@@ -1,0 +1,31 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "zeroh-marketplace",
+  "description": "Blade Labs AI development plugins — Shape-Driven Development, UI design, and more",
+  "owner": {
+    "name": "Blade Labs",
+    "email": "info@blade-labs.com"
+  },
+  "plugins": [
+    {
+      "name": "zeroh-sdd",
+      "description": "Shape-Driven Development — shapes as RED tests, enforcement hooks, 14 skills, 8 hooks",
+      "source": {
+        "source": "github",
+        "repo": "Blade-Labs/zeroh-sdd"
+      },
+      "category": "development",
+      "tags": ["sdd", "tdd", "shapes", "zod", "enforcement"]
+    },
+    {
+      "name": "ui-design-skill",
+      "description": "Blade Labs branded UI and collateral generator — 3 design themes",
+      "source": {
+        "source": "github",
+        "repo": "Blade-Labs/ui-design-skill"
+      },
+      "category": "design",
+      "tags": ["ui", "design-system", "branded"]
+    }
+  ]
+}
