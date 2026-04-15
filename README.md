@@ -42,27 +42,29 @@ For background auto-updates (non-interactive), set a token in your shell config:
 export GITHUB_TOKEN=ghp_xxx  # needs 'repo' scope for private repos
 ```
 
-## Adding a New Plugin
+## Listing a New Plugin
 
-All plugins live in this repo under `plugins/`. No separate repo needed.
+All plugins live in this repo. To list a new plugin:
 
-### Step 1: Create the plugin directory
+1. **Create a PR** that adds your plugin directory and a marketplace entry
+2. **Get it merged**
+3. **Done** — team members see it on next `/plugin marketplace update zeroh-marketplace`
+
+### Your PR should contain:
+
+**A. Your plugin directory** under `plugins/`:
 
 ```
 plugins/my-plugin/
 ├── .claude-plugin/
-│   └── plugin.json          # { "name": "my-plugin", "description": "...", "author": { "name": "..." } }
+│   └── plugin.json     ← minimum: { "name": "my-plugin", "description": "..." }
 ├── skills/
 │   └── my-skill/
-│       └── SKILL.md
-├── hooks/                   # optional
-│   └── hooks.json
-└── README.md
+│       └── SKILL.md    ← your skill content
+└── README.md           ← optional
 ```
 
-### Step 2: Add to marketplace.json
-
-Edit `.claude-plugin/marketplace.json` and add an entry:
+**B. One entry** added to `.claude-plugin/marketplace.json`:
 
 ```json
 {
@@ -74,34 +76,11 @@ Edit `.claude-plugin/marketplace.json` and add an entry:
 }
 ```
 
-### Step 3: Push
+That's it. No separate repo, no tokens, no CI config. Merge the PR and it's listed.
 
-Push to this repo. Team members pick up the new plugin on their next session via:
+### Listing an external plugin (not in this repo)
 
-```bash
-/plugin marketplace update zeroh-marketplace
-```
-
-Or it auto-updates at session start.
-
-## Adding an External Plugin
-
-For plugins maintained outside this repo (third-party integrations, MCP servers):
-
-### Option A: Minimal wrapper (like official marketplace)
-
-```
-external_plugins/some-tool/
-├── .claude-plugin/
-│   └── plugin.json
-└── .mcp.json               # MCP server configuration
-```
-
-Add to marketplace.json with: `"source": "./external_plugins/some-tool"`
-
-### Option B: URL reference (no local files)
-
-Add to marketplace.json with:
+Add just a marketplace.json entry pointing to the external repo:
 
 ```json
 {
