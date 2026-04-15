@@ -14,6 +14,8 @@ or browse in `/plugin > Discover`
 
 ## Listing a New Plugin
 
+> **Official docs:** [Plugin marketplaces](https://code.claude.com/docs/en/plugin-marketplaces)
+
 Create a PR that adds your plugin directory under `/plugins` and one entry in `.claude-plugin/marketplace.json`. Once merged, the plugin is listed.
 
 **marketplace.json entry:**
@@ -32,6 +34,8 @@ Create a PR that adds your plugin directory under `/plugins` and one entry in `.
 
 ### Basic plugin (skill only)
 
+> **Official docs:** [Plugin structure overview](https://code.claude.com/docs/en/plugins#plugin-structure-overview)
+
 A plugin that teaches Claude one thing. No hooks, no agents, just a skill.
 
 ```
@@ -46,6 +50,8 @@ my-plugin/
 This is all you need to get started. See `plugins/zeroh-design/` for a real example — one skill with reference materials.
 
 ### Enterprise plugin (full capabilities)
+
+> **Official docs:** [Organize complex plugins](https://code.claude.com/docs/en/plugins#organize-complex-plugins) · [Plugin directory structure](https://code.claude.com/docs/en/plugins-reference#plugin-directory-structure)
 
 A plugin that enforces workflows, runs background checks, provides agents, and integrates external tools.
 
@@ -161,6 +167,8 @@ plugins/zeroh-sdd/
 
 ### plugin.json
 
+> **Official docs:** [Plugin manifest schema](https://code.claude.com/docs/en/plugins-reference#plugin-manifest-schema)
+
 Only `name` is required:
 
 ```json
@@ -175,6 +183,8 @@ Only `name` is required:
 
 ### Skills (`skills/name/SKILL.md`)
 
+> **Official docs:** [Skills](https://code.claude.com/docs/en/skills)
+
 Markdown files that teach Claude how to do something. Auto-invoked when the `description` matches user intent.
 
 **Frontmatter fields:** `name`, `description`, `version`, `disable-model-invocation`, `argument-hint`, `user-invocable`, `allowed-tools`, `model` (sonnet/opus/haiku/inherit), `effort`, `context` (fork for subagent isolation), `agent`, `hooks`, `paths`, `shell`
@@ -183,6 +193,8 @@ Skills can include `references/`, `examples/`, and `scripts/` subdirectories. Us
 
 ### Agents (`agents/name.md`)
 
+> **Official docs:** [Subagents](https://code.claude.com/docs/en/sub-agents)
+
 Subagent definitions that run as autonomous workers.
 
 **Frontmatter fields:** `name`, `description`, `model`, `color` (blue/cyan/green/yellow/magenta/red), `tools`, `disallowedTools`, `maxTurns`, `skills`, `memory`, `background`, `effort`, `isolation` (worktree), `initialPrompt`
@@ -190,6 +202,8 @@ Subagent definitions that run as autonomous workers.
 See `plugins/zeroh-roadmap/agents/` for examples — 4 agents (software-architect, software-developer, code-reviewer, test-engineer).
 
 ### Hooks (`hooks/hooks.json`)
+
+> **Official docs:** [Hooks reference](https://code.claude.com/docs/en/hooks) · [Hook events](https://code.claude.com/docs/en/plugins-reference#hooks)
 
 Event handlers that run bash scripts, LLM prompts, agents, or HTTP webhooks.
 
@@ -211,9 +225,13 @@ Event handlers that run bash scripts, LLM prompts, agents, or HTTP webhooks.
 
 ### MCP Servers (`.mcp.json`)
 
+> **Official docs:** [MCP](https://code.claude.com/docs/en/mcp) · [Plugin MCP servers](https://code.claude.com/docs/en/plugins-reference#mcp-servers)
+
 Connect Claude to external tools and services. Four transports: `stdio`, `sse`, `http`, `ws`.
 
 ### LSP Servers (`.lsp.json`)
+
+> **Official docs:** [Plugin LSP servers](https://code.claude.com/docs/en/plugins-reference#lsp-servers)
 
 Give Claude real-time code intelligence — diagnostics, go-to-definition, hover info.
 
@@ -228,6 +246,8 @@ Give Claude real-time code intelligence — diagnostics, go-to-definition, hover
 | `commands/` | Plugin root | Skills as flat .md files (use `skills/` for new plugins) |
 
 ### Environment Variables
+
+> **Official docs:** [Environment variables](https://code.claude.com/docs/en/plugins-reference#environment-variables)
 
 Available in all plugin components:
 
