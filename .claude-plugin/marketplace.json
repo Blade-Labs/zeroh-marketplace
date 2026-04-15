@@ -22,9 +22,9 @@
       "tags": ["ui", "design-system", "branded"]
     },
     {
-      "name": "roadmap-plugin",
+      "name": "zeroh-roadmap",
       "description": "Phase-driven development — shape-enforced task schemas, validation gates, sequential execution, review reports, changelog generation",
-      "source": "./plugins/roadmap-plugin",
+      "source": "./plugins/zeroh-roadmap",
       "category": "development",
       "tags": ["roadmap", "phases", "shapes", "gates", "review", "changelog"]
     }

@@ -187,7 +187,7 @@ Subagent definitions that run as autonomous workers.
 
 **Frontmatter fields:** `name`, `description`, `model`, `color` (blue/cyan/green/yellow/magenta/red), `tools`, `disallowedTools`, `maxTurns`, `skills`, `memory`, `background`, `effort`, `isolation` (worktree), `initialPrompt`
 
-See `plugins/roadmap-plugin/agents/` for examples — 4 agents (software-architect, software-developer, code-reviewer, test-engineer).
+See `plugins/zeroh-roadmap/agents/` for examples — 4 agents (software-architect, software-developer, code-reviewer, test-engineer).
 
 ### Hooks (`hooks/hooks.json`)
 
@@ -246,7 +246,7 @@ The best way to learn is to read existing plugins in this marketplace:
 | Plugin | Complexity | Learn about |
 |--------|-----------|-------------|
 | `plugins/zeroh-design/` | Simple | Single skill with reference materials and theme assets |
-| `plugins/roadmap-plugin/` | Medium | Multiple skills, 4 agents, templates, scaffold scripts |
+| `plugins/zeroh-roadmap/` | Medium | Multiple skills, 4 agents, templates, scaffold scripts |
 | `plugins/zeroh-sdd/` | Complex | 14 skills, 8 hooks, context injection, hook overrides, multi-IDE |
 
 For the official plugin development guide, install the `plugin-dev` plugin:
