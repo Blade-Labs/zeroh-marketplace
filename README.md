@@ -23,7 +23,7 @@ If you need to add the marketplace manually (e.g., for a personal project):
 | Plugin | Description | Install |
 |--------|-------------|---------|
 | **zeroh-sdd** | Shape-Driven Development — 14 skills, 8 enforcement hooks, 19 AP detection patterns | `/plugin install zeroh-sdd@zeroh-marketplace` |
-| **ui-design-skill** | Branded UI generation — 4 design themes (Ali, Zeroh GRC, Blade Corporate, Disclosure) | `/plugin install ui-design-skill@zeroh-marketplace` |
+| **zeroh-design** | Branded UI generation — 4 design themes (Ali, Zeroh GRC, Blade Corporate, Disclosure) | `/plugin install zeroh-design@zeroh-marketplace` |
 | **roadmap-plugin** | Phase-driven development — validation gates, sequential execution, review reports | `/plugin install roadmap-plugin@zeroh-marketplace` |
 
 ## Auto-Updates
@@ -140,7 +140,7 @@ zeroh-marketplace/
 ├── .claude-plugin/marketplace.json    ← registry (sources point to ./plugins/ or URLs)
 ├── plugins/                           ← Blade Labs plugins (internal)
 │   ├── zeroh-sdd/                     ← 14 skills, 8 hooks, templates
-│   ├── ui-design-skill/               ← 1 skill, 4 themes
+│   ├── zeroh-design/                  ← 1 skill, 4 themes
 │   └── roadmap-plugin/               ← 7 skills, 4 agents, templates
 ├── external_plugins/                  ← Third-party plugins (MCP wrappers, etc.)
 └── README.md

@@ -1,0 +1,9 @@
+{
+  "name": "zeroh-design",
+  "description": "Blade Labs branded UI and collateral generator — 4 design themes (Ali, Zeroh GRC, Blade Corporate, Disclosure). Auto-selects the right theme, applies consistent typography, color, and spacing.",
+  "category": "design",
+  "author": {
+    "name": "Blade Labs",
+    "email": "info@blade-labs.com"
+  }
+}

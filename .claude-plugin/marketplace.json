@@ -15,9 +15,9 @@
       "tags": ["sdd", "tdd", "shapes", "zod", "enforcement"]
     },
     {
-      "name": "ui-design-skill",
+      "name": "zeroh-design",
       "description": "Blade Labs branded UI and collateral generator — 4 design themes",
-      "source": "./plugins/ui-design-skill",
+      "source": "./plugins/zeroh-design",
       "category": "design",
       "tags": ["ui", "design-system", "branded"]
     },
