@@ -4,8 +4,7 @@ A curated directory of plugins for Claude Code, maintained by Blade Labs.
 
 ## Structure
 
-- **`/plugins`** - Plugins developed and maintained by Blade Labs
-- **`/external_plugins`** - Third-party plugins from partners and the community
+- **`/plugins`** - All plugins live here as directories
 
 ## Installation
 
