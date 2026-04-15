@@ -22,28 +22,16 @@ If you need to add the marketplace manually (e.g., for a personal project):
 
 | Plugin | Description | Install |
 |--------|-------------|---------|
-| **zeroh-sdd** | Shape-Driven Development — 14 skills, 8 enforcement hooks, 19 AP detection patterns, 7 extension points | `/plugin install zeroh-sdd@zeroh-marketplace` |
-| **ui-design-skill** | Branded UI generation — 3 design themes (Ali, Zeroh GRC, Blade Corporate) | `/plugin install ui-design-skill@zeroh-marketplace` |
-
-### zeroh-sdd
-
-Teaches AI agents Shape-Driven Development — Zod schemas define contracts BEFORE implementation, hooks enforce them mechanically.
-
-- **14 skills**: specify → clarify → plan → shapes → tasks → implement → analyze (full SDD pipeline)
-- **8 enforcement hooks**: AP detection (19 patterns), commit hygiene, stop-check, JIT context injection, quality gate
-- **5-layer enforcement gradient**: prose → JIT context → detect → remind → block
-- **7 extension points**: pipeline hooks, AP registry, context files, drop-in skills/agents/commands, plugin composition
-
-### ui-design-skill
-
-Branded UI and collateral generator with 3 design themes. Composes with zeroh-sdd — use both together for full-stack Shape-Driven Development with brand-consistent UI.
+| **zeroh-sdd** | Shape-Driven Development — 14 skills, 8 enforcement hooks, 19 AP detection patterns | `/plugin install zeroh-sdd@zeroh-marketplace` |
+| **blade-design** | Branded UI generation — 4 design themes (Ali, Zeroh GRC, Blade Corporate, Disclosure) | `/plugin install blade-design@zeroh-marketplace` |
+| **roadmap-plugin** | Phase-driven development — validation gates, sequential execution, review reports | `/plugin install roadmap-plugin@zeroh-marketplace` |
 
 ## Auto-Updates
 
 Plugins auto-update at session start when your git credentials are configured:
 
 ```bash
-# GitHub CLI (recommended — handles auth for all git operations)
+# GitHub CLI (recommended)
 gh auth login
 ```
 
@@ -54,37 +42,25 @@ For background auto-updates (non-interactive), set a token in your shell config:
 export GITHUB_TOKEN=ghp_xxx  # needs 'repo' scope for private repos
 ```
 
-## Adding a New Plugin to the Marketplace
+## Adding a New Plugin
 
-### Step 1: Create the plugin repo
+All plugins live in this repo under `plugins/`. No separate repo needed.
+
+### Step 1: Create the plugin directory
 
 ```
-my-plugin/
+plugins/my-plugin/
 ├── .claude-plugin/
-│   └── plugin.json          # { "name": "my-plugin", "version": "1.0.0", ... }
+│   └── plugin.json          # { "name": "my-plugin", "description": "...", "author": { "name": "..." } }
 ├── skills/
 │   └── my-skill/
-│       └── SKILL.md          # Skill definition
-├── hooks/
-│   └── hooks.json            # Hook definitions (optional)
-├── README.md
-└── LICENSE
+│       └── SKILL.md
+├── hooks/                   # optional
+│   └── hooks.json
+└── README.md
 ```
 
-Validate before publishing:
-```bash
-claude plugin validate .claude-plugin/plugin.json
-```
-
-### Step 2: Set up access
-
-```bash
-# Add both teams to the plugin repo
-gh api /orgs/Blade-Labs/teams/blade-development/repos/Blade-Labs/my-plugin -X PUT -f permission="push"
-gh api /orgs/Blade-Labs/teams/blade-business/repos/Blade-Labs/my-plugin -X PUT -f permission="pull"
-```
-
-### Step 3: Add to this marketplace
+### Step 2: Add to marketplace.json
 
 Edit `.claude-plugin/marketplace.json` and add an entry:
 
@@ -92,23 +68,51 @@ Edit `.claude-plugin/marketplace.json` and add an entry:
 {
   "name": "my-plugin",
   "description": "What it does",
-  "source": {
-    "source": "github",
-    "repo": "Blade-Labs/my-plugin"
-  },
+  "source": "./plugins/my-plugin",
   "category": "development",
   "tags": ["relevant", "tags"]
 }
 ```
 
-### Step 4: Notify team
+### Step 3: Push
 
 Push to this repo. Team members pick up the new plugin on their next session via:
+
 ```bash
 /plugin marketplace update zeroh-marketplace
 ```
 
 Or it auto-updates at session start.
+
+## Adding an External Plugin
+
+For plugins maintained outside this repo (third-party integrations, MCP servers):
+
+### Option A: Minimal wrapper (like official marketplace)
+
+```
+external_plugins/some-tool/
+├── .claude-plugin/
+│   └── plugin.json
+└── .mcp.json               # MCP server configuration
+```
+
+Add to marketplace.json with: `"source": "./external_plugins/some-tool"`
+
+### Option B: URL reference (no local files)
+
+Add to marketplace.json with:
+
+```json
+{
+  "name": "some-tool",
+  "description": "...",
+  "source": {
+    "source": "url",
+    "url": "https://github.com/org/some-tool-plugin.git"
+  }
+}
+```
 
 ## Adding the Marketplace to a New Project
 
@@ -132,26 +136,26 @@ Everyone who clones and trusts the project folder gets prompted to install the m
 ## Architecture
 
 ```
-Blade-Labs/zeroh-marketplace (this repo)
-├── .claude-plugin/marketplace.json     ← lists plugins by GitHub source
-│
-├── Blade-Labs/zeroh-sdd               ← separate repo (private)
-│   ├── skills/ (14)
-│   ├── hooks/ (8)
-│   └── .claude-plugin/plugin.json
-│
-└── Blade-Labs/ui-design-skill          ← separate repo (public)
-    ├── skills/ (1)
-    └── .claude-plugin/plugin.json
+zeroh-marketplace/
+├── .claude-plugin/marketplace.json    ← registry (sources point to ./plugins/ or URLs)
+├── plugins/                           ← Blade Labs plugins (internal)
+│   ├── zeroh-sdd/                     ← 14 skills, 8 hooks, templates
+│   ├── blade-design/                  ← 1 skill, 4 themes
+│   └── roadmap-plugin/               ← 7 skills, 4 agents, templates
+├── external_plugins/                  ← Third-party plugins (MCP wrappers, etc.)
+└── README.md
 ```
 
-Each plugin is its own repo — independently versioned, independently installable. The marketplace is a catalog that points to them. Adding a plugin = adding one JSON entry + giving team access.
+This matches the structure of `anthropics/claude-plugins-official`:
+- `plugins/` = Anthropic-maintained plugins (33)
+- `external_plugins/` = Third-party MCP wrappers (16)
+- URL sources in marketplace.json = Community plugins (90+)
 
 ## Access Control
 
-| Team | Marketplace | Plugins | Permission |
-|------|-------------|---------|-----------|
-| **Blade Development** | ✓ | All | push (write) |
-| **Blade Business** | ✓ | All | pull (read) |
+| Team | Permission |
+|------|-----------|
+| **Blade Development** | push (write) |
+| **Blade Business** | pull (read) |
 
 Access is controlled by GitHub org team membership. No separate auth system needed.
