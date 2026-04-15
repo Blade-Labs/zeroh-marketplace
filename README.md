@@ -1,44 +1,31 @@
-# zeroh-marketplace
+# ZeroH Plugin Marketplace
 
-Private Claude Code plugin marketplace for Blade Labs.
+A curated directory of plugins for Claude Code, maintained by Blade Labs.
 
-## Listing a New Plugin
+## Structure
 
-1. **Create a PR** that adds your plugin directory and a marketplace entry
-2. **Get it merged**
-3. **Done** — team members see it on next `/plugin marketplace update zeroh-marketplace`
+- **`/plugins`** - Plugins developed and maintained by Blade Labs
+- **`/external_plugins`** - Third-party plugins from partners and the community
 
-### Your PR should contain:
+## Installation
 
-**A. Your plugin directory** under `plugins/`:
+Plugins can be installed directly from this marketplace via Claude Code's plugin system.
 
-```
-plugins/my-plugin/
-├── .claude-plugin/
-│   └── plugin.json     ← minimum: { "name": "my-plugin", "description": "..." }
-├── skills/
-│   └── my-skill/
-│       └── SKILL.md    ← your skill content
-└── README.md           ← optional
-```
+To install, run `/plugin install {plugin-name}@zeroh-marketplace`
 
-**B. One entry** added to `.claude-plugin/marketplace.json`:
+or browse for the plugin in `/plugin > Discover`
 
-```json
-{
-  "name": "my-plugin",
-  "description": "What it does",
-  "source": "./plugins/my-plugin",
-  "category": "development",
-  "tags": ["relevant", "tags"]
-}
-```
+## Contributing
 
-That's it. No separate repo, no tokens, no CI config. Merge the PR and it's listed.
+### Internal Plugins
 
-### Listing an external plugin (not in this repo)
+Create a PR that adds your plugin directory under `/plugins` and an entry in `.claude-plugin/marketplace.json`. Once merged, the plugin is listed.
 
-Add just a marketplace.json entry pointing to the external repo:
+See the [Plugin Structure](#plugin-structure) section below and any existing plugin under `/plugins` for reference.
+
+### External Plugins
+
+Third-party plugins can be listed by adding a marketplace.json entry pointing to an external repo:
 
 ```json
 {
@@ -50,3 +37,22 @@ Add just a marketplace.json entry pointing to the external repo:
   }
 }
 ```
+
+## Plugin Structure
+
+Each plugin follows a standard structure:
+
+```
+plugin-name/
+├── .claude-plugin/
+│   └── plugin.json      # Plugin metadata (required)
+├── .mcp.json            # MCP server configuration (optional)
+├── commands/            # Slash commands (optional)
+├── agents/              # Agent definitions (optional)
+├── skills/              # Skill definitions (optional)
+└── README.md            # Documentation
+```
+
+## Documentation
+
+For more information on developing Claude Code plugins, see the [official documentation](https://code.claude.com/docs/en/plugins).
