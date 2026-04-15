@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+/* ============================================
+   CONVERSATIONAL THEME
+   Scholarly, warm, reading-heavy
+   ============================================ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* --- L1 Primitives --- */
+  --brand-50:  #F2F7F4;
+  --brand-100: #E4EFE9;
+  --brand-200: #C7DDD3;
+  --brand-300: #A1C4B7;
+  --brand-400: #6FA28F;
+  --brand-500: #3E7F67;
+  --brand-600: #1F5B46;
+  --brand-700: #174437;
+  --brand-800: #0F2E25;
+  --brand-900: #081915;
+  --brand-950: #040D0A;
+
+  --gold-50:  #FCF7E7;
+  --gold-100: #F8EBCD;
+  --gold-200: #F0D599;
+  --gold-300: #DCB868;   /* Figma source — logo solid gold anchor */
+  --gold-400: #DBA533;
+  --gold-500: #C38D11;
+  --gold-600: #976E0D;
+  --gold-700: #70510A;
+  --gold-800: #4B3606;
+  --gold-900: #281D03;
+  --gold-950: #150E02;
+
+  --sand-50:  #F7F6F3;
+  --sand-100: #EFEDE8;
+  --sand-200: #E2DED6;
+  --sand-300: #D1CCC1;
+  --sand-400: #B7B1A4;
+  --sand-500: #9C9587;
+  --sand-600: #7D7669;
+  --sand-700: #5E574B;
+  --sand-800: #3F392F;
+  --sand-900: #221D15;
+  --sand-950: #14110D;
+
+
+  /* --- Brand gradient (marketing UI — sage → forest green) --- */
+  --brand-gradient-start: #6FA28F;
+  --brand-gradient-end:   #1F5B46;
+  --brand-gradient: linear-gradient(to right, #6FA28F, #1F5B46);
+
+  /* --- Logo gradient (signature mark — 3-stop metallic gold) --- */
+  /* Use on the Icon only; wordmark uses --logo-solid */
+  --logo-gradient-start: var(--gold-700); /* #6A4F10 — dark gold */
+  --logo-gradient-mid:   var(--gold-200); /* #EAD39F — bright highlight, 1 step above logo solid */
+  --logo-gradient-end:   var(--gold-500); /* #B8891C — warm gold */
+  --logo-gradient: linear-gradient(to right, #70510A 0%, #F0D599 50%, #C38D11 100%);
+  --logo-solid:    var(--gold-300); /* #DCB868 — Figma source, wordmark fill */
+  /* --- L2 Semantics --- */
+  --background:         var(--sand-50);
+  --foreground:         var(--sand-900);
+  --card:               #FFFFFF;
+  --card-foreground:    var(--sand-900);
+  --popover:            var(--sand-900);
+  --popover-foreground: var(--sand-50);
+  --primary:            var(--brand-600);
+  --primary-foreground: var(--sand-50);
+  --secondary:          var(--sand-100);
+  --secondary-foreground: var(--sand-900);
+  --muted:              var(--sand-100);
+  --muted-foreground:   var(--sand-600);
+  --accent:             var(--gold-100);
+  --accent-foreground:  var(--sand-900);
+  --border:             var(--sand-200);
+  --input:              var(--sand-200);
+  --ring:               var(--brand-300);
+  --destructive:        #DC2626;
+  --destructive-foreground: var(--sand-50);
+
+  --chart-1: #C7441C;
+  --chart-2: var(--brand-500);
+  --chart-3: #104E64;
+  --chart-4: var(--gold-500);
+  --chart-5: var(--gold-300);
+
+  --sidebar:            var(--brand-700);
+  --sidebar-foreground: var(--sand-50);
+  --sidebar-primary:    var(--brand-500);
+  --sidebar-accent:     var(--brand-600);
+  --sidebar-border:     var(--brand-800);
+
+  --radius: 0.625rem;
+}
+
+/* --- L3 Tailwind --- */
+@theme inline {
+  --color-background:         var(--background);
+  --color-foreground:         var(--foreground);
+  --color-card:               var(--card);
+  --color-card-foreground:    var(--card-foreground);
+  --color-primary:            var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:          var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:              var(--muted);
+  --color-muted-foreground:   var(--muted-foreground);
+  --color-accent:             var(--accent);
+  --color-accent-foreground:  var(--accent-foreground);
+  --color-border:             var(--border);
+  --color-input:              var(--input);
+  --color-ring:               var(--ring);
+  --color-destructive:        var(--destructive);
+  --color-sidebar:            var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary:    var(--sidebar-primary);
+  --color-sidebar-accent:     var(--sidebar-accent);
+  --color-sidebar-border:     var(--sidebar-border);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-crimson), Georgia, serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

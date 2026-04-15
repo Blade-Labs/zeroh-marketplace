@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+/* ============================================
+   VITAL THEME
+   Organic, friendly, approachable
+   ============================================ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 225 16% 12%;
+  --muted: 144 33% 96%;
+  --muted-foreground: 155 12% 36%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 225 16% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 225 16% 12%;
+  --border: 145 32% 88%;
+  --input: 145 32% 88%;
+  --primary: 147 91% 33%;
+  --primary-foreground: 144 100% 96%;
+  --secondary: 148 46% 90%;
+  --secondary-foreground: 147 40% 20%;
+  --accent: 156 44% 92%;
+  --accent-foreground: 158 32% 24%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --ring: 147 91% 33%;
+  --radius: 0.85rem;
+}
+
+.dark {
+  --background: 156 42% 6%;
+  --foreground: 148 45% 92%;
+  --muted: 157 28% 14%;
+  --muted-foreground: 150 22% 70%;
+  --popover: 156 42% 6%;
+  --popover-foreground: 148 45% 92%;
+  --card: 156 42% 6%;
+  --card-foreground: 148 45% 92%;
+  --border: 158 24% 22%;
+  --input: 158 24% 22%;
+  --primary: 147 69% 45%;
+  --primary-foreground: 144 100% 96%;
+  --secondary: 158 30% 20%;
+  --secondary-foreground: 147 45% 92%;
+  --accent: 157 28% 18%;
+  --accent-foreground: 148 45% 92%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --ring: 147 69% 45%;
+}
+
+/* --- L3 Tailwind --- */
+@theme inline {
+  --color-background:           hsl(var(--background));
+  --color-foreground:           hsl(var(--foreground));
+  --color-card:                 hsl(var(--card));
+  --color-card-foreground:      hsl(var(--card-foreground));
+  --color-popover:              hsl(var(--popover));
+  --color-popover-foreground:   hsl(var(--popover-foreground));
+  --color-primary:              hsl(var(--primary));
+  --color-primary-foreground:   hsl(var(--primary-foreground));
+  --color-secondary:            hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted:                hsl(var(--muted));
+  --color-muted-foreground:     hsl(var(--muted-foreground));
+  --color-accent:               hsl(var(--accent));
+  --color-accent-foreground:    hsl(var(--accent-foreground));
+  --color-destructive:          hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border:               hsl(var(--border));
+  --color-input:                hsl(var(--input));
+  --color-ring:                 hsl(var(--ring));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-quicksand), ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

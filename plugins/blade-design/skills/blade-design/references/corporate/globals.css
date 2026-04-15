@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+/* ============================================
+   BLADE LABS CORPORATE
+   Digital-first, indigo-primary, data-dense
+   Source: bladelabs.io
+   ============================================ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* --- L1 Primitives — Slate neutrals --- */
+  --slate-50:  #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #90a1b9;
+  --slate-500: #62748e;
+  --slate-600: #45556c;
+  --slate-700: #314158;
+  --slate-800: #1d293d;
+  --slate-900: #0f172b;
+  --slate-950: #020817;
+
+  /* --- L1 Primitives — Indigo scale --- */
+  --indigo-50:  #eef2ff;
+  --indigo-100: #e0e7ff;
+  --indigo-200: #c7d2fe;
+  --indigo-300: #a5b4fc;
+  --indigo-400: #818cf8;
+  --indigo-500: #6366f1;
+  --indigo-600: #4f39f6;
+  --indigo-700: #4338ca;
+  --indigo-800: #3730a3;
+  --indigo-900: #312e81;
+  --indigo-950: #1e1b4b;
+
+  /* --- Brand gradient --- */
+  --brand-gradient-start: #6e70a1;
+  --brand-gradient-end:   #2622b2;
+  --brand-gradient: linear-gradient(to right, #6e70a1, #2622b2);
+
+  /* --- L2 Semantics (light) --- */
+  --background:             #ffffff;
+  --foreground:             #020817;
+  --card:                   #ffffff;
+  --card-foreground:        #020817;
+  --popover:                #ffffff;
+  --popover-foreground:     #020817;
+  --primary:                #4f39f6;
+  --primary-foreground:     #ffffff;
+  --secondary:              var(--slate-100);
+  --secondary-foreground:   #020817;
+  --muted:                  var(--slate-100);
+  --muted-foreground:       var(--slate-500);
+  --accent:                 var(--indigo-100);
+  --accent-foreground:      #020817;
+  --border:                 var(--slate-200);
+  --input:                  var(--slate-200);
+  --ring:                   var(--indigo-600);
+  --destructive:            #e7000b;
+  --destructive-foreground: #ffffff;
+
+  /* Data visualisation */
+  --chart-1: #4f39f6;   /* indigo  — primary series  */
+  --chart-2: #009966;   /* teal    — secondary series */
+  --chart-3: #9810fa;   /* violet  — tertiary series  */
+  --chart-4: #e7000b;   /* red     — alert series     */
+  --chart-5: #62748e;   /* slate   — neutral series   */
+
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background:             var(--slate-900);
+  --foreground:             var(--slate-100);
+  --card:                   var(--slate-800);
+  --card-foreground:        var(--slate-100);
+  --popover:                var(--slate-800);
+  --popover-foreground:     var(--slate-100);
+  --primary:                var(--indigo-400);
+  --primary-foreground:     var(--slate-950);
+  --secondary:              var(--slate-700);
+  --secondary-foreground:   var(--slate-100);
+  --muted:                  var(--slate-700);
+  --muted-foreground:       var(--slate-400);
+  --accent:                 var(--indigo-950);
+  --accent-foreground:      var(--indigo-200);
+  --border:                 var(--slate-700);
+  --input:                  var(--slate-700);
+  --ring:                   var(--indigo-400);
+  --destructive:            #ef4444;
+  --destructive-foreground: #ffffff;
+}
+
+/* --- L3 Tailwind --- */
+@theme inline {
+  --color-background:             var(--background);
+  --color-foreground:             var(--foreground);
+  --color-card:                   var(--card);
+  --color-card-foreground:        var(--card-foreground);
+  --color-popover:                var(--popover);
+  --color-popover-foreground:     var(--popover-foreground);
+  --color-primary:                var(--primary);
+  --color-primary-foreground:     var(--primary-foreground);
+  --color-secondary:              var(--secondary);
+  --color-secondary-foreground:   var(--secondary-foreground);
+  --color-muted:                  var(--muted);
+  --color-muted-foreground:       var(--muted-foreground);
+  --color-accent:                 var(--accent);
+  --color-accent-foreground:      var(--accent-foreground);
+  --color-destructive:            var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border:                 var(--border);
+  --color-input:                  var(--input);
+  --color-ring:                   var(--ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

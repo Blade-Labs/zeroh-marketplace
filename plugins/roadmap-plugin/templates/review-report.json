@@ -1,0 +1,31 @@
+{
+  "$schema": "Review report schema — fill after each release",
+  "version": "0.0.0",
+  "date": "YYYY-MM-DD",
+  "verdict": "PASSED | RELEASED | BLOCKED",
+  "phases": [{ "number": 0, "name": "Phase name from .phase.ts" }],
+  "gate": {
+    "lint": "clean | warnings | errors",
+    "typeCheck": "clean | errors",
+    "unitTests": { "passed": 0, "total": 0 },
+    "integrationTests": { "passed": 0, "total": 0, "notes": "" },
+    "e2eTests": { "passed": 0, "total": 0, "skipped": 0, "notes": "" },
+    "build": "clean | errors"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "agents": [{ "name": "AgentName", "findings": 0 }],
+      "verdict": "Summary of round"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "CRITICAL | HIGH | MEDIUM | LOW",
+      "description": "What was found",
+      "resolution": "How it was fixed",
+      "round": 1,
+      "agent": "AgentName"
+    }
+  ]
+}

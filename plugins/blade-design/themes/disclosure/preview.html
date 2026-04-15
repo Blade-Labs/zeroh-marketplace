@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zeroh Disclosure — Design System Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <style>
+    /* ─── Zeroh Disclosure tokens ─────────────────────────────────── */
+    :root {
+      --brand-gradient: linear-gradient(to right, #0F1A2E, #00C8AA);
+      --brand-gradient-start: #0F1A2E;
+      --brand-gradient-end: #00C8AA;
+
+      --background:         hsl(220, 20%, 97%);
+      --foreground:         hsl(214, 50%, 12%);
+      --card:               hsl(0, 0%, 100%);
+      --card-foreground:    hsl(214, 50%, 12%);
+      --primary:            hsl(172, 100%, 39%);
+      --primary-foreground: hsl(0, 0%, 100%);
+      --secondary:          hsl(172, 30%, 90%);
+      --secondary-foreground: hsl(172, 60%, 20%);
+      --muted:              hsl(214, 30%, 95%);
+      --muted-foreground:   hsl(214, 15%, 48%);
+      --accent:             hsl(172, 25%, 92%);
+      --accent-foreground:  hsl(172, 50%, 24%);
+      --border:             hsl(214, 25%, 88%);
+      --input:              hsl(214, 25%, 88%);
+      --ring:               hsl(172, 100%, 39%);
+      --destructive:        hsl(0, 84%, 60%);
+      --destructive-foreground: hsl(210, 40%, 98%);
+      --radius: 0.5rem;
+
+      /* Hex for swatches */
+      --hex-background: #F8F9FB;
+      --hex-foreground: #0F1A2E;
+      --hex-primary: #00C8AA;
+      --hex-primary-fg: #FFFFFF;
+      --hex-secondary: #C8EDE8;
+      --hex-muted: #EDF0F5;
+      --hex-muted-fg: #6B7A96;
+      --hex-accent: #DDF0EC;
+      --hex-border: #D4DCE8;
+
+      /* Dark mode overrides */
+      --dark-background: hsl(214, 50%, 8%);
+      --dark-foreground: hsl(220, 30%, 92%);
+      --dark-card: hsl(214, 45%, 10%);
+      --dark-primary: hsl(172, 80%, 45%);
+      --dark-muted: hsl(214, 40%, 14%);
+      --dark-border: hsl(214, 30%, 20%);
+
+      --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+      --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    }
+
+    .dark {
+      --background: hsl(214, 50%, 8%);
+      --foreground: hsl(220, 30%, 92%);
+      --card: hsl(214, 45%, 10%);
+      --card-foreground: hsl(220, 30%, 92%);
+      --primary: hsl(172, 80%, 45%);
+      --primary-foreground: hsl(0, 0%, 100%);
+      --muted: hsl(214, 40%, 14%);
+      --muted-foreground: hsl(214, 20%, 62%);
+      --accent: hsl(214, 35%, 16%);
+      --accent-foreground: hsl(220, 30%, 92%);
+      --border: hsl(214, 30%, 20%);
+      --input: hsl(214, 30%, 20%);
+      --secondary: hsl(172, 25%, 18%);
+      --secondary-foreground: hsl(172, 60%, 80%);
+      --ring: hsl(172, 80%, 45%);
+      --destructive: hsl(0, 62.8%, 30.6%);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--background);
+      color: var(--foreground);
+      line-height: 1.6;
+      min-height: 100vh;
+      transition: background 200ms ease-out, color 200ms ease-out;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--font-mono);
+    }
+
+    .page { max-width: 960px; margin: 0 auto; padding: 40px 32px 64px; }
+    .section { margin-bottom: 80px; }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono);
+    }
+    .section-subtitle {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted-foreground);
+      margin: 32px 0 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: var(--font-mono);
+    }
+
+    /* Brand Header */
+    .brand-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 80px;
+      padding-bottom: 48px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand-logo-wrap { color: var(--primary); }
+    .brand-logo-wrap svg { display: block; height: 36px; width: auto; }
+    .brand-meta { text-align: right; }
+    .brand-meta .tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--accent);
+      color: var(--accent-foreground);
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .brand-meta p { font-size: 13px; color: var(--muted-foreground); font-family: var(--font-mono); }
+    .brand-tagline { margin-top: 20px; font-size: 16px; color: var(--muted-foreground); max-width: 440px; line-height: 1.5; font-family: var(--font-sans); }
+
+    /* Dark mode toggle */
+    /* Site nav */
+    .site-nav {
+      position: sticky;
+      top: 0;
+      height: 44px;
+      background: var(--background);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 2px;
+      z-index: 100;
+      transition: background 150ms ease-out, border-color 150ms ease-out;
+      font-family: var(--font-mono);
+    }
+    .site-nav a {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 11px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      text-decoration: none;
+      transition: background 120ms ease-out, color 120ms ease-out;
+    }
+    .site-nav a:hover { background: #f4f4f4; color: #111; }
+    .site-nav a.active { background: #f0f0f0; color: #111; }
+    .dark .site-nav a:hover { background: rgba(255,255,255,0.08); color: #eee; }
+    .dark .site-nav a.active { background: rgba(255,255,255,0.1); color: #eee; }
+    .nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .nav-divider { width: 1px; height: 16px; background: #e5e5e5; margin: 0 4px; }
+    .dark .nav-divider { background: #333; }
+
+    .dark-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: transparent;
+      color: #888;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+      white-space: nowrap;
+    }
+    .dark-toggle:hover { background: rgba(0,0,0,0.05); color: #111; border-color: #aaa; }
+    .dark .dark-toggle { color: #aaa; border-color: #444; }
+    .dark .dark-toggle:hover { background: rgba(255,255,255,0.08); color: #eee; border-color: #888; }
+
+    /* Swatches */
+    .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
+    .swatch { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+    .swatch-color { height: 72px; }
+    .swatch-info { padding: 10px 12px; background: var(--card); }
+    .swatch-token { font-family: var(--font-mono); font-size: 10px; color: var(--primary); display: block; margin-bottom: 2px; }
+    .swatch-hex { font-family: var(--font-mono); font-size: 11px; color: var(--foreground); font-weight: 500; }
+    .swatch-usage { font-size: 11px; color: var(--muted-foreground); margin-top: 3px; display: block; font-family: var(--font-sans); }
+
+    /* Typography */
+    .type-scale { display: flex; flex-direction: column; gap: 0; }
+    .type-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 200px;
+      align-items: baseline;
+      gap: 24px;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .type-row:first-child { border-top: 1px solid var(--border); }
+    .type-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); }
+    .type-usage { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); text-align: right; }
+
+    /* Components */
+    .component-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 32px; }
+
+    .btn {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 500;
+      padding: 9px 18px;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: opacity 150ms ease-out, background 150ms ease-out;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+    .btn-secondary { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--border); }
+    .btn-ghost { background: transparent; color: var(--foreground); }
+    .btn-ghost:hover { background: var(--muted); opacity: 1; }
+    .btn-destructive { background: var(--destructive); color: var(--destructive-foreground); }
+
+    .input-demo {
+      width: 280px;
+      height: 40px;
+      padding: 0 14px;
+      border-radius: calc(var(--radius));
+      border: 1px solid var(--input);
+      background: var(--card);
+      color: var(--foreground);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 400;
+      outline: none;
+      transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+    }
+    .input-demo:focus {
+      border-color: var(--ring);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+    }
+
+    .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+    .card-demo {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .card-demo.tinted { background: var(--accent); }
+    .card-demo h4 { font-size: 18px; font-weight: 600; margin-bottom: 6px; font-family: var(--font-mono); }
+    .card-demo p { font-size: 14px; color: var(--muted-foreground); line-height: 1.5; font-family: var(--font-sans); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+    }
+    .badge-default { background: var(--muted); color: var(--muted-foreground); border-color: var(--border); }
+    .badge-primary { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 25%, transparent); }
+    .badge-success { background: hsl(172, 60%, 90%); color: hsl(172, 70%, 20%); }
+    .badge-warning { background: hsl(45, 90%, 90%); color: hsl(35, 80%, 30%); }
+    .badge-destructive { background: hsl(0, 84%, 95%); color: hsl(0, 72%, 35%); }
+
+    /* Spacing & Radius */
+    .spacing-scale { display: flex; flex-direction: column; gap: 12px; }
+    .spacing-row { display: flex; align-items: center; gap: 16px; }
+    .spacing-bar { background: var(--primary); border-radius: 3px; height: 14px; opacity: 0.7; }
+    .spacing-label { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); min-width: 100px; }
+
+    .radius-scale { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+    .radius-box { width: 52px; height: 52px; background: var(--primary); opacity: 0.85; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; }
+    .radius-val { font-family: var(--font-mono); font-size: 10px; color: var(--primary-foreground); }
+    .radius-name { font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground); margin-top: 6px; text-align: center; }
+    .radius-item { display: flex; flex-direction: column; align-items: center; }
+
+    /* Token table */
+    .token-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .token-table th { text-align: left; padding: 10px 14px; font-family: var(--font-mono); font-size: 10px; font-weight: 500; color: var(--muted-foreground); background: var(--muted); border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.06em; }
+    .token-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .token-table tr:hover td { background: var(--muted); }
+    .token-table td:first-child { font-family: var(--font-mono); font-size: 11px; color: var(--primary); }
+    .token-table td:nth-child(2) { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); }
+    .token-table td:nth-child(3) { font-family: var(--font-mono); font-size: 11px; }
+    .dot { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; margin-right: 8px; border: 1px solid var(--border); }
+
+    /* Logo section */
+    .logo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+    .logo-asset-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .logo-asset-preview {
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--muted);
+      padding: 24px;
+    }
+    .logo-asset-info { padding: 14px 16px; border-top: 1px solid var(--border); }
+    .logo-asset-name { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--foreground); margin-bottom: 2px; }
+    .logo-asset-desc { font-size: 12px; color: var(--muted-foreground); }
+
+    .logo-placements { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
+    .logo-panel {
+      border-radius: 8px;
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      min-height: 110px;
+      border: 1px solid transparent;
+    }
+    .logo-panel-label { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6; }
+    .logo-panel-light { background: var(--background); border-color: var(--border); }
+    .logo-panel-light .logo-panel-label { color: var(--muted-foreground); }
+    .logo-panel-dark { background: #0F1A2E; }
+    .logo-panel-dark .logo-panel-label { color: rgba(255,255,255,0.5); }
+    .logo-panel-primary { background: var(--primary); }
+    .logo-panel-primary .logo-panel-label { color: rgba(255,255,255,0.7); }
+
+    .logo-dont-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .logo-dont-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .logo-dont-preview {
+      height: 90px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--muted);
+      position: relative;
+    }
+    .logo-dont-x {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-size: 16px;
+      color: hsl(0, 72%, 50%);
+      font-weight: 700;
+    }
+    .logo-dont-label {
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: hsl(0, 60%, 45%);
+      font-weight: 500;
+      border-top: 1px solid var(--border);
+    }
+
+    .code-block {
+      background: #0F1A2E;
+      border-radius: 8px;
+      padding: 20px 24px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.7;
+      color: #E0E8F0;
+      overflow-x: auto;
+      margin-bottom: 16px;
+    }
+    .code-block .c-comment { color: #5A7A9A; }
+    .code-block .c-prop { color: #00C8AA; }
+    .code-block .c-val { color: #B8D4F0; }
+    .code-block .c-tag { color: #89C4E1; }
+
+    /* Motion */
+    .motion-table { width: 100%; border-collapse: collapse; }
+    .motion-table th, .motion-table td { text-align: left; padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
+    .motion-table th { font-size: 10px; font-family: var(--font-mono); color: var(--muted-foreground); background: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+    .motion-table td:first-child { font-family: var(--font-mono); font-size: 12px; color: var(--primary); }
+
+    /* Gradient strip */
+    .gradient-strip {
+      height: 56px;
+      border-radius: 8px;
+      background: var(--brand-gradient);
+      margin-bottom: 16px;
+    }
+    .gradient-stops { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); padding: 0 4px; }
+  </style>
+</head>
+<body>
+  <nav class="site-nav">
+    <a href="../ali/preview.html">
+      <span class="nav-dot" style="background:#1F5B46;"></span>Ali
+    </a>
+    <div class="nav-divider"></div>
+    <a href="../zeroh/preview.html">
+      <span class="nav-dot" style="background:#0E8F3C;"></span>Zeroh GRC
+    </a>
+    <div class="nav-divider"></div>
+    <a href="../disclosure/preview.html" class="active">
+      <span class="nav-dot" style="background:#00C8AA;"></span>Zeroh Disclosure
+    </a>
+    <div class="nav-divider"></div>
+    <a href="../corporate/preview.html">
+      <span class="nav-dot" style="background:#4f39f6;"></span>Blade Labs Corporate
+    </a>
+    <button class="dark-toggle" style="margin-left:auto;" onclick="document.documentElement.classList.toggle('dark')">
+      ◐ dark mode
+    </button>
+  </nav>
+<div class="page">
+
+  <!-- ── Brand Header ──────────────────────────────────────── -->
+  <header class="brand-header">
+    <div>
+      <div class="brand-logo-wrap">
+        <!-- Zeroh Icon inline SVG — teal primary -->
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: var(--primary)">
+          <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+          <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="brand-tagline">Precise, deterministic, trustworthy. Built for cloud privacy and document disclosure.</div>
+    </div>
+    <div class="brand-meta">
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+        <span class="tag">Zeroh Disclosure</span>
+        <p>IBM Plex Mono + IBM Plex Sans</p>
+        <p>Teal #00C8AA · Navy #0F1A2E</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Logo & Icon Usage ─────────────────────────────────── -->
+  <section class="section">
+    <div class="section-title">Logo &amp; Icon Usage</div>
+
+    <div class="section-subtitle">Asset Inventory</div>
+    <div class="logo-grid">
+      <!-- Logo (wordmark) -->
+      <div class="logo-asset-card">
+        <div class="logo-asset-preview">
+          <!-- Zeroh wordmark — temporary zeroh mark, teal solid -->
+          <svg width="120" height="34" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: var(--primary); height: 48px; width: auto;">
+            <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+            <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="logo-asset-info">
+          <div class="logo-asset-name">Logo.svg</div>
+          <div class="logo-asset-desc">Full wordmark — nav, headers, collateral</div>
+        </div>
+      </div>
+      <!-- Icon -->
+      <div class="logo-asset-card">
+        <div class="logo-asset-preview">
+          <svg width="52" height="52" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: var(--primary);">
+            <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+            <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="logo-asset-info">
+          <div class="logo-asset-name">Icon.svg</div>
+          <div class="logo-asset-desc">Compact mark — sidebar, favicon, avatar slots</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-subtitle">Placement on Backgrounds</div>
+    <div class="logo-placements">
+      <!-- Light -->
+      <div class="logo-panel logo-panel-light">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: var(--primary)">
+          <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+          <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+        </svg>
+        <span class="logo-panel-label">Light · teal primary</span>
+      </div>
+      <!-- Dark -->
+      <div class="logo-panel logo-panel-dark">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #ffffff">
+          <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+          <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+        </svg>
+        <span class="logo-panel-label">Dark · white</span>
+      </div>
+      <!-- Primary (gradient) -->
+      <div class="logo-panel" style="background: var(--brand-gradient);">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #ffffff">
+          <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+          <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+        </svg>
+        <span style="font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.7);">Gradient · white</span>
+      </div>
+    </div>
+
+    <div class="section-subtitle">Gradient Icon (marketing)</div>
+    <div style="display: flex; gap: 32px; align-items: center; margin-bottom: 32px;">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <!-- Gradient icon using inline SVG defs -->
+        <svg width="52" height="52" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="iconGrad" x1="0" y1="0" x2="36" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#0F1A2E"/>
+              <stop offset="100%" stop-color="#00C8AA"/>
+            </linearGradient>
+          </defs>
+          <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="url(#iconGrad)"/>
+          <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="url(#iconGrad)"/>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="url(#iconGrad)"/>
+        </svg>
+        <span style="font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground);">52px</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="iconGrad2" x1="0" y1="0" x2="36" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#0F1A2E"/>
+              <stop offset="100%" stop-color="#00C8AA"/>
+            </linearGradient>
+          </defs>
+          <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="url(#iconGrad2)"/>
+          <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="url(#iconGrad2)"/>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="url(#iconGrad2)"/>
+        </svg>
+        <span style="font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground);">36px</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <svg width="24" height="24" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="iconGrad3" x1="0" y1="0" x2="36" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#0F1A2E"/>
+              <stop offset="100%" stop-color="#00C8AA"/>
+            </linearGradient>
+          </defs>
+          <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="url(#iconGrad3)"/>
+          <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="url(#iconGrad3)"/>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="url(#iconGrad3)"/>
+        </svg>
+        <span style="font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground);">24px</span>
+      </div>
+      <!-- Favicon -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-left: 16px;">
+        <div style="width: 32px; height: 32px; background: #00C8AA; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+          <svg width="20" height="20" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="white"/>
+            <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="white"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="white"/>
+          </svg>
+        </div>
+        <span style="font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground);">favicon</span>
+      </div>
+    </div>
+
+    <div class="section-subtitle">Developer Implementation</div>
+    <div class="code-block"><span class="c-comment">&lt;!-- Color via CSS `color` property --&gt;</span>
+
+<span class="c-comment">&lt;!-- App UI: solid teal --&gt;</span>
+&lt;<span class="c-tag">div</span> <span class="c-prop">style</span>=<span class="c-val">"color: var(--primary)"</span>&gt;
+  &lt;!-- inline Logo.svg or Icon.svg --&gt;
+&lt;/<span class="c-tag">div</span>&gt;
+
+<span class="c-comment">&lt;!-- On dark/gradient surface: white --&gt;</span>
+&lt;<span class="c-tag">div</span> <span class="c-prop">style</span>=<span class="c-val">"color: #ffffff"</span>&gt;
+  &lt;!-- same SVG renders white --&gt;
+&lt;/<span class="c-tag">div</span>&gt;
+
+<span class="c-comment">&lt;!-- Gradient icon: inline SVG with linearGradient --&gt;</span>
+&lt;<span class="c-tag">linearGradient</span> <span class="c-prop">id</span>=<span class="c-val">"iconGrad"</span> <span class="c-prop">x1</span>=<span class="c-val">"0"</span> <span class="c-prop">y1</span>=<span class="c-val">"0"</span> <span class="c-prop">x2</span>=<span class="c-val">"36"</span> <span class="c-prop">y2</span>=<span class="c-val">"0"</span>
+  <span class="c-prop">gradientUnits</span>=<span class="c-val">"userSpaceOnUse"</span>&gt;
+  &lt;<span class="c-tag">stop</span> <span class="c-prop">offset</span>=<span class="c-val">"0%"</span> <span class="c-prop">stop-color</span>=<span class="c-val">"#0F1A2E"</span>/&gt;
+  &lt;<span class="c-tag">stop</span> <span class="c-prop">offset</span>=<span class="c-val">"100%"</span> <span class="c-prop">stop-color</span>=<span class="c-val">"#00C8AA"</span>/&gt;
+&lt;/<span class="c-tag">linearGradient</span>&gt;
+<span class="c-comment">&lt;!-- All paths: fill="url(#iconGrad)" --&gt;</span></div>
+
+    <div class="section-subtitle">Don'ts</div>
+    <div class="logo-dont-grid">
+      <div class="logo-dont-card">
+        <div class="logo-dont-preview">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" style="transform: scaleX(1.6); color: var(--primary)">
+            <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+            <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+          </svg>
+          <span class="logo-dont-x">✕</span>
+        </div>
+        <div class="logo-dont-label">Stretched</div>
+      </div>
+      <div class="logo-dont-card">
+        <div class="logo-dont-preview">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" style="transform: rotate(35deg); color: var(--primary)">
+            <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+            <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+          </svg>
+          <span class="logo-dont-x">✕</span>
+        </div>
+        <div class="logo-dont-label">Rotated</div>
+      </div>
+      <div class="logo-dont-card">
+        <div class="logo-dont-preview" style="background: #00C8AA;">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" style="color: #00B89A;">
+            <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+            <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+          </svg>
+          <span class="logo-dont-x">✕</span>
+        </div>
+        <div class="logo-dont-label">Low contrast</div>
+      </div>
+      <div class="logo-dont-card">
+        <div class="logo-dont-preview">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" style="color: var(--primary); filter: drop-shadow(3px 3px 6px rgba(0,200,170,0.7));">
+            <path d="M16.9131 18.1465L14.4229 24.2168H19.3477L20.9629 28.2979L8.8125 28.2803L14.915 13.1621L16.9131 18.1465Z" fill="currentColor"/>
+            <path d="M26.999 28.2793H22.0176L16.0752 13.4092C16.0463 13.3366 16.0199 13.2611 15.9941 13.1836C15.8668 12.7803 15.7826 12.3645 15.7432 11.9434C15.6212 10.9049 15.7339 9.8521 16.0732 8.86328L16.1348 8.71582L17.6055 5L26.999 28.2793Z" fill="currentColor"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M18 0C27.9411 0 36 8.05888 36 18C36 27.9411 27.9411 36 18 36C8.05888 36 0 27.9411 0 18C0 8.05888 8.05888 0 18 0ZM18 1.5C8.8873 1.5 1.5 8.8873 1.5 18C1.5 27.1127 8.8873 34.5 18 34.5C27.1127 34.5 34.5 27.1127 34.5 18C34.5 8.8873 27.1127 1.5 18 1.5Z" fill="currentColor"/>
+          </svg>
+          <span class="logo-dont-x">✕</span>
+        </div>
+        <div class="logo-dont-label">Drop shadow</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Color System ───────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-title">Color System</div>
+
+    <div class="section-subtitle">Semantic Tokens</div>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--background); border-bottom: 1px solid var(--border);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">bg-background</span>
+          <span class="swatch-hex">#F8F9FB</span>
+          <span class="swatch-usage">App background</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--foreground);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">text-foreground</span>
+          <span class="swatch-hex">#0F1A2E</span>
+          <span class="swatch-usage">Primary text</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--primary);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">bg-primary</span>
+          <span class="swatch-hex">#00C8AA</span>
+          <span class="swatch-usage">Teal accent, CTA</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--card); border-bottom: 1px solid var(--border);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">bg-card</span>
+          <span class="swatch-hex">#FFFFFF</span>
+          <span class="swatch-usage">Card surfaces</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--secondary);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">bg-secondary</span>
+          <span class="swatch-hex">#C8EDE8</span>
+          <span class="swatch-usage">Chips, tags</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--muted);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">bg-muted</span>
+          <span class="swatch-hex">#EDF0F5</span>
+          <span class="swatch-usage">Hover, subtle fill</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--accent);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">bg-accent</span>
+          <span class="swatch-hex">#DDF0EC</span>
+          <span class="swatch-usage">Tinted areas</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--border);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">border-border</span>
+          <span class="swatch-hex">#D4DCE8</span>
+          <span class="swatch-usage">Dividers, outlines</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--destructive);"></div>
+        <div class="swatch-info">
+          <span class="swatch-token">text-destructive</span>
+          <span class="swatch-hex">#EF4444</span>
+          <span class="swatch-usage">Errors, critical</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-subtitle">Brand Gradient</div>
+    <div class="gradient-strip"></div>
+    <div class="gradient-stops">
+      <span>#0F1A2E — deep navy</span>
+      <span>linear-gradient(to right, #0F1A2E, #00C8AA)</span>
+      <span>#00C8AA — electric teal</span>
+    </div>
+  </section>
+
+  <!-- ── Typography ────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-title">Typography</div>
+    <div class="type-scale">
+      <div class="type-row">
+        <span class="type-meta">Display<br>40px · 700</span>
+        <span style="font-family: var(--font-mono); font-size: 40px; font-weight: 700; line-height: 1.1;">Disclosure</span>
+        <span class="type-usage">Hero headers</span>
+      </div>
+      <div class="type-row">
+        <span class="type-meta">Heading 1<br>28px · 600</span>
+        <span style="font-family: var(--font-mono); font-size: 28px; font-weight: 600;">Privacy Report</span>
+        <span class="type-usage">Section titles</span>
+      </div>
+      <div class="type-row">
+        <span class="type-meta">Heading 2<br>22px · 600</span>
+        <span style="font-family: var(--font-mono); font-size: 22px; font-weight: 600;">Data Retention</span>
+        <span class="type-usage">Card headers</span>
+      </div>
+      <div class="type-row">
+        <span class="type-meta">Heading 3<br>18px · 600</span>
+        <span style="font-family: var(--font-mono); font-size: 18px; font-weight: 600;">Access Log</span>
+        <span class="type-usage">Sub-sections</span>
+      </div>
+      <div class="type-row">
+        <span class="type-meta">Body Large<br>16px · 400</span>
+        <span style="font-family: var(--font-sans); font-size: 16px; font-weight: 400;">Cloud privacy tools for teams that move fast without compromising compliance.</span>
+        <span class="type-usage">Primary content</span>
+      </div>
+      <div class="type-row">
+        <span class="type-meta">Body<br>14px · 400</span>
+        <span style="font-family: var(--font-sans); font-size: 14px; font-weight: 400;">All document events are logged immutably. Access is audited end-to-end.</span>
+        <span class="type-usage">Descriptions</span>
+      </div>
+      <div class="type-row">
+        <span class="type-meta">Label / UI<br>13px · 500</span>
+        <span style="font-family: var(--font-sans); font-size: 13px; font-weight: 500;">Request Access · View Report · Export</span>
+        <span class="type-usage">Nav, buttons</span>
+      </div>
+      <div class="type-row">
+        <span class="type-meta">Caption<br>12px · 400</span>
+        <span style="font-family: var(--font-sans); font-size: 12px; color: var(--muted-foreground);">Updated 2 minutes ago · 4 events</span>
+        <span class="type-usage">Timestamps, meta</span>
+      </div>
+      <div class="type-row">
+        <span class="type-meta">Code<br>13px · 400</span>
+        <span style="font-family: var(--font-mono); font-size: 13px; color: var(--primary);">doc_id: b4f2a9e1</span>
+        <span class="type-usage">IDs, values</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Components ────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-title">Components</div>
+
+    <div class="section-subtitle">Buttons</div>
+    <div class="component-row">
+      <button class="btn btn-primary">Request Access</button>
+      <button class="btn btn-secondary">Learn More</button>
+      <button class="btn btn-ghost">Cancel</button>
+      <button class="btn btn-destructive">Revoke</button>
+    </div>
+
+    <div class="section-subtitle">Badges</div>
+    <div class="component-row">
+      <span class="badge badge-default">Default</span>
+      <span class="badge badge-primary">Active</span>
+      <span class="badge badge-success">Verified</span>
+      <span class="badge badge-warning">Pending</span>
+      <span class="badge badge-destructive">Revoked</span>
+    </div>
+
+    <div class="section-subtitle">Input</div>
+    <div class="component-row">
+      <input class="input-demo" type="text" placeholder="search_documents...">
+    </div>
+
+    <div class="section-subtitle">Cards</div>
+    <div class="cards-row">
+      <div class="card-demo">
+        <h4>Access Report</h4>
+        <p>14 documents accessed in the last 30 days. All events logged and auditable.</p>
+      </div>
+      <div class="card-demo tinted">
+        <h4>Privacy Status</h4>
+        <p>All cloud storage buckets are encrypted at rest and in transit.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Spacing & Radius ───────────────────────────────────── -->
+  <section class="section">
+    <div class="section-title">Spacing &amp; Radius</div>
+
+    <div class="section-subtitle">Spacing Scale</div>
+    <div class="spacing-scale">
+      <div class="spacing-row"><span class="spacing-label">4px — tight</span><div class="spacing-bar" style="width: 4px;"></div></div>
+      <div class="spacing-row"><span class="spacing-label">8px — tag pad</span><div class="spacing-bar" style="width: 8px;"></div></div>
+      <div class="spacing-row"><span class="spacing-label">12px — inner gap</span><div class="spacing-bar" style="width: 12px;"></div></div>
+      <div class="spacing-row"><span class="spacing-label">16px — standard</span><div class="spacing-bar" style="width: 16px;"></div></div>
+      <div class="spacing-row"><span class="spacing-label">24px — card pad</span><div class="spacing-bar" style="width: 24px;"></div></div>
+      <div class="spacing-row"><span class="spacing-label">32px — between</span><div class="spacing-bar" style="width: 32px;"></div></div>
+      <div class="spacing-row"><span class="spacing-label">48px — section</span><div class="spacing-bar" style="width: 48px;"></div></div>
+    </div>
+
+    <div class="section-subtitle">Border Radius</div>
+    <div class="radius-scale">
+      <div class="radius-item"><div class="radius-box" style="border-radius: 4px;"><span class="radius-val">4</span></div><span class="radius-name">badges</span></div>
+      <div class="radius-item"><div class="radius-box" style="border-radius: 6px;"><span class="radius-val">6</span></div><span class="radius-name">inputs</span></div>
+      <div class="radius-item"><div class="radius-box" style="border-radius: 8px;"><span class="radius-val">8</span></div><span class="radius-name">buttons</span></div>
+      <div class="radius-item"><div class="radius-box" style="border-radius: 12px;"><span class="radius-val">12</span></div><span class="radius-name">cards</span></div>
+      <div class="radius-item"><div class="radius-box" style="border-radius: 16px;"><span class="radius-val">16</span></div><span class="radius-name">modals</span></div>
+    </div>
+  </section>
+
+  <!-- ── Token Reference ────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-title">Token Reference</div>
+    <table class="token-table">
+      <thead>
+        <tr><th>Token</th><th>HSL</th><th>Resolved</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>--background</td><td>220 20% 97%</td><td><span class="dot" style="background:#F8F9FB;"></span>#F8F9FB</td></tr>
+        <tr><td>--foreground</td><td>214 50% 12%</td><td><span class="dot" style="background:#0F1A2E;"></span>#0F1A2E</td></tr>
+        <tr><td>--primary</td><td>172 100% 39%</td><td><span class="dot" style="background:#00C8AA;"></span>#00C8AA</td></tr>
+        <tr><td>--primary-foreground</td><td>0 0% 100%</td><td><span class="dot" style="background:#FFFFFF; border: 1px solid var(--border);"></span>#FFFFFF</td></tr>
+        <tr><td>--card</td><td>0 0% 100%</td><td><span class="dot" style="background:#FFFFFF; border: 1px solid var(--border);"></span>#FFFFFF</td></tr>
+        <tr><td>--secondary</td><td>172 30% 90%</td><td><span class="dot" style="background:#C8EDE8;"></span>#C8EDE8</td></tr>
+        <tr><td>--muted</td><td>214 30% 95%</td><td><span class="dot" style="background:#EDF0F5;"></span>#EDF0F5</td></tr>
+        <tr><td>--muted-foreground</td><td>214 15% 48%</td><td><span class="dot" style="background:#6B7A96;"></span>#6B7A96</td></tr>
+        <tr><td>--accent</td><td>172 25% 92%</td><td><span class="dot" style="background:#DDF0EC;"></span>#DDF0EC</td></tr>
+        <tr><td>--border</td><td>214 25% 88%</td><td><span class="dot" style="background:#D4DCE8;"></span>#D4DCE8</td></tr>
+        <tr><td>--destructive</td><td>0 84% 60%</td><td><span class="dot" style="background:#EF4444;"></span>#EF4444</td></tr>
+        <tr><td>--radius</td><td>—</td><td>0.5rem</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── Motion ────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-title">Motion</div>
+    <table class="motion-table">
+      <thead><tr><th>Role</th><th>Duration</th><th>Easing</th><th>Usage</th></tr></thead>
+      <tbody>
+        <tr><td>micro</td><td>100ms</td><td>ease-out</td><td>Button hover, badge, focus ring</td></tr>
+        <tr><td>default</td><td>150ms</td><td>ease-out</td><td>Menu open, tab switch, state change</td></tr>
+        <tr><td>enter</td><td>200ms</td><td>ease-out</td><td>Modal in, panel slide, toast</td></tr>
+        <tr><td>exit</td><td>120ms</td><td>ease-in</td><td>Modal dismiss, tooltip hide</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</div>
+</body>
+</html>

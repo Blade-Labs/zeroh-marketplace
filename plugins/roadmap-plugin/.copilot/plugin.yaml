@@ -1,0 +1,6 @@
+name: zeroh-roadmap
+version: 0.1.0
+description: Phase-driven development with validation gates and review reports — shapes as RED tests, CRITERIA-RED-GREEN-RATCHET, branded UI generation
+skills_dir: skills/
+hooks:
+  session_start: skills/using-zeroh-roadmap/SKILL.md

@@ -1,0 +1,26 @@
+{
+  "description": "Plugin hook overrides — copy to project root to customize enforcement behavior",
+  "phase-context": {
+    "enabled": true,
+    "modes": {
+      "shapes": "allow",
+      "routes": "allow",
+      "tests": "allow",
+      "stores": "allow",
+      "components": "allow"
+    }
+  },
+  "ap-detector": {
+    "enabled": true
+  },
+  "commit-hygiene": {
+    "enabled": true,
+    "threshold": 3
+  },
+  "stop-quality-gate": {
+    "enabled": true
+  },
+  "stop-check": {
+    "enabled": true
+  }
+}

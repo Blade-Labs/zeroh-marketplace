@@ -1,0 +1,8 @@
+{
+  "name": "zeroh-roadmap",
+  "version": "0.1.0",
+  "description": "Phase-driven development with validation gates, review reports, and changelog generation",
+  "type": "skills",
+  "entry": "CLAUDE.md",
+  "skills_dir": "skills/"
+}
