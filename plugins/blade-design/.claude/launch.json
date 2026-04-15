@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "All Previews",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/serve.js", "3000", "."],
+      "port": 3000
+    },
+    {
+      "name": "Ali Preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/serve.js", "3001", "themes/ali"],
+      "port": 3001
+    },
+    {
+      "name": "Zeroh GRC Preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/serve.js", "3002", "themes/zeroh"],
+      "port": 3002
+    },
+    {
+      "name": "Corporate Preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/serve.js", "3003", "themes/corporate"],
+      "port": 3003
+    },
+    {
+      "name": "Disclosure Preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/serve.js", "3004", "themes/disclosure"],
+      "port": 3004
+    }
+  ]
+}

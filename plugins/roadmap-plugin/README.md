@@ -1,0 +1,117 @@
+# ZeroH Roadmap
+
+Phase-driven development for AI-assisted teams. Break work into phases, execute one task at a time, validate with review agents, generate audit reports.
+
+**Requires:** TypeScript project with `zod` in dependencies.
+
+## Why
+
+Long-context LLM sessions degrade. Decisions get forgotten, work gets re-done, Claude declares "all done!" after 3 of 5 tasks. This plugin solves it by giving every session a phase file that says exactly what to do, in what order, with what acceptance criteria. Two review agents validate the result. Zero findings to pass.
+
+## Install
+
+```bash
+claude plugin install zeroh-roadmap
+```
+
+On first session, the plugin detects if your project has a `roadmap/` directory. If not, it offers to scaffold the infrastructure — schema, phases directory, review reports, helper scripts. Nothing is written without your session seeing it.
+
+## Get started
+
+After install, start your first session and say:
+
+> "create a phase for adding user authentication"
+
+The plugin reads your code, identifies the specific files and changes needed, and writes a typed phase file. Then say `do phase 1` and watch it execute.
+
+## Usage
+
+| What you say | What happens |
+|-------------|-------------|
+| "create phase for X" | Reads the code, identifies specific files + changes, writes `phase-N.phase.ts` |
+| "do phase 5" | Executes tasks one at a time, commits each, runs validation gate, reports compromises |
+| "review phase 5" | Verifies claimed work actually happened — checks code, not just commit messages |
+| "what's in the roadmap?" | Lists backlog by priority, shows in-progress and recent done phases |
+| "can phases 5 and 7 run parallel?" | Checks if key files overlap — if no, two sessions can work simultaneously |
+| "run full code review" | 8 specialist agents audit the codebase — required before release |
+
+## How it works
+
+```
+/plan-phase    → reads code, creates phase-N.phase.ts (backlog)
+/do-phase N    → one task at a time, commit between each, gate at the end
+/review-phase N → verify the work was done correctly
+```
+
+Each phase is a `.phase.ts` file with typed tasks. The plugin creates them for you — you describe what you want, it reads the code and writes the phase:
+
+```typescript
+export default definePhase({
+  phase: 5,
+  name: 'Add rate limiting to public endpoints',
+  status: 'backlog',
+  priority: 'HIGH',
+  tasks: [
+    {
+      id: '5.1',
+      title: 'Add rate limiter middleware to login route',
+      problem: 'Login endpoint has no rate limiting — brute force possible.',
+      steps: [{ file: 'middleware.ts', description: 'Add sliding window rate check' }],
+      acceptanceCriteria: ['10 requests/min limit enforced, 429 returned on 11th'],
+      files: ['middleware.ts'],
+      done: false,
+    },
+  ],
+})
+```
+
+### Validation gate (runs automatically after every phase)
+
+1. Lint
+2. Type-check
+3. Tests
+4. Build
+5. Code review — 2 parallel agents, >=80% confidence filter
+6. Fix all findings → loop until zero
+
+No exceptions. No "this phase is low-risk." Every phase gets the full gate. A typical gate takes 2-4 minutes and ~150k tokens (2 agents, 1-2 rounds).
+
+### Review reports
+
+Each release produces `reviews/releases/v{version}-review.json` — gate results, agent findings per round, resolution status, verdict. Build the HTML dashboard: `bash scripts/build-dashboard.sh`
+
+## What gets created in your project
+
+On first use, the plugin scaffolds:
+
+| Path | Purpose |
+|------|---------|
+| `lib/roadmap/schema.ts` | `definePhase()` with Zod validation |
+| `lib/roadmap/registry.ts` | Phase discovery (glob + dynamic import + duplicate detection) |
+| `lib/roadmap/emit.ts` | Deterministic registry emission with SHA256 digest |
+| `roadmap/phases/` | Where `.phase.ts` files live |
+| `roadmap/ROADMAP.md` | Gate protocol + git strategy |
+| `reviews/releases/` | Release review report JSONs |
+| `scripts/pre-review.sh` | Automated checks (catches 40% of findings before agents) |
+| `scripts/collect-phase-metrics.ts` | Git stats + gate results collector |
+| `scripts/build-dashboard.sh` | Self-contained HTML review dashboard |
+| `scripts/generate-changelog-md.ts` | Changelog from phase data |
+
+## Skills reference
+
+| Skill | Trigger |
+|-------|---------|
+| `/do-phase N` | Execute phase — sequential tasks, commits, transparency reports, gate |
+| `/plan-phase` | Create phase — reads code first, writes specific tasks with file paths |
+| `/review-phase N` | Verify phase — checks code matches claims, finds missed patterns |
+| `/code-review` | Review code — confidence-filtered, >=80% only |
+| `/full-code-review` | Pre-release — 8 parallel agents (security, dead code, DRY, perf, arch, edge cases, data flow, domain) |
+| `/test-strategy` | Test conventions — pyramid, coverage targets, quality bar |
+
+## Multi-platform
+
+Works on Claude Code, Cursor, GitHub Copilot, Gemini CLI, and Codex.
+
+## License
+
+Apache 2.0 — See [LICENSE](LICENSE)

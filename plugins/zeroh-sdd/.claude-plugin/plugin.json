@@ -1,0 +1,12 @@
+{
+  "name": "zeroh-sdd",
+  "version": "0.1.0",
+  "description": "Shape-Driven Development — shapes as RED tests, CRITERIA-RED-GREEN-RATCHET, enforcement hooks",
+  "author": {
+    "name": "Blade Labs",
+    "url": "https://blade-labs.com"
+  },
+  "repository": "https://github.com/Blade-Labs/zeroh-sdd",
+  "license": "Apache-2.0",
+  "keywords": ["sdd", "tdd", "shapes", "zod", "enforcement", "methodology"]
+}
