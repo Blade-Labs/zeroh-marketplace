@@ -29,6 +29,18 @@ ls roadmap/phases/ 2>/dev/null
 
 **Do NOT skip this. Do NOT invent your own schema. Do NOT create phases manually.**
 
+**If the directory DOES exist**, do a 1-line drift check — cheap grep, no full audit:
+
+```bash
+grep -q "TransparencyReportShape" lib/roadmap/schema.ts 2>/dev/null || echo "schema outdated"
+```
+
+If the output is `schema outdated`, print this one-line nudge to the user (once per session, do not repeat):
+
+> ⚠️  Roadmap schema is behind the plugin. Run `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts` for a full upgrade report, or tell me "upgrade the roadmap" and I'll drive it.
+
+Do NOT run the audit automatically — the grep is the cheap sentinel, the audit is the expensive report the user opts into.
+
 ## Routing — What the User Says → What You Do
 
 | User says | You MUST invoke |
@@ -41,7 +53,7 @@ ls roadmap/phases/ 2>/dev/null
 | "code review", "review this code" | Invoke skill: **code-review** |
 | "full code review", "pre-release review" | Invoke skill: **full-code-review** |
 | "audit roadmap", "check roadmap consistency", "roadmap health check" | Invoke skill: **audit-roadmap** |
-| "migrate roadmap", "upgrade roadmap plugin", "audit for migration" | Invoke skill: **migrate-roadmap** |
+| "migrate roadmap", "upgrade roadmap", "apply the migration" | Run `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts`, read the report, then drive remediation per the "Recommended next steps" section: schema first, missing scripts next, strict-fail phase files last. Confirm with user before every phase-file change. See `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` for full details. |
 
 **NEVER** handle these requests yourself. ALWAYS invoke the corresponding skill. The skills contain the full protocol — task format, validation gates, review agents, transparency reports.
 
@@ -62,4 +74,7 @@ review-phase N → verify the work was done correctly
 - **code-review**: Confidence-filtered (>=80% only). Reports severity + file:line + fix.
 - **full-code-review**: 8 parallel specialist agents. Required before release.
 - **audit-roadmap**: Cross-phase structural audit. 8 checks (dangling deps, cycles, clarification markers, stale phases, etc.). Never reads source code; read-only report.
-- **migrate-roadmap**: Guided upgrade from an older roadmap shape to the current plugin version. Runs `scripts/migrate/audit.ts`, then walks through schema / files / phase-file remediation with confirmation at each step. Disposable — never copies its own tooling into the target repo.
+
+## Migration (one-off, not a skill)
+
+`scripts/migrate/audit.ts` is the plugin-version upgrade tool. It lives under `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/` and is **never copied into the target repo** — migration tooling is disposable by design. The SessionStart drift check above surfaces it exactly when needed; the routing table row above drives the interactive remediation when the user says "migrate roadmap".

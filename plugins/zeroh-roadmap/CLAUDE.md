@@ -4,7 +4,7 @@
 
 A Claude Code plugin that adds phase-driven development with validation gates, review reports, and changelog generation to any project. Zero dependencies — all content is Markdown skills, bash scripts, and TypeScript templates.
 
-## Skills (9)
+## Skills (8)
 
 ### Process (3 phase lifecycle skills)
 | Skill | Purpose |
@@ -21,22 +21,18 @@ A Claude Code plugin that adds phase-driven development with validation gates, r
 | test-strategy | Test pyramid, coverage targets, conventions |
 | audit-roadmap | Cross-phase structural audit (dangling deps, cycles, clarification markers, stale phases) |
 
-### Maintenance (1 one-off skill)
-| Skill | Purpose |
-|-------|---------|
-| migrate-roadmap | Upgrade an existing project to the current plugin shape (schema + scripts + phase-file reconciliation) |
-
 ### Bootstrap (1 meta-skill)
 | Skill | Purpose |
 |-------|---------|
-| using-zeroh-roadmap | Session bootstrap — loaded on every SessionStart |
+| using-zeroh-roadmap | Session bootstrap — loaded on every SessionStart. Also runs the 1-line schema-drift check and nudges the user toward the migration script when outdated. |
 
-## Migration tools (not scaffolded)
+## Migration tools (not a skill, not scaffolded)
 
-`scripts/migrate/` contains one-off tooling for upgrading a target project
-to the current plugin version. `scaffold-roadmap.sh` deliberately skips this
-directory so it never accretes in user repos. Invoked via the `migrate-roadmap`
-skill or directly from the target project:
+`scripts/migrate/audit.ts` is a one-off upgrade tool. It lives in the plugin,
+`scaffold-roadmap.sh` deliberately skips it, and there is no permanent skill
+for it. Discovery is via the SessionStart drift check in `using-zeroh-roadmap`
+and the routing row that maps "migrate roadmap" directly to the script
+invocation. Run from a target project root:
 
 ```bash
 npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts
