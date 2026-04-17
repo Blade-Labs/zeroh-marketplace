@@ -1,0 +1,19 @@
+{
+  "name": "grc-neon-foundation",
+  "description": "NeOn methodology, ORSD alignment, bundle governance, and closed-world guardrails for the GRC system.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Blade Labs",
+    "url": "https://blade-labs.com"
+  },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/Blade-Labs/grc-zod-poc",
+  "keywords": [
+    "neon",
+    "orsd",
+    "cwa",
+    "governance",
+    "architecture"
+  ],
+  "hooks": "./hooks/hooks.json"
+}
