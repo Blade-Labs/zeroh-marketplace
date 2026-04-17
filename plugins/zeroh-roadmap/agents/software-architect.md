@@ -2,7 +2,7 @@
 name: software-architect
 description: Designs system architecture by analyzing existing patterns, making decisive technical choices, and producing implementation blueprints
 tools: "*"
-model: claude-opus-4-7
+model: opus
 user_callable: true
 ---
 
