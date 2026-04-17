@@ -2,7 +2,7 @@
 name: test-engineer
 description: Writes comprehensive unit tests, enforces coverage thresholds, and validates that business rules are properly tested
 tools: Glob, Grep, Read, Edit, Write, Bash, WebFetch, TodoWrite, LSP
-model: opus
+model: claude-opus-4-7
 user_callable: true
 ---
 

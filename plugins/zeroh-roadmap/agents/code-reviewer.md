@@ -2,7 +2,7 @@
 name: code-reviewer
 description: Reviews code for bugs, logic errors, pattern adherence, and business rule correctness using confidence-based filtering to report only high-priority issues
 tools: "*"
-model: opus
+model: claude-opus-4-7
 user_callable: true
 ---
 

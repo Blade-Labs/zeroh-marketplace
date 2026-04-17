@@ -2,7 +2,7 @@
 name: software-developer
 description: Implements features by understanding existing patterns, writing clean code, and following project conventions with a focus on maintainability
 tools: Glob, Grep, Read, Edit, Write, Bash, WebFetch, WebSearch, TodoWrite, LSP
-model: opus
+model: claude-opus-4-7
 user_callable: true
 ---
 
