@@ -28,13 +28,6 @@ import * as path from 'node:path'
 
 type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO'
 
-interface SchemaFeature {
-  name: string
-  summary: string
-  presentInCanonical: boolean
-  presentInTarget: boolean
-}
-
 interface ArtifactCheck {
   path: string
   exists: boolean
@@ -110,20 +103,26 @@ function detectFeatures(content: string | null): Record<string, boolean> {
   }
 }
 
-/** Find the first brace-balanced `{ ... }` block that starts at / after `startRegex`
- *  and return the full match span (including the text before the `{`). Handles
- *  both `Name = z.object({ ... })` and `Name = { ... }` (as const) styles. */
-function findBlock(content: string, startRegex: RegExp): string | null {
+/** Find the first bracket-balanced block that starts at / after `startRegex`
+ *  and return the full match span (from `startRegex.index` through the closing
+ *  char). Defaults to `{}` but can balance `[]` or any other pair. Used for
+ *  `z.object({ ... })`, `{ ... } as const`, and `gateRounds: [ ... ]`. */
+function findBlock(
+  content: string,
+  startRegex: RegExp,
+  openChar = '{',
+  closeChar = '}',
+): string | null {
   const match = startRegex.exec(content)
   if (!match) return null
   const start = match.index
-  const openIdx = content.indexOf('{', start)
+  const openIdx = content.indexOf(openChar, start)
   if (openIdx < 0) return null
   let depth = 0
   for (let i = openIdx; i < content.length; i++) {
     const c = content[i]
-    if (c === '{') depth++
-    else if (c === '}') {
+    if (c === openChar) depth++
+    else if (c === closeChar) {
       depth--
       if (depth === 0) return content.slice(start, i + 1)
     }
@@ -217,17 +216,23 @@ function scanPhaseFile(filePath: string): PhaseScan {
     }
   }
 
-  const grMatch = text.match(/gateRounds:\s*\[([\s\S]*?)\]/)
-  if (!grMatch) {
+  // Use bracket-balanced extraction so descriptions containing `arr[0]` don't
+  // terminate the match at the first inner `]`.
+  const gateRoundsBlock = findBlock(text, /gateRounds:\s*\[/, '[', ']')
+  if (!gateRoundsBlock) {
     issues.push({
       severity: 'HIGH',
       issue: 'done phase missing `gateRounds: [...]` — strict DonePhase requires ≥1 entry',
     })
-  } else if (grMatch[1].trim() === '') {
-    issues.push({
-      severity: 'HIGH',
-      issue: '`gateRounds: []` is empty — strict DonePhase requires ≥1 entry',
-    })
+  } else {
+    const bracketOpen = gateRoundsBlock.indexOf('[')
+    const inner = gateRoundsBlock.slice(bracketOpen + 1, gateRoundsBlock.length - 1)
+    if (inner.trim() === '') {
+      issues.push({
+        severity: 'HIGH',
+        issue: '`gateRounds: []` is empty — strict DonePhase requires ≥1 entry',
+      })
+    }
   }
 
   if (!/\bmetrics:\s*\{/.test(text)) {
@@ -376,7 +381,7 @@ ${nextSteps}
 
 ---
 
-_This audit is read-only. No files were modified. Run the \`migrate-roadmap\` skill to walk through the upgrade interactively, or apply the steps manually._
+_This audit is read-only. No files were modified. Apply the steps above in order — schema first, missing scripts next, strict-fail phase files last. Tell Claude "migrate the roadmap" to drive the remediation interactively._
 `
 }
 
