@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "zeroh-marketplace",
-  "description": "Blade Labs AI development plugins — Shape-Driven Development, UI design, and more",
+  "description": "Blade Labs AI development plugins — Shape-Driven Development, UI design, GRC agentic-infrastructure (NeOn + CWA + Fuseki), and more",
   "owner": {
     "name": "Blade Labs",
     "email": "info@blade-labs.com"
@@ -27,6 +27,41 @@
       "source": "./plugins/zeroh-roadmap",
       "category": "development",
       "tags": ["roadmap", "phases", "shapes", "gates", "review", "changelog"]
+    },
+    {
+      "name": "grc-neon-foundation",
+      "description": "NeOn methodology, ORSD alignment, bundle governance, and closed-world (CWA) guardrails — 3 subagents + 4 skills + 3 JIT-injection hooks",
+      "source": "./plugins/grc-neon-foundation",
+      "category": "architecture",
+      "tags": ["neon", "orsd", "cwa", "governance", "grc"]
+    },
+    {
+      "name": "grc-legislation-pipeline",
+      "description": "Akoma Ntoso ingestion, LegalRuleML first-pass + LKIF Hohfeldian second-pass normalization, routing materialization — 3 subagents + 4 skills + 1 hook",
+      "source": "./plugins/grc-legislation-pipeline",
+      "category": "legal",
+      "tags": ["akn", "lrml", "lkif", "legislation", "grc"]
+    },
+    {
+      "name": "grc-ontology-workbench",
+      "description": "Standards-first ontology reuse, canonical + operational + promoted mapping cascade, SHACL/SPARQL authoring — 3 subagents + 4 skills + 2 hooks",
+      "source": "./plugins/grc-ontology-workbench",
+      "category": "ontology",
+      "tags": ["oscal", "sssom", "shacl", "sparql", "grc"]
+    },
+    {
+      "name": "grc-omg-factory",
+      "description": "DMN 1.5 formal / BPMN / CMMN artifact binding and cross-family reference validation — 3 subagents + 4 skills",
+      "source": "./plugins/grc-omg-factory",
+      "category": "artifacts",
+      "tags": ["dmn", "bpmn", "cmmn", "omg", "grc"]
+    },
+    {
+      "name": "grc-platform-runtime",
+      "description": "Repo scaffolding, Apache Jena Fuseki + TDB2 dev stack, acceptance gates, plugin release checks — 3 subagents + 4 skills + 1 hook + configurable Fuseki endpoints",
+      "source": "./plugins/grc-platform-runtime",
+      "category": "platform",
+      "tags": ["fuseki", "jena", "tdb2", "ci", "grc"]
     }
   ]
 }

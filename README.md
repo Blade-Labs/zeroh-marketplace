@@ -6,6 +6,26 @@ A curated directory of plugins for Claude Code, maintained by Blade Labs.
 
 - **`/plugins`** - All plugins live here as directories
 
+## Listed plugins
+
+### General-purpose development
+
+- **`zeroh-sdd`** — Shape-Driven Development (shapes as RED tests, enforcement hooks, 14 skills, 8 hooks)
+- **`zeroh-design`** — Blade Labs branded UI and collateral generator (4 design themes)
+- **`zeroh-roadmap`** — Phase-driven development (shape-enforced task schemas, validation gates, review reports)
+
+### GRC agentic-infrastructure suite (new)
+
+Five plugins source-adapted from `Blade-Labs/grc-zod-poc` per the [agentic-infra-refinement plan](https://github.com/Blade-Labs/grc-zod-poc/blob/claude/review-commit-history-x36V2/docs/research/claude-neon-implementation-pack.md). Together: 15 specialist subagents + ~20 authoring skills + 7 JIT-injection hook scripts. All hooks are **PostToolUse JIT-injection** (never block) — the original pack's 3 PreToolUse blocker scripts were rewritten per the grc-zod-poc `AGENTS.md §6` teaching-not-blocking invariant.
+
+- **`grc-neon-foundation`** — NeOn methodology + ORSD alignment + bundle governance + CWA guardrails. `neon-methodologist`, `bundle-architect`, `cwa-auditor` + `orsd-review`, `cwa-guardrails`, `adr-draft`, `bundle-diff` skills.
+- **`grc-legislation-pipeline`** — Akoma Ntoso ingestion + LegalRuleML first-pass + LKIF Hohfeldian second-pass + routing materialization. `legal-source-engineer`, `deontic-modeler`, `lkif-refiner` + 4 skills.
+- **`grc-ontology-workbench`** — Standards-first ontology reuse + three-layer mapping (oscalm:SetMapping → sssom:Mapping → owl:Axiom) + SHACL/SPARQL authoring. `ontology-architect`, `mapping-curator`, `shacl-sparql-engineer` + 4 skills.
+- **`grc-omg-factory`** — DMN 1.5 formal / BPMN / CMMN binding + cross-family reference validation. `dmn-architect`, `bpmn-architect`, `cmmn-architect` + 4 skills (no hooks).
+- **`grc-platform-runtime`** — Repo scaffolding + Apache Jena Fuseki + TDB2 dev stack + acceptance gates + plugin release. `platform-engineer`, `fuseki-operator`, `ci-guardian` + 4 skills + configurable Fuseki endpoints.
+
+These plugins are also **committed in-repo** in both `Blade-Labs/grc-zod-poc` and `Blade-Labs/GRC-ZOD-Alpha` under `plugins/grc-*/`, auto-enabled via the in-repo marketplace pattern (`extraKnownMarketplaces: {source: directory, path: "."}`) for consumers who work in those repos directly. This marketplace mirror serves external consumers.
+
 ## Installation
 
 To install, run `/plugin install {plugin-name}@zeroh-marketplace`
