@@ -55,6 +55,34 @@ This is the most important step. For each area of work:
 
 **If you can't do steps 1-5 for a piece of work, it's not ready to be a task.** Split the investigation into its own task first.
 
+### Step 2b: When the answer isn't in the code — `[NEEDS CLARIFICATION]` markers
+
+Some questions cannot be resolved by reading source, no matter how hard you look. Examples:
+
+- A business rule the codebase doesn't yet express (e.g. "what's the max retry count?")
+- A product decision that could go two valid ways (e.g. "should partial-month settlement pro-rate by days or treat the partial period as full?")
+- An environment constraint that isn't in the repo (e.g. "which Stripe webhook endpoint does staging point at?")
+
+For these, embed a marker directly in the task's `problem` or `acceptanceCriteria` string:
+
+```typescript
+{
+  problem: 'Settlement modal shows the wrong amount for partial months. '
+    + '[NEEDS CLARIFICATION: should partial months pro-rate by days, or '
+    + 'treat the partial period as a full period?]',
+  // ...
+}
+```
+
+**Rules:**
+
+- A marker must name a **specific question**, not just "TBD" or "figure this out".
+- A marker means the task is **not yet executable**. The phase may be committed on disk, but it must NOT be queued in `roadmap/backlog.ts` until every marker is resolved.
+- Do NOT guess and leave a silent assumption. The marker is the honest answer; a silent wrong guess is the failure mode markers prevent.
+- `do-phase` and `review-phase` will both refuse to proceed on a phase containing unresolved markers.
+
+Markers are for **genuine ambiguity** that the code cannot answer. If a function's behavior is unclear, read the function — don't drop a marker as a shortcut out of investigation.
+
 ### Step 3: Write the phase file
 
 Create `roadmap/phases/phase-{N}.phase.ts` using `definePhase()`:
@@ -135,9 +163,17 @@ Each acceptance criterion must name a specific command to run (`pnpm test`, `pnp
 **5. Task order respects data flow**
 Walk the task list top to bottom. No task may depend on output from a later task. No task may assume a file is unchanged if an earlier task modifies it.
 - Check: does task N.3 import/use something task N.4 creates? Does task N.2 modify a file that task N.1 reads in a specific state?
+- Any task with explicit `dependsOn: ["N.X"]` — verify N.X exists in this phase and appears earlier in the task list.
 - Fail = BLOCKER. Will fail at execution.
 
-**If any check fails:** fix the phase file and re-run the failing checks. Do NOT commit until all 5 pass.
+**6. No unresolved clarification markers**
+```bash
+grep -n '\[NEEDS CLARIFICATION' roadmap/phases/phase-{N}.phase.ts
+```
+Every marker must either be resolved (replaced with the decision) OR the phase is explicitly flagged as non-executable — it is committed but not queued.
+- Fail = NEEDS WORK. Phase is planned but not yet decidable. `do-phase` will refuse it.
+
+**If any check fails:** fix the phase file and re-run the failing checks. Commit is acceptable with unresolved markers only if the phase is NOT added to the backlog. All 5 other checks MUST pass before commit.
 
 ### Step 6: Commit and push
 
@@ -233,5 +269,6 @@ Tell the user:
 3. Whether it's ready to execute (`/do-phase N`) or needs more investigation
 4. Key risk areas or dependencies to be aware of
 5. That the phase is **not** in the execution backlog yet — to queue it, edit `roadmap/backlog.ts`
+6. **Any `[NEEDS CLARIFICATION]` markers** — list each one as a question, with its task ID. Explicitly state: "Phase is committed but NOT executable until these are answered." Do not suggest queuing the phase in the backlog while markers remain.
 
 **Do NOT auto-append to `roadmap/backlog.ts`.** New phases enter backlog unqueued. The user deliberately sequences phases during planning sessions — auto-appending would bypass that intentional ordering.
