@@ -19,7 +19,7 @@ A Claude Code plugin that adds phase-driven development with validation gates, r
 | code-review | Confidence-filtered code review (>=80% only) |
 | full-code-review | Pre-release gate with 8 parallel specialist agents |
 | test-strategy | Test pyramid, coverage targets, conventions |
-| analyze-phases | Cross-phase consistency auditor (dangling deps, cycles, clarification markers, stale phases) |
+| audit-roadmap | Cross-phase structural audit (dangling deps, cycles, clarification markers, stale phases) |
 
 ### Bootstrap (1 meta-skill)
 | Skill | Purpose |

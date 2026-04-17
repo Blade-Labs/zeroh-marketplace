@@ -222,7 +222,7 @@ Record the summary in **both**:
 1. The phase file's `compromises` field (Edit the .phase.ts file — this is the durable record).
 2. The completion commit message body (Step 5).
 
-Persisting to the phase file means the compromise summary survives outside git and is queryable by later skills (e.g. `speckit-analyze`). Skipping the phase file write loses that signal.
+Persisting to the phase file means the compromise summary survives outside git and is queryable by later skills (e.g. `audit-roadmap`). Skipping the phase file write loses that signal.
 
 ### Step 5: Complete the phase
 
@@ -246,7 +246,7 @@ The schema enforces gate results when `status: 'done'`. `pnpm type-check` catche
        { round: 2, findings: [], summary: 'Round 2: 0 findings — gate clean' },
      ],
      ```
-     Legacy free-form strings are still accepted by the schema for compatibility with pre-extension phases, but new phases should use the structured form so `speckit-analyze` can query findings.
+     Legacy free-form strings are still accepted by the schema for compatibility with pre-extension phases, but new phases should use the structured form so `audit-roadmap` can query findings.
    - `metrics: { commits, linesAdded, linesRemoved, filesChanged, testsAtStart, testsAtEnd, testsAdded }`
    - `compromises: '<summary from Step 4b>'` — the aggregated compromise/skipped/hardcoded summary. Omit only if every task reported "None" in all six sections.
    - `completedDate: 'YYYY-MM-DD'`

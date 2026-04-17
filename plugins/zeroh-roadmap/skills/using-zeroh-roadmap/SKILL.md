@@ -40,7 +40,7 @@ ls roadmap/phases/ 2>/dev/null
 | "what's next?", "next phase", "do next phase" | Read `roadmap/backlog.ts` — first entry is next to execute. Invoke **do-phase** |
 | "code review", "review this code" | Invoke skill: **code-review** |
 | "full code review", "pre-release review" | Invoke skill: **full-code-review** |
-| "analyze roadmap", "check roadmap consistency", "lint the roadmap" | Invoke skill: **analyze-phases** |
+| "audit roadmap", "check roadmap consistency", "roadmap health check" | Invoke skill: **audit-roadmap** |
 
 **NEVER** handle these requests yourself. ALWAYS invoke the corresponding skill. The skills contain the full protocol — task format, validation gates, review agents, transparency reports.
 
@@ -60,4 +60,4 @@ review-phase N → verify the work was done correctly
 - **review-phase**: Two modes — Plan Quality (backlog: verify files exist, source confirms problem, pattern completeness) or Post-Execution Audit (done: verify claimed changes exist, bug actually fixed, pattern caught everywhere).
 - **code-review**: Confidence-filtered (>=80% only). Reports severity + file:line + fix.
 - **full-code-review**: 8 parallel specialist agents. Required before release.
-- **analyze-phases**: Cross-phase consistency auditor. 8 checks (dangling deps, cycles, clarification markers, stale phases, etc.). Read-only.
+- **audit-roadmap**: Cross-phase structural audit. 8 checks (dangling deps, cycles, clarification markers, stale phases, etc.). Never reads source code; read-only report.

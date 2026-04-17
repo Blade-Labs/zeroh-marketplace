@@ -1,17 +1,17 @@
 ---
-name: "Analyze Phases"
-description: "Read-only cross-phase consistency check across the entire roadmap. Detects dangling dependencies, cycles, backlog drift, unresolved clarification markers, incomplete done phases, misordered task deps, stale in-progress phases, and duplicate phase numbers. Does NOT fix — reports findings only."
+name: "Audit Roadmap"
+description: "Read-only structural audit across the entire roadmap. 8 checks — dangling dependencies, cycles, backlog drift, unresolved clarification markers, incomplete done phases, misordered task deps, stale in-progress phases, duplicate phase numbers. Never reads source code. Does NOT fix — reports findings only."
 user-invocable: true
 metadata:
-  keywords: analyze, consistency, roadmap, check, audit, phases, drift, lint
-  aliases: roadmap-analyze, check-roadmap
+  keywords: audit, roadmap, consistency, check, phases, drift, health
+  aliases: roadmap-audit, check-roadmap
 ---
 
-# Analyze Phases — Cross-Phase Consistency Check
+# Audit Roadmap — Cross-Phase Structural Audit
 
 ## Trigger
 
-User says: `analyze roadmap`, `check roadmap consistency`, `/analyze-phases`, `/roadmap-analyze`, `verify phases consistency`, `lint the roadmap`
+User says: `audit roadmap`, `audit the roadmap`, `/audit-roadmap`, `/roadmap-audit`, `check roadmap consistency`, `roadmap health check`
 
 ## What This Is (and Is NOT)
 
@@ -24,7 +24,7 @@ User says: `analyze roadmap`, `check roadmap consistency`, `/analyze-phases`, `/
 - **`full-code-review`** (which audits application code)
 - **`emit.ts --check`** (which verifies the registry JSON digest)
 
-`analyze-phases` is the cross-cutting roadmap auditor. It finds problems that span phases, not problems within a single phase.
+`audit-roadmap` is the cross-cutting structural auditor. It finds problems that span phases, not problems within a single phase. Compared to `review-phase`: `review-phase` goes **deep into one phase** (reads source code, verifies bug claims, does blast-radius grep). `audit-roadmap` goes **shallow across all phases** (reads only phase files + git log, never opens source).
 
 ## Protocol
 
