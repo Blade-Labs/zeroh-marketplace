@@ -134,7 +134,11 @@ For each task, in order:
    **LIMITATIONS:** <known limitations, or "None">
    ```
 
-   b. Persist the same content as a structured `transparencyReport` field on the task in the phase file. The schema (`TransparencyReportShape`) requires all six sections — use the literal string `"None"` for any section with nothing to report.
+   b. Persist the same content as a structured `transparencyReport` field on the task in the phase file. The schema (`TransparencyReportShape`) requires all six sections and rejects noise — use either:
+      - The literal string `"None"` when a section genuinely has nothing to report (compromises/skipped/hardcoded/limitations only — `whatWasDone` and `how` must always be real content).
+      - At least 10 characters of substantive content.
+
+      Short tokens like `"n/a"`, `"."`, `"tbd"` will fail schema parse. This is intentional — the field exists to force honesty, not placate a type check.
 
    ```typescript
    // In the phase file, inside the task object:

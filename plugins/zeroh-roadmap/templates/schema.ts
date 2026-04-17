@@ -134,14 +134,22 @@ export type PhaseMetrics = z.output<typeof PhaseMetricsShape>
 /** Structured honesty report written by do-phase after each task executes.
  *  Was previously output only in the conversation; persisting it on the task
  *  makes compromises and shortcuts queryable after the session ends.
- *  Use the literal string "None" when a section has nothing to report. */
+ *
+ *  Constraints:
+ *  - `whatWasDone` and `how` are always content (no null semantics) — require
+ *    at least 10 characters so a terse "ok" or "." can't pass.
+ *  - `compromises`, `skipped`, `hardcoded`, `limitations` are naturally nullable.
+ *    Use the **literal string `"None"`** when a section has nothing to report;
+ *    any other content must be at least 10 characters. Short tokens like
+ *    "n/a", ".", "tbd" intentionally fail — they're the noise this schema
+ *    exists to reject. */
 export const TransparencyReportShape = z.object({
-  whatWasDone: z.string().min(5),
-  how: z.string().min(5),
-  compromises: z.string().min(1),
-  skipped: z.string().min(1),
-  hardcoded: z.string().min(1),
-  limitations: z.string().min(1),
+  whatWasDone: z.string().min(10),
+  how: z.string().min(10),
+  compromises: z.union([z.literal('None'), z.string().min(10)]),
+  skipped: z.union([z.literal('None'), z.string().min(10)]),
+  hardcoded: z.union([z.literal('None'), z.string().min(10)]),
+  limitations: z.union([z.literal('None'), z.string().min(10)]),
 })
 
 export type TransparencyReport = z.output<typeof TransparencyReportShape>
