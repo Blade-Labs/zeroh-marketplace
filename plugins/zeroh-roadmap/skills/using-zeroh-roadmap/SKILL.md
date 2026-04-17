@@ -56,7 +56,7 @@ Do NOT run the audit automatically — the grep is the cheap sentinel, the audit
 | "code review", "review this code" | Invoke skill: **code-review** |
 | "full code review", "pre-release review" | Invoke skill: **full-code-review** |
 | "audit roadmap", "check roadmap consistency", "roadmap health check" | Invoke skill: **audit-roadmap** |
-| "migrate roadmap", "upgrade roadmap", "apply the migration" | Run `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts`, read the report, then drive remediation per the "Recommended next steps" section: schema first, missing scripts next, strict-fail phase files last. Confirm with user before every phase-file change. See `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` for full details. |
+| "migrate roadmap", "upgrade roadmap", "apply the migration" | Read `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` — it contains the authoritative 7-step migration protocol including pre-flight safety (clean working tree check, migration branch, `/tmp` tarball snapshot) and per-bucket remediation. Follow it in order. Do NOT skip pre-flight. |
 
 **NEVER** handle these requests yourself. ALWAYS invoke the corresponding skill. The skills contain the full protocol — task format, validation gates, review agents, transparency reports.
 
