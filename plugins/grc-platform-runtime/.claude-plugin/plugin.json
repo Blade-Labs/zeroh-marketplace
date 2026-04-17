@@ -1,0 +1,34 @@
+{
+  "name": "grc-platform-runtime",
+  "description": "Repo scaffolding, TypeScript/package boundaries, Apache Jena Fuseki + TDB2 runtime, and CI/release guardrails.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Blade Labs",
+    "url": "https://blade-labs.com"
+  },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/Blade-Labs/grc-zod-poc",
+  "keywords": [
+    "platform",
+    "fuseki",
+    "jena",
+    "tdb2",
+    "typescript",
+    "ci"
+  ],
+  "hooks": "./hooks/hooks.json",
+  "userConfig": {
+    "fuseki_query_endpoint": {
+      "description": "Fuseki SPARQL query endpoint, for example http://localhost:3030/grc/query",
+      "sensitive": false
+    },
+    "fuseki_update_endpoint": {
+      "description": "Fuseki SPARQL update endpoint, for example http://localhost:3030/grc/update",
+      "sensitive": false
+    },
+    "fuseki_dataset_name": {
+      "description": "Fuseki dataset name, for example grc",
+      "sensitive": false
+    }
+  }
+}

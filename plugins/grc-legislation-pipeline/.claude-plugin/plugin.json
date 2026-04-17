@@ -1,0 +1,19 @@
+{
+  "name": "grc-legislation-pipeline",
+  "description": "Akoma Ntoso ingestion, LegalRuleML and LKIF legal normalization, and routing preparation for legislation.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Blade Labs",
+    "url": "https://blade-labs.com"
+  },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/Blade-Labs/grc-zod-poc",
+  "keywords": [
+    "legislation",
+    "akoma-ntoso",
+    "legalruleml",
+    "lkif",
+    "normalization"
+  ],
+  "hooks": "./hooks/hooks.json"
+}
