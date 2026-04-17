@@ -41,6 +41,7 @@ ls roadmap/phases/ 2>/dev/null
 | "code review", "review this code" | Invoke skill: **code-review** |
 | "full code review", "pre-release review" | Invoke skill: **full-code-review** |
 | "audit roadmap", "check roadmap consistency", "roadmap health check" | Invoke skill: **audit-roadmap** |
+| "migrate roadmap", "upgrade roadmap plugin", "audit for migration" | Invoke skill: **migrate-roadmap** |
 
 **NEVER** handle these requests yourself. ALWAYS invoke the corresponding skill. The skills contain the full protocol — task format, validation gates, review agents, transparency reports.
 
@@ -61,3 +62,4 @@ review-phase N → verify the work was done correctly
 - **code-review**: Confidence-filtered (>=80% only). Reports severity + file:line + fix.
 - **full-code-review**: 8 parallel specialist agents. Required before release.
 - **audit-roadmap**: Cross-phase structural audit. 8 checks (dangling deps, cycles, clarification markers, stale phases, etc.). Never reads source code; read-only report.
+- **migrate-roadmap**: Guided upgrade from an older roadmap shape to the current plugin version. Runs `scripts/migrate/audit.ts`, then walks through schema / files / phase-file remediation with confirmation at each step. Disposable — never copies its own tooling into the target repo.

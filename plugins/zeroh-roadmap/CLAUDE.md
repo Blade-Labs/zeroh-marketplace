@@ -4,7 +4,7 @@
 
 A Claude Code plugin that adds phase-driven development with validation gates, review reports, and changelog generation to any project. Zero dependencies — all content is Markdown skills, bash scripts, and TypeScript templates.
 
-## Skills (8)
+## Skills (9)
 
 ### Process (3 phase lifecycle skills)
 | Skill | Purpose |
@@ -21,10 +21,26 @@ A Claude Code plugin that adds phase-driven development with validation gates, r
 | test-strategy | Test pyramid, coverage targets, conventions |
 | audit-roadmap | Cross-phase structural audit (dangling deps, cycles, clarification markers, stale phases) |
 
+### Maintenance (1 one-off skill)
+| Skill | Purpose |
+|-------|---------|
+| migrate-roadmap | Upgrade an existing project to the current plugin shape (schema + scripts + phase-file reconciliation) |
+
 ### Bootstrap (1 meta-skill)
 | Skill | Purpose |
 |-------|---------|
 | using-zeroh-roadmap | Session bootstrap — loaded on every SessionStart |
+
+## Migration tools (not scaffolded)
+
+`scripts/migrate/` contains one-off tooling for upgrading a target project
+to the current plugin version. `scaffold-roadmap.sh` deliberately skips this
+directory so it never accretes in user repos. Invoked via the `migrate-roadmap`
+skill or directly from the target project:
+
+```bash
+npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts
+```
 
 ## Agents (4)
 
