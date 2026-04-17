@@ -40,7 +40,7 @@ Bumping the plugin's schema version is a single-line edit in `templates/schema.t
 
 If the output is `schema outdated`, print this one-line nudge to the user (once per session, do not repeat):
 
-> ⚠️  Roadmap schema is behind the plugin. Run `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts` for a full upgrade report, or tell me "upgrade the roadmap" and I'll drive it.
+> ⚠️  New roadmap plugin update available. Tell me "upgrade the roadmap" or run `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts` for a full upgrade report.
 
 Do NOT run the audit automatically — the grep is the cheap sentinel, the audit is the expensive report the user opts into.
 
