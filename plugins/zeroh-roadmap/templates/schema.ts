@@ -77,6 +77,38 @@ export const PassingGateResultShape = z
 
 export type PassingGateResult = z.output<typeof PassingGateResultShape>
 
+// ── Gate Finding + Round (structured) ──────────────────────────────────────
+
+/** A single actionable finding produced by a code-review agent during a gate round.
+ *  Populated by do-phase Step 5 / full-code-review Phase 4. `fixedInCommit` is set
+ *  in the subsequent round if the finding was remediated. */
+export const GateFindingShape = z.object({
+  file: z.string().min(1),
+  line: z.number().int().positive().optional(),
+  severity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']),
+  confidence: z.number().int().min(80).max(100).optional(),
+  description: z.string().min(10),
+  fixedInCommit: z.string().min(7).optional(),
+})
+
+export type GateFinding = z.output<typeof GateFindingShape>
+
+/** Structured record of one round of validation agents + the findings they raised. */
+export const StructuredGateRoundShape = z.object({
+  round: z.number().int().positive(),
+  findings: z.array(GateFindingShape).default([]),
+  summary: z.string().min(5).optional(),
+})
+
+export type StructuredGateRound = z.output<typeof StructuredGateRoundShape>
+
+/** A gate round may be the legacy free-form string (pre-schema-extension phases)
+ *  or the new structured form. Both are accepted to preserve backwards
+ *  compatibility with existing .phase.ts files. */
+export const GateRoundShape = z.union([z.string().min(5), StructuredGateRoundShape])
+
+export type GateRound = z.output<typeof GateRoundShape>
+
 // ── Phase Metrics ───────────────────────────────────────────────────────────
 
 export const PhaseMetricsShape = z.object({
@@ -90,6 +122,23 @@ export const PhaseMetricsShape = z.object({
 })
 
 export type PhaseMetrics = z.output<typeof PhaseMetricsShape>
+
+// ── Transparency Report ─────────────────────────────────────────────────────
+
+/** Structured honesty report written by do-phase after each task executes.
+ *  Was previously output only in the conversation; persisting it on the task
+ *  makes compromises and shortcuts queryable after the session ends.
+ *  Use the literal string "None" when a section has nothing to report. */
+export const TransparencyReportShape = z.object({
+  whatWasDone: z.string().min(5),
+  how: z.string().min(5),
+  compromises: z.string().min(1),
+  skipped: z.string().min(1),
+  hardcoded: z.string().min(1),
+  limitations: z.string().min(1),
+})
+
+export type TransparencyReport = z.output<typeof TransparencyReportShape>
 
 // ── Phase Task ──────────────────────────────────────────────────────────────
 
@@ -122,10 +171,18 @@ export const PhaseTaskShape = z.object({
    *  "e2e" = test-engineer writes E2E AFTER implementation (blind to source).
    *  "none" = no separate test step (default for docs, infra, config tasks). */
   testMode: z.enum(['tdd', 'e2e', 'none']).default('none'),
+  /** Task IDs from the same phase that must complete before this task can run.
+   *  Empty / omitted = strict sequential (previous task is the implicit dep).
+   *  Use an explicit list when a task can start earlier than its position suggests
+   *  or has a non-obvious dependency. Cross-phase deps go on the Phase, not the Task. */
+  dependsOn: z.array(z.string().regex(/^\d+\.\d+$/)).default([]),
   /** Whether the task is complete */
   done: z.boolean(),
   /** ISO date when completed */
   doneDate: z.string().date().optional(),
+  /** Transparency report from execution — what was done, what was compromised, what was skipped.
+   *  Populated by do-phase after each task completes. Absence on a done task = report not captured. */
+  transparencyReport: TransparencyReportShape.optional(),
 })
 
 export type PhaseTask = z.output<typeof PhaseTaskShape>
@@ -173,12 +230,16 @@ const BasePhaseFields = {
   tasks: z.array(z.union([PhaseTaskShape, MinimalTaskShape])),
   /** Unstructured investigation notes, architecture decisions, analysis (preserved from markdown) */
   notes: z.string().optional(),
+  /** Aggregated compromise summary from do-phase — trade-offs, skipped criteria, and
+   *  hardcoded values accumulated across tasks. Promoted from commit body so that
+   *  phase-level honesty survives outside git. */
+  compromises: z.string().optional(),
 } as const
 
 /** Gate fields for non-done phases — all optional */
 const OptionalGateFields = {
   gate: GateResultShape.optional(),
-  gateRounds: z.array(z.string()).optional(),
+  gateRounds: z.array(GateRoundShape).optional(),
   metrics: PhaseMetricsShape.optional(),
   completedDate: z.string().date().optional(),
 } as const
@@ -188,7 +249,7 @@ const DonePhaseShape = z.object({
   ...BasePhaseFields,
   status: z.literal('done'),
   gate: PassingGateResultShape,
-  gateRounds: z.array(z.string()).min(1, 'Validation agents must run at least 1 round'),
+  gateRounds: z.array(GateRoundShape).min(1, 'Validation agents must run at least 1 round'),
   metrics: PhaseMetricsShape,
   completedDate: z.string().date(),
 })
