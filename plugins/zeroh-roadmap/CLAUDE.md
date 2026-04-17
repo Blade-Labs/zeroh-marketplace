@@ -4,7 +4,7 @@
 
 A Claude Code plugin that adds phase-driven development with validation gates, review reports, and changelog generation to any project. Zero dependencies — all content is Markdown skills, bash scripts, and TypeScript templates.
 
-## Skills (7)
+## Skills (8)
 
 ### Process (3 phase lifecycle skills)
 | Skill | Purpose |
@@ -13,12 +13,13 @@ A Claude Code plugin that adds phase-driven development with validation gates, r
 | plan-phase | Create new phases with high-confidence task design |
 | review-phase | Verify completed work or audit plan quality |
 
-### Quality (3 review skills)
+### Quality (4 review skills)
 | Skill | Purpose |
 |-------|---------|
 | code-review | Confidence-filtered code review (>=80% only) |
 | full-code-review | Pre-release gate with 8 parallel specialist agents |
 | test-strategy | Test pyramid, coverage targets, conventions |
+| analyze-phases | Cross-phase consistency auditor (dangling deps, cycles, clarification markers, stale phases) |
 
 ### Bootstrap (1 meta-skill)
 | Skill | Purpose |
