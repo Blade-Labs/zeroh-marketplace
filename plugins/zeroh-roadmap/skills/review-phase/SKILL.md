@@ -76,7 +76,17 @@ Each acceptance criterion must name a specific command to run or an observable o
 
 **5. Task order respects data flow**
 Walk the task list top to bottom. No task may depend on output from a later task. No task may assume a file is unchanged if an earlier task modifies it.
+- Any task with explicit `dependsOn: ["N.X"]` — verify N.X exists in this phase and appears **earlier** in the `tasks` array. A dep pointing to a later task is a BLOCKER (cycle or misorder). A dep pointing to a non-existent task ID is a BLOCKER (hallucinated ID).
+- Cross-phase deps live on the Phase object (`phase.dependsOn`), not on tasks. A task's `dependsOn` referencing a phase number (not an N.X task ID) is malformed.
 - Fail = BLOCKER. Will fail at execution.
+
+**6. No unresolved `[NEEDS CLARIFICATION]` markers**
+```bash
+grep -n '\[NEEDS CLARIFICATION' roadmap/phases/phase-{N}.phase.ts
+```
+Every marker means the planner explicitly flagged a question that must be answered before the phase is executable.
+- If any marker exists, the phase is NEEDS WORK regardless of all other checks. List each marker in the findings with its task ID and the specific question.
+- Fail = NEEDS WORK. Phase cannot be queued or executed until every marker is resolved.
 
 **Output per task:**
 ```
