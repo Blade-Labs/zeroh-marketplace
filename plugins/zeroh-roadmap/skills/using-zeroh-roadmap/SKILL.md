@@ -29,11 +29,14 @@ ls roadmap/phases/ 2>/dev/null
 
 **Do NOT skip this. Do NOT invent your own schema. Do NOT create phases manually.**
 
-**If the directory DOES exist**, do a 1-line drift check — cheap grep, no full audit:
+**If the directory DOES exist**, do a 1-line drift check against the plugin's current schema version. The canonical carries a `@zeroh-roadmap-schema vN` comment — read N from the plugin, compare against the target:
 
 ```bash
-grep -q "TransparencyReportShape" lib/roadmap/schema.ts 2>/dev/null || echo "schema outdated"
+CANONICAL_VER=$(grep -oE '@zeroh-roadmap-schema v[0-9]+' "${CLAUDE_PLUGIN_ROOT}/templates/schema.ts" | head -1)
+grep -qF "$CANONICAL_VER" lib/roadmap/schema.ts 2>/dev/null || echo "schema outdated"
 ```
+
+Bumping the plugin's schema version is a single-line edit in `templates/schema.ts` — no migration of this grep needed.
 
 If the output is `schema outdated`, print this one-line nudge to the user (once per session, do not repeat):
 
