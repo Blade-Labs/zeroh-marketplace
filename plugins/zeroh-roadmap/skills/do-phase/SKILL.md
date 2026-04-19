@@ -180,10 +180,11 @@ This replaces the old protocol's instruction to "loop Steps 3→6→7 until clea
    - **Round N>1**: only the fix diff from the previous round (scoped per ROADMAP.md:77-81)
    - The phase file for context
    - Hard requirement: findings must have `confidence >= 80`. Lower-confidence findings are dropped.
+   - **Severity range: CRITICAL through LOW are in scope for fixing.** INFO findings are recorded but do not block the gate. Agents must surface every >=80% confidence issue — the loop is responsible for triage, not the agents.
 
 3. **Evaluate round result:**
-   - **Both agents return 0 findings** → gate PASSES for this round. Record the round and proceed to Step 4b.
-   - **At least one agent returns ≥1 finding** → fix, record, loop.
+   - **Both agents return 0 actionable findings (CRITICAL/HIGH/MEDIUM/LOW)** → gate PASSES for this round. Record the round (including any INFO observations) and proceed to Step 4b.
+   - **At least one agent returns ≥1 actionable finding** → fix, record, loop. INFO-only findings do not trigger another round but must still be persisted in `gateRounds[].findings` for the audit trail.
 
 4. **Fix findings + record round:**
    - Apply fixes. One commit per logical fix group: `fix(<scope>): phase N gate RN — <what was fixed>`.

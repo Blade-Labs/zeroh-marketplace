@@ -26,5 +26,17 @@ Report ONLY findings with >=80% confidence. Low-confidence hunches waste the use
 For each finding:
 - File path and line number
 - Issue description (1-2 sentences)
-- Severity: CRITICAL / HIGH / MEDIUM
+- Severity: CRITICAL / HIGH / MEDIUM / LOW / INFO
 - Suggested fix (if obvious)
+
+## Severity Rubric
+
+Report **every** finding that meets the >=80% confidence bar — not just the headline-grabbing ones. Minor findings are how regressions and tech debt accumulate.
+
+- **CRITICAL** — security vulnerability, data corruption, financial calc error, runtime crash. Blocks release.
+- **HIGH** — wrong business behavior, broken contract, significant perf regression, orphaned business rule.
+- **MEDIUM** — incorrect-but-non-blocking behavior, missing error context, brittle pattern, race condition with low blast radius.
+- **LOW** — code quality issue with real but minor cost: unclear naming, dead code, weak abstraction, inconsistent pattern.
+- **INFO** — observation worth noting but not requiring action: alternative approach, future-considerations, doc gap.
+
+**Do not silently drop a finding because it feels too small.** If you're confident it's wrong, report it at the right severity. The gate decides what to fix.
