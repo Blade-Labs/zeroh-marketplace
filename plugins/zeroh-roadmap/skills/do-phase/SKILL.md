@@ -122,16 +122,17 @@ For each task, in order:
 7. **TaskUpdate** — set status to `completed`
 8. **Transparency report** — output a structured block AND persist it into the phase file.
 
-   a. Output to the conversation so the user sees it in real time:
+   a. Output to the conversation so the user sees it in real time. **Always print `WHAT WAS DONE` and `HOW`. For `COMPROMISES`, `SKIPPED`, `HARDCODED`, `LIMITATIONS` — print the line ONLY when the value is not `"None"`.** A clean task should be a 2-line report; a compromised task surfaces only the sections that actually have something to say. This applies to the chat output only — the persisted `transparencyReport` field (step b) still records all six sections so the audit trail stays complete.
+
    ```
    ### Transparency Report — Task N.X: <title>
 
    **WHAT WAS DONE:** <1-2 sentence summary>
    **HOW:** <approach, key decisions>
-   **COMPROMISES:** <trade-offs made and why, or "None">
-   **SKIPPED:** <acceptance criteria not fully addressed, or "None">
-   **HARDCODED:** <values that should be configurable, or "None">
-   **LIMITATIONS:** <known limitations, or "None">
+   [**COMPROMISES:** <trade-offs made and why>]      ← omit line if "None"
+   [**SKIPPED:** <acceptance criteria not fully addressed>]  ← omit line if "None"
+   [**HARDCODED:** <values that should be configurable>]     ← omit line if "None"
+   [**LIMITATIONS:** <known limitations>]            ← omit line if "None"
    ```
 
    b. Persist the same content as a structured `transparencyReport` field on the task in the phase file. The schema (`TransparencyReportShape`) requires all six sections and rejects noise — use either:
