@@ -38,11 +38,12 @@ invocation. Run from a target project root:
 npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts
 ```
 
-## Agents (4)
+## Agents (5)
 
 | Agent | Purpose |
 |-------|---------|
 | code-reviewer | Bugs, logic errors, pattern adherence |
+| simplifier | Taste pass — removes dead scaffolding, speculative abstractions, redundant error handling. Runs as Round 0 of the `do-phase` gate (one-shot). |
 | software-architect | Architecture blueprints, decisive design |
 | software-developer | Implementation with existing patterns |
 | test-engineer | Test writing, coverage enforcement |

@@ -157,115 +157,43 @@ For each task, in order:
 
 The agent continues immediately to the next task after persisting the report. No waiting, no asking "should I continue?"
 
-### Step 4: Validation gate loop (automated — keep looping until clean)
+### Step 4: Validation gate
 
-After the last task is complete, run the validation gate. **The loop is automated**: each round fixes findings and re-runs the agents without pausing for user input, until one round reports ZERO findings from all agents.
+After the last task commits, run the validation gate. Full protocol in **`references/gate-protocol.md`** — read it once per session, then return here.
 
-This replaces the old protocol's instruction to "loop Steps 3→6→7 until clean" with explicit automation — the human no longer drives successive rounds.
+The gate has three stages:
 
-**Round N (start with N=1):**
+**Round 0 — Simplify pass** (one-shot, does NOT loop). Launch one `simplifier` agent with `git diff <phase-start-SHA>..HEAD` and the phase file. It removes dead scaffolding, speculative abstractions, redundant error handling, and noise — then commits inline (`refactor(phase-N): simplify — <summary>`). Simplification is judgment, not correctness, so it runs exactly once. Bugs the simplifier notices get flagged and forwarded to Round 1 rather than fixed.
 
-1. **Mechanical checks** — every step must pass before agents run. If any fails, fix it, commit, and restart Round N from the top.
+**Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5 rounds). Each round:
+1. Mechanical checks (`pnpm biome check . && pnpm type-check && pnpm test && pnpm build && bash scripts/pre-review.sh <first-task-SHA>~1 && pnpm e2e:local`). Any failure → fix + commit + restart Round N.
+2. Two parallel `code-reviewer` agents reviewing the phase diff (Round 1) or the previous round's fix diff (Round N>1). Confidence ≥80, severities CRITICAL→LOW in scope, INFO recorded but non-blocking.
+3. If both agents return zero actionable findings → gate passes. Otherwise fix, record a `StructuredGateRound` entry, loop.
 
-   ```bash
-   pnpm biome check .       # lint
-   pnpm type-check          # types
-   pnpm test                # unit + integration
-   pnpm build               # production build
-   bash scripts/pre-review.sh <first-task-SHA>~1   # mechanical finding catcher
-   pnpm e2e:local           # E2E (MANDATORY)
-   ```
+If Round 5 hasn't converged, STOP and surface remaining findings — agents may be cycling.
 
-2. **Agent reviews** — launch 2 `code-reviewer` agents in parallel. Each receives:
-   - **Round 1**: full phase diff (`git diff <phase-start-SHA>..HEAD`)
-   - **Round N>1**: only the fix diff from the previous round (scoped per ROADMAP.md:77-81)
-   - The phase file for context
-   - Hard requirement: findings must have `confidence >= 80`. Lower-confidence findings are dropped.
-   - **Severity range: CRITICAL through LOW are in scope for fixing.** INFO findings are recorded but do not block the gate. Agents must surface every >=80% confidence issue — the loop is responsible for triage, not the agents.
+**NO EXCEPTIONS** — every phase gets the full gate, including docs-only and test-only phases.
 
-3. **Evaluate round result:**
-   - **Both agents return 0 actionable findings (CRITICAL/HIGH/MEDIUM/LOW)** → gate PASSES for this round. Record the round (including any INFO observations) and proceed to Step 4b.
-   - **At least one agent returns ≥1 actionable finding** → fix, record, loop. INFO-only findings do not trigger another round but must still be persisted in `gateRounds[].findings` for the audit trail.
+### Step 4b: Phase compromise summary (the ONLY human stop)
 
-4. **Fix findings + record round:**
-   - Apply fixes. One commit per logical fix group: `fix(<scope>): phase N gate RN — <what was fixed>`.
-   - Build a `StructuredGateRound` record for this round:
-     ```typescript
-     { round: N, findings: [{ file, line?, severity, confidence, description, fixedInCommit? }], summary: 'Round N: X findings fixed' }
-     ```
-     Keep this in working memory — it gets written to the phase file in Step 5.
-   - Go back to step 1 with Round N+1.
+Aggregate every task's persisted `transparencyReport` into a phase-level summary (compromises, skipped criteria, hardcoded values, limitations). The user decides: mark done, or address items first.
 
-**Hard limit — Round 5**: if the loop has not converged after 5 rounds, STOP and surface the remaining findings to the user. Agents may be cycling (finding-then-rewriting-then-finding). Do not silently loop forever.
+Record the summary in BOTH the phase file's `compromises` field AND the completion commit body. Skipping the phase-file write loses the signal for `audit-roadmap`.
 
-**NO EXCEPTIONS** — not for "docs-only", "test-only", or "low-risk" phases. Every phase gets the full gate. If the phase file's validation task specifies additional checks, run those too.
-
-### Step 4b: Phase Compromise Summary (ONLY REAL STOP)
-
-Before marking the phase done, aggregate every task's persisted `transparencyReport` into a phase-level summary:
-
-```
-## Phase N Compromise Summary
-
-Tasks: X total | Y clean | Z with compromises
-
-### Compromises
-- Task N.1: <one-liner from COMPROMISES section>
-- Task N.3: <one-liner>
-
-### Skipped criteria
-- Task N.2: <what was skipped>
-
-### Hardcoded values
-- Task N.4: <one-liner>
-```
-
-**This is the ONLY real STOP in the phase.** The user reviews the summary and decides:
-- "Mark done" → proceed to Step 5
-- "Address X first" → fix the compromise, then re-run summary
-
-Record the summary in **both**:
-1. The phase file's `compromises` field (Edit the .phase.ts file — this is the durable record).
-2. The completion commit message body (Step 5).
-
-Persisting to the phase file means the compromise summary survives outside git and is queryable by later skills (e.g. `audit-roadmap`). Skipping the phase file write loses that signal.
+Full format in `references/gate-protocol.md`.
 
 ### Step 5: Complete the phase
 
-The schema enforces gate results when `status: 'done'`. `pnpm type-check` catches missing fields and wrong literal values (e.g. `typeCheck: 'errors'`, `lint: 'errors'`); `definePhase()` additionally catches `unitTests.passed !== total` and empty `gateRounds` at runtime. Fill everything in one edit:
+The schema enforces gate results when `status: 'done'`. In one edit to the `.phase.ts` file, set: `status: 'done'`, `gate` (from Rounds 1..N results), `gateRounds` (structured entries including Round 0), `metrics`, `compromises` (from Step 4b), `completedDate: 'YYYY-MM-DD'`.
 
-1. Edit the .phase.ts file — set ALL of these together:
-   - `status: 'done'`
-   - `gate: { typeCheck: 'clean', lint: 'clean', unitTests: { passed: N, total: N }, ... }` — must reflect passing results from Step 4
-   - `gateRounds` — use the structured `StructuredGateRound` shape built in Step 4. At least 1 entry required. Example:
-     ```typescript
-     gateRounds: [
-       {
-         round: 1,
-         findings: [
-           { file: 'lib/services/foo.ts', line: 42, severity: 'HIGH', confidence: 85,
-             description: 'Missing null check when payload.user is undefined',
-             fixedInCommit: 'a1b2c3d' },
-         ],
-         summary: 'Round 1: 1 finding fixed',
-       },
-       { round: 2, findings: [], summary: 'Round 2: 0 findings — gate clean' },
-     ],
-     ```
-     Legacy free-form strings are still accepted by the schema for compatibility with pre-extension phases, but new phases should use the structured form so `audit-roadmap` can query findings.
-   - `metrics: { commits, linesAdded, linesRemoved, filesChanged, testsAtStart, testsAtEnd, testsAdded }`
-   - `compromises: '<summary from Step 4b>'` — the aggregated compromise/skipped/hardcoded summary. Omit only if every task reported "None" in all six sections.
-   - `completedDate: 'YYYY-MM-DD'`
-2. Run `pnpm type-check` — confirms gate enforcement passes
-3. Run `pnpm emit:phases` to update the registry
-4. Commit: `docs(roadmap): mark phase N complete` (include compromise summary in commit body)
-5. Push to develop
+Then: `pnpm type-check` → `pnpm emit:phases` → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop.
 
-Alternatively, if `scripts/collect-phase-metrics.ts` exists, it can fill gate + metrics automatically:
+If `scripts/collect-phase-metrics.ts` exists, it fills `gate` and `metrics` automatically:
 ```bash
 npx tsx scripts/collect-phase-metrics.ts N
 ```
-Then set `status: 'done'` and verify with `pnpm type-check`.
+
+Field-level detail, `StructuredGateRound` shape, and Round 0 schema integration in **`references/gate-protocol.md`**.
 
 ## Execution Mode: parallel
 
