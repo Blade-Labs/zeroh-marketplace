@@ -38,12 +38,13 @@ invocation. Run from a target project root:
 npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts
 ```
 
-## Agents (5)
+## Agents (6)
 
 | Agent | Purpose |
 |-------|---------|
+| architect-critique | Shortcut hunter — auto-fixes hardcodes, TODOs, and pre-existing issues in touched files. Runs as the first stage of the `do-phase` gate (one-shot), before simplifier. Surfaces only true hard-stops (multi-repo breaking changes, scoped-out systems, product decisions, speculative fixes). |
 | code-reviewer | Bugs, logic errors, pattern adherence |
-| simplifier | Taste pass — removes dead scaffolding, speculative abstractions, redundant error handling. Runs as Round 0 of the `do-phase` gate (one-shot). |
+| simplifier | Taste pass — removes dead scaffolding, speculative abstractions, redundant error handling, and any over-extraction the architect-critique may have introduced. Runs as Round 0 of the `do-phase` gate (one-shot), after architect-critique. |
 | software-architect | Architecture blueprints, decisive design |
 | software-developer | Implementation with existing patterns |
 | test-engineer | Test writing, coverage enforcement |
