@@ -16,6 +16,25 @@ Add rows to detect new anti-patterns. The hook reads this table at runtime.
 | AP-ENV-01 | `process.env.` outside config/ or env/ directories | *.ts,*.tsx | Scattered environment variable access | Centralize env reads in a config module. Scattered reads create invisible coupling. |
 | AP-LOG-01 | `console.log` in non-test file | *.ts,*.tsx | Console.log left in production code | Remove or replace with structured logging. |
 
+## Tier 1: Closed-World Admission (*.ts, *.tsx, *.sparql)
+
+Derived from Blade-Labs/grc-zod-alpha-audit Phase B signal-absorption manifest (2026-04-24). These codes cover the four distinctive CWA-violation patterns that the repo-scoped cwa-fallback-detector previously caught; they now live in the plugin as the single source of truth.
+
+| id | pattern | file_filter | message | remediation |
+|----|---------|-------------|---------|-------------|
+| AP-CWA-01 | `??` with non-boolean operand (excluding `?? false\|true\|null\|undefined`) | *.ts,*.tsx | Silent default masks missing value — CWA violation | Replace with explicit undefined handling or throw. Nullish-coalescing with a non-boolean RHS hides the "value is missing" signal. |
+| AP-CWA-02 | Empty or comment-only catch block: `catch () {}` / `catch (e) {}` with no throw/return/log | *.ts,*.tsx | Swallowed error — catch has no re-throw, log, or typed-error return | Re-throw with context or return a typed error object. Empty catch erases diagnostic signal. |
+| AP-CWA-03 | `model\|provider\|fallback` arrays containing provider names (`claude\|gpt\|opus\|sonnet\|haiku\|openai\|anthropic\|local`) | *.ts,*.tsx,*.json | Fallback model/provider chain detected — CWA forbids silent provider substitution | Remove the fallback array. Primary model must fail closed. The LLM router is the sole routing point. |
+| AP-CWA-04 | `SELECT \?s \?p \?o` wildcard SPARQL read | *.ts,*.sparql | Wildcard read admits unchecked statements — provenance bypass | Narrow the query to a specific predicate + graph. Wildcard reads are forbidden under CWA. |
+
+## Tier 1: Hardcoded Ontology Data (*.ts, *.tsx — multi-line awk)
+
+Derived from Blade-Labs/grc-zod-alpha-audit Phase B signal-absorption manifest (2026-04-24). Unlike the other tiers, this requires multi-line awk analysis (const-block body scanning), not single-line grep.
+
+| id | pattern | file_filter | message | remediation |
+|----|---------|-------------|---------|-------------|
+| AP-HARD-01 | const block containing ≥ 2 CURIE/URN/IRI string values (e.g. `"dpv:Foo"`, `"urn:grc:..."`, `"https://..."`) | *.ts,*.tsx | Hardcoded ontology data — should load from bundle, not inline as TS constants | Replace the const with a bundle loader call (e.g. `@grc/bundle` resolver). Ontology is data; duplicating it in code creates drift. |
+
 ## Tier 1: Shape-Specific (*.shape.ts only)
 
 | id | pattern | file_filter | message | remediation |
@@ -32,6 +51,7 @@ Add rows to detect new anti-patterns. The hook reads this table at runtime.
 | AP-WIRE-02 | `response.json() as T` type assertion | *.ts | Unvalidated type assertion bypasses shape enforcement | Replace with `validatedParse(ResponseSchema, await response.json(), { route })`. |
 | AP-WIRE-03 | `throw new Error(await response.text())` | *.ts | Error chain destruction — stringifies structured error into plain text | Use `throwUpstreamError(response)` or parse the response as RFC 9457 first. |
 | AP-WIRE-04 | catch block without remediation keywords (remediation, fix, check, run, verify) | *.ts | Error without remediation is unactionable by LLM | Add specific remediation: what endpoint to check, what config to verify, what command to run. |
+| AP-WIRE-05 | `.parse(`/`safeParse(`/`validatedParse(` called but no `*Schema`/`*Shape` import in file | *.ts | Parse call without declared shape — boundary validation bypassed | Add `import { FooSchema } from '...'; FooSchema.safeParse(data)` at the boundary. Inverse of AP-WIRE-01. |
 
 ## Tier 1: Test-Specific (*.test.*, *.spec.*)
 
