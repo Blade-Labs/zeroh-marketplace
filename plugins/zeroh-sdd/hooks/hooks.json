@@ -1,5 +1,5 @@
 {
-  "description": "zeroh-sdd enforcement gradient — 8 hooks across 6 events",
+  "description": "zeroh-sdd enforcement gradient — 9 hooks across 6 events",
   "hooks": {
     "SessionStart": [
       {
@@ -19,6 +19,11 @@
             "type": "command",
             "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/phase-context.sh",
             "statusMessage": "Checking file type..."
+          },
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/stage-write-guard.sh",
+            "statusMessage": "Checking stage allowlist..."
           }
         ]
       }
