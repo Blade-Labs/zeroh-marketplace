@@ -161,6 +161,10 @@ The agent continues immediately to the next task after persisting the report. No
 
 After the last task commits, run the validation gate. Full protocol in **`references/gate-protocol.md`** — read it once per session, then return here.
 
+**Launch every gate agent synchronously.** Do NOT pass `run_in_background: true` on any `architect-critique`, `simplifier`, or `code-reviewer` Agent call. Background agents end the parent turn and rely on a completion notification that does not fire until the sub-agent's final `end_turn` — creating a silent dead-zone where the parent looks stopped. The gate is a critical-path sequence; there is no useful parent work to do in parallel, so block on each stage.
+
+Before entering the gate, finish (or kill) any long-running background bash you started — e.g. a manual `pnpm tauri build`. Do not launch one "to run in parallel with the gate." The gate's mechanical checks already run `pnpm build` inside Round N.
+
 The gate has four stages:
 
 **Architect-critique pass** (one-shot, does NOT loop). Launch one `architect-critique` agent with `git diff <phase-start-SHA>..HEAD` and the phase file. It auto-fixes shortcuts, hardcodes, TODOs, and pre-existing issues in files the phase touched, then commits (`fix(phase-N): architect critique — <summary>`). Hard-stops (multi-repo breaking changes, scoped-out systems, product decisions, speculative fixes) are NOT fixed — they surface in the critique's report and feed the compromise summary (Step 4b).

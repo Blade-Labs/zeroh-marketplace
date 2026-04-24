@@ -23,9 +23,11 @@ After the gate passes, Step 5 fills the phase file with gate results, metrics, a
 
 ### Protocol
 
-1. Launch exactly one `architect-critique` agent with:
+1. Launch exactly one `architect-critique` agent **synchronously** (no `run_in_background`) with:
    - `git diff <phase-start-SHA>..HEAD` — the full phase diff (raw implementation, no simplifier run yet)
    - The phase file — for scope context and transparency-report compromises
+
+   Block on the return. A background launch ends the parent turn and there is no completion notification until the sub-agent's final `end_turn` — the parent will appear to stop between the sub-agent's last commit and its summary.
 2. The agent applies auto-fixes and commits as one: `fix(phase-N): architect critique — <summary>`. If nothing was fixed, it commits nothing.
 3. Capture the agent's report. It has three sections:
    - **FIXED (auto)** — applied inline; no further action.
@@ -44,7 +46,7 @@ After the gate passes, Step 5 fills the phase file with gate results, metrics, a
 
 ### Protocol
 
-1. Launch exactly one `simplifier` agent with:
+1. Launch exactly one `simplifier` agent **synchronously** (no `run_in_background`) with:
    - `git diff <phase-start-SHA>..HEAD` — the full phase diff, now including the architect-critique's commit
    - The phase file, for context on what the phase was supposed to accomplish
    - Scope reminder: fix taste issues, flag bugs for later rounds, do NOT fix correctness
@@ -94,7 +96,7 @@ bash scripts/pre-review.sh <first-task-SHA>~1   # mechanical finding catcher
 pnpm e2e:local           # E2E (MANDATORY)
 ```
 
-**2. Agent reviews.** Launch 2 `code-reviewer` agents in parallel. Each receives:
+**2. Agent reviews.** Launch 2 `code-reviewer` agents in parallel — **two synchronous Agent calls in a single message** (no `run_in_background` on either). "Parallel" here means the runtime fans them out; the parent still blocks until both return. Each receives:
 - **Round 1**: full phase diff (`git diff <phase-start-SHA>..HEAD`) plus any unresolved items from Round 0's `skipped` or `bugsNoted` lists.
 - **Round N > 1**: only the fix diff from the previous round (scoped per ROADMAP.md:77-81).
 - The phase file for context.
