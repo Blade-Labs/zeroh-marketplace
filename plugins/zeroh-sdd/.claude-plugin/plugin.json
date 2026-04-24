@@ -1,6 +1,6 @@
 {
   "name": "zeroh-sdd",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shape-Driven Development — shapes as RED tests, CRITERIA-RED-GREEN-RATCHET, enforcement hooks",
   "author": {
     "name": "Blade Labs",
