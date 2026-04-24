@@ -161,9 +161,11 @@ The agent continues immediately to the next task after persisting the report. No
 
 After the last task commits, run the validation gate. Full protocol in **`references/gate-protocol.md`** — read it once per session, then return here.
 
-The gate has three stages:
+The gate has four stages:
 
-**Round 0 — Simplify pass** (one-shot, does NOT loop). Launch one `simplifier` agent with `git diff <phase-start-SHA>..HEAD` and the phase file. It removes dead scaffolding, speculative abstractions, redundant error handling, and noise — then commits inline (`refactor(phase-N): simplify — <summary>`). Simplification is judgment, not correctness, so it runs exactly once. Bugs the simplifier notices get flagged and forwarded to Round 1 rather than fixed.
+**Architect-critique pass** (one-shot, does NOT loop). Launch one `architect-critique` agent with `git diff <phase-start-SHA>..HEAD` and the phase file. It auto-fixes shortcuts, hardcodes, TODOs, and pre-existing issues in files the phase touched, then commits (`fix(phase-N): architect critique — <summary>`). Hard-stops (multi-repo breaking changes, scoped-out systems, product decisions, speculative fixes) are NOT fixed — they surface in the critique's report and feed the compromise summary (Step 4b).
+
+**Round 0 — Simplify pass** (one-shot, does NOT loop). Launch one `simplifier` agent with the updated `git diff <phase-start-SHA>..HEAD` (now including the critique's fixes) and the phase file. It removes dead scaffolding, speculative abstractions, redundant error handling, and any over-extraction the critique may have added — then commits inline (`refactor(phase-N): simplify — <summary>`). Simplification is judgment, not correctness, so it runs exactly once. Bugs the simplifier notices get flagged and forwarded to Round 1 rather than fixed.
 
 **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5 rounds). Each round:
 1. Mechanical checks (`pnpm biome check . && pnpm type-check && pnpm test && pnpm build && bash scripts/pre-review.sh <first-task-SHA>~1 && pnpm e2e:local`). Any failure → fix + commit + restart Round N.
@@ -176,7 +178,12 @@ If Round 5 hasn't converged, STOP and surface remaining findings — agents may 
 
 ### Step 4b: Phase compromise summary (the ONLY human stop)
 
-Aggregate every task's persisted `transparencyReport` into a phase-level summary (compromises, skipped criteria, hardcoded values, limitations). The user decides: mark done, or address items first.
+Aggregate into a phase-level summary:
+1. Every task's persisted `transparencyReport` (compromises, skipped criteria, hardcoded values, limitations).
+2. The architect-critique's `SURFACED` entries (e.g. DB migrations — applied, but worth knowing before deploy).
+3. The architect-critique's `HARD-STOPS` by tag: `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`.
+
+The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries).
 
 Record the summary in BOTH the phase file's `compromises` field AND the completion commit body. Skipping the phase-file write loses the signal for `audit-roadmap`.
 

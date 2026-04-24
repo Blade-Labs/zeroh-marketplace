@@ -4,26 +4,48 @@ Detailed protocol for the phase validation gate invoked by `do-phase` Step 4 and
 
 ## Overview
 
-Three stages, run in order:
+Four stages, run in order:
 
-1. **Round 0 — Simplify pass** (one-shot, no looping). `simplifier` agent removes dead scaffolding and speculative abstractions. Runs exactly once per phase.
-2. **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5). Mechanical checks + two parallel `code-reviewer` agents. Each round fixes findings and re-runs until zero actionable findings.
-3. **Compromise summary** — aggregate every task's persisted `transparencyReport`. This is the ONLY human stop-point in the gate.
+1. **Architect-critique pass** (one-shot, no looping). `architect-critique` agent hunts shortcuts, hardcodes, TODOs, and pre-existing issues in touched files. Auto-fixes everything within scope; surfaces only true hard-stops.
+2. **Round 0 — Simplify pass** (one-shot, no looping). `simplifier` agent removes dead scaffolding, speculative abstractions, and any over-extraction the critique may have introduced. Runs exactly once per phase.
+3. **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5). Mechanical checks + two parallel `code-reviewer` agents. Each round fixes findings and re-runs until zero actionable findings.
+4. **Compromise summary** — aggregate every task's persisted `transparencyReport` PLUS the critique's surfaced items and hard-stops. This is the ONLY human stop-point in the gate.
 
 After the gate passes, Step 5 fills the phase file with gate results, metrics, and completion date.
 
 ---
 
+## Architect-Critique Pass (one-shot)
+
+**Why it runs first:** shortcut-hunting is additive work (fixing hardcodes, adding proper handling, updating same-repo callers for a contract change). Running it before the simplifier means the simplifier gets a chance to trim any over-extraction the critique may have introduced. Running it before the code-reviewer loop means the reviewer validates the final combined result in one pass, not two.
+
+**Why one-shot, not looping:** the critique makes judgment calls about whether a shortcut is worth fixing now vs. escalating. There is no "zero" state to converge on. The code-reviewer loop that runs after acts as the validation gate for the critique's fixes — if the critique introduces a correctness issue, reviewers will catch it.
+
+### Protocol
+
+1. Launch exactly one `architect-critique` agent with:
+   - `git diff <phase-start-SHA>..HEAD` — the full phase diff (raw implementation, no simplifier run yet)
+   - The phase file — for scope context and transparency-report compromises
+2. The agent applies auto-fixes and commits as one: `fix(phase-N): architect critique — <summary>`. If nothing was fixed, it commits nothing.
+3. Capture the agent's report. It has three sections:
+   - **FIXED (auto)** — applied inline; no further action.
+   - **SURFACED** — fixed, but worth flagging (DB migrations, schema changes). Carry forward to the compromise summary.
+   - **HARD-STOPS** — tagged `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`. Carry forward to the compromise summary for user decision.
+4. If the agent reports nothing fixed and no hard-stops, that is a valid outcome. Proceed to Round 0.
+5. **Do not re-run the agent.** The code-reviewer loop validates whatever the critique left.
+
+---
+
 ## Round 0 — Simplify Pass (one-shot)
 
-**Why it runs first:** taste corrections invalidate bug findings. If the simplifier deletes a helper that the code-reviewer was about to flag, you avoid wasted rounds. Running simplify after code-review instead would mean either re-running code-review (expensive) or shipping code that could have been reduced.
+**Why it runs after critique, before correctness:** taste corrections invalidate bug findings. If the simplifier deletes a helper that the code-reviewer was about to flag, you avoid wasted rounds. And running the simplifier *after* the architect-critique lets it trim any over-extraction the critique may have introduced (e.g. a config object promoted for one caller).
 
 **Why one-shot, not looping:** simplification is judgment. There is no "zero" state to converge on. Diminishing returns kick in after the first pass, and taste loops encourage over-deletion.
 
 ### Protocol
 
 1. Launch exactly one `simplifier` agent with:
-   - `git diff <phase-start-SHA>..HEAD` — the full phase diff
+   - `git diff <phase-start-SHA>..HEAD` — the full phase diff, now including the architect-critique's commit
    - The phase file, for context on what the phase was supposed to accomplish
    - Scope reminder: fix taste issues, flag bugs for later rounds, do NOT fix correctness
 2. The agent applies its edits inline and commits: `refactor(phase-N): simplify — <summary>`.
@@ -108,14 +130,14 @@ If the loop has not converged after 5 rounds, STOP and surface the remaining fin
 
 ## Compromise Summary (the only human stop-point)
 
-Before marking the phase done, aggregate every task's persisted `transparencyReport` into a phase-level summary:
+Before marking the phase done, aggregate into a phase-level summary:
 
 ```
 ## Phase N Compromise Summary
 
 Tasks: X total | Y clean | Z with compromises
 
-### Compromises
+### Compromises (from task transparency reports)
 - Task N.1: <one-liner from COMPROMISES section>
 - Task N.3: <one-liner>
 
@@ -124,11 +146,26 @@ Tasks: X total | Y clean | Z with compromises
 
 ### Hardcoded values
 - Task N.4: <one-liner>
+
+### Surfaced by architect-critique (fixed, but worth knowing)
+- DB migration applied: new column `users.verified_at` — ensure staging migration runs before deploy
+
+### Hard-stops from architect-critique (NOT fixed — your call)
+- [MULTI-REPO] lib/api/client.ts — signature change breaks callers in zeroh-admin repo
+- [SCOPED-OUT] lib/analytics/emitter.ts:34 — pre-existing double-fire, analytics out of scope
+- [PRODUCT] checkout flow for expired coupons — needs product decision
+- [SPECULATIVE] settlement.calculate() partial-month basis ambiguous
 ```
 
 The user reviews the summary and decides:
 - **"Mark done"** → proceed to phase completion
 - **"Address X first"** → fix the compromise, then re-run the summary
+- **"Plan follow-up"** → especially for `[MULTI-REPO]` hard-stops that need a phase in another repo
+
+Sources to aggregate:
+1. Every task's persisted `transparencyReport` (compromises, skipped criteria, hardcoded values, limitations).
+2. The architect-critique's `SURFACED` section (DB migrations, schema changes — applied, flagged for visibility).
+3. The architect-critique's `HARD-STOPS` section (all four tag categories).
 
 Record the summary in both:
 1. The phase file's `compromises` field (durable record).
