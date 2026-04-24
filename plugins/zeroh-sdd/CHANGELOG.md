@@ -4,6 +4,26 @@ All notable changes to zeroh-sdd will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-04-24
+
+### Added
+
+- `stage-write-guard.sh` PreToolUse Write|Edit blocking hook, ported from Blade-Labs/grc-zod-alpha-audit (Phase C of the hook-consolidation sprint). First blocking hook in the plugin; others remain advisory (PostToolUse) or Stop-gate.
+- `scripts/hooks/context/stage-write-guard.md` message template (placeholders: STAGE, ATTEMPTED, ALLOWED).
+- hooks.json wires the new hook alongside existing `phase-context.sh` under the PreToolUse Write|Edit matcher; both fire in parallel (deny > defer > ask > allow precedence if both return decisions).
+
+### Behaviour
+
+Reads `.specify/workflows/active-stage.json` from the consuming repo (via `CLAUDE_PROJECT_DIR`). If the file is absent → silent exit (no active stage → no guard). If a Write|Edit tool call targets a path outside the active stage's allowlist → emits `permissionDecision: "deny"` with a rendered message citing the stage name, attempted path, and allowed-path rules.
+
+### Non-breaking
+
+Additive hook. Consumers without `.specify/workflows/active-stage.json` see no behaviour change. Consumers that already have a Spec-Kit-style stage pipeline get mechanical enforcement of their stage allowlists.
+
+### Context
+
+Source: `Blade-Labs/grc-zod-alpha-audit/.claude/hooks/stage-write-guard.sh` at commit 977ed83 (codex baseline). Repo's `common.sh` helper deps rewritten inline per plugin convention (node for JSON parse, inline python3 for template substitution + escape). Consumer data (`active-stage.json`, workflow YAML) remains in consuming-repo `.specify/`, not ported into the plugin, per concept ownership contract in the source discovery doc §4.0.
+
 ## [0.2.0] - 2026-04-24
 
 ### Added
