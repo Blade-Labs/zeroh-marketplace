@@ -95,7 +95,8 @@ fi
 
 # AP-ANY-01: high density of 'as any' or 'as unknown as' (>3 per file)
 if [[ "$is_ts_file" == "true" ]]; then
-  count=$(grep -cE '\bas any\b|\bas unknown as\b' "$file_path" 2>/dev/null || echo 0)
+  count=$(grep -cE '\bas any\b|\bas unknown as\b' "$file_path" 2>/dev/null || true)
+  count=${count:-0}
   if (( count > 3 )); then
     append_violation "AP-ANY-01" \
       "High type assertion density (${count} occurrences)" \
@@ -136,6 +137,105 @@ if [[ "$is_ts_file" == "true" && "$is_test_file" == "false" ]]; then
       "console.log left in production code" \
       ":${ln}" \
       "Remove or replace with structured logging."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Closed-World Admission (CWA) — Phase B absorption from grc-zod-alpha-audit
+# repo-scoped cwa-fallback-detector (2026-04-24 signal-absorption manifest).
+# ---------------------------------------------------------------------------
+
+# AP-CWA-01: `??` with non-boolean operand (nullish-coalescing default).
+# Allows `?? false`, `?? true`, `?? null`, `?? undefined` which are often
+# legitimate boolean-like coercions.
+if [[ "$is_ts_file" == "true" ]]; then
+  match=$(grep -nE '\?\?\s*[^[:space:]]' "$file_path" 2>/dev/null \
+    | grep -vE '\?\?\s*(false|true|null|undefined)\b' \
+    | head -1 || true)
+  if [[ -n "$match" ]]; then
+    ln=$(echo "$match" | cut -d: -f1)
+    append_violation "AP-CWA-01" \
+      "Silent default masks missing value — CWA violation" \
+      ":${ln}" \
+      "Replace \`??\` with explicit undefined handling or throw. Nullish-coalescing with a non-boolean RHS hides the missing-value signal."
+  fi
+fi
+
+# AP-CWA-02: empty or comment-only catch block.
+# Matches `catch () {}` / `catch (e) {}` / `catch { // comment }`.
+if [[ "$is_ts_file" == "true" ]]; then
+  match=$(grep -nE 'catch\s*\(?[^)]*\)?\s*\{\s*(//[^\n]*)?\s*\}' "$file_path" 2>/dev/null | head -1 || true)
+  if [[ -n "$match" ]]; then
+    ln=$(echo "$match" | cut -d: -f1)
+    append_violation "AP-CWA-02" \
+      "Swallowed error — catch block is empty or comment-only" \
+      ":${ln}" \
+      "Re-throw with context or return a typed error object. Empty catch erases diagnostic signal."
+  fi
+fi
+
+# AP-CWA-03: model/provider fallback chains (routing array with provider names).
+if [[ "$is_ts_file" == "true" || "$file_path" == *.json ]]; then
+  match=$(grep -nE '(model|provider|fallback).*\[.*(claude|gpt|opus|sonnet|haiku|openai|anthropic|local).*\]' "$file_path" 2>/dev/null | head -1 || true)
+  if [[ -n "$match" ]]; then
+    ln=$(echo "$match" | cut -d: -f1)
+    append_violation "AP-CWA-03" \
+      "Fallback model/provider chain detected — CWA forbids silent provider substitution" \
+      ":${ln}" \
+      "Remove the fallback array. Primary model must fail closed. The LLM router is the sole routing point."
+  fi
+fi
+
+# AP-CWA-04: wildcard SPARQL `SELECT ?s ?p ?o` read (no provenance filter).
+if [[ "$is_ts_file" == "true" || "$file_path" == *.sparql ]]; then
+  match=$(grep -nE 'SELECT\s+\?s\s+\?p\s+\?o' "$file_path" 2>/dev/null | head -1 || true)
+  if [[ -n "$match" ]]; then
+    ln=$(echo "$match" | cut -d: -f1)
+    append_violation "AP-CWA-04" \
+      "Wildcard read admits unchecked statements — provenance bypass" \
+      ":${ln}" \
+      "Narrow the query to a specific predicate + graph. Wildcard reads are forbidden under CWA."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Hardcoded Ontology Data — Phase B absorption from grc-zod-alpha-audit
+# repo-scoped hardcoded-enum-detector. Multi-line awk (const-body scan).
+# ---------------------------------------------------------------------------
+
+# AP-HARD-01: const block containing >=2 CURIE/URN/IRI string values.
+if [[ "$is_ts_file" == "true" ]]; then
+  hard_hit=$(awk '
+    /^[[:space:]]*const[[:space:]]+[A-Za-z_][A-Za-z_0-9]*[[:space:]]*[=:]/ {
+      start_line = NR
+      decl = $0
+      in_const = 1
+      hit_count = 0
+      depth = 0
+    }
+    in_const {
+      for (i=1; i<=length($0); i++) {
+        c = substr($0, i, 1)
+        if (c == "[" || c == "{") depth++
+        if (c == "]" || c == "}") depth--
+      }
+      if (match($0, /"(urn:|https?:\/\/|[a-z]+:[A-Za-z])[A-Za-z0-9_:\/#\.\-]+"/)) {
+        hit_count++
+      }
+      if (depth == 0 && NR > start_line && hit_count >= 2) {
+        print start_line
+        in_const = 0
+        exit
+      } else if (depth == 0 && NR > start_line) {
+        in_const = 0
+      }
+    }
+  ' "$file_path" 2>/dev/null | head -1 || true)
+  if [[ -n "$hard_hit" ]]; then
+    append_violation "AP-HARD-01" \
+      "Hardcoded ontology data — should load from bundle, not inline as TS constants" \
+      ":${hard_hit}" \
+      "Replace the const with a bundle loader call. Ontology is data; duplicating it in code creates drift."
   fi
 fi
 
@@ -194,6 +294,23 @@ if [[ "$is_ts_file" == "true" ]]; then
   done
 fi
 
+# AP-WIRE-05: parse()/safeParse()/validatedParse() called but NO Schema/Shape
+# imported in file (inverse of AP-WIRE-01 — parse without declared contract).
+# Added 2026-04-24 per Phase B absorption from repo-scoped
+# schema-parse-boundary-detector.
+if [[ "$is_ts_file" == "true" && "$is_shape_file" == "false" ]]; then
+  if grep -qE '(\bsafeParse\(|\bvalidatedParse\(|\.parse\()' "$file_path" 2>/dev/null; then
+    if ! grep -qE '^\s*import\s+.*\b[A-Za-z0-9_]*(Schema|Shape)\b' "$file_path" 2>/dev/null; then
+      match=$(grep -nE '(\bsafeParse\(|\bvalidatedParse\(|\.parse\()' "$file_path" 2>/dev/null | head -1 || true)
+      ln=$(echo "$match" | cut -d: -f1)
+      append_violation "AP-WIRE-05" \
+        "Parse call without declared shape — boundary validation bypassed" \
+        ":${ln}" \
+        "Add \`import { FooSchema } from '...'; FooSchema.safeParse(data)\` at the boundary. Inverse of AP-WIRE-01."
+    fi
+  fi
+fi
+
 # AP-SHAPE-01: .shape.ts defines status/state/currentState field without discriminatedUnion
 if [[ "$is_shape_file" == "true" ]]; then
   if grep -qE '\b(status|state|currentState)\b' "$file_path" 2>/dev/null; then
@@ -208,7 +325,8 @@ fi
 
 # AP-SHAPE-02: .shape.ts has 2+ datetime() calls but no .refine()
 if [[ "$is_shape_file" == "true" ]]; then
-  dt_count=$(grep -cE 'datetime\(\)' "$file_path" 2>/dev/null || echo 0)
+  dt_count=$(grep -cE 'datetime\(\)' "$file_path" 2>/dev/null || true)
+  dt_count=${dt_count:-0}
   if (( dt_count >= 2 )); then
     if ! grep -qE '\.refine\(' "$file_path" 2>/dev/null; then
       append_violation "AP-SHAPE-02" \
