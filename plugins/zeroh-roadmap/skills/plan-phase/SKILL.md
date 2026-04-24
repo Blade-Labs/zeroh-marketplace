@@ -21,6 +21,9 @@ Parse the description of what needs to be done. This can be:
 - A review finding: "FCR-12: CSP missing globally"
 - A broad goal: "improve the onboarding flow"
 
+**Flags:**
+- `--skip-review` — skip the automatic `/review-phase N` pass after commit. Default: review runs. Use only for fast iteration on a WIP plan you know is unfinished.
+
 ## PRIME RULE: KNOW THE DIFF BEFORE WRITING THE TASK
 
 **Every task must be planned to the point where you know the exact diff before writing code.**
@@ -181,6 +184,18 @@ Every marker must either be resolved (replaced with the decision) OR the phase i
 docs(roadmap): phase N — <short description>
 ```
 
+### Step 7: Auto-invoke `/review-phase N`
+
+Unless the user passed `--skip-review`, immediately run `/review-phase N` against the freshly committed phase. The review runs in plan-quality mode (Mode A) because the phase has `status: 'backlog'`.
+
+Why this is mandatory by default: Step 5's self-verification is lazy — an independent pass consistently finds hallucinated paths, stale problem statements, and blast-radius gaps the author missed.
+
+Handling findings:
+- **READY (no findings)** — report "Review clean" to the user and stop.
+- **NEEDS WORK / BLOCKER findings** — fix each one, then commit `docs(roadmap): phase N — address review findings`. Do NOT re-run review in a loop; one pass is enough. If the user wants another pass, they'll ask.
+
+Skip this step entirely if `--skip-review` was passed. Mention in the user-facing summary that review was skipped so the user knows the plan is unverified.
+
 ## Task Design Rules
 
 ### Every task must have:
@@ -270,5 +285,6 @@ Tell the user:
 4. Key risk areas or dependencies to be aware of
 5. That the phase is **not** in the execution backlog yet — to queue it, edit `roadmap/backlog.ts`
 6. **Any `[NEEDS CLARIFICATION]` markers** — list each one as a question, with its task ID. Explicitly state: "Phase is committed but NOT executable until these are answered." Do not suggest queuing the phase in the backlog while markers remain.
+7. **Review outcome** — "Review clean" if `/review-phase N` (Step 7) found nothing, or a one-line summary of what was fixed. If `--skip-review` was passed, say so explicitly so the user knows the plan is unverified.
 
 **Do NOT auto-append to `roadmap/backlog.ts`.** New phases enter backlog unqueued. The user deliberately sequences phases during planning sessions — auto-appending would bypass that intentional ordering.
