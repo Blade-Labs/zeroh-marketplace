@@ -120,6 +120,10 @@ a. **Claimed changes exist** — every `steps[].file` was actually modified. Rea
 
 b. **Bug actually fixed (not just patched)** — if the task claimed to fix a bug, verify the fix is correct. Read the function, trace the logic, confirm the root cause is addressed — not just papered over with a null check or try/catch.
 
+   **For phases with `kind: 'hardening'` AND any persistence / event-emission / marshal-chain task**, unit-test pass is NOT the closure criterion — the integration-suite rerun is. The reviewer MUST find evidence that the integration suite was rerun after the fix and that the runtime symptom resolved. Acceptable evidence: integration test output diff (events captured before vs. after, persisted records before vs. after, the previously-failing assertion now passing), referenced in the phase file's `compromises` field or the completion commit body.
+
+   If the integration suite was not rerun, OR the rerun still shows the symptom, this is a **FAIL** — the fix is unverified regardless of unit-test status. This catches the "structurally correct fix that didn't close the runtime bug" pattern (e.g. unit tests green but 4 events still missing on integration replay).
+
 c. **Pattern caught everywhere (the "elsewhere?" check)** — the most important check. If the fix changed a pattern in one file:
    - Grep for the OLD pattern across the entire codebase — does it still exist somewhere?
    - Use LSP `findReferences` on changed symbols — are all consumers updated?
