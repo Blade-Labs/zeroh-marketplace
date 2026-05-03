@@ -136,6 +136,7 @@ export default definePhase({
         'Observable outcome you can verify by running a command or checking the UI',
       ],
       files: ['path/to/actual/file.ts'],
+      // batchMode: true,  // Set ONLY for mechanical multi-commit work (rename across N files, parallel template authoring). Required when files.length > 10 OR steps.length > 6.
       done: false,
     },
   ],
@@ -209,6 +210,21 @@ The other candidates must be marked `REFUTED — <reason>` or `NOT TESTED — <w
 - Fail = NEEDS WORK. Re-investigate before authoring tasks.
 
 Skip this check entirely for `kind: 'mockup'`, `kind: 'release'`, or `category` ∈ `{feature, refactor, test, docs, infra}` (unless the phase is explicitly diagnostic — then upgrade to `hardening`).
+
+**9. Task size lint (`batchMode` gate)**
+For every task, verify:
+- `files.length` ≤ 10 OR `batchMode: true`
+- `steps.length` ≤ 6 OR `batchMode: true`
+
+A task that exceeds either limit without `batchMode: true` is a planning error — the unit of intent is no longer "one focused change committable in one pass."
+
+Two valid resolutions, in order of preference:
+1. **Split the task** into 2+ smaller tasks. This is the default. Most oversized tasks are actually "and also..." in disguise — separate them.
+2. **Set `batchMode: true`** ONLY when the work is genuinely mechanical and the unit of intent is one task even if the unit of commit is many. Examples that justify batchMode: rename `Foo` → `Bar` across 22 files; author 22 shapes from a single template; backfill an enum value in every consumer. Examples that do NOT: "build feature X with all its components" (that's many decisions, not one).
+
+If you set `batchMode: true`, also ensure each `steps[]` entry maps to a clean commit unit — `do-phase` will TaskCreate one subtask per step and commit per step. If your steps don't slice cleanly, re-author them before committing the plan.
+
+- Fail = BLOCKER. Oversized task without batchMode will not pass do-phase auto-spawn discipline.
 
 **If any check fails:** fix the phase file and re-run the failing checks. Commit is acceptable with unresolved markers only if the phase is NOT added to the backlog. All other checks MUST pass before commit.
 

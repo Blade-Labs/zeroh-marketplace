@@ -88,6 +88,17 @@ Every marker means the planner explicitly flagged a question that must be answer
 - If any marker exists, the phase is NEEDS WORK regardless of all other checks. List each marker in the findings with its task ID and the specific question.
 - Fail = NEEDS WORK. Phase cannot be queued or executed until every marker is resolved.
 
+**7. Task size lint (`batchMode` gate)**
+For every task, verify:
+- `files.length` ≤ 10 OR `batchMode: true`
+- `steps.length` ≤ 6 OR `batchMode: true`
+
+If a task exceeds either limit without `batchMode: true`, the planner left a unit-of-intent problem on the table. `do-phase` will refuse to fork an agent for it, and inline execution will produce a single mega-commit with no granular recovery. Reject: either split the task into 2+ smaller tasks, or set `batchMode: true` if the work is genuinely mechanical (rename across N files, parallel template authoring).
+
+Confirm the planner's batchMode decision is honest: a task with `batchMode: true` whose `steps[]` entries don't slice into clean commit units is a bad batch — the planner used the flag to silence the lint instead of doing the slicing work. If the steps look like prose ("Implement everything for shape X" with 8 sub-bullets) rather than commit-shaped units, flag as NEEDS WORK.
+
+- Fail = BLOCKER. Oversized task without batchMode, or batchMode with non-commit-shaped steps.
+
 **Output per task:**
 ```
 Task N.1: <title>
