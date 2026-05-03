@@ -79,6 +79,7 @@ function detectFeatures(content: string | null): Record<string, boolean> {
       structuredGateRound: false,
       taskLevelDependsOn: false,
       phaseLevelCompromises: false,
+      phaseKind: false,
     }
   }
 
@@ -100,6 +101,9 @@ function detectFeatures(content: string | null): Record<string, boolean> {
       taskShapeBlock !== null && /dependsOn:\s*z\.array\(z\.string/.test(taskShapeBlock),
     phaseLevelCompromises:
       basePhaseBlock !== null && /\bcompromises:\s*z\.string\(\)/.test(basePhaseBlock),
+    phaseKind:
+      basePhaseBlock !== null &&
+      /\bkind:\s*z\.enum\(\[\s*['"]mockup['"]/.test(basePhaseBlock),
   }
 }
 
@@ -175,6 +179,16 @@ function scanPhaseFile(filePath: string): PhaseScan {
 
   const statusMatch = text.match(/\bstatus:\s*['"](\w[\w-]*)['"]/m)
   const status = statusMatch?.[1] ?? null
+
+  // Schema v3: every phase must declare `kind`. Applies to ALL statuses —
+  // legacy phases predating v3 need backfill before do-phase can select the
+  // right gate set. Scan before the done-only early return.
+  if (!/\bkind:\s*['"](mockup|logic|hardening|release)['"]/.test(text)) {
+    issues.push({
+      severity: 'HIGH',
+      issue: `missing kind field — backfill suggested: ${suggestKind(text)}`,
+    })
+  }
 
   if (status !== 'done') {
     return { file: filePath, phaseNumber, status, issues }
@@ -252,6 +266,22 @@ function scanPhaseFile(filePath: string): PhaseScan {
   return { file: filePath, phaseNumber, status, issues }
 }
 
+/** Heuristic backfill for the kind field on legacy phases. Reads category and
+ *  stakeholderDemo from the phase text and returns the most likely kind value.
+ *  Order matters — the first matching rule wins. */
+function suggestKind(text: string): 'mockup' | 'logic' | 'hardening' | 'release' {
+  const cat = text.match(/\bcategory:\s*['"](\w+)['"]/)?.[1] ?? ''
+  const demo = text.match(/\bstakeholderDemo:\s*['"]([^'"]+)['"]/)?.[1]?.toLowerCase() ?? ''
+
+  const isUI = /\b(screen|page|design|dashboard|branding|layout|copy|dark[- ]?mode|landing|wizard)\b/.test(demo)
+  const isRelease = /\b(release|version|ship|cut|hotfix)\b/.test(demo)
+
+  if (cat === 'fix' || cat === 'refactor') return 'hardening'
+  if (cat === 'infra' && isRelease) return 'release'
+  if (cat === 'feature' && isUI) return 'mockup'
+  return 'logic'
+}
+
 /** Find the first `{` matching the opening pattern and return the balanced block. */
 function extractBalanced(text: string, opening: RegExp): string | null {
   const match = opening.exec(text)
@@ -289,6 +319,7 @@ function renderReport(args: {
     ['structuredGateRound', 'StructuredGateRoundShape — findings attached to each round'],
     ['taskLevelDependsOn', 'PhaseTaskShape.dependsOn: string[] for intra-phase task DAG'],
     ['phaseLevelCompromises', 'Phase.compromises — aggregated summary survives outside commit body'],
+    ['phaseKind', 'Phase.kind — mockup/logic/hardening/release drives gate selection (schema v3)'],
   ]
 
   let schemaSection = ''
@@ -334,6 +365,18 @@ function renderReport(args: {
         .join('\n\n')
     : '_No breaking issues detected in done phases._'
 
+  const missingKindScans = phaseScans.filter((s) =>
+    s.issues.some((i) => i.issue.startsWith('missing kind field')),
+  )
+  const missingKindSection = missingKindScans.length
+    ? missingKindScans
+        .map((s) => {
+          const issue = s.issues.find((i) => i.issue.startsWith('missing kind field'))
+          return `- phase-${s.phaseNumber ?? '?'} (\`${path.basename(s.file)}\`, status: ${s.status ?? '?'}) — ${issue?.issue ?? ''}`
+        })
+        .join('\n')
+    : '_All phases declare `kind`._'
+
   const statusCounts = phaseScans.reduce<Record<string, number>>((acc, s) => {
     const k = s.status ?? 'unknown'
     acc[k] = (acc[k] ?? 0) + 1
@@ -346,6 +389,7 @@ function renderReport(args: {
     breakingCount: breakingScans.length,
     totalDone: doneScans.length,
     targetSchemaExists: fs.existsSync(path.join(projectDir, 'lib', 'roadmap', 'schema.ts')),
+    missingKindCount: missingKindScans.length,
   })
 
   return `# Roadmap Migration Audit — ${now}
@@ -375,6 +419,10 @@ Done phases with strict-fail issues: **${breakingScans.length}** of ${doneScans.
 
 ${breakingSection}
 
+### Phases missing \`kind\` (schema v3 backfill)
+
+${missingKindSection}
+
 ## 4. Recommended next steps
 
 ${nextSteps}
@@ -391,6 +439,7 @@ function buildNextSteps(args: {
   breakingCount: number
   totalDone: number
   targetSchemaExists: boolean
+  missingKindCount: number
 }): string {
   const steps: string[] = []
 
@@ -431,6 +480,17 @@ function buildNextSteps(args: {
         '   - Fill the missing fields manually using data from the phase\'s commits.\n' +
         '   - Downgrade the phase to `status: \'cancelled\'` if the completion claim was premature.\n' +
         '   Pick one per phase; the audit makes no assumption.',
+    )
+  }
+
+  if (args.missingKindCount > 0) {
+    steps.push(
+      `**Backfill \`kind\` on ${args.missingKindCount} phase(s)** flagged in section 3. Schema v3 ` +
+        'requires every phase to declare `kind` (mockup | logic | hardening | release) — it drives ' +
+        'gate selection in `do-phase`. The audit suggests a value per phase based on category and ' +
+        'stakeholderDemo heuristics; treat it as a starting point, not gospel. When in doubt between ' +
+        '`logic` and `hardening`, pick `hardening` — the cost of one extra integration rerun is far ' +
+        'less than shipping an unverified persistence fix.',
     )
   }
 

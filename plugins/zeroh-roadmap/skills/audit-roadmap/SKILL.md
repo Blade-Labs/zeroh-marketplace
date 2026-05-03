@@ -41,7 +41,7 @@ Build three in-memory maps:
 - `tasks: Map<string, { phase: number, task: PhaseTask }>` — every task keyed by `id` (e.g. `"171.1"`)
 - `backlog: BacklogEntry[]` — the ordered execution queue
 
-### Step 2: Run all 8 consistency checks
+### Step 2: Run all 9 consistency checks
 
 Run every check before reporting. Do **not** short-circuit on the first failure — the value of this skill is surfacing everything in one pass.
 
@@ -114,6 +114,24 @@ sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts | sort | uniq -
 For each duplicate, list all file paths that claim that phase number.
 
 - **CRITICAL** — `Phase number X appears in multiple files: <paths>. emit.ts will refuse to build the registry until this is resolved.`
+
+#### Check 9: Missing `kind` field (schema v3)
+
+```bash
+for f in roadmap/phases/*.phase.ts; do
+  grep -q '^\s*kind:' "$f" || echo "$f"
+done
+```
+
+For every phase file that does not declare `kind`, list it. These phases predate `@zeroh-roadmap-schema v3` and need backfill before `do-phase` can select the correct gate set.
+
+Suggested backfill (the migration script does this automatically — run `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts`):
+- `category: 'fix'` → `hardening`
+- `category: 'feature'` + UI-only `stakeholderDemo` (mentions "screen", "page", "design", "dashboard", "branding") → `mockup`
+- `category: 'infra'` + `stakeholderDemo` mentions "release", "version", "ship" → `release`
+- otherwise → `logic`
+
+- **HIGH** — `Phase N at <path> is missing the kind field. Backfill with: <suggested kind>. Run scripts/migrate/audit.ts to backfill all at once.`
 
 ### Step 3: Report
 
