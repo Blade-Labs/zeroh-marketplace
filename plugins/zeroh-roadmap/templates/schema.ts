@@ -13,7 +13,7 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-// @zeroh-roadmap-schema v3
+// @zeroh-roadmap-schema v4
 // Bump this marker whenever the canonical schema gains a feature. The
 // SessionStart drift check in using-zeroh-roadmap greps for this exact line
 // to decide whether a target repo is behind the plugin. Keep the comment
@@ -190,6 +190,21 @@ export const PhaseTaskShape = z.object({
    *  Use an explicit list when a task can start earlier than its position suggests
    *  or has a non-obvious dependency. Cross-phase deps go on the Phase, not the Task. */
   dependsOn: z.array(z.string().regex(/^\d+\.\d+$/)).default([]),
+  /** Opt into batch execution. Defaults false.
+   *
+   *  Set to true ONLY for genuinely mechanical multi-commit work where the
+   *  unit of intent is one task but the unit of commit is many — e.g. rename
+   *  Foo to Bar across 22 files, author N parallel shapes from a template.
+   *
+   *  When true, do-phase enters batch protocol: TaskCreate per step, commit
+   *  per step, type-check between, transparency report aggregates across
+   *  commits. Sub-agent forks remain forbidden — batchMode is permission to
+   *  make many commits inline, not permission to spawn agents.
+   *
+   *  Plan-time size lint (plan-phase / review-phase) refuses tasks with
+   *  files.length > 10 OR steps.length > 6 unless batchMode === true.
+   *  When in doubt, split the task instead. */
+  batchMode: z.boolean().default(false),
   /** Whether the task is complete */
   done: z.boolean(),
   /** ISO date when completed */
