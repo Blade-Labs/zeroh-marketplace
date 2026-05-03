@@ -71,6 +71,7 @@ Artifacts are written to the user's repo:
 4. **Zero findings to pass.** Loop agents until clean.
 5. **Errors are the debugging interface.** Never swallow, summarize, or "clean up" errors.
 6. **`phase.kind` drives gate selection.** `mockup` runs typecheck+biome only; `logic` runs the full architect→simplifier→reviewer chain; `hardening` adds the integration-rerun closure rule for persistence/event fixes; `release` adds e2e. Schema v3.
+7. **Tasks are one decision, one commit — `task.batchMode` is the explicit escape.** Plan/review reject any task with `files.length > 10` OR `steps.length > 6` unless `batchMode: true`. Default is split. `batchMode` signals genuinely mechanical multi-commit work; do-phase runs the Batch Protocol (TaskCreate per step, commit per step, type-check between). Sub-agent forks for big tasks are forbidden. Schema v4.
 
 ## Version
 
