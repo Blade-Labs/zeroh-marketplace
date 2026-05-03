@@ -13,7 +13,7 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-// @zeroh-roadmap-schema v2
+// @zeroh-roadmap-schema v3
 // Bump this marker whenever the canonical schema gains a feature. The
 // SessionStart drift check in using-zeroh-roadmap greps for this exact line
 // to decide whether a target repo is behind the plugin. Keep the comment
@@ -221,6 +221,13 @@ const BasePhaseFields = {
   name: z.string().min(5),
   /** Changelog category — determines release note section */
   category: z.enum(['feature', 'fix', 'refactor', 'test', 'docs', 'infra']),
+  /** Phase kind — drives gate selection in do-phase.
+   *  - mockup: UI-only / visual; gate is typecheck + biome only.
+   *  - logic: behaviour, business rules, algorithms; full architect→simplifier→reviewer gate.
+   *  - hardening: bug fixes, refactors, persistence work; full gate + integration rerun closure (review-phase Mode B 2b).
+   *  - release: version cuts, changelog, infra; full gate + e2e in Round 1.
+   *  Picker rules in plan-phase. When in doubt between logic and hardening, pick hardening. */
+  kind: z.enum(['mockup', 'logic', 'hardening', 'release']),
   /** Semver of the release this phase ships in */
   version: z
     .string()
