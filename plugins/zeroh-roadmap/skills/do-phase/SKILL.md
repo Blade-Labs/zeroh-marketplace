@@ -176,8 +176,8 @@ Replaces steps 3–8 above. Use ONLY for tasks with `batchMode: true` — set de
    - `whatWasDone`: bullet list, one line per step, summarizing per-unit deltas (`step k/M: <file> — <one-line>`).
    - `how`: 1–2 sentences describing the overall approach (e.g. "applied template `lib/shape-template.ts` to each of 22 catalog entries, derived test from existing `lib/__tests__/shape-template.test.ts`").
    - `compromises` / `skipped` / `hardcoded` / `limitations`: aggregate across all steps. Same `"None"`-or-≥10-chars rule as standard flow.
-5. **Update phase file** in the SAME commit as the last step (or in a follow-up `docs(roadmap)` commit if the last step's commit is already typed). Set `done: true`, `doneDate`, and persist the aggregated `transparencyReport`.
-6. **TaskUpdate the parent task** in the agent's task list to `completed` (the per-step subtasks are already individually completed).
+5. **Update phase file** in its own commit AFTER the last step lands. Set `done: true`, `doneDate`, and persist the aggregated `transparencyReport`. Commit message: `docs(roadmap): phase N task N.X — mark batch done`. Always one commit, never folded into a step's commit — predictability matters more than commit count.
+6. **TaskUpdate** the original phase-task (created in the do-phase setup before per-task iteration) to `completed`. The per-step subtasks are already individually completed in step 2e.
 7. **Chat output cap**: per-step commit messages stream through naturally. The end-of-task aggregated transparency report follows the standard ~30-line / ~1500-char cap from Step 4b — long step lists go into the persisted `whatWasDone` field, the chat shows a head + tail with `+N more in roadmap/phases/phase-N.phase.ts`.
 
 If a step fails twice in a row (type-check still red after one fix attempt), STOP. Do not power through the batch. Surface the failing step and the actual error to the user — the batch's mechanical assumption is broken.
