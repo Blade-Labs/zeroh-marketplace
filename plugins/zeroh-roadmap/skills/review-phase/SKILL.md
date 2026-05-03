@@ -100,6 +100,41 @@ Task N.1: <title>
     - [NEEDS WORK] same pattern in settlement-preview.ts:89 — NOT covered by any task
 ```
 
+#### Mode A — Step 7: Backlog placement
+
+After the 6-check pass, decide whether and where this phase belongs in `roadmap/backlog.ts`. This step **only runs when the phase verdict is READY** (no BLOCKER, no NEEDS WORK, no unresolved `[NEEDS CLARIFICATION]` markers). NEEDS WORK / BLOCKER phases do NOT enter the backlog — fix the findings first, re-review, then queue.
+
+**Read the current backlog:**
+
+```bash
+cat roadmap/backlog.ts
+```
+
+**Reason about position using these rules, in order:**
+
+1. **Dependency floor** — the phase must appear AFTER every phase listed in its `dependsOn`. Locate each dep in the backlog (or confirm it's already `status: 'done'`); the lowest acceptable index is `max(depIndex) + 1`. If any dep is missing from both the backlog and done phases, that's a BLOCKER finding — re-issue verdict.
+2. **Conflict spacing** — if the phase has `conflictsWith: [X, ...]`, do not place it adjacent to X. Insert at least one phase between, or surface as a NEEDS WORK if no valid slot exists.
+3. **Priority sort within the eligible range** — among positions allowed by rules 1–2, place by `priority`: `BLOCKER` slots above all `HIGH/MEDIUM/LOW`; `HIGH` above `MEDIUM/LOW`; `MEDIUM` above `LOW`. Within the same priority, append at the end of that priority's run (FIFO — phases of equal priority execute in plan order).
+4. **Already in backlog?** If the phase is already listed, validate its position against rules 1–3. If the position is wrong, propose a move; do not silently re-order.
+
+**Apply the placement:**
+
+- If the phase is not in the backlog, edit `roadmap/backlog.ts` and insert the entry at the chosen index. Format: `{ phase: N, name: '<phase.name>' }`.
+- If already present at the right position, no edit.
+- If present at a wrong position, output the proposal AND apply the move in the same edit.
+
+Commit the backlog change as part of the review's findings-fix commit (or as `docs(roadmap): queue phase N`) — same commit policy as any other review-driven edit.
+
+**Output:**
+
+```
+Backlog placement
+  Verdict: QUEUED at index K | ALREADY QUEUED at index K (correct) | MOVED from K1 to K2 | NOT QUEUED — verdict was NEEDS WORK
+  Reasoning: priority=HIGH; depends on phase 12 (already done) and phase 17 (queued at idx 3); conflicts with phase 21 (queued at idx 4 — placed at idx 5 instead of 4 to avoid adjacency)
+```
+
+**Opt-out**: if the user passed `--no-queue` to `/review-phase`, run rules 1–3 to validate but do NOT edit `backlog.ts`. Just output the proposed position.
+
 ---
 
 ### Mode B: Post-Execution Audit (done/in-progress phases)

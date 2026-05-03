@@ -225,10 +225,10 @@ Unless the user passed `--skip-review`, immediately run `/review-phase N` agains
 Why this is mandatory by default: Step 5's self-verification is lazy — an independent pass consistently finds hallucinated paths, stale problem statements, and blast-radius gaps the author missed.
 
 Handling findings:
-- **READY (no findings)** — report "Review clean" to the user and stop.
-- **NEEDS WORK / BLOCKER findings** — fix each one, then commit `docs(roadmap): phase N — address review findings`. Do NOT re-run review in a loop; one pass is enough. If the user wants another pass, they'll ask.
+- **READY (no findings)** — review-phase Mode A Step 7 will queue the phase in `roadmap/backlog.ts` at the position dictated by `priority` + `dependsOn` + `conflictsWith`. Report "Review clean — queued at index K" to the user and stop.
+- **NEEDS WORK / BLOCKER findings** — fix each one, then commit `docs(roadmap): phase N — address review findings`. Do NOT re-run review in a loop; one pass is enough. If the user wants another pass, they'll ask. The phase is NOT queued until a clean re-review.
 
-Skip this step entirely if `--skip-review` was passed. Mention in the user-facing summary that review was skipped so the user knows the plan is unverified.
+Skip this step entirely if `--skip-review` was passed. Mention in the user-facing summary that review was skipped so the user knows (a) the plan is unverified and (b) the phase is NOT queued — the user must run `/review-phase N` later to validate and queue, or hand-edit `roadmap/backlog.ts`.
 
 ## Task Design Rules
 
@@ -317,8 +317,8 @@ Tell the user:
 2. How many tasks were created
 3. Whether it's ready to execute (`/do-phase N`) or needs more investigation
 4. Key risk areas or dependencies to be aware of
-5. That the phase is **not** in the execution backlog yet — to queue it, edit `roadmap/backlog.ts`
-6. **Any `[NEEDS CLARIFICATION]` markers** — list each one as a question, with its task ID. Explicitly state: "Phase is committed but NOT executable until these are answered." Do not suggest queuing the phase in the backlog while markers remain.
-7. **Review outcome** — "Review clean" if `/review-phase N` (Step 7) found nothing, or a one-line summary of what was fixed. If `--skip-review` was passed, say so explicitly so the user knows the plan is unverified.
+5. **Backlog placement** — the index where review-phase queued the phase, or "not queued — review found NEEDS WORK / BLOCKER" if findings remain, or "not queued — `--skip-review` was passed" if the user opted out of review.
+6. **Any `[NEEDS CLARIFICATION]` markers** — list each one as a question, with its task ID. Explicitly state: "Phase is committed but NOT executable until these are answered." A phase with unresolved markers is NEVER queued by review-phase, regardless of other findings.
+7. **Review outcome** — "Review clean" if `/review-phase N` (Step 7) found nothing, or a one-line summary of what was fixed. If `--skip-review` was passed, say so explicitly so the user knows the plan is unverified AND not queued.
 
-**Do NOT auto-append to `roadmap/backlog.ts`.** New phases enter backlog unqueued. The user deliberately sequences phases during planning sessions — auto-appending would bypass that intentional ordering.
+**Auto-queue policy.** plan-phase does not edit `roadmap/backlog.ts` directly. Queuing is delegated to review-phase Mode A Step 7, which only queues a phase when the verdict is READY (no BLOCKER, no NEEDS WORK, no unresolved markers) and at a position reasoned from `priority` + `dependsOn` + `conflictsWith`. This single hook point ensures (a) bad plans never enter the queue and (b) position reasoning happens with the same data the review already loaded.

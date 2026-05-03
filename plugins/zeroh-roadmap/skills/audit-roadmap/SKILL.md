@@ -41,7 +41,7 @@ Build three in-memory maps:
 - `tasks: Map<string, { phase: number, task: PhaseTask }>` — every task keyed by `id` (e.g. `"171.1"`)
 - `backlog: BacklogEntry[]` — the ordered execution queue
 
-### Step 2: Run all 9 consistency checks
+### Step 2: Run all 10 consistency checks
 
 Run every check before reporting. Do **not** short-circuit on the first failure — the value of this skill is surfacing everything in one pass.
 
@@ -132,6 +132,13 @@ Suggested backfill (the migration script does this automatically — run `npx ts
 - otherwise → `logic`
 
 - **HIGH** — `Phase N at <path> is missing the kind field. Backfill with: <suggested kind>. Run scripts/migrate/audit.ts to backfill all at once.`
+
+#### Check 10: Stale done entries in backlog
+
+For every entry in `backlog.ts`, look up the corresponding phase file's `status`. Any entry whose phase is `status: 'done'` (or `status: 'cancelled'`) is stale — `do-phase` Step 5 should have removed it during completion. Stale entries pollute "do next phase" resolution and indicate a grooming gap.
+
+- **MEDIUM** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'done'. Remove the backlog entry. (do-phase Step 5 should have done this — flag any pattern of stale entries as a process bug.)`
+- **LOW** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'cancelled'. Remove the backlog entry.`
 
 ### Step 3: Report
 
