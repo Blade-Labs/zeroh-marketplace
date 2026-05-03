@@ -88,6 +88,19 @@ Markers are for **genuine ambiguity** that the code cannot answer. If a function
 
 ### Step 3: Write the phase file
 
+**Pick the `kind` first.** It drives gate selection in `do-phase`. Use this table:
+
+| If the phase's primary work is… | `kind` |
+|---|---|
+| New screen, layout, copy, design refresh, mockup, branding, dark-mode tweak | `mockup` |
+| Algorithm, business rule, calculation, new logic, new feature with behaviour | `logic` |
+| Bug fix, persistence/event/marshal-chain fix, refactor, perf | `hardening` |
+| Version cut, changelog, infra, deploy plumbing | `release` |
+
+When in doubt between `logic` and `hardening`, pick `hardening` — the cost of one extra integration rerun is far less than shipping an unverified persistence fix.
+
+`kind` is independent of `category`: a `category: 'fix'` phase is almost always `kind: 'hardening'`, but a `category: 'feature'` phase can be `mockup`, `logic`, or `hardening` depending on what it actually changes.
+
 Create `roadmap/phases/phase-{N}.phase.ts` using `definePhase()`:
 
 ```typescript
@@ -98,6 +111,7 @@ export default definePhase({
   name: 'Verb-phrase describing the outcome',
   status: 'backlog',
   category: 'feature',  // feature | fix | refactor | test | docs | infra
+  kind: 'logic',         // mockup | logic | hardening | release — drives gate selection (see picker below)
   version: undefined,    // Set when assigned to a release
   source: 'Where this came from — review finding, bug report, user request',
   priority: 'MEDIUM',   // BLOCKER | HIGH | MEDIUM | LOW
@@ -176,7 +190,27 @@ grep -n '\[NEEDS CLARIFICATION' roadmap/phases/phase-{N}.phase.ts
 Every marker must either be resolved (replaced with the decision) OR the phase is explicitly flagged as non-executable — it is committed but not queued.
 - Fail = NEEDS WORK. Phase is planned but not yet decidable. `do-phase` will refuse it.
 
-**If any check fails:** fix the phase file and re-run the failing checks. Commit is acceptable with unresolved markers only if the phase is NOT added to the backlog. All 5 other checks MUST pass before commit.
+**7. Task descriptions are concrete (placeholder lint)**
+For every task, verify:
+- Each `steps[].description` is ≥ 10 chars AND references at least one path or symbol (file path, function name, type name, or specific identifier — not just prose).
+- Each `acceptanceCriteria` entry does NOT match `/(implementation|task)\s+(is\s+)?(verified|complete)/i`. Reject "works correctly", "properly handles", "task N.1 implementation verified", "implemented" alone.
+- Each `problem` field is ≥ 1 sentence and names what is broken/missing/wrong — not "this needs to be done".
+
+This check exists because the previous review cycle shipped phases with placeholder task descriptions that required full rewrites. If any task fails, the plan is not done — rewrite it.
+- Fail = BLOCKER.
+
+**8. Hypotheses refuted (only if `category: 'fix'` OR `kind: 'hardening'`)**
+The phase's `notes` field must contain a `## Hypotheses` block with:
+- ≥ 2 candidate root causes ranked by prior probability.
+- A one-line refutation strategy or evidence pointer per candidate (file:line, test command, log signature).
+- Exactly one candidate marked `CONFIRMED` with evidence (file:line, test output, or commit SHA where the bug reproduced).
+
+The other candidates must be marked `REFUTED — <reason>` or `NOT TESTED — <why deferred>`. This catches the "wrong root cause hypothesis" pattern (RunEvent fan-out, Mongo polling) before tasks are written against the wrong target.
+- Fail = NEEDS WORK. Re-investigate before authoring tasks.
+
+Skip this check entirely for `kind: 'mockup'`, `kind: 'release'`, or `category` ∈ `{feature, refactor, test, docs, infra}` (unless the phase is explicitly diagnostic — then upgrade to `hardening`).
+
+**If any check fails:** fix the phase file and re-run the failing checks. Commit is acceptable with unresolved markers only if the phase is NOT added to the backlog. All other checks MUST pass before commit.
 
 ### Step 6: Commit and push
 
