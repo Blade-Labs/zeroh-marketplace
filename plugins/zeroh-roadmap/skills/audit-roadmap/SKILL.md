@@ -125,11 +125,13 @@ done
 
 For every phase file that does not declare `kind`, list it. These phases predate `@zeroh-roadmap-schema v3` and need backfill before `do-phase` can select the correct gate set.
 
-Suggested backfill (the migration script does this automatically — run `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts`):
-- `category: 'fix'` → `hardening`
-- `category: 'feature'` + UI-only `stakeholderDemo` (mentions "screen", "page", "design", "dashboard", "branding") → `mockup`
-- `category: 'infra'` + `stakeholderDemo` mentions "release", "version", "ship" → `release`
+Suggested backfill (the migration script implements the same rules — run `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts` to get per-phase suggestions):
+- `category: 'fix'` or `category: 'refactor'` → `hardening`
+- `category: 'infra'` + `stakeholderDemo` mentions "release", "version", "ship", "cut", "hotfix" → `release`
+- `category: 'feature'` + UI-only `stakeholderDemo` (mentions "screen", "page", "design", "dashboard", "branding", "layout", "copy", "dark-mode", "landing", "wizard") → `mockup`
 - otherwise → `logic`
+
+The executable form lives in `scripts/migrate/audit.ts:suggestKind`. Keep these rules in sync — if you edit one, edit the other.
 
 - **HIGH** — `Phase N at <path> is missing the kind field. Backfill with: <suggested kind>. Run scripts/migrate/audit.ts to backfill all at once.`
 
@@ -140,7 +142,7 @@ For every entry in `backlog.ts`, look up the corresponding phase file's `status`
 - **MEDIUM** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'done'. Remove the backlog entry. (do-phase Step 5 should have done this — flag any pattern of stale entries as a process bug.)`
 - **LOW** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'cancelled'. Remove the backlog entry.`
 
-#### Check 11: Oversized tasks without `batchMode`
+#### Check 11: Oversized tasks without `batchMode` (schema v4)
 
 For every task in every phase file, verify the size lint that plan-phase / review-phase enforce at authoring time:
 

@@ -271,7 +271,10 @@ function scanPhaseFile(filePath: string): PhaseScan {
 
 /** Heuristic backfill for the kind field on legacy phases. Reads category and
  *  stakeholderDemo from the phase text and returns the most likely kind value.
- *  Order matters — the first matching rule wins. */
+ *  Order matters — the first matching rule wins.
+ *
+ *  Prose mirror: skills/audit-roadmap/SKILL.md Check 9. Keep these in sync —
+ *  if you edit one, edit the other. */
 function suggestKind(text: string): 'mockup' | 'logic' | 'hardening' | 'release' {
   const cat = text.match(/\bcategory:\s*['"](\w+)['"]/)?.[1] ?? ''
   const demo = text.match(/\bstakeholderDemo:\s*['"]([^'"]+)['"]/)?.[1]?.toLowerCase() ?? ''
