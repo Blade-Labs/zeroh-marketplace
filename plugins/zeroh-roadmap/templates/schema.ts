@@ -238,11 +238,16 @@ const BasePhaseFields = {
   category: z.enum(['feature', 'fix', 'refactor', 'test', 'docs', 'infra']),
   /** Phase kind — drives gate selection in do-phase.
    *  - mockup: UI-only / visual; gate is typecheck + biome only.
-   *  - logic: behaviour, business rules, algorithms; full architect→simplifier→reviewer gate.
+   *  - logic: behaviour, business rules, algorithms; full architect→simplifier→reviewer gate. (Default — safe for legacy phases predating v3.)
    *  - hardening: bug fixes, refactors, persistence work; full gate + integration rerun closure (review-phase Mode B 2b).
    *  - release: version cuts, changelog, infra; full gate + e2e in Round 1.
-   *  Picker rules in plan-phase. When in doubt between logic and hardening, pick hardening. */
-  kind: z.enum(['mockup', 'logic', 'hardening', 'release']),
+   *  Picker rules in plan-phase. When in doubt between logic and hardening, pick hardening.
+   *
+   *  The default exists so the v2 → v3 schema bump is non-breaking — legacy
+   *  phases parse cleanly and run the full logic gate. New phases must still
+   *  pick deliberately at plan time (the picker table is mandatory in
+   *  plan-phase Step 3) and migrate/audit.ts surfaces unbackfilled phases. */
+  kind: z.enum(['mockup', 'logic', 'hardening', 'release']).default('logic'),
   /** Semver of the release this phase ships in */
   version: z
     .string()
