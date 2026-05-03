@@ -241,7 +241,7 @@ Unless the user passed `--skip-review`, immediately run `/review-phase N` agains
 Why this is mandatory by default: Step 5's self-verification is lazy — an independent pass consistently finds hallucinated paths, stale problem statements, and blast-radius gaps the author missed.
 
 Handling findings:
-- **READY (no findings)** — review-phase Mode A Step 7 will queue the phase in `roadmap/backlog.ts` at the position dictated by `priority` + `dependsOn` + `conflictsWith`. Report "Review clean — queued at index K" to the user and stop.
+- **READY (no findings)** — review-phase Mode A Step 8 will queue the phase in `roadmap/backlog.ts` at the position dictated by `priority` + `dependsOn` + `conflictsWith`. Report "Review clean — queued at index K" to the user and stop.
 - **NEEDS WORK / BLOCKER findings** — fix each one, then commit `docs(roadmap): phase N — address review findings`. Do NOT re-run review in a loop; one pass is enough. If the user wants another pass, they'll ask. The phase is NOT queued until a clean re-review.
 
 Skip this step entirely if `--skip-review` was passed. Mention in the user-facing summary that review was skipped so the user knows (a) the plan is unverified and (b) the phase is NOT queued — the user must run `/review-phase N` later to validate and queue, or hand-edit `roadmap/backlog.ts`.
@@ -337,4 +337,4 @@ Tell the user:
 6. **Any `[NEEDS CLARIFICATION]` markers** — list each one as a question, with its task ID. Explicitly state: "Phase is committed but NOT executable until these are answered." A phase with unresolved markers is NEVER queued by review-phase, regardless of other findings.
 7. **Review outcome** — "Review clean" if `/review-phase N` (Step 7) found nothing, or a one-line summary of what was fixed. If `--skip-review` was passed, say so explicitly so the user knows the plan is unverified AND not queued.
 
-**Auto-queue policy.** plan-phase does not edit `roadmap/backlog.ts` directly. Queuing is delegated to review-phase Mode A Step 7, which only queues a phase when the verdict is READY (no BLOCKER, no NEEDS WORK, no unresolved markers) and at a position reasoned from `priority` + `dependsOn` + `conflictsWith`. This single hook point ensures (a) bad plans never enter the queue and (b) position reasoning happens with the same data the review already loaded.
+**Auto-queue policy.** plan-phase does not edit `roadmap/backlog.ts` directly. Queuing is delegated to review-phase Mode A Step 8, which only queues a phase when the verdict is READY (no BLOCKER, no NEEDS WORK, no unresolved markers) and at a position reasoned from `priority` + `dependsOn` + `conflictsWith`. This single hook point ensures (a) bad plans never enter the queue and (b) position reasoning happens with the same data the review already loaded.

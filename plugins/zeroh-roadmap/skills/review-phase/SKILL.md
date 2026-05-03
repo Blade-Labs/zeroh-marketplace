@@ -111,9 +111,9 @@ Task N.1: <title>
     - [NEEDS WORK] same pattern in settlement-preview.ts:89 — NOT covered by any task
 ```
 
-#### Mode A — Step 7: Backlog placement
+#### Mode A — Step 8: Backlog placement
 
-After the 6-check pass, decide whether and where this phase belongs in `roadmap/backlog.ts`. This step **only runs when the phase verdict is READY** (no BLOCKER, no NEEDS WORK, no unresolved `[NEEDS CLARIFICATION]` markers). NEEDS WORK / BLOCKER phases do NOT enter the backlog — fix the findings first, re-review, then queue.
+After the 7-check pass, decide whether and where this phase belongs in `roadmap/backlog.ts`. This step **only runs when the phase verdict is READY** (no BLOCKER, no NEEDS WORK, no unresolved `[NEEDS CLARIFICATION]` markers). NEEDS WORK / BLOCKER phases do NOT enter the backlog — fix the findings first, re-review, then queue.
 
 **Read the current backlog:**
 
