@@ -15,6 +15,33 @@ After the gate passes, Step 5 fills the phase file with gate results, metrics, a
 
 ---
 
+## Gate Set by `phase.kind`
+
+The gate set is selected from the phase's `kind` field (introduced in `@zeroh-roadmap-schema v3`):
+
+| `kind` | Stages run |
+|---|---|
+| `mockup` | Mechanical only: `pnpm biome check . && pnpm type-check`. Skip Architect-Critique, Round 0, and Rounds 1..N. Compromise Summary still runs. |
+| `logic` | All four stages (default behaviour). |
+| `hardening` | All four stages **plus** the bug-fix closure rule from `review-phase` Mode B Step 2(b): for any persistence/event/marshal-chain task, the integration-suite rerun is the closure criterion. Quote the integration test diff in the compromise summary. Unit-test pass alone is NOT sufficient. |
+| `release` | All four stages **plus** `pnpm test:e2e` in Round 1's mechanical checks (in addition to `pnpm e2e:local`). |
+
+If `kind` is missing on a legacy phase, treat as `logic` and emit a one-time warning pointing at `scripts/migrate/audit.ts`.
+
+The `kind` field is required at schema parse time; the legacy fallback only covers phases authored before v3.
+
+---
+
+## Per-Stage Echo Contract
+
+Every gate-agent stage (Architect-Critique, Simplifier, each code-reviewer round) echoes a condensed summary inline in chat after the agent returns. The full agent report stays in the sub-agent transcript — the echo exists so the user has non-zero visibility without scrolling.
+
+Cap each echo at **~10 lines / ~600 chars**. Truncate ruthlessly. If the agent's report is empty, a single line is enough (`[Simplifier] nothing to simplify`). Format examples in `do-phase/SKILL.md` Step 4.
+
+This is in addition to the per-stage bookkeeping (commits, gateRounds entries, etc.) — it does not replace any of it.
+
+---
+
 ## Architect-Critique Pass (one-shot)
 
 **Why it runs first:** shortcut-hunting is additive work (fixing hardcodes, adding proper handling, updating same-repo callers for a contract change). Running it before the simplifier means the simplifier gets a chance to trim any over-extraction the critique may have introduced. Running it before the code-reviewer loop means the reviewer validates the final combined result in one pass, not two.
@@ -131,6 +158,8 @@ If the loop has not converged after 5 rounds, STOP and surface the remaining fin
 ---
 
 ## Compromise Summary (the only human stop-point)
+
+**Chat-output cap: ~30 lines / ~1500 chars.** The full summary is persisted to the phase file's `compromises` field and the completion commit body. Don't repeat the long form in chat — render a head + tail with a `+N more in roadmap/phases/phase-N.phase.ts` pointer when the summary would overflow. Output-token truncation has historically blocked phase completion mid-summary; the file is the long-form surface, chat is the headline.
 
 Before marking the phase done, aggregate into a phase-level summary:
 
