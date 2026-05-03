@@ -41,7 +41,7 @@ Build three in-memory maps:
 - `tasks: Map<string, { phase: number, task: PhaseTask }>` — every task keyed by `id` (e.g. `"171.1"`)
 - `backlog: BacklogEntry[]` — the ordered execution queue
 
-### Step 2: Run all 10 consistency checks
+### Step 2: Run all 11 consistency checks
 
 Run every check before reporting. Do **not** short-circuit on the first failure — the value of this skill is surfacing everything in one pass.
 
@@ -139,6 +139,20 @@ For every entry in `backlog.ts`, look up the corresponding phase file's `status`
 
 - **MEDIUM** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'done'. Remove the backlog entry. (do-phase Step 5 should have done this — flag any pattern of stale entries as a process bug.)`
 - **LOW** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'cancelled'. Remove the backlog entry.`
+
+#### Check 11: Oversized tasks without `batchMode`
+
+For every task in every phase file, verify the size lint that plan-phase / review-phase enforce at authoring time:
+
+- `task.files.length` ≤ 10 OR `task.batchMode === true`
+- `task.steps.length` ≤ 6 OR `task.batchMode === true`
+
+Tasks predating schema v4 won't have `batchMode` set; the field defaults to `false`, so any oversized legacy task surfaces here. Tasks added under v4 should already have been gated by plan-phase / review-phase, so a finding here on a v4-era task usually means the lint was bypassed.
+
+- **HIGH** — `Phase N task N.X has files.length=K (>10) without batchMode. Either split into smaller tasks, or set batchMode: true if the work is genuinely mechanical (rename across files, parallel template authoring).`
+- **HIGH** — `Phase N task N.X has steps.length=K (>6) without batchMode. Same resolution.`
+
+Done tasks (`done: true`) are exempt — they already executed; the finding is informational only and does not need a fix.
 
 ### Step 3: Report
 

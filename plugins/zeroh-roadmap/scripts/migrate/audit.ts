@@ -80,6 +80,7 @@ function detectFeatures(content: string | null): Record<string, boolean> {
       taskLevelDependsOn: false,
       phaseLevelCompromises: false,
       phaseKind: false,
+      taskBatchMode: false,
     }
   }
 
@@ -104,6 +105,8 @@ function detectFeatures(content: string | null): Record<string, boolean> {
     phaseKind:
       basePhaseBlock !== null &&
       /\bkind:\s*z\.enum\(\[\s*['"]mockup['"]/.test(basePhaseBlock),
+    taskBatchMode:
+      taskShapeBlock !== null && /\bbatchMode:\s*z\.boolean\(\)/.test(taskShapeBlock),
   }
 }
 
@@ -320,6 +323,7 @@ function renderReport(args: {
     ['taskLevelDependsOn', 'PhaseTaskShape.dependsOn: string[] for intra-phase task DAG'],
     ['phaseLevelCompromises', 'Phase.compromises — aggregated summary survives outside commit body'],
     ['phaseKind', 'Phase.kind — mockup/logic/hardening/release drives gate selection (schema v3)'],
+    ['taskBatchMode', 'PhaseTask.batchMode — opt-in for mechanical multi-commit tasks (schema v4)'],
   ]
 
   let schemaSection = ''
