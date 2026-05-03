@@ -93,8 +93,11 @@ Use `TaskCreate` to create ONE task for each task in the phase file. Use the tas
 For each task, in order:
 
 1. **TaskUpdate** — set status to `in_progress`
-2. **Read the task** — read the `problem`, `steps`, `acceptanceCriteria`, `files`, and `testMode` fields
-3. **Execute** — branch on `testMode`:
+2. **Read the task** — read the `problem`, `steps`, `acceptanceCriteria`, `files`, `testMode`, and `batchMode` fields
+
+**If `batchMode: true`, run the Batch Protocol below instead of steps 3–8.** Batch tasks have a different commit shape (one commit per step) and a different transparency report contract (aggregated across commits). The standard flow below assumes `batchMode: false`.
+
+3. **Execute** — branch on `testMode` (`batchMode: false` only):
 
 #### testMode: "tdd" (test-first)
 
@@ -157,6 +160,28 @@ For each task, in order:
 
 The agent continues immediately to the next task after persisting the report. No waiting, no asking "should I continue?"
 
+### Batch Protocol (`batchMode: true` tasks)
+
+Replaces steps 3–8 above. Use ONLY for tasks with `batchMode: true` — set deliberately at plan time for genuinely mechanical multi-commit work (rename `Foo` → `Bar` across 22 files, author N parallel shapes from a template). The plan-phase / review-phase size lint forbids `batchMode: true` for non-mechanical work.
+
+1. **TaskCreate one subtask per `steps[]` entry.** Subject: `Phase N task N.X (k/M) — <step.description>`. activeForm follows the same template. The user sees per-unit progress in the parent transcript.
+2. **Implement and commit each subtask serially.** For each step:
+   a. TaskUpdate status to `in_progress`.
+   b. Apply the step's edits to the named file.
+   c. Run `pnpm type-check`. Failure → fix it in this same step's commit; do not roll back, do not skip ahead.
+   d. Commit with message: `<type>(<scope>): phase N task N.X (k/M) — <step.description first ~60 chars>`.
+   e. TaskUpdate status to `completed`.
+3. **No sub-agent forks.** `batchMode: true` is permission to make many commits inline, NOT permission to spawn sub-agents. Forking abandons the per-step commit discipline and produces an opaque mega-deliverable. The auto-spawn discipline rule (Step 4 prelude) applies in full force here.
+4. **Aggregated transparency report after the last step.** One report covering the entire batch task:
+   - `whatWasDone`: bullet list, one line per step, summarizing per-unit deltas (`step k/M: <file> — <one-line>`).
+   - `how`: 1–2 sentences describing the overall approach (e.g. "applied template `lib/shape-template.ts` to each of 22 catalog entries, derived test from existing `lib/__tests__/shape-template.test.ts`").
+   - `compromises` / `skipped` / `hardcoded` / `limitations`: aggregate across all steps. Same `"None"`-or-≥10-chars rule as standard flow.
+5. **Update phase file** in the SAME commit as the last step (or in a follow-up `docs(roadmap)` commit if the last step's commit is already typed). Set `done: true`, `doneDate`, and persist the aggregated `transparencyReport`.
+6. **TaskUpdate the parent task** in the agent's task list to `completed` (the per-step subtasks are already individually completed).
+7. **Chat output cap**: per-step commit messages stream through naturally. The end-of-task aggregated transparency report follows the standard ~30-line / ~1500-char cap from Step 4b — long step lists go into the persisted `whatWasDone` field, the chat shows a head + tail with `+N more in roadmap/phases/phase-N.phase.ts`.
+
+If a step fails twice in a row (type-check still red after one fix attempt), STOP. Do not power through the batch. Surface the failing step and the actual error to the user — the batch's mechanical assumption is broken.
+
 ### Step 4: Validation gate
 
 After the last task commits, run the validation gate. Full protocol in **`references/gate-protocol.md`** — read it once per session, then return here.
@@ -166,6 +191,8 @@ After the last task commits, run the validation gate. Full protocol in **`refere
 Before entering the gate, finish (or kill) any long-running background bash you started — e.g. a manual `pnpm tauri build`. Do not launch one "to run in parallel with the gate." The gate's mechanical checks already run `pnpm build` inside Round N.
 
 **Auto-spawn discipline.** During Steps 1–4 do NOT spawn `Explore`, `general-purpose`, or arbitrary `Task` sub-agents. The architect-critique → simplifier → code-reviewer chain is the only auto-spawned set. Investigation, gap analysis, and review are done inline by default — fork only when the phase doc explicitly requests a sub-agent (e.g. `agentDispatch: true` on an investigation task) or the user asks for one. The user has overridden silent forks before; respect that.
+
+**This includes "this task feels too big to do inline" reactions.** A task that feels oversized at runtime means one of two things: (a) it's actually fine and you're hesitating — push through; or (b) the plan was wrong. In case (b), STOP and surface a split proposal to the user. Do NOT reach for `Agent(...)` to run the task in a sub-agent — that path produces opaque mega-deliverables, abandons commit-per-unit discipline, and fails the user's prior feedback that fork-for-big-tasks "doesn't produce good results." If the planner intended this to be multi-commit, they would have set `batchMode: true` and you would already be in the Batch Protocol above.
 
 **Gate set is selected by `phase.kind`:**
 
