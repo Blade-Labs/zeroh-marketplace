@@ -69,15 +69,6 @@ do next phase → reads roadmap/backlog.ts, picks first entry
 review-phase N → verify the work was done correctly
 ```
 
-## What the Skills Do (summary — see each SKILL.md for full protocol)
-
-- **plan-phase**: Reads the project code FIRST, identifies specific files and changes, writes a typed `.phase.ts` file with structured tasks. Each task has: problem context, implementation steps with file paths, acceptance criteria.
-- **do-phase**: Executes ONE task at a time. Commits after each. Runs type-check between tasks. Full validation gate after all tasks. Transparency report per task. Compromise summary before marking done.
-- **review-phase**: Two modes — Plan Quality (backlog: verify files exist, source confirms problem, pattern completeness) or Post-Execution Audit (done: verify claimed changes exist, bug actually fixed, pattern caught everywhere).
-- **code-review**: Confidence-filtered (>=80% only). Reports severity + file:line + fix.
-- **full-code-review**: 8 parallel specialist agents. Required before release.
-- **audit-roadmap**: Cross-phase structural audit. 8 checks (dangling deps, cycles, clarification markers, stale phases, etc.). Never reads source code; read-only report.
-
 ## Migration (one-off, not a skill)
 
 `scripts/migrate/audit.ts` is the plugin-version upgrade tool. It lives under `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/` and is **never copied into the target repo** — migration tooling is disposable by design. The SessionStart drift check above surfaces it exactly when needed; the routing table row above drives the interactive remediation when the user says "migrate roadmap".

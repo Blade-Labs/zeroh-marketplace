@@ -1,6 +1,6 @@
 ---
 name: "Audit Roadmap"
-description: "Read-only structural audit across the entire roadmap. 8 checks — dangling dependencies, cycles, backlog drift, unresolved clarification markers, incomplete done phases, misordered task deps, stale in-progress phases, duplicate phase numbers. Never reads source code. Does NOT fix — reports findings only."
+description: "Read-only structural audit across the roadmap (11 checks). Never reads source code. Does NOT fix — reports findings only."
 user-invocable: true
 metadata:
   keywords: audit, roadmap, consistency, check, phases, drift, health

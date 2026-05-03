@@ -1,67 +1,19 @@
 # zeroh-roadmap — Phase-Driven Development Plugin
 
-## What This Is
+A Claude Code plugin that adds phase-driven development with validation gates, review reports, and changelog generation. Zero dependencies — Markdown skills, bash scripts, TypeScript templates.
 
-A Claude Code plugin that adds phase-driven development with validation gates, review reports, and changelog generation to any project. Zero dependencies — all content is Markdown skills, bash scripts, and TypeScript templates.
-
-## Skills (8)
-
-### Process (3 phase lifecycle skills)
-| Skill | Purpose |
-|-------|---------|
-| do-phase | Execute a phase task-by-task with sequential discipline |
-| plan-phase | Create new phases with high-confidence task design |
-| review-phase | Verify completed work or audit plan quality |
-
-### Quality (4 review skills)
-| Skill | Purpose |
-|-------|---------|
-| code-review | Confidence-filtered code review (>=80% only) |
-| full-code-review | Pre-release gate with 8 parallel specialist agents |
-| test-strategy | Test pyramid, coverage targets, conventions |
-| audit-roadmap | Cross-phase structural audit (dangling deps, cycles, clarification markers, stale phases) |
-
-### Bootstrap (1 meta-skill)
-| Skill | Purpose |
-|-------|---------|
-| using-zeroh-roadmap | Session bootstrap — loaded on every SessionStart. Also runs the 1-line schema-drift check and nudges the user toward the migration script when outdated. |
-
-## Migration tools (not a skill, not scaffolded)
-
-`scripts/migrate/audit.ts` is a one-off upgrade tool. It lives in the plugin,
-`scaffold-roadmap.sh` deliberately skips it, and there is no permanent skill
-for it. Discovery is via the SessionStart drift check in `using-zeroh-roadmap`
-and the routing row that maps "migrate roadmap" directly to the script
-invocation. Run from a target project root:
-
-```bash
-npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts
-```
-
-## Agents (6)
-
-| Agent | Purpose |
-|-------|---------|
-| architect-critique | Shortcut hunter — auto-fixes hardcodes, TODOs, and pre-existing issues in touched files. Runs as the first stage of the `do-phase` gate (one-shot), before simplifier. Surfaces only true hard-stops (multi-repo breaking changes, scoped-out systems, product decisions, speculative fixes). |
-| code-reviewer | Bugs, logic errors, pattern adherence |
-| simplifier | Taste pass — removes dead scaffolding, speculative abstractions, redundant error handling, and any over-extraction the architect-critique may have introduced. Runs as Round 0 of the `do-phase` gate (one-shot), after architect-critique. |
-| software-architect | Architecture blueprints, decisive design |
-| software-developer | Implementation with existing patterns |
-| test-engineer | Test writing, coverage enforcement |
+The skill catalog (auto-loaded) is the source of truth for what skills exist and what they do. Agent definitions are loaded when invoked. Operator-facing setup notes (migration script, version bump, contributor docs) live in README.md.
 
 ## Path Conventions
 
-Skills reference plugin content via these paths:
-- **Templates**: `${CLAUDE_PLUGIN_ROOT}/templates/`
-- **Scripts**: `${CLAUDE_PLUGIN_ROOT}/scripts/`
+Plugin content via `${CLAUDE_PLUGIN_ROOT}/templates/` and `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 
-Artifacts are written to the user's repo:
-- **Schema**: `lib/roadmap/schema.ts`
-- **Backlog**: `roadmap/backlog.ts` (ordered execution queue — first entry is next)
-- **Phases**: `roadmap/phases/*.phase.ts`
-- **Gate results**: `roadmap/phases/*.phase.ts` (gate + metrics fields)
-- **Review reports**: `reviews/releases/v*-review.json`
-- **Dashboard**: `reviews/dashboard/index.html`
+User-repo artifacts:
+- Schema: `lib/roadmap/schema.ts`
+- Backlog: `roadmap/backlog.ts` (ordered queue — first entry is next)
+- Phases: `roadmap/phases/*.phase.ts`
+- Review reports: `reviews/releases/v*-review.json`
+- Dashboard: `reviews/dashboard/index.html`
 
 ## Core Principles
 
@@ -72,9 +24,3 @@ Artifacts are written to the user's repo:
 5. **Errors are the debugging interface.** Never swallow, summarize, or "clean up" errors.
 6. **`phase.kind` selects the gate set.** Picker rules in plan-phase Step 3.
 7. **One task = one commit.** `batchMode: true` is the only escape; sub-agent forks for big tasks are forbidden.
-
-## Version
-
-Update both files when bumping:
-- `package.json` → `version`
-- `.claude-plugin/plugin.json` → `version`
