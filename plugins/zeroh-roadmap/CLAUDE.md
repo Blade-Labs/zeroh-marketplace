@@ -70,6 +70,7 @@ Artifacts are written to the user's repo:
 3. **Validation gate after every phase.** No exceptions.
 4. **Zero findings to pass.** Loop agents until clean.
 5. **Errors are the debugging interface.** Never swallow, summarize, or "clean up" errors.
+6. **`phase.kind` drives gate selection.** `mockup` runs typecheck+biome only; `logic` runs the full architect→simplifier→reviewer chain; `hardening` adds the integration-rerun closure rule for persistence/event fixes; `release` adds e2e. Schema v3.
 
 ## Version
 
