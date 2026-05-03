@@ -136,7 +136,7 @@ export default definePhase({
         'Observable outcome you can verify by running a command or checking the UI',
       ],
       files: ['path/to/actual/file.ts'],
-      // batchMode: true,  // Set ONLY for mechanical multi-commit work (rename across N files, parallel template authoring). Required when files.length > 10 OR steps.length > 6.
+      // batchMode: true,  // Set to bypass the size lint when files.length > 10 OR steps.length > 6. Use ONLY for mechanical multi-commit work (rename across N files, parallel template authoring) — see Self-check #9.
       done: false,
     },
   ],
@@ -226,7 +226,7 @@ If you set `batchMode: true`, also ensure each `steps[]` entry maps to a clean c
 
 - Fail = BLOCKER. Oversized task without batchMode will not pass do-phase auto-spawn discipline.
 
-**If any check fails:** fix the phase file and re-run the failing checks. Commit is acceptable with unresolved markers only if the phase is NOT added to the backlog. All other checks MUST pass before commit.
+**If any check fails:** fix the phase file and re-run the failing checks. Commit is acceptable with unresolved markers (check 6) only if the phase is NOT added to the backlog. All other 8 checks MUST pass before commit.
 
 ### Step 6: Commit and push
 
