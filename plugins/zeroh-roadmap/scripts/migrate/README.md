@@ -210,7 +210,7 @@ Then:
 
 ```bash
 pnpm type-check       # schema must parse cleanly
-pnpm emit:phases      # registry rebuilds without errors
+pnpm emit:phases      # discovery + changelog regen succeed
 ```
 
 ### Step 7 — Merge or abandon

@@ -240,7 +240,7 @@ The schema enforces gate results when `status: 'done'`. `pnpm type-check` catche
    - `compromises: '<summary from compromise-summary step>'` — the aggregated compromise/skipped/hardcoded summary. Omit only if every task reported "None" in all six sections.
    - `completedDate: 'YYYY-MM-DD'`
 2. Run `pnpm type-check` — confirms gate enforcement passes.
-3. Run `pnpm emit:phases` to update the registry.
+3. Run `pnpm emit:phases` to regenerate `reviews/changelog.json`.
 4. Commit: `docs(roadmap): mark phase N complete` (include compromise summary in commit body).
 5. Push to develop.
 

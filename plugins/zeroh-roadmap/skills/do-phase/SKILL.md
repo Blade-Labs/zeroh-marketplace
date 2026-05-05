@@ -253,7 +253,7 @@ The schema enforces gate results when `status: 'done'`. In one edit to the `.pha
 
 **Groom the backlog in the same commit.** If `roadmap/backlog.ts` contains an entry for this phase, remove it. Done phases do not belong in the execution queue — leaving them there pollutes `do-phase`'s next-up resolution and forces `audit-roadmap` to flag the staleness later. The removal is a one-line edit to `backlog.ts`. If the phase was never queued (e.g. it ran via explicit `/do-phase N`), no edit is needed.
 
-Then: `pnpm type-check` → `pnpm emit:phases` → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop.
+Then: `pnpm type-check` → `pnpm emit:phases` (regenerates `reviews/changelog.json`) → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop.
 
 If `scripts/collect-phase-metrics.ts` exists, it fills `gate` and `metrics` automatically:
 ```bash

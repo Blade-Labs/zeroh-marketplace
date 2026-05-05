@@ -147,7 +147,7 @@ export default definePhase({
 
 ```bash
 pnpm type-check    # Validates the phase compiles
-pnpm emit:phases   # Discovers the phase in the registry
+pnpm emit:phases   # Validates phase discovery + regenerates changelog
 ```
 
 If type-check fails, the task data is structurally invalid — fix it before committing.

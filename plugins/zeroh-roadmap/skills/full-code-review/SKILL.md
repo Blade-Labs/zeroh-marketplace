@@ -320,7 +320,7 @@ git add roadmap/phases/phase-{N}.phase.ts
 git commit -m "docs(roadmap): phase {N} — code review remediation from {date} audit"
 ```
 
-After committing, run `pnpm emit:phases` to update the registry.
+After committing, run `pnpm emit:phases` to regenerate `reviews/changelog.json`.
 
 ### Step 4: Save review to `reviews/`
 

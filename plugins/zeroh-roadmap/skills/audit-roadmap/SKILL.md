@@ -22,7 +22,6 @@ User says: `audit roadmap`, `audit the roadmap`, `/audit-roadmap`, `/roadmap-aud
 - **`code-review`** (which looks for bugs in code)
 - **`review-phase`** (which verifies the claims of ONE phase)
 - **`full-code-review`** (which audits application code)
-- **`emit.ts --check`** (which verifies the registry JSON digest)
 
 `audit-roadmap` is the cross-cutting structural auditor. It finds problems that span phases, not problems within a single phase. Compared to `review-phase`: `review-phase` goes **deep into one phase** (reads source code, verifies bug claims, does blast-radius grep). `audit-roadmap` goes **shallow across all phases** (reads only phase files + git log, never opens source).
 
@@ -208,5 +207,4 @@ If the verdict is BROKEN, end the report with:
 - **Do NOT fix anything** — this skill reports findings. The user runs `/plan-phase` or edits phase files manually to resolve them.
 - **Do NOT short-circuit** — run all 8 checks even if earlier ones fail. One pass, one report.
 - **Do NOT infer intent** — if phase 5 says `dependsOn: [3]` and phase 3 doesn't exist, report it literally. Don't guess "maybe they meant phase 4".
-- **Do NOT rebuild the registry** — `pnpm emit:phases --check` is a separate digest-based drift detector. Recommend it separately if the user asks about registry drift.
 - **Do NOT block on missing git history** — Check 7 falls back to "unknown age" if `git log` returns nothing for the phase. Report it as LOW with a note.

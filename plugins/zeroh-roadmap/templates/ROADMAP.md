@@ -84,6 +84,6 @@ Launch both **in parallel** with the exact diff command in each prompt:
 ### Step 7: Record Results, Mark Done & Push
 - Run `npx tsx scripts/collect-phase-metrics.ts {N}` to fill `gate` and `metrics` fields.
 - Set `status: 'done'` in the `.phase.ts` file.
-- Run `pnpm emit:phases` to update the registry.
+- Run `pnpm emit:phases` to regenerate `reviews/changelog.json`.
 - Commit: `docs(roadmap): mark phase N complete`.
 - Push to remote.

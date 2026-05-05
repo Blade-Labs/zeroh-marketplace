@@ -88,7 +88,7 @@ On first use, the plugin scaffolds:
 |------|---------|
 | `lib/roadmap/schema.ts` | `definePhase()` with Zod validation |
 | `lib/roadmap/registry.ts` | Phase discovery (glob + dynamic import + duplicate detection) |
-| `lib/roadmap/emit.ts` | Deterministic registry emission with SHA256 digest |
+| `lib/roadmap/emit.ts` | Changelog emission from `.phase.ts` files |
 | `roadmap/phases/` | Where `.phase.ts` files live |
 | `roadmap/ROADMAP.md` | Gate protocol + git strategy |
 | `reviews/releases/` | Release review report JSONs |
