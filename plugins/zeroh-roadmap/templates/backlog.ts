@@ -20,11 +20,34 @@
  *
  * Duplicate phase numbers are rejected at runtime by Zod.
  *
+ * Two input forms are supported (schema v5+):
+ *   1. Flat array — `defineBacklog([{ phase: 1, name: '...' }])`
+ *   2. Tiered     — `defineBacklog({ tiers: [{ tier: 0, label: '...', items: [...] }] })`
+ *
+ * To switch from flat to tiered, replace the array argument with a
+ * `{ tiers: [...] }` object — the rest of the lifecycle is unchanged.
+ * The flat form is normalized into a single `tier: 0` tier on parse, so
+ * downstream code only ever sees the tiered shape.
+ *
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
 import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
+  // Flat form (back-compat):
   // { phase: 1, name: 'Example phase name' },
+  //
+  // Or tiered form — comment-out the array and uncomment the block below:
+  // {
+  //   tiers: [
+  //     {
+  //       tier: 0,
+  //       label: 'Sentinel becomes daily driver',
+  //       items: [
+  //         { phase: 1, name: 'Example phase name' },
+  //       ],
+  //     },
+  //   ],
+  // }
 ])

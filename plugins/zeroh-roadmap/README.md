@@ -86,7 +86,7 @@ On first use, the plugin scaffolds:
 
 | Path | Purpose |
 |------|---------|
-| `lib/roadmap/schema.ts` | `definePhase()` with Zod validation |
+| `lib/roadmap/schema.ts` | `definePhase()` + `defineBacklog()` with Zod validation (flat or tiered backlog input — see `roadmap/backlog.ts`) |
 | `lib/roadmap/registry.ts` | Phase discovery (glob + dynamic import + duplicate detection) |
 | `lib/roadmap/emit.ts` | Changelog emission from `.phase.ts` files |
 | `roadmap/phases/` | Where `.phase.ts` files live |
