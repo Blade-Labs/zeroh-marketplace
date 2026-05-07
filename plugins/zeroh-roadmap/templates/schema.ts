@@ -13,7 +13,7 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-// @zeroh-roadmap-schema v4
+// @zeroh-roadmap-schema v5
 // Bump this marker whenever the canonical schema gains a feature. The
 // SessionStart drift check in using-zeroh-roadmap greps for this exact line
 // to decide whether a target repo is behind the plugin. Keep the comment
@@ -328,7 +328,7 @@ export function isDonePhase(phase: Phase): phase is DonePhase {
   return phase.status === 'done'
 }
 
-// ── Backlog (ordered execution queue) ───────────────────────────────────────
+// ── Backlog (ordered execution queue, optionally tiered) ───────────────────
 
 export const BacklogEntryShape = z.object({
   /** Phase number — foreign key to a .phase.ts file */
@@ -339,14 +339,47 @@ export const BacklogEntryShape = z.object({
 
 export type BacklogEntry = z.output<typeof BacklogEntryShape>
 
-export const BacklogShape = z
-  .array(BacklogEntryShape)
-  .refine(
-    (arr) => new Set(arr.map((e) => e.phase)).size === arr.length,
-    { message: 'Backlog must not contain duplicate phase numbers' },
-  )
+/** Flat backlog — ordered array of entries. Back-compat input form. */
+export const BacklogFlatShape = z.array(BacklogEntryShape)
 
-export type Backlog = z.output<typeof BacklogShape>
+/** A tier groups related entries under a human-readable header for UI
+ *  rendering. `tier` is the sort key (lower runs first); `label` is the
+ *  display title; `items` are the entries in execution order within the tier. */
+export const BacklogTierShape = z.object({
+  tier: z.number().int().nonnegative(),
+  label: z.string().min(5),
+  items: z.array(BacklogEntryShape),
+})
+
+export type BacklogTier = z.output<typeof BacklogTierShape>
+
+/** Tiered backlog — `{ tiers: [{ tier, label, items }, ...] }`. */
+export const BacklogTieredShape = z.object({
+  tiers: z.array(BacklogTierShape),
+})
+
+export type BacklogTiered = z.output<typeof BacklogTieredShape>
+
+/** Backlog input — either form is accepted. Duplicate phase numbers across
+ *  the whole queue (including across tiers) are rejected. `defineBacklog()`
+ *  normalizes the parse result to BacklogTiered. */
+export const BacklogShape = z
+  .union([BacklogFlatShape, BacklogTieredShape])
+  .superRefine((value, ctx) => {
+    const all = Array.isArray(value) ? value : value.tiers.flatMap((t) => t.items)
+    const phases = all.map((e) => e.phase)
+    if (new Set(phases).size !== phases.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Backlog must not contain duplicate phase numbers',
+      })
+    }
+  })
+
+/** Output of `defineBacklog()` — always normalized to the tiered form so
+ *  consumers have one shape to render. Flat input collapses into a single
+ *  `{ tier: 0, label: 'Default', items: [...] }` tier. */
+export type Backlog = BacklogTiered
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
@@ -368,10 +401,28 @@ export function definePhase(input: z.input<typeof PhaseShape>): Phase {
 
 /**
  * Define the ordered execution backlog with runtime Zod validation.
- * Use in backlog.ts: `export default defineBacklog([...])`
  *
- * First entry is next to execute. No duplicate phase numbers allowed.
+ * Use in backlog.ts in either form:
+ * ```ts
+ * // 1. Flat (back-compat)
+ * defineBacklog([{ phase: 18, name: 'Foo' }])
+ * // 2. Tiered (renderable headers)
+ * defineBacklog({
+ *   tiers: [
+ *     { tier: 0, label: 'Sentinel becomes daily driver', items: [...] },
+ *   ],
+ * })
+ * ```
+ *
+ * Returns the normalized tiered form. Flat input becomes a single
+ * `{ tier: 0, label: 'Default', items: [...] }` tier so callers always see
+ * one shape. First entry of the lowest tier is next to execute. Duplicate
+ * phase numbers across the whole queue are rejected.
  */
 export function defineBacklog(input: z.input<typeof BacklogShape>): Backlog {
-  return BacklogShape.parse(input)
+  const parsed = BacklogShape.parse(input)
+  if (Array.isArray(parsed)) {
+    return { tiers: [{ tier: 0, label: 'Default', items: parsed }] }
+  }
+  return parsed
 }
