@@ -1,12 +1,34 @@
 {
-  "description": "zeroh-sdd enforcement gradient — 9 hooks across 6 events",
+  "description": "zeroh-sdd v1 runtime hooks — executable stage gates, proof receipts, JIT checks, and AP envelopes",
   "hooks": {
+    "Setup": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook setup",
+            "statusMessage": "Initializing zeroh-sdd runtime..."
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-start.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook session-start",
+            "statusMessage": "Loading zeroh-sdd execution state..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook user-prompt-submit"
           }
         ]
       }
@@ -17,13 +39,49 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/phase-context.sh",
-            "statusMessage": "Checking file type..."
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook pre-tool-write",
+            "statusMessage": "Checking active SDD stage..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook pre-tool-bash",
+            "statusMessage": "Checking SDD stage advance..."
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/stage-write-guard.sh",
-            "statusMessage": "Checking stage allowlist..."
+            "if": "Bash(git push *)",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook pre-tool-bash",
+            "statusMessage": "Checking SDD stage advance..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(git merge *)",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook pre-tool-bash",
+            "statusMessage": "Checking SDD stage advance..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(zeroh-sdd stage set *)",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook pre-tool-bash",
+            "statusMessage": "Checking SDD stage advance..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(node *zeroh-sdd.mjs stage set *)",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook pre-tool-bash",
+            "statusMessage": "Checking SDD stage advance..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(sdd:stage set *)",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook pre-tool-bash",
+            "statusMessage": "Checking SDD stage advance..."
           }
         ]
       }
@@ -34,11 +92,54 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/ap-detector.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook post-tool-write",
+            "statusMessage": "Scanning for SDD antipatterns..."
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/commit-hygiene.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook post-tool-write-jit",
+            "asyncRewake": true,
+            "timeout": 300,
+            "statusMessage": "Running SDD JIT checks..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook post-tool-bash"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook post-tool-failure"
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook post-tool-batch"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook task-completed"
           }
         ]
       }
@@ -48,7 +149,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/pre-compact.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook pre-compact"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook post-compact"
           }
         ]
       }
@@ -58,11 +169,49 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/stop-check.sh"
-          },
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook stop"
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "matcher": "user_settings|project_settings|local_settings|skills",
+        "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/stop-quality-gate.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook config-change"
+          }
+        ]
+      }
+    ],
+    "CwdChanged": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook cwd-changed"
+          }
+        ]
+      }
+    ],
+    "FileChanged": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook file-changed"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "Bash|Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook permission-denied"
           }
         ]
       }
@@ -72,7 +221,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-end.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs\" hook session-end"
           }
         ]
       }
