@@ -9,10 +9,10 @@
   "plugins": [
     {
       "name": "zeroh-sdd",
-      "description": "Shape-Driven Development — shapes as RED tests, enforcement hooks, 14 skills, 8 hooks",
+      "description": "Shape-Driven Development runtime — executable stage state, proof receipts, Zod shape gates, and Claude hook JIT correction",
       "source": "./plugins/zeroh-sdd",
       "category": "development",
-      "tags": ["sdd", "tdd", "shapes", "zod", "enforcement"]
+      "tags": ["sdd", "spec-kit", "hooks", "zod", "shape-gates", "proof-receipts"]
     },
     {
       "name": "zeroh-design",

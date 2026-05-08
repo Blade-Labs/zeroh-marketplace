@@ -1,8 +1,0 @@
-{
-  "name": "zeroh-sdd",
-  "version": "0.1.0",
-  "description": "Shape-Driven Development — shapes as RED tests, CRITERIA-RED-GREEN-RATCHET, enforcement hooks",
-  "type": "skills",
-  "entry": "GEMINI.md",
-  "skills_dir": "skills/"
-}

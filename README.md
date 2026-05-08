@@ -10,7 +10,7 @@ A curated directory of plugins for Claude Code, maintained by Blade Labs.
 
 ### General-purpose development
 
-- **`zeroh-sdd`** — Shape-Driven Development (shapes as RED tests, enforcement hooks, 14 skills, 8 hooks)
+- **`zeroh-sdd`** — Shape-Driven Development runtime (executable stage state, proof receipts, Zod shape gates, Claude hook enforcement)
 - **`zeroh-design`** — Blade Labs branded UI and collateral generator (4 design themes)
 - **`zeroh-roadmap`** — Phase-driven development (shape-enforced task schemas, validation gates, review reports)
 
@@ -114,74 +114,40 @@ enterprise-plugin/
 
 ### Real example: zeroh-sdd
 
-Our most complex plugin — 14 skills, 8 hooks across 6 lifecycle events, templates, multi-IDE support, and hook overrides.
+Production SDD runtime — 10 skills, a Node CLI in `bin/`, and Claude hooks that enforce active execution stage boundaries.
 
 ```
 plugins/zeroh-sdd/
 ├── .claude-plugin/plugin.json          # Manifest
-├── .cursor-plugin/plugin.json          # Cursor IDE support
-├── .copilot/plugin.yaml                # GitHub Copilot support
 │
-├── skills/                             # 14 skills — the SDD pipeline
-│   ├── using-zeroh-sdd/SKILL.md        # Bootstrap skill (loaded at SessionStart)
-│   ├── speckit-specify/SKILL.md         # Create feature spec
-│   ├── speckit-clarify/SKILL.md         # Ask clarification questions
-│   ├── speckit-plan/SKILL.md            # Generate implementation plan
-│   ├── speckit-shapes/SKILL.md          # Shape-gated development
-│   ├── speckit-tasks/SKILL.md           # Generate task list
-│   ├── speckit-implement/SKILL.md       # Execute tasks
-│   ├── speckit-analyze/SKILL.md         # Cross-artifact analysis
-│   ├── speckit-rescope/SKILL.md         # Rescope after changes
-│   ├── speckit-checklist/SKILL.md       # Custom checklists
-│   ├── speckit-constitution/SKILL.md    # Project constitution
-│   ├── speckit-taskstoissues/SKILL.md   # Tasks → GitHub issues
-│   ├── shape-authoring/SKILL.md         # Zod shape authoring
-│   └── criteria-first-tdd/SKILL.md      # Gate-driven development
+├── bin/
+│   └── zeroh-sdd.mjs                    # check/doctor/stage/jit/hook runtime
 │
-├── hooks/hooks.json                    # 8 hooks across 6 events
-├── scripts/hooks/                      # Hook implementations
-│   ├── session-start.sh                 # SessionStart — bootstrap
-│   ├── phase-context.sh                 # PreToolUse (Write|Edit) — file type checking
-│   ├── ap-detector.sh                   # PostToolUse (Write|Edit) — anti-pattern detection
-│   ├── commit-hygiene.sh                # PostToolUse (Write|Edit) — commit message quality
-│   ├── pre-compact.sh                   # PreCompact — save state before compaction
-│   ├── stop-check.sh                    # Stop — verify completion
-│   ├── stop-quality-gate.sh             # Stop — quality gate
-│   └── session-end.sh                   # SessionEnd — cleanup
-├── scripts/hooks/context/              # Context files injected by hooks
-│   ├── ap-registry.md                   # 19 anti-patterns to detect
-│   ├── phase-specify.md                 # Context for specify phase
-│   ├── phase-plan.md                    # Context for plan phase
-│   ├── phase-red.md                     # Context for red phase
-│   ├── phase-green.md                   # Context for green phase
-│   ├── checklist-component.md           # Component checklist
-│   ├── checklist-route.md               # Route checklist
-│   ├── checklist-shape.md               # Shape checklist
-│   ├── checklist-store.md               # Store checklist
-│   ├── checklist-test.md                # Test checklist
-│   ├── commit-hygiene.md                # Commit conventions
-│   └── stop-gate-config.md              # Quality gate config
+├── skills/                              # SDD runtime workflow
+│   ├── specify/SKILL.md
+│   ├── clarify/SKILL.md
+│   ├── plan/SKILL.md
+│   ├── execution-spec/SKILL.md
+│   ├── shapes/SKILL.md
+│   ├── tasks/SKILL.md
+│   ├── implement/SKILL.md
+│   ├── analyze/SKILL.md
+│   ├── sdd-readiness/SKILL.md
+│   └── ap-taxonomy/SKILL.md
 │
-├── templates/                          # File templates for scaffolding
-│   ├── spec-template.md
-│   ├── plan-template.md
-│   ├── tasks-template.md
-│   ├── checklist-template.md
-│   ├── constitution-template.md
-│   └── agent-file-template.md
-│
-├── hook-overrides.json                 # Users can customize hook behavior
+├── hooks/hooks.json                     # Hook events routed to bin/zeroh-sdd.mjs
+├── docs/v1-runtime.md                   # Runtime architecture
 ├── CLAUDE.md                           # Developer docs (not auto-loaded)
 └── README.md
 ```
 
 **What makes this plugin powerful:**
 
-- **Skills form a pipeline:** specify → clarify → plan → shapes → tasks → implement → analyze
-- **Hooks enforce the pipeline:** can't write code without checking file type, can't stop without quality gate
-- **Context injection:** hooks load phase-specific context into Claude's working memory
-- **Hook overrides:** projects can customize enforcement without forking the plugin
-- **Multi-IDE:** same plugin works in Claude Code, Cursor, and GitHub Copilot
+- **Execution specs are machine-checkable:** every actionable plan carries one fenced `sdd` block
+- **Stage state drives enforcement:** `.specify/workflows/active-stage.json` is the source of truth for allowed writes and proof commands
+- **Hooks protect boundaries:** writes, commits, task completion, and Stop are blocked only while an active stage remains unfinished
+- **AP findings steer, not block:** warnings emit `additionalContext` plus `_fix.prompt` envelopes
+- **Shapes are proof gates:** Zod shapes and parse boundaries are discovered and enforced when `shape_gate` declares them
 
 ## Component Reference
 
@@ -287,7 +253,7 @@ The best way to learn is to read existing plugins in this marketplace:
 |--------|-----------|-------------|
 | `plugins/zeroh-design/` | Simple | Single skill with reference materials and theme assets |
 | `plugins/zeroh-roadmap/` | Medium | Multiple skills, 4 agents, templates, scaffold scripts |
-| `plugins/zeroh-sdd/` | Complex | 14 skills, 8 hooks, context injection, hook overrides, multi-IDE |
+| `plugins/zeroh-sdd/` | Complex | SDD runtime, active-stage hooks, proof receipts, AP envelopes, shape gates |
 
 For the official plugin development guide, install the `plugin-dev` plugin:
 

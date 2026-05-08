@@ -1,7 +1,21 @@
 {
   "name": "zeroh-sdd",
-  "version": "0.1.0",
-  "description": "Shape-Driven Development — shapes as RED tests, CRITERIA-RED-GREEN-RATCHET, enforcement hooks",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Shape-Driven Development runtime for Claude Code — executable stage state, proof receipts, Zod shape gates, and hook-driven JIT correction",
   "author": "Blade Labs <info@blade-labs.com>",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "bin": {
+    "zeroh-sdd": "bin/zeroh-sdd.mjs"
+  },
+  "scripts": {
+    "test": "node bin/zeroh-sdd.mjs self-test",
+    "sdd:self-test": "node bin/zeroh-sdd.mjs self-test",
+    "sdd:check": "node bin/zeroh-sdd.mjs check",
+    "sdd:doctor": "node bin/zeroh-sdd.mjs doctor",
+    "sdd:stage": "node bin/zeroh-sdd.mjs stage"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  }
 }

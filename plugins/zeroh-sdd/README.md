@@ -1,223 +1,220 @@
 # zeroh-sdd
 
-**Shape-Driven Development for AI-assisted coding.**
-Shapes as RED tests. Enforcement hooks. Extension points.
+Shape-Driven Development runtime for Claude Code.
 
+`zeroh-sdd` turns Spec Kit-style planning into an executable loop enforced by Claude hooks:
+
+```text
+execution-spec -> active-stage.json -> hooks enforce boundary -> proof command -> receipt -> doctor -> next slice
 ```
+
+This is the v1 clean runtime. There are no legacy Speckit shims.
+
+## Install
+
+```text
+/plugin marketplace add Blade-Labs/zeroh-marketplace
 /plugin install zeroh-sdd@zeroh-marketplace
 ```
 
----
+Runtime prerequisite: Node.js 18.18 or newer.
 
-## The Problem
+## Commands
 
-LLM-generated codebases exhibit predictable structural failures. Research across 211M lines of code (GitClear), 470 PRs (CodeRabbit), and 304K commits (Liu et al.) documents 10 recurring anti-patterns:
-
-1. **Fat route handlers** — 200-400 LOC inline instead of service layer
-2. **Parallel implementations** — `chat/` + `chat-v2/` accumulate; nothing gets deleted
-3. **Scattered env reads** — `process.env` everywhere instead of centralized config
-4. **Inconsistent error handling** — 3+ patterns mixed across files
-5. **Type assertion abuse** — `as any` density exceeds 18%
-6. **Naming drift** — camelCase/snake_case/PascalCase mixed within one codebase
-7. **Structural tests** — "does file export X?" instead of "does function enforce invariant Y?"
-8. **Dead code accumulation** — `if: false` blocks, commented-out code, unreachable branches
-9. **Blurred module boundaries** — circular dependencies, internal imports crossing zones
-10. **JSDoc bloat** — 20-40 line headers that duplicate the code below
-
-**Root causes:** Local optimization without global coherence. Additive bias (LLMs add, rarely delete). Training distribution leakage (patterns from training data, not project conventions).
-
-**Existing tools address fragments.** spec-kit creates specs but can't enforce implementation. Superpowers documents TDD but relies on honor system. Neither combines schema enforcement + ratcheting + trust chains + evidence emission.
-
----
-
-## What zeroh-sdd Does
-
-zeroh-sdd teaches AI agents Shape-Driven Development — a methodology where **Zod schemas define contracts BEFORE implementation**, and **hooks enforce those contracts mechanically**.
-
-**Five novel contributions:**
-
-1. **Shapes as RED tests** — A Zod shape IS the acceptance criterion. `safeParse()` IS the test. One artifact, two roles.
-2. **CRITERIA-RED-GREEN-RATCHET** — Acceptance criteria first. Failing tests. Passing code. Violations can only decrease.
-3. **CGTC trust chain** — 4-layer governance: conventions must lock before discovery, discovery before triangulation, triangulation before downstream metrics.
-4. **Test scaffolds from criteria** — The spec decides WHAT to test, not the LLM. Scaffolds are immutable; the LLM fills assertions.
-5. **Mechanical enforcement** — PostToolUse hooks catch anti-patterns in <200ms. Stop hooks block premature completion. Not prose suggestions — bash scripts with grep/diff.
-
----
-
-## Installation
+The plugin ships a self-contained CLI:
 
 ```bash
-# Add Blade Labs marketplace (one-time)
-/plugin marketplace add Blade-Labs/zeroh-marketplace
-
-# Install the plugin
-/plugin install zeroh-sdd@zeroh-marketplace
-
-# Optional: UI design companion plugin
-/plugin install ui-design-skill@zeroh-marketplace
-
-# Enable auto-updates for private repo (add to .bashrc/.zshrc)
-export GITHUB_TOKEN=ghp_xxx
+zeroh-sdd check --plan <path>
+zeroh-sdd doctor --plan <path>
+zeroh-sdd stage set|status|finish|clear
+zeroh-sdd jit --file <path>
+zeroh-sdd self-test
 ```
 
-**Zero dependencies.** No npm install. No build step. Pure markdown, bash, and JSON.
+The Claude hooks call the same runtime through a small launcher that finds `node` or `node.exe`:
 
----
-
-## Pipeline
-
-```
-specify → clarify → plan → SHAPES → tasks → implement → analyze
-                                                   ↑
-                                               rescope
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd" hook <event>
 ```
 
-| Phase | Produces | What happens |
-|-------|----------|-------------|
-| **specify** | spec.md | Capture WHAT to build and WHY from natural language |
-| **clarify** | Updated spec | Ask up to 5 targeted questions to resolve ambiguity |
-| **plan** | plan.md | Architecture decisions, component breakdown, dependencies |
-| **shapes** | shape-briefs/ | Boundary contracts as Zod schemas — these ARE the RED tests |
-| **tasks** | tasks.md | Dependency-ordered, atomic implementation steps |
-| **implement** | Code + tests | Execute tasks with per-task gates (lint, typecheck) |
-| **analyze** | Findings | Cross-artifact consistency audit |
-| **rescope** | Updated artifacts | Surgical invalidation when scope changes (preserves research) |
+## State Files
 
----
+Project state lives in the consuming repo:
 
-## Skills (14)
+- `.specify/workflows/active-stage.json`
+- `.specify/workflows/hook-state.json`
 
-| Skill | Slash Command | Purpose |
-|-------|--------------|---------|
-| speckit-specify | `/zeroh-sdd:speckit-specify` | Create feature spec from natural language |
-| speckit-clarify | `/zeroh-sdd:speckit-clarify` | Ask up to 5 targeted clarification questions |
-| speckit-checklist | `/zeroh-sdd:speckit-checklist` | Generate requirements checklist ("unit tests for English") |
-| speckit-constitution | `/zeroh-sdd:speckit-constitution` | Define or update project principles |
-| speckit-plan | `/zeroh-sdd:speckit-plan` | Implementation planning with research phase |
-| speckit-shapes | `/zeroh-sdd:speckit-shapes` | Shape briefs + fills as RED tests |
-| speckit-tasks | `/zeroh-sdd:speckit-tasks` | Dependency-ordered task generation |
-| speckit-taskstoissues | `/zeroh-sdd:speckit-taskstoissues` | Convert tasks to GitHub issues |
-| speckit-implement | `/zeroh-sdd:speckit-implement` | Execute tasks with per-task mechanical gates |
-| speckit-analyze | `/zeroh-sdd:speckit-analyze` | Cross-artifact consistency audit |
-| speckit-rescope | `/zeroh-sdd:speckit-rescope` | Surgical artifact invalidation after scope change |
-| criteria-first-tdd | `/zeroh-sdd:criteria-first-tdd` | CRITERIA-RED-GREEN-RATCHET cycle enforcement |
-| shape-authoring | `/zeroh-sdd:shape-authoring` | Golden Zod shape template with SKOS+PROV-O metadata |
-| using-zeroh-sdd | *(auto-loaded)* | Session bootstrap — skill inventory, pipeline state |
+Plugin cache lives in Claude plugin data:
 
----
+- `${CLAUDE_PLUGIN_DATA}/shape-registry.json`
+- `${CLAUDE_PLUGIN_DATA}/runtime-cache.json`
 
-## Enforcement Hooks
+If `CLAUDE_PLUGIN_DATA` is unavailable, local CLI runs fall back to `.specify/workflows/.zeroh-sdd-plugin-data`.
 
-These fire automatically. No invocation needed.
+## Skills
 
-| Hook | Event | Type | What it catches |
-|------|-------|------|----------------|
-| **stop-check** | Stop | BLOCKING | Premature "I'm done!" with uncommitted files |
-| **ap-detector** | PostToolUse (Write/Edit) | ADVISORY | 11 anti-patterns via grep/diff in <200ms |
-| **commit-hygiene** | PostToolUse (Write/Edit) | ADVISORY | Commit batching (>3 uncommitted files) |
-| **session-start** | SessionStart | LIFECYCLE | Pipeline state, context recovery after compaction |
-| **pre-compact** | PreCompact | LIFECYCLE | Context snapshot before memory loss |
-| **session-end** | SessionEnd | LIFECYCLE | Session transcript archival |
+| Skill | Purpose |
+| --- | --- |
+| `specify` | Capture intent, evidence, owner, non-goals, and acceptance signals |
+| `clarify` | Resolve only ambiguity that changes the next executable proof gate |
+| `plan` | Frame the current slice and hand off to `execution-spec` |
+| `execution-spec` | Author the fenced `sdd` block and stage gate |
+| `shapes` | Author Zod shapes as executable acceptance criteria |
+| `tasks` | Break the active stage into proof-preserving tasks |
+| `implement` | Execute inside the active stage boundary |
+| `analyze` | Audit plan, stage, implementation, APs, and receipts |
+| `sdd-readiness` | Run `check` and `doctor` before implementation |
+| `ap-taxonomy` | Shared AP vocabulary and hook envelope contract |
 
-**Anti-patterns detected** (from `scripts/hooks/context/ap-registry.md`):
+## SDD Block
 
-| ID | Pattern | What it catches |
-|----|---------|----------------|
-| AP-ERR-01 | `return null` in catch block | Error swallowing |
-| AP-ERR-02 | New `handle*Error` function | Bypass of canonical error utility |
-| AP-ANY-01 | `as any` count > 3 per file | Type assertion abuse |
-| AP-DOC-01 | `--no-verify` in git | Commit hook bypass |
-| AP-IGN-01 | `@ts-ignore` without comment | Suppression without justification |
-| AP-ENV-01 | `process.env` outside config/ | Scattered environment reads |
-| AP-LOG-01 | `console.log` in prod code | Debug logging left behind |
-| AP-CAP-01 | `toThrow` → `toBeUndefined` | Test assertion weakened |
-| AP-CAP-02 | Test count decreased | Test removed or skipped |
-| AP-CAP-03 | Gate severity downgraded | Gate weakened |
+Every actionable execution spec carries exactly one fenced `sdd` YAML block:
 
----
-
-## What Makes This Different
-
-| Dimension | Superpowers | spec-kit | Kiro | **zeroh-sdd** |
-|-----------|------------|----------|------|-----------|
-| **Enforcement** | Honor system | None | None | **Hooks catch APs in <200ms** |
-| **Test philosophy** | TDD (prose) | None | None | **CRITERIA-RED-GREEN-RATCHET** |
-| **Shapes** | None | None | None | **Zod schemas as RED tests** |
-| **Trust chain** | None | None | None | **CGTC 4-layer governance** |
-| **Blocking hooks** | 0 | 0 | 0 | **1 (Stop: premature completion)** |
-| **Advisory hooks** | 0 | 0 | 0 | **2 (AP detection + commit hygiene)** |
-| **Extension model** | Skills only | Extensions + presets | None | **7 extension points** |
-| **Multi-agent** | 6 platforms | 28 platforms | VS Code only | **5 platforms** |
-
----
-
-## Multi-Agent Support
-
-zeroh-sdd works on multiple AI coding platforms:
-
-| Platform | Config | Skills format |
-|----------|--------|--------------|
-| **Claude Code** | `.claude-plugin/plugin.json` | SKILL.md (native) |
-| **Gemini CLI** | `gemini-extension.json` | SKILL.md via GEMINI.md |
-| **GitHub Copilot** | `.copilot/plugin.yaml` | SKILL.md |
-| **Cursor** | `.cursor-plugin/plugin.json` | SKILL.md |
-| **Codex** | `.codex/INSTALL.md` | SKILL.md |
-
-SKILL.md follows the [agentskills.io](https://agentskills.io) standard, supported by 30+ AI coding tools.
-
----
-
-## Companion Plugins
-
-zeroh-sdd focuses on methodology. Aesthetics and domain knowledge are separate plugins:
-
-- **[ui-design-skill](https://github.com/Blade-Labs/ui-design-skill)** — Branded UI generation with design system themes
-
-Future extension packs (install alongside zeroh-sdd):
-- `zeroh-agents` — 12 specialized agents (architect, reviewer, debugger, etc.)
-- `zeroh-eval` — Quality evaluation framework (7 evaluators)
-- `zeroh-sprint` — Sprint lifecycle management
-
----
-
-## Extending
-
-zeroh-sdd has 7 extension points. Extending is designed to be a single-file operation.
-
-### Add an AP detection pattern
-
-Edit `scripts/hooks/context/ap-registry.md`. Add a row:
-
-```markdown
-| AP-XXX-01 | `your-regex-pattern` | *.ts | Your warning message | How to fix it |
+```sdd
+sdd:
+  version: 1
+  id: example-step-1
+  status: ready
+  requirement:
+    owner: "named owner"
+    evidence:
+      - "source input"
+    why_now: "why this proof gate is next"
+  change:
+    intent: "what changes"
+    adds: []
+    deletes_or_subsumes: []
+  source_authority:
+    official_sources: []
+    local_extensions: []
+    prohibited_shortcuts: []
+  simplification_proof:
+    preserves:
+      - "validation"
+    rejected_simpler_options: []
+  validation:
+    commands:
+      - "runnable proof command"
+    proof_tiers:
+      - "unit"
+  stage_gate:
+    next_gate: "receipt for this step"
+    first_executable_slice: "smallest proof-producing edit"
+    proof_command: "runnable proof command"
+    stop_rule: "when to stop"
+    replan_trigger: "when to replan"
+    surfaces:
+      existing: []
+      creates: []
+      future: []
+  shape_gate:
+    required_shapes: []
+    parse_boundaries: []
+    status: red
 ```
 
-Next session, the hook catches this pattern automatically.
+## Stage Loop
 
-### Add a pipeline phase hook
+Set the active stage before implementation:
 
-Copy `templates/extensions.yml` to `.specify/extensions.yml` in your project. Add:
-
-```yaml
-hooks:
-  after_tasks:
-    - command: my-custom-check
-      optional: true
-      prompt: "Run custom validation?"
+```bash
+zeroh-sdd stage set \
+  --stage "Step 1 - boundary proof" \
+  --step-id "Step 1" \
+  --plan "docs/build-log/example-execution-spec.md" \
+  --allow exact:src/route.ts \
+  --proof-command "pnpm test" \
+  --stop-rule "Stop after receipt."
 ```
 
-### Add a skill, agent, or command
+Hooks then enforce the stage:
 
-Drop a file in the appropriate directory:
-- `skills/<name>/SKILL.md` — auto-discovered by Claude
-- `agents/<name>.md` — specialized subagent
-- `commands/<name>.md` — slash command
+- writes outside `allowedPaths` are denied
+- commit, push, merge, and new stage setup are denied while the stage is open
+- Stop and TaskCompleted are blocked until `stage finish` closes the receipt
+- proof command completion triggers a receipt reminder
+- AP findings stay advisory, and deterministic JIT checks run async by default
 
-### Tune hook behavior
+Finish the stage only after proof:
 
-Edit any file in `scripts/hooks/context/*.md`. These are plain markdown templates the hooks read at runtime.
+```bash
+zeroh-sdd stage finish --status passed \
+  --proof-result "pnpm test => pass" \
+  --changed "src/route.ts" \
+  --closed "SDD041" \
+  --next-adjustment "Proceed to Step 2."
+```
+
+`stage finish` appends an execution receipt, runs `doctor`, and clears the active stage only if no P0 findings remain.
+
+## Hook Behavior
+
+Hard blocking is reserved for execution-boundary integrity.
+
+| Event | Behavior |
+| --- | --- |
+| `Setup` | Initialize plugin data and shape registry |
+| `SessionStart` | Inject branch, dirty count, active stage, hook state, and shape summary |
+| `UserPromptSubmit` | Remind Claude of active stage context |
+| `PreToolUse Write/Edit` | Deny writes outside active-stage surfaces; inject shape context otherwise |
+| `PreToolUse Bash` | Deny commit/push/merge/new stage while current stage is unfinished |
+| `PostToolUse Write/Edit` | Run cheap AP detectors and shape discovery inline; run deterministic JIT async by default |
+| `PostToolUse Bash` | Remind receipt discipline after proof command completion |
+| `PostToolUseFailure` | Record failure context for receipt/replan |
+| `PostToolBatch` | Emit one consolidated stage/check/AP summary |
+| `TaskCompleted` | Block task completion with exit code 2 while a stage is open |
+| `Stop` | Block stopping while a stage is open |
+| `PreCompact`/`PostCompact` | Preserve and rehydrate execution state |
+| `ConfigChange` | Block non-policy config changes during an active stage |
+| `CwdChanged`/`FileChanged` | Keep watched active plans, stage state, hook state, and Zod shape registry fresh |
+| `PermissionDenied` | Record auto-mode denials; allow retry only for safe SDD/proof commands |
+
+## Configuration
+
+The runtime reads low-friction options from `CLAUDE_PLUGIN_OPTION_*` environment variables. These names match Claude's plugin `userConfig` export format, while the manifest stays compatible with the local validator.
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `enforcement_mode` | `balanced` | `balanced` blocks only active-stage boundary violations; `advisory` never blocks |
+| `jit_mode` | `async-rewake` | Runs deterministic checks in the background and wakes Claude only on failures |
+| `shape_watch` | `true` | Refreshes shape registry when watched shape files change |
+| `max_shape_context` | `12` | Caps injected shape summaries |
+| `doctor_on_finish` | `true` | Runs `doctor` before clearing stage receipts |
+
+## AP Envelopes
+
+Advisory hooks do not block. They emit human-readable remediation plus a machine envelope:
+
+```text
+remediation prose
 
 ---
+<!-- envelope:
+{"type":"urn:zeroh-sdd:error:AP_PARSE_BOUNDARY","code":"AP_PARSE_BOUNDARY","_fix":{"prompt":"..."}}
+-->
+```
+
+Claude reads the prose. Telemetry and repair tooling can extract the envelope. `_fix.prompt` is the canonical LLM repair payload.
+
+## Verification
+
+Run from the plugin directory:
+
+```bash
+npm test
+```
+
+This executes:
+
+- `sdd-self-test`
+- `sdd-doctor-self-test`
+- `sdd-stage-self-test`
+- `jit-router-self-test`
+- `hook-runtime-self-test`
+- `hook-watch-self-test`
+- `async-jit-self-test`
+- `runtime-config-self-test`
+- `shape-registry-self-test`
 
 ## License
 

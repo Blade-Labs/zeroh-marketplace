@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+if command -v node >/dev/null 2>&1; then
+  NODE_BIN="node"
+elif command -v node.exe >/dev/null 2>&1; then
+  NODE_BIN="node.exe"
+elif [[ -x "/mnt/c/Program Files/nodejs/node.exe" ]]; then
+  NODE_BIN="/mnt/c/Program Files/nodejs/node.exe"
+elif [[ -x "/c/Program Files/nodejs/node.exe" ]]; then
+  NODE_BIN="/c/Program Files/nodejs/node.exe"
+else
+  echo "zeroh-sdd requires Node.js 18.18+ but node was not found on PATH." >&2
+  exit 1
+fi
+
+RUNTIME="$SCRIPT_DIR/zeroh-sdd.mjs"
+if [[ "$NODE_BIN" == *".exe" ]] && command -v cygpath >/dev/null 2>&1; then
+  RUNTIME="$(cygpath -w "$RUNTIME")"
+  [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && export CLAUDE_PROJECT_DIR="$(cygpath -w "$CLAUDE_PROJECT_DIR")"
+  [[ -n "${CLAUDE_PLUGIN_DATA:-}" ]] && export CLAUDE_PLUGIN_DATA="$(cygpath -w "$CLAUDE_PLUGIN_DATA")"
+  [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]] && export CLAUDE_PLUGIN_ROOT="$(cygpath -w "$CLAUDE_PLUGIN_ROOT")"
+elif [[ "$NODE_BIN" == *".exe" ]] && command -v wslpath >/dev/null 2>&1; then
+  RUNTIME="$(wslpath -w "$RUNTIME")"
+  [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && export CLAUDE_PROJECT_DIR="$(wslpath -w "$CLAUDE_PROJECT_DIR")"
+  [[ -n "${CLAUDE_PLUGIN_DATA:-}" ]] && export CLAUDE_PLUGIN_DATA="$(wslpath -w "$CLAUDE_PLUGIN_DATA")"
+  [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]] && export CLAUDE_PLUGIN_ROOT="$(wslpath -w "$CLAUDE_PLUGIN_ROOT")"
+fi
+
+exec "$NODE_BIN" "$RUNTIME" "$@"
