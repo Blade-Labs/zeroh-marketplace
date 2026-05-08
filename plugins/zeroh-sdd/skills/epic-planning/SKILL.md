@@ -11,9 +11,9 @@ Use this skill when the work is larger than one execution spec and needs phases,
 
 ## Core Rule
 
-Produce the smallest epic tracker that lets Claude and the human choose the next executable MC without inventing custom runtime machinery.
+Produce the smallest epic tracker that lets the agent and the human choose the next executable MC without inventing custom runtime machinery.
 
-The tracker is macro planning. The current MC is compiled by `execution-spec`. Claude native todos are only the live session mirror while Claude works; receipts and tracker rows are durable evidence.
+The tracker is macro planning. The current MC is compiled by `execution-spec`. Claude native todos, Codex task/progress tracking, or a compact checklist are only the live session mirror while the agent works; receipts and tracker rows are durable evidence.
 
 ## Required Shape
 
@@ -34,7 +34,7 @@ Keep markdown after the machine section short: human context, diagrams, and sour
 
 ## Todo And Tracker Discipline
 
-Use Claude native todos to mirror only the live work:
+Use live session tracking to mirror only the live work:
 
 1. create todos for the current planning pass or current MC,
 2. mark exactly one todo in progress,
@@ -80,6 +80,6 @@ Do not mark a story `COMPLETE` from memory. Completion requires a proof result a
 
 - Duplicating runtime truth from `active-stage.json` into the epic.
 - Detailing every future code edit before the current MC has proof.
-- Using Claude todos as the only progress record.
+- Using live todos/tasks as the only progress record.
 - Marking a story complete because hooks were quiet.
 - Running implementation before `blocking_gate.status` is CLEAR and pending decisions are empty.

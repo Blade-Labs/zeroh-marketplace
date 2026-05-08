@@ -1,8 +1,8 @@
 {
   "name": "zeroh-sdd",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "type": "module",
-  "description": "Shape-Driven Development runtime for Claude Code — canonical SDD planning, executable stage state, proof receipts, Zod shape gates, and hook-driven JIT correction",
+  "description": "LLM-agent Shape-Driven Development runtime — canonical SDD planning, executable stage state, proof receipts, Zod shape gates, and Claude/Codex adapter-ready guardrails",
   "author": "Blade Labs <info@blade-labs.com>",
   "license": "Apache-2.0",
   "bin": {
@@ -13,7 +13,8 @@
     "sdd:self-test": "node bin/zeroh-sdd.mjs self-test",
     "sdd:check": "node bin/zeroh-sdd.mjs check",
     "sdd:doctor": "node bin/zeroh-sdd.mjs doctor",
-    "sdd:stage": "node bin/zeroh-sdd.mjs stage"
+    "sdd:stage": "node bin/zeroh-sdd.mjs stage",
+    "codex:hook-discovery": "node scripts/codex-hook-discovery.mjs"
   },
   "engines": {
     "node": ">=18.18.0"

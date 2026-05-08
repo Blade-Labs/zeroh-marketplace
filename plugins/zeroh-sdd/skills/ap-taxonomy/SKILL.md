@@ -34,6 +34,6 @@ Do not add another prose checklist when a checker, hook, receipt rule, or test c
 
 Advisory hooks emit prose first, then an HTML-commented JSON envelope. The envelope uses RFC-style problem fields plus SDD/GRC extensions and must include `_fix.prompt` as the canonical repair payload.
 
-Hard gates are reserved for active-stage integrity and declared proof gates. AP findings steer Claude unless the current execution spec says the AP is part of the proof.
+Hard gates are reserved for active-stage integrity and declared proof gates. AP findings steer the agent unless the current execution spec says the AP is part of the proof.
 
-Every hook finding should make scope explicit: current-edit, active-stage, proof-command, or repo-background. Current-edit findings can carry `_fix.prompt`; repo-background findings should be compact branch-health context so Claude does not blame unrelated baseline noise on the active slice.
+Every hook finding should make scope explicit: current-edit, active-stage, proof-command, or repo-background. Current-edit findings can carry `_fix.prompt`; repo-background findings should be compact branch-health context so the agent does not blame unrelated baseline noise on the active slice.

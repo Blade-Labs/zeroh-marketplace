@@ -1,6 +1,6 @@
 ---
 name: sdd-planning
-description: Primary planning front door for zeroh-sdd. Use for non-trivial vibecoding work, upgrade planning, feature planning, remediation planning, or any request where Claude must decide whether to draft a long-form plan, build an epic tracker, or go straight to execution-spec.
+description: Primary planning front door for zeroh-sdd. Use for non-trivial vibecoding work, upgrade planning, feature planning, remediation planning, or any request where the LLM agent must decide whether to draft a long-form plan, build an epic tracker, or go straight to execution-spec.
 ---
 
 # sdd-planning
@@ -40,7 +40,7 @@ Skip any layer that does not buy clarity. A tiny change should not receive an ep
 ## Planning Flow
 
 1. Capture intent, owner, evidence, non-goals, and acceptance signal.
-2. Use Claude native todos as the live mirror of the current planning pass.
+2. Use live session tracking as the mirror of the current planning pass: Claude native todos when available, Codex task/progress tracking when available, or a compact in-message checklist otherwise.
 3. If the plan is long-form, invoke `staged-doc-drafting` for Stage 0-4 only.
 4. If the work spans multiple MCs, invoke `epic-planning` to create or update the macro tracker.
 5. Select exactly one current MC or proof slice.
@@ -60,11 +60,11 @@ tracker:
 9. Set the active stage before implementation.
 10. After proof, finish with a receipt and update any epic tracker row explicitly.
 
-Claude native todos are session UX only. Durable truth lives in the synthesized doc, epic tracker, execution spec, receipt, and `.specify/workflows/active-stage.json`.
+Live session tracking is session UX only. Durable truth lives in the synthesized doc, epic tracker, execution spec, receipt, and `.specify/workflows/active-stage.json`.
 
 ## Tool Availability First
 
-Before selecting `pnpm`, `npm`, `npx`, `biome`, `vitest`, `tsc`, promptfoo, or another repo tool as the proof command, verify that the command is runnable in the same shell Claude will use for hooks and Bash. If the tool is missing or unrunnable, make the current MC "install/configure the proof toolchain" instead of writing implementation code against a proof command that cannot execute.
+Before selecting `pnpm`, `npm`, `npx`, `biome`, `vitest`, `tsc`, promptfoo, or another repo tool as the proof command, verify that the command is runnable in the same shell the active agent will use for hooks and Bash. If the tool is missing or unrunnable, make the current MC "install/configure the proof toolchain" instead of writing implementation code against a proof command that cannot execute.
 
 The runtime may report `TOOL_MISSING` or `TOOL_UNRUNNABLE` as `proof-command / replan` context. Treat that as infrastructure feedback, not blame on the edited file.
 
@@ -102,7 +102,7 @@ A failed receipt closes the current gate only because it includes the replan han
 
 - Asking the user to choose between staged drafting and epic planning when scope classification can decide.
 - Producing a polished epic tracker with no selected next MC.
-- Treating Claude native todos as the tracker.
+- Treating live todos/tasks as the tracker.
 - Writing implementation files from a long-form plan before `execution-spec` sets the active stage.
 - Creating an epic for a single obvious proof gate.
 - Marking work done from a quiet hook run instead of a proof receipt.

@@ -31,7 +31,7 @@ frame -> current slice -> execute -> receipt -> replan
 4. Receipt: after proof, write at most 20 lines with changed files, proof result, gaps, and next-step adjustment.
 5. Replan: revise the next slice from the receipt before doing more work.
 
-Use Claude native todos as the live mirror of this loop: Step N.0, stage set, implementation, proof, receipt, and tracker update when present. Todos are not durable truth; the execution spec, `.specify/workflows/active-stage.json`, receipt row, and optional epic tracker row are.
+Use live session tracking as the mirror of this loop: Step N.0, stage set, implementation, proof, receipt, and tracker update when present. Claude native todos are preferred when available; Codex task/progress tracking or a compact checklist is acceptable elsewhere. Live tracking is not durable truth; the execution spec, `.specify/workflows/active-stage.json`, receipt row, and optional epic tracker row are.
 
 ## AP Filter
 
@@ -153,7 +153,7 @@ sdd:
     todo_policy: mirror-current-slice
 ```
 
-The `tracker:` block is optional. Use it only when this execution spec was selected from an `epic-planning` tracker. It links the current proof gate to a durable macro row while Claude native todos mirror the active slice in-session.
+The `tracker:` block is optional. Use it only when this execution spec was selected from an `epic-planning` tracker. It links the current proof gate to a durable macro row while live session tracking mirrors the active slice in-session.
 
 After proof, finish the stage with a receipt:
 
@@ -167,4 +167,4 @@ zeroh-sdd stage finish --status passed \
 
 Use `--status failed` or `--status blocked` when proof fails or the slice cannot proceed. Non-passed status or opened findings require a concrete next adjustment. Do not clear an active stage as a substitute for a receipt unless the gate is explicitly abandoned or replanned.
 
-When `tracker:` is present, the receipt must name the tracker item and next adjustment. `stage finish` preserves tracker context in the receipt; Claude still updates the epic tracker row explicitly after proof rather than relying on hidden automation.
+When `tracker:` is present, the receipt must name the tracker item and next adjustment. `stage finish` preserves tracker context in the receipt; the agent still updates the epic tracker row explicitly after proof rather than relying on hidden automation.

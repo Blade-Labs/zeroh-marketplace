@@ -7,7 +7,7 @@ description: Break the current execution spec into proof-preserving implementati
 
 Create tasks only inside the active stage surface.
 
-Use Claude native todos (`TodoWrite` in non-interactive/SDK sessions, Task tools in interactive Claude Code) as the live mirror of the current MC. Todos are not durable truth; the execution spec, receipt, and optional epic tracker row are.
+Use live session tracking as the live mirror of the current MC: Claude native todos when available, Codex task/progress tracking when available, or a compact checklist otherwise. Todos/tasks are not durable truth; the execution spec, receipt, and optional epic tracker row are.
 
 Each task must include:
 

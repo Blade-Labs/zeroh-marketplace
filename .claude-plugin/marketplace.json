@@ -12,10 +12,10 @@
   "plugins": [
     {
       "name": "zeroh-sdd",
-      "description": "Shape-Driven Development runtime for vibecoding — canonical SDD planning, staged docs, epic planning, execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, and scoped Claude hook JIT correction",
+      "description": "LLM-agent Shape-Driven Development runtime for vibecoding — canonical SDD planning, staged docs, epic planning, execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, and scoped Claude/Codex adapter support",
       "source": "./plugins/zeroh-sdd",
       "category": "development",
-      "tags": ["sdd", "spec-kit", "sdd-planning", "staged-docs", "epic-planning", "hooks", "zod", "shape-gates", "proof-receipts"]
+      "tags": ["sdd", "spec-kit", "sdd-planning", "staged-docs", "epic-planning", "hooks", "codex", "claude", "zod", "shape-gates", "proof-receipts"]
     },
     {
       "name": "zeroh-design",

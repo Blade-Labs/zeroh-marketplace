@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-const VERSION = '1.0.7';
+const VERSION = '1.0.8';
 const STATE_DIR = ['.specify', 'workflows'];
 const ACTIVE_STAGE = 'active-stage.json';
 const HOOK_STATE = 'hook-state.json';
@@ -42,6 +42,8 @@ const AP = {
 const FINDING_SCOPES = Object.freeze(['edited-file', 'active-stage', 'proof-command', 'repo-background']);
 const BASELINE_STATUSES = Object.freeze(['current-edit', 'pre-existing', 'unknown']);
 const OWNER_ACTIONS = Object.freeze(['fix-now', 'receipt-note', 'replan', 'branch-health-followup']);
+const HOOK_ADAPTERS = Object.freeze(['claude', 'codex']);
+let CURRENT_HOOK_ADAPTER = 'claude';
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
@@ -93,7 +95,7 @@ Usage:
   zeroh-sdd stage status
   zeroh-sdd stage clear
   zeroh-sdd jit --file <path>
-  zeroh-sdd hook <event>
+  zeroh-sdd hook <event> [--adapter claude|codex]
   zeroh-sdd self-test
 
 Run zeroh-sdd <command> --help for command details.`,
@@ -129,9 +131,9 @@ Clear the active stage without writing a receipt. Use only when explicitly aband
     jit: `zeroh-sdd jit --file <path>
 
 Classify an edited surface and run the smallest deterministic check currently selected by the runtime.`,
-    hook: `zeroh-sdd hook <event>
+    hook: `zeroh-sdd hook <event> [--adapter claude|codex]
 
-Claude Code hook entrypoint. Normally called by hooks/hooks.json through CLAUDE_PLUGIN_ROOT.`,
+LLM-agent hook entrypoint. Claude Code normally calls this through hooks/hooks.json and CLAUDE_PLUGIN_ROOT. Codex adapter support is explicit with --adapter codex until Codex hook wiring is enabled.`,
     'self-test': `zeroh-sdd self-test [name]
 
 Run bundled runtime self-tests. Pass a specific test name such as skill-content to run one test.`,
@@ -238,10 +240,11 @@ function cliHook(args) {
     console.log(helpText('hook'));
     return;
   }
-  const event = args[0];
+  const event = hookEventArg(args);
   if (!event) throw new Error('zeroh-sdd hook requires an event name.');
+  const adapter = detectHookAdapter(args);
   const input = readJsonStdin();
-  const output = handleHook(event, input, projectRoot());
+  const output = withHookAdapter(adapter, () => handleHook(event, input, projectRoot()));
   emitHookResult(output);
 }
 
@@ -1691,18 +1694,74 @@ function runSelfTests(suite) {
     add('runtime-config-self-test', () => {
       const previousJit = process.env.CLAUDE_PLUGIN_OPTION_JIT_MODE;
       const previousShapeContext = process.env.CLAUDE_PLUGIN_OPTION_MAX_SHAPE_CONTEXT;
+      const previousPortableJit = process.env.ZEROH_SDD_OPTION_JIT_MODE;
+      const previousProjectDir = process.env.ZEROH_SDD_PROJECT_DIR;
+      const previousClaudeProjectDir = process.env.CLAUDE_PROJECT_DIR;
+      const previousDataDir = process.env.ZEROH_SDD_PLUGIN_DATA;
       try {
         process.env.CLAUDE_PLUGIN_OPTION_JIT_MODE = 'sync';
         process.env.CLAUDE_PLUGIN_OPTION_MAX_SHAPE_CONTEXT = '2';
         assert(runtimeConfig().jitMode === 'sync', 'jit_mode env should override default');
         assert(runtimeConfig().maxShapeContext === 2, 'max_shape_context env should override default');
+        process.env.ZEROH_SDD_OPTION_JIT_MODE = 'off';
+        assert(runtimeConfig().jitMode === 'off', 'portable ZEROH_SDD_OPTION env should override platform-specific env');
         process.env.CLAUDE_PLUGIN_OPTION_JIT_MODE = 'nonsense';
         process.env.CLAUDE_PLUGIN_OPTION_MAX_SHAPE_CONTEXT = '999';
+        delete process.env.ZEROH_SDD_OPTION_JIT_MODE;
         assert(runtimeConfig().jitMode === 'async-rewake', 'invalid jit_mode should fall back');
         assert(runtimeConfig().maxShapeContext === 50, 'max_shape_context should clamp to max');
+        process.env.CLAUDE_PROJECT_DIR = join(root, 'claude-root');
+        process.env.ZEROH_SDD_PROJECT_DIR = root;
+        assert(samePath(projectRoot(), root), 'portable project root should override platform-specific project root');
+        process.env.ZEROH_SDD_PLUGIN_DATA = join(root, 'portable-data');
+        assert(samePath(pluginDataDir(root), join(root, 'portable-data')), 'portable plugin data should override platform-specific plugin data');
       } finally {
         restoreEnv('CLAUDE_PLUGIN_OPTION_JIT_MODE', previousJit);
         restoreEnv('CLAUDE_PLUGIN_OPTION_MAX_SHAPE_CONTEXT', previousShapeContext);
+        restoreEnv('ZEROH_SDD_OPTION_JIT_MODE', previousPortableJit);
+        restoreEnv('ZEROH_SDD_PROJECT_DIR', previousProjectDir);
+        restoreEnv('CLAUDE_PROJECT_DIR', previousClaudeProjectDir);
+        restoreEnv('ZEROH_SDD_PLUGIN_DATA', previousDataDir);
+      }
+    });
+    add('codex-adapter', () => {
+      const manifestPath = join(pluginRoot, '.codex-plugin', 'plugin.json');
+      assert(existsSync(manifestPath), 'Codex plugin manifest should exist');
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      assert(manifest.name === 'zeroh-sdd', 'Codex manifest should name zeroh-sdd');
+      assert(manifest.version === VERSION, 'Codex manifest version should match runtime version');
+      assert(manifest.skills === './skills/', 'Codex manifest should expose shared skills');
+      assert(!('hooks' in manifest), 'Codex first gate should not wire hooks before hook IO probe');
+      assert(Array.isArray(manifest.interface?.defaultPrompt) && manifest.interface.defaultPrompt.some((prompt) => prompt.includes('sdd-planning')), 'Codex manifest should include sdd-planning starter prompt');
+      assert(detectHookAdapter(['session-start', '--adapter', 'codex']) === 'codex', 'explicit codex adapter should be accepted');
+      assert(hookEventArg(['--adapter', 'codex', 'session-start']) === 'session-start', 'hook event parser should allow adapter flag before event');
+      const context = JSON.parse(withHookAdapter('codex', () => hookContext('SessionStart', 'fixture context')));
+      assert(context.hookSpecificOutput.additionalContext === 'fixture context', 'Codex context output should use additionalContext where supported');
+      const preTool = JSON.parse(withHookAdapter('codex', () => preToolContext('PreToolUse', 'shape context')));
+      assert(preTool.systemMessage === 'shape context', 'Codex PreToolUse advisory context should use systemMessage');
+      const denied = JSON.parse(withHookAdapter('codex', () => preToolContext('PreToolUse', 'blocked', 'deny', 'reason')));
+      assert(denied.hookSpecificOutput.permissionDecision === 'deny' && denied.systemMessage === 'blocked', 'Codex deny output should preserve permissionDecision and message');
+      const patch = '*** Begin Patch\n*** Update File: src/route.ts\n@@\n-old\n+new\n*** Add File: src/added.ts\n+export {};\n*** End Patch\n';
+      const paths = patchFilePaths(patch).map(normalizeRepoPath);
+      assert(paths.includes('src/route.ts') && paths.includes('src/added.ts'), 'Codex apply_patch paths should be extracted');
+      const first = toolFilePath({ tool_name: 'apply_patch', tool_input: { command: patch } });
+      assert(normalizeRepoPath(first) === 'src/route.ts', 'toolFilePath should expose first apply_patch path for adapter-normalized hooks');
+    });
+    add('llm-agnostic', () => {
+      const claudeManifest = JSON.parse(readFileSync(join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
+      const codexManifest = JSON.parse(readFileSync(join(pluginRoot, '.codex-plugin', 'plugin.json'), 'utf8'));
+      const pkg = JSON.parse(readFileSync(join(pluginRoot, 'package.json'), 'utf8'));
+      assert(claudeManifest.version === VERSION && codexManifest.version === VERSION && pkg.version === VERSION, 'all plugin metadata versions should match runtime version');
+      assert(claudeManifest.description.includes('LLM-agent') && pkg.description.includes('LLM-agent'), 'shared metadata should describe the LLM-agent runtime');
+      assert(readFileSync(join(pluginRoot, 'README.md'), 'utf8').includes('Codex'), 'README should document Codex support');
+      assert(readFileSync(join(pluginRoot, 'docs', 'v1-runtime.md'), 'utf8').includes('Claude/Codex adapters'), 'runtime docs should name Claude/Codex adapters');
+      assert(existsSync(join(pluginRoot, 'docs', 'codex', 'AGENTS.template.md')), 'Codex AGENTS template should exist');
+      assert(existsSync(join(pluginRoot, 'scripts', 'codex-hook-discovery.mjs')), 'Codex hook discovery script should exist');
+      assert(pkg.scripts?.['codex:hook-discovery'] === 'node scripts/codex-hook-discovery.mjs', 'package script should expose Codex hook discovery');
+      const marketplacePath = join(pluginRoot, '..', '..', '.agents', 'plugins', 'marketplace.json');
+      if (existsSync(marketplacePath)) {
+        const marketplace = JSON.parse(readFileSync(marketplacePath, 'utf8'));
+        assert(marketplace.plugins?.some((plugin) => plugin.name === 'zeroh-sdd' && plugin.source?.path === './plugins/zeroh-sdd'), 'Codex marketplace should list zeroh-sdd source path');
       }
     });
     add('shape-registry-self-test', () => {
@@ -1738,7 +1797,8 @@ function runSelfTests(suite) {
         'staged-doc-drafting',
         'epic-planning',
         'execution-spec',
-        'Claude native todos',
+        'live session tracking',
+        'Codex task/progress tracking',
         'active-stage',
         'receipt',
         'tracker:',
@@ -1753,7 +1813,8 @@ function runSelfTests(suite) {
         'sdd-planning',
         'staged-doc-drafting',
         'epic-planning',
-        'Claude native todos',
+        'live session tracking',
+        'Codex task/progress tracking',
         'tracker:',
         'Stage 0 - Repo Triangulation',
         'Stage 0.5 - Executability Classification',
@@ -1778,7 +1839,7 @@ function runSelfTests(suite) {
         'Stage 4',
         'execution-spec',
         'zeroh-sdd check',
-        'Claude native todos',
+        'live session tracking',
       ]);
       requireTerms('epic-planning skill', readSkill('epic-planning'), [
         'supporting skill',
@@ -1789,7 +1850,7 @@ function runSelfTests(suite) {
         'phases',
         'stories',
         'proof',
-        'Claude native todos',
+        'live session tracking',
         'execution-spec',
       ]);
       requireTerms('shapes skill', readSkill('shapes'), [
@@ -1874,8 +1935,10 @@ function runSelfTests(suite) {
       assert(!readme.includes('bash "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd" hook <event>'), 'README should not document the stale nested Bash launcher');
       assert(readme.includes('/plugin marketplace update zeroh-marketplace') && readme.includes('/plugin update zeroh-sdd@zeroh-marketplace'), 'README should include marketplace update commands');
       assert(readme.includes('restart Claude Code or start a fresh Claude session'), 'README should mention restart/new-session after install or update');
+      assert(readme.includes('Codex packaging currently ships the same skills') && readme.includes('codex plugin marketplace'), 'README should document Codex first-gate packaging and install path');
+      assert(readme.includes('npm run codex:hook-discovery'), 'README should document Codex hook discovery probe');
       assert(readme.includes('edited-file') && readme.includes('proof-command') && readme.includes('repo-background'), 'README should explain finding attribution');
-      assert(readme.includes('advanced low-friction options') && readme.includes('does not expose `userConfig`'), 'README should frame config as env-backed advanced knobs');
+      assert(readme.includes('ZEROH_SDD_OPTION_*') && readme.includes('does not expose `userConfig`'), 'README should frame config as portable env-backed advanced knobs');
       assert(wiredSection, 'README should have a wired hook section');
       assert(unwiredSection, 'README should have an unwired runtime handler section');
       for (const eventName of wiredEvents) assert(wiredSection.includes(eventName), `README wired hook section should mention ${eventName}`);
@@ -1884,6 +1947,8 @@ function runSelfTests(suite) {
         assert(unwiredSection.includes(eventName), `README should label ${eventName} as runtime-supported but unwired`);
       }
       assert(runtimeDoc.includes('node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event>'), 'runtime doc should document the direct node hook launcher');
+      assert(runtimeDoc.includes('.codex-plugin/plugin.json') && runtimeDoc.includes('Codex hook wiring should be added only after a probe'), 'runtime doc should explain Codex packaging and hook probe gate');
+      assert(runtimeDoc.includes('npm run codex:hook-discovery'), 'runtime doc should document Codex hook discovery probe');
       assert(runtimeDoc.includes('runtime-supported but not live'), 'runtime doc should tell maintainers to label unwired handlers');
       assert(changelog.includes('## 1.0.6') && changelog.includes('Added `sdd-planning` as the canonical planning front door'), 'changelog should record the canonical planning front-door upgrade');
       assert(changelog.includes('## 1.0.3') && changelog.includes('Corrected hook documentation'), 'changelog should record the UX remediation');
@@ -2520,6 +2585,9 @@ function hookExit(exitCode, stderr = '', stdout = '') {
 
 function hookContext(event, additionalContext) {
   if (!additionalContext) return '';
+  if (CURRENT_HOOK_ADAPTER === 'codex') {
+    return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext } });
+  }
   return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext } });
 }
 
@@ -2532,14 +2600,44 @@ function watchPathsContext(repoRoot, additionalContext = '', event = 'CwdChanged
 }
 
 function preToolContext(event, additionalContext, permissionDecision, permissionDecisionReason) {
+  if (CURRENT_HOOK_ADAPTER === 'codex' && !permissionDecision) {
+    return JSON.stringify({ systemMessage: additionalContext });
+  }
   const hookSpecificOutput = { hookEventName: event, additionalContext };
   if (permissionDecision) hookSpecificOutput.permissionDecision = permissionDecision;
   if (permissionDecisionReason) hookSpecificOutput.permissionDecisionReason = permissionDecisionReason;
+  if (CURRENT_HOOK_ADAPTER === 'codex' && additionalContext) {
+    return JSON.stringify({ systemMessage: additionalContext, hookSpecificOutput });
+  }
   return JSON.stringify({ hookSpecificOutput });
 }
 
 function toolFilePath(input) {
-  return fromPortablePath(input?.tool_input?.file_path || input?.tool_input?.path || '');
+  return toolFilePaths(input)[0] || '';
+}
+
+function toolFilePaths(input) {
+  const explicit = input?.tool_input?.file_path || input?.tool_input?.path;
+  if (explicit) return [fromPortablePath(explicit)];
+  if (input?.tool_name === 'apply_patch' || input?.tool_input?.command?.includes('*** Begin Patch')) {
+    return patchFilePaths(input?.tool_input?.command || '');
+  }
+  return [];
+}
+
+function patchFilePaths(command) {
+  const paths = [];
+  const patterns = [
+    /^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm,
+    /^\*\*\* Move to: (.+)$/gm,
+  ];
+  for (const pattern of patterns) {
+    for (const match of String(command || '').matchAll(pattern)) {
+      const path = match[1]?.trim();
+      if (path) paths.push(fromPortablePath(path));
+    }
+  }
+  return [...new Set(paths)];
 }
 
 function toolCommand(input) {
@@ -2610,9 +2708,15 @@ function numberOption(key, fallback, min, max) {
 }
 
 function pluginOption(key) {
-  return process.env[`CLAUDE_PLUGIN_OPTION_${key}`]
-    ?? process.env[`CLAUDE_PLUGIN_OPTION_${key.toUpperCase()}`]
-    ?? process.env[`CLAUDE_PLUGIN_OPTION_${key.replace(/_/g, '').toUpperCase()}`];
+  return envOption('ZEROH_SDD_OPTION', key)
+    ?? envOption('CLAUDE_PLUGIN_OPTION', key)
+    ?? envOption('CODEX_PLUGIN_OPTION', key);
+}
+
+function envOption(prefix, key) {
+  return process.env[`${prefix}_${key}`]
+    ?? process.env[`${prefix}_${key.toUpperCase()}`]
+    ?? process.env[`${prefix}_${key.replace(/_/g, '').toUpperCase()}`];
 }
 
 function restoreEnv(key, value) {
@@ -2654,12 +2758,55 @@ function wantsHelp(args) {
   return args.includes('--help') || args.includes('-h');
 }
 
+function hookEventArg(args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index];
+    if (value === '--adapter') {
+      index += 1;
+      continue;
+    }
+    if (!value.startsWith('-')) return value;
+  }
+  return '';
+}
+
+function detectHookAdapter(args = []) {
+  const explicit = flagValue(args, '--adapter');
+  if (explicit) {
+    if (!HOOK_ADAPTERS.includes(explicit)) throw new Error(`Unsupported hook adapter: ${explicit}. Expected ${HOOK_ADAPTERS.join(' or ')}.`);
+    return explicit;
+  }
+  if (process.env.CLAUDE_PLUGIN_ROOT || process.env.CLAUDE_PROJECT_DIR) return 'claude';
+  if (process.env.CODEX_HOME || process.env.CODEX_PROJECT_DIR || process.env.CODEX_PLUGIN_DATA) return 'codex';
+  return 'claude';
+}
+
+function withHookAdapter(adapter, fn) {
+  const previous = CURRENT_HOOK_ADAPTER;
+  CURRENT_HOOK_ADAPTER = adapter;
+  try {
+    return fn();
+  } finally {
+    CURRENT_HOOK_ADAPTER = previous;
+  }
+}
+
 function projectRoot() {
-  return resolve(fromPortablePath(process.env.CLAUDE_PROJECT_DIR || process.cwd()));
+  return resolve(fromPortablePath(
+    process.env.ZEROH_SDD_PROJECT_DIR
+    || process.env.CLAUDE_PROJECT_DIR
+    || process.env.CODEX_PROJECT_DIR
+    || process.cwd(),
+  ));
 }
 
 function pluginDataDir(repoRoot) {
-  return resolve(fromPortablePath(process.env.CLAUDE_PLUGIN_DATA || join(repoRoot, '.specify', 'workflows', '.zeroh-sdd-plugin-data')));
+  return resolve(fromPortablePath(
+    process.env.ZEROH_SDD_PLUGIN_DATA
+    || process.env.CLAUDE_PLUGIN_DATA
+    || process.env.CODEX_PLUGIN_DATA
+    || join(repoRoot, '.specify', 'workflows', '.zeroh-sdd-plugin-data'),
+  ));
 }
 
 function activeStagePath(repoRoot) {

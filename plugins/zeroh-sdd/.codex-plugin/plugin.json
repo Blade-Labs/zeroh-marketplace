@@ -1,0 +1,46 @@
+{
+  "name": "zeroh-sdd",
+  "version": "1.0.8",
+  "description": "LLM-agent Shape-Driven Development runtime — canonical SDD planning, execution-spec control plane, proof receipts, Zod shape gates, and adapter-ready guardrails for Codex and Claude Code.",
+  "author": {
+    "name": "Blade Labs",
+    "email": "info@blade-labs.com",
+    "url": "https://blade-labs.com"
+  },
+  "homepage": "https://github.com/Blade-Labs/zeroh-marketplace/tree/main/plugins/zeroh-sdd",
+  "repository": "https://github.com/Blade-Labs/zeroh-marketplace",
+  "license": "Apache-2.0",
+  "keywords": [
+    "sdd",
+    "spec-kit",
+    "sdd-planning",
+    "execution-spec",
+    "codex",
+    "claude",
+    "zod",
+    "shape-gates",
+    "proof-receipts"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ZeroH SDD",
+    "shortDescription": "Shape-driven execution specs and proof receipts",
+    "longDescription": "Plan non-trivial coding work with sdd-planning, compile one current proof gate with execution-spec, and keep durable repo truth in active-stage state, receipts, shape gates, and doctor checks.",
+    "developerName": "Blade Labs",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/Blade-Labs/zeroh-marketplace/tree/main/plugins/zeroh-sdd",
+    "privacyPolicyURL": "https://blade-labs.com/privacy",
+    "termsOfServiceURL": "https://blade-labs.com/terms",
+    "defaultPrompt": [
+      "Use zeroh-sdd:sdd-planning to turn this upgrade into one executable proof gate.",
+      "Use zeroh-sdd:execution-spec for the next proof slice.",
+      "Check this plan with zeroh-sdd doctor before implementation."
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

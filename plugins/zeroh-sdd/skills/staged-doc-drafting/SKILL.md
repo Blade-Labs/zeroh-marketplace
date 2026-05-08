@@ -88,7 +88,7 @@ Fill **one section at a time**. One targeted `Edit` per section. Each pass:
 
 This is the Chain-of-Thought + progressive-refinement pattern. Each section stays in focused context; the model isn't juggling the whole doc at once.
 
-**Use Claude native todos** (`TodoWrite` in non-interactive/SDK sessions, Task tools in interactive Claude Code) to make each section-fill a visible micro-step. Commits for long docs land as multiple microcommits (one per section if the file is git-tracked); for plan-mode drafting, each `Edit` is the visible micro-step. Todos are live session progress only; the drafted document and later execution receipt are the durable evidence.
+**Use live session tracking** to make each section-fill a visible micro-step: Claude native todos when available, Codex task/progress tracking when available, or a compact checklist otherwise. Commits for long docs land as multiple microcommits (one per section if the file is git-tracked); for plan-mode drafting, each `Edit` is the visible micro-step. Todos/tasks are live session progress only; the drafted document and later execution receipt are the durable evidence.
 
 ### Stage 3 — Critique-and-revise loops (inline as you discover needs)
 

@@ -1,6 +1,6 @@
 # zeroh-sdd
 
-Shape-Driven Development runtime for Claude Code.
+Shape-Driven Development runtime for LLM coding agents, with Claude Code and Codex packaging.
 
 `zeroh-sdd` turns vibecoding into a composed proof loop:
 
@@ -10,13 +10,13 @@ vibecoder intent
   -> staged-doc-drafting only when long-form coherence is needed
   -> epic-planning only when macro phases/stories/proofs are needed
   -> execution-spec compiles one current MC/proof gate
-  -> Claude native todos for live microstep tracking
-  -> active-stage.json + hooks enforce lane
+  -> live session tracking mirrors microsteps
+  -> active-stage.json + adapter hooks/context enforce or steer the lane
   -> proof + receipt + tracker update
   -> next slice
 ```
 
-The expected feel is low friction: silent when green, advisory when the current edit looks suspicious, and blocking only when Claude is about to violate the active execution stage.
+The expected feel is low friction: silent when green, advisory when the current edit looks suspicious, and blocking only when the active adapter can prove the agent is about to violate the active execution stage.
 
 ## Quickstart
 
@@ -31,6 +31,14 @@ Runtime prerequisite: Node.js 18.18 or newer.
 
 After installing or updating, restart Claude Code or start a fresh Claude session so the plugin skills and hooks load reliably.
 
+Install from Codex:
+
+```powershell
+codex plugin marketplace add Blade-Labs/zeroh-marketplace
+```
+
+Then install or enable `zeroh-sdd` from the Codex plugin marketplace UI. Codex support in this gate packages the shared skills and CLI contract first; Codex hooks remain adapter-spike work until the hook IO probe is completed.
+
 For non-trivial work, start with the canonical planning front door:
 
 ```text
@@ -43,14 +51,14 @@ When the next proof gate is already obvious, use the fast path:
 Use zeroh-sdd execution-spec for this change. Create the next proof gate, set the active stage, implement only inside that stage, run the proof command, and finish with a receipt.
 ```
 
-Claude should then:
+The agent should then:
 
 1. Use `sdd-planning` to classify single-gate, long-form, multi-MC, or non-execution work.
 2. Use `staged-doc-drafting` only as the supporting Stage 0-4 long-form method.
 3. Use `epic-planning` only as the supporting macro tracker method.
 4. Use `execution-spec` to create one next proof gate.
 5. Put exactly one fenced `sdd` YAML block in the plan.
-6. Mirror the current slice in Claude native todos, while keeping docs/receipts as durable truth.
+6. Mirror the current slice in live session tracking, such as Claude native todos or Codex task progress, while keeping docs/receipts as durable truth.
 7. Run `zeroh-sdd check` and `zeroh-sdd doctor` on the plan.
 8. Run `zeroh-sdd stage set` to write `.specify/workflows/active-stage.json`.
 9. Edit only the declared stage surfaces.
@@ -68,11 +76,22 @@ Update from Claude Code:
 
 Then restart Claude Code or start a new session.
 
+Update from Codex:
+
+```powershell
+codex plugin marketplace upgrade zeroh-marketplace
+```
+
+`upgrade` applies to Git-backed marketplaces. A local-path marketplace reads directly from the local source tree.
+
+Then restart Codex or start a fresh session.
+
 Useful verification commands:
 
 ```bash
 claude plugin list
 claude plugin validate plugins/zeroh-sdd
+codex plugin marketplace add <marketplace-root>
 zeroh-sdd self-test
 ```
 
@@ -101,7 +120,13 @@ zeroh-sdd self-test
 Claude hooks call the same runtime directly:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event>
+node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event> --adapter claude
+```
+
+Codex support uses the same runtime and shared skills. Codex hook wiring is intentionally not live in this first gate; when enabled, hook commands must call:
+
+```bash
+node "<plugin-root>/bin/zeroh-sdd.mjs" hook <event> --adapter codex
 ```
 
 ## State Contract
@@ -111,11 +136,11 @@ Project state lives in the consuming repo:
 - `.specify/workflows/active-stage.json`: the runtime control plane for the current proof gate. It stores the stage name, step id, plan path, allowed paths, proof command, stop rule, receipt requirement, open findings, shape gate, and optional epic tracker bridge.
 - `.specify/workflows/hook-state.json`: the latest hook/JIT summary. Findings are attributed by `scope`, `baselineStatus`, `introducedByCurrentEdit`, and `ownerAction`.
 
-Claude native todos/tasks are live session progress only. They should mirror the current MC, but they are not durable state; execution specs, receipts, and optional epic tracker rows are.
+Live session progress is not durable state. Claude native todos or Codex task progress should mirror the current MC, but execution specs, receipts, and optional epic tracker rows are the recoverable truth.
 
 Finding scopes:
 
-- `edited-file`: a finding on the file Claude just changed.
+- `edited-file`: a finding on the file the agent just changed.
 - `active-stage`: a finding on a declared active-stage surface.
 - `proof-command`: a proof command or proof-gate failure.
 - `repo-background`: branch health context that should not be blamed on the current edit.
@@ -127,12 +152,16 @@ Owner actions:
 - `replan`: stop and revise the execution spec.
 - `branch-health-followup`: handle separately from the active slice.
 
-Plugin cache lives in Claude plugin data:
+Plugin cache lives in adapter plugin data:
 
+- `${ZEROH_SDD_PLUGIN_DATA}/shape-registry.json`
 - `${CLAUDE_PLUGIN_DATA}/shape-registry.json`
+- `${CODEX_PLUGIN_DATA}/shape-registry.json`
+- `${ZEROH_SDD_PLUGIN_DATA}/runtime-cache.json`
 - `${CLAUDE_PLUGIN_DATA}/runtime-cache.json`
+- `${CODEX_PLUGIN_DATA}/runtime-cache.json`
 
-If `CLAUDE_PLUGIN_DATA` is unavailable, local CLI runs fall back to `.specify/workflows/.zeroh-sdd-plugin-data`.
+If no plugin data env var is available, local CLI runs fall back to `.specify/workflows/.zeroh-sdd-plugin-data`.
 
 ## Skills
 
@@ -146,7 +175,7 @@ If `CLAUDE_PLUGIN_DATA` is unavailable, local CLI runs fall back to `.specify/wo
 | `plan` | Frame the current slice and hand off to `execution-spec` |
 | `execution-spec` | Compile one current story/MC into the fenced `sdd` block and stage gate |
 | `shapes` | Author Zod shapes as executable acceptance criteria |
-| `tasks` | Mirror the active MC into Claude native todos without making todos durable truth |
+| `tasks` | Mirror the active MC into live session progress without making todos/tasks durable truth |
 | `implement` | Execute inside the active stage boundary |
 | `analyze` | Audit plan, stage, implementation, APs, and receipts |
 | `sdd-readiness` | Run `check` and `doctor` before implementation |
@@ -205,7 +234,7 @@ sdd:
     todo_policy: mirror-current-slice
 ```
 
-The optional `tracker` block links the current proof gate to an epic-planning row. `doctor` validates that the epic path and item exist. `stage set` preserves that bridge in `active-stage.json`; `stage finish` records the tracker item in the receipt so Claude can update the epic row explicitly.
+The optional `tracker` block links the current proof gate to an epic-planning row. `doctor` validates that the epic path and item exist. `stage set` preserves that bridge in `active-stage.json`; `stage finish` records the tracker item in the receipt so the agent can update the epic row explicitly.
 
 Every planning entry point must converge here. `sdd-planning` may invoke long-form drafting or epic tracking first, but actionable work is enforceable only after `execution-spec` creates this block and `stage set` makes it live.
 
@@ -231,7 +260,7 @@ While the stage is open:
 - proof command completion triggers a receipt reminder
 - AP findings stay advisory unless the active stage declares them as proof gates
 - background branch-health findings are summarized without blaming the current edit
-- Claude native todos may mirror current progress, but they never replace receipts or tracker rows
+- Live session progress may mirror current progress, but it never replaces receipts or tracker rows
 
 Finish the stage only after proof:
 
@@ -245,11 +274,11 @@ zeroh-sdd stage finish --status passed \
 
 `stage finish` appends an execution receipt, runs `doctor`, and clears the active stage only if no blocking P0 findings remain.
 
-If the active stage has tracker metadata, `stage finish` requires a next adjustment and records the tracker item in the receipt. Claude must still update the epic tracker row explicitly after proof.
+If the active stage has tracker metadata, `stage finish` requires a next adjustment and records the tracker item in the receipt. The agent must still update the epic tracker row explicitly after proof.
 
 ## Tiny Smoke Test
 
-In a disposable repo, ask Claude:
+In a disposable repo, ask the agent:
 
 ```text
 Use zeroh-sdd execution-spec for a tiny change to src/route.ts. The only allowed file should be src/route.ts and the proof command should be node --version. After setting the stage, try to write forbidden.txt, then fix src/route.ts, run proof, and finish the receipt.
@@ -260,7 +289,7 @@ Expected infrastructure:
 - `SessionStart` and `UserPromptSubmit` show active stage context.
 - `PreToolUse Write/Edit` blocks `forbidden.txt`.
 - `PostToolUse Write/Edit` emits advisory AP context only for current-edit or active-stage findings.
-- `PostToolUse Bash` reminds Claude to write the receipt after `node --version`.
+- `PostToolUse Bash` reminds the agent to write the receipt after `node --version`.
 - `Stop` and `TaskCompleted` block while the stage is still open.
 - `stage finish` writes a receipt and clears `.specify/workflows/active-stage.json`.
 
@@ -276,7 +305,7 @@ These events are declared in `hooks/hooks.json` and are live when the plugin is 
 | --- | --- |
 | `Setup` | Initialize plugin data and shape registry |
 | `SessionStart` | Inject branch, dirty count, active stage, hook state, and shape summary |
-| `UserPromptSubmit` | Remind Claude of active stage context |
+| `UserPromptSubmit` | Remind the agent of active stage context |
 | `PreToolUse Write/Edit` | Deny writes outside active-stage surfaces; inject shape context otherwise |
 | `PreToolUse Bash` | Deny commit, push, merge, and new stage setup while a stage is unfinished |
 | `PostToolUse Write/Edit` | Run cheap AP detectors and shape discovery inline; run deterministic JIT async by default |
@@ -300,14 +329,26 @@ The runtime has handlers for these events, but this plugin version does not decl
 
 They are covered by runtime self-tests only.
 
+### Codex First Gate
+
+Codex packaging currently ships the same skills and CLI runtime through `.codex-plugin/plugin.json`. Codex hook commands are not declared yet because the first Codex gate is intentionally skills + context packaging. The next gate probes Codex hook cwd, env, and JSON IO before enabling `SessionStart` or `UserPromptSubmit` hooks.
+
+Run the probe with:
+
+```bash
+npm run codex:hook-discovery
+```
+
+The probe writes a temp Markdown report and fails when this Codex build does not execute command hooks through the tested project, user, or inline config sources.
+
 ## Configuration
 
-The runtime reads advanced low-friction options from `CLAUDE_PLUGIN_OPTION_*` environment variables. The plugin manifest intentionally does not expose `userConfig` until the local Claude validator supports it for this marketplace.
+The runtime reads advanced low-friction options from portable `ZEROH_SDD_OPTION_*` environment variables first, then platform-specific `CLAUDE_PLUGIN_OPTION_*` or `CODEX_PLUGIN_OPTION_*` variables. The Claude manifest intentionally does not expose `userConfig` until the local Claude validator supports it for this marketplace.
 
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `enforcement_mode` | `balanced` | `balanced` blocks only active-stage boundary violations; `advisory` never blocks |
-| `jit_mode` | `async-rewake` | Runs deterministic checks in the background and wakes Claude only on failures |
+| `jit_mode` | `async-rewake` | Runs deterministic checks in the background and wakes the agent only on failures |
 | `shape_watch` | `true` | Refreshes shape registry when watched shape files change |
 | `max_shape_context` | `12` | Caps injected shape summaries |
 | `doctor_on_finish` | `true` | Runs `doctor` before clearing stage receipts |
@@ -325,7 +366,7 @@ remediation prose
 -->
 ```
 
-Claude reads the prose. Telemetry and repair tooling can extract the envelope. `_fix.prompt` is the canonical LLM repair payload.
+The LLM agent reads the prose. Telemetry and repair tooling can extract the envelope. `_fix.prompt` is the canonical LLM repair payload.
 
 ## Verification
 
