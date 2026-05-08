@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const STATE_DIR = ['.specify', 'workflows'];
 const ACTIVE_STAGE = 'active-stage.json';
 const HOOK_STATE = 'hook-state.json';
@@ -666,7 +666,7 @@ function handlePreToolBash(input, repoRoot) {
       '',
       `Blocked command: ${command}`,
       '',
-      'Run the proof command and finish with `zeroh-sdd stage finish ...`, or explicitly clear/replan the stage.',
+      `Run the proof command and finish with \`${runtimeCli()} stage finish ...\`, or explicitly clear/replan the stage.`,
     ].join('\n');
     if (!shouldBlockHardGate(config)) return preToolContext('PreToolUse', message);
     return preToolContext('PreToolUse', message, 'deny', 'Active execution stage must finish before stage advance, commit, merge, or push.');
@@ -733,7 +733,7 @@ function handlePostToolBash(input, repoRoot) {
     'Do not move to the next step from memory. Write the execution receipt now:',
     '',
     '```bash',
-    'zeroh-sdd stage finish --status passed \\',
+    `${runtimeCli()} stage finish --status passed \\`,
     '  --proof-result "<command => pass>" \\',
     '  --changed "<path>" \\',
     '  --closed "<finding-id>" \\',
@@ -781,7 +781,7 @@ function renderPostBatch(repoRoot) {
     `AP finding count: ${hookState?.activeApFindingCount || 0}`,
     `Summary: ${hookState?.summary || '(none)'}`,
     '',
-    stage ? 'If the proof command already ran, finish the stage with `zeroh-sdd stage finish ...` before advancing.' : '',
+    stage ? `If the proof command already ran, finish the stage with \`${runtimeCli()} stage finish ...\` before advancing.` : '',
   ].filter(Boolean).join('\n');
   return hookContext('PostToolBatch', message);
 }
@@ -796,7 +796,7 @@ function blockIfActiveStage(repoRoot, event, options = {}) {
     `Plan: ${stage.planPath}.`,
     `Proof: ${stage.proofCommand || '(none)'}.`,
     shapeIssues.length > 0 ? `Shape gate issues: ${shapeIssues.join('; ')}` : '',
-    'Run the proof, write the receipt with `zeroh-sdd stage finish ...`, or explicitly clear/replan before completing.',
+    `Run the proof, write the receipt with \`${runtimeCli()} stage finish ...\`, or explicitly clear/replan before completing.`,
   ].filter(Boolean).join(' ');
   if (!shouldBlockHardGate(runtimeConfig())) return hookContext(event, reason);
   if (options.exitCodeBlock) return hookExit(2, reason);
@@ -1339,6 +1339,8 @@ function runSelfTests(suite) {
       assert(commitDenied.includes('"permissionDecision":"deny"'), 'commit should deny while stage open');
       const reminder = handlePostToolBash({ tool_input: { command: 'node --version' } }, root);
       assert(reminder.includes('Active proof command ran'), 'proof command should remind receipt');
+      const reminderContext = JSON.parse(reminder).hookSpecificOutput.additionalContext;
+      assert(reminderContext.includes('node "') && reminderContext.includes('zeroh-sdd.mjs" stage finish'), 'receipt reminder should include runnable runtime path');
       const stop = blockIfActiveStage(root, 'Stop');
       assert(stop.includes('"decision":"block"'), 'stop should block while active stage open');
       const taskCompleted = blockIfActiveStage(root, 'TaskCompleted', { exitCodeBlock: true });
@@ -1967,6 +1969,10 @@ function hookStatePath(repoRoot) {
 
 function currentScriptPath() {
   return process.argv[1] ? resolve(process.argv[1]) : new URL(import.meta.url).pathname;
+}
+
+function runtimeCli() {
+  return `node "${normalizeRepoPath(currentScriptPath())}"`;
 }
 
 function toRepoRelative(repoRoot, candidate) {
