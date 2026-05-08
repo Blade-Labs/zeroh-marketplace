@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const STATE_DIR = ['.specify', 'workflows'];
 const ACTIVE_STAGE = 'active-stage.json';
 const HOOK_STATE = 'hook-state.json';
@@ -37,6 +37,10 @@ const AP = {
   TEST_CAPITULATION: 'AP_TEST_CAPITULATION',
   HARDCODED_DATA: 'AP_HARDCODED_DATA',
 };
+
+const FINDING_SCOPES = Object.freeze(['edited-file', 'active-stage', 'proof-command', 'repo-background']);
+const BASELINE_STATUSES = Object.freeze(['current-edit', 'pre-existing', 'unknown']);
+const OWNER_ACTIONS = Object.freeze(['fix-now', 'receipt-note', 'replan', 'branch-health-followup']);
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
@@ -498,6 +502,7 @@ function runRelevantChecks({ repoRoot, filePath, writeState = false }) {
     summary: previousAdvisoryCount > 0 && ok
       ? `${baseSummary} ${previousAdvisoryCount} advisory AP finding(s) remain.`
       : baseSummary,
+    findings: results.filter((result) => result.exitCode !== 0).map((result) => deterministicFinding(repoRoot, surface, result)),
     timestamp: new Date().toISOString(),
   };
   if (writeState) writeHookState(repoRoot, state);
@@ -681,7 +686,7 @@ function handlePostToolWrite(input, repoRoot) {
   const contexts = [];
   const apFindings = detectApFindings(repoRoot, filePath);
   for (const apFinding of apFindings) {
-    contexts.push(renderEnvelope(apFinding));
+    contexts.push(renderApContext(apFinding));
   }
   if (isShapeFile(filePath)) saveShapeRegistry(repoRoot);
   if (config.jitMode === 'sync') {
@@ -692,14 +697,17 @@ function handlePostToolWrite(input, repoRoot) {
   if (apFindings.length > 0) {
     const state = readHookState(repoRoot) || {};
     const surface = classifySurface(repoRoot, filePath);
-    const priorCount = state.lastEditedFile === surface.repoRelativePath ? state.activeApFindingCount || 0 : 0;
+    const currentFindings = apFindings.filter((item) => item.introducedByCurrentEdit);
+    const baselineFindings = apFindings.filter((item) => !item.introducedByCurrentEdit);
     writeHookState(repoRoot, {
       ...state,
       lastEditedFile: surface.repoRelativePath,
       lastCheck: state.lastCheck || 'AP detectors',
       status: 'advisory',
-      activeApFindingCount: priorCount + apFindings.length,
-      summary: `${apFindings.length} AP finding(s) emitted as JIT context.`,
+      activeApFindingCount: currentFindings.length,
+      baselineFindingCount: baselineFindings.length,
+      findings: apFindings.map(toHookStateFinding),
+      summary: summarizeAttributedFindings(currentFindings.length, baselineFindings.length),
       timestamp: new Date().toISOString(),
     });
   }
@@ -745,19 +753,36 @@ function handlePostToolBash(input, repoRoot) {
 
 function handlePostToolFailure(input, repoRoot) {
   const command = toolCommand(input) || input?.tool_name || '(unknown tool)';
+  const stage = readActiveStage(repoRoot);
+  const proofFailure = Boolean(stage?.proofCommand && commandMatchesProof(command, stage.proofCommand));
+  const scopedFinding = {
+    code: 'TOOL_FAILURE',
+    surface: proofFailure ? 'hook.proof-command.failure' : 'hook.tool.failure',
+    filePath: '(command)',
+    hits: command,
+    scope: proofFailure ? 'proof-command' : 'repo-background',
+    baselineStatus: 'unknown',
+    introducedByCurrentEdit: false,
+    ownerAction: proofFailure ? 'replan' : 'branch-health-followup',
+  };
   writeHookState(repoRoot, {
     version: 1,
     lastEditedFile: '(none)',
     lastCheck: command,
     status: 'failed',
     activeApFindingCount: 1,
-    summary: 'Tool failure recorded; fix directly or capture it in the active stage receipt and replan.',
+    findings: [scopedFinding],
+    summary: proofFailure
+      ? 'Active proof command failed; capture it in the execution receipt and replan or mark blocked.'
+      : 'Tool failure recorded as background context; fix directly or capture it in the active stage receipt if it affects the gate.',
     timestamp: new Date().toISOString(),
   });
   return hookContext('PostToolUseFailure', [
     '# Tool failure recorded',
     '',
     `Failed command/tool: ${command}`,
+    `Scope: ${scopedFinding.scope}`,
+    `Owner action: ${scopedFinding.ownerAction}`,
     '',
     'Fix the failure before advancing the stage. If it changes scope, record the finding in the execution receipt and replan.',
   ].join('\n'));
@@ -779,7 +804,9 @@ function renderPostBatch(repoRoot) {
     `Last deterministic check: ${hookState?.lastCheck || '(none)'}`,
     `Check status: ${hookState?.status || '(none)'}`,
     `AP finding count: ${hookState?.activeApFindingCount || 0}`,
+    `Baseline finding count: ${hookState?.baselineFindingCount || 0}`,
     `Summary: ${hookState?.summary || '(none)'}`,
+    ...(hookState?.findings || []).slice(0, 3).map((finding) => `Finding: ${finding.code} / ${finding.scope} / ${finding.baselineStatus} / ${finding.ownerAction}`),
     '',
     stage ? `If the proof command already ran, finish the stage with \`${runtimeCli()} stage finish ...\` before advancing.` : '',
   ].filter(Boolean).join('\n');
@@ -996,7 +1023,7 @@ function detectApFindings(repoRoot, filePath) {
       ].join('\n')));
     }
   }
-  return findings;
+  return findings.map((item) => withFindingAttribution(repoRoot, rel, item));
 }
 
 function discoverShapes(repoRoot) {
@@ -1065,6 +1092,21 @@ function evaluateActiveShapeGate(repoRoot, stage) {
   return findings.filter((item) => item.severity === 'P0').map((item) => item.message);
 }
 
+function renderApContext(finding) {
+  if (finding.introducedByCurrentEdit) return renderEnvelope(finding);
+  return [
+    '# Existing AP finding in edited surface',
+    '',
+    `File: ${finding.filePath}`,
+    `Code: ${finding.code}`,
+    `Scope: ${finding.scope}`,
+    `Baseline: ${finding.baselineStatus}`,
+    `Owner action: ${finding.ownerAction}`,
+    '',
+    'This finding was detected in the edited surface but was not introduced by the current diff. Keep the execution spec on track: fix it only if it is part of the active proof gate, otherwise record it in the receipt or branch-health follow-up.',
+  ].join('\n');
+}
+
 function renderEnvelope({ code, surface, filePath, hits, prose, metadata = {} }) {
   const bucket = 'contract';
   const envelope = {
@@ -1074,6 +1116,10 @@ function renderEnvelope({ code, surface, filePath, hits, prose, metadata = {} })
     title: `${code} detected at ${filePath}`,
     surface,
     metadata: { filePath, hits: String(hits).slice(0, 500), ...metadata },
+    scope: metadata.scope || 'edited-file',
+    baselineStatus: metadata.baselineStatus || 'current-edit',
+    introducedByCurrentEdit: metadata.introducedByCurrentEdit !== false,
+    ownerAction: metadata.ownerAction || 'fix-now',
     remediation: prose.slice(0, 300),
     _fix: {
       surface: 'hook',
@@ -1095,13 +1141,15 @@ function renderEnvelope({ code, surface, filePath, hits, prose, metadata = {} })
 function renderJitContext(result) {
   const failing = result.results.filter((check) => check.exitCode !== 0);
   if (failing.length === 0) return '';
+  const findingSummary = (result.findings || []).map((finding) => `${finding.code} / ${finding.scope} / ${finding.ownerAction}`).join('; ') || '(none)';
   return [
     '# JIT execution-spec check failed',
     '',
     `Edited file: \`${result.surface.repoRelativePath}\``,
     `Surface: \`${result.surface.kind}\``,
+    `Finding scope: \`${findingSummary}\``,
     '',
-    'The hook ran the smallest deterministic check it could select from the edited surface. Fix this before moving to the next stage, or record it in the execution receipt and replan.',
+    'The hook ran the smallest deterministic check it could select from the edited surface. Fix current-gate failures before moving to the next stage; record background drift in the execution receipt or branch-health follow-up instead of treating it as caused by this edit.',
     '',
     ...failing.flatMap((check) => [
       `## ${check.label} (${check.apClass})`,
@@ -1353,6 +1401,10 @@ function runSelfTests(suite) {
       assert(retry.includes('"retry":true'), 'safe proof command denial should allow retry');
       const unsafeRetry = handlePermissionDenied({ tool_name: 'Bash', tool_input: { command: 'git push origin main' }, reason: 'fixture' }, root);
       assert(unsafeRetry === '', 'unsafe denied command should not retry');
+      const proofFailure = handlePostToolFailure({ tool_name: 'Bash', tool_input: { command: 'node --version' } }, root);
+      const proofState = readHookState(root);
+      assert(proofFailure.includes('Scope: proof-command'), 'proof failure context should name proof-command scope');
+      assert(proofState.findings[0].scope === 'proof-command', 'proof command failure should be scoped to proof-command');
       clearActiveStage(root);
       const inactiveConfigChange = handleConfigChange({ source: 'project_settings' }, root);
       assert(inactiveConfigChange === '', 'config change should be silent when no stage is active');
@@ -1408,6 +1460,20 @@ function runSelfTests(suite) {
       writeFileSync(join(root, 'src', 'bad.ts'), 'import { PolicyShape } from "./policy.shape";\nexport const x = 1;\n', 'utf8');
       const bad = detectApFindings(root, join(root, 'src', 'bad.ts'));
       assert(bad.some((item) => item.code === AP.PARSE_BOUNDARY), 'missing parse should emit AP_PARSE_BOUNDARY');
+      assert(bad[0].introducedByCurrentEdit === true && bad[0].baselineStatus === 'current-edit', 'untracked bad file should be current-edit');
+      const currentContext = handlePostToolWrite({ tool_input: { file_path: join(root, 'src', 'bad.ts') } }, root);
+      assert(currentContext.includes('_fix') && currentContext.includes('AP_PARSE_BOUNDARY'), 'current-edit AP should emit _fix.prompt envelope');
+      spawnSync('git', ['init'], { cwd: root, encoding: 'utf8' });
+      spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' });
+      spawnSync('git', ['-c', 'user.name=zeroh-sdd', '-c', 'user.email=sdd@example.com', 'commit', '-m', 'baseline'], { cwd: root, encoding: 'utf8' });
+      const baseline = handlePostToolWrite({ tool_input: { file_path: join(root, 'src', 'bad.ts') } }, root);
+      const baselineState = readHookState(root);
+      assert(baseline.includes('Baseline: pre-existing'), 'pre-existing same-file AP should be labeled baseline');
+      assert(!baseline.includes('_fix'), 'pre-existing AP should not emit _fix.prompt');
+      assert(baselineState.findings[0].baselineStatus === 'pre-existing', 'hook-state should record pre-existing baseline status');
+      writeFileSync(join(root, 'src', 'clean.ts'), 'export const clean = true;\n', 'utf8');
+      const cleanContext = handlePostToolWrite({ tool_input: { file_path: join(root, 'src', 'clean.ts') } }, root);
+      assert(!cleanContext.includes('bad.ts') && !cleanContext.includes('AP_PARSE_BOUNDARY'), 'unrelated AP file should not be emitted during clean edit');
     });
     add('skill-content', () => {
       const readSkill = (name) => readFileSync(join(pluginRoot, 'skills', name, 'SKILL.md'), 'utf8');
@@ -1424,6 +1490,7 @@ function runSelfTests(suite) {
         'zeroh-sdd doctor --plan',
         'zeroh-sdd stage set',
         'zeroh-sdd stage finish',
+        'Only the current proof gate owns blocking truth',
         'receipt',
         'replan',
       ]);
@@ -1445,6 +1512,7 @@ function runSelfTests(suite) {
         'parse untrusted inputs',
         '_fix.prompt',
         'RFC-style problem details',
+        'branch-baseline findings',
         'zeroh-sdd stage finish',
       ]);
       requireTerms('ap-taxonomy skill', readSkill('ap-taxonomy'), [
@@ -1452,6 +1520,7 @@ function runSelfTests(suite) {
         'execution-spec',
         'sdd doctor',
         'cheap hook',
+        'current execution gate',
         '_fix.prompt',
         'Hard gates',
       ]);
@@ -1584,6 +1653,105 @@ function finding(severity, code, apClass, message, remediation = []) {
 
 function apFinding(code, surface, filePath, hits, prose, metadata = {}) {
   return { code, surface, filePath, hits, prose, metadata };
+}
+
+function withFindingAttribution(repoRoot, rel, item) {
+  const introducedByCurrentEdit = findingIntroducedByCurrentEdit(repoRoot, rel, item);
+  const baselineStatus = introducedByCurrentEdit ? 'current-edit' : 'pre-existing';
+  const ownerAction = introducedByCurrentEdit ? 'fix-now' : 'receipt-note';
+  return {
+    ...item,
+    scope: 'edited-file',
+    baselineStatus,
+    introducedByCurrentEdit,
+    ownerAction,
+    metadata: {
+      ...item.metadata,
+      scope: 'edited-file',
+      baselineStatus,
+      introducedByCurrentEdit,
+      ownerAction,
+    },
+  };
+}
+
+function findingIntroducedByCurrentEdit(repoRoot, rel, item) {
+  if (!isGitTracked(repoRoot, rel)) return true;
+  const diff = git(repoRoot, ['diff', '-U0', '--', rel]);
+  if (!diff.trim()) return false;
+  const added = diffLines(diff, '+');
+  const removed = diffLines(diff, '-');
+  if (item.code === AP.TEST_CAPITULATION) return true;
+  if (item.code === AP.PARSE_BOUNDARY) {
+    return added.some((line) => /\b[A-Za-z0-9_]*(Schema|Shape)\b/.test(line)) || removed.some((line) => /\b(validatedParse|safeParse|parse)\s*\(/.test(line));
+  }
+  if (item.code === AP.SILENT_FAIL) {
+    return added.some((line) => /\?\?\s*(["'`{[]|\d|DEFAULT_|fallback|nullish)/i.test(line)
+      || /catch\s*\([^)]*\)\s*\{\s*\}|catch\s*\{\s*\}/.test(line)
+      || /(model|provider|fallback).*\[.*(claude|gpt|openai|anthropic|local)/i.test(line)
+      || /SELECT\s+\?s\s+\?p\s+\?o/i.test(line));
+  }
+  if (item.code === AP.HARDCODED_DATA) {
+    const iriCount = (added.join('\n').match(/["'`](?:urn:|https?:\/\/|[a-z]+:[A-Za-z])[A-Za-z0-9_:/#.\-]+["'`]/g) || []).length;
+    return iriCount > 0 || added.some((line) => /^\s*const\s+[A-Za-z_][A-Za-z0-9_]*\s*[:=]/.test(line));
+  }
+  return added.length > 0 || removed.length > 0;
+}
+
+function isGitTracked(repoRoot, rel) {
+  const result = spawnSync('git', ['ls-files', '--error-unmatch', rel], { cwd: repoRoot, encoding: 'utf8' });
+  return result.status === 0;
+}
+
+function diffLines(diff, marker) {
+  return diff.split(/\r?\n/)
+    .filter((line) => line.startsWith(marker) && !line.startsWith(`${marker}${marker}${marker}`))
+    .map((line) => line.slice(1));
+}
+
+function deterministicFinding(repoRoot, surface, result) {
+  const stage = readActiveStage(repoRoot);
+  const command = [result.command, ...result.args].join(' ');
+  const proofScoped = Boolean(stage?.proofCommand && commandMatchesProof(command, stage.proofCommand));
+  const activeScoped = Boolean(stage && allowedByStage(repoRoot, stage, surface.absolute).allowed);
+  const scope = proofScoped ? 'proof-command' : activeScoped ? 'active-stage' : 'edited-file';
+  return normalizeHookFinding({
+    code: result.apClass,
+    surface: result.label,
+    filePath: surface.repoRelativePath,
+    hits: `${result.label} failed`,
+    scope,
+    baselineStatus: proofScoped ? 'unknown' : 'current-edit',
+    introducedByCurrentEdit: false,
+    ownerAction: proofScoped ? 'replan' : 'receipt-note',
+  });
+}
+
+function normalizeHookFinding(item) {
+  const scope = FINDING_SCOPES.includes(item.scope) ? item.scope : 'repo-background';
+  const baselineStatus = BASELINE_STATUSES.includes(item.baselineStatus) ? item.baselineStatus : 'unknown';
+  const ownerAction = OWNER_ACTIONS.includes(item.ownerAction) ? item.ownerAction : 'receipt-note';
+  return {
+    code: item.code,
+    surface: item.surface,
+    filePath: item.filePath,
+    hits: String(item.hits || '').slice(0, 500),
+    scope,
+    baselineStatus,
+    introducedByCurrentEdit: Boolean(item.introducedByCurrentEdit),
+    ownerAction,
+  };
+}
+
+function toHookStateFinding(item) {
+  return normalizeHookFinding(item);
+}
+
+function summarizeAttributedFindings(currentCount, baselineCount) {
+  const parts = [];
+  if (currentCount > 0) parts.push(`${currentCount} current-edit AP finding(s) emitted as JIT context`);
+  if (baselineCount > 0) parts.push(`${baselineCount} pre-existing AP finding(s) labeled as baseline`);
+  return parts.length > 0 ? `${parts.join('; ')}.` : 'No AP findings.';
 }
 
 function hasP0(findings) {
@@ -1973,6 +2141,11 @@ function currentScriptPath() {
 
 function runtimeCli() {
   return `node "${normalizeRepoPath(currentScriptPath())}"`;
+}
+
+function commandMatchesProof(command, proofCommand) {
+  if (!command || !proofCommand) return false;
+  return command.includes(proofCommand) || proofCommand.includes(command);
 }
 
 function toRepoRelative(repoRoot, candidate) {

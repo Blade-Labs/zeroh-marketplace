@@ -24,7 +24,7 @@ When the same AP recurs, close it in the smallest useful loop:
 
 1. `execution-spec` if the issue is missing owner, proof, surface, stop rule, or deletion/subsumption.
 2. `sdd check` or `sdd doctor` if the issue can be found from the plan and repo truth.
-3. A cheap hook if the signal is local, syntactic, and useful as just-in-time context.
+3. A cheap hook if the signal is local, syntactic, scoped to the current execution gate, and useful as just-in-time context.
 4. A test, canary, or review if the issue needs runtime behavior or semantic judgment.
 5. Deletion if the row, hook, or checklist has no named consumer.
 
@@ -35,3 +35,5 @@ Do not add another prose checklist when a checker, hook, receipt rule, or test c
 Advisory hooks emit prose first, then an HTML-commented JSON envelope. The envelope uses RFC-style problem fields plus SDD/GRC extensions and must include `_fix.prompt` as the canonical repair payload.
 
 Hard gates are reserved for active-stage integrity and declared proof gates. AP findings steer Claude unless the current execution spec says the AP is part of the proof.
+
+Every hook finding should make scope explicit: current-edit, active-stage, proof-command, or repo-background. Current-edit findings can carry `_fix.prompt`; repo-background findings should be compact branch-health context so Claude does not blame unrelated baseline noise on the active slice.

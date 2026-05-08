@@ -22,6 +22,7 @@ Implementation is execution of the active proof gate, not free-form cleanup. Sta
 - preserve `.describe()`, `.meta()`, provenance, acceptance criteria, and refinements unless the receipt explains why they changed
 - use AP envelopes as local repair prompts; `_fix.prompt` is the canonical minimal repair payload
 - keep AP, shape, and error-chain warnings advisory unless the active stage declares them as proof gates
+- separate current-edit findings from branch-baseline findings; do not treat pre-existing branch noise as caused by this edit
 - if an AP finding changes scope, stop and record it as opened in the receipt or replan
 - run the active proof command before finishing
 
@@ -44,4 +45,4 @@ zeroh-sdd stage finish --status passed \
   --next-adjustment "<next slice from receipt>"
 ```
 
-If proof fails, finish with `--status failed` or keep the stage open while fixing inside the same allowed surface. Do not move to another gate from memory; the receipt is the handoff to the next execution spec.
+If proof fails, finish with `--status failed` or `--status blocked` only when the receipt names the failure scope and next adjustment. Use `branch-health-followup` language for branch-baseline findings that are unrelated to the current edit. Do not move to another gate from memory; the receipt is the handoff to the next execution spec.
