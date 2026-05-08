@@ -15,6 +15,8 @@ Plan only to the next executable proof gate.
 
 A roadmap may name later gates, dependencies, and abandon checkpoints, but only the next gate gets code rows, file surfaces, validation commands, implementation detail, and handoff criteria. After that gate executes, write the receipt and re-run Step N.0 before expanding the next slice.
 
+Only the current proof gate owns blocking truth. Hook findings, branch-health warnings, and repo-wide convention drift are blockers only when the active execution spec declares them as the proof gate. Otherwise classify them as current-edit repair, receipt context, or branch-health follow-up.
+
 ## Tight Loop
 
 ```text

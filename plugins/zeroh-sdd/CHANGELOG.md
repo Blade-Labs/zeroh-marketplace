@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+- Refocused hook-state around execution-spec scope attribution: edited file, active stage, proof command, and repo background.
+- Labeled AP findings as current-edit or pre-existing so branch-baseline noise is not blamed on the active slice.
+- Updated execution-spec, implement, and AP taxonomy skills to keep blocking truth owned by the current proof gate.
+
 ## 1.0.1
 
 - Made proof-receipt hook guidance use the concrete `node ".../bin/zeroh-sdd.mjs"` runtime path instead of assuming `zeroh-sdd` is on Bash `PATH` in Windows Claude sessions.
