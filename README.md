@@ -1,6 +1,6 @@
 # ZeroH Plugin Marketplace
 
-A curated directory of plugins for Claude Code, maintained by Blade Labs.
+A curated directory of plugins for LLM coding agents, maintained by Blade Labs. Claude Code is the primary marketplace target today; `zeroh-sdd` also carries first-gate Codex packaging.
 
 ## Structure
 
@@ -10,7 +10,7 @@ A curated directory of plugins for Claude Code, maintained by Blade Labs.
 
 ### General-purpose development
 
-- **`zeroh-sdd`** — Shape-Driven Development runtime for vibecoding (canonical SDD planning, staged docs, epic planning, execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, scoped hook correction)
+- **`zeroh-sdd`** — LLM-agent Shape-Driven Development runtime for vibecoding (canonical SDD planning, staged docs, epic planning, execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, scoped Claude/Codex adapter support)
 - **`zeroh-design`** — Blade Labs branded UI and collateral generator (4 design themes)
 - **`zeroh-roadmap`** — Phase-driven development (shape-enforced task schemas, validation gates, review reports)
 
@@ -114,11 +114,12 @@ enterprise-plugin/
 
 ### Real example: zeroh-sdd
 
-Production SDD runtime for vibecoding — 13 skills, a Node CLI in `bin/`, and Claude hooks that keep execution inside the active proof stage.
+Production SDD runtime for vibecoding — 13 shared skills, a Node CLI in `bin/`, Claude hooks that keep execution inside the active proof stage, and first-gate Codex plugin packaging.
 
 ```
 plugins/zeroh-sdd/
 ├── .claude-plugin/plugin.json          # Manifest
+├── .codex-plugin/plugin.json           # Codex manifest
 │
 ├── bin/
 │   └── zeroh-sdd.mjs                    # check/doctor/stage/jit/hook runtime
@@ -139,6 +140,7 @@ plugins/zeroh-sdd/
 │   └── ap-taxonomy/SKILL.md
 │
 ├── hooks/hooks.json                     # Hook events routed to bin/zeroh-sdd.mjs
+├── docs/codex/AGENTS.template.md        # Codex consuming-repo guidance
 ├── docs/v1-runtime.md                   # Runtime architecture
 ├── CLAUDE.md                           # Developer docs (not auto-loaded)
 └── README.md
@@ -151,6 +153,7 @@ plugins/zeroh-sdd/
 - **Hooks protect boundaries:** writes, commits, task completion, and Stop are blocked only while an active stage remains unfinished
 - **AP findings steer, not block:** current-edit warnings emit `additionalContext` plus `_fix.prompt` envelopes; branch-baseline noise is scoped as background context
 - **Shapes are proof gates:** Zod shapes and parse boundaries are discovered and enforced when `shape_gate` declares them
+- **Codex support starts with skills and CLI truth:** `.codex-plugin/plugin.json` exposes the same SDD planning skills; Codex hook enforcement is added only after hook IO is probed
 
 ## Component Reference
 

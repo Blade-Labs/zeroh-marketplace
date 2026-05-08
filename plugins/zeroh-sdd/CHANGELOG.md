@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.8
+
+- Added Codex plugin packaging and repo-local Codex marketplace metadata while keeping one shared `zeroh-sdd` runtime and skill tree.
+- Added adapter-aware hook entrypoints, portable `ZEROH_SDD_*` environment support, and Codex `apply_patch` path extraction tests.
+- Reframed docs and skills toward an LLM-agent SDD runtime with Claude Code as the first hard-hook adapter and Codex as the first portability adapter.
+- Added `npm run codex:hook-discovery` to prove whether the installed Codex build executes command hooks before enabling Codex hard enforcement.
+
 ## 1.0.7
 
 - Added Windows-aware command resolution for hook/JIT checks, including local `node_modules/.bin` lookup and `.cmd` shim handling for JS tooling.
