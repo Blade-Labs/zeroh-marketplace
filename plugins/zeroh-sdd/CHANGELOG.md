@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4
+
+- Made the documentation UX self-test work from both the marketplace source tree and Claude's installed plugin cache.
+
 ## 1.0.3
 
 - Reworked the README around the vibecoder journey: execution-spec, active stage, proof, receipt, next slice.
