@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 const STATE_DIR = ['.specify', 'workflows'];
 const ACTIVE_STAGE = 'active-stage.json';
 const HOOK_STATE = 'hook-state.json';
@@ -1550,6 +1550,39 @@ function runSelfTests(suite) {
       const invalid = Object.keys(manifest.hooks || {}).filter((eventName) => !supportedEvents.has(eventName));
       assert(invalid.length === 0, `unsupported hook event(s): ${invalid.join(', ')}`);
     });
+    add('docs-ux-self-test', () => {
+      const readPluginDoc = (path) => readFileSync(join(pluginRoot, path), 'utf8');
+      const readRepoDoc = (path) => readFileSync(join(pluginRoot, '..', '..', path), 'utf8');
+      const readme = readPluginDoc('README.md');
+      const runtimeDoc = readPluginDoc(join('docs', 'v1-runtime.md'));
+      const changelog = readPluginDoc('CHANGELOG.md');
+      const rootReadme = readRepoDoc('README.md');
+      const manifest = JSON.parse(readFileSync(join(pluginRoot, 'hooks', 'hooks.json'), 'utf8'));
+      const wiredEvents = Object.keys(manifest.hooks || {});
+      const wiredSection = sectionBetween(readme, '### Wired In Current Claude Build', '### Runtime-Supported But Not Currently Wired');
+      const unwiredSection = sectionBetween(readme, '### Runtime-Supported But Not Currently Wired', '## Configuration');
+      const runtimeOnlyEvents = ['PostToolBatch', 'PostCompact', 'CwdChanged', 'FileChanged', 'PermissionDenied'];
+
+      assert(readme.includes('Use zeroh-sdd execution-spec for this change'), 'README should include a copy-paste vibecoder quickstart prompt');
+      assert(readme.includes('node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event>'), 'README should document the direct node hook launcher');
+      assert(!readme.includes('bash "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd" hook <event>'), 'README should not document the stale nested Bash launcher');
+      assert(readme.includes('/plugin marketplace update zeroh-marketplace') && readme.includes('/plugin update zeroh-sdd@zeroh-marketplace'), 'README should include marketplace update commands');
+      assert(readme.includes('restart Claude Code or start a fresh Claude session'), 'README should mention restart/new-session after install or update');
+      assert(readme.includes('edited-file') && readme.includes('proof-command') && readme.includes('repo-background'), 'README should explain finding attribution');
+      assert(readme.includes('advanced low-friction options') && readme.includes('does not expose `userConfig`'), 'README should frame config as env-backed advanced knobs');
+      assert(wiredSection, 'README should have a wired hook section');
+      assert(unwiredSection, 'README should have an unwired runtime handler section');
+      for (const eventName of wiredEvents) assert(wiredSection.includes(eventName), `README wired hook section should mention ${eventName}`);
+      for (const eventName of runtimeOnlyEvents) {
+        assert(!wiredSection.includes(eventName), `README wired hook section should not list runtime-only event ${eventName}`);
+        assert(unwiredSection.includes(eventName), `README should label ${eventName} as runtime-supported but unwired`);
+      }
+      assert(runtimeDoc.includes('node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event>'), 'runtime doc should document the direct node hook launcher');
+      assert(runtimeDoc.includes('runtime-supported but not live'), 'runtime doc should tell maintainers to label unwired handlers');
+      assert(changelog.includes('## 1.0.3') && changelog.includes('Corrected hook documentation'), 'changelog should record the UX remediation');
+      assert(!changelog.includes('PostToolBatch, TaskCompleted, Stop, compact, config-change, cwd/file-change, and permission-denial events through the runtime'), 'changelog should not preserve the stale live-hook claim');
+      assert(rootReadme.includes('execution-spec control plane') && rootReadme.includes('branch-baseline noise'), 'root README should describe zeroh-sdd as scoped execution control, not generic hook noise');
+    });
 
     const selected = suite === 'all' ? checks : checks.filter((check) => check.name === suite);
     if (selected.length === 0) throw new Error(`Unknown self-test suite: ${suite}`);
@@ -2181,6 +2214,13 @@ function isObject(value) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function sectionBetween(text, startMarker, endMarker) {
+  const start = text.indexOf(startMarker);
+  if (start === -1) return '';
+  const end = text.indexOf(endMarker, start + startMarker.length);
+  return end === -1 ? text.slice(start) : text.slice(start, end);
 }
 
 function assert(condition, message) {

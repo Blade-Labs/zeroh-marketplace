@@ -1,6 +1,6 @@
 # zeroh-sdd v1 Runtime Architecture
 
-`zeroh-sdd` v1 is a command-hook runtime. Skills produce execution specs; hooks enforce the active stage; the runtime records proof receipts.
+`zeroh-sdd` v1 is a command-hook runtime. Skills produce execution specs, `active-stage.json` becomes the control plane, live hooks enforce the active stage, and the runtime records proof receipts.
 
 ## Runtime Loop
 
@@ -17,6 +17,8 @@ execution-spec
   -> receipt + doctor
   -> next execution-spec
 ```
+
+The user-facing product is the lane, not the checklist: Claude can move quickly, but once it commits to a proof slice it cannot edit outside the declared surfaces, advance the stage early, or finish the task without a receipt.
 
 ## Hard vs Soft Feedback
 
@@ -37,7 +39,9 @@ Soft steering:
 - test capitulation warnings
 - successful deterministic JIT checks
 
-Soft steering is emitted as `hookSpecificOutput.additionalContext` with an HTML-commented JSON envelope and `_fix.prompt`. Deterministic JIT checks run with `asyncRewake` by default: clean checks stay silent, failed checks wake Claude with compact repair context.
+Soft steering is emitted as `hookSpecificOutput.additionalContext` with an HTML-commented JSON envelope and `_fix.prompt` for current-edit repairs. Findings are attributed as `edited-file`, `active-stage`, `proof-command`, or `repo-background` so baseline branch health does not get blamed on the current edit.
+
+Deterministic JIT checks run with `asyncRewake` by default: clean checks stay silent, failed checks wake Claude with compact repair context.
 
 ## State
 
@@ -60,10 +64,12 @@ Plugin cache:
 - `shape_watch=true`: refresh shape context when watched files change
 - `doctor_on_finish=true`: keep receipt closure deterministic
 
-The runtime reads these as `CLAUDE_PLUGIN_OPTION_*` variables. That matches Claude's plugin `userConfig` export format; the manifest remains validator-compatible for the local Claude Code version.
+The runtime reads these as advanced `CLAUDE_PLUGIN_OPTION_*` environment variables. The manifest does not expose `userConfig` until the local Claude validator accepts it for this marketplace.
 
 ## Runtime Ownership
 
-All behavior lives in `bin/zeroh-sdd.mjs`. `bin/zeroh-sdd` is only a cross-shell launcher that finds Node.js and delegates to the runtime.
+All behavior lives in `bin/zeroh-sdd.mjs`. `bin/zeroh-sdd` is only a cross-shell launcher for humans or shells that need it.
 
-`hooks/hooks.json` should stay declarative. Do not reintroduce per-hook Bash implementations.
+`hooks/hooks.json` should stay declarative and should call the runtime directly with `node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event>`. Do not reintroduce per-hook Bash implementations.
+
+Some runtime handlers exist before they are wired in `hooks/hooks.json`. User-facing docs must label those as runtime-supported but not live in the current validated Claude build.

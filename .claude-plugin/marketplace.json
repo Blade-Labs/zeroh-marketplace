@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "zeroh-sdd",
-      "description": "Shape-Driven Development runtime — executable stage state, proof receipts, Zod shape gates, and Claude hook JIT correction",
+      "description": "Shape-Driven Development runtime for vibecoding — execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, and scoped Claude hook JIT correction",
       "source": "./plugins/zeroh-sdd",
       "category": "development",
       "tags": ["sdd", "spec-kit", "hooks", "zod", "shape-gates", "proof-receipts"]
