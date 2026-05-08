@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Made proof-receipt hook guidance use the concrete `node ".../bin/zeroh-sdd.mjs"` runtime path instead of assuming `zeroh-sdd` is on Bash `PATH` in Windows Claude sessions.
+- Added self-test coverage for runnable proof receipt reminder commands.
+
 ## 1.0.0
 
 Clean runtime upgrade.
