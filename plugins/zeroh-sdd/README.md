@@ -2,10 +2,18 @@
 
 Shape-Driven Development runtime for Claude Code.
 
-`zeroh-sdd` turns vibecoding into a small executable proof loop:
+`zeroh-sdd` turns vibecoding into a composed proof loop:
 
 ```text
-vibecoder intent -> execution-spec -> active-stage.json -> hooks enforce lane -> proof -> receipt -> next slice
+vibecoder intent
+  -> sdd-planning classifies scope
+  -> staged-doc-drafting only when long-form coherence is needed
+  -> epic-planning only when macro phases/stories/proofs are needed
+  -> execution-spec compiles one current MC/proof gate
+  -> Claude native todos for live microstep tracking
+  -> active-stage.json + hooks enforce lane
+  -> proof + receipt + tracker update
+  -> next slice
 ```
 
 The expected feel is low friction: silent when green, advisory when the current edit looks suspicious, and blocking only when Claude is about to violate the active execution stage.
@@ -23,7 +31,13 @@ Runtime prerequisite: Node.js 18.18 or newer.
 
 After installing or updating, restart Claude Code or start a fresh Claude session so the plugin skills and hooks load reliably.
 
-Start work with a prompt like this:
+For non-trivial work, start with the canonical planning front door:
+
+```text
+Use zeroh-sdd sdd-planning for this upgrade. Classify the scope, use staged drafting or epic planning only if they are needed, select one current MC, hand it to execution-spec, set the active stage, run proof, and finish with a receipt.
+```
+
+When the next proof gate is already obvious, use the fast path:
 
 ```text
 Use zeroh-sdd execution-spec for this change. Create the next proof gate, set the active stage, implement only inside that stage, run the proof command, and finish with a receipt.
@@ -31,13 +45,17 @@ Use zeroh-sdd execution-spec for this change. Create the next proof gate, set th
 
 Claude should then:
 
-1. Use the `execution-spec` skill to create one next proof gate.
-2. Put exactly one fenced `sdd` YAML block in the plan.
-3. Run `zeroh-sdd check` and `zeroh-sdd doctor` on the plan.
-4. Run `zeroh-sdd stage set` to write `.specify/workflows/active-stage.json`.
-5. Edit only the declared stage surfaces.
-6. Run the proof command.
-7. Run `zeroh-sdd stage finish` to append the receipt and clear the stage.
+1. Use `sdd-planning` to classify single-gate, long-form, multi-MC, or non-execution work.
+2. Use `staged-doc-drafting` only as the supporting Stage 0-4 long-form method.
+3. Use `epic-planning` only as the supporting macro tracker method.
+4. Use `execution-spec` to create one next proof gate.
+5. Put exactly one fenced `sdd` YAML block in the plan.
+6. Mirror the current slice in Claude native todos, while keeping docs/receipts as durable truth.
+7. Run `zeroh-sdd check` and `zeroh-sdd doctor` on the plan.
+8. Run `zeroh-sdd stage set` to write `.specify/workflows/active-stage.json`.
+9. Edit only the declared stage surfaces.
+10. Run the proof command.
+11. Run `zeroh-sdd stage finish` to append the receipt, then update any epic tracker row explicitly.
 
 ## Update And Verify
 
@@ -90,8 +108,10 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event>
 
 Project state lives in the consuming repo:
 
-- `.specify/workflows/active-stage.json`: the runtime control plane for the current proof gate. It stores the stage name, step id, plan path, allowed paths, proof command, stop rule, receipt requirement, and open findings.
+- `.specify/workflows/active-stage.json`: the runtime control plane for the current proof gate. It stores the stage name, step id, plan path, allowed paths, proof command, stop rule, receipt requirement, open findings, shape gate, and optional epic tracker bridge.
 - `.specify/workflows/hook-state.json`: the latest hook/JIT summary. Findings are attributed by `scope`, `baselineStatus`, `introducedByCurrentEdit`, and `ownerAction`.
+
+Claude native todos/tasks are live session progress only. They should mirror the current MC, but they are not durable state; execution specs, receipts, and optional epic tracker rows are.
 
 Finding scopes:
 
@@ -118,12 +138,15 @@ If `CLAUDE_PLUGIN_DATA` is unavailable, local CLI runs fall back to `.specify/wo
 
 | Skill | Purpose |
 | --- | --- |
+| `sdd-planning` | Primary front door; classifies scope and converges work into `execution-spec` |
 | `specify` | Capture intent, evidence, owner, non-goals, and acceptance signals |
 | `clarify` | Resolve only ambiguity that changes the next executable proof gate |
+| `staged-doc-drafting` | Supporting method for long-form docs through Stage 0-4 |
+| `epic-planning` | Supporting method for macro phases, stories, proof packs, and tracker rows |
 | `plan` | Frame the current slice and hand off to `execution-spec` |
-| `execution-spec` | Author the fenced `sdd` block and stage gate |
+| `execution-spec` | Compile one current story/MC into the fenced `sdd` block and stage gate |
 | `shapes` | Author Zod shapes as executable acceptance criteria |
-| `tasks` | Break the active stage into proof-preserving tasks |
+| `tasks` | Mirror the active MC into Claude native todos without making todos durable truth |
 | `implement` | Execute inside the active stage boundary |
 | `analyze` | Audit plan, stage, implementation, APs, and receipts |
 | `sdd-readiness` | Run `check` and `doctor` before implementation |
@@ -174,7 +197,17 @@ sdd:
     required_shapes: []
     parse_boundaries: []
     status: red
+  tracker:
+    kind: epic
+    path: docs/epics/EPIC-example.md
+    phase_id: P1
+    item_id: S1
+    todo_policy: mirror-current-slice
 ```
+
+The optional `tracker` block links the current proof gate to an epic-planning row. `doctor` validates that the epic path and item exist. `stage set` preserves that bridge in `active-stage.json`; `stage finish` records the tracker item in the receipt so Claude can update the epic row explicitly.
+
+Every planning entry point must converge here. `sdd-planning` may invoke long-form drafting or epic tracking first, but actionable work is enforceable only after `execution-spec` creates this block and `stage set` makes it live.
 
 ## Stage Loop
 
@@ -198,6 +231,7 @@ While the stage is open:
 - proof command completion triggers a receipt reminder
 - AP findings stay advisory unless the active stage declares them as proof gates
 - background branch-health findings are summarized without blaming the current edit
+- Claude native todos may mirror current progress, but they never replace receipts or tracker rows
 
 Finish the stage only after proof:
 
@@ -210,6 +244,8 @@ zeroh-sdd stage finish --status passed \
 ```
 
 `stage finish` appends an execution receipt, runs `doctor`, and clears the active stage only if no blocking P0 findings remain.
+
+If the active stage has tracker metadata, `stage finish` requires a next adjustment and records the tracker item in the receipt. Claude must still update the epic tracker row explicitly after proof.
 
 ## Tiny Smoke Test
 
@@ -303,6 +339,7 @@ This executes:
 
 - `sdd-self-test`
 - `sdd-doctor-self-test`
+- `sdd-tracker-self-test`
 - `sdd-stage-self-test`
 - `jit-router-self-test`
 - `hook-runtime-self-test`

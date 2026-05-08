@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.6
+
+- Added `sdd-planning` as the canonical planning front door for non-trivial vibecoding work.
+- Repositioned `staged-doc-drafting` and `epic-planning` as supporting methods that converge into `execution-spec`.
+- Updated UX docs and skill-content checks so every actionable planning path ends in one enforceable proof gate or a clear non-execution artifact.
+
+## 1.0.5
+
+- Added `staged-doc-drafting` as the long-form Stage 0-4 drafting layer and `epic-planning` as the macro phases/stories/proofs layer.
+- Added optional `sdd.tracker` bridge validation so one execution spec can link back to an epic tracker row.
+- Preserved tracker metadata in active stage state and receipt rows while keeping Claude native todos as live progress only.
+
 ## 1.0.4
 
 - Made the documentation UX self-test work from both the marketplace source tree and Claude's installed plugin cache.

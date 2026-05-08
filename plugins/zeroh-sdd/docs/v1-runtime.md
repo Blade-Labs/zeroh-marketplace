@@ -1,24 +1,30 @@
 # zeroh-sdd v1 Runtime Architecture
 
-`zeroh-sdd` v1 is a command-hook runtime. Skills produce execution specs, `active-stage.json` becomes the control plane, live hooks enforce the active stage, and the runtime records proof receipts.
+`zeroh-sdd` v1 is a command-hook runtime. `sdd-planning` is the primary front door: it classifies scope, invokes long-form drafting or epic tracking only when needed, and converges actionable work into `execution-spec`. `active-stage.json` becomes the control plane for the current proof gate; live hooks enforce the active stage; and the runtime records proof receipts.
 
 ## Runtime Loop
 
 ```text
-execution-spec
+sdd-planning
+  -> staged-doc-drafting when long-form prose is needed
+  -> epic-planning when macro phases/stories/proofs are needed
+  -> execution-spec for one current MC
   -> zeroh-sdd check
   -> zeroh-sdd doctor
   -> zeroh-sdd stage set
+  -> Claude native todos mirror current microsteps
   -> Write/Edit/Bash hooks enforce active-stage.json
   -> async JIT checks wake only on failures
   -> proof command
   -> proof reminder
   -> zeroh-sdd stage finish
-  -> receipt + doctor
+  -> receipt + optional epic tracker update + doctor
   -> next execution-spec
 ```
 
 The user-facing product is the lane, not the checklist: Claude can move quickly, but once it commits to a proof slice it cannot edit outside the declared surfaces, advance the stage early, or finish the task without a receipt.
+
+Direct `execution-spec` remains the fast path when the next proof gate is already obvious. For broader "plan this upgrade" requests, `sdd-planning` should decide whether staged drafting or epic tracking is worth the overhead.
 
 ## Hard vs Soft Feedback
 
@@ -49,6 +55,8 @@ Project state:
 
 - `.specify/workflows/active-stage.json`
 - `.specify/workflows/hook-state.json`
+
+When an execution spec includes an optional `tracker` block, `active-stage.json` preserves that epic tracker bridge. The tracker is durable macro planning state; it does not replace runtime authority. Claude native todos/tasks are live session progress only and should be recoverable from the execution spec, receipt, and tracker row.
 
 Plugin cache:
 

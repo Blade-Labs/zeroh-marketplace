@@ -1,12 +1,12 @@
 {
   "name": "zeroh-sdd",
-  "version": "1.0.4",
-  "description": "Shape-Driven Development runtime for Claude Code — executable stage state, proof receipts, Zod shape gates, and hook-driven JIT correction",
+  "version": "1.0.6",
+  "description": "Shape-Driven Development runtime for Claude Code — canonical SDD planning, staged docs, epic planning, executable stage state, proof receipts, Zod shape gates, and hook-driven JIT correction",
   "author": {
     "name": "Blade Labs",
     "url": "https://blade-labs.com"
   },
   "repository": "https://github.com/Blade-Labs/zeroh-marketplace",
   "license": "Apache-2.0",
-  "keywords": ["sdd", "spec-kit", "execution-spec", "hooks", "zod", "shape-gates", "proof-receipts"]
+  "keywords": ["sdd", "spec-kit", "sdd-planning", "execution-spec", "staged-docs", "epic-planning", "hooks", "zod", "shape-gates", "proof-receipts"]
 }

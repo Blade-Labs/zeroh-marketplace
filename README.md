@@ -10,7 +10,7 @@ A curated directory of plugins for Claude Code, maintained by Blade Labs.
 
 ### General-purpose development
 
-- **`zeroh-sdd`** — Shape-Driven Development runtime for vibecoding (execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, scoped hook correction)
+- **`zeroh-sdd`** — Shape-Driven Development runtime for vibecoding (canonical SDD planning, staged docs, epic planning, execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, scoped hook correction)
 - **`zeroh-design`** — Blade Labs branded UI and collateral generator (4 design themes)
 - **`zeroh-roadmap`** — Phase-driven development (shape-enforced task schemas, validation gates, review reports)
 
@@ -114,7 +114,7 @@ enterprise-plugin/
 
 ### Real example: zeroh-sdd
 
-Production SDD runtime for vibecoding — 10 skills, a Node CLI in `bin/`, and Claude hooks that keep execution inside the active proof stage.
+Production SDD runtime for vibecoding — 13 skills, a Node CLI in `bin/`, and Claude hooks that keep execution inside the active proof stage.
 
 ```
 plugins/zeroh-sdd/
@@ -124,9 +124,12 @@ plugins/zeroh-sdd/
 │   └── zeroh-sdd.mjs                    # check/doctor/stage/jit/hook runtime
 │
 ├── skills/                              # SDD runtime workflow
+│   ├── sdd-planning/SKILL.md
 │   ├── specify/SKILL.md
 │   ├── clarify/SKILL.md
 │   ├── plan/SKILL.md
+│   ├── staged-doc-drafting/SKILL.md
+│   ├── epic-planning/SKILL.md
 │   ├── execution-spec/SKILL.md
 │   ├── shapes/SKILL.md
 │   ├── tasks/SKILL.md

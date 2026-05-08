@@ -9,6 +9,8 @@ This is the primary workflow for turning intent into executable work. It owns th
 
 The job is not to draft documents. The job is to turn user intent, rough plans, specs, review findings, or code failures into a small execution spec, then keep prose, code, hooks, gates, receipts, and evidence in one feedback loop.
 
+Inputs can come from `sdd-planning`, a finished `staged-doc-drafting` Stage 4 document, one candidate story/MC from an `epic-planning` tracker, direct user intent when the next gate is obvious, or a review finding. In all cases this skill compiles only one current MC into one executable proof gate.
+
 ## Core Rule
 
 Plan only to the next executable proof gate.
@@ -28,6 +30,8 @@ frame -> current slice -> execute -> receipt -> replan
 3. Execute: code and test first; docs only when docs are the edited surface.
 4. Receipt: after proof, write at most 20 lines with changed files, proof result, gaps, and next-step adjustment.
 5. Replan: revise the next slice from the receipt before doing more work.
+
+Use Claude native todos as the live mirror of this loop: Step N.0, stage set, implementation, proof, receipt, and tracker update when present. Todos are not durable truth; the execution spec, `.specify/workflows/active-stage.json`, receipt row, and optional epic tracker row are.
 
 ## AP Filter
 
@@ -141,7 +145,15 @@ sdd:
     required_shapes: []
     parse_boundaries: []
     status: red
+  tracker:
+    kind: epic
+    path: docs/epics/EPIC-example.md
+    phase_id: P1
+    item_id: S1
+    todo_policy: mirror-current-slice
 ```
+
+The `tracker:` block is optional. Use it only when this execution spec was selected from an `epic-planning` tracker. It links the current proof gate to a durable macro row while Claude native todos mirror the active slice in-session.
 
 After proof, finish the stage with a receipt:
 
@@ -154,3 +166,5 @@ zeroh-sdd stage finish --status passed \
 ```
 
 Use `--status failed` or `--status blocked` when proof fails or the slice cannot proceed. Non-passed status or opened findings require a concrete next adjustment. Do not clear an active stage as a substitute for a receipt unless the gate is explicitly abandoned or replanned.
+
+When `tracker:` is present, the receipt must name the tracker item and next adjustment. `stage finish` preserves tracker context in the receipt; Claude still updates the epic tracker row explicitly after proof rather than relying on hidden automation.

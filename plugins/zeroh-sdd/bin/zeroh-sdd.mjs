@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-const VERSION = '1.0.4';
+const VERSION = '1.0.6';
 const STATE_DIR = ['.specify', 'workflows'];
 const ACTIVE_STAGE = 'active-stage.json';
 const HOOK_STATE = 'hook-state.json';
@@ -255,6 +255,7 @@ function doctorPlan({ repoRoot, planPath, skipGit = false }) {
 
   validateReceiptDiscipline(markdown, findings);
   validateShapeGate(repoRoot, doc.shape_gate, findings);
+  validateTrackerBridge(repoRoot, doc.tracker, findings);
 
   return {
     ...result,
@@ -319,6 +320,23 @@ function validateSddDocument(root, findings) {
     requireArray(sdd.shape_gate, 'parse_boundaries', findings, 'SDD031', AP.PARSE_BOUNDARY, 'shape_gate.parse_boundaries must be an array.');
     if (sdd.shape_gate?.status && !['red', 'green', 'blocked', 'not-started'].includes(String(sdd.shape_gate.status))) {
       findings.push(finding('P0', 'SDD032', AP.PARSE_BOUNDARY, 'shape_gate.status must be red, green, blocked, or not-started.'));
+    }
+  }
+
+  if (sdd.tracker !== undefined) {
+    requireObject(sdd, 'tracker', findings, 'SDD044', AP.CONTRACT_DRIFT, 'sdd.tracker must be an object when present.');
+    requireString(sdd.tracker, 'kind', findings, 'SDD045', AP.CONTRACT_DRIFT, 'tracker.kind is required.');
+    requireString(sdd.tracker, 'path', findings, 'SDD046', AP.CONTRACT_DRIFT, 'tracker.path is required.');
+    requireString(sdd.tracker, 'phase_id', findings, 'SDD047', AP.CONTRACT_DRIFT, 'tracker.phase_id is required.');
+    requireString(sdd.tracker, 'item_id', findings, 'SDD048', AP.CONTRACT_DRIFT, 'tracker.item_id is required.');
+    requireString(sdd.tracker, 'todo_policy', findings, 'SDD049', AP.CONTRACT_DRIFT, 'tracker.todo_policy is required.');
+    if (isObject(sdd.tracker)) {
+      if (sdd.tracker.kind !== 'epic') {
+        findings.push(finding('P0', 'SDD050', AP.CONTRACT_DRIFT, 'tracker.kind must be epic in v1.'));
+      }
+      if (sdd.tracker.todo_policy !== 'mirror-current-slice') {
+        findings.push(finding('P0', 'SDD051', AP.CONTRACT_DRIFT, 'tracker.todo_policy must be mirror-current-slice in v1.'));
+      }
     }
   }
 }
@@ -417,6 +435,36 @@ function validateShapeGate(repoRoot, shapeGate, findings) {
   }
 }
 
+function validateTrackerBridge(repoRoot, tracker, findings) {
+  if (!isObject(tracker)) return;
+  const trackerPath = String(tracker.path || '').trim();
+  if (!trackerPath) return;
+  const file = resolve(repoRoot, trackerPath);
+  if (!existsSync(file)) {
+    findings.push(finding('P0', 'SDD052', AP.CONTRACT_DRIFT, `tracker.path does not exist: ${trackerPath}`));
+    return;
+  }
+  const text = readFileSync(file, 'utf8');
+  if (tracker.kind !== 'epic') return;
+  if (!text.includes('progress_summary:') || !text.includes('phases:') || !text.includes('stories:')) {
+    findings.push(finding('P0', 'SDD053', AP.CONTRACT_DRIFT, `Epic tracker is missing progress_summary, phases, or stories: ${trackerPath}`));
+  }
+  if (!yamlIdExists(text, tracker.phase_id)) {
+    findings.push(finding('P0', 'SDD054', AP.CONTRACT_DRIFT, `Epic tracker phase not found: ${tracker.phase_id}`));
+  }
+  const itemBlock = yamlItemBlock(text, tracker.item_id);
+  if (!itemBlock) {
+    findings.push(finding('P0', 'SDD055', AP.CONTRACT_DRIFT, `Epic tracker item not found: ${tracker.item_id}`));
+    return;
+  }
+  if (!/\bstatus:\s*(NOT_STARTED|IN_PROGRESS|PARTIAL|COMPLETE|BLOCKED)\b/.test(itemBlock)) {
+    findings.push(finding('P0', 'SDD056', AP.CONTRACT_DRIFT, `Epic tracker item is missing a valid status: ${tracker.item_id}`));
+  }
+  if (!/\bproof:\s*/.test(itemBlock) || !/\bverify_cmd:\s*/.test(itemBlock) || !/\bpassed:\s*/.test(itemBlock)) {
+    findings.push(finding('P0', 'SDD057', AP.CONTRACT_DRIFT, `Epic tracker item is missing proof.verify_cmd or proof.passed: ${tracker.item_id}`));
+  }
+}
+
 function setActiveStage({ repoRoot, stage, stepId, planPath, allow, proofCommand, stopRule }) {
   if (!stage.trim()) throw new Error('sdd stage set requires --stage.');
   if (!planPath.trim()) throw new Error('sdd stage set requires --plan.');
@@ -434,6 +482,7 @@ function setActiveStage({ repoRoot, stage, stepId, planPath, allow, proofCommand
     openFindings: [],
     ...(checkedPlan?.document?.sdd?.id ? { sddId: checkedPlan.document.sdd.id } : {}),
     ...(checkedPlan?.document?.sdd?.shape_gate ? { shapeGate: checkedPlan.document.sdd.shape_gate } : {}),
+    ...(checkedPlan?.document?.sdd?.tracker ? { tracker: normalizeTrackerBridge(checkedPlan.document.sdd.tracker) } : {}),
     createdAt: new Date().toISOString(),
   };
   mkdirSync(dirname(activeStagePath(repoRoot)), { recursive: true });
@@ -459,6 +508,9 @@ function finishActiveStage({ repoRoot, status, changed, proofResult, opened, clo
   if ((opened.length > 0 || status !== 'passed') && !nextAdjustment.trim()) {
     throw new Error('sdd stage finish requires --next-adjustment when findings opened or status is not passed.');
   }
+  if (state.tracker && !nextAdjustment.trim()) {
+    throw new Error('sdd stage finish requires --next-adjustment when an epic tracker bridge is active.');
+  }
   const planPath = resolve(repoRoot, state.planPath);
   if (!existsSync(planPath)) throw new Error(`Active stage plan does not exist: ${state.planPath}`);
   const markdown = readFileSync(planPath, 'utf8');
@@ -470,6 +522,7 @@ function finishActiveStage({ repoRoot, status, changed, proofResult, opened, clo
     opened,
     closed,
     nextAdjustment,
+    tracker: state.tracker,
   });
   writeFileSync(planPath, nextMarkdown, 'utf8');
   if (runDoctor) {
@@ -598,7 +651,7 @@ function handleHook(event, input, repoRoot) {
     case 'task-completed':
       return blockIfActiveStage(repoRoot, 'TaskCompleted', { exitCodeBlock: true });
     case 'stop':
-      return blockIfActiveStage(repoRoot, 'Stop');
+      return blockIfActiveStage(repoRoot, 'Stop', { stopHookActive: Boolean(input?.stop_hook_active) });
     case 'pre-compact':
       return hookContext('PreCompact', renderCompactContext(repoRoot, 'PreCompact'));
     case 'post-compact':
@@ -816,6 +869,7 @@ function renderPostBatch(repoRoot) {
 function blockIfActiveStage(repoRoot, event, options = {}) {
   const stage = readActiveStage(repoRoot);
   if (!stage) return '';
+  if (event === 'Stop' && options.stopHookActive) return '';
   const shapeIssues = evaluateActiveShapeGate(repoRoot, stage);
   const reason = [
     `Active execution stage is still open: ${stage.stage}.`,
@@ -827,7 +881,7 @@ function blockIfActiveStage(repoRoot, event, options = {}) {
   ].filter(Boolean).join(' ');
   if (!shouldBlockHardGate(runtimeConfig())) return hookContext(event, reason);
   if (options.exitCodeBlock) return hookExit(2, reason);
-  return JSON.stringify({ decision: 'block', reason, hookSpecificOutput: { hookEventName: event } });
+  return JSON.stringify({ decision: 'block', reason });
 }
 
 function handleConfigChange(input, repoRoot) {
@@ -843,7 +897,7 @@ function handleConfigChange(input, repoRoot) {
     'Finish the receipt, or explicitly clear/replan the stage before changing hook/runtime configuration.',
   ].join(' ');
   if (!shouldBlockHardGate(runtimeConfig())) return hookContext('ConfigChange', reason);
-  return JSON.stringify({ decision: 'block', reason, hookSpecificOutput: { hookEventName: 'ConfigChange', additionalContext: reason } });
+  return JSON.stringify({ decision: 'block', reason });
 }
 
 function handleCwdChanged(repoRoot) {
@@ -1316,10 +1370,12 @@ function runSelfTests(suite) {
   const pluginRoot = resolve(dirname(fromPortablePath(process.argv[1] || 'bin/zeroh-sdd.mjs')), '..');
   try {
     mkdirSync(join(root, 'docs', 'build-log'), { recursive: true });
+    mkdirSync(join(root, 'docs', 'epics'), { recursive: true });
     mkdirSync(join(root, 'src'), { recursive: true });
     writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '0.0.0' }, null, 2), 'utf8');
     writeFileSync(join(root, 'src', 'policy.shape.ts'), 'import { z } from "zod";\nexport const PolicyShape = z.object({ id: z.string(), title: z.string() });\n', 'utf8');
     writeFileSync(join(root, 'src', 'route.ts'), 'import { PolicyShape } from "./policy.shape";\nexport function handle(x: unknown) { return PolicyShape.safeParse(x); }\n', 'utf8');
+    writeFileSync(join(root, 'docs', 'epics', 'EPIC-fixture.md'), validEpicMarkdown(), 'utf8');
     const plan = join(root, 'docs', 'build-log', 'fixture-execution-spec.md');
     writeFileSync(plan, validPlanMarkdown(), 'utf8');
     const missing = join(root, 'docs', 'build-log', 'missing.md');
@@ -1338,6 +1394,14 @@ function runSelfTests(suite) {
       const doctor = doctorPlan({ repoRoot: root, planPath: relative(root, plan), skipGit: true });
       assert(doctor.ok, formatFindings(doctor.findings));
     });
+    add('sdd-tracker-self-test', () => {
+      const checked = checkPlan({ repoRoot: root, planPath: relative(root, plan) });
+      assert(checked.ok && checked.document.sdd.tracker.item_id === 'S1', 'sdd tracker bridge should pass check');
+      const missingItem = join(root, 'docs', 'build-log', 'missing-tracker-item.md');
+      writeFileSync(missingItem, validPlanMarkdown().replace('item_id: S1', 'item_id: S404'), 'utf8');
+      const doctor = doctorPlan({ repoRoot: root, planPath: relative(root, missingItem), skipGit: true });
+      assert(!doctor.ok && formatFindings(doctor.findings).includes('Epic tracker item not found: S404'), 'doctor should fail when declared tracker item is missing');
+    });
     add('sdd-stage-self-test', () => {
       const state = setActiveStage({
         repoRoot: root,
@@ -1349,6 +1413,7 @@ function runSelfTests(suite) {
         stopRule: 'Stop after receipt.',
       });
       assert(state.allowedPaths.length === 2, 'allowed path count');
+      assert(state.tracker?.item_id === 'S1', 'stage state should preserve tracker bridge metadata');
       const allowed = allowedByStage(root, state, join(root, 'src', 'route.ts'));
       assert(allowed.allowed, 'src route should be allowed');
       const blocked = allowedByStage(root, state, join(root, 'README.md'));
@@ -1363,6 +1428,7 @@ function runSelfTests(suite) {
         nextAdjustment: 'Proceed to Step 2.',
         runDoctor: false,
       });
+      assert(readFileSync(plan, 'utf8').includes('tracker epic:docs/epics/EPIC-fixture.md#P1/S1'), 'receipt should include tracker item context');
       assert(!readActiveStage(root), 'stage should clear after finish');
     });
     add('jit-router-self-test', () => {
@@ -1390,11 +1456,15 @@ function runSelfTests(suite) {
       const reminderContext = JSON.parse(reminder).hookSpecificOutput.additionalContext;
       assert(reminderContext.includes('node "') && reminderContext.includes('zeroh-sdd.mjs" stage finish'), 'receipt reminder should include runnable runtime path');
       const stop = blockIfActiveStage(root, 'Stop');
-      assert(stop.includes('"decision":"block"'), 'stop should block while active stage open');
+      const stopJson = JSON.parse(stop);
+      assert(stopJson.decision === 'block' && !('hookSpecificOutput' in stopJson), 'stop should block with the event-specific JSON shape');
+      const repeatedStop = handleHook('stop', { stop_hook_active: true }, root);
+      assert(repeatedStop === '', 'stop hook should not re-block its own continuation loop');
       const taskCompleted = blockIfActiveStage(root, 'TaskCompleted', { exitCodeBlock: true });
       assert(taskCompleted.exitCode === 2 && taskCompleted.stderr.includes('Active execution stage'), 'task completion should block with exit code 2');
       const configChange = handleConfigChange({ source: 'project_settings', file_path: join(root, '.claude', 'settings.json') }, root);
-      assert(configChange.includes('"decision":"block"'), 'config change should block while active stage open');
+      const configChangeJson = JSON.parse(configChange);
+      assert(configChangeJson.decision === 'block' && !('hookSpecificOutput' in configChangeJson), 'config change should block with the event-specific JSON shape');
       const policyChange = handleConfigChange({ source: 'policy_settings' }, root);
       assert(policyChange === '', 'policy settings changes cannot be blocked');
       const retry = handlePermissionDenied({ tool_name: 'Bash', tool_input: { command: 'node --version' }, reason: 'fixture' }, root);
@@ -1480,8 +1550,26 @@ function runSelfTests(suite) {
       const requireTerms = (label, text, terms) => {
         for (const term of terms) assert(text.includes(term), `${label} should mention ${term}`);
       };
+      requireTerms('sdd-planning skill', readSkill('sdd-planning'), [
+        'canonical user-facing planning skill',
+        'staged-doc-drafting',
+        'epic-planning',
+        'execution-spec',
+        'Claude native todos',
+        'active-stage',
+        'receipt',
+        'tracker:',
+        'exactly one fenced `sdd` block',
+        'only skill that authors the fenced `sdd` block',
+        'non-execution artifact',
+      ]);
       requireTerms('execution-spec skill', readSkill('execution-spec'), [
         'Plan only to the next executable proof gate',
+        'sdd-planning',
+        'staged-doc-drafting',
+        'epic-planning',
+        'Claude native todos',
+        'tracker:',
         'Stage 0 - Repo Triangulation',
         'Stage 0.5 - Executability Classification',
         'Stage 0.6 - Open-Finding Closure Map',
@@ -1493,6 +1581,31 @@ function runSelfTests(suite) {
         'Only the current proof gate owns blocking truth',
         'receipt',
         'replan',
+      ]);
+      requireTerms('staged-doc-drafting skill', readSkill('staged-doc-drafting'), [
+        'supporting methodology skill',
+        'sdd-planning',
+        'Stops at Stage 4',
+        'Stage 0',
+        'Stage 1',
+        'Stage 2',
+        'Stage 3',
+        'Stage 4',
+        'execution-spec',
+        'zeroh-sdd check',
+        'Claude native todos',
+      ]);
+      requireTerms('epic-planning skill', readSkill('epic-planning'), [
+        'supporting skill',
+        'sdd-planning',
+        'macro planning',
+        'runtime authority remains `.specify/workflows/active-stage.json`',
+        'progress_summary',
+        'phases',
+        'stories',
+        'proof',
+        'Claude native todos',
+        'execution-spec',
       ]);
       requireTerms('shapes skill', readSkill('shapes'), [
         '.describe()',
@@ -1566,7 +1679,10 @@ function runSelfTests(suite) {
       const unwiredSection = sectionBetween(readme, '### Runtime-Supported But Not Currently Wired', '## Configuration');
       const runtimeOnlyEvents = ['PostToolBatch', 'PostCompact', 'CwdChanged', 'FileChanged', 'PermissionDenied'];
 
-      assert(readme.includes('Use zeroh-sdd execution-spec for this change'), 'README should include a copy-paste vibecoder quickstart prompt');
+      assert(readme.includes('Use zeroh-sdd sdd-planning for this upgrade'), 'README should point non-trivial work to the sdd-planning front door');
+      assert(readme.includes('Use zeroh-sdd execution-spec for this change'), 'README should preserve a copy-paste execution-spec fast-path prompt');
+      assert(readme.includes('staged-doc-drafting` only as the supporting Stage 0-4 long-form method'), 'README should frame staged-doc-drafting as supporting method');
+      assert(readme.includes('epic-planning` only as the supporting macro tracker method'), 'README should frame epic-planning as supporting method');
       assert(readme.includes('node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event>'), 'README should document the direct node hook launcher');
       assert(!readme.includes('bash "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd" hook <event>'), 'README should not document the stale nested Bash launcher');
       assert(readme.includes('/plugin marketplace update zeroh-marketplace') && readme.includes('/plugin update zeroh-sdd@zeroh-marketplace'), 'README should include marketplace update commands');
@@ -1582,6 +1698,7 @@ function runSelfTests(suite) {
       }
       assert(runtimeDoc.includes('node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-sdd.mjs" hook <event>'), 'runtime doc should document the direct node hook launcher');
       assert(runtimeDoc.includes('runtime-supported but not live'), 'runtime doc should tell maintainers to label unwired handlers');
+      assert(changelog.includes('## 1.0.6') && changelog.includes('Added `sdd-planning` as the canonical planning front door'), 'changelog should record the canonical planning front-door upgrade');
       assert(changelog.includes('## 1.0.3') && changelog.includes('Corrected hook documentation'), 'changelog should record the UX remediation');
       assert(!changelog.includes('PostToolBatch, TaskCompleted, Stop, compact, config-change, cwd/file-change, and permission-denial events through the runtime'), 'changelog should not preserve the stale live-hook claim');
       if (rootReadme) {
@@ -1657,7 +1774,58 @@ sdd:
     parse_boundaries:
       - "src/route.ts"
     status: red
+  tracker:
+    kind: epic
+    path: "docs/epics/EPIC-fixture.md"
+    phase_id: P1
+    item_id: S1
+    todo_policy: mirror-current-slice
 \`\`\`
+`;
+}
+
+function validEpicMarkdown() {
+  return `---
+epic:
+  id: "E0.fixture"
+  name: "Fixture Epic"
+  status: "EXECUTION"
+
+progress_summary:
+  stories: { total: 1, complete: 0, in_progress: 0, partial: 0, blocked: 0, not_started: 1 }
+  phases: { total: 1, complete: 0 }
+
+blocking_gate:
+  rule: "Fixture ready"
+  check: "node --version"
+  status: "CLEAR"
+
+phases:
+  - id: P1
+    name: "Fixture Phase"
+    stories: [S1]
+    gate: "Route boundary proves shape parse"
+    verify_command: "node --version"
+    status: PENDING
+    gate_passed: null
+
+stories:
+  - id: S1
+    name: "Route boundary"
+    status: NOT_STARTED
+    deps: []
+    deliverable: "src/route.ts"
+    completed_at: null
+    commit: null
+    note: null
+    implements_adrs: []
+    proof:
+      verify_cmd: "node --version"
+      expected: "exit 0"
+      actual: null
+      passed: null
+      remediation: null
+---
 `;
 }
 
@@ -1847,7 +2015,9 @@ function allowedByStage(repoRoot, stage, filePath) {
 }
 
 function upsertReceipt(markdown, receipt) {
-  const row = `| ${receipt.stepId} | ${receipt.status} | ${receipt.changed.join(', ') || '(none)'} | ${receipt.proofResult} | ${receipt.opened.join(', ') || '(none)'} | ${receipt.closed.join(', ') || '(none)'} | ${receipt.nextAdjustment || '(none)'} |`;
+  const trackerNote = receipt.tracker ? `tracker ${trackerLabel(receipt.tracker)}; ` : '';
+  const nextAdjustment = receipt.nextAdjustment ? `${trackerNote}${receipt.nextAdjustment}` : trackerNote ? `${trackerNote}update tracker before next gate` : '(none)';
+  const row = `| ${receipt.stepId} | ${receipt.status} | ${receipt.changed.join(', ') || '(none)'} | ${receipt.proofResult} | ${receipt.opened.join(', ') || '(none)'} | ${receipt.closed.join(', ') || '(none)'} | ${nextAdjustment} |`;
   const tableHeader = [
     '## Execution Receipts',
     '',
@@ -1862,6 +2032,35 @@ function upsertReceipt(markdown, receipt) {
   if (existingIndex >= 0) lines[existingIndex] = row;
   else lines.push(row);
   return `${lines.join('\n').trimEnd()}\n`;
+}
+
+function normalizeTrackerBridge(tracker) {
+  return {
+    kind: String(tracker.kind || ''),
+    path: normalizeRepoPath(tracker.path || ''),
+    phase_id: String(tracker.phase_id || ''),
+    item_id: String(tracker.item_id || ''),
+    todo_policy: String(tracker.todo_policy || ''),
+  };
+}
+
+function trackerLabel(tracker) {
+  const normalized = normalizeTrackerBridge(tracker);
+  return `${normalized.kind}:${normalized.path}#${normalized.phase_id}/${normalized.item_id}`;
+}
+
+function yamlIdExists(text, id) {
+  if (!id) return false;
+  return new RegExp(`\\bid:\\s*["']?${escapeRegExp(id)}["']?\\b`).test(text);
+}
+
+function yamlItemBlock(text, id) {
+  if (!id) return '';
+  const start = text.search(new RegExp(`(^|\\n)\\s*-\\s+id:\\s*["']?${escapeRegExp(id)}["']?\\b`));
+  if (start < 0) return '';
+  const rest = text.slice(start);
+  const next = rest.slice(1).search(/\n\s*-\s+id:\s*["']?[-A-Za-z0-9_]+["']?\b/);
+  return next < 0 ? rest : rest.slice(0, next + 1);
 }
 
 function writeHookState(repoRoot, state) {

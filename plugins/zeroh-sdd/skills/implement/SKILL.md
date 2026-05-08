@@ -13,6 +13,7 @@ Implementation is execution of the active proof gate, not free-form cleanup. Sta
 2. Read the active plan and proof command.
 3. Re-run Step N.0 mentally against the repo: do the files exist, which findings close, is the proof runnable, and does this slice prove behavior rather than a checker-only placeholder?
 4. Stay inside `allowedPaths`.
+5. If the active stage contains `tracker`, mirror the current MC in Claude native todos and remember that the epic tracker row is durable evidence, not the todo list.
 
 ## During Implementation
 
@@ -46,3 +47,5 @@ zeroh-sdd stage finish --status passed \
 ```
 
 If proof fails, finish with `--status failed` or `--status blocked` only when the receipt names the failure scope and next adjustment. Use `branch-health-followup` language for branch-baseline findings that are unrelated to the current edit. Do not move to another gate from memory; the receipt is the handoff to the next execution spec.
+
+When tracker metadata is present, ensure the receipt names the tracker item and then update the epic tracker row explicitly: status, proof.actual, proof.passed, remediation when needed, and the next adjustment. Claude native todos can show progress, but they are not the durable tracker.
