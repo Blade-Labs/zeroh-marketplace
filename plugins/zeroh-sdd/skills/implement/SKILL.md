@@ -38,6 +38,8 @@ When editing API, CLI, file, or integration boundaries:
 
 ## After Proof
 
+If the proof passed:
+
 ```bash
 zeroh-sdd stage finish --status passed \
   --proof-result "<command => pass>" \
@@ -46,6 +48,16 @@ zeroh-sdd stage finish --status passed \
   --next-adjustment "<next slice from receipt>"
 ```
 
-If proof fails, finish with `--status failed` or `--status blocked` only when the receipt names the failure scope and next adjustment. Use `branch-health-followup` language for branch-baseline findings that are unrelated to the current edit. Do not move to another gate from memory; the receipt is the handoff to the next execution spec.
+If the proof failed or the proof toolchain was unavailable:
+
+```bash
+zeroh-sdd stage finish --status failed \
+  --proof-result "<command => fail: <reason>>" \
+  --changed "<path>" \
+  --opened "TOOL_MISSING" \
+  --next-adjustment "Replan: make the proof command runnable before editing further."
+```
+
+If proof fails, finish with `--status failed` or `--status blocked` only when the receipt names the failure scope and next adjustment. Use `branch-health-followup` language for branch-baseline findings that are unrelated to the current edit, and use `TOOL_MISSING` or `TOOL_UNRUNNABLE` for proof-command infrastructure failures. Do not move to another gate from memory; the receipt is the handoff to the next execution spec.
 
 When tracker metadata is present, ensure the receipt names the tracker item and then update the epic tracker row explicitly: status, proof.actual, proof.passed, remediation when needed, and the next adjustment. Claude native todos can show progress, but they are not the durable tracker.

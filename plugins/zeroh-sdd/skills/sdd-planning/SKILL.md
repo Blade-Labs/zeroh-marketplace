@@ -62,6 +62,36 @@ tracker:
 
 Claude native todos are session UX only. Durable truth lives in the synthesized doc, epic tracker, execution spec, receipt, and `.specify/workflows/active-stage.json`.
 
+## Tool Availability First
+
+Before selecting `pnpm`, `npm`, `npx`, `biome`, `vitest`, `tsc`, promptfoo, or another repo tool as the proof command, verify that the command is runnable in the same shell Claude will use for hooks and Bash. If the tool is missing or unrunnable, make the current MC "install/configure the proof toolchain" instead of writing implementation code against a proof command that cannot execute.
+
+The runtime may report `TOOL_MISSING` or `TOOL_UNRUNNABLE` as `proof-command / replan` context. Treat that as infrastructure feedback, not blame on the edited file.
+
+## Receipt Forms
+
+If the proof passed:
+
+```bash
+zeroh-sdd stage finish --status passed \
+  --proof-result "<command => pass>" \
+  --changed "<path>" \
+  --closed "<finding-id>" \
+  --next-adjustment "Proceed to the next executable proof gate."
+```
+
+If the proof failed or the proof toolchain was unavailable:
+
+```bash
+zeroh-sdd stage finish --status failed \
+  --proof-result "<command => fail: <reason>>" \
+  --changed "<path>" \
+  --opened "TOOL_MISSING" \
+  --next-adjustment "Replan: make the proof command runnable before editing further."
+```
+
+A failed receipt closes the current gate only because it includes the replan handoff. Do not keep editing from the failed gate; start a new `execution-spec`.
+
 ## Supporting Skills
 
 - `staged-doc-drafting` is a supporting method for long-form coherence. It owns Stage 0-4 and stops before SDD block authoring.

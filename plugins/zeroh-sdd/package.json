@@ -1,6 +1,6 @@
 {
   "name": "zeroh-sdd",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "description": "Shape-Driven Development runtime for Claude Code — canonical SDD planning, executable stage state, proof receipts, Zod shape gates, and hook-driven JIT correction",
   "author": "Blade Labs <info@blade-labs.com>",
