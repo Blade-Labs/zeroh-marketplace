@@ -1454,6 +1454,31 @@ function runSelfTests(suite) {
         'Hard gates',
       ]);
     });
+    add('hook-manifest-self-test', () => {
+      const supportedEvents = new Set([
+        'PreToolUse',
+        'PostToolUse',
+        'PostToolUseFailure',
+        'Notification',
+        'UserPromptSubmit',
+        'SessionStart',
+        'SessionEnd',
+        'Stop',
+        'SubagentStart',
+        'SubagentStop',
+        'PreCompact',
+        'PermissionRequest',
+        'Setup',
+        'TeammateIdle',
+        'TaskCompleted',
+        'ConfigChange',
+        'WorktreeCreate',
+        'WorktreeRemove',
+      ]);
+      const manifest = JSON.parse(readFileSync(join(pluginRoot, 'hooks', 'hooks.json'), 'utf8'));
+      const invalid = Object.keys(manifest.hooks || {}).filter((eventName) => !supportedEvents.has(eventName));
+      assert(invalid.length === 0, `unsupported hook event(s): ${invalid.join(', ')}`);
+    });
 
     const selected = suite === 'all' ? checks : checks.filter((check) => check.name === suite);
     if (selected.length === 0) throw new Error(`Unknown self-test suite: ${suite}`);
