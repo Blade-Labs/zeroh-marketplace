@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3
+
+- Reworked the README around the vibecoder journey: execution-spec, active stage, proof, receipt, next slice.
+- Corrected hook documentation so live-hook claims match `hooks/hooks.json`, with runtime-only handlers labeled separately.
+- Added documentation drift self-tests for hook launcher examples, live hook claims, and setup/update guidance.
+
 ## 1.0.2
 
 - Refocused hook-state around execution-spec scope attribution: edited file, active stage, proof command, and repo background.
@@ -20,5 +26,6 @@ Clean runtime upgrade.
 - Added active-stage state, proof receipts, doctor validation, JIT check routing, AP envelopes, shape discovery, and shape-gate evaluation.
 - Added low-friction vibecoding defaults: env-configurable enforcement, async-rewake JIT checks, shape/file watchers, config-change protection, and safe permission-denial retry.
 - Replaced Speckit-prefixed skills with the v1 SDD skill surface.
-- Updated Claude hook wiring to route Setup, SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PostToolBatch, TaskCompleted, Stop, compact, config-change, cwd/file-change, and permission-denial events through the runtime.
+- Updated Claude hook wiring to route Setup, SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, TaskCompleted, Stop, PreCompact, ConfigChange, and SessionEnd through the runtime.
+- Kept additional runtime handlers covered by self-tests for Claude builds that support broader hook events.
 - Removed old compatibility scripts, templates, hook overrides, and multi-agent shim files.

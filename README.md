@@ -10,13 +10,13 @@ A curated directory of plugins for Claude Code, maintained by Blade Labs.
 
 ### General-purpose development
 
-- **`zeroh-sdd`** — Shape-Driven Development runtime (executable stage state, proof receipts, Zod shape gates, Claude hook enforcement)
+- **`zeroh-sdd`** — Shape-Driven Development runtime for vibecoding (execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, scoped hook correction)
 - **`zeroh-design`** — Blade Labs branded UI and collateral generator (4 design themes)
 - **`zeroh-roadmap`** — Phase-driven development (shape-enforced task schemas, validation gates, review reports)
 
 ### GRC agentic-infrastructure suite (new)
 
-Five plugins source-adapted from `Blade-Labs/grc-zod-poc` per the [agentic-infra-refinement plan](https://github.com/Blade-Labs/grc-zod-poc/blob/claude/review-commit-history-x36V2/docs/research/claude-neon-implementation-pack.md). Together: 15 specialist subagents + ~20 authoring skills + 7 JIT-injection hook scripts. All hooks are **PostToolUse JIT-injection** (never block) — the original pack's 3 PreToolUse blocker scripts were rewritten per the grc-zod-poc `AGENTS.md §6` teaching-not-blocking invariant.
+Five plugins source-adapted from `Blade-Labs/grc-zod-poc` per the [agentic-infra-refinement plan](https://github.com/Blade-Labs/grc-zod-poc/blob/claude/review-commit-history-x36V2/docs/research/claude-neon-implementation-pack.md). Together: 15 specialist subagents + ~20 authoring skills + 7 JIT-injection hook scripts. For this GRC suite, all hooks are **PostToolUse JIT-injection** (never block) — the original pack's 3 PreToolUse blocker scripts were rewritten per the grc-zod-poc `AGENTS.md §6` teaching-not-blocking invariant.
 
 - **`grc-neon-foundation`** — NeOn methodology + ORSD alignment + bundle governance + CWA guardrails. `neon-methodologist`, `bundle-architect`, `cwa-auditor` + `orsd-review`, `cwa-guardrails`, `adr-draft`, `bundle-diff` skills.
 - **`grc-legislation-pipeline`** — Akoma Ntoso ingestion + LegalRuleML first-pass + LKIF Hohfeldian second-pass + routing materialization. `legal-source-engineer`, `deontic-modeler`, `lkif-refiner` + 4 skills.
@@ -114,7 +114,7 @@ enterprise-plugin/
 
 ### Real example: zeroh-sdd
 
-Production SDD runtime — 10 skills, a Node CLI in `bin/`, and Claude hooks that enforce active execution stage boundaries.
+Production SDD runtime for vibecoding — 10 skills, a Node CLI in `bin/`, and Claude hooks that keep execution inside the active proof stage.
 
 ```
 plugins/zeroh-sdd/
@@ -146,7 +146,7 @@ plugins/zeroh-sdd/
 - **Execution specs are machine-checkable:** every actionable plan carries one fenced `sdd` block
 - **Stage state drives enforcement:** `.specify/workflows/active-stage.json` is the source of truth for allowed writes and proof commands
 - **Hooks protect boundaries:** writes, commits, task completion, and Stop are blocked only while an active stage remains unfinished
-- **AP findings steer, not block:** warnings emit `additionalContext` plus `_fix.prompt` envelopes
+- **AP findings steer, not block:** current-edit warnings emit `additionalContext` plus `_fix.prompt` envelopes; branch-baseline noise is scoped as background context
 - **Shapes are proof gates:** Zod shapes and parse boundaries are discovered and enforced when `shape_gate` declares them
 
 ## Component Reference
