@@ -9,12 +9,12 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-const VERSION = '1.0.6';
+const VERSION = '1.0.7';
 const STATE_DIR = ['.specify', 'workflows'];
 const ACTIVE_STAGE = 'active-stage.json';
 const HOOK_STATE = 'hook-state.json';
@@ -26,6 +26,7 @@ const DEFAULT_RUNTIME_CONFIG = Object.freeze({
   maxShapeContext: 12,
   doctorOnFinish: true,
 });
+const WINDOWS_CMD_PREFERRED = Object.freeze(['pnpm', 'npm', 'npx', 'biome', 'vitest', 'tsc']);
 
 const AP = {
   CONTRACT_DRIFT: 'AP_CONTRACT_DRIFT',
@@ -77,7 +78,12 @@ async function main() {
 }
 
 function printHelp() {
-  console.log(`zeroh-sdd ${VERSION}
+  console.log(helpText());
+}
+
+function helpText(topic = 'root') {
+  const topics = {
+    root: `zeroh-sdd ${VERSION}
 
 Usage:
   zeroh-sdd check --plan <path>
@@ -88,10 +94,56 @@ Usage:
   zeroh-sdd stage clear
   zeroh-sdd jit --file <path>
   zeroh-sdd hook <event>
-  zeroh-sdd self-test`);
+  zeroh-sdd self-test
+
+Run zeroh-sdd <command> --help for command details.`,
+    check: `zeroh-sdd check --plan <path>
+
+Validate that a plan has exactly one fenced sdd YAML block and that the v1 schema is structurally complete.`,
+    doctor: `zeroh-sdd doctor --plan <path>
+
+Run repo-truth checks on an execution spec: declared surfaces, validation commands, receipts, tracker bridge, and shape gates.`,
+    stage: `zeroh-sdd stage set|status|finish|clear
+
+Manage .specify/workflows/active-stage.json.
+
+Use:
+  zeroh-sdd stage set --stage <name> --step-id <id> --plan <path> --allow exact:<path> --proof-command <cmd> --stop-rule <rule>
+  zeroh-sdd stage finish --status passed|failed|blocked --proof-result <text> [--changed <path>] [--opened <id>] [--closed <id>] [--next-adjustment <text>]
+  zeroh-sdd stage status
+  zeroh-sdd stage clear`,
+    'stage set': `zeroh-sdd stage set --stage <name> --step-id <id> --plan <path> --allow exact:<path>|prefix:<path> --proof-command <cmd> --stop-rule <rule>
+
+Open one active execution gate. Hooks block writes outside the allowed surface until a receipt closes the stage.`,
+    'stage finish': `zeroh-sdd stage finish --status passed|failed|blocked --proof-result <text> [--changed <path>] [--opened <id>] [--closed <id>] [--next-adjustment <text>]
+
+Write the execution receipt into the active plan and clear the active stage.
+
+Failed or blocked receipts require --next-adjustment so the next step is an explicit replan, not drift from memory.`,
+    'stage status': `zeroh-sdd stage status
+
+Print active-stage.json when a stage is open, or "sdd-stage: inactive" when no gate is active.`,
+    'stage clear': `zeroh-sdd stage clear
+
+Clear the active stage without writing a receipt. Use only when explicitly abandoning or replanning the gate.`,
+    jit: `zeroh-sdd jit --file <path>
+
+Classify an edited surface and run the smallest deterministic check currently selected by the runtime.`,
+    hook: `zeroh-sdd hook <event>
+
+Claude Code hook entrypoint. Normally called by hooks/hooks.json through CLAUDE_PLUGIN_ROOT.`,
+    'self-test': `zeroh-sdd self-test [name]
+
+Run bundled runtime self-tests. Pass a specific test name such as skill-content to run one test.`,
+  };
+  return topics[topic] || topics.root;
 }
 
 function cliCheck(args) {
+  if (wantsHelp(args)) {
+    console.log(helpText('check'));
+    return;
+  }
   const plan = requireFlag(args, '--plan');
   const result = checkPlan({ repoRoot: projectRoot(), planPath: plan });
   printSddReport('sdd-check', result);
@@ -99,6 +151,10 @@ function cliCheck(args) {
 }
 
 function cliDoctor(args) {
+  if (wantsHelp(args)) {
+    console.log(helpText('doctor'));
+    return;
+  }
   const plan = requireFlag(args, '--plan');
   const result = doctorPlan({ repoRoot: projectRoot(), planPath: plan });
   printSddReport('sdd-doctor', result);
@@ -108,6 +164,11 @@ function cliDoctor(args) {
 function cliStage(args) {
   const subcommand = args[0];
   const repoRoot = projectRoot();
+  if (wantsHelp(args)) {
+    const topic = subcommand && !subcommand.startsWith('-') ? `stage ${subcommand}` : 'stage';
+    console.log(helpText(topic));
+    return;
+  }
   if (subcommand === 'set') {
     const state = setActiveStage({
       repoRoot,
@@ -148,12 +209,19 @@ function cliStage(args) {
       runDoctor: !hasFlag(args, '--skip-doctor') && config.doctorOnFinish,
     });
     console.log(`sdd-stage: finished ${result.stepId} (${result.status})`);
+    if (result.status !== 'passed') {
+      console.log('sdd-stage: failed or blocked gate closed; start a new execution-spec before editing further.');
+    }
     return;
   }
   throw new Error('sdd:stage requires set, status, finish, or clear.');
 }
 
 function cliJit(args) {
+  if (wantsHelp(args)) {
+    console.log(helpText('jit'));
+    return;
+  }
   const file = requireFlag(args, '--file');
   const result = runRelevantChecks({ repoRoot: projectRoot(), filePath: file, writeState: true });
   const context = renderJitContext(result);
@@ -166,6 +234,10 @@ function cliJit(args) {
 }
 
 function cliHook(args) {
+  if (wantsHelp(args)) {
+    console.log(helpText('hook'));
+    return;
+  }
   const event = args[0];
   if (!event) throw new Error('zeroh-sdd hook requires an event name.');
   const input = readJsonStdin();
@@ -174,6 +246,10 @@ function cliHook(args) {
 }
 
 function cliSelfTest(args) {
+  if (wantsHelp(args)) {
+    console.log(helpText('self-test'));
+    return;
+  }
   const suite = flagValue(args, '--suite') || args[0] || 'all';
   runSelfTests(suite);
 }
@@ -545,7 +621,14 @@ function runRelevantChecks({ repoRoot, filePath, writeState = false }) {
     ? previousState.activeApFindingCount || 0
     : 0;
   const failedCheckCount = results.filter((result) => result.exitCode !== 0).length;
-  const baseSummary = checks.length === 0 ? 'No deterministic check selected for this surface.' : ok ? 'Selected checks passed.' : 'Selected checks failed.';
+  const toolFailureCount = results.filter((result) => result.failureCode).length;
+  const baseSummary = checks.length === 0
+    ? 'No deterministic check selected for this surface.'
+    : ok
+      ? 'Selected checks passed.'
+      : toolFailureCount > 0
+        ? 'Selected check could not run because required tooling was missing or unrunnable.'
+        : 'Selected checks failed.';
   const state = {
     version: 1,
     lastEditedFile: surface.repoRelativePath,
@@ -599,13 +682,13 @@ function checksForSurface(repoRoot, surface) {
     }];
   }
   if (surface.kind === 'typescript-test') {
-    if (surface.packageName && hasCommand('pnpm')) {
+    if (surface.packageName) {
       return [{ label: 'package test', apClass: AP.SHORTCUT, command: 'pnpm', args: ['--silent', '--filter', surface.packageName, 'test'], timeout: DEFAULT_TIMEOUT_MS }];
     }
     return [];
   }
   if (surface.kind === 'typescript-source') {
-    if (surface.packageName && hasCommand('pnpm')) {
+    if (surface.packageName) {
       return [{ label: 'package tsc', apClass: AP.PARSE_BOUNDARY, command: 'pnpm', args: ['--silent', '--filter', surface.packageName, 'exec', 'tsc', '--noEmit'], timeout: DEFAULT_TIMEOUT_MS }];
     }
     return [];
@@ -778,6 +861,34 @@ function handlePostToolWriteJit(input, repoRoot) {
   return hookExit(2, jitContext);
 }
 
+function receiptCommandExamples(mode = 'both') {
+  const passed = [
+    'If the proof passed:',
+    '',
+    '```bash',
+    `${runtimeCli()} stage finish --status passed \\`,
+    '  --proof-result "<command => pass>" \\',
+    '  --changed "<path>" \\',
+    '  --closed "<finding-id>" \\',
+    '  --next-adjustment "Proceed to the next executable proof gate."',
+    '```',
+  ].join('\n');
+  const failed = [
+    'If the proof failed or required tooling was unavailable:',
+    '',
+    '```bash',
+    `${runtimeCli()} stage finish --status failed \\`,
+    '  --proof-result "<command => fail: <reason>>" \\',
+    '  --changed "<path>" \\',
+    '  --opened "TOOL_MISSING" \\',
+    '  --next-adjustment "Replan: make the proof command runnable before editing further."',
+    '```',
+  ].join('\n');
+  if (mode === 'passed') return passed;
+  if (mode === 'failed') return failed;
+  return `${passed}\n\n${failed}`;
+}
+
 function handlePostToolBash(input, repoRoot) {
   const command = toolCommand(input);
   const stage = readActiveStage(repoRoot);
@@ -791,15 +902,9 @@ function handlePostToolBash(input, repoRoot) {
     `Plan: ${stage.planPath}`,
     `Proof command: ${stage.proofCommand}`,
     '',
-    'Do not move to the next step from memory. Write the execution receipt now:',
+    'Do not move to the next step from memory. Write the execution receipt now. Choose the receipt status from the actual proof result:',
     '',
-    '```bash',
-    `${runtimeCli()} stage finish --status passed \\`,
-    '  --proof-result "<command => pass>" \\',
-    '  --changed "<path>" \\',
-    '  --closed "<finding-id>" \\',
-    '  --next-adjustment "Proceed to the next executable proof gate."',
-    '```',
+    receiptCommandExamples('both'),
   ].join('\n');
   return hookContext('PostToolUse', message);
 }
@@ -830,14 +935,16 @@ function handlePostToolFailure(input, repoRoot) {
       : 'Tool failure recorded as background context; fix directly or capture it in the active stage receipt if it affects the gate.',
     timestamp: new Date().toISOString(),
   });
+  const receiptHelp = proofFailure ? ['', receiptCommandExamples('failed')].join('\n') : '';
   return hookContext('PostToolUseFailure', [
-    '# Tool failure recorded',
+    proofFailure ? '# Active proof command failed' : '# Tool failure recorded',
     '',
     `Failed command/tool: ${command}`,
     `Scope: ${scopedFinding.scope}`,
     `Owner action: ${scopedFinding.ownerAction}`,
     '',
     'Fix the failure before advancing the stage. If it changes scope, record the finding in the execution receipt and replan.',
+    receiptHelp,
   ].join('\n'));
 }
 
@@ -1209,13 +1316,15 @@ function renderJitContext(result) {
       `## ${check.label} (${check.apClass})`,
       '',
       `Command: \`${[check.command, ...check.args].join(' ')}\``,
+      check.resolvedCommand && check.resolvedCommand !== check.command ? `Resolved command: \`${check.resolvedCommand}\`` : '',
+      check.failureCode ? `Failure code: \`${check.failureCode}\`` : '',
       `Exit code: \`${check.exitCode}\``,
       '',
       '```',
       trim(check.output, 4000),
       '```',
       '',
-    ]),
+    ].filter(Boolean)),
   ].join('\n');
 }
 
@@ -1430,12 +1539,84 @@ function runSelfTests(suite) {
       });
       assert(readFileSync(plan, 'utf8').includes('tracker epic:docs/epics/EPIC-fixture.md#P1/S1'), 'receipt should include tracker item context');
       assert(!readActiveStage(root), 'stage should clear after finish');
+      setActiveStage({
+        repoRoot: root,
+        stage: 'Step 1 - failed fixture',
+        stepId: 'Step 1 failed',
+        planPath: relative(root, plan),
+        allow: ['exact:src/route.ts'],
+        proofCommand: 'node missing.js',
+        stopRule: 'Replan on failed proof.',
+      });
+      let failedWithoutAdjustment = false;
+      try {
+        finishActiveStage({
+          repoRoot: root,
+          status: 'failed',
+          changed: ['src/route.ts'],
+          proofResult: 'node missing.js => fail',
+          opened: ['TOOL_MISSING'],
+          closed: [],
+          nextAdjustment: '',
+          runDoctor: false,
+        });
+      } catch {
+        failedWithoutAdjustment = true;
+      }
+      assert(failedWithoutAdjustment, 'failed receipt should require next adjustment');
+      finishActiveStage({
+        repoRoot: root,
+        status: 'failed',
+        changed: ['src/route.ts'],
+        proofResult: 'node missing.js => fail',
+        opened: ['TOOL_MISSING'],
+        closed: [],
+        nextAdjustment: 'Replan: make the proof command runnable.',
+        runDoctor: false,
+      });
+      assert(!readActiveStage(root), 'failed receipt with replan should clear stage');
     });
     add('jit-router-self-test', () => {
       const surface = classifySurface(root, plan);
       assert(surface.kind === 'plan', `expected plan surface, got ${surface.kind}`);
       const source = classifySurface(root, join(root, 'src', 'route.ts'));
       assert(source.kind === 'typescript-source', `expected source surface, got ${source.kind}`);
+    });
+    add('command-runner-self-test', () => {
+      const localBin = join(root, 'node_modules', '.bin');
+      mkdirSync(localBin, { recursive: true });
+      writeFileSync(join(localBin, 'fixture-tool'), 'extensionless shim\n', 'utf8');
+      writeFileSync(join(localBin, 'fixture-tool.cmd'), '@echo off\r\necho local-fixture-tool\r\n', 'utf8');
+      const pathTool = join(root, 'path-fixture-tool.cmd');
+      writeFileSync(pathTool, '@echo off\r\necho path-fixture-tool\r\n', 'utf8');
+      const chosen = chooseCommandCandidate('pnpm', [join(root, 'pnpm'), join(root, 'pnpm.cmd')], 'win32');
+      assert(chosen.endsWith('pnpm.cmd'), 'Windows command candidate should prefer .cmd');
+      const resolved = resolveCommand(root, 'fixture-tool', { platform: 'win32', pathCandidates: [pathTool] });
+      assert(resolved.ok && samePath(resolved.executable, join(localBin, 'fixture-tool.cmd')), 'local node_modules/.bin .cmd should win before PATH');
+      const missingCheck = runCheck(root, {
+        label: 'missing fixture tool',
+        apClass: AP.CONTRACT_DRIFT,
+        command: 'definitely-missing-zeroh-sdd-tool',
+        args: [],
+        timeout: 1000,
+      });
+      assert(missingCheck.failureCode === 'TOOL_MISSING', 'missing tool should produce TOOL_MISSING');
+      assert(inferToolFailureCode("'tsc' is not recognized as an internal or external command") === 'TOOL_MISSING', 'missing nested tool output should produce TOOL_MISSING');
+      const missingFinding = deterministicFinding(root, classifySurface(root, join(root, 'src', 'route.ts')), missingCheck);
+      assert(missingFinding.code === 'TOOL_MISSING' && missingFinding.scope === 'proof-command' && missingFinding.ownerAction === 'replan', 'missing tool should be proof-command/replan context');
+      if (process.platform === 'win32') {
+        const runnable = runCheck(root, {
+          label: 'local fixture tool',
+          apClass: AP.CONTRACT_DRIFT,
+          command: 'fixture-tool',
+          args: [],
+          timeout: 1000,
+        });
+        assert(runnable.resolvedCommand.endsWith('fixture-tool.cmd'), 'runCheck should use the resolved .cmd command');
+        assert(runnable.exitCode === 0 && runnable.output.includes('local-fixture-tool'), 'resolved .cmd command should run through cmd.exe');
+      }
+      assert(helpText('stage finish').includes('--proof-result') && helpText('stage finish').includes('--next-adjustment'), 'stage finish help should document receipt flags');
+      assert(helpText('jit').includes('zeroh-sdd jit --file'), 'jit help should be available');
     });
     add('hook-runtime-self-test', () => {
       setActiveStage({
@@ -1455,6 +1636,7 @@ function runSelfTests(suite) {
       assert(reminder.includes('Active proof command ran'), 'proof command should remind receipt');
       const reminderContext = JSON.parse(reminder).hookSpecificOutput.additionalContext;
       assert(reminderContext.includes('node "') && reminderContext.includes('zeroh-sdd.mjs" stage finish'), 'receipt reminder should include runnable runtime path');
+      assert(reminderContext.includes('--status passed') && reminderContext.includes('--status failed'), 'receipt reminder should include passed and failed forms');
       const stop = blockIfActiveStage(root, 'Stop');
       const stopJson = JSON.parse(stop);
       assert(stopJson.decision === 'block' && !('hookSpecificOutput' in stopJson), 'stop should block with the event-specific JSON shape');
@@ -1474,6 +1656,7 @@ function runSelfTests(suite) {
       const proofFailure = handlePostToolFailure({ tool_name: 'Bash', tool_input: { command: 'node --version' } }, root);
       const proofState = readHookState(root);
       assert(proofFailure.includes('Scope: proof-command'), 'proof failure context should name proof-command scope');
+      assert(proofFailure.includes('--status failed'), 'proof failure context should include failed receipt form');
       assert(proofState.findings[0].scope === 'proof-command', 'proof command failure should be scoped to proof-command');
       clearActiveStage(root);
       const inactiveConfigChange = handleConfigChange({ source: 'project_settings' }, root);
@@ -1562,6 +1745,8 @@ function runSelfTests(suite) {
         'exactly one fenced `sdd` block',
         'only skill that authors the fenced `sdd` block',
         'non-execution artifact',
+        'Tool Availability First',
+        'TOOL_MISSING',
       ]);
       requireTerms('execution-spec skill', readSkill('execution-spec'), [
         'Plan only to the next executable proof gate',
@@ -1627,6 +1812,8 @@ function runSelfTests(suite) {
         'RFC-style problem details',
         'branch-baseline findings',
         'zeroh-sdd stage finish',
+        '--status failed',
+        'TOOL_UNRUNNABLE',
       ]);
       requireTerms('ap-taxonomy skill', readSkill('ap-taxonomy'), [
         'Close-The-Loop Rule',
@@ -1918,14 +2105,14 @@ function diffLines(diff, marker) {
 function deterministicFinding(repoRoot, surface, result) {
   const stage = readActiveStage(repoRoot);
   const command = [result.command, ...result.args].join(' ');
-  const proofScoped = Boolean(stage?.proofCommand && commandMatchesProof(command, stage.proofCommand));
+  const proofScoped = Boolean(result.failureCode || (stage?.proofCommand && commandMatchesProof(command, stage.proofCommand)));
   const activeScoped = Boolean(stage && allowedByStage(repoRoot, stage, surface.absolute).allowed);
   const scope = proofScoped ? 'proof-command' : activeScoped ? 'active-stage' : 'edited-file';
   return normalizeHookFinding({
-    code: result.apClass,
-    surface: result.label,
+    code: result.failureCode || result.apClass,
+    surface: result.failureCode ? 'runtime.command-runner' : result.label,
     filePath: surface.repoRelativePath,
-    hits: `${result.label} failed`,
+    hits: result.failureCode ? `${result.label} could not run: ${trim(result.output, 300)}` : `${result.label} failed`,
     scope,
     baselineStatus: proofScoped ? 'unknown' : 'current-edit',
     introducedByCurrentEdit: false,
@@ -2171,25 +2358,132 @@ function nearestPackageName(repoRoot, filePath) {
 }
 
 function runCheck(repoRoot, check) {
-  const result = spawnSync(check.command, check.args, {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    timeout: check.timeout,
-    shell: false,
-  });
+  const resolved = resolveCommand(repoRoot, check.command);
+  if (!resolved.ok) {
+    return {
+      ...check,
+      resolvedCommand: '',
+      exitCode: 1,
+      failureCode: 'TOOL_MISSING',
+      output: `TOOL_MISSING: ${check.command} was not found in local node_modules/.bin or PATH.`,
+    };
+  }
+  const result = spawnResolvedCommand(repoRoot, resolved.executable, check.args, check.timeout);
+  const output = `${result.stdout || ''}${result.stderr || ''}${result.error ? result.error.message : ''}`;
+  const failureCode = result.error
+    ? result.error.code === 'ENOENT'
+      ? 'TOOL_MISSING'
+      : 'TOOL_UNRUNNABLE'
+    : result.status && result.status !== 0
+      ? inferToolFailureCode(output)
+      : undefined;
   return {
     ...check,
+    resolvedCommand: resolved.executable,
     exitCode: result.status ?? (result.error ? 1 : 0),
-    output: `${result.stdout || ''}${result.stderr || ''}${result.error ? result.error.message : ''}`,
+    failureCode,
+    output,
   };
 }
 
-function hasCommand(command) {
-  const result = spawnSync(process.platform === 'win32' ? 'where' : 'command', process.platform === 'win32' ? [command] : ['-v', command], {
-    shell: process.platform !== 'win32',
+function spawnResolvedCommand(repoRoot, executable, args, timeout) {
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(executable)) {
+    return spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', [executable, ...args].map(quoteCmdArg).join(' ')], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      timeout,
+      shell: false,
+    });
+  }
+  return spawnSync(executable, args, {
+    cwd: repoRoot,
     encoding: 'utf8',
+    timeout,
+    shell: false,
   });
-  return result.status === 0;
+}
+
+function resolveCommand(repoRoot, command, options = {}) {
+  const platform = options.platform || process.platform;
+  const normalizedCommand = fromPortablePath(command);
+  if (isCommandPath(normalizedCommand)) {
+    const absolute = isAbsolute(normalizedCommand) ? normalizedCommand : resolve(repoRoot, normalizedCommand);
+    return existsSync(absolute)
+      ? { ok: true, command, executable: absolute, source: 'path' }
+      : { ok: false, command, reason: 'path-missing' };
+  }
+
+  const localCandidates = localBinCandidates(repoRoot, normalizedCommand, platform).filter((candidate) => existsSync(candidate));
+  const local = chooseCommandCandidate(normalizedCommand, localCandidates, platform);
+  if (local) return { ok: true, command, executable: local, source: 'local-bin' };
+
+  const pathCandidates = options.pathCandidates || findCommandOnPath(normalizedCommand, platform);
+  const pathMatch = chooseCommandCandidate(normalizedCommand, pathCandidates, platform);
+  if (pathMatch) return { ok: true, command, executable: pathMatch, source: 'path' };
+  return { ok: false, command, reason: 'not-found' };
+}
+
+function localBinCandidates(repoRoot, command, platform = process.platform) {
+  const candidates = [];
+  let dir = resolve(repoRoot);
+  while (true) {
+    const binDir = join(dir, 'node_modules', '.bin');
+    for (const name of commandNames(command, platform)) candidates.push(join(binDir, name));
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return candidates;
+}
+
+function findCommandOnPath(command, platform = process.platform) {
+  if (platform === 'win32') {
+    const result = spawnSync('where.exe', [command], { shell: false, encoding: 'utf8' });
+    return result.status === 0 ? result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+  }
+  const result = spawnSync('command', ['-v', command], { shell: true, encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+}
+
+function commandNames(command, platform = process.platform) {
+  if (platform !== 'win32' || extname(command)) return [command];
+  return [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command, `${command}.ps1`];
+}
+
+function chooseCommandCandidate(command, candidates, platform = process.platform) {
+  const list = [...new Set((candidates || []).map((candidate) => fromPortablePath(candidate)).filter(Boolean))];
+  if (list.length === 0) return '';
+  if (platform !== 'win32') return list[0];
+  const commandName = filename(command).toLowerCase();
+  const exactCmd = list.find((candidate) => filename(candidate).toLowerCase() === `${commandName}.cmd`);
+  if (WINDOWS_CMD_PREFERRED.includes(commandName) && exactCmd) return exactCmd;
+  const nonPs1 = list.find((candidate) => !filename(candidate).toLowerCase().endsWith('.ps1'));
+  return nonPs1 || list[0];
+}
+
+function isCommandPath(command) {
+  return isAbsolute(command) || /[\\/]/.test(command);
+}
+
+function filename(value) {
+  return String(value || '').replace(/\\/g, '/').split('/').pop() || '';
+}
+
+function quoteCmdArg(value) {
+  const text = String(value);
+  if (text === '') return '""';
+  if (!/[ \t&()^|<>"]/.test(text)) return text;
+  return `"${text.replace(/"/g, '\\"')}"`;
+}
+
+function inferToolFailureCode(output) {
+  const text = String(output || '');
+  if (/is not recognized as an internal or external command/i.test(text)) return 'TOOL_MISSING';
+  if (/\bcommand not found\b/i.test(text)) return 'TOOL_MISSING';
+  if (/\bCommand ".*" not found\b/i.test(text)) return 'TOOL_MISSING';
+  if (/could not determine executable to run/i.test(text)) return 'TOOL_MISSING';
+  if (/\b(EACCES|permission denied)\b/i.test(text)) return 'TOOL_UNRUNNABLE';
+  return undefined;
 }
 
 function surfaceExists(repoRoot, surface) {
@@ -2354,6 +2648,10 @@ function flagValues(args, name) {
 
 function hasFlag(args, name) {
   return args.includes(name);
+}
+
+function wantsHelp(args) {
+  return args.includes('--help') || args.includes('-h');
 }
 
 function projectRoot() {

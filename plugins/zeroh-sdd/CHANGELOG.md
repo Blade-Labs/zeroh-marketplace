@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.7
+
+- Added Windows-aware command resolution for hook/JIT checks, including local `node_modules/.bin` lookup and `.cmd` shim handling for JS tooling.
+- Classified missing or unrunnable proof tooling as `TOOL_MISSING` / `TOOL_UNRUNNABLE` with proof-command replan context instead of edited-file blame.
+- Made proof receipt guidance neutral with passed and failed forms, added safe CLI help, and documented failed-gate replan discipline.
+
 ## 1.0.6
 
 - Added `sdd-planning` as the canonical planning front door for non-trivial vibecoding work.
