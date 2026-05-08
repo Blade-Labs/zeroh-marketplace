@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 const STATE_DIR = ['.specify', 'workflows'];
 const ACTIVE_STAGE = 'active-stage.json';
 const HOOK_STATE = 'hook-state.json';
@@ -1552,11 +1552,14 @@ function runSelfTests(suite) {
     });
     add('docs-ux-self-test', () => {
       const readPluginDoc = (path) => readFileSync(join(pluginRoot, path), 'utf8');
-      const readRepoDoc = (path) => readFileSync(join(pluginRoot, '..', '..', path), 'utf8');
+      const readOptionalRepoDoc = (path) => {
+        const candidate = join(pluginRoot, '..', '..', path);
+        return existsSync(candidate) ? readFileSync(candidate, 'utf8') : '';
+      };
       const readme = readPluginDoc('README.md');
       const runtimeDoc = readPluginDoc(join('docs', 'v1-runtime.md'));
       const changelog = readPluginDoc('CHANGELOG.md');
-      const rootReadme = readRepoDoc('README.md');
+      const rootReadme = readOptionalRepoDoc('README.md');
       const manifest = JSON.parse(readFileSync(join(pluginRoot, 'hooks', 'hooks.json'), 'utf8'));
       const wiredEvents = Object.keys(manifest.hooks || {});
       const wiredSection = sectionBetween(readme, '### Wired In Current Claude Build', '### Runtime-Supported But Not Currently Wired');
@@ -1581,7 +1584,9 @@ function runSelfTests(suite) {
       assert(runtimeDoc.includes('runtime-supported but not live'), 'runtime doc should tell maintainers to label unwired handlers');
       assert(changelog.includes('## 1.0.3') && changelog.includes('Corrected hook documentation'), 'changelog should record the UX remediation');
       assert(!changelog.includes('PostToolBatch, TaskCompleted, Stop, compact, config-change, cwd/file-change, and permission-denial events through the runtime'), 'changelog should not preserve the stale live-hook claim');
-      assert(rootReadme.includes('execution-spec control plane') && rootReadme.includes('branch-baseline noise'), 'root README should describe zeroh-sdd as scoped execution control, not generic hook noise');
+      if (rootReadme) {
+        assert(rootReadme.includes('execution-spec control plane') && rootReadme.includes('branch-baseline noise'), 'root README should describe zeroh-sdd as scoped execution control, not generic hook noise');
+      }
     });
 
     const selected = suite === 'all' ? checks : checks.filter((check) => check.name === suite);
