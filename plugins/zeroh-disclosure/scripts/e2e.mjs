@@ -48,6 +48,23 @@ console.log();
 
 const results = [];
 
+await step('VI fixtures parse (issuer-signed L1, user-signed L2)', async () => {
+  const { decodeIssuerJwt } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const l1d = decodeIssuerJwt(l1);
+  const l2d = decodeIssuerJwt(l2);
+  assert(l1d.payload.iss === 'https://issuer.example.zeroh', 'L1 iss');
+  assert(l1d.payload.cnf?.jwk?.kid === 'user-key-1', 'L1 binds user pubkey');
+  assert(l2d.payload.aud === 'commerce', 'L2 aud=commerce');
+  assert(l2d.payload.mode === 'autonomous', 'L2 mode=autonomous');
+  const c = (l2d.payload.delegate_payload?.checkout_mandate?.constraints || []).length
+          + (l2d.payload.delegate_payload?.payment_mandate?.constraints || []).length;
+  assert(c === 8, `8 constraints in L2 (got ${c})`);
+  return { l1_alg: l1d.header.alg, l2_kid: l2d.payload.delegate_payload?.checkout_mandate?.cnf?.jwk?.kid, constraints: c };
+});
+
 await step('SessionStart', async () => {
   const out = await runHook(HOOKS.sessionStart, {
     session_id: SESSION_ID, cwd, source: 'startup', hook_event_name: 'SessionStart',

@@ -1,0 +1,8 @@
+{
+  "kty": "EC",
+  "x": "2IeHzoSP07GHbBCnIXq2pscLcezPTMkEObLKLRUCIiw",
+  "y": "xx1O8XSa6So0ofOGLIaS2Dk8ign27yjeFEp1dBsufdk",
+  "crv": "P-256",
+  "d": "0W2o3fW48VboYu-4nu4z16mNCuKvleJGwdJROsmUo5s",
+  "kid": "user-key-1"
+}

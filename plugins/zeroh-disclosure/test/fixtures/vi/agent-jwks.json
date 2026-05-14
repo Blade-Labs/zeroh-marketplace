@@ -1,0 +1,11 @@
+{
+  "keys": [
+    {
+      "kty": "EC",
+      "x": "MDRX6EpT5qg8m0SheKUfPBwo60pg81UQFlS4ajOX4h8",
+      "y": "KAG_pJ5ImhJLbIdATwUCoDG2J8rhNvuv2SPFkzi8kw4",
+      "crv": "P-256",
+      "kid": "agent-key-1"
+    }
+  ]
+}

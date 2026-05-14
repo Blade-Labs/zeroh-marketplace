@@ -1,0 +1,8 @@
+{
+  "kty": "EC",
+  "x": "CvuPaQwVTTsQpGSIX7mzrSDZJRtKfhGdOlqBwPT2kWE",
+  "y": "3ZGiLKC2igXHamrqLXai4mlF2jVpqD5CT7TL1qv7etk",
+  "crv": "P-256",
+  "d": "-a2cXxmZzOGFey7kULjt7mPDbnE6MNHULf6rsVjxRCQ",
+  "kid": "issuer-key-1"
+}
