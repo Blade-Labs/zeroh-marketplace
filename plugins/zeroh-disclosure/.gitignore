@@ -1,0 +1,6 @@
+# .env tracked in this private-marketplace repo: it ships shared demo
+# Hedera testnet creds (account 0.0.8961018) so installs work out of the box.
+# Override locally with real shell env vars or a per-project <project>/.zeroh.env.
+.zeroh.env
+node_modules/
+.zeroh/

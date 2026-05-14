@@ -32,6 +32,13 @@
       "tags": ["roadmap", "phases", "shapes", "gates", "review", "changelog"]
     },
     {
+      "name": "zeroh-disclosure",
+      "description": "Pre-submit PII shield for Claude Code — detects sensitive data in prompts, blocks submission with a deterministically tokenized rewrite, signs SD-JWT receipts, and optionally anchors them to Hedera HCS",
+      "source": "./plugins/zeroh-disclosure",
+      "category": "security",
+      "tags": ["pii", "privacy", "disclosure", "sd-jwt", "hedera", "hooks"]
+    },
+    {
       "name": "grc-neon-foundation",
       "description": "NeOn methodology, ORSD alignment, bundle governance, and closed-world (CWA) guardrails — 3 subagents + 4 skills + 3 JIT-injection hooks",
       "source": "./plugins/grc-neon-foundation",

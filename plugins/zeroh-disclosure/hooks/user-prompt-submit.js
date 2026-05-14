@@ -1,0 +1,199 @@
+#!/usr/bin/env node
+import { loadConfig } from '../lib/config.js';
+import { detectSensitiveData } from '../lib/detector.js';
+import { maskText } from '../lib/mask.js';
+import { isToken } from '../lib/tokens.js';
+import {
+  bumpTurn,
+  collectActiveTokens,
+  extractTokens,
+  hmacKeyBytes,
+  loadSession,
+  writeTurn,
+} from '../lib/session.js';
+import { writeClipboard } from '../lib/clipboard.js';
+
+const event = await readStdinJson();
+const userPrompt = event?.prompt ?? event?.user_prompt ?? '';
+const cwd = event?.cwd;
+await loadConfig({ cwd });
+const sessionId = event?.session_id;
+
+if (typeof userPrompt !== 'string' || userPrompt.length === 0) {
+  process.exit(0);
+}
+
+// Every prompt — clean, tokenized re-submit, or PII-bearing — gets a turn and
+// a receipt. The receipt is the deliverable: it records that the policy was
+// applied and what it observed, signed and anchored on chain. Masking is one
+// possible outcome; "policy applied, 0 findings" is just as valid a proof.
+
+const session = await loadSession({ cwd, sessionId });
+const turn = await bumpTurn(session);
+const findings = detectSensitiveData(userPrompt);
+
+if (findings.length > 0) {
+  const masked = await buildMasked(userPrompt, findings, session);
+  await writePiiTurn({ session, turn, userPrompt, findings, masked });
+  await emitBlock({ turn, masked });
+  process.exit(0);
+}
+
+const tokens = extractTokens(userPrompt);
+await writeCleanTurn({ session, turn, userPrompt, tokens });
+
+if (tokens.length === 0) {
+  // Pure clean prompt: receipt still issued at Stop, but no model-facing
+  // signal needed.
+  process.exit(0);
+}
+
+// Tokenized re-submit: clean by detection, but references prior tokens.
+// Inject a token map so the model can reason about the placeholders.
+const map = await collectActiveTokens(session.dir);
+const relevant = tokens.filter((t) => map.has(t)).map((t) => [t, map.get(t)]);
+if (relevant.length === 0) process.exit(0);
+
+const ctxLines = [
+  '🛡  ZeroH Disclosure: this prompt references tokenized values from earlier in the session.',
+  '',
+  'Token map (the model never sees the raw values; treat tokens as opaque',
+  'placeholders that the user can resolve locally):',
+];
+for (const [token, type] of relevant) ctxLines.push(`  ${token} = ${type.toLowerCase()}`);
+
+process.stdout.write(
+  JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'UserPromptSubmit',
+      additionalContext: ctxLines.join('\n'),
+    },
+  }) + '\n',
+);
+process.exit(0);
+
+// turn writers ----------------------------------------------------------------
+
+async function writePiiTurn({ session, turn, userPrompt, findings, masked }) {
+  await writeTurn({
+    dir: session.dir,
+    turn,
+    payload: {
+      turn,
+      phase: 'blocked_pending_user_resubmit',
+      created_at: new Date().toISOString(),
+      findings: findings.map(({ type, risk, start, end, length, confidence }) => ({ type, risk, start, end, length, confidence })),
+      sanitized_text: masked.sanitized_text,
+      replacements: masked.replacements,
+      masked_categories: masked.masked_categories,
+      // Original prompt stays local; sits under .zeroh/sessions/ (same trust
+      // boundary as wallet.key.json). Needed so the Stop hook can build a
+      // faithful receipt that records what was actually masked. Never sent.
+      local_private: {
+        original_text: userPrompt,
+        note: 'Local-only. Never leaves disk. Used by the Stop hook to build the receipt.',
+      },
+    },
+  });
+}
+
+async function writeCleanTurn({ session, turn, userPrompt, tokens }) {
+  await writeTurn({
+    dir: session.dir,
+    turn,
+    payload: {
+      turn,
+      phase: tokens.length > 0 ? 'allowed_tokenized_resubmit' : 'allowed_no_findings',
+      created_at: new Date().toISOString(),
+      findings: [],
+      sanitized_text: userPrompt,
+      replacements: [],
+      masked_categories: [],
+      referenced_tokens: tokens,
+      local_private: {
+        original_text: userPrompt,
+        note: 'Local-only. Receipt commits to a hash; raw text is dropped at finalization.',
+      },
+    },
+  });
+}
+
+async function buildMasked(userPrompt, findings, session) {
+  return maskText(userPrompt, findings, {
+    hmacKeyBytes: hmacKeyBytes(session.state),
+  });
+}
+
+// block emitter ---------------------------------------------------------------
+
+async function emitBlock({ turn, masked }) {
+  const clipboardTool = await writeClipboard(masked.sanitized_text).catch(() => null);
+
+  const byType = countByType(masked.replacements);
+  const lines = [];
+  lines.push('🛡  ZeroH Disclosure: your prompt contains sensitive data that should not be sent to the model.');
+  lines.push('');
+  lines.push(`Detected ${masked.replacements.length} item(s): ${formatByType(byType)}`);
+  lines.push('');
+  if (clipboardTool) {
+    const pasteHint = process.platform === 'darwin' ? '⌘V' : process.platform === 'win32' ? 'Ctrl+V' : 'Ctrl+Shift+V';
+    lines.push(`✓ Masked version copied to clipboard (${clipboardTool}). Paste with ${pasteHint} and press Enter to re-submit.`);
+  } else {
+    lines.push('Re-submit using this masked version (copy/paste):');
+  }
+  lines.push('');
+  lines.push('────────────────────────────────────────');
+  lines.push(masked.sanitized_text);
+  lines.push('────────────────────────────────────────');
+  lines.push('');
+  lines.push('Token mapping (kept locally; the model never sees these values):');
+  for (const r of masked.replacements) {
+    lines.push(`  ${r.replacement}  →  <${r.entity_type.toLowerCase()} #${shortCommit(r.value_commitment)}>`);
+  }
+  lines.push('');
+  lines.push(`Receipt will be finalized at turn end. Turn ${turn} pending re-submit.`);
+
+  // Block the prompt and present the masked alternative for the user to paste.
+  process.stdout.write(
+    JSON.stringify({
+      decision: 'block',
+      reason: lines.join('\n'),
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: '',
+      },
+    }) + '\n',
+  );
+}
+
+// helpers ---------------------------------------------------------------------
+
+function countByType(replacements) {
+  const out = {};
+  for (const r of replacements) out[r.entity_type] = (out[r.entity_type] ?? 0) + 1;
+  return out;
+}
+
+function formatByType(map) {
+  return Object.entries(map)
+    .map(([t, n]) => (n > 1 ? `${t}×${n}` : t))
+    .join(', ');
+}
+
+function shortCommit(b64u) {
+  return String(b64u).replace(/[^A-Za-z0-9]/g, '').slice(0, 8);
+}
+
+async function readStdinJson() {
+  if (process.stdin.isTTY) return null;
+  let raw = '';
+  for await (const chunk of process.stdin) raw += chunk;
+  if (!raw.trim()) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+void isToken;
