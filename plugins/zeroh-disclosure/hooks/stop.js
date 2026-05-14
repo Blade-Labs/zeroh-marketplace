@@ -1,0 +1,148 @@
+#!/usr/bin/env node
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { loadConfig } from '../lib/config.js';
+import { prepareDisclosure } from '../lib/receipt.js';
+import { buildProofPack } from '../lib/proofpack.js';
+import { anchorIntentToHederaMessage } from '../lib/anchor.js';
+import { isAnchorEnabled, submitToHcs } from '../lib/hedera-anchor.js';
+import { hmacKeyBytes, listTurns, loadSession, readJson, writeJson, writeProofPack } from '../lib/session.js';
+
+const event = await readStdinJson();
+const cwd = event?.cwd;
+await loadConfig({ cwd });
+const sessionId = event?.session_id;
+
+const session = await loadSession({ cwd, sessionId });
+const turns = await listTurns({ dir: session.dir });
+
+if (turns.length === 0) process.exit(0);
+
+const unfinished = [];
+for (const t of turns) {
+  const ledgerPath = path.join(session.dir, `turn-${t}.json`);
+  const ledger = await readJson(ledgerPath);
+  if (!ledger) continue;
+  if (ledger.phase === 'finalized') continue;
+  unfinished.push({ t, ledgerPath, ledger });
+}
+
+if (unfinished.length === 0) process.exit(0);
+
+const outboundLines = [];
+const receipts = [];
+let prevReceiptHash = session.state.lastReceiptHash;
+let prevTokenHash = session.state.lastTokenHash;
+
+for (const { t, ledgerPath, ledger } of unfinished) {
+  const originalText = ledger?.local_private?.original_text ?? ledger.sanitized_text ?? '';
+  const result = await prepareDisclosure({
+    text: originalText,
+    boundary: {
+      destination: process.env.ZEROH_DESTINATION || 'anthropic_claude_api',
+      model: process.env.ZEROH_MODEL || 'claude-code',
+      retention: process.env.ZEROH_RETENTION || 'unknown',
+      destination_jurisdiction: process.env.ZEROH_DESTINATION_JURISDICTION || 'US',
+    },
+    wallet: session.wallet,
+    previousReceiptHash: prevReceiptHash,
+    previousTokenHash: prevTokenHash,
+    hmacKeyBytes: hmacKeyBytes(session.state),
+  });
+
+  let anchor = { anchored: false, reason: 'ZEROH_ANCHOR != 1' };
+  if (isAnchorEnabled()) {
+    try {
+      anchor = await submitToHcs(anchorIntentToHederaMessage(result.anchor_intent));
+    } catch (e) {
+      anchor = { anchored: false, error: String(e?.message ?? e) };
+    }
+  }
+
+  // Drop the original text once the receipt is built — the receipt holds an
+  // HMAC commitment to it, and we don't want raw PII lingering on disk after
+  // finalization.
+  const { local_private, ...ledgerWithoutOriginal } = ledger;
+  void local_private;
+  const finalized = {
+    ...ledgerWithoutOriginal,
+    phase: 'finalized',
+    finalized_at: new Date().toISOString(),
+    receipt: {
+      receipt_id: result.receipt.receipt_id,
+      receipt_hash: result.receipt.receipt_hash,
+      public_claims: result.receipt.public_claims,
+      compact_sdjwt: result.receipt.sdjwt.compact,
+      disclosure_manifest: result.receipt.disclosure_manifest,
+      presentations: result.receipt.presentations,
+    },
+    token: result.token,
+    anchor_intent: result.anchor_intent,
+    anchor,
+  };
+
+  await writeJson(ledgerPath, finalized);
+  receipts.push(finalized);
+
+  prevReceiptHash = result.receipt.receipt_hash;
+  prevTokenHash = result.token.token_hash;
+
+  const anchorLine = anchor.anchored
+    ? `anchored ${anchor.tx_id} seq=${anchor.sequence_number}`
+    : anchor.error
+      ? `anchor failed: ${anchor.error}`
+      : 'anchor skipped';
+  const network = anchor.network || process.env.HEDERA_NETWORK || 'testnet';
+  const topicId = anchor.topic_id || process.env.HEDERA_TOPIC_ID;
+  const urls = [];
+  if (anchor.anchored && anchor.hashscan_url) urls.push(anchor.hashscan_url);
+  if (anchor.anchored && topicId) urls.push(`https://hashscan.io/${network}/topic/${topicId}`);
+  const urlBlock = urls.length ? `\n   ${urls.join('\n   ')}` : '';
+  const line = `📜 Turn ${t}: receipt ${result.receipt.receipt_id} (${anchorLine})${urlBlock}`;
+  outboundLines.push(line);
+  process.stderr.write(line + '\n'); // debug copy
+}
+
+session.state.lastReceiptHash = prevReceiptHash;
+session.state.lastTokenHash = prevTokenHash;
+session.state.updated_at = new Date().toISOString();
+await writeJson(session.statePath, session.state);
+
+const pack = await buildProofPack(
+  receipts.map((r) => ({ public_claims: r.receipt.public_claims })),
+  { audience: 'regulator', period: `session:${session.state.sid || sessionId || 'default'}` },
+);
+const packPath = await writeProofPack({ dir: session.dir, turn: unfinished.at(-1).t, proofpack: pack });
+const packLine = `📦 ProofPack written: ${packPath}`;
+outboundLines.push(packLine);
+process.stderr.write(packLine + '\n');
+
+// UserPromptSubmit gets text into the transcript via {decision:"block", reason}.
+// Stop can't block (that would force another agent loop), so we use the same
+// reason-as-message channel with decision:"approve" — which the docs imply
+// renders the explanation to the user without forcing continuation.
+process.stdout.write(
+  JSON.stringify({
+    decision: 'approve',
+    reason: outboundLines.join('\n'),
+    continue: true,
+    suppressOutput: false,
+    systemMessage: outboundLines.join('\n'),
+  }),
+);
+
+process.exit(0);
+
+async function readStdinJson() {
+  if (process.stdin.isTTY) return null;
+  let raw = '';
+  for await (const chunk of process.stdin) raw += chunk;
+  if (!raw.trim()) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+void fs;

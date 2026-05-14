@@ -1,0 +1,4 @@
+.env
+.zeroh.env
+node_modules/
+.zeroh/
