@@ -102,6 +102,9 @@ async function buildSessionViBlock(r) {
     l2_nonce: l2Payload.nonce ?? null,
     mandate_aud: l2Payload.aud ?? null,
     agent_jwk_kid: agentJwkKid,
+    agent_jwk: agentJwk ?? null, // Public half only — used by Phase E.6 to
+                                 // validate ZEROH_VI_AGENT_KEY_FILE matches
+                                 // the mandate's bound key.
     issuer: l1Payload.iss ?? null,
     user_sub: l1Payload.sub ?? null,
     mode: l2Payload.mode ?? null,

@@ -50,8 +50,12 @@ export async function prepareDisclosure({
   const account = await wallet.getAccount();
   const now = new Date().toISOString();
   const receipt_id = `zrh_${Date.now().toString(36)}_${(await sha256B64u(now + sanitized_content_hash)).slice(0, 12)}`;
+  // VI wallets provide their own `did` (did:jwk:<thumbprint>) so receipts
+  // signed under a mandate carry the same identifier the merchant uses to
+  // verify the forward L3 chain — one key, one DID, two directions of proof.
+  const iss = account.did ?? `did:hedera:${account.network}:${account.accountId}`;
   const publicClaims = {
-    iss: `did:hedera:${account.network}:${account.accountId}`,
+    iss,
     sub: `wallet:${account.accountId}`,
     vct: 'https://zeroh.io/vct/disclosure-receipt/v1',
     receipt_id,

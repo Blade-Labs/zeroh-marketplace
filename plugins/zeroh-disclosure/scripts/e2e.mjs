@@ -253,6 +253,42 @@ await step('End-to-end: receipt carries intent_binding when mandate is active', 
   };
 });
 
+await step('Key reuse: SessionStart with correct agent key swaps the receipt-signing wallet', async () => {
+  const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const agentKey = path.join(PLUGIN_ROOT, 'test/fixtures/vi/agent-key.json');
+  await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-vi-keyok', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath, ZEROH_VI_AGENT_KEY_FILE: agentKey });
+  // Run a clean prompt + Stop under this session so a receipt gets minted.
+  await runHook(HOOKS.userPromptSubmit, {
+    session_id: 'e2e-vi-keyok', cwd, prompt: 'hello',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath, ZEROH_VI_AGENT_KEY_FILE: agentKey });
+  await runHook(HOOKS.stop, {
+    session_id: 'e2e-vi-keyok', cwd, hook_event_name: 'Stop',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath, ZEROH_VI_AGENT_KEY_FILE: agentKey });
+  const turn = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-vi-keyok/turn-1.json'), 'utf8'));
+  const iss = turn.receipt.public_claims.iss;
+  assert(iss.startsWith('did:jwk:'), `iss is did:jwk (got ${iss})`);
+  const stateFile = path.join(cwd, '.zeroh/sessions/e2e-vi-keyok/state.json');
+  const state = JSON.parse(await fs.readFile(stateFile, 'utf8'));
+  assert(!state.vi_error, 'no vi_error');
+  return { iss_prefix: iss.slice(0, 16) + '…', kid_match: state.vi.agent_jwk_kid };
+});
+
+await step('Key reuse: SessionStart with wrong agent key records vi_error and skips wallet swap', async () => {
+  const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const wrongKey = path.join(PLUGIN_ROOT, 'test/fixtures/vi/issuer-key.json'); // not the agent's key
+  await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-vi-keybad', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath, ZEROH_VI_AGENT_KEY_FILE: wrongKey });
+  const stateFile = path.join(cwd, '.zeroh/sessions/e2e-vi-keybad/state.json');
+  const state = JSON.parse(await fs.readFile(stateFile, 'utf8'));
+  assert(!state.vi, 'state.vi absent after wrong-key failure');
+  assert(Array.isArray(state.vi_error?.errors), 'vi_error captured');
+  assert(/agent key reuse/.test(state.vi_error.errors[0]), `error mentions agent key reuse (got: ${state.vi_error.errors[0]})`);
+  return { error_first: state.vi_error.errors[0].slice(0, 70) + '…' };
+});
+
 await step('SessionStart with invalid VI mandate records vi_error', async () => {
   // Write a wrapper that points at the fixture but with a tampered L1 (random bytes).
   const tamperedPath = path.join(cwd, 'tampered.mandate.json');

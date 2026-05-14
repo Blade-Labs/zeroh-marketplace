@@ -3,6 +3,7 @@ import { loadConfig } from '../lib/config.js';
 import { collectActiveTokens, loadSession, writeJson } from '../lib/session.js';
 import { isAnchorEnabled } from '../lib/hedera-anchor.js';
 import { ingestMandate } from '../lib/vi/index.js';
+import { loadViWallet } from '../lib/wallet/vi-wallet.js';
 
 const event = await readStdinJson();
 const cwd = event?.cwd;
@@ -16,8 +17,28 @@ const session = await loadSession({ cwd, sessionId });
 // success; surfaces a clear error line on failure (commerce tools become
 // hard-deny in the PreToolUse hook).
 const viResult = await ingestMandate({ cwd });
+let viKeyReuseError = null;
 if (viResult.present && viResult.ok) {
-  session.state.vi = viResult.vi;
+  // Key reuse (Phase E.6): if ZEROH_VI_AGENT_KEY_FILE is configured, the
+  // private key on disk MUST match the mandate's bound cnf.jwk. Detect a
+  // mismatch here so subsequent hooks don't sign with the wrong key.
+  if (process.env.ZEROH_VI_AGENT_KEY_FILE) {
+    try {
+      await loadViWallet({
+        keyFile: process.env.ZEROH_VI_AGENT_KEY_FILE,
+        boundJwk: viResult.vi.agent_jwk,
+      });
+    } catch (e) {
+      viKeyReuseError = e.message;
+    }
+  }
+  if (viKeyReuseError) {
+    session.state.vi_error = { source: viResult.source, errors: [`agent key reuse: ${viKeyReuseError}`] };
+    delete session.state.vi;
+  } else {
+    session.state.vi = viResult.vi;
+    delete session.state.vi_error;
+  }
   await writeJson(session.statePath, session.state);
 } else if (viResult.present && !viResult.ok) {
   // Persist the failure so PreToolUse / Stop don't accidentally treat a
@@ -52,6 +73,11 @@ if (session.state.vi) {
     `Issuer: ${v.issuer || 'unknown'} · agent kid: ${v.agent_jwk_kid || 'unknown'}`,
   );
   if (v.scope_summary) lines.push(`Scope: ${v.scope_summary}`);
+  if (process.env.ZEROH_VI_AGENT_KEY_FILE) {
+    lines.push(`Receipt signing: L2-bound agent key (one-key chain).`);
+  } else {
+    lines.push(`Receipt signing: default wallet (ZEROH_VI_AGENT_KEY_FILE not set; receipts still carry intent_binding).`);
+  }
   lines.push('Commerce-tier tools require an `_intent_fulfillment` field matching this scope.');
 } else if (session.state.vi_error) {
   lines.push(
