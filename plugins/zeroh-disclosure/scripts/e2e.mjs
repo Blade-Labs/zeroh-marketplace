@@ -121,6 +121,68 @@ await step('SessionStart with valid VI mandate exposes state.vi', async () => {
   return { aud: state.vi.mandate_aud, kid: state.vi.agent_jwk_kid, scope: state.vi.scope_summary };
 });
 
+await step('Receipt boundary unchanged when no mandate (hash-stability regression guard)', async () => {
+  // Compute boundary_hash for the default boundary (what Stop produces today
+  // for non-VI sessions) and confirm it matches a fixed value. The string is
+  // intentionally pinned — any future change to boundary defaults must be
+  // accompanied by an explicit update here.
+  const { normalizeBoundary, boundaryHash } = await import('../lib/boundary.js');
+  const b = normalizeBoundary({
+    destination: 'anthropic_claude_api', model: 'claude-code',
+    retention: 'unknown', destination_jurisdiction: 'US',
+  });
+  assert(!('intent_binding' in b), 'intent_binding key absent from default boundary');
+  const h = await boundaryHash(b);
+  assert(h === '0yZ5pWz7p0_cigUKdGL7In6V-Sm83Y7SRqV7qTuQA3s',
+    `boundary_hash stable for no-mandate path (got ${h})`);
+  return { boundary_hash: h.slice(0, 16) + '…' };
+});
+
+await step('Receipt boundary changes when mandate is bound (hash differs + intent_binding present)', async () => {
+  const { normalizeBoundary, boundaryHash } = await import('../lib/boundary.js');
+  const sample = {
+    l1_hash: 'aaa', l2_hash: 'bbb', l2_nonce: 'nonce-1',
+    mandate_aud: 'commerce', agent_jwk_kid: 'agent-key-1',
+    scope_summary: 'amount:100-2000 USD', expiry: 9999999999,
+  };
+  const b = normalizeBoundary({
+    destination: 'anthropic_claude_api', model: 'claude-code',
+    retention: 'unknown', destination_jurisdiction: 'US',
+    intent_binding: sample,
+  });
+  assert(b.intent_binding?.l2_hash === 'bbb', 'intent_binding included');
+  const h = await boundaryHash(b);
+  assert(h !== '0yZ5pWz7p0_cigUKdGL7In6V-Sm83Y7SRqV7qTuQA3s',
+    'boundary_hash differs from no-mandate baseline');
+  return { boundary_hash: h.slice(0, 16) + '…' };
+});
+
+await step('End-to-end: receipt carries intent_binding when mandate is active', async () => {
+  // Reuse the e2e-vi-ok session created earlier (already has state.vi
+  // persisted). Submit one clean prompt then Stop, and inspect the receipt.
+  const viSession = 'e2e-vi-ok';
+  const viSessionDir = path.join(cwd, '.zeroh/sessions', viSession);
+  await runHook(HOOKS.userPromptSubmit, {
+    session_id: viSession, cwd,
+    prompt: 'tell me about the weather',
+  });
+  await runHook(HOOKS.stop, {
+    session_id: viSession, cwd, hook_event_name: 'Stop',
+  });
+  const turn = JSON.parse(await fs.readFile(path.join(viSessionDir, 'turn-1.json'), 'utf8'));
+  assert(turn.phase === 'finalized', `vi-session turn-1 finalized (got ${turn.phase})`);
+  const ib = turn.receipt?.public_claims?.intent_binding;
+  assert(ib, 'public_claims.intent_binding present on receipt');
+  assert(ib.mandate_aud === 'commerce', 'intent_binding.mandate_aud=commerce');
+  assert(ib.agent_jwk_kid === 'agent-key-1', 'intent_binding.agent_jwk_kid=agent-key-1');
+  assert(typeof ib.l1_hash === 'string' && ib.l1_hash.length > 16, 'intent_binding.l1_hash present');
+  return {
+    receipt_id: turn.receipt.receipt_id,
+    aud: ib.mandate_aud,
+    agent_kid: ib.agent_jwk_kid,
+  };
+});
+
 await step('SessionStart with invalid VI mandate records vi_error', async () => {
   // Write a wrapper that points at the fixture but with a tampered L1 (random bytes).
   const tamperedPath = path.join(cwd, 'tampered.mandate.json');

@@ -13,6 +13,10 @@ export function normalizeBoundary(input = {}) {
     route_policy: input.route_policy ?? null,
   };
   if (b.route_policy?.router === 'openrouter') b.boundary_type = 'external_ai_router';
+  // VI mandate binding (Phase E.4). Added only when present so the canonical
+  // JSON — and therefore boundary_hash — stays byte-identical for receipts
+  // emitted with no active mandate.
+  if (input.intent_binding) b.intent_binding = input.intent_binding;
   return b;
 }
 
