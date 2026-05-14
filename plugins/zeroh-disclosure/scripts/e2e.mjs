@@ -16,6 +16,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { loadConfig } from '../lib/config.js';
 
 const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HOOKS = {
@@ -27,6 +28,9 @@ const HOOKS = {
 
 const args = parseArgs(process.argv.slice(2));
 const cwd = args.cwd || (await fs.mkdtemp(path.join(os.tmpdir(), 'zeroh-e2e-')));
+// Pull .env values into process.env before deciding what to verify (anchor
+// stage gates on ZEROH_ANCHOR + HEDERA_OPERATOR_ID, which usually live in .env).
+await loadConfig({ cwd });
 const SESSION_ID = 'e2e';
 const sessionDir = path.join(cwd, '.zeroh', 'sessions', SESSION_ID);
 
@@ -181,17 +185,25 @@ await step('VERIFY: ProofPack rolls up receipt', async () => {
   return { receipts: pp.summary.receipts_count, hash: pp.proofpack_hash.slice(0, 12) + '…' };
 });
 
-const anchorEnabled = process.env.ZEROH_ANCHOR === '1' && process.env.HEDERA_OPERATOR_ID;
-if (anchorEnabled) {
+const fullyConfigured = process.env.ZEROH_ANCHOR === '1'
+  && process.env.HEDERA_OPERATOR_ID
+  && process.env.HEDERA_OPERATOR_KEY
+  && process.env.HEDERA_TOPIC_ID;
+if (fullyConfigured) {
   await step('VERIFY: live HCS anchor on Mirror Node', async () => {
     const turn = JSON.parse(await fs.readFile(path.join(sessionDir, 'turn-1.json'), 'utf8'));
     const anchor = turn.anchor;
-    assert(anchor?.submitted === true, 'anchor submitted');
+    assert(anchor?.submitted === true, `anchor submitted (got: ${anchor?.reason || 'no anchor field'})`);
     assert(anchor?.tx_id, 'tx_id present');
     return { tx_id: anchor.tx_id, topic_id: anchor.topic_id };
   });
 } else {
-  console.log(yellow('  ⏭  anchor verification skipped (set ZEROH_ANCHOR=1 + HEDERA_* env to enable)'));
+  const missing = [];
+  if (process.env.ZEROH_ANCHOR !== '1') missing.push('ZEROH_ANCHOR=1');
+  if (!process.env.HEDERA_OPERATOR_ID) missing.push('HEDERA_OPERATOR_ID');
+  if (!process.env.HEDERA_OPERATOR_KEY) missing.push('HEDERA_OPERATOR_KEY');
+  if (!process.env.HEDERA_TOPIC_ID) missing.push('HEDERA_TOPIC_ID (run scripts/finalize-anchor-setup.mjs)');
+  console.log(yellow(`  ⏭  anchor verification skipped (missing: ${missing.join(', ')})`));
 }
 
 console.log();
