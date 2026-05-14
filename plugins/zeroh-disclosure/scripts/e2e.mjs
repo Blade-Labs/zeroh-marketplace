@@ -469,6 +469,25 @@ const evmConfigured = process.env.ZEROH_ANCHOR === '1'
   && process.env.HEDERA_EVM_OPERATOR_ID
   && process.env.HEDERA_EVM_OPERATOR_KEY;
 
+await step('vi-demo.mjs runs end-to-end and produces a one-key chain receipt', async () => {
+  // Spawn vi-demo as a child; it must exit 0 and the stdout must mention the
+  // verifier-summary checkmark line.
+  const { spawn: spawnChild } = await import('node:child_process');
+  const r = await new Promise((resolve, reject) => {
+    const child = spawnChild('node', [path.join(PLUGIN_ROOT, 'scripts/vi-demo.mjs')], {
+      env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', (b) => (stdout += b));
+    child.stderr.on('data', (b) => (stderr += b));
+    child.on('error', reject);
+    child.on('close', (exit) => resolve({ exit, stdout, stderr }));
+  });
+  assert(r.exit === 0, `vi-demo.mjs exit 0 (got ${r.exit}; stderr: ${r.stderr.slice(-200)})`);
+  assert(/Receipt iss === did:jwk/.test(r.stdout), 'demo prints the one-key-chain confirmation line');
+  return { stdout_bytes: r.stdout.length };
+});
+
 if (hcsConfigured || evmConfigured) {
   await step('VERIFY: every receipt is anchored on Mirror Node', async () => {
     const network = process.env.HEDERA_NETWORK || 'testnet';
