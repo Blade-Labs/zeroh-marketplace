@@ -157,6 +157,76 @@ await step('Receipt boundary changes when mandate is bound (hash differs + inten
   return { boundary_hash: h.slice(0, 16) + '…' };
 });
 
+await step('Commerce tool denied without an active mandate', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-cmrc-no-mandate', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-cm-1',
+    tool_input: { amount: 800, currency: 'USD' },
+  });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/no active Verifiable Intent mandate/.test(hso.permissionDecisionReason),
+    `reason mentions missing mandate (got: ${hso.permissionDecisionReason?.slice(0, 200)})`);
+  return { reason_starts: hso.permissionDecisionReason.split('\n')[0] };
+});
+
+await step('Commerce tool denied when mandate active but _intent_fulfillment is missing', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-vi-ok', cwd,
+    tool_name: 'mcp__example_checkout__buy', tool_use_id: 'e2e-cm-2',
+    tool_input: { url: 'https://coffee.example/api/buy' },
+  });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/must declare an _intent_fulfillment/.test(hso.permissionDecisionReason),
+    `reason mentions missing _intent_fulfillment`);
+  return { reason_starts: hso.permissionDecisionReason.split('\n')[0] };
+});
+
+await step('Commerce tool denied when fulfillment exceeds amount_range', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-vi-ok', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-cm-3',
+    tool_input: {
+      _intent_fulfillment: {
+        amount: 9999, currency: 'USD', // > amount_range.max (2000)
+        merchant: { id: 'merchant-001' },
+        payee: { id: 'payee-001' },
+        line_items: [{ id: 'sku-coffee', quantity: 1 }],
+        reference: 'binding-001',
+      },
+    },
+  });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/amount_range/.test(hso.permissionDecisionReason),
+    `reason names violated constraint (got: ${hso.permissionDecisionReason?.slice(0, 200)})`);
+  return { reason_first: hso.permissionDecisionReason.split('\n').find((l) => l.includes('amount_range')) };
+});
+
+await step('Commerce tool allowed when fulfillment is in scope', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-vi-ok', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-cm-4',
+    tool_input: {
+      _intent_fulfillment: {
+        amount: 800, currency: 'USD',
+        merchant: { id: 'merchant-001' },
+        payee: { id: 'payee-001' },
+        line_items: [{ id: 'sku-coffee', quantity: 1 }],
+        reference: 'binding-001',
+      },
+    },
+  });
+  // Allow = silent pass-through (no JSON output) OR explicit permissionDecision: allow.
+  // Our hook currently exits 0 with no JSON for the allow path on commerce.
+  assert(out.exit === 0, 'exit 0');
+  // No deny JSON.
+  assert(out.json?.hookSpecificOutput?.permissionDecision !== 'deny',
+    `not denied (got: ${out.json?.hookSpecificOutput?.permissionDecision})`);
+  return { passed: true };
+});
+
 await step('End-to-end: receipt carries intent_binding when mandate is active', async () => {
   // Reuse the e2e-vi-ok session created earlier (already has state.vi
   // persisted). Submit one clean prompt then Stop, and inspect the receipt.
