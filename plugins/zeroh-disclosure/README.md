@@ -11,32 +11,60 @@ masked.
 ## Quick install (recommended)
 
 ```bash
-cd "/path/to/zeroh-disclosure"
-npm install
-
-claude plugin marketplace add "$PWD"
-claude plugin install zeroh-disclosure@zeroh-disclosure-local
+claude plugin marketplace add Blade-Labs/zeroh-marketplace
+claude plugin install zeroh-disclosure@zeroh-marketplace
 ```
 
-That's it. The plugin is now permanently installed for every Claude Code
-session — no `--plugin-dir` flag, no symlinks. Verify with:
+Verify:
 
 ```bash
 claude plugin list | grep zeroh-disclosure
 ```
 
-To enable live Hedera anchoring (optional but visually demo-friendly), copy
-the env template and fill it in once:
+The plugin runs end-to-end with zero configuration — detection, masking,
+signed receipts, and ProofPack writes all work immediately.
 
-```bash
-cp .env.example .env
-$EDITOR .env
-node scripts/create-topic.mjs   # mints an HCS topic, prints the id to paste back into .env
-```
+### Optional: live Hedera HCS anchoring
 
-You need a Hedera testnet account — get one free at
-<https://portal.hedera.com/>. The faucet there gives you 100 ℏ, plenty for
-hundreds of receipt anchors.
+By default the receipt pipeline records the anchor *intent* but doesn't
+submit it on-chain. To turn anchoring on:
+
+1. **Install the Hedera SDK once**, in the cached plugin install:
+
+   ```bash
+   cd ~/.claude/plugins/cache/zeroh-marketplace/zeroh-disclosure/*/
+   npm install
+   ```
+
+   Re-run after `claude plugin update` — snapshot refreshes drop the cached
+   `node_modules/`.
+
+2. **Get a free Hedera testnet account** at <https://portal.hedera.com/>.
+   The faucet hands out 100 ℏ — enough for hundreds of anchors.
+
+3. **Mint an HCS topic** (one-time):
+
+   ```bash
+   HEDERA_OPERATOR_ID=0.0.xxxxxx HEDERA_OPERATOR_KEY=302e02... \
+     node ~/.claude/plugins/cache/zeroh-marketplace/zeroh-disclosure/*/scripts/create-topic.mjs
+   ```
+
+   Note the topic id it prints.
+
+4. **Configure per-project.** Drop a `.zeroh.env` file next to the code you
+   launch Claude Code from:
+
+   ```
+   ZEROH_ANCHOR=1
+   HEDERA_NETWORK=testnet
+   HEDERA_OPERATOR_ID=0.0.xxxxxx
+   HEDERA_OPERATOR_KEY=302e02...
+   HEDERA_TOPIC_ID=0.0.yyyyyy
+   ```
+
+   This file beats the plugin's bundled defaults; real shell env vars beat
+   both. See `.env.example` for the full list of boundary metadata
+   variables.
 
 ---
 
@@ -130,10 +158,10 @@ For surfaces that allow transparent rewriting (browser extension hooking
 ## Updating, uninstalling
 
 ```bash
-claude plugin update zeroh-disclosure@zeroh-disclosure-local
-claude plugin disable zeroh-disclosure@zeroh-disclosure-local
-claude plugin uninstall zeroh-disclosure@zeroh-disclosure-local
-claude plugin marketplace remove zeroh-disclosure-local
+claude plugin update zeroh-disclosure@zeroh-marketplace
+claude plugin disable zeroh-disclosure@zeroh-marketplace
+claude plugin uninstall zeroh-disclosure@zeroh-marketplace
+claude plugin marketplace remove zeroh-marketplace
 ```
 
 Hooks only load at Claude Code session start; restart any running sessions
@@ -145,9 +173,8 @@ after install / update / disable.
 
 ```
 zeroh-disclosure/
-├── plugin.json                       ← Claude Code plugin manifest
-├── .claude-plugin/marketplace.json   ← local marketplace manifest (one-line install)
-├── .env / .env.example               ← config; .env is gitignored
+├── .claude-plugin/plugin.json        ← Claude Code plugin manifest
+├── .env.example                      ← copy to <project>/.zeroh.env
 ├── hooks/
 │   ├── hooks.json                    ← UserPromptSubmit + Stop
 │   ├── user-prompt-submit.js         ← detect → block-and-suggest masked rewrite
@@ -201,11 +228,12 @@ is `enabled`. For a deeper look, `claude --debug` shows hook events.
 **Edits to the source don't seem to take effect.** `claude plugin install`
 snapshots the plugin into `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`.
 Editing the source folder afterwards has no effect on the running install.
-After making changes, bump `version` in `plugin.json` and run:
+After making changes, bump `version` in `.claude-plugin/plugin.json` and
+run:
 
 ```bash
-claude plugin marketplace update zeroh-disclosure-local
-claude plugin update zeroh-disclosure@zeroh-disclosure-local
+claude plugin marketplace update zeroh-marketplace
+claude plugin update zeroh-disclosure@zeroh-marketplace
 # fully quit and restart Claude Code
 ```
 
