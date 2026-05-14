@@ -3,7 +3,14 @@ import { loadConfig } from '../lib/config.js';
 import { detectSensitiveData } from '../lib/detector.js';
 import { maskText } from '../lib/mask.js';
 import { isToken } from '../lib/tokens.js';
-import { bumpTurn, hmacKeyBytes, loadSession, writeTurn } from '../lib/session.js';
+import {
+  bumpTurn,
+  collectActiveTokens,
+  extractTokens,
+  hmacKeyBytes,
+  loadSession,
+  writeTurn,
+} from '../lib/session.js';
 import { writeClipboard } from '../lib/clipboard.js';
 
 const event = await readStdinJson();
@@ -19,8 +26,33 @@ if (typeof userPrompt !== 'string' || userPrompt.length === 0) {
 const findings = detectSensitiveData(userPrompt);
 
 if (findings.length === 0) {
-  // No PII — allow through silently. Don't bump the turn counter; only do that
-  // for prompts we actually act on.
+  // No fresh PII. If the prompt carries tokens from earlier (typical
+  // re-submitted masked prompt), inject a token map so Claude can reason
+  // about them semantically. Stay silent otherwise.
+  const tokens = extractTokens(userPrompt);
+  if (tokens.length === 0) process.exit(0);
+
+  const session = await loadSession({ cwd, sessionId });
+  const map = await collectActiveTokens(session.dir);
+  const relevant = tokens.filter((t) => map.has(t)).map((t) => [t, map.get(t)]);
+  if (relevant.length === 0) process.exit(0);
+
+  const ctxLines = [
+    '🛡  ZeroH Disclosure: this prompt references tokenized values from earlier in the session.',
+    '',
+    'Token map (the model never sees the raw values; treat tokens as opaque',
+    'placeholders that the user can resolve locally):',
+  ];
+  for (const [token, type] of relevant) ctxLines.push(`  ${token} = ${type.toLowerCase()}`);
+
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: ctxLines.join('\n'),
+      },
+    }) + '\n',
+  );
   process.exit(0);
 }
 

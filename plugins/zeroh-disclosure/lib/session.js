@@ -112,6 +112,37 @@ export async function writeProofPack({ dir, turn, proofpack }) {
   return p;
 }
 
+// Walk the session dir and return a Map<token, entityType> covering every
+// replacement recorded in any turn-*.json or tool-*.json file. Used by hooks
+// to inject a token map into Claude's context.
+export async function collectActiveTokens(dir) {
+  const map = new Map();
+  let entries;
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    return map;
+  }
+  for (const name of entries) {
+    if (!/^turn-\d+\.json$/.test(name) && !/^tool-.+\.json$/.test(name)) continue;
+    const record = await readJson(path.join(dir, name));
+    const replacements =
+      record?.replacements ||
+      record?.fields?.flatMap((f) => f.replacements || []) ||
+      [];
+    for (const r of replacements) {
+      if (r?.replacement && r?.entity_type) map.set(r.replacement, r.entity_type);
+    }
+  }
+  return map;
+}
+
+const TOKEN_RE = /\[[A-Z_]+-[0-9a-f]{6}\]/g;
+export function extractTokens(text) {
+  if (typeof text !== 'string') return [];
+  return [...new Set(text.match(TOKEN_RE) || [])];
+}
+
 export function hmacKeyBytes(state) {
   return base64UrlToBytes(state.hmacKeyB64u);
 }
