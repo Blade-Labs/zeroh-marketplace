@@ -65,6 +65,46 @@ await step('VI fixtures parse (issuer-signed L1, user-signed L2)', async () => {
   return { l1_alg: l1d.header.alg, l2_kid: l2d.payload.delegate_payload?.checkout_mandate?.cnf?.jwk?.kid, constraints: c };
 });
 
+await step('VI chain verifies (signatures + sd_hash binding + audience)', async () => {
+  const { verifyChain } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const issuerJwks = JSON.parse(await fs.readFile(path.join(fixDir, 'issuer-jwks.json'), 'utf8'));
+  const r = await verifyChain({ l1Compact: l1, l2Compact: l2, trustedIssuerJwks: issuerJwks });
+  assert(r.ok === true, `chain verifies (errors: ${r.errors.join('; ')})`);
+  assert(typeof r.l1Hash === 'string' && r.l1Hash.length > 16, 'l1Hash present');
+  assert(typeof r.l2Hash === 'string' && r.l2Hash.length > 16, 'l2Hash present');
+  assert(r.agentJwk?.kid === 'agent-key-1', 'agent JWK extracted from L2');
+  return { l1_short: r.l1Hash.slice(0, 12) + '…', l2_short: r.l2Hash.slice(0, 12) + '…', agent_kid: r.agentJwk.kid };
+});
+
+await step('VI chain rejects: expired L2', async () => {
+  const { verifyChain } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const issuerJwks = JSON.parse(await fs.readFile(path.join(fixDir, 'issuer-jwks.json'), 'utf8'));
+  const { decodeIssuerJwt } = await import('../lib/vi/index.js');
+  const l2Exp = decodeIssuerJwt(l2).payload.exp;
+  const r = await verifyChain({ l1Compact: l1, l2Compact: l2, trustedIssuerJwks: issuerJwks, now: l2Exp + 1 });
+  assert(r.ok === false, 'chain rejected as expected');
+  assert(r.errors.some((e) => /expired/i.test(e)), `error mentions expiry (got: ${r.errors.join(';')})`);
+  return { error_first: r.errors[0] };
+});
+
+await step('VI chain rejects: wrong issuer JWKS', async () => {
+  const { verifyChain } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const wrongJwks = JSON.parse(await fs.readFile(path.join(fixDir, 'user-jwks.json'), 'utf8'));
+  const r = await verifyChain({ l1Compact: l1, l2Compact: l2, trustedIssuerJwks: wrongJwks });
+  assert(r.ok === false, 'chain rejected as expected');
+  assert(r.errors.some((e) => /signature/i.test(e) || /no matching/i.test(e)), `error mentions signature (got: ${r.errors.join(';')})`);
+  return { error_first: r.errors[0] };
+});
+
 await step('SessionStart', async () => {
   const out = await runHook(HOOKS.sessionStart, {
     session_id: SESSION_ID, cwd, source: 'startup', hook_event_name: 'SessionStart',
