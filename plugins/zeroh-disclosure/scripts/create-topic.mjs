@@ -34,7 +34,7 @@ const client = network === 'mainnet' ? Client.forMainnet() : Client.forTestnet()
 client.setOperator(operator, key);
 
 const tx = await new TopicCreateTransaction()
-  .setTopicMemo('ZeroH Mask disclosure anchors (demo)')
+  .setTopicMemo('ZeroH Disclosure disclosure anchors (demo)')
   .execute(client);
 const receipt = await tx.getReceipt(client);
 const topicId = receipt.topicId.toString();

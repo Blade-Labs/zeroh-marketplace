@@ -8,7 +8,7 @@ if (!t) {
   process.exit(0);
 }
 const { ledger } = t;
-console.log(header(`ZeroH Mask — Turn ${t.t} (${ledger.phase})`));
+console.log(header(`ZeroH Disclosure — Turn ${t.t} (${ledger.phase})`));
 console.log(`Detected: ${ledger.findings.length} item(s)`);
 for (const r of ledger.replacements || []) {
   console.log(`  ${r.replacement}  type=${r.entity_type}  risk=${r.risk}  len=${r.original_length}  commit=${shorten(r.value_commitment)}`);

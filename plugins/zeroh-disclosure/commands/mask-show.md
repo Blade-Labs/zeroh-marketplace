@@ -1,5 +1,5 @@
 ---
-description: Show what ZeroH Mask redacted in the last masked turn
+description: Show what ZeroH Disclosure redacted in the last masked turn
 allowed-tools: ["Bash"]
 ---
 

@@ -1,5 +1,5 @@
 {
-  "description": "ZeroH Mask hooks: block prompts containing PII with a tokenized suggestion; finalize and (optionally) anchor a signed receipt at turn end.",
+  "description": "ZeroH Disclosure hooks: block prompts containing PII with a tokenized suggestion; finalize and (optionally) anchor a signed receipt at turn end.",
   "hooks": {
     "UserPromptSubmit": [
       {

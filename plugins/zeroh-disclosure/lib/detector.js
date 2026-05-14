@@ -102,7 +102,7 @@ export function detectSensitiveData(text, { enabledTypes = null } = {}) {
 
 export function detectorManifest() {
   return {
-    id: 'zeroh-mask-plugin-detector-v1',
+    id: 'zeroh-disclosure-detector-v1',
     engine: 'regex-local',
     cloud_calls: false,
     categories: RULES.map((r) => ({ type: r.type, risk: r.risk, confidence: r.confidence })),

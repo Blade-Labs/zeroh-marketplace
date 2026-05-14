@@ -13,7 +13,7 @@ const text = raw.replace(/\n$/, '');
 const findings = detectSensitiveData(text);
 
 if (findings.length === 0) {
-  console.log('ZeroH Mask: no sensitive data detected.');
+  console.log('ZeroH Disclosure: no sensitive data detected.');
   console.log('');
   console.log('The passage is safe to send as-is by the current rule set.');
   process.exit(0);
@@ -24,7 +24,7 @@ const masked = await maskText(text, findings, { hmacKeyBytes: randomBytes(32) })
 const byType = {};
 for (const r of masked.replacements) byType[r.entity_type] = (byType[r.entity_type] ?? 0) + 1;
 
-console.log(`ZeroH Mask: ${masked.replacements.length} item(s) detected.`);
+console.log(`ZeroH Disclosure: ${masked.replacements.length} item(s) detected.`);
 console.log(
   `Categories: ${Object.entries(byType)
     .map(([t, n]) => (n > 1 ? `${t}×${n}` : t))

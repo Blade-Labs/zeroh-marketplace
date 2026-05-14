@@ -4,7 +4,7 @@ import { anchorEnvSummary } from '../../lib/hedera-anchor.js';
 import { header, latestSession } from './_helpers.js';
 
 const s = await latestSession();
-console.log(header('ZeroH Mask config'));
+console.log(header('ZeroH Disclosure config'));
 console.log(`session_dir:   ${s.dir}`);
 console.log(`turn_count:    ${s.state.turnCount}`);
 console.log(`wallet:        ${s.state.sid ? s.state.sid : '(default)'} on ${(await s.wallet.getAccount()).network}`);

@@ -56,7 +56,7 @@ const clipboardTool = await writeClipboard(masked.sanitized_text).catch(() => nu
 
 const byType = countByType(masked.replacements);
 const lines = [];
-lines.push('🛡  ZeroH Mask: your prompt contains sensitive data that should not be sent to the model.');
+lines.push('🛡  ZeroH Disclosure: your prompt contains sensitive data that should not be sent to the model.');
 lines.push('');
 lines.push(`Detected ${masked.replacements.length} item(s): ${formatByType(byType)}`);
 lines.push('');

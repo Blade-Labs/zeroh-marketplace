@@ -5,7 +5,7 @@ description: Scan a draft text passage for sensitive data (PII, credit cards, IB
 
 # mask-review
 
-You are asked to identify sensitive content in a text passage and report what ZeroH Mask would redact, then provide a tokenized rewrite the user can paste into an external AI tool safely.
+You are asked to identify sensitive content in a text passage and report what ZeroH Disclosure would redact, then provide a tokenized rewrite the user can paste into an external AI tool safely.
 
 ## How to run
 

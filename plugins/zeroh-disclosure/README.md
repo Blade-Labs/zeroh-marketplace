@@ -1,4 +1,4 @@
-# ZeroH Mask · Claude Code plugin
+# ZeroH Disclosure · Claude Code plugin
 
 Detects sensitive content in your prompts **before** they leave the device,
 blocks the submission, and shows you a deterministically tokenized rewrite to
@@ -11,18 +11,18 @@ masked.
 ## Quick install (recommended)
 
 ```bash
-cd "/path/to/zeroh-mask-plugin"
+cd "/path/to/zeroh-disclosure"
 npm install
 
 claude plugin marketplace add "$PWD"
-claude plugin install zeroh-mask@zeroh-mask-local
+claude plugin install zeroh-disclosure@zeroh-disclosure-local
 ```
 
 That's it. The plugin is now permanently installed for every Claude Code
 session — no `--plugin-dir` flag, no symlinks. Verify with:
 
 ```bash
-claude plugin list | grep zeroh-mask
+claude plugin list | grep zeroh-disclosure
 ```
 
 To enable live Hedera anchoring (optional but visually demo-friendly), copy
@@ -52,7 +52,7 @@ Draft a refund email.
 You'll see:
 
 ```
-🛡  ZeroH Mask: your prompt contains sensitive data that should not be sent to the model.
+🛡  ZeroH Disclosure: your prompt contains sensitive data that should not be sent to the model.
 
 Detected 2 item(s): CARD_NUMBER, EMAIL
 
@@ -76,11 +76,11 @@ Inspect what happened with the slash commands:
 
 | Command | What it shows |
 | --- | --- |
-| `/zeroh-mask:mask-show` | Types + positions of redacted items (no raw values) |
-| `/zeroh-mask:mask-receipt` | Signed SD-JWT receipt JSON |
-| `/zeroh-mask:mask-anchor` | Hedera tx_id + HashScan URL |
-| `/zeroh-mask:mask-proofpack` | Regulator-ready evidence export path |
-| `/zeroh-mask:mask-config` | Detector categories + env status |
+| `/zeroh-disclosure:mask-show` | Types + positions of redacted items (no raw values) |
+| `/zeroh-disclosure:mask-receipt` | Signed SD-JWT receipt JSON |
+| `/zeroh-disclosure:mask-anchor` | Hedera tx_id + HashScan URL |
+| `/zeroh-disclosure:mask-proofpack` | Regulator-ready evidence export path |
+| `/zeroh-disclosure:mask-config` | Detector categories + env status |
 
 (Or use the `mask-review` skill to scan a draft before pasting:
 *"Use the mask-review skill on this: …"*.)
@@ -123,17 +123,17 @@ One extra paste per sensitive prompt is the cost of *guaranteeing* the raw
 values never reach the model.
 
 For surfaces that allow transparent rewriting (browser extension hooking
-`fetch`, for example), see `../research/zeroh-mask-integration-feasibility-v0.1.pdf`.
+`fetch`, for example), see `../research/zeroh-disclosure-integration-feasibility-v0.1.pdf`.
 
 ---
 
 ## Updating, uninstalling
 
 ```bash
-claude plugin update zeroh-mask@zeroh-mask-local
-claude plugin disable zeroh-mask@zeroh-mask-local
-claude plugin uninstall zeroh-mask@zeroh-mask-local
-claude plugin marketplace remove zeroh-mask-local
+claude plugin update zeroh-disclosure@zeroh-disclosure-local
+claude plugin disable zeroh-disclosure@zeroh-disclosure-local
+claude plugin uninstall zeroh-disclosure@zeroh-disclosure-local
+claude plugin marketplace remove zeroh-disclosure-local
 ```
 
 Hooks only load at Claude Code session start; restart any running sessions
@@ -144,7 +144,7 @@ after install / update / disable.
 ## What's inside
 
 ```
-zeroh-mask-plugin/
+zeroh-disclosure/
 ├── plugin.json                       ← Claude Code plugin manifest
 ├── .claude-plugin/marketplace.json   ← local marketplace manifest (one-line install)
 ├── .env / .env.example               ← config; .env is gitignored
@@ -171,7 +171,7 @@ zeroh-mask-plugin/
 
 Three pieces sit next to each other in this workspace; here's the map:
 
-|  | `zeroh-disclosure-mvp` | `zeroh-disclosure-wallet-mvp` | `zeroh-mask-plugin` *(this)* |
+|  | `zeroh-disclosure-mvp` | `zeroh-disclosure-wallet-mvp` | `zeroh-disclosure` *(this)* |
 |---|---|---|---|
 | **Shape** | Provider-agnostic SDK + CLI + HTTP server | Non-custodial client library + Vue integration | Claude Code plugin |
 | **Boundary** | Wraps `openaiCompatible` / `anthropicMessages` calls server-side | Generates receipts client-side; signs with a wallet adapter | Hooks into Claude Code's `UserPromptSubmit` / `Stop` events |
@@ -184,7 +184,7 @@ Three pieces sit next to each other in this workspace; here's the map:
 
 **Architectural relationship**
 
-- `zeroh-mask-plugin/lib/` is a **copy of `zeroh-disclosure-wallet-mvp/src/core/`** (`detector.js`, `mask.js`, `crypto.js`, `boundary.js`, `policy.js`, `policies/qcb-ai-disclosure.v1.js`, `sdjwt.js`, `receipt.js`, `proofpack.js`, `anchor.js`, `vault.js`), with one substantive change: `mask.js` now uses FNV-1a deterministic tokens (from the Ali Chat research) instead of counter-based `[TYPE_N]` tokens.
+- `zeroh-disclosure/lib/` is a **copy of `zeroh-disclosure-wallet-mvp/src/core/`** (`detector.js`, `mask.js`, `crypto.js`, `boundary.js`, `policy.js`, `policies/qcb-ai-disclosure.v1.js`, `sdjwt.js`, `receipt.js`, `proofpack.js`, `anchor.js`, `vault.js`), with one substantive change: `mask.js` now uses FNV-1a deterministic tokens (from the Ali Chat research) instead of counter-based `[TYPE_N]` tokens.
 - The plugin **adds** `hedera-anchor.js` (live HCS submit via `@hashgraph/sdk`) and `session.js` (per-turn ledger on disk) — capabilities the wallet-mvp had as *intent* but never executed.
 - `zeroh-disclosure-mvp` is a **separate, server-side lineage** that pre-dates the wallet refactor. Different architecture (HTTP server, provider wrappers, append-only ledger), different signing model.
 
@@ -195,7 +195,7 @@ In one sentence: **wallet-mvp is the library; mask-plugin is the first real surf
 ## Troubleshooting
 
 **Hook doesn't fire.** Make sure you restarted Claude Code after install —
-hooks load at session start. Run `claude plugin list` and confirm `zeroh-mask`
+hooks load at session start. Run `claude plugin list` and confirm `zeroh-disclosure`
 is `enabled`. For a deeper look, `claude --debug` shows hook events.
 
 **Edits to the source don't seem to take effect.** `claude plugin install`
@@ -204,8 +204,8 @@ Editing the source folder afterwards has no effect on the running install.
 After making changes, bump `version` in `plugin.json` and run:
 
 ```bash
-claude plugin marketplace update zeroh-mask-local
-claude plugin update zeroh-mask@zeroh-mask-local
+claude plugin marketplace update zeroh-disclosure-local
+claude plugin update zeroh-disclosure@zeroh-disclosure-local
 # fully quit and restart Claude Code
 ```
 
@@ -233,7 +233,7 @@ turn.
 - **Transparent rewriting** — the hook can only block, not rewrite. Use a
   browser extension for that surface (see the feasibility doc).
 - **Universal coverage** — this is one of several adapters. See
-  `../research/zeroh-mask-integration-feasibility-v0.1.pdf` for the full
+  `../research/zeroh-disclosure-integration-feasibility-v0.1.pdf` for the full
   landscape.
 - **Mainnet by default** — Hedera defaults to `testnet`. Flip
   `HEDERA_NETWORK=mainnet` only when you mean it.
