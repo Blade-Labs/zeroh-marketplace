@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@hashgraph/sdk": "^2.49.0"
+    "@hashgraph/sdk": "^2.49.0",
+    "ethers": "^6.16.0"
   }
 }

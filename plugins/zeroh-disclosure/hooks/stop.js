@@ -6,6 +6,7 @@ import { prepareDisclosure } from '../lib/receipt.js';
 import { buildProofPack } from '../lib/proofpack.js';
 import { anchorIntentToHederaMessage } from '../lib/anchor.js';
 import { isAnchorEnabled, submitToHcs } from '../lib/hedera-anchor.js';
+import { isEvmAnchorEnabled, submitEvmAnchor } from '../lib/evm-anchor.js';
 import { hmacKeyBytes, listTurns, loadSession, readJson, writeJson, writeProofPack } from '../lib/session.js';
 
 const event = await readStdinJson();
@@ -50,13 +51,32 @@ for (const { t, ledgerPath, ledger } of unfinished) {
     hmacKeyBytes: hmacKeyBytes(session.state),
   });
 
-  let anchor = { anchored: false, reason: 'ZEROH_ANCHOR != 1' };
+  // Anchor: HCS-primary, EVM-fallback. HCS gives us topic semantics
+  // (sequence numbers, topic-level filtering) and is preferred where gRPC
+  // is reachable. EVM via Hashio works over HTTPS-only egress (sandboxes,
+  // restricted CI) and uses the same receipt_hash as the on-chain payload.
+  let anchor = { anchored: false, type: 'none', reason: 'no anchor configured' };
+  let hcsAttempt = null;
   if (isAnchorEnabled()) {
     try {
-      anchor = await submitToHcs(anchorIntentToHederaMessage(result.anchor_intent));
+      const hcs = await submitToHcs(anchorIntentToHederaMessage(result.anchor_intent));
+      hcsAttempt = { ...hcs, type: 'hcs' };
+      if (hcs.anchored) anchor = hcsAttempt;
     } catch (e) {
-      anchor = { anchored: false, error: String(e?.message ?? e) };
+      hcsAttempt = { anchored: false, type: 'hcs', error: String(e?.message ?? e) };
     }
+  }
+  if (!anchor.anchored && isEvmAnchorEnabled()) {
+    const evm = await submitEvmAnchor(result.receipt.receipt_hash);
+    if (evm.anchored) {
+      anchor = hcsAttempt ? { ...evm, hcs_attempt: hcsAttempt } : evm;
+    } else if (hcsAttempt) {
+      anchor = { anchored: false, type: 'none', hcs_attempt: hcsAttempt, evm_attempt: evm };
+    } else {
+      anchor = evm;
+    }
+  } else if (hcsAttempt && !anchor.anchored) {
+    anchor = hcsAttempt;
   }
 
   // Drop the original text once the receipt is built — the receipt holds an
@@ -88,7 +108,9 @@ for (const { t, ledgerPath, ledger } of unfinished) {
   prevTokenHash = result.token.token_hash;
 
   const anchorLine = anchor.anchored
-    ? `anchored ${anchor.tx_id} seq=${anchor.sequence_number}`
+    ? anchor.type === 'evm'
+      ? `anchored on EVM ${anchor.tx_hash} block=${anchor.block_number}`
+      : `anchored on HCS ${anchor.tx_id} seq=${anchor.sequence_number}`
     : anchor.error
       ? `anchor failed: ${anchor.error}`
       : 'anchor skipped';
@@ -96,7 +118,7 @@ for (const { t, ledgerPath, ledger } of unfinished) {
   const topicId = anchor.topic_id || process.env.HEDERA_TOPIC_ID;
   const urls = [];
   if (anchor.anchored && anchor.hashscan_url) urls.push(anchor.hashscan_url);
-  if (anchor.anchored && topicId) urls.push(`https://hashscan.io/${network}/topic/${topicId}`);
+  if (anchor.anchored && anchor.type === 'hcs' && topicId) urls.push(`https://hashscan.io/${network}/topic/${topicId}`);
   const urlBlock = urls.length ? `\n   ${urls.join('\n   ')}` : '';
   const line = `📜 Turn ${t}: receipt ${result.receipt.receipt_id} (${anchorLine})${urlBlock}`;
   outboundLines.push(line);

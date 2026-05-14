@@ -185,25 +185,49 @@ await step('VERIFY: ProofPack rolls up receipt', async () => {
   return { receipts: pp.summary.receipts_count, hash: pp.proofpack_hash.slice(0, 12) + '…' };
 });
 
-const fullyConfigured = process.env.ZEROH_ANCHOR === '1'
+const hcsConfigured = process.env.ZEROH_ANCHOR === '1'
   && process.env.HEDERA_OPERATOR_ID
   && process.env.HEDERA_OPERATOR_KEY
   && process.env.HEDERA_TOPIC_ID;
-if (fullyConfigured) {
-  await step('VERIFY: live HCS anchor on Mirror Node', async () => {
+const evmConfigured = process.env.ZEROH_ANCHOR === '1'
+  && process.env.HEDERA_EVM_OPERATOR_ID
+  && process.env.HEDERA_EVM_OPERATOR_KEY;
+
+if (hcsConfigured || evmConfigured) {
+  await step('VERIFY: live anchor on Mirror Node', async () => {
     const turn = JSON.parse(await fs.readFile(path.join(sessionDir, 'turn-1.json'), 'utf8'));
     const anchor = turn.anchor;
-    assert(anchor?.submitted === true, `anchor submitted (got: ${anchor?.reason || 'no anchor field'})`);
-    assert(anchor?.tx_id, 'tx_id present');
-    return { tx_id: anchor.tx_id, topic_id: anchor.topic_id };
+    assert(anchor?.anchored === true, `anchor submitted (got: ${anchor?.reason || anchor?.error || 'not anchored'})`);
+    const network = process.env.HEDERA_NETWORK || 'testnet';
+    const mirrorBase = network === 'mainnet'
+      ? 'https://mainnet-public.mirrornode.hedera.com'
+      : 'https://testnet.mirrornode.hedera.com';
+    if (anchor.type === 'evm') {
+      // Poll Mirror Node for the EVM transaction record.
+      const start = Date.now();
+      const deadline = start + 20_000;
+      while (Date.now() < deadline) {
+        const r = await fetch(`${mirrorBase}/api/v1/contracts/results/${anchor.tx_hash}`);
+        if (r.ok) {
+          const j = await r.json();
+          if (j?.hash) {
+            return {
+              path: 'evm',
+              tx_hash: anchor.tx_hash.slice(0, 14) + '…',
+              block: j.block_number,
+              status: j.status,
+              consensus_ts: j.timestamp,
+            };
+          }
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      throw new Error(`EVM tx ${anchor.tx_hash} not visible on Mirror Node within 20s`);
+    }
+    return { path: 'hcs', tx_id: anchor.tx_id, topic_id: anchor.topic_id };
   });
 } else {
-  const missing = [];
-  if (process.env.ZEROH_ANCHOR !== '1') missing.push('ZEROH_ANCHOR=1');
-  if (!process.env.HEDERA_OPERATOR_ID) missing.push('HEDERA_OPERATOR_ID');
-  if (!process.env.HEDERA_OPERATOR_KEY) missing.push('HEDERA_OPERATOR_KEY');
-  if (!process.env.HEDERA_TOPIC_ID) missing.push('HEDERA_TOPIC_ID (run scripts/finalize-anchor-setup.mjs)');
-  console.log(yellow(`  ⏭  anchor verification skipped (missing: ${missing.join(', ')})`));
+  console.log(yellow('  ⏭  anchor verification skipped (set ZEROH_ANCHOR=1 + HEDERA_* env to enable)'));
 }
 
 console.log();

@@ -32,6 +32,11 @@ export async function submitToHcs(messageString) {
   const client = network === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
   const operatorKey = parseHederaPrivateKey(PrivateKey, process.env.HEDERA_OPERATOR_KEY);
   client.setOperator(process.env.HEDERA_OPERATOR_ID, operatorKey);
+  // Fail fast in environments without gRPC egress (e.g. Claude-on-the-web)
+  // so the Stop hook still has budget left for the EVM-anchor fallback.
+  const timeoutMs = Number(process.env.ZEROH_HCS_TIMEOUT_MS || 8000);
+  client.setRequestTimeout(timeoutMs);
+  if (typeof client.setMaxAttempts === 'function') client.setMaxAttempts(Number(process.env.ZEROH_HCS_MAX_ATTEMPTS || 2));
   try {
     const tx = await new TopicMessageSubmitTransaction()
       .setTopicId(TopicId.fromString(process.env.HEDERA_TOPIC_ID))
