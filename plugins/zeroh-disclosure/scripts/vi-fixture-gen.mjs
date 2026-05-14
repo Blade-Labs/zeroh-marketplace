@@ -141,6 +141,15 @@ const l2Compact = await userSdjwt.issue(l2Payload, {});
 await fs.writeFile(path.join(FIXTURE_DIR, 'l2.sdjwt'), l2Compact);
 console.log(`✓ l2.sdjwt   (${l2Compact.length} bytes)`);
 
+// ---- mandate wrapper (one file ZEROH_VI_MANDATE_FILE can point at) -----------
+
+await writeJson('mandate.json', {
+  version: '1',
+  l1_compact: l1Compact,
+  l2_compact: l2Compact,
+  trusted_issuer_jwks: { keys: [stripPriv(issuer.jwk)] },
+});
+
 // ---- summary ----------------------------------------------------------------
 
 console.log('\nFixtures written to', FIXTURE_DIR);

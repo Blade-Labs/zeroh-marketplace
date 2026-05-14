@@ -105,6 +105,40 @@ await step('VI chain rejects: wrong issuer JWKS', async () => {
   return { error_first: r.errors[0] };
 });
 
+await step('SessionStart with valid VI mandate exposes state.vi', async () => {
+  const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const out = await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-vi-ok', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath });
+  const ctx = out.json?.hookSpecificOutput?.additionalContext || '';
+  assert(ctx.includes('Verifiable Intent mandate active'), `mandate line in additionalContext (got: ${ctx.slice(0, 200)})`);
+  assert(ctx.includes('aud=commerce'), 'aud=commerce in summary');
+  // state.json should now hold the vi block
+  const stateFile = path.join(cwd, '.zeroh/sessions/e2e-vi-ok/state.json');
+  const state = JSON.parse(await fs.readFile(stateFile, 'utf8'));
+  assert(state.vi?.l1_hash && state.vi?.l2_hash, 'state.vi populated with hashes');
+  assert(state.vi?.agent_jwk_kid === 'agent-key-1', 'agent kid recorded');
+  return { aud: state.vi.mandate_aud, kid: state.vi.agent_jwk_kid, scope: state.vi.scope_summary };
+});
+
+await step('SessionStart with invalid VI mandate records vi_error', async () => {
+  // Write a wrapper that points at the fixture but with a tampered L1 (random bytes).
+  const tamperedPath = path.join(cwd, 'tampered.mandate.json');
+  const orig = JSON.parse(await fs.readFile(path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json'), 'utf8'));
+  const tampered = { ...orig, l1_compact: orig.l1_compact.replace(/.$/, 'X') };
+  await fs.writeFile(tamperedPath, JSON.stringify(tampered));
+  const out = await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-vi-bad', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_VI_MANDATE_FILE: tamperedPath });
+  const ctx = out.json?.hookSpecificOutput?.additionalContext || '';
+  assert(ctx.includes('FAILED'), `failure line surfaced (got: ${ctx.slice(0, 200)})`);
+  const stateFile = path.join(cwd, '.zeroh/sessions/e2e-vi-bad/state.json');
+  const state = JSON.parse(await fs.readFile(stateFile, 'utf8'));
+  assert(!state.vi, 'state.vi absent after failed ingest');
+  assert(Array.isArray(state.vi_error?.errors), 'state.vi_error captured');
+  return { error_first: state.vi_error.errors[0] };
+});
+
 await step('SessionStart', async () => {
   const out = await runHook(HOOKS.sessionStart, {
     session_id: SESSION_ID, cwd, source: 'startup', hook_event_name: 'SessionStart',
@@ -342,9 +376,12 @@ function assert(cond, msg) {
   if (!cond) throw new Error(`assertion failed: ${msg}`);
 }
 
-function runHook(scriptPath, event) {
+function runHook(scriptPath, event, extraEnv = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [scriptPath], { env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('node', [scriptPath], {
+      env: { ...process.env, ...extraEnv },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     let stdout = '', stderr = '';
     child.stdout.on('data', (b) => (stdout += b));
     child.stderr.on('data', (b) => (stderr += b));

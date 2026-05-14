@@ -1,8 +1,8 @@
 {
   "kty": "EC",
-  "x": "MDRX6EpT5qg8m0SheKUfPBwo60pg81UQFlS4ajOX4h8",
-  "y": "KAG_pJ5ImhJLbIdATwUCoDG2J8rhNvuv2SPFkzi8kw4",
+  "x": "HCgEsZu7PFCYHVPp94PIQvYML_GTqdmzGImjMYELh9Q",
+  "y": "RLjZHyME0cMi29-cM-fhgz43ly-XLLW25K3bKMfEY58",
   "crv": "P-256",
-  "d": "I4asU4ATl55wtOkv-hMs2IglkGLTG51bVQzwAP83Qrc",
+  "d": "BLP6peJ_xq_MA35OQhlqF9_Z-bLHN5naKWZucXF1ZKI",
   "kid": "agent-key-1"
 }
