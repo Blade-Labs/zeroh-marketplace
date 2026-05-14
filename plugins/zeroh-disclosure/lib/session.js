@@ -44,13 +44,14 @@ export async function writeJson(p, value) {
 }
 
 export async function loadSession({ cwd, sessionId }) {
-  const dir = sessionDir(cwd, sessionId);
+  const resolvedSid = sanitizeSid(sessionId || process.env.CLAUDE_SESSION_ID || 'default');
+  const dir = sessionDir(cwd, resolvedSid);
   await ensureDir(dir);
   const statePath = path.join(dir, 'state.json');
   let state = await readJson(statePath);
   if (!state) {
     state = {
-      sid: sessionId,
+      sid: resolvedSid,
       created_at: new Date().toISOString(),
       hmacKeyB64u: bytesToBase64Url(randomBytes(32)),
       turnCount: 0,
@@ -64,7 +65,7 @@ export async function loadSession({ cwd, sessionId }) {
     writeJson,
     walletPath: path.join(dir, 'wallet.json'),
     privateJwkPath: path.join(dir, 'wallet.key.json'),
-    accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid)}`,
+    accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid || resolvedSid)}`,
     network: process.env.HEDERA_NETWORK || 'testnet',
   });
   return { dir, state, statePath, wallet };
