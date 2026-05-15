@@ -1,4 +1,4 @@
-import { canonicalJson, randomB64u, sha256B64u, utf8, bytesToBase64Url, base64UrlToBytes } from './crypto.js';
+import { canonicalJson, randomB64u, sha256B64u, utf8, bytesToBase64Url, base64UrlToBytes, importPublicJwk, verifyP256 } from './crypto.js';
 
 export async function buildSelectiveDisclosures(claims) {
   const disclosures = [],
@@ -67,4 +67,23 @@ export async function verifyPresentationDigests(presentation) {
     revealed.push({ name, value, digest });
   }
   return { ok: true, receipt_payload: payload, revealed };
+}
+
+export function decodeCompactReceipt(compact) {
+  const [headerB64u, payloadB64u, signatureB64u] = compact.split('.');
+  if (!headerB64u || !payloadB64u || !signatureB64u) throw new Error('receipt compact must have three dot-separated parts');
+  return {
+    header: JSON.parse(new TextDecoder().decode(base64UrlToBytes(headerB64u))),
+    payload: JSON.parse(new TextDecoder().decode(base64UrlToBytes(payloadB64u))),
+    signature: base64UrlToBytes(signatureB64u),
+    signingInput: `${headerB64u}.${payloadB64u}`,
+  };
+}
+
+export async function verifyCompactReceiptSignature(compact, publicJwk) {
+  if (!publicJwk) return { ok: false, reason: 'missing_public_jwk' };
+  const decoded = decodeCompactReceipt(compact);
+  const key = await importPublicJwk(publicJwk);
+  const ok = await verifyP256(key, utf8(decoded.signingInput), decoded.signature);
+  return { ok, reason: ok ? null : 'signature_invalid', ...decoded };
 }

@@ -1,6 +1,6 @@
 {
   "name": "zeroh-disclosure",
   "version": "0.1.1",
-  "description": "ZeroH Disclosure: pre-submit PII detection for Claude Code. Blocks prompts containing sensitive data and suggests a deterministically tokenized replacement. Builds signed SD-JWT receipts and (optionally) anchors them to Hedera HCS.",
+  "description": "ZeroH Disclosure: disclosure-policy proof primitive with a Claude Code adapter. Applies named policies before AI boundary release, records the protection engine used, signs receipt v2 proofs, and optionally anchors them to Hedera.",
   "author": { "name": "Blade Labs / ZeroH" }
 }

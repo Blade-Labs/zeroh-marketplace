@@ -1,5 +1,6 @@
 export const qcbAiDisclosurePolicyV1 = {
   policy_id: 'qcb-ai-disclosure-v1',
+  aliases: ['qcb'],
   name: 'QCB AI Disclosure Demo Policy v1',
   jurisdiction: 'QA',
   version: '0.1.0-mvp',
