@@ -22,6 +22,12 @@ export async function applyDisclosurePolicy({
   intentBinding = null,
   proofStage = 'pre_boundary',
   anchor = true,
+  subjectType = 'prompt',
+  decisionOverride = null,
+  findingsOverride = null,
+  sanitizedTextOverride = undefined,
+  publicClaimExtras = {},
+  selectiveClaimExtras = {},
 } = {}) {
   if (!session) throw new Error('session is required');
   await loadConfig({ cwd });
@@ -41,6 +47,12 @@ export async function applyDisclosurePolicy({
     protectionEngine: engineContext.engine,
     protectionEngineManifest: engineContext.manifest,
     protectionEngineResolution: engineContext.resolution,
+    subjectType,
+    decisionOverride,
+    findingsOverride,
+    sanitizedTextOverride,
+    publicClaimExtras,
+    selectiveClaimExtras,
   });
   let anchorResult = { anchored: false, type: 'none', reason: anchor ? 'no anchor configured' : 'anchor skipped by caller' };
   if (anchor) anchorResult = await submitAnchor(result);

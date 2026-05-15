@@ -2,8 +2,9 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { qcbAiDisclosurePolicyV1 } from './policies/qcb-ai-disclosure.v1.js';
 import { bladeAiDisclosurePolicyV1 } from './policies/blade-ai-disclosure.v1.js';
+import { agentControlledDisclosurePolicyV1 } from './policies/agent-controlled-disclosure.v1.js';
 
-const POLICIES = [qcbAiDisclosurePolicyV1, bladeAiDisclosurePolicyV1];
+const POLICIES = [qcbAiDisclosurePolicyV1, bladeAiDisclosurePolicyV1, agentControlledDisclosurePolicyV1];
 
 export function listPolicies() {
   return POLICIES.map((policy) => ({

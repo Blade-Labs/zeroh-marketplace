@@ -105,6 +105,18 @@ await step('VI chain rejects: wrong issuer JWKS', async () => {
   return { error_first: r.errors[0] };
 });
 
+await step('VI chain rejects: wrong audience', async () => {
+  const { verifyChain } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const issuerJwks = JSON.parse(await fs.readFile(path.join(fixDir, 'issuer-jwks.json'), 'utf8'));
+  const r = await verifyChain({ l1Compact: l1, l2Compact: l2, trustedIssuerJwks: issuerJwks, expectedAud: 'not-commerce' });
+  assert(r.ok === false, 'chain rejected as expected');
+  assert(r.errors.some((e) => /aud=commerce expected not-commerce/.test(e)), `error mentions audience (got: ${r.errors.join(';')})`);
+  return { error_first: r.errors[0] };
+});
+
 await step('SessionStart with valid VI mandate exposes state.vi', async () => {
   const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
   const out = await runHook(HOOKS.sessionStart, {
@@ -170,7 +182,7 @@ await step('Commerce tool denied without an active mandate', async () => {
   return { reason_starts: hso.permissionDecisionReason.split('\n')[0] };
 });
 
-await step('Commerce tool denied when mandate active but _intent_fulfillment is missing', async () => {
+await step('Commerce tool denied when mandate active but fulfillment is missing', async () => {
   const out = await runHook(HOOKS.preToolUse, {
     session_id: 'e2e-vi-ok', cwd,
     tool_name: 'mcp__example_checkout__buy', tool_use_id: 'e2e-cm-2',
@@ -178,8 +190,8 @@ await step('Commerce tool denied when mandate active but _intent_fulfillment is 
   });
   const hso = out.json?.hookSpecificOutput;
   assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
-  assert(/must declare an _intent_fulfillment/.test(hso.permissionDecisionReason),
-    `reason mentions missing _intent_fulfillment`);
+  assert(/fulfillment fields are missing/.test(hso.permissionDecisionReason),
+    `reason mentions missing fulfillment`);
   return { reason_starts: hso.permissionDecisionReason.split('\n')[0] };
 });
 
@@ -225,6 +237,102 @@ await step('Commerce tool allowed when fulfillment is in scope', async () => {
   assert(out.json?.hookSpecificOutput?.permissionDecision !== 'deny',
     `not denied (got: ${out.json?.hookSpecificOutput?.permissionDecision})`);
   return { passed: true };
+});
+
+await step('Agent accountability mode loads VI and reports enabled context', async () => {
+  const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const out = await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-agent', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_POLICY: 'agent', ZEROH_REQUIRE_INTENT: '1', ZEROH_VI_MANDATE_FILE: mandatePath });
+  const ctx = out.json?.hookSpecificOutput?.additionalContext || '';
+  assert(ctx.includes('Agent accountability: enabled'), 'agent accountability line present');
+  assert(ctx.includes('Verifiable Intent mandate active'), 'VI line present');
+  return { context: 'agent+vi' };
+});
+
+await step('Agent commerce allow signs deterministic tool evidence', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-agent', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-agent-allow',
+    tool_input: {
+      amount: 800,
+      currency: 'USD',
+      merchant: { id: 'merchant-001' },
+      payee: { id: 'payee-001' },
+      line_items: [{ id: 'sku-coffee', quantity: 1 }],
+      reference: 'binding-001',
+    },
+  }, { ZEROH_POLICY: 'agent', ZEROH_REQUIRE_INTENT: '1' });
+  assert(out.exit === 0, `exit 0 (got ${out.exit})`);
+  assert(out.json?.hookSpecificOutput?.permissionDecision !== 'deny', 'not denied');
+  const event = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-agent/event-1.json'), 'utf8'));
+  assert(event.decision_action === 'tool_allow', 'tool_allow receipt');
+  assert(event.fulfillment_source === 'deterministic', 'deterministic fulfillment');
+  assert(event.receipt.public_claims.subject_type === 'tool_action', 'tool action receipt');
+  return { receipt: event.receipt.receipt_hash.slice(0, 12) + '…' };
+});
+
+await step('Agent strict mode denies self-reported-only fulfillment and signs it', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-agent', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-agent-self',
+    tool_input: {
+      _intent_fulfillment: {
+        amount: 800,
+        currency: 'USD',
+        merchant: { id: 'merchant-001' },
+        payee: { id: 'payee-001' },
+        line_items: [{ id: 'sku-coffee', quantity: 1 }],
+        reference: 'binding-001',
+      },
+    },
+  }, { ZEROH_POLICY: 'agent', ZEROH_REQUIRE_INTENT: '1' });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/strict agent mode/.test(hso.permissionDecisionReason), 'strict-mode denial reason');
+  const event = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-agent/event-2.json'), 'utf8'));
+  assert(event.decision_action === 'tool_deny', 'signed deny event');
+  return { reason: event.reason };
+});
+
+await step('Agent commerce deny names amount_range and signs it', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-agent', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-agent-amount',
+    tool_input: {
+      amount: 9999,
+      currency: 'USD',
+      merchant: { id: 'merchant-001' },
+      payee: { id: 'payee-001' },
+      line_items: [{ id: 'sku-coffee', quantity: 1 }],
+      reference: 'binding-001',
+    },
+  }, { ZEROH_POLICY: 'agent', ZEROH_REQUIRE_INTENT: '1' });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/mandate\.payment\.amount_range/.test(hso.permissionDecisionReason), 'amount_range denial reason');
+  const event = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-agent/event-3.json'), 'utf8'));
+  assert(event.violations.some((v) => v.type === 'mandate.payment.amount_range'), 'event records amount_range');
+  return { violation: 'amount_range' };
+});
+
+await step('Agent packet builds, verifies, and fails on tamper', async () => {
+  const cli = path.join(PLUGIN_ROOT, 'bin/zeroh-disclosure.mjs');
+  const built = await runNode(cli, ['agent-packet', '--cwd', cwd, '--session', 'e2e-agent', '--json']);
+  assert(built.exit === 0, `agent-packet exit 0 (got ${built.exit}; stderr: ${built.stderr.slice(-200)})`);
+  const builtJson = JSON.parse(built.stdout);
+  const verified = await runNode(cli, ['verify', '--agent-packet', builtJson.path, '--json']);
+  assert(verified.exit === 0, `verify agent packet exit 0 (got ${verified.exit}; stderr: ${verified.stderr.slice(-200)})`);
+  const verifyJson = JSON.parse(verified.stdout);
+  assert(verifyJson.ok === true, 'packet verifies');
+  assert(verifyJson.action_count === 3, `action_count=3 (got ${verifyJson.action_count})`);
+  const tamperedPath = path.join(cwd, 'tampered-agent-packet.json');
+  const tampered = JSON.parse(await fs.readFile(builtJson.path, 'utf8'));
+  tampered.events[0].decision_action = 'tool_deny';
+  await fs.writeFile(tamperedPath, JSON.stringify(tampered, null, 2));
+  const tamperedVerify = await runNode(cli, ['verify', '--agent-packet', tamperedPath, '--json']);
+  assert(tamperedVerify.exit !== 0, 'tampered packet fails');
+  return { packet: verifyJson.packet_hash.slice(0, 12) + '…' };
 });
 
 await step('End-to-end: receipt carries intent_binding when mandate is active', async () => {

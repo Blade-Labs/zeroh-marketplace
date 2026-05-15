@@ -62,6 +62,14 @@ export async function verifyReceiptArtifactObject(artifact, { verifySessionChain
     checks.push(check('protection_engine_manifest', false, 'missing manifest'));
   }
 
+  if (claims.subject_type === 'tool_action') {
+    checks.push(check('tool_action_claims', !!claims.tool_use_id && !!claims.tool_name && !!claims.tool_input_hash, 'missing tool action claims'));
+    if (claims.allowed_tool_input_hash && artifact.sanitized_text != null) {
+      const expected = await sha256B64u(artifact.sanitized_text);
+      checks.push(check('allowed_tool_input_hash', expected === claims.allowed_tool_input_hash, `expected ${expected}, got ${claims.allowed_tool_input_hash}`));
+    }
+  }
+
   const boundaryDetails = await revealClaim(artifact, 'boundary_details');
   if (boundaryDetails != null) {
     const expected = await boundaryHash(boundaryDetails);
@@ -204,7 +212,7 @@ function verifyProofPackChain(records) {
   return checks;
 }
 
-function receiptRecordToArtifact(record, file) {
+export function receiptRecordToArtifact(record, file) {
   const receipt = record.receipt ?? record;
   const compact = receipt.compact_sdjwt ?? receipt.sdjwt?.compact ?? record.compact_sdjwt;
   if (!compact) throw new Error(`No compact receipt found in proofpack record ${file}`);

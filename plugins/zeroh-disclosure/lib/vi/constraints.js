@@ -5,14 +5,14 @@
 
 const CHECKS = {
   'mandate.checkout.allowed_merchants': (c, f) => {
-    if (!f?.merchant) return fail('merchant not declared in _intent_fulfillment');
+    if (!f?.merchant) return fail('missing fulfillment field: merchant');
     const m = f.merchant;
     const ok = (c.allowed || []).some((a) => matchParty(a, m));
     return ok ? pass() : fail(`merchant ${describeParty(m)} not in allowed_merchants`);
   },
 
   'mandate.checkout.line_items': (c, f) => {
-    if (!Array.isArray(f?.line_items)) return fail('line_items not declared in _intent_fulfillment');
+    if (!Array.isArray(f?.line_items)) return fail('missing fulfillment field: line_items');
     const constraintItems = c.items || [];
     const mode = c.match_mode === 'exact' ? 'exact' : 'subset';
     // Each fulfillment line item must be allowed and quantity within cap.
@@ -32,13 +32,13 @@ const CHECKS = {
   },
 
   'mandate.payment.allowed_payees': (c, f) => {
-    if (!f?.payee) return fail('payee not declared in _intent_fulfillment');
+    if (!f?.payee) return fail('missing fulfillment field: payee');
     const ok = (c.allowed || []).some((a) => matchParty(a, f.payee));
     return ok ? pass() : fail(`payee ${describeParty(f.payee)} not in allowed_payees`);
   },
 
   'mandate.payment.amount_range': (c, f) => {
-    if (typeof f?.amount !== 'number') return fail('amount not declared in _intent_fulfillment');
+    if (typeof f?.amount !== 'number') return fail('missing fulfillment field: amount');
     if (c.currency && f.currency && c.currency !== f.currency) {
       return fail(`currency ${f.currency} ≠ constraint ${c.currency}`);
     }
@@ -56,7 +56,7 @@ const CHECKS = {
     // monthly). The v1 plugin can't see prior transactions across sessions,
     // so we only enforce that THIS single amount is within budget.max. The
     // network/issuer is expected to enforce the cumulative bound.
-    if (typeof f?.amount !== 'number') return fail('amount not declared in _intent_fulfillment');
+    if (typeof f?.amount !== 'number') return fail('missing fulfillment field: amount');
     if (c.currency && f.currency && c.currency !== f.currency) {
       return fail(`currency ${f.currency} ≠ budget ${c.currency}`);
     }
@@ -82,7 +82,7 @@ const CHECKS = {
 
   'mandate.payment.reference': (c, f) => {
     if (!c.conditional_transaction_id) return pass();
-    if (!f?.reference) return fail('reference not declared (mandate requires conditional_transaction_id)');
+    if (!f?.reference) return fail('missing fulfillment field: reference (mandate requires conditional_transaction_id)');
     if (f.reference !== c.conditional_transaction_id) {
       return fail(`reference ${f.reference} ≠ mandate.conditional_transaction_id ${c.conditional_transaction_id}`);
     }
@@ -96,7 +96,7 @@ const CHECKS = {
  * full picture.
  *
  * @param {object[]} constraints  Array of L2 constraints (any of the 8 types)
- * @param {object} fulfillment    Tool input's _intent_fulfillment object
+ * @param {object} fulfillment    Normalized commerce fulfillment.
  * @returns {{ satisfied: boolean, violations: { type: string, reason: string }[] }}
  */
 export function evaluateConstraints(constraints, fulfillment) {

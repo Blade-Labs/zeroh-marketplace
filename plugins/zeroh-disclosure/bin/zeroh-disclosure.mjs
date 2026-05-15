@@ -1,24 +1,30 @@
 #!/usr/bin/env node
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../lib/config.js';
 import { applyDisclosurePolicy, buildSessionProofPack, ledgerFromDisclosureResult, markDisclosureResultCommitted, protectionEngineStatus } from '../lib/disclosure.js';
-import { bumpTurn, loadSession, writeTurn } from '../lib/session.js';
+import { bumpTurn, loadSession, writeJson, writeTurn } from '../lib/session.js';
 import { resolveActivePolicy, resolvePolicy, listPolicies } from '../lib/policy-registry.js';
 import { loadReceiptArtifact, verifyProofPackArtifact, verifyReceiptArtifact } from '../lib/verify-receipt.js';
 import { anchorEnvSummary } from '../lib/hedera-anchor.js';
 import { evmAnchorEnvSummary } from '../lib/evm-anchor.js';
 import { verifyAnchorEvidence } from '../lib/anchor-verify.js';
 import { sha256B64u } from '../lib/crypto.js';
+import { applyToolEvidence, buildAgentPacket, evaluateCommerceIntent, verifyAgentPacket } from '../lib/evidence-events.js';
+import { ingestMandate } from '../lib/vi/ingest.js';
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
 const cwd = path.resolve(args.cwd || process.cwd());
+const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 await loadConfig({ cwd });
 
 try {
   if (command === 'apply') await cmdApply(args, cwd);
   else if (command === 'verify') await cmdVerify(args);
   else if (command === 'proofpack') await cmdProofPack(args, cwd);
+  else if (command === 'agent-packet') await cmdAgentPacket(args, cwd);
   else if (command === 'poll-anchor') await cmdPollAnchor(args);
   else if (command === 'doctor') await cmdDoctor(args, cwd);
   else if (command === 'demo') await cmdDemo(args, cwd);
@@ -85,6 +91,23 @@ async function cmdApply(args, cwd) {
 }
 
 async function cmdVerify(args) {
+  if (args['agent-packet']) {
+    const packet = JSON.parse(await fs.readFile(args['agent-packet'], 'utf8'));
+    const result = await verifyAgentPacket(packet);
+    print(result, args.json, [
+      `ok: ${result.ok}`,
+      `agent_accountability: ${result.ok ? 'verified' : 'failed'}`,
+      `policy: ${result.policy_id}`,
+      `receipt_count: ${result.receipt_count}`,
+      `action_count: ${result.action_count}`,
+      `packet_hash: ${result.packet_hash}`,
+      `anchor_status: ${result.anchor.status}`,
+      '',
+      ...result.checks.map((c) => `${c.ok ? '✓' : '✗'} ${c.name}${c.detail ? `: ${c.detail}` : ''}`),
+    ]);
+    if (!result.ok) process.exit(1);
+    return;
+  }
   if (args.proofpack) {
     const result = await verifyProofPackArtifact(args.proofpack);
     print(result, args.json, [
@@ -121,6 +144,17 @@ async function cmdProofPack(args, cwd) {
     `proofpack_path: ${result.path}`,
     `receipts_count: ${result.receipts_count}`,
     `proofpack_hash: ${result.proofpack.proofpack_hash}`,
+  ]);
+}
+
+async function cmdAgentPacket(args, cwd) {
+  const session = await loadSession({ cwd, sessionId: args.session || 'cli-default' });
+  const result = await buildAgentPacket({ session });
+  print(result, args.json, [
+    `agent_packet_path: ${result.path}`,
+    `packet_hash: ${result.packet_hash}`,
+    `receipt_count: ${result.packet.receipt_count}`,
+    `action_count: ${result.packet.action_count}`,
   ]);
 }
 
@@ -169,6 +203,7 @@ async function cmdDoctor(args, cwd) {
 
 async function cmdDemo(args, cwd) {
   const name = args._[1];
+  if (name === 'agent-accountability') return cmdDemoAgentAccountability(args, cwd);
   if (name !== 'blade-proof') throw new Error('demo requires "blade-proof"');
   const engineId = args.engine || 'presidio-http';
   const sessionId = args.session || `blade-proof-demo-${Date.now().toString(36)}`;
@@ -248,6 +283,122 @@ async function cmdDemo(args, cwd) {
   if (!receiptVerification.ok || !proofpackVerification.ok) process.exit(1);
 }
 
+async function cmdDemoAgentAccountability(args, cwd) {
+  const sessionId = args.session || `agent-accountability-demo-${Date.now().toString(36)}`;
+  const session = await loadSession({ cwd, sessionId });
+  const mandateFile = args.mandate || process.env.ZEROH_VI_MANDATE_FILE || path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const mandate = await ingestMandate({ cwd, mandateFile });
+  if (!mandate.present) throw new Error(`No VI mandate found at ${mandateFile}`);
+  if (!mandate.ok) throw new Error(`VI mandate invalid: ${mandate.errors.join('; ')}`);
+  session.state.vi = mandate.vi;
+  session.state.active_policy_id = 'agent-controlled-disclosure-v1';
+  session.state.active_policy_alias = 'agent';
+  session.state.updated_at = new Date().toISOString();
+  await writeJson(session.statePath, session.state);
+
+  const allowedInput = {
+    amount: 800,
+    currency: 'USD',
+    merchant: { id: 'merchant-001' },
+    payee: { id: 'payee-001' },
+    line_items: [{ id: 'sku-coffee', quantity: 1 }],
+    reference: 'binding-001',
+  };
+  const allowed = await evaluateCommerceIntent({
+    toolName: 'mcp__example_payment__charge',
+    toolInput: allowedInput,
+    viState: session.state.vi,
+    strict: true,
+  });
+  if (allowed.action !== 'allow') throw new Error(`expected allowed demo action, got ${allowed.reason}`);
+  await applyToolEvidence({
+    session,
+    cwd,
+    policyAlias: 'agent',
+    toolName: 'mcp__example_payment__charge',
+    toolUseId: 'demo-allow-1',
+    toolInput: allowedInput,
+    allowedToolInput: allowedInput,
+    action: 'allow',
+    reason: 'commerce_constraints_satisfied',
+    tier: 'commerce',
+    commerce: allowed,
+  });
+
+  const highAmountInput = { ...allowedInput, amount: 9999 };
+  const highAmount = await evaluateCommerceIntent({
+    toolName: 'mcp__example_payment__charge',
+    toolInput: highAmountInput,
+    viState: session.state.vi,
+    strict: true,
+  });
+  await applyToolEvidence({
+    session,
+    cwd,
+    policyAlias: 'agent',
+    toolName: 'mcp__example_payment__charge',
+    toolUseId: 'demo-deny-amount',
+    toolInput: highAmountInput,
+    action: 'deny',
+    reason: highAmount.reason,
+    tier: 'commerce',
+    commerce: highAmount,
+  });
+
+  const selfOnlyInput = {
+    _intent_fulfillment: allowedInput,
+  };
+  const selfOnly = await evaluateCommerceIntent({
+    toolName: 'mcp__example_payment__charge',
+    toolInput: selfOnlyInput,
+    viState: session.state.vi,
+    strict: true,
+  });
+  await applyToolEvidence({
+    session,
+    cwd,
+    policyAlias: 'agent',
+    toolName: 'mcp__example_payment__charge',
+    toolUseId: 'demo-deny-self-reported',
+    toolInput: selfOnlyInput,
+    action: 'deny',
+    reason: selfOnly.reason,
+    tier: 'commerce',
+    commerce: selfOnly,
+  });
+
+  const packet = await buildAgentPacket({ session });
+  const verification = await verifyAgentPacket(packet.packet);
+  const out = {
+    agent_accountability: verification.ok ? 'verified' : 'failed',
+    policy: packet.packet.policy_id,
+    intent: packet.packet.vi_summary ? 'valid' : 'missing',
+    agent_key: packet.packet.vi_summary?.agent_jwk_kid ?? null,
+    actions_allowed: packet.packet.decision_counts.tool_allow || 0,
+    actions_denied: packet.packet.decision_counts.tool_deny || 0,
+    violations: packet.packet.events.flatMap((e) => e.violations || [])[0]?.type ?? null,
+    raw_sensitive_content_sent: false,
+    packet_hash: packet.packet_hash,
+    anchor_status: verification.anchor.status,
+    packet_path: packet.path,
+    verification_result: verification.ok,
+  };
+  print(out, args.json, [
+    `agent_accountability: ${out.agent_accountability}`,
+    `policy: ${out.policy}`,
+    `intent: ${out.intent}`,
+    `agent_key: ${out.agent_key}`,
+    `actions_allowed: ${out.actions_allowed}`,
+    `actions_denied: ${out.actions_denied}`,
+    `violations: ${out.violations}`,
+    `raw_sensitive_content_sent: ${out.raw_sensitive_content_sent}`,
+    `packet_hash: ${out.packet_hash}`,
+    `anchor_status: ${out.anchor_status}`,
+    `packet_path: ${out.packet_path}`,
+  ]);
+  if (!verification.ok) process.exit(1);
+}
+
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
@@ -290,10 +441,13 @@ function help(exit) {
   zeroh-disclosure apply --policy blade --text "..."
   zeroh-disclosure verify --receipt <turn-json>
   zeroh-disclosure verify --proofpack <proofpack-json>
+  zeroh-disclosure verify --agent-packet <packet-json>
   zeroh-disclosure proofpack --session <id>
+  zeroh-disclosure agent-packet --session <id>
   zeroh-disclosure poll-anchor --receipt <turn-json>
   zeroh-disclosure doctor [--policy blade]
   zeroh-disclosure demo blade-proof --engine presidio-http [--allow-fallback]
+  zeroh-disclosure demo agent-accountability [--mandate <path>]
 `);
   process.exit(exit);
 }

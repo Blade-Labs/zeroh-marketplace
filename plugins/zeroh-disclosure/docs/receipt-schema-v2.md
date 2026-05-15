@@ -7,6 +7,8 @@ produce it, but verifiers validate the same contract.
 Required public claims:
 
 - `schema`: `zeroh-disclosure-receipt/v2`
+- `subject_type`: `prompt` by default; `tool_action` for signed PreToolUse
+  decisions
 - `receipt_id`, `receipt_hash`, `iat`
 - `policy_id`, `policy_alias`, `policy_hash`
 - `boundary_hash`
@@ -28,6 +30,16 @@ Required public claims:
   `sanitized_content_may_be_sent_to_ai_provider`
 - `issuer_public_jwk`: public verification key for the receipt signature
 
+Tool-action receipts add:
+
+- `tool_use_id`, `tool_name`, `tool_tier`
+- `tool_input_hash`, `tool_input_commitment`
+- `allowed_tool_input_hash`
+- `intent_fulfillment_hash`
+- `constraint_result_hash`
+- `decision_action`: `tool_allow`, `tool_deny`, `tool_rewrite`, or
+  `tool_warn`
+
 Hash rules:
 
 - Policy, boundary, and engine hashes use canonical JSON with sorted object
@@ -44,6 +56,8 @@ Selective disclosures:
 - `protection_engine_manifest`
 - `transformation_manifest`
 - `masked_prompt`
+- `tool_action_details`, `intent_fulfillment`, `constraint_result` for
+  tool-action evidence
 
 Verifier expectations:
 

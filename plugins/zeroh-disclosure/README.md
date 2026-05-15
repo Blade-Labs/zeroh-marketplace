@@ -2,7 +2,9 @@
 
 ZeroH Disclosure is a disclosure-proof primitive. The unit of value is the
 signed, verifiable, optionally anchored receipt proving which policy, boundary,
-protection engine, and transformed view were applied before release.
+protection engine, and transformed view were applied before release. Agent
+tool decisions can also roll into a customer-facing accountability packet that
+proves commerce actions stayed inside signed user intent.
 
 The Claude Code plugin is the first adapter. The same proof primitive is also
 available from the CLI, and future adapters such as browser extensions, MCP
@@ -44,6 +46,7 @@ Current surfaces:
 | Claude Code hooks | First interactive AI-boundary adapter |
 | `zeroh-disclosure` CLI | Hook-independent proof creation and verification |
 | Presidio sidecar | Third-party protection engine proof point |
+| Agent packet | Signed tool-action evidence bundle for autonomous agents |
 
 ### Optional: live Hedera HCS anchoring
 
@@ -167,7 +170,8 @@ All settings live in a `.env`-style file. Precedence, highest first:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `ZEROH_POLICY` | Active policy alias/id (`qcb`, `blade`) | `qcb` |
+| `ZEROH_POLICY` | Active policy alias/id (`qcb`, `blade`, `agent`) | `qcb` |
+| `ZEROH_REQUIRE_INTENT` | `1` makes agent commerce evidence fail closed without valid VI | unset |
 | `ZEROH_PROTECTION_ENGINE` | Override protection engine (`regex-local`, `presidio-http`) | policy default |
 | `ZEROH_POLICY_MODE` | `fallback_with_receipt` or `fail_closed` | `fallback_with_receipt` |
 | `PRESIDIO_ANALYZER_URL` | Presidio analyzer endpoint | `http://localhost:5002/analyze` |
@@ -230,6 +234,9 @@ node bin/zeroh-disclosure.mjs apply --policy blade --text "contact alice@example
 node bin/zeroh-disclosure.mjs verify --receipt .zeroh/sessions/cli-default/turn-1.json
 node bin/zeroh-disclosure.mjs proofpack --session cli-default
 node bin/zeroh-disclosure.mjs verify --proofpack .zeroh/sessions/cli-default/turn-1.proofpack.json
+node bin/zeroh-disclosure.mjs demo agent-accountability
+node bin/zeroh-disclosure.mjs agent-packet --session cli-default
+node bin/zeroh-disclosure.mjs verify --agent-packet .zeroh/sessions/cli-default/agent-accountability-packet.json
 node bin/zeroh-disclosure.mjs poll-anchor --receipt .zeroh/sessions/cli-default/turn-1.json
 node bin/zeroh-disclosure.mjs doctor
 ```

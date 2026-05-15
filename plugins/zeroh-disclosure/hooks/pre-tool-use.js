@@ -10,6 +10,8 @@ import {
   summariseFindings,
   tokenMapLines,
 } from '../lib/tool-policies.js';
+import { agentEvidenceEnabled, applyToolEvidence, toolTier } from '../lib/evidence-events.js';
+import { resolveActivePolicy } from '../lib/policy-registry.js';
 
 const event = await readStdinJson();
 const toolName = event?.tool_name;
@@ -19,79 +21,71 @@ const cwd = event?.cwd;
 await loadConfig({ cwd });
 const sessionId = event?.session_id;
 
-if (!toolName || !toolInput) {
-  // Not enough information to act; let the call through.
-  process.exit(0);
-}
+if (!toolName || !toolInput) process.exit(0);
 
 const session = await loadSession({ cwd, sessionId });
+const { policy, alias } = await resolveActivePolicy({ cwd, sessionState: session.state });
+const tier = toolTier(toolName);
+const evidenceOn = agentEvidenceEnabled(policy);
+let commerce = null;
 
-// Commerce gate (Phase E.5). Runs BEFORE the PII rewrite/deny logic so a
-// commerce call without a valid mandate is denied immediately and we don't
-// waste cycles masking inputs that are about to be rejected anyway.
 if (isCommerceTool(toolName, toolInput)) {
-  const commerce = evaluateCommerce({ toolName, toolInput, viState: session.state.vi });
+  commerce = await evaluateCommerce({
+    toolName,
+    toolInput,
+    viState: session.state.vi,
+    strict: evidenceOn,
+  });
   if (commerce.action === 'deny') {
-    const auditPath = path.join(session.dir, `tool-${sanitize(toolUseId)}.json`);
-    await writeJson(auditPath, {
-      tool_use_id: toolUseId,
-      tool_name: toolName,
-      created_at: new Date().toISOString(),
+    await writeLegacyToolAudit({ session, toolUseId, toolName, action: 'deny', tier: 'commerce', commerce });
+    await applyToolEvidence({
+      session,
+      cwd,
+      policyAlias: evidenceOn ? alias : null,
+      toolName,
+      toolUseId,
+      toolInput,
       action: 'deny',
+      reason: commerce.reason,
       tier: 'commerce',
-      commerce_reason: commerce.reason,
-      violations: commerce.violations || null,
-      mandate_active: !!session.state.vi,
+      commerce,
     });
-    emit({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: commerce.message,
-      },
-    });
+    emitDeny(commerce.message);
     process.exit(0);
   }
-  // commerce.action === 'allow' → fall through to the PII gate below.
 }
 
-const result = await evaluateToolUse({
+const pii = await evaluateToolUse({
   toolName,
   toolInput,
   hmacKeyBytes: hmacKeyBytes(session.state),
 });
 
-if (result.action === 'allow') {
+if (pii.action === 'allow') {
+  if (evidenceOn || commerce) {
+    await applyToolEvidence({
+      session,
+      cwd,
+      policyAlias: evidenceOn ? alias : null,
+      toolName,
+      toolUseId,
+      toolInput,
+      allowedToolInput: toolInput,
+      action: 'allow',
+      reason: commerce ? 'commerce_constraints_satisfied' : 'agent_clean_allow',
+      tier,
+      commerce,
+    });
+  }
   process.exit(0);
 }
 
-const summary = summariseFindings(result.perField);
-const tokenLines = tokenMapLines(result.perField);
+const summary = summariseFindings(pii.perField);
+const tokenLines = tokenMapLines(pii.perField);
+await writeLegacyToolAudit({ session, toolUseId, toolName, action: pii.action, policy: pii.policy, perField: pii.perField });
 
-// Write an audit record next to the per-turn ledger. One file per tool call,
-// so multiple parallel tool calls in a turn don't trample each other.
-const auditPath = path.join(session.dir, `tool-${sanitize(toolUseId)}.json`);
-await writeJson(auditPath, {
-  tool_use_id: toolUseId,
-  tool_name: toolName,
-  created_at: new Date().toISOString(),
-  action: result.action,
-  policy: result.policy,
-  fields: result.perField.map((f) => ({
-    path: f.path,
-    mode: f.mode,
-    url_field: f.urlField,
-    findings: f.findings.map(({ type, risk, start, end, length, confidence }) => ({
-      type, risk, start, end, length, confidence,
-    })),
-    replacements: f.replacements,
-    // Original field text stays on disk so the Stop-hook receipt can audit it.
-    local_private: { original: f.original },
-  })),
-});
-
-if (result.action === 'deny') {
-  const reasonLines = [
+if (pii.action === 'deny') {
+  const reason = [
     `🛡  ZeroH Disclosure: sensitive data detected in ${toolName} input.`,
     '',
     `Detected: ${summary}`,
@@ -100,18 +94,19 @@ if (result.action === 'deny') {
     'the operation (Bash, URL) or leak structure (MCP). Reshape the call to',
     'avoid raw sensitive values — e.g. read the value from an env var, redirect',
     'output to a file the user controls, or ask the user to redact first.',
-  ];
-  emit({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'deny',
-      permissionDecisionReason: reasonLines.join('\n'),
-    },
-  });
+  ].join('\n');
+  if (evidenceOn || commerce) {
+    await applyToolEvidence({
+      session, cwd, policyAlias: evidenceOn ? alias : null, toolName, toolUseId, toolInput,
+      action: 'deny', reason: 'sensitive_tool_input_denied', tier, commerce,
+      findings: pii.perField.flatMap((f) => f.findings || []),
+    });
+  }
+  emitDeny(reason);
   process.exit(0);
 }
 
-if (result.action === 'warn') {
+if (pii.action === 'warn') {
   const ctxLines = [
     `🛡  ZeroH Disclosure: sensitive data detected in ${toolName} input (${summary}).`,
     '',
@@ -119,22 +114,20 @@ if (result.action === 'warn') {
     'only. Treat the existing values as sensitive; avoid echoing them into other',
     'tool calls or your response.',
   ];
-  if (tokenLines.length > 0) {
-    ctxLines.push('', 'If you reference these values, use the canonical tokens:');
-    ctxLines.push(...tokenLines);
+  if (tokenLines.length > 0) ctxLines.push('', 'If you reference these values, use the canonical tokens:', ...tokenLines);
+  if (evidenceOn || commerce) {
+    await applyToolEvidence({
+      session, cwd, policyAlias: evidenceOn ? alias : null, toolName, toolUseId, toolInput,
+      allowedToolInput: toolInput, action: 'warn', reason: 'sensitive_tool_input_warn', tier, commerce,
+      findings: pii.perField.flatMap((f) => f.findings || []),
+      replacements: pii.perField.flatMap((f) => f.replacements || []),
+    });
   }
-  emit({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'allow',
-      additionalContext: ctxLines.join('\n'),
-    },
-  });
+  emit({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', additionalContext: ctxLines.join('\n') } });
   process.exit(0);
 }
 
-// action === 'rewrite'
-const updatedInput = applyMasked(toolInput, result.perField);
+const updatedInput = applyMasked(toolInput, pii.perField);
 const ctxLines = [
   `🛡  ZeroH Disclosure tokenized sensitive data in your ${toolName} input.`,
   '',
@@ -143,21 +136,43 @@ const ctxLines = [
   "value always yields the same token within this session, so you can reason",
   'about identity ("the card from earlier") without seeing the value.',
 ];
-if (tokenLines.length > 0) {
-  ctxLines.push('', 'Tokens in this call:');
-  ctxLines.push(...tokenLines);
+if (tokenLines.length > 0) ctxLines.push('', 'Tokens in this call:', ...tokenLines);
+if (evidenceOn || commerce) {
+  await applyToolEvidence({
+    session, cwd, policyAlias: evidenceOn ? alias : null, toolName, toolUseId, toolInput,
+    allowedToolInput: updatedInput, action: 'rewrite', reason: 'sensitive_tool_input_rewritten', tier, commerce,
+    findings: pii.perField.flatMap((f) => f.findings || []),
+    replacements: pii.perField.flatMap((f) => f.replacements || []),
+  });
 }
-emit({
-  hookSpecificOutput: {
-    hookEventName: 'PreToolUse',
-    permissionDecision: 'allow',
-    updatedInput,
-    additionalContext: ctxLines.join('\n'),
-  },
-});
+emit({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', updatedInput, additionalContext: ctxLines.join('\n') } });
 process.exit(0);
 
-// helpers ---------------------------------------------------------------------
+async function writeLegacyToolAudit({ session, toolUseId, toolName, action, tier = null, policy = null, perField = [], commerce = null }) {
+  await writeJson(path.join(session.dir, `tool-${sanitize(toolUseId)}.json`), {
+    tool_use_id: toolUseId,
+    tool_name: toolName,
+    created_at: new Date().toISOString(),
+    action,
+    tier,
+    policy,
+    commerce_reason: commerce?.reason ?? null,
+    violations: commerce?.violations ?? null,
+    mandate_active: !!session.state.vi,
+    fields: perField.map((f) => ({
+      path: f.path,
+      mode: f.mode,
+      url_field: f.urlField,
+      findings: f.findings.map(({ type, risk, start, end, length, confidence }) => ({ type, risk, start, end, length, confidence })),
+      replacements: f.replacements,
+      local_private: { original: f.original },
+    })),
+  });
+}
+
+function emitDeny(reason) {
+  emit({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } });
+}
 
 function emit(obj) {
   process.stdout.write(JSON.stringify(obj) + '\n');

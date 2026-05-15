@@ -19,6 +19,12 @@ export async function prepareDisclosure({
   protectionEngine = regexLocalProtectionEngine,
   protectionEngineManifest = null,
   protectionEngineResolution = null,
+  subjectType = 'prompt',
+  decisionOverride = null,
+  findingsOverride = null,
+  sanitizedTextOverride = undefined,
+  publicClaimExtras = {},
+  selectiveClaimExtras = {},
 }) {
   if (!wallet) throw new Error('wallet adapter required');
   if (typeof text !== 'string') throw new Error('text must be a string');
@@ -29,8 +35,8 @@ export async function prepareDisclosure({
   const boundary = normalizeBoundary({ ...boundaryInput, ...(intentBinding ? { intent_binding: intentBinding } : {}) });
   const engineManifest = protectionEngineManifest ?? (await protectionEngine.manifest({ policy, boundary }));
   const protection_engine_hash = await sha256B64u(canonicalJson(engineManifest));
-  const findings = await protectionEngine.analyze({ text, policy, boundary });
-  const decision = evaluateDisclosurePolicy({ findings, boundary, policy });
+  const findings = findingsOverride ?? await protectionEngine.analyze({ text, policy, boundary });
+  const decision = decisionOverride ?? evaluateDisclosurePolicy({ findings, boundary, policy });
   const detector_hash = protection_engine_hash;
   const policy_hash = await policyHash(policy);
   const boundary_hash = await boundaryHash(boundary);
@@ -41,7 +47,9 @@ export async function prepareDisclosure({
   let sanitized_text = text,
     replacements = [],
     masked_categories = [];
-  if (decision.action === 'mask_and_allow' || decision.action === 'approval_required') {
+  if (sanitizedTextOverride !== undefined) {
+    sanitized_text = sanitizedTextOverride;
+  } else if (decision.action === 'mask_and_allow' || decision.action === 'approval_required') {
     const masked = await protectionEngine.transform({
       text,
       findings,
@@ -66,6 +74,7 @@ export async function prepareDisclosure({
   const issuerPublic = await wallet.getPublicKey?.();
   const publicClaims = {
     schema: 'zeroh-disclosure-receipt/v2',
+    subject_type: subjectType,
     iss,
     sub: `wallet:${account.accountId}`,
     vct: 'https://zeroh.io/vct/disclosure-receipt/v1',
@@ -102,6 +111,7 @@ export async function prepareDisclosure({
     wallet_network: account.network,
     issuer_public_jwk: issuerPublic?.jwk ?? null,
     ...(intentBinding ? { intent_binding: intentBinding } : {}),
+    ...publicClaimExtras,
   };
   const selectiveClaims = {
     boundary_details: boundary,
@@ -119,6 +129,7 @@ export async function prepareDisclosure({
       value_commitment: r.value_commitment,
     })),
     masked_prompt: sanitized_text,
+    ...selectiveClaimExtras,
   };
   const sdjwt = await createReceiptJwtLike({ wallet, publicClaims, selectiveClaims });
   const receipt_hash = await sha256B64u(sdjwt.compact);

@@ -10,6 +10,7 @@ import { loadViWallet } from './wallet/vi-wallet.js';
 //   wallet.json   — public part of the wallet (account + jwk)
 //   wallet.key.json — private JWK (P-256). Sensitive; lives only on disk.
 //   turn-<n>.json — per-turn ledger (prompt commitment, findings, masked text, replacements, receipt)
+//   event-<n>.json — signed tool-action evidence event.
 //   turn-<n>.proofpack.json — final ProofPack written by Stop hook.
 
 export function projectRoot(cwd) {
@@ -98,8 +99,21 @@ export async function bumpTurn({ statePath, state }) {
   return state.turnCount;
 }
 
+export async function bumpEvent({ statePath, state }) {
+  state.eventCount = (state.eventCount ?? 0) + 1;
+  state.updated_at = new Date().toISOString();
+  await writeJson(statePath, state);
+  return state.eventCount;
+}
+
 export async function writeTurn({ dir, turn, payload }) {
   const p = path.join(dir, `turn-${turn}.json`);
+  await writeJson(p, payload);
+  return p;
+}
+
+export async function writeEvent({ dir, sequence, payload }) {
+  const p = path.join(dir, `event-${sequence}.json`);
   await writeJson(p, payload);
   return p;
 }
@@ -114,6 +128,18 @@ export async function listTurns({ dir }) {
     return entries
       .filter((e) => /^turn-\d+\.json$/.test(e))
       .map((e) => Number(e.match(/^turn-(\d+)\.json$/)[1]))
+      .sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+}
+
+export async function listEvents({ dir }) {
+  try {
+    const entries = await fs.readdir(dir);
+    return entries
+      .filter((e) => /^event-\d+\.json$/.test(e))
+      .map((e) => Number(e.match(/^event-(\d+)\.json$/)[1]))
       .sort((a, b) => a - b);
   } catch {
     return [];

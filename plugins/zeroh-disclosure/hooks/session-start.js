@@ -4,6 +4,8 @@ import { collectActiveTokens, loadSession, writeJson } from '../lib/session.js';
 import { isAnchorEnabled } from '../lib/hedera-anchor.js';
 import { ingestMandate } from '../lib/vi/index.js';
 import { loadViWallet } from '../lib/wallet/vi-wallet.js';
+import { resolveActivePolicy } from '../lib/policy-registry.js';
+import { agentEvidenceEnabled } from '../lib/evidence-events.js';
 
 const event = await readStdinJson();
 const cwd = event?.cwd;
@@ -12,6 +14,7 @@ await loadConfig({ cwd });
 const sessionId = event?.session_id;
 
 const session = await loadSession({ cwd, sessionId });
+const { policy } = await resolveActivePolicy({ cwd, sessionState: session.state });
 
 // VI mandate ingest. Silent when no mandate is configured; populated on
 // success; surfaces a clear error line on failure (commerce tools become
@@ -63,6 +66,7 @@ const issuer = session.wallet?.accountId
   : 'unconfigured';
 lines.push('', `Signing identity: ${issuer}.`);
 lines.push(`Anchoring: ${isAnchorEnabled() ? 'live (Hedera HCS)' : 'intent-only (no submission)'}.`);
+if (agentEvidenceEnabled(policy)) lines.push(`Agent accountability: enabled by policy ${policy.policy_id}.`);
 
 if (session.state.vi) {
   const v = session.state.vi;
@@ -78,7 +82,7 @@ if (session.state.vi) {
   } else {
     lines.push(`Receipt signing: default wallet (ZEROH_VI_AGENT_KEY_FILE not set; receipts still carry intent_binding).`);
   }
-  lines.push('Commerce-tier tools require an `_intent_fulfillment` field matching this scope.');
+  lines.push('Commerce-tier tools require deterministic fulfillment fields matching this scope.');
 } else if (session.state.vi_error) {
   lines.push(
     '',

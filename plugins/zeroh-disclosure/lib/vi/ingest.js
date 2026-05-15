@@ -23,6 +23,7 @@ import { verifyChain } from './verify.js';
  * @param {string=} opts.cwd
  * @param {number=} opts.now            unix seconds; defaults to Date.now()/1000
  * @param {string=} opts.expectedAud    default 'commerce'
+ * @param {string=} opts.mandateFile
  * @returns {Promise<{
  *   present: false
  * } | {
@@ -31,8 +32,8 @@ import { verifyChain } from './verify.js';
  *   present: true, ok: false, source: string, errors: string[]
  * }>}
  */
-export async function ingestMandate({ cwd, now, expectedAud = 'commerce' } = {}) {
-  const found = await locate({ cwd });
+export async function ingestMandate({ cwd, now, expectedAud = 'commerce', mandateFile = null } = {}) {
+  const found = await locate({ cwd, mandateFile });
   if (!found) return { present: false };
 
   let wrapper;
@@ -65,11 +66,19 @@ export async function ingestMandate({ cwd, now, expectedAud = 'commerce' } = {})
   });
   if (!r.ok) return { present: true, ok: false, source: found.path, errors: r.errors };
 
-  const vi = await buildSessionViBlock(r);
+  const vi = await buildSessionViBlock(r, wrapper, found.path);
   return { present: true, ok: true, source: found.path, vi };
 }
 
-async function locate({ cwd }) {
+async function locate({ cwd, mandateFile }) {
+  if (mandateFile) {
+    try {
+      await fs.access(mandateFile);
+      return { path: mandateFile, via: 'argument' };
+    } catch {
+      return null;
+    }
+  }
   const envPath = process.env.ZEROH_VI_MANDATE_FILE;
   if (envPath) {
     try {
@@ -89,7 +98,7 @@ async function locate({ cwd }) {
   return null;
 }
 
-async function buildSessionViBlock(r) {
+async function buildSessionViBlock(r, wrapper, source) {
   const { l1Hash, l2Hash, l1Payload, l2Payload, agentJwk } = r;
   const agentJwkKid = agentJwk?.kid ?? (agentJwk ? await calculateJwkThumbprint(agentJwk, 'sha256') : null);
 
@@ -109,6 +118,12 @@ async function buildSessionViBlock(r) {
     user_sub: l1Payload.sub ?? null,
     mode: l2Payload.mode ?? null,
     expiry: l2Payload.exp ?? null,
+    source,
+    evidence: {
+      l1_compact: wrapper.l1_compact,
+      l2_compact: wrapper.l2_compact,
+      trusted_issuer_jwks: wrapper.trusted_issuer_jwks,
+    },
     scope_summary: summariseScope(checkoutConstraints, paymentConstraints),
     constraints: { checkout: checkoutConstraints, payment: paymentConstraints },
   };
