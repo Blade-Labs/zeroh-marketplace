@@ -4,7 +4,9 @@ import { loadConfig } from '../lib/config.js';
 import { hmacKeyBytes, loadSession, writeJson } from '../lib/session.js';
 import {
   applyMasked,
+  evaluateCommerce,
   evaluateToolUse,
+  isCommerceTool,
   summariseFindings,
   tokenMapLines,
 } from '../lib/tool-policies.js';
@@ -23,6 +25,36 @@ if (!toolName || !toolInput) {
 }
 
 const session = await loadSession({ cwd, sessionId });
+
+// Commerce gate (Phase E.5). Runs BEFORE the PII rewrite/deny logic so a
+// commerce call without a valid mandate is denied immediately and we don't
+// waste cycles masking inputs that are about to be rejected anyway.
+if (isCommerceTool(toolName, toolInput)) {
+  const commerce = evaluateCommerce({ toolName, toolInput, viState: session.state.vi });
+  if (commerce.action === 'deny') {
+    const auditPath = path.join(session.dir, `tool-${sanitize(toolUseId)}.json`);
+    await writeJson(auditPath, {
+      tool_use_id: toolUseId,
+      tool_name: toolName,
+      created_at: new Date().toISOString(),
+      action: 'deny',
+      tier: 'commerce',
+      commerce_reason: commerce.reason,
+      violations: commerce.violations || null,
+      mandate_active: !!session.state.vi,
+    });
+    emit({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: commerce.message,
+      },
+    });
+    process.exit(0);
+  }
+  // commerce.action === 'allow' → fall through to the PII gate below.
+}
+
 const result = await evaluateToolUse({
   toolName,
   toolInput,

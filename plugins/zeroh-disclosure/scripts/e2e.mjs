@@ -48,6 +48,265 @@ console.log();
 
 const results = [];
 
+await step('VI fixtures parse (issuer-signed L1, user-signed L2)', async () => {
+  const { decodeIssuerJwt } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const l1d = decodeIssuerJwt(l1);
+  const l2d = decodeIssuerJwt(l2);
+  assert(l1d.payload.iss === 'https://issuer.example.zeroh', 'L1 iss');
+  assert(l1d.payload.cnf?.jwk?.kid === 'user-key-1', 'L1 binds user pubkey');
+  assert(l2d.payload.aud === 'commerce', 'L2 aud=commerce');
+  assert(l2d.payload.mode === 'autonomous', 'L2 mode=autonomous');
+  const c = (l2d.payload.delegate_payload?.checkout_mandate?.constraints || []).length
+          + (l2d.payload.delegate_payload?.payment_mandate?.constraints || []).length;
+  assert(c === 8, `8 constraints in L2 (got ${c})`);
+  return { l1_alg: l1d.header.alg, l2_kid: l2d.payload.delegate_payload?.checkout_mandate?.cnf?.jwk?.kid, constraints: c };
+});
+
+await step('VI chain verifies (signatures + sd_hash binding + audience)', async () => {
+  const { verifyChain } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const issuerJwks = JSON.parse(await fs.readFile(path.join(fixDir, 'issuer-jwks.json'), 'utf8'));
+  const r = await verifyChain({ l1Compact: l1, l2Compact: l2, trustedIssuerJwks: issuerJwks });
+  assert(r.ok === true, `chain verifies (errors: ${r.errors.join('; ')})`);
+  assert(typeof r.l1Hash === 'string' && r.l1Hash.length > 16, 'l1Hash present');
+  assert(typeof r.l2Hash === 'string' && r.l2Hash.length > 16, 'l2Hash present');
+  assert(r.agentJwk?.kid === 'agent-key-1', 'agent JWK extracted from L2');
+  return { l1_short: r.l1Hash.slice(0, 12) + '…', l2_short: r.l2Hash.slice(0, 12) + '…', agent_kid: r.agentJwk.kid };
+});
+
+await step('VI chain rejects: expired L2', async () => {
+  const { verifyChain } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const issuerJwks = JSON.parse(await fs.readFile(path.join(fixDir, 'issuer-jwks.json'), 'utf8'));
+  const { decodeIssuerJwt } = await import('../lib/vi/index.js');
+  const l2Exp = decodeIssuerJwt(l2).payload.exp;
+  const r = await verifyChain({ l1Compact: l1, l2Compact: l2, trustedIssuerJwks: issuerJwks, now: l2Exp + 1 });
+  assert(r.ok === false, 'chain rejected as expected');
+  assert(r.errors.some((e) => /expired/i.test(e)), `error mentions expiry (got: ${r.errors.join(';')})`);
+  return { error_first: r.errors[0] };
+});
+
+await step('VI chain rejects: wrong issuer JWKS', async () => {
+  const { verifyChain } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const wrongJwks = JSON.parse(await fs.readFile(path.join(fixDir, 'user-jwks.json'), 'utf8'));
+  const r = await verifyChain({ l1Compact: l1, l2Compact: l2, trustedIssuerJwks: wrongJwks });
+  assert(r.ok === false, 'chain rejected as expected');
+  assert(r.errors.some((e) => /signature/i.test(e) || /no matching/i.test(e)), `error mentions signature (got: ${r.errors.join(';')})`);
+  return { error_first: r.errors[0] };
+});
+
+await step('SessionStart with valid VI mandate exposes state.vi', async () => {
+  const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const out = await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-vi-ok', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath });
+  const ctx = out.json?.hookSpecificOutput?.additionalContext || '';
+  assert(ctx.includes('Verifiable Intent mandate active'), `mandate line in additionalContext (got: ${ctx.slice(0, 200)})`);
+  assert(ctx.includes('aud=commerce'), 'aud=commerce in summary');
+  // state.json should now hold the vi block
+  const stateFile = path.join(cwd, '.zeroh/sessions/e2e-vi-ok/state.json');
+  const state = JSON.parse(await fs.readFile(stateFile, 'utf8'));
+  assert(state.vi?.l1_hash && state.vi?.l2_hash, 'state.vi populated with hashes');
+  assert(state.vi?.agent_jwk_kid === 'agent-key-1', 'agent kid recorded');
+  return { aud: state.vi.mandate_aud, kid: state.vi.agent_jwk_kid, scope: state.vi.scope_summary };
+});
+
+await step('Receipt boundary unchanged when no mandate (hash-stability regression guard)', async () => {
+  // Compute boundary_hash for the default boundary (what Stop produces today
+  // for non-VI sessions) and confirm it matches a fixed value. The string is
+  // intentionally pinned — any future change to boundary defaults must be
+  // accompanied by an explicit update here.
+  const { normalizeBoundary, boundaryHash } = await import('../lib/boundary.js');
+  const b = normalizeBoundary({
+    destination: 'anthropic_claude_api', model: 'claude-code',
+    retention: 'unknown', destination_jurisdiction: 'US',
+  });
+  assert(!('intent_binding' in b), 'intent_binding key absent from default boundary');
+  const h = await boundaryHash(b);
+  assert(h === '0yZ5pWz7p0_cigUKdGL7In6V-Sm83Y7SRqV7qTuQA3s',
+    `boundary_hash stable for no-mandate path (got ${h})`);
+  return { boundary_hash: h.slice(0, 16) + '…' };
+});
+
+await step('Receipt boundary changes when mandate is bound (hash differs + intent_binding present)', async () => {
+  const { normalizeBoundary, boundaryHash } = await import('../lib/boundary.js');
+  const sample = {
+    l1_hash: 'aaa', l2_hash: 'bbb', l2_nonce: 'nonce-1',
+    mandate_aud: 'commerce', agent_jwk_kid: 'agent-key-1',
+    scope_summary: 'amount:100-2000 USD', expiry: 9999999999,
+  };
+  const b = normalizeBoundary({
+    destination: 'anthropic_claude_api', model: 'claude-code',
+    retention: 'unknown', destination_jurisdiction: 'US',
+    intent_binding: sample,
+  });
+  assert(b.intent_binding?.l2_hash === 'bbb', 'intent_binding included');
+  const h = await boundaryHash(b);
+  assert(h !== '0yZ5pWz7p0_cigUKdGL7In6V-Sm83Y7SRqV7qTuQA3s',
+    'boundary_hash differs from no-mandate baseline');
+  return { boundary_hash: h.slice(0, 16) + '…' };
+});
+
+await step('Commerce tool denied without an active mandate', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-cmrc-no-mandate', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-cm-1',
+    tool_input: { amount: 800, currency: 'USD' },
+  });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/no active Verifiable Intent mandate/.test(hso.permissionDecisionReason),
+    `reason mentions missing mandate (got: ${hso.permissionDecisionReason?.slice(0, 200)})`);
+  return { reason_starts: hso.permissionDecisionReason.split('\n')[0] };
+});
+
+await step('Commerce tool denied when mandate active but _intent_fulfillment is missing', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-vi-ok', cwd,
+    tool_name: 'mcp__example_checkout__buy', tool_use_id: 'e2e-cm-2',
+    tool_input: { url: 'https://coffee.example/api/buy' },
+  });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/must declare an _intent_fulfillment/.test(hso.permissionDecisionReason),
+    `reason mentions missing _intent_fulfillment`);
+  return { reason_starts: hso.permissionDecisionReason.split('\n')[0] };
+});
+
+await step('Commerce tool denied when fulfillment exceeds amount_range', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-vi-ok', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-cm-3',
+    tool_input: {
+      _intent_fulfillment: {
+        amount: 9999, currency: 'USD', // > amount_range.max (2000)
+        merchant: { id: 'merchant-001' },
+        payee: { id: 'payee-001' },
+        line_items: [{ id: 'sku-coffee', quantity: 1 }],
+        reference: 'binding-001',
+      },
+    },
+  });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/amount_range/.test(hso.permissionDecisionReason),
+    `reason names violated constraint (got: ${hso.permissionDecisionReason?.slice(0, 200)})`);
+  return { reason_first: hso.permissionDecisionReason.split('\n').find((l) => l.includes('amount_range')) };
+});
+
+await step('Commerce tool allowed when fulfillment is in scope', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-vi-ok', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-cm-4',
+    tool_input: {
+      _intent_fulfillment: {
+        amount: 800, currency: 'USD',
+        merchant: { id: 'merchant-001' },
+        payee: { id: 'payee-001' },
+        line_items: [{ id: 'sku-coffee', quantity: 1 }],
+        reference: 'binding-001',
+      },
+    },
+  });
+  // Allow = silent pass-through (no JSON output) OR explicit permissionDecision: allow.
+  // Our hook currently exits 0 with no JSON for the allow path on commerce.
+  assert(out.exit === 0, 'exit 0');
+  // No deny JSON.
+  assert(out.json?.hookSpecificOutput?.permissionDecision !== 'deny',
+    `not denied (got: ${out.json?.hookSpecificOutput?.permissionDecision})`);
+  return { passed: true };
+});
+
+await step('End-to-end: receipt carries intent_binding when mandate is active', async () => {
+  // Reuse the e2e-vi-ok session created earlier (already has state.vi
+  // persisted). Submit one clean prompt then Stop, and inspect the receipt.
+  const viSession = 'e2e-vi-ok';
+  const viSessionDir = path.join(cwd, '.zeroh/sessions', viSession);
+  await runHook(HOOKS.userPromptSubmit, {
+    session_id: viSession, cwd,
+    prompt: 'tell me about the weather',
+  });
+  await runHook(HOOKS.stop, {
+    session_id: viSession, cwd, hook_event_name: 'Stop',
+  });
+  const turn = JSON.parse(await fs.readFile(path.join(viSessionDir, 'turn-1.json'), 'utf8'));
+  assert(turn.phase === 'finalized', `vi-session turn-1 finalized (got ${turn.phase})`);
+  const ib = turn.receipt?.public_claims?.intent_binding;
+  assert(ib, 'public_claims.intent_binding present on receipt');
+  assert(ib.mandate_aud === 'commerce', 'intent_binding.mandate_aud=commerce');
+  assert(ib.agent_jwk_kid === 'agent-key-1', 'intent_binding.agent_jwk_kid=agent-key-1');
+  assert(typeof ib.l1_hash === 'string' && ib.l1_hash.length > 16, 'intent_binding.l1_hash present');
+  return {
+    receipt_id: turn.receipt.receipt_id,
+    aud: ib.mandate_aud,
+    agent_kid: ib.agent_jwk_kid,
+  };
+});
+
+await step('Key reuse: SessionStart with correct agent key swaps the receipt-signing wallet', async () => {
+  const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const agentKey = path.join(PLUGIN_ROOT, 'test/fixtures/vi/agent-key.json');
+  await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-vi-keyok', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath, ZEROH_VI_AGENT_KEY_FILE: agentKey });
+  // Run a clean prompt + Stop under this session so a receipt gets minted.
+  await runHook(HOOKS.userPromptSubmit, {
+    session_id: 'e2e-vi-keyok', cwd, prompt: 'hello',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath, ZEROH_VI_AGENT_KEY_FILE: agentKey });
+  await runHook(HOOKS.stop, {
+    session_id: 'e2e-vi-keyok', cwd, hook_event_name: 'Stop',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath, ZEROH_VI_AGENT_KEY_FILE: agentKey });
+  const turn = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-vi-keyok/turn-1.json'), 'utf8'));
+  const iss = turn.receipt.public_claims.iss;
+  assert(iss.startsWith('did:jwk:'), `iss is did:jwk (got ${iss})`);
+  const stateFile = path.join(cwd, '.zeroh/sessions/e2e-vi-keyok/state.json');
+  const state = JSON.parse(await fs.readFile(stateFile, 'utf8'));
+  assert(!state.vi_error, 'no vi_error');
+  return { iss_prefix: iss.slice(0, 16) + '…', kid_match: state.vi.agent_jwk_kid };
+});
+
+await step('Key reuse: SessionStart with wrong agent key records vi_error and skips wallet swap', async () => {
+  const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const wrongKey = path.join(PLUGIN_ROOT, 'test/fixtures/vi/issuer-key.json'); // not the agent's key
+  await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-vi-keybad', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_VI_MANDATE_FILE: mandatePath, ZEROH_VI_AGENT_KEY_FILE: wrongKey });
+  const stateFile = path.join(cwd, '.zeroh/sessions/e2e-vi-keybad/state.json');
+  const state = JSON.parse(await fs.readFile(stateFile, 'utf8'));
+  assert(!state.vi, 'state.vi absent after wrong-key failure');
+  assert(Array.isArray(state.vi_error?.errors), 'vi_error captured');
+  assert(/agent key reuse/.test(state.vi_error.errors[0]), `error mentions agent key reuse (got: ${state.vi_error.errors[0]})`);
+  return { error_first: state.vi_error.errors[0].slice(0, 70) + '…' };
+});
+
+await step('SessionStart with invalid VI mandate records vi_error', async () => {
+  // Write a wrapper that points at the fixture but with a tampered L1 (random bytes).
+  const tamperedPath = path.join(cwd, 'tampered.mandate.json');
+  const orig = JSON.parse(await fs.readFile(path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json'), 'utf8'));
+  const tampered = { ...orig, l1_compact: orig.l1_compact.replace(/.$/, 'X') };
+  await fs.writeFile(tamperedPath, JSON.stringify(tampered));
+  const out = await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-vi-bad', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_VI_MANDATE_FILE: tamperedPath });
+  const ctx = out.json?.hookSpecificOutput?.additionalContext || '';
+  assert(ctx.includes('FAILED'), `failure line surfaced (got: ${ctx.slice(0, 200)})`);
+  const stateFile = path.join(cwd, '.zeroh/sessions/e2e-vi-bad/state.json');
+  const state = JSON.parse(await fs.readFile(stateFile, 'utf8'));
+  assert(!state.vi, 'state.vi absent after failed ingest');
+  assert(Array.isArray(state.vi_error?.errors), 'state.vi_error captured');
+  return { error_first: state.vi_error.errors[0] };
+});
+
 await step('SessionStart', async () => {
   const out = await runHook(HOOKS.sessionStart, {
     session_id: SESSION_ID, cwd, source: 'startup', hook_event_name: 'SessionStart',
@@ -210,6 +469,25 @@ const evmConfigured = process.env.ZEROH_ANCHOR === '1'
   && process.env.HEDERA_EVM_OPERATOR_ID
   && process.env.HEDERA_EVM_OPERATOR_KEY;
 
+await step('vi-demo.mjs runs end-to-end and produces a one-key chain receipt', async () => {
+  // Spawn vi-demo as a child; it must exit 0 and the stdout must mention the
+  // verifier-summary checkmark line.
+  const { spawn: spawnChild } = await import('node:child_process');
+  const r = await new Promise((resolve, reject) => {
+    const child = spawnChild('node', [path.join(PLUGIN_ROOT, 'scripts/vi-demo.mjs')], {
+      env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', (b) => (stdout += b));
+    child.stderr.on('data', (b) => (stderr += b));
+    child.on('error', reject);
+    child.on('close', (exit) => resolve({ exit, stdout, stderr }));
+  });
+  assert(r.exit === 0, `vi-demo.mjs exit 0 (got ${r.exit}; stderr: ${r.stderr.slice(-200)})`);
+  assert(/Receipt iss === did:jwk/.test(r.stdout), 'demo prints the one-key-chain confirmation line');
+  return { stdout_bytes: r.stdout.length };
+});
+
 if (hcsConfigured || evmConfigured) {
   await step('VERIFY: every receipt is anchored on Mirror Node', async () => {
     const network = process.env.HEDERA_NETWORK || 'testnet';
@@ -285,9 +563,12 @@ function assert(cond, msg) {
   if (!cond) throw new Error(`assertion failed: ${msg}`);
 }
 
-function runHook(scriptPath, event) {
+function runHook(scriptPath, event, extraEnv = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [scriptPath], { env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('node', [scriptPath], {
+      env: { ...process.env, ...extraEnv },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     let stdout = '', stderr = '';
     child.stdout.on('data', (b) => (stdout += b));
     child.stderr.on('data', (b) => (stderr += b));

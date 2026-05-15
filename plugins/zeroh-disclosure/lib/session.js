@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { bytesToBase64Url, base64UrlToBytes, randomBytes } from './crypto.js';
 import { loadOrCreateMockWallet } from './wallet/mock-wallet.js';
+import { loadViWallet } from './wallet/vi-wallet.js';
 
 // Sessions live under <project>/.zeroh/sessions/<sid>/ with:
 //   state.json    — { hmacKeyB64u, turnCount, lastReceiptHash, lastTokenHash, walletAccountId }
@@ -60,14 +61,27 @@ export async function loadSession({ cwd, sessionId }) {
     };
     await writeJson(statePath, state);
   }
-  const wallet = await loadOrCreateMockWallet({
-    readJson,
-    writeJson,
-    walletPath: path.join(dir, 'wallet.json'),
-    privateJwkPath: path.join(dir, 'wallet.key.json'),
-    accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid || resolvedSid)}`,
-    network: process.env.HEDERA_NETWORK || 'testnet',
-  });
+  // Wallet selection (Phase E.6): if a VI mandate is active in this session
+  // AND the agent's private key file is configured, swap the receipt signer
+  // for the L2-bound agent key. One key now signs both forward (L3) and
+  // backward (ZH receipts). Failing loud beats silent fallback — if the user
+  // turned VI on but didn't supply the key, that's a configuration error.
+  let wallet;
+  if (state.vi && process.env.ZEROH_VI_AGENT_KEY_FILE) {
+    wallet = await loadViWallet({
+      keyFile: process.env.ZEROH_VI_AGENT_KEY_FILE,
+      boundJwk: null, // checked at SessionStart; trusting persisted state here
+    });
+  } else {
+    wallet = await loadOrCreateMockWallet({
+      readJson,
+      writeJson,
+      walletPath: path.join(dir, 'wallet.json'),
+      privateJwkPath: path.join(dir, 'wallet.key.json'),
+      accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid || resolvedSid)}`,
+      network: process.env.HEDERA_NETWORK || 'testnet',
+    });
+  }
   return { dir, state, statePath, wallet };
 }
 

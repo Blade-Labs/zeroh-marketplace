@@ -14,11 +14,15 @@ export async function prepareDisclosure({
   previousReceiptHash = null,
   previousTokenHash = null,
   hmacKeyBytes = null,
+  intentBinding = null,
 }) {
   if (!wallet) throw new Error('wallet adapter required');
   if (typeof text !== 'string') throw new Error('text must be a string');
   const localHmacKey = hmacKeyBytes ?? randomBytes(32);
-  const boundary = normalizeBoundary(boundaryInput);
+  // intentBinding is hashed inside the boundary (so anchored evidence binds
+  // to it) and surfaced in public_claims so verifiers don't have to parse the
+  // boundary digest to know the mandate id.
+  const boundary = normalizeBoundary({ ...boundaryInput, ...(intentBinding ? { intent_binding: intentBinding } : {}) });
   const findings = detectSensitiveData(text);
   const decision = evaluateDisclosurePolicy({ findings, boundary, policy });
   const detector = detectorManifest();
@@ -46,8 +50,12 @@ export async function prepareDisclosure({
   const account = await wallet.getAccount();
   const now = new Date().toISOString();
   const receipt_id = `zrh_${Date.now().toString(36)}_${(await sha256B64u(now + sanitized_content_hash)).slice(0, 12)}`;
+  // VI wallets provide their own `did` (did:jwk:<thumbprint>) so receipts
+  // signed under a mandate carry the same identifier the merchant uses to
+  // verify the forward L3 chain — one key, one DID, two directions of proof.
+  const iss = account.did ?? `did:hedera:${account.network}:${account.accountId}`;
   const publicClaims = {
-    iss: `did:hedera:${account.network}:${account.accountId}`,
+    iss,
     sub: `wallet:${account.accountId}`,
     vct: 'https://zeroh.io/vct/disclosure-receipt/v1',
     receipt_id,
@@ -68,6 +76,7 @@ export async function prepareDisclosure({
     sanitized_content_may_be_sent_to_ai_provider: decision.action !== 'block',
     wallet_account_id: account.accountId,
     wallet_network: account.network,
+    ...(intentBinding ? { intent_binding: intentBinding } : {}),
   };
   const selectiveClaims = {
     boundary_details: boundary,

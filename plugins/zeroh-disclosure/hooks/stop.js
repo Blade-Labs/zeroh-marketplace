@@ -35,6 +35,21 @@ const receipts = [];
 let prevReceiptHash = session.state.lastReceiptHash;
 let prevTokenHash = session.state.lastTokenHash;
 
+// If a Verifiable Intent mandate is active in the session, surface a compact
+// binding into every receipt's boundary + public_claims so an auditor can
+// reconstruct "this disclosure was enforced under that user authorization".
+// The full constraint list stays in state.vi (recoverable from the mandate
+// itself) — only the binding handles travel in each receipt.
+const intentBinding = session.state.vi ? {
+  l1_hash: session.state.vi.l1_hash,
+  l2_hash: session.state.vi.l2_hash,
+  l2_nonce: session.state.vi.l2_nonce,
+  mandate_aud: session.state.vi.mandate_aud,
+  agent_jwk_kid: session.state.vi.agent_jwk_kid,
+  scope_summary: session.state.vi.scope_summary,
+  expiry: session.state.vi.expiry,
+} : null;
+
 for (const { t, ledgerPath, ledger } of unfinished) {
   const originalText = ledger?.local_private?.original_text ?? ledger.sanitized_text ?? '';
   const result = await prepareDisclosure({
@@ -49,6 +64,7 @@ for (const { t, ledgerPath, ledger } of unfinished) {
     previousReceiptHash: prevReceiptHash,
     previousTokenHash: prevTokenHash,
     hmacKeyBytes: hmacKeyBytes(session.state),
+    intentBinding,
   });
 
   // Anchor: HCS-primary, EVM-fallback. HCS gives us topic semantics

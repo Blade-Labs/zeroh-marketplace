@@ -6,6 +6,7 @@
 
 import { detectSensitiveData } from './detector.js';
 import { maskText } from './mask.js';
+import { evaluateConstraints } from './vi/constraints.js';
 
 const VALID_POLICIES = new Set(['deny', 'rewrite', 'warn']);
 
@@ -153,4 +154,72 @@ export function tokenMapLines(perField) {
 
 function shortCommit(b64u) {
   return String(b64u).replace(/[^A-Za-z0-9]/g, '').slice(0, 8);
+}
+
+// === Commerce-tier (VI) — separate path from the PII rewrite/deny logic. ===
+// A tool call is commerce-tier when its name matches a payment/checkout MCP
+// pattern OR it's a WebFetch to a host explicitly listed in
+// ZEROH_COMMERCE_HOSTS (comma-separated, no scheme). Commerce-tier calls
+// require an active VI mandate AND a structured `_intent_fulfillment` field
+// on the tool input that satisfies the mandate's constraints. Heuristic
+// sniffing is intentionally avoided — the contract is loud and explicit.
+
+const COMMERCE_NAME_RE = /^mcp__.*(payment|checkout|commerce)/i;
+
+export function isCommerceTool(toolName, toolInput) {
+  if (typeof toolName !== 'string') return false;
+  if (COMMERCE_NAME_RE.test(toolName)) return true;
+  if (toolName === 'WebFetch') {
+    const hostsRaw = process.env.ZEROH_COMMERCE_HOSTS || '';
+    if (!hostsRaw.trim()) return false;
+    const hosts = hostsRaw.split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+    try {
+      const u = new URL(toolInput?.url);
+      return hosts.includes(u.hostname.toLowerCase());
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Gate a commerce-tier tool call against an active VI mandate.
+ *
+ * Returns one of:
+ *   { action: 'allow' }                                — checks pass
+ *   { action: 'deny', reason: 'no_mandate' | 'missing_fulfillment' | 'scope_violation',
+ *     message: string, violations?: { type, reason }[] }
+ *
+ * Caller (pre-tool-use hook) translates this into the Claude Code hook
+ * output JSON.
+ */
+export function evaluateCommerce({ toolName, toolInput, viState }) {
+  if (!viState) {
+    return {
+      action: 'deny',
+      reason: 'no_mandate',
+      message: `🛡  ZeroH Disclosure: ${toolName} is a commerce-tier tool, but no active Verifiable Intent mandate is loaded in this session. Ask the user to provide a signed L2 mandate (ZEROH_VI_MANDATE_FILE or <project>/.zeroh.intent) before attempting commerce.`,
+    };
+  }
+  const fulfillment = toolInput?._intent_fulfillment;
+  if (!fulfillment || typeof fulfillment !== 'object') {
+    return {
+      action: 'deny',
+      reason: 'missing_fulfillment',
+      message: `🛡  ZeroH Disclosure: ${toolName} must declare an _intent_fulfillment object on its tool input describing { amount, currency, merchant, payee, line_items, reference }. Without it the disclosure plugin can't verify the action stays inside the user-authorized scope.`,
+    };
+  }
+  const allConstraints = [
+    ...(viState.constraints?.checkout || []),
+    ...(viState.constraints?.payment || []),
+  ];
+  const { satisfied, violations } = evaluateConstraints(allConstraints, fulfillment);
+  if (satisfied) return { action: 'allow' };
+  return {
+    action: 'deny',
+    reason: 'scope_violation',
+    message: `🛡  ZeroH Disclosure: ${toolName} violates the active VI mandate (aud=${viState.mandate_aud}). The call exceeded the user-authorized scope on the following constraints:\n${violations.map((v) => `  • ${v.type}: ${v.reason}`).join('\n')}`,
+    violations,
+  };
 }
