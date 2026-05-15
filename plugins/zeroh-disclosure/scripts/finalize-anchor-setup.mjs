@@ -46,7 +46,6 @@ const txResp = await new TopicCreateTransaction()
   .execute(client);
 const receipt = await txResp.getReceipt(client);
 const topicId = receipt.topicId.toString();
-client.close();
 
 console.log(`✓ topic_id=${topicId}  tx_id=${txResp.transactionId}`);
 console.log(`  https://hashscan.io/${network}/topic/${topicId}`);

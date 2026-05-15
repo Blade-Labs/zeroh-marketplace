@@ -154,10 +154,12 @@ async function emitBlock({ turn, masked }) {
   lines.push(`Receipt will be finalized at turn end. Turn ${turn} pending re-submit.`);
 
   // Block the prompt and present the masked alternative for the user to paste.
+  const message = lines.join('\n');
   process.stdout.write(
     JSON.stringify({
       decision: 'block',
-      reason: lines.join('\n'),
+      reason: message,
+      systemMessage: message,
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
         additionalContext: '',
