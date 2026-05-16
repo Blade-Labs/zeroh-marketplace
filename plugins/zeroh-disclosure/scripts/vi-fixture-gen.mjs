@@ -26,26 +26,58 @@ import { sha256 } from '@noble/hashes/sha256';
 const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FIXTURE_DIR = path.join(PLUGIN_ROOT, 'test', 'fixtures', 'vi');
 
+// argv: --agent-from-blade=<path-to-blade-agent.json>
+//   When set, the bound agent JWK comes from a Blade bootstrap config blob
+//   (Ed25519/OKP) instead of a synthetic ES256 keypair. The user-issuer
+//   keypairs stay ES256 — only the agent's cnf.jwk changes shape.
+//   Outputs land in *-blade.* files so the existing ES256 fixtures are
+//   untouched (and the 28 pre-Phase-F-1 e2e checks keep passing).
+const blFlag = process.argv.find((a) => a.startsWith('--agent-from-blade='));
+const bladeConfigPath = blFlag ? blFlag.split('=')[1] : null;
+const suffix = bladeConfigPath ? '-blade' : '';
+
 await fs.mkdir(FIXTURE_DIR, { recursive: true });
 
 const now = Math.floor(Date.now() / 1000);
 const HOUR = 3600;
 const DAY = 24 * HOUR;
 
-// ---- 3 keypairs -------------------------------------------------------------
+// ---- issuer + user (always ES256) ------------------------------------------
 
-const [issuer, user, agent] = await Promise.all([
+const [issuer, user] = await Promise.all([
   makeKeyPair('issuer-key-1'),
   makeKeyPair('user-key-1'),
-  makeKeyPair('agent-key-1'),
 ]);
 
-await writeJson('issuer-jwks.json', { keys: [stripPriv(issuer.jwk)] });
-await writeJson('user-jwks.json',   { keys: [stripPriv(user.jwk)] });
-await writeJson('agent-jwks.json',  { keys: [stripPriv(agent.jwk)] });
-await writeJson('issuer-key.json',  issuer.jwk);
-await writeJson('user-key.json',    user.jwk);
-await writeJson('agent-key.json',   agent.jwk);
+// ---- agent: synthetic ES256 OR Ed25519 from Blade bootstrap config ----------
+
+let agent;
+if (bladeConfigPath) {
+  const bladeCfg = JSON.parse(await fs.readFile(bladeConfigPath, 'utf8'));
+  // Agent's PUBLIC half only — we never need to sign on behalf of the
+  // agent in this fixture script; the user signs L2, and the Blade
+  // wallet later signs receipts using the private half from blade-agent.json.
+  agent = {
+    pubJwk: bladeCfg.publicJwk,
+    kid: bladeCfg.publicJwk.kid,
+    thumbprint: await calculateJwkThumbprint(bladeCfg.publicJwk, 'sha256'),
+    fromBlade: true,
+    bladeDid: bladeCfg.did,
+  };
+  console.log(`✓ agent JWK sourced from ${bladeConfigPath}`);
+  console.log(`  kty=${agent.pubJwk.kty} crv=${agent.pubJwk.crv} did=${agent.bladeDid}`);
+} else {
+  agent = await makeKeyPair('agent-key-1');
+}
+
+await writeJson(`issuer-jwks${suffix}.json`, { keys: [stripPriv(issuer.jwk)] });
+await writeJson(`user-jwks${suffix}.json`,   { keys: [stripPriv(user.jwk)] });
+await writeJson(`issuer-key${suffix}.json`,  issuer.jwk);
+await writeJson(`user-key${suffix}.json`,    user.jwk);
+if (!agent.fromBlade) {
+  await writeJson('agent-jwks.json',  { keys: [stripPriv(agent.jwk)] });
+  await writeJson('agent-key.json',   agent.jwk);
+}
 
 // ---- L1 (issuer → user) -----------------------------------------------------
 
@@ -63,8 +95,8 @@ const l1Payload = {
 const l1Frame = { email: true };
 const issuerSdjwt = await sdjwtFor(issuer);
 const l1Compact = await issuerSdjwt.issue(l1Payload, l1Frame);
-await fs.writeFile(path.join(FIXTURE_DIR, 'l1.sdjwt'), l1Compact);
-console.log(`✓ l1.sdjwt   (${l1Compact.length} bytes)`);
+await fs.writeFile(path.join(FIXTURE_DIR, `l1${suffix}.sdjwt`), l1Compact);
+console.log(`✓ l1${suffix}.sdjwt   (${l1Compact.length} bytes)`);
 
 // ---- L2 (user → agent) ------------------------------------------------------
 // We follow VI's *shape* but issue as a fresh SD-JWT signed by the user's key
@@ -82,7 +114,7 @@ const l2Payload = {
   delegate_payload: {
     checkout_mandate: {
       vct: 'mandate.checkout.open.1',
-      cnf: { jwk: stripPriv(agent.jwk), kid: agent.kid },
+      cnf: { jwk: agent.pubJwk ?? stripPriv(agent.jwk), kid: agent.kid },
       constraints: [
         {
           type: 'mandate.checkout.allowed_merchants',
@@ -99,7 +131,7 @@ const l2Payload = {
     },
     payment_mandate: {
       vct: 'mandate.payment.open.1',
-      cnf: { jwk: stripPriv(agent.jwk), kid: agent.kid },
+      cnf: { jwk: agent.pubJwk ?? stripPriv(agent.jwk), kid: agent.kid },
       payment_instrument: { scheme: 'mastercard', pan_last_four: '1234' },
       constraints: [
         {
@@ -138,12 +170,12 @@ const l2Payload = {
 // raw payload — this is fine for our v1 chain check.
 const userSdjwt = await sdjwtFor(user);
 const l2Compact = await userSdjwt.issue(l2Payload, {});
-await fs.writeFile(path.join(FIXTURE_DIR, 'l2.sdjwt'), l2Compact);
-console.log(`✓ l2.sdjwt   (${l2Compact.length} bytes)`);
+await fs.writeFile(path.join(FIXTURE_DIR, `l2${suffix}.sdjwt`), l2Compact);
+console.log(`✓ l2${suffix}.sdjwt   (${l2Compact.length} bytes)`);
 
 // ---- mandate wrapper (one file ZEROH_VI_MANDATE_FILE can point at) -----------
 
-await writeJson('mandate.json', {
+await writeJson(`mandate${suffix}.json`, {
   version: '1',
   l1_compact: l1Compact,
   l2_compact: l2Compact,

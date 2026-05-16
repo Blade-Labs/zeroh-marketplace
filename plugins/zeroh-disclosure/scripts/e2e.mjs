@@ -351,6 +351,63 @@ await step('SessionStart with ZEROH_BLADE_AGENT_CONFIG → BladeWallet selected 
   return { iss_short: iss.slice(0, 30) + '…', alg: header.alg };
 });
 
+await step('VI mandate bound to Blade Ed25519 key — BladeWallet signs receipt (F-1.6)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  // 1. Provision a Blade agent (dry-run) — synthetic Hedera IDs, real Ed25519 keys
+  const cfgPath = path.join(cwd, 'blade-agent-vi-test.json');
+  await new Promise((resolve, reject) => {
+    const c = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/blade-agent-bootstrap.mjs'),
+      '--dry-run', '--config-path', cfgPath,
+    ], { env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    c.stderr.on('data', (b) => (err += b));
+    c.on('close', (exit) => exit === 0 ? resolve() : reject(new Error(err)));
+  });
+  // 2. Regenerate VI fixtures with the Blade agent's Ed25519 key as cnf.jwk
+  await new Promise((resolve, reject) => {
+    const c = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/vi-fixture-gen.mjs'),
+      `--agent-from-blade=${cfgPath}`,
+    ], { env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    c.stderr.on('data', (b) => (err += b));
+    c.on('close', (exit) => exit === 0 ? resolve() : reject(new Error(err)));
+  });
+  const mandateBladePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate-blade.json');
+  // 3. SessionStart with the Blade-bound mandate + Blade agent config
+  const sid = 'e2e-vi-blade';
+  const envOverrides = {
+    ZEROH_VI_MANDATE_FILE: mandateBladePath,
+    ZEROH_BLADE_AGENT_CONFIG: cfgPath,
+  };
+  const start = await runHook(HOOKS.sessionStart, {
+    session_id: sid, cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, envOverrides);
+  const ctx = start.json?.hookSpecificOutput?.additionalContext || '';
+  assert(ctx.includes('Verifiable Intent mandate active'), `mandate active line surfaced (got: ${ctx.slice(0, 200)})`);
+  // 4. UserPromptSubmit + Stop → produce a receipt
+  await runHook(HOOKS.userPromptSubmit, {
+    session_id: sid, cwd, prompt: 'in-scope coffee purchase test',
+  }, envOverrides);
+  await runHook(HOOKS.stop, {
+    session_id: sid, cwd, hook_event_name: 'Stop',
+  }, envOverrides);
+  // 5. The receipt's iss must be did:hedera:..., not did:jwk:...
+  const turn = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions', sid, 'turn-1.json'), 'utf8'));
+  const iss = turn.receipt.public_claims.iss;
+  assert(iss.startsWith('did:hedera:'), `iss is did:hedera (got ${iss})`);
+  // SD-JWT header alg + kid match Blade
+  const jwt = turn.receipt.compact_sdjwt;
+  const header = JSON.parse(Buffer.from(jwt.split('~')[0].split('.')[0], 'base64url').toString('utf8'));
+  assert(header.alg === 'EdDSA', `alg=EdDSA (got ${header.alg})`);
+  assert(header.kid.endsWith('#did-root-key'), `kid ends with #did-root-key (got ${header.kid})`);
+  // intent_binding mandate_aud preserved
+  const ib = turn.receipt.public_claims.intent_binding;
+  assert(ib?.mandate_aud === 'commerce', 'intent_binding.mandate_aud=commerce');
+  return { iss_short: iss.slice(0, 30) + '…', alg: header.alg };
+});
+
 await step('Blade bootstrap --dry-run produces a complete config blob (F-1.3)', async () => {
   const { spawn: spawnChild } = await import('node:child_process');
   const cfgPath = path.join(cwd, 'blade-agent-dryrun.json');
