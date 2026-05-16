@@ -153,15 +153,20 @@ async function emitBlock({ turn, masked }) {
   lines.push('');
   lines.push(`Receipt will be finalized at turn end. Turn ${turn} pending re-submit.`);
 
-  // Block the prompt and present the masked alternative for the user to paste.
+  // `reason` is the event-specific block message; surfaces in-line where the
+  // UI supports it. `systemMessage` is the universal user-visible notification
+  // — required because `decision: "block"` erases the prompt from Claude's
+  // context, so without `systemMessage` the user can be left with nothing
+  // visible at all on surfaces that don't render `reason`.
+  const summary = `🛡  ZeroH Disclosure blocked your prompt: ${masked.replacements.length} sensitive item(s) detected (${formatByType(byType)}). ${
+    clipboardTool ? 'Masked version copied to clipboard — paste it and re-submit.' : 'See block details for the masked version to copy.'
+  }`;
+
   process.stdout.write(
     JSON.stringify({
       decision: 'block',
       reason: lines.join('\n'),
-      hookSpecificOutput: {
-        hookEventName: 'UserPromptSubmit',
-        additionalContext: '',
-      },
+      systemMessage: summary,
     }) + '\n',
   );
 }
