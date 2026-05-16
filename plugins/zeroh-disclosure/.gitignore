@@ -4,3 +4,10 @@
 .zeroh.env
 node_modules/
 .zeroh/
+
+# Blade-bound VI fixtures: regenerated on every test/demo run by
+# `vi-fixture-gen.mjs --agent-from-blade=...`. The vanilla l1.sdjwt /
+# l2.sdjwt / mandate.json / *-key.json fixtures stay committed (Phase E.1
+# baseline). The *-blade* variants are ephemeral test artifacts.
+test/fixtures/vi/*-blade.sdjwt
+test/fixtures/vi/*-blade.json
