@@ -21,11 +21,18 @@
 //   node scripts/blade-agent-bootstrap.mjs --config-path PATH
 //
 // REQUIRED ENV (live mode)
+//   HEDERA_OPERATOR_ID       0.0.XXXX — funded account that pays fees
+//   HEDERA_OPERATOR_KEY      DER-prefixed hex Ed25519 private key
+//
+// OPTIONAL ENV (live mode)
 //   ZEROH_BLADE_API_KEY      Your Blade SDK API key
 //   ZEROH_BLADE_DAPP_CODE    Your Blade dApp code
 //   HEDERA_NETWORK           "testnet" or "mainnet" (default: testnet)
-//   HEDERA_OPERATOR_ID       0.0.XXXX — funded account that pays fees
-//   HEDERA_OPERATOR_KEY      DER-prefixed hex Ed25519 private key
+//
+// If both ZEROH_BLADE_* vars are set, the bootstrap runs an informational
+// Blade SDK init handshake. If either is missing, the Blade step is skipped
+// (the agent's actual identity is provisioned via @hashgraph/sdk +
+// @hiero-did-sdk, neither of which depend on Blade in V1).
 //
 // COST (testnet, 2026)
 //   ~$0.05 to create Hedera account + ~$0.01 for DID topic + ~$0.001 per
@@ -41,8 +48,14 @@ import {
   PrivateKey,
 } from '@hashgraph/sdk';
 import { BladeSDK } from '../lib/blade/sdk.js';
+import { loadConfig } from '../lib/config.js';
 import { publishAgentDid } from '../lib/hiero/did-publisher.js';
 import { buildUaidFromDid } from '../lib/hashgraph-online/uaid.js';
+
+// Match the precedence the plugin's hooks use: real env → .zeroh.env →
+// plugin .env. So `node scripts/blade-agent-bootstrap.mjs` picks up the
+// same HEDERA_* creds the runtime uses.
+await loadConfig({ cwd: process.cwd() });
 
 // --- argv ---------------------------------------------------------------
 
@@ -118,9 +131,14 @@ if (dryRun) {
 }
 console.log();
 
-// 5. Blade SDK init (diagnostic + future Paymaster hook)
+// 5. Blade SDK init (informational + future Paymaster hook). Skipped unless
+//    both ZEROH_BLADE_API_KEY and ZEROH_BLADE_DAPP_CODE are set — the V1
+//    agent identity doesn't depend on Blade.
 if (dryRun) {
   console.log(yellow(`[dry-run] skipping BladeSDK.init()`));
+} else if (!env.ZEROH_BLADE_API_KEY || !env.ZEROH_BLADE_DAPP_CODE) {
+  console.log(yellow(`[skip] BladeSDK.init() — ZEROH_BLADE_API_KEY or ZEROH_BLADE_DAPP_CODE not set`));
+  console.log(dim('       (agent identity provisioned via @hashgraph/sdk + @hiero-did-sdk regardless)'));
 } else {
   console.log(`Initializing Blade SDK with dAppCode...`);
   const blade = new BladeSDK();
@@ -214,7 +232,8 @@ function readEnv() {
 }
 
 function requireLiveEnv(env) {
-  const missing = ['ZEROH_BLADE_API_KEY', 'ZEROH_BLADE_DAPP_CODE', 'HEDERA_OPERATOR_ID', 'HEDERA_OPERATOR_KEY']
+  // Hard-required: operator credentials (pay for HCS topic + message fees).
+  const missing = ['HEDERA_OPERATOR_ID', 'HEDERA_OPERATOR_KEY']
     .filter((k) => !env[k]);
   if (missing.length > 0) {
     console.error(`✗ Missing required env vars for live mode:\n  ${missing.join('\n  ')}`);
