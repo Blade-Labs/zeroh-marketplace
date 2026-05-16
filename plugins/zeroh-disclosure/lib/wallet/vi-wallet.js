@@ -15,10 +15,14 @@
 
 import { promises as fs } from 'node:fs';
 import { calculateJwkThumbprint, importJWK } from 'jose';
+import { algForJwk } from '../vi/verify.js';
 
 export class ViWallet {
-  constructor({ kid, did, privateKey, publicJwk }) {
-    this.alg = 'ES256';
+  constructor({ kid, did, privateKey, publicJwk, alg }) {
+    // alg is derived from the public JWK at load time. ES256 for synthetic
+    // fixtures (existing Phase E path); EdDSA when a Blade-rooted Ed25519
+    // key is bound (Phase F-1).
+    this.alg = alg;
     this.accountId = kid;
     this.network = 'jwk';
     this.did = did;
@@ -37,18 +41,26 @@ export class ViWallet {
     return this.accountId;
   }
   async signMessage(bytes) {
-    // Sign raw bytes with ES256. jose handles RFC 7515 JOSE-style signing
-    // (raw r||s, not DER), which is what the SD-JWT receipt expects.
+    // JOSE-format raw signatures (no DER for ECDSA; no ASN.1 wrapper for
+    // Ed25519). The exact `subtle` algorithm dispatch depends on `this.alg`.
     const { subtle } = await import('node:crypto').then((m) => m.webcrypto);
-    const cryptoKey = await subtle.importKey(
-      'jwk',
-      this._privateKeyJwk,
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      false,
-      ['sign'],
-    );
-    const sig = await subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, cryptoKey, bytes);
-    return new Uint8Array(sig);
+    if (this.alg === 'ES256') {
+      const cryptoKey = await subtle.importKey(
+        'jwk', this._privateKeyJwk,
+        { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign'],
+      );
+      const sig = await subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, cryptoKey, bytes);
+      return new Uint8Array(sig);
+    }
+    if (this.alg === 'EdDSA') {
+      const cryptoKey = await subtle.importKey(
+        'jwk', this._privateKeyJwk,
+        { name: 'Ed25519' }, false, ['sign'],
+      );
+      const sig = await subtle.sign({ name: 'Ed25519' }, cryptoKey, bytes);
+      return new Uint8Array(sig);
+    }
+    throw new Error(`ViWallet.signMessage: unsupported alg ${this.alg}`);
   }
   // exposed for signMessage() — set by loader
   _privateKeyJwk = null;
@@ -86,10 +98,11 @@ export async function loadViWallet({ keyFile, boundJwk }) {
     }
   }
 
+  const alg = algForJwk(publicJwk);
   const kid = jwk.kid || (await calculateJwkThumbprint(publicJwk, 'sha256'));
   const did = `did:jwk:${await calculateJwkThumbprint(publicJwk, 'sha256')}`;
-  const privateKey = await importJWK(jwk, 'ES256');
-  const wallet = new ViWallet({ kid, did, privateKey, publicJwk });
+  const privateKey = await importJWK(jwk, alg);
+  const wallet = new ViWallet({ kid, did, privateKey, publicJwk, alg });
   wallet._privateKeyJwk = jwk;
   return wallet;
 }

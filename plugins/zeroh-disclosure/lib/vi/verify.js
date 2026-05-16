@@ -22,7 +22,25 @@ import { compactVerify, importJWK } from 'jose';
 import { sha256 } from '@noble/hashes/sha256';
 import { decodeIssuerJwt } from './parse.js';
 
-const SUPPORTED_ALG = new Set(['ES256']);
+const SUPPORTED_ALG = new Set(['ES256', 'EdDSA']);
+
+/**
+ * Derive the JOSE `alg` string from a JWK's `kty` / `crv`.
+ *  - EC + P-256  → ES256   (existing Phase E path; default for synthetic fixtures)
+ *  - OKP + Ed25519 → EdDSA (Phase F-1; used by Hedera-rooted BladeWallet)
+ *
+ * Throws on unsupported key types. Single source of truth: any caller that
+ * imports a JWK and needs to pick an alg should route through here so verify,
+ * sign, and thumbprint code agree.
+ *
+ * @param {object} jwk
+ * @returns {'ES256' | 'EdDSA'}
+ */
+export function algForJwk(jwk) {
+  if (jwk?.kty === 'EC' && jwk?.crv === 'P-256') return 'ES256';
+  if (jwk?.kty === 'OKP' && jwk?.crv === 'Ed25519') return 'EdDSA';
+  throw new Error(`algForJwk: unsupported JWK kty=${jwk?.kty} crv=${jwk?.crv}`);
+}
 
 /**
  * @param {object} args
@@ -63,7 +81,7 @@ export async function verifyChain({ l1Compact, l2Compact, trustedIssuerJwks, exp
     return out;
   }
   try {
-    const key = await importJWK(issuerJwk, 'ES256');
+    const key = await importJWK(issuerJwk, algForJwk(issuerJwk));
     await compactVerify(l1Jwt, key);
   } catch (e) {
     errors.push(`L1: signature invalid (${e.code || e.message})`);
@@ -94,7 +112,8 @@ export async function verifyChain({ l1Compact, l2Compact, trustedIssuerJwks, exp
     return out;
   }
   try {
-    const key = await importJWK(l1Payload.cnf.jwk, 'ES256');
+    const userJwk = l1Payload.cnf.jwk;
+    const key = await importJWK(userJwk, algForJwk(userJwk));
     await compactVerify(l2Jwt, key);
   } catch (e) {
     errors.push(`L2: signature does not verify against L1.cnf.jwk (${e.code || e.message})`);
