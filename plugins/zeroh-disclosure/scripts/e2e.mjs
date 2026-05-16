@@ -289,6 +289,31 @@ await step('Key reuse: SessionStart with wrong agent key records vi_error and sk
   return { error_first: state.vi_error.errors[0].slice(0, 70) + '…' };
 });
 
+await step('Blade bootstrap --dry-run produces a complete config blob (F-1.3)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  const cfgPath = path.join(cwd, 'blade-agent-dryrun.json');
+  const r = await new Promise((resolve, reject) => {
+    const child = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/blade-agent-bootstrap.mjs'),
+      '--dry-run', '--config-path', cfgPath,
+    ], { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '', err = '';
+    child.stdout.on('data', (b) => (out += b));
+    child.stderr.on('data', (b) => (err += b));
+    child.on('error', reject);
+    child.on('close', (exit) => resolve({ exit, out, err }));
+  });
+  assert(r.exit === 0, `bootstrap exit 0 (got ${r.exit}; stderr: ${r.err.slice(-200)})`);
+  const cfg = JSON.parse(await fs.readFile(cfgPath, 'utf8'));
+  for (const key of ['version', 'accountId', 'network', 'privateKeyHex', 'publicJwk', 'did', 'uaid', 'createdAt']) {
+    assert(cfg[key], `config field ${key} present`);
+  }
+  assert(cfg.publicJwk.kty === 'OKP' && cfg.publicJwk.crv === 'Ed25519', 'publicJwk is Ed25519 OKP');
+  assert(cfg.did.startsWith('did:hedera:'), `did starts with did:hedera: (got ${cfg.did})`);
+  assert(cfg.uaid.startsWith('uaid:did:'), `uaid starts with uaid:did: (got ${cfg.uaid})`);
+  return { account: cfg.accountId, did_short: cfg.did.slice(0, 40) + '…' };
+});
+
 await step('SessionStart with invalid VI mandate records vi_error', async () => {
   // Write a wrapper that points at the fixture but with a tampered L1 (random bytes).
   const tamperedPath = path.join(cwd, 'tampered.mandate.json');
