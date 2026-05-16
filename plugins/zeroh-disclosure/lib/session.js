@@ -1,9 +1,14 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import url from 'node:url';
 import { bytesToBase64Url, base64UrlToBytes, randomBytes } from './crypto.js';
 import { loadOrCreateMockWallet } from './wallet/mock-wallet.js';
 import { loadViWallet } from './wallet/vi-wallet.js';
+import { loadBladeWallet } from './wallet/blade-wallet.js';
+
+const PLUGIN_ROOT = path.resolve(url.fileURLToPath(new URL('..', import.meta.url)));
+const DEFAULT_BLADE_CONFIG = path.join(PLUGIN_ROOT, '.zeroh', 'blade-agent.json');
 
 // Sessions live under <project>/.zeroh/sessions/<sid>/ with:
 //   state.json    — { hmacKeyB64u, turnCount, lastReceiptHash, lastTokenHash, walletAccountId }
@@ -61,11 +66,23 @@ export async function loadSession({ cwd, sessionId }) {
     };
     await writeJson(statePath, state);
   }
-  // Wallet selection (Phase E.6): if a VI mandate is active in this session
-  // AND the agent's private key file is configured, swap the receipt signer
-  // for the L2-bound agent key. One key now signs both forward (L3) and
-  // backward (ZH receipts). Failing loud beats silent fallback — if the user
-  // turned VI on but didn't supply the key, that's a configuration error.
+  // Wallet selection. Three branches, priority top-down:
+  //
+  //   1. VI mandate active (Phase E.6) + ZEROH_VI_AGENT_KEY_FILE
+  //      → ViWallet (agent identity dictated by the L2 mandate's cnf.jwk).
+  //
+  //   2. ZEROH_BLADE_AGENT_CONFIG set OR default config exists at
+  //      <plugin>/.zeroh/blade-agent.json (Phase F-1.4)
+  //      → BladeWallet (Hedera-rooted did:hedera identity provisioned by
+  //        scripts/blade-agent-bootstrap.mjs). Same key signs every
+  //        receipt; iss = did:hedera:...; resolvable via Mirror Node.
+  //
+  //   3. Fallback → P256FileWallet (mock; bootstrap-on-first-run; the
+  //      existing test/dev path with synthetic P-256 keys).
+  //
+  // VI keeps priority because if a mandate is active, the agent identity
+  // is already dictated by the mandate. The Blade-bound-VI path (mandate
+  // names the Hedera key as cnf.jwk) ships in Phase F-1.6.
   let wallet;
   if (state.vi && process.env.ZEROH_VI_AGENT_KEY_FILE) {
     wallet = await loadViWallet({
@@ -73,16 +90,25 @@ export async function loadSession({ cwd, sessionId }) {
       boundJwk: null, // checked at SessionStart; trusting persisted state here
     });
   } else {
-    wallet = await loadOrCreateMockWallet({
-      readJson,
-      writeJson,
-      walletPath: path.join(dir, 'wallet.json'),
-      privateJwkPath: path.join(dir, 'wallet.key.json'),
-      accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid || resolvedSid)}`,
-      network: process.env.HEDERA_NETWORK || 'testnet',
-    });
+    const bladeConfigPath = process.env.ZEROH_BLADE_AGENT_CONFIG || DEFAULT_BLADE_CONFIG;
+    if (await fileExists(bladeConfigPath)) {
+      wallet = await loadBladeWallet({ configPath: bladeConfigPath });
+    } else {
+      wallet = await loadOrCreateMockWallet({
+        readJson,
+        writeJson,
+        walletPath: path.join(dir, 'wallet.json'),
+        privateJwkPath: path.join(dir, 'wallet.key.json'),
+        accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid || resolvedSid)}`,
+        network: process.env.HEDERA_NETWORK || 'testnet',
+      });
+    }
   }
   return { dir, state, statePath, wallet };
+}
+
+async function fileExists(p) {
+  try { await fs.access(p); return true; } catch { return false; }
 }
 
 function hash32(s) {

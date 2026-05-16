@@ -289,6 +289,68 @@ await step('Key reuse: SessionStart with wrong agent key records vi_error and sk
   return { error_first: state.vi_error.errors[0].slice(0, 70) + '…' };
 });
 
+await step('BladeWallet: signMessage roundtrip verifies via Web Crypto Ed25519 (F-1.4)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  const cfgPath = path.join(cwd, 'blade-agent-wallet-test.json');
+  // Produce a config blob with --dry-run (real Ed25519 keys, synthetic Hedera IDs)
+  await new Promise((resolve, reject) => {
+    const c = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/blade-agent-bootstrap.mjs'),
+      '--dry-run', '--config-path', cfgPath,
+    ], { env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    c.stderr.on('data', (b) => (err += b));
+    c.on('close', (exit) => exit === 0 ? resolve() : reject(new Error(err)));
+  });
+  const { loadBladeWallet } = await import('../lib/wallet/blade-wallet.js');
+  const wallet = await loadBladeWallet({ configPath: cfgPath });
+  assert(wallet.alg === 'EdDSA', `alg=EdDSA (got ${wallet.alg})`);
+  assert((await wallet.getAccount()).did.startsWith('did:hedera:'), 'did:hedera in getAccount');
+  const msg = new TextEncoder().encode('zeroh signing roundtrip');
+  const sig = await wallet.signMessage(msg);
+  assert(sig.length === 64, `Ed25519 sig is 64 bytes (got ${sig.length})`);
+  const { webcrypto } = await import('node:crypto');
+  const pub = await wallet.getPublicKey();
+  const ck = await webcrypto.subtle.importKey('jwk', pub.jwk, { name: 'Ed25519' }, false, ['verify']);
+  const ok = await webcrypto.subtle.verify({ name: 'Ed25519' }, ck, sig, msg);
+  assert(ok === true, 'Web Crypto verify');
+  return { kid: (await wallet.getKeyId()).slice(-24) };
+});
+
+await step('SessionStart with ZEROH_BLADE_AGENT_CONFIG → BladeWallet selected (F-1.5)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  const cfgPath = path.join(cwd, 'blade-agent-session-test.json');
+  await new Promise((resolve, reject) => {
+    const c = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/blade-agent-bootstrap.mjs'),
+      '--dry-run', '--config-path', cfgPath,
+    ], { env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    c.stderr.on('data', (b) => (err += b));
+    c.on('close', (exit) => exit === 0 ? resolve() : reject(new Error(err)));
+  });
+  // Run UserPromptSubmit + Stop under a fresh session, with the Blade config
+  // pointed at. Then assert the finalized receipt's iss is did:hedera:...
+  const sid = 'e2e-blade-wallet';
+  await runHook(HOOKS.userPromptSubmit, {
+    session_id: sid, cwd, prompt: 'hello blade-rooted agent',
+  }, { ZEROH_BLADE_AGENT_CONFIG: cfgPath });
+  await runHook(HOOKS.stop, {
+    session_id: sid, cwd, hook_event_name: 'Stop',
+  }, { ZEROH_BLADE_AGENT_CONFIG: cfgPath });
+  const turn = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions', sid, 'turn-1.json'), 'utf8'));
+  const iss = turn.receipt.public_claims.iss;
+  assert(iss.startsWith('did:hedera:'), `iss starts with did:hedera: (got ${iss})`);
+  // Decode header from compact_sdjwt — same pattern as the existing
+  // "VERIFY: SD-JWT signature structure" step.
+  const jwt = turn.receipt.compact_sdjwt;
+  const headerB64 = jwt.split('~')[0].split('.')[0];
+  const header = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf8'));
+  assert(header.alg === 'EdDSA', `alg=EdDSA (got ${header.alg})`);
+  assert(header.kid && header.kid.endsWith('#did-root-key'), `kid ends with #did-root-key (got ${header.kid})`);
+  return { iss_short: iss.slice(0, 30) + '…', alg: header.alg };
+});
+
 await step('Blade bootstrap --dry-run produces a complete config blob (F-1.3)', async () => {
   const { spawn: spawnChild } = await import('node:child_process');
   const cfgPath = path.join(cwd, 'blade-agent-dryrun.json');
