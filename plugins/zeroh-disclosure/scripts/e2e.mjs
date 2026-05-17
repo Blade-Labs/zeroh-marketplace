@@ -397,6 +397,150 @@ await step('Key reuse: SessionStart with wrong agent key records vi_error and sk
   return { error_first: state.vi_error.errors[0].slice(0, 70) + '…' };
 });
 
+await step('BladeWallet: signMessage roundtrip verifies via Web Crypto Ed25519 (F-1.4)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  const cfgPath = path.join(cwd, 'blade-agent-wallet-test.json');
+  // Produce a config blob with --dry-run (real Ed25519 keys, synthetic Hedera IDs)
+  await new Promise((resolve, reject) => {
+    const c = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/blade-agent-bootstrap.mjs'),
+      '--dry-run', '--config-path', cfgPath,
+    ], { env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    c.stderr.on('data', (b) => (err += b));
+    c.on('close', (exit) => exit === 0 ? resolve() : reject(new Error(err)));
+  });
+  const { loadBladeWallet } = await import('../lib/wallet/blade-wallet.js');
+  const wallet = await loadBladeWallet({ configPath: cfgPath });
+  assert(wallet.alg === 'EdDSA', `alg=EdDSA (got ${wallet.alg})`);
+  assert((await wallet.getAccount()).did.startsWith('did:hedera:'), 'did:hedera in getAccount');
+  const msg = new TextEncoder().encode('zeroh signing roundtrip');
+  const sig = await wallet.signMessage(msg);
+  assert(sig.length === 64, `Ed25519 sig is 64 bytes (got ${sig.length})`);
+  const { webcrypto } = await import('node:crypto');
+  const pub = await wallet.getPublicKey();
+  const ck = await webcrypto.subtle.importKey('jwk', pub.jwk, { name: 'Ed25519' }, false, ['verify']);
+  const ok = await webcrypto.subtle.verify({ name: 'Ed25519' }, ck, sig, msg);
+  assert(ok === true, 'Web Crypto verify');
+  return { kid: (await wallet.getKeyId()).slice(-24) };
+});
+
+await step('SessionStart with ZEROH_BLADE_AGENT_CONFIG → BladeWallet selected (F-1.5)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  const cfgPath = path.join(cwd, 'blade-agent-session-test.json');
+  await new Promise((resolve, reject) => {
+    const c = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/blade-agent-bootstrap.mjs'),
+      '--dry-run', '--config-path', cfgPath,
+    ], { env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    c.stderr.on('data', (b) => (err += b));
+    c.on('close', (exit) => exit === 0 ? resolve() : reject(new Error(err)));
+  });
+  // Run UserPromptSubmit + Stop under a fresh session, with the Blade config
+  // pointed at. Then assert the finalized receipt's iss is did:hedera:...
+  const sid = 'e2e-blade-wallet';
+  await runHook(HOOKS.userPromptSubmit, {
+    session_id: sid, cwd, prompt: 'hello blade-rooted agent',
+  }, { ZEROH_BLADE_AGENT_CONFIG: cfgPath });
+  await runHook(HOOKS.stop, {
+    session_id: sid, cwd, hook_event_name: 'Stop',
+  }, { ZEROH_BLADE_AGENT_CONFIG: cfgPath });
+  const turn = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions', sid, 'turn-1.json'), 'utf8'));
+  const iss = turn.receipt.public_claims.iss;
+  assert(iss.startsWith('did:hedera:'), `iss starts with did:hedera: (got ${iss})`);
+  // Decode header from compact_sdjwt — same pattern as the existing
+  // "VERIFY: SD-JWT signature structure" step.
+  const jwt = turn.receipt.compact_sdjwt;
+  const headerB64 = jwt.split('~')[0].split('.')[0];
+  const header = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf8'));
+  assert(header.alg === 'EdDSA', `alg=EdDSA (got ${header.alg})`);
+  assert(header.kid && header.kid.endsWith('#did-root-key'), `kid ends with #did-root-key (got ${header.kid})`);
+  return { iss_short: iss.slice(0, 30) + '…', alg: header.alg };
+});
+
+await step('VI mandate bound to Blade Ed25519 key — BladeWallet signs receipt (F-1.6)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  // 1. Provision a Blade agent (dry-run) — synthetic Hedera IDs, real Ed25519 keys
+  const cfgPath = path.join(cwd, 'blade-agent-vi-test.json');
+  await new Promise((resolve, reject) => {
+    const c = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/blade-agent-bootstrap.mjs'),
+      '--dry-run', '--config-path', cfgPath,
+    ], { env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    c.stderr.on('data', (b) => (err += b));
+    c.on('close', (exit) => exit === 0 ? resolve() : reject(new Error(err)));
+  });
+  // 2. Regenerate VI fixtures with the Blade agent's Ed25519 key as cnf.jwk
+  await new Promise((resolve, reject) => {
+    const c = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/vi-fixture-gen.mjs'),
+      `--agent-from-blade=${cfgPath}`,
+    ], { env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    c.stderr.on('data', (b) => (err += b));
+    c.on('close', (exit) => exit === 0 ? resolve() : reject(new Error(err)));
+  });
+  const mandateBladePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate-blade.json');
+  // 3. SessionStart with the Blade-bound mandate + Blade agent config
+  const sid = 'e2e-vi-blade';
+  const envOverrides = {
+    ZEROH_VI_MANDATE_FILE: mandateBladePath,
+    ZEROH_BLADE_AGENT_CONFIG: cfgPath,
+  };
+  const start = await runHook(HOOKS.sessionStart, {
+    session_id: sid, cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, envOverrides);
+  const ctx = start.json?.hookSpecificOutput?.additionalContext || '';
+  assert(ctx.includes('Verifiable Intent mandate active'), `mandate active line surfaced (got: ${ctx.slice(0, 200)})`);
+  // 4. UserPromptSubmit + Stop → produce a receipt
+  await runHook(HOOKS.userPromptSubmit, {
+    session_id: sid, cwd, prompt: 'in-scope coffee purchase test',
+  }, envOverrides);
+  await runHook(HOOKS.stop, {
+    session_id: sid, cwd, hook_event_name: 'Stop',
+  }, envOverrides);
+  // 5. The receipt's iss must be did:hedera:..., not did:jwk:...
+  const turn = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions', sid, 'turn-1.json'), 'utf8'));
+  const iss = turn.receipt.public_claims.iss;
+  assert(iss.startsWith('did:hedera:'), `iss is did:hedera (got ${iss})`);
+  // SD-JWT header alg + kid match Blade
+  const jwt = turn.receipt.compact_sdjwt;
+  const header = JSON.parse(Buffer.from(jwt.split('~')[0].split('.')[0], 'base64url').toString('utf8'));
+  assert(header.alg === 'EdDSA', `alg=EdDSA (got ${header.alg})`);
+  assert(header.kid.endsWith('#did-root-key'), `kid ends with #did-root-key (got ${header.kid})`);
+  // intent_binding mandate_aud preserved
+  const ib = turn.receipt.public_claims.intent_binding;
+  assert(ib?.mandate_aud === 'commerce', 'intent_binding.mandate_aud=commerce');
+  return { iss_short: iss.slice(0, 30) + '…', alg: header.alg };
+});
+
+await step('Blade bootstrap --dry-run produces a complete config blob (F-1.3)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  const cfgPath = path.join(cwd, 'blade-agent-dryrun.json');
+  const r = await new Promise((resolve, reject) => {
+    const child = spawnChild('node', [
+      path.join(PLUGIN_ROOT, 'scripts/blade-agent-bootstrap.mjs'),
+      '--dry-run', '--config-path', cfgPath,
+    ], { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '', err = '';
+    child.stdout.on('data', (b) => (out += b));
+    child.stderr.on('data', (b) => (err += b));
+    child.on('error', reject);
+    child.on('close', (exit) => resolve({ exit, out, err }));
+  });
+  assert(r.exit === 0, `bootstrap exit 0 (got ${r.exit}; stderr: ${r.err.slice(-200)})`);
+  const cfg = JSON.parse(await fs.readFile(cfgPath, 'utf8'));
+  for (const key of ['version', 'accountId', 'network', 'privateKeyHex', 'publicJwk', 'did', 'uaid', 'createdAt']) {
+    assert(cfg[key], `config field ${key} present`);
+  }
+  assert(cfg.publicJwk.kty === 'OKP' && cfg.publicJwk.crv === 'Ed25519', 'publicJwk is Ed25519 OKP');
+  assert(cfg.did.startsWith('did:hedera:'), `did starts with did:hedera: (got ${cfg.did})`);
+  assert(cfg.uaid.startsWith('uaid:did:'), `uaid starts with uaid:did: (got ${cfg.uaid})`);
+  return { account: cfg.accountId, did_short: cfg.did.slice(0, 40) + '…' };
+});
+
 await step('SessionStart with invalid VI mandate records vi_error', async () => {
   // Write a wrapper that points at the fixture but with a tampered L1 (random bytes).
   const tamperedPath = path.join(cwd, 'tampered.mandate.json');
@@ -671,6 +815,23 @@ const hcsConfigured = process.env.ZEROH_ANCHOR === '1'
 const evmConfigured = process.env.ZEROH_ANCHOR === '1'
   && process.env.HEDERA_EVM_OPERATOR_ID
   && process.env.HEDERA_EVM_OPERATOR_KEY;
+
+await step('blade-vi-demo.mjs runs end-to-end (Hedera-rooted one-key chain) (F-1.7)', async () => {
+  const { spawn: spawnChild } = await import('node:child_process');
+  const r = await new Promise((resolve, reject) => {
+    const child = spawnChild('node', [path.join(PLUGIN_ROOT, 'scripts/blade-vi-demo.mjs')], {
+      env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', (b) => (stdout += b));
+    child.stderr.on('data', (b) => (stderr += b));
+    child.on('error', reject);
+    child.on('close', (exit) => resolve({ exit, stdout, stderr }));
+  });
+  assert(r.exit === 0, `blade-vi-demo.mjs exit 0 (got ${r.exit}; stderr: ${r.stderr.slice(-200)})`);
+  assert(/Receipt iss === did:hedera/.test(r.stdout), 'demo prints Hedera-rooted one-key confirmation');
+  return { stdout_bytes: r.stdout.length };
+});
 
 await step('vi-demo.mjs runs end-to-end and produces a one-key chain receipt', async () => {
   // Spawn vi-demo as a child; it must exit 0 and the stdout must mention the

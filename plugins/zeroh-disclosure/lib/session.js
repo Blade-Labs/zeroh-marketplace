@@ -1,9 +1,15 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import url from 'node:url';
+import { calculateJwkThumbprint } from 'jose';
 import { bytesToBase64Url, base64UrlToBytes, randomBytes } from './crypto.js';
 import { loadOrCreateMockWallet } from './wallet/mock-wallet.js';
 import { loadViWallet } from './wallet/vi-wallet.js';
+import { loadBladeWallet } from './wallet/blade-wallet.js';
+
+const PLUGIN_ROOT = path.resolve(url.fileURLToPath(new URL('..', import.meta.url)));
+const DEFAULT_BLADE_CONFIG = path.join(PLUGIN_ROOT, '.zeroh', 'blade-agent.json');
 
 // Sessions live under <project>/.zeroh/sessions/<sid>/ with:
 //   state.json    — { hmacKeyB64u, turnCount, lastReceiptHash, lastTokenHash, walletAccountId }
@@ -62,28 +68,98 @@ export async function loadSession({ cwd, sessionId }) {
     };
     await writeJson(statePath, state);
   }
-  // Wallet selection (Phase E.6): if a VI mandate is active in this session
-  // AND the agent's private key file is configured, swap the receipt signer
-  // for the L2-bound agent key. One key now signs both forward (L3) and
-  // backward (ZH receipts). Failing loud beats silent fallback — if the user
-  // turned VI on but didn't supply the key, that's a configuration error.
+  // Wallet selection. Four branches, priority top-down:
+  //
+  //   1a. VI mandate active + Blade config present + thumbprints match
+  //       → BladeWallet (Hedera-rooted; the L2 mandate names did:hedera's
+  //         key as cnf.jwk). Forward chain (the mandate) and backward
+  //         chain (every signed receipt) close through the SAME key,
+  //         resolvable via Mirror Node. Phase F-1.6.
+  //
+  //   1b. VI mandate active + ZEROH_VI_AGENT_KEY_FILE
+  //       → ViWallet (Phase E.6 path; agent identity is a did:jwk
+  //         derived from the L2 mandate's cnf.jwk).
+  //
+  //   2.  ZEROH_BLADE_AGENT_CONFIG set OR default config exists at
+  //       <plugin>/.zeroh/blade-agent.json (no VI mandate)
+  //       → BladeWallet (Phase F-1.4; receipts carry did:hedera iss
+  //         without a mandate context).
+  //
+  //   3.  Fallback → P256FileWallet (mock; bootstrap-on-first-run;
+  //       existing test/dev path with synthetic P-256 keys).
+  //
+  // The 1a/1b ordering matters: when a mandate is active, we look for the
+  // strongest available signing identity that the mandate ALREADY binds
+  // (Blade-rooted Ed25519 first; fall back to disk-loaded JWK).
   let wallet;
-  if (state.vi && process.env.ZEROH_VI_AGENT_KEY_FILE) {
-    wallet = await loadViWallet({
-      keyFile: process.env.ZEROH_VI_AGENT_KEY_FILE,
-      boundJwk: null, // checked at SessionStart; trusting persisted state here
-    });
+  if (state.vi) {
+    const bladePath = process.env.ZEROH_BLADE_AGENT_CONFIG || DEFAULT_BLADE_CONFIG;
+    const bladeMatch = (await fileExists(bladePath))
+      ? await bladeMatchesMandate(bladePath, state.vi.agent_jwk)
+      : null;
+    if (bladeMatch) {
+      wallet = await loadBladeWallet({ configPath: bladePath });
+    } else if (process.env.ZEROH_VI_AGENT_KEY_FILE) {
+      wallet = await loadViWallet({
+        keyFile: process.env.ZEROH_VI_AGENT_KEY_FILE,
+        boundJwk: null, // checked at SessionStart; trusting persisted state here
+      });
+    } else {
+      // SessionStart already validates that the configured key matches the
+      // mandate's cnf.jwk and writes vi_error on mismatch. By the time later
+      // hooks (PreToolUse, Stop) load the session, the env vars may not be
+      // re-supplied — soft-fall back to the mock wallet so the rest of the
+      // hook chain still functions. The receipts won't carry the bound
+      // identity, but intent_binding metadata still survives from state.vi.
+      wallet = await loadOrCreateMockWallet({
+        readJson,
+        writeJson,
+        walletPath: path.join(dir, 'wallet.json'),
+        privateJwkPath: path.join(dir, 'wallet.key.json'),
+        accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid || resolvedSid)}`,
+        network: process.env.HEDERA_NETWORK || 'testnet',
+      });
+    }
   } else {
-    wallet = await loadOrCreateMockWallet({
-      readJson,
-      writeJson,
-      walletPath: path.join(dir, 'wallet.json'),
-      privateJwkPath: path.join(dir, 'wallet.key.json'),
-      accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid || resolvedSid)}`,
-      network: process.env.HEDERA_NETWORK || 'testnet',
-    });
+    const bladeConfigPath = process.env.ZEROH_BLADE_AGENT_CONFIG || DEFAULT_BLADE_CONFIG;
+    if (await fileExists(bladeConfigPath)) {
+      wallet = await loadBladeWallet({ configPath: bladeConfigPath });
+    } else {
+      wallet = await loadOrCreateMockWallet({
+        readJson,
+        writeJson,
+        walletPath: path.join(dir, 'wallet.json'),
+        privateJwkPath: path.join(dir, 'wallet.key.json'),
+        accountId: process.env.HEDERA_OPERATOR_ID || `0.0.${hash32(state.sid || resolvedSid)}`,
+        network: process.env.HEDERA_NETWORK || 'testnet',
+      });
+    }
   }
   return { dir, state, statePath, wallet };
+}
+
+/**
+ * True if the Blade config at `path` holds a public key whose JWK thumbprint
+ * matches `mandateJwk`. Returns false on any read/parse failure (so the
+ * caller falls through to the next branch cleanly).
+ */
+async function bladeMatchesMandate(bladePath, mandateJwk) {
+  if (!mandateJwk) return false;
+  try {
+    const cfg = JSON.parse(await fs.readFile(bladePath, 'utf8'));
+    if (!cfg?.publicJwk) return false;
+    const [a, b] = await Promise.all([
+      calculateJwkThumbprint(cfg.publicJwk, 'sha256'),
+      calculateJwkThumbprint(mandateJwk, 'sha256'),
+    ]);
+    return a === b;
+  } catch {
+    return false;
+  }
+}
+
+async function fileExists(p) {
+  try { await fs.access(p); return true; } catch { return false; }
 }
 
 function hash32(s) {
