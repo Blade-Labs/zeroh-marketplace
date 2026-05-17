@@ -17,6 +17,7 @@ export function normalizeBoundary(input = {}) {
   // JSON — and therefore boundary_hash — stays byte-identical for receipts
   // emitted with no active mandate.
   if (input.intent_binding) b.intent_binding = input.intent_binding;
+  if (input.tool_boundary) b.tool_boundary = input.tool_boundary;
   return b;
 }
 

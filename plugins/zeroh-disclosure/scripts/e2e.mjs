@@ -8,8 +8,8 @@
 //   node scripts/e2e.mjs --cwd ./foo   # persistent run in ./foo
 //   node scripts/e2e.mjs --keep        # leave the tmpdir for inspection
 //
-// Honors ZEROH_ANCHOR=1 + HEDERA_OPERATOR_* env vars: if set, the Stop hook
-// submits to live HCS and the runner verifies the topic message.
+// Honors ZEROH_ANCHOR=1 + HEDERA_* env vars: if set, the Stop hook submits to
+// live HCS or EVM fallback and the runner verifies the mirror-node payload.
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -105,6 +105,18 @@ await step('VI chain rejects: wrong issuer JWKS', async () => {
   return { error_first: r.errors[0] };
 });
 
+await step('VI chain rejects: wrong audience', async () => {
+  const { verifyChain } = await import('../lib/vi/index.js');
+  const fixDir = path.join(PLUGIN_ROOT, 'test/fixtures/vi');
+  const l1 = await fs.readFile(path.join(fixDir, 'l1.sdjwt'), 'utf8');
+  const l2 = await fs.readFile(path.join(fixDir, 'l2.sdjwt'), 'utf8');
+  const issuerJwks = JSON.parse(await fs.readFile(path.join(fixDir, 'issuer-jwks.json'), 'utf8'));
+  const r = await verifyChain({ l1Compact: l1, l2Compact: l2, trustedIssuerJwks: issuerJwks, expectedAud: 'not-commerce' });
+  assert(r.ok === false, 'chain rejected as expected');
+  assert(r.errors.some((e) => /aud=commerce expected not-commerce/.test(e)), `error mentions audience (got: ${r.errors.join(';')})`);
+  return { error_first: r.errors[0] };
+});
+
 await step('SessionStart with valid VI mandate exposes state.vi', async () => {
   const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
   const out = await runHook(HOOKS.sessionStart, {
@@ -170,7 +182,7 @@ await step('Commerce tool denied without an active mandate', async () => {
   return { reason_starts: hso.permissionDecisionReason.split('\n')[0] };
 });
 
-await step('Commerce tool denied when mandate active but _intent_fulfillment is missing', async () => {
+await step('Commerce tool denied when mandate active but fulfillment is missing', async () => {
   const out = await runHook(HOOKS.preToolUse, {
     session_id: 'e2e-vi-ok', cwd,
     tool_name: 'mcp__example_checkout__buy', tool_use_id: 'e2e-cm-2',
@@ -178,8 +190,8 @@ await step('Commerce tool denied when mandate active but _intent_fulfillment is 
   });
   const hso = out.json?.hookSpecificOutput;
   assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
-  assert(/must declare an _intent_fulfillment/.test(hso.permissionDecisionReason),
-    `reason mentions missing _intent_fulfillment`);
+  assert(/fulfillment fields are missing/.test(hso.permissionDecisionReason),
+    `reason mentions missing fulfillment`);
   return { reason_starts: hso.permissionDecisionReason.split('\n')[0] };
 });
 
@@ -225,6 +237,102 @@ await step('Commerce tool allowed when fulfillment is in scope', async () => {
   assert(out.json?.hookSpecificOutput?.permissionDecision !== 'deny',
     `not denied (got: ${out.json?.hookSpecificOutput?.permissionDecision})`);
   return { passed: true };
+});
+
+await step('Agent accountability mode loads VI and reports enabled context', async () => {
+  const mandatePath = path.join(PLUGIN_ROOT, 'test/fixtures/vi/mandate.json');
+  const out = await runHook(HOOKS.sessionStart, {
+    session_id: 'e2e-agent', cwd, source: 'startup', hook_event_name: 'SessionStart',
+  }, { ZEROH_POLICY: 'agent', ZEROH_REQUIRE_INTENT: '1', ZEROH_VI_MANDATE_FILE: mandatePath });
+  const ctx = out.json?.hookSpecificOutput?.additionalContext || '';
+  assert(ctx.includes('Agent accountability: enabled'), 'agent accountability line present');
+  assert(ctx.includes('Verifiable Intent mandate active'), 'VI line present');
+  return { context: 'agent+vi' };
+});
+
+await step('Agent commerce allow signs deterministic tool evidence', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-agent', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-agent-allow',
+    tool_input: {
+      amount: 800,
+      currency: 'USD',
+      merchant: { id: 'merchant-001' },
+      payee: { id: 'payee-001' },
+      line_items: [{ id: 'sku-coffee', quantity: 1 }],
+      reference: 'binding-001',
+    },
+  }, { ZEROH_POLICY: 'agent', ZEROH_REQUIRE_INTENT: '1' });
+  assert(out.exit === 0, `exit 0 (got ${out.exit})`);
+  assert(out.json?.hookSpecificOutput?.permissionDecision !== 'deny', 'not denied');
+  const event = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-agent/event-1.json'), 'utf8'));
+  assert(event.decision_action === 'tool_allow', 'tool_allow receipt');
+  assert(event.fulfillment_source === 'deterministic', 'deterministic fulfillment');
+  assert(event.receipt.public_claims.subject_type === 'tool_action', 'tool action receipt');
+  return { receipt: event.receipt.receipt_hash.slice(0, 12) + '…' };
+});
+
+await step('Agent strict mode denies self-reported-only fulfillment and signs it', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-agent', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-agent-self',
+    tool_input: {
+      _intent_fulfillment: {
+        amount: 800,
+        currency: 'USD',
+        merchant: { id: 'merchant-001' },
+        payee: { id: 'payee-001' },
+        line_items: [{ id: 'sku-coffee', quantity: 1 }],
+        reference: 'binding-001',
+      },
+    },
+  }, { ZEROH_POLICY: 'agent', ZEROH_REQUIRE_INTENT: '1' });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/strict agent mode/.test(hso.permissionDecisionReason), 'strict-mode denial reason');
+  const event = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-agent/event-2.json'), 'utf8'));
+  assert(event.decision_action === 'tool_deny', 'signed deny event');
+  return { reason: event.reason };
+});
+
+await step('Agent commerce deny names amount_range and signs it', async () => {
+  const out = await runHook(HOOKS.preToolUse, {
+    session_id: 'e2e-agent', cwd,
+    tool_name: 'mcp__example_payment__charge', tool_use_id: 'e2e-agent-amount',
+    tool_input: {
+      amount: 9999,
+      currency: 'USD',
+      merchant: { id: 'merchant-001' },
+      payee: { id: 'payee-001' },
+      line_items: [{ id: 'sku-coffee', quantity: 1 }],
+      reference: 'binding-001',
+    },
+  }, { ZEROH_POLICY: 'agent', ZEROH_REQUIRE_INTENT: '1' });
+  const hso = out.json?.hookSpecificOutput;
+  assert(hso?.permissionDecision === 'deny', 'permissionDecision=deny');
+  assert(/mandate\.payment\.amount_range/.test(hso.permissionDecisionReason), 'amount_range denial reason');
+  const event = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-agent/event-3.json'), 'utf8'));
+  assert(event.violations.some((v) => v.type === 'mandate.payment.amount_range'), 'event records amount_range');
+  return { violation: 'amount_range' };
+});
+
+await step('Agent packet builds, verifies, and fails on tamper', async () => {
+  const cli = path.join(PLUGIN_ROOT, 'bin/zeroh-disclosure.mjs');
+  const built = await runNode(cli, ['agent-packet', '--cwd', cwd, '--session', 'e2e-agent', '--json']);
+  assert(built.exit === 0, `agent-packet exit 0 (got ${built.exit}; stderr: ${built.stderr.slice(-200)})`);
+  const builtJson = JSON.parse(built.stdout);
+  const verified = await runNode(cli, ['verify', '--agent-packet', builtJson.path, '--json']);
+  assert(verified.exit === 0, `verify agent packet exit 0 (got ${verified.exit}; stderr: ${verified.stderr.slice(-200)})`);
+  const verifyJson = JSON.parse(verified.stdout);
+  assert(verifyJson.ok === true, 'packet verifies');
+  assert(verifyJson.action_count === 3, `action_count=3 (got ${verifyJson.action_count})`);
+  const tamperedPath = path.join(cwd, 'tampered-agent-packet.json');
+  const tampered = JSON.parse(await fs.readFile(builtJson.path, 'utf8'));
+  tampered.events[0].decision_action = 'tool_deny';
+  await fs.writeFile(tamperedPath, JSON.stringify(tampered, null, 2));
+  const tamperedVerify = await runNode(cli, ['verify', '--agent-packet', tamperedPath, '--json']);
+  assert(tamperedVerify.exit !== 0, 'tampered packet fails');
+  return { packet: verifyJson.packet_hash.slice(0, 12) + '…' };
 });
 
 await step('End-to-end: receipt carries intent_binding when mandate is active', async () => {
@@ -460,6 +568,95 @@ await step('SessionStart', async () => {
   return { ctx_first_line: ctx.split('\n')[0] };
 });
 
+await step('Structured policy command activates Blade without a model prompt', async () => {
+  const r = await runNode(path.join(PLUGIN_ROOT, 'commands/scripts/apply-policy.js'), ['blade'], {
+    cwd,
+    env: { CLAUDE_SESSION_ID: 'e2e-blade' },
+  });
+  assert(r.exit === 0, `apply-policy exit 0 (got ${r.exit}; stderr: ${r.stderr.slice(-200)})`);
+  const state = JSON.parse(await fs.readFile(path.join(cwd, '.zeroh/sessions/e2e-blade/state.json'), 'utf8'));
+  assert(state.active_policy_id === 'blade-ai-disclosure-v1', `active_policy_id=blade (got ${state.active_policy_id})`);
+  return { policy: state.active_policy_id };
+});
+
+await step('CLI apply + verify works without Claude hooks', async () => {
+  const cliCwd = path.join(cwd, 'cli-proof');
+  await fs.mkdir(cliCwd, { recursive: true });
+  const cli = path.join(PLUGIN_ROOT, 'bin/zeroh-disclosure.mjs');
+  const applied = await runNode(cli, [
+    'apply',
+    '--cwd', cliCwd,
+    '--policy', 'blade',
+    '--engine', 'regex-local',
+    '--session', 'demo',
+    '--text', 'contact alice@example.com about card 4532 0151 1283 0366',
+    '--json',
+  ]);
+  assert(applied.exit === 0, `CLI apply exit 0 (got ${applied.exit}; stderr: ${applied.stderr.slice(-200)})`);
+  const applyJson = JSON.parse(applied.stdout);
+  assert(applyJson.policy_id === 'blade-ai-disclosure-v1', `CLI policy_id blade (got ${applyJson.policy_id})`);
+  assert(applyJson.protection_engine_id === 'regex-local', `CLI engine regex-local (got ${applyJson.protection_engine_id})`);
+  assert(applyJson.model_safe_text.includes('[EMAIL-'), 'CLI emits model-safe text');
+  const verified = await runNode(cli, ['verify', '--receipt', applyJson.ledger_path, '--json']);
+  assert(verified.exit === 0, `CLI verify exit 0 (got ${verified.exit}; stderr: ${verified.stderr.slice(-200)})`);
+  const verifyJson = JSON.parse(verified.stdout);
+  assert(verifyJson.ok === true, 'CLI verify ok');
+  const applied2 = await runNode(cli, [
+    'apply',
+    '--cwd', cliCwd,
+    '--policy', 'blade',
+    '--engine', 'regex-local',
+    '--session', 'demo',
+    '--text', 'follow up with bob@example.com',
+    '--json',
+  ]);
+  assert(applied2.exit === 0, `second CLI apply exit 0 (got ${applied2.exit}; stderr: ${applied2.stderr.slice(-200)})`);
+  const applyJson2 = JSON.parse(applied2.stdout);
+  const proofpack = await runNode(cli, ['proofpack', '--cwd', cliCwd, '--session', 'demo', '--json']);
+  assert(proofpack.exit === 0, `CLI proofpack exit 0 (got ${proofpack.exit}; stderr: ${proofpack.stderr.slice(-200)})`);
+  const proofpackJson = JSON.parse(proofpack.stdout);
+  const proofpackVerify = await runNode(cli, ['verify', '--proofpack', proofpackJson.path, '--json']);
+  assert(proofpackVerify.exit === 0, `CLI verify --proofpack exit 0 (got ${proofpackVerify.exit}; stderr: ${proofpackVerify.stderr.slice(-200)})`);
+  const proofpackVerifyJson = JSON.parse(proofpackVerify.stdout);
+  assert(proofpackVerifyJson.ok === true, 'CLI proofpack verify ok');
+
+  const tamperedReceiptPath = path.join(cliCwd, 'tampered-turn.json');
+  const tamperedReceipt = JSON.parse(await fs.readFile(applyJson2.ledger_path, 'utf8'));
+  tamperedReceipt.sanitized_text = `${tamperedReceipt.sanitized_text} tampered`;
+  await fs.writeFile(tamperedReceiptPath, JSON.stringify(tamperedReceipt, null, 2));
+  const tamperedVerify = await runNode(cli, ['verify', '--receipt', tamperedReceiptPath, '--json']);
+  assert(tamperedVerify.exit !== 0, 'tampered sanitized text fails verification');
+
+  const tamperedProofpackPath = path.join(cliCwd, 'tampered-proofpack.json');
+  const tamperedProofpack = JSON.parse(await fs.readFile(proofpackJson.path, 'utf8'));
+  tamperedProofpack.receipts[1].receipt.public_claims.previous_receipt_hash = 'tampered';
+  await fs.writeFile(tamperedProofpackPath, JSON.stringify(tamperedProofpack, null, 2));
+  const tamperedProofpackVerify = await runNode(cli, ['verify', '--proofpack', tamperedProofpackPath, '--json']);
+  assert(tamperedProofpackVerify.exit !== 0, 'tampered proofpack fails verification');
+  return { policy: applyJson.policy_id, engine: applyJson.protection_engine_id, proofpack: proofpackVerifyJson.receipts_count };
+});
+
+await step('CLI Blade proof demo produces a verifiable transcript', async () => {
+  const cliCwd = path.join(cwd, 'cli-demo');
+  await fs.mkdir(cliCwd, { recursive: true });
+  const cli = path.join(PLUGIN_ROOT, 'bin/zeroh-disclosure.mjs');
+  const demo = await runNode(cli, [
+    'demo',
+    'blade-proof',
+    '--cwd', cliCwd,
+    '--engine', 'regex-local',
+    '--json',
+  ]);
+  assert(demo.exit === 0, `CLI demo exit 0 (got ${demo.exit}; stderr: ${demo.stderr.slice(-200)})`);
+  const demoJson = JSON.parse(demo.stdout);
+  assert(demoJson.policy_applied === 'blade-ai-disclosure-v1', 'demo policy blade');
+  assert(demoJson.engine_used === 'regex-local', 'demo engine regex-local');
+  assert(demoJson.raw_content_sent_to_ai_provider === false, 'raw not sent');
+  assert(demoJson.receipt_verification_ok === true, 'demo receipt verifies');
+  assert(demoJson.proofpack_verification_ok === true, 'demo proofpack verifies');
+  return { receipt: demoJson.receipt_hash.slice(0, 12) + '…', anchor: demoJson.anchor.status };
+});
+
 let blockedPrompt = null, maskedRewrite = null;
 
 await step('UserPromptSubmit (clean prompt → silent + turn ledger)', async () => {
@@ -482,12 +679,14 @@ await step('UserPromptSubmit (PII prompt → block, turn-2)', async () => {
   const out = await runHook(HOOKS.userPromptSubmit, {
     session_id: SESSION_ID, cwd, prompt: blockedPrompt,
   });
-  assert(out.exit === 0, 'exit 0');
-  assert(out.json?.decision === 'block', 'decision=block');
-  assert(out.json?.reason?.includes('Detected 2'), 'reason mentions 2 items');
+  assert(out.exit === 0 || out.exit === 2, `exit 0 or hook-block exit 2 (got ${out.exit})`);
+  const reason = out.json?.reason || out.stderr;
+  assert(out.json?.decision === 'block' || out.exit === 2, 'decision=block or exit-2 hook block');
+  assert(reason?.includes('Detected 2'), 'reason mentions 2 items');
   const turn2 = JSON.parse(await fs.readFile(path.join(sessionDir, 'turn-2.json'), 'utf8'));
   assert(turn2.phase === 'blocked_pending_user_resubmit', 'turn-2 phase blocked');
   assert(turn2.findings.length === 2, '2 findings recorded');
+  assert(turn2.receipt?.public_claims?.proof_stage === 'pre_boundary', 'turn-2 receipt is pre_boundary');
   maskedRewrite = turn2.sanitized_text;
   return { findings: turn2.findings.map((f) => f.type).join(','), masked: maskedRewrite };
 });
@@ -573,6 +772,10 @@ await step('VERIFY: receipts prove the policy was applied to every prompt', asyn
     assert(claims.policy_id === 'qcb-ai-disclosure-v1', `turn-${n} policy_id`);
     assert(typeof claims.policy_hash === 'string' && claims.policy_hash.length > 20, `turn-${n} policy_hash`);
     assert(typeof claims.detector_hash === 'string' && claims.detector_hash.length > 20, `turn-${n} detector_hash`);
+    assert(claims.schema === 'zeroh-disclosure-receipt/v2', `turn-${n} schema v2`);
+    assert(claims.proof_stage === 'pre_boundary', `turn-${n} proof_stage=pre_boundary`);
+    assert(claims.protection_engine_id === 'regex-local', `turn-${n} protection_engine_id=regex-local`);
+    assert(claims.protection_engine_hash === claims.detector_hash, `turn-${n} detector_hash aliases protection_engine_hash`);
     assert(claims.decision_action === exp.decision, `turn-${n} decision_action=${exp.decision} (got ${claims.decision_action})`);
     const cats = claims.detected_categories?.length ?? 0;
     assert(cats >= exp.categoriesGte && cats <= exp.categoriesLte, `turn-${n} categories in [${exp.categoriesGte},${exp.categoriesLte}] (got ${cats})`);
@@ -650,32 +853,17 @@ await step('vi-demo.mjs runs end-to-end and produces a one-key chain receipt', a
 });
 
 if (hcsConfigured || evmConfigured) {
-  await step('VERIFY: every receipt is anchored on Mirror Node', async () => {
-    const network = process.env.HEDERA_NETWORK || 'testnet';
-    const mirrorBase = network === 'mainnet'
-      ? 'https://mainnet-public.mirrornode.hedera.com'
-      : 'https://testnet.mirrornode.hedera.com';
+  await step('VERIFY: every receipt anchor matches Mirror Node payload', async () => {
+    const cli = path.join(PLUGIN_ROOT, 'bin/zeroh-disclosure.mjs');
     const results = [];
     for (const n of [1, 2, 3]) {
-      const turn = JSON.parse(await fs.readFile(path.join(sessionDir, `turn-${n}.json`), 'utf8'));
-      const anchor = turn.anchor;
-      assert(anchor?.anchored === true, `turn-${n} anchored (got: ${anchor?.reason || anchor?.error || 'not anchored'})`);
-      if (anchor.type !== 'evm') {
-        results.push(`${n}:hcs:${anchor.tx_id}`);
-        continue;
-      }
-      const start = Date.now();
-      const deadline = start + 20_000;
-      let found = false;
-      while (Date.now() < deadline) {
-        const r = await fetch(`${mirrorBase}/api/v1/contracts/results/${anchor.tx_hash}`);
-        if (r.ok) {
-          const j = await r.json();
-          if (j?.hash) { results.push(`${n}:evm:block ${j.block_number}`); found = true; break; }
-        }
-        await new Promise((r) => setTimeout(r, 1500));
-      }
-      if (!found) throw new Error(`turn-${n} EVM tx ${anchor.tx_hash} not visible within 20s`);
+      const receiptPath = path.join(sessionDir, `turn-${n}.json`);
+      const verified = await runNode(cli, ['verify', '--receipt', receiptPath, '--json']);
+      assert(verified.exit === 0, `turn-${n} verify exit 0 (got ${verified.exit}; stderr: ${verified.stderr.slice(-200)})`);
+      const json = JSON.parse(verified.stdout);
+      assert(json.anchor.status === 'anchored', `turn-${n} anchor status anchored (got ${json.anchor.status})`);
+      assert(json.anchor.verified === true, `turn-${n} anchor payload verified`);
+      results.push(`${n}:${json.anchor.type}:${json.anchor.tx_id || json.anchor.tx_hash}`);
     }
     return { anchors: results.join(' | ') };
   });
@@ -743,6 +931,21 @@ function runHook(scriptPath, event, extraEnv = {}) {
       resolve({ exit, stdout, stderr, json });
     });
     child.stdin.end(JSON.stringify(event));
+  });
+}
+
+function runNode(scriptPath, argv = [], options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, ...argv], {
+      cwd: options.cwd || process.cwd(),
+      env: { ...process.env, ...(options.env || {}) },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', (b) => (stdout += b));
+    child.stderr.on('data', (b) => (stderr += b));
+    child.on('error', reject);
+    child.on('close', (exit) => resolve({ exit, stdout, stderr }));
   });
 }
 

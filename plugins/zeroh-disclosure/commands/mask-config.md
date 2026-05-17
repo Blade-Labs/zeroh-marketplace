@@ -1,5 +1,5 @@
 ---
-description: Show ZeroH Disclosure configuration, detector categories, and Hedera env status
+description: Show ZeroH Disclosure configuration, policies, protection engines, and Hedera env status
 allowed-tools: ["Bash"]
 ---
 

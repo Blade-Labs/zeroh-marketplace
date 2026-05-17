@@ -1,10 +1,14 @@
-# ZeroH Disclosure · Claude Code plugin
+# ZeroH Disclosure · proof primitive + Claude Code adapter
 
-Detects sensitive content in your prompts **before** they leave the device,
-blocks the submission, and shows you a deterministically tokenized rewrite to
-paste back. When the turn ends, a signed SD-JWT receipt is built and
-(optionally) anchored to Hedera HCS — non-repudiable evidence of what was
-masked.
+ZeroH Disclosure is a disclosure-proof primitive. The unit of value is the
+signed, verifiable, optionally anchored receipt proving which policy, boundary,
+protection engine, and transformed view were applied before release. Agent
+tool decisions can also roll into a customer-facing accountability packet that
+proves commerce actions stayed inside signed user intent.
+
+The Claude Code plugin is the first adapter. The same proof primitive is also
+available from the CLI, and future adapters such as browser extensions, MCP
+servers, and IDE plugins should produce the same receipt contract.
 
 ---
 
@@ -21,8 +25,28 @@ Verify:
 claude plugin list | grep zeroh-disclosure
 ```
 
-The plugin runs end-to-end with zero configuration — detection, masking,
-signed receipts, and ProofPack writes all work immediately.
+The plugin runs end-to-end with zero configuration using the local `regex-local`
+reference engine. The Blade sample policy can also use Presidio as a
+third-party protection engine through a local Docker sidecar.
+
+## Proof primitive
+
+Core contracts live in:
+
+| Contract | Purpose |
+| --- | --- |
+| `docs/receipt-schema-v2.md` | Receipt fields, hash rules, signature rules, verifier expectations |
+| `docs/protection-engine.md` | Engine interface for regex-local, Presidio, and future masking/DLP engines |
+| `docs/blade-policy.md` | Blade sample policy behavior and fallback semantics |
+
+Current surfaces:
+
+| Surface | Role |
+| --- | --- |
+| Claude Code hooks | First interactive AI-boundary adapter |
+| `zeroh-disclosure` CLI | Hook-independent proof creation and verification |
+| Presidio sidecar | Third-party protection engine proof point |
+| Agent packet | Signed tool-action evidence bundle for autonomous agents |
 
 ### Optional: live Hedera HCS anchoring
 
@@ -70,6 +94,15 @@ submit it on-chain. To turn anchoring on:
 
 ## Try it
 
+Activate the sample Blade policy with the structured command:
+
+```
+/zeroh-disclosure:apply-policy blade
+```
+
+Natural-language activation like `apply Blade policy` is recognized as a
+convenience, but structured activation is canonical.
+
 Start any Claude Code session and type something with sensitive data:
 
 ```
@@ -77,10 +110,14 @@ My card is 4532 0151 1283 0366 and my email is alice@example.com.
 Draft a refund email.
 ```
 
-You'll see:
+You'll see a block before the raw prompt crosses the Claude boundary:
 
 ```
-🛡  ZeroH Disclosure: your prompt contains sensitive data that should not be sent to the model.
+🛡  ZeroH Disclosure: policy applied before the Claude boundary.
+
+Policy: blade-ai-disclosure-v1
+Engine: regex-local
+Receipt: zrh_...
 
 Detected 2 item(s): CARD_NUMBER, EMAIL
 
@@ -92,8 +129,10 @@ Draft a refund email.
 ────────────────────────────────────────
 ```
 
-Copy the masked line, paste, hit Enter. The model drafts the email using the
-tokens — never seeing the raw values. At the end of the turn:
+Copy the policy-permitted line, paste, hit Enter. The model drafts the email
+using the tokens — never seeing the raw values. The receipt already exists
+before this re-submit crosses the AI boundary. At the end of the turn, Stop
+rolls receipts into a ProofPack:
 
 ```
 📜 Turn 1: receipt zrh_… (anchored 0.0.…@… seq=1)
@@ -108,7 +147,12 @@ Inspect what happened with the slash commands:
 | `/zeroh-disclosure:mask-receipt` | Signed SD-JWT receipt JSON |
 | `/zeroh-disclosure:mask-anchor` | Hedera tx_id + HashScan URL |
 | `/zeroh-disclosure:mask-proofpack` | Regulator-ready evidence export path |
-| `/zeroh-disclosure:mask-config` | Detector categories + env status |
+| `/zeroh-disclosure:mask-config` | Policy + protection engine + anchor status |
+| `/zeroh-disclosure:apply-policy blade` | Activate a named disclosure policy |
+| `/zeroh-disclosure:disclosure-receipt` | Alias for the receipt view |
+| `/zeroh-disclosure:disclosure-proofpack` | Alias for the ProofPack view |
+| `/zeroh-disclosure:disclosure-anchor` | Alias for the anchor view |
+| `/zeroh-disclosure:disclosure-config` | Policy + engine + anchor status |
 
 (Or use the `mask-review` skill to scan a draft before pasting:
 *"Use the mask-review skill on this: …"*.)
@@ -126,11 +170,20 @@ All settings live in a `.env`-style file. Precedence, highest first:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
+| `ZEROH_POLICY` | Active policy alias/id (`qcb`, `blade`, `agent`) | `qcb` |
+| `ZEROH_REQUIRE_INTENT` | `1` makes agent commerce evidence fail closed without valid VI | unset |
+| `ZEROH_PROTECTION_ENGINE` | Override protection engine (`regex-local`, `presidio-http`) | policy default |
+| `ZEROH_POLICY_MODE` | `fallback_with_receipt` or `fail_closed` | `fallback_with_receipt` |
+| `PRESIDIO_ANALYZER_URL` | Presidio analyzer endpoint | `http://localhost:5002/analyze` |
+| `PRESIDIO_ANONYMIZER_URL` | Presidio anonymizer endpoint | `http://localhost:5001/anonymize` |
 | `ZEROH_ANCHOR` | `1` to submit anchors to Hedera | `0` |
 | `HEDERA_NETWORK` | `testnet` or `mainnet` | `testnet` |
 | `HEDERA_OPERATOR_ID` | Hedera account paying for submissions | — |
 | `HEDERA_OPERATOR_KEY` | Operator private key (DER or hex) | — |
 | `HEDERA_TOPIC_ID` | HCS topic to submit to (use `scripts/create-topic.mjs`) | — |
+| `ZEROH_HCS_GRPC_DEADLINE_MS` | Per-HCS gRPC request deadline | `10000` |
+| `ZEROH_HCS_TIMEOUT_MS` | Total HCS request timeout; must exceed gRPC deadline | `30000` |
+| `ZEROH_HCS_MAX_ATTEMPTS` | Hedera SDK attempts before fallback | `4` |
 | `ZEROH_DESTINATION` | Boundary field for the receipt | `anthropic_claude_api` |
 | `ZEROH_MODEL` | Boundary model identifier | `claude-code` |
 | `ZEROH_RETENTION` | Boundary retention class — affects which policy rule fires | `unknown` |
@@ -138,6 +191,57 @@ All settings live in a `.env`-style file. Precedence, highest first:
 
 Without Hedera credentials the plugin still runs end-to-end — it just skips
 the live submit and stores the anchor *intent* in the receipt.
+
+### Presidio sidecar
+
+Start the third-party protection engine proof point with:
+
+```bash
+docker compose -f docker-compose.presidio.yml up
+```
+
+Then run:
+
+```bash
+node bin/zeroh-disclosure.mjs doctor --policy blade
+node bin/zeroh-disclosure.mjs apply --policy blade --engine presidio-http --text "email alice@example.com"
+```
+
+If Presidio is unavailable, fallback behavior is controlled by the active
+policy and recorded in `protection_engine_resolution` on the receipt.
+
+### Repeatable Blade proof demo
+
+```bash
+docker compose -f docker-compose.presidio.yml up -d
+node bin/zeroh-disclosure.mjs doctor --policy blade
+node bin/zeroh-disclosure.mjs demo blade-proof --engine presidio-http
+node bin/zeroh-disclosure.mjs verify --receipt .zeroh/sessions/<session>/turn-1.json
+node bin/zeroh-disclosure.mjs verify --proofpack .zeroh/sessions/<session>/turn-1.proofpack.json
+node bin/zeroh-disclosure.mjs poll-anchor --receipt .zeroh/sessions/<session>/turn-1.json
+```
+
+The demo prints the policy applied, engine used, fallback/degradation status,
+raw-content flags, sanitized text, receipt hash, ProofPack hash, anchor status,
+and verification result. If Presidio is unavailable the demo fails closed unless
+you pass `--allow-fallback`, which records fallback to `regex-local` in the
+receipt.
+
+### CLI
+
+```bash
+node bin/zeroh-disclosure.mjs apply --policy blade --text "contact alice@example.com"
+node bin/zeroh-disclosure.mjs verify --receipt .zeroh/sessions/cli-default/turn-1.json
+node bin/zeroh-disclosure.mjs proofpack --session cli-default
+node bin/zeroh-disclosure.mjs verify --proofpack .zeroh/sessions/cli-default/turn-1.proofpack.json
+node bin/zeroh-disclosure.mjs demo agent-accountability
+node bin/zeroh-disclosure.mjs agent-packet --session cli-default
+node bin/zeroh-disclosure.mjs verify --agent-packet .zeroh/sessions/cli-default/agent-accountability-packet.json
+node bin/zeroh-disclosure.mjs poll-anchor --receipt .zeroh/sessions/cli-default/turn-1.json
+node bin/zeroh-disclosure.mjs doctor
+```
+
+CLI sessions are peers to Claude sessions under `.zeroh/sessions/<id>`.
 
 ---
 
@@ -177,17 +281,18 @@ zeroh-disclosure/
 ├── .env.example                      ← copy to <project>/.zeroh.env
 ├── hooks/
 │   ├── hooks.json                    ← UserPromptSubmit + Stop
-│   ├── user-prompt-submit.js         ← detect → block-and-suggest masked rewrite
-│   └── stop.js                       ← finalize receipt + Hedera anchor + ProofPack
-├── commands/                         ← /mask-show, /mask-receipt, /mask-anchor, /mask-proofpack, /mask-config
+│   ├── user-prompt-submit.js         ← pre-boundary policy proof + block/allow
+│   └── stop.js                       ← finalize ledgers + ProofPack rollup/backfill
+├── bin/zeroh-disclosure.mjs          ← apply / verify / proofpack / poll-anchor / doctor / demo
+├── commands/                         ← apply-policy + disclosure-* commands (mask-* aliases retained)
 ├── skills/mask-review/               ← user-invokable "scan this draft for leaks"
 ├── lib/
-│   ├── detector.js                   ← regex + Luhn + IBAN/MOD-97 validators
-│   ├── mask.js                       ← deterministic FNV-1a tokens
+│   ├── disclosure.js                 ← reusable proof primitive
+│   ├── protection-engines/           ← regex-local + presidio-http adapters
+│   ├── policy-registry.js            ← qcb + blade policy resolution
 │   ├── crypto.js, sdjwt.js           ← P-256 signing, SD-JWT-style receipts
-│   ├── receipt.js, proofpack.js      ← disclosure pipeline orchestration
-│   ├── policy.js                     ← versioned + hashed policy (default: QCB demo)
-│   ├── hedera-anchor.js              ← live HCS submission via @hashgraph/sdk
+│   ├── receipt.js, proofpack.js      ← receipt v2 + rollup
+│   ├── hedera-anchor.js, anchor-verify.js ← live HCS/EVM evidence + mirror verification
 │   └── wallet/mock-wallet.js         ← session-persistent P-256 signer
 └── scripts/create-topic.mjs          ← one-shot HCS topic mint
 ```
@@ -206,8 +311,8 @@ Three pieces sit next to each other in this workspace; here's the map:
 | **Receipt** | `provenance.js` tokens + append-only `ledger.js` + MD ProofPack | SD-JWT-style receipts; Hedera **anchor intent** (no submit) | SD-JWT (lifted); **live Hedera HCS submission** added |
 | **Signing wallet** | Server-managed / none | `genericWalletAdapter` — Blade signer or mock P-256 | Mock P-256, persisted per session to disk |
 | **Storage** | Filesystem ledger | LocalStorage / memory vault | Per-turn JSON files under `.zeroh/sessions/<sid>/` |
-| **CLI** | `bin/zeroh-disclosure.js` (demo/inspect/server/proofpack/verify) | `demo.js`, `dev-server.js` | None — the plugin lives inside Claude Code |
-| **Unique value** | Provider wrappers, ledger verification | Wallet abstraction, regulator/CISO/user presentations | Real pre-hook integration with an AI tool, live anchor, interactive UX |
+| **CLI** | `bin/zeroh-disclosure.js` (demo/inspect/server/proofpack/verify) | `demo.js`, `dev-server.js` | `bin/zeroh-disclosure.mjs` apply/verify/proofpack/doctor |
+| **Unique value** | Provider wrappers, ledger verification | Wallet abstraction, regulator/CISO/user presentations | Receipt/verifier primitive with Claude as first adapter |
 
 **Architectural relationship**
 
@@ -215,7 +320,7 @@ Three pieces sit next to each other in this workspace; here's the map:
 - The plugin **adds** `hedera-anchor.js` (live HCS submit via `@hashgraph/sdk`) and `session.js` (per-turn ledger on disk) — capabilities the wallet-mvp had as *intent* but never executed.
 - `zeroh-disclosure-mvp` is a **separate, server-side lineage** that pre-dates the wallet refactor. Different architecture (HTTP server, provider wrappers, append-only ledger), different signing model.
 
-In one sentence: **wallet-mvp is the library; mask-plugin is the first real surface adapter that consumes it; disclosure-mvp is a parallel earlier attempt that took a server-side bet.** The convergence path sketched in `../research/repo-comparison.md` keeps wallet-mvp as the canonical core, folds disclosure-mvp's good ideas (ledger + verify tooling) into it, and ships thin surface adapters like this plugin — and, later, a browser extension — as the consumer products.
+In one sentence: **the invariant product is the receipt/verifier; Claude Code, CLI, browser extension, MCP, and IDE surfaces are adapters.** The convergence path sketched in `../research/repo-comparison.md` keeps the proof core canonical, folds disclosure-mvp's good ideas (ledger + verify tooling) into it, and ships thin surface adapters like this plugin as distribution products.
 
 ---
 
@@ -239,20 +344,39 @@ claude plugin update zeroh-disclosure@zeroh-marketplace
 
 (Or `claude plugin uninstall …` + `… install …` for a clean refresh.)
 
-**Prompt is sent without masking.** Check the detector matched. The detector
-runs on the raw prompt text only. Whitespace and unicode normalization edge
-cases can cause misses — the `mask-review` skill is useful for testing what
-the detector sees on a given passage.
+**Prompt is sent without a block.** Check which policy and protection engine
+are active with `/zeroh-disclosure:disclosure-config`. Clean prompts are allowed
+but still receive receipts; sensitive prompts depend on what the configured
+engine detects.
 
 **Anchor fails with `INSUFFICIENT_PAYER_BALANCE`.** Your operator account
 balance is too low. Refill at <https://portal.hedera.com/faucet>.
 
+**Docker unavailable.** Start Docker Desktop and confirm the Linux engine is
+running, then start Presidio with `docker compose -f docker-compose.presidio.yml up -d`.
+
+**Presidio unavailable.** Run `node bin/zeroh-disclosure.mjs doctor --policy blade`.
+Check `PRESIDIO_ANALYZER_URL`, `PRESIDIO_ANONYMIZER_URL`, and whether the
+sidecar containers are healthy.
+
+**HCS fails with `UNKNOWN` or max attempts.** The HCS path uses gRPC. Keep
+`ZEROH_HCS_TIMEOUT_MS` greater than `ZEROH_HCS_GRPC_DEADLINE_MS`; defaults are
+`30000` and `10000`. The receipt records the HCS failure `stage`,
+`duration_ms`, and timeout config.
+
+**Anchor is submitted but not found.** Mirror node indexing can lag. Re-run
+`poll-anchor`; HCS/EVM evidence remains in the receipt and can be checked later.
+
+**EVM fallback was used.** HCS failed and Hashio/EVM credentials were present.
+Inspect `anchor.hcs_attempt` for the HCS stage/error. The EVM calldata still
+verifies against the receipt hash.
+
 **`@hashgraph/sdk` not installed.** Run `npm install` inside this folder.
 
-**Receipts not showing up.** They're written at the end of a turn (Stop hook).
-A prompt that was blocked but never re-submitted won't have a finalized
-receipt until you re-submit the masked version and let the agent finish a
-turn.
+**Receipts not showing up.** Pre-boundary receipts are written in the turn JSON
+as soon as the prompt hook runs. Stop finalizes ledgers and writes ProofPacks.
+Use `/zeroh-disclosure:disclosure-receipt` or the CLI `verify` command to
+inspect the latest proof.
 
 ---
 
