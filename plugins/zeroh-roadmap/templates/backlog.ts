@@ -20,6 +20,13 @@
  *
  * Duplicate phase numbers are rejected at runtime by Zod.
  *
+ * **Queue-only file.** One line per phase entry. No track narratives, no
+ * "shipped on" notes, no completed-work summaries, no refresh-date prose.
+ * Those belong elsewhere: commit history (git log), the phase file's
+ * `compromises` + `gateRounds` fields, `reviews/changelog.json`, or a
+ * curated CHANGELOG.md. The backlog answers one question — "what's next?"
+ * — and accreted narrative makes that question harder to answer.
+ *
  * Two input forms are supported (schema v5+):
  *   1. Flat array — `defineBacklog([{ phase: 1, name: '...' }])`
  *   2. Tiered     — `defineBacklog({ tiers: [{ tier: 0, label: '...', items: [...] }] })`
