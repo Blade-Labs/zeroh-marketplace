@@ -203,53 +203,20 @@ If a step fails twice in a row (type-check still red after one fix attempt), STO
 
 ### Step 4: Validation gate
 
-After the last task commits, run the validation gate. Full protocol in **`references/gate-protocol.md`** — read it once per session, then return here.
-
-**Launch every gate agent synchronously.** Do NOT pass `run_in_background: true` on any `architect-critique`, `simplifier`, or `code-reviewer` Agent call. Background agents end the parent turn and rely on a completion notification that does not fire until the sub-agent's final `end_turn` — creating a silent dead-zone where the parent looks stopped. The gate is a critical-path sequence; there is no useful parent work to do in parallel, so block on each stage.
-
-Before entering the gate, finish (or kill) any long-running background bash you started — e.g. a manual `pnpm tauri build`. Do not launch one "to run in parallel with the gate." The gate's mechanical checks already run `pnpm build` inside Round N.
-
-**Auto-spawn discipline.** During Steps 1–4 do NOT spawn `Explore`, `general-purpose`, or arbitrary `Task` sub-agents. The architect-critique → simplifier → code-reviewer chain is the only auto-spawned set. Investigation, gap analysis, and review are done inline by default — fork only when the phase doc explicitly requests a sub-agent (e.g. `agentDispatch: true` on an investigation task) or the user asks for one. The user has overridden silent forks before; respect that.
-
-**This includes "this task feels too big to do inline" reactions.** A task that feels oversized at runtime means one of two things: (a) it's actually fine and you're hesitating — push through; or (b) the plan was wrong. In case (b), STOP and surface a split proposal to the user. Do NOT reach for `Agent(...)` to run the task in a sub-agent — that path produces opaque mega-deliverables, abandons commit-per-unit discipline, and fails the user's prior feedback that fork-for-big-tasks "doesn't produce good results." If the planner intended this to be multi-commit, they would have set `batchMode: true` and you would already be in the Batch Protocol above.
+After the last task commits, run the validation gate per **`references/gate-protocol.md`** — load it once per session for stage detail, echo contract, and `StructuredGateRound` shape.
 
 **Gate set is selected by `phase.kind`:**
 
 | `kind` | Gate set |
 |---|---|
-| `mockup` | Mechanical only: `pnpm biome check . && pnpm type-check`. **Skip** architect-critique, simplifier, code-reviewer loop. Step 4b summary still runs (cap applies). |
-| `logic` | Full gate: architect-critique → Round 0 simplify → Rounds 1..N correctness loop. |
-| `hardening` | Full gate **plus** the bug-fix closure rule from `review-phase` Mode B Step 2(b) — for any persistence/event/marshal-chain task, integration-suite rerun is the closure criterion, not unit-test pass. |
-| `release` | Full gate **plus** `pnpm test:e2e` in Round 1's mechanical checks (in addition to the existing `pnpm e2e:local`). |
+| `mockup` | Mechanical only: `pnpm biome check . && pnpm type-check`. **Skip** architect-critique → simplifier → code-reviewer chain. Step 4b summary still runs. |
+| `logic` | Full gate: architect-critique → Round 0 simplify → Rounds 1..N correctness loop (hard-cap 5). |
+| `hardening` | Full gate **plus** the integration-suite-rerun closure rule for persistence/event/marshal-chain tasks (see `review-phase` Mode B Step 2(b)). |
+| `release` | Full gate **plus** `pnpm test:e2e` in Round 1's mechanical checks. |
 
-If `kind` is missing on a legacy phase, treat as `logic` and warn the user once: *"Phase N has no `kind` field — defaulted to `logic`. Backfill with `npx tsx ${CLAUDE_PLUGIN_ROOT}/scripts/migrate/audit.ts`."*
+Missing `kind` on a legacy phase → default to `logic`, warn once. **No exceptions** — every phase gets its kind's gate, docs and tests included.
 
-The gate has four stages (skipped wholesale for `kind: 'mockup'`):
-
-**Architect-critique pass** (one-shot, does NOT loop). Launch one `architect-critique` agent with `git diff <phase-start-SHA>..HEAD` and the phase file. It auto-fixes shortcuts, hardcodes, TODOs, and pre-existing issues in files the phase touched, then commits (`fix(phase-N): architect critique — <summary>`). Hard-stops (multi-repo breaking changes, scoped-out systems, product decisions, speculative fixes) are NOT fixed — they surface in the critique's report and feed the compromise summary (Step 4b).
-
-**Per-stage echo contract** (applies to architect-critique, simplifier, and EACH code-reviewer round). The agent's full report stays in the sub-agent transcript — but echo a condensed summary inline in chat so the user can see what happened without scrolling. Cap each echo at ~10 lines / ~600 chars. Format:
-
-```
-[Architect-critique] FIXED 4: lib/foo.ts hardcoded URL → config; lib/bar.ts removed TODO; api/baz.ts null check; …
-                      SURFACED 1: DB migration users.verified_at — confirm staging before deploy
-                      HARD-STOPS 1: [MULTI-REPO] api/client.ts contract change — plan phase in zeroh-admin
-[Simplifier]         −62 / +4 lines across 7 files. Top fixes: removed _opts param in lib/foo.ts; deleted unused helper in lib/qux.ts. Bugs noted (forwarded to Round 1): lib/zot.ts:88 missing null check.
-[Reviewer R1]        2 findings. CRITICAL 0, HIGH 1, MED 1, LOW 0. Fixed: lib/zot.ts:88 null check; lib/foo.ts:42 off-by-one.
-```
-
-Truncate ruthlessly — if the agent reports nothing of interest, a single line is enough (`[Simplifier] nothing to simplify`). The point is non-zero visibility, not full disclosure.
-
-**Round 0 — Simplify pass** (one-shot, does NOT loop). Launch one `simplifier` agent with the updated `git diff <phase-start-SHA>..HEAD` (now including the critique's fixes) and the phase file. It removes dead scaffolding, speculative abstractions, redundant error handling, and any over-extraction the critique may have added — then commits inline (`refactor(phase-N): simplify — <summary>`). Simplification is judgment, not correctness, so it runs exactly once. Bugs the simplifier notices get flagged and forwarded to Round 1 rather than fixed.
-
-**Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5 rounds). Each round:
-1. Mechanical checks (`pnpm biome check . && pnpm type-check && pnpm test && pnpm build && bash scripts/pre-review.sh <first-task-SHA>~1 && pnpm e2e:local`). Any failure → fix + commit + restart Round N.
-2. Two parallel `code-reviewer` agents reviewing the phase diff (Round 1) or the previous round's fix diff (Round N>1). Confidence ≥80, severities CRITICAL→LOW in scope, INFO recorded but non-blocking.
-3. If both agents return zero actionable findings → gate passes. Otherwise fix, record a `StructuredGateRound` entry, loop.
-
-If Round 5 hasn't converged, STOP and surface remaining findings — agents may be cycling.
-
-**NO EXCEPTIONS** — every phase gets the full gate, including docs-only and test-only phases.
+**Sub-agent rules:** launch all gate agents synchronously (no `run_in_background`). Auto-spawn discipline applies during Steps 1–4 — the architect-critique → simplifier → code-reviewer chain is the only auto-spawned set during the gate; the architect-gate from Prime Rule 1 and `test-engineer` from `testMode` are the only sub-agent calls during task execution. No `Explore` / `general-purpose` / arbitrary `Task` forks. A task that "feels too big" is either fine (push through) or wrongly planned (STOP, surface split proposal) — never launch a sub-agent to absorb it.
 
 ### Step 4b: Phase compromise summary (the ONLY human stop)
 
