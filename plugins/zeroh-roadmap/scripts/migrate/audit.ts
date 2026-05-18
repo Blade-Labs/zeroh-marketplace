@@ -82,6 +82,7 @@ function detectFeatures(content: string | null): Record<string, boolean> {
       phaseKind: false,
       taskBatchMode: false,
       backlogTiers: false,
+      debtResolutions: false,
     }
   }
 
@@ -109,6 +110,8 @@ function detectFeatures(content: string | null): Record<string, boolean> {
     taskBatchMode:
       taskShapeBlock !== null && /\bbatchMode:\s*z\.boolean\(\)/.test(taskShapeBlock),
     backlogTiers: /\bBacklogTierShape\b/.test(content),
+    debtResolutions:
+      basePhaseBlock !== null && /\bdebtResolutions:\s*z\.array\(/.test(basePhaseBlock),
   }
 }
 
@@ -330,6 +333,7 @@ function renderReport(args: {
     ['phaseKind', 'Phase.kind — mockup/logic/hardening/release drives gate selection (schema v3)'],
     ['taskBatchMode', 'PhaseTask.batchMode — opt-in for mechanical multi-commit tasks (schema v4)'],
     ['backlogTiers', 'Backlog accepts tiered { tiers: [{ tier, label, items }] } form (schema v5)'],
+    ['debtResolutions', 'Phase.debtResolutions — closed-debt log pointing at transparencyReport entries (schema v6)'],
   ]
 
   let schemaSection = ''
