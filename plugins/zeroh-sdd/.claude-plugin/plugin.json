@@ -1,6 +1,6 @@
 {
   "name": "zeroh-sdd",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "LLM-agent Shape-Driven Development runtime — canonical SDD planning, staged docs, epic planning, executable stage state, proof receipts, Zod shape gates, and Claude/Codex adapter-ready guardrails",
   "author": {
     "name": "Blade Labs",
