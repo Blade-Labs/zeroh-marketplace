@@ -77,6 +77,7 @@ Return one of:
 - `ESCALATE_TO_USER` → only this verdict justifies stopping plan-phase or writing a `[NEEDS CLARIFICATION]` marker. The marker's text becomes the architect's specific question.
 
 **Rules for this escalation:**
+- **Fires during task authoring only.** The architect is invoked during Step 2 (investigation), Step 2b (would-be markers), and Step 3 (task writing). It is NOT invoked at Step 1 (the next-phase-number computation is mechanical), Step 4+ (commit / review handoff), or for the architect's own follow-up reasoning.
 - Architect runs **inline / synchronous**. Do NOT pass `run_in_background: true`.
 - The architect may itself read files and grep — encourage it (token budget is not the constraint).
 - The architect must NOT invoke another architect (no recursion). If it can't decide, it returns `ESCALATE_TO_USER`.
@@ -88,10 +89,16 @@ Return one of:
 ### Step 1: Determine the next phase number
 
 ```bash
-echo $(( $(sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts 2>/dev/null | sort -n | tail -1) + 1 ))
+# Scan BOTH active phases and archived phases — phase numbers are one monotonic
+# namespace across roadmap/phases/ and roadmap/archive/<version>/. If you only
+# scan phases/, you will collide with archived numbers (audit Check 8 catches
+# this; plan-phase must not produce it in the first place).
+echo $(( $({ sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts 2>/dev/null
+              find roadmap/archive -maxdepth 2 -name '*.phase.ts' -exec sed -nE 's/^  phase: ([0-9]+),.*/\1/p' {} \; 2>/dev/null
+            } | sort -n | tail -1) + 1 ))
 ```
 
-This returns the next available phase number. Phase numbers are monotonic — never reuse historical gaps.
+This returns the next available phase number. Phase numbers are monotonic — never reuse historical gaps, including numbers that now live under `roadmap/archive/`.
 
 ### Step 2: Investigate the code BEFORE writing any task
 
