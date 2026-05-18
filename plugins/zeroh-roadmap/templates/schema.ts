@@ -275,6 +275,53 @@ const BasePhaseFields = {
    *  hardcoded values accumulated across tasks. Promoted from commit body so that
    *  phase-level honesty survives outside git. */
   compromises: z.string().optional(),
+  /** Structured debt tracker — items that survived the architect gate and weren't
+   *  fully resolved during execution. Each entry is one outstanding item that must
+   *  be marked `resolved` or `accepted` before this phase is eligible for archive.
+   *
+   *  Release is NOT gated on debts (a phase can ship with open debts on a patch or
+   *  minor). Archive IS gated: `release-sweep` refuses to move a done phase into
+   *  `roadmap/archive/v{X}/` while any `status: 'open'` debt remains.
+   *
+   *  Append to this array when:
+   *    - a task commits with a non-`"None"` value in transparencyReport.compromises,
+   *      transparencyReport.hardcoded, transparencyReport.skipped, or
+   *      transparencyReport.limitations, AND the architect gate (do-phase Prime Rule 1)
+   *      verdict was ESCALATE_TO_USER + user accepted the compromise; OR
+   *    - the architect itself returned a forced compromise (no proper path available
+   *      from within this phase's scope).
+   *
+   *  A clean phase has `debts: []` (or omitted). The architect gate is designed so
+   *  this is the common case. */
+  debts: z
+    .array(
+      z
+        .object({
+          /** Free-form description of the open item. Must be substantive enough that
+           *  a future operator can act on it without re-reading the phase commits.
+           *  Example: "HARDCODED 1000ms poll interval in lib/services/sync.ts:42 —
+           *  needs to be configurable per env once we have a config registry". */
+          note: z.string().min(20, 'Debt note must be substantive (≥20 chars)'),
+          /** Lifecycle. Defaults to 'open' when appended. */
+          status: z.enum(['open', 'resolved', 'accepted']).default('open'),
+          /** Required when status !== 'open'.
+           *   - 'resolved' via inline fix: commit SHA (`"a1b2c3d"`)
+           *   - 'resolved' via new phase:  phase ref (`"phase-470"`)
+           *   - 'accepted':                written reason (≥20 chars) */
+          via: z.string().optional(),
+          /** ISO date when status last changed. Set by release-sweep. */
+          resolvedDate: z.string().date().optional(),
+        })
+        .refine(
+          (d) => d.status === 'open' || (d.via && d.via.length >= 7),
+          {
+            message:
+              "Resolved or accepted debts must include `via` (commit SHA, phase ref, or reason ≥7 chars)",
+            path: ['via'],
+          },
+        ),
+    )
+    .default([]),
 } as const
 
 /** Gate fields for non-done phases — all optional */
