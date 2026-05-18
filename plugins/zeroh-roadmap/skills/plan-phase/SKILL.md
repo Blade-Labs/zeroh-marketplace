@@ -38,51 +38,18 @@ If you cannot name the specific files, functions, and nature of the change — y
 
 ## PRIME RULE 2: ESCALATE TO ARCHITECT BEFORE GIVING UP
 
-This plugin runs long-running autonomous work. Tokens are not the constraint — hallucinations and shortcuts are. So whenever you would otherwise (a) write a vague low-confidence task because the diff is unclear, (b) drop a `[NEEDS CLARIFICATION]` marker, (c) split work into "investigate first" sub-phases because the decomposition isn't obvious, or (d) STOP-and-ask the user a planning question — **first** launch the `zeroh-roadmap:software-architect` agent inline (foreground, synchronous, NOT background) with this exact contract:
+Tokens are not the constraint; hallucinations and shortcuts are. Whenever you would otherwise (a) write a vague low-confidence task because the diff is unclear, (b) drop a `[NEEDS CLARIFICATION]` marker, (c) split work into "investigate first" sub-phases because the decomposition isn't obvious, or (d) STOP and ask the user a planning question — **first** invoke `zeroh-roadmap:software-architect` (foreground, synchronous, single hop) per its **Decision Contract** in `agents/software-architect.md`.
 
-```
-Plan-phase N — architectural-decision request
+Pass the agent: the user's one-line request, files you've already investigated (with brief findings), where you got stuck, plus the convenient path you were about to take vs the proper path you can see. The agent returns `PROCEED_WITH_TASK` or `ESCALATE_TO_USER`.
 
-Context:
-  - User request: <one-line description of what the user asked for>
-  - Files I've already investigated: <list of paths read, with brief findings>
-  - Where I got stuck: <one of: "diff unclear at file:fn", "two valid decompositions",
-                                "decision needs user input on ___", "no obvious entry point">
+**Apply the verdict literally:**
+- `PROCEED_WITH_TASK` → write the high-confidence task with the named files / functions / lines. No marker, no vague phrasing.
+- `ESCALATE_TO_USER` → only verdict that justifies stopping plan-phase or writing a `[NEEDS CLARIFICATION]` marker. The marker's text becomes the architect's specific question.
 
-Situation:
-  The convenient path: <vague task / marker / split-into-investigation / stop-and-ask>
-  The proper path I can see: <one line, or "I can't see a proper path">
-
-Verify on the way:
-  - Read the relevant source files (call chain, not just entry points). Grep for existing
-    patterns that solve the same problem. Identify exact functions and lines that change.
-  - Check downstream consumers — will this break anything?
-  - Confirm: does the file/function I'm about to name actually exist and behave as assumed?
-
-Return one of:
-  VERDICT: PROCEED_WITH_TASK
-    Task shape: <verb-phrase task name>
-    Specific files + functions + lines: <exact change list>
-    Why: <1-2 lines>
-
-  VERDICT: ESCALATE_TO_USER
-    Specific question: <one well-posed question with the two or three valid options
-                       the user must choose between>
-    Why this genuinely needs user input: <1-2 lines — must rule out "the answer is in
-                                          the code if you keep reading">
-```
-
-**Then apply the architect's verdict literally:**
-- `PROCEED_WITH_TASK` → write the high-confidence task. No marker, no vague phrasing, no user interruption.
-- `ESCALATE_TO_USER` → only this verdict justifies stopping plan-phase or writing a `[NEEDS CLARIFICATION]` marker. The marker's text becomes the architect's specific question.
-
-**Rules for this escalation:**
-- **Fires during task authoring only.** The architect is invoked during Step 2 (investigation), Step 2b (would-be markers), and Step 3 (task writing). It is NOT invoked at Step 1 (the next-phase-number computation is mechanical), Step 4+ (commit / review handoff), or for the architect's own follow-up reasoning.
-- Architect runs **inline / synchronous**. Do NOT pass `run_in_background: true`.
-- The architect may itself read files and grep — encourage it (token budget is not the constraint).
-- The architect must NOT invoke another architect (no recursion). If it can't decide, it returns `ESCALATE_TO_USER`.
-- One ambiguity = one architect call. Do not batch ("here are five unclear tasks, what do you think?") — per-decision rigor matters.
-- If three+ tasks in the same phase need architect escalation, the **phase is too broad** — STOP, escalate to user with the pattern, and ask whether to narrow the scope or split into multiple phases.
+**Escalation rules:**
+- **Fires at Step 2 / 2b / 3 only** — task authoring. Not Step 1 (mechanical number computation) or Step 4+ (commit / review handoff).
+- One ambiguity = one architect call. No batching.
+- Three+ escalations in one phase = the **phase is too broad**. STOP, surface the pattern, ask the user whether to narrow scope or split.
 
 ## Protocol
 
