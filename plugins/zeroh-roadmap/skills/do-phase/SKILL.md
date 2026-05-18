@@ -28,7 +28,26 @@ Read `roadmap/backlog.ts` — the first entry is the next phase to execute. Conf
 
 If `roadmap/backlog.ts` doesn't exist or is empty, ask the user for a phase number.
 
-## PRIME RULE: ONE TASK AT A TIME
+## PRIME RULE 1: NO COMPROMISES — DONE PROPERLY THE FIRST TIME
+
+**This skill's purpose is to ship phases done, not phases shipped.** Every task is executed at senior-software-architect rigor. The goal is correctness, not convenience.
+
+The implicit goal for every `/do-phase N` invocation — equivalent to the user typing `/goal finish phase N fully and properly, as a senior software architect, no compromises, no hardcodes, no shortcuts` — is **already set by virtue of running this skill**. Treat it that way.
+
+**Before writing any code for a task, ask:**
+- Is this the senior-architect-correct implementation, or the convenient one?
+- Am I about to hardcode a value because it's faster than designing the abstraction?
+- Am I about to silence ambiguity (e.g. "first match wins") instead of surfacing it as an explicit error?
+- Am I about to defer a real problem to a follow-up that probably won't get planned?
+- Am I about to write a twin-JSX block instead of driving both from one array?
+
+**If the answer to any is "yes" — do the correct thing instead.** Magic numbers get named constants with rationale. Duplicate-name ambiguity throws. Per-currency JSX gets a `CURRENCIES` array. The proper solution is almost always one extra minute of thinking and one less line of code.
+
+The `transparencyReport.compromises` field is an **audit trail for the rare case** where a compromise was genuinely forced by something outside this phase's scope (missing upstream data, a third-party API quirk you can't fix here). It is NOT a release valve for "I didn't want to solve this properly." A clean phase has every `compromises` field set to `"None"`.
+
+**If a real obstacle forces a compromise: STOP.** Surface it to the user with the proper-solution alternative, and let them decide whether to fix-now, file-a-follow-up, or accept. Do not silently choose convenience and report it in the transparency block at the end — by then the commit is already in history and the user has to ask you to redo it.
+
+## PRIME RULE 2: ONE TASK AT A TIME
 
 **This skill exists to PREVENT batch execution.** Each task in the phase file was carefully designed as an independent unit of work. Batching them introduces errors (proven: phase 160-170 migration lost data when batched).
 
