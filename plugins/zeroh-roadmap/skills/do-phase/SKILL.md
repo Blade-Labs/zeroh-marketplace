@@ -45,7 +45,49 @@ The implicit goal for every `/do-phase N` invocation — equivalent to the user 
 
 The `transparencyReport.compromises` field is an **audit trail for the rare case** where a compromise was genuinely forced by something outside this phase's scope (missing upstream data, a third-party API quirk you can't fix here). It is NOT a release valve for "I didn't want to solve this properly." A clean phase has every `compromises` field set to `"None"`.
 
-**If a real obstacle forces a compromise: STOP.** Surface it to the user with the proper-solution alternative, and let them decide whether to fix-now, file-a-follow-up, or accept. Do not silently choose convenience and report it in the transparency block at the end — by then the commit is already in history and the user has to ask you to redo it.
+**Escalate via the senior architect, not via the user.**
+
+This plugin runs long-running autonomous work. Tokens are not the constraint — hallucinations and shortcuts are. So whenever you would otherwise (a) write a non-`"None"` value into `compromises`, (b) hardcode a value, (c) silence ambiguity, (d) defer a real problem with a TODO, or (e) STOP-and-ask the user — **first** launch the `zeroh-roadmap:software-architect` agent inline (foreground, synchronous, NOT background) with this exact contract:
+
+```
+Phase N task N.X — architectural-decision request
+
+Context:
+  - Task acceptance criteria: <paste from task.acceptanceCriteria>
+  - Files in scope: <paste from task.files>
+  - Phase notes relevant to this decision: <quote any directly-applicable lines from phase.notes>
+
+Situation:
+  I was about to <describe the compromise / shortcut / hardcode / would-stop reason>.
+  The convenient path: <one line>
+  The proper path I can see: <one line, or "I can't see a proper path">
+
+Verify on the way:
+  - Does the file/function I'm about to edit actually exist and behave as I'm assuming? Read it.
+  - Is there an existing utility/pattern I'm about to duplicate? Grep for it.
+  - Is the ambiguity I'm about to silence resolvable from existing code or schema? Read it.
+
+Return one of:
+  VERDICT: PROCEED_WITH_FIX
+    Correct approach: <specific files, functions, lines, exact change>
+    Why: <1-2 lines>
+
+  VERDICT: ESCALATE_TO_USER
+    Specific question: <one well-posed question with the two or three valid options the user must choose between>
+    Why this genuinely needs user input: <1-2 lines explaining why no amount of code-reading can resolve it>
+```
+
+**Then apply the architect's verdict literally:**
+- `PROCEED_WITH_FIX` → implement the correct approach. `compromises` stays `"None"`. No user interruption.
+- `ESCALATE_TO_USER` → stop, post the architect's specific question to the user, wait for the answer. Only this verdict justifies stopping a do-phase run.
+
+**Rules for this escalation:**
+- The architect runs **inline / synchronous**. Do NOT pass `run_in_background: true`. The decision blocks the current task.
+- The architect may itself read files and grep — encourage it (token budget is not the constraint).
+- The architect must NOT invoke another architect (no recursion). If `software-architect` can't decide, it returns `ESCALATE_TO_USER`.
+- This escalation is **exempt** from the auto-spawn discipline rule in Step 4 — it is an explicitly-allowed sub-agent call during task execution, alongside `test-engineer` for `testMode: "tdd"|"e2e"`.
+- Do not batch escalations. One compromise = one architect call. Aggregating ("here are five things I might compromise on, what do you think?") loses the per-decision rigor.
+- If the same kind of compromise comes up three times in the same phase, that is signal that the **phase plan was wrong** — STOP, escalate to user with the pattern, and ask whether to re-plan rather than re-architect each instance.
 
 ## PRIME RULE 2: ONE TASK AT A TIME
 
