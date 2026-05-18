@@ -15,7 +15,7 @@ User says: `audit roadmap`, `audit the roadmap`, `/audit-roadmap`, `/roadmap-aud
 
 ## What This Is (and Is NOT)
 
-**This IS:** A read-only consistency check across all `roadmap/phases/*.phase.ts` files and `roadmap/backlog.ts`. Finds structural drift between phases — dangling refs, incomplete done phases, stuck in-progress phases, unresolved clarification markers, duplicate phase numbers.
+**This IS:** A read-only consistency check across all `roadmap/phases/*.phase.ts` files, `roadmap/archive/**/*.phase.ts` files, and `roadmap/backlog.ts`. Finds structural drift between phases — dangling refs, incomplete done phases, stuck in-progress phases, unresolved clarification markers, duplicate phase numbers across active+archive, and archive integrity violations.
 
 **This is NOT:**
 
@@ -30,17 +30,20 @@ User says: `audit roadmap`, `audit the roadmap`, `/audit-roadmap`, `/roadmap-aud
 ### Step 1: Enumerate the roadmap
 
 ```bash
-ls roadmap/phases/*.phase.ts | sort
+ls roadmap/phases/*.phase.ts 2>/dev/null | sort
+ls roadmap/archive/**/*.phase.ts 2>/dev/null | sort   # archive may not exist yet
 cat roadmap/backlog.ts
 ```
 
 Build three in-memory maps:
 
-- `phases: Map<number, Phase>` — every phase keyed by phase number
-- `tasks: Map<string, { phase: number, task: PhaseTask }>` — every task keyed by `id` (e.g. `"171.1"`)
-- `backlog: BacklogEntry[]` — the ordered execution queue
+- `phases: Map<number, { phase: Phase, location: 'active' | 'archive', archiveVersion?: string }>` — every phase keyed by phase number. `location` distinguishes `roadmap/phases/` (active) from `roadmap/archive/<version>/` (archive); `archiveVersion` is the dir name (e.g. `"v0.7.0"`) when archived.
+- `tasks: Map<string, { phase: number, task: PhaseTask }>` — every task keyed by `id` (e.g. `"171.1"`). Includes tasks from archived phases.
+- `backlog: BacklogEntry[]` — the ordered execution queue.
 
-### Step 2: Run all 11 consistency checks
+**Archive is part of the namespace.** Phase numbers are monotonic across active+archive — `phase-467` in `phases/` and `phase-467` in `archive/v0.7.0/` is a hard conflict (Check 8). Archived phases remain valid `dependsOn` targets (they're done, hence valid prerequisites).
+
+### Step 2: Run all 12 consistency checks
 
 Run every check before reporting. Do **not** short-circuit on the first failure — the value of this skill is surfacing everything in one pass.
 
@@ -104,11 +107,13 @@ If the most recent commit mentioning the phase is older than 30 days, flag.
 
 - **LOW** — `Phase N has been in-progress since <ISO date> (>30 days since last related commit). Either resume, or set status: 'cancelled'.`
 
-#### Check 8: Duplicate phase numbers across files
+#### Check 8: Duplicate phase numbers across files (including archive)
 
 ```bash
-sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts | sort | uniq -d
+sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts roadmap/archive/**/*.phase.ts 2>/dev/null | sort | uniq -d
 ```
+
+A duplicate spanning `phases/` and `archive/<version>/` is a CRITICAL violation: an active phase cannot share a number with an archived one. The numeric space is one namespace.
 
 For each duplicate, list all file paths that claim that phase number.
 
@@ -140,6 +145,7 @@ For every entry in `backlog.ts`, look up the corresponding phase file's `status`
 
 - **MEDIUM** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'done'. Remove the backlog entry. (do-phase Step 5 should have done this — flag any pattern of stale entries as a process bug.)`
 - **LOW** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'cancelled'. Remove the backlog entry.`
+- **HIGH** — `Backlog index K queues phase N, but phase N is archived at roadmap/archive/<version>/. Archived phases are terminal — remove from backlog.`
 
 #### Check 11: Oversized tasks without `batchMode` (schema v4)
 
@@ -154,6 +160,22 @@ Tasks predating schema v4 won't have `batchMode` set; the field defaults to `fal
 - **HIGH** — `Phase N task N.X has steps.length=K (>6) without batchMode. Same resolution.`
 
 Done tasks (`done: true`) are exempt — they already executed; the finding is informational only and does not need a fix.
+
+#### Check 12: Archive integrity (schema v6 — when `roadmap/archive/` exists)
+
+For every file in `roadmap/archive/<version>/*.phase.ts`, verify the four archive invariants:
+
+1. **status is `'done'`.** Archive is only for completed phases — nothing else should be there.
+2. **`version` field matches the containing directory.** A phase at `roadmap/archive/v0.7.0/phase-N.phase.ts` must have `version: 'v0.7.0'`. Drift here means release-sweep moved the file without updating the field (bug) or someone hand-moved it.
+3. **Every non-`"None"` transparency-report entry has a matching `debtResolutions` entry.** For each task `T` and each field `F ∈ {compromises, hardcoded, skipped, limitations}` where `T.transparencyReport[F] !== "None"`, there must exist `debtResolutions[i].ref === "${T.id}.${F}"`. This is the invariant `release-sweep --archive` is supposed to enforce; this check catches archives produced by other means (manual `git mv`, scripted bulk-archive).
+4. **`debtResolutions` refs all resolve to real transparency-report entries.** For each `debtResolutions[i]`, parse the `ref` and verify the referenced task + field exists and has a non-`"None"` value. Drift here means the transparency report was edited post-hoc and the resolution log no longer points anywhere.
+
+- **CRITICAL** — `Phase N archived at roadmap/archive/<version>/ has status: '<other>' (expected 'done').`
+- **CRITICAL** — `Phase N at roadmap/archive/<version>/ has version: '<other>' — directory says <version>. Hand-edit or restore via git.`
+- **HIGH** — `Phase N at roadmap/archive/<version>/ has unresolved debt — task N.X transparencyReport.<field> is non-"None" with no matching debtResolutions entry. Archive should not have been allowed.`
+- **MEDIUM** — `Phase N at roadmap/archive/<version>/ has dangling debtResolution — ref "N.X.<field>" does not match any non-"None" transparency-report entry.`
+
+If `roadmap/archive/` does not exist (project hasn't archived anything yet), skip Check 12 silently — not a finding.
 
 ### Step 3: Report
 
@@ -205,6 +227,6 @@ If the verdict is BROKEN, end the report with:
 ## What NOT to do
 
 - **Do NOT fix anything** — this skill reports findings. The user runs `/plan-phase` or edits phase files manually to resolve them.
-- **Do NOT short-circuit** — run all 8 checks even if earlier ones fail. One pass, one report.
+- **Do NOT short-circuit** — run all 12 checks even if earlier ones fail. One pass, one report.
 - **Do NOT infer intent** — if phase 5 says `dependsOn: [3]` and phase 3 doesn't exist, report it literally. Don't guess "maybe they meant phase 4".
 - **Do NOT block on missing git history** — Check 7 falls back to "unknown age" if `git log` returns nothing for the phase. Report it as LOW with a note.
