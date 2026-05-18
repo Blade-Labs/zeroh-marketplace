@@ -1,6 +1,6 @@
 ---
 name: "Audit Roadmap"
-description: "Read-only structural audit across the roadmap (11 checks). Never reads source code. Does NOT fix — reports findings only."
+description: "Read-only structural audit across the roadmap (12 checks). Never reads source code. Does NOT fix — reports findings only."
 user-invocable: true
 metadata:
   keywords: audit, roadmap, consistency, check, phases, drift, health
@@ -31,17 +31,19 @@ User says: `audit roadmap`, `audit the roadmap`, `/audit-roadmap`, `/roadmap-aud
 
 ```bash
 ls roadmap/phases/*.phase.ts 2>/dev/null | sort
-ls roadmap/archive/**/*.phase.ts 2>/dev/null | sort   # archive may not exist yet
+# Use `find` instead of `**` — bash defaults to globstar OFF, so the glob
+# wouldn't recurse. The archive layout is roadmap/archive/<version>/*.phase.ts.
+find roadmap/archive -maxdepth 2 -name '*.phase.ts' 2>/dev/null | sort
 cat roadmap/backlog.ts
 ```
 
 Build three in-memory maps:
 
-- `phases: Map<number, { phase: Phase, location: 'active' | 'archive', archiveVersion?: string }>` — every phase keyed by phase number. `location` distinguishes `roadmap/phases/` (active) from `roadmap/archive/<version>/` (archive); `archiveVersion` is the dir name (e.g. `"v0.7.0"`) when archived.
+- `phases: Map<number, { phase: Phase, location: 'active' | 'archive', archiveVersion?: string }>` — every phase keyed by phase number. `location` distinguishes `roadmap/phases/` (active) from `roadmap/archive/<version>/` (archive); `archiveVersion` is the dir name (e.g. `"0.7.0"`) when archived.
 - `tasks: Map<string, { phase: number, task: PhaseTask }>` — every task keyed by `id` (e.g. `"171.1"`). Includes tasks from archived phases.
 - `backlog: BacklogEntry[]` — the ordered execution queue.
 
-**Archive is part of the namespace.** Phase numbers are monotonic across active+archive — `phase-467` in `phases/` and `phase-467` in `archive/v0.7.0/` is a hard conflict (Check 8). Archived phases remain valid `dependsOn` targets (they're done, hence valid prerequisites).
+**Archive is part of the namespace.** Phase numbers are monotonic across active+archive — `phase-467` in `phases/` and `phase-467` in `archive/0.7.0/` is a hard conflict (Check 8). Archived phases remain valid `dependsOn` targets (they're done, hence valid prerequisites).
 
 ### Step 2: Run all 12 consistency checks
 
@@ -110,7 +112,9 @@ If the most recent commit mentioning the phase is older than 30 days, flag.
 #### Check 8: Duplicate phase numbers across files (including archive)
 
 ```bash
-sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts roadmap/archive/**/*.phase.ts 2>/dev/null | sort | uniq -d
+{ sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts 2>/dev/null
+  find roadmap/archive -maxdepth 2 -name '*.phase.ts' -exec sed -nE 's/^  phase: ([0-9]+),.*/\1/p' {} \; 2>/dev/null
+} | sort | uniq -d
 ```
 
 A duplicate spanning `phases/` and `archive/<version>/` is a CRITICAL violation: an active phase cannot share a number with an archived one. The numeric space is one namespace.
@@ -166,7 +170,7 @@ Done tasks (`done: true`) are exempt — they already executed; the finding is i
 For every file in `roadmap/archive/<version>/*.phase.ts`, verify the four archive invariants:
 
 1. **status is `'done'`.** Archive is only for completed phases — nothing else should be there.
-2. **`version` field matches the containing directory.** A phase at `roadmap/archive/v0.7.0/phase-N.phase.ts` must have `version: 'v0.7.0'`. Drift here means release-sweep moved the file without updating the field (bug) or someone hand-moved it.
+2. **`version` field matches the containing directory.** A phase at `roadmap/archive/0.7.0/phase-N.phase.ts` must have `version: '0.7.0'`. Drift here means release-sweep moved the file without updating the field (bug) or someone hand-moved it.
 3. **Every non-`"None"` transparency-report entry has a matching `debtResolutions` entry.** For each task `T` and each field `F ∈ {compromises, hardcoded, skipped, limitations}` where `T.transparencyReport[F] !== "None"`, there must exist `debtResolutions[i].ref === "${T.id}.${F}"`. This is the invariant `release-sweep --archive` is supposed to enforce; this check catches archives produced by other means (manual `git mv`, scripted bulk-archive).
 4. **`debtResolutions` refs all resolve to real transparency-report entries.** For each `debtResolutions[i]`, parse the `ref` and verify the referenced task + field exists and has a non-`"None"` value. Drift here means the transparency report was edited post-hoc and the resolution log no longer points anywhere.
 
