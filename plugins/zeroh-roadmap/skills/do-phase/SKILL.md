@@ -247,6 +247,8 @@ The schema enforces gate results when `status: 'done'`. In one edit to the `.pha
 
 **Groom the backlog in the same commit.** If `roadmap/backlog.ts` contains an entry for this phase, remove it. Done phases do not belong in the execution queue — leaving them there pollutes `do-phase`'s next-up resolution and forces `audit-roadmap` to flag the staleness later. The removal is a one-line edit to `backlog.ts`. If the phase was never queued (e.g. it ran via explicit `/do-phase N`), no edit is needed.
 
+**Also strip narrative referencing this phase.** If `backlog.ts` has track-narrative comments that explicitly name the phase being removed (`// Track 1 — phase 467 shipped 2026-…`, `// 467 + 472 complete; remaining: 359`, etc.), remove those comments too in the same edit. The backlog is queue-only per its header — narrative about completed work belongs in the commit history, the phase file's `compromises` field, and `reviews/changelog.json`, not in backlog comments. Operator-curated comments NOT naming this phase (track-priority headers, in-flight notes for other phases) stay.
+
 Then: `pnpm type-check` → `pnpm emit:phases` (regenerates `reviews/changelog.json`) → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop.
 
 If `scripts/collect-phase-metrics.ts` exists, it fills `gate` and `metrics` automatically:
