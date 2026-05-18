@@ -32,6 +32,14 @@ If `roadmap/backlog.ts` doesn't exist or is empty, ask the user for a phase numb
 
 Every task ships at senior-architect rigor. Goal is correctness, not convenience. Magic numbers → named constants. Duplicate-name ambiguity → throw. Twin JSX blocks → one array. Tokens are not the constraint; hallucinations and shortcuts are.
 
+**Comment discipline.** Code comments earn their keep by explaining **non-obvious WHY** — a hidden invariant, a workaround for a specific bug, behavior that would surprise a reader. Comments must NOT:
+- Reference phases (`// added in phase 374.1`, `// phase 184.5 metadata`) — phase numbers rot when the phase archives, and provenance already lives in git blame + the phase file.
+- Explain WHEN or WHO (`// added 2026-05-18`, `// from the dual-write migration`) — git log owns that.
+- Explain WHAT (`// builds the form-tag dictionary at startup`) — well-named identifiers already say what.
+- Live at the re-export site when the real explanation belongs on the function declaration.
+
+If a comment is non-obvious-WHY, put it on the function/type where the invariant lives, not at every call site. If you're tempted to write phase-numbered section dividers (`// ── Event metadata (phase 184.5) ──`), strip the parenthetical — `// ── Event metadata ──` is the keeper.
+
 **Whenever you would otherwise:** (a) write a non-`"None"` value into `transparencyReport.compromises`/`hardcoded`/`skipped`, (b) hardcode a value, (c) silence ambiguity, (d) defer a real problem with a TODO, or (e) STOP and ask the user a question — **first** invoke `zeroh-roadmap:software-architect` (foreground, synchronous, single hop) per its **Decision Contract** in `agents/software-architect.md`.
 
 Pass the agent: the task's `acceptanceCriteria` + `files` + relevant `phase.notes`, plus a one-line description of the convenient path you were about to take and the proper path you can see (or "can't see one"). The agent returns `PROCEED_WITH_FIX` or `ESCALATE_TO_USER`.
