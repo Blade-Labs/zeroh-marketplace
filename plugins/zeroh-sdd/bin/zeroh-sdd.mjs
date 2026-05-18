@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
-const VERSION = '1.0.8';
+const VERSION = '1.0.9';
 const STATE_DIR = ['.specify', 'workflows'];
 const ACTIVE_STAGE = 'active-stage.json';
 const HOOK_STATE = 'hook-state.json';
@@ -2452,9 +2452,11 @@ function runCheck(repoRoot, check) {
 }
 
 function spawnResolvedCommand(repoRoot, executable, args, timeout) {
+  const env = pinProjectEnv(process.env, repoRoot);
   if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(executable)) {
     return spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', [executable, ...args].map(quoteCmdArg).join(' ')], {
       cwd: repoRoot,
+      env,
       encoding: 'utf8',
       timeout,
       shell: false,
@@ -2462,10 +2464,22 @@ function spawnResolvedCommand(repoRoot, executable, args, timeout) {
   }
   return spawnSync(executable, args, {
     cwd: repoRoot,
+    env,
     encoding: 'utf8',
     timeout,
     shell: false,
   });
+}
+
+function pinProjectEnv(env, repoRoot) {
+  // Prevent host project-root env from leaking to child via projectRoot()/pluginDataDir().
+  const pinned = { ...env, ZEROH_SDD_PROJECT_DIR: repoRoot };
+  delete pinned.CLAUDE_PROJECT_DIR;
+  delete pinned.CODEX_PROJECT_DIR;
+  delete pinned.CLAUDE_PLUGIN_DATA;
+  delete pinned.CODEX_PLUGIN_DATA;
+  delete pinned.ZEROH_SDD_PLUGIN_DATA;
+  return pinned;
 }
 
 function resolveCommand(repoRoot, command, options = {}) {

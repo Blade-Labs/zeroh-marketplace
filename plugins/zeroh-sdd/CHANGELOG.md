@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.9
+
+- Fixed project-root env-var leak in internal CLI spawns. The self-test's `async-jit-self-test` now passes under Claude Code PostToolUse JIT checks where `CLAUDE_PROJECT_DIR` is set in the host process; spawned children pin `ZEROH_SDD_PROJECT_DIR` to the intended repo root and strip lower-priority project / plugin-data env overrides so `projectRoot()` and `pluginDataDir()` resolve to the spawn's cwd-aligned root.
+
 ## 1.0.8
 
 - Added Codex plugin packaging and repo-local Codex marketplace metadata while keeping one shared `zeroh-sdd` runtime and skill tree.
