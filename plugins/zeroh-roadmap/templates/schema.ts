@@ -29,6 +29,7 @@ export const GateResultShape = z.object({
   unitTests: z.object({
     passed: z.number().int().nonnegative(),
     total: z.number().int().nonnegative(),
+    notes: z.string().optional(),
   }),
   integrationTests: z.object({
     passed: z.number().int().nonnegative(),
@@ -61,6 +62,7 @@ export const PassingGateResultShape = z
     unitTests: z.object({
       passed: z.number().int().nonnegative(),
       total: z.number().int().nonnegative(),
+      notes: z.string().optional(),
     }),
     integrationTests: z.object({
       passed: z.number().int().nonnegative(),
@@ -255,7 +257,7 @@ const BasePhaseFields = {
   /** Human-readable name */
   name: z.string().min(5),
   /** Changelog category — determines release note section */
-  category: z.enum(['feature', 'fix', 'refactor', 'test', 'docs', 'infra']),
+  category: z.enum(['feature', 'fix', 'refactor', 'test', 'docs', 'infra', 'spike']),
   /** Phase kind — drives gate selection in do-phase.
    *  - mockup: UI-only / visual; gate is typecheck + biome only.
    *  - logic: behaviour, business rules, algorithms; full architect→simplifier→reviewer gate. (Default — safe for legacy phases predating v3.)
