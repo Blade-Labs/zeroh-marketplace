@@ -28,74 +28,24 @@ Read `roadmap/backlog.ts` — the first entry is the next phase to execute. Conf
 
 If `roadmap/backlog.ts` doesn't exist or is empty, ask the user for a phase number.
 
-## PRIME RULE 1: NO COMPROMISES — DONE PROPERLY THE FIRST TIME
+## PRIME RULE 1: NO COMPROMISES — ESCALATE TO ARCHITECT, NOT TO USER
 
-**This skill's purpose is to ship phases done, not phases shipped.** Every task is executed at senior-software-architect rigor. The goal is correctness, not convenience.
+Every task ships at senior-architect rigor. Goal is correctness, not convenience. Magic numbers → named constants. Duplicate-name ambiguity → throw. Twin JSX blocks → one array. Tokens are not the constraint; hallucinations and shortcuts are.
 
-The implicit goal for every `/do-phase N` invocation — equivalent to the user typing `/goal finish phase N fully and properly, as a senior software architect, no compromises, no hardcodes, no shortcuts` — is **already set by virtue of running this skill**. Treat it that way.
+**Whenever you would otherwise:** (a) write a non-`"None"` value into `transparencyReport.compromises`/`hardcoded`/`skipped`, (b) hardcode a value, (c) silence ambiguity, (d) defer a real problem with a TODO, or (e) STOP and ask the user a question — **first** invoke `zeroh-roadmap:software-architect` (foreground, synchronous, single hop) per its **Decision Contract** in `agents/software-architect.md`.
 
-**Before writing any code for a task, ask:**
-- Is this the senior-architect-correct implementation, or the convenient one?
-- Am I about to hardcode a value because it's faster than designing the abstraction?
-- Am I about to silence ambiguity (e.g. "first match wins") instead of surfacing it as an explicit error?
-- Am I about to defer a real problem to a follow-up that probably won't get planned?
-- Am I about to write a twin-JSX block instead of driving both from one array?
+Pass the agent: the task's `acceptanceCriteria` + `files` + relevant `phase.notes`, plus a one-line description of the convenient path you were about to take and the proper path you can see (or "can't see one"). The agent returns `PROCEED_WITH_FIX` or `ESCALATE_TO_USER`.
 
-**If the answer to any is "yes" — do the correct thing instead.** Magic numbers get named constants with rationale. Duplicate-name ambiguity throws. Per-currency JSX gets a `CURRENCIES` array. The proper solution is almost always one extra minute of thinking and one less line of code.
+**Apply the verdict literally:**
+- `PROCEED_WITH_FIX` → implement the named approach. `compromises` stays `"None"`. No user interruption.
+- `ESCALATE_TO_USER` → post the architect's specific question to the user, wait. This is the only verdict that justifies stopping a do-phase run.
+  - User picks proper-solution option → implement it; no debt logged.
+  - User accepts the compromise → record in the appropriate `transparencyReport` field per schema's field-meaning rules (`TransparencyReportShape` doc). do-phase does NOT write to `phase.debtResolutions` — that's release-sweep's job.
 
-The `transparencyReport.compromises` field is an **audit trail for the rare case** where a compromise was genuinely forced by something outside this phase's scope (missing upstream data, a third-party API quirk you can't fix here). It is NOT a release valve for "I didn't want to solve this properly." A clean phase has every `compromises` field set to `"None"`.
-
-**Escalate via the senior architect, not via the user.**
-
-This plugin runs long-running autonomous work. Tokens are not the constraint — hallucinations and shortcuts are. So whenever you would otherwise (a) write a non-`"None"` value into `compromises`, (b) hardcode a value, (c) silence ambiguity, (d) defer a real problem with a TODO, or (e) STOP-and-ask the user — **first** launch the `zeroh-roadmap:software-architect` agent inline (foreground, synchronous, NOT background) with this exact contract:
-
-```
-Phase N task N.X — architectural-decision request
-
-Context:
-  - Task acceptance criteria: <paste from task.acceptanceCriteria>
-  - Files in scope: <paste from task.files>
-  - Phase notes relevant to this decision: <quote any directly-applicable lines from phase.notes>
-
-Situation:
-  I was about to <describe the compromise / shortcut / hardcode / would-stop reason>.
-  The convenient path: <one line>
-  The proper path I can see: <one line, or "I can't see a proper path">
-
-Verify on the way:
-  - Does the file/function I'm about to edit actually exist and behave as I'm assuming? Read it.
-  - Is there an existing utility/pattern I'm about to duplicate? Grep for it.
-  - Is the ambiguity I'm about to silence resolvable from existing code or schema? Read it.
-
-Return one of:
-  VERDICT: PROCEED_WITH_FIX
-    Correct approach: <specific files, functions, lines, exact change>
-    Why: <1-2 lines>
-
-  VERDICT: ESCALATE_TO_USER
-    Specific question: <one well-posed question with the two or three valid options the user must choose between>
-    Why this genuinely needs user input: <1-2 lines explaining why no amount of code-reading can resolve it>
-```
-
-**Then apply the architect's verdict literally:**
-- `PROCEED_WITH_FIX` → implement the correct approach. `compromises` stays `"None"`. No user interruption.
-- `ESCALATE_TO_USER` → stop, post the architect's specific question to the user, wait for the answer. Only this verdict justifies stopping a do-phase run.
-  - If the user picks the **proper-solution option** → implement it; `compromises` stays `"None"`; no debt logged.
-  - If the user picks **accept the compromise** → record it in the task's `transparencyReport.compromises` (or `hardcoded` / `skipped` if more accurate — see field-meaning rules in the schema's TransparencyReportShape doc). do-phase does NOT touch `phase.debtResolutions` — that field is the resolution log written later by `release-sweep`. The transparency report is the debt audit trail; sweep is the resolution layer. Two concerns, two fields.
-
-**Field-meaning discipline (matters for release-sweep accuracy):**
-- `compromises` — trade-offs accepted under pressure / forced by the architect gate.
-- `hardcoded` — values that should be configurable but aren't (yet).
-- `skipped` — acceptance criteria not fully addressed.
-- `limitations` — **permanent** design constraints or informational notes. NOT deferred work. If you're tempted to write "pre-pilot acceptable", "until proper X ships", "post-pilot, consider…", "deferred to follow-up" — that's a `compromises` or `skipped`, not a `limitations`.
-
-**Rules for this escalation:**
-- The architect runs **inline / synchronous**. Do NOT pass `run_in_background: true`. The decision blocks the current task.
-- The architect may itself read files and grep — encourage it (token budget is not the constraint).
-- The architect must NOT invoke another architect (no recursion). If `software-architect` can't decide, it returns `ESCALATE_TO_USER`.
-- This escalation is **exempt** from the auto-spawn discipline rule in Step 4 — it is an explicitly-allowed sub-agent call during task execution, alongside `test-engineer` for `testMode: "tdd"|"e2e"`.
-- Do not batch escalations. One compromise = one architect call. Aggregating ("here are five things I might compromise on, what do you think?") loses the per-decision rigor.
-- If the same kind of compromise comes up three times in the same phase, that is signal that the **phase plan was wrong** — STOP, escalate to user with the pattern, and ask whether to re-plan rather than re-architect each instance.
+**Escalation rules** (full Decision Contract lives in `agents/software-architect.md`):
+- One compromise = one architect call. No batching.
+- If three+ escalations land in the same phase, the **plan was too broad** — STOP, surface the pattern to the user, ask whether to re-plan.
+- This escalation is exempt from the Step 4 auto-spawn ban — same exemption as `test-engineer` for `testMode: "tdd"|"e2e"`.
 
 ## PRIME RULE 2: ONE TASK AT A TIME
 
