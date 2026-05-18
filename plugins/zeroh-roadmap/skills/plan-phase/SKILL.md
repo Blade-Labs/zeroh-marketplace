@@ -306,58 +306,24 @@ Every task should declare a `testMode` based on its acceptance criteria:
 
 **Default to `"none"` when unsure.** TDD adds ~5 min per task (test-engineer agent + red→green cycle). Only use it when the acceptance criteria describe specific function behavior.
 
-### What NOT to write:
-- `steps: [{ file: 'roadmap/phases/', description: 'Implement task N.1' }]` — this is a placeholder, not a plan
-- `acceptanceCriteria: ['Task N.1 implementation verified']` — this is a tautology, not a criterion
-- `problem: 'This needs to be done'` — this is not a problem statement
-- `title: 'Fix things'` — this is not a title
+### Anti-patterns
+
+Placeholder tasks fail Prime Rule 1. Watch for: `steps: [{ description: 'Implement task N.1' }]`, `acceptanceCriteria: ['Task N.1 implementation verified']`, `problem: 'This needs to be done'`, `title: 'Fix things'`. If you wrote any of these, you haven't planned enough — read the code and rewrite.
 
 ## Special Task Types
 
-### Investigation task
-When you genuinely don't know what to change yet:
-```typescript
-{
-  id: 'N.1',
-  title: 'Investigate settlement calculation discrepancy',
-  problem: 'Dashboard shows $4800 but settlement shows $48. Need to trace the data flow.',
-  steps: [
-    { file: 'lib/services/settlement.ts', description: 'Read calculatePnL and trace where cents/dollars conversion happens' },
-    { file: 'app/dashboard/settlement/page.tsx', description: 'Check how settlement data is displayed — readCents vs raw Number()' },
-  ],
-  acceptanceCriteria: [
-    'Root cause identified with file path and line number',
-    'Fix tasks N.2-N.X written with specific file paths',
-  ],
-  files: ['lib/services/settlement.ts', 'app/dashboard/settlement/page.tsx'],
-  done: false,
-}
-```
+**Investigation task** — use when root cause isn't yet known. `problem` describes the discrepancy, `steps` enumerate files to read, `acceptanceCriteria` is "root cause identified at file:line + follow-up tasks N.2..N.X written."
 
-### Validation gate task (always last)
-```typescript
-{
-  id: 'N.last',
-  title: 'Validation gate',
-  problem: 'All changes must pass the full validation gate.',
-  steps: [
-    { file: 'package.json', description: 'Run lint, type-check, test, build' },
-  ],
-  acceptanceCriteria: ['All gate checks pass'],
-  files: ['package.json'],
-  done: false,
-}
-```
+**Validation gate task** — always last. `problem`: "All changes must pass the full validation gate." `steps`: one entry pointing at `package.json` running lint/type-check/test/build. `acceptanceCriteria`: "All gate checks pass."
 
 ## After Creating the Phase
 
-Tell the user:
-1. The phase number and file path
-2. How many tasks were created
-3. Whether it's ready to execute (`/do-phase N`) or needs more investigation
-4. Key risk areas or dependencies to be aware of
-5. **Backlog placement** — the index where review-phase queued the phase, or "not queued — review found NEEDS WORK / BLOCKER" if findings remain, or "not queued — `--skip-review` was passed" if the user opted out of review.
-6. **Any `[NEEDS CLARIFICATION]` markers** — list each one as a question, with its task ID. Explicitly state: "Phase is committed but NOT executable until these are answered." A phase with unresolved markers is NEVER queued by review-phase, regardless of other findings.
-7. **Review outcome** — "Review clean" if `/review-phase N` (Step 7) found nothing, or a one-line summary of what was fixed. If `--skip-review` was passed, say so explicitly so the user knows the plan is unverified AND not queued.
+Report to the user:
+1. Phase number + file path + task count.
+2. Ready-to-execute (`/do-phase N`) or needs more investigation?
+3. Key risks / cross-phase dependencies.
+4. **Backlog placement** — index queued by `review-phase`, or "not queued — review found NEEDS WORK / BLOCKER", or "not queued — `--skip-review`".
+5. **`[NEEDS CLARIFICATION]` markers** — list each with task ID. Phase is committed but NOT executable until resolved; review-phase will not queue.
+6. **Review outcome** — "Review clean" or one-line fix summary. If `--skip-review`, say so — plan unverified, not queued.
 
-**Auto-queue policy.** plan-phase does not edit `roadmap/backlog.ts` directly. Queuing is delegated to review-phase Mode A Step 8, which only queues a phase when the verdict is READY (no BLOCKER, no NEEDS WORK, no unresolved markers) and at a position reasoned from `priority` + `dependsOn` + `conflictsWith`. This single hook point ensures (a) bad plans never enter the queue and (b) position reasoning happens with the same data the review already loaded.
+`plan-phase` does NOT edit `roadmap/backlog.ts`. Queuing is delegated to `review-phase` Mode A Step 8, which queues only when the verdict is READY at a position reasoned from `priority` + `dependsOn` + `conflictsWith`.

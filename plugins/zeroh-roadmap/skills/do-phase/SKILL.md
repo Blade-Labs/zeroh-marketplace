@@ -250,17 +250,4 @@ Field-level detail, `StructuredGateRound` shape, and Round 0 schema integration 
 
 ## Execution Mode: parallel
 
-If the phase has `executionMode: 'parallel'`, you MAY batch tasks that are truly independent (different files, no shared state). But:
-- Still create TaskCreate for each task
-- Still commit each task separately
-- Still verify between batches
-- If any task depends on another's output, execute them sequentially regardless
-
-## What NOT to do
-
-- **Do NOT launch a single agent to "do all tasks"** — this is the exact anti-pattern this skill prevents
-- **Do NOT skip the commit between tasks** — each task must be an atomic commit
-- **Do NOT reorder tasks** — the phase author ordered them for a reason (dependencies, risk)
-- **Do NOT combine small tasks** — "they're trivial" is how errors creep in
-- **Do NOT mark a task done before committing** — done means committed and verified
-- **Do NOT skip type-check between tasks** — catching errors early is the whole point
+If the phase has `executionMode: 'parallel'`, you MAY batch tasks that are truly independent (different files, no shared state). One TaskCreate per task, one commit per task, type-check between batches. Any cross-task dependency forces sequential — no exceptions.
