@@ -73,16 +73,13 @@ Phase 467 — Currency mode picker
 Phase 472 — Notification ratchet
   [472.3.limitations]  NOT-ON-CALL bypass not implemented for SSB role;
                        policy says role is "best-effort" only.
-                       ⚠ Field discipline check: contains "deferred" /
-                         "until X ships" / "pre-pilot acceptable"? If yes,
-                         the planner used the wrong field — this is
-                         compromise disguised as limitation. Consider
-                         re-classifying the resolution accordingly.
 ```
 
-The `ref` (`<taskId>.<field>`) IS the synthetic ID — use it verbatim in subsequent prompts. No separate `dK` indexing.
+The `ref` (`<taskId>.<field>`) IS the synthetic ID — use it verbatim in subsequent prompts.
 
-**Sanity check before prompting:** if a `phase.debtResolutions[i].ref` points to a transparency-report entry that is `"None"` (or doesn't exist), surface as a schema-drift warning. The release-sweep does not auto-repair drift — flag and continue.
+**Field-discipline check before prompting:** when a debt sits on `limitations`, re-read it against the field-meaning rules in `schema.ts` `TransparencyReportShape` doc. If it matches a deferred-work pattern listed there, surface a one-line note in the prompt: *"this looks like compromise-disguised-as-limitation per schema field rules — consider re-classifying."* The schema is the single source of truth for trigger phrases; do not restate them here.
+
+**Sanity check before prompting:** if a `phase.debtResolutions[i].ref` points to a transparency-report entry that is `"None"` (or doesn't exist), surface as a schema-drift warning. The skill does not auto-repair drift — flag and continue.
 
 ### Step 3: Resolve each open debt (interactive)
 
