@@ -135,6 +135,26 @@ export type PhaseMetrics = z.output<typeof PhaseMetricsShape>
  *  Was previously output only in the conversation; persisting it on the task
  *  makes compromises and shortcuts queryable after the session ends.
  *
+ *  ## Field meanings (strict — release-sweep treats all four as debt sources)
+ *
+ *  - `compromises`: trade-offs accepted under pressure or forced by architect-gate
+ *    escalation. Example: "Switched to USD-only because BDT exchange rate API was
+ *    blocked by network policy and architect ruled this phase out of scope to fix."
+ *  - `hardcoded`: values that should be configurable but aren't (yet). Example:
+ *    "1000ms poll interval in lib/services/sync.ts:42 — needs config registry."
+ *  - `skipped`: acceptance criteria not fully addressed in this task. Example:
+ *    "AC #3 (mobile viewport) not verified — Playwright mobile profile not yet set up."
+ *  - `limitations`: PERMANENT design constraints or informational notes — NOT
+ *    deferred work. Example: "Composer is single-threaded by design — parallel
+ *    invocation would race the catalog cache."
+ *
+ *  **Anti-pattern caught by audit:** entries in `limitations` containing phrases
+ *  like "pre-pilot acceptable", "post-pilot, consider…", "until proper X ships",
+ *  "deferred to follow-up", "operator action documented" are disguised debt — they
+ *  belong in `compromises` or `skipped`, not `limitations`. release-sweep's
+ *  informational-status flag exists for the *truly* permanent case; using it to
+ *  launder deferred work is operator drift, not a feature.
+ *
  *  Constraints:
  *  - `whatWasDone` and `how` are always content (no null semantics) — require
  *    at least 10 characters so a terse "ok" or "." can't pass.
@@ -275,48 +295,57 @@ const BasePhaseFields = {
    *  hardcoded values accumulated across tasks. Promoted from commit body so that
    *  phase-level honesty survives outside git. */
   compromises: z.string().optional(),
-  /** Structured debt tracker — items that survived the architect gate and weren't
-   *  fully resolved during execution. Each entry is one outstanding item that must
-   *  be marked `resolved` or `accepted` before this phase is eligible for archive.
+  /** Closed-debt log. Records resolution lifecycle for non-`"None"` entries in
+   *  `tasks[].transparencyReport.{compromises,hardcoded,skipped,limitations}`.
    *
-   *  Release is NOT gated on debts (a phase can ship with open debts on a patch or
-   *  minor). Archive IS gated: `release-sweep` refuses to move a done phase into
-   *  `roadmap/archive/v{X}/` while any `status: 'open'` debt remains.
+   *  Debt CONTENT lives in transparency reports (immutable per-task audit).
+   *  Debt RESOLUTION lives here. Absence of a ref-matching entry = debt is open.
    *
-   *  Append to this array when:
-   *    - a task commits with a non-`"None"` value in transparencyReport.compromises,
-   *      transparencyReport.hardcoded, transparencyReport.skipped, or
-   *      transparencyReport.limitations, AND the architect gate (do-phase Prime Rule 1)
-   *      verdict was ESCALATE_TO_USER + user accepted the compromise; OR
-   *    - the architect itself returned a forced compromise (no proper path available
-   *      from within this phase's scope).
+   *  release-sweep walks transparency reports, cross-joins against this array, and
+   *  prompts for resolution on any non-`"None"` entry without a matching ref.
+   *  Archive refuses while any open debt remains. Release is NOT gated.
    *
-   *  A clean phase has `debts: []` (or omitted). The architect gate is designed so
-   *  this is the common case. */
-  debts: z
+   *  Resolution statuses:
+   *    - 'resolved'      — fixed (inline commit or new phase). `via` carries the
+   *                        commit SHA or phase ref (≥7 chars).
+   *    - 'accepted'      — kept as-is for a substantive reason. `via` carries the
+   *                        reason (≥20 chars enforced by refinement).
+   *    - 'informational' — entry was never debt; it was a permanent design
+   *                        constraint or informational note logged in the wrong
+   *                        field (or correctly in `limitations`). One-click close
+   *                        with optional `via` note. Treat high counts of this
+   *                        status as a signal that field discipline is slipping.
+   *
+   *  A clean phase has `debtResolutions: []` until release-sweep runs. */
+  debtResolutions: z
     .array(
       z
         .object({
-          /** Free-form description of the open item. Must be substantive enough that
-           *  a future operator can act on it without re-reading the phase commits.
-           *  Example: "HARDCODED 1000ms poll interval in lib/services/sync.ts:42 —
-           *  needs to be configurable per env once we have a config registry". */
-          note: z.string().min(20, 'Debt note must be substantive (≥20 chars)'),
-          /** Lifecycle. Defaults to 'open' when appended. */
-          status: z.enum(['open', 'resolved', 'accepted']).default('open'),
-          /** Required when status !== 'open'.
-           *   - 'resolved' via inline fix: commit SHA (`"a1b2c3d"`)
-           *   - 'resolved' via new phase:  phase ref (`"phase-470"`)
-           *   - 'accepted':                written reason (≥20 chars) */
+          /** Pointer: `"<taskId>.<field>"` — e.g. `"467.5.hardcoded"` or
+           *  `"467.3.compromises"`. Must reference an existing transparencyReport
+           *  field with a non-`"None"` value on a task in this phase. */
+          ref: z
+            .string()
+            .regex(
+              /^\d+\.\d+\.(compromises|hardcoded|skipped|limitations)$/,
+              'ref must be "<taskId>.<field>" (field ∈ compromises|hardcoded|skipped|limitations)',
+            ),
+          status: z.enum(['resolved', 'accepted', 'informational']),
+          /** Required for 'resolved' (≥7 chars: commit SHA or phase ref) and
+           *  'accepted' (≥20 chars: substantive reason). Optional for
+           *  'informational' (≥1 char if present — a one-line note is enough). */
           via: z.string().optional(),
-          /** ISO date when status last changed. Set by release-sweep. */
-          resolvedDate: z.string().date().optional(),
+          date: z.string().date(),
         })
         .refine(
-          (d) => d.status === 'open' || (d.via && d.via.length >= 7),
+          (r) => {
+            if (r.status === 'resolved') return r.via != null && r.via.length >= 7
+            if (r.status === 'accepted') return r.via != null && r.via.length >= 20
+            return true // informational: via is optional
+          },
           {
             message:
-              "Resolved or accepted debts must include `via` (commit SHA, phase ref, or reason ≥7 chars)",
+              "'resolved' requires via ≥7 chars (commit SHA or phase ref); 'accepted' requires via ≥20 chars (substantive reason)",
             path: ['via'],
           },
         ),

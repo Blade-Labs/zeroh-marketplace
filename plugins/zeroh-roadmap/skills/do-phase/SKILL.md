@@ -81,7 +81,13 @@ Return one of:
 - `PROCEED_WITH_FIX` → implement the correct approach. `compromises` stays `"None"`. No user interruption.
 - `ESCALATE_TO_USER` → stop, post the architect's specific question to the user, wait for the answer. Only this verdict justifies stopping a do-phase run.
   - If the user picks the **proper-solution option** → implement it; `compromises` stays `"None"`; no debt logged.
-  - If the user picks **accept the compromise** → record the compromise in the task's `transparencyReport.compromises` AND append to `phase.debts[]`: `{ note: '<specific item>', status: 'open' }` (the schema defaults `status` to `'open'`). The debt becomes archive-time work that `release-sweep` will surface. Commit the schema update in the same commit that closes the task.
+  - If the user picks **accept the compromise** → record it in the task's `transparencyReport.compromises` (or `hardcoded` / `skipped` if more accurate — see field-meaning rules in the schema's TransparencyReportShape doc). do-phase does NOT touch `phase.debtResolutions` — that field is the resolution log written later by `release-sweep`. The transparency report is the debt audit trail; sweep is the resolution layer. Two concerns, two fields.
+
+**Field-meaning discipline (matters for release-sweep accuracy):**
+- `compromises` — trade-offs accepted under pressure / forced by the architect gate.
+- `hardcoded` — values that should be configurable but aren't (yet).
+- `skipped` — acceptance criteria not fully addressed.
+- `limitations` — **permanent** design constraints or informational notes. NOT deferred work. If you're tempted to write "pre-pilot acceptable", "until proper X ships", "post-pilot, consider…", "deferred to follow-up" — that's a `compromises` or `skipped`, not a `limitations`.
 
 **Rules for this escalation:**
 - The architect runs **inline / synchronous**. Do NOT pass `run_in_background: true`. The decision blocks the current task.

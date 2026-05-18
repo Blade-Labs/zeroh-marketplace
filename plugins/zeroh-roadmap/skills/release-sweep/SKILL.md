@@ -38,49 +38,68 @@ release-sweep [<version>] [--archive]
 ### Step 1: Locate done phases for the version
 
 ```bash
-# Lists phase numbers + their debts count
-grep -lE "version: ['\"]<version>['\"]" roadmap/phases/*.phase.ts \
-  | xargs -I{} sh -c 'echo "{}:"; grep -E "status:|debts:" "{}" | head -3'
+# Lists matching phase files
+grep -lE "version: ['\"]<version>['\"]" roadmap/phases/*.phase.ts
 ```
 
 If zero phases match, surface and stop: "No done phases tagged `version: <version>`. Nothing to sweep."
 
-### Step 2: Aggregate open debts
+### Step 2: Aggregate open debts (join transparency reports × debtResolutions)
 
-For each matched phase file, read `debts: [...]` and collect every entry with `status: 'open'`. Output a single grouped list, ordered by phase number:
+For each matched phase file, read `tasks[].transparencyReport` for every task. An entry is a **candidate debt** if:
+- `transparencyReport.compromises !== "None"`, OR
+- `transparencyReport.hardcoded !== "None"`, OR
+- `transparencyReport.skipped !== "None"`, OR
+- `transparencyReport.limitations !== "None"`
+
+For each candidate, compose `ref = "<task.id>.<field>"` (e.g. `"467.5.hardcoded"`). The debt is **open** if no entry in `phase.debtResolutions` has a matching `ref`.
+
+Output the open set grouped by phase, ordered by phase number:
 
 ```
 Open debts for <version> (M phases, N open debts):
 
 Phase 467 — Currency mode picker
-  [467.d1] HARDCODED 1000ms poll interval in lib/services/sync.ts:42 —
-           needs config registry. (added by task 467.5)
+  [467.5.hardcoded]    1000ms poll interval in lib/services/sync.ts:42 —
+                       needs config registry.
+  [467.3.compromises]  Switched to USD-only — exchange rate API blocked.
 
 Phase 472 — Notification ratchet
-  [472.d1] LIMITATION: NOT-ON-CALL bypass not implemented for SSB role;
-           policy says role is "best-effort" only. (added by task 472.3)
+  [472.3.limitations]  NOT-ON-CALL bypass not implemented for SSB role;
+                       policy says role is "best-effort" only.
+                       ⚠ Field discipline check: contains "deferred" /
+                         "until X ships" / "pre-pilot acceptable"? If yes,
+                         the planner used the wrong field — this is
+                         compromise disguised as limitation. Consider
+                         re-classifying the resolution accordingly.
 ```
 
-`[<phase>.dK]` is a synthetic ID: `K` is the 1-based index into `debts[]`. Use it to refer to a specific debt in subsequent prompts.
+The `ref` (`<taskId>.<field>`) IS the synthetic ID — use it verbatim in subsequent prompts. No separate `dK` indexing.
+
+**Sanity check before prompting:** if a `phase.debtResolutions[i].ref` points to a transparency-report entry that is `"None"` (or doesn't exist), surface as a schema-drift warning. The release-sweep does not auto-repair drift — flag and continue.
 
 ### Step 3: Resolve each open debt (interactive)
 
-**Do NOT auto-resolve.** Every debt needs an operator decision. For each item, ask:
+**Do NOT auto-resolve.** Every debt needs an operator decision. For each item:
 
-> **`[467.d1]` HARDCODED 1000ms poll interval ...** — how do you want to close it?
-> - **(f)** Fix inline now (I'll patch and you commit; debt closed `resolved` via that commit SHA)
-> - **(p)** Plan a new phase to fix it properly (invokes `/plan-phase`; debt closed `resolved` via the new phase ref)
-> - **(a)** Accept (provide a written reason, ≥20 chars; debt closed `accepted`)
-> - **(k)** Keep open (do nothing; debt stays — blocks archive for this version)
-> - **(s)** Skip to next debt (decide later)
+> **`[467.5.hardcoded]` 1000ms poll interval in lib/services/sync.ts:42 — needs config registry.**
+>
+> How do you want to close it?
+> - **(f)** Fix inline now (I'll patch and you commit; closed `resolved` via that commit SHA)
+> - **(p)** Plan a new phase to fix it properly (invokes `/plan-phase`; closed `resolved` via new phase ref)
+> - **(a)** Accept (provide a written reason ≥20 chars; closed `accepted`)
+> - **(i)** Informational (this was never debt — permanent design constraint or a note logged in the wrong field; closed `informational`, optional one-line `via` note)
+> - **(k)** Keep open (do nothing; blocks archive for this version)
+> - **(s)** Skip to next (decide later)
 
-**Implementation notes for each choice:**
+**Implementation per choice (each appends ONE entry to `phase.debtResolutions[]`):**
 
-- **(f) Fix inline.** Invoke `/zeroh-roadmap:software-architect` first with the debt note + relevant files to get the proper-solution blueprint. Apply the fix, run the validation gate appropriate to the phase's `kind`, commit, then update `phase.debts[K]` to `{ status: 'resolved', via: '<commitSHA>', resolvedDate: 'YYYY-MM-DD' }`. Commit the schema update separately: `docs(roadmap): phase N — close debt dK (resolved by <SHA>)`.
-- **(p) Plan a new phase.** Invoke `/zeroh-roadmap:plan-phase <debt note>` so the new phase carries the same `version` tag as the debt (or the *next* version if the user prefers — confirm). After the new phase commits, update `phase.debts[K]` to `{ status: 'resolved', via: 'phase-<N>', resolvedDate: 'YYYY-MM-DD' }`.
-- **(a) Accept.** Capture a substantive reason (≥20 chars; the schema refinement rejects shorter values). Update `phase.debts[K]` to `{ status: 'accepted', via: '<reason>', resolvedDate: 'YYYY-MM-DD' }`. Commit: `docs(roadmap): phase N — accept debt dK (<short reason summary>)`.
-- **(k) Keep open.** Note in the sweep summary that this debt remains open. If `--archive` was requested, archive will fail until this debt is resolved.
-- **(s) Skip.** Move to next.
+- **(f) Fix inline.** Invoke `zeroh-roadmap:software-architect` (foreground, synchronous) with the debt text + relevant files to get the proper-solution blueprint. Apply the fix, run the validation gate appropriate to the phase's `kind`, commit. Then append `{ ref: '<ref>', status: 'resolved', via: '<commitSHA>', date: 'YYYY-MM-DD' }` to `phase.debtResolutions`. Commit the schema update separately: `docs(roadmap): phase N — close debt <ref> (resolved by <SHA>)`.
+- **(p) Plan a new phase.** Invoke `/zeroh-roadmap:plan-phase <debt text>` — new phase carries the same `version` (or the *next* version if the user prefers; confirm). After the new phase commits, append `{ ref, status: 'resolved', via: 'phase-<N>', date }`. Commit: `docs(roadmap): phase N — close debt <ref> (resolved by phase-<N>)`.
+- **(a) Accept.** Capture a substantive reason (≥20 chars; schema rejects shorter). Append `{ ref, status: 'accepted', via: '<reason>', date }`. Commit: `docs(roadmap): phase N — accept debt <ref> (<short summary>)`.
+- **(i) Informational.** Append `{ ref, status: 'informational', via: '<optional one-liner>' (omit if obvious), date }`. Commit: `docs(roadmap): phase N — close debt <ref> (informational)`. **Operator-facing nudge:** if more than half of a phase's resolutions are `informational`, suggest revising the planner's transparency-report field-meaning discipline — most debts should be `resolved` or `accepted`, not waved through.
+- **(k) Keep open.** No append. Note in summary. Blocks archive.
+- **(s) Skip.** Move on.
 
 ### Step 4: Summary
 
@@ -88,10 +107,16 @@ After processing all debts, output:
 
 ```
 Sweep complete for <version>:
-  Resolved (inline fix):   X
-  Resolved (new phase):    Y
-  Accepted:                Z
-  Still open:              W
+  Resolved (inline fix):       X
+  Resolved (new phase):        Y
+  Accepted:                    Z
+  Informational:               I
+  Still open:                  W
+
+[If I/(X+Y+Z+I) > 0.5, surface:]
+  ⚠ Informational ratio is {I}/{total} ({pct}%). Likely planner field-meaning
+    drift (deferred work logged in `limitations` instead of `compromises` /
+    `skipped`). Consider tightening discipline before the next minor.
 
 [If W > 0 and --archive was requested:]
   Archive refused — W debt(s) still open. Re-run release-sweep <version> --archive
@@ -112,16 +137,17 @@ git mv roadmap/phases/phase-{N}.phase.ts roadmap/archive/<version>/phase-{N}.pha
 Commit: `chore(roadmap): archive <version> — N phases moved to roadmap/archive/<version>/`.
 
 After the move:
-- `audit-roadmap` must read both `roadmap/phases/` and `roadmap/archive/**/` (open work in mind: update audit-roadmap separately when this skill first lands).
+- `audit-roadmap` reads both `roadmap/phases/` and `roadmap/archive/**/` (see audit-roadmap SKILL.md — covers archive integrity as its own check).
 - `reviews/changelog.json` remains the canonical queryable index — archived phases stay in changelog with their `archivePath` recorded.
-- Debt fields are preserved on the archived files; `accepted` items remain visible for future auditors.
+- Transparency reports and `debtResolutions` are preserved on the archived files; `accepted` and `informational` items remain visible for future auditors.
 
 ## Edge Cases
 
-- **Phase has `debts: []` or no `debts` field.** No open debts — nothing to resolve. Eligible for archive immediately when `--archive` is passed.
-- **Phase has `version: undefined`.** Skipped (the version field is the partition key). Output a warning: "Phase N has no version — assign before sweeping."
-- **Debt resolution introduces new debts.** Possible if the inline fix surfaces an architectural issue. The new debt is appended to the *same* phase's `debts[]` with `status: 'open'`. Sweep continues; the new debt joins the next pass.
-- **User aborts mid-sweep.** Any debts already updated stay updated (committed individually). Re-running the skill resumes from the remaining `open` items.
+- **Phase has no non-`"None"` transparency entries.** Zero candidate debts — nothing to resolve. Eligible for archive immediately when `--archive` is passed.
+- **Phase has `version: undefined`.** Skipped (version is the partition key). Output a warning: "Phase N has no version — assign before sweeping."
+- **`debtResolutions` ref doesn't match any transparency entry.** Surfaced as schema-drift warning; sweep does not auto-repair. Likely cause: a transparency report was edited post-hoc; the ref no longer resolves. Operator should fix manually.
+- **Resolution introduces new compromises.** Possible if an inline fix forces its own trade-off. The new compromise goes into the *fix commit's* transparency report (which lives on the FIX'S phase, possibly a new one). It does NOT retroactively reopen this phase's debt — that debt is closed by `via: <commitSHA>`, and the new compromise is tracked on its own phase.
+- **User aborts mid-sweep.** Per-resolution commits land independently. Re-running the skill resumes from the remaining open debts.
 
 ## What this skill does NOT do
 
