@@ -305,16 +305,16 @@ const BasePhaseFields = {
    *  prompts for resolution on any non-`"None"` entry without a matching ref.
    *  Archive refuses while any open debt remains. Release is NOT gated.
    *
-   *  Resolution statuses:
-   *    - 'resolved'      — fixed (inline commit or new phase). `via` carries the
-   *                        commit SHA or phase ref (≥7 chars).
-   *    - 'accepted'      — kept as-is for a substantive reason. `via` carries the
-   *                        reason (≥20 chars enforced by refinement).
-   *    - 'informational' — entry was never debt; it was a permanent design
-   *                        constraint or informational note logged in the wrong
-   *                        field (or correctly in `limitations`). One-click close
-   *                        with optional `via` note. Treat high counts of this
-   *                        status as a signal that field discipline is slipping.
+   *  Resolution statuses (vocabulary lifted from GitHub Code Scanning):
+   *    - 'fixed'     — code change closed it. `via` carries the commit SHA (≥7)
+   *                    or phase ref (e.g. "phase-470", ≥7 chars).
+   *    - 'won't_fix' — kept as-is for a substantive reason. `via` carries the
+   *                    reason (≥20 chars enforced by refinement).
+   *    - 'dismissed' — entry was never debt; it was a permanent design constraint
+   *                    or informational note logged in the wrong field (or
+   *                    correctly in `limitations`). One-click close with optional
+   *                    `via` note. Treat high counts as a signal that field
+   *                    discipline is slipping.
    *
    *  A clean phase has `debtResolutions: []` until release-sweep runs. */
   debtResolutions: z
@@ -330,25 +330,47 @@ const BasePhaseFields = {
               /^\d+\.\d+\.(compromises|hardcoded|skipped|limitations)$/,
               'ref must be "<taskId>.<field>" (field ∈ compromises|hardcoded|skipped|limitations)',
             ),
-          status: z.enum(['resolved', 'accepted', 'informational']),
-          /** Required for 'resolved' (≥7 chars: commit SHA or phase ref) and
-           *  'accepted' (≥20 chars: substantive reason). Optional for
-           *  'informational' (≥1 char if present — a one-line note is enough). */
+          status: z.enum(['fixed', "won't_fix", 'dismissed']),
+          /** Required for 'fixed' (≥7 chars: commit SHA or phase ref) and
+           *  'won't_fix' (≥20 chars: substantive reason). Optional for
+           *  'dismissed' — when present, the schema accepts any string (no min
+           *  length enforced); operators are encouraged but not required to
+           *  leave a one-line note. */
           via: z.string().optional(),
           date: z.string().date(),
         })
-        .refine(
-          (r) => {
-            if (r.status === 'resolved') return r.via != null && r.via.length >= 7
-            if (r.status === 'accepted') return r.via != null && r.via.length >= 20
-            return true // informational: via is optional
-          },
-          {
-            message:
-              "'resolved' requires via ≥7 chars (commit SHA or phase ref); 'accepted' requires via ≥20 chars (substantive reason)",
-            path: ['via'],
-          },
-        ),
+        .superRefine((r, ctx) => {
+          if (r.status === 'fixed') {
+            if (r.via == null) {
+              ctx.addIssue({
+                code: 'custom',
+                path: ['via'],
+                message: "'fixed' requires `via` (commit SHA or phase ref ≥7 chars)",
+              })
+            } else if (r.via.length < 7) {
+              ctx.addIssue({
+                code: 'custom',
+                path: ['via'],
+                message: "'fixed' `via` must be ≥7 chars (commit SHA or phase ref)",
+              })
+            }
+          } else if (r.status === "won't_fix") {
+            if (r.via == null) {
+              ctx.addIssue({
+                code: 'custom',
+                path: ['via'],
+                message: "'won't_fix' requires `via` (substantive reason ≥20 chars)",
+              })
+            } else if (r.via.length < 20) {
+              ctx.addIssue({
+                code: 'custom',
+                path: ['via'],
+                message: "'won't_fix' `via` must be ≥20 chars (substantive reason)",
+              })
+            }
+          }
+          // dismissed: via is optional; no length check
+        }),
     )
     .default([]),
 } as const
