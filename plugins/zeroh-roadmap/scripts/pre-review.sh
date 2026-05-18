@@ -16,8 +16,8 @@ NC='\033[0m'
 ERRORS=0
 WARNINGS=0
 
-fail() { echo -e "${RED}FAIL:${NC} $1"; ((ERRORS++)); }
-warn() { echo -e "${YELLOW}WARN:${NC} $1"; ((WARNINGS++)); }
+fail() { echo -e "${RED}FAIL:${NC} $1"; ERRORS=$((ERRORS+1)); }
+warn() { echo -e "${YELLOW}WARN:${NC} $1"; WARNINGS=$((WARNINGS+1)); }
 pass() { echo -e "${GREEN}  OK:${NC} $1"; }
 
 echo "=== Pre-Review Checks (diff from $BASE) ==="
