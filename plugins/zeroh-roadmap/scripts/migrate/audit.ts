@@ -110,8 +110,8 @@ function detectFeatures(content: string | null): Record<string, boolean> {
     taskBatchMode:
       taskShapeBlock !== null && /\bbatchMode:\s*z\.boolean\(\)/.test(taskShapeBlock),
     backlogTiers: /\bBacklogTierShape\b/.test(content),
-    debtResolutions:
-      basePhaseBlock !== null && /\bdebtResolutions:\s*z\.array\(/.test(basePhaseBlock),
+    // Field name alone is distinctive — formatter may split `z.array(` across lines.
+    debtResolutions: basePhaseBlock !== null && /\bdebtResolutions:/.test(basePhaseBlock),
   }
 }
 
