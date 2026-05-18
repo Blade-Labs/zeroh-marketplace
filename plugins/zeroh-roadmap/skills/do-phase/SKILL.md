@@ -80,6 +80,8 @@ Return one of:
 **Then apply the architect's verdict literally:**
 - `PROCEED_WITH_FIX` → implement the correct approach. `compromises` stays `"None"`. No user interruption.
 - `ESCALATE_TO_USER` → stop, post the architect's specific question to the user, wait for the answer. Only this verdict justifies stopping a do-phase run.
+  - If the user picks the **proper-solution option** → implement it; `compromises` stays `"None"`; no debt logged.
+  - If the user picks **accept the compromise** → record the compromise in the task's `transparencyReport.compromises` AND append to `phase.debts[]`: `{ note: '<specific item>', status: 'open' }` (the schema defaults `status` to `'open'`). The debt becomes archive-time work that `release-sweep` will surface. Commit the schema update in the same commit that closes the task.
 
 **Rules for this escalation:**
 - The architect runs **inline / synchronous**. Do NOT pass `run_in_background: true`. The decision blocks the current task.
