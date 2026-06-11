@@ -2433,7 +2433,8 @@ function runCheck(repoRoot, check) {
       output: `TOOL_MISSING: ${check.command} was not found in local node_modules/.bin or PATH.`,
     };
   }
-  const result = spawnResolvedCommand(repoRoot, resolved.executable, check.args, check.timeout);
+  const contained = containHeavyRun(check.command, resolved.executable, check.args);
+  const result = spawnResolvedCommand(repoRoot, contained.executable, contained.args, check.timeout);
   const output = `${result.stdout || ''}${result.stderr || ''}${result.error ? result.error.message : ''}`;
   const failureCode = result.error
     ? result.error.code === 'ENOENT'
@@ -2469,6 +2470,59 @@ function spawnResolvedCommand(repoRoot, executable, args, timeout) {
     timeout,
     shell: false,
   });
+}
+
+// --- Cgroup containment for heavy JIT runs -------------------------------
+// A write-triggered JIT check that runs a test/build pool (vitest, `pnpm test`,
+// `node --test`, ...) used to spawn UNBOUNDED into the Claude session's own
+// cgroup. With async-rewake firing one per file write, dozens stacked and
+// swap-thrashed the whole box (2026-06-11). On Linux with a user systemd
+// manager we now route those heavy runs through a transient scope in
+// `test.slice` (hard MemoryMax, tight swap, OOMPolicy=kill) so a pile-up is
+// capped and OOM-killed INSIDE that slice — the Claude sessions, dev servers,
+// and sshd are never touched. Cheap checks (git, the self-test) are NOT
+// wrapped, and on non-Linux / no-systemd hosts this is a transparent no-op,
+// so the plugin's own self-tests are unaffected.
+const JIT_SCOPE_MEM_MAX = '2G';
+const JIT_SCOPE_SWAP_MAX = '256M';
+const JIT_SLICE = 'test.slice';
+let _systemdRunOk;
+function systemdRunAvailable() {
+  if (_systemdRunOk !== undefined) return _systemdRunOk;
+  if (process.platform !== 'linux' || !process.env.XDG_RUNTIME_DIR) {
+    _systemdRunOk = false;
+    return _systemdRunOk;
+  }
+  const probe = spawnSync('systemd-run', ['--user', '--scope', '--quiet', '--', 'true'], {
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+  _systemdRunOk = probe.status === 0;
+  return _systemdRunOk;
+}
+function isHeavyRun(command, args) {
+  const line = [command, ...(args || [])].join(' ');
+  if (/\b(vitest|jest|mocha|ava|cypress)\b/.test(line)) return true;     // pool-spawning test bins
+  if (/(^|\s)playwright\s+test(\s|$)/.test(line)) return true;
+  if (/--test(\s|$)|--experimental-test(\s|$)/.test(line)) return true;  // node/tsx built-in runner
+  if (/\b(pnpm|npm|yarn|bun|turbo)\b/.test(line)
+      && /(^|\s)(test|test:[^\s]+|dev|start|build)(\s|$)/.test(line)) return true;
+  return false;
+}
+// Returns {executable, args} — original, or systemd-run-wrapped for heavy runs.
+function containHeavyRun(command, executable, args) {
+  if (!isHeavyRun(command, args) || !systemdRunAvailable()) return { executable, args };
+  return {
+    executable: 'systemd-run',
+    args: [
+      '--user', '--scope', '--collect', '--quiet',
+      `--slice=${JIT_SLICE}`,
+      `--property=MemoryMax=${JIT_SCOPE_MEM_MAX}`,
+      `--property=MemorySwapMax=${JIT_SCOPE_SWAP_MAX}`,
+      '--property=OOMPolicy=kill',
+      '--', executable, ...(args || []),
+    ],
+  };
 }
 
 function pinProjectEnv(env, repoRoot) {
