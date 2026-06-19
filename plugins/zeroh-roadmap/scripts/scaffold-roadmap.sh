@@ -67,10 +67,35 @@ done
 # Make shell scripts executable
 chmod +x "$PROJECT_DIR/scripts/"*.sh 2>/dev/null || true
 
+# Wire the npm scripts the skills invoke. do-phase / plan-phase / full-code-review all run
+# `<pm> emit:phases` to regenerate reviews/changelog.json; without this script the agent can't
+# find it and skips the regen. Idempotent: existing scripts are left untouched.
+if [ -f "$PROJECT_DIR/package.json" ]; then
+  node - "$PROJECT_DIR/package.json" <<'NODE'
+const fs = require('fs');
+const path = process.argv[2];
+const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+pkg.scripts = pkg.scripts || {};
+const want = {
+  'emit:phases': 'tsx lib/roadmap/emit.ts',
+  'changelog:md': 'tsx scripts/generate-changelog-md.ts',
+};
+let changed = false;
+for (const [k, v] of Object.entries(want)) {
+  if (!pkg.scripts[k]) { pkg.scripts[k] = v; changed = true; console.log('  Added package.json script: ' + k); }
+  else { console.log('  Skipped package.json script ' + k + ' (already set)'); }
+}
+if (changed) fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+NODE
+else
+  echo "  No package.json found — add a script manually: \"emit:phases\": \"tsx lib/roadmap/emit.ts\""
+fi
+
 echo ""
 echo "=== Done ==="
 echo ""
 echo "Next steps:"
-echo "  1. Ensure 'zod' is in your dependencies: pnpm add zod"
-echo "  2. Create your first phase: /plan-phase"
-echo "  3. Execute it: /do-phase 1"
+echo "  1. Ensure 'zod' + 'tsx' are in your devDependencies (the emit:phases script runs tsx)."
+echo "  2. Regenerate the changelog to confirm wiring: <pm> run emit:phases"
+echo "  3. Create your first phase: /plan-phase"
+echo "  4. Execute it: /do-phase 1"
