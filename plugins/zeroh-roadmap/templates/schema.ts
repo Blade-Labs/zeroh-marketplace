@@ -413,11 +413,33 @@ const CancelledPhaseShape = z.object({
   ...OptionalGateFields,
 })
 
+/**
+ * Historical phase: a phase that completed BEFORE the current gate-discipline schema
+ * (no gate/gateRounds, partial gate, legacy category/kind vocabulary, or a documented
+ * pre-existing red that makes passed≠total). It parses LOOSE so legacy records are
+ * accepted AS-RECORDED — never rewritten or falsified to fit the strict DonePhaseShape.
+ * Terminal like 'done' (not in the execution backlog), but excluded from the version
+ * changelog. The migration protocol's sanctioned alternative to backfilling every phase.
+ */
+const HistoricalPhaseShape = z.object({
+  ...BasePhaseFields,
+  // Legacy vocabulary accepted as-is — old phases predate the current category/kind enums.
+  category: z.string(),
+  kind: z.string().optional(),
+  status: z.literal('historical'),
+  // Gate data is preserved exactly as recorded (any legacy shape), never required.
+  gate: z.unknown().optional(),
+  gateRounds: z.unknown().optional(),
+  metrics: z.unknown().optional(),
+  completedDate: z.string().optional(),
+})
+
 export const PhaseShape = z.discriminatedUnion('status', [
   DonePhaseShape,
   BacklogPhaseShape,
   InProgressPhaseShape,
   CancelledPhaseShape,
+  HistoricalPhaseShape,
 ])
 
 export type Phase = z.output<typeof PhaseShape>
