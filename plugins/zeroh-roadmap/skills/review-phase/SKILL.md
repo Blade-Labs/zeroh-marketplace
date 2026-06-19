@@ -36,6 +36,7 @@ Determine the phase mode:
 - **`status: 'done'`** → Post-execution audit (verify completed work)
 - **`status: 'in-progress'`** → Mid-flight check (verify completed tasks, flag remaining)
 - **`status: 'backlog'`** → Plan quality review (verify tasks are specific, files exist, no gaps)
+- **`status: 'historical'`** or **`'cancelled'`** → terminal, not reviewable here. Historical phases predate gate discipline (loose by design); say so and stop rather than auditing them against the strict done bar.
 
 ---
 
@@ -123,7 +124,7 @@ cat roadmap/backlog.ts
 
 **Reason about position using these rules, in order:**
 
-1. **Dependency floor** — the phase must appear AFTER every phase listed in its `dependsOn`. Locate each dep in the backlog (or confirm it's already `status: 'done'`); the lowest acceptable index is `max(depIndex) + 1`. If any dep is missing from both the backlog and done phases, that's a BLOCKER finding — re-issue verdict.
+1. **Dependency floor** — the phase must appear AFTER every phase listed in its `dependsOn`. Locate each dep in the backlog (or confirm it's already terminal-complete — `status: 'done'` or `'historical'`); the lowest acceptable index is `max(depIndex) + 1`. If any dep is missing from both the backlog and the completed (done/historical) phases, that's a BLOCKER finding — re-issue verdict.
 2. **Conflict spacing** — if the phase has `conflictsWith: [X, ...]`, do not place it adjacent to X. Insert at least one phase between, or surface as a NEEDS WORK if no valid slot exists.
 3. **Priority sort within the eligible range** — among positions allowed by rules 1–2, place by `priority`: `BLOCKER` slots above all `HIGH/MEDIUM/LOW`; `HIGH` above `MEDIUM/LOW`; `MEDIUM` above `LOW`. Within the same priority, append at the end of that priority's run (FIFO — phases of equal priority execute in plan order).
 4. **Already in backlog?** If the phase is already listed, validate its position against rules 1–3. If the position is wrong, propose a move; do not silently re-order.

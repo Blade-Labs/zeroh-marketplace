@@ -150,10 +150,19 @@ schema until the user has a strategy for those phases** (bucket 3 below).
 Options:
 
 - Backfill every flagged done phase via `collect-phase-metrics.ts` before
-  swapping the schema.
+  swapping the schema (best for phases that genuinely shipped through a gate).
 - Accept the break, fix phase-by-phase on the migration branch.
-- Add a `status: 'historical'` variant to the union so legacy done phases
-  parse loose (schema-side change, not part of this skill).
+- Reclassify legacy phases to `status: 'historical'` — a first-class terminal
+  status (in `templates/schema.ts` since the schema ships it) that parses LOOSE:
+  gate/category/kind are accepted as-recorded, never required or falsified. This is
+  the bulk strategy when a repo never adopted the version/archive lifecycle and has
+  accumulated many pre-discipline done phases (emit/registry validate the active
+  `roadmap/phases/` set strictly, so old phases failing the latest schema would
+  otherwise block emit forever). The tooling treats `historical` as terminal
+  everywhere `done` is terminal (do-phase won't run it, audit-roadmap counts it and
+  exempts it from the strict done-only checks, it's a valid `dependsOn` target), and
+  it is excluded from the version changelog. Do NOT falsify gate data (e.g. set
+  unitTests passed==total) to keep a phase `done` — mark it `historical` instead.
 
 Confirm the strategy, then apply the schema edit.
 

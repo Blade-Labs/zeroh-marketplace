@@ -83,14 +83,14 @@ cat roadmap/phases/phase-{N}.phase.ts
 ```
 
 Read the full phase data. Note:
-- `status` — must be `'backlog'` or `'in-progress'`. If `'done'`, tell user and stop.
+- `status` — must be `'backlog'` or `'in-progress'`. If `'done'`, `'cancelled'`, or `'historical'` (all terminal), tell the user and stop.
 - `executionMode` — `'sequential'` (default) or `'parallel'`. Sequential = this protocol. Parallel = you may batch truly independent tasks (rare).
 - `tasks[]` — the ordered list of work. Execute in order.
 - `notes` — read for context (architecture decisions, investigation data).
 
 ### Step 0.5: Verify phase dependencies
 
-If the phase declares `dependsOn: [X, Y, ...]` (phase-level deps), check that every referenced phase exists and has `status: 'done'`:
+If the phase declares `dependsOn: [X, Y, ...]` (phase-level deps), check that every referenced phase exists and is terminal-complete — `status: 'done'` OR `status: 'historical'` (a historical phase is a completed legacy prerequisite, exactly like an archived done phase):
 
 ```bash
 for dep in <each number from dependsOn>; do
@@ -98,7 +98,7 @@ for dep in <each number from dependsOn>; do
 done
 ```
 
-If any dependency is missing or not `'done'`, STOP and tell the user:
+If any dependency is missing or is neither `'done'` nor `'historical'`, STOP and tell the user:
 
 > Phase N declares a dependency on phase X, which is currently {missing | backlog | in-progress | cancelled}. Run `/do-phase X` first, or remove it from `dependsOn` if it's no longer required.
 

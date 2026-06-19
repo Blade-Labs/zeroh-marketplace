@@ -23,7 +23,7 @@
  * runner required so the plugin stays zero-deps for end users.
  */
 
-import { defineBacklog, BacklogShape, BacklogTierShape } from '../templates/schema'
+import { defineBacklog, definePhase, BacklogShape, BacklogTierShape } from '../templates/schema'
 
 let failures = 0
 
@@ -182,6 +182,50 @@ console.log('\nBacklogShape — exports')
 check('BacklogShape and BacklogTierShape are exported and parse-capable', () => {
   BacklogShape.parse([])
   BacklogTierShape.parse({ tier: 2, label: 'A valid label', items: [] })
+})
+
+console.log('\nPhaseShape — historical status (loose legacy variant)')
+
+// Minimal valid base fields shared by the historical cases below.
+const basePhase = {
+  phase: 1,
+  name: 'A legacy phase name',
+  source: 'legacy source note',
+  priority: 'MEDIUM' as const,
+  dependsOn: [] as number[],
+  conflictsWith: [] as number[],
+  keyFiles: ['src/x.ts'],
+  stakeholderDemo: 'A demoable legacy outcome.',
+  tasks: [] as never[],
+}
+
+check('historical: parses loose — no gate required, legacy category/kind accepted', () => {
+  const p = definePhase({
+    ...basePhase,
+    status: 'historical',
+    category: 'chore', // legacy vocabulary NOT in the current category enum
+    kind: 'feature', // legacy vocabulary NOT in the current kind enum
+    // no gate / gateRounds / metrics — historical must not require them
+  } as never)
+  assertEq(p.status, 'historical', 'status preserved')
+})
+
+check('historical: tolerates recorded gate with passed != total (never falsified)', () => {
+  const p = definePhase({
+    ...basePhase,
+    status: 'historical',
+    category: 'feature',
+    kind: 'logic',
+    gate: { lint: 'clean', typeCheck: 'clean', unitTests: { passed: 5, total: 6 }, build: 'clean' },
+  } as never)
+  assertEq(p.status, 'historical', 'historical with a partial/red gate parses')
+})
+
+check('done stays STRICT — missing gate is still rejected (historical did not loosen done)', () => {
+  assertThrows(
+    () => definePhase({ ...basePhase, status: 'done', category: 'feature', kind: 'logic' } as never),
+    'done without gate',
+  )
 })
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${failures} failure(s)`)

@@ -25,6 +25,8 @@ User says: `audit roadmap`, `audit the roadmap`, `/audit-roadmap`, `/roadmap-aud
 
 `audit-roadmap` is the cross-cutting structural auditor. It finds problems that span phases, not problems within a single phase. Compared to `review-phase`: `review-phase` goes **deep into one phase** (reads source code, verifies bug claims, does blast-radius grep). `audit-roadmap` goes **shallow across all phases** (reads only phase files + git log, never opens source).
 
+**Status vocabulary.** Phases are one of: `backlog`, `in-progress` (active); `done`, `cancelled`, `historical` (terminal). `historical` is a phase that completed BEFORE the current gate-discipline schema — it parses loose (gate/category/kind accepted as-recorded, never required or falsified) and is the sanctioned alternative to backfilling a legacy done phase that can't meet strict `DonePhaseShape`. Treat `historical` as terminal everywhere `done` is terminal (not executable, not queued in the backlog), but EXEMPT it from the strict done-only checks (Check 5 task-completeness, gate completeness) — its looseness is the whole point. Historical phases are unversioned, so they stay in active `roadmap/phases/` (they cannot be archived under the version layout).
+
 ## Protocol
 
 ### Step 1: Enumerate the roadmap
@@ -145,10 +147,11 @@ The executable form lives in `scripts/migrate/audit.ts:suggestKind`. Keep these 
 
 #### Check 10: Stale done entries in backlog
 
-For every entry in `backlog.ts`, look up the corresponding phase file's `status`. Any entry whose phase is `status: 'done'` (or `status: 'cancelled'`) is stale — `do-phase` Step 5 should have removed it during completion. Stale entries pollute "do next phase" resolution and indicate a grooming gap.
+For every entry in `backlog.ts`, look up the corresponding phase file's `status`. Any entry whose phase is `status: 'done'`, `'cancelled'`, or `'historical'` is stale — all three are terminal, so the entry should have been removed during completion. Stale entries pollute "do next phase" resolution and indicate a grooming gap.
 
 - **MEDIUM** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'done'. Remove the backlog entry. (do-phase Step 5 should have done this — flag any pattern of stale entries as a process bug.)`
 - **LOW** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'cancelled'. Remove the backlog entry.`
+- **LOW** — `Backlog index K queues phase N, but phase-N.phase.ts is status: 'historical'. Historical phases are terminal — remove the backlog entry.`
 - **HIGH** — `Backlog index K queues phase N, but phase N is archived at roadmap/archive/<version>/. Archived phases are terminal — remove from backlog.`
 
 #### Check 11: Oversized tasks without `batchMode` (schema v4)
@@ -190,7 +193,7 @@ Output one structured report grouped by severity. Every finding names the phase,
 
 ## Summary
 
-- Total phases: X ({Y done}, {Z in-progress}, {W backlog}, {V cancelled})
+- Total phases: X ({Y done}, {Z in-progress}, {W backlog}, {V cancelled}, {H historical})
 - Findings: A CRITICAL, B HIGH, C MEDIUM, D LOW
 
 ## CRITICAL (A)
