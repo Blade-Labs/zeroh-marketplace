@@ -352,6 +352,24 @@ check('crossValidate passes a phase whose arcId matches a discovered arc', () =>
   assertEq(crossValidate([{ phase: 855, arcId: 855 }] as never, [sampleArc]), [], 'no errors')
 })
 
+check('crossValidate flags a phase claimed by two arcs', () => {
+  const arcA = defineArc({ id: 'A', name: 'Arc Alpha', baseRef: 'main', phases: [855] })
+  const arcB = defineArc({ id: 'B', name: 'Arc Bravo', baseRef: 'main', phases: [855] })
+  const errors = crossValidate([{ phase: 855 }] as never, [arcA, arcB])
+  if (!errors.some((e) => e.includes('claimed by 2 arc planes'))) {
+    throw new Error(`expected a two-arc claim error, got ${JSON.stringify(errors)}`)
+  }
+})
+
+check('crossValidate flags an arcId that disagrees with the arc listing the phase', () => {
+  // phase 855 says arcId 'A', but arc 'A' lists only phase 856 — back-ref vs forward list disagree
+  const arcA = defineArc({ id: 'A', name: 'Arc Alpha', baseRef: 'main', phases: [856] })
+  const errors = crossValidate([{ phase: 855, arcId: 'A' }, { phase: 856 }] as never, [arcA])
+  if (!errors.some((e) => e.includes('that arc') && e.includes('do not list it'))) {
+    throw new Error(`expected an arcId-disagreement error, got ${JSON.stringify(errors)}`)
+  }
+})
+
 // discoverArcs is async — run it and the final summary inside an async tail so
 // the harness stays CJS-compatible (no top-level await).
 ;(async () => {
