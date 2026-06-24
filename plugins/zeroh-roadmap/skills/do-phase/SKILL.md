@@ -199,7 +199,7 @@ Replaces steps 3–8 above. Use ONLY for tasks with `batchMode: true` — set de
    c. Run `pnpm type-check`. Failure → fix it in this same step's commit; do not roll back, do not skip ahead.
    d. Commit with message: `<type>(<scope>): phase N task N.X (k/M) — <step.description first ~60 chars>`.
    e. TaskUpdate status to `completed`.
-3. **No sub-agent forks for the steps.** `batchMode: true` is permission to make many commits inline, NOT permission to spawn sub-agents to absorb the steps. Forking the steps abandons the per-step commit discipline and produces an opaque mega-deliverable. The auto-spawn discipline rule (Step 4 prelude) applies in full force here — including its scoping: this bans forks that absorb phase work, not the do-phase runner itself being a phase-executor sub-agent under arc-mode (one executor = one whole phase).
+3. **No sub-agent forks for the steps.** `batchMode: true` is permission to make many commits inline, NOT permission to spawn sub-agents to absorb the steps. Forking the steps abandons the per-step commit discipline and produces an opaque mega-deliverable. The auto-spawn discipline rule (Step 4 prelude) applies in full force here — including its arc-mode scoping: it bans forks that absorb phase work, not the do-phase runner itself being a phase-executor sub-agent.
 4. **Aggregated transparency report after the last step.** One report covering the entire batch task:
    - `whatWasDone`: bullet list, one line per step, summarizing per-unit deltas (`step k/M: <file> — <one-line>`).
    - `how`: 1–2 sentences describing the overall approach (e.g. "applied template `lib/shape-template.ts` to each of 22 catalog entries, derived test from existing `lib/__tests__/shape-template.test.ts`").
@@ -227,7 +227,7 @@ Missing `kind` on a legacy phase → default to `logic`, warn once. **No excepti
 
 **Sub-agent rules:** launch all gate agents synchronously (no `run_in_background`). Auto-spawn discipline applies during Steps 1–4 — the architect-critique → simplifier → code-reviewer chain is the only auto-spawned set during the gate; the architect-gate from Prime Rule 1 and `test-engineer` from `testMode` are the only sub-agent calls that may **absorb phase work** during task execution. No `Explore` / `general-purpose` / arbitrary `Task` forks. A task that "feels too big" is either fine (push through) or wrongly planned (STOP, surface split proposal) — never launch a sub-agent to absorb it.
 
-This ban scopes the actor **while executing a phase's tasks and gate** — it does NOT forbid do-phase from *being* a sub-agent. Under arc-mode (the `do-arc` orchestrator, phase 858) the do-phase runner is itself a **phase-executor** sub-agent: one executor = one whole phase. What stays forbidden, in arc-mode exactly as inline: a phase-executor spawning another phase-executor (no recursion past a single phase), `Explore` / `general-purpose` forks, or any fork that offloads a "too-big" task. The line is "the runner IS a sub-agent" (allowed) vs "the runner spawns forks that absorb its phase work" (forbidden).
+This ban scopes the actor **while executing a phase's tasks and gate** — it does NOT forbid do-phase from *being* a sub-agent. Under arc-mode (the `do-arc` orchestrator, phase 858) the do-phase runner is itself a **phase-executor** sub-agent: one executor = one whole phase. What stays forbidden, in arc-mode exactly as inline: a phase-executor spawning another phase-executor (no recursion past a single phase), `Explore` / `general-purpose` forks, or any fork that offloads a "too-big" task.
 
 ### Step 4b: Phase compromise summary (the ONLY human stop — inline mode)
 
@@ -236,7 +236,7 @@ Aggregate into a phase-level summary:
 2. The architect-critique's `SURFACED` entries (e.g. DB migrations — applied, but worth knowing before deploy).
 3. The architect-critique's `HARD-STOPS` by tag: `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`.
 
-**Inline mode (do-phase driven by the main session — the default):** this is the ONLY human stop. The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries). This behaviour is unchanged from prior versions.
+**Inline mode (do-phase driven by the main session — the default):** this is the ONLY human stop. The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries).
 
 **Arc-mode (do-phase running inside a phase-executor — phase 858's `do-arc`):** do NOT stop and ask — there is no reachable user. Emit the same aggregate as a typed `PhaseExecutionResult` (the shape from phase 855, `templates/schema.ts`) as the executor's final message:
 - `status: "escalated"` on a hard `ESCALATE_TO_USER` verdict or a `[MULTI-REPO]` / `[PRODUCT]` hard-stop — carry the architect's `question` + `options` in `escalation`. Do NOT guess past the escalation.
