@@ -55,7 +55,9 @@ Compute over the member phases:
 - `gateWeight` — count of phases whose `kind` is in {`logic`, `hardening`, `release`}.
 - `tddTasks` — count of tasks whose `testMode` is in {`tdd`, `e2e`}.
 
-**Choose RECURSION if `phases >= 3` AND (`totalTasks >= 10` OR `gateWeight >= 2` OR `tddTasks >= 4`); else ORCHESTRATOR-INLINE.**
+**Choose RECURSION if `totalTasks >= 10` OR `tddTasks >= 4` OR (`phases >= 3` AND `gateWeight >= 2`); else ORCHESTRATOR-INLINE.**
+
+The two volume signals (`totalTasks`, `tddTasks`) stand alone so a small-but-heavy arc — say 2 phases with 12 tasks — still recurses instead of being forced inline by a phase-count gate. `gateWeight` only counts behind the `phases >= 3` floor because `logic` is the default `kind`, so `gateWeight` alone is near-always-true and would not discriminate. **The four thresholds (`10`, `4`, `3`, `2`) are the tunable knobs** — raise them to keep more arcs inline (lighter, more-watched), lower them to delegate sooner; a future config could surface them, but the override flags below cover the per-run case.
 
 Echo the four inputs and the decision to chat (e.g. `phases=5 totalTasks=14 gateWeight=4 tddTasks=2 → RECURSION`). Recursion keeps each phase's per-task tasks under the sub-agent, so the main task list shows only the arc-level phase checklist — surface that as the stated advantage in the echo.
 
