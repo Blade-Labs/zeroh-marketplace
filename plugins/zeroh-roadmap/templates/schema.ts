@@ -176,6 +176,49 @@ export const TransparencyReportShape = z.object({
 
 export type TransparencyReport = z.output<typeof TransparencyReportShape>
 
+// ── Phase Execution Result ──────────────────────────────────────────────────
+
+/** Typed projection of do-phase Step-4b, returned by the phase-executor for one
+ *  phase so `do-arc` can mechanically aggregate an arc without re-parsing the
+ *  free-text phase `compromises` string (which audit/release-sweep still own).
+ *
+ *  - `status`: 'done' (gate passed, phase complete), 'escalated' (architect
+ *    returned ESCALATE_TO_USER — `escalation` carries the question/options), or
+ *    'failed' (gate could not be reached green).
+ *  - `compromises`/`skipped`/`hardcoded`: the same four debt categories the
+ *    transparency report uses, lifted to arc scope so it composes with
+ *    release-sweep. (`limitations` is intentionally omitted — permanent design
+ *    notes are not arc-level debt.)
+ *  - `surfaced`: architect-critique SURFACED entries worth knowing before deploy.
+ *  - `hardStops`: architect-critique HARD-STOP entries by tag — `do-arc` keys its
+ *    pre-merge decision on `[MULTI-REPO]` in particular.
+ *  - `gateRounds`: how many correctness rounds the gate took (0 for mockup). */
+export const PhaseExecutionResultShape = z.object({
+  phase: z.number().int().positive(),
+  status: z.enum(['done', 'escalated', 'failed']),
+  escalation: z
+    .object({
+      question: z.string().min(10),
+      options: z.array(z.string().min(1)),
+    })
+    .optional(),
+  compromises: z.array(z.string().min(10)).default([]),
+  skipped: z.array(z.string().min(10)).default([]),
+  hardcoded: z.array(z.string().min(10)).default([]),
+  surfaced: z.array(z.string().min(10)).default([]),
+  hardStops: z
+    .array(
+      z.object({
+        tag: z.enum(['[MULTI-REPO]', '[SCOPED-OUT]', '[PRODUCT]', '[SPECULATIVE]']),
+        text: z.string().min(10),
+      }),
+    )
+    .default([]),
+  gateRounds: z.number().int().nonnegative(),
+})
+
+export type PhaseExecutionResult = z.output<typeof PhaseExecutionResultShape>
+
 // ── Phase Task ──────────────────────────────────────────────────────────────
 
 export const PhaseTaskShape = z.object({
