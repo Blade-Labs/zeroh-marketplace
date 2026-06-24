@@ -236,7 +236,7 @@ Aggregate into a phase-level summary:
 2. The architect-critique's `SURFACED` entries (e.g. DB migrations — applied, but worth knowing before deploy).
 3. The architect-critique's `HARD-STOPS` by tag: `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`.
 
-**Inline mode (do-phase driven by the main session — the default):** this is the ONLY human stop. The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries).
+**Inline mode (do-phase driven by the main session — the default):** this is the ONLY human stop, unchanged. The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries).
 
 **Arc-mode (do-phase running inside a phase-executor — phase 858's `do-arc`):** do NOT stop and ask — there is no reachable user. Emit the same aggregate as a typed `PhaseExecutionResult` (the shape from phase 855, `templates/schema.ts`) as the executor's final message:
 - `status: "escalated"` on a hard `ESCALATE_TO_USER` verdict or a `[MULTI-REPO]` / `[PRODUCT]` hard-stop — carry the architect's `question` + `options` in `escalation`. Do NOT guess past the escalation.
