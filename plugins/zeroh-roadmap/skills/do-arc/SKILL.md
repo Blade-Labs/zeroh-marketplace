@@ -62,3 +62,13 @@ Compute over the member phases:
 Echo the four inputs and the decision to chat (e.g. `phases=5 totalTasks=14 gateWeight=4 tddTasks=2 → RECURSION`). Recursion keeps each phase's per-task tasks under the sub-agent, so the main task list shows only the arc-level phase checklist — surface that as the stated advantage in the echo.
 
 `--inline` / `--recursion` override the heuristic; when an override is passed, still echo the computed inputs plus `(overridden → <mode>)` so the choice is visible.
+
+## Step 3: Create the arc-level task progress (the phase checklist)
+
+At arc start, `TaskCreate` ONE task per member phase so the user watches the arc tick down. Subject pattern: **`Phase N — Plane X`**, where `Plane X` is the `arc.planes[].name` the phase belongs to (855 `ArcShape.planes`). Lifecycle: set the phase's task `in_progress` at phase start, `completed` at phase done.
+
+**Ownership is strict:** ONLY do-arc touches arc-level (phase) tasks. The per-task tasks inside a phase stay owned by `do-phase` (it creates and lifecycles them per Step 2 of do-phase). Two tiers, two owners:
+- **Arc tier** — one task per phase, subject `Phase N — Plane X`, owned by do-arc.
+- **Task tier** — one task per phase-task, owned by do-phase.
+
+The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the flat task list. In **recursion mode**, the per-task tasks live under the `phase-executor` sub-agent, so the main session's task list shows ONLY the arc-level phase checklist — the whole point of recursion's context isolation.
