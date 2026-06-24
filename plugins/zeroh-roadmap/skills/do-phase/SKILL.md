@@ -49,6 +49,7 @@ Pass the agent: the task's `acceptanceCriteria` + `files` + relevant `phase.note
 - `ESCALATE_TO_USER` → post the architect's specific question to the user, wait. This is the only verdict that justifies stopping a do-phase run.
   - User picks proper-solution option → implement it; no debt logged.
   - User accepts the compromise → record in the appropriate `transparencyReport` field per schema's field-meaning rules (`TransparencyReportShape` doc). do-phase does NOT write to `phase.debtResolutions` — that's release-sweep's job.
+  - **Arc-mode:** there is no reachable user inside a phase-executor. `ESCALATE_TO_USER` does NOT prompt — it bounces up as the executor's `PhaseExecutionResult` with `status: "escalated"` (carrying the architect's question + options) for the `do-arc` orchestrator to surface. See Step 4b.
 
 **Escalation rules** (full Decision Contract lives in `agents/software-architect.md`):
 - One compromise = one architect call. No batching.
@@ -228,14 +229,20 @@ Missing `kind` on a legacy phase → default to `logic`, warn once. **No excepti
 
 This ban scopes the actor **while executing a phase's tasks and gate** — it does NOT forbid do-phase from *being* a sub-agent. Under arc-mode (the `do-arc` orchestrator, phase 858) the do-phase runner is itself a **phase-executor** sub-agent: one executor = one whole phase. What stays forbidden, in arc-mode exactly as inline: a phase-executor spawning another phase-executor (no recursion past a single phase), `Explore` / `general-purpose` forks, or any fork that offloads a "too-big" task. The line is "the runner IS a sub-agent" (allowed) vs "the runner spawns forks that absorb its phase work" (forbidden).
 
-### Step 4b: Phase compromise summary (the ONLY human stop)
+### Step 4b: Phase compromise summary (the ONLY human stop — inline mode)
 
 Aggregate into a phase-level summary:
 1. Every task's persisted `transparencyReport` (compromises, skipped criteria, hardcoded values, limitations).
 2. The architect-critique's `SURFACED` entries (e.g. DB migrations — applied, but worth knowing before deploy).
 3. The architect-critique's `HARD-STOPS` by tag: `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`.
 
-The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries).
+**Inline mode (do-phase driven by the main session — the default):** this is the ONLY human stop. The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries). This behaviour is unchanged from prior versions.
+
+**Arc-mode (do-phase running inside a phase-executor — phase 858's `do-arc`):** do NOT stop and ask — there is no reachable user. Emit the same aggregate as a typed `PhaseExecutionResult` (the shape from phase 855, `templates/schema.ts`) as the executor's final message:
+- `status: "escalated"` on a hard `ESCALATE_TO_USER` verdict or a `[MULTI-REPO]` / `[PRODUCT]` hard-stop — carry the architect's `question` + `options` in `escalation`. Do NOT guess past the escalation.
+- otherwise `status: "done"` with the compromise roll-up mapped into `compromises` / `skipped` / `hardcoded` / `surfaced` / `hardStops` / `gateRounds`.
+
+The human stop relocates to the orchestrator (`do-arc`), which surfaces escalations and the arc-wide roll-up before merge. The phase-file `compromises` string is still written either way (Step 5) — the structured result is an addition, not a replacement.
 
 **Chat-output cap: ~30 lines / ~1500 chars.** The full summary is already persisted to the phase file's `compromises` field and the completion commit body — don't repeat the long form inline. If the summary would overflow, render a head + tail with a `+N more in roadmap/phases/phase-N.phase.ts` pointer. The cap exists because output-token truncation has historically blocked phase completion mid-summary; treat the file as the long-form surface and chat as the headline.
 
