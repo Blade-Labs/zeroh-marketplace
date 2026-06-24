@@ -16,7 +16,8 @@ and prints a markdown report covering:
 
 1. Schema feature detection (discriminated union, `PassingGateResultShape`,
    `TransparencyReportShape`, `GateFindingShape`, `StructuredGateRoundShape`,
-   task-level `dependsOn`, phase-level `compromises`).
+   task-level `dependsOn`, phase-level `compromises`, and the v7 arc feature —
+   `ArcShape`/`defineArc`, phase `arcId`, `PhaseExecutionResultShape`).
 2. Presence of required steady-state artifacts (`schema.ts`, `registry.ts`,
    `emit.ts`, `ROADMAP.md`, `backlog.ts`, the four helper scripts).
 3. Every `status: 'done'` phase file that would fail to parse under the strict
@@ -138,7 +139,9 @@ Branch on the audit's detection:
 **Case A — target already has discriminated union + `PassingGateResultShape`:**
 the remaining additions are all backwards-compatible (`TransparencyReportShape`,
 `GateFindingShape`, `StructuredGateRoundShape`, task `dependsOn`, phase
-`compromises`). Apply via Edit — show the user the inserts — then commit:
+`compromises`, and the v7 arc feature — optional `arcId` field + new sibling
+`ArcShape`/`PhaseExecutionResultShape`, copy-paste-safe). Apply via Edit — show
+the user the inserts — then commit:
 
 ```
 feat(roadmap): upgrade schema to @zeroh-roadmap-schema v2

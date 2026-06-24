@@ -83,6 +83,9 @@ function detectFeatures(content: string | null): Record<string, boolean> {
       taskBatchMode: false,
       backlogTiers: false,
       debtResolutions: false,
+      arcShape: false,
+      arcId: false,
+      phaseExecutionResult: false,
     }
   }
 
@@ -112,6 +115,9 @@ function detectFeatures(content: string | null): Record<string, boolean> {
     backlogTiers: /\bBacklogTierShape\b/.test(content),
     // Field name alone is distinctive — formatter may split `z.array(` across lines.
     debtResolutions: basePhaseBlock !== null && /\bdebtResolutions:/.test(basePhaseBlock),
+    arcShape: /\bArcShape\b/.test(content),
+    arcId: basePhaseBlock !== null && /\barcId:\s*z\.number/.test(basePhaseBlock),
+    phaseExecutionResult: /\bPhaseExecutionResultShape\b/.test(content),
   }
 }
 
@@ -334,6 +340,9 @@ function renderReport(args: {
     ['taskBatchMode', 'PhaseTask.batchMode — opt-in for mechanical multi-commit tasks (schema v4)'],
     ['backlogTiers', 'Backlog accepts tiered { tiers: [{ tier, label, items }] } form (schema v5)'],
     ['debtResolutions', 'Phase.debtResolutions — closed-debt log pointing at transparencyReport entries (schema v6)'],
+    ['arcShape', 'ArcShape + defineArc — Arc as first-class data (named block of phases) (schema v7)'],
+    ['arcId', 'Phase.arcId — optional back-reference from a phase to its Arc (schema v7)'],
+    ['phaseExecutionResult', 'PhaseExecutionResultShape — typed per-phase roll-up do-arc aggregates (schema v7)'],
   ]
 
   let schemaSection = ''
