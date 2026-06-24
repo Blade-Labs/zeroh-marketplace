@@ -41,6 +41,11 @@ The plugin reads your code, identifies the specific files and changes needed, an
 /plan-phase    → reads code, creates phase-N.phase.ts (backlog)
 /do-phase N    → one task at a time, commit between each, gate at the end
 /review-phase N → verify the work was done correctly
+
+# Arc lifecycle (a named block of phases shipped as one unit)
+/plan-arc      → author the Arc + plan its phases (parallel review)
+/do-arc <id>   → build every phase in order, then the pre-merge sweep
+/arc-sweep     → dispose arc debt + whole-arc seam review before merge
 ```
 
 Each phase is a `.phase.ts` file with typed tasks. The plugin creates them for you — you describe what you want, it reads the code and writes the phase:
@@ -107,6 +112,12 @@ On first use, the plugin scaffolds:
 | `/code-review` | Review code — confidence-filtered, >=80% only |
 | `/full-code-review` | Pre-release — 8 parallel agents (security, dead code, DRY, perf, arch, edge cases, data flow, domain) |
 | `/test-strategy` | Test conventions — pyramid, coverage targets, quality bar |
+| `/audit-roadmap` | Audit roadmap — read-only structural consistency checks |
+| `/release-sweep <version>` | Release prep — dispose outstanding debts, optionally archive |
+| `/plan-arc` | Plan arc — author the Arc entity, plan its phases, review in parallel |
+| `/do-arc <id>` | Execute arc — build every phase in order, serialize mutation, end in the pre-merge sweep |
+| `/arc-sweep` | Pre-merge sweep — dispose arc debt + whole-arc seam review |
+| `using-zeroh-roadmap` | Always-active router — dispatches the requests above to the right skill |
 
 ## Multi-platform
 
