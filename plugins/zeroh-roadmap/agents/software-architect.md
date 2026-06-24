@@ -1,7 +1,7 @@
 ---
 name: software-architect
 description: Designs system architecture by analyzing existing patterns, making decisive technical choices, and producing implementation blueprints
-tools: "*"
+tools: Glob, Grep, Read, Bash, WebFetch, WebSearch, LSP
 model: opus
 user_callable: true
 ---

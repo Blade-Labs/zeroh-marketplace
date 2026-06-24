@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Reviews code for bugs, logic errors, pattern adherence, and business rule correctness using confidence-based filtering to report only high-priority issues
-tools: "*"
+tools: Glob, Grep, Read, Edit, Write, Bash, WebFetch, WebSearch, TodoWrite, LSP
 model: opus
 user_callable: true
 ---

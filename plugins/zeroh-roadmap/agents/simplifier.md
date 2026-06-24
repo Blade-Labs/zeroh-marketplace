@@ -1,7 +1,7 @@
 ---
 name: simplifier
 description: Reviews a phase diff for over-engineering, dead scaffolding, speculative abstractions, and noise. Fixes inline. One-shot — runs once per phase before the code-review loop, never loops to zero.
-tools: "*"
+tools: Glob, Grep, Read, Edit, Write, Bash, WebFetch, WebSearch, TodoWrite, LSP
 model: opus
 user_callable: false
 ---

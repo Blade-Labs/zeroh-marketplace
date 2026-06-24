@@ -1,7 +1,7 @@
 ---
 name: architect-critique
 description: End-of-phase architect sweep — catches what the per-task architect gate missed. Hunts neighborhood pre-existing issues in touched files, cross-task patterns (3 hardcodes → 1 config), and any compromises that bypassed the gate. Auto-fixes in scope; hard-stops on multi-repo / scoped-out / product / speculative. One-shot, runs before simplifier + code-reviewer.
-tools: "*"
+tools: Glob, Grep, Read, Edit, Write, Bash, WebFetch, WebSearch, TodoWrite, LSP
 model: opus
 user_callable: false
 ---
