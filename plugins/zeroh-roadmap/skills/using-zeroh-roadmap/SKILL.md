@@ -51,6 +51,9 @@ Do NOT run the audit automatically — the grep is the cheap sentinel, the audit
 | "create phase for X", "plan phase for X", "add X to roadmap" | Invoke skill: **plan-phase** |
 | "do phase N", "start phase N", "execute phase N" | Invoke skill: **do-phase** |
 | "review phase N", "verify phase N", "check phase N" | Invoke skill: **review-phase** |
+| "plan arc", "create arc", "new arc" | Invoke skill: **plan-arc** |
+| "do arc", "execute arc", "run arc" | Invoke skill: **do-arc** |
+| "arc sweep", "pre-merge sweep", "sweep arc" | Invoke skill: **arc-sweep** |
 | "what's in the roadmap?", "show roadmap", "backlog" | Read `roadmap/ROADMAP.md` and list phases from `roadmap/phases/` |
 | "what's next?", "next phase", "do next phase" | Read `roadmap/backlog.ts` — first entry is next to execute. Invoke **do-phase** |
 | "code review", "review this code" | Invoke skill: **code-review** |
