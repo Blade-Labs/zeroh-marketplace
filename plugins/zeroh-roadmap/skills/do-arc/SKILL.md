@@ -28,3 +28,19 @@ User says: `do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`.
 4. Confirm each member phase has passed plan review (status `backlog` or `in-progress`, never `cancelled`; a phase already `done`/`historical` is skipped as complete, not re-run). STOP if a phase is in a state that can't be executed.
 
 Do NOT proceed past any gap — a missing arc, a malformed arc file, a missing or unexecutable phase all halt here with a specific message. Once the arc resolves cleanly, continue to Step 1.
+
+## Step 1: Generate the execution-prompt doc (always — before execution)
+
+Deterministically emit `docs/arc-<id>-execution-prompt.md` from the resolved Arc entity, every run (overwrite if present). This is NOT optional and NOT hand-written — it is regenerated from the arc data so the same bar applies to every arc. Mirror the structure of the hand-written exemplars (reference shape: `docs/arc-810-814-execution-prompt.md`). Sections, in order:
+
+1. `# Execution directive — <arc.name> (phases <first> → <last>)`
+2. **`## The bar — non-negotiable`** — the reusable BAR preamble, written once here in the skill and copied verbatim into every generated doc:
+
+   > Senior software architect. **No compromises or limitations disguised as shortcuts.** Every change must be **composable, reusable, maintainable, governed, and long-term correct**. Reason explicitly on EACH compromise, limitation, hardcode, or skipped item the moment it appears. At a fork between the convenient path and the proper path, invoke `zeroh-roadmap:software-architect` per the Prime-Rule-1 Decision Contract (in `do-phase`) and apply its verdict literally. Do not silently record debt to avoid an architect call.
+
+3. `## What this arc delivers (the why)` — from `arc.name` and the member phases' `stakeholderDemo`.
+4. `## Build sequence — one phase at a time, gate each` — the phases in dependency order, each with its `kind` (→ which gate) and task count.
+5. **`## Pre-merge arc sweep (MANDATORY)`** — render `arc.singleSeams` here as the "hold these single" invariants the sweep judges (one bullet per seam — a prose checklist, not a bare array dump).
+6. **`## Honesty rails specific to this arc`** — render `arc.honestyRails`, one bullet each.
+
+The BAR preamble text is a constant in this skill — never re-typed per arc. `singleSeams` always land in the Pre-merge arc sweep section and `honestyRails` always land in the Honesty rails section, as prose bullets mirroring the exemplar.
