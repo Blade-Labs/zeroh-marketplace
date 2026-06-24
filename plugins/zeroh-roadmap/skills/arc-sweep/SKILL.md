@@ -25,7 +25,7 @@ arc-sweep runs **pre-merge**, on an unversioned, unarchived arc, aggregating the
 
 ### Dispose each item (release-sweep's vocabulary, NOT a new one)
 
-For each debt item, prompt the user. The three code-disposition outcomes each persist exactly one `debtResolutions[]` entry on the owning phase — the same shape release-sweep writes (`{ ref: '<taskId>.<field>', status, via, date }`). OPERATOR-PENDING is the exception: it writes NO entry (the schema's `status` enum is `'fixed' | "won't_fix" | 'dismissed'` — there is no fourth value), exactly as release-sweep's `(k) Keep open` appends nothing.
+For each debt item, prompt the user. The three code-disposition outcomes each persist exactly one `debtResolutions[]` entry on the owning phase — the same shape release-sweep writes (`{ ref: '<taskId>.<field>', status, via, date }`). OPERATOR-PENDING is the exception: it writes NO entry (the schema's `status` enum is `'fixed' | "won't_fix" | 'dismissed'` — there is no fourth value).
 
 - **RESOLVE-NOW** == release-sweep **(f) Fix inline** → invoke `zeroh-roadmap:software-architect` for the proper-solution blueprint, apply, re-gate to the phase's `kind`, commit → append `{ ref, status: 'fixed', via: '<commitSHA>', date }`.
 - **PLAN-PHASE** == release-sweep **(p) Plan a new phase** → invoke `zeroh-roadmap:plan-phase` by name with the debt text; after the new phase commits, append `{ ref, status: 'fixed', via: 'phase-<N>', date }`.
