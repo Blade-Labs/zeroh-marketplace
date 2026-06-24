@@ -38,6 +38,8 @@ For each debt item, prompt the user. The three code-disposition outcomes each pe
 
 `ref`/`status`/`via`/`date` semantics, the ≥20-char `won't_fix` reason, and the dismissed-ratio nudge are all release-sweep's — do not redefine them here.
 
+**`limitations` are out of arc-sweep's scope — by design, not by omission.** The `PhaseExecutionResult` roll-up carries the three arc-debt categories (`compromises`/`skipped`/`hardcoded`) but NOT `limitations` — a limitation is a permanent design constraint, not deferred work, so it is not arc-disposable. It stays an open debt that **release-sweep** disposes pre-archive (release-sweep walks all four transparency-report fields). To avoid a silent coverage hole, arc-sweep still **re-reads each phase's `limitations` and LISTS any present in the Step-3 merge-readiness report** under "deferred to release-sweep" — so "every debt is disposed" is never claimed falsely; the operator sees the limitations exist and that their disposition is release-sweep's, not this sweep's.
+
 **No summary file.** Like release-sweep (its SKILL.md "the phase files ARE the audit trail" rule), arc-sweep NEVER writes a persisted summary/report file. `debtResolutions[]` + the transparency reports it points to are the durable audit trail; the merge-readiness report (Step 3) is an EPHEMERAL chat report only.
 
 ## Step 2: Whole-arc cross-phase review (against singleSeams)
@@ -55,6 +57,7 @@ Emit a merge-readiness report **to chat only** (never a file — see the no-summ
 - **Per-phase gate status** — every member phase is `done` with a passing gate.
 - **Debt dispositions** — the Step-1 roll-up: counts by `RESOLVE-NOW` / `PLAN-PHASE` / `ACCEPT` (won't_fix/dismissed) / `OPERATOR-PENDING`, with the `debtResolutions[]` refs written by the three code dispositions (OPERATOR-PENDING writes none — list its items in the deploy-actions bullet below instead).
 - **Whole-arc architect verdict** — the Step-2 seam judgment (single vs forked) and any RESOLVE-NOW fixes applied + re-gated.
+- **Deferred to release-sweep** — any `limitations` entries re-read from the phase files (arc-sweep does not dispose these; they're release-sweep's). List them so the operator knows they exist and remain open.
 - **Overall** — full green / blocked, and any OPERATOR-PENDING deploy actions the operator must take.
 
 **Hold the merge for an explicit user go** — arc-sweep never merges on its own. On the user's go, the merge proceeds per the report (and any OPERATOR-PENDING actions are the operator's to run at deploy); until then the arc sits built-and-swept on its branch.
