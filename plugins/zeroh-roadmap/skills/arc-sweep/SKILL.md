@@ -35,3 +35,12 @@ For each debt item, prompt the user and persist exactly one `debtResolutions[]` 
 `ref`/`status`/`via`/`date` semantics, the ≥20-char `won't_fix` reason, and the dismissed-ratio nudge are all release-sweep's — do not redefine them here.
 
 **No summary file.** Like release-sweep (its SKILL.md "the phase files ARE the audit trail" rule), arc-sweep NEVER writes a persisted summary/report file. `debtResolutions[]` + the transparency reports it points to are the durable audit trail; the merge-readiness report (Step 3) is an EPHEMERAL chat report only.
+
+## Step 2: Whole-arc cross-phase review (against singleSeams)
+
+A per-phase gate sees only its own diff — it CANNOT catch a seam that one phase quietly forked from another (3 hardcodes that should have been 1 config; a shared type two phases each redefined; a read-back path one consumer re-implemented). **Only a whole-arc view catches a forked seam.** That is this step's whole job.
+
+Run ONE `zeroh-roadmap:software-architect` over **`git diff <arc.baseRef>..HEAD`** (the arc's full diff, `baseRef` from the Arc entity, 855) and judge it as **a single system** against `arc.singleSeams` (the "hold these single" invariants): for each seam, did any consumer fork it, or is it genuinely a single implementation across the whole arc?
+
+- Apply any **RESOLVE-NOW** fixes the architect identifies, and **re-gate each** to its phase's `kind` (a fix is not done until it re-passes the gate).
+- Author **PLAN-PHASE** follow-ups (via `zeroh-roadmap:plan-phase`) for real debt that should not block this merge.
