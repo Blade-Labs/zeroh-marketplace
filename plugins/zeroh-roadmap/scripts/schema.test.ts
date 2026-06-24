@@ -284,6 +284,11 @@ check('arcId: a phase without arcId still parses (back-compat)', () => {
   assertEq(p.arcId, undefined, 'no arcId is fine')
 })
 
+check('arcId: a string arcId "B" round-trips (matches Arc.id union)', () => {
+  const p = definePhase({ ...basePhase, status: 'backlog', category: 'feature', arcId: 'B' } as never)
+  assertEq(p.arcId, 'B', 'string arcId preserved')
+})
+
 console.log('\nPhaseExecutionResult')
 
 check('PhaseExecutionResult: minimal { phase, status, gateRounds } parses, arrays default to []', () => {

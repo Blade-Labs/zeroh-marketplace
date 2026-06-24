@@ -116,7 +116,7 @@ function detectFeatures(content: string | null): Record<string, boolean> {
     // Field name alone is distinctive — formatter may split `z.array(` across lines.
     debtResolutions: basePhaseBlock !== null && /\bdebtResolutions:/.test(basePhaseBlock),
     arcShape: /\bArcShape\b/.test(content),
-    arcId: basePhaseBlock !== null && /\barcId:\s*z\.number/.test(basePhaseBlock),
+    arcId: basePhaseBlock !== null && /\barcId:/.test(basePhaseBlock),
     phaseExecutionResult: /\bPhaseExecutionResultShape\b/.test(content),
   }
 }

@@ -61,9 +61,9 @@ Pass each explicit number into the planning loop so `plan-phase` never recompute
 Loop `plan-phase` over the reserved numbers, in **dependency / plane order**:
 - Pass the **explicit phase number** (from Step 2a) so no recompute happens.
 - Pass **`--skip-review`** so the per-phase auto-review does NOT run and does NOT queue — reviews are batched in Step 3.
-- Set each planned phase's **`arcId`** (855) to the arc id **when the id is numeric** — `Phase.arcId` is a `number` (schema: `arcId: z.number().int().positive().optional()`, "`Arc.id` when numeric"), so a string arc id (e.g. `B`) is NOT written into `arcId`. For a string-id arc, leave `arcId` unset; the binding holds through the arc's `planes[].phases` instead.
+- Set each planned phase's **`arcId`** (855) to the arc id — `Phase.arcId` accepts the same `number | string` union as `Arc.id`, so a letter id like `B` is written directly. Set it on every member phase, always.
 
-Each phase is authored as a normal `.phase.ts` with `status: 'backlog'`; the arc binds them via the arc's `planes[].phases` (always) plus `arcId` (when the arc id is numeric). `crossValidate` (855) checks both directions: a numeric `arcId` must match an arc, and every `planes[].phases` number must match a real phase.
+Each phase is authored as a normal `.phase.ts` with `status: 'backlog'`; the arc binds them via the arc's `planes[].phases` (the forward list) and each phase's `arcId` (the back-reference). `crossValidate` (855) checks they stay consistent: every `arcId` must match a discovered arc, every `planes[].phases` number must match a real phase, no phase may be claimed by two arcs, and a phase's `arcId` must name the arc whose `planes` actually list it.
 
 ## Step 3: Fan out plan-quality review (parallel, read-mostly)
 

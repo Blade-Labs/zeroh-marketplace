@@ -318,11 +318,13 @@ const BasePhaseFields = {
     .string()
     .regex(/^\d+\.\d+\.\d+$/)
     .optional(),
-  /** Back-reference to the Arc this phase belongs to (`Arc.id` when numeric).
-   *  Optional so every existing .phase.ts across all consumer repos keeps
-   *  parsing — the v7 bump stays non-breaking. do-arc and audit use it to map a
-   *  phase to its arc; registry `crossValidate` rejects an arcId with no arc. */
-  arcId: z.number().int().positive().optional(),
+  /** Back-reference to the Arc this phase belongs to — mirrors `Arc.id`, so it
+   *  accepts the same `number | string` union (an arc may use a letter id like
+   *  `"B"`). Optional so every existing .phase.ts across all consumer repos keeps
+   *  parsing. do-arc and audit use it to map a phase to its arc; registry
+   *  `crossValidate` rejects an arcId with no matching arc and an arcId that
+   *  disagrees with the arc whose `planes` list the phase. */
+  arcId: z.union([z.number().int().positive(), z.string().min(1)]).optional(),
   /** Where this phase came from (review, bug report, user request) */
   source: z.string().min(5),
   /** Priority level */
