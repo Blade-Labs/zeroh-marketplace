@@ -21,7 +21,7 @@ arc-sweep runs **pre-merge**, on an unversioned, unarchived arc, aggregating the
 
 ### Hand-in contract (the inputs)
 
-`PhaseExecutionResult` (phase 855) is a typed roll-up that lives in the `do-arc` ORCHESTRATOR's context and is NOT written to phase files. So arc-sweep **RECEIVES the array of `PhaseExecutionResult` handed in by do-arc (858 Step 4)** — it cannot re-discover them (there is no `discoverResults()`). The free-text `compromises` strings ARE persisted on the phase files and are **re-read** from there. Aggregate both: the structured roll-ups in-context, the free-text strings from `roadmap/phases/phase-<n>.phase.ts`.
+`PhaseExecutionResult` (phase 855) is a typed roll-up that lives in the `do-arc` ORCHESTRATOR's context and is NOT written to phase files. So arc-sweep **RECEIVES the array of `PhaseExecutionResult` handed in by do-arc (858 Step 6)** — it cannot re-discover them (there is no `discoverResults()`). The free-text `compromises` strings ARE persisted on the phase files and are **re-read** from there. Aggregate both: the structured roll-ups in-context, the free-text strings from `roadmap/phases/phase-<n>.phase.ts`.
 
 ### Dispose each item (release-sweep's vocabulary, NOT a new one)
 
