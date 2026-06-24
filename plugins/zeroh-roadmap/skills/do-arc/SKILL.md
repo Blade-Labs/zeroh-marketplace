@@ -43,8 +43,6 @@ Deterministically emit `docs/arc-<id>-execution-prompt.md` from the resolved Arc
 5. **`## Pre-merge arc sweep (MANDATORY)`** — render `arc.singleSeams` here as the "hold these single" invariants the sweep judges (one bullet per seam — a prose checklist, not a bare array dump).
 6. **`## Honesty rails specific to this arc`** — render `arc.honestyRails`, one bullet each.
 
-The BAR preamble text is a constant in this skill — never re-typed per arc. `singleSeams` always land in the Pre-merge arc sweep section and `honestyRails` always land in the Honesty rails section, as prose bullets mirroring the exemplar.
-
 ## Step 2: Size the work and select the execution mode
 
 Auto-pick **orchestrator-inline** (run `do-phase` in the main session) vs **recursion** (delegate each phase to a `phase-executor` sub-agent). The signal is context pressure, NOT `phase.kind`.
@@ -71,7 +69,7 @@ At arc start, `TaskCreate` ONE task per member phase so the user watches the arc
 - **Arc tier** — one task per phase, subject `Phase N — Plane X`, owned by do-arc.
 - **Task tier** — one task per phase-task, owned by do-phase.
 
-The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the flat task list. In **recursion mode**, the per-task tasks live under the `phase-executor` sub-agent, so the main session's task list shows ONLY the arc-level phase checklist — the whole point of recursion's context isolation.
+The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the flat task list. In **recursion mode** the task tier lives under the `phase-executor` sub-agent, so the main session shows only the arc tier (Step 2's context-isolation advantage).
 
 ## Step 4: Execute the phases (dependency order, sequential in v1)
 
