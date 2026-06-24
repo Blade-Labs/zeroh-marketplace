@@ -23,7 +23,16 @@
  * runner required so the plugin stays zero-deps for end users.
  */
 
-import { defineBacklog, definePhase, BacklogShape, BacklogTierShape } from '../templates/schema'
+import {
+  defineBacklog,
+  definePhase,
+  defineArc,
+  BacklogShape,
+  BacklogTierShape,
+  ArcShape,
+  PhaseExecutionResultShape,
+} from '../templates/schema'
+import { crossValidate, discoverArcs } from '../templates/registry'
 
 let failures = 0
 
@@ -43,6 +52,21 @@ function check(label: string, fn: () => void): void {
       `  FAIL — ${label}\n` +
         `         ${message}\n` +
         `         remediation: inspect the case above against templates/schema.ts (BacklogShape / defineBacklog).`,
+    )
+  }
+}
+
+async function checkAsync(label: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn()
+    console.log(`  ok — ${label}`)
+  } catch (err) {
+    failures++
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(
+      `  FAIL — ${label}\n` +
+        `         ${message}\n` +
+        `         remediation: inspect the case above against templates/registry.ts (discoverArcs).`,
     )
   }
 }
@@ -228,5 +252,97 @@ check('done stays STRICT — missing gate is still rejected (historical did not 
   )
 })
 
-console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${failures} failure(s)`)
-process.exit(failures === 0 ? 0 : 1)
+console.log('\nArcShape — defineArc')
+
+check('ArcShape: parses id "B" with one plane, applies defaults', () => {
+  const a = defineArc({
+    id: 'B',
+    name: 'Arc Bravo',
+    baseRef: 'main',
+    planes: [{ name: 'core', phases: [855] }],
+  })
+  assertEq(a.status, 'planning', 'status defaults to planning')
+  assertEq(a.singleSeams, [], 'singleSeams defaults to []')
+  assertEq(a.honestyRails, [], 'honestyRails defaults to []')
+})
+
+check('ArcShape: rejects empty planes array', () => {
+  assertThrows(
+    () => defineArc({ id: 'B', name: 'Arc Bravo', baseRef: 'main', planes: [] }),
+    'empty planes',
+  )
+})
+
+check('ArcShape: rejects bad status', () => {
+  assertThrows(
+    () =>
+      ArcShape.parse({
+        id: 1,
+        name: 'Arc One',
+        baseRef: 'main',
+        planes: [{ name: 'core', phases: [1] }],
+        status: 'bogus',
+      }),
+    'bad status',
+  )
+})
+
+console.log('\nPhaseShape — arcId back-reference')
+
+check('arcId: a backlog phase with arcId 855 round-trips', () => {
+  const p = definePhase({ ...basePhase, status: 'backlog', category: 'feature', arcId: 855 } as never)
+  assertEq(p.arcId, 855, 'arcId preserved')
+})
+
+check('arcId: a phase without arcId still parses (back-compat)', () => {
+  const p = definePhase({ ...basePhase, status: 'backlog', category: 'feature' } as never)
+  assertEq(p.arcId, undefined, 'no arcId is fine')
+})
+
+console.log('\nPhaseExecutionResult')
+
+check('PhaseExecutionResult: minimal { phase, status, gateRounds } parses, arrays default to []', () => {
+  const r = PhaseExecutionResultShape.parse({ phase: 855, status: 'done', gateRounds: 1 })
+  assertEq(r.compromises, [], 'compromises defaults to []')
+  assertEq(r.hardStops, [], 'hardStops defaults to []')
+})
+
+check('PhaseExecutionResult: rejects bad status', () => {
+  assertThrows(
+    () => PhaseExecutionResultShape.parse({ phase: 855, status: 'bogus', gateRounds: 1 }),
+    'bad status',
+  )
+})
+
+console.log('\nregistry — arc cross-validation')
+
+const sampleArc = defineArc({
+  id: 855,
+  name: 'Arcs arc',
+  baseRef: 'main',
+  planes: [{ name: 'core', phases: [855] }],
+})
+
+check('crossValidate flags a phase whose arcId matches no arc', () => {
+  const errors = crossValidate(
+    [{ phase: 855 }, { phase: 856, arcId: 999 }] as never,
+    [sampleArc],
+  )
+  assertEq(errors.length, 1, 'exactly the dangling-arcId error')
+})
+
+check('crossValidate passes a phase whose arcId matches a discovered arc', () => {
+  assertEq(crossValidate([{ phase: 855, arcId: 855 }] as never, [sampleArc]), [], 'no errors')
+})
+
+// discoverArcs is async — run it and the final summary inside an async tail so
+// the harness stays CJS-compatible (no top-level await).
+;(async () => {
+  await checkAsync('discoverArcs over a missing roadmap/arcs dir returns empty', async () => {
+    const out = await discoverArcs('/no/such/dir')
+    assertEq(out, { arcs: [], errors: [] }, 'missing dir')
+  })
+
+  console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${failures} failure(s)`)
+  process.exit(failures === 0 ? 0 : 1)
+})()
