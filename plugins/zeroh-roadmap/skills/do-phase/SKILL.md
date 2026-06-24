@@ -198,7 +198,7 @@ Replaces steps 3–8 above. Use ONLY for tasks with `batchMode: true` — set de
    c. Run `pnpm type-check`. Failure → fix it in this same step's commit; do not roll back, do not skip ahead.
    d. Commit with message: `<type>(<scope>): phase N task N.X (k/M) — <step.description first ~60 chars>`.
    e. TaskUpdate status to `completed`.
-3. **No sub-agent forks.** `batchMode: true` is permission to make many commits inline, NOT permission to spawn sub-agents. Forking abandons the per-step commit discipline and produces an opaque mega-deliverable. The auto-spawn discipline rule (Step 4 prelude) applies in full force here.
+3. **No sub-agent forks for the steps.** `batchMode: true` is permission to make many commits inline, NOT permission to spawn sub-agents to absorb the steps. Forking the steps abandons the per-step commit discipline and produces an opaque mega-deliverable. The auto-spawn discipline rule (Step 4 prelude) applies in full force here — including its scoping: this bans forks that absorb phase work, not the do-phase runner itself being a phase-executor sub-agent under arc-mode (one executor = one whole phase).
 4. **Aggregated transparency report after the last step.** One report covering the entire batch task:
    - `whatWasDone`: bullet list, one line per step, summarizing per-unit deltas (`step k/M: <file> — <one-line>`).
    - `how`: 1–2 sentences describing the overall approach (e.g. "applied template `lib/shape-template.ts` to each of 22 catalog entries, derived test from existing `lib/__tests__/shape-template.test.ts`").
@@ -224,7 +224,9 @@ After the last task commits, run the validation gate per **`references/gate-prot
 
 Missing `kind` on a legacy phase → default to `logic`, warn once. **No exceptions** — every phase gets its kind's gate, docs and tests included.
 
-**Sub-agent rules:** launch all gate agents synchronously (no `run_in_background`). Auto-spawn discipline applies during Steps 1–4 — the architect-critique → simplifier → code-reviewer chain is the only auto-spawned set during the gate; the architect-gate from Prime Rule 1 and `test-engineer` from `testMode` are the only sub-agent calls during task execution. No `Explore` / `general-purpose` / arbitrary `Task` forks. A task that "feels too big" is either fine (push through) or wrongly planned (STOP, surface split proposal) — never launch a sub-agent to absorb it.
+**Sub-agent rules:** launch all gate agents synchronously (no `run_in_background`). Auto-spawn discipline applies during Steps 1–4 — the architect-critique → simplifier → code-reviewer chain is the only auto-spawned set during the gate; the architect-gate from Prime Rule 1 and `test-engineer` from `testMode` are the only sub-agent calls that may **absorb phase work** during task execution. No `Explore` / `general-purpose` / arbitrary `Task` forks. A task that "feels too big" is either fine (push through) or wrongly planned (STOP, surface split proposal) — never launch a sub-agent to absorb it.
+
+This ban scopes the actor **while executing a phase's tasks and gate** — it does NOT forbid do-phase from *being* a sub-agent. Under arc-mode (the `do-arc` orchestrator, phase 858) the do-phase runner is itself a **phase-executor** sub-agent: one executor = one whole phase. What stays forbidden, in arc-mode exactly as inline: a phase-executor spawning another phase-executor (no recursion past a single phase), `Explore` / `general-purpose` forks, or any fork that offloads a "too-big" task. The line is "the runner IS a sub-agent" (allowed) vs "the runner spawns forks that absorb its phase work" (forbidden).
 
 ### Step 4b: Phase compromise summary (the ONLY human stop)
 
