@@ -75,12 +75,12 @@ The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the fl
 
 Iterate the member phases in **dependency order** (respect each phase's `dependsOn`; a phase runs only after its deps are `done`). **v1 is sequential** — one phase fully completes before the next starts. Parallel cross-Plane execution is deferred (see the plan's "Deferred to follow-up"). For each phase, set its arc-level task `in_progress`, then run it by the selected mode:
 
-- **Orchestrator-inline mode** → run `do-phase` for the phase IN THE MAIN SESSION, in arc-mode (so do-phase skips backlog grooming + emit:phases per its Step-5 arc-mode override, and bounces escalations up as a `PhaseExecutionResult` instead of stopping to ask).
-- **Recursion mode** → spawn ONE `phase-executor` sub-agent (857) for the phase. It runs do-phase end to end and returns the `PhaseExecutionResult`.
+- **Recursion mode** → spawn ONE `phase-executor` sub-agent (857) for the phase. It runs do-phase end to end and **returns** the `PhaseExecutionResult` — a real return channel: the sub-agent stops and you read its result.
+- **Orchestrator-inline mode** → run `do-phase` for the phase IN THE MAIN SESSION, in arc-mode (so do-phase skips backlog grooming + emit:phases per its Step-5 arc-mode override, and produces a `PhaseExecutionResult` instead of stopping to ask the user). **There is no separate return channel here — you are both do-phase and do-arc.** So the collect-and-branch below is YOUR control flow: after do-phase produces the result, you MUST evaluate it (step 2) before doing anything else. Do not let do-phase's "continue immediately to the next task" momentum (Prime Rule 1) carry the session past an `escalated`/`failed` result into Step 5 or the next phase.
 
-Either way, **collect the `PhaseExecutionResult`** and:
+Either way, the **collect-and-branch is a mandatory control gate, not a logging step.** Read the `PhaseExecutionResult` and:
 1. **Surface its compromise roll-up to chat AS the phase ends** (the per-phase headline). Routine compromises/skipped/hardcoded are noted and **batched into the final arc-sweep** for disposition — they do not stop the arc.
-2. **HALT the arc immediately** on a hard interrupt: `status: "escalated"`, or a `hardStops` entry tagged `[MULTI-REPO]` or `[PRODUCT]`. Surface the architect's `escalation.question` + `options` and WAIT for the user — do not start the next phase.
+2. **HALT the arc immediately** on a hard interrupt: `status: "escalated"`, or a `hardStops` entry tagged `[MULTI-REPO]` or `[PRODUCT]`. Surface the architect's `escalation.question` + `options` and WAIT for the user — do not run Step 5, do not start the next phase. (In inline mode this means the same session stops here; in recursion mode the spawn already returned.)
 3. On `status: "done"`, set the phase's arc-level task `completed` and continue to the next phase.
 4. On `status: "failed"`, HALT and surface the blocking detail — the arc cannot proceed past a phase that could not be driven green.
 
