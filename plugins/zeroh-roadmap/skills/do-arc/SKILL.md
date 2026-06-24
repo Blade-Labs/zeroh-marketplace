@@ -87,3 +87,21 @@ Either way, **collect the `PhaseExecutionResult`** and:
 4. On `status: "failed"`, HALT and surface the blocking detail — the arc cannot proceed past a phase that could not be driven green.
 
 After a phase returns `done`, run the serialized shared-mutation step (Step 5) before the next phase begins.
+
+## Step 5: Serialize the shared mutation (orchestrator-owned)
+
+`roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable. The phase-executor and arc-mode do-phase deliberately SKIP them (per do-phase Step-5 arc-mode override / 856.3). **do-arc owns them, run serially after each phase returns `done`** — never inside a parallel or sub-agent context:
+1. Groom `roadmap/backlog.ts` — remove the just-completed phase's entry (and any narrative naming only that phase).
+2. Run `pnpm emit:phases` to regenerate `reviews/changelog.json`.
+
+Doing this in the orchestrator, one phase at a time, is what keeps concurrent phase completions from racing those two files.
+
+### Context-pressure guidance
+
+Bake this into how you pace the arc: **don't rush.** Auto-compact handles a long arc's context for you — proceed phase-by-phase and let it. Delegation IS the context strategy: recursion mode hands each phase to a `phase-executor` so the main session stays light over a long arc. A calm phase-by-phase cadence beats trying to hold the whole arc in working memory at once.
+
+## Step 6: Arc-sweep and merge-readiness
+
+When every member phase is `done`, the arc is built but NOT merged. Invoke **`arc-sweep`** (phase 860) — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises against `arc.singleSeams` and `arc.honestyRails`). Then report **merge-readiness** to the user.
+
+**Hold the merge for an explicit user go** — do-arc never merges on its own. On the user's go, complete the merge per the arc-sweep's report; until then the arc sits built-and-swept on its branch.
