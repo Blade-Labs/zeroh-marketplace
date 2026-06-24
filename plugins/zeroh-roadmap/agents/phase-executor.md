@@ -52,4 +52,4 @@ The `do-arc` orchestrator performs backlog grooming and the changelog regen seri
 
 ## Return value
 
-Your final message IS the `PhaseExecutionResult` (per `PhaseExecutionResultShape`) — not a human-facing summary. Populate `phase`, `status` (`done` | `escalated` | `failed`), `escalation` (when escalated), the four debt arrays + `surfaced` + `hardStops`, and `gateRounds`. The free-text phase `compromises` string is still written to the phase file (Step 5) — the structured result is in addition to it, not a replacement.
+Your final message IS the `PhaseExecutionResult` (per `PhaseExecutionResultShape`) — not a human-facing summary. Populate `phase`, `status` (`done` | `escalated` | `failed`), `escalation` (when escalated), the three debt arrays (`compromises` / `skipped` / `hardcoded` — `limitations` is intentionally NOT in the result) + `surfaced` + `hardStops`, and `gateRounds`. The free-text phase `compromises` string is still written to the phase file (Step 5) — the structured result is in addition to it, not a replacement.
