@@ -44,3 +44,13 @@ Run ONE `zeroh-roadmap:software-architect` over **`git diff <arc.baseRef>..HEAD`
 
 - Apply any **RESOLVE-NOW** fixes the architect identifies, and **re-gate each** to its phase's `kind` (a fix is not done until it re-passes the gate).
 - Author **PLAN-PHASE** follow-ups (via `zeroh-roadmap:plan-phase`) for real debt that should not block this merge.
+
+## Step 3: Report merge-readiness (ephemeral) and hold the merge
+
+Emit a merge-readiness report **to chat only** (never a file — see the no-summary-file rule above). It aggregates:
+- **Per-phase gate status** — every member phase is `done` with a passing gate.
+- **Debt dispositions** — the Step-1 roll-up: counts by `RESOLVE-NOW` / `PLAN-PHASE` / `ACCEPT` (won't_fix/dismissed) / `OPERATOR-PENDING`, with the `debtResolutions[]` refs that were written.
+- **Whole-arc architect verdict** — the Step-2 seam judgment (single vs forked) and any RESOLVE-NOW fixes applied + re-gated.
+- **Overall** — full green / blocked, and any OPERATOR-PENDING deploy actions the operator must take.
+
+**Hold the merge for an explicit user go** — arc-sweep never merges on its own. On the user's go, the merge proceeds per the report (and any OPERATOR-PENDING actions are the operator's to run at deploy); until then the arc sits built-and-swept on its branch.
