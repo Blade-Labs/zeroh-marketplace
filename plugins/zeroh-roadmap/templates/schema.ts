@@ -13,7 +13,7 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-// @zeroh-roadmap-schema v6
+// @zeroh-roadmap-schema v7
 // Bump this marker whenever the canonical schema gains a feature. The
 // SessionStart drift check in using-zeroh-roadmap greps for this exact line
 // to decide whether a target repo is behind the plugin. Keep the comment
@@ -503,6 +503,51 @@ export const BacklogShape = z
  *  `{ tier: 0, label: 'Default', items: [...] }` tier. */
 export type Backlog = BacklogTiered
 
+// ── Arc ─────────────────────────────────────────────────────────────────────
+
+/** An Arc is a named, contiguous block of phases shipped as one unit — the
+ *  formalization of the hand-rolled "arc" convention (a phase range planned,
+ *  executed, swept, and merged together). `do-arc` executes an arc, `plan-arc`
+ *  authors one, and `arc-sweep` judges it before merge.
+ *
+ *  ## Field meanings
+ *  - `id`: arc identifier — a positive number or a short string (e.g. `"B"`).
+ *    Strings let arcs use a letter namespace distinct from phase numbers.
+ *  - `name`: human-readable arc title.
+ *  - `baseRef`: the git ref the arc was cut from — the merge target and the
+ *    diff base `arc-sweep` reviews against.
+ *  - `worktree`: optional path to the git worktree the arc executes in, when it
+ *    runs in isolation rather than on `baseRef` directly.
+ *  - `singleSeams`: the "hold these single" invariants — seams (a config, a
+ *    factory, a shared type) that must stay a SINGLE implementation across the
+ *    whole arc. `arc-sweep` judges the arc diff for drift against each one
+ *    (3 hardcodes that should have been 1 config, two parallel JSX blocks, …).
+ *  - `honestyRails`: honesty constraints the arc must uphold end-to-end (carried
+ *    into every phase's gate), e.g. "no phase-numbered comments", "errors surfaced".
+ *  - `planes`: named tracks of phases within the arc. Each plane is an ordered
+ *    group of phase numbers; planes can run in parallel, phases within a plane
+ *    are sequential. At least one plane, at least one phase per plane.
+ *  - `status`: arc lifecycle — planning → executing → swept → merged. */
+export const ArcShape = z.object({
+  id: z.union([z.number().int().positive(), z.string().min(1)]),
+  name: z.string().min(5),
+  baseRef: z.string().min(1),
+  worktree: z.string().min(1).optional(),
+  singleSeams: z.array(z.string().min(10)).default([]),
+  honestyRails: z.array(z.string().min(10)).default([]),
+  planes: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        phases: z.array(z.number().int().positive()).min(1),
+      }),
+    )
+    .min(1),
+  status: z.enum(['planning', 'executing', 'swept', 'merged']).default('planning'),
+})
+
+export type Arc = z.output<typeof ArcShape>
+
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 /**
@@ -547,4 +592,15 @@ export function defineBacklog(input: z.input<typeof BacklogShape>): Backlog {
     return { tiers: [{ tier: 0, label: 'Default', items: parsed }] }
   }
   return parsed
+}
+
+/**
+ * Define an Arc with compile-time type checking and runtime Zod validation.
+ * Use in .arc.ts files: `export default defineArc({ ... })`
+ *
+ * Applies ArcShape defaults (`singleSeams`/`honestyRails` → `[]`, `status` →
+ * 'planning') and rejects an arc with no planes or an empty plane at import time.
+ */
+export function defineArc(input: z.input<typeof ArcShape>): Arc {
+  return ArcShape.parse(input)
 }
