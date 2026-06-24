@@ -44,3 +44,21 @@ Deterministically emit `docs/arc-<id>-execution-prompt.md` from the resolved Arc
 6. **`## Honesty rails specific to this arc`** — render `arc.honestyRails`, one bullet each.
 
 The BAR preamble text is a constant in this skill — never re-typed per arc. `singleSeams` always land in the Pre-merge arc sweep section and `honestyRails` always land in the Honesty rails section, as prose bullets mirroring the exemplar.
+
+## Step 2: Size the work and select the execution mode
+
+Auto-pick **orchestrator-inline** (run `do-phase` in the main session) vs **recursion** (delegate each phase to a `phase-executor` sub-agent). The signal is context pressure, NOT `phase.kind`.
+
+> **`phase.kind` is NOT a sizing input.** kind selects the *gate set* — and a `release` phase is precisely the one to keep WATCHED in the main session, so keying off kind would push exactly the wrong phases into a sub-agent. Size on the work-ahead instead.
+
+Compute over the member phases:
+- `phases` — count of member phases.
+- `totalTasks` — sum of all tasks across them.
+- `gateWeight` — count of phases whose `kind` is in {`logic`, `hardening`, `release`}.
+- `tddTasks` — count of tasks whose `testMode` is in {`tdd`, `e2e`}.
+
+**Choose RECURSION if `phases >= 3` AND (`totalTasks >= 10` OR `gateWeight >= 2` OR `tddTasks >= 4`); else ORCHESTRATOR-INLINE.**
+
+Echo the four inputs and the decision to chat (e.g. `phases=5 totalTasks=14 gateWeight=4 tddTasks=2 → RECURSION`). Recursion keeps each phase's per-task tasks under the sub-agent, so the main task list shows only the arc-level phase checklist — surface that as the stated advantage in the echo.
+
+`--inline` / `--recursion` override the heuristic; when an override is passed, still echo the computed inputs plus `(overridden → <mode>)` so the choice is visible.
