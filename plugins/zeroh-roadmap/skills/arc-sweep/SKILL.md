@@ -25,12 +25,12 @@ arc-sweep runs **pre-merge**, on an unversioned, unarchived arc, aggregating the
 
 ### Dispose each item (release-sweep's vocabulary, NOT a new one)
 
-For each debt item, prompt the user and persist exactly one `debtResolutions[]` entry on the owning phase — the same shape release-sweep writes (`{ ref: '<taskId>.<field>', status, via, date }`):
+For each debt item, prompt the user. The three code-disposition outcomes each persist exactly one `debtResolutions[]` entry on the owning phase — the same shape release-sweep writes (`{ ref: '<taskId>.<field>', status, via, date }`). OPERATOR-PENDING is the exception: it writes NO entry (the schema's `status` enum is `'fixed' | "won't_fix" | 'dismissed'` — there is no fourth value), exactly as release-sweep's `(k) Keep open` appends nothing.
 
 - **RESOLVE-NOW** == release-sweep **(f) Fix inline** → invoke `zeroh-roadmap:software-architect` for the proper-solution blueprint, apply, re-gate to the phase's `kind`, commit → append `{ ref, status: 'fixed', via: '<commitSHA>', date }`.
 - **PLAN-PHASE** == release-sweep **(p) Plan a new phase** → invoke `zeroh-roadmap:plan-phase` by name with the debt text; after the new phase commits, append `{ ref, status: 'fixed', via: 'phase-<N>', date }`.
 - **ACCEPT** == release-sweep **(w) Won't fix** (substantive reason ≥20 chars → `status: "won't_fix"`) **or (d) Dismiss** (never-was-debt → `status: 'dismissed'`).
-- **OPERATOR-PENDING** — the ONE genuinely new disposition with no release-sweep equivalent: a required **deploy/operator action, not a code change** (a pre-merge arc operates on an unversioned arc, so some items are "do this at deploy" rather than "fix in code"). Document why it exists; it does not map to a code-fix `via`.
+- **OPERATOR-PENDING** — the ONE genuinely new disposition with no release-sweep equivalent: a required **deploy/operator action, not a code change** (a pre-merge arc operates on an unversioned arc, so some items are "do this at deploy" rather than "fix in code"). It has no schema `status` and writes NO `debtResolutions[]` entry — it is carried only in the Step-3 ephemeral report's deploy-actions section for the operator to run at deploy (cf. release-sweep `(k) Keep open` → no append). The item stays an open debt on the phase until a later release-sweep disposes it post-deploy.
 
 `ref`/`status`/`via`/`date` semantics, the ≥20-char `won't_fix` reason, and the dismissed-ratio nudge are all release-sweep's — do not redefine them here.
 
@@ -49,7 +49,7 @@ Run ONE `zeroh-roadmap:software-architect` over **`git diff <arc.baseRef>..HEAD`
 
 Emit a merge-readiness report **to chat only** (never a file — see the no-summary-file rule above). It aggregates:
 - **Per-phase gate status** — every member phase is `done` with a passing gate.
-- **Debt dispositions** — the Step-1 roll-up: counts by `RESOLVE-NOW` / `PLAN-PHASE` / `ACCEPT` (won't_fix/dismissed) / `OPERATOR-PENDING`, with the `debtResolutions[]` refs that were written.
+- **Debt dispositions** — the Step-1 roll-up: counts by `RESOLVE-NOW` / `PLAN-PHASE` / `ACCEPT` (won't_fix/dismissed) / `OPERATOR-PENDING`, with the `debtResolutions[]` refs written by the three code dispositions (OPERATOR-PENDING writes none — list its items in the deploy-actions bullet below instead).
 - **Whole-arc architect verdict** — the Step-2 seam judgment (single vs forked) and any RESOLVE-NOW fixes applied + re-gated.
 - **Overall** — full green / blocked, and any OPERATOR-PENDING deploy actions the operator must take.
 
