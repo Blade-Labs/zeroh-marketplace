@@ -45,3 +45,22 @@ export default defineArc({
 ```
 
 Decide WITH the user: the `planes` (ordered waves), the `singleSeams` (what must not fork across the arc), the `honestyRails`, and `baseRef`. Match the `do-phase` / `plan-phase` skill style. `planes[].phases` is filled in Step 2a once the phase numbers are reserved.
+
+## Step 2a: Reserve a contiguous phase-number block FIRST
+
+`plan-phase` Step 1 computes the "next number" from the filesystem with **no lock** — so recomputing it per iteration can collide under the arc's volatile namespace (each new phase file shifts the max). Reserve the block ONCE, up front:
+
+1. Compute the next phase number once (the current max + 1).
+2. Reserve a contiguous block of size = **sum of the phase counts across `arc.planes`**.
+3. Write those EXPLICIT numbers back into `arc.planes[].phases` (in plane order) and re-save the `.arc.ts`, so the arc's `planes ↔ phases` cross-validation (855 `crossValidate`) is correct and the "phase range" label is stable.
+
+Pass each explicit number into the planning loop so `plan-phase` never recomputes the next number per iteration.
+
+## Step 2b: Plan each member phase (plan-phase --skip-review)
+
+Loop `plan-phase` over the reserved numbers, in **dependency / plane order**:
+- Pass the **explicit phase number** (from Step 2a) so no recompute happens.
+- Pass **`--skip-review`** so the per-phase auto-review does NOT run and does NOT queue — reviews are batched in Step 3.
+- Set each planned phase's **`arcId`** (855) to the arc id, so the phase ↔ arc back-reference resolves.
+
+Each phase is authored as a normal `.phase.ts` with `status: 'backlog'`; the arc binds them via `arcId` + the arc's `planes`.
