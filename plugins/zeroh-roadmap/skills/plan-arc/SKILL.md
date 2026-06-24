@@ -61,9 +61,9 @@ Pass each explicit number into the planning loop so `plan-phase` never recompute
 Loop `plan-phase` over the reserved numbers, in **dependency / plane order**:
 - Pass the **explicit phase number** (from Step 2a) so no recompute happens.
 - Pass **`--skip-review`** so the per-phase auto-review does NOT run and does NOT queue — reviews are batched in Step 3.
-- Set each planned phase's **`arcId`** (855) to the arc id, so the phase ↔ arc back-reference resolves.
+- Set each planned phase's **`arcId`** (855) to the arc id **when the id is numeric** — `Phase.arcId` is a `number` (schema: `arcId: z.number().int().positive().optional()`, "`Arc.id` when numeric"), so a string arc id (e.g. `B`) is NOT written into `arcId`. For a string-id arc, leave `arcId` unset; the binding holds through the arc's `planes[].phases` instead.
 
-Each phase is authored as a normal `.phase.ts` with `status: 'backlog'`; the arc binds them via `arcId` + the arc's `planes`.
+Each phase is authored as a normal `.phase.ts` with `status: 'backlog'`; the arc binds them via the arc's `planes[].phases` (always) plus `arcId` (when the arc id is numeric). `crossValidate` (855) checks both directions: a numeric `arcId` must match an arc, and every `planes[].phases` number must match a real phase.
 
 ## Step 3: Fan out plan-quality review (parallel, read-mostly)
 
