@@ -260,6 +260,8 @@ The schema enforces gate results when `status: 'done'`. In one edit to the `.pha
 
 Then: `pnpm type-check` → `pnpm emit:phases` (regenerates `reviews/changelog.json`) → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop.
 
+**Arc-mode override.** When do-phase runs inside a phase-executor (signalled explicitly by `do-arc`), the executor still sets the phase-file fields (`status`, `gate`, `gateRounds`, `metrics`, `compromises`, `completedDate`) and commits the phase, but it SKIPS the backlog grooming above and the `pnpm emit:phases` regen. Both `roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable; the `do-arc` orchestrator grooms the backlog and runs `emit:phases` **serially** after each phase-executor returns, so concurrent phase completions never race those files. Inline (non-arc) runs do the grooming + emit themselves exactly as described above — unchanged.
+
 If `scripts/collect-phase-metrics.ts` exists, it fills `gate` and `metrics` automatically:
 ```bash
 npx tsx scripts/collect-phase-metrics.ts N
