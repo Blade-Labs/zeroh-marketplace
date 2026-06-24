@@ -72,3 +72,18 @@ At arc start, `TaskCreate` ONE task per member phase so the user watches the arc
 - **Task tier** — one task per phase-task, owned by do-phase.
 
 The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the flat task list. In **recursion mode**, the per-task tasks live under the `phase-executor` sub-agent, so the main session's task list shows ONLY the arc-level phase checklist — the whole point of recursion's context isolation.
+
+## Step 4: Execute the phases (dependency order, sequential in v1)
+
+Iterate the member phases in **dependency order** (respect each phase's `dependsOn`; a phase runs only after its deps are `done`). **v1 is sequential** — one phase fully completes before the next starts. Parallel cross-Plane execution is deferred (see the plan's "Deferred to follow-up"). For each phase, set its arc-level task `in_progress`, then run it by the selected mode:
+
+- **Orchestrator-inline mode** → run `do-phase` for the phase IN THE MAIN SESSION, in arc-mode (so do-phase skips backlog grooming + emit:phases per its Step-5 arc-mode override, and bounces escalations up as a `PhaseExecutionResult` instead of stopping to ask).
+- **Recursion mode** → spawn ONE `phase-executor` sub-agent (857) for the phase. It runs do-phase end to end and returns the `PhaseExecutionResult`.
+
+Either way, **collect the `PhaseExecutionResult`** and:
+1. **Surface its compromise roll-up to chat AS the phase ends** (the per-phase headline). Routine compromises/skipped/hardcoded are noted and **batched into the final arc-sweep** for disposition — they do not stop the arc.
+2. **HALT the arc immediately** on a hard interrupt: `status: "escalated"`, or a `hardStops` entry tagged `[MULTI-REPO]` or `[PRODUCT]`. Surface the architect's `escalation.question` + `options` and WAIT for the user — do not start the next phase.
+3. On `status: "done"`, set the phase's arc-level task `completed` and continue to the next phase.
+4. On `status: "failed"`, HALT and surface the blocking detail — the arc cannot proceed past a phase that could not be driven green.
+
+After a phase returns `done`, run the serialized shared-mutation step (Step 5) before the next phase begins.
