@@ -318,6 +318,19 @@ check('PhaseExecutionResult: rejects bad status', () => {
   )
 })
 
+check('executionResult: a phase persists its roll-up and a phase without it still parses', () => {
+  const withResult = definePhase({
+    ...basePhase,
+    status: 'backlog',
+    category: 'feature',
+    executionResult: { phase: 1, status: 'done', gateRounds: 2 },
+  } as never)
+  assertEq(withResult.executionResult?.status, 'done', 'persisted result status')
+  assertEq(withResult.executionResult?.compromises, [], 'result arrays default to []')
+  const without = definePhase({ ...basePhase, status: 'backlog', category: 'feature' } as never)
+  assertEq(without.executionResult, undefined, 'absent executionResult is fine (back-compat)')
+})
+
 console.log('\nregistry — arc cross-validation')
 
 const sampleArc = defineArc({

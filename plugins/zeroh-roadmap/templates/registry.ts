@@ -12,7 +12,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { ArcShape, type Arc, type Phase } from './schema'
+import { ArcShape, type Arc, type Phase, type PhaseExecutionResult } from './schema'
 
 export interface DiscoveryResult {
   phases: Phase[]
@@ -21,6 +21,11 @@ export interface DiscoveryResult {
 
 export interface ArcDiscoveryResult {
   arcs: Arc[]
+  errors: { file: string; error: string }[]
+}
+
+export interface ResultDiscoveryResult {
+  results: PhaseExecutionResult[]
   errors: { file: string; error: string }[]
 }
 
@@ -79,6 +84,26 @@ export async function discoverPhases(
   const phases = phasesWithFiles.map((p) => p.phase).sort((a, b) => a.phase - b.phase)
 
   return { phases, errors }
+}
+
+/**
+ * Re-read the persisted `PhaseExecutionResult` roll-ups from the phase files.
+ *
+ * `do-arc` accumulates these in-context as it runs an arc, but that array is
+ * ordinary conversation state — lost if the run is resumed or its context
+ * compacts (exactly the long-arc case recursion mode targets). do-phase arc-mode
+ * persists each phase's roll-up to `phase.executionResult`, so `arc-sweep` can
+ * reconstruct the set durably instead of depending on the in-context hand-off.
+ * Reuses `discoverPhases` so discovery/validation lives in one place.
+ */
+export async function discoverResults(
+  rootDir: string = path.resolve(process.cwd(), 'roadmap/phases'),
+): Promise<ResultDiscoveryResult> {
+  const { phases, errors } = await discoverPhases(rootDir)
+  const results = phases
+    .map((p) => p.executionResult)
+    .filter((r): r is PhaseExecutionResult => r != null)
+  return { results, errors }
 }
 
 /**

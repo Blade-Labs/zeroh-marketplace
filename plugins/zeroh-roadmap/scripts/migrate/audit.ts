@@ -86,6 +86,7 @@ function detectFeatures(content: string | null): Record<string, boolean> {
       arcShape: false,
       arcId: false,
       phaseExecutionResult: false,
+      executionResultField: false,
     }
   }
 
@@ -118,6 +119,7 @@ function detectFeatures(content: string | null): Record<string, boolean> {
     arcShape: /\bArcShape\b/.test(content),
     arcId: basePhaseBlock !== null && /\barcId:/.test(basePhaseBlock),
     phaseExecutionResult: /\bPhaseExecutionResultShape\b/.test(content),
+    executionResultField: basePhaseBlock !== null && /\bexecutionResult:/.test(basePhaseBlock),
   }
 }
 
@@ -343,6 +345,7 @@ function renderReport(args: {
     ['arcShape', 'ArcShape + defineArc — Arc as first-class data (named block of phases) (schema v7)'],
     ['arcId', 'Phase.arcId — optional back-reference from a phase to its Arc (schema v7)'],
     ['phaseExecutionResult', 'PhaseExecutionResultShape — typed per-phase roll-up do-arc aggregates (schema v7)'],
+    ['executionResultField', 'Phase.executionResult — persisted roll-up so a resumed arc is not lossy (schema v7)'],
   ]
 
   let schemaSection = ''
