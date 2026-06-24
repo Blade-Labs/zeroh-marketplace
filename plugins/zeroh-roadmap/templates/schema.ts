@@ -574,10 +574,21 @@ export type Backlog = BacklogTiered
  *    (3 hardcodes that should have been 1 config, two parallel JSX blocks, …).
  *  - `honestyRails`: honesty constraints the arc must uphold end-to-end (carried
  *    into every phase's gate), e.g. "no phase-numbered comments", "errors surfaced".
- *  - `planes`: named tracks of phases within the arc. Each plane is an ordered
- *    group of phase numbers; planes can run in parallel, phases within a plane
- *    are sequential. At least one plane, at least one phase per plane.
+ *  - `planes`: named groups of the arc's phases — the canonical storage form.
+ *    **v1 executes phases in `dependsOn` order** (Step 4 of do-arc); a plane is a
+ *    presentational grouping surfaced in the execution-prompt and the arc-level
+ *    task subjects (`Phase N — Plane X`). A future version will run separate
+ *    planes in parallel — until then the grouping does not change execution order.
+ *    Don't author this by hand for a single-track arc: pass a flat `phases:
+ *    number[]` to `defineArc` and it normalizes to one `Default` plane (the same
+ *    flat→tiered convenience `defineBacklog` provides). At least one plane, at
+ *    least one phase per plane.
  *  - `status`: arc lifecycle — planning → executing → swept → merged. */
+export const ArcPlaneShape = z.object({
+  name: z.string().min(1),
+  phases: z.array(z.number().int().positive()).min(1),
+})
+
 export const ArcShape = z.object({
   id: z.union([z.number().int().positive(), z.string().min(1)]),
   name: z.string().min(5),
@@ -585,18 +596,23 @@ export const ArcShape = z.object({
   worktree: z.string().min(1).optional(),
   singleSeams: z.array(z.string().min(10)).default([]),
   honestyRails: z.array(z.string().min(10)).default([]),
-  planes: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        phases: z.array(z.number().int().positive()).min(1),
-      }),
-    )
-    .min(1),
+  planes: z.array(ArcPlaneShape).min(1),
   status: z.enum(['planning', 'executing', 'swept', 'merged']).default('planning'),
 })
 
 export type Arc = z.output<typeof ArcShape>
+
+/** Flat authoring form: a single-track arc lists its phases directly via
+ *  `phases: number[]` instead of spelling out a one-plane `planes` array.
+ *  `defineArc` collapses it to a single `Default` plane — mirroring how
+ *  `defineBacklog` collapses a flat entry array into one `tier: 0` tier. */
+export const ArcFlatInputShape = ArcShape.omit({ planes: true }).extend({
+  phases: z.array(z.number().int().positive()).min(1),
+})
+
+/** Accepted `defineArc` input — either the canonical `planes` form or the flat
+ *  `phases` form. The output is always normalized to the `planes` form (`Arc`). */
+export const ArcInputShape = z.union([ArcShape, ArcFlatInputShape])
 
 // ── Factory ─────────────────────────────────────────────────────────────────
 
@@ -645,12 +661,25 @@ export function defineBacklog(input: z.input<typeof BacklogShape>): Backlog {
 }
 
 /**
+ * Normalize a flat `phases` input (single-track arc) to the canonical `planes`
+ * form. Shared by `defineArc` and the registry's defensive arc discovery so the
+ * two never drift on what "flat" means.
+ */
+export function normalizeArc(parsed: z.output<typeof ArcInputShape>): Arc {
+  if ('planes' in parsed) return parsed
+  const { phases, ...rest } = parsed
+  return { ...rest, planes: [{ name: 'Default', phases }] }
+}
+
+/**
  * Define an Arc with compile-time type checking and runtime Zod validation.
  * Use in .arc.ts files: `export default defineArc({ ... })`
  *
- * Applies ArcShape defaults (`singleSeams`/`honestyRails` → `[]`, `status` →
- * 'planning') and rejects an arc with no planes or an empty plane at import time.
+ * Accepts either the canonical `planes` form or the flat `phases` form (a
+ * single-track arc), applies defaults (`singleSeams`/`honestyRails` → `[]`,
+ * `status` → 'planning'), normalizes to the `planes` output, and rejects an arc
+ * with no phases or an empty plane at import time.
  */
-export function defineArc(input: z.input<typeof ArcShape>): Arc {
-  return ArcShape.parse(input)
+export function defineArc(input: z.input<typeof ArcInputShape>): Arc {
+  return normalizeArc(ArcInputShape.parse(input))
 }

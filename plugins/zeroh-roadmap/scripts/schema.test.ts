@@ -272,6 +272,20 @@ check('ArcShape: rejects bad status', () => {
   )
 })
 
+check('defineArc: flat `phases` form normalizes to one Default plane', () => {
+  const a = defineArc({ id: 'A', name: 'Flat arc', baseRef: 'main', phases: [855, 856] })
+  assertEq(a.planes.length, 1, 'one plane')
+  assertEq(a.planes[0].name, 'Default', 'plane named Default')
+  assertEq(a.planes[0].phases, [855, 856], 'phases carried into the Default plane')
+})
+
+check('defineArc: flat form rejects empty phases', () => {
+  assertThrows(
+    () => defineArc({ id: 'A', name: 'Flat arc', baseRef: 'main', phases: [] }),
+    'empty flat phases',
+  )
+})
+
 console.log('\nPhaseShape — arcId back-reference')
 
 check('arcId: a backlog phase with arcId 855 round-trips', () => {

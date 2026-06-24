@@ -6,7 +6,9 @@
  * or keep it as a reference.
  *
  * `defineArc` validates the shape at import time (the same Zod source of truth as
- * `definePhase`). Each `plane` is a track of phase numbers; `singleSeams` are the
+ * `definePhase`). A single-track arc lists its phases via the flat `phases:`
+ * field (shown here) — it normalizes to one `Default` plane. A multi-track arc
+ * declares named `planes: [{ name, phases }]` instead. `singleSeams` are the
  * "hold these single" invariants the pre-merge arc-sweep judges; `honestyRails`
  * are constraints the whole arc must uphold.
  */
@@ -17,7 +19,7 @@ export default defineArc({
   id: 'A',
   name: 'Example arc — replace with your own',
   baseRef: 'main',
-  planes: [{ name: 'core', phases: [1] }],
+  phases: [1],
   singleSeams: ['The shared config seam stays a single implementation across the arc.'],
   honestyRails: ['No phase-numbered comments; errors are surfaced, never swallowed.'],
 })
