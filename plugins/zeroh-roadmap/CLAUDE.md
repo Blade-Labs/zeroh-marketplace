@@ -23,4 +23,4 @@ User-repo artifacts:
 4. **Zero findings to pass.** Loop agents until clean.
 5. **Errors are the debugging interface.** Never swallow, summarize, or "clean up" errors.
 6. **`phase.kind` selects the gate set.** Picker rules in plan-phase Step 3.
-7. **One task = one commit.** `batchMode: true` is the only escape; sub-agent forks for big tasks are forbidden.
+7. **One task = one commit.** `batchMode: true` is the only escape; sub-agent forks that absorb phase tasks are forbidden — but the arc executor is one agent = one whole phase (not a fork per task), see do-phase Step 4.
