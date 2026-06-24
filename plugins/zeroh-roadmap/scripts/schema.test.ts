@@ -56,21 +56,6 @@ function check(label: string, fn: () => void): void {
   }
 }
 
-async function checkAsync(label: string, fn: () => Promise<void>): Promise<void> {
-  try {
-    await fn()
-    console.log(`  ok — ${label}`)
-  } catch (err) {
-    failures++
-    const message = err instanceof Error ? err.message : String(err)
-    console.error(
-      `  FAIL — ${label}\n` +
-        `         ${message}\n` +
-        `         remediation: inspect the case above against templates/registry.ts (discoverArcs).`,
-    )
-  }
-}
-
 function assertEq<T>(actual: T, expected: T, where: string): void {
   const a = JSON.stringify(actual)
   const e = JSON.stringify(expected)
@@ -338,10 +323,15 @@ check('crossValidate passes a phase whose arcId matches a discovered arc', () =>
 // discoverArcs is async — run it and the final summary inside an async tail so
 // the harness stays CJS-compatible (no top-level await).
 ;(async () => {
-  await checkAsync('discoverArcs over a missing roadmap/arcs dir returns empty', async () => {
+  try {
     const out = await discoverArcs('/no/such/dir')
     assertEq(out, { arcs: [], errors: [] }, 'missing dir')
-  })
+    console.log('  ok — discoverArcs over a missing roadmap/arcs dir returns empty')
+  } catch (err) {
+    failures++
+    console.error(`  FAIL — discoverArcs over a missing roadmap/arcs dir returns empty\n` +
+      `         ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} — ${failures} failure(s)`)
   process.exit(failures === 0 ? 0 : 1)
