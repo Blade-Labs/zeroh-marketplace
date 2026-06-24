@@ -197,7 +197,7 @@ When do-phase runs inside a phase-executor (orchestrated by `do-arc`, phase 858)
 - `gateRounds` ← the count of correctness rounds run (Rounds 1..N).
 - `status` ← `"escalated"` (with `escalation.question` + `options`) on a hard `ESCALATE_TO_USER` / `[MULTI-REPO]` / `[PRODUCT]` stop, else `"done"`.
 
-The structured result is an addition, not a replacement: the `compromises` string is the durable audit record; the `PhaseExecutionResult` is the machine-readable channel `do-arc` aggregates.
+The structured result is an addition, not a replacement: the `compromises` string is the durable human-readable audit record; the `PhaseExecutionResult` is the machine-readable channel `do-arc` aggregates. The executor returns it AND persists it to `phase.executionResult` (do-phase arc-mode Step 5), so `arc-sweep` can re-read it via `discoverResults()` if the arc resumes — the return value is the fast path, the persisted field the system of record.
 
 The user reviews the summary and decides (**inline mode only** — under arc-mode the `do-arc` orchestrator owns this stop; see SKILL.md Step 4b):
 - **"Mark done"** → proceed to phase completion

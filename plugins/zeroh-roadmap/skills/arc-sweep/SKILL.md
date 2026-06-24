@@ -21,7 +21,11 @@ arc-sweep runs **pre-merge**, on an unversioned, unarchived arc, aggregating the
 
 ### Hand-in contract (the inputs)
 
-`PhaseExecutionResult` (phase 855) is a typed roll-up that lives in the `do-arc` ORCHESTRATOR's context and is NOT written to phase files. So arc-sweep **RECEIVES the array of `PhaseExecutionResult` handed in by do-arc (858 Step 6)** — it cannot re-discover them (there is no `discoverResults()`). The free-text `compromises` strings ARE persisted on the phase files and are **re-read** from there. Aggregate both: the structured roll-ups in-context, the free-text strings from `roadmap/phases/phase-<n>.phase.ts`.
+`PhaseExecutionResult` (phase 855) is a typed roll-up. arc-sweep gets it two ways, in priority order:
+1. **In-context hand-in (the fast path):** `do-arc` (858 Step 6) hands in the array it accumulated as the arc ran. Use it when present and complete.
+2. **Durable fallback (`discoverResults()`):** each phase-executor persists its roll-up to `phase.executionResult` (do-phase arc-mode Step 5), so `discoverResults()` re-reads them from `roadmap/phases/phase-<n>.phase.ts`. **If the in-context array is missing or short** — a resumed arc, or context that compacted mid-run — reconstruct from `discoverResults()` rather than disposing a truncated set. The in-context array is an optimization; the persisted field is the system of record.
+
+The free-text `compromises` strings are also persisted on the phase files and are **re-read** from there. Aggregate all of it: the structured roll-ups (in-context, or via `discoverResults()`) plus the free-text strings.
 
 ### Dispose each item (release-sweep's vocabulary, NOT a new one)
 
