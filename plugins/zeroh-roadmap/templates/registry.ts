@@ -1,11 +1,13 @@
 /**
- * Phase discovery — glob *.phase.ts files and dynamic-import them.
+ * Phase & arc discovery — glob *.phase.ts / *.arc.ts files and dynamic-import them.
  *
  * Pattern: convention-based discovery via file pattern matching + dynamic
  * import + Zod validation. Scaffolded by roadmap-plugin scaffold-roadmap.sh.
  *
  * Duplicate phase numbers are reported as errors with BOTH colliding file
- * paths so the operator can bisect immediately.
+ * paths so the operator can bisect immediately. `crossValidate` is a pure
+ * (I/O-free) check that the discovered phases and arcs reference each other
+ * consistently.
  */
 
 import fs from 'node:fs'
