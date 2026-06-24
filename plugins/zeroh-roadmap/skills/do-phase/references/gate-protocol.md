@@ -9,7 +9,7 @@ Four stages, run in order:
 1. **Architect-critique pass** (one-shot, no looping). `architect-critique` agent hunts shortcuts, hardcodes, TODOs, and pre-existing issues in touched files. Auto-fixes everything within scope; surfaces only true hard-stops.
 2. **Round 0 — Simplify pass** (one-shot, no looping). `simplifier` agent removes dead scaffolding, speculative abstractions, and any over-extraction the critique may have introduced. Runs exactly once per phase.
 3. **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5). Mechanical checks + two parallel `code-reviewer` agents. Each round fixes findings and re-runs until zero actionable findings.
-4. **Compromise summary** — aggregate every task's persisted `transparencyReport` PLUS the critique's surfaced items and hard-stops. This is the ONLY human stop-point in the gate.
+4. **Compromise summary** — aggregate every task's persisted `transparencyReport` PLUS the critique's surfaced items and hard-stops. This is the ONLY human stop-point in the gate (inline mode; under arc-mode the `do-arc` orchestrator owns the stop — see SKILL.md Step 4b).
 
 After the gate passes, Step 5 fills the phase file with gate results, metrics, and completion date.
 
@@ -157,7 +157,7 @@ If the loop has not converged after 5 rounds, STOP and surface the remaining fin
 
 ---
 
-## Compromise Summary (the only human stop-point)
+## Compromise Summary (the only human stop-point — inline mode; under arc the orchestrator owns the stop, see SKILL.md Step 4b)
 
 **Chat-output cap: ~30 lines / ~1500 chars.** The full summary is persisted to the phase file's `compromises` field and the completion commit body. Don't repeat the long form in chat — render a head + tail with a `+N more in roadmap/phases/phase-N.phase.ts` pointer when the summary would overflow. Output-token truncation has historically blocked phase completion mid-summary; the file is the long-form surface, chat is the headline.
 
@@ -188,7 +188,18 @@ Tasks: X total | Y clean | Z with compromises
 - [SPECULATIVE] settlement.calculate() partial-month basis ambiguous
 ```
 
-The user reviews the summary and decides:
+### Structured return (arc-mode)
+
+When do-phase runs inside a phase-executor (orchestrated by `do-arc`, phase 858), the free-text summary above is **still** persisted to the phase file's `compromises` string (audit + release-sweep read it) — that does not change. **In addition**, the executor emits the same content as a typed `PhaseExecutionResult` (`PhaseExecutionResultShape` in `templates/schema.ts`, phase 855) as its return value, so the orchestrator can aggregate the arc without re-parsing markdown:
+- `compromises` / `skipped` / `hardcoded` ← the matching task transparency-report lines (one array entry per task line).
+- `surfaced` ← the architect-critique SURFACED entries.
+- `hardStops` ← the tagged HARD-STOPS (`[MULTI-REPO]` / `[SCOPED-OUT]` / `[PRODUCT]` / `[SPECULATIVE]`), each `{ tag, text }`.
+- `gateRounds` ← the count of correctness rounds run (Rounds 1..N).
+- `status` ← `"escalated"` (with `escalation.question` + `options`) on a hard `ESCALATE_TO_USER` / `[MULTI-REPO]` / `[PRODUCT]` stop, else `"done"`.
+
+The structured result is an addition, not a replacement: the `compromises` string is the durable audit record; the `PhaseExecutionResult` is the machine-readable channel `do-arc` aggregates.
+
+The user reviews the summary and decides (**inline mode only** — under arc-mode the `do-arc` orchestrator owns this stop; see SKILL.md Step 4b):
 - **"Mark done"** → proceed to phase completion
 - **"Address X first"** → fix the compromise, then re-run the summary
 - **"Plan follow-up"** → especially for `[MULTI-REPO]` hard-stops that need a phase in another repo
