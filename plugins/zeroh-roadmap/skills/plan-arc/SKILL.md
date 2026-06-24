@@ -64,3 +64,17 @@ Loop `plan-phase` over the reserved numbers, in **dependency / plane order**:
 - Set each planned phase's **`arcId`** (855) to the arc id, so the phase ↔ arc back-reference resolves.
 
 Each phase is authored as a normal `.phase.ts` with `status: 'backlog'`; the arc binds them via `arcId` + the arc's `planes`.
+
+## Step 3: Fan out plan-quality review (parallel, read-mostly)
+
+Review all member phases in parallel — one agent per phase running `review-phase` Mode A — each with **`--no-queue`**. This is the same safe fan-out shape `do-arc` uses, and it exists for one reason: `review-phase` Mode A's queue step WRITES the shared `roadmap/backlog.ts`, so N concurrent reviews would race it.
+
+**Edit-confinement invariant (state it explicitly):** `--no-queue` skips ONLY the queue write, not all writes. Each parallel review agent may edit ONLY its own `roadmap/phases/phase-{N}.phase.ts` (to fix its BLOCKER / NEEDS-WORK findings) and **MUST NOT touch `roadmap/backlog.ts`** or any other phase's file. The parallel stage is read-mostly: each agent reads broadly, writes only within its own phase file.
+
+Collect each phase's verdict (READY / NEEDS WORK / BLOCKER). Only READY phases proceed to queueing.
+
+## Step 4: Place the queue entries serially (single writer, one arc tier)
+
+After ALL parallel reviews return, the orchestrator ALONE places the READY phases into `roadmap/backlog.ts` — **serially, in one pass** — as a single arc tier whose label names the arc + its phase range. Respect the dependency floor + priority ordering (same rules as `review-phase` Mode A Step 8). **`roadmap/backlog.ts` has exactly one writer: this serial Step 4.** No parallel agent ever writes it.
+
+A phase that came back NEEDS WORK / BLOCKER is NOT queued — surface its findings; the user fixes and re-reviews before that phase joins the tier.
