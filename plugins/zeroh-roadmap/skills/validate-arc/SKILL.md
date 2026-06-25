@@ -11,7 +11,7 @@ metadata:
 
 `validate-arc` closes the arc loop. The per-phase gate proves the code is correct; `arc-sweep` proves the arc coheres. Neither drives the **shipped product** as a user and asks *did this do the job, at the bar that was set?* That is this skill: resolve the arc's `acceptanceCriteria`, drive the real flow at each criterion's tier with a **fresh independent judge** (`intent-validator` — never the agent that built it), and report **PASS** (all met) or **GAPS** (≥1 unmet) with concrete evidence.
 
-This skill **REPORTS ONLY** — it never merges and never fixes. (The corrective loop that turns a GAPS into fixes lives in Step 5, added by the corrective-loop phase; merge stays do-arc's call.)
+This skill **never merges** — merge stays do-arc's call. It reports the verdict, and on GAPS its bounded corrective loop (Step 5) turns gaps into fixes by reusing the normal, gated `plan-phase` + `do-phase` pipeline (never a parallel executor).
 
 ## Trigger
 
