@@ -23,7 +23,7 @@ The plugin owns the generic tier vocabulary; the **consumer repo owns the concre
 - live-host: npm run test:live                         # real model / masking against a running host
 ```
 
-Read that block, take the line for the criterion's `tier`, and run it (adapting the suite/target to the criterion's `surfaces`). **Never hardcode a command** — if the consumer's `CLAUDE.md` has no `Validation tiers` block, you cannot drive this tier: return a `gap` whose `whatsMissing` names the missing binding (do not guess a command). The consumer ships the wiring; you ship the judgment.
+Read that block, take the line for the criterion's `tier`, and run it (adapting the suite/target to the criterion's `surfaces`). **Never hardcode a command** — if the consumer's `CLAUDE.md` has no `Validation tiers` block, you cannot drive this tier: return a `gap` whose `whatsMissing` names the missing binding and whose `suggestedFix` is to add a `## Validation tiers` block to the consumer's `CLAUDE.md` binding that tier to a command (do not guess a command). The consumer ships the wiring; you ship the judgment.
 
 ## Drive the flow — by tier
 
@@ -50,8 +50,8 @@ For a subjective `bar` you are one judge of a panel — `validate-arc` may run s
 Return exactly the `IntentVerdict` shape (no prose wrapper): `{ criterionId, status: 'met' | 'gap', tierUsed, evidence, gap?: { whatsMissing, suggestedFix }, confidence: 'high' | 'medium' | 'low' }`.
 
 - `tierUsed` is the tier you **actually drove** (the tier-honesty rail — if you fell back, say so here).
-- `evidence` is **mandatory and concrete**: a transcript line, a screenshot path + what it shows, or a response excerpt. A verdict of `met` with vague or absent evidence is not a pass — downgrade it to a `gap` whose `whatsMissing` is "no concrete evidence the signal is met".
-- On `gap`, `suggestedFix` should be specific enough to seed a corrective phase's task (what to change, where the signal is missing).
+- `evidence` is **mandatory and concrete**: a transcript line, a screenshot path + what it shows, or a response excerpt. A verdict of `met` with vague or absent evidence is not a pass — downgrade it to a `gap` whose `whatsMissing` is "no concrete evidence the signal is met" and whose `suggestedFix` is to re-drive the criterion and capture the transcript / screenshot / response excerpt that proves the signal.
+- **Every `gap` verdict MUST carry BOTH `whatsMissing` AND `suggestedFix`** (each a real sentence ≥10 chars) — the shape rejects a gap missing either, so never emit a gap with only one. `suggestedFix` should be specific enough to seed a corrective phase's task (what to change, where the signal is missing).
 - `confidence` reflects how directly the evidence answers the criterion — `low` if you had to infer, `high` if you watched the signal appear.
 
 You judge ONE criterion. Drive it, look at what actually happened, and report what you saw — not what should have happened.
