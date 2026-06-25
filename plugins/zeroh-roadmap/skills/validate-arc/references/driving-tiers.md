@@ -2,7 +2,7 @@
 
 `validate-arc` and the `intent-validator` agent speak ONE generic tier vocabulary. The plugin owns the vocabulary; each **consumer repo binds each tier to a concrete command** in its `CLAUDE.md` `## Validation tiers` block (the prose-convention binding the judge reads). The plugin hardcodes no consumer command.
 
-A criterion's `tier` is the **cheapest tier that can honestly answer it**. Pick the cheapest that can actually see the `signal` and the `bar` — not the most thorough.
+A criterion's `tier` is the **cheapest tier that can honestly see its `signal` and `bar`** — not the most thorough.
 
 ## The three tiers
 
