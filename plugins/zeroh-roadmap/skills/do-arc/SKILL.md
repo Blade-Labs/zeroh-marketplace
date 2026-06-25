@@ -42,6 +42,7 @@ Deterministically emit `docs/arc-<id>-execution-prompt.md` from the resolved Arc
 4. `## Build sequence — one phase at a time, gate each` — the phases in dependency order, each with its `kind` (→ which gate) and task count.
 5. **`## Pre-merge arc sweep (MANDATORY)`** — render `arc.singleSeams` here as the "hold these single" invariants the sweep judges (one bullet per seam — a prose checklist, not a bare array dump).
 6. **`## Honesty rails specific to this arc`** — render `arc.honestyRails`, one bullet each.
+7. **`## Acceptance criteria — the intent to validate`** — render `arc.acceptanceCriteria`, one bullet per criterion as `**<job>** — signal: <signal> · tier: <tier> · bar: <bar>` (surfaces in parens). This is the experience-level Definition of Done the terminal `validate-arc` stage (Step 7) drives the real flow and judges against, so the directive ends on what "done for a user" means. If `arc.acceptanceCriteria` is empty, render the explicit line `_None declared — the validate-arc stage will be a no-op for this arc._` so the absence is honest, never a silently missing section.
 
 ## Step 2: Size the work and select the execution mode
 
