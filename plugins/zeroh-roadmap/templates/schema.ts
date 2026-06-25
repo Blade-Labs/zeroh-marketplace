@@ -582,6 +582,10 @@ export type Backlog = BacklogTiered
  *    (3 hardcodes that should have been 1 config, two parallel JSX blocks, …).
  *  - `honestyRails`: honesty constraints the arc must uphold end-to-end (carried
  *    into every phase's gate), e.g. "no phase-numbered comments", "errors surfaced".
+ *  - `acceptanceCriteria`: the experience-level Definition of Done — the JTBD as
+ *    observable signals (NOT per-phase code DoD). plan-arc authors them WITH the
+ *    user; the `validate-arc` stage drives the real flow and an independent judge
+ *    scores each. Optional (defaults `[]`) so existing arcs keep parsing.
  *  - `planes`: named groups of the arc's phases — the canonical storage form.
  *    **v1 executes phases in `dependsOn` order** (Step 4 of do-arc); a plane is a
  *    presentational grouping surfaced in the execution-prompt and the arc-level
@@ -597,6 +601,30 @@ export const ArcPlaneShape = z.object({
   phases: z.array(z.number().int().positive()).min(1),
 })
 
+/** A single experience-level acceptance criterion — the job-to-be-done expressed
+ *  as an OBSERVABLE signal, not per-phase code DoD. Structured rather than a bare
+ *  string because the `validate-arc` orchestrator must read `tier` to choose how to
+ *  drive the flow and `signal`/`bar` to brief the independent judge.
+ *  - `id`: stable handle (an `IntentVerdict` references it back).
+ *  - `job`: the JTBD in user terms ("draft a reply a rep can send unedited").
+ *  - `surfaces`: the surface id(s) the job lives on — generic strings the consumer
+ *    defines ("console", "office-pane", "chat", …).
+ *  - `signal`: the observable proof the job is fulfilled — what the judge looks for.
+ *  - `tier`: the cheapest tier that can HONESTLY judge it — `wired` (in-process
+ *    logic), `live-ui` (rendered UX needing a screenshot), `live-host` (real
+ *    model/masking). The consumer binds each tier to a concrete command.
+ *  - `bar`: the UX/quality bar beyond "it works" — what "good" feels like. */
+export const AcceptanceCriterionShape = z.object({
+  id: z.string().min(1),
+  job: z.string().min(10),
+  surfaces: z.array(z.string().min(1)).min(1),
+  signal: z.string().min(10),
+  tier: z.enum(['wired', 'live-ui', 'live-host']),
+  bar: z.string().min(10),
+})
+
+export type AcceptanceCriterion = z.output<typeof AcceptanceCriterionShape>
+
 export const ArcShape = z.object({
   id: z.union([z.number().int().positive(), z.string().min(1)]),
   name: z.string().min(5),
@@ -604,6 +632,7 @@ export const ArcShape = z.object({
   worktree: z.string().min(1).optional(),
   singleSeams: z.array(z.string().min(10)).default([]),
   honestyRails: z.array(z.string().min(10)).default([]),
+  acceptanceCriteria: z.array(AcceptanceCriterionShape).default([]),
   planes: z.array(ArcPlaneShape).min(1),
   status: z.enum(['planning', 'executing', 'swept', 'merged']).default('planning'),
 })

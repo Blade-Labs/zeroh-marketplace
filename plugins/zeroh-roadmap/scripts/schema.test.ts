@@ -30,6 +30,7 @@ import {
   BacklogShape,
   BacklogTierShape,
   ArcShape,
+  AcceptanceCriterionShape,
   PhaseExecutionResultShape,
 } from '../templates/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
@@ -283,6 +284,42 @@ check('defineArc: flat form rejects empty phases', () => {
   assertThrows(
     () => defineArc({ id: 'A', name: 'Flat arc', baseRef: 'main', phases: [] }),
     'empty flat phases',
+  )
+})
+
+console.log('\nArcShape — acceptanceCriteria')
+
+const sampleCriterion = {
+  id: 'ac-1',
+  job: 'draft a reply a rep can send without editing',
+  surfaces: ['office-pane'],
+  signal: 'the drafted reply appears in the pane with the masked names rehydrated',
+  tier: 'wired' as const,
+  bar: 'reads as finished — no raw error, no placeholder, no token left unresolved',
+}
+
+check('acceptanceCriteria: an arc round-trips a structured criterion', () => {
+  const a = defineArc({
+    id: 'B',
+    name: 'Arc Bravo',
+    baseRef: 'main',
+    planes: [{ name: 'core', phases: [855] }],
+    acceptanceCriteria: [sampleCriterion],
+  })
+  assertEq(a.acceptanceCriteria.length, 1, 'one criterion carried')
+  assertEq(a.acceptanceCriteria[0].tier, 'wired', 'tier preserved')
+  assertEq(a.acceptanceCriteria[0].surfaces, ['office-pane'], 'surfaces preserved')
+})
+
+check('acceptanceCriteria: an arc without it defaults to []', () => {
+  const a = defineArc({ id: 'B', name: 'Arc Bravo', baseRef: 'main', planes: [{ name: 'core', phases: [855] }] })
+  assertEq(a.acceptanceCriteria, [], 'defaults to empty array (non-breaking)')
+})
+
+check('acceptanceCriteria: rejects an unknown tier (fail-loud at the boundary)', () => {
+  assertThrows(
+    () => AcceptanceCriterionShape.parse({ ...sampleCriterion, tier: 'smoke' }),
+    'unknown tier',
   )
 })
 
