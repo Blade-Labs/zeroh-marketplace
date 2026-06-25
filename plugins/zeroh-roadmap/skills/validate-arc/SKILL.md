@@ -53,3 +53,22 @@ For a criterion whose `bar` is **subjective** (a rendered-UX / "feels finished" 
 3. Arc-level: **PASS** iff every criterion is MET; otherwise **GAPS** with the list of unmet criteria, each with its evidence and suggested fix.
 
 Report the result — per-criterion verdict, the evidence, the tier each was judged at (and any tier-honesty flag from Step 2), and the arc-level PASS/GAPS. **Stop here on PASS** (the arc met its intent — merge-readiness is do-arc's call). On GAPS, the corrective loop (Step 5) takes over.
+
+## Step 5: Corrective loop (on GAPS) — bounded
+
+A GAPS result is not the end; it is the input to a fix-and-re-check loop. The loop **reuses `plan-phase` + `do-phase`** — a gap becomes a normal, gated corrective phase. There is NO parallel executor and NO forked phase pipeline (the singleSeam).
+
+**When invoked from `do-arc` (Step 7), do NOT auto-correct unattended.** Surface the GAPS + the proposed corrective phase(s) and **PAUSE for the user's go** — auto-fixing an arc's intent gaps is a bigger commitment than a per-task gate fix, so it mirrors do-arc's "hold the merge for an explicit go". When invoked directly with the user present, proceed through the loop.
+
+Each round:
+
+1. **For each gap, author a corrective phase via `plan-phase`** — its `problem` is the gap's `whatsMissing`, its tasks seeded by the `suggestedFix`. **Arc membership:** vanilla `plan-phase` does NOT stamp `arcId` (that is `plan-arc` Step 2b's job), so the corrective step MUST set the new phase's `arcId` to this arc AND append its number to the arc entity's `planes[].phases` — otherwise `crossValidate` rejects the dangling `arcId`. Mirror exactly what `plan-arc` Step 2b does.
+2. **Execute each corrective phase via `do-phase`** (full gate — corrective work is still gated code).
+3. **Re-validate ONLY the affected criteria** — re-run Steps 2–4 for the criteria whose corrective phase landed, not the whole arc (the already-MET criteria didn't change; re-judging them all wastes the budget).
+4. **Loop** until PASS or the bound trips.
+
+**The bound (termination is guaranteed):**
+- `maxRounds` — default **2**. After this many correct→re-validate rounds, stop.
+- a **token/budget ceiling** — stop if the loop would exceed it.
+
+**Exhaustion exit (never spin, never silently pass):** when the bound trips with criteria still unmet, author **one backlog phase** capturing the **named residual gaps** (each with its evidence + suggested fix) and report `Shipped with N named residual gaps` so the human decides whether to merge with them or keep going. Never loop forever; never report PASS when a criterion is still unmet.
