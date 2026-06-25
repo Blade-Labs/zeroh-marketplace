@@ -43,9 +43,10 @@ The plugin reads your code, identifies the specific files and changes needed, an
 /review-phase N → verify the work was done correctly
 
 # Arc lifecycle (a named block of phases shipped as one unit)
-/plan-arc      → author the Arc + plan its phases (parallel review)
-/do-arc <id>   → build every phase in order, then the pre-merge sweep
+/plan-arc      → author the Arc (incl. acceptance criteria) + plan its phases (parallel review)
+/do-arc <id>   → build every phase in order, then the pre-merge sweep + intent validation
 /arc-sweep     → dispose arc debt + whole-arc seam review before merge
+/validate-arc  → drive the real flow + an independent judge vs the acceptance criteria
 ```
 
 Each phase is a `.phase.ts` file with typed tasks. The plugin creates them for you — you describe what you want, it reads the code and writes the phase:
@@ -115,8 +116,9 @@ On first use, the plugin scaffolds:
 | `/audit-roadmap` | Audit roadmap — read-only structural consistency checks |
 | `/release-sweep <version>` | Release prep — dispose outstanding debts, optionally archive |
 | `/plan-arc` | Plan arc — author the Arc entity, plan its phases, review in parallel |
-| `/do-arc <id>` | Execute arc — build every phase in order, serialize mutation, end in the pre-merge sweep |
+| `/do-arc <id>` | Execute arc — build every phase in order, serialize mutation, end in the pre-merge sweep + intent validation |
 | `/arc-sweep` | Pre-merge sweep — dispose arc debt + whole-arc seam review |
+| `/validate-arc <id>` | Terminal intent gate — drive the arc's real flow + an independent `intent-validator` judge against its acceptance criteria; PASS/GAPS + a bounded corrective loop |
 | `using-zeroh-roadmap` | Always-active router — dispatches the requests above to the right skill |
 
 ## Multi-platform
