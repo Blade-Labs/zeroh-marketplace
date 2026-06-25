@@ -101,8 +101,18 @@ Doing this in the orchestrator, one phase at a time, is what keeps concurrent ph
 
 Bake this into how you pace the arc: **don't rush.** Auto-compact handles a long arc's context for you — proceed phase-by-phase and let it. Delegation IS the context strategy: recursion mode hands each phase to a `phase-executor` so the main session stays light over a long arc. A calm phase-by-phase cadence beats trying to hold the whole arc in working memory at once.
 
-## Step 6: Arc-sweep and merge-readiness
+## Step 6: Arc-sweep
 
-When every member phase is `done`, the arc is built but NOT merged. Invoke **`arc-sweep`** (phase 860) — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises against `arc.singleSeams` and `arc.honestyRails`). Then report **merge-readiness** to the user.
+When every member phase is `done`, the arc is built but NOT merged. Invoke **`arc-sweep`** (phase 860) — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises against `arc.singleSeams` and `arc.honestyRails`). The sweep judges **code coherence**; the next step judges **fulfilled intent**.
 
-**Hold the merge for an explicit user go** — do-arc never merges on its own. On the user's go, complete the merge per the arc-sweep's report; until then the arc sits built-and-swept on its branch.
+## Step 7: Validate the arc against its intent
+
+After the sweep, run **`validate-arc <id>`** — the terminal intent gate. It drives the arc's real shipped flow against its `acceptanceCriteria` with an independent judge and returns **PASS** or **GAPS**. Two gates, in this order: sweep first (cheap, no live driving — is the code coherent and the debt disposed?), then validate (is the job done for a user, at the bar?). A code-clean arc that misses its intent is not merge-ready; neither is a fulfilled arc with undisposed debt.
+
+- **PASS** → proceed to merge-readiness below.
+- **GAPS** → surface them + the proposed corrective phases and **PAUSE for the user's go** — do NOT auto-correct unattended (mirroring the merge-hold; an arc's intent gaps are a bigger commitment than a per-task gate fix). On the user's go, run validate-arc's corrective loop (Step 5 there), then re-report.
+- **No `acceptanceCriteria`** → validate-arc is an explicit no-op; record that in the merge-readiness report (the arc declared no intent to validate), never a silent skip.
+
+## Step 8: Merge-readiness
+
+Report **merge-readiness** to the user — the arc-sweep disposition AND the validate-arc verdict (PASS / GAPS / no-op). **Hold the merge for an explicit user go** — do-arc never merges on its own. On the user's go, complete the merge per the arc-sweep's report; until then the arc sits built-swept-and-validated on its branch.
