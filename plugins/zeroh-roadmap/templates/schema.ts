@@ -639,6 +639,39 @@ export const ArcShape = z.object({
 
 export type Arc = z.output<typeof ArcShape>
 
+/** The independent judge's verdict on ONE acceptance criterion — the typed return
+ *  of the `intent-validator` agent that `validate-arc` `.parse()`s (never free prose).
+ *  - `criterionId`: the `AcceptanceCriterion.id` this judges.
+ *  - `status`: `met` or `gap`.
+ *  - `tierUsed`: which tier actually ran — the tier-honesty rail (a `bar`/UX
+ *    criterion reported `met` from a `wired` logic run alone is suspect).
+ *  - `evidence`: concrete proof the judge observed — a transcript line, a screenshot
+ *    path + what it shows, a live response body. Mandatory (min length 1): a `met`
+ *    with empty evidence is invalid by construction, so "met without evidence" can't
+ *    be expressed.
+ *  - `gap`: present iff `status === 'gap'` — what is missing + the suggested fix
+ *    (which seeds a corrective phase in the validate→correct loop).
+ *  - `confidence`: the judge's confidence in the verdict. */
+export const IntentVerdictShape = z
+  .object({
+    criterionId: z.string().min(1),
+    status: z.enum(['met', 'gap']),
+    tierUsed: z.enum(['wired', 'live-ui', 'live-host']),
+    evidence: z.string().min(1),
+    gap: z
+      .object({
+        whatsMissing: z.string().min(10),
+        suggestedFix: z.string().min(10),
+      })
+      .optional(),
+    confidence: z.enum(['high', 'medium', 'low']),
+  })
+  .refine((v) => v.status === 'met' || !!v.gap, {
+    message: 'a gap verdict must describe the gap (whatsMissing + suggestedFix)',
+  })
+
+export type IntentVerdict = z.output<typeof IntentVerdictShape>
+
 /** Flat authoring form: a single-track arc lists its phases directly via
  *  `phases: number[]` instead of spelling out a one-plane `planes` array.
  *  `defineArc` collapses it to a single `Default` plane — mirroring how

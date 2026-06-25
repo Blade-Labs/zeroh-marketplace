@@ -31,6 +31,7 @@ import {
   BacklogTierShape,
   ArcShape,
   AcceptanceCriterionShape,
+  IntentVerdictShape,
   PhaseExecutionResultShape,
 } from '../templates/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
@@ -320,6 +321,46 @@ check('acceptanceCriteria: rejects an unknown tier (fail-loud at the boundary)',
   assertThrows(
     () => AcceptanceCriterionShape.parse({ ...sampleCriterion, tier: 'smoke' }),
     'unknown tier',
+  )
+})
+
+console.log('\nIntentVerdictShape — the judge return')
+
+check('IntentVerdict: a met verdict parses', () => {
+  const v = IntentVerdictShape.parse({
+    criterionId: 'ac-1',
+    status: 'met',
+    tierUsed: 'wired',
+    evidence: 'transcript: the pane rendered "Dear Acme team" with the masked name rehydrated',
+    confidence: 'high',
+  })
+  assertEq(v.status, 'met', 'met preserved')
+  assertEq(v.gap, undefined, 'no gap on a met verdict')
+})
+
+check('IntentVerdict: a gap verdict carries whatsMissing + suggestedFix', () => {
+  const v = IntentVerdictShape.parse({
+    criterionId: 'ac-1',
+    status: 'gap',
+    tierUsed: 'live-ui',
+    evidence: 'screenshot pane-1.png: the reply area shows a raw 502 instead of a draft',
+    gap: { whatsMissing: 'the draft never renders on a rehydration miss', suggestedFix: 'surface the session-reset message instead of the 502' },
+    confidence: 'medium',
+  })
+  assertEq(v.gap?.whatsMissing.length > 0, true, 'gap detail carried')
+})
+
+check('IntentVerdict: a gap verdict WITHOUT a gap object fails the refine', () => {
+  assertThrows(
+    () => IntentVerdictShape.parse({ criterionId: 'ac-1', status: 'gap', tierUsed: 'wired', evidence: 'x', confidence: 'low' }),
+    'gap without gap object',
+  )
+})
+
+check('IntentVerdict: empty evidence fails (met-without-evidence is unexpressible)', () => {
+  assertThrows(
+    () => IntentVerdictShape.parse({ criterionId: 'ac-1', status: 'met', tierUsed: 'wired', evidence: '', confidence: 'high' }),
+    'empty evidence',
   )
 })
 
