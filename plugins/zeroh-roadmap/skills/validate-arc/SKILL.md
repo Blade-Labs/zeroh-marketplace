@@ -33,6 +33,8 @@ User says: `validate arc <id>`, `/validate-arc <id>`, `check arc <id> met its in
 
 ## Step 2: Tier-pick — honour each criterion's tier, with a tier-honesty down-check
 
+What each tier can and cannot honestly judge, its evidence, and the consumer-binding convention are in **`references/driving-tiers.md`** — read it once for the tier vocabulary the down-check below and the judge in Step 3 both rely on.
+
 Each criterion carries its `tier` (set at plan time — the cheapest tier that can honestly judge it). Honour it, but apply a **tier-honesty down-check**: if a criterion's `bar` is about the *rendered experience* (how it looks/feels) yet its `tier` is `wired` (in-process logic, which cannot see a screen), **flag it** — logic alone can't judge rendered UX. Surface the mismatch in the report and run the judge at the flagged tier anyway (the judge will itself return a gap naming the mismatch). Do not silently upgrade the tier; the mismatch is a planning signal worth seeing.
 
 ## Step 3: Fan out the judge — one `intent-validator` per criterion, in parallel
