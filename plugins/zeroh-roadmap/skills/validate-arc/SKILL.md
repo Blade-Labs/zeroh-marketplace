@@ -64,7 +64,7 @@ Each round:
 
 1. **For each gap, author a corrective phase via `plan-phase`** — its `problem` is the gap's `whatsMissing`, its tasks seeded by the `suggestedFix`. **Arc membership:** vanilla `plan-phase` does NOT stamp `arcId` (that is `plan-arc` Step 2b's job), so the corrective step MUST do what `plan-arc` Step 2b does: set the new phase's `arcId` to this arc AND append its number to the arc entity's `planes[].phases` — otherwise `crossValidate` rejects the dangling `arcId`.
 2. **Execute each corrective phase via `do-phase`** (full gate — corrective work is still gated code).
-3. **Re-validate ONLY the affected criteria** — re-run Steps 2–4 for the criteria whose corrective phase landed, not the whole arc (the already-MET criteria didn't change; re-judging them all wastes the budget).
+3. **Re-validate the affected criteria** (the bounded default) — re-run Steps 2–4 for the criteria whose corrective phase landed, not the whole arc, to spend the loop's budget on what actually changed. This is a deliberate bound, not a guarantee: a corrective phase *could* regress a previously-MET criterion. The backstop is two-layered — each corrective phase still passes its own `do-phase` gate (which guards the touched code), and do-arc's terminal validate stage re-runs the full arc before merge. If a corrective phase's blast radius plausibly reaches other criteria, widen the re-validation to include them.
 
 Loop until PASS or the bound trips.
 
