@@ -62,10 +62,11 @@ A GAPS result is not the end; it is the input to a fix-and-re-check loop. The lo
 
 Each round:
 
-1. **For each gap, author a corrective phase via `plan-phase`** — its `problem` is the gap's `whatsMissing`, its tasks seeded by the `suggestedFix`. **Arc membership:** vanilla `plan-phase` does NOT stamp `arcId` (that is `plan-arc` Step 2b's job), so the corrective step MUST set the new phase's `arcId` to this arc AND append its number to the arc entity's `planes[].phases` — otherwise `crossValidate` rejects the dangling `arcId`. Mirror exactly what `plan-arc` Step 2b does.
+1. **For each gap, author a corrective phase via `plan-phase`** — its `problem` is the gap's `whatsMissing`, its tasks seeded by the `suggestedFix`. **Arc membership:** vanilla `plan-phase` does NOT stamp `arcId` (that is `plan-arc` Step 2b's job), so the corrective step MUST do what `plan-arc` Step 2b does: set the new phase's `arcId` to this arc AND append its number to the arc entity's `planes[].phases` — otherwise `crossValidate` rejects the dangling `arcId`.
 2. **Execute each corrective phase via `do-phase`** (full gate — corrective work is still gated code).
 3. **Re-validate ONLY the affected criteria** — re-run Steps 2–4 for the criteria whose corrective phase landed, not the whole arc (the already-MET criteria didn't change; re-judging them all wastes the budget).
-4. **Loop** until PASS or the bound trips.
+
+Loop until PASS or the bound trips.
 
 **The bound (termination is guaranteed):**
 - `maxRounds` — default **2**. After this many correct→re-validate rounds, stop.
