@@ -288,6 +288,12 @@ check('defineArc: flat form rejects empty phases', () => {
   )
 })
 
+// MIRROR INVARIANT: AcceptanceCriterionShape + IntentVerdictShape are duplicated
+// byte-identical in each consumer's lib/roadmap/schema.ts (this template is the
+// source of truth; there is no generator copying it). The two copies are hand-synced
+// and the VALIDATE arc honestyRail enforces it at review — this plugin test env can't
+// read a consumer's tree, so we assert the shapes here and trust the sync, rather than
+// fake a cross-repo diff the runner cannot do.
 console.log('\nArcShape — acceptanceCriteria')
 
 const sampleCriterion = {
