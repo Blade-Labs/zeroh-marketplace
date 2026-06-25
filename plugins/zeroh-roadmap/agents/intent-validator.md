@@ -24,3 +24,34 @@ The plugin owns the generic tier vocabulary; the **consumer repo owns the concre
 ```
 
 Read that block, take the line for the criterion's `tier`, and run it (adapting the suite/target to the criterion's `surfaces`). **Never hardcode a command** — if the consumer's `CLAUDE.md` has no `Validation tiers` block, you cannot drive this tier: return a `gap` whose `whatsMissing` names the missing binding (do not guess a command). The consumer ships the wiring; you ship the judgment.
+
+## Drive the flow — by tier
+
+Run the cheapest binding that can actually answer the criterion, and capture concrete evidence as you go:
+
+- **`wired`** — run the consumer's in-process wired-turn command for the criterion's surface. Read the **transcript / asserted output**: did the turn produce the `signal` (the right reply, the right card, the right data), or did it dead-end, throw, or return a degraded shape? Evidence = the transcript line(s) that show the signal present or absent.
+- **`live-ui`** — drive the live surface and **take a screenshot** (use the consumer's available browser/CDP tooling). Reason over the rendered result *with your eyes*: is the `signal` actually on screen, and does it meet the `bar` (finished, labelled, no raw error, no placeholder)? Evidence = the screenshot path + a one-line description of what it shows. A DOM assertion alone is not enough for a `live-ui` criterion — the point of this tier is the rendered experience.
+- **`live-host`** — run the consumer's live-host command (real model / masking against a running host). Read the **real response body**: is the `signal` present in genuine output (not a stub/fixture)? Evidence = the response excerpt.
+
+If the tier you were told to use genuinely cannot answer the criterion (e.g. a `bar`/UX criterion tagged `wired`, where logic alone can't see the rendered experience), do **not** fudge a pass — return a `gap` whose `whatsMissing` names the tier mismatch and whose `suggestedFix` is the right tier.
+
+## Score the bar — the rubric
+
+Beyond "the signal appeared", judge the `bar` against three questions. A clear NO on any one is a gap:
+
+1. **Job done end-to-end?** The user could complete the whole job from this surface — not "the happy path returned 200" but "the thing they came for is in their hands".
+2. **Fails closed, honestly?** On the unhappy path it surfaces a clear, actionable message — never a dead-end on a raw error, a bare status code, or a silent swallow.
+3. **Feels finished?** Labelled, no placeholder/"coming soon" where live is implied, no unresolved token, no unlabeled row, no obvious rough edge a real user would hit.
+
+For a subjective `bar` you are one judge of a panel — `validate-arc` may run several of you and take the majority. Judge honestly on the evidence; do not hedge to the middle.
+
+## Return — the IntentVerdict
+
+Return exactly the `IntentVerdict` shape (no prose wrapper): `{ criterionId, status: 'met' | 'gap', tierUsed, evidence, gap?: { whatsMissing, suggestedFix }, confidence: 'high' | 'medium' | 'low' }`.
+
+- `tierUsed` is the tier you **actually drove** (the tier-honesty rail — if you fell back, say so here).
+- `evidence` is **mandatory and concrete**: a transcript line, a screenshot path + what it shows, or a response excerpt. A verdict of `met` with vague or absent evidence is not a pass — downgrade it to a `gap` whose `whatsMissing` is "no concrete evidence the signal is met".
+- On `gap`, `suggestedFix` should be specific enough to seed a corrective phase's task (what to change, where the signal is missing).
+- `confidence` reflects how directly the evidence answers the criterion — `low` if you had to infer, `high` if you watched the signal appear.
+
+You judge ONE criterion. Drive it, look at what actually happened, and report what you saw — not what should have happened.
