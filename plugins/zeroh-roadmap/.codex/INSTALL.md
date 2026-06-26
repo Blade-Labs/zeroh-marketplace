@@ -22,7 +22,7 @@
 
 After setup, the following skills should be discoverable:
 - 12 roadmap skills (do-phase, plan-phase, review-phase, code-review, full-code-review, test-strategy, audit-roadmap, release-sweep, plan-arc, do-arc, arc-sweep, validate-arc)
-- 8 specialist agents (code-reviewer, software-architect, software-developer, test-engineer, architect-critique, simplifier, phase-executor, intent-validator)
+- 9 specialist agents (code-reviewer, software-architect, software-developer, test-engineer, architect-critique, simplifier, phase-executor, intent-validator, ux-designer)
 - 1 bootstrap skill (using-zeroh-roadmap)
 
 ## Update

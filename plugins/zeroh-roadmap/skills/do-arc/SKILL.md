@@ -42,7 +42,8 @@ Deterministically emit `roadmap/arc-prompts/arc-<id>-execution-prompt.md` from t
 4. `## Build sequence — one phase at a time, gate each` — the phases in dependency order, each with its `kind` (→ which gate) and task count.
 5. **`## Pre-merge arc sweep (MANDATORY)`** — render `arc.singleSeams` here as the "hold these single" invariants the sweep judges (one bullet per seam — a prose checklist, not a bare array dump).
 6. **`## Honesty rails specific to this arc`** — render `arc.honestyRails`, one bullet each.
-7. **`## Acceptance criteria — the intent to validate`** — render `arc.acceptanceCriteria`, one bullet per criterion as `**<job>** — signal: <signal> · tier: <tier> · bar: <bar>` (surfaces in parens). This is the experience-level Definition of Done the terminal `validate-arc` stage (Step 7) drives the real flow and judges against, so the directive ends on what "done for a user" means. If `arc.acceptanceCriteria` is empty, render the explicit line `_None declared — the validate-arc stage will be a no-op for this arc._` so the absence is honest, never a silently missing section.
+7. **`## Design spec — build against these`** — render `arc.designRefs`, one bullet per ref as `**<kind>/<status>** \`<ref>\` — <summary>`. This is the confirmed design the design-first gate produced (plan-arc Step 1b): each phase is planned and built AGAINST it, and `arc-sweep` judges the build's conformance to it. If `arc.designRefs` is empty, render the explicit line `_None — design gate skipped (mechanical arc), or no design recorded._` so the absence is honest, never a silently missing section.
+8. **`## Acceptance criteria — the intent to validate`** — render `arc.acceptanceCriteria`, one bullet per criterion as `**<job>** — signal: <signal> · tier: <tier> · bar: <bar>` (surfaces in parens). This is the experience-level Definition of Done the terminal `validate-arc` stage (Step 7) drives the real flow and judges against, so the directive ends on what "done for a user" means. If `arc.acceptanceCriteria` is empty, render the explicit line `_None declared — the validate-arc stage will be a no-op for this arc._` so the absence is honest, never a silently missing section.
 
 ## Step 2: Size the work and select the execution mode
 
@@ -103,7 +104,7 @@ Bake this into how you pace the arc: **don't rush.** Auto-compact handles a long
 
 ## Step 6: Arc-sweep
 
-When every member phase is `done`, the arc is built but NOT merged. Invoke **`arc-sweep`** (phase 860) — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises against `arc.singleSeams` and `arc.honestyRails`). The sweep judges **code coherence**; the next step judges **fulfilled intent**.
+When every member phase is `done`, the arc is built but NOT merged. Invoke **`arc-sweep`** (phase 860) — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises and judges the arc against `arc.singleSeams`, `arc.honestyRails`, and `arc.designRefs` — design-conformance: did the build follow the confirmed design?). The sweep judges **code coherence**; the next step judges **fulfilled intent**.
 
 **Deferred-test reminder.** Under arc-mode the per-phase gates ran only the tests *relevant* to each phase's diff (the fast inner loop — see `do-phase` gate-protocol's arc-mode test scope); the **full unit + integration suite (+ e2e for a release-kind arc) is deferred to the single arc-end run in Step 8**, AFTER this sweep and validate-arc, because both of those can still land code (a sweep RESOLVE-NOW fix, a validate-arc corrective phase) and an earlier full-suite run would be stale. Do not run the full suite here.
 

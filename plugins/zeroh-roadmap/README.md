@@ -43,11 +43,13 @@ The plugin reads your code, identifies the specific files and changes needed, an
 /review-phase N → verify the work was done correctly
 
 # Arc lifecycle (a named block of phases shipped as one unit)
-/plan-arc      → author the Arc (incl. acceptance criteria) + plan its phases (parallel review)
+/plan-arc      → author the Arc + design-first gate (reuse-or-design the architecture & UX, confirmed) → plan phases against the design (parallel review)
 /do-arc <id>   → build every phase in order, then the pre-merge sweep + intent validation
-/arc-sweep     → dispose arc debt + whole-arc seam review before merge
+/arc-sweep     → dispose arc debt + whole-arc seam + design-conformance review before merge
 /validate-arc  → drive the real flow + an independent judge vs the acceptance criteria
 ```
+
+The arc lifecycle is a **design → build → validate** loop: `plan-arc`'s **design-first gate** (Step 1b) classifies the arc and, for a new pattern or a surface, has the `software-architect` (architecture) and the `ux-designer` (UX) reuse an existing design or design a new one — confirmed by you — and records it as the arc's `designRefs`. Phases then plan and build *against* that confirmed design, and `arc-sweep` judges the build's conformance to it.
 
 Each phase is a `.phase.ts` file with typed tasks. The plugin creates them for you — you describe what you want, it reads the code and writes the phase:
 
