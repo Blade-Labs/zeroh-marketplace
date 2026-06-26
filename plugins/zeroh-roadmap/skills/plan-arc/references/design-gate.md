@@ -15,7 +15,7 @@ Fires when the arc introduces something the codebase has no shape for yet:
 Does NOT fire for **mechanical extension** of an existing pattern: adding the Nth instance of an established shape (one more tool on an existing registry, one more field on an existing contract, one more card mirroring the established card pattern), a rename/move, a config/threshold change, a docs/test-only change. The test: *would a reviewer say "this follows the existing X pattern" — or "there is no X pattern here yet"?* The former is mechanical; the latter trips the gate.
 
 ### UX surface? (→ UX sub-gate)
-Fires when the arc adds or materially changes a **user-facing surface** — a new view/page/pane, a new interaction flow, a new card type, a visibly restructured layout. Does NOT fire for a copy tweak, a non-visual fix, or a backend-only change with no rendered delta. *(The UX sub-gate contract is documented in §3, wired into Step 1b by the UX plane.)*
+Fires when the arc adds or materially changes a **user-facing surface** — a new view/page/pane, a new interaction flow, a new card type, a visibly restructured layout. Does NOT fire for a copy tweak, a non-visual fix, or a backend-only change with no rendered delta. *(The UX sub-gate contract is documented in §3.)*
 
 ### Recording a skip
 If NEITHER fires, write the skip explicitly where the arc's reasoning lives (a comment in the `.arc.ts`, or the planning chat): `design gate: skipped — no new pattern / no surface (mechanical arc)`. The skip is never silent — proportionality is a recorded decision, not an absence.
@@ -37,7 +37,18 @@ The orchestrator writes every confirmed designRef onto the Arc entity (`roadmap/
 
 ## 3. The UX reuse-or-design contract
 
-*(Stub — filled by the UX plane, which adds the senior UX role consulted when the classifier finds a surface, the prose-vs-preview decision, and how the UX designRef is recorded + confirmed. Until then the UX sub-gate is not yet wired into Step 1b.)*
+Run by the `ux-designer` agent when the classifier finds a **surface**. Same advise/record split as §2: the designer ADVISES + produces the artifact; the **orchestrator** records the designRef; the **user** confirms.
+
+**Reuse-first, within the consumer's UX canon.** The designer reads the consumer's UX standards (from the "## Design homes" binding — §4) and designs **inside** them, never a parallel design language:
+1. **Search** the canon for an existing surface pattern + components that fit.
+2. **If they fit → reuse.** Record `{ kind: 'ux', ref: '<layout-note path>', status: 'reused', summary }`; the layout cites the canonical pattern and reuses existing components.
+3. **If none fits → design.** The designer creates the new layout (structure, hierarchy, the honest empty/loading/error/not-yet-measured states, accessibility) within the canon's idiom, and records `{ …, status: 'designed', summary }`.
+
+**Prose layout note vs static HTML preview — the designer's call, per arc:**
+- **Prose layout note** for a tweak or an extension of an existing surface — the user can picture it from what exists.
+- **Static HTML preview** for a **net-new** surface, where seeing it beats reading about it (produced with the `frontend-design` skill where available). `ref` then points at the preview file.
+
+Pick the lighter option that lets the user actually judge the design. The UX designRef is then **confirmed by the user** (Step 1b pauses) and **recorded by the orchestrator** onto the arc — same as the architecture designRef.
 
 ## 4. Consumer-agnostic — the design HOMES
 

@@ -78,7 +78,12 @@ If **NEITHER** holds, record an explicit skip in the arc's reasoning (a comment 
 
 The **orchestrator** (not the architect — the architect advises, the orchestrator records) writes the confirmed designRef(s) onto the Arc entity (`roadmap/arcs/<id>.arc.ts` → `designRefs`, the 900 contract) — the design spec that, once their planes wire it, Step 2b plans each member phase against and `arc-sweep` judges the build's conformance to.
 
-> **Seam for Plane B / C:** for a surface arc, the **UX sub-gate** runs here too — after the architecture sub-gate — consulting a senior `ux-designer` and pausing for confirmation (wired in the UX plane). Step 2b plans every member phase AGAINST the confirmed `designRefs` (wired in the plan-against-design plane).
+**(3) UX sub-gate** — when the classifier found a **surface** (run after the architecture sub-gate). The UX standards are the consumer's, bound the same way: the `CLAUDE.md` "## Design homes" block (an absent block fails loud — surface + STOP, don't guess — exactly as above). Then:
+1. Spawn the **`ux-designer`** agent — an advisor, like the architect. It reads the consumer's UX canon, designs the surface's layout within it, and **decides per arc** whether a prose layout note or a static HTML preview is warranted (its call — a preview for a net-new surface, prose for a tweak/extension). It produces that artifact and returns a recommended UX designRef.
+2. The **orchestrator** records the UX designRef `{ kind: 'ux', ref: <layout-note / preview path>, status: 'reused' | 'designed', summary }` onto the arc (`designRefs`) — `reused` when the surface follows an existing canonical pattern, `designed` when a new layout was created.
+3. **Confirm.** PAUSE for the user's explicit go on the UX design before continuing — the user is the design gate, same as the architecture sub-gate. A no-surface arc skips this sub-gate (record the skip; never silent).
+
+> **Seam for Plane C:** Step 2b plans every member phase AGAINST the confirmed `designRefs` (wired in the plan-against-design plane).
 
 ## Step 2a: Reserve a contiguous phase-number block FIRST
 
