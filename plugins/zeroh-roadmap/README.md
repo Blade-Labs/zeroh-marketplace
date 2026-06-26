@@ -117,9 +117,9 @@ On first use, the plugin scaffolds:
 | `/test-strategy` | Test conventions — pyramid, coverage targets, quality bar |
 | `/audit-roadmap` | Audit roadmap — read-only structural consistency checks |
 | `/release-sweep <version>` | Release prep — dispose outstanding debts, optionally archive |
-| `/plan-arc` | Plan arc — author the Arc entity, plan its phases, review in parallel |
+| `/plan-arc` | Plan arc — author the Arc + design-first gate (reuse-or-design the architecture & UX, confirmed), then plan phases against the design (parallel review) |
 | `/do-arc <id>` | Execute arc — build every phase in order, serialize mutation, end in the pre-merge sweep + intent validation |
-| `/arc-sweep` | Pre-merge sweep — dispose arc debt + whole-arc seam review |
+| `/arc-sweep` | Pre-merge sweep — dispose arc debt + whole-arc seam + design-conformance review |
 | `/validate-arc <id>` | Terminal intent gate — drive the arc's real flow + an independent `intent-validator` judge against its acceptance criteria; PASS/GAPS + a bounded corrective loop |
 | `using-zeroh-roadmap` | Always-active router — dispatches the requests above to the right skill |
 
