@@ -60,6 +60,26 @@ Decide WITH the user: the `planes` (ordered waves), the `singleSeams` (what must
 
 **Authoring `acceptanceCriteria` — elicit, don't invent.** These are the experience-level Definition of Done the terminal `validate-arc` stage checks; author them WITH the user, in user-outcome terms, NOT after the fact (grading against criteria invented at validate time is circular). For each: state the `job` (the JTBD — "draft a reply a rep can send unedited", not "the draft endpoint returns 200"), the `signal` (the observable proof it's fulfilled — what the judge looks for), and the `bar` (what "good" feels like beyond "it works" — finished, no raw error, no placeholder). Assign the `surfaces` it lives on, and pick the **cheapest `tier` that can honestly judge it** (the stub above glosses `wired` / `live-ui` / `live-host`). Prefer **one or two sharp criteria over ten vague ones** — a criterion the judge can't get concrete evidence for is noise. The field is optional (defaults `[]`), but an arc with none makes its validate stage a no-op — say so deliberately rather than leaving it empty by accident.
 
+## Step 1b: Design-first gate (classify → architecture reuse-or-design → confirm)
+
+The Arc entity exists (Step 1) but NO phase is planned yet. Before reserving numbers (Step 2a), run the **design-first gate** — the front-gate mirror of the terminal `validate-arc` stage: validate-arc asks "did it meet the intent?"; this asks "was it DESIGNED right — the best long-term architecture (and UX, where there's a surface) — before a line was written?". The gate is **proportionate**: triggered by what the arc introduces and honestly **skipped (and recorded)** for a mechanical arc — never ceremony by default, never a silent bypass. The classifier criteria + the architect's reuse-or-design contract live in **`references/design-gate.md`**.
+
+**(1) Classify the arc.** Decide (criteria in `references/design-gate.md`):
+- **New pattern?** Does the arc introduce a new tool, a new architectural pattern, or a new cross-module seam — vs. mechanically extending one that already exists?
+- **UX surface?** Does the arc add or materially change a user-facing surface?
+
+If **NEITHER** holds, record an explicit skip in the arc's reasoning (a comment in the `.arc.ts` or the planning chat) — `design gate: skipped — no new pattern / no surface (mechanical arc)` — and proceed to Step 2a. Don't invent design ceremony for a mechanical change.
+
+**(2) Architecture sub-gate** — when the arc introduces a new pattern / tool / seam. The architecture design **home is the consumer's** canonical architecture doc set; the plugin hardcodes no path — read the binding from the consumer's `CLAUDE.md` "## Design homes" block (the consumer-agnostic seam, exactly like the `validate-arc` tier bindings). Then:
+1. Spawn the **`software-architect`** agent to **search** that doc set for a pattern that already fits the arc's new capability.
+2. **Reuse-first:** an existing pattern fits → record a designRef `{ kind: 'architecture', ref: <doc section>, status: 'reused', summary }`. No new pattern is invented when one already exists (the pattern-reuse-first honesty rail).
+3. **Design-when-needed:** none fits → the architect designs the long-term-correct pattern and **extends** the arch doc set through the consumer's own doc governance (e.g. its canon-sync flow), then records `{ …, status: 'designed', summary }` with the justification.
+4. **Confirm.** PAUSE for the user's explicit go on the architecture design before continuing — the user is the design gate (mirrors the merge-hold + the validate-arc GAPS pause). Do not plan phases against an unconfirmed design.
+
+Write the resulting designRef(s) onto the Arc entity (`roadmap/arcs/<id>.arc.ts` → `designRefs`, the 900 contract) so Step 2b can plan each phase against them and `arc-sweep` can judge the build's conformance.
+
+> **Seam for Plane B / C:** for a surface arc, the **UX sub-gate** runs here too — after the architecture sub-gate — consulting a senior `ux-designer` and pausing for confirmation (wired in the UX plane). Step 2b plans every member phase AGAINST the confirmed `designRefs` (wired in the plan-against-design plane).
+
 ## Step 2a: Reserve a contiguous phase-number block FIRST
 
 `plan-phase` Step 1 computes the "next number" from the filesystem with **no lock** — so recomputing it per iteration can collide under the arc's volatile namespace (each new phase file shifts the max). Reserve the block ONCE, up front:
