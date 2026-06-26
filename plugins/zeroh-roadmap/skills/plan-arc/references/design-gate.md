@@ -22,7 +22,7 @@ If NEITHER fires, write the skip explicitly where the arc's reasoning lives (a c
 
 ## 2. The architecture reuse-or-design contract
 
-The `software-architect` agent JUDGES (it searches + recommends under its two-verdict Decision Contract and has no write tools); the **plan-arc orchestrator** WRITES (extends the doc, records the designRef). Keep that split — the architect never edits files.
+Split the roles: the `software-architect` agent ADVISES (the gate tasks it to search the docs and recommend reuse-or-design — a search-and-recommend role, distinct from its compromise-breaking Decision Contract); the **plan-arc orchestrator** WRITES (extends the doc, records the designRef). Keep that split by gate design — the architect's output is a recommendation, the orchestrator owns every file write.
 
 **Reuse-first is the honest default.** The architect SEARCHES the consumer's architecture doc set BEFORE designing anything:
 1. **Search** the doc home (see §4 — read it from the consumer binding) for a pattern that already fits the new capability.
