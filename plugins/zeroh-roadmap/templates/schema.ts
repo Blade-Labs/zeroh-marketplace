@@ -587,6 +587,11 @@ export type Backlog = BacklogTiered
  *    observable signals (NOT per-phase code DoD). plan-arc authors them WITH the
  *    user; the `validate-arc` stage drives the real flow and an independent judge
  *    scores each. Optional (defaults `[]`) so existing arcs keep parsing.
+ *  - `designRefs`: what the arc was DESIGNED against — the front-gate record
+ *    (mirror of `acceptanceCriteria`'s back gate). plan-arc's design-first gate
+ *    writes one per design decision: an existing pattern it `reused` or a new one
+ *    it `designed`; plan-phase phases cite them and `arc-sweep` judges the build's
+ *    conformance. Optional (defaults `[]`) so existing arcs keep parsing.
  *  - `planes`: named groups of the arc's phases — the canonical storage form.
  *    **v1 executes phases in `dependsOn` order** (Step 4 of do-arc); a plane is a
  *    presentational grouping surfaced in the execution-prompt and the arc-level
@@ -626,6 +631,26 @@ export const AcceptanceCriterionShape = z.object({
 
 export type AcceptanceCriterion = z.output<typeof AcceptanceCriterionShape>
 
+/** One design decision the arc was built against — the design-first gate's record,
+ *  structured (not a prose note) so plan-phase can cite the exact ref a phase
+ *  implements and `arc-sweep` can judge conformance per-ref.
+ *  - `kind`: `architecture` (a system pattern in the consumer's arch docs) or `ux`
+ *    (a layout/preview in the consumer's UX canon).
+ *  - `ref`: a pointer to the design home — an arch-doc section path, or a UX design
+ *    note / preview path.
+ *  - `status`: `reused` (an existing pattern was cited) or `designed` (a new
+ *    pattern/layout was created and the doc extended) — drives the pattern-reuse-first
+ *    honesty rail.
+ *  - `summary`: one line — what the pattern/design IS, so a reader needn't open the ref. */
+export const DesignRefShape = z.object({
+  kind: z.enum(['architecture', 'ux']),
+  ref: z.string().min(1),
+  status: z.enum(['reused', 'designed']),
+  summary: z.string().min(10),
+})
+
+export type DesignRef = z.output<typeof DesignRefShape>
+
 export const ArcShape = z.object({
   id: z.union([z.number().int().positive(), z.string().min(1)]),
   name: z.string().min(5),
@@ -634,6 +659,7 @@ export const ArcShape = z.object({
   singleSeams: z.array(z.string().min(10)).default([]),
   honestyRails: z.array(z.string().min(10)).default([]),
   acceptanceCriteria: z.array(AcceptanceCriterionShape).default([]),
+  designRefs: z.array(DesignRefShape).default([]),
   planes: z.array(ArcPlaneShape).min(1),
   status: z.enum(['planning', 'executing', 'swept', 'merged']).default('planning'),
 })

@@ -31,6 +31,7 @@ import {
   BacklogTierShape,
   ArcShape,
   AcceptanceCriterionShape,
+  DesignRefShape,
   IntentVerdictShape,
   PhaseExecutionResultShape,
 } from '../templates/schema'
@@ -327,6 +328,51 @@ check('acceptanceCriteria: rejects an unknown tier (fail-loud at the boundary)',
   assertThrows(
     () => AcceptanceCriterionShape.parse({ ...sampleCriterion, tier: 'smoke' }),
     'unknown tier',
+  )
+})
+
+// MIRROR INVARIANT (designRefs): DesignRefShape is likewise duplicated byte-identical
+// into each consumer's lib/roadmap/schema.ts — same hand-sync discipline as
+// AcceptanceCriterionShape above (no generator); the DESIGN arc honestyRail enforces it
+// at review. Asserted here against the template; the cross-repo sync is trusted, not faked.
+console.log('\nArcShape — designRefs')
+
+const sampleDesignRef = {
+  kind: 'architecture' as const,
+  ref: 'docs/architecture/src/governed-connectors-and-tools.md#tool-loop',
+  status: 'reused' as const,
+  summary: 'the generic governed tool-call loop pattern, reused for this arc',
+}
+
+check('designRefs: an arc round-trips a structured design ref', () => {
+  const a = defineArc({
+    id: 'B',
+    name: 'Arc Bravo',
+    baseRef: 'main',
+    planes: [{ name: 'core', phases: [855] }],
+    designRefs: [sampleDesignRef],
+  })
+  assertEq(a.designRefs.length, 1, 'one design ref carried')
+  assertEq(a.designRefs[0].kind, 'architecture', 'kind preserved')
+  assertEq(a.designRefs[0].status, 'reused', 'status preserved')
+})
+
+check('designRefs: an arc without it defaults to []', () => {
+  const a = defineArc({ id: 'B', name: 'Arc Bravo', baseRef: 'main', planes: [{ name: 'core', phases: [855] }] })
+  assertEq(a.designRefs, [], 'defaults to empty array (non-breaking)')
+})
+
+check('designRefs: rejects an unknown kind (fail-loud at the boundary)', () => {
+  assertThrows(
+    () => DesignRefShape.parse({ ...sampleDesignRef, kind: 'visual' }),
+    'unknown kind',
+  )
+})
+
+check('designRefs: rejects an unknown status (fail-loud at the boundary)', () => {
+  assertThrows(
+    () => DesignRefShape.parse({ ...sampleDesignRef, status: 'invented' }),
+    'unknown status',
   )
 })
 
