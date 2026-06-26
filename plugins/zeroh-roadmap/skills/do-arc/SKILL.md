@@ -31,7 +31,7 @@ Do NOT proceed past any gap — a missing arc, a malformed arc file, a missing o
 
 ## Step 1: Generate the execution-prompt doc (always — before execution)
 
-Deterministically emit `docs/arc-<id>-execution-prompt.md` from the resolved Arc entity, every run (overwrite if present). This is NOT optional and NOT hand-written — it is regenerated from the arc data so the same bar applies to every arc. Mirror the structure of the hand-written exemplars (reference shape: `docs/arc-810-814-execution-prompt.md`). Sections, in order:
+Deterministically emit `roadmap/arc-prompts/arc-<id>-execution-prompt.md` from the resolved Arc entity, every run (overwrite if present). This is NOT optional and NOT hand-written — it is regenerated from the arc data so the same bar applies to every arc. **It is a regenerable artifact, not documentation** — its source of truth is the `.arc.ts`; it belongs in `roadmap/arc-prompts/` (co-located with the roadmap, NOT in `docs/`), and consumers should gitignore that directory. Create the directory if absent. Sections, in order:
 
 1. `# Execution directive — <arc.name> (phases <first> → <last>)`
 2. **`## The bar — non-negotiable`** — the reusable BAR preamble, written once here in the skill and copied verbatim into every generated doc:
