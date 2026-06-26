@@ -76,14 +76,14 @@ If **NEITHER** holds, record an explicit skip in the arc's reasoning (a comment 
 3. **Design-when-needed:** none fits → the architect designs the long-term-correct pattern; the **orchestrator** then extends the arch doc set through the consumer's own doc governance (e.g. its canon-sync flow) and records `{ …, status: 'designed', summary }` with the justification.
 4. **Confirm.** PAUSE for the user's explicit go on the architecture design before continuing — the user is the design gate (mirrors the merge-hold + the validate-arc GAPS pause). Do not plan phases against an unconfirmed design.
 
-The **orchestrator** (not the architect — the architect advises, the orchestrator records) writes the confirmed designRef(s) onto the Arc entity (`roadmap/arcs/<id>.arc.ts` → `designRefs`, the 900 contract) — the design spec that, once their planes wire it, Step 2b plans each member phase against and `arc-sweep` judges the build's conformance to.
+The **orchestrator** (not the architect — the architect advises, the orchestrator records) writes the confirmed designRef(s) onto the Arc entity (`roadmap/arcs/<id>.arc.ts` → `designRefs`, the 900 contract) — the design spec that Step 2b plans each member phase against and `arc-sweep` judges the build's conformance to.
 
 **(3) UX sub-gate** — when the classifier found a **surface** (run after the architecture sub-gate). The UX standards are the consumer's, bound the same way: the `CLAUDE.md` "## Design homes" block (an absent block fails loud — surface + STOP, don't guess — exactly as above). Then:
 1. Spawn the **`ux-designer`** agent — an advisor, like the architect. It reads the consumer's UX canon, designs the surface's layout within it, and **decides per arc** whether a prose layout note or a static HTML preview is warranted (its call — a preview for a net-new surface, prose for a tweak/extension). It produces that artifact and returns a recommended UX designRef.
 2. The **orchestrator** records the UX designRef `{ kind: 'ux', ref: <layout-note / preview path>, status: 'reused' | 'designed', summary }` onto the arc (`designRefs`) — `reused` when the surface follows an existing canonical pattern, `designed` when a new layout was created.
 3. **Confirm.** PAUSE for the user's explicit go on the UX design before continuing — the user is the design gate, same as the architecture sub-gate. A no-surface arc skips this sub-gate (record the skip; never silent).
 
-> **Seam for Plane C:** Step 2b plans every member phase AGAINST the confirmed `designRefs` (wired in the plan-against-design plane).
+The confirmed `designRefs` are now the design spec the rest of plan-arc builds on: Step 2b plans each member phase against them, and `arc-sweep` later judges the build's conformance.
 
 ## Step 2a: Reserve a contiguous phase-number block FIRST
 
@@ -101,6 +101,7 @@ Loop `plan-phase` over the reserved numbers, in **dependency / plane order**:
 - Pass the **explicit phase number** (from Step 2a) so no recompute happens.
 - Pass **`--skip-review`** so the per-phase auto-review does NOT run and does NOT queue — reviews are batched in Step 3.
 - Set each planned phase's **`arcId`** (855) to the arc id — `Phase.arcId` accepts the same `number | string` union as `Arc.id`, so a letter id like `B` is written directly. Set it on every member phase, always.
+- **Plan AGAINST the confirmed design.** Each member phase is planned against the arc's confirmed `designRefs` (the Step 1b output) — its tasks cite the architecture pattern / UX spec they implement (the `ref` + `summary`), so the implementation traces to the design rather than re-inventing it inline. A phase that would deviate from a confirmed designRef must **re-open the design gate** (Step 1b) — confirm the changed design first — not silently diverge. If the arc recorded a design-gate skip (mechanical arc, no `designRefs`), there is nothing to plan against and this is a no-op.
 
 Each phase is authored as a normal `.phase.ts` with `status: 'backlog'`; the arc binds them via the arc's `planes[].phases` (the forward list) and each phase's `arcId` (the back-reference). `crossValidate` (855) checks they stay consistent: every `arcId` must match a discovered arc, every `planes[].phases` number must match a real phase, no phase may be claimed by two arcs, and a phase's `arcId` must name the arc whose `planes` actually list it.
 

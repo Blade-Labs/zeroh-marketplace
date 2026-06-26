@@ -33,7 +33,7 @@ Split the roles: the `software-architect` agent ADVISES (the gate tasks it to se
 
 **Confirm.** The architecture design PAUSES for the user's explicit go before phase-planning continues. An unconfirmed design is not a spec — the user is the design gate.
 
-The orchestrator writes every confirmed designRef onto the Arc entity (`roadmap/arcs/<id>.arc.ts` → `designRefs`) — the design spec that, once their planes wire it, Step 2b plans each member phase against and `arc-sweep` judges the build's conformance to per-ref.
+The orchestrator writes every confirmed designRef onto the Arc entity (`roadmap/arcs/<id>.arc.ts` → `designRefs`) — the design spec that Step 2b plans each member phase against and `arc-sweep` judges the build's conformance to per-ref.
 
 ## 3. The UX reuse-or-design contract
 
