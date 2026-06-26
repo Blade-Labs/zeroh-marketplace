@@ -62,7 +62,7 @@ Decide WITH the user: the `planes` (ordered waves), the `singleSeams` (what must
 
 ## Step 1b: Design-first gate (classify → architecture + UX reuse-or-design → confirm)
 
-The Arc entity exists (Step 1) but NO phase is planned yet. Before reserving numbers (Step 2a), run the **design-first gate** — the front-gate mirror of the terminal `validate-arc` stage: validate-arc asks "did it meet the intent?"; this asks "was it DESIGNED right — the best long-term architecture (and UX, where there's a surface) — before a line was written?". The gate is **proportionate**: triggered by what the arc introduces and honestly **skipped (and recorded)** for a mechanical arc — never ceremony by default, never a silent bypass. The classifier criteria + the architect's reuse-or-design contract live in **`references/design-gate.md`**.
+The Arc entity exists (Step 1) but NO phase is planned yet. Before reserving numbers (Step 2a), run the **design-first gate** — the front-gate mirror of the terminal `validate-arc` stage: validate-arc asks "did it meet the intent?"; this asks "was it DESIGNED right — the best long-term architecture (and UX, where there's a surface) — before a line was written?". The gate is **proportionate**: triggered by what the arc introduces and honestly **skipped (and recorded)** for a mechanical arc — never ceremony by default, never a silent bypass. The classifier criteria + the architecture and UX reuse-or-design contracts live in **`references/design-gate.md`**.
 
 **(1) Classify the arc.** Decide (criteria in `references/design-gate.md`):
 - **New pattern?** Does the arc introduce a new tool, a new architectural pattern, or a new cross-module seam — vs. mechanically extending one that already exists?
