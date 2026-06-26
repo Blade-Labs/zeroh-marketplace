@@ -1,6 +1,6 @@
 ---
 name: "Plan Arc"
-description: "Plan a whole arc (a named, contiguous block of phases shipped as one unit): author the Arc entity, plan every member phase, and review them in parallel — then queue them as one arc tier."
+description: "Plan a whole arc (a named, contiguous block of phases shipped as one unit): author the Arc entity, run the design-first gate (reuse-or-design the architecture & UX, confirmed) at its head, plan every member phase against the confirmed design, and review them in parallel — then queue them as one arc tier."
 user-invocable: true
 metadata:
   keywords: plan arc, create arc, new arc, arc
@@ -9,7 +9,7 @@ metadata:
 
 # Plan Arc — Arc Planning Protocol
 
-`plan-arc` is the front door to an Arc: it writes the `Arc` entity, plans each member phase (looping `plan-phase`), fans out plan-quality review across them safely, and queues the whole set as one arc tier. The arc can then be built with `/do-arc <id>`.
+`plan-arc` is the front door to an Arc: it writes the `Arc` entity, runs the **design-first gate** (Step 1b — classify the arc, then reuse-or-design the architecture and, for a surface, the UX, confirmed by the user and recorded as the arc's `designRefs`), plans each member phase (looping `plan-phase`) **against that confirmed design**, fans out plan-quality review across them safely, and queues the whole set as one arc tier. The arc can then be built with `/do-arc <id>`.
 
 ## Trigger
 
