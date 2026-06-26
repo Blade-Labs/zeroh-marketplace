@@ -103,7 +103,8 @@ export type GateFinding = z.output<typeof GateFindingShape>
 
 /** Structured record of one round of validation agents + the findings they raised. */
 export const StructuredGateRoundShape = z.object({
-  round: z.number().int().positive(),
+  // 0 is valid: gate-protocol numbers the one-shot simplify pass "Round 0", correctness rounds 1..N.
+  round: z.number().int().nonnegative(),
   findings: z.array(GateFindingShape).default([]),
   summary: z.string().min(5).optional(),
 })

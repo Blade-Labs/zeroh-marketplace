@@ -71,6 +71,8 @@ This is in addition to the per-stage bookkeeping (commits, gateRounds entries, e
 
 **Why one-shot, not looping:** simplification is judgment. There is no "zero" state to converge on. Diminishing returns kick in after the first pass, and taste loops encourage over-deletion.
 
+**Skip the simplify pass for a pure-docs/prose diff.** The simplifier's mandate — dead scaffolding, speculative abstractions, over-extraction — is a *code* lens; a phase whose diff is entirely Markdown/docs/prose (no executable code: no `.ts`/`.tsx`/`.js`/`.py`/config logic, only `.md` and the like) has nothing for it to act on, and running it is pure overhead. In that case skip the agent and record the `round: 0` simplify entry with summary `skipped — pure-docs diff, no code to simplify` (keep the audit trail honest). `mockup`-kind phases already skip the whole agent chain; this extends the same logic to docs-only diffs of any kind. A *mixed* diff (any executable code) still runs the simplifier.
+
 ### Protocol
 
 1. Launch exactly one `simplifier` agent **synchronously** (no `run_in_background`) with:
@@ -117,11 +119,17 @@ The loop is automated. Each round fixes findings and re-runs agents without paus
 ```bash
 pnpm biome check .       # lint
 pnpm type-check          # types
-pnpm test                # unit + integration
+pnpm test                # unit + integration   (see test-cadence below — arc-mode runs RELEVANT tests only)
 pnpm build               # production build
 bash scripts/pre-review.sh <first-task-SHA>~1   # mechanical finding catcher
-pnpm e2e:local           # E2E (MANDATORY)
+pnpm e2e:local           # E2E                  (inline only — deferred to arc end under arc-mode)
 ```
+
+**Test cadence (arc-mode vs inline).** Re-running the whole unit+integration+e2e suite on every phase's gate is wasteful for a multi-phase arc (it runs N times) and is the dominant per-phase slowdown.
+- **Arc-mode** (do-phase running inside a `do-arc` phase-executor): at the gate run **only the tests relevant to this phase's diff** (the suites/files covering the touched code) plus `biome`, `type-check`, and `build`. **Defer** the full `pnpm test` (unit + integration) and `pnpm e2e:local` to the **arc end** — `do-arc` Step 6 runs the full suite ONCE before the sweep, and a red suite there blocks the merge. A docs/config-only phase whose diff has no covering tests runs its relevant doc/lint checks and records honestly that no test suite applies.
+- **Inline** (a standalone, non-arc `do-phase` run): run the FULL block above at the gate unchanged — a lone phase is its own integration point, with no "arc end" to defer to.
+
+The `kind`-specific additions (hardening's integration-rerun closure rule, release's `pnpm test:e2e`) still apply where relevant: under arc-mode they run at the arc-end full suite; inline they run at the gate.
 
 **2. Agent reviews.** Launch 2 `code-reviewer` agents in parallel — **two synchronous Agent calls in a single message** (no `run_in_background` on either). "Parallel" here means the runtime fans them out; the parent still blocks until both return. Each receives:
 - **Round 1**: full phase diff (`git diff <phase-start-SHA>..HEAD`) plus any unresolved items from Round 0's `skipped` or `bugsNoted` lists.
@@ -153,7 +161,7 @@ pnpm e2e:local           # E2E (MANDATORY)
 
 If the loop has not converged after 5 rounds, STOP and surface the remaining findings to the user. Agents may be cycling (finding-then-rewriting-then-finding). Do not silently loop forever.
 
-**NO EXCEPTIONS** — not for "docs-only", "test-only", or "low-risk" phases. Every phase gets the full gate. If the phase file's validation task specifies additional checks, run those too.
+**NO EXCEPTIONS to the gate itself** — not for "docs-only", "test-only", or "low-risk" phases. Every phase gets the full gate (mechanical checks → agent reviews → correctness loop). The arc-mode *test cadence* above narrows the per-gate **test scope** (relevant tests now, full suite at arc end) — it does NOT skip the gate, the agent reviews, the mechanical lint/type/build checks, or the arc-end suite. If the phase file's validation task specifies additional checks, run those too.
 
 ---
 
