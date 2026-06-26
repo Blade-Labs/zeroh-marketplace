@@ -389,7 +389,7 @@ function renderDashboard(data) {
         const sev = (f.severity || 'LOW').toLowerCase();
         const parts = [f.agent || ''];
         if (f.phase) parts.push('phase ' + f.phase);
-        if (f.round) parts.push('round ' + f.round);
+        if (f.round !== undefined && f.round !== null) parts.push('round ' + f.round);
         html += '<div class="finding">';
         html += '<div class="finding-header">';
         html += '<span class="severity-badge ' + sev + '">' + esc(f.severity || 'LOW') + '</span>';

@@ -71,7 +71,7 @@ This is in addition to the per-stage bookkeeping (commits, gateRounds entries, e
 
 **Why one-shot, not looping:** simplification is judgment. There is no "zero" state to converge on. Diminishing returns kick in after the first pass, and taste loops encourage over-deletion.
 
-**Skip the simplify pass for a pure-docs/prose diff.** The simplifier's mandate — dead scaffolding, speculative abstractions, over-extraction — is a *code* lens; a phase whose diff is entirely Markdown/docs/prose (no executable code: no `.ts`/`.tsx`/`.js`/`.py`/config logic, only `.md` and the like) has nothing for it to act on, and running it is pure overhead. In that case skip the agent and record the `round: 0` simplify entry with summary `skipped — pure-docs diff, no code to simplify` (keep the audit trail honest). `mockup`-kind phases already skip the whole agent chain; this extends the same logic to docs-only diffs of any kind. A *mixed* diff (any executable code) still runs the simplifier.
+**Skip the simplify pass for a pure-docs/prose diff.** The simplifier's mandate — dead scaffolding, speculative abstractions, over-extraction — is a *code* lens; a phase whose diff touches no executable code has nothing for it to act on, and running it is pure overhead. Mechanical test (not a judgment call): list the phase diff's changed paths — `git diff --name-only <phase-start-SHA>..HEAD` — and if NONE is an executable-code file (`.ts` `.tsx` `.js` `.jsx` `.mjs` `.cjs` `.py` `.rego` `.sql` or a logic-bearing config), i.e. the diff is entirely Markdown/docs/assets, skip the agent and record the `round: 0` entry with summary `skipped — pure-docs diff, no code to simplify` (keep the audit trail honest). Any executable-code file in the diff → run the simplifier as normal. `mockup`-kind phases already skip the whole agent chain; this extends the same logic to docs-only diffs of any `kind`.
 
 ### Protocol
 
@@ -126,10 +126,15 @@ pnpm e2e:local           # E2E                  (inline only — deferred to arc
 ```
 
 **Test cadence (arc-mode vs inline).** Re-running the whole unit+integration+e2e suite on every phase's gate is wasteful for a multi-phase arc (it runs N times) and is the dominant per-phase slowdown.
-- **Arc-mode** (do-phase running inside a `do-arc` phase-executor): at the gate run **only the tests relevant to this phase's diff** (the suites/files covering the touched code) plus `biome`, `type-check`, and `build`. **Defer** the full `pnpm test` (unit + integration) and `pnpm e2e:local` to the **arc end** — `do-arc` Step 6 runs the full suite ONCE before the sweep, and a red suite there blocks the merge. A docs/config-only phase whose diff has no covering tests runs its relevant doc/lint checks and records honestly that no test suite applies.
+- **Arc-mode** (do-phase running inside a `do-arc` phase-executor): at the gate run **only the tests relevant to this phase's diff** (the suites/files covering the touched code) plus `biome`, `type-check`, and `build`. **Defer** the full `pnpm test` (unit + integration) and `pnpm e2e:local` to the **arc end** — `do-arc` Step 8 runs the full suite ONCE (after the sweep and validate-arc, since both can still land code), and a red suite there blocks the merge. A docs/config-only phase whose diff has no covering tests runs its relevant doc/lint checks and records honestly that no test suite applies.
 - **Inline** (a standalone, non-arc `do-phase` run): run the FULL block above at the gate unchanged — a lone phase is its own integration point, with no "arc end" to defer to.
 
-The `kind`-specific additions (hardening's integration-rerun closure rule, release's `pnpm test:e2e`) still apply where relevant: under arc-mode they run at the arc-end full suite; inline they run at the gate.
+The `kind`-specific additions still apply under arc-mode, but the cadence does NOT weaken a task's own correctness proof:
+- **hardening's integration-rerun closure rule** targets a *specific* persistence/event/marshal-chain task — that task's covering integration test IS "relevant" and **runs at the gate** (it is the closure criterion proving the task correct; never defer it). Only the *rest* of the integration suite defers to the arc-end run.
+- **release's broad `pnpm test:e2e`** defers to the arc-end run under arc-mode (a release-kind phase inside an arc still gets full e2e at the arc end, which gates the merge).
+- Inline (non-arc) runs: both run at the gate, unchanged.
+
+The principle: "relevant tests" always includes the specific test(s) that *prove the touched code correct* — what defers is only the broad suite that re-covers untouched code.
 
 **2. Agent reviews.** Launch 2 `code-reviewer` agents in parallel — **two synchronous Agent calls in a single message** (no `run_in_background` on either). "Parallel" here means the runtime fans them out; the parent still blocks until both return. Each receives:
 - **Round 1**: full phase diff (`git diff <phase-start-SHA>..HEAD`) plus any unresolved items from Round 0's `skipped` or `bugsNoted` lists.

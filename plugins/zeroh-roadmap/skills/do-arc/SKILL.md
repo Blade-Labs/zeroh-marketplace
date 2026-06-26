@@ -101,13 +101,11 @@ Doing this in the orchestrator, one phase at a time, is what keeps concurrent ph
 
 Bake this into how you pace the arc: **don't rush.** Auto-compact handles a long arc's context for you — proceed phase-by-phase and let it. Delegation IS the context strategy: recursion mode hands each phase to a `phase-executor` so the main session stays light over a long arc. A calm phase-by-phase cadence beats trying to hold the whole arc in working memory at once.
 
-## Step 6: Arc-sweep (+ the arc-end full-suite run)
+## Step 6: Arc-sweep
 
-When every member phase is `done`, the arc is built but NOT merged.
+When every member phase is `done`, the arc is built but NOT merged. Invoke **`arc-sweep`** (phase 860) — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises against `arc.singleSeams` and `arc.honestyRails`). The sweep judges **code coherence**; the next step judges **fulfilled intent**.
 
-**First, the test-cadence closure (arc-end full suite).** Under arc-mode the per-phase gates run only the tests *relevant* to each phase's diff (the fast inner loop — see `do-phase` gate-protocol's arc-mode test scope); the **full unit + integration + e2e suite is deferred to here and runs ONCE** — the arc's single integration point. Run the consumer's full suite (e.g. `pnpm test` + `pnpm test:integration` / `pnpm test:e2e`, per its `CLAUDE.md` Validation tiers) now, before the sweep. A non-green result is a **blocker** (Step 8) — surface the failures and hold; do not proceed to merge on a red suite. For an arc that touched no runtime code (a docs/config-only arc), the "full suite" reduces to that arc's relevant checks (which already ran) — say so honestly rather than running an unrelated suite for show.
-
-**Then invoke** **`arc-sweep`** (phase 860) — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises against `arc.singleSeams` and `arc.honestyRails`). The sweep judges **code coherence**; the next step judges **fulfilled intent**.
+**Deferred-test reminder.** Under arc-mode the per-phase gates ran only the tests *relevant* to each phase's diff (the fast inner loop — see `do-phase` gate-protocol's arc-mode test scope); the **full unit + integration suite (+ e2e for a release-kind arc) is deferred to the single arc-end run in Step 8**, AFTER this sweep and validate-arc, because both of those can still land code (a sweep RESOLVE-NOW fix, a validate-arc corrective phase) and an earlier full-suite run would be stale. Do not run the full suite here.
 
 ## Step 7: Validate the arc against its intent
 
@@ -117,22 +115,28 @@ After the sweep, run **`validate-arc <id>`** — the terminal intent gate. It dr
 - **GAPS** → surface them + the proposed corrective phases and **PAUSE for the user's go** — do NOT auto-correct unattended (mirroring the merge-hold; an arc's intent gaps are a bigger commitment than a per-task gate fix). On the user's go, run validate-arc's corrective loop (Step 5 there), then re-report.
 - **No `acceptanceCriteria`** → validate-arc is an explicit no-op; record that in the merge-readiness report (the arc declared no intent to validate), never a silent skip.
 
-## Step 8: Merge-readiness — auto-merge to baseRef on a clean PASS
+## Step 8: Land the arc — arc-end full suite, then auto-integrate on a clean PASS
 
 Report **merge-readiness** to the user — the arc-sweep disposition AND the validate-arc verdict (PASS / GAPS / no-op).
 
-**The default is to auto-merge, not to hold.** A clean arc should land without waiting on a manual go. **Auto-merge the arc's worktree to `arc.baseRef`** (typically `develop`) when ALL of these hold:
-- validate-arc returned **PASS** (or a no-op with no `acceptanceCriteria`), AND
-- the arc-sweep is clean — every batched debt item disposed (RESOLVE-NOW applied + re-gated, or PLAN-PHASE authored, or ACCEPT/OPERATOR-PENDING recorded), AND
-- **no blocker** (see below).
+**First, the arc-end full-suite gate.** The sweep (Step 6) and validate-arc's corrective loop (Step 7) can both land code, so the deferred full suite is the **last** thing run, here, after them — never earlier (an earlier run would be stale). Run the consumer's full suite once — `pnpm test` (unit + integration) plus the `kind`-appropriate top tier (`pnpm test:e2e` if any member phase was `release`-kind), per its `CLAUDE.md` Validation tiers. For an arc that touched no runtime code (a docs/config-only arc), there is no runtime suite to run — say so honestly; the arc's relevant doc/lint/type checks already ran per phase.
 
-On auto-merge: merge the worktree branch into `baseRef` per the sweep's report (the standard ff/no-ff merge), then remove the worktree. Report what landed. **`baseRef → master` is NOT part of auto-merge** — promoting to `master` is a deliberate *release* (branch protection + a version bump per RELEASE.md), so it stays a held release PR, never an arc auto-merge.
+A non-green result is a **blocker** — but what "blocker" means differs by integration model (below), and this asymmetry is the reason to prefer isolation for risky arcs: on the **isolated-branch** model the suite genuinely *gates* the merge (red → don't merge, the bad code never reaches `baseRef`); on the **direct-on-`baseRef`** model the deferred code is *already* on `baseRef`, so a red suite is a **fix-forward** signal, not a gate (the regression is already integrated — surface it loudly and fix it forward on `baseRef`, do not pretend it was held). An arc whose phases carry real regression risk should therefore run on an isolated branch so the arc-end suite can actually gate.
 
-**A blocker HALTS the auto-merge and falls back to hold-and-ask** (report the blocker + what's needed, then wait for the user's go). A blocker is any of:
+**Then auto-integrate — the default is to land, not to hold.** A clean arc should land without waiting on a manual go, but HOW it lands depends on the arc's **integration model**, which do-arc honours rather than imposes (do-arc does not create a branch; it runs the phases on whatever the session set up):
+
+- **Direct-on-`baseRef`** (the working tree was already on `arc.baseRef` and phases committed straight to it — the common case): the arc is **already integrated** — every phase commit is on `baseRef`. There is no merge to perform. On a clean PASS + no blocker, report it as landed-and-integrated; nothing else to do.
+- **Isolated branch/worktree off `baseRef`** (the session ran the arc on its own branch — recommended when other sessions share the checkout): on a clean PASS + no blocker, **auto-merge that branch into `baseRef`** (the standard ff/no-ff merge per the sweep's report) and, if a git worktree was used, remove it. Report what landed.
+
+Auto-integration fires only when ALL hold: validate-arc returned **PASS** (or a no-op with no `acceptanceCriteria`); the arc-sweep is clean (every batched debt item disposed — RESOLVE-NOW applied + re-gated, PLAN-PHASE authored, or ACCEPT/OPERATOR-PENDING recorded); the arc-end full suite is green; and there is **no blocker**.
+
+**`baseRef → master` is NEVER part of auto-integration** — promoting to `master` is a deliberate *release* (branch protection + a version bump per RELEASE.md), so it stays a held release PR.
+
+**A blocker HALTS auto-integration and falls back to hold-and-ask** (report the blocker + what's needed, then wait for the user's go). A blocker is any of:
 - a member phase returned `failed` or `escalated`, or any unresolved `[MULTI-REPO]` / `[PRODUCT]` / `[SCOPED-OUT]` hard-stop from a phase or the sweep;
 - validate-arc returned **GAPS** the user has not yet dispositioned (per Step 7 — GAPS already pauses);
-- the arc-end full-suite run (the test-cadence closure, see Step 6) is not green;
-- a merge conflict against `baseRef`, or the arc ran directly on `baseRef` with no separate branch to merge (nothing to do — report that it is already integrated);
+- the arc-end full suite is not green (isolated-branch: halts the merge; direct-on-`baseRef`: the arc is not cleanly landed — fix forward before declaring done, never report a green landing over a red suite);
+- on the isolated-branch model: a merge conflict against `baseRef`;
 - the user explicitly asked to review before merge.
 
-When in doubt whether something is a blocker, treat it as one and ask — auto-merge is for the unambiguous clean case. A held arc sits built-swept-and-validated on its branch until the user's go.
+When in doubt whether something is a blocker, treat it as one and ask — auto-integration is for the unambiguous clean case. A held arc sits built-swept-and-validated on its branch until the user's go.
