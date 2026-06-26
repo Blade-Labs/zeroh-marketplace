@@ -1,6 +1,6 @@
 ---
 name: "Arc Sweep"
-description: "Pre-merge sweep for a built arc: dispose every accumulated compromise (reusing release-sweep's debt vocabulary) and run one whole-arc software-architect review against the arc's singleSeams, then report merge-readiness."
+description: "Pre-merge sweep for a built arc: dispose every accumulated compromise (reusing release-sweep's debt vocabulary) and run one whole-arc software-architect review against the arc's singleSeams + designRefs, then report merge-readiness."
 user-invocable: true
 metadata:
   keywords: arc sweep, pre-merge sweep, sweep arc
