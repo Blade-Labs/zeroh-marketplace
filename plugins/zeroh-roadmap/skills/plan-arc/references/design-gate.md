@@ -31,7 +31,12 @@ Split the roles: the `software-architect` agent ADVISES (the gate tasks it to se
 
 **Extend a doc vs author a new section.** Extend an existing pattern's doc when the new capability is a variant/special-case of it; author a new pattern section only when the capability is genuinely new (the same reuse-vs-new judgment, one level down).
 
-**Confirm.** The architecture design PAUSES for the user's explicit go before phase-planning continues. An unconfirmed design is not a spec — the user is the design gate.
+**Generalize-forward — the inverse question (asked for every new/designed pattern).** Reuse-first asks "does a pattern already exist to reuse?"; generalize-forward asks the inverse: "is what I'm building a special case of a capability that SHOULD exist for others?" The architect answers BOTH — when it is about to record a `status: 'designed'` pattern, it also asks: *if the general seam were built, what else would consume it?*
+- **Discipline — the rule of three (the guard against speculative generality the `simplifier` exists to kill): generalize ONLY with ≥2 concrete near-term consumers.** With exactly one consumer, build the vertical and record the generalization as a **named backlog follow-up** (so the next similar feature folds into it instead of forking) — never abstract on speculation.
+- **When ≥2 consumers earn it**, the architect designs the GENERAL seam (not the one-off), the arc's `singleSeams` widen to "this seam is consumed beyond this arc", and the member phases plan against the general seam. The architect names the concrete consumers in the recommendation so the ≥2 bar is evidenced, not asserted.
+- **Consumer bias knob.** A consumer whose product thesis IS a generic substrate (e.g. "any workflow / any agent / any RAG") should bias harder toward generic — if the consumer's `CLAUDE.md` states such a bias (a "generalize-forward" / substrate note), the architect weights toward the general seam accordingly. Reuse-backward + generalize-forward (≥2-consumer-gated) are the two halves of "build a substrate, not features".
+
+**Confirm.** The architecture design PAUSES for the user's explicit go before phase-planning continues. An unconfirmed design is not a spec — the user is the design gate. (The generalize-forward verdict — general seam vs vertical+follow-up — is part of what the user confirms here.)
 
 The orchestrator writes every confirmed designRef onto the Arc entity (`roadmap/arcs/<id>.arc.ts` → `designRefs`) — the design spec that Step 2b plans each member phase against and `arc-sweep` judges the build's conformance to per-ref.
 
