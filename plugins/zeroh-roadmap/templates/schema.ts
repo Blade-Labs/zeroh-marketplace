@@ -13,7 +13,7 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-// @zeroh-roadmap-schema v7
+// @zeroh-roadmap-schema v8
 // Bump this marker whenever the canonical schema gains a feature. The
 // SessionStart drift check in using-zeroh-roadmap greps for this exact line
 // to decide whether a target repo is behind the plugin. Keep the comment
@@ -219,6 +219,43 @@ export const PhaseExecutionResultShape = z.object({
 })
 
 export type PhaseExecutionResult = z.output<typeof PhaseExecutionResultShape>
+
+// ── Runner Summary (the converged arc result the governed-coding runner reads, phase 1045) ──────────
+
+/** The four compromise-disposition tokens — the pre-merge arc-sweep debt vocabulary. The SAME set the
+ *  governed-coding consumer single-sources in its CodingJobCallback contract; defined once here so
+ *  RunnerSummaryShape reuses it rather than forking a parallel taxonomy. */
+export const CompromiseDispositionShape = z.enum(['ACCEPT', 'OPERATOR-PENDING', 'RESOLVE-NOW', 'PLAN-PHASE'])
+export type CompromiseDisposition = z.output<typeof CompromiseDispositionShape>
+
+/**
+ * RunnerSummaryShape — the ONE typed converged-arc artifact `do-arc` serializes to roadmap/arc-summary.json
+ * (Step 8b) and the governed-coding runner reads (fail-closed) into a DriveTerminal. A deliberate
+ * near-isomorphism with the runner's DriveTerminal + CodingJobCallback: the runner maps it 1:1 and BLOCKS
+ * on any unreadability rather than fabricating a clean arc. `gateSignals` feeds the runner's existing
+ * normalizeGateResults unchanged (a malformed/absent signal ⇒ not green ⇒ deploy blocked). `receiptRef` is
+ * min(1) so a missing receipt fails .parse() → block; the artifact URLs are optional → honest-absent. The
+ * artifact is regenerable + gitignored + written every run, like the Step-1 arc-prompts/ artifact.
+ */
+export const RunnerSummaryShape = z.object({
+  arcId: z.string().min(1),
+  outcome: z.enum(['shipped', 'halted', 'blocked']),
+  reason: z.string().min(1).optional(),
+  compromiseDisposition: z.array(
+    z.object({ item: z.string().min(1), disposition: CompromiseDispositionShape }),
+  ),
+  gateSignals: z.object({
+    arcSweepClean: z.boolean(),
+    validateArcPassed: z.boolean(),
+    fullSuiteGreen: z.boolean(),
+  }),
+  receiptRef: z.string().min(1),
+  screenshotUrl: z.string().url().optional(),
+  prUrl: z.string().url().optional(),
+  releaseUrl: z.string().url().optional(),
+})
+
+export type RunnerSummary = z.output<typeof RunnerSummaryShape>
 
 // ── Phase Task ──────────────────────────────────────────────────────────────
 
