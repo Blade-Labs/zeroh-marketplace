@@ -141,3 +141,21 @@ Auto-integration fires only when ALL hold: validate-arc returned **PASS** (or a 
 - the user explicitly asked to review before merge.
 
 When in doubt whether something is a blocker, treat it as one and ask — auto-integration is for the unambiguous clean case. A held arc sits built-swept-and-validated on its branch until the user's go.
+
+## Step 8b: Emit the runner summary (`roadmap/arc-summary.json`)
+
+After the merge-readiness report, **serialize the converged arc result** to `roadmap/arc-summary.json` so a governed-coding runner (arc GARUN) has ONE typed artifact to read its terminal outcome from — never reconstructed from prose. This is a **serialize of the report you already computed** in Steps 6–8, NOT new logic: it duplicates no decision, it just writes the in-hand result in a machine-readable shape.
+
+Write the file via **`RunnerSummaryShape.parse(...)`** (from the roadmap schema) so the artifact is validated at the write boundary — a malformed summary fails loud here rather than handing the runner a bad file. Field → source mapping:
+
+- `arcId` ← `arc.id`.
+- `outcome` ← the merge-readiness verdict: `shipped` on a clean PASS that landed; `halted` on a blocker / red arc-end suite; `blocked` on validate-arc **GAPS** or a phase escalation.
+- `reason` (optional) ← a short, secret-free line stating WHY a non-`shipped` arc ended where it did (the blocker / the gap). Omit on a clean ship.
+- `compromiseDisposition[]` ← the **Step-6 arc-sweep** batched debt items, each as `{ item, disposition }` using the four `CompromiseDisposition` tokens (ACCEPT / OPERATOR-PENDING / RESOLVE-NOW / PLAN-PHASE). An empty array = a clean arc (kept, not omitted).
+- `gateSignals` ← `{ arcSweepClean: <Step 6 clean>, validateArcPassed: <Step 7 PASS or no-op>, fullSuiteGreen: <Step 8 suite green> }`. The runner feeds this straight into its own fail-closed gate normalizer — so write the three booleans honestly (a deferred/unrun suite is **not** green).
+- `receiptRef` ← the governance-receipt reference for the arc (required, min length 1 — a missing receipt must fail `.parse()`, never be faked).
+- `screenshotUrl` / `prUrl` / `releaseUrl` (optional) ← present only when the artifact actually exists (a live-ui capture / the merged PR / the cut release); omit otherwise — never fabricate a URL.
+
+**It is a regenerable artifact, exactly like the Step-1 `arc-prompts/` doc:** written **every run** (overwrite if present), its source of truth is the Steps 6–8 result, and `roadmap/arc-summary.json` should be **gitignored** (create the `roadmap/` path if absent).
+
+**This does NOT contradict arc-sweep's "no summary file" rule.** That rule forbids arc-sweep from persisting its *ephemeral debt report* as a tracked deliverable (the debt disposition is consumed inline, not filed). Step 8b is a *different concern*: a **terminal converged-result artifact** a downstream runner reads — regenerable + gitignored, never a tracked hand-authored report. The two coexist; the rule is not read as contradicted.
