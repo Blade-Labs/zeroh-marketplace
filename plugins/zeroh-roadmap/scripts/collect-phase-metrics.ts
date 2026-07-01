@@ -172,14 +172,18 @@ function detectPackageManager(): 'pnpm' | 'npm' | 'yarn' {
 }
 
 /** Read the consumer's `## Gate commands` CLAUDE.md block ("- slot: command" lines).
- *  Returns {} when the block is absent — callers fall back to detected-PM defaults. */
+ *  Returns {} when the block is absent — callers fall back to detected-PM defaults.
+ *  Line-walk instead of a regex block-capture: a multiline-$ lookahead terminates
+ *  the lazy capture at the FIRST line end, silently dropping every slot after
+ *  the first — exactly the bind-defeating bug a regex here shipped once. */
 function readGateCommands(): Record<string, string> {
   try {
-    const claude = fs.readFileSync('CLAUDE.md', 'utf-8')
-    const block = claude.match(/^## Gate commands\s*\n([\s\S]*?)(?=^## |\n*$)/m)?.[1]
-    if (!block) return {}
+    const lines = fs.readFileSync('CLAUDE.md', 'utf-8').split('\n')
+    const start = lines.findIndex((l) => /^## Gate commands\s*$/.test(l))
+    if (start === -1) return {}
     const out: Record<string, string> = {}
-    for (const line of block.split('\n')) {
+    for (const line of lines.slice(start + 1)) {
+      if (/^## /.test(line)) break
       const m = line.match(/^\s*-\s*(\w+):\s*(.+?)\s*$/)
       if (m) out[m[1]] = m[2]
     }

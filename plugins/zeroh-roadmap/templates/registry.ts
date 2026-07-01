@@ -20,6 +20,12 @@ import {
   type PhaseExecutionResult,
 } from './schema'
 
+/** Shared discriminant for the one FATAL discovery error class. emit.ts filters
+ *  on this exact prefix to keep duplicates exit-1 while quarantining parse
+ *  failures — a shared constant so the wording cannot drift into a silent
+ *  fatal→warning downgrade. */
+export const DUPLICATE_PHASE_NUMBER_PREFIX = 'Duplicate phase number'
+
 export interface DiscoveryResult {
   phases: Phase[]
   errors: { file: string; error: string }[]
@@ -81,7 +87,7 @@ export async function discoverPhases(
     if (filePaths.length > 1) {
       errors.push({
         file: filePaths.join(', '),
-        error: `Duplicate phase number ${num} in ${filePaths.length} files: ${filePaths.join(' and ')}`,
+        error: `${DUPLICATE_PHASE_NUMBER_PREFIX} ${num} in ${filePaths.length} files: ${filePaths.join(' and ')}`,
       })
     }
   }

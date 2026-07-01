@@ -12,7 +12,7 @@
 import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { crossValidate, discoverArcs, discoverPhases } from './registry'
+import { crossValidate, discoverArcs, discoverPhases, DUPLICATE_PHASE_NUMBER_PREFIX } from './registry'
 import type { Phase } from './schema'
 
 // ── Changelog computation ───────────────────────────────────────────────────
@@ -92,8 +92,8 @@ async function emit() {
   // Every other discovery error (a sibling's parse/import failure) is
   // QUARANTINED — warned, excluded, emission proceeds — so one malformed file
   // can't block every session's phase completion.
-  const duplicates = errors.filter((e) => e.error.startsWith('Duplicate phase number'))
-  const quarantined = errors.filter((e) => !e.error.startsWith('Duplicate phase number'))
+  const duplicates = errors.filter((e) => e.error.startsWith(DUPLICATE_PHASE_NUMBER_PREFIX))
+  const quarantined = errors.filter((e) => !e.error.startsWith(DUPLICATE_PHASE_NUMBER_PREFIX))
 
   if (duplicates.length > 0) {
     console.error('Discovery errors (duplicate numbers are fatal):')
