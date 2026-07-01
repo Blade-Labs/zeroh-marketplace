@@ -34,6 +34,8 @@ import {
   DesignRefShape,
   IntentVerdictShape,
   PhaseExecutionResultShape,
+  RunnerSummaryShape,
+  StructuredGateRoundShape,
 } from '../templates/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
 
@@ -498,6 +500,98 @@ check('crossValidate flags an arcId that disagrees with the arc listing the phas
   if (!errors.some((e) => e.includes('that arc') && e.includes('do not list it'))) {
     throw new Error(`expected an arcId-disagreement error, got ${JSON.stringify(errors)}`)
   }
+})
+
+console.log('\nv9 tightening — MinimalTask discriminant, gate rounds, label cap, arcId union')
+
+const richTask = {
+  id: '1.1',
+  title: 'A real task title',
+  problem: 'A problem statement that is long enough to satisfy the schema.',
+  steps: [{ file: 'src/x.ts', description: 'change something specific' }],
+  acceptanceCriteria: ['a criterion long enough to pass'],
+  files: ['src/x.ts'],
+  done: false,
+}
+
+check('v9: a rich-shaped task missing `problem` REJECTS (no silent MinimalTask degrade)', () => {
+  const { problem: _dropped, ...taskMissingProblem } = richTask
+  assertThrows(
+    () =>
+      definePhase({
+        ...basePhase,
+        status: 'backlog',
+        category: 'feature',
+        tasks: [taskMissingProblem],
+      } as never),
+    'rich task missing problem must not degrade to MinimalTask',
+  )
+})
+
+check('v9: a minimal task WITH `minimal: true` parses', () => {
+  const p = definePhase({
+    ...basePhase,
+    status: 'backlog',
+    category: 'feature',
+    tasks: [{ minimal: true, id: '1.1', title: 'legacy row', done: true }],
+  } as never)
+  assertEq(p.tasks.length, 1, 'minimal task accepted with the discriminant')
+})
+
+check('v9: a 201-char backlog tier label rejects; 200 passes', () => {
+  const long = 'x'.repeat(201)
+  assertThrows(
+    () => BacklogTierShape.parse({ tier: 0, label: long, items: [] }),
+    '201-char label',
+  )
+  BacklogTierShape.parse({ tier: 0, label: 'y'.repeat(200), items: [] })
+})
+
+check('v9: RunnerSummary accepts a NUMERIC arcId (parity with Arc.id)', () => {
+  const r = RunnerSummaryShape.parse({
+    arcId: 2,
+    outcome: 'shipped',
+    compromiseDisposition: [],
+    gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true },
+    receiptRef: 'receipt-ref-1',
+  })
+  assertEq(r.arcId, 2, 'numeric arcId parses')
+})
+
+check('v9: structured gate round with agent enum + verdict parses; bad agent rejects', () => {
+  const round = StructuredGateRoundShape.parse({
+    round: 1,
+    agent: 'code-reviewer',
+    verdict: 'clean',
+    findings: [],
+    summary: 'Round 1: 0 findings — gate clean',
+  })
+  assertEq(round.agent, 'code-reviewer', 'agent recorded')
+  assertThrows(
+    () => StructuredGateRoundShape.parse({ round: 1, agent: 'not-an-agent' }),
+    'unknown gate agent',
+  )
+})
+
+check('v9: PhaseTask.commit accepts a sha and rejects a too-short one', () => {
+  const p = definePhase({
+    ...basePhase,
+    status: 'backlog',
+    category: 'feature',
+    tasks: [{ ...richTask, done: true, doneDate: '2026-07-01', commit: 'abc123def' }],
+  } as never)
+  const t = p.tasks[0] as { commit?: string }
+  assertEq(t.commit, 'abc123def', 'commit sha recorded')
+  assertThrows(
+    () =>
+      definePhase({
+        ...basePhase,
+        status: 'backlog',
+        category: 'feature',
+        tasks: [{ ...richTask, commit: 'abc' }],
+      } as never),
+    'short commit sha',
+  )
 })
 
 // discoverArcs is async — run it and the final summary inside an async tail so

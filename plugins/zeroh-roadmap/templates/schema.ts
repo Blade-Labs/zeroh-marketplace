@@ -13,11 +13,24 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-// @zeroh-roadmap-schema v8
+// @zeroh-roadmap-schema v9
 // Bump this marker whenever the canonical schema gains a feature. The
 // SessionStart drift check in using-zeroh-roadmap greps for this exact line
 // to decide whether a target repo is behind the plugin. Keep the comment
 // literal (no template syntax) so a simple grep is sufficient.
+//
+// v9 migration notes (consumers syncing from v8):
+// - MinimalTask now requires an explicit `minimal: true` discriminant — a task
+//   missing PhaseTaskShape's rich fields no longer silently degrades to 3-field
+//   validation. Add `minimal: true` to genuinely-minimal historical tasks.
+// - Backlog tier labels cap at 200 chars — move blueprint narratives into
+//   roadmap/followups/<arcId>.md (arc-sweep's disposition home) and keep one
+//   pointer line in the label.
+// - StructuredGateRoundShape gains optional `agent` + `verdict`; the bare-string
+//   gate-round form is deprecated for newly-done phases (still parses).
+// - RunnerSummaryShape.arcId widens to number|string (parity with Arc.id).
+// - PhaseTask gains optional `commit` (the task's landed sha) so
+//   one-task-one-commit is mechanically verifiable.
 
 import { z } from 'zod'
 
@@ -105,6 +118,11 @@ export type GateFinding = z.output<typeof GateFindingShape>
 export const StructuredGateRoundShape = z.object({
   // 0 is valid: gate-protocol numbers the one-shot simplify pass "Round 0", correctness rounds 1..N.
   round: z.number().int().nonnegative(),
+  /** Which gate agent produced this round — makes "which gates actually ran"
+   *  queryable instead of remembered. Optional for pre-v9 rounds. */
+  agent: z.enum(['architect-critique', 'simplifier', 'code-reviewer', 'test-engineer']).optional(),
+  /** The round's outcome at a glance (clean = zero actionable findings). */
+  verdict: z.enum(['clean', 'findings-fixed', 'skipped']).optional(),
   findings: z.array(GateFindingShape).default([]),
   summary: z.string().min(5).optional(),
 })
@@ -113,7 +131,11 @@ export type StructuredGateRound = z.output<typeof StructuredGateRoundShape>
 
 /** A gate round may be the legacy free-form string (pre-schema-extension phases)
  *  or the new structured form. Both are accepted to preserve backwards
- *  compatibility with existing .phase.ts files. */
+ *  compatibility with existing .phase.ts files.
+ *  DEPRECATED for newly-done phases: the bare-string form defeats gate
+ *  auditability ('gate passed ok' satisfies a done phase). New phases record
+ *  StructuredGateRoundShape entries with `agent` set; audit-roadmap flags
+ *  string-form rounds on recently-completed phases. */
 export const GateRoundShape = z.union([z.string().min(5), StructuredGateRoundShape])
 
 export type GateRound = z.output<typeof GateRoundShape>
@@ -238,7 +260,8 @@ export type CompromiseDisposition = z.output<typeof CompromiseDispositionShape>
  * artifact is regenerable + gitignored + written every run, like the Step-1 arc-prompts/ artifact.
  */
 export const RunnerSummaryShape = z.object({
-  arcId: z.string().min(1),
+  // Same number|string union as Arc.id — a numeric-id arc must not fail Step 8b's parse.
+  arcId: z.union([z.number().int().positive(), z.string().min(1)]),
   outcome: z.enum(['shipped', 'halted', 'blocked']),
   reason: z.string().min(1).optional(),
   compromiseDisposition: z.array(
@@ -312,6 +335,10 @@ export const PhaseTaskShape = z.object({
   done: z.boolean(),
   /** ISO date when completed */
   doneDate: z.string().date().optional(),
+  /** The landed commit sha for this task (short or full) — makes the
+   *  one-task-one-commit discipline mechanically verifiable. Recorded by
+   *  do-phase at task completion; absence on a done task = not captured. */
+  commit: z.string().min(7).optional(),
   /** Transparency report from execution — what was done, what was compromised, what was skipped.
    *  Populated by do-phase after each task completes. Absence on a done task = report not captured. */
   transparencyReport: TransparencyReportShape.optional(),
@@ -321,7 +348,12 @@ export type PhaseTask = z.output<typeof PhaseTaskShape>
 
 // ── Minimal Task (for migrated historical phases with no structured data) ───
 
+/** The `minimal: true` literal is the REQUIRED discriminant (v9): without it, a
+ *  rich task missing `problem`/`steps`/`files` would silently degrade to this
+ *  3-field validation and every plan-quality rail would evaporate. Only
+ *  genuinely-minimal (usually historical) tasks carry the flag. */
 export const MinimalTaskShape = z.object({
+  minimal: z.literal(true),
   id: z.string(),
   title: z.string(),
   done: z.boolean(),
@@ -565,7 +597,10 @@ export const BacklogFlatShape = z.array(BacklogEntryShape)
  *  display title; `items` are the entries in execution order within the tier. */
 export const BacklogTierShape = z.object({
   tier: z.number().int().nonnegative(),
-  label: z.string().min(5),
+  /** ONE line. Blueprint narratives live in roadmap/followups/<arcId>.md (the
+   *  arc-sweep disposition home) — the label points there. The 200-char cap is
+   *  the mechanical enforcement of the backlog's own queue-only rule. */
+  label: z.string().min(5).max(200),
   items: z.array(BacklogEntryShape),
 })
 
