@@ -242,7 +242,9 @@ Aggregate into a phase-level summary:
 
 **Inline mode (do-phase driven by the main session — the default):** this is the ONLY human stop, unchanged. The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries).
 
-**Arc-mode (do-phase running inside a phase-executor — phase 858's `do-arc`):** do NOT stop and ask — there is no reachable user. Emit the same aggregate as a typed `PhaseExecutionResult` (the shape from phase 855, `templates/schema.ts`) as the executor's final message:
+**Arc-mode is re-derivable, never remembered:** you are in arc-mode **iff** `roadmap/.arc-mode` exists (do-arc's inline-mode marker — re-READ it here, at this step, don't rely on recalling Step-3 context) **or** this session IS a `phase-executor` sub-agent (your agent card says so). Neither → inline mode.
+
+**Arc-mode (do-phase running inside a phase-executor, or under do-arc's inline marker):** do NOT stop and ask — there is no reachable user. Emit the same aggregate as a typed `PhaseExecutionResult` (`PhaseExecutionResultShape` in `templates/schema.ts`) as the executor's final message:
 - `status: "escalated"` on a hard `ESCALATE_TO_USER` verdict or a `[MULTI-REPO]` / `[PRODUCT]` hard-stop — carry the architect's `question` + `options` in `escalation`. Do NOT guess past the escalation.
 - otherwise `status: "done"` with the compromise roll-up mapped into `compromises` / `skipped` / `hardcoded` / `surfaced` / `hardStops` / `gateRounds`.
 
@@ -264,7 +266,7 @@ The schema enforces gate results when `status: 'done'`. In one edit to the `.pha
 
 Then: the `types` slot → the `emit` slot (regenerates `reviews/changelog.json`) → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop.
 
-**Arc-mode override.** When do-phase runs inside a phase-executor (signalled explicitly by `do-arc`), the executor still sets the phase-file fields (`status`, `gate`, `gateRounds`, `metrics`, `compromises`, `completedDate`) **plus `executionResult`** — the typed Step-4b roll-up it is about to return — and commits the phase, but it SKIPS the backlog grooming above and the `emit`-slot regen. Persisting `executionResult` is what makes the roll-up durable: `do-arc`/`arc-sweep` read the in-context array as an optimization but can re-read it via `discoverResults()`, so a resumed or context-compacted arc is not lossy. Both `roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable; the `do-arc` orchestrator grooms the backlog and runs `emit:phases` **serially** after each phase-executor returns, so concurrent phase completions never race those files. Inline (non-arc) runs do the grooming + emit themselves exactly as described above, and leave `executionResult` unset — unchanged.
+**Arc-mode override.** When do-phase runs in arc-mode (re-derive it exactly as Step 4b does: the `roadmap/.arc-mode` marker exists, or this session IS a phase-executor), the executor still sets the phase-file fields (`status`, `gate`, `gateRounds`, `metrics`, `compromises`, `completedDate`) **plus `executionResult`** — the typed Step-4b roll-up it is about to return — and commits the phase, but it SKIPS the backlog grooming above and the `emit`-slot regen. Persisting `executionResult` is what makes the roll-up durable: `do-arc`/`arc-sweep` read the in-context array as an optimization but can re-read it via `discoverResults()`, so a resumed or context-compacted arc is not lossy. Both `roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable; the `do-arc` orchestrator grooms the backlog and runs `emit:phases` **serially** after each phase-executor returns, so concurrent phase completions never race those files. Inline (non-arc) runs do the grooming + emit themselves exactly as described above, and leave `executionResult` unset — unchanged.
 
 If `scripts/collect-phase-metrics.ts` exists, it fills `gate` and `metrics` automatically:
 ```bash

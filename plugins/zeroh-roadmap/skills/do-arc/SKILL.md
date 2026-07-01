@@ -79,10 +79,25 @@ The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the fl
 
 Iterate the member phases in **dependency order** (respect each phase's `dependsOn`; a phase runs only after its deps are `done`). **v1 is sequential** — one phase fully completes before the next starts. Parallel cross-Plane execution is deferred (see the plan's "Deferred to follow-up"). For each phase, set its arc-level task `in_progress`, then run it by the selected mode:
 
-- **Recursion mode** → spawn ONE `phase-executor` sub-agent (857) for the phase. It runs do-phase end to end and **returns** the `PhaseExecutionResult` — a real return channel: the sub-agent stops and you read its result.
+- **Recursion mode** → spawn ONE `phase-executor` sub-agent for the phase. It runs do-phase end to end and **returns** the `PhaseExecutionResult` — a real return channel: the sub-agent stops and you read its result.
 - **Orchestrator-inline mode** → run `do-phase` for the phase IN THE MAIN SESSION, in arc-mode (so do-phase skips backlog grooming + emit:phases per its Step-5 arc-mode override, and produces a `PhaseExecutionResult` instead of stopping to ask the user). **There is no separate return channel here — you are both do-phase and do-arc.** So the collect-and-branch below is YOUR control flow: after do-phase produces the result, you MUST evaluate it (step 2) before doing anything else. Do not let do-phase's "continue immediately to the next task" momentum (Prime Rule 1) carry the session past an `escalated`/`failed` result into Step 5 or the next phase.
 
-Either way, the **collect-and-branch is a mandatory control gate, not a logging step.** Read the `PhaseExecutionResult` and:
+**Arc-mode is an artifact, not a memory (inline mode).** On entering Step 4 in inline mode,
+write **`roadmap/.arc-mode`** (content: `{"arcId": <arc.id>, "mode": "inline"}`; gitignored)
+and remove it at Step 8 when the arc lands or halts. `do-phase` re-derives "am I in
+arc-mode?" from that marker (or from BEING a phase-executor) at its Steps 4b/5 — never from
+remembered conversation state, which decays over an hours-long arc. Recursion mode needs no
+marker: the phase-executor's agent card is the explicit signal.
+
+**Parse the return — never trust it raw.** Validate the executor's returned
+`PhaseExecutionResult` with `PhaseExecutionResultShape.parse(...)` (the validate-arc judge
+pattern). On a parse failure: (1) re-read `phase.executionResult` from the phase file via
+`discoverResults()` — the persisted field is the declared system of record and usually has
+the well-formed copy; (2) if the field is absent/also malformed, re-ask the executor ONCE
+for the typed result; (3) still malformed → treat as `status: "failed"` and HALT per branch
+4 below — never guess a phase's outcome from prose.
+
+Either way, the **collect-and-branch is a mandatory control gate, not a logging step.** Read the parsed `PhaseExecutionResult` and:
 1. **Surface its compromise roll-up to chat AS the phase ends** (the per-phase headline). Routine compromises/skipped/hardcoded are noted and **batched into the final arc-sweep** for disposition — they do not stop the arc.
 2. **HALT the arc immediately** on a hard interrupt: `status: "escalated"`, or a `hardStops` entry tagged `[MULTI-REPO]` or `[PRODUCT]`. Surface the architect's `escalation.question` + `options` and WAIT for the user — do not run Step 5, do not start the next phase. (In inline mode this means the same session stops here; in recursion mode the spawn already returned.)
 3. On `status: "done"`, set the phase's arc-level task `completed` and continue to the next phase.
@@ -130,6 +145,8 @@ A non-green result is a **blocker** — but what "blocker" means differs by inte
 - **Isolated branch/worktree off `baseRef`** (the session ran the arc on its own branch — recommended when other sessions share the checkout): on a clean PASS + no blocker, **auto-merge that branch into `baseRef`** (the standard ff/no-ff merge per the sweep's report) and, if a git worktree was used, remove it. Report what landed.
 
 Auto-integration fires only when ALL hold: validate-arc returned **PASS** (or a no-op with no `acceptanceCriteria`); the arc-sweep is clean (every batched debt item disposed — RESOLVE-NOW applied + re-gated, PLAN-PHASE authored, or ACCEPT/OPERATOR-PENDING recorded); the arc-end full suite is green; and there is **no blocker**.
+
+Whatever the outcome (landed, held, or halted), **remove `roadmap/.arc-mode`** here — a stale marker would put the NEXT standalone do-phase run into phantom arc-mode.
 
 **`baseRef → master` is NEVER part of auto-integration** — promoting to `master` is a deliberate *release* (branch protection + a version bump per RELEASE.md), so it stays a held release PR.
 
