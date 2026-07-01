@@ -12,7 +12,7 @@
 import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { discoverPhases } from './registry'
+import { crossValidate, discoverArcs, discoverPhases } from './registry'
 import type { Phase } from './schema'
 
 // ── Changelog computation ───────────────────────────────────────────────────
@@ -87,14 +87,29 @@ const CHANGELOG_PATH = path.resolve(process.cwd(), 'reviews/changelog.json')
 async function emit() {
   const { phases, errors } = await discoverPhases()
 
-  // All discovery errors are fatal — duplicate phase numbers included.
-  // Silent tolerance of duplicates causes non-deterministic lookups-by-number,
-  // so any collision halts emission.
-  if (errors.length > 0) {
-    console.error('Discovery errors:')
-    for (const e of errors) console.error(`  ${e.file}: ${e.error}`)
+  // Duplicate phase numbers stay FATAL: silent tolerance causes
+  // non-deterministic lookups-by-number, so any collision halts emission.
+  // Every other discovery error (a sibling's parse/import failure) is
+  // QUARANTINED — warned, excluded, emission proceeds — so one malformed file
+  // can't block every session's phase completion.
+  const duplicates = errors.filter((e) => e.error.startsWith('Duplicate phase number'))
+  const quarantined = errors.filter((e) => !e.error.startsWith('Duplicate phase number'))
+
+  if (duplicates.length > 0) {
+    console.error('Discovery errors (duplicate numbers are fatal):')
+    for (const e of duplicates) console.error(`  ${e.file}: ${e.error}`)
     process.exit(1)
   }
+  if (quarantined.length > 0) {
+    console.error('QUARANTINED (excluded from emission — fix these files):')
+    for (const e of quarantined) console.error(`  ${e.file}: ${e.error}`)
+  }
+
+  // Arc ↔ phase integrity: emit is the early signal (warnings only);
+  // audit-roadmap remains the enforcement surface.
+  const { arcs, errors: arcErrors } = await discoverArcs()
+  for (const e of arcErrors) console.error(`  arc warning — ${e.file}: ${e.error}`)
+  for (const v of crossValidate(phases, arcs)) console.error(`  cross-validate warning — ${v}`)
 
   const changelog = computeChangelog(phases)
   const changelogJson = `${JSON.stringify({ versions: changelog }, null, 2)}\n`
@@ -104,6 +119,11 @@ async function emit() {
 
   console.log(`Changelog: ${CHANGELOG_PATH}`)
   console.log(`  ${phases.length} phases scanned, ${changelog.length} versions emitted`)
+  if (quarantined.length > 0) {
+    console.log(
+      `  WARNING: ${quarantined.length} file(s) quarantined and NOT emitted: ${quarantined.map((e) => e.file).join(', ')}`,
+    )
+  }
 }
 
 emit().catch((err) => {
