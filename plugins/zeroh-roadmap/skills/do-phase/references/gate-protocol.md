@@ -15,16 +15,51 @@ After the gate passes, Step 5 fills the phase file with gate results, metrics, a
 
 ---
 
+## Gate commands — the consumer binding (read this FIRST)
+
+Every mechanical check in this protocol is a **named slot**, never a literal command. The
+consumer repo binds each slot to its real command in a **`## Gate commands`** block in its
+CLAUDE.md — the same consumer-binding seam `validate-arc` uses for `## Validation tiers`.
+Slot names: `lint` · `types` · `unit` · `integration` · `build` · `e2e` · `emit`.
+
+Example consumer block:
+
+```markdown
+## Gate commands
+- lint: npm run lint:boundaries
+- types: npm run type-check
+- unit: npm test
+- integration: npm run test:integration
+- build: npm run build
+- e2e: npm run test:e2e
+- emit: npm run emit:phases
+```
+
+**Resolution rules (fail-loud, never guess):**
+- Read the block once per session from the consumer's CLAUDE.md; resolve every slot the
+  selected gate set needs BEFORE running any check.
+- A needed slot missing from the block → the gate **REFUSES** with: `Gate cannot run:
+  '## Gate commands' in CLAUDE.md has no '<slot>' binding — add it.` Do not substitute a
+  guessed `npm`/`pnpm` command: a guess that happens to execute can silently run the wrong
+  check and report a false pass.
+- The whole block absent → the gate **REFUSES**, naming the block and pointing at the
+  example above.
+- A slot explicitly bound to `none` (e.g. `e2e: none`) is the consumer's honest statement
+  that the tier doesn't exist — record it as absent-by-declaration in the gate results;
+  that is not a failure.
+
+---
+
 ## Gate Set by `phase.kind`
 
 The gate set is selected from the phase's `kind` field (introduced in `@zeroh-roadmap-schema v3`):
 
 | `kind` | Stages run |
 |---|---|
-| `mockup` | Mechanical only: `pnpm biome check . && pnpm type-check`. Skip Architect-Critique, Round 0, and Rounds 1..N. Compromise Summary still runs. |
+| `mockup` | Mechanical only: the `lint` + `types` slots. Skip Architect-Critique, Round 0, and Rounds 1..N. Compromise Summary still runs. |
 | `logic` | All four stages (default behaviour). |
 | `hardening` | All four stages **plus** the bug-fix closure rule from `review-phase` Mode B Step 2(b): for any persistence/event/marshal-chain task, the integration-suite rerun is the closure criterion. Quote the integration test diff in the compromise summary. Unit-test pass alone is NOT sufficient. |
-| `release` | All four stages **plus** `pnpm test:e2e` in Round 1's mechanical checks (in addition to `pnpm e2e:local`). |
+| `release` | All four stages **plus** the `e2e` slot in Round 1's mechanical checks. |
 
 If `kind` is missing on a legacy phase, treat as `logic` and emit a one-time warning pointing at `scripts/migrate/audit.ts`.
 
@@ -114,27 +149,20 @@ The loop is automated. Each round fixes findings and re-runs agents without paus
 
 ### Round N (start with N=1)
 
-**1. Mechanical checks.** Every step must pass before agents run. If any fails, fix it, commit, and restart Round N from the top.
+**1. Mechanical checks.** Every step must pass before agents run. If any fails, fix it, commit, and restart Round N from the top. Which slots run is a **table lookup**, not a judgment call — resolve slots via the `## Gate commands` binding (top of this file), then run the cell for this phase's `kind` × mode:
 
-```bash
-pnpm biome check .       # lint
-pnpm type-check          # types
-pnpm test                # unit + integration   (see test-cadence below — arc-mode runs RELEVANT tests only)
-pnpm build               # production build
-bash scripts/pre-review.sh <first-task-SHA>~1   # mechanical finding catcher
-pnpm e2e:local           # E2E                  (inline only — deferred to arc end under arc-mode)
-```
+| `kind` \ mode | **Inline** (standalone do-phase) | **Arc-mode** (inside a phase-executor) |
+|---|---|---|
+| `mockup` | `lint` + `types` | `lint` + `types` |
+| `logic` | `lint` + `types` + `unit` + `integration` + `build` + `e2e` | `lint` + `types` + `build` + tests **relevant to this diff** only |
+| `hardening` | the `logic` row **plus** the closure integration test for any persistence/event/marshal-chain task | `lint` + `types` + `build` + relevant tests, **always including the closure integration test** (the closure criterion never defers) |
+| `release` | the `logic` row **plus** the broad `e2e` slot | `lint` + `types` + `build` + relevant tests; broad `e2e` defers to the arc end |
 
-**Test cadence (arc-mode vs inline).** Re-running the whole unit+integration+e2e suite on every phase's gate is wasteful for a multi-phase arc (it runs N times) and is the dominant per-phase slowdown.
-- **Arc-mode** (do-phase running inside a `do-arc` phase-executor): at the gate run **only the tests relevant to this phase's diff** (the suites/files covering the touched code) plus `biome`, `type-check`, and `build`. **Defer** the full `pnpm test` (unit + integration) and `pnpm e2e:local` to the **arc end** — `do-arc` Step 8 runs the full suite ONCE (after the sweep and validate-arc, since both can still land code), and a red suite there blocks the merge. A docs/config-only phase whose diff has no covering tests runs its relevant doc/lint checks and records honestly that no test suite applies.
-- **Inline** (a standalone, non-arc `do-phase` run): run the FULL block above at the gate unchanged — a lone phase is its own integration point, with no "arc end" to defer to.
+Also run `bash scripts/pre-review.sh <first-task-SHA>~1` when that script exists in the consumer repo (a consumer-authored mechanical finding catcher; skip silently when absent).
 
-The `kind`-specific additions still apply under arc-mode, but the cadence does NOT weaken a task's own correctness proof:
-- **hardening's integration-rerun closure rule** targets a *specific* persistence/event/marshal-chain task — that task's covering integration test IS "relevant" and **runs at the gate** (it is the closure criterion proving the task correct; never defer it). Only the *rest* of the integration suite defers to the arc-end run.
-- **release's broad `pnpm test:e2e`** defers to the arc-end run under arc-mode (a release-kind phase inside an arc still gets full e2e at the arc end, which gates the merge).
-- Inline (non-arc) runs: both run at the gate, unchanged.
+Why the arc-mode column is narrower: re-running the whole unit+integration+e2e suite on every phase's gate runs it N times per arc — `do-arc` Step 8 runs the full suite ONCE at the arc end (after the sweep and validate-arc, since both can still land code), and a red suite there blocks the merge. A docs/config-only phase whose diff has no covering tests runs its relevant doc/lint checks and records honestly that no test suite applies.
 
-The principle: "relevant tests" always includes the specific test(s) that *prove the touched code correct* — what defers is only the broad suite that re-covers untouched code.
+The principle behind "relevant tests": always include the specific test(s) that *prove the touched code correct* — what defers is only the broad suite that re-covers untouched code.
 
 **2. Agent reviews.** Launch 2 `code-reviewer` agents in parallel — **two synchronous Agent calls in a single message** (no `run_in_background` on either). "Parallel" here means the runtime fans them out; the parent still blocks until both return. Each receives:
 - **Round 1**: full phase diff (`git diff <phase-start-SHA>..HEAD`) plus any unresolved items from Round 0's `skipped` or `bugsNoted` lists.
@@ -232,7 +260,7 @@ Persisting to the phase file means the compromise summary survives outside git a
 
 ## Phase Completion
 
-The schema enforces gate results when `status: 'done'`. `pnpm type-check` catches missing fields and wrong literal values (e.g. `typeCheck: 'errors'`, `lint: 'errors'`); `definePhase()` additionally catches `unitTests.passed !== total` and empty `gateRounds` at runtime. Fill everything in one edit.
+The schema enforces gate results when `status: 'done'`. The `types` slot catches missing fields and wrong literal values (e.g. `typeCheck: 'errors'`, `lint: 'errors'`); `definePhase()` additionally catches `unitTests.passed !== total` and empty `gateRounds` at runtime. Fill everything in one edit.
 
 ### Required fields (set together)
 
@@ -263,8 +291,8 @@ The schema enforces gate results when `status: 'done'`. `pnpm type-check` catche
    - `metrics: { commits, linesAdded, linesRemoved, filesChanged, testsAtStart, testsAtEnd, testsAdded }`
    - `compromises: '<summary from compromise-summary step>'` — the aggregated compromise/skipped/hardcoded summary. Omit only if every task reported "None" in all six sections.
    - `completedDate: 'YYYY-MM-DD'`
-2. Run `pnpm type-check` — confirms gate enforcement passes.
-3. Run `pnpm emit:phases` to regenerate `reviews/changelog.json`.
+2. Run the `types` slot — confirms gate enforcement passes.
+3. Run the `emit` slot to regenerate `reviews/changelog.json`.
 4. Commit: `docs(roadmap): mark phase N complete` (include compromise summary in commit body).
 5. Push to develop.
 
@@ -276,4 +304,4 @@ If `scripts/collect-phase-metrics.ts` exists, it can fill gate + metrics automat
 npx tsx scripts/collect-phase-metrics.ts N
 ```
 
-Then set `status: 'done'` and verify with `pnpm type-check`.
+Then set `status: 'done'` and verify with the `types` slot.

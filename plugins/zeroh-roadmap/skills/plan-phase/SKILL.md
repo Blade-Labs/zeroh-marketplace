@@ -168,10 +168,10 @@ export default definePhase({
 
 ### Step 4: Validate the phase file
 
-```bash
-pnpm type-check    # Validates the phase compiles
-pnpm emit:phases   # Validates phase discovery + regenerates changelog
-```
+Run the `types` slot, then the `emit` slot (both resolved from the consumer's `## Gate commands`
+CLAUDE.md block — see do-phase `references/gate-protocol.md`; a missing binding fails loud). The
+`types` slot validates the phase compiles; the `emit` slot validates phase discovery and
+regenerates the changelog.
 
 If type-check fails, the task data is structurally invalid — fix it before committing.
 
@@ -197,7 +197,7 @@ For each pattern a task changes, check whether the same pattern exists elsewhere
 - Fail = NEEDS WORK. Incomplete fix — will ship a partial change.
 
 **4. Criteria are verifiable**
-Each acceptance criterion must name a specific command to run (`pnpm test`, `pnpm type-check`) or an observable output to check ("page renders X", "API returns 200 with field Y").
+Each acceptance criterion must name a specific command to run (the consumer's `unit` / `types` slot command, e.g. `npm test`) or an observable output to check ("page renders X", "API returns 200 with field Y").
 - Reject: "works correctly", "implementation verified", "task complete", "properly handles"
 - Fail = NEEDS WORK. Unverifiable criterion — do-phase can't confirm the task worked.
 
@@ -274,7 +274,7 @@ Skip this step entirely if `--skip-review` was passed. Mention in the user-facin
 ### Every task must have:
 - `steps[].file` — a REAL file path that exists (or will be created). Never `'roadmap/phases/'` as a placeholder.
 - `steps[].description` — what specifically changes in that file
-- `acceptanceCriteria` — 1-4 observable outcomes. Not "implementation verified" but "pnpm test:integration passes" or "dashboard shows $48 not $4800"
+- `acceptanceCriteria` — 1-4 observable outcomes. Not "implementation verified" but "the `integration` slot passes" or "dashboard shows $48 not $4800"
 - `files[]` — ALL files the task modifies
 
 ### Task sizing:
@@ -300,7 +300,7 @@ Every task should declare a `testMode` based on its acceptance criteria:
 | "business rule enforces X" | `"tdd"` | Business rules are pure functions |
 | "dashboard shows X", "page renders Y" | `"e2e"` | Needs browser |
 | "form submits successfully", "user can navigate to" | `"e2e"` | User flow |
-| "pnpm build passes", "file exists" | `"none"` | Build/file checks |
+| "the `build` slot passes", "file exists" | `"none"` | Build/file checks |
 | "docs updated", "config changed" | `"none"` | Not testable by agent |
 | "lint passes", "type-check clean" | `"none"` | Validation gate covers this |
 

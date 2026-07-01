@@ -130,10 +130,10 @@ For each task, in order:
 #### testMode: "tdd" (test-first)
 
    **(3a)** Launch `test-engineer` agent with ONLY: `task.problem`, `task.acceptanceCriteria`, `task.files`, and the existing type signatures/interfaces from those files (use LSP `hover` or read type exports — NOT function bodies). Do NOT give `task.steps`.
-   **(3b)** Run `pnpm test` — tests MUST FAIL (red). If they pass, tests are trivial — reject and have test-engineer rewrite.
+   **(3b)** Run the `unit` slot (commands resolve from the consumer's `## Gate commands` CLAUDE.md block — see references/gate-protocol.md) — tests MUST FAIL (red). If they pass, tests are trivial — reject and have test-engineer rewrite.
    **(3c)** If tests don't compile, provide the compilation error to test-engineer for 1 retry. If still broken, skip TDD and note in transparency report: "TDD skipped — test-engineer could not produce compilable tests."
    **(3d)** Code agent implements `task.steps`.
-   **(3e)** Run `pnpm test` — tests MUST PASS (green).
+   **(3e)** Run the `unit` slot — tests MUST PASS (green).
    **(3f)** Commit test + code together.
 
 #### testMode: "e2e" (test-after, blind to source)
@@ -147,7 +147,7 @@ For each task, in order:
 
    Implement the changes described in `steps`. Each step has a `file` path — go to that file and make the described change.
 
-4. **Verify** — run `pnpm type-check` at minimum. If the task touches tests, run `pnpm test`. If the task touches UI, run `pnpm build`.
+4. **Verify** — run the `types` slot at minimum (resolved from the consumer `## Gate commands` block; a missing binding fails loud — never guess a command). If the task touches tests, run the `unit` slot. If the task touches UI, run the `build` slot.
 5. **Commit** — commit the changes with message format: `<type>(<scope>): phase N — <task title>`
 6. **Update phase file** — set `done: true` and `doneDate: 'YYYY-MM-DD'` on the task
 7. **TaskUpdate** — set status to `completed`
@@ -196,7 +196,7 @@ Replaces steps 3–8 above. Use ONLY for tasks with `batchMode: true` — set de
 2. **Implement and commit each subtask serially.** For each step:
    a. TaskUpdate status to `in_progress`.
    b. Apply the step's edits to the named file.
-   c. Run `pnpm type-check`. Failure → fix it in this same step's commit; do not roll back, do not skip ahead.
+   c. Run the `types` slot. Failure → fix it in this same step's commit; do not roll back, do not skip ahead.
    d. Commit with message: `<type>(<scope>): phase N task N.X (k/M) — <step.description first ~60 chars>`.
    e. TaskUpdate status to `completed`.
 3. **No sub-agent forks for the steps.** `batchMode: true` is permission to make many commits inline, NOT permission to spawn sub-agents to absorb the steps. Forking the steps abandons the per-step commit discipline and produces an opaque mega-deliverable. The auto-spawn discipline rule (Step 4 prelude) applies in full force here — including its arc-mode scoping: it bans forks that absorb phase work, not the do-phase runner itself being a phase-executor sub-agent.
@@ -218,10 +218,12 @@ After the last task commits, run the validation gate per **`references/gate-prot
 
 | `kind` | Gate set |
 |---|---|
-| `mockup` | Mechanical only: `pnpm biome check . && pnpm type-check`. **Skip** architect-critique → simplifier → code-reviewer chain. Step 4b summary still runs. |
+| `mockup` | Mechanical only: the `lint` + `types` slots. **Skip** architect-critique → simplifier → code-reviewer chain. Step 4b summary still runs. |
 | `logic` | Full gate: architect-critique → Round 0 simplify → Rounds 1..N correctness loop (hard-cap 5). |
 | `hardening` | Full gate **plus** the integration-suite-rerun closure rule for persistence/event/marshal-chain tasks (see `review-phase` Mode B Step 2(b)). |
-| `release` | Full gate **plus** `pnpm test:e2e` in Round 1's mechanical checks. |
+| `release` | Full gate **plus** the `e2e` slot in Round 1's mechanical checks. |
+
+Which slots run per kind × mode is the decision table in `references/gate-protocol.md` — a table lookup, not a judgment call.
 
 Missing `kind` on a legacy phase → default to `logic`, warn once. **No exceptions** — every phase gets its kind's gate, docs and tests included.
 
@@ -260,9 +262,9 @@ The schema enforces gate results when `status: 'done'`. In one edit to the `.pha
 
 **Also strip narrative referencing this phase.** If `backlog.ts` has track-narrative comments that explicitly name the phase being removed (`// Track 1 — phase 467 shipped 2026-…`, `// 467 + 472 complete; remaining: 359`, etc.), remove those comments too in the same edit. The backlog is queue-only per its header — narrative about completed work belongs in the commit history, the phase file's `compromises` field, and `reviews/changelog.json`, not in backlog comments. Operator-curated comments NOT naming this phase (track-priority headers, in-flight notes for other phases) stay.
 
-Then: `pnpm type-check` → `pnpm emit:phases` (regenerates `reviews/changelog.json`) → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop.
+Then: the `types` slot → the `emit` slot (regenerates `reviews/changelog.json`) → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop.
 
-**Arc-mode override.** When do-phase runs inside a phase-executor (signalled explicitly by `do-arc`), the executor still sets the phase-file fields (`status`, `gate`, `gateRounds`, `metrics`, `compromises`, `completedDate`) **plus `executionResult`** — the typed Step-4b roll-up it is about to return — and commits the phase, but it SKIPS the backlog grooming above and the `pnpm emit:phases` regen. Persisting `executionResult` is what makes the roll-up durable: `do-arc`/`arc-sweep` read the in-context array as an optimization but can re-read it via `discoverResults()`, so a resumed or context-compacted arc is not lossy. Both `roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable; the `do-arc` orchestrator grooms the backlog and runs `emit:phases` **serially** after each phase-executor returns, so concurrent phase completions never race those files. Inline (non-arc) runs do the grooming + emit themselves exactly as described above, and leave `executionResult` unset — unchanged.
+**Arc-mode override.** When do-phase runs inside a phase-executor (signalled explicitly by `do-arc`), the executor still sets the phase-file fields (`status`, `gate`, `gateRounds`, `metrics`, `compromises`, `completedDate`) **plus `executionResult`** — the typed Step-4b roll-up it is about to return — and commits the phase, but it SKIPS the backlog grooming above and the `emit`-slot regen. Persisting `executionResult` is what makes the roll-up durable: `do-arc`/`arc-sweep` read the in-context array as an optimization but can re-read it via `discoverResults()`, so a resumed or context-compacted arc is not lossy. Both `roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable; the `do-arc` orchestrator grooms the backlog and runs `emit:phases` **serially** after each phase-executor returns, so concurrent phase completions never race those files. Inline (non-arc) runs do the grooming + emit themselves exactly as described above, and leave `executionResult` unset — unchanged.
 
 If `scripts/collect-phase-metrics.ts` exists, it fills `gate` and `metrics` automatically:
 ```bash
