@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
-# reviews/build-dashboard.sh — Rebuild reviews/dashboard/index.html
+# build-dashboard.sh — Rebuild reviews/dashboard/index.html
 # Embeds all v*.json review files from reviews/releases/ as inline data.
-# Run after adding a new review JSON: bash reviews/build-dashboard.sh
+# Run after adding a new review JSON: bash scripts/build-dashboard.sh
 # Output: reviews/dashboard/index.html (self-contained, no CDN except Chart.js)
+#
+# Resolves reviews/ from the PROJECT ROOT (git toplevel, cwd fallback), never
+# from the script's own install dir — scaffold-roadmap.sh installs this file
+# to scripts/, where $SCRIPT_DIR-relative paths would read an empty
+# scripts/releases/ and silently build an empty dashboard.
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RELEASES_DIR="$SCRIPT_DIR/releases"
-OUTPUT="$SCRIPT_DIR/dashboard/index.html"
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+REVIEWS_DIR="$PROJECT_ROOT/reviews"
+RELEASES_DIR="$REVIEWS_DIR/releases"
+OUTPUT="$REVIEWS_DIR/dashboard/index.html"
 
-mkdir -p "$SCRIPT_DIR/dashboard"
+[ -d "$RELEASES_DIR" ] || { echo "build-dashboard: no such dir: $RELEASES_DIR (run from the project or a subdir of it)" >&2; exit 1; }
+mkdir -p "$REVIEWS_DIR/dashboard"
 
 # Collect all v*.json files into a JSON array using Python
 REVIEWS_JSON=$(python3 - "$RELEASES_DIR" <<'PYEOF'

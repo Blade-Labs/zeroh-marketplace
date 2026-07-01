@@ -9,9 +9,10 @@
  *   npx tsx scripts/collect-phase-metrics.ts <phase-number> --historical
  *     Skip live gate checks. Derive everything from git log. Use for
  *     backfilling historical phases that shipped before discipline.
- *     Gate fields default to 'clean' (defensible — phase was marked done)
- *     with a placeholder unitTests {0,0}. completedDate is the date of
- *     the LAST commit matching this phase number.
+ *     Gate enum fields default to 'clean' (the schema has no "unverified"
+ *     enum member) with the honest 'unverified-historical' sentinel stamped
+ *     in every notes field, and a placeholder unitTests {0,0}. completedDate
+ *     is the date of the LAST commit matching this phase number.
  *
  *   npx tsx scripts/collect-phase-metrics.ts --all-historical
  *     Iterate every done phase that lacks gate/gateRounds/metrics/
@@ -163,14 +164,49 @@ function getGateRoundsFromCommits(phaseNum: number): string[] {
 
 // ── Live gate checks (live mode only) ───────────────────────────────────────
 
+/** Package manager by lockfile sniff — the fallback when no Gate-commands binding exists. */
+function detectPackageManager(): 'pnpm' | 'npm' | 'yarn' {
+  if (fs.existsSync('pnpm-lock.yaml')) return 'pnpm'
+  if (fs.existsSync('yarn.lock')) return 'yarn'
+  return 'npm'
+}
+
+/** Read the consumer's `## Gate commands` CLAUDE.md block ("- slot: command" lines).
+ *  Returns {} when the block is absent — callers fall back to detected-PM defaults. */
+function readGateCommands(): Record<string, string> {
+  try {
+    const claude = fs.readFileSync('CLAUDE.md', 'utf-8')
+    const block = claude.match(/^## Gate commands\s*\n([\s\S]*?)(?=^## |\n*$)/m)?.[1]
+    if (!block) return {}
+    const out: Record<string, string> = {}
+    for (const line of block.split('\n')) {
+      const m = line.match(/^\s*-\s*(\w+):\s*(.+?)\s*$/)
+      if (m) out[m[1]] = m[2]
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function resolveSlot(slot: string, fallback: string): string {
+  return readGateCommands()[slot] ?? fallback
+}
+
 function getTestCounts(): { passed: number; failed: number } {
   function parse(output: string) {
-    const passed = Number(output.match(/(\d+) passed/)?.[1] ?? 0)
-    const failed = Number(output.match(/(\d+) failed/)?.[1] ?? 0)
+    // vitest/jest: "N passed" / "N failed" · node:test TAP: "# pass N" / "# fail N"
+    const passed = Number(
+      output.match(/(\d+) passed/)?.[1] ?? output.match(/# pass:?\s+(\d+)/)?.[1] ?? 0,
+    )
+    const failed = Number(
+      output.match(/(\d+) failed/)?.[1] ?? output.match(/# fail:?\s+(\d+)/)?.[1] ?? 0,
+    )
     return { passed, failed }
   }
+  const cmd = resolveSlot('unit', `${detectPackageManager()} test`)
   try {
-    const output = execSync('pnpm test 2>&1', { encoding: 'utf-8', timeout: 120_000 })
+    const output = execSync(`${cmd} 2>&1`, { encoding: 'utf-8', timeout: 600_000 })
     return parse(output)
   } catch (err) {
     return parse(String(err))
@@ -178,9 +214,10 @@ function getTestCounts(): { passed: number; failed: number } {
 }
 
 function getLiveGateResults() {
+  const pm = detectPackageManager()
   const lint = (() => {
     try {
-      execSync('pnpm biome check . 2>&1', { encoding: 'utf-8' })
+      execSync(`${resolveSlot('lint', `${pm} run lint`)} 2>&1`, { encoding: 'utf-8' })
       return 'clean' as const
     } catch (e) {
       return String(e).includes('error') ? ('errors' as const) : ('warnings' as const)
@@ -188,7 +225,7 @@ function getLiveGateResults() {
   })()
   const typeCheck = (() => {
     try {
-      execSync('pnpm type-check 2>&1', { encoding: 'utf-8' })
+      execSync(`${resolveSlot('types', `${pm} run type-check`)} 2>&1`, { encoding: 'utf-8' })
       return 'clean' as const
     } catch {
       return 'errors' as const
@@ -197,7 +234,10 @@ function getLiveGateResults() {
   const tests = getTestCounts()
   const build = (() => {
     try {
-      execSync('pnpm build 2>&1', { encoding: 'utf-8', timeout: 300_000 })
+      execSync(`${resolveSlot('build', `${pm} run build`)} 2>&1`, {
+        encoding: 'utf-8',
+        timeout: 600_000,
+      })
       return 'clean' as const
     } catch {
       return 'errors' as const
@@ -210,7 +250,7 @@ function getLiveGateResults() {
       typeCheck,
       unitTests: { passed: tests.passed, total: tests.passed + tests.failed },
       integrationTests: { passed: 0, total: 0, notes: 'Included in unit test count' },
-      e2eTests: { passed: 0, total: 0, notes: 'Run separately via pnpm e2e:local' },
+      e2eTests: { passed: 0, total: 0, notes: 'Run separately via the e2e slot' },
       build,
     },
     testsAtEnd: tests.passed,
@@ -220,17 +260,21 @@ function getLiveGateResults() {
 // ── Historical gate (no live execution) ─────────────────────────────────────
 
 function getHistoricalGate() {
-  // The phase was marked done in a prior commit, which implies it passed
-  // its gate at the time. Lint/typeCheck/build → 'clean' is the defensible
-  // historical assumption. Tests default to 0/0 because we cannot recover
-  // historical pass counts without checking out the phase's HEAD and
-  // running the suite at that revision (out of scope for backfill).
+  // HONESTY NOTE: the lint/typeCheck/build enum values below are ASSUMED, not
+  // verified — the schema's GateResultShape enums have no "unverified" member,
+  // so 'clean' is the only value a done phase can carry. The sentinel lives in
+  // the notes fields (the only free-text slot): every consumer of a historical
+  // gate sees 'unverified-historical' stamped there instead of a fabricated
+  // verified-looking result. Tests default to 0/0 because we cannot recover
+  // historical pass counts without checking out the phase's HEAD and running
+  // the suite at that revision (out of scope for backfill).
+  const SENTINEL = 'unverified-historical — assumed from done status, never re-run'
   return {
     lint: 'clean' as const,
     typeCheck: 'clean' as const,
-    unitTests: { passed: 0, total: 0 },
-    integrationTests: { passed: 0, total: 0, notes: 'Historical — gate discipline retrofitted' },
-    e2eTests: { passed: 0, total: 0, notes: 'Historical — gate discipline retrofitted' },
+    unitTests: { passed: 0, total: 0, notes: SENTINEL },
+    integrationTests: { passed: 0, total: 0, notes: SENTINEL },
+    e2eTests: { passed: 0, total: 0, notes: SENTINEL },
     build: 'clean' as const,
   }
 }
@@ -396,7 +440,7 @@ if (ALL_HISTORICAL) {
     }
   }
   console.log(`\nProcessed ${scanned} done phases, modified ${modified}`)
-  console.log('Run pnpm type-check + pnpm emit:phases to verify.')
+  console.log('Run the types + emit gate slots (type-check + emit:phases) to verify.')
 } else {
   const phaseNum = Number(argv[0])
   if (!phaseNum || Number.isNaN(phaseNum)) {
@@ -418,7 +462,7 @@ if (ALL_HISTORICAL) {
   const changed = processPhase(phaseNum, HISTORICAL ? 'historical' : 'live')
   if (changed) {
     console.log(`Updated: ${phaseFile}`)
-    console.log('Run pnpm type-check to verify the update compiles.')
+    console.log('Run the types gate slot (type-check) to verify the update compiles.')
   } else {
     console.log('No changes — fields already populated.')
   }

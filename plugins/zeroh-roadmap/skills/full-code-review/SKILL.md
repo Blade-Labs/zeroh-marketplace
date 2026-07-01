@@ -373,7 +373,7 @@ node -p "require('./package.json').version"
 
 7. Rebuild the dashboard:
 ```bash
-bash reviews/build-dashboard.sh
+bash scripts/build-dashboard.sh   # resolves reviews/ from the git toplevel
 ```
 
 8. Commit both files:
@@ -455,7 +455,7 @@ If any findings were deferred, add a `deferredToBacklog` array:
 ### Step 5: Rebuild and commit
 
 ```bash
-bash reviews/build-dashboard.sh
+bash scripts/build-dashboard.sh   # resolves reviews/ from the git toplevel
 git add reviews/releases/v{version}-review.json reviews/dashboard/index.html
 git commit -m "docs(reviews): v{version} — remediation complete, verdict updated"
 ```
