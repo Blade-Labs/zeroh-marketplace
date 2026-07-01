@@ -53,19 +53,22 @@ Pass the agent: the user's one-line request, files you've already investigated (
 
 ## Protocol
 
-### Step 1: Determine the next phase number
+### Step 1: Reserve the next phase number (atomic)
 
 ```bash
-# Scan BOTH active phases and archived phases — phase numbers are one monotonic
-# namespace across roadmap/phases/ and roadmap/archive/<version>/. If you only
-# scan phases/, you will collide with archived numbers (audit Check 8 catches
-# this; plan-phase must not produce it in the first place).
-echo $(( $({ sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts 2>/dev/null
-              find roadmap/archive -maxdepth 2 -name '*.phase.ts' -exec sed -nE 's/^  phase: ([0-9]+),.*/\1/p' {} \; 2>/dev/null
-            } | sort -n | tail -1) + 1 ))
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/claim-phase-number.sh"
 ```
 
-This returns the next available phase number. Phase numbers are monotonic — never reuse historical gaps, including numbers that now live under `roadmap/archive/`.
+The script scans BOTH `roadmap/phases/` and `roadmap/archive/` (one monotonic namespace),
+counts outstanding claims, and atomically creates `roadmap/phases/.claims/<N>.claim` with
+noclobber — **creation IS the lock**, so two concurrent sessions can never claim the same
+number (the loser gets EEXIST and the script retries at N+1). It prints the claimed N.
+If the consumer scaffolded the script locally (`scripts/claim-phase-number.sh`), that copy
+works identically. Ensure `roadmap/phases/.claims/` is gitignored.
+
+Phase numbers are monotonic — never reuse historical gaps, including numbers that now live
+under `roadmap/archive/`. Never hand-compute max+1; that unlocked read-compute-write is
+exactly the collision this script exists to kill.
 
 ### Step 2: Investigate the code BEFORE writing any task
 
@@ -256,6 +259,9 @@ If you set `batchMode: true`, also ensure each `steps[]` entry maps to a clean c
 ```
 docs(roadmap): phase N — <short description>
 ```
+
+Delete the number reservation in the same breath: `rm -f roadmap/phases/.claims/<N>.claim`
+(the committed `phase-N.phase.ts` now holds the number; the claim file has done its job).
 
 ### Step 7: Auto-invoke `/review-phase N`
 
