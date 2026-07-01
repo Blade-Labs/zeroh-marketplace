@@ -3,107 +3,54 @@ name: "Test Strategy"
 description: "Test pyramid, coverage targets, and conventions. Use when writing tests, reviewing test quality, or planning test phases."
 user-invocable: true
 metadata:
-  keywords: test, vitest, coverage, unit, integration, e2e, playwright, allure
+  keywords: test, coverage, unit, integration, e2e, pyramid, conventions
 ---
 
 # Test Strategy
 
-**Full document:** Check project docs for a test strategy document.
+**This skill is consumer-bound.** The runner, commands, layout, and mock seams are the
+consumer repo's, never this plugin's. Two bindings, both in the consumer's CLAUDE.md:
 
-## Test Pyramid
+1. **`## Test conventions`** — the repo's test runner, test file layout
+   (colocated vs `__tests__/`), mock seam (which boundary to fake), fixture home, assertion
+   style. Read it before writing any test. Absent → infer from 2-3 existing test files
+   nearest the code under test and say so.
+2. **`## Gate commands`** — the `unit` / `integration` / `e2e` slots bind the commands
+   (see do-phase `references/gate-protocol.md`).
 
-| Tier | What | Runner | Count | Runtime |
-|------|------|--------|-------|---------|
-| 1a — Unit | Pure business logic, no mocking | vitest | ~900 | ~3s |
-| 1b — Integration | Mocked DB/email, route orchestration | vitest | ~400 | ~5s |
-| 2 — E2E | User journeys, all 9 roles | Playwright | ~100 | ~7min |
+Also check the consumer's own test-strategy document if one exists (e.g. `docs/TEST-STRATEGY.md`)
+— it outranks the generic guidance below.
 
-## Commands
+## Test Pyramid (generic shape — counts/runtimes are the consumer's)
 
-```bash
-pnpm test              # All Tier 1 (~4s, offline)
-pnpm test:coverage     # With v8 coverage
-pnpm test:allure       # With Allure HTML report
-```
+| Tier | What | Bound by |
+|------|------|----------|
+| 1a — Unit | Pure logic, no I/O, colocated with source | the `unit` slot |
+| 1b — Integration | Real wiring through the app's entrypoints, external boundaries faked | the `integration` slot |
+| 2 — E2E | Real user journeys against a running instance | the `e2e` slot |
 
-## Conventions
-
-- Tests in `__tests__/` directories next to source
-- `describe('module') > describe('function') > it('scenario — edge case')`
-- Mock at sub-module boundary, not at drizzle layer
-- `beforeEach(() => vi.resetAllMocks())` in every file
-- Financial assertions: exact integers or `toBeCloseTo` with explicit precision
-- Time-dependent: `vi.useFakeTimers()` + `vi.useRealTimers()` in afterEach
-
-## DB Mock Factory (`lib/__tests__/db-mock-factory.ts`)
-
-Shared Drizzle mock with argument capture. Use for all new test files that mock `@/lib/db/drizzle`.
-
-### Setup pattern (handles vi.mock hoisting)
-
-```typescript
-import type { DrizzleMockCapture } from '@/lib/__tests__/db-mock-factory'
-
-const ref = vi.hoisted(() => ({ db: null as any, mocks: null as any }))
-vi.mock('@/lib/db/drizzle', async () => {
-  const { createDrizzleMock } = await import('@/lib/__tests__/db-mock-factory')
-  const result = createDrizzleMock()
-  ref.db = result.db
-  ref.mocks = result.mocks
-  return { db: result.db }
-})
-function getMocks(): DrizzleMockCapture { return ref.mocks }
-```
-
-### Providing select results (FIFO queue)
-
-```typescript
-// Each push = one await db.select()... call
-getMocks().selectQueue.push([{ id: '1', name: 'Cycle A' }])
-getMocks().selectQueue.push([])  // empty result for second query
-```
-
-### Asserting insert/update payloads
-
-```typescript
-// After code under test runs:
-expect(getMocks().insertPayloads[0]).toMatchObject({
-  event_type: 'CAPITAL_DEPLOYED',
-  data: expect.objectContaining({ amount: 50000 }),
-})
-
-expect(getMocks().updatePayloads[0]).toMatchObject({
-  status: 'closed',
-})
-```
-
-### When to use argument capture vs simple call verification
-
-| Scenario | Approach |
-|----------|----------|
-| Verifying correct event type/data sent to DB | `insertPayloads[0].event_type` |
-| Verifying a side-effect happened at all | `insertCalled` flag |
-| Verifying specific WHERE conditions | `whereConditions` array |
-| Verifying no DB write occurred | `insertPayloads.length === 0` |
+Push every assertion as far DOWN the pyramid as it can live: a rule provable in a unit test
+does not belong in an E2E test.
 
 ## Coverage Targets
 
 | Risk Tier | Target |
 |-----------|--------|
-| Financial calculations | 90%+ |
-| Business rules | 90%+ |
+| Core business rules / money math (as the consumer defines them) | 90%+ |
 | Auth/security | 80%+ |
-| Disclosure | 80%+ |
+| New code | 80%+ minimum |
 
 ## Quality Bar
 
 - Tests enforce INVARIANTS, not just outputs
+- Tests fail if the bug existed — mentally revert the fix and check the test goes red
 - No test capitulation (changing tests to match broken behavior)
-- No no-op assertions (`toBeDefined()` on always-defined values)
-- No conditional assertions wrapped in `if` blocks
+- No no-op assertions (always-true checks) and no conditional assertions wrapped in `if` blocks
+- Mock at the consumer's declared mock seam; verify call ARGUMENTS, not just call counts
+- Boundary tests sit EXACTLY at thresholds
 
 ## E2E Rules & Patterns
 
-E2E rules (real-user-flow principle, selector priority, spec file structure) are defined in the "E2E Test Rules" section of `CLAUDE.md` — the single source of truth.
-
-Implementation patterns (step functions, code examples, file references) are in `.claude/agents/e2e-test-writer.md`.
+E2E rules (real-user-flow principle, selector priority, spec structure) belong to the
+consumer — look for an "E2E" section in its CLAUDE.md or test-strategy doc, and reuse its
+existing spec files as the pattern source.
