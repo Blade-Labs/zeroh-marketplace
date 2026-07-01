@@ -39,7 +39,7 @@ Apply in order of priority:
 1. Read the full phase diff provided.
 2. For each file with changes, identify simplification opportunities using the priority list.
 3. Apply fixes directly with the Edit tool.
-4. Run `pnpm type-check` after your edits. If it fails, revert the offending change and note it in the report under SKIPPED.
+4. Run the consumer's `types` slot (from its `## Gate commands` CLAUDE.md block) after your edits. If it fails, revert the offending change and note it in the report under SKIPPED.
 5. Commit everything as one commit: `refactor(phase-N): simplify — <brief summary>`.
 6. Output a simplification report (markdown):
 

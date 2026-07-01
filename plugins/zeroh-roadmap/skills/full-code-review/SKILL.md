@@ -294,7 +294,7 @@ export default definePhase({
       problem:
         'Gate must pass after all findings are resolved to confirm no regressions.',
       steps: [
-        { file: 'package.json', description: 'Run pnpm lint, type-check, test, build' },
+        { file: 'package.json', description: 'Run the lint, types, unit, and build slots (consumer `## Gate commands` block)' },
         { file: 'CLAUDE.md', description: 'Re-run /full-code-review — zero critical/high findings' },
       ],
       acceptanceCriteria: ['All gate steps pass', 'Zero critical/high findings on re-run'],
@@ -320,7 +320,7 @@ git add roadmap/phases/phase-{N}.phase.ts
 git commit -m "docs(roadmap): phase {N} — code review remediation from {date} audit"
 ```
 
-After committing, run `pnpm emit:phases` to regenerate `reviews/changelog.json`.
+After committing, run the `emit` slot to regenerate `reviews/changelog.json`.
 
 ### Step 4: Save review to `reviews/`
 
@@ -387,8 +387,8 @@ git commit -m "docs(reviews): v{version} — code review round {N}, {X} findings
 Read the latest test counts from the current test run and update the review JSON:
 
 ```bash
-# Run tests and capture counts
-pnpm test 2>&1 | tail -5  # Extract "Tests X passed" line
+# Run tests and capture counts (the consumer's `unit` slot command)
+<unit slot command> 2>&1 | tail -5  # Extract the runner's pass-count line
 ```
 
 Update the review JSON `gate` section:

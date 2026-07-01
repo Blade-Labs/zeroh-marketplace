@@ -36,25 +36,17 @@ If you cannot name the specific files, functions, and nature of the change — y
 > **NO EXCEPTIONS** — not for "test-only", "docs-only", or "low-risk" phases. Every phase gets the full gate.
 > **Token budget:** ~150-200k tokens per gate (2 agents x 2 rounds typical). The pre-review script catches mechanical issues before agents run, reducing rounds.
 
-### Step 1: Lint
-```bash
-pnpm lint
-```
+> Steps 1–4 run the consumer's own commands, resolved from the `## Gate commands` block in
+> this repo's CLAUDE.md (slots: `lint` / `types` / `unit` / `build`). A missing binding fails
+> the gate loud — never substitute a guessed `npm`/`pnpm` command.
 
-### Step 2: Type-Check
-```bash
-pnpm type-check
-```
+### Step 1: Lint — run the `lint` slot
 
-### Step 3: Tests
-```bash
-pnpm test
-```
+### Step 2: Type-Check — run the `types` slot
 
-### Step 4: Build
-```bash
-pnpm build
-```
+### Step 3: Tests — run the `unit` slot
+
+### Step 4: Build — run the `build` slot
 
 ### Step 5: Code Review — 2 Parallel Agents
 
@@ -84,6 +76,6 @@ Launch both **in parallel** with the exact diff command in each prompt:
 ### Step 7: Record Results, Mark Done & Push
 - Run `npx tsx scripts/collect-phase-metrics.ts {N}` to fill `gate` and `metrics` fields.
 - Set `status: 'done'` in the `.phase.ts` file.
-- Run `pnpm emit:phases` to regenerate `reviews/changelog.json`.
+- Run the `emit` slot to regenerate `reviews/changelog.json`.
 - Commit: `docs(roadmap): mark phase N complete`.
 - Push to remote.

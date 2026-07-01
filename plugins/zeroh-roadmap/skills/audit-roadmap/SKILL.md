@@ -86,7 +86,7 @@ For every phase with `status: 'done'`, verify every task's `done: true`.
 
 - **HIGH** — `Phase N is marked done, but task N.X has done: false. Either completion was premature, or the task was retroactively added post-completion.`
 
-Note: `pnpm type-check` does not catch this because the schema allows `done: false` tasks on a done phase — the enforcement is only on gate/metrics/completedDate. This check fills that gap.
+Note: the `types` slot does not catch this because the schema allows `done: false` tasks on a done phase — the enforcement is only on gate/metrics/completedDate. This check fills that gap.
 
 #### Check 6: Task-level `dependsOn` referencing bad IDs
 

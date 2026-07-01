@@ -2,7 +2,7 @@
  * Roadmap shape definitions — TypeScript-native phase data.
  *
  * These Zod schemas are the single source of truth for phase structure.
- * `pnpm type-check` validates all .phase.ts files against these shapes.
+ * The consumer's type-check (its `types` gate slot) validates all .phase.ts files against these shapes.
  * Zod `.parse()` in `definePhase()` provides runtime validation at import time.
  *
  * Enforcement: PhaseShape is a discriminated union on `status`. When

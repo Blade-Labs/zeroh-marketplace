@@ -46,7 +46,7 @@ Never return a `done` you did not actually reach. An honest `escalated` or `fail
 
 Complete the phase per do-phase Step 5 — set the phase-file fields (`status`, `gate`, `gateRounds`, `metrics`, `compromises`, `completedDate`) **and persist your `executionResult`** (the same `PhaseExecutionResult` you return, written to the phase's `executionResult` field) — and commit the phase. Persisting it durably means `do-arc`/`arc-sweep` can re-read your roll-up via `discoverResults()` if the arc resumes or its context compacts, instead of depending on the in-context hand-off. But because you run in arc-mode, **SKIP** the two shared-mutable steps:
 - do NOT groom `roadmap/backlog.ts`, and
-- do NOT run `pnpm emit:phases`.
+- do NOT run the `emit` slot (`emit:phases`).
 
 The `do-arc` orchestrator performs backlog grooming and the changelog regen serially after you return, so concurrent phase completions never race those files. Setting and committing your own phase-file fields is yours; the shared-queue mutation is the orchestrator's.
 

@@ -28,7 +28,7 @@ When in doubt: **fix.** Deferring `could-do-now` is how debt compounds.
 
 1. Read: `git diff <phase-start-SHA>..HEAD` + the phase file (for transparency reports + scope).
 2. Walk the diff file by file; build a candidate list with classification.
-3. For each AUTO_FIX: apply via Edit, run `pnpm type-check` after each meaningful change. If type-check fails and a single follow-up doesn't recover it → revert and demote to `[SCOPED-OUT]`.
+3. For each AUTO_FIX: apply via Edit, run the consumer's `types` slot (from its `## Gate commands` CLAUDE.md block) after each meaningful change. If type-check fails and a single follow-up doesn't recover it → revert and demote to `[SCOPED-OUT]`.
 4. Commit all AUTO_FIXES as one commit: `fix(phase-N): architect critique — <summary>`. No fixes → no commit.
 5. Report (full echo format in `do-phase` `references/gate-protocol.md`):
 

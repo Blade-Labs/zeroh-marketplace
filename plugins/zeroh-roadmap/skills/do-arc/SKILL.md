@@ -94,7 +94,7 @@ After a phase returns `done`, run the serialized shared-mutation step (Step 5) b
 
 `roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable. The phase-executor and arc-mode do-phase deliberately SKIP them (per do-phase Step-5 arc-mode override / 856.3). **do-arc owns them, run serially after each phase returns `done`** — never inside a parallel or sub-agent context:
 1. Groom `roadmap/backlog.ts` — remove the just-completed phase's entry (and any narrative naming only that phase).
-2. Run `pnpm emit:phases` to regenerate `reviews/changelog.json`.
+2. Run the `emit` slot to regenerate `reviews/changelog.json`.
 
 Doing this in the orchestrator, one phase at a time, is what keeps concurrent phase completions from racing those two files.
 
@@ -120,7 +120,7 @@ After the sweep, run **`validate-arc <id>`** — the terminal intent gate. It dr
 
 Report **merge-readiness** to the user — the arc-sweep disposition AND the validate-arc verdict (PASS / GAPS / no-op).
 
-**First, the arc-end full-suite gate.** The sweep (Step 6) and validate-arc's corrective loop (Step 7) can both land code, so the deferred full suite is the **last** thing run, here, after them — never earlier (an earlier run would be stale). Run the consumer's full suite once — `pnpm test` (unit + integration) plus the `kind`-appropriate top tier (`pnpm test:e2e` if any member phase was `release`-kind), per its `CLAUDE.md` Validation tiers. For an arc that touched no runtime code (a docs/config-only arc), there is no runtime suite to run — say so honestly; the arc's relevant doc/lint/type checks already ran per phase.
+**First, the arc-end full-suite gate.** The sweep (Step 6) and validate-arc's corrective loop (Step 7) can both land code, so the deferred full suite is the **last** thing run, here, after them — never earlier (an earlier run would be stale). Run the consumer's full suite once — the `unit` + `integration` slots plus the `kind`-appropriate top tier (the `e2e` slot if any member phase was `release`-kind), resolved from its `CLAUDE.md` `## Gate commands` block. For an arc that touched no runtime code (a docs/config-only arc), there is no runtime suite to run — say so honestly; the arc's relevant doc/lint/type checks already ran per phase.
 
 A non-green result is a **blocker** — but what "blocker" means differs by integration model (below), and this asymmetry is the reason to prefer isolation for risky arcs: on the **isolated-branch** model the suite genuinely *gates* the merge (red → don't merge, the bad code never reaches `baseRef`); on the **direct-on-`baseRef`** model the deferred code is *already* on `baseRef`, so a red suite is a **fix-forward** signal, not a gate (the regression is already integrated — surface it loudly and fix it forward on `baseRef`, do not pretend it was held). An arc whose phases carry real regression risk should therefore run on an isolated branch so the arc-end suite can actually gate.
 

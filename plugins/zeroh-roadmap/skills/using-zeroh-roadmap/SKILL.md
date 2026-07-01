@@ -24,7 +24,7 @@ ls roadmap/phases/ 2>/dev/null
 4. Create phases dir: `mkdir -p roadmap/phases`
 5. Create reviews dir: `mkdir -p reviews/releases`
 6. Copy scripts: `cp ${CLAUDE_PLUGIN_ROOT}/scripts/{pre-review.sh,collect-phase-metrics.ts,build-dashboard.sh,generate-changelog-md.ts} scripts/` (create `scripts/` first)
-7. Ensure `zod` is in dependencies: `pnpm add zod` (if not already)
+7. Ensure `zod` is in dependencies — add it with the repo's own package manager (`npm install zod` / `pnpm add zod`) if not already
 8. Commit: `feat(roadmap): scaffold phase-driven development infrastructure`
 
 **Do NOT skip this. Do NOT invent your own schema. Do NOT create phases manually.**
