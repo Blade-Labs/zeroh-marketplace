@@ -20,6 +20,8 @@ Parse the description of what needs to be done. This can be:
 - A feature request: "add BDT support to the purchase form"
 - A review finding: "FCR-12: CSP missing globally"
 - A broad goal: "improve the onboarding flow"
+- A followups reference: "roadmap/followups/<arcId>.md item 3" — arc-sweep's deferred
+  blueprints live there (NOT in backlog labels); read the item, it IS the plan input
 
 **Flags:**
 - `--skip-review` — skip the automatic `/review-phase N` pass after commit. Default: review runs. Use only for fast iteration on a WIP plan you know is unfinished.

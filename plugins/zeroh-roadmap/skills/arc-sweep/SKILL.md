@@ -37,7 +37,7 @@ Which disposition writes what is mechanical — read the row, don't re-derive it
 | PLAN-PHASE | real follow-up, phase authored | ONE entry | `'fixed'` | `'phase-<N>'` |
 | ACCEPT (won't fix) | correct boundary, reason ≥20 chars | ONE entry | `"won't_fix"` | the reason |
 | ACCEPT (dismiss) | never was debt | ONE entry | `'dismissed'` | the reason |
-| OPERATOR-PENDING | deploy/operator action, not code | **NO entry** — deploy-actions section of the Step-3 report only | — | — |
+| OPERATOR-PENDING | deploy/operator action, not code | **NO entry** — recorded in `roadmap/followups/<arcId>.md` + the Step-3 report's deploy-actions section | — | — |
 
 (`limitations` never enter this table — they are release-sweep's, listed not disposed; see below.)
 
@@ -46,15 +46,25 @@ Which disposition writes what is mechanical — read the row, don't re-derive it
 For each debt item, prompt the user. The three code-disposition outcomes each persist exactly one `debtResolutions[]` entry on the owning phase — the same shape release-sweep writes (`{ ref: '<taskId>.<field>', status, via, date }`). OPERATOR-PENDING is the exception: it writes NO entry (the schema's `status` enum is `'fixed' | "won't_fix" | 'dismissed'` — there is no fourth value).
 
 - **RESOLVE-NOW** == release-sweep **(f) Fix inline** → invoke `zeroh-roadmap:software-architect` for the proper-solution blueprint, apply, re-gate to the phase's `kind`, commit → append `{ ref, status: 'fixed', via: '<commitSHA>', date }`.
-- **PLAN-PHASE** == release-sweep **(p) Plan a new phase** → invoke `zeroh-roadmap:plan-phase` by name with the debt text; after the new phase commits, append `{ ref, status: 'fixed', via: 'phase-<N>', date }`.
+- **PLAN-PHASE** == release-sweep **(p) Plan a new phase** → invoke `zeroh-roadmap:plan-phase` by name with the debt text; after the new phase commits, append `{ ref, status: 'fixed', via: 'phase-<N>', date }`. When the follow-up is NOT planned immediately (deferred blueprint), write the full blueprint into **`roadmap/followups/<arcId>.md`** (create it; one numbered item per deferral) — see "Where deferred blueprints live" below.
 - **ACCEPT** == release-sweep **(w) Won't fix** (substantive reason ≥20 chars → `status: "won't_fix"`) **or (d) Dismiss** (never-was-debt → `status: 'dismissed'`).
-- **OPERATOR-PENDING** — the ONE genuinely new disposition with no release-sweep equivalent: a required **deploy/operator action, not a code change** (a pre-merge arc operates on an unversioned arc, so some items are "do this at deploy" rather than "fix in code"). It has no schema `status` and writes NO `debtResolutions[]` entry — it is carried only in the Step-3 ephemeral report's deploy-actions section for the operator to run at deploy (cf. release-sweep `(k) Keep open` → no append). The item stays an open debt on the phase until a later release-sweep disposes it post-deploy.
+- **OPERATOR-PENDING** — the ONE genuinely new disposition with no release-sweep equivalent: a required **deploy/operator action, not a code change** (a pre-merge arc operates on an unversioned arc, so some items are "do this at deploy" rather than "fix in code"). It has no schema `status` and writes NO `debtResolutions[]` entry — it is recorded in `roadmap/followups/<arcId>.md` (the durable inventory) and echoed in the Step-3 ephemeral report's deploy-actions section for the operator to run at deploy (cf. release-sweep `(k) Keep open` → no append). The item stays an open debt on the phase until a later release-sweep disposes it post-deploy.
 
 `ref`/`status`/`via`/`date` semantics, the ≥20-char `won't_fix` reason, and the dismissed-ratio nudge are all release-sweep's — do not redefine them here.
 
 **`limitations` are out of arc-sweep's scope — by design, not by omission.** The `PhaseExecutionResult` roll-up carries the three arc-debt categories (`compromises`/`skipped`/`hardcoded`) but NOT `limitations` — a limitation is a permanent design constraint, not deferred work, so it is not arc-disposable. It stays an open debt that **release-sweep** disposes pre-archive (release-sweep walks all four transparency-report fields). To avoid a silent coverage hole, arc-sweep still **re-reads each phase's `limitations` and LISTS any present in the Step-3 merge-readiness report** under "deferred to release-sweep" — so "every debt is disposed" is never claimed falsely; the operator sees the limitations exist and that their disposition is release-sweep's, not this sweep's.
 
 **No summary file.** Like release-sweep (its SKILL.md "the phase files ARE the audit trail" rule), arc-sweep NEVER writes a persisted summary/report file. `debtResolutions[]` + the transparency reports it points to are the durable audit trail; the merge-readiness report (Step 3) is an EPHEMERAL chat report only.
+
+**Where deferred blueprints live — `roadmap/followups/<arcId>.md` (not backlog labels).**
+PLAN-PHASE items not planned on the spot and OPERATOR-PENDING deploy actions need a durable
+home between "disposed" and "planned/run". That home is `roadmap/followups/<arcId>.md`: the
+sweep creates it with one numbered item per deferral carrying the FULL blueprint (the fix
+design, files, evidence). The backlog tier label then carries ONE line (≤200 chars — the
+schema enforces it) pointing at the file: blueprints in backlog labels are what bloated them
+into unreadable multi-KB blobs. This is a *work-inventory* file, not a summary/report — the
+no-summary-file rule above is about the sweep's ephemeral verdict, which stays chat-only.
+`plan-phase` accepts a followups item reference as its source input.
 
 ## Step 2: Whole-arc cross-phase review (against singleSeams + designRefs)
 

@@ -156,6 +156,15 @@ Write the file via **`RunnerSummaryShape.parse(...)`** (from the roadmap schema)
 - `receiptRef` ← the governance-receipt reference for the arc (required, min length 1 — a missing receipt must fail `.parse()`, never be faked).
 - `screenshotUrl` / `prUrl` / `releaseUrl` (optional) ← present only when the artifact actually exists (a live-ui capture / the merged PR / the cut release); omit otherwise — never fabricate a URL.
 
-**It is a regenerable artifact, exactly like the Step-1 `arc-prompts/` doc:** written **every run** (overwrite if present), its source of truth is the Steps 6–8 result, and `roadmap/arc-summary.json` should be **gitignored** (create the `roadmap/` path if absent).
+**Write it twice — keyed history + latest pointer:**
+1. `roadmap/arc-summaries/<arcId>-<completion date YYYY-MM-DD>.json` — **keyed, never
+   overwritten**: the durable per-arc history (a History surface reads all of them; before
+   this existed, each run overwrote the single file and every prior arc's outcome was lost).
+2. Copy the same content to `roadmap/arc-summary.json` — the **latest pointer** the
+   governed-coding runner reads; existing single-file consumers keep working unchanged.
+
+**Both are regenerable artifacts, exactly like the Step-1 `arc-prompts/` doc:** written
+**every run** (the keyed file created, the pointer overwritten), source of truth is the
+Steps 6–8 result, and both paths should be **gitignored** (create the dirs if absent).
 
 **This does NOT contradict arc-sweep's "no summary file" rule.** That rule forbids arc-sweep from persisting its *ephemeral debt report* as a tracked deliverable (the debt disposition is consumed inline, not filed). Step 8b is a *different concern*: a **terminal converged-result artifact** a downstream runner reads — regenerable + gitignored, never a tracked hand-authored report. The two coexist; the rule is not read as contradicted.
