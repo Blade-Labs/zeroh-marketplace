@@ -22,7 +22,7 @@ arc-sweep runs **pre-merge**, on an unversioned, unarchived arc, aggregating the
 ### Hand-in contract (the inputs)
 
 `PhaseExecutionResult` (`PhaseExecutionResultShape`, `templates/schema.ts`) is a typed roll-up. arc-sweep gets it two ways, in priority order:
-1. **In-context hand-in (the fast path):** `do-arc` (858 Step 6) hands in the array it accumulated as the arc ran. Use it when present and complete.
+1. **In-context hand-in (the fast path):** `do-arc` (its Step 6) hands in the array it accumulated as the arc ran. Use it when present and complete.
 2. **Durable fallback (`discoverResults()`):** each phase-executor persists its roll-up to `phase.executionResult` (do-phase arc-mode Step 5), so `discoverResults()` re-reads them from `roadmap/phases/phase-<n>.phase.ts`. **If the in-context array is missing or short** — a resumed arc, or context that compacted mid-run — reconstruct from `discoverResults()` rather than disposing a truncated set. The in-context array is an optimization; the persisted field is the system of record.
 
 The free-text `compromises` strings are also persisted on the phase files and are **re-read** from there. Aggregate all of it: the structured roll-ups (in-context, or via `discoverResults()`) plus the free-text strings.
@@ -70,7 +70,7 @@ no-summary-file rule above is about the sweep's ephemeral verdict, which stays c
 
 A per-phase gate sees only its own diff — it CANNOT catch a seam that one phase quietly forked from another (3 hardcodes that should have been 1 config; a shared type two phases each redefined; a read-back path one consumer re-implemented). **Only a whole-arc view catches a forked seam.** That is this step's whole job.
 
-Run ONE `zeroh-roadmap:software-architect` over **`git diff <arc.baseRef>..HEAD`** (the arc's full diff, `baseRef` from the Arc entity, 855) and judge it as **a single system** against `arc.singleSeams` (the "hold these single" invariants): for each seam, did any consumer fork it, or is it genuinely a single implementation across the whole arc?
+Run ONE `zeroh-roadmap:software-architect` over **`git diff <arc.baseRef>..HEAD`** (the arc's full diff, `baseRef` from the Arc entity) and judge it as **a single system** against `arc.singleSeams` (the "hold these single" invariants): for each seam, did any consumer fork it, or is it genuinely a single implementation across the whole arc?
 
 **Design-conformance — judge the build against `arc.designRefs` too.** Beyond the seams, read the arc's confirmed `designRefs` (the design spec the design-first gate produced in plan-arc Step 1b) and judge whether the built arc actually implements each: a `reused` architecture pattern is genuinely followed (not quietly re-invented); a `designed` pattern matches what was extended in the arch doc; a `ux` designRef's surface matches the confirmed layout/preview. **The design is the spec** — a build that drifts from a confirmed designRef is a sweep finding, disposed like any other (RESOLVE-NOW if cheap, else a PLAN-PHASE follow-up) and reported alongside the seam verdicts. An arc with no `designRefs` (the design gate was skipped — a mechanical arc) has nothing to conform to: skip this check explicitly, never a silent pass.
 

@@ -67,7 +67,7 @@ Echo the four inputs and the decision to chat (e.g. `phases=5 totalTasks=14 gate
 
 ## Step 3: Create the arc-level task progress (the phase checklist)
 
-At arc start, `TaskCreate` ONE task per member phase so the user watches the arc tick down. Subject pattern: **`Phase N — Plane X`**, where `Plane X` is the `arc.planes[].name` the phase belongs to (855 `ArcShape.planes`). Lifecycle: set the phase's task `in_progress` at phase start, `completed` at phase done.
+At arc start, `TaskCreate` ONE task per member phase so the user watches the arc tick down. Subject pattern: **`Phase N — Plane X`**, where `Plane X` is the `arc.planes[].name` the phase belongs to (`ArcShape.planes`, `templates/schema.ts`). Lifecycle: set the phase's task `in_progress` at phase start, `completed` at phase done.
 
 **Ownership is strict:** ONLY do-arc touches arc-level (phase) tasks. The per-task tasks inside a phase stay owned by `do-phase` (it creates and lifecycles them per Step 2 of do-phase). Two tiers, two owners:
 - **Arc tier** — one task per phase, subject `Phase N — Plane X`, owned by do-arc.
@@ -84,7 +84,7 @@ Iterate the member phases in **dependency order** (respect each phase's `depends
 
 **Arc-mode is an artifact, not a memory (inline mode).** On entering Step 4 in inline mode,
 write **`roadmap/.arc-mode`** (content: `{"arcId": <arc.id>, "mode": "inline"}`; gitignored)
-and remove it at Step 8 when the arc lands or halts. `do-phase` re-derives "am I in
+and remove it at EVERY arc exit — Step 8 landing/holding AND the Step-4 halt branches (2 and 4 below). `do-phase` re-derives "am I in
 arc-mode?" from that marker (or from BEING a phase-executor) at its Steps 4b/5 — never from
 remembered conversation state, which decays over an hours-long arc. Recursion mode needs no
 marker: the phase-executor's agent card is the explicit signal.
@@ -99,15 +99,15 @@ for the typed result; (3) still malformed → treat as `status: "failed"` and HA
 
 Either way, the **collect-and-branch is a mandatory control gate, not a logging step.** Read the parsed `PhaseExecutionResult` and:
 1. **Surface its compromise roll-up to chat AS the phase ends** (the per-phase headline). Routine compromises/skipped/hardcoded are noted and **batched into the final arc-sweep** for disposition — they do not stop the arc.
-2. **HALT the arc immediately** on a hard interrupt: `status: "escalated"`, or a `hardStops` entry tagged `[MULTI-REPO]` or `[PRODUCT]`. Surface the architect's `escalation.question` + `options` and WAIT for the user — do not run Step 5, do not start the next phase. (In inline mode this means the same session stops here; in recursion mode the spawn already returned.)
+2. **HALT the arc immediately** on a hard interrupt: `status: "escalated"`, or a `hardStops` entry tagged `[MULTI-REPO]` or `[PRODUCT]`. Surface the architect's `escalation.question` + `options` and WAIT for the user — do not run Step 5, do not start the next phase. (In inline mode this means the same session stops here; in recursion mode the spawn already returned.) **Inline mode: remove `roadmap/.arc-mode` before stopping** — every arc exit clears the marker, or the next standalone do-phase run enters phantom arc-mode.
 3. On `status: "done"`, set the phase's arc-level task `completed` and continue to the next phase.
-4. On `status: "failed"`, HALT and surface the blocking detail — the arc cannot proceed past a phase that could not be driven green.
+4. On `status: "failed"`, HALT and surface the blocking detail — the arc cannot proceed past a phase that could not be driven green. **Inline mode: remove `roadmap/.arc-mode` here too** (same rule as branch 2).
 
 After a phase returns `done`, run the serialized shared-mutation step (Step 5) before the next phase begins.
 
 ## Step 5: Serialize the shared mutation (orchestrator-owned)
 
-`roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable. The phase-executor and arc-mode do-phase deliberately SKIP them (per do-phase Step-5 arc-mode override / 856.3). **do-arc owns them, run serially after each phase returns `done`** — never inside a parallel or sub-agent context:
+`roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable. The phase-executor and arc-mode do-phase deliberately SKIP them (per do-phase Step-5 arc-mode override). **do-arc owns them, run serially after each phase returns `done`** — never inside a parallel or sub-agent context:
 1. Groom `roadmap/backlog.ts` — remove the just-completed phase's entry (and any narrative naming only that phase).
 2. Run the `emit` slot to regenerate `reviews/changelog.json`.
 
@@ -119,7 +119,7 @@ Bake this into how you pace the arc: **don't rush.** Auto-compact handles a long
 
 ## Step 6: Arc-sweep
 
-When every member phase is `done`, the arc is built but NOT merged. Invoke **`arc-sweep`** (phase 860) — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises and judges the arc against `arc.singleSeams`, `arc.honestyRails`, and `arc.designRefs` — design-conformance: did the build follow the confirmed design?). The sweep judges **code coherence**; the next step judges **fulfilled intent**.
+When every member phase is `done`, the arc is built but NOT merged. Invoke the **`arc-sweep`** skill — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises and judges the arc against `arc.singleSeams`, `arc.honestyRails`, and `arc.designRefs` — design-conformance: did the build follow the confirmed design?). The sweep judges **code coherence**; the next step judges **fulfilled intent**.
 
 **Deferred-test reminder.** Under arc-mode the per-phase gates ran only the tests *relevant* to each phase's diff (the fast inner loop — see `do-phase` gate-protocol's arc-mode test scope); the **full unit + integration suite (+ e2e for a release-kind arc) is deferred to the single arc-end run in Step 8**, AFTER this sweep and validate-arc, because both of those can still land code (a sweep RESOLVE-NOW fix, a validate-arc corrective phase) and an earlier full-suite run would be stale. Do not run the full suite here.
 

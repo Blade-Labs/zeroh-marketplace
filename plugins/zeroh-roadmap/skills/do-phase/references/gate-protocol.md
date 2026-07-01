@@ -154,7 +154,7 @@ The loop is automated. Each round fixes findings and re-runs agents without paus
 | `kind` \ mode | **Inline** (standalone do-phase) | **Arc-mode** (inside a phase-executor) |
 |---|---|---|
 | `mockup` | `lint` + `types` | `lint` + `types` |
-| `logic` | `lint` + `types` + `unit` + `integration` + `build` + `e2e` | `lint` + `types` + `build` + tests **relevant to this diff** only |
+| `logic` | `lint` + `types` + `unit` + `integration` + `build` | `lint` + `types` + `build` + tests **relevant to this diff** only |
 | `hardening` | the `logic` row **plus** the closure integration test for any persistence/event/marshal-chain task | `lint` + `types` + `build` + relevant tests, **always including the closure integration test** (the closure criterion never defers) |
 | `release` | the `logic` row **plus** the broad `e2e` slot | `lint` + `types` + `build` + relevant tests; broad `e2e` defers to the arc end |
 
