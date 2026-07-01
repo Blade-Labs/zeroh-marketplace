@@ -77,7 +77,7 @@ exactly the collision this script exists to kill.
 This is the most important step. For each area of work:
 
 1. **Read the relevant source files** — not just the entry point, but the call chain
-2. **Use LSP** — `findReferences`, `incomingCalls`, `goToDefinition` to understand the dependency graph
+2. **Trace references with Grep** — grep for the symbol name (imports, call sites, string-literal/registry references) to understand the dependency graph
 3. **Identify the exact functions and lines that change** — "line ~142" is acceptable, "somewhere in the file" is not
 4. **Check downstream consumers** — will this change break anything?
 5. **Check for existing solutions** — does a utility already exist? Is there a pattern to follow?
@@ -180,7 +180,7 @@ regenerates the changelog.
 
 If type-check fails, the task data is structurally invalid — fix it before committing.
 
-### Step 5: Self-verify (5-point checklist)
+### Step 5: Self-verify (9-check list)
 
 **Do NOT skip this.** Run every check against the phase you just wrote. Fix issues before committing — a phase that fails self-verification is not ready.
 
@@ -197,7 +197,7 @@ Read the actual function or code each task claims to modify. Does the problem de
 **3. Blast radius**
 For each pattern a task changes, check whether the same pattern exists elsewhere:
 - `grep` for the string/pattern across the codebase
-- `findReferences` on any symbol being renamed, moved, or changed
+- Grep the repo for any symbol being renamed, moved, or changed (imports AND string-literal references)
 - If there are other occurrences, they must be covered by a task in this phase (or documented as out of scope with justification).
 - Fail = NEEDS WORK. Incomplete fix — will ship a partial change.
 

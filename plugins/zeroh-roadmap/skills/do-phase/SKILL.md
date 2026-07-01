@@ -129,7 +129,7 @@ For each task, in order:
 
 #### testMode: "tdd" (test-first)
 
-   **(3a)** Launch `test-engineer` agent with ONLY: `task.problem`, `task.acceptanceCriteria`, `task.files`, and the existing type signatures/interfaces from those files (use LSP `hover` or read type exports — NOT function bodies). Do NOT give `task.steps`.
+   **(3a)** Launch `test-engineer` agent with ONLY: `task.problem`, `task.acceptanceCriteria`, `task.files`, and the existing type signatures/interfaces from those files (read the type exports — NOT function bodies). Do NOT give `task.steps`.
    **(3b)** Run the `unit` slot (commands resolve from the consumer's `## Gate commands` CLAUDE.md block — see references/gate-protocol.md) — tests MUST FAIL (red). If they pass, tests are trivial — reject and have test-engineer rewrite.
    **(3c)** If tests don't compile, provide the compilation error to test-engineer for 1 retry. If still broken, skip TDD and note in transparency report: "TDD skipped — test-engineer could not produce compilable tests."
    **(3d)** Code agent implements `task.steps`.
@@ -231,7 +231,7 @@ Missing `kind` on a legacy phase → default to `logic`, warn once. **No excepti
 
 **Sub-agent rules:** launch all gate agents synchronously (no `run_in_background`). Auto-spawn discipline applies during Steps 1–4 — the architect-critique → simplifier → code-reviewer chain is the only auto-spawned set during the gate; the architect-gate from Prime Rule 1 and `test-engineer` from `testMode` are the only sub-agent calls that may **absorb phase work** during task execution. No `Explore` / `general-purpose` / arbitrary `Task` forks. A task that "feels too big" is either fine (push through) or wrongly planned (STOP, surface split proposal) — never launch a sub-agent to absorb it.
 
-This ban scopes the actor **while executing a phase's tasks and gate** — it does NOT forbid do-phase from *being* a sub-agent. Under arc-mode (the `do-arc` orchestrator, phase 858) the do-phase runner is itself a **phase-executor** sub-agent: one executor = one whole phase. What stays forbidden, in arc-mode exactly as inline: a phase-executor spawning another phase-executor (no recursion past a single phase), `Explore` / `general-purpose` forks, or any fork that offloads a "too-big" task.
+This ban scopes the actor **while executing a phase's tasks and gate** — it does NOT forbid do-phase from *being* a sub-agent. Under arc-mode (the `do-arc` orchestrator skill) the do-phase runner is itself a **phase-executor** sub-agent: one executor = one whole phase. What stays forbidden, in arc-mode exactly as inline: a phase-executor spawning another phase-executor (no recursion past a single phase), `Explore` / `general-purpose` forks, or any fork that offloads a "too-big" task.
 
 ### Step 4b: Phase compromise summary (the ONLY human stop — inline mode)
 

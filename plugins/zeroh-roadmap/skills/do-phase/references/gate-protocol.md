@@ -231,7 +231,7 @@ Tasks: X total | Y clean | Z with compromises
 
 ### Structured return (arc-mode)
 
-When do-phase runs inside a phase-executor (orchestrated by `do-arc`, phase 858), the free-text summary above is **still** persisted to the phase file's `compromises` string (audit + release-sweep read it) — that does not change. **In addition**, the executor emits the same content as a typed `PhaseExecutionResult` (`PhaseExecutionResultShape` in `templates/schema.ts`, phase 855) as its return value, so the orchestrator can aggregate the arc without re-parsing markdown:
+When do-phase runs inside a phase-executor (orchestrated by `do-arc`), the free-text summary above is **still** persisted to the phase file's `compromises` string (audit + release-sweep read it) — that does not change. **In addition**, the executor emits the same content as a typed `PhaseExecutionResult` (`PhaseExecutionResultShape` in `templates/schema.ts`) as its return value, so the orchestrator can aggregate the arc without re-parsing markdown:
 - `compromises` / `skipped` / `hardcoded` ← the matching task transparency-report lines (one array entry per task line).
 - `surfaced` ← the architect-critique SURFACED entries.
 - `hardStops` ← the tagged HARD-STOPS (`[MULTI-REPO]` / `[SCOPED-OUT]` / `[PRODUCT]` / `[SPECULATIVE]`), each `{ tag, text }`.

@@ -22,7 +22,7 @@ User says: `do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`.
 
 ## Step 0: Resolve the arc and verify its phases
 
-1. Call `discoverArcs()` (the registry helper from phase 855 — returns `{ arcs, errors }` for ALL `roadmap/arcs/*.arc.ts`). If `errors` is non-empty, STOP and surface them — a malformed arc file is a hard stop.
+1. Call `discoverArcs()` (the registry helper in `templates/registry.ts` — returns `{ arcs, errors }` for ALL `roadmap/arcs/*.arc.ts`). If `errors` is non-empty, STOP and surface them — a malformed arc file is a hard stop.
 2. **Select** the arc whose `id` equals the passed `<id>`. If none matches, STOP: `No arc with id <id> in roadmap/arcs/. Run /plan-arc first, or check the id.`
 3. For every phase number across `arc.planes[].phases`, confirm `roadmap/phases/phase-<n>.phase.ts` exists. STOP listing any missing phase file.
 4. Confirm each member phase has passed plan review (status `backlog` or `in-progress`, never `cancelled`; a phase already `done`/`historical` is skipped as complete, not re-run). STOP if a phase is in a state that can't be executed.

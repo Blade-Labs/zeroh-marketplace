@@ -8,6 +8,11 @@ argument-hint: "[path or scope]"
 
 Comprehensive local code audit using parallel specialist agents. **Required before every merge to main / deploy to production.** Covers security, dead code, DRY, optimization, architecture, edge cases, data flow, and financial calculation correctness.
 
+**Consumer override rule:** if the consumer repo ships its own tailored release-review skill
+(e.g. a `release-review` with agents tuned to its domain invariants), **that skill supersedes
+this generic one** — say so and run the consumer's instead. This generic review is the
+fallback for consumers without one.
+
 ## Arguments
 
 User instructions: $ARGUMENTS
@@ -23,7 +28,7 @@ Before dispatching review agents, build a codebase map:
 1. Identify project type, language(s), framework(s), build system from config files
 2. Find entry points: main files, index files, route definitions, top-level exports
 3. Read CLAUDE.md for project-specific conventions
-4. Read `reviews/2026-03-22-SECURITY-AUDIT-BRANCH-COMPREHENSIVE.md` for prior security findings — agents must check for REGRESSIONS
+4. Read the consumer's prior review reports if present (`reviews/releases/*.json` + any audit reports in `reviews/`) — agents must check for REGRESSIONS against previously fixed findings
 5. Map directory structure and key modules
 6. Note the tech stack version — agents need this to check against current best practices
 
@@ -65,7 +70,7 @@ Check every auth route, middleware, and session handler for:
 - **File upload/download**: path traversal protection, MIME validation, cycle-scoped authorization on both upload AND download
 - **Environment variable consistency**: server-only vars not accidentally exposed as `NEXT_PUBLIC_*`, client and server reading different env var names for the same config
 
-Cross-reference with `reviews/2026-03-22-SECURITY-AUDIT-BRANCH-COMPREHENSIVE.md` — flag any REGRESSIONS from previously fixed findings.
+Cross-reference with the consumer's prior security-audit reports under `reviews/` (when present) — flag any REGRESSIONS from previously fixed findings.
 
 ---
 

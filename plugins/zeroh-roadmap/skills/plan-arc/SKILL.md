@@ -21,7 +21,7 @@ User says: `plan arc`, `/plan-arc`, `create arc`, `new arc`.
 
 ## Step 1: Author the Arc entity
 
-Before any phase is planned, write `roadmap/arcs/<id>.arc.ts` using `defineArc` (from phase 855, `templates/schema.ts`). Capture the arc's shape up front so the phases plan against a fixed frame:
+Before any phase is planned, write `roadmap/arcs/<id>.arc.ts` using `defineArc` (`templates/schema.ts`). Capture the arc's shape up front so the phases plan against a fixed frame:
 
 ```ts
 import { defineArc } from '@/lib/roadmap/schema'

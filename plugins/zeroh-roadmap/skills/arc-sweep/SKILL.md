@@ -21,7 +21,7 @@ arc-sweep runs **pre-merge**, on an unversioned, unarchived arc, aggregating the
 
 ### Hand-in contract (the inputs)
 
-`PhaseExecutionResult` (phase 855) is a typed roll-up. arc-sweep gets it two ways, in priority order:
+`PhaseExecutionResult` (`PhaseExecutionResultShape`, `templates/schema.ts`) is a typed roll-up. arc-sweep gets it two ways, in priority order:
 1. **In-context hand-in (the fast path):** `do-arc` (858 Step 6) hands in the array it accumulated as the arc ran. Use it when present and complete.
 2. **Durable fallback (`discoverResults()`):** each phase-executor persists its roll-up to `phase.executionResult` (do-phase arc-mode Step 5), so `discoverResults()` re-reads them from `roadmap/phases/phase-<n>.phase.ts`. **If the in-context array is missing or short** — a resumed arc, or context that compacted mid-run — reconstruct from `discoverResults()` rather than disposing a truncated set. The in-context array is an optimization; the persisted field is the system of record.
 

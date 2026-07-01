@@ -48,9 +48,9 @@ For phases not yet executed. Review as a **senior software architect** — don't
 
 Do NOT just read the task description and check if it "sounds right." Open the files. Read the functions. Verify the claims. The plan was written by an agent that may have hallucinated file paths, function names, or line numbers.
 
-Note: plan-phase runs this same 5-point checklist as self-verification before committing. Review-phase re-runs it because (a) the codebase may have changed since planning, and (b) self-verification can be lazy — an independent pass catches what the author missed.
+Note: plan-phase runs a superset of these checks (its Step-5 9-check list) as self-verification before committing. Review-phase re-runs the 7 checks below because (a) the codebase may have changed since planning, and (b) self-verification can be lazy — an independent pass catches what the author missed.
 
-**For each task, run the 5-point verification checklist:**
+**For each task, run the 7-check verification list:**
 
 **1. Paths resolve**
 Open every `steps[].file` and `files[]` path. Each must exist (or be explicitly created by an earlier task in the same phase).
@@ -65,7 +65,7 @@ Read the actual function or code each task claims to modify. Does the problem de
 **3. Blast radius**
 For each pattern a task changes, check whether the same pattern exists elsewhere:
 - `grep` for the string/pattern across the codebase
-- `findReferences` on any symbol being renamed, moved, or changed
+- Grep the repo for any symbol being renamed, moved, or changed (imports AND string-literal references)
 - If there are uncovered instances, flag as NEEDS WORK with the file paths.
 - This is the most common planning failure — fixing one occurrence and missing five others.
 - Fail = NEEDS WORK. Incomplete fix.
@@ -173,7 +173,7 @@ b. **Bug actually fixed (not just patched)** — if the task claimed to fix a bu
 
 c. **Pattern caught everywhere (the "elsewhere?" check)** — the most important check. If the fix changed a pattern in one file:
    - Grep for the OLD pattern across the entire codebase — does it still exist somewhere?
-   - Use LSP `findReferences` on changed symbols — are all consumers updated?
+   - Grep for changed symbols across the repo (imports AND string-literal references) — are all consumers updated?
    - Renamed a field? Check: catalog, disclosure matrix, E2E tests, seed data, dashboard components, API routes, business rules
    - Fixed a calculation? Check: are there other calculations with the same bug pattern?
    - Changed an error message? Check: are there similar error messages that need the same fix?
