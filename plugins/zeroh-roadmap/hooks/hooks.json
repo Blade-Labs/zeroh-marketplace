@@ -1,0 +1,17 @@
+{
+  "description": "zeroh-roadmap runtime hooks — validate roadmap files at write time so a malformed phase/arc/backlog file never lands (the import-time Zod parse IS the validator)",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/validate-roadmap-file.mjs\"",
+            "statusMessage": "Validating roadmap file..."
+          }
+        ]
+      }
+    ]
+  }
+}
