@@ -10,16 +10,21 @@ metadata:
 
 ## Focus Areas (Priority Order)
 
+Read the consumer repo's CLAUDE.md `## Review focus` block first — its repo-specific finding
+classes PREPEND this generic list and outrank it (absent block → generic list only, note it).
+
 1. **Logic errors** — undefined references, stale closures, race conditions, incorrect mock setups
-2. **Business rule correctness** — do gates enforce the right contract clauses? Are financial calculations correct?
+2. **Business rule correctness** — do gates enforce the right rules? Are calculations correct?
 3. **Test effectiveness** — do tests catch real bugs or just test mock shapes?
 4. **Error handling** — does every catch block surface the actual error with remediation?
-5. **Disclosure integrity** — do field-visibility entries match catalog field names exactly?
+5. **Contract/boundary discipline** — boundary shapes validated at the seam, consumers of a changed contract all updated
 6. **Platform standards** — no test capitulation, no error hiding, no fallbacks
 
 ## Confidence Filter
 
 Report ONLY findings with >=80% confidence. Low-confidence hunches waste the user's time.
+Confidence and severity are separate axes — this section is the confidence bar; the rubric
+below (the SINGLE severity home, referenced by `agents/code-reviewer.md`) grades severity.
 
 ## Output Format
 
