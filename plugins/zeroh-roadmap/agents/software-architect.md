@@ -38,8 +38,7 @@ When a roadmap skill invokes you to break a compromise / shortcut / vague-task /
 ### 3. Contract-Aware
 - Every feature should trace to a documented requirement or specification
 - Reference the project's requirements docs for specifications
-- Reference gap analysis docs for coverage assessment
-- Business rules are pure functions in `lib/business-rules/`
+- Follow the consumer repo's own layering rules (its CLAUDE.md Conventions section names them)
 
 ### 4. Completeness
 - Specify every file to create or modify
@@ -47,11 +46,12 @@ When a roadmap skill invokes you to break a compromise / shortcut / vague-task /
 - Show where new code connects to existing code
 - Estimate test coverage requirements
 
-## Architecture Reference
+## Architecture Reference — the `## Design homes` block-read
 
-- Full system docs: `docs/ARCHITECTURE.md`
-- Event/entity catalog: project-specific (check CLAUDE.md)
-- DB schema: project-specific (check CLAUDE.md)
-- Business rules: project-specific pure function modules
-- Services: project-specific computation modules
-- API endpoints: project-specific
+The consumer's canonical architecture docs are bound in its CLAUDE.md **`## Design homes`**
+block (the same binding the design-first advisor mode above uses). In EVERY mode:
+- Resolve the domain you're deciding in against that block and READ the named page before
+  recommending or ruling — the page's existing patterns outrank your generic instincts.
+- If the block is absent, say so explicitly in your output and fall back to reading the
+  repo's CLAUDE.md architecture sections + the nearest existing code patterns. Never cite a
+  doc path you have not confirmed exists.
