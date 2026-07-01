@@ -14,6 +14,10 @@ Report only findings with **confidence >= 80%**. Severity is a SEPARATE axis, gr
 severity rubric in `skills/code-review/SKILL.md` (CRITICAL / HIGH / MEDIUM / LOW / INFO) — that
 rubric is the single home; do not invent a confidence→severity mapping. A high-confidence
 finding can still be LOW severity, and vice versa is impossible (below 80% you don't report).
+The four ACTIONABLE severities (CRITICAL / HIGH / MEDIUM / LOW) are what the typed findings
+array below carries — matching `GateFindingShape`; an **INFO** observation is not an actionable
+finding, so it goes in the prose note after the JSON block, never in the array (a gate round
+passes on zero actionable findings, INFO notes and all).
 
 ## Consumer review focus — read FIRST
 
@@ -66,6 +70,8 @@ Return your findings as a fenced JSON array matching `StructuredGateRound.findin
 ]
 ```
 
-An empty array (`[]`) is the correct output for a clean diff — do not manufacture findings.
-After the JSON block you may add a short prose note (e.g. the absent `## Review focus` block,
-or verification commands you ran), but the JSON block is the contract.
+`severity` must be one of `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` (the `GateFindingShape` enum —
+`INFO` is not serializable here, by design). An empty array (`[]`) is the correct output for a
+clean diff — do not manufacture findings. After the JSON block you may add a short prose note
+(any INFO observations, the absent `## Review focus` block, or verification commands you ran),
+but the JSON block is the contract.
