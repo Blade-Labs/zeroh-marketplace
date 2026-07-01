@@ -18,7 +18,7 @@ Review the diff provided. You are NOT reviewing the whole codebase — only the 
 
 Apply in order of priority:
 
-1. **Dead scaffolding** — code added but never called, exports not imported anywhere, helper functions with a single caller that can be inlined.
+1. **Dead scaffolding** — code added but never called, exports not imported anywhere, helper functions with a single caller that can be inlined. **Before deleting ANY export: Grep the whole repo for the symbol name** — registries, tool tables, dynamic dispatch, and config-driven wiring reference symbols in ways the type-checker never sees. Any non-test hit (including a string-literal hit) → flag under SKIPPED instead of deleting. Record the grep as evidence in the FIXED entry (`grep "symbolName" → 0 non-test hits`).
 2. **Speculative abstractions** — parameterized functions where the parameter has one real call site; config objects for one option; strategy/factory patterns introduced without a second concrete case; feature flags for code with one branch.
 3. **Redundant error handling** — try/catch at internal boundaries that just rethrows or logs-and-rethrows. Catch-all blocks that swallow specific errors the caller should see. Runtime validation for inputs a Zod schema upstream already guarantees.
 4. **Comments that restate code** — `// increment counter` above `counter++`. Delete. Keep only comments explaining WHY (hidden constraint, surprising behavior, bug-workaround reference).
@@ -49,7 +49,7 @@ Apply in order of priority:
 **LINES:** −<removed> / +<added> across <count> files
 **FIXED:**
 - lib/foo.ts: removed unused `_opts` parameter (no caller set it)
-- lib/bar.ts: inlined `formatX` — single caller, 3 lines
+- lib/bar.ts: inlined `formatX` — single caller, 3 lines (grep "formatX" → 0 non-test hits)
 - api/baz.ts: dropped try/catch that re-threw unchanged
 
 **SKIPPED (flagged but not fixed):**

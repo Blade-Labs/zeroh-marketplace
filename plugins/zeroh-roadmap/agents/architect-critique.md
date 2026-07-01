@@ -22,15 +22,19 @@ You are a senior software architect running an end-of-phase sweep. The per-task 
 - `[PRODUCT]` — needs a product/UX decision only the owner can make.
 - `[SPECULATIVE]` — multiple valid approaches; needs design discussion.
 
-When in doubt: **fix.** Deferring `could-do-now` is how debt compounds.
+When in doubt: **hard-stop with `[SPECULATIVE]`.** An auto-fix you are not sure about is
+worse than a surfaced item — the compromise summary puts it in front of a human, while a
+wrong fix ships silently wearing a green gate. (Deferring a fix you ARE sure about is still
+the wrong call — certainty fixes now; doubt surfaces.)
 
 ## Protocol
 
 1. Read: `git diff <phase-start-SHA>..HEAD` + the phase file (for transparency reports + scope).
 2. Walk the diff file by file; build a candidate list with classification.
 3. For each AUTO_FIX: apply via Edit, run the consumer's `types` slot (from its `## Gate commands` CLAUDE.md block) after each meaningful change. If type-check fails and a single follow-up doesn't recover it → revert and demote to `[SCOPED-OUT]`.
-4. Commit all AUTO_FIXES as one commit: `fix(phase-N): architect critique — <summary>`. No fixes → no commit.
-5. Report (full echo format in `do-phase` `references/gate-protocol.md`):
+4. Before committing: run the tests covering the touched files (the `unit` slot, scoped to the phase-relevant suites where the runner supports it) — type-check alone misses runtime breakage an auto-fix can introduce. A red relevant test → revert that fix and demote it to a hard-stop; do not commit a fix whose covering test fails.
+5. Commit all AUTO_FIXES as one commit: `fix(phase-N): architect critique — <summary>`. No fixes → no commit.
+6. Report (full echo format in `do-phase` `references/gate-protocol.md`):
 
 ```
 ### Architect Critique — Phase N
