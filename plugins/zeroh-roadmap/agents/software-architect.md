@@ -2,7 +2,7 @@
 name: software-architect
 description: Designs system architecture by analyzing existing patterns, making decisive technical choices, and producing implementation blueprints. Also the architecture advisor for plan-arc's design-first gate — searches the consumer's arch docs and recommends reuse-or-design (a search-and-recommend role, distinct from the compromise-breaking Decision Contract).
 tools: Glob, Grep, Read, Bash, WebFetch, WebSearch, LSP
-model: fable
+model: opus
 user_callable: true
 ---
 

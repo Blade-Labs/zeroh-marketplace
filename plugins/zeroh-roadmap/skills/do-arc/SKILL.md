@@ -19,8 +19,12 @@ User says: `do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`.
 
 - **`<id>`** (required) — the Arc id, matching `Arc.id` in `roadmap/arcs/<id>.arc.ts` (a number or short string, e.g. `B`).
 - **`--inline`** / **`--recursion`** (optional) — force the execution mode, overriding the sizing heuristic (Step 2). Default: auto-size.
+- **`--pause-after <N>`** (optional) — run up to and including phase `<N>`, then execute the Pause protocol (Step 4c) instead of starting the next phase. A mid-run user message ("pause after this phase", "pause the arc") arms the same protocol.
+- **`--resume`** (optional) — continue a previously paused arc from its `roadmap/arcs/<ID>-RESUME.md`. Step 0 also auto-detects the file, so a bare `do-arc <id>` on a paused arc resumes rather than restarting.
 
 ## Step 0: Resolve the arc and verify its phases
+
+**Resume detection first:** if `roadmap/arcs/<ID>-RESUME.md` exists, this is a RESUME, not a fresh start — read it, `cd` to its recorded worktree, verify its recorded HEAD is an ancestor of the current branch tip (a mismatch means another session moved it: STOP and report), re-verify any recorded preconditions (e.g. operator steps), then re-enter the protocol at the phase it names — skipping Steps 1–3 except re-registering the build sidecar (Step 3b) and re-creating the arc-level task list for the REMAINING phases only. Delete the RESUME file in the same commit that serializes the next completed phase (it describes a state that no longer exists once execution moves).
 
 1. Call `discoverArcs()` (the registry helper in `templates/registry.ts` — returns `{ arcs, errors }` for ALL `roadmap/arcs/*.arc.ts`). If `errors` is non-empty, STOP and surface them — a malformed arc file is a hard stop.
 2. **Select** the arc whose `id` equals the passed `<id>`. If none matches, STOP: `No arc with id <id> in roadmap/arcs/. Run /plan-arc first, or check the id.`
@@ -75,6 +79,16 @@ At arc start, `TaskCreate` ONE task per member phase so the user watches the arc
 
 The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the flat task list. In **recursion mode** the task tier lives under the `phase-executor` sub-agent, so the main session shows only the arc tier (Step 2's context-isolation advantage).
 
+## Step 3b: Register the build (worktree + branch, machine-readable)
+
+Before the first phase starts, write **`roadmap/arcs/.building/<ID>.json`** (create the dir; consumers gitignore it beside `roadmap/phases/.claims/`):
+
+```json
+{ "arcId": "<id>", "worktree": "<absolute cwd>", "branch": "<git branch --show-current>", "baseRef": "<arc.baseRef>", "mode": "inline|recursion" }
+```
+
+This is the lane registry a coordinating session reads instead of reverse-engineering `git worktree list` + commit forensics. Lifecycle mirrors `.arc-mode`: written at build start, **removed at EVERY arc exit** — Step 8 landing/holding, the Step-4 halt branches, and the Step-4c pause (the pause rewrites it with `"paused": true` instead of removing it, so the lane stays visibly claimed). If the sidecar already exists for this arc with a DIFFERENT worktree, STOP — another session is building this arc.
+
 ## Step 4: Execute the phases (dependency order, sequential in v1)
 
 Iterate the member phases in **dependency order** (respect each phase's `dependsOn`; a phase runs only after its deps are `done`). **v1 is sequential** — one phase fully completes before the next starts. Parallel cross-Plane execution is deferred (see the plan's "Deferred to follow-up"). For each phase, set its arc-level task `in_progress`, then run it by the selected mode:
@@ -117,6 +131,28 @@ Doing this in the orchestrator, one phase at a time, is what keeps concurrent ph
 
 Bake this into how you pace the arc: **don't rush.** Auto-compact handles a long arc's context for you — proceed phase-by-phase and let it. Delegation IS the context strategy: recursion mode hands each phase to a `phase-executor` so the main session stays light over a long arc. A calm phase-by-phase cadence beats trying to hold the whole arc in working memory at once.
 
+## Step 4c: Pause protocol (user-directed — a first-class exit, not an abandonment)
+
+Armed by `--pause-after <N>` or a mid-run user pause directive. A pause happens ONLY at a
+phase boundary: finish the in-flight phase completely — its collect-and-branch (Step 4) AND
+its serialized groom/emit/commit tail (Step 5) — never mid-phase. Then:
+
+1. **Write `roadmap/arcs/<ID>-RESUME.md`** from `templates/ARC-RESUME.md` (copy the template
+   shape, fill every field — worktree, branch, HEAD, baseRef, execution mode + sizing echo,
+   per-phase state table, remaining sequence, known gotchas observed THIS run, operator
+   preconditions, and the exact resume command). The file is the cold-start contract: a
+   fresh session must be able to continue from it with zero archaeology.
+2. **Update the consumer's backlog tier label** for this arc with `PAUSED after <N>` + the
+   resume pointer (respect the label length cap), and groom out any phases that completed.
+3. **Commit** the RESUME file + backlog label on the arc's branch (isolated model) or
+   `baseRef` (direct model): `docs(roadmap): <ID> pause handoff after <N>`.
+4. Mark the build sidecar paused (Step 3b: rewrite with `"paused": true`) and, in inline
+   mode, remove `roadmap/.arc-mode` (every arc exit clears it).
+5. Report the pause state + remaining queue to the user and STOP. Do not start the next
+   phase, the sweep, or validate-arc.
+
+Resume is Step 0's detection path (or explicit `--resume`).
+
 ## Step 6: Arc-sweep
 
 When every member phase is `done`, the arc is built but NOT merged. Invoke the **`arc-sweep`** skill — the pre-merge consolidated debt sweep + whole-arc cross-phase review (it disposes the batched per-phase compromises and judges the arc against `arc.singleSeams`, `arc.honestyRails`, and `arc.designRefs` — design-conformance: did the build follow the confirmed design?). The sweep judges **code coherence**; the next step judges **fulfilled intent**.
@@ -146,7 +182,7 @@ A non-green result is a **blocker** — but what "blocker" means differs by inte
 
 Auto-integration fires only when ALL hold: validate-arc returned **PASS** (or a no-op with no `acceptanceCriteria`); the arc-sweep is clean (every batched debt item disposed — RESOLVE-NOW applied + re-gated, PLAN-PHASE authored, or ACCEPT/OPERATOR-PENDING recorded); the arc-end full suite is green; and there is **no blocker**.
 
-Whatever the outcome (landed, held, or halted), **remove `roadmap/.arc-mode`** here — a stale marker would put the NEXT standalone do-phase run into phantom arc-mode.
+Whatever the outcome (landed, held, or halted), **remove `roadmap/.arc-mode`** here — a stale marker would put the NEXT standalone do-phase run into phantom arc-mode. **Remove `roadmap/arcs/.building/<ID>.json` too** (Step 3b — the lane is free once the arc lands or halts), and delete a leftover `roadmap/arcs/<ID>-RESUME.md` if this run was a resume that reached the end.
 
 **`baseRef → master` is NEVER part of auto-integration** — promoting to `master` is a deliberate *release* (branch protection + a version bump per RELEASE.md), so it stays a held release PR.
 

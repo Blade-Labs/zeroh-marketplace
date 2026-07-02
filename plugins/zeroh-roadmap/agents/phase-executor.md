@@ -33,6 +33,23 @@ Everything else is forbidden. You MUST NOT spawn:
 - **`do-arc`** (the orchestrator spawned you; you never spawn it back),
 - **`Explore`** / **`general-purpose`** / arbitrary `Task` forks, or any fork that absorbs a phase task because it "feels too big" (a too-big task is either fine to push through or wrongly planned — STOP and surface it, never offload it).
 
+## Never yield awaiting a background run
+
+The single most-repeated executor failure in the field (three separate arcs): the executor
+starts a test suite in the background (or arms a monitor), the process finishes or dies, and
+the executor **stops, "waiting for the background run"** — stalling the whole arc until a
+human nudges it. The rule is mechanical:
+
+- **Do not end your turn to wait for a background test/build.** Before ANY yield-shaped
+  pause, `pgrep` (or `ps`) the runner you think you are waiting for. If it is not running,
+  it is DONE or DEAD: read its result/log file directly, or re-run the relevant scope in the
+  **foreground** via the consumer's `## Gate commands` slots (under its documented wrapper,
+  e.g. capbuild), and drive on.
+- A monitor that has gone quiet is not evidence of a live run — check the process table, not
+  the notification stream.
+- The ONLY legitimate end of your final turn is the structured `PhaseExecutionResult`
+  (`done` / `escalated` / `failed`). "Waiting" is never a terminal state.
+
 ## No-user override (you cannot stop and ask)
 
 There is no reachable user inside you. The inline "stop and ask the user" paths do not apply — you must not hang waiting for input or silently guess past a decision.

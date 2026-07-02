@@ -60,6 +60,8 @@ Do NOT run the audit automatically — the grep is the cheap sentinel, the audit
 | "code review", "review this code" | Invoke skill: **code-review** |
 | "full code review", "pre-release review" | Invoke skill: **full-code-review** |
 | "audit roadmap", "check roadmap consistency", "roadmap health check" | Invoke skill: **audit-roadmap** |
+| "pause the arc", "pause after this phase / after phase N" | **do-arc's Pause protocol** (Step 4c) — finish the phase boundary, write `roadmap/arcs/<ID>-RESUME.md`, mark the backlog label PAUSED, stop |
+| "resume arc X", "continue arc X" | Invoke skill: **do-arc** — Step 0 auto-detects `roadmap/arcs/<ID>-RESUME.md` and continues from it |
 | "migrate roadmap", "upgrade roadmap", "apply the migration" | Read `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` — it contains the authoritative 7-step migration protocol including pre-flight safety (clean working tree check, migration branch, `/tmp` tarball snapshot) and per-bucket remediation. Follow it in order. Do NOT skip pre-flight. |
 
 **NEVER** handle these requests yourself. ALWAYS invoke the corresponding skill. The skills contain the full protocol — task format, validation gates, review agents, transparency reports.
@@ -72,6 +74,27 @@ do-phase N    → one task at a time, commit between each, gate at the end
 do next phase → reads roadmap/backlog.ts, picks first entry
 review-phase N → verify the work was done correctly
 ```
+
+## Multi-session coordination (shared repos — board, claims, worktrees)
+
+Some consumers run SEVERAL sessions against one repo (parallel arc builds in worktrees, a
+planner, a coordinator). Three conventions keep them from colliding; honor all three
+whenever the repo shows signs of multi-session use (a `roadmap/phases/.claims/` dir, a
+COORDINATION BOARD, `roadmap/arcs/.building/`):
+
+1. **The COORDINATION BOARD lives in `roadmap/backlog.ts`'s header comment** — a lane map
+   (which arc runs where: worktree/branch/pause state), the release plan (when
+   `baseRef → master` cuts, and what gates each cut), and the repo's standing conventions.
+   Read it FIRST when the user says "what next" — then tell them, or pick the named lane.
+   It rides the same commit discipline as the queue, so it survives sessions.
+2. **Claim phase numbers BEFORE authoring anything** — `scripts/claim-phase-number.sh`
+   (creation-is-the-lock; delete the `.claim` in the landing commit). This applies to
+   one-off fix phases too, not just arc planning. The write-time hook warns on a new
+   phase file without a claim (`ZEROH_ROADMAP_STRICT_CLAIMS=1` makes it blocking).
+3. **Building arcs are registered** — do-arc writes `roadmap/arcs/.building/<ID>.json`
+   (worktree, branch, mode) at build start and clears it at land/halt; a paused arc keeps
+   it with `"paused": true` plus a `roadmap/arcs/<ID>-RESUME.md` cold-start handoff.
+   Never start an arc whose sidecar names a different worktree.
 
 ## Migration (one-off, not a skill)
 

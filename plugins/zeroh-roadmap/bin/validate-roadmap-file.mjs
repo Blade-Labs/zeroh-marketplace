@@ -111,6 +111,48 @@ if (phaseMatch) {
     console.error('Pick the next free number (scripts/claim-phase-number.sh reserves one atomically).')
     process.exit(2)
   }
+
+  // 3) Claim-before-start: a NEW phase file (not yet in git HEAD) should hold a
+  //    .claims/<N>.claim reservation — under real multi-session concurrency the
+  //    claim IS the collision lock (creation-is-the-lock, claim-phase-number.sh).
+  //    Warn loudly by default; ZEROH_ROADMAP_STRICT_CLAIMS=1 makes it blocking.
+  //    Git absence / non-repo fails OPEN — never block a repo without git.
+  const claimPath = join(roadmapRoot, 'phases', '.claims', `${phaseNum}.claim`)
+  if (!existsSync(claimPath)) {
+    let isNewFile = false
+    try {
+      execFileSync('git', ['-C', roadmapRoot, 'cat-file', '-e', `HEAD:${relToRepo(roadmapRoot, normalized)}`], {
+        stdio: 'ignore',
+        timeout: 10_000,
+      })
+    } catch (err) {
+      // ENOENT = git missing → fail open; a non-zero exit = path not in HEAD → new file.
+      isNewFile = err?.code !== 'ENOENT'
+    }
+    if (isNewFile) {
+      const msg =
+        `[zeroh-roadmap] phase ${phaseNum} is NEW but holds no claim (${claimPath} missing). ` +
+        `Concurrent sessions collide without one — reserve numbers BEFORE authoring: ` +
+        `bash <plugin>/scripts/claim-phase-number.sh (creation is the lock; delete the .claim in the landing commit).`
+      console.error(msg)
+      if (process.env.ZEROH_ROADMAP_STRICT_CLAIMS === '1') process.exit(2)
+    }
+  }
+}
+
+/** Repo-relative path for git cat-file, resolved against the roadmap root's repo. */
+function relToRepo(roadmapRoot, absPath) {
+  try {
+    const top = execFileSync('git', ['-C', roadmapRoot, 'rev-parse', '--show-toplevel'], {
+      timeout: 10_000,
+    })
+      .toString()
+      .trim()
+      .replace(/\\/g, '/')
+    return absPath.startsWith(top + '/') ? absPath.slice(top.length + 1) : absPath
+  } catch {
+    return absPath
+  }
 }
 
 process.exit(0)
