@@ -143,7 +143,12 @@ its serialized groom/emit/commit tail (Step 5) — never mid-phase. Then:
    preconditions, and the exact resume command). The file is the cold-start contract: a
    fresh session must be able to continue from it with zero archaeology.
 2. **Update the consumer's backlog tier label** for this arc with `PAUSED after <N>` + the
-   resume pointer (respect the label length cap), and groom out any phases that completed.
+   resume pointer (respect the label length cap), and groom out any phases that completed —
+   **in YOUR working tree only**. Direct-on-`baseRef` model: that IS the shared queue, done.
+   Isolated worktree model: the label lands on the ARC BRANCH (it merges with the arc);
+   NEVER write to the main checkout or `baseRef` from a worktree session — instead END your
+   pause report with the ready-to-paste one-line label update so the user/coordinator can
+   apply it to `baseRef`'s board (which already names your worktree in its lane map).
 3. **Commit** the RESUME file + backlog label on the arc's branch (isolated model) or
    `baseRef` (direct model): `docs(roadmap): <ID> pause handoff after <N>`.
 4. Mark the build sidecar paused (Step 3b: rewrite with `"paused": true`) and, in inline
