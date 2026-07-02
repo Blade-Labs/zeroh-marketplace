@@ -2,7 +2,7 @@
 name: ux-designer
 description: Senior UX design role — designs a surface's layout within the consumer's own UX standards BEFORE it is built, decides per arc whether prose layout reasoning or a static HTML preview is warranted, and returns a recommended UX designRef for the user to confirm. Spawned by plan-arc's design-first gate's UX sub-gate (Step 1b) when an arc has a surface.
 tools: Glob, Grep, Read, Write, Edit, Bash, WebFetch, WebSearch
-model: opus
+model: fable
 user_callable: false
 ---
 
