@@ -88,3 +88,51 @@ from it (template↔consumer diff = comments only).
   make the schema close its escape hatches, script the bookkeeping, type every agent boundary,
   and use decision tables where prose currently nests exceptions. intent-validator is the
   house pattern; apply it everywhere.
+
+## Addendum — 2026-07-02: multi-session coordination (from the four-lane paused-build day)
+
+Evidence base: four concurrent arc builds (ANYPLAN + KNOWFIX sharing the consumer's MAIN
+checkout, MEETRAG + PROMPTCRAFT in isolated worktrees), a user-directed all-pause across
+them, 36 phases planned in parallel by a fifth session (zero number collisions), and two
+hand-rolled resume-handoff files (PROMPTGOV-RESUME.md, PROMPTCRAFT-RESUME.md) that both
+worked. What should graduate from convention to plugin protocol:
+
+1. **Pause/resume as a first-class do-arc verb.** The `<ID>-RESUME.md` pattern proved out
+   twice but is re-invented each time. do-arc should honor a "pause after <phase>"
+   directive: finish the phase's serialize tail, write `roadmap/arcs/<ID>-RESUME.md` from a
+   TEMPLATE (worktree path, branch, HEAD, baseRef, execution mode + sizing, per-phase
+   state, known gotchas, the exact next command), commit it on the arc branch, and update
+   the consumer's backlog tier label with `PAUSED after <N>` + the resume pointer. Resume =
+   a fresh session reads the file and continues the protocol — no archaeology.
+
+2. **Worktree registration at arc start.** do-arc records its worktree + branch into the
+   arc's backlog tier label (or a gitignored sidecar beside `.claims/`, e.g.
+   `roadmap/arcs/.building/<ID>.json`) when the build starts, and clears it at merge.
+   Today this lives only in session memory; the coordinator had to reverse-engineer the
+   lane map from `git worktree list` + commit forensics.
+
+3. **Claim-before-start, enforced.** `claim-phase-number.sh` worked perfectly under real
+   concurrency (36 claims, zero collisions) but is convention-only. Add a validate-hook
+   check: a NEW `phase-<N>.phase.ts` appearing without `.claims/<N>.claim` and without a
+   prior commit for N → loud warn (block in strict mode). Also bless claiming for one-off
+   fix phases, not just arc planning (the consumer now claims before ANY new phase).
+
+4. **Bake the executor await-background gotcha into phase-executor.** It bit at least three
+   times across two arcs: executors yield "waiting for a background test run" that is
+   already dead, and need SendMessage nudges with process-table evidence to finish. Add to
+   the phase-executor prompt: "Never yield awaiting a background test run. Before yielding,
+   `pgrep` the runner; if absent, read the result file directly or re-run scoped in the
+   foreground via the consumer's gate commands, then return the structured
+   PhaseExecutionResult."
+
+5. **A home for the coordination board.** The consumer now keeps a COORDINATION BOARD
+   (lane map, release plan, standing conventions) in `backlog.ts`'s header comment — it
+   survives sessions and rides the same commit discipline as the queue. Either bless that
+   convention in using-zeroh-roadmap's docs, or add an optional `board` string field to
+   `defineBacklog` (schema v10) so hooks can lint lane references against live worktrees.
+
+6. **Model-pin housekeeping (observed).** 76c2e68 reverted ux-designer to opus while
+   software-architect still carries a1f5b7e's "temporary" fable pin. The planning wave that
+   motivated the pin completed 2026-07-02 — revert software-architect too; planning
+   sessions that want Fable pass the call-site model override per the consumer's standing
+   rule.
