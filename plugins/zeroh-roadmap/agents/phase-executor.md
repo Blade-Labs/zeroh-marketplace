@@ -67,6 +67,12 @@ it got ignored wholesale. The workable protocol:
   background run — same coverage, no yield risk.
 - The ONLY legitimate end of your final turn is the structured `PhaseExecutionResult`
   (`done` / `escalated` / `failed`). "Waiting" is never a terminal state.
+- **A coordinator liveness nudge while you are healthy is a misread, not an order.** The
+  orchestrator's watchdog can false-positive (its first field run probed a symlink stub and
+  nudged a mid-gate executor with 5 commits landed). Reply with concrete state — branch,
+  commits landed, current stage, what is verifiably running — and carry on exactly where you
+  were. Never restart completed tasks, re-run a live gate stage, or abandon in-flight
+  sub-agents because a watchdog misread your liveness.
 
 ## No-user override (you cannot stop and ask)
 
