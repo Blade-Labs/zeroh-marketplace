@@ -82,6 +82,19 @@ duplicate completion signals, a paragraph "no one will read". Design for that en
 - **No duplicated/placeholder blocks.** A copy-pasted card left twice in the artifact, or
   lorem-grade filler, fails the gate. Every block in the preview is intentional.
 
+## 5b. Handover — a design is delivered as a LINK, not a path
+
+A handed-over artifact the reviewer cannot open in one click is not handed over. Before
+returning, make the artifact viewable and put the URL in your return message:
+- If the consumer already serves its previews directory (a running static server, a docs
+  site), use that URL.
+- Otherwise start one per the consumer's own environment conventions (its CLAUDE.md /
+  host rules — e.g. a memory-capped static server on a shared box) and hand back the
+  REACHABLE address those rules prescribe (never localhost when the reviewer is on
+  another machine).
+- The file path is still reported (it is the designRef); the link is how the human
+  actually reviews it. No link, no handover.
+
 ## 6. Self-check before returning (all must pass)
 
 1. Open the preview: is the display face visibly the canon's (not a fallback)?
@@ -93,3 +106,4 @@ duplicate completion signals, a paragraph "no one will read". Design for that en
 7. Reduced-motion, keyboard focus, live regions present?
 8. If the consumer's Design homes name a **quality exemplar**, does this artifact stand
    next to it without embarrassment?
+9. Does the return message carry a clickable URL where the artifact is served (§5b)?

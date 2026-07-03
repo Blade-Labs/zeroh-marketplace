@@ -56,6 +56,7 @@ Return a recommended designRef:
 
 - `status: 'reused'` when the surface follows an existing canonical pattern (you cite it); `'designed'` when you created a new layout because the canon had no fit (say why).
 - The orchestrator writes this onto the arc's `designRefs` after the **user confirms** it. Do not present an unseen design as confirmed.
+- **Hand over a LINK, not just a path** (ux-craft.md §5b): serve the artifact per the consumer's environment conventions and include the reachable URL in your return message alongside the designRef. The orchestrator presents that link to the user at the confirm pause — a design the user cannot open in one click is not ready for its gate.
 
 ## Honesty rails
 
