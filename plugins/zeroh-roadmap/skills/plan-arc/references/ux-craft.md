@@ -10,6 +10,16 @@ of checkable habits. This file makes them the bar.
 The identity itself is always the CONSUMER's (bound via its `CLAUDE.md` "## Design
 homes"); this file is about the CRAFT applied to that identity.
 
+## 0. Before designing — enumerate what already exists
+
+List the consumer's preview/design directories for EXISTING artifacts of the target
+surface, including variants (`-dark`, `-v2`, sibling names) — an `ls`, not a grep for one
+filename. If more than one artifact exists, ASK the user which is canonical before
+evolving any of them. The field failure this prevents: a session iterated a stale sibling
+through four polish passes while the design the user loved sat one directory entry away.
+The same check applies to code: a "missing" component may exist unmounted — search before
+building.
+
 ## 1. Identity fidelity — the consumer's brand, actually rendered
 
 - **Load the real webfonts.** A preview that names the canon's typefaces in CSS but ships
