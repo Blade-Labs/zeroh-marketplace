@@ -129,6 +129,14 @@ When in doubt between `logic` and `hardening`, pick `hardening` — the cost of 
 
 `kind` is independent of `category`: a `category: 'fix'` phase is almost always `kind: 'hardening'`, but a `category: 'feature'` phase can be `mockup`, `logic`, or `hardening` depending on what it actually changes.
 
+**Then consider `testScope` (optional — only meaningful when the consumer CLAUDE.md has a
+`## Test cadence` block).** It scopes the gate's `unit`/`integration` slots independently of
+`kind`: `static` (docs/data/generated-only diff) · `scoped` (enumerable tests — list them in
+`scopedTests`) · `relevant` (+ suites exercising the touched modules) · `full`. Omit it and
+the gate derives the scope from the diff; a declared value can only RAISE the derived floor
+(`## Gate specialists` paths always force `full`), so declare it when you know the phase is
+data/docs-shaped and want that recorded up front — never to sneak under the floor.
+
 Create `roadmap/phases/phase-{N}.phase.ts` using `definePhase()`:
 
 ```typescript

@@ -65,6 +65,58 @@ If `kind` is missing on a legacy phase, treat as `logic` and emit a one-time war
 
 The `kind` field is required at schema parse time; the legacy fallback only covers phases authored before v3.
 
+
+---
+
+## Test-scope ladder (opt-in — narrows the TEST slots only, never the gate)
+
+`kind` selects the agent chain, but it is a poor proxy for how much of the test pyramid a
+diff needs: a `logic` phase whose diff is register data + two small scripts buys nothing
+from a full-tier rerun, while the same `kind` on a spine refactor genuinely needs it. The
+ladder scopes ONLY the `unit`/`integration` slots in Round 1's mechanical checks.
+Everything else is UNCHANGED: lint/types/build/emit, the architect-critique → simplifier →
+code-reviewer chain, `hardening`'s closure itest (never defers), `release`'s `e2e`.
+
+**Opt-in (consumer-binding, fail-loud — the `## Gate commands` pattern):** the ladder is
+honored ONLY when the consumer's CLAUDE.md declares a `## Test cadence` block naming the
+backstop that re-covers untouched code off the phase gate:
+
+```markdown
+## Test cadence
+- backstop: ci-pr-gate + nightly   # what re-runs the full suites off the phase gate
+- floors: blocking                 # coverage floors enforced there (or 'advisory'/'none')
+```
+
+No block → the ladder is OFF and the kind × mode table applies as-is (today's behavior).
+Never guess a consumer's CI posture: a consumer without a CI/nightly backstop keeps the
+full-suite default because the phase gate IS its only line of defense.
+
+**The ladder** (`phase.testScope`; absent → derived from the diff's path classes, the same
+mechanical `git diff --name-only` classification the Round-0 docs-only skip uses):
+
+| `testScope` | Derived when the diff is… | Test slots run |
+|---|---|---|
+| `static` | docs/data/assets/generated artifacts only (no executable code) | none — lint/types/emit only, plus a determinism re-run of any generator whose source is in the diff |
+| `scoped` | code whose proving tests are enumerable | test files IN the diff + colocated `<name>.test.*` siblings of changed files + `phase.scopedTests` globs — exactly those files |
+| `relevant` | src changes with cross-module consumers | scoped + the suites that exercise the touched modules (the arc-mode rule, promoted to inline) |
+| `full` | any path matched by the consumer's `## Gate specialists` block, or declared | the whole kind × mode cell (today's behavior) |
+
+**Floor rule (fail-loud):** derive the floor from the diff FIRST; a declared `testScope`
+may only RAISE it. Declared below the derived floor → the gate REFUSES:
+`testScope 'static' declared but the diff touches src/relay/governed-turn.ts
+(## Gate specialists floor: full)`. A path important enough to swap in a specialist
+reviewer is important enough for the full suite — one consumer seam, two consumers.
+
+**Honesty record:** any scope below `full` writes what was deferred and which backstop
+covers it into `gate.unitTests.notes` (e.g. `deferred: full unit+integration tiers →
+ci-pr-gate + nightly per ## Test cadence`) — a narrowed gate is a recorded state, never a
+silent or ad-hoc one.
+
+**Arc-mode note:** the arc-mode column of the kind × mode table already implements
+`relevant` with the arc-end full run (do-arc Step 8) as its backstop. Under the ladder both
+modes read as one rule — prove the touched code at the gate; the declared backstop
+(`## Test cadence` inline, arc-end suite in arc-mode) re-covers the world.
+
 ---
 
 ## Per-Stage Echo Contract
@@ -149,7 +201,7 @@ The loop is automated. Each round fixes findings and re-runs agents without paus
 
 ### Round N (start with N=1)
 
-**1. Mechanical checks.** Every step must pass before agents run. If any fails, fix it, commit, and restart Round N from the top. Which slots run is a **table lookup**, not a judgment call — resolve slots via the `## Gate commands` binding (top of this file), then run the cell for this phase's `kind` × mode:
+**1. Mechanical checks.** Every step must pass before agents run. If any fails, fix it, commit, and restart Round N from the top. Which slots run is a **table lookup**, not a judgment call — resolve slots via the `## Gate commands` binding (top of this file), then run the cell for this phase's `kind` × mode — **narrowed by the Test-scope ladder (above) when, and only when, the consumer has a `## Test cadence` block**:
 
 | `kind` \ mode | **Inline** (standalone do-phase) | **Arc-mode** (inside a phase-executor) |
 |---|---|---|
@@ -194,7 +246,7 @@ The principle behind "relevant tests": always include the specific test(s) that 
 
 If the loop has not converged after 5 rounds, STOP and surface the remaining findings to the user. Agents may be cycling (finding-then-rewriting-then-finding). Do not silently loop forever.
 
-**NO EXCEPTIONS to the gate itself** — not for "docs-only", "test-only", or "low-risk" phases. Every phase gets the full gate (mechanical checks → agent reviews → correctness loop). The arc-mode *test cadence* above narrows the per-gate **test scope** (relevant tests now, full suite at arc end) — it does NOT skip the gate, the agent reviews, the mechanical lint/type/build checks, or the arc-end suite. If the phase file's validation task specifies additional checks, run those too.
+**NO EXCEPTIONS to the gate itself** — not for "docs-only", "test-only", or "low-risk" phases. Every phase gets the full gate (mechanical checks → agent reviews → correctness loop). The arc-mode *test cadence* and the opt-in **Test-scope ladder** narrow the per-gate **test scope** only (prove the touched code now; the declared backstop re-covers the rest) — neither skips the gate, the agent reviews, the mechanical lint/type/build checks, the hardening closure itest, or the arc-end suite. If the phase file's validation task specifies additional checks, run those too.
 
 ---
 

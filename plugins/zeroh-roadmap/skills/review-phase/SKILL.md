@@ -100,6 +100,14 @@ Confirm the planner's batchMode decision is honest: a task with `batchMode: true
 
 - Fail = BLOCKER. Oversized task without batchMode, or batchMode with non-commit-shaped steps.
 
+**Test-scope sanity (bonus check — only when `phase.testScope` is declared):**
+Verify the declared scope is plausible against `keyFiles` + every task's `files[]`: any
+path in the consumer's `## Gate specialists` block, or any runtime `src/` change with
+cross-module consumers, is incompatible with `static`/`scoped`. The gate would refuse at
+execution (floor rule), but catching it at review time saves the do-phase round-trip.
+Also check `scopedTests` globs resolve to real files when `testScope: 'scoped'`.
+- Fail = NEEDS WORK. Under-scoped test declaration.
+
 **Output per task:**
 ```
 Task N.1: <title>

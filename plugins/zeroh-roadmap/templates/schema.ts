@@ -383,6 +383,23 @@ const BasePhaseFields = {
    *  pick deliberately at plan time (the picker table is mandatory in
    *  plan-phase Step 3) and migrate/audit.ts surfaces unbackfilled phases. */
   kind: z.enum(['mockup', 'logic', 'hardening', 'release']).default('logic'),
+  /** Test-scope ladder for the gate's MECHANICAL test slots (`kind` keeps
+   *  selecting the agent chain — the chain never narrows). Optional: absent →
+   *  the gate derives the scope from the diff's path classes (gate-protocol.md
+   *  "Test-scope ladder"); a declared value may only RAISE the derived floor,
+   *  and paths in the consumer's `## Gate specialists` block always force
+   *  'full'. Honored ONLY when the consumer declares a `## Test cadence`
+   *  backstop block in CLAUDE.md — without it the gate keeps today's
+   *  full-suite default, so the field is inert until a consumer opts in.
+   *  static  — lint/types/emit only (docs/data/generated-artifact diffs)
+   *  scoped  — tests in/colocated with the diff + `scopedTests` globs
+   *  relevant— scoped + the suites exercising the touched modules
+   *  full    — the whole kind × mode cell (today's behavior) */
+  testScope: z.enum(['static', 'scoped', 'relevant', 'full']).optional(),
+  /** Explicit test files/globs the `scoped` tier runs in addition to the
+   *  diff-colocated tests (the planner enumerates them; review-phase vetoes
+   *  under-scoping). */
+  scopedTests: z.array(z.string().min(1)).optional(),
   /** Semver of the release this phase ships in */
   version: z
     .string()
