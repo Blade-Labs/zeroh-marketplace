@@ -26,13 +26,25 @@ For the surface the arc introduces, design:
 - **Components** — **reuse the consumer's existing components first**; only propose a new one when the canon has no fit, and say so explicitly (the reuse-first rail, mirrored from the architecture sub-gate).
 - **Accessibility** — keyboard path, focus order, contrast, labels — to the canon's bar.
 
-## 3. Decide per arc: prose layout note vs static HTML preview
+## 3. Decide per arc: prose layout note vs preview vs interactive prototype
 
 You own this call:
 - **Prose layout note** — enough for a tweak or an extension of an existing surface: describe structure, hierarchy, states, and the components reused, against the canon. Cheaper, and right when the user can picture it from the existing surface.
-- **Static HTML/mock preview** — warranted for a **net-new** surface, where seeing it beats reading about it. Produce it with the **frontend-design** skill (when available in the consumer environment) for the layout/preview craft; write it to a preview path the designRef can point at.
+- **Static HTML preview** — warranted for a **net-new single-state** surface, where seeing it beats reading about it. Produce it with the **frontend-design** skill (when available in the consumer environment); write it to a preview path the designRef can point at.
+- **Interactive prototype** — REQUIRED for a net-new surface with 2+ sequential states (funnel, wizard, stepper flow): one live page, click-through with real transitions and simulated async latency, plus a small designer rail (restart / failure toggles) so the reviewer reaches the unhappy paths.
 
-Pick the lighter option that lets the user actually judge the design — a preview nobody needs is as wasteful as a prose note for a surface no one can picture.
+Pick the lightest option that lets the user actually judge the design — a preview nobody needs is as wasteful as a prose note for a surface no one can picture.
+
+## 3b. The craft bar — MANDATORY, read before producing anything
+
+Read `skills/plan-arc/references/ux-craft.md` under this plugin's root (the orchestrator passes its path; if unresolvable, ask for it — do not skip). Its self-check is your definition of done. The non-negotiables it encodes:
+
+1. **Render the consumer's identity for real**: LOAD the canon's webfonts (a preview that names fonts but ships no `<link>` renders as generic fallback slop — the #1 quality killer), inline the consumer's REAL wordmark/logo and app icons from its repos (never a text-styled fake), copy its tokens verbatim, and honor its type roles (machine facts in the record voice, e.g. mono — never body text).
+2. **Say it once**: each view states its message exactly once. Kickers duplicating chrome, reassurance fine-print, second completion signals — cut. Run an explicit declutter pass before returning; if it removed nothing, look harder.
+3. **Copy follows the consumer's copy rules** (banned AI-tell vocabulary, no filler, no em-dash sentence connectors, lead with a specific fact). Short declaratives beat cleverness — "You're in." beats "One thing left, and it's a click."
+4. **Honest artifacts**: never a fake screenshot (stylized vignette + a build-task note for real captures), never a duplicated or placeholder block, honest empty/error/refused states with semantic colors used as facts.
+5. **Demonstrated accessibility**: real buttons, hover AND focus paths, live regions, visible focus, `prefers-reduced-motion` collapse.
+6. **Match the exemplar**: if the consumer's Design homes name a quality exemplar, open it first and produce work that stands next to it.
 
 ## 4. Return a UX designRef recommendation
 

@@ -49,11 +49,14 @@ Run by the `ux-designer` agent when the classifier finds a **surface**. Same adv
 2. **If they fit → reuse.** Record `{ kind: 'ux', ref: '<layout-note path>', status: 'reused', summary }`; the layout cites the canonical pattern and reuses existing components.
 3. **If none fits → design.** The designer creates the new layout (structure, hierarchy, the honest empty/loading/error/not-yet-measured states, accessibility) within the canon's idiom, and records `{ …, status: 'designed', summary }`.
 
-**Prose layout note vs static HTML preview — the designer's call, per arc:**
+**Prose layout note vs static HTML preview vs interactive prototype — the designer's call, per arc:**
 - **Prose layout note** for a tweak or an extension of an existing surface — the user can picture it from what exists.
-- **Static HTML preview** for a **net-new** surface, where seeing it beats reading about it (produced with the `frontend-design` skill where available). `ref` then points at the preview file.
+- **Static HTML preview** for a **net-new single-state** surface, where seeing it beats reading about it (produced with the `frontend-design` skill where available). `ref` then points at the preview file.
+- **Interactive prototype** for a net-new surface with 2+ sequential states (funnel, wizard, stepper) — one live click-through page with real transitions and a designer rail for the failure states.
 
-Pick the lighter option that lets the user actually judge the design. The UX designRef is then **confirmed by the user** (Step 1b pauses) and **recorded by the orchestrator** onto the arc — same as the architecture designRef.
+Pick the lightest option that lets the user actually judge the design. The UX designRef is then **confirmed by the user** (Step 1b pauses) and **recorded by the orchestrator** onto the arc — same as the architecture designRef.
+
+**The craft bar.** Whatever the form, the artifact must meet `references/ux-craft.md` (same directory as this file) — identity fidelity (REAL webfonts loaded, the consumer's real logo/icon assets, tokens verbatim, type roles honored), the say-it-once restraint doctrine with an explicit declutter pass, the consumer's copy rules, honest-artifact rules (no fake screenshots, no placeholder blocks), demonstrated accessibility, and exemplar conformance. **The orchestrator passes the ux-craft.md absolute path to the `ux-designer` agent in its spawn prompt** (the agent's §3b requires it), and — when the consumer's Design homes name a **quality exemplar** — names that exemplar path too.
 
 ## 4. Consumer-agnostic — the design HOMES
 
