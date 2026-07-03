@@ -33,20 +33,38 @@ Everything else is forbidden. You MUST NOT spawn:
 - **`do-arc`** (the orchestrator spawned you; you never spawn it back),
 - **`Explore`** / **`general-purpose`** / arbitrary `Task` forks, or any fork that absorbs a phase task because it "feels too big" (a too-big task is either fine to push through or wrongly planned — STOP and surface it, never offload it).
 
-## Never yield awaiting a background run
+## Long-run survival protocol (the most-repeated executor failure — now mechanical)
 
-The single most-repeated executor failure in the field (three separate arcs): the executor
-starts a test suite in the background (or arms a monitor), the process finishes or dies, and
-the executor **stops, "waiting for the background run"** — stalling the whole arc until a
-human nudges it. The rule is mechanical:
+The failure, seen on four separate arcs: the executor starts a long suite in the background,
+ends its turn "waiting", and then either burns wake cycles doing nothing per wake or goes
+permanently quiet after the process dies — stalling the whole arc until a human nudges it.
+The old rule ("never end your turn to wait") was IMPOSSIBLE for the runs that matter — a
+15-20 min coverage suite cannot run as one foreground Bash call (the tool caps foreground
+timeouts at 10 min) and shared-host consumer rules mandate backgrounding long commands — so
+it got ignored wholesale. The workable protocol:
 
-- **Do not end your turn to wait for a background test/build.** Before ANY yield-shaped
-  pause, `pgrep` (or `ps`) the runner you think you are waiting for. If it is not running,
-  it is DONE or DEAD: read its result/log file directly, or re-run the relevant scope in the
-  **foreground** via the consumer's `## Gate commands` slots (under its documented wrapper,
-  e.g. capbuild), and drive on.
-- A monitor that has gone quiet is not evidence of a live run — check the process table, not
-  the notification stream.
+- **Expected ≤ 8 min** (single suites, builds, scoped tests): run it **foreground**, under
+  the consumer's documented wrapper (e.g. capbuild), with an explicit `timeout` sized to the
+  run. Block. No yield.
+- **Expected > 8 min** (full unit tier, coverage runs, integration+build chains): background
+  it, redirecting output to a log file — and **in the same turn, before ending it**, arm a
+  Monitor whose script EXITS on completion (an until-loop on the terminal line of the log)
+  and ALSO emits on failure signatures (`FAILED|Error|not ok|Killed|OOM|exit [1-9]`) and on
+  stall (log size unchanged ~5 min → emit a STALL line so you get woken to check the process
+  table). The Monitor's exit is your guaranteed re-invocation. Only with BOTH the background
+  task and that exiting Monitor armed may the turn end — and the turn's last text must name
+  exactly what is running and which log it writes.
+- **On EVERY wake** (task notification or monitor event), the FIRST actions are: `pgrep` the
+  runner + read the tail of its log/result file. Then **drive on in that same wake turn** —
+  parse the result, run the next gate step, commit, or relaunch a dead run. A wake turn that
+  ends without advancing the phase is the bug; never "still waiting" twice in a row.
+- **Never end a turn with nothing running.** Ending a turn is legal only when (a) a verified
+  live process + an armed exiting Monitor cover you, or (b) you are returning the structured
+  `PhaseExecutionResult`. A quiet monitor is not evidence of a live run — the process table
+  is; if `pgrep` finds nothing, the run is DONE or DEAD: read its log and drive on now.
+- Splitting beats waiting: where the consumer's `## Gate commands` slot allows scoping
+  (single suite, single package), prefer several foreground-sized runs over one giant
+  background run — same coverage, no yield risk.
 - The ONLY legitimate end of your final turn is the structured `PhaseExecutionResult`
   (`done` / `escalated` / `failed`). "Waiting" is never a terminal state.
 
