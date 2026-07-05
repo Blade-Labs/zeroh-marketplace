@@ -26,7 +26,7 @@ release-sweep [<version>] [--archive]
 
 **Release does NOT gate on debts.** A phase can ship with open debts on a patch, a minor, or even a major if the operator explicitly chooses — release-sweep does not block any release.
 
-**Archive DOES gate on debts.** Once a phase is in `roadmap/archive/<version>/`, the operator commits to never revisiting its open debts. So archive requires every candidate debt (a non-`"None"` transparency-report entry on a task in this phase) to have a matching `debtResolutions[].ref`. "Open" is the absence of a matching ref — there is no `'open'` status value.
+**Archive DOES gate on debts.** Once a phase is in `roadmap/archive/<version>/`, the operator commits to never revisiting its open debts. So archive requires every candidate debt (a non-`"None"` transparency-report entry on a task in this phase) to have a matching `debtResolutions[].ref` with a CLOSING status. "Open" is the absence of a matching ref — **or** a matching entry whose status is still open (the 1371 follow-up contract): `'planned'` is open until its `via: 'phase-<N>'` phase is `done`; `'operator-pending'` is open until this sweep disposes it post-deploy, and that disposition REPLACES the entry (one ref, latest disposition wins). Archive stays blocked on both.
 
 **Recommended timing** (operator choice — none of these are enforced):
 - **Patch release** (0.7.0 → 0.7.1) — sweep is *optional*. Patches commonly close debts from prior releases; a quick sweep against the prior minor is the natural moment. Never required.
@@ -58,7 +58,7 @@ For each matched phase file, read `tasks[].transparencyReport` for every task. A
 - `transparencyReport.skipped !== "None"`, OR
 - `transparencyReport.limitations !== "None"`
 
-For each candidate, compose `ref = "<task.id>.<field>"` (e.g. `"467.5.hardcoded"`). The debt is **open** if no entry in `phase.debtResolutions` has a matching `ref`.
+For each candidate, compose `ref = "<task.id>.<field>"` (e.g. `"467.5.hardcoded"`). The debt is **open** if no entry in `phase.debtResolutions` has a matching `ref` — **OR** the matching entry carries a still-open status (the 1371 follow-up contract): `status: 'planned'` is OPEN until its `via: 'phase-<N>'` phase is itself `status: done` (re-check that phase file — an authored-but-unexecuted follow-up is not resolved); `status: 'operator-pending'` is OPEN until this sweep disposes it post-deploy. `'fixed'` / `"won't_fix"` / `'dismissed'` close the debt as before.
 
 Output the open set grouped by phase, ordered by phase number:
 
