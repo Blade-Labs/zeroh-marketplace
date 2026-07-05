@@ -24,7 +24,7 @@ User says: `validate arc <id>`, `/validate-arc <id>`, `check arc <id> met its in
 ## Step 0: Resolve the arc and its criteria
 
 1. Call `discoverArcs()` and select the arc whose `id` equals `<id>`. If none matches, STOP: `No arc with id <id>. Run /plan-arc first, or check the id.`
-2. Read `arc.acceptanceCriteria`. **If it is empty, STOP with an HONEST no-op:** report `Arc <id> declares no acceptance criteria — validate-arc is a no-op. (Author criteria in plan-arc Step 1 to make this gate real.)` Do NOT invent criteria to judge against — that is circular.
+2. Read `arc.acceptanceCriteria`. **If it is empty, STOP with an HONEST no-op:** report `Arc <id> declares no acceptance criteria — validate-arc is a no-op. (Author criteria in plan-arc Step 1 to make this gate real.)` Do NOT invent criteria to judge against — that is circular. When criteria DO exist, note that they are **immutable post-planning** (the 1367 validator enforces it via `criteriaRatifications`), so the intent judged here is always the ORIGINAL — never one quietly narrowed during the build.
 
 ## Step 1: Confirm the arc is built and the surface is runnable
 
@@ -52,7 +52,7 @@ For a criterion whose `bar` is **subjective** (a rendered-UX / "feels finished" 
 2. Per criterion: **MET** (single judge met, or majority met) or **GAP** (carrying the judge's `whatsMissing` + `suggestedFix` + the evidence).
 3. Arc-level: **PASS** iff every criterion is MET; otherwise **GAPS** with the list of unmet criteria, each with its evidence and suggested fix.
 
-Report the result — per-criterion verdict, the evidence, the tier each was judged at (and any tier-honesty flag from Step 2), and the arc-level PASS/GAPS. **Stop here on PASS** (the arc met its intent — merge-readiness is do-arc's call). On GAPS, the corrective loop (Step 5) takes over.
+Report the result — per-criterion verdict, the evidence, the tier each was judged at (and any tier-honesty flag from Step 2), a **Ratified descopes** section (read `Arc.descopes`; list each `{ item, ratifiedBy, ratifiedAt }`, or state `Ratified descopes: none` when empty — honest, NEVER omitted, so a descoped criterion is visible next to the verdict), and the arc-level PASS/GAPS. **Stop here on PASS** (the arc met its intent — merge-readiness is do-arc's call). On GAPS, the corrective loop (Step 5) takes over.
 
 ## Step 5: Corrective loop (on GAPS) — bounded
 
@@ -72,4 +72,4 @@ Loop until PASS or the bound trips.
 - `maxRounds` — default **2**. After this many correct→re-validate rounds, stop.
 - a **token/budget ceiling** — stop if the loop would exceed it.
 
-**Exhaustion exit (never spin, never silently pass):** when the bound trips with criteria still unmet, author **one backlog phase** capturing the **named residual gaps** (each with its evidence + suggested fix) and report `Shipped with N named residual gaps` so the human decides whether to merge with them or keep going. Never loop forever; never report PASS when a criterion is still unmet.
+**Exhaustion exit (never spin, never silently pass, never launder):** when the bound trips with criteria still unmet, **DISPOSITION each named residual gap through the arc-sweep disposition table** (arc-sweep SKILL.md — **IN-ARC** author-and-execute, or a user-ratified **DESCOPE** typed on `Arc.descopes`), NOT as prose shipped into the backlog (that is the same laundering, at the intent gate itself). Report `GAPS: N residual gaps — dispositioned <in-arc | descope>` so the human sees each disposition. Never loop forever; never report PASS when a criterion is still unmet; never ship a residual gap as prose-only.
