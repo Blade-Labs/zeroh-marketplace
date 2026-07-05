@@ -96,15 +96,18 @@ try {
   }
 } catch (err) {
   const stderr = err?.stderr?.toString?.() ?? ''
+  // Classify OUR wrapper's structured exits first (3 = ZodError, 4 = load error),
+  // so a genuine schema failure is never misread as a missing toolchain even if a
+  // Zod message happened to contain "not found".
+  if (err?.status === 3 && stderr.startsWith('ZODISSUES:')) {
+    printZodIssues(normalized, stderr.slice('ZODISSUES:'.length))
+    process.exit(2)
+  }
   const notFound =
     err?.code === 'ENOENT' || /not found|could not determine executable|npx: command/i.test(stderr)
   if (notFound) {
     console.error('[zeroh-roadmap] tsx unavailable — roadmap file NOT validated (install tsx to arm this hook)')
     process.exit(0)
-  }
-  if (err?.status === 3 && stderr.startsWith('ZODISSUES:')) {
-    printZodIssues(normalized, stderr.slice('ZODISSUES:'.length))
-    process.exit(2)
   }
   console.error(`[zeroh-roadmap] roadmap file failed to load: ${basename(normalized)}`)
   console.error(
@@ -218,17 +221,38 @@ function duplicateTopLevelKeyErrors(content) {
   const lines = content.slice(open.index + open[0].length).split('\n')
   const seen = new Set()
   const dups = new Set()
-  let backticks = 0 // running parity of unescaped backticks; odd ⇒ inside a template literal
+  // `inTemplate` (a backtick template literal) is the only string state that spans
+  // lines; ' and " strings are single-line here (concatenated with +). Track it
+  // QUOTE-AWARE so a backtick INSIDE a '...'/"..." value never toggles it (else a
+  // lone backtick in e.g. `source` desyncs the scan and false-flags notes prose).
+  let inTemplate = false
   for (const line of lines) {
-    if (/^\}\)/.test(line)) break // close of the top-level definePhase({ / defineArc({
-    if (backticks % 2 === 0) {
+    if (!inTemplate && /^\}\)/.test(line)) break // top-level close (only when not mid-template)
+    if (!inTemplate) {
       const km = line.match(/^ {2}([A-Za-z_$][\w$]*):/)
       if (km) {
         if (seen.has(km[1])) dups.add(km[1])
         else seen.add(km[1])
       }
     }
-    for (let i = 0; i < line.length; i++) if (line[i] === '`' && line[i - 1] !== '\\') backticks++
+    let sq = false
+    let dq = false
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i]
+      if (c === '\\') {
+        i++ // skip the escaped char in every state
+        continue
+      }
+      if (inTemplate) {
+        if (c === '`') inTemplate = false
+      } else if (sq) {
+        if (c === "'") sq = false
+      } else if (dq) {
+        if (c === '"') dq = false
+      } else if (c === "'") sq = true
+      else if (c === '"') dq = true
+      else if (c === '`') inTemplate = true
+    }
   }
   return [...dups].map((k) => ({
     rule: 'duplicate-key',
@@ -312,14 +336,16 @@ function extractBalanced(text, openIdx) {
   return null
 }
 
-/** Count top-level elements of an `[...]` block (string-aware, depth-aware). */
+/** Count top-level elements of an `[...]` block (string-aware, depth-aware). A
+ *  top-level comma counts only when the segment before it had content, and a
+ *  final content-bearing segment adds one — so a trailing comma does NOT inflate. */
 function countTopLevelElements(arrayBlock) {
   if (!arrayBlock) return 0
   const inner = arrayBlock.slice(1, -1)
   let depth = 0
   let quote = null
   let count = 0
-  let hasContent = false
+  let segHasContent = false
   for (let i = 0; i < inner.length; i++) {
     const c = inner[i]
     if (quote) {
@@ -328,19 +354,26 @@ function countTopLevelElements(arrayBlock) {
         continue
       }
       if (c === quote) quote = null
+      segHasContent = true
       continue
     }
     if (c === "'" || c === '"' || c === '`') {
       quote = c
-      hasContent = true
-      continue
+      segHasContent = true
+    } else if (c === '[' || c === '{' || c === '(') {
+      depth++
+      segHasContent = true
+    } else if (c === ']' || c === '}' || c === ')') {
+      depth--
+      segHasContent = true
+    } else if (c === ',' && depth === 0) {
+      if (segHasContent) count++
+      segHasContent = false
+    } else if (!/\s/.test(c)) {
+      segHasContent = true
     }
-    if (c === '[' || c === '{' || c === '(') depth++
-    else if (c === ']' || c === '}' || c === ')') depth--
-    else if (c === ',' && depth === 0) count++
-    else if (!/\s/.test(c)) hasContent = true
   }
-  return hasContent ? count + 1 : 0
+  return segHasContent ? count + 1 : count
 }
 
 function runPhaseNumberAndClaimChecks(normalizedPath, phaseMatch) {

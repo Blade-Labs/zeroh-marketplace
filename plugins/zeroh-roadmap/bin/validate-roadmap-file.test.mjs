@@ -138,6 +138,27 @@ test('(b) false-positive guard: 2-space `key:` prose inside a notes template lit
   assert.equal(r.code, 0, `template-literal prose must not be flagged; got: ${r.stderr}`)
 })
 
+// A lone backtick inside an ordinary '...'/"..." string value must NOT desync the
+// template tracking (the code-review HIGH: otherwise the notes prose below is
+// mis-scanned as top-level keys and false-flags a duplicate).
+const backtickInStringProse = `${IMPORT}
+export default definePhase({
+  phase: 9008, name: 'fixture backtick-in-string phase', status: 'backlog',
+  category: 'infra', kind: 'logic', source: 'see the \\\` backtick char inline', priority: 'LOW',
+  dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',
+  notes: \`Notes with column-2 prose that looks like keys:
+  status: open
+  category: bug\`,
+  tasks: [],
+})
+`
+
+test('(b) a backtick inside a string value does not desync the template scan (no false dup)', () => {
+  const f = writeRoadmapFile('phase-9008.phase.ts', backtickInStringProse)
+  const r = runValidator(f.path)
+  assert.equal(r.code, 0, `backtick-in-string must not false-flag a dup; got: ${r.stderr}`)
+})
+
 // ── (c) non-"None" compromise/skipped ⇒ decisionRef (floor-gated) ────────────────
 const compromisePhase = (withRef) => `${IMPORT}
 export default definePhase({
