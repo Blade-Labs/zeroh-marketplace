@@ -5,6 +5,18 @@ grounded in the flagship consumer's operational record (azure_private_agent: 1,1
 38 arcs, real gate catches, real failure incidents). Goal: a high-confidence, well-balanced
 coding workflow that runs **reliably on Opus 4.8**, not only on a frontier driver.
 
+> **Reconciliation (2026-07-05, post-arc-ROADOPUS).** This 2026-07-01 audit is the standing design
+> frame; its Tier-1/Tier-2 mechanical items SHIPPED across two arcs — **phases 1232/1233** (the
+> `## Gate commands` seam, the PostToolUse validator hook, atomic claims, governed-spine-reviewer)
+> and **arc ROADOPUS, phases 1365-1372** (FM1-FM4: scoped-gate slots + scoping-guard hook;
+> validator v2 with the six write-time defect checks; the executor beacon + liveness script; the
+> one-screen operating card + mid-phase resume + respawn ladder; autonomous merge (`## Merge
+> policy`); the follow-up contract (IN-ARC default + typed DESCOPE + openFollowups budget);
+> assumptions tripwires + the plan-arc interview step + `## Model policy`; and this five-manifest
+> version alignment to 0.13.0). The arc-level design record for the ROADOPUS work is
+> **`OPUS-OPTIMIZATION-2026-07.md`** (audit-grounded, 2026-07-04). Treat the tables below as the
+> ORIGINAL audit — the items named here are shipped, not still-open.
+
 ## Verdict
 
 **The architecture is right.** plan-arc (design gate) → Mode-A plan review → do-arc (recursion,
