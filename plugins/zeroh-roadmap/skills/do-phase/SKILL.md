@@ -112,6 +112,31 @@ If status is `'backlog'`, edit the .phase.ts file to set `status: 'in-progress'`
 docs(roadmap): phase N — move to in-progress
 ```
 
+### Step 1b: Resume path (a phase already `in-progress`)
+
+When Step 0 finds `status: 'in-progress'` (a takeover after a stall, or a respawn from
+do-arc's recovery ladder), do NOT restart — resume from the durable checkpoint (`done: true`
++ one-commit-per-task in the worktree):
+
+1. **Verify the done flags against commits.** For each `done: true` task, confirm a matching
+   commit exists in the worktree. A `done: true` with NO matching commit is untrustworthy —
+   treat that task as NOT done and redo it.
+2. **TaskCreate only the remainder** — the not-done tasks (plus any redone per step 1). Skip
+   the commit-verified done tasks.
+3. **Re-derive the phase-start SHA** as the PARENT (`^`) of the OLDEST worktree commit matching
+   `git log --reverse --grep "phase N —"` (normally the `docs(roadmap): phase N — move to
+   in-progress` commit). The parent matters because the gate diffs `<phase-start-SHA>..HEAD`
+   EXCLUSIVE of the base — deriving from the first IMPLEMENTING commit would drop task 1 from
+   the gate diff. The `—` (em dash) boundary in the grep prevents phase-number-prefix
+   collisions (resuming 136 must not match 1369's commits).
+4. **Resume the loop** at the first remaining task. Every resumed task obeys every rule an
+   unstalled run does — including the per-task `transparencyReport` (the recorded recovery
+   failures lost exactly this). **A resumed phase produces the SAME record as an unstalled
+   one:** one commit per task, a `transparencyReport` per task, the full gate at the end.
+
+Then go to Step 2 for the remaining tasks only (Step 1's move-to-in-progress commit is already
+in history — skip it).
+
 ### Step 2: Create Claude Code tasks
 
 Use `TaskCreate` to create ONE task for each task in the phase file. Use the task title as the subject and the problem as the description. This gives the user live progress visibility.
