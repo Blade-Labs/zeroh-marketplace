@@ -18,7 +18,7 @@ User says: `do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`.
 ## Arguments
 
 - **`<id>`** (required) — the Arc id, matching `Arc.id` in `roadmap/arcs/<id>.arc.ts` (a number or short string, e.g. `B`).
-- **`--inline`** / **`--recursion`** (optional) — force the execution mode, overriding the sizing heuristic (Step 2). Default: auto-size.
+- **`--inline`** / **`--recursion`** (optional) — force EVERY phase into that band (inline / executor), overriding the per-phase classification (Step 2). Default: per-phase auto-classify.
 - **`--pause-after <N>`** (optional) — run up to and including phase `<N>`, then execute the Pause protocol (Step 4c) instead of starting the next phase. A mid-run user message ("pause after this phase", "pause the arc") arms the same protocol.
 - **`--resume`** (optional) — continue a previously paused arc from its `roadmap/arcs/<ID>-RESUME.md`. Step 0 also auto-detects the file, so a bare `do-arc <id>` on a paused arc resumes rather than restarting.
 
@@ -49,25 +49,29 @@ Deterministically emit `roadmap/arc-prompts/arc-<id>-execution-prompt.md` from t
 7. **`## Design spec — build against these`** — render `arc.designRefs`, one bullet per ref as `**<kind>/<status>** \`<ref>\` — <summary>`. This is the confirmed design the design-first gate produced (plan-arc Step 1b): each phase is planned and built AGAINST it, and `arc-sweep` judges the build's conformance to it. If `arc.designRefs` is empty, render the explicit line `_None — design gate skipped (mechanical arc), or no design recorded._` so the absence is honest, never a silently missing section.
 8. **`## Acceptance criteria — the intent to validate`** — render `arc.acceptanceCriteria`, one bullet per criterion as `**<job>** — signal: <signal> · tier: <tier> · bar: <bar>` (surfaces in parens). This is the experience-level Definition of Done the terminal `validate-arc` stage (Step 7) drives the real flow and judges against, so the directive ends on what "done for a user" means. If `arc.acceptanceCriteria` is empty, render the explicit line `_None declared — the validate-arc stage will be a no-op for this arc._` so the absence is honest, never a silently missing section.
 
-## Step 2: Size the work and select the execution mode
+## Step 2: Classify each phase into an execution band
 
-Auto-pick **orchestrator-inline** (run `do-phase` in the main session) vs **recursion** (delegate each phase to a `phase-executor` sub-agent). The signal is context pressure, NOT `phase.kind`.
+The decision is **PER-PHASE**, not one mode for the whole arc (a mixed arc is normal). The
+signal is context pressure + reliability, NOT `phase.kind`. For each member phase compute its
+`taskCount`, its count of `tdd`/`e2e` tasks, and whether it touches a **contended path**
+(mechanical definition: any path matched by the consumer's `## Gate specialists` block — the
+same anchor the gate uses). Then assign a band:
 
-> **`phase.kind` is NOT a sizing input.** kind selects the *gate set* — and a `release` phase is precisely the one to keep WATCHED in the main session, so keying off kind would push exactly the wrong phases into a sub-agent. Size on the work-ahead instead.
+- **HEAVY → inline-supervised** — `taskCount >= 10` OR (`tdd/e2e tasks >= 4` AND it touches a
+  contended path). The orchestrator drives `software-developer`/`test-engineer` sub-agents per
+  task **WHILE OWNING** every commit, `transparencyReport`, and the gate itself — the
+  field-proven RAGUNIFY recovery shape. This INVERTS the old heuristic, which pushed exactly
+  the heaviest phases into the least-reliable pure-executor mode. (Named exemption to
+  do-phase's auto-spawn ban — see do-phase Step 4.)
+- **MID → executor** — a gate-weighty phase that is not heavy (`kind` in {logic, hardening,
+  release} and `taskCount >= 3`). Spawn ONE `phase-executor` sub-agent for it (Step 4).
+- **TRIVIAL → inline** — a small phase (`taskCount <= 2`, or a `mockup`/docs-only phase) runs
+  inline in the main session as today.
 
-Compute over the member phases:
-- `phases` — count of member phases.
-- `totalTasks` — sum of all tasks across them.
-- `gateWeight` — count of phases whose `kind` is in {`logic`, `hardening`, `release`}.
-- `tddTasks` — count of tasks whose `testMode` is in {`tdd`, `e2e`}.
-
-**Choose RECURSION if `totalTasks >= 10` OR `tddTasks >= 4` OR (`phases >= 3` AND `gateWeight >= 2`); else ORCHESTRATOR-INLINE.**
-
-The two volume signals (`totalTasks`, `tddTasks`) stand alone so a small-but-heavy arc — say 2 phases with 12 tasks — still recurses instead of being forced inline by a phase-count gate. `gateWeight` only counts behind the `phases >= 3` floor because `logic` is the default `kind`, so `gateWeight` alone is near-always-true and would not discriminate. **The four thresholds (`10`, `4`, `3`, `2`) are the tunable knobs** — raise them to keep more arcs inline (lighter, more-watched), lower them to delegate sooner; a future config could surface them, but the override flags below cover the per-run case.
-
-Echo the four inputs and the decision to chat (e.g. `phases=5 totalTasks=14 gateWeight=4 tddTasks=2 → RECURSION`). Recursion keeps each phase's per-task tasks under the sub-agent, so the main task list shows only the arc-level phase checklist — surface that as the stated advantage in the echo.
-
-`--inline` / `--recursion` override the heuristic; when an override is passed, still echo the computed inputs plus `(overridden → <mode>)` so the choice is visible.
+Echo the per-phase band assignments to chat (e.g. `1367:heavy 1368:mid 1369:trivial`), NOT one
+arc-level mode. **The thresholds (`10`, `4`, `3`, `2`) are the tunable knobs.** `--inline` /
+`--recursion` FORCE every phase into that band (inline / executor respectively), overriding the
+classification — echo `(forced → <band>)`.
 
 ## Step 3: Create the arc-level task progress (the phase checklist)
 
@@ -77,14 +81,14 @@ At arc start, `TaskCreate` ONE task per member phase so the user watches the arc
 - **Arc tier** — one task per phase, subject `Phase N — Plane X`, owned by do-arc.
 - **Task tier** — one task per phase-task, owned by do-phase.
 
-The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the flat task list. In **recursion mode** the task tier lives under the `phase-executor` sub-agent, so the main session shows only the arc tier (Step 2's context-isolation advantage).
+The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the flat task list. For an **executor-band phase** the task tier lives under the `phase-executor` sub-agent, so the main session shows only the arc tier (the context-isolation advantage); an inline / inline-supervised phase's task tier shows in the main session.
 
 ## Step 3b: Register the build (worktree + branch, machine-readable)
 
 Before the first phase starts, write **`roadmap/arcs/.building/<ID>.json`** (create the dir; consumers gitignore `roadmap/arcs/.building/`):
 
 ```json
-{ "arcId": "<id>", "worktree": "<absolute cwd>", "branch": "<git branch --show-current>", "baseRef": "<arc.baseRef>", "mode": "inline|recursion" }
+{ "arcId": "<id>", "worktree": "<absolute cwd>", "branch": "<git branch --show-current>", "baseRef": "<arc.baseRef>", "mode": "<uniform band, or 'mixed' for a mixed-band arc>" }
 ```
 
 This is the lane registry a coordinating session reads instead of reverse-engineering `git worktree list` + commit forensics. Lifecycle mirrors `.arc-mode`: written at build start, **removed at EVERY arc exit** — Step 8 landing/holding, the Step-4 halt branches, and the Step-4c pause (the pause rewrites it with `"paused": true` instead of removing it, so the lane stays visibly claimed). If the sidecar already exists for this arc with a DIFFERENT worktree, STOP — another session is building this arc.
@@ -93,25 +97,46 @@ This is the lane registry a coordinating session reads instead of reverse-engine
 
 Iterate the member phases in **dependency order** (respect each phase's `dependsOn`; a phase runs only after its deps are `done`). **v1 is sequential** — one phase fully completes before the next starts. Parallel cross-Plane execution is deferred (see the plan's "Deferred to follow-up"). For each phase, set its arc-level task `in_progress`, then run it by the selected mode:
 
-- **Recursion mode** → spawn ONE `phase-executor` sub-agent for the phase. It runs do-phase end to end and **returns** the `PhaseExecutionResult` — a real return channel: the sub-agent stops and you read its result.
+- **Executor-band phase** → spawn ONE `phase-executor` sub-agent for the phase. It runs do-phase end to end and **returns** the `PhaseExecutionResult` — a real return channel: the sub-agent stops and you read its result.
 
-  **Stalled-executor watchdog (recursion mode).** The field failure: an executor backgrounds a long gate run, its turn ends, the run finishes or dies, and the executor never resumes — its phase sits incomplete with no notification ever coming. The executor's long-run survival protocol (its agent card) makes this rare, not impossible, so the ORCHESTRATOR watches — with REAL evidence only. The watchdog's first field run false-positived: it probed the task `.output` stub with bare `stat`, read a constant 141 bytes, and nudged an executor that was mid-gate with 5 commits landed. So the liveness probe is mechanical, never improvised:
+  **Stalled-executor watchdog + recovery ladder (executor-band phases only — an inline /
+  inline-supervised phase has no executor to probe).** The field failure: an executor
+  backgrounds a long gate run, its turn ends, the run finishes or dies, and it never resumes.
+  The orchestrator watches with the ONE liveness SCRIPT — never hand-improvised forensics (the
+  2026-07-03 false positive came from hand-probing a symlinked transcript stub). Every ~15 min OR
+  on every wake:
 
-  - **Probe the real transcript, not the task stub.** The `.output` path under the harness task dir is a SYMLINK to the executor's `subagents/agent-<id>.jsonl`. Bare `stat` reports the link itself — a constant ~140-byte "size" (the target path's string length) and a never-changing mtime — which reads exactly like "stalled since launch" on a healthy agent. Follow the link (`stat -L`, `wc -c <`, `readlink -f`) and compare two probes a few minutes apart: growth = alive.
-  - **Judge phase state in the ARC WORKTREE, never the main checkout.** Commits: `git -C <worktree> log --oneline <baseRef>..<arcBranch>`. Task states: the worktree's phase file. The main checkout's copy says `backlog` for the whole arc — the executor doesn't work there.
-  - **Mid-gate quiet is normal.** During agent-review stages the executor runs NO test/build process for 5–15 minutes while its reviewer/architect sub-agents work; those sub-agents' growing transcripts ARE executor activity.
-  - **Declare a stall only when ALL hold for ~20+ minutes**: symlink-resolved transcript not growing, no runner process referencing the worktree, no new commits on the arc branch, and no live gate sub-agent. ANY single sign of life → stand down silently; do NOT message a working executor — a "you have stalled, re-engage NOW" interrupt injected mid-gate can derail a healthy run. A SendMessage result's status line is delivery mechanics, never stall evidence.
+  ```bash
+  node <plugin>/scripts/executor-liveness.mjs roadmap/arcs/.building/<ID>.json --json
+  ```
 
-  On a genuine stall, **SendMessage the standard nudge** — "No test or build process is running (process table verified). Your background run is done or dead: read its log or result file directly, or re-run the relevant scope in the foreground under the consumer's documented wrapper, drive the gate to completion, and return the structured PhaseExecutionResult. Do not end your turn waiting again." — and cite the evidence (transcript size + age, commit count, process-table result) so a healthy executor can refute a misread. One nudge usually completes the phase; an executor that stalls again after two nudges is treated as `status: "failed"` (collect what it committed, surface the blocking detail) — never wait indefinitely, and never leave the recovery to a human noticing.
+  It returns **ALIVE / QUIET / STALLED** with an evidence block (beacon age + event,
+  realpath-resolved transcript growth, pgrep, worktree commits — the symlink-stat trap is
+  handled inside the script, so that false-positive class is structurally gone). Then:
 
-- **Orchestrator-inline mode** → run `do-phase` for the phase IN THE MAIN SESSION, in arc-mode (so do-phase skips backlog grooming + emit:phases per its Step-5 arc-mode override, and produces a `PhaseExecutionResult` instead of stopping to ask the user). **There is no separate return channel here — you are both do-phase and do-arc.** So the collect-and-branch below is YOUR control flow: after do-phase produces the result, you MUST evaluate it (step 2) before doing anything else. Do not let do-phase's "continue immediately to the next task" momentum (Prime Rule 1) carry the session past an `escalated`/`failed` result into Step 5 or the next phase.
+  - **ALIVE / QUIET → wait.** Mid-gate quiet is normal and the verdict says so — do NOT nudge a
+    QUIET executor (a mid-gate "re-engage NOW" interrupt can derail a healthy run).
+  - **STALLED → the recovery ladder (human rescue is the LAST rung, not the first):**
+    1. **Nudge once** — SendMessage the standard nudge, citing the script's evidence block so a
+       healthy executor can refute a misread. Re-probe after ~10 min.
+    2. **Still STALLED → respawn-with-resume.** Kill the executor and spawn ONE fresh
+       `phase-executor` told to resume phase N mid-phase — it re-enters via do-phase's **Step 1b
+       resume path** (verify done flags against commits, re-derive the phase-start SHA, identical
+       record-keeping). The durable checkpoint (`done:true` + one-commit-per-task in the
+       worktree) makes the respawn lossless — the same commit-per-task record as an unstalled run.
+    3. **The respawn also STALLES, or the phase fails again → NOW `status: "failed"` + human
+       escalation** (branch 4 below, unchanged from there on). Human rescue moves from rung 1 to
+       rung 3.
+
+- **Inline-band phase** (a TRIVIAL phase run inline, or a HEAVY phase run inline-supervised — the orchestrator driving software-developer/test-engineer per task while owning commits, transparencyReports, and the gate) → run `do-phase` for the phase IN THE MAIN SESSION, in arc-mode (so do-phase skips backlog grooming + emit:phases per its Step-5 arc-mode override, and produces a `PhaseExecutionResult` instead of stopping to ask the user). **There is no separate return channel here — you are both do-phase and do-arc.** So the collect-and-branch below is YOUR control flow: after do-phase produces the result, you MUST evaluate it (step 2) before doing anything else. Do not let do-phase's "continue immediately to the next task" momentum (Prime Rule 1) carry the session past an `escalated`/`failed` result into Step 5 or the next phase.
 
 **Arc-mode is an artifact, not a memory (inline mode).** On entering Step 4 in inline mode,
 write **`roadmap/.arc-mode`** (content: `{"arcId": <arc.id>, "mode": "inline"}`; gitignored)
 and remove it at EVERY arc exit — Step 8 landing/holding AND the Step-4 halt branches (2 and 4 below). `do-phase` re-derives "am I in
 arc-mode?" from that marker (or from BEING a phase-executor) at its Steps 4b/5 — never from
-remembered conversation state, which decays over an hours-long arc. Recursion mode needs no
-marker: the phase-executor's agent card is the explicit signal.
+remembered conversation state, which decays over an hours-long arc. An executor-band phase needs
+no marker: the phase-executor's agent card is the explicit signal (the `.arc-mode` marker is
+written whenever ANY member phase runs in an inline band).
 
 **Parse the return — never trust it raw.** Validate the executor's returned
 `PhaseExecutionResult` with `PhaseExecutionResultShape.parse(...)` (the validate-arc judge
