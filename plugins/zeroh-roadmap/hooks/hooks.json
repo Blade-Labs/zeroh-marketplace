@@ -23,6 +23,16 @@
             "statusMessage": "Validating roadmap file..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/beacon-stamp.sh\"",
+            "statusMessage": "Stamping executor beacon..."
+          }
+        ]
       }
     ]
   }
