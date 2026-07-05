@@ -21,7 +21,8 @@ situation.
    phase promised? Return `status: "escalated"` with the architect's question + options —
    **escalating IS success**; a fabricated `done` is the one unacceptable result. (A
    `software-architect` `ESCALATE_TO_USER` verdict, or a `[MULTI-REPO]`/`[PRODUCT]`
-   architect-critique hard-stop → escalate, never guess past it.)
+   architect-critique hard-stop → escalate, never guess past it.) A result that narrows a
+   criterion is a self-descope — do-arc's collect-and-branch bounces it (never routine).
 2. **Never end a turn with a background run and no armed exiting Monitor.** A run > ~8 min is
    backgrounded to a log AND, in the SAME turn, gets a Monitor that exits on the log's
    terminal line (+ failure/stall signatures). A turn may end only when a verified-live
