@@ -2,6 +2,14 @@
 
 Detailed protocol for the phase validation gate invoked by `do-phase` Step 4 and the phase completion fields invoked by Step 5.
 
+**Escalation contract (rule #1, mirrored on the phase-executor card).** Blocked, or the only
+path forward narrows an acceptance criterion / records a compromise the architect did not
+bless? **Escalate — escalating IS success.** Invoke `software-architect` per the Prime-Rule-1
+Decision Contract; on an `ESCALATE_TO_USER` verdict (or a `[MULTI-REPO]`/`[PRODUCT]` hard-stop)
+surface it (inline) or return `status: "escalated"` (arc-mode). A criterion silently narrowed
+to reach `done` is the one unacceptable outcome; a fabricated `done` is never better than an
+honest `escalated`.
+
 ## Overview
 
 Four stages, run in order:
