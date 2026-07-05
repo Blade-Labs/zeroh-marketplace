@@ -124,7 +124,12 @@ function gitInfo() {
 // ── beacon ────────────────────────────────────────────────────────────────────
 let beacon = { exists: false }
 if (existsSync(beaconPath)) {
-  const lines = readFileSync(beaconPath, 'utf8').trim().split('\n').filter(Boolean)
+  let lines = []
+  try {
+    lines = readFileSync(beaconPath, 'utf8').trim().split('\n').filter(Boolean)
+  } catch {
+    lines = [] // I/O error → treat as pre-beacon, never crash the reader
+  }
   if (lines.length > 0) {
     try {
       const last = JSON.parse(lines[lines.length - 1])

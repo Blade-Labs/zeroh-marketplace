@@ -143,7 +143,12 @@ const fmtMin = (m) => (m < 60 ? `${Math.round(m)}m` : m < 2880 ? `${Math.round(m
 const beaconOf = (arcId) => {
   const p = join(buildingDir, `${arcId}-executor.jsonl`)
   if (!existsSync(p)) return null
-  const lines = readFileSync(p, 'utf8').trim().split('\n').filter(Boolean)
+  let lines
+  try {
+    lines = readFileSync(p, 'utf8').trim().split('\n').filter(Boolean)
+  } catch {
+    return null // an I/O error must degrade to the commit-age fallback, never crash the whole board
+  }
   if (lines.length === 0) return null
   try {
     const last = JSON.parse(lines[lines.length - 1])

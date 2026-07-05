@@ -19,12 +19,44 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
 [ -z "$CMD" ] && exit 0
 
-# Only fire on `git commit` / `git -C <dir> commit`.
-printf '%s' "$CMD" | grep -qE '\bgit\b([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+commit\b' || exit 0
-
-# The commit target dir: an explicit `git -C <dir>`, else the payload cwd.
+# Find a real `git … commit` invocation and take its -C target FROM THE SAME
+# segment, so a `git -C <path>` mentioned in a commit MESSAGE (or a different
+# chained command) cannot hijack the target or the fire. Split on && || ; | ,
+# then per git segment walk the pre-subcommand flags and require the subcommand to
+# be EXACTLY `commit` (never commit-tree/commit-graph). `set -f` guards the
+# word-split from globbing; `-c <cfg>`/`-C <dir>` config flags are handled.
 target="${CWD:-.}"
-cdir=$(printf '%s' "$CMD" | grep -oE '\bgit[[:space:]]+-C[[:space:]]+[^[:space:]]+' | head -1 | awk '{print $NF}')
+cdir=""
+found=0
+while IFS= read -r seg; do
+  seg="${seg#"${seg%%[![:space:]]*}"}" # ltrim
+  while printf '%s' "$seg" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]* +'; do
+    seg=$(printf '%s' "$seg" | sed -E 's/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]* +//')
+  done
+  case "$seg" in git | git\ *) : ;; *) continue ;; esac
+  set -f
+  # shellcheck disable=SC2086
+  set -- $seg
+  set +f
+  shift # drop 'git'
+  segcdir=""
+  sub=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -C) segcdir="$2"; shift 2 || break ;;
+      -c) shift 2 || break ;;
+      --) shift; break ;;
+      -*) shift ;;
+      *) sub="$1"; break ;;
+    esac
+  done
+  if [ "$sub" = commit ]; then
+    found=1
+    cdir="$segcdir"
+    break
+  fi
+done < <(printf '%s\n' "$CMD" | sed -E 's/&&/\n/g; s/\|\|/\n/g; s/[;|]/\n/g')
+[ "$found" = 1 ] || exit 0
 if [ -n "$cdir" ]; then
   case "$cdir" in
     /*) target="$cdir" ;;
