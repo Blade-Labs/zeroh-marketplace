@@ -195,6 +195,14 @@ export const TransparencyReportShape = z.object({
   skipped: z.union([z.literal('None'), z.string().min(10)]),
   hardcoded: z.union([z.literal('None'), z.string().min(10)]),
   limitations: z.union([z.literal('None'), z.string().min(10)]),
+  /** Provenance for a scope-narrowing trade-off: the architect verdict
+   *  (`PROCEED_WITH_FIX`/`ESCALATE_TO_USER` ref) or the user ratification that
+   *  authorized it. validate-roadmap-file v2 REQUIRES this whenever `compromises`
+   *  or `skipped` is non-`"None"` on a phase planned after arc ROADOPUS (the
+   *  ENFORCEMENT_FLOOR) — a compromise recorded only in a commit message (the
+   *  1343.6 audit defect) can no longer reach `done`. Optional so the historical
+   *  corpus keeps parsing. */
+  decisionRef: z.string().min(8).optional(),
 })
 
 export type TransparencyReport = z.output<typeof TransparencyReportShape>
@@ -272,7 +280,16 @@ export const RunnerSummaryShape = z.object({
     validateArcPassed: z.boolean(),
     fullSuiteGreen: z.boolean(),
   }),
+  /** Governance-receipt reference for the arc. Required (min 1) — a missing
+   *  receipt must fail `.parse()`, never be faked. A consumer with no governance
+   *  receipt surface uses the honest literal `'none'` sentinel (parallel to the
+   *  `unsigned`/version-0 honest-gap convention), never a fabricated id. */
   receiptRef: z.string().min(1),
+  /** Follow-ups the arc left open at close — the count do-arc's ## Merge policy
+   *  checks against `max-open-followups` before an autonomous land (phase 1370),
+   *  and the follow-up contract (phase 1371) keeps honest. Optional (absent ⇒ not
+   *  reported). */
+  openFollowups: z.number().int().min(0).optional(),
   screenshotUrl: z.string().url().optional(),
   prUrl: z.string().url().optional(),
   releaseUrl: z.string().url().optional(),
@@ -412,6 +429,37 @@ const BasePhaseFields = {
    *  `crossValidate` rejects an arcId with no matching arc and an arcId that
    *  disagrees with the arc whose `planes` list the phase. */
   arcId: z.union([z.number().int().positive(), z.string().min(1)]).optional(),
+  /** True when this phase ships user-facing behaviour — the consumer's
+   *  flag-first-delivery rule, made schema-visible. The planner sets it; the
+   *  validator (v2) ties it to `flag` for phases ≥ ENFORCEMENT_FLOOR. Optional
+   *  so historical + non-user-facing phases parse unchanged. */
+  userFacing: z.boolean().optional(),
+  /** The kill-switch plan for a userFacing phase: either a runtime FlagId
+   *  (`{ id }`) or a justified boot-wiring (`{ bootWired: true, justification }`
+   *  — a route-mount/sink-construction that can't hot-flip, which then joins the
+   *  feature manifest). validate-roadmap-file v2 requires ONE variant when
+   *  userFacing:true on a phase ≥ ENFORCEMENT_FLOOR (the 1345 unflagged-feature
+   *  audit defect). Optional overall (non-user-facing phases omit it). */
+  flag: z
+    .union([
+      z.object({ id: z.string().min(3) }),
+      z.object({ bootWired: z.literal(true), justification: z.string().min(20) }),
+    ])
+    .optional(),
+  /** Plan-time tripwires: falsifiable assumptions the plan rests on, each with a
+   *  one-command `verify` and `onFalse: 'ESCALATE'` (a false assumption stops the
+   *  phase in its first minute instead of after a quiet five-hour workaround). The
+   *  SHAPE lands here so schema changes ship once; the AUTHORING + tripwire
+   *  execution land in phase 1372. Optional → additive. */
+  assumptions: z
+    .array(
+      z.object({
+        claim: z.string().min(10),
+        verify: z.string().min(5),
+        onFalse: z.literal('ESCALATE'),
+      }),
+    )
+    .optional(),
   /** Where this phase came from (review, bug report, user request) */
   source: z.string().min(5),
   /** Priority level */
@@ -469,12 +517,14 @@ const BasePhaseFields = {
               /^\d+\.\d+\.(compromises|hardcoded|skipped|limitations)$/,
               'ref must be "<taskId>.<field>" (field ∈ compromises|hardcoded|skipped|limitations)',
             ),
-          status: z.enum(['fixed', "won't_fix", 'dismissed']),
+          status: z.enum(['fixed', "won't_fix", 'dismissed', 'planned', 'operator-pending']),
           /** Required for 'fixed' (≥7 chars: commit SHA or phase ref) and
            *  'won't_fix' (≥20 chars: substantive reason). Optional for
-           *  'dismissed' — when present, the schema accepts any string (no min
-           *  length enforced); operators are encouraged but not required to
-           *  leave a one-line note. */
+           *  'dismissed', 'planned', and 'operator-pending' — when present, the
+           *  schema accepts any string (no min length enforced); operators are
+           *  encouraged but not required to leave a one-line note (e.g. the
+           *  authored follow-up phase for 'planned', the deploy step for
+           *  'operator-pending'). */
           via: z.string().optional(),
           date: z.string().date(),
         })
@@ -749,6 +799,25 @@ export const ArcShape = z.object({
   honestyRails: z.array(z.string().min(10)).default([]),
   acceptanceCriteria: z.array(AcceptanceCriterionShape).default([]),
   designRefs: z.array(DesignRefShape).default([]),
+  /** Typed, user-ratified descopes — the ONLY legitimate way an arc narrows what
+   *  it promised. Each records WHAT was dropped, WHO ratified it, and WHEN. A
+   *  descope buried in followups prose (never surfaced to the user) is the
+   *  scope-leak this closes; arc-sweep's PLAN-PHASE disposition writes here (or
+   *  authors the follow-up in-arc) instead. Optional → additive. */
+  descopes: z
+    .array(
+      z.object({
+        item: z.string().min(10),
+        ratifiedBy: z.string().min(2),
+        ratifiedAt: z.string().min(8),
+      }),
+    )
+    .optional(),
+  /** Append-only log of legitimate post-planning acceptanceCriteria changes —
+   *  each entry is a dated "why". validate-roadmap-file v2 rejects a criteria
+   *  edit on a building arc UNLESS this array grew (the 1343.6 silent-drift
+   *  defect). Optional → additive. */
+  criteriaRatifications: z.array(z.string().min(10)).optional(),
   planes: z.array(ArcPlaneShape).min(1),
   status: z.enum(['planning', 'executing', 'swept', 'merged']).default('planning'),
 })

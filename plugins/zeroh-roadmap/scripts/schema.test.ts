@@ -36,6 +36,7 @@ import {
   PhaseExecutionResultShape,
   RunnerSummaryShape,
   StructuredGateRoundShape,
+  TransparencyReportShape,
 } from '../templates/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
 
@@ -592,6 +593,112 @@ check('v9: PhaseTask.commit accepts a sha and rejects a too-short one', () => {
       } as never),
     'short commit sha',
   )
+})
+
+console.log('\nROADOPUS widenings — additive schema fields (phase 1367)')
+
+check('decisionRef: TransparencyReport accepts an optional decisionRef; absent still parses', () => {
+  TransparencyReportShape.parse({
+    whatWasDone: 'did the thing properly',
+    how: 'by the documented approach',
+    compromises: 'a narrow trade-off was accepted here',
+    skipped: 'None',
+    hardcoded: 'None',
+    limitations: 'None',
+    decisionRef: 'architect PROCEED_WITH_FIX 2026-07-05',
+  })
+  TransparencyReportShape.parse({
+    whatWasDone: 'did the thing properly',
+    how: 'by the documented approach',
+    compromises: 'None',
+    skipped: 'None',
+    hardcoded: 'None',
+    limitations: 'None',
+  })
+})
+
+check('userFacing + flag: a phase with userFacing:true and a FlagId parses; boot-wired variant parses', () => {
+  const withId = definePhase({
+    ...basePhase, status: 'backlog', category: 'feature',
+    userFacing: true, flag: { id: 'MY_FLAG' },
+  } as never)
+  assertEq((withId as { userFacing?: boolean }).userFacing, true, 'userFacing preserved')
+  definePhase({
+    ...basePhase, status: 'backlog', category: 'feature',
+    userFacing: true, flag: { bootWired: true, justification: 'route-mount cannot hot-flip at runtime' },
+  } as never)
+})
+
+check('flag: a neither-variant object REJECTS ({id} or {bootWired,justification} only)', () => {
+  assertThrows(
+    () => definePhase({ ...basePhase, status: 'backlog', category: 'feature', flag: { nonsense: true } } as never),
+    'flag neither variant',
+  )
+  assertThrows(
+    () => definePhase({ ...basePhase, status: 'backlog', category: 'feature', flag: { bootWired: true } } as never),
+    'bootWired missing justification',
+  )
+})
+
+check('assumptions: onFalse ESCALATE parses; a non-ESCALATE onFalse rejects', () => {
+  definePhase({
+    ...basePhase, status: 'backlog', category: 'feature',
+    assumptions: [{ claim: 'the file exists at that path', verify: 'test -f x', onFalse: 'ESCALATE' }],
+  } as never)
+  assertThrows(
+    () => definePhase({
+      ...basePhase, status: 'backlog', category: 'feature',
+      assumptions: [{ claim: 'the file exists at that path', verify: 'test -f x', onFalse: 'WARN' }],
+    } as never),
+    'assumptions onFalse must be ESCALATE',
+  )
+})
+
+check('debtResolutions: the widened statuses planned + operator-pending parse (via optional)', () => {
+  const p = definePhase({
+    ...basePhase, status: 'backlog', category: 'feature',
+    debtResolutions: [
+      { ref: '1.1.compromises', status: 'planned', date: '2026-07-05' },
+      { ref: '1.2.skipped', status: 'operator-pending', date: '2026-07-05' },
+    ],
+  } as never)
+  assertEq((p as { debtResolutions?: unknown[] }).debtResolutions?.length, 2, 'two debt resolutions parsed')
+})
+
+check('back-compat: a pre-ROADOPUS-shaped phase with NONE of the new fields parses', () => {
+  const p = definePhase({ ...basePhase, status: 'backlog', category: 'feature' } as never)
+  assertEq((p as { userFacing?: boolean }).userFacing, undefined, 'no userFacing')
+  assertEq((p as { flag?: unknown }).flag, undefined, 'no flag')
+  assertEq((p as { assumptions?: unknown }).assumptions, undefined, 'no assumptions')
+})
+
+check('arc descopes + criteriaRatifications: accepted; a descope missing ratifiedBy rejects', () => {
+  const arc = defineArc({
+    id: 'TESTARC', name: 'A test arc name', baseRef: 'develop',
+    planes: [{ name: 'plane one', phases: [1] }],
+    descopes: [{ item: 'the keyed HMAC widening', ratifiedBy: 'DPO', ratifiedAt: '2026-07-05' }],
+    criteriaRatifications: ['2026-07-05: narrowed AC-3 per user ratification'],
+  } as never)
+  assertEq((arc as { descopes?: unknown[] }).descopes?.length, 1, 'descope recorded')
+  assertThrows(
+    () => defineArc({
+      id: 'TESTARC2', name: 'A test arc name', baseRef: 'develop',
+      planes: [{ name: 'plane one', phases: [1] }],
+      descopes: [{ item: 'the keyed HMAC widening', ratifiedAt: '2026-07-05' }],
+    } as never),
+    'descope missing ratifiedBy',
+  )
+})
+
+check('RunnerSummary openFollowups: accepted; absent still parses', () => {
+  const base = {
+    arcId: 'TESTARC', outcome: 'shipped' as const,
+    compromiseDisposition: [] as { item: string; disposition: 'ACCEPT' }[],
+    gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true },
+    receiptRef: 'none',
+  }
+  RunnerSummaryShape.parse({ ...base, openFollowups: 3 })
+  RunnerSummaryShape.parse(base)
 })
 
 // discoverArcs is async — run it and the final summary inside an async tail so
