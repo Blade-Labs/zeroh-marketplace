@@ -215,25 +215,31 @@ Report **merge-readiness** to the user — the arc-sweep disposition AND the val
 
 A non-green result is a **blocker** — but what "blocker" means differs by integration model (below), and this asymmetry is the reason to prefer isolation for risky arcs: on the **isolated-branch** model the suite genuinely *gates* the merge (red → don't merge, the bad code never reaches `baseRef`); on the **direct-on-`baseRef`** model the deferred code is *already* on `baseRef`, so a red suite is a **fix-forward** signal, not a gate (the regression is already integrated — surface it loudly and fix it forward on `baseRef`, do not pretend it was held). An arc whose phases carry real regression risk should therefore run on an isolated branch so the arc-end suite can actually gate.
 
-**Then auto-integrate — the default is to land, not to hold.** (The landing decision is THIS step's, not arc-sweep's: the sweep reports merge-readiness and hands back — its SKILL.md says the same. A standalone user-invoked arc-sweep outside do-arc is the only case that holds for a user go.) A clean arc should land without waiting on a manual go, but HOW it lands depends on the arc's **integration model**, which do-arc honours rather than imposes (do-arc does not create a branch; it runs the phases on whatever the session set up):
+**Read the consumer `## Merge policy` block, then auto-integrate.** Parse `^## Merge policy$` from the consumer's CLAUDE.md (same fail-loud discipline as `## Gate commands`): keys `arc-integration: autonomous | hold` and `max-open-followups: <int>`. **An ABSENT block, or `arc-integration: hold`, = HOLD for the user** — today's behavior, the fail-safe honesty rail (the plugin never guesses a consumer default). Under `arc-integration: autonomous`, a clean arc LANDS without waiting on a manual go (the landing decision is THIS step's, not arc-sweep's — the sweep reports merge-readiness and hands back). Two invariants the block can NEVER override: **push is never autonomous** (coordinated-push stays manual) and **`baseRef → master` is never autonomous** (a release is a held human act, RELEASE.md §3; GARUN is its own separately-ratified release actor — reference, not extend). HOW a clean arc lands depends on its **integration model** (do-arc does not create a branch; it runs the phases on whatever the session set up):
 
 - **Direct-on-`baseRef`** (the working tree was already on `arc.baseRef` and phases committed straight to it — the common case): the arc is **already integrated** — every phase commit is on `baseRef`. There is no merge to perform. On a clean PASS + no blocker, report it as landed-and-integrated; nothing else to do.
-- **Isolated branch/worktree off `baseRef`** (the session ran the arc on its own branch — recommended when other sessions share the checkout): on a clean PASS + no blocker, **auto-merge that branch into `baseRef`** (the standard ff/no-ff merge per the sweep's report) and, if a git worktree was used, remove it. Report what landed.
+- **Isolated branch/worktree off `baseRef`** (the session ran the arc on its own branch — recommended when other sessions share the checkout): on a clean PASS + no blocker, run the **landing mechanics**: (1) re-fetch `baseRef`; (2) overlap-aware contention check — never clobber a concurrent session's dirty tree (the consumer's shared-master procedure, referenced not restated); (3) merge the worktree branch → `baseRef` (ff when possible, else a `--no-ff` merge commit); (4) **regroom `roadmap/backlog.ts` against the LANDED `baseRef`** (discard worktree-local grooming conflicts — the queue that matters is baseRef's); (5) remove the worktree + `.building/<ID>.json` sidecar + `<ID>-RESUME.md` + the claims; (6) write the RunnerSummary (outcome + openFollowups). **NO push** (coordinated-push stays manual). Report what landed.
 
-Auto-integration fires only when ALL hold: validate-arc returned **PASS** (or a no-op with no `acceptanceCriteria`); the arc-sweep is clean (every batched debt item disposed — RESOLVE-NOW applied + re-gated, PLAN-PHASE authored, or ACCEPT/OPERATOR-PENDING recorded); the arc-end full suite is green; and there is **no blocker**.
+Auto-integration fires only when ALL hold: the `## Merge policy` block says `arc-integration: autonomous`; validate-arc returned **PASS** (or a no-op with no `acceptanceCriteria`); the arc-sweep is clean (every batched debt item disposed — RESOLVE-NOW applied + re-gated, PLAN-PHASE authored, or ACCEPT/OPERATOR-PENDING recorded); the arc-end full suite is green; and there is **no blocker**.
 
 Whatever the outcome (landed, held, or halted), **remove `roadmap/.arc-mode`** here — a stale marker would put the NEXT standalone do-phase run into phantom arc-mode. **Remove `roadmap/arcs/.building/<ID>.json` too** (Step 3b — the lane is free once the arc lands or halts), and delete a leftover `roadmap/arcs/<ID>-RESUME.md` if this run was a resume that reached the end.
 
 **`baseRef → master` is NEVER part of auto-integration** — promoting to `master` is a deliberate *release* (branch protection + a version bump per RELEASE.md), so it stays a held release PR.
 
-**A blocker HALTS auto-integration and falls back to hold-and-ask** (report the blocker + what's needed, then wait for the user's go). A blocker is any of:
-- a member phase returned `failed` or `escalated`, or any unresolved `[MULTI-REPO]` / `[PRODUCT]` / `[SCOPED-OUT]` hard-stop from a phase or the sweep;
-- validate-arc returned **GAPS** the user has not yet dispositioned (per Step 7 — GAPS already pauses);
-- the arc-end full suite is not green (isolated-branch: halts the merge; direct-on-`baseRef`: the arc is not cleanly landed — fix forward before declaring done, never report a green landing over a red suite);
-- on the isolated-branch model: a merge conflict against `baseRef`;
-- the user explicitly asked to review before merge.
+**Authority override (sits ABOVE the list):** an explicit user instruction in THIS session ALWAYS supersedes the consumer block — if the user asked to review before merge, HOLD regardless of `arc-integration: autonomous`; the block can never silence the user.
 
-When in doubt whether something is a blocker, treat it as one and ask — auto-integration is for the unambiguous clean case. A held arc sits built-swept-and-validated on its branch until the user's go.
+**The blocker list (exactly seven — autonomous landing proceeds iff NONE hold):**
+1. a member phase returned `failed` or `escalated` unresolved;
+2. any unresolved `[MULTI-REPO]` / `[PRODUCT]` / `[SCOPED-OUT]` hard-stop from a phase or the sweep;
+3. validate-arc returned **GAPS** not yet dispositioned (per Step 7), OR was not run while the arc HAS `acceptanceCriteria`;
+4. the arc-end full suite is not green (isolated-branch: halts the merge; direct-on-`baseRef`: the arc is not cleanly landed — fix forward before declaring done, never report a green landing over a red suite);
+5. `openFollowups > max-open-followups`;
+6. a merge conflict against `baseRef` (isolated-branch model);
+7. `baseRef` moved under the arc and the reconciliation build/tests are not green after re-merge.
+
+**An item NOT on this list is NOT a blocker.** (openFollowups interim semantics until 1371 lands: the count of PLAN-PHASE dispositions not executed in-arc + deferred-blueprint items from this sweep — a conservative superset of 1371's typed `planned` count; unable to count ⇒ treat as over budget ⇒ hold, never land over an uncountable deferral set.)
+
+**A blocker HALTS autonomous landing and falls back to hold-and-ask** — report the blocker + what's needed, then wait for the user's go. A held arc sits built-swept-and-validated on its branch until the user's go.
 
 ## Step 8b: Emit the runner summary (`roadmap/arc-summary.json`)
 
