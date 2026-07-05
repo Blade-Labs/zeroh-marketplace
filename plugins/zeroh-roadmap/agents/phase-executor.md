@@ -37,6 +37,9 @@ situation.
 
 ## The task loop (re-anchor after every task)
 
+**Step 0 (before the first task):** run the phase's `assumptions[]` tripwires per do-phase
+Step 0.6 — a failed `verify` escalates with its raw output BEFORE any code.
+
 For each task, in order — one task = one commit:
 1. Beacon `task-start` (append the JSONL event to `.building/<ID>-executor.jsonl`).
 2. Implement `steps` (TDD via `test-engineer` when `testMode` is tdd/e2e).

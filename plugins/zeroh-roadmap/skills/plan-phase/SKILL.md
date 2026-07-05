@@ -132,6 +132,8 @@ When in doubt between `logic` and `hardening`, pick `hardening` — the cost of 
 
 `kind` is independent of `category`: a `category: 'fix'` phase is almost always `kind: 'hardening'`, but a `category: 'feature'` phase can be `mockup`, `logic`, or `hardening` depending on what it actually changes.
 
+**Author the `assumptions` tripwires.** Every load-bearing claim about the CURRENT state of the territory that a task depends on — a file's behavior, a test's status, a caller count, a seam's existence — becomes an `assumptions[]` entry `{ claim, verify: '<one runnable command — grep/test/ls>', onFalse: 'ESCALATE' }`. 2-6 per phase is typical; **zero is legitimate for a pure-prose phase — say so explicitly.** `assumptions` are for claims whose FALSITY CHANGES THE PLAN (the RAGUNIFY 1343.6 miss: the plan asserted a test would pass unmodified, the territory disagreed, and the deviation reached only a commit message) — NOT for every `keyFiles` anchor (those keep their "verify at execution" comments; the two are complementary). Worked example: `assumptions: [{ claim: 'agui routes model writes through runGovernedToolCall', verify: 'grep -n runGovernedToolCall src/agui.ts', onFalse: 'ESCALATE' }, { claim: 'no test pins the current mask output', verify: 'grep -rl maskPrompt src', onFalse: 'ESCALATE' }]`.
+
 **Then consider `testScope` (optional — only meaningful when the consumer CLAUDE.md has a
 `## Test cadence` block).** It scopes the gate's `unit`/`integration` slots independently of
 `kind`: `static` (docs/data/generated-only diff) · `scoped` (enumerable tests — list them in

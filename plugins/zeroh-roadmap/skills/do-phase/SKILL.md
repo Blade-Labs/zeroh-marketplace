@@ -105,6 +105,10 @@ If any dependency is missing or is neither `'done'` nor `'historical'`, STOP and
 
 Do NOT proceed until every entry in `dependsOn` resolves to a `done` phase. This prevents executing a phase whose prerequisite work doesn't exist yet — a failure mode the schema already modelled but never enforced.
 
+### Step 0.6: Run the assumptions tripwires (BEFORE any code)
+
+If the phase declares `assumptions: [...]`, run each `verify` command **BEFORE writing any code**. **Any failure ⇒ beacon the result + STOP: escalate with the raw command output** — inline: surface it and wait; arc-mode: return `status: "escalated"` carrying the output. A false assumption CHANGES THE PLAN, so escalating IS success — never adapt silently past it (the RAGUNIFY 1343.6 failure, where a wrong assumption became a mid-execution rewrite recorded only in a commit message). **Never edit code past a failed tripwire.** (The Step-1b resume path re-runs the tripwires on takeover, so a resumed phase re-verifies its assumptions.)
+
 ### Step 1: Set status to in-progress
 
 If status is `'backlog'`, edit the .phase.ts file to set `status: 'in-progress'`. Commit:
