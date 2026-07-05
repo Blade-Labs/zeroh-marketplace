@@ -62,11 +62,14 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/claim-phase-number.sh"
 ```
 
 The script scans BOTH `roadmap/phases/` and `roadmap/archive/` (one monotonic namespace),
-counts outstanding claims, and atomically creates `roadmap/phases/.claims/<N>.claim` with
-noclobber — **creation IS the lock**, so two concurrent sessions can never claim the same
-number (the loser gets EEXIST and the script retries at N+1). It prints the claimed N.
+counts outstanding claims, and atomically creates `<N>.claim` in the git COMMON dir
+(`$(git rev-parse --git-common-dir)/zeroh-roadmap-claims` — shared across ALL worktrees of
+the repo) with noclobber — **creation IS the lock**, so two concurrent sessions (even in
+different worktrees) can never claim the same number (the loser gets EEXIST and the script
+retries at N+1). It prints the claimed N.
 If the consumer scaffolded the script locally (`scripts/claim-phase-number.sh`), that copy
-works identically. Ensure `roadmap/phases/.claims/` is gitignored.
+works identically. No gitignore is needed — the claim lives under `.git`, so it is never
+tracked (the legacy `roadmap/phases/.claims/` is still scanned read-only during transition).
 
 Phase numbers are monotonic — never reuse historical gaps, including numbers that now live
 under `roadmap/archive/`. Never hand-compute max+1; that unlocked read-compute-write is
@@ -270,8 +273,9 @@ If you set `batchMode: true`, also ensure each `steps[]` entry maps to a clean c
 docs(roadmap): phase N — <short description>
 ```
 
-Delete the number reservation in the same breath: `rm -f roadmap/phases/.claims/<N>.claim`
-(the committed `phase-N.phase.ts` now holds the number; the claim file has done its job).
+Delete the number reservation in the same breath: `rm -f "$(git rev-parse --git-common-dir)/zeroh-roadmap-claims/<N>.claim"`
+(a plain `rm`, NOT a git delete — the claim lives under `.git` and was never tracked; the
+committed `phase-N.phase.ts` now holds the number, so the claim file has done its job).
 
 ### Step 7: Auto-invoke `/review-phase N`
 

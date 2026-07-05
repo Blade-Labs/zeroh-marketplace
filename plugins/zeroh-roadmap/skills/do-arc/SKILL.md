@@ -81,7 +81,7 @@ The `Phase N — Plane X` prefix keeps the two tiers visually distinct in the fl
 
 ## Step 3b: Register the build (worktree + branch, machine-readable)
 
-Before the first phase starts, write **`roadmap/arcs/.building/<ID>.json`** (create the dir; consumers gitignore it beside `roadmap/phases/.claims/`):
+Before the first phase starts, write **`roadmap/arcs/.building/<ID>.json`** (create the dir; consumers gitignore `roadmap/arcs/.building/`):
 
 ```json
 { "arcId": "<id>", "worktree": "<absolute cwd>", "branch": "<git branch --show-current>", "baseRef": "<arc.baseRef>", "mode": "inline|recursion" }

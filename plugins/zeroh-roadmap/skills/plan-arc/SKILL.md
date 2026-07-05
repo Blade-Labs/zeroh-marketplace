@@ -90,7 +90,7 @@ The confirmed `designRefs` are now the design spec the rest of plan-arc builds o
 
 Recomputing "next number" per iteration collides under the arc's volatile namespace (each new phase file shifts the max) AND across concurrent sessions. Reserve the block ONCE, up front, through the same atomic claim mechanism `plan-phase` Step 1 uses:
 
-1. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/claim-phase-number.sh"` once per member phase — sum of the phase counts across `arc.planes` invocations. Each call atomically creates a `roadmap/phases/.claims/<N>.claim` (creation is the lock), so the block is contiguous unless a concurrent session interleaves — in which case the claims are still collision-free, just non-contiguous (fine; the arc's phases don't require contiguity, only uniqueness).
+1. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/claim-phase-number.sh"` once per member phase — sum of the phase counts across `arc.planes` invocations. Each call atomically creates a `<N>.claim` in the shared git-common-dir claims store (creation is the lock; shared across all worktrees), so the block is contiguous unless a concurrent session interleaves — in which case the claims are still collision-free, just non-contiguous (fine; the arc's phases don't require contiguity, only uniqueness).
 2. Write those EXPLICIT claimed numbers back into `arc.planes[].phases` (in plane order) and re-save the `.arc.ts`, so the arc's `planes ↔ phases` cross-validation (`crossValidate`) is correct and the "phase range" label is stable.
 3. Each claim file is deleted when its `phase-N.phase.ts` commits (plan-phase Step 6).
 

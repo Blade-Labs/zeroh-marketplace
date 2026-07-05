@@ -79,8 +79,8 @@ review-phase N → verify the work was done correctly
 
 Some consumers run SEVERAL sessions against one repo (parallel arc builds in worktrees, a
 planner, a coordinator). Three conventions keep them from colliding; honor all three
-whenever the repo shows signs of multi-session use (a `roadmap/phases/.claims/` dir, a
-COORDINATION BOARD, `roadmap/arcs/.building/`):
+whenever the repo shows signs of multi-session use (a COORDINATION BOARD,
+`roadmap/arcs/.building/` sidecars):
 
 1. **The COORDINATION BOARD lives in `roadmap/backlog.ts`'s header comment** — a lane map
    (which arc runs where: worktree/branch/pause state), the release plan (when
@@ -88,7 +88,8 @@ COORDINATION BOARD, `roadmap/arcs/.building/`):
    Read it FIRST when the user says "what next" — then tell them, or pick the named lane.
    It rides the same commit discipline as the queue, so it survives sessions.
 2. **Claim phase numbers BEFORE authoring anything** — `scripts/claim-phase-number.sh`
-   (creation-is-the-lock; delete the `.claim` in the landing commit). This applies to
+   (creation-is-the-lock; the claim lives under the git common dir, shared across all
+   worktrees — `rm` it once the phase lands, it is never a tracked file). This applies to
    one-off fix phases too, not just arc planning. The write-time hook warns on a new
    phase file without a claim (`ZEROH_ROADMAP_STRICT_CLAIMS=1` makes it blocking).
 3. **Building arcs are registered** — do-arc writes `roadmap/arcs/.building/<ID>.json`
