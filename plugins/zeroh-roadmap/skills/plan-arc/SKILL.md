@@ -110,7 +110,7 @@ Each phase is authored as a normal `.phase.ts` with `status: 'backlog'`; the arc
 
 ## Step 3: Fan out plan-quality review (parallel, read-mostly)
 
-Review all member phases in parallel — one agent per phase running `review-phase` Mode A — each with **`--no-queue`**. This is the same safe fan-out shape `do-arc` uses, and it exists for one reason: `review-phase` Mode A's queue step WRITES the shared `roadmap/backlog.ts`, so N concurrent reviews would race it.
+Review all member phases in parallel — one agent per phase running `review-phase` Mode A — each with **`--no-queue`**. This is the same safe fan-out shape `do-arc` uses, and it exists for one reason: `review-phase` Mode A's queue step WRITES the shared `roadmap/backlog.ts`, so N concurrent reviews would race it. **Pass `model` to each reviewer per the `## Model policy` home statement (review-phase SKILL.md)** — these Mode A reviewers are judges.
 
 **Edit-confinement invariant:** `--no-queue` skips ONLY the queue write, not all writes. Each parallel review agent may edit ONLY its own `roadmap/phases/phase-{N}.phase.ts` (to fix its BLOCKER / NEEDS-WORK findings) and **MUST NOT touch `roadmap/backlog.ts`** or any other phase's file.
 

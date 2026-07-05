@@ -44,6 +44,8 @@ Determine the phase mode:
 
 For phases not yet executed. Review as a **senior software architect** — don't trust the plan, verify it against the actual code.
 
+**Model policy (the HOME statement — stated ONCE, here; the other seams reference it).** A spawner running Mode A *via an agent* reads the consumer's `^## Model policy$` block: when it names `judge-model: <model>`, pass `model: <that model>` to the spawned reviewer; an **ABSENT block = the agent's frontmatter default** (the fail-safe rail). This covers the JUDGE seams ONLY — Mode A plan reviewers, arc-sweep's whole-arc software-architect, and validate-arc's intent-validator panel. `phase-executor` / `software-developer` / `test-engineer` spawns are NOT covered (Opus executes; the strongest model goes to grading, not writing). Mode A invoked STANDALONE by the user runs INLINE — no agent spawn, no model choice; the reviewer SPAWN site is plan-arc Step 3.
+
 **PRIME RULE: CONFIRM EVERYTHING AGAINST SOURCE CODE.**
 
 Do NOT just read the task description and check if it "sounds right." Open the files. Read the functions. Verify the claims. The plan was written by an agent that may have hallucinated file paths, function names, or line numbers.

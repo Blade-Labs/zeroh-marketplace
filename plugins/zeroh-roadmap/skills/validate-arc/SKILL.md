@@ -39,7 +39,7 @@ Each criterion carries its `tier` (set at plan time — the cheapest tier that c
 
 ## Step 3: Fan out the judge — one `intent-validator` per criterion, in parallel
 
-Spawn the `intent-validator` agent **once per criterion, concurrently** — the same safe read-mostly fan-out shape `plan-arc` Step 3 uses. Two invariants:
+Spawn the `intent-validator` agent **once per criterion, concurrently** — the same safe read-mostly fan-out shape `plan-arc` Step 3 uses. **Spawn each judge with `model` per the `## Model policy` home statement (review-phase SKILL.md)** — this applies to EVERY judge in an N-judge majority panel. Two invariants:
 
 - **Edit-confinement:** the judges are READ-ONLY. They drive the flow and observe; they write NOTHING in the consumer tree or the roadmap. (Driving may run the consumer's own tests/build, which is fine — but no judge edits source, backlog, or a phase file.)
 - **Independence:** each judge is spawned FRESH with only (the criterion + the consumer's tier bindings + the running surface). Never pass it the building agents' reasoning, the phase diffs, or the commit log — that is self-grading. This is the independent-judge singleSeam.
