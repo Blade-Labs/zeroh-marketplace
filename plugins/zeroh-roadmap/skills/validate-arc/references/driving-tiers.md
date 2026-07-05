@@ -27,7 +27,7 @@ A criterion's `tier` is the **cheapest tier that can honestly see its `signal` a
 
 This is how one consumer binds the tiers (its `CLAUDE.md` `## Validation tiers` block); the commands are **that repo's**, shown to make the vocabulary concrete — the plugin ships none of them:
 
-- `wired` → in-process wired turn through `integration/harness.ts` `driveTurn` (`app.run` with external boundaries faked) — `npm run test:integration -- <suite>`.
+- `wired` → in-process wired turn through `integration/harness.ts` `driveTurn` (`app.run` with external boundaries faked) — run ONE suite via the consumer's `integration-scoped` Gate-commands slot (scoped-slot resolution rule); never `-- <suite>`, which appends after the inline glob and runs the whole tier.
 - `live-ui` → the Playwright projects in `e2e/playwright.config.ts` (`deployed` = the console, loginless; `office-pane`; `sharepoint`) + a screenshot — `E2E_PROJECT=<project> npx playwright test …` (storageState auth via `npm run e2e:auth` where needed).
 - `live-host` → real model + masking against a running host — `npm run test:live`.
 

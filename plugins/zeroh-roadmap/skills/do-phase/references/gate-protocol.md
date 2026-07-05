@@ -20,7 +20,9 @@ After the gate passes, Step 5 fills the phase file with gate results, metrics, a
 Every mechanical check in this protocol is a **named slot**, never a literal command. The
 consumer repo binds each slot to its real command in a **`## Gate commands`** block in its
 CLAUDE.md — the same consumer-binding seam `validate-arc` uses for `## Validation tiers`.
-Slot names: `lint` · `types` · `unit` · `integration` · `build` · `e2e` · `emit`.
+Slot names: `lint` · `types` · `unit` · `integration` · `build` · `e2e` · `emit`, plus two
+OPTIONAL scoped slots — `integration-scoped` · `unit-scoped` — for running ONE suite/file
+instead of the whole tier (see **Scoped slots** below).
 
 Example consumer block:
 
@@ -33,6 +35,8 @@ Example consumer block:
 - build: npm run build
 - e2e: npm run test:e2e
 - emit: npm run emit:phases
+- integration-scoped: node --test {files}   # OPTIONAL — {files} = space-separated suite paths
+- unit-scoped: node --test {files}           # OPTIONAL — same contract, unit tier
 ```
 
 **Resolution rules (fail-loud, never guess):**
@@ -47,6 +51,24 @@ Example consumer block:
 - A slot explicitly bound to `none` (e.g. `e2e: none`) is the consumer's honest statement
   that the tier doesn't exist — record it as absent-by-declaration in the gate results;
   that is not a failure.
+
+**Scoped slots (optional — `integration-scoped` / `unit-scoped`):** a consumer whose full
+`integration`/`unit` slot runs a broad glob binds these to a template that runs a NARROW
+file list, so a gate that needs to prove only the touched suite does not run the whole tier
+(which can exceed the foreground window and push the run onto the unreliable background
+path). The template carries the literal placeholder **`{files}`** — the gate substitutes a
+space-separated list of suite/test paths VERBATIM, adding no quoting (the template author
+owns quoting).
+
+**Scoped-slot resolution rule (the single seam — stated here ONCE; the ladder, the arc-mode
+column, and the long-running mechanic all reference THIS rule, never restate it):** when a
+run should be scoped to specific files, use the matching scoped slot verbatim with `{files}`
+substituted. If the consumer has NOT bound that scoped slot, run the FULL slot and record
+`scoped slot missing — ran full suite` in the gate notes (`gate.integrationTests.notes` /
+`gate.unitTests.notes`) — honest and fail-visible. NEVER append or invent a filter argument
+on a full-suite slot: a guessed filter the runner ignores (or applies ON TOP of an inline
+glob) silently runs everything while the gate believes it scoped — the exact FM2 failure
+this arc closes.
 
 ---
 
@@ -106,6 +128,12 @@ may only RAISE it. Declared below the derived floor → the gate REFUSES:
 `testScope 'static' declared but the diff touches src/relay/governed-turn.ts
 (## Gate specialists floor: full)`. A path important enough to swap in a specialist
 reviewer is important enough for the full suite — one consumer seam, two consumers.
+
+**Running the narrowed set:** the `scoped`/`relevant` file selections run through the
+consumer's `integration-scoped` / `unit-scoped` slot per the scoped-slot resolution rule
+(Gate-commands section above) — `{files}` = the selected paths, verbatim template; an
+unbound scoped slot falls back to the full slot with the `scoped slot missing — ran full
+suite` note. The ladder decides WHICH files; the resolution rule decides HOW they run.
 
 **Honesty record:** any scope below `full` writes what was deferred and which backstop
 covers it into `gate.unitTests.notes` (e.g. `deferred: full unit+integration tiers →
@@ -214,9 +242,9 @@ Also run `bash scripts/pre-review.sh <first-task-SHA>~1` when that script exists
 
 Why the arc-mode column is narrower: re-running the whole unit+integration+e2e suite on every phase's gate runs it N times per arc — `do-arc` Step 8 runs the full suite ONCE at the arc end (after the sweep and validate-arc, since both can still land code), and a red suite there blocks the merge. A docs/config-only phase whose diff has no covering tests runs its relevant doc/lint checks and records honestly that no test suite applies.
 
-The principle behind "relevant tests": always include the specific test(s) that *prove the touched code correct* — what defers is only the broad suite that re-covers untouched code.
+The principle behind "relevant tests": always include the specific test(s) that *prove the touched code correct* — what defers is only the broad suite that re-covers untouched code. Those relevant/diff tests run through the consumer's `integration-scoped` / `unit-scoped` slot (scoped-slot resolution rule, Gate-commands section) — never an improvised filter; an unbound scoped slot falls back to the full slot with the honest `scoped slot missing — ran full suite` note.
 
-**Long-running slots — the execution mechanic (do not improvise this).** A slot expected to run ≤ 8 min runs **foreground** under the consumer's documented wrapper with an explicit timeout; block on it. A slot expected to run longer (full unit tiers, coverage runs, integration+build chains) is backgrounded to a log file **and, in the same turn, before it ends,** a Monitor is armed whose script EXITS when the log shows the terminal line — with failure signatures (`FAILED|not ok|Error|Killed|OOM|exit [1-9]`) and a ~5-min log-stall emit included — so re-invocation is guaranteed. On every wake: `pgrep` the runner + read the log tail FIRST, then continue the round in that same turn. Never end a turn "waiting" with no verified live process and no armed exiting Monitor; a dead or missing process means the run is done — read its log and drive on. Prefer several foreground-sized scoped runs over one giant background run whenever the slot can be scoped. (This is the mechanical form of the phase-executor's long-run survival protocol; it applies to inline runs too.)
+**Long-running slots — the execution mechanic (do not improvise this).** A slot expected to run ≤ 8 min runs **foreground** under the consumer's documented wrapper with an explicit timeout; block on it. A slot expected to run longer (full unit tiers, coverage runs, integration+build chains) is backgrounded to a log file **and, in the same turn, before it ends,** a Monitor is armed whose script EXITS when the log shows the terminal line — with failure signatures (`FAILED|not ok|Error|Killed|OOM|exit [1-9]`) and a ~5-min log-stall emit included — so re-invocation is guaranteed. On every wake: `pgrep` the runner + read the log tail FIRST, then continue the round in that same turn. Never end a turn "waiting" with no verified live process and no armed exiting Monitor; a dead or missing process means the run is done — read its log and drive on. Prefer several foreground-sized scoped runs — via the `integration-scoped` / `unit-scoped` slot (scoped-slot resolution rule above) — over one giant background run whenever the tier can be scoped to specific files. (This is the mechanical form of the phase-executor's long-run survival protocol; it applies to inline runs too.)
 
 **2. Agent reviews.** Launch 2 `code-reviewer` agents in parallel — **two synchronous Agent calls in a single message** (no `run_in_background` on either). "Parallel" here means the runtime fans them out; the parent still blocks until both return. Each receives:
 - **Round 1**: full phase diff (`git diff <phase-start-SHA>..HEAD`) plus any unresolved items from Round 0's `skipped` or `bugsNoted` lists.

@@ -62,9 +62,12 @@ it got ignored wholesale. The workable protocol:
   live process + an armed exiting Monitor cover you, or (b) you are returning the structured
   `PhaseExecutionResult`. A quiet monitor is not evidence of a live run — the process table
   is; if `pgrep` finds nothing, the run is DONE or DEAD: read its log and drive on now.
-- Splitting beats waiting: where the consumer's `## Gate commands` slot allows scoping
-  (single suite, single package), prefer several foreground-sized runs over one giant
-  background run — same coverage, no yield risk.
+- Splitting beats waiting: where the consumer binds an `integration-scoped` / `unit-scoped`
+  slot (the scoped-slot resolution rule, gate-protocol.md), prefer several foreground-sized
+  runs of that slot with `{files}` set to specific suites over one giant background run —
+  same coverage, no yield risk. Never improvise a filter onto the full slot (in a broad-glob
+  consumer that silently runs the whole tier); an unbound scoped slot means run the full slot
+  and record the honest `scoped slot missing — ran full suite` note.
 - The ONLY legitimate end of your final turn is the structured `PhaseExecutionResult`
   (`done` / `escalated` / `failed`). "Waiting" is never a terminal state.
 - **A coordinator liveness nudge while you are healthy is a misread, not an order.** The

@@ -18,7 +18,7 @@ The plugin owns the generic tier vocabulary; the **consumer repo owns the concre
 
 ```
 ## Validation tiers (for validate-arc)
-- wired:     npm run test:integration -- <suite>     # in-process wired turn through the real route table
+- wired:     scope ONE suite via the integration-scoped Gate-commands slot   # in-process wired turn through the real route table (never `-- <suite>`, which appends after an inline glob and runs the whole tier)
 - live-ui:   E2E_PROJECT=<project> npx playwright test …   # rendered surface + screenshot
 - live-host: npm run test:live                         # real model / masking against a running host
 ```
