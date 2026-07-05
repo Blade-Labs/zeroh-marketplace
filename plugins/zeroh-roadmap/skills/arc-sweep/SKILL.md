@@ -34,10 +34,11 @@ Which disposition writes what is mechanical — read the row, don't re-derive it
 | Disposition | Meaning | Writes to `debtResolutions[]` | `status` | `via` |
 |---|---|---|---|---|
 | RESOLVE-NOW | fixed inline now, re-gated | ONE entry | `'fixed'` | `'<commitSHA>'` |
-| PLAN-PHASE | real follow-up, phase authored | ONE entry | `'fixed'` | `'phase-<N>'` |
+| PLAN-PHASE / **IN-ARC** (default) | authored + executed in-arc (do-arc loops back) | ONE entry | `'planned'` → `'fixed'` AFTER execution | `'phase-<N>'` |
+| PLAN-PHASE / **DESCOPE** | dropped, user-ratified (even autonomous) | ONE entry + a typed `Arc.descopes[]` item | `"won't_fix"` | `'descope — ratified by … (≥20 chars)'` |
 | ACCEPT (won't fix) | correct boundary, reason ≥20 chars | ONE entry | `"won't_fix"` | the reason |
 | ACCEPT (dismiss) | never was debt | ONE entry | `'dismissed'` | the reason |
-| OPERATOR-PENDING | deploy/operator action, not code | **NO entry** — recorded in `roadmap/followups/<arcId>.md` + the Step-3 report's deploy-actions section | — | — |
+| OPERATOR-PENDING | deploy/operator action, not code | ONE entry (+ detail in `roadmap/followups/<arcId>.md`) | `'operator-pending'` | runbook / DEPLOY.md anchor |
 
 (`limitations` never enter this table — they are release-sweep's, listed not disposed; see below.)
 
@@ -45,7 +46,7 @@ Which disposition writes what is mechanical — read the row, don't re-derive it
 
 **Disposition mode — read the consumer's `## Merge policy` first.** When arc-sweep runs UNDER do-arc AND `arc-integration: autonomous`, dispose each item YOURSELF by the decision table below — no per-item user prompt on the clean path. When the block is absent / `arc-integration: hold`, or arc-sweep was invoked **standalone** by the user, prompt the user per item as before — **standalone arc-sweep behavior is unchanged (always interactive).**
 
-**Autonomous mode STILL stops for a human on exactly four classes** (the decision table disposes everything else): a `[PRODUCT]` hard-stop; a `[MULTI-REPO]` hard-stop; a `software-architect` **ESCALATE** verdict on a tiebreak; and any **DESCOPE** — a disposition that would narrow what the arc promised ALWAYS needs user ratification (the 1371 contract; until its typed DESCOPE row lands, this reads as "any would-be descope under the existing table"). On a genuinely ambiguous item, spawn `software-architect` as a tiebreak advisor (the Prime-Rule-1 pattern) BEFORE disposing.
+**Autonomous mode STILL stops for a human on exactly four classes** (the decision table disposes everything else): a `[PRODUCT]` hard-stop; a `[MULTI-REPO]` hard-stop; a `software-architect` **ESCALATE** verdict on a tiebreak; and any **DESCOPE** — a disposition that would narrow what the arc promised ALWAYS needs user ratification (recorded typed on `Arc.descopes` per the table below). On a genuinely ambiguous item, spawn `software-architect` as a tiebreak advisor (the Prime-Rule-1 pattern) BEFORE disposing.
 
 The three code-disposition outcomes each persist exactly one `debtResolutions[]` entry on the owning phase — the same shape release-sweep writes (`{ ref: '<taskId>.<field>', status, via, date }`). An autonomous disposition writes the **SAME** entry, distinguished only by marking `via` with `autonomous-sweep` (e.g. `via: '<commitSHA> autonomous-sweep'` for RESOLVE-NOW, `via: 'autonomous-sweep'` for a dismissed item) — so an autonomous and an interactive disposition are typed identically and the record stays honest about which ran. (Every disposition below writes a `debtResolutions[]` entry, including OPERATOR-PENDING via the widened `operator-pending` status — see its row.)
 
@@ -87,7 +88,7 @@ Run ONE `zeroh-roadmap:software-architect` over **`git diff <arc.baseRef>..HEAD`
 
 Emit a merge-readiness report **to chat only** (never a file — see the no-summary-file rule above). It aggregates:
 - **Per-phase gate status** — every member phase is `done` with a passing gate.
-- **Debt dispositions** — the Step-1 roll-up: counts by `RESOLVE-NOW` / `PLAN-PHASE` / `ACCEPT` (won't_fix/dismissed) / `OPERATOR-PENDING`, with the `debtResolutions[]` refs written by the three code dispositions (OPERATOR-PENDING writes none — list its items in the deploy-actions bullet below instead).
+- **Debt dispositions** — the Step-1 roll-up: counts by `RESOLVE-NOW` / `PLAN-PHASE` (IN-ARC vs DESCOPE) / `ACCEPT` (won't_fix/dismissed) / `OPERATOR-PENDING`, with the `debtResolutions[]` refs each writes (IN-ARC = `'planned'`→`'fixed'`; OPERATOR-PENDING = `'operator-pending'`, also listed in the deploy-actions bullet below).
 - **Whole-arc architect verdict** — the Step-2 seam judgment (single vs forked) AND the design-conformance judgment (build matches `arc.designRefs`, or the drift findings; "no designRefs — design gate skipped" when there are none), plus any RESOLVE-NOW fixes applied + re-gated.
 - **Deferred to release-sweep** — any `limitations` entries re-read from the phase files (arc-sweep does not dispose these; they're release-sweep's). List them so the operator knows they exist and remain open.
 - **Overall** — full green / blocked, and any OPERATOR-PENDING deploy actions the operator must take.

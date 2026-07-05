@@ -56,12 +56,14 @@ mandate backgrounding long commands. The workable protocol:
 - **Expected ≤ 8 min** (single suites, builds, scoped tests): run **foreground** under the
   consumer's documented wrapper (e.g. capbuild) with an explicit `timeout`. Block. No yield.
 - **Expected > 8 min** (full tiers, coverage, integration+build chains): background it to a log
-  file — and **in the same turn, before ending it**, arm a Monitor whose script EXITS on the
-  log's terminal line, and ALSO emits on failure signatures (`FAILED|Error|not ok|Killed|OOM|exit
-  [1-9]`) and on a ~5-min log-size stall (so you wake to check the process table). The Monitor's
-  exit is your guaranteed re-invocation. Only with BOTH the background task and that exiting
-  Monitor armed may the turn end — and the turn's last text names exactly what is running and
-  which log it writes.
+  file — and **in the same turn, before ending it**, (a) beacon `background-run` with
+  `log: <logfile>` (this is the writer for the liveness reader's log-growth ALIVE lane — without
+  it, a legitimately quiet >45-min backgrounded run can read STALLED), and (b) arm a Monitor whose
+  script EXITS on the log's terminal line, and ALSO emits on failure signatures
+  (`FAILED|Error|not ok|Killed|OOM|exit [1-9]`) and on a ~5-min log-size stall (so you wake to
+  check the process table). The Monitor's exit is your guaranteed re-invocation. Only with BOTH
+  the background task and that exiting Monitor armed may the turn end — and the turn's last text
+  names exactly what is running and which log it writes.
 - **On EVERY wake**: FIRST `pgrep` the runner + read the tail of its log, THEN drive on in that
   same wake turn (parse the result, run the next gate step, commit, or relaunch a dead run). A
   wake turn that ends without advancing the phase is the bug; never "still waiting" twice.

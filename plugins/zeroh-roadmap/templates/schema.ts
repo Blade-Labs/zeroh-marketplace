@@ -13,11 +13,24 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-// @zeroh-roadmap-schema v9
+// @zeroh-roadmap-schema v10
 // Bump this marker whenever the canonical schema gains a feature. The
 // SessionStart drift check in using-zeroh-roadmap greps for this exact line
 // to decide whether a target repo is behind the plugin. Keep the comment
 // literal (no template syntax) so a simple grep is sufficient.
+//
+// v10 migration notes (consumers syncing from v9 — all additive/optional, so
+// historical files keep parsing unmodified):
+// - TransparencyReport gains `decisionRef` (provenance for a non-"None"
+//   compromise/skipped — the validator requires it ≥ the enforcement floor).
+// - Phase gains `userFacing` + `flag` ({id} | {bootWired, justification}) and
+//   `assumptions[]` ({claim, verify, onFalse: 'ESCALATE'} — plan-time tripwires).
+// - Arc gains `descopes[]` ({item, ratifiedBy, ratifiedAt}) + `criteriaRatifications[]`.
+// - RunnerSummary gains `openFollowups`.
+// - debtResolutions status enum widens to add 'planned' + 'operator-pending' (the
+//   follow-up contract) — a reader that treats any matching ref as CLOSED MUST
+//   re-check these two (planned = open until its via-phase is done; operator-pending
+//   = open until disposed post-deploy).
 //
 // v9 migration notes (consumers syncing from v8):
 // - MinimalTask now requires an explicit `minimal: true` discriminant — a task

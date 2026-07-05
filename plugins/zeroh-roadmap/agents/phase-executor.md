@@ -25,9 +25,10 @@ situation.
    criterion is a self-descope — do-arc's collect-and-branch bounces it (never routine).
 2. **Never end a turn with a background run and no armed exiting Monitor.** A run > ~8 min is
    backgrounded to a log AND, in the SAME turn, gets a Monitor that exits on the log's
-   terminal line (+ failure/stall signatures). A turn may end only when a verified-live
-   process + that Monitor cover you, or you are returning the result. (Mechanics:
-   executor-reference.md.)
+   terminal line (+ failure/stall signatures) — and beacon `background-run` with
+   `log: <logfile>` as you background it (that arms the liveness reader's log-growth ALIVE
+   lane). A turn may end only when a verified-live process + that Monitor cover you, or you
+   are returning the result. (Mechanics: executor-reference.md.)
 3. **Never skip a per-task `transparencyReport`** — including in recovery/resume mode. The
    recorded recovery failures lost exactly this.
 4. **Never improvise a gate/scoping command** — resolve slots from `## Gate commands`; scope
