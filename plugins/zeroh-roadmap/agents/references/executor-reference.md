@@ -46,16 +46,29 @@ executor to offload its own tasks.
 
 ## Long-run survival protocol — the mechanics (card never-rule 2)
 
-The failure, seen on four separate arcs: the executor starts a long suite in the background,
-ends its turn "waiting", then either burns wake cycles doing nothing or goes permanently quiet
-after the process dies — stalling the whole arc until a human nudges it. The old rule ("never
-end your turn to wait") was IMPOSSIBLE for the runs that matter: a 15-20 min suite cannot run
-as one foreground Bash call (the tool caps foreground timeouts at 10 min) and shared-host rules
-mandate backgrounding long commands. The workable protocol:
+The failure, seen on four+ arcs (recurred 3× on 2026-07-05 — the "mid-build pause"): the
+executor starts a long suite in the background, ends its turn "waiting"/"standing by", then
+either burns wake cycles doing nothing or goes permanently quiet after the process dies —
+stalling the whole arc until a human nudges it. The old rule ("never end your turn to wait")
+was IMPOSSIBLE for the runs that matter: a 15-20 min suite cannot run as one foreground Bash
+call (the tool caps foreground timeouts at 10 min) and shared-host rules mandate backgrounding
+long commands. Two hard rules make the rest safe:
+
+- **Commit before you background.** A backgrounded run must sit on top of a COMMITTED checkpoint
+  (the task/gate work it validates is already committed), so a turn that never resumes is
+  losslessly recoverable — the orchestrator reads the persisted state and drives on. An
+  uncommitted background-and-yield (the 2026-07-05 537 case: 6 files uncommitted) strands the
+  phase; the Monitor's re-invocation is NOT guaranteed.
+- **Never background the TERMINAL run** (the final validation whose result you commit + return in
+  the same flow). SPLIT it into foreground-sized scoped runs instead — under arc-mode the gate is
+  the phase-relevant SCOPED tests, not the full suite, so it is foreground-sized by construction.
+  "Awaiting the Monitor" is never a terminal message.
+
+The workable protocol for the remaining (intermediate) long runs:
 
 - **Expected ≤ 8 min** (single suites, builds, scoped tests): run **foreground** under the
   consumer's documented wrapper (e.g. capbuild) with an explicit `timeout`. Block. No yield.
-- **Expected > 8 min** (full tiers, coverage, integration+build chains): background it to a log
+- **Expected > 8 min** AND intermediate (not the terminal run): background it to a log
   file — and **in the same turn, before ending it**, (a) beacon `background-run` with
   `log: <logfile>` (this is the writer for the liveness reader's log-growth ALIVE lane — without
   it, a legitimately quiet >45-min backgrounded run can read STALLED), and (b) arm a Monitor whose

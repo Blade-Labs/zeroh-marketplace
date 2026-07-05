@@ -23,12 +23,17 @@ situation.
    `software-architect` `ESCALATE_TO_USER` verdict, or a `[MULTI-REPO]`/`[PRODUCT]`
    architect-critique hard-stop → escalate, never guess past it.) A result that narrows a
    criterion is a self-descope — do-arc's collect-and-branch bounces it (never routine).
-2. **Never end a turn with a background run and no armed exiting Monitor.** A run > ~8 min is
-   backgrounded to a log AND, in the SAME turn, gets a Monitor that exits on the log's
-   terminal line (+ failure/stall signatures) — and beacon `background-run` with
-   `log: <logfile>` as you background it (that arms the liveness reader's log-growth ALIVE
-   lane). A turn may end only when a verified-live process + that Monitor cover you, or you
-   are returning the result. (Mechanics: executor-reference.md.)
+2. **Commit before you background; never background the TERMINAL run.** Run gate/validation as
+   foreground-sized SCOPED chunks (the `types`/`lint` slots + the phase-relevant
+   `unit-scoped`/`integration-scoped` slot) — block to the exit code, no yield. Background ONLY a
+   genuinely >~8-min INTERMEDIATE run, and only AFTER committing the work it covers (a durable
+   committed checkpoint is what makes a non-resuming turn losslessly recoverable — an uncommitted
+   pause strands the phase), with a `background-run` beacon + a Monitor that exits on the log's
+   terminal line. The FINAL validation → flip-done → `executionResult` → return is ONE continuous
+   execution: SPLIT an over-cap terminal run into foreground scoped runs, never background it and
+   yield. **"Awaiting the Monitor" / "standing by" is NEVER your last message** — the Monitor's
+   re-invocation is not guaranteed for a terminal run (this stranded phases on 2026-07-05), so a
+   backgrounded final run is a stall you caused, not a handoff. (Mechanics: executor-reference.md.)
 3. **Never skip a per-task `transparencyReport`** — including in recovery/resume mode. The
    recorded recovery failures lost exactly this.
 4. **Never improvise a gate/scoping command** — resolve slots from `## Gate commands`; scope
@@ -60,10 +65,14 @@ liveness nudge WHILE you are healthy is a misread, not an order: reply with conc
 
 ## Complete + return (arc-mode Step 5)
 
-Set the phase-file fields (`status`/`gate`/`gateRounds`/`metrics`/`compromises`/
-`completedDate`) AND persist `executionResult`, then commit the phase. **SKIP** the two
-shared-mutable steps — backlog grooming and the `emit` slot — the orchestrator runs those
-serially after you return.
+Run the terminal validation FOREGROUND to its exit code (split it into scoped chunks if it
+would exceed the cap — never background-and-yield here; never-rule 2). Then, in the SAME
+continuous execution: set the phase-file fields (`status`/`gate`/`gateRounds`/`metrics`/
+`compromises`/`completedDate`) AND persist `executionResult`, commit the phase, and return.
+**SKIP** the two shared-mutable steps — backlog grooming and the `emit` slot — the orchestrator
+runs those serially after you return. Under arc-mode the terminal gate runs the PHASE-RELEVANT
+scoped tests, NOT the full suite (the orchestrator's arc-end run owns that) — so it is
+foreground-sized by construction and there is nothing here to background.
 
 Your final message IS the `PhaseExecutionResult` (`PhaseExecutionResultShape`), not prose:
 - `status: "done"` — the phase honestly reached done; map the Step-4b roll-up into
