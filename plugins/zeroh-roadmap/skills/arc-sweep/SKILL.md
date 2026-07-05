@@ -47,12 +47,14 @@ Which disposition writes what is mechanical — read the row, don't re-derive it
 
 **Autonomous mode STILL stops for a human on exactly four classes** (the decision table disposes everything else): a `[PRODUCT]` hard-stop; a `[MULTI-REPO]` hard-stop; a `software-architect` **ESCALATE** verdict on a tiebreak; and any **DESCOPE** — a disposition that would narrow what the arc promised ALWAYS needs user ratification (the 1371 contract; until its typed DESCOPE row lands, this reads as "any would-be descope under the existing table"). On a genuinely ambiguous item, spawn `software-architect` as a tiebreak advisor (the Prime-Rule-1 pattern) BEFORE disposing.
 
-The three code-disposition outcomes each persist exactly one `debtResolutions[]` entry on the owning phase — the same shape release-sweep writes (`{ ref: '<taskId>.<field>', status, via, date }`). An autonomous disposition writes the **SAME** entry, distinguished only by marking `via` with `autonomous-sweep` (e.g. `via: '<commitSHA> autonomous-sweep'` for RESOLVE-NOW, `via: 'autonomous-sweep'` for a dismissed item) — so an autonomous and an interactive disposition are typed identically and the record stays honest about which ran. OPERATOR-PENDING is the exception: in this sweep it writes NO `debtResolutions[]` entry (it is recorded in `roadmap/followups/<arcId>.md`); phase 1371 introduces the use of the typed `operator-pending` status (1367 widened the enum) that lets it persist an entry.
+The three code-disposition outcomes each persist exactly one `debtResolutions[]` entry on the owning phase — the same shape release-sweep writes (`{ ref: '<taskId>.<field>', status, via, date }`). An autonomous disposition writes the **SAME** entry, distinguished only by marking `via` with `autonomous-sweep` (e.g. `via: '<commitSHA> autonomous-sweep'` for RESOLVE-NOW, `via: 'autonomous-sweep'` for a dismissed item) — so an autonomous and an interactive disposition are typed identically and the record stays honest about which ran. (Every disposition below writes a `debtResolutions[]` entry, including OPERATOR-PENDING via the widened `operator-pending` status — see its row.)
 
-- **RESOLVE-NOW** == release-sweep **(f) Fix inline** → invoke `zeroh-roadmap:software-architect` for the proper-solution blueprint, apply, re-gate to the phase's `kind`, commit → append `{ ref, status: 'fixed', via: '<commitSHA>', date }`.
-- **PLAN-PHASE** == release-sweep **(p) Plan a new phase** → invoke `zeroh-roadmap:plan-phase` by name with the debt text; after the new phase commits, append `{ ref, status: 'fixed', via: 'phase-<N>', date }`. When the follow-up is NOT planned immediately (deferred blueprint), write the full blueprint into **`roadmap/followups/<arcId>.md`** (create it; one numbered item per deferral) — see "Where deferred blueprints live" below.
+- **RESOLVE-NOW** == release-sweep **(f) Fix inline** → invoke `zeroh-roadmap:software-architect` for the proper-solution blueprint, apply, re-gate to the phase's `kind`, commit → append `{ ref, status: 'fixed', via: '<commitSHA>', date }`. **`'fixed'` is reserved for work EXECUTED in this sweep** (a commit that exists) — never for a follow-up that was merely authored.
+- **PLAN-PHASE** — a real follow-up. Two dispositions, and **IN-ARC is the DEFAULT**:
+  - **IN-ARC (default)** — author the phase NOW (`zeroh-roadmap:plan-phase`, stamp `arcId`, claim a number, append it to the arc's `planes`) and append `{ ref, status: 'planned', via: 'phase-<N>', date }`. **do-arc then loops back to Step 4 and EXECUTES the phase before Step 7/8** (the mechanics validate-arc's corrective loop documents — validate-arc SKILL.md). When it completes, the entry flips `'planned'` → `'fixed'` via `'phase-<N>'` (now truthful — the work exists). Authoring alone is NOT resolution.
+  - **DESCOPE** — drop the follow-up. Requires **explicit user ratification EVEN in autonomous mode** (the 1370 stop-class). Record it BOTH as `{ ref, status: "won't_fix", via: 'descope — ratified by <who> <when> (see Arc.descopes)', date }` (the `won't_fix` `via` is release-sweep's substantive ≥20-char reason — here the descope ratification) AND a typed `Arc.descopes[]` item `{ item, ratifiedBy, ratifiedAt }` (the 1367 shape) — the ratification stays durable and typed, never buried in prose.
 - **ACCEPT** == release-sweep **(w) Won't fix** (substantive reason ≥20 chars → `status: "won't_fix"`) **or (d) Dismiss** (never-was-debt → `status: 'dismissed'`).
-- **OPERATOR-PENDING** — the ONE genuinely new disposition with no release-sweep equivalent: a required **deploy/operator action, not a code change** (a pre-merge arc operates on an unversioned arc, so some items are "do this at deploy" rather than "fix in code"). It has no schema `status` and writes NO `debtResolutions[]` entry — it is recorded in `roadmap/followups/<arcId>.md` (the durable inventory) and echoed in the Step-3 ephemeral report's deploy-actions section for the operator to run at deploy (cf. release-sweep `(k) Keep open` → no append). The item stays an open debt on the phase until a later release-sweep disposes it post-deploy.
+- **OPERATOR-PENDING** — a required **deploy/operator action, not a code change** (a pre-merge arc is unversioned, so some items are "do this at deploy"). It now WRITES an entry `{ ref, status: 'operator-pending', via: '<runbook / DEPLOY.md anchor>', date }` (the 1367 enum widening) so deploy debt is schema-visible to audit-roadmap + release-sweep, with the detail in `roadmap/followups/<arcId>.md`. **Exempt from the openFollowups budget** but counted separately and listed in the RunnerSummary notes. It stays OPEN until a later release-sweep disposes it post-deploy.
 
 `ref`/`status`/`via`/`date` semantics, the ≥20-char `won't_fix` reason, and the dismissed-ratio nudge are all release-sweep's — do not redefine them here.
 
@@ -60,15 +62,15 @@ The three code-disposition outcomes each persist exactly one `debtResolutions[]`
 
 **No summary file.** Like release-sweep (its SKILL.md "the phase files ARE the audit trail" rule), arc-sweep NEVER writes a persisted summary/report file. `debtResolutions[]` + the transparency reports it points to are the durable audit trail; the merge-readiness report (Step 3) is an EPHEMERAL chat report only.
 
-**Where deferred blueprints live — `roadmap/followups/<arcId>.md` (not backlog labels).**
-PLAN-PHASE items not planned on the spot and OPERATOR-PENDING deploy actions need a durable
-home between "disposed" and "planned/run". That home is `roadmap/followups/<arcId>.md`: the
-sweep creates it with one numbered item per deferral carrying the FULL blueprint (the fix
-design, files, evidence). The backlog tier label then carries ONE line (≤200 chars — the
-schema enforces it) pointing at the file: blueprints in backlog labels are what bloated them
-into unreadable multi-KB blobs. This is a *work-inventory* file, not a summary/report — the
-no-summary-file rule above is about the sweep's ephemeral verdict, which stays chat-only.
-`plan-phase` accepts a followups item reference as its source input.
+**`roadmap/followups/<arcId>.md` — OPERATOR-PENDING detail + ratified-descope rationale only.**
+Code debt no longer has a prose-blueprint-only deferral path: a PLAN-PHASE follow-up is either
+authored-AND-executed **IN-ARC** (the default — no prose stand-in for real work) or a
+user-ratified **DESCOPE** (typed on `Arc.descopes`). What remains for this file is the durable
+detail of the two dispositions that are NOT code fixes disposed in the sweep: OPERATOR-PENDING
+deploy actions (the runbook step) and the rationale behind a ratified descope. The backlog tier
+label carries ONE line (≤200 chars — the schema enforces it) pointing at the file. This is a
+*work-inventory* file, not a summary/report — the no-summary-file rule above is about the
+sweep's ephemeral verdict, which stays chat-only.
 
 ## Step 2: Whole-arc cross-phase review (against singleSeams + designRefs)
 
