@@ -98,6 +98,8 @@ If a task exceeds either limit without `batchMode: true`, the planner left a uni
 
 Confirm the planner's batchMode decision is honest: a task with `batchMode: true` whose `steps[]` entries don't slice into clean commit units is a bad batch — the planner used the flag to silence the lint instead of doing the slicing work. If the steps look like prose ("Implement everything for shape X" with 8 sub-bullets) rather than commit-shaped units, flag as NEEDS WORK.
 
+Confirm `userFacing` + `flag`: a phase adding user-visible behavior must carry `userFacing: true` and a `flag` (a FlagId `{ id }`, or a justified `{ bootWired, justification }`). A missing flag on a user-facing phase is NEEDS WORK — the 1345-class gap; the 1367 validator also enforces it at write time ≥ the enforcement floor.
+
 - Fail = BLOCKER. Oversized task without batchMode, or batchMode with non-commit-shaped steps.
 
 **Test-scope sanity (bonus check — only when `phase.testScope` is declared):**
