@@ -14,7 +14,11 @@
  *   - UNREGISTERED — in-progress phases whose arc has no .building sidecar
  *     (a pre-v0.11 build, or a session that skipped Step 3b)
  *   - WORKTREE GONE — a sidecar naming a worktree that no longer exists
- *   - STALE? — a registered worktree whose HEAD hasn't moved in >24h
+ *   - STALLED? — beacon-evidenced: the executor heartbeat (<ID>-executor.jsonl)
+ *     has aged past the liveness thresholds (a mid-gate-quiet gate-stage-start
+ *     beacon is NOT stalled). Falls back to STALE? (>24h commit age, labeled
+ *     `pre-beacon`) only when no beacon exists — so a long gate no longer
+ *     false-positives on commit age alone.
  *
  * Usage: node <plugin>/scripts/arc-status.mjs [roadmap-root]   (default ./roadmap)
  * Decisions (priorities, release gates) are NOT here — read the short board in
@@ -127,14 +131,47 @@ const ageOf = (wt) => {
   return { txt: h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`, stale: h > 24 }
 }
 
+// Beacon-first liveness — the STALE? flag on commit-age alone false-positives on any
+// arc inside a long multi-agent gate (legitimately commit-quiet for an hour+). When
+// the executor beacon (<ID>-executor.jsonl, phase 1368) exists, staleness reads IT:
+// STALLED? only on beacon evidence, never commit age. Thresholds mirror the
+// executor-liveness.mjs verdict table (kept in sync by name).
+const ALIVE_MAX_MIN = 20
+const GATE_QUIET_MAX_MIN = 45
+const WORK_EVENTS = new Set(['gate-stage-start', 'task-start', 'background-run'])
+const fmtMin = (m) => (m < 60 ? `${Math.round(m)}m` : m < 2880 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`)
+const beaconOf = (arcId) => {
+  const p = join(buildingDir, `${arcId}-executor.jsonl`)
+  if (!existsSync(p)) return null
+  const lines = readFileSync(p, 'utf8').trim().split('\n').filter(Boolean)
+  if (lines.length === 0) return null
+  try {
+    const last = JSON.parse(lines[lines.length - 1])
+    return { ageMin: (Date.now() - Date.parse(last.ts)) / 60000, event: last.event }
+  } catch {
+    return null
+  }
+}
+const livenessOf = (arcId, wt) => {
+  const b = beaconOf(arcId)
+  if (b) {
+    const alive = b.ageMin < ALIVE_MAX_MIN
+    const quiet = b.ageMin < GATE_QUIET_MAX_MIN && WORK_EVENTS.has(b.event)
+    const stalled = !alive && !quiet
+    return { txt: `${fmtMin(b.ageMin)} beacon (${b.event})`, stale: stalled, flag: stalled ? 'STALLED?' : '' }
+  }
+  const a = ageOf(wt)
+  return { txt: `${a.txt} (pre-beacon)`, stale: a.stale, flag: a.stale ? 'STALE?' : '' }
+}
+
 const rows = []
 const seen = new Set()
 for (const [id, s] of sidecars) {
   seen.add(id)
   const wt = resolve(s.worktree ?? '')
   const gone = !worktrees.has(wt)
-  const age = gone ? { txt: '-', stale: false } : ageOf(wt)
-  const flags = [gone && 'WORKTREE GONE', age.stale && 'STALE?'].filter(Boolean).join(' ')
+  const age = gone ? { txt: '-', stale: false, flag: '' } : livenessOf(id, wt)
+  const flags = [gone && 'WORKTREE GONE', age.flag].filter(Boolean).join(' ')
   rows.push({
     arc: id,
     state: s.paused ? 'PAUSED' : 'BUILDING',
@@ -165,7 +202,7 @@ console.log(`arc-status — derived ${new Date().toISOString()} (repo ${repo})\n
 if (rows.length === 0) console.log('No arcs building, paused, or in-flight. All lanes free.')
 for (const r of rows.sort((a, b) => a.arc.localeCompare(b.arc))) {
   console.log(`  ${r.arc.padEnd(12)} ${r.state.padEnd(10)} ${r.where}`)
-  console.log(`  ${''.padEnd(12)} last commit: ${r.age}${r.note ? ` · ${r.note}` : ''}`)
+  console.log(`  ${''.padEnd(12)} activity: ${r.age}${r.note ? ` · ${r.note}` : ''}`)
 }
 const inProgressRegistered = [...inProgress.entries()].filter(([a]) => seen.has(a) || a === '?')
 for (const [arc, phases] of inProgressRegistered) {
