@@ -129,14 +129,19 @@ mechanical `git diff --name-only` classification the Round-0 docs-only skip uses
 |---|---|---|
 | `static` | docs/data/assets/generated artifacts only (no executable code) | none — lint/types/emit only, plus a determinism re-run of any generator whose source is in the diff |
 | `scoped` | code whose proving tests are enumerable | test files IN the diff + colocated `<name>.test.*` siblings of changed files + `phase.scopedTests` globs — exactly those files |
-| `relevant` | src changes with cross-module consumers | scoped + the suites that exercise the touched modules (the arc-mode rule, promoted to inline) |
-| `full` | any path matched by the consumer's `## Gate specialists` block, or declared | the whole kind × mode cell (today's behavior) |
+| `relevant` | src changes with cross-module consumers, **including any `## Gate specialists` path** | scoped + the suites that exercise the touched modules (the arc-mode rule, promoted to inline) |
+| `full` | declared, or a `release`-kind phase | the whole kind × mode cell (the pre-ladder behavior) |
 
 **Floor rule (fail-loud):** derive the floor from the diff FIRST; a declared `testScope`
 may only RAISE it. Declared below the derived floor → the gate REFUSES:
 `testScope 'static' declared but the diff touches src/relay/governed-turn.ts
-(## Gate specialists floor: full)`. A path important enough to swap in a specialist
-reviewer is important enough for the full suite — one consumer seam, two consumers.
+(## Gate specialists floor: relevant)`. A `## Gate specialists` path floors to `relevant`,
+never below — its module suites always run at the gate — but not to `full`: the whole-suite
+value on a spine path is catching *distant* consumers, and that is exactly what the declared
+`## Test cadence` backstop re-covers off the phase gate. (The specialist path still forces
+the **agent-chain** floor to `full` in the Review-scope ladder below — the review floor and
+the test floor deliberately diverge: reviewer judgment on spine diffs has real catch history;
+a distant-suite rerun per phase mostly re-proves untouched code the backstop re-proves anyway.)
 
 **Running the narrowed set:** the `scoped`/`relevant` file selections run through the
 consumer's `integration-scoped` / `unit-scoped` slot per the scoped-slot resolution rule

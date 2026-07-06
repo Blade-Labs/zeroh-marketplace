@@ -154,7 +154,8 @@ those).
 `kind`: `static` (docs/data/generated-only diff) · `scoped` (enumerable tests — list them in
 `scopedTests`) · `relevant` (+ suites exercising the touched modules) · `full`. Omit it and
 the gate derives the scope from the diff; a declared value can only RAISE the derived floor
-(`## Gate specialists` paths always force `full`), so declare it when you know the phase is
+(`## Gate specialists` paths floor to `relevant` — module suites at the gate, full tiers on
+the backstop; the agent-chain floor for those paths stays `full`), so declare it when you know the phase is
 data/docs-shaped and want that recorded up front — never to sneak under the floor.
 
 **And assess `reviewScope` (optional — the gate's agent-chain ladder, gate-protocol.md).**
