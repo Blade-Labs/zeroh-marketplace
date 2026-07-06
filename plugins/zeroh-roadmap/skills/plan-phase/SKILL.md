@@ -132,6 +132,17 @@ When in doubt between `logic` and `hardening`, pick `hardening` — the cost of 
 
 `kind` is independent of `category`: a `category: 'fix'` phase is almost always `kind: 'hardening'`, but a `category: 'feature'` phase can be `mockup`, `logic`, or `hardening` depending on what it actually changes.
 
+**Phase granularity — gate cost is per-phase, so don't shard the work.** Every phase pays a
+fixed overhead regardless of size: its gate chain, its executor spawn under do-arc, its
+serialization tail. Seven 2–3-task phases pay that overhead seven times for work four
+5-task phases would cover (the July-2026 yield audit's ATELIER example). **Target 5–8 tasks
+per phase.** Split below ~4 tasks only for a reason you can name: genuine risk isolation (a
+prod-touching change that must land+verify alone), a hard dependency boundary another phase
+waits on, or a distinct `kind` (a mockup rider on a logic arc). "It felt like a separate
+topic" is not a reason — make it a task, not a phase. The ceiling stands too: past ~10 tasks
+a phase becomes hard to drive and review honestly (do-arc's HEAVY band exists for exactly
+those).
+
 **Author the `assumptions` tripwires.** Every load-bearing claim about the CURRENT state of the territory that a task depends on — a file's behavior, a test's status, a caller count, a seam's existence — becomes an `assumptions[]` entry `{ claim, verify: '<one runnable command — grep/test/ls>', onFalse: 'ESCALATE' }`. 2-6 per phase is typical; **zero is legitimate for a pure-prose phase — say so explicitly.** `assumptions` are for claims whose FALSITY CHANGES THE PLAN (the RAGUNIFY 1343.6 miss: the plan asserted a test would pass unmodified, the territory disagreed, and the deviation reached only a commit message) — NOT for every `keyFiles` anchor (those keep their "verify at execution" comments; the two are complementary). Worked example: `assumptions: [{ claim: 'agui routes model writes through runGovernedToolCall', verify: 'grep -n runGovernedToolCall src/agui.ts', onFalse: 'ESCALATE' }, { claim: 'no test pins the current mask output', verify: 'grep -rl maskPrompt src', onFalse: 'ESCALATE' }]`.
 
 **Set `userFacing` + `flag` at plan time.** For every phase adding user-visible behavior, set `userFacing: true` and fill `flag` — either `{ id: 'FLAG_ID' }` (a runtime kill-switch, default-OFF discipline) or `{ bootWired: true, justification: '<why it cannot hot-flip>' }` (which then joins the feature manifest; the justification is where a default-ON choice is ratified or rejected — the ATELIER deviation). review-phase Mode A checks it; the 1367 validator enforces presence ≥ the enforcement floor. A non-user-facing phase omits both.
@@ -149,7 +160,7 @@ data/docs-shaped and want that recorded up front — never to sneak under the fl
 **And assess `reviewScope` (optional — the gate's agent-chain ladder, gate-protocol.md).**
 This is a genuine plan-time judgment, not bookkeeping: *what review is actually high-value
 for this diff?* `none` (docs/data — no review agents) · `light` (small, mechanical, or
-well-trodden code: ONE reviewer, no architect-critique/simplifier) · `full` (the whole
+well-trodden code: ONE reviewer, no quality pass) · `full` (the whole
 chain — new seams, subtle logic, anything governed). Unlike `testScope` a declared value may
 LOWER the derived rung, because review-phase Mode A independently ratifies it (an unjustified
 low rung = NEEDS WORK) — with one hard floor the gate enforces regardless: a diff touching a

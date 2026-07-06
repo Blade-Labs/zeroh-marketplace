@@ -123,6 +123,12 @@ export const GateFindingShape = z.object({
   confidence: z.number().int().min(80).max(100).optional(),
   description: z.string().min(10),
   fixedInCommit: z.string().min(7).optional(),
+  /** Which spawn reported this finding — 'reviewer-1' / 'reviewer-2' for the
+   *  parallel generalists, the specialist's name under a `## Gate specialists`
+   *  swap, 'quality-pass' for a Round-0 noted bug a reviewer confirmed. What
+   *  makes per-stage gate yield auditable (does reviewer #2 ever catch what
+   *  reviewer #1 missed?). Omit when the source is unclear. */
+  agent: z.string().min(1).optional(),
 })
 
 export type GateFinding = z.output<typeof GateFindingShape>
@@ -132,8 +138,10 @@ export const StructuredGateRoundShape = z.object({
   // 0 is valid: gate-protocol numbers the one-shot simplify pass "Round 0", correctness rounds 1..N.
   round: z.number().int().nonnegative(),
   /** Which gate agent produced this round — makes "which gates actually ran"
-   *  queryable instead of remembered. Optional for pre-v9 rounds. */
-  agent: z.enum(['architect-critique', 'simplifier', 'code-reviewer', 'test-engineer']).optional(),
+   *  queryable instead of remembered. Optional for pre-v9 rounds.
+   *  'quality-pass' is the merged Round-0 agent (v0.15.0); 'architect-critique'
+   *  and 'simplifier' remain valid for phases gated before the merge. */
+  agent: z.enum(['quality-pass', 'architect-critique', 'simplifier', 'code-reviewer', 'test-engineer']).optional(),
   /** The round's outcome at a glance (clean = zero actionable findings). */
   verdict: z.enum(['clean', 'findings-fixed', 'skipped']).optional(),
   findings: z.array(GateFindingShape).default([]),
@@ -435,8 +443,8 @@ const BasePhaseFields = {
    *  genuinely high-value for THIS phase's diff, made at plan time and
    *  ratified by review-phase Mode A (an unjustified low rung = NEEDS WORK).
    *  none  — no review agents; mechanical checks + compromise summary only
-   *  light — ONE code-reviewer correctness loop; skip critique + simplifier
-   *  full  — architect-critique → simplifier → 2 reviewers (the default chain)
+   *  light — ONE code-reviewer correctness loop; skip the quality pass
+   *  full  — quality pass → 2 reviewers (the default chain)
    *  Absent → the gate derives the rung from the diff. Unlike `testScope`, a
    *  declared value may LOWER the derived rung — except the hard floor: a diff
    *  touching a `## Gate specialists` path always runs 'full' (the gate

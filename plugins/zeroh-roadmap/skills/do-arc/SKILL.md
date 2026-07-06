@@ -63,15 +63,20 @@ same anchor the gate uses). Then assign a band:
   field-proven RAGUNIFY recovery shape. This INVERTS the old heuristic, which pushed exactly
   the heaviest phases into the least-reliable pure-executor mode. (Named exemption to
   do-phase's auto-spawn ban — see do-phase Step 4.)
-- **MID → executor** — a gate-weighty phase that is not heavy (`kind` in {logic, hardening,
-  release} and `taskCount >= 3`). Spawn ONE `phase-executor` sub-agent for it (Step 4).
-- **TRIVIAL → inline** — a small phase (`taskCount <= 2`, or a `mockup`/docs-only phase) runs
-  inline in the main session as today.
+- **MID → executor** — a gate-weighty phase that is neither heavy nor trivial (`kind` in
+  {logic, hardening, release} and `taskCount >= 3`, and not caught by the TRIVIAL rule's
+  light-gated branch below — check TRIVIAL before MID). Spawn ONE `phase-executor` sub-agent
+  for it (Step 4).
+- **TRIVIAL → inline** — a small phase runs inline in the main session as today: `taskCount <= 2`,
+  a `mockup`/docs-only phase, **or `taskCount <= 4` with a plan-declared `reviewScope` of
+  `light`/`none`** — a light-gated phase doesn't need a fresh full-context executor; the
+  executor's value is context isolation for gate-heavy phases, and spawning one to run a
+  single-reviewer gate costs more than the phase itself.
 
 Echo the per-phase band assignments to chat (e.g. `1367:heavy 1368:mid 1369:trivial`), NOT one
-arc-level mode. **The thresholds (`10`, `4`, `3`, `2`) are the tunable knobs.** `--inline` /
-`--recursion` FORCE every phase into that band (inline / executor respectively), overriding the
-classification — echo `(forced → <band>)`.
+arc-level mode. **The thresholds (`10`, `4`, `3`, `2`, and the light-gated `4`) are the tunable
+knobs.** `--inline` / `--recursion` FORCE every phase into that band (inline / executor
+respectively), overriding the classification — echo `(forced → <band>)`.
 
 ## Step 3: Create the arc-level task progress (the phase checklist)
 

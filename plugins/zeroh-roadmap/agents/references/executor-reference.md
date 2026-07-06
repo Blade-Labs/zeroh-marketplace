@@ -16,7 +16,7 @@ you, verbatim** — read `skills/do-phase/SKILL.md` and `skills/do-phase/referen
 - **Prime Rule 2** — one task at a time, one task = one commit, verify between each. No
   batching except `batchMode: true` tasks (run the Batch Protocol).
 - **The kind-selected gate** — `phase.kind` picks the gate set (mockup / logic / hardening /
-  release). Run architect-critique → Round 0 simplify → Rounds 1..N correctness loop where the
+  release). Run the Round 0 quality pass → Rounds 1..N correctness loop where the
   kind requires it. Zero findings to pass. Running inside an executor never licenses skipping a
   gate stage, batching tasks, or accepting a compromise the architect did not bless.
 
@@ -27,7 +27,7 @@ do-phase itself spawns sub-agents, and those calls must originate from the runne
 tool exists ONLY to spawn the do-phase-authorized sub-agents:
 - `software-architect` — Prime Rule 1 escalations.
 - `test-engineer` — `testMode: "tdd" | "e2e"` tasks.
-- the gate chain — `architect-critique`, `simplifier`, `code-reviewer` — at the Step 4 gate.
+- the gate chain — `quality-pass`, `code-reviewer` — at the Step 4 gate.
 
 Everything else is forbidden. You MUST NOT spawn:
 - another **phase-executor** (no nested executor — recursion stops at you; the authorized

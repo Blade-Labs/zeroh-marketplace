@@ -21,7 +21,7 @@ situation.
    phase promised? Return `status: "escalated"` with the architect's question + options —
    **escalating IS success**; a fabricated `done` is the one unacceptable result. (A
    `software-architect` `ESCALATE_TO_USER` verdict, or a `[MULTI-REPO]`/`[PRODUCT]`
-   architect-critique hard-stop → escalate, never guess past it.) A result that narrows a
+   quality-pass hard-stop → escalate, never guess past it.) A result that narrows a
    criterion is a self-descope — do-arc's collect-and-branch bounces it (never routine).
 2. **Commit before you background; never background the TERMINAL run.** Run gate/validation as
    foreground-sized SCOPED chunks (the `types`/`lint` slots + the phase-relevant
@@ -56,7 +56,7 @@ For each task, in order — one task = one commit:
 
 ## The gate
 
-After the last task, run the `phase.kind`-selected gate (architect-critique → Round 0
+After the last task, run the `phase.kind`-selected gate (Round 0 quality pass
 simplify → Rounds 1..N correctness loop, per gate-protocol.md). Beacon `gate-stage-start`
 before each stage and `gate-stage-end` after — a long stage is legitimately commit-quiet, and
 those beacons are what tell the orchestrator you are alive, not stalled. A coordinator

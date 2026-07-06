@@ -247,8 +247,8 @@ After the last task commits, run the validation gate per **`references/gate-prot
 
 | `kind` | Gate set |
 |---|---|
-| `mockup` | Mechanical only: the `lint` + `types` slots. **Skip** architect-critique → simplifier → code-reviewer chain. Step 4b summary still runs. |
-| `logic` | Full gate: architect-critique → Round 0 simplify → Rounds 1..N correctness loop (hard-cap 5). |
+| `mockup` | Mechanical only: the `lint` + `types` slots. **Skip** the quality-pass → code-reviewer chain. Step 4b summary still runs. |
+| `logic` | Full gate: Round 0 quality pass → Rounds 1..N correctness loop (hard-cap 5). |
 | `hardening` | Full gate **plus** the integration-suite-rerun closure rule for persistence/event/marshal-chain tasks (see `review-phase` Mode B Step 2(b)). |
 | `release` | Full gate **plus** the `e2e` slot in Round 1's mechanical checks. |
 
@@ -256,9 +256,9 @@ Which slots run per kind × mode is the decision table in `references/gate-proto
 
 Missing `kind` on a legacy phase → default to `logic`, warn once. **No exceptions** — every phase gets its kind's gate, docs and tests included.
 
-**Four refinements (see `references/gate-protocol.md`):** (0) **Test-scope ladder** — when the consumer declares a `## Test cadence` backstop block, the `unit`/`integration` slots narrow to the diff-derived scope (`static`/`scoped`/`relevant`/`full`; `phase.testScope` may only RAISE the derived floor, and `## Gate specialists` paths always force `full`); anything below `full` records what deferred + the covering backstop in `gate.unitTests.notes`. (0b) **Review-scope ladder** — `phase.reviewScope` (plan-declared + Mode-A-ratified, else derived from the diff) selects the agent chain: `none` (no review agents — mechanical checks + compromise summary) / `light` (ONE code-reviewer loop, no critique/simplifier) / `full` (the whole chain); a `## Gate specialists` path always forces `full`, and any lower rung is recorded in `gateRounds`, never silent. (1) **Test cadence** — under **arc-mode** the gate runs only the tests *relevant* to the phase diff (plus lint/type/build); the full unit+integration+e2e suite is deferred to the arc end (`do-arc` Step 8, once, after the sweep + validate-arc, gating the merge). Inline single-phase runs keep the full suite at the gate. (2) **Simplifier skips a pure-docs/prose diff** — Round 0 has no code to act on when the diff is entirely Markdown/docs; it records a skipped `round: 0` entry (same spirit as `mockup` skipping the chain). A mixed diff with any executable code still runs it.
+**Four refinements (see `references/gate-protocol.md`):** (0) **Test-scope ladder** — when the consumer declares a `## Test cadence` backstop block, the `unit`/`integration` slots narrow to the diff-derived scope (`static`/`scoped`/`relevant`/`full`; `phase.testScope` may only RAISE the derived floor, and `## Gate specialists` paths always force `full`); anything below `full` records what deferred + the covering backstop in `gate.unitTests.notes`. (0b) **Review-scope ladder** — `phase.reviewScope` (plan-declared + Mode-A-ratified, else derived from the diff) selects the agent chain: `none` (no review agents — mechanical checks + compromise summary) / `light` (ONE code-reviewer loop, no quality pass) / `full` (the whole chain); a `## Gate specialists` path always forces `full`, and any lower rung is recorded in `gateRounds`, never silent. (1) **Test cadence** — under **arc-mode** the gate runs only the tests *relevant* to the phase diff (plus lint/type/build); the full unit+integration+e2e suite is deferred to the arc end (`do-arc` Step 8, once, after the sweep + validate-arc, gating the merge). Inline single-phase runs keep the full suite at the gate. (2) **The quality pass skips a pure-docs/prose diff** — Round 0 has no code to act on when the diff is entirely Markdown/docs; it records a skipped `round: 0` entry (same spirit as `mockup` skipping the chain). A mixed diff with any executable code still runs it.
 
-**Sub-agent rules:** launch all gate agents synchronously (no `run_in_background`). Auto-spawn discipline applies during Steps 1–4 — the architect-critique → simplifier → code-reviewer chain is the only auto-spawned set during the gate; the architect-gate from Prime Rule 1 and `test-engineer` from `testMode` are the only sub-agent calls that may **absorb phase work** during task execution. No `Explore` / `general-purpose` / arbitrary `Task` forks. A task that "feels too big" is either fine (push through) or wrongly planned (STOP, surface split proposal) — never launch a sub-agent to absorb it.
+**Sub-agent rules:** launch all gate agents synchronously (no `run_in_background`). Auto-spawn discipline applies during Steps 1–4 — the quality-pass → code-reviewer chain is the only auto-spawned set during the gate; the architect-gate from Prime Rule 1 and `test-engineer` from `testMode` are the only sub-agent calls that may **absorb phase work** during task execution. No `Explore` / `general-purpose` / arbitrary `Task` forks. A task that "feels too big" is either fine (push through) or wrongly planned (STOP, surface split proposal) — never launch a sub-agent to absorb it.
 
 **Inline-supervised (heavy-band) exemption.** When the `do-arc` orchestrator runs a HEAVY-band phase inline-supervised (do-arc Step 2's execution bands), the ORCHESTRATOR — not an executor — may drive `software-developer` / `test-engineer` sub-agents PER TASK while itself owning every commit, `transparencyReport`, and the gate. This is the one sanctioned way to fork per-task implementation work, and it is the orchestrator's alone: an executor still never offloads its own tasks. Without this exemption the heavy band would violate the ban above.
 
@@ -268,8 +268,8 @@ This ban scopes the actor **while executing a phase's tasks and gate** — it do
 
 Aggregate into a phase-level summary:
 1. Every task's persisted `transparencyReport` (compromises, skipped criteria, hardcoded values, limitations).
-2. The architect-critique's `SURFACED` entries (e.g. DB migrations — applied, but worth knowing before deploy).
-3. The architect-critique's `HARD-STOPS` by tag: `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`.
+2. The quality pass's `SURFACED` entries (e.g. DB migrations — applied, but worth knowing before deploy).
+3. The quality pass's `HARD-STOPS` by tag: `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`.
 
 **Inline mode (do-phase driven by the main session — the default):** this is the ONLY human stop, unchanged. The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries).
 

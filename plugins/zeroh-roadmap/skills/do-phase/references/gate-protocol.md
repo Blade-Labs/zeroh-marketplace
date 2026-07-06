@@ -12,14 +12,13 @@ honest `escalated`.
 
 ## Overview
 
-Four stages, run in order:
+Three stages, run in order:
 
-1. **Architect-critique pass** (one-shot, no looping). `architect-critique` agent hunts shortcuts, hardcodes, TODOs, and pre-existing issues in touched files. Auto-fixes everything within scope; surfaces only true hard-stops.
-2. **Round 0 — Simplify pass** (one-shot, no looping). `simplifier` agent removes dead scaffolding, speculative abstractions, and any over-extraction the critique may have introduced. Runs exactly once per phase.
-3. **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5). Mechanical checks + two parallel `code-reviewer` agents. Each round fixes findings and re-runs until zero actionable findings.
-4. **Compromise summary** — aggregate every task's persisted `transparencyReport` PLUS the critique's surfaced items and hard-stops. This is the ONLY human stop-point in the gate (inline mode; under arc-mode the `do-arc` orchestrator owns the stop — see SKILL.md Step 4b).
+1. **Round 0 — Quality pass** (one-shot, no looping). ONE `quality-pass` agent runs both quality mandates over the phase diff in a single read: the additive architect sweep (shortcuts, hardcodes, cross-task patterns, neighborhood issues in touched files — auto-fixed in scope, hard-stopped otherwise) and the subtractive simplify sweep (dead scaffolding, speculative abstractions, noise — deleted). Formerly two agents (architect-critique + simplifier); merged because both were one-shot judgment passes over the same diff and the second full-diff read bought nothing.
+2. **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5). Mechanical checks + two parallel `code-reviewer` agents. Each round fixes findings and re-runs until zero actionable findings.
+3. **Compromise summary** — aggregate every task's persisted `transparencyReport` PLUS the quality pass's surfaced items and hard-stops. This is the ONLY human stop-point in the gate (inline mode; under arc-mode the `do-arc` orchestrator owns the stop — see SKILL.md Step 4b).
 
-Which of stages 1–3 run for a given phase is governed by the **Review-scope ladder** (below): `full` runs all three, `light` runs a single-reviewer stage 3 only, `none` runs no review agents. Stage 4 always runs.
+Which of stages 1–2 run for a given phase is governed by the **Review-scope ladder** (below): `full` runs both, `light` runs a single-reviewer stage 2 only, `none` runs no review agents. Stage 3 always runs.
 
 After the gate passes, Step 5 fills the phase file with gate results, metrics, and completion date.
 
@@ -88,7 +87,7 @@ The gate set is selected from the phase's `kind` field (introduced in `@zeroh-ro
 
 | `kind` | Stages run |
 |---|---|
-| `mockup` | Mechanical only: the `lint` + `types` slots. Skip Architect-Critique, Round 0, and Rounds 1..N. Compromise Summary still runs. |
+| `mockup` | Mechanical only: the `lint` + `types` slots. Skip the quality pass (Round 0) and Rounds 1..N. Compromise Summary still runs. |
 | `logic` | All four stages (default behaviour). |
 | `hardening` | All four stages **plus** the bug-fix closure rule from `review-phase` Mode B Step 2(b): for any persistence/event/marshal-chain task, the integration-suite rerun is the closure criterion. Quote the integration test diff in the compromise summary. Unit-test pass alone is NOT sufficient. |
 | `release` | All four stages **plus** the `e2e` slot in Round 1's mechanical checks. |
@@ -106,7 +105,7 @@ The `kind` field is required at schema parse time; the legacy fallback only cove
 diff needs: a `logic` phase whose diff is register data + two small scripts buys nothing
 from a full-tier rerun, while the same `kind` on a spine refactor genuinely needs it. The
 ladder scopes ONLY the `unit`/`integration` slots in Round 1's mechanical checks.
-Everything else is UNCHANGED: lint/types/build/emit, the architect-critique → simplifier →
+Everything else is UNCHANGED: lint/types/build/emit, the quality-pass →
 code-reviewer chain, `hardening`'s closure itest (never defers), `release`'s `e2e`.
 
 **Opt-in (consumer-binding, fail-loud — the `## Gate commands` pattern):** the ladder is
@@ -160,7 +159,7 @@ modes read as one rule — prove the touched code at the gate; the declared back
 ## Review-scope ladder (plan-time configurable — narrows the AGENT chain)
 
 The test-scope ladder scopes the mechanical slots; this ladder scopes the **agent chain**.
-The flat chain (critique + simplifier + 2 reviewers on every `logic` phase) prices a one-line
+The flat chain (quality pass + 2 reviewers on every `logic` phase) prices a one-line
 fix and a spine refactor identically — the planner is better placed to say what review is
 genuinely high-value for a given diff, and `review-phase` Mode A already reviews that plan.
 No consumer opt-in block is needed (unlike the test ladder there is no deferred work needing
@@ -171,9 +170,9 @@ a backstop — a lower rung runs less review, recorded honestly; the release-tim
 
 | `reviewScope` | Derived when the diff is… | Agent stages run |
 |---|---|---|
-| `none` | docs/data/assets only (the same path-class test as the simplifier's pure-docs skip), or `kind: mockup` | No review agents. Mechanical checks + Compromise Summary only. |
-| `light` | executable code, ≤ ~150 changed lines, touching NO `## Gate specialists` path and adding no new governed surface / contract / ledger event kind | ONE `code-reviewer` correctness loop (Rounds 1..N, same convergence + hard-cap rules). Skip Architect-Critique and Round 0. |
-| `full` | anything else — always when a `## Gate specialists` path is touched | The full chain: Architect-Critique → Simplifier → 2 parallel reviewers (today's behavior). |
+| `none` | docs/data/assets only (the same path-class test as the quality pass's pure-docs skip), or `kind: mockup` | No review agents. Mechanical checks + Compromise Summary only. |
+| `light` | executable code, ≤ ~150 changed lines, touching NO `## Gate specialists` path and adding no new governed surface / contract / ledger event kind | ONE `code-reviewer` correctness loop (Rounds 1..N, same convergence + hard-cap rules). Skip the quality pass. |
+| `full` | anything else — always when a `## Gate specialists` path is touched | The full chain: quality pass → 2 parallel reviewers. |
 
 **Declaration semantics (deliberately different from `testScope`):** a declared
 `reviewScope` is HONORED in both directions — the planner may lower a large-but-mechanical
@@ -194,59 +193,41 @@ state, never a silent one.
 
 ## Per-Stage Echo Contract
 
-Every gate-agent stage (Architect-Critique, Simplifier, each code-reviewer round) echoes a condensed summary inline in chat after the agent returns. The full agent report stays in the sub-agent transcript — the echo exists so the user has non-zero visibility without scrolling.
+Every gate-agent stage (the Quality Pass, each code-reviewer round) echoes a condensed summary inline in chat after the agent returns. The full agent report stays in the sub-agent transcript — the echo exists so the user has non-zero visibility without scrolling.
 
-Cap each echo at **~10 lines / ~600 chars**. Truncate ruthlessly. If the agent's report is empty, a single line is enough (`[Simplifier] nothing to simplify`). Format examples in `do-phase/SKILL.md` Step 4.
+Cap each echo at **~10 lines / ~600 chars**. Truncate ruthlessly. If the agent's report is empty, a single line is enough (`[Quality pass] nothing to fix or simplify`). Format examples in `do-phase/SKILL.md` Step 4.
 
 This is in addition to the per-stage bookkeeping (commits, gateRounds entries, etc.) — it does not replace any of it.
 
 ---
 
-## Architect-Critique Pass (one-shot)
+## Round 0 — Quality Pass (one-shot)
 
-**Runs only at `reviewScope: full`** (the Review-scope ladder above) — a `light`/`none` phase skips straight past this stage, recording the skip in `gateRounds`.
+**Runs only at `reviewScope: full`** (the Review-scope ladder above) — a `light`/`none` phase records the `round: 0` entry as `skipped — reviewScope <rung> (plan-ratified)` and proceeds to Round 1.
 
-**Why it runs first:** shortcut-hunting is additive work (fixing hardcodes, adding proper handling, updating same-repo callers for a contract change). Running it before the simplifier means the simplifier gets a chance to trim any over-extraction the critique may have introduced. Running it before the code-reviewer loop means the reviewer validates the final combined result in one pass, not two.
+ONE `quality-pass` agent runs both quality mandates in a single pass over the diff — the additive architect sweep (neighborhood issues in touched files, cross-task patterns, gate-bypassed compromises; auto-fix in scope, tagged hard-stop otherwise) and the subtractive simplify sweep (dead scaffolding, speculative abstractions, noise). The two used to be separate agents (architect-critique, then simplifier); they were merged because both are one-shot judgment passes over the same diff, the simplifier's measured standalone yield was near zero, and the second full-diff read doubled cost without adding coverage. The mandate split lives inside the agent (`agents/quality-pass.md`), with the subtractive sweep explicitly re-checking any over-extraction the additive fixes introduced.
 
-**Why one-shot, not looping:** the critique makes judgment calls about whether a shortcut is worth fixing now vs. escalating. There is no "zero" state to converge on. The code-reviewer loop that runs after acts as the validation gate for the critique's fixes — if the critique introduces a correctness issue, reviewers will catch it.
+**Why it runs before the correctness loop:** quality corrections invalidate bug findings — if the pass deletes a helper the code-reviewer was about to flag, you avoid wasted rounds; and the reviewers then validate the final combined result in one pass, not two.
+
+**Why one-shot, not looping:** both mandates are judgment calls with no "zero" state to converge on. The code-reviewer loop after it is the validation gate for whatever the pass changed — a correctness issue it introduces gets caught there.
+
+**Skip the pass for a pure-docs/prose diff.** Both mandates are a *code* lens; a phase whose diff touches no executable code has nothing to act on. Mechanical test (not a judgment call): list the phase diff's changed paths — `git diff --name-only <phase-start-SHA>..HEAD` — and if NONE is an executable-code file (`.ts` `.tsx` `.js` `.jsx` `.mjs` `.cjs` `.py` `.rego` `.sql` or a logic-bearing config), skip the agent and record the `round: 0` entry with summary `skipped — pure-docs diff, no code for the quality pass` (keep the audit trail honest). Any executable-code file in the diff → run it as normal. `mockup`-kind phases already skip the whole agent chain; this extends the same logic to docs-only diffs of any `kind`.
 
 ### Protocol
 
-1. Launch exactly one `architect-critique` agent **synchronously** (no `run_in_background`) with:
-   - `git diff <phase-start-SHA>..HEAD` — the full phase diff (raw implementation, no simplifier run yet)
+1. Launch exactly one `quality-pass` agent **synchronously** (no `run_in_background`) with:
+   - `git diff <phase-start-SHA>..HEAD` — the full phase diff
    - The phase file — for scope context and transparency-report compromises
 
    Block on the return. A background launch ends the parent turn and there is no completion notification until the sub-agent's final `end_turn` — the parent will appear to stop between the sub-agent's last commit and its summary.
-2. The agent applies auto-fixes and commits as one: `fix(phase-N): architect critique — <summary>`. If nothing was fixed, it commits nothing.
-3. Capture the agent's report. It has three sections:
-   - **FIXED (auto)** — applied inline; no further action.
-   - **SURFACED** — fixed, but worth flagging (DB migrations, schema changes). Carry forward to the compromise summary.
+2. The agent applies its fixes and commits as one: `fix(phase-N): quality pass — <summary>`. If nothing was fixed, it commits nothing.
+3. Capture the agent's report:
+   - **FIXED (architect)** / **FIXED (simplify)** — applied inline; no further action.
+   - **SURFACED** — applied, but worth flagging (DB migrations, schema changes). Carry forward to the compromise summary.
    - **HARD-STOPS** — tagged `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`. Carry forward to the compromise summary for user decision.
-4. If the agent reports nothing fixed and no hard-stops, that is a valid outcome. Proceed to Round 0.
-5. **Do not re-run the agent.** The code-reviewer loop validates whatever the critique left.
-
----
-
-## Round 0 — Simplify Pass (one-shot)
-
-**Runs only at `reviewScope: full`** — a `light`/`none` phase records the `round: 0` entry as `skipped — reviewScope <rung> (plan-ratified)` and proceeds.
-
-**Why it runs after critique, before correctness:** taste corrections invalidate bug findings. If the simplifier deletes a helper that the code-reviewer was about to flag, you avoid wasted rounds. And running the simplifier *after* the architect-critique lets it trim any over-extraction the critique may have introduced (e.g. a config object promoted for one caller).
-
-**Why one-shot, not looping:** simplification is judgment. There is no "zero" state to converge on. Diminishing returns kick in after the first pass, and taste loops encourage over-deletion.
-
-**Skip the simplify pass for a pure-docs/prose diff.** The simplifier's mandate — dead scaffolding, speculative abstractions, over-extraction — is a *code* lens; a phase whose diff touches no executable code has nothing for it to act on, and running it is pure overhead. Mechanical test (not a judgment call): list the phase diff's changed paths — `git diff --name-only <phase-start-SHA>..HEAD` — and if NONE is an executable-code file (`.ts` `.tsx` `.js` `.jsx` `.mjs` `.cjs` `.py` `.rego` `.sql` or a logic-bearing config), i.e. the diff is entirely Markdown/docs/assets, skip the agent and record the `round: 0` entry with summary `skipped — pure-docs diff, no code to simplify` (keep the audit trail honest). Any executable-code file in the diff → run the simplifier as normal. `mockup`-kind phases already skip the whole agent chain; this extends the same logic to docs-only diffs of any `kind`.
-
-### Protocol
-
-1. Launch exactly one `simplifier` agent **synchronously** (no `run_in_background`) with:
-   - `git diff <phase-start-SHA>..HEAD` — the full phase diff, now including the architect-critique's commit
-   - The phase file, for context on what the phase was supposed to accomplish
-   - Scope reminder: fix taste issues, flag bugs for later rounds, do NOT fix correctness
-2. The agent applies its edits inline and commits: `refactor(phase-N): simplify — <summary>`.
-3. Capture the simplifier's report — flagged-but-unfixed items get fed to Round 1's code-reviewer agents.
-4. If the simplifier reports "nothing to simplify", that is a valid outcome. Proceed to Round 1 with no changes.
-5. **Do not re-run the simplifier.** Even if Round 1 introduces new complexity via fixes, trust the first pass.
+   - **SKIPPED** / **BUGS NOTED** — feed to Round 1's code-reviewer agents.
+4. If the agent reports nothing fixed and no hard-stops, that is a valid outcome. Proceed to Round 1 with no changes.
+5. **Do not re-run the agent.** The code-reviewer loop validates whatever the pass left.
 
 ### Record in gateRounds
 
@@ -255,9 +236,9 @@ Round 0 gets its own entry with `round: 0`:
 ```typescript
 {
   round: 0,
-  findings: [],  // simplifier does not return findings; see `simplifyPass` field
-  summary: 'Round 0: simplify — −N lines across M files',
-  simplifyPass: {
+  findings: [],  // the quality pass does not return findings; see `simplifyPass` field
+  summary: 'Round 0: quality pass — −N lines across M files, 2 architect fixes',
+  simplifyPass: {   // legacy field name; records the pass's subtractive numbers
     linesRemoved: N,
     linesAdded: M,
     filesChanged: K,
@@ -268,9 +249,10 @@ Round 0 gets its own entry with `round: 0`:
 }
 ```
 
-If `simplifyPass` is not yet in the phase schema, record the summary in the `summary` field and skip the structured `simplifyPass` sub-object. The schema migration is optional — the skill works either way.
+If `simplifyPass` is not yet in the phase schema, record the summary in the `summary` field and skip the structured sub-object. The schema migration is optional — the skill works either way.
 
 ---
+
 
 ## Rounds 1..N — Correctness Loop
 
@@ -313,12 +295,19 @@ The principle behind "relevant tests": always include the specific test(s) that 
   {
     round: N,
     findings: [
-      { file, line?, severity, confidence, description, fixedInCommit? }
+      { file, line?, severity, confidence, description, fixedInCommit?, agent? }
     ],
     summary: 'Round N: X findings fixed',
   }
   ```
   Keep this in working memory — it gets written to the phase file in Step 5.
+- **Attribute every finding** via the optional `agent` field: which spawn reported it —
+  `'reviewer-1'` / `'reviewer-2'` for the parallel generalists, the specialist's name when a
+  `## Gate specialists` swap is active (e.g. `'governed-spine-reviewer'`), `'quality-pass'`
+  for a bug the Round-0 pass noted that a reviewer then confirmed. One word per finding at
+  record time is what makes the gate's yield auditable later — "does reviewer #2 ever catch
+  what reviewer #1 missed?" becomes a mechanical query over `gateRounds` instead of
+  archaeology. Findings without a clear source (e.g. found while fixing) omit the field.
 - Go back to step 1 with Round N+1.
 
 ### Hard limit — Round 5
@@ -350,10 +339,10 @@ Tasks: X total | Y clean | Z with compromises
 ### Hardcoded values
 - Task N.4: <one-liner>
 
-### Surfaced by architect-critique (fixed, but worth knowing)
+### Surfaced by the quality pass (fixed, but worth knowing)
 - DB migration applied: new column `users.verified_at` — ensure staging migration runs before deploy
 
-### Hard-stops from architect-critique (NOT fixed — your call)
+### Hard-stops from the quality pass (NOT fixed — your call)
 - [MULTI-REPO] lib/api/client.ts — signature change breaks callers in zeroh-admin repo
 - [SCOPED-OUT] lib/analytics/emitter.ts:34 — pre-existing double-fire, analytics out of scope
 - [PRODUCT] checkout flow for expired coupons — needs product decision
@@ -364,7 +353,7 @@ Tasks: X total | Y clean | Z with compromises
 
 When do-phase runs inside a phase-executor (orchestrated by `do-arc`), the free-text summary above is **still** persisted to the phase file's `compromises` string (audit + release-sweep read it) — that does not change. **In addition**, the executor emits the same content as a typed `PhaseExecutionResult` (`PhaseExecutionResultShape` in `templates/schema.ts`) as its return value, so the orchestrator can aggregate the arc without re-parsing markdown:
 - `compromises` / `skipped` / `hardcoded` ← the matching task transparency-report lines (one array entry per task line).
-- `surfaced` ← the architect-critique SURFACED entries.
+- `surfaced` ← the quality pass's SURFACED entries.
 - `hardStops` ← the tagged HARD-STOPS (`[MULTI-REPO]` / `[SCOPED-OUT]` / `[PRODUCT]` / `[SPECULATIVE]`), each `{ tag, text }`.
 - `gateRounds` ← the count of correctness rounds run (Rounds 1..N).
 - `status` ← `"escalated"` (with `escalation.question` + `options`) on a hard `ESCALATE_TO_USER` / `[MULTI-REPO]` / `[PRODUCT]` stop, else `"done"`.
@@ -378,8 +367,8 @@ The user reviews the summary and decides (**inline mode only** — under arc-mod
 
 Sources to aggregate:
 1. Every task's persisted `transparencyReport` (compromises, skipped criteria, hardcoded values, limitations).
-2. The architect-critique's `SURFACED` section (DB migrations, schema changes — applied, flagged for visibility).
-3. The architect-critique's `HARD-STOPS` section (all four tag categories).
+2. The quality pass's `SURFACED` section (DB migrations, schema changes — applied, flagged for visibility).
+3. The quality pass's `HARD-STOPS` section (all four tag categories).
 
 Record the summary in both:
 1. The phase file's `compromises` field (durable record).
@@ -404,14 +393,14 @@ The schema enforces gate results when `status: 'done'`. The `types` slot catches
        {
          round: 0,
          findings: [],
-         summary: 'Round 0: simplify — −47 lines across 3 files',
+         summary: 'Round 0: quality pass — −47 lines across 3 files, 1 architect fix',
        },
        {
          round: 1,
          findings: [
            { file: 'lib/services/foo.ts', line: 42, severity: 'HIGH', confidence: 85,
              description: 'Missing null check when payload.user is undefined',
-             fixedInCommit: 'a1b2c3d' },
+             fixedInCommit: 'a1b2c3d', agent: 'reviewer-2' },
          ],
          summary: 'Round 1: 1 finding fixed',
        },
