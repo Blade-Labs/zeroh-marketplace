@@ -44,7 +44,7 @@ Determine the phase mode:
 
 For phases not yet executed. Review as a **senior software architect** — don't trust the plan, verify it against the actual code.
 
-**Model policy (the HOME statement — stated ONCE, here; the other seams reference it).** A spawner running Mode A *via an agent* reads the consumer's `^## Model policy$` block: when it names `judge-model: <model>`, pass `model: <that model>` to the spawned reviewer; an **ABSENT block = the agent's frontmatter default** (the fail-safe rail). This covers the JUDGE seams ONLY — Mode A plan reviewers, arc-sweep's whole-arc software-architect, and validate-arc's intent-validator panel. `phase-executor` / `software-developer` / `test-engineer` spawns are NOT covered (Opus executes; the strongest model goes to grading, not writing). Mode A invoked STANDALONE by the user runs INLINE — no agent spawn, no model choice; the reviewer SPAWN site is plan-arc Step 3.
+**Model policy (the HOME statement — stated ONCE, here; the other seams reference it).** A spawner running Mode A *via an agent* reads the consumer's `^## Model policy$` block: when it names `judge-model: <model>`, pass `model: <that model>` to the spawned reviewer; an **ABSENT block = the agent's frontmatter default** (the fail-safe rail). This covers the JUDGE seams ONLY — Mode A plan reviewers, arc-sweep's whole-arc software-architect, and validate-arc's intent-validator panel. `phase-executor` / `software-developer` / `test-engineer` spawns are NOT covered. The judge seams may name the SAME model that executes — a judge's independence comes from its fresh, read-only context and evidence-or-downgrade discipline, never from being a different/stronger model; when builder and judge share a model, keep panels small and spend the review budget on the seams with real catch history. Mode A invoked STANDALONE by the user runs INLINE — no agent spawn, no model choice; the reviewer SPAWN site is plan-arc Step 3.
 
 **PRIME RULE: CONFIRM EVERYTHING AGAINST SOURCE CODE.**
 
@@ -111,6 +111,17 @@ cross-module consumers, is incompatible with `static`/`scoped`. The gate would r
 execution (floor rule), but catching it at review time saves the do-phase round-trip.
 Also check `scopedTests` globs resolve to real files when `testScope: 'scoped'`.
 - Fail = NEEDS WORK. Under-scoped test declaration.
+
+**Review-scope ratification (bonus check — only when `phase.reviewScope` is declared below
+`full`):** this review IS the ratification the gate trusts (gate-protocol "Review-scope
+ladder" — a declared value may LOWER the derived rung precisely because Mode A judges it).
+Verify: (a) no `keyFiles`/task `files[]` path is in the consumer's `## Gate specialists`
+block (the gate would refuse at execution — catch it here); (b) the rung fits the diff's
+nature — `none` only for docs/data/assets, `light` only for small or mechanical changes with
+no new governed surface / contract / ledger event kind / subtle logic; (c) the planner
+stated WHY the skipped stages are low-value for this phase. An unjustified or ill-fitting
+low rung = NEEDS WORK — never wave it through, the whole ladder's safety rests on this check.
+- Fail = NEEDS WORK. Under-scoped review declaration.
 
 **Output per task:**
 ```

@@ -146,6 +146,17 @@ the gate derives the scope from the diff; a declared value can only RAISE the de
 (`## Gate specialists` paths always force `full`), so declare it when you know the phase is
 data/docs-shaped and want that recorded up front — never to sneak under the floor.
 
+**And assess `reviewScope` (optional — the gate's agent-chain ladder, gate-protocol.md).**
+This is a genuine plan-time judgment, not bookkeeping: *what review is actually high-value
+for this diff?* `none` (docs/data — no review agents) · `light` (small, mechanical, or
+well-trodden code: ONE reviewer, no architect-critique/simplifier) · `full` (the whole
+chain — new seams, subtle logic, anything governed). Unlike `testScope` a declared value may
+LOWER the derived rung, because review-phase Mode A independently ratifies it (an unjustified
+low rung = NEEDS WORK) — with one hard floor the gate enforces regardless: a diff touching a
+`## Gate specialists` path always runs `full`. When you declare below `full`, say in the
+phase notes WHY the skipped stages are low-value here — that one line is what the Mode A
+reviewer judges.
+
 Create `roadmap/phases/phase-{N}.phase.ts` using `definePhase()`:
 
 ```typescript

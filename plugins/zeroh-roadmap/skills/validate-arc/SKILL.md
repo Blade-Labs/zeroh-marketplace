@@ -39,17 +39,17 @@ Each criterion carries its `tier` (set at plan time — the cheapest tier that c
 
 ## Step 3: Fan out the judge — one `intent-validator` per criterion, in parallel
 
-Spawn the `intent-validator` agent **once per criterion, concurrently** — the same safe read-mostly fan-out shape `plan-arc` Step 3 uses. **Spawn each judge with `model` per the `## Model policy` home statement (review-phase SKILL.md)** — this applies to EVERY judge in an N-judge majority panel. Two invariants:
+Spawn the `intent-validator` agent **once per criterion, concurrently** — the same safe read-mostly fan-out shape `plan-arc` Step 3 uses. **Spawn each judge with `model` per the `## Model policy` home statement (review-phase SKILL.md)** — this applies to EVERY judge in a panel. Two invariants:
 
 - **Edit-confinement:** the judges are READ-ONLY. They drive the flow and observe; they write NOTHING in the consumer tree or the roadmap. (Driving may run the consumer's own tests/build, which is fine — but no judge edits source, backlog, or a phase file.)
 - **Independence:** each judge is spawned FRESH with only (the criterion + the consumer's tier bindings + the running surface). Never pass it the building agents' reasoning, the phase diffs, or the commit log — that is self-grading. This is the independent-judge singleSeam.
 
-For a criterion whose `bar` is **subjective** (a rendered-UX / "feels finished" judgment, typically `live-ui`), spawn **N judges (default 3)** and take the **MAJORITY** verdict — one judge cannot rubber-stamp a screenshot. A deterministic `wired` criterion can run a single judge.
+For a criterion whose `bar` is **subjective** (a rendered-UX / "feels finished" judgment, typically `live-ui`), spawn **2 judges and require AGREEMENT** — one judge cannot rubber-stamp a screenshot, and a third tie-breaker buys less than surfacing the disagreement: both MET → MET; both unmet → GAP; a **split verdict is recorded as a GAP carrying BOTH verdicts** (fail-visible — the user arbitrates from the report, which is cheaper and more honest than majority-voting the doubt away). A deterministic `wired`/`live-host` criterion runs a **single judge**.
 
 ## Step 4: Collect, aggregate, report
 
 1. `.parse()` each returned `IntentVerdict` (the typed shape — reject free prose; a judge that didn't return the shape is re-run once, then recorded as an inconclusive gap).
-2. Per criterion: **MET** (single judge met, or majority met) or **GAP** (carrying the judge's `whatsMissing` + `suggestedFix` + the evidence).
+2. Per criterion: **MET** (single judge met, or both panel judges met) or **GAP** (carrying the judge's `whatsMissing` + `suggestedFix` + the evidence; a split panel's GAP carries both verdicts, marked `split — user arbitrates`).
 3. Arc-level: **PASS** iff every criterion is MET; otherwise **GAPS** with the list of unmet criteria, each with its evidence and suggested fix.
 
 Report the result — per-criterion verdict, the evidence, the tier each was judged at (and any tier-honesty flag from Step 2), a **Ratified descopes** section (read `Arc.descopes`; list each `{ item, ratifiedBy, ratifiedAt }`, or state `Ratified descopes: none` when empty — honest, NEVER omitted, so a descoped criterion is visible next to the verdict), and the arc-level PASS/GAPS. **Stop here on PASS** (the arc met its intent — merge-readiness is do-arc's call). On GAPS, the corrective loop (Step 5) takes over.

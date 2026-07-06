@@ -43,7 +43,7 @@ Beyond "the signal appeared", judge the `bar` against three questions. A clear N
 2. **Fails closed, honestly?** On the unhappy path it surfaces a clear, actionable message — never a dead-end on a raw error, a bare status code, or a silent swallow.
 3. **Feels finished?** Labelled, no placeholder/"coming soon" where live is implied, no unresolved token, no unlabeled row, no obvious rough edge a real user would hit.
 
-For a subjective `bar` you are one judge of a panel — `validate-arc` may run several of you and take the majority. Judge honestly on the evidence; do not hedge to the middle.
+For a subjective `bar` you are one judge of a two-judge agreement panel — `validate-arc` surfaces a split verdict to the user rather than out-voting it, so your verdict is never averaged away. Judge honestly on the evidence; do not hedge to the middle.
 
 ## Return — the IntentVerdict
 

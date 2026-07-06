@@ -413,8 +413,8 @@ const BasePhaseFields = {
    *  pick deliberately at plan time (the picker table is mandatory in
    *  plan-phase Step 3) and migrate/audit.ts surfaces unbackfilled phases. */
   kind: z.enum(['mockup', 'logic', 'hardening', 'release']).default('logic'),
-  /** Test-scope ladder for the gate's MECHANICAL test slots (`kind` keeps
-   *  selecting the agent chain — the chain never narrows). Optional: absent →
+  /** Test-scope ladder for the gate's MECHANICAL test slots (the agent chain
+   *  is scoped separately, via `reviewScope` below). Optional: absent →
    *  the gate derives the scope from the diff's path classes (gate-protocol.md
    *  "Test-scope ladder"); a declared value may only RAISE the derived floor,
    *  and paths in the consumer's `## Gate specialists` block always force
@@ -430,6 +430,18 @@ const BasePhaseFields = {
    *  diff-colocated tests (the planner enumerates them; review-phase vetoes
    *  under-scoping). */
   scopedTests: z.array(z.string().min(1)).optional(),
+  /** Review-scope ladder for the gate's AGENT chain (gate-protocol.md
+   *  "Review-scope ladder") — the planner's assessment of what review is
+   *  genuinely high-value for THIS phase's diff, made at plan time and
+   *  ratified by review-phase Mode A (an unjustified low rung = NEEDS WORK).
+   *  none  — no review agents; mechanical checks + compromise summary only
+   *  light — ONE code-reviewer correctness loop; skip critique + simplifier
+   *  full  — architect-critique → simplifier → 2 reviewers (the default chain)
+   *  Absent → the gate derives the rung from the diff. Unlike `testScope`, a
+   *  declared value may LOWER the derived rung — except the hard floor: a diff
+   *  touching a `## Gate specialists` path always runs 'full' (the gate
+   *  refuses a lower declaration rather than honoring it). */
+  reviewScope: z.enum(['none', 'light', 'full']).optional(),
   /** Semver of the release this phase ships in */
   version: z
     .string()

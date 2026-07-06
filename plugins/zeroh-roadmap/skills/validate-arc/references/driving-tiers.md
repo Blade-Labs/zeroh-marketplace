@@ -15,7 +15,7 @@ A criterion's `tier` is the **cheapest tier that can honestly see its `signal` a
 ### `live-ui` — rendered surface + screenshot
 - **What it judges:** the rendered experience — is the signal actually on screen, labelled, finished, no raw error / placeholder? Judged by **vision over a real screenshot**, not a DOM assertion.
 - **Evidence:** the screenshot path + a one-line description of what it shows.
-- **Cost:** needs a running surface + auth (often a one-time captured session). Subjective bars here run a **majority-of-N** judge panel.
+- **Cost:** needs a running surface + auth (often a one-time captured session). Subjective bars here run a **two-judge agreement** panel (split verdict → GAP, the user arbitrates).
 - **Default for:** "the user sees / can do X on the surface" criteria where how it looks matters.
 
 ### `live-host` — real model / masking against a running host

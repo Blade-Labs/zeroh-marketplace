@@ -19,6 +19,8 @@ Four stages, run in order:
 3. **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5). Mechanical checks + two parallel `code-reviewer` agents. Each round fixes findings and re-runs until zero actionable findings.
 4. **Compromise summary** — aggregate every task's persisted `transparencyReport` PLUS the critique's surfaced items and hard-stops. This is the ONLY human stop-point in the gate (inline mode; under arc-mode the `do-arc` orchestrator owns the stop — see SKILL.md Step 4b).
 
+Which of stages 1–3 run for a given phase is governed by the **Review-scope ladder** (below): `full` runs all three, `light` runs a single-reviewer stage 3 only, `none` runs no review agents. Stage 4 always runs.
+
 After the gate passes, Step 5 fills the phase file with gate results, metrics, and completion date.
 
 ---
@@ -155,6 +157,41 @@ modes read as one rule — prove the touched code at the gate; the declared back
 
 ---
 
+## Review-scope ladder (plan-time configurable — narrows the AGENT chain)
+
+The test-scope ladder scopes the mechanical slots; this ladder scopes the **agent chain**.
+The flat chain (critique + simplifier + 2 reviewers on every `logic` phase) prices a one-line
+fix and a spine refactor identically — the planner is better placed to say what review is
+genuinely high-value for a given diff, and `review-phase` Mode A already reviews that plan.
+No consumer opt-in block is needed (unlike the test ladder there is no deferred work needing
+a backstop — a lower rung runs less review, recorded honestly; the release-time
+`full-code-review`/release review remains the whole-tree backstop).
+
+**The ladder** (`phase.reviewScope`; absent → derived from the diff at gate time):
+
+| `reviewScope` | Derived when the diff is… | Agent stages run |
+|---|---|---|
+| `none` | docs/data/assets only (the same path-class test as the simplifier's pure-docs skip), or `kind: mockup` | No review agents. Mechanical checks + Compromise Summary only. |
+| `light` | executable code, ≤ ~150 changed lines, touching NO `## Gate specialists` path and adding no new governed surface / contract / ledger event kind | ONE `code-reviewer` correctness loop (Rounds 1..N, same convergence + hard-cap rules). Skip Architect-Critique and Round 0. |
+| `full` | anything else — always when a `## Gate specialists` path is touched | The full chain: Architect-Critique → Simplifier → 2 parallel reviewers (today's behavior). |
+
+**Declaration semantics (deliberately different from `testScope`):** a declared
+`reviewScope` is HONORED in both directions — the planner may lower a large-but-mechanical
+diff to `light` or raise a subtle small diff to `full` — with ONE hard floor: a diff touching
+any `## Gate specialists` path runs `full` regardless of declaration; the gate REFUSES a
+lower declared value (`reviewScope 'light' declared but the diff touches src/relay/… —
+## Gate specialists floor: full`) rather than honoring it. The legitimacy of a lowered rung
+comes from plan review: `review-phase` Mode A judges the declared `reviewScope` against the
+planned diff and returns NEEDS WORK on under-scoping, so a low rung that reaches the gate has
+been independently ratified.
+
+**Honesty record:** any rung below `full` writes what was skipped into the `gateRounds`
+entries (e.g. Round 0 recorded as `skipped — reviewScope light (plan-ratified)`, and the
+round-1 summary noting `1 reviewer — reviewScope light`) — a narrowed chain is a recorded
+state, never a silent one.
+
+---
+
 ## Per-Stage Echo Contract
 
 Every gate-agent stage (Architect-Critique, Simplifier, each code-reviewer round) echoes a condensed summary inline in chat after the agent returns. The full agent report stays in the sub-agent transcript — the echo exists so the user has non-zero visibility without scrolling.
@@ -166,6 +203,8 @@ This is in addition to the per-stage bookkeeping (commits, gateRounds entries, e
 ---
 
 ## Architect-Critique Pass (one-shot)
+
+**Runs only at `reviewScope: full`** (the Review-scope ladder above) — a `light`/`none` phase skips straight past this stage, recording the skip in `gateRounds`.
 
 **Why it runs first:** shortcut-hunting is additive work (fixing hardcodes, adding proper handling, updating same-repo callers for a contract change). Running it before the simplifier means the simplifier gets a chance to trim any over-extraction the critique may have introduced. Running it before the code-reviewer loop means the reviewer validates the final combined result in one pass, not two.
 
@@ -189,6 +228,8 @@ This is in addition to the per-stage bookkeeping (commits, gateRounds entries, e
 ---
 
 ## Round 0 — Simplify Pass (one-shot)
+
+**Runs only at `reviewScope: full`** — a `light`/`none` phase records the `round: 0` entry as `skipped — reviewScope <rung> (plan-ratified)` and proceeds.
 
 **Why it runs after critique, before correctness:** taste corrections invalidate bug findings. If the simplifier deletes a helper that the code-reviewer was about to flag, you avoid wasted rounds. And running the simplifier *after* the architect-critique lets it trim any over-extraction the critique may have introduced (e.g. a config object promoted for one caller).
 
@@ -254,7 +295,7 @@ The principle behind "relevant tests": always include the specific test(s) that 
 
 **Long-running slots — the execution mechanic (do not improvise this).** A slot expected to run ≤ 8 min runs **foreground** under the consumer's documented wrapper with an explicit timeout; block on it. A slot expected to run longer (full unit tiers, coverage runs, integration+build chains) is backgrounded to a log file **and, in the same turn, before it ends,** a Monitor is armed whose script EXITS when the log shows the terminal line — with failure signatures (`FAILED|not ok|Error|Killed|OOM|exit [1-9]`) and a ~5-min log-stall emit included — so re-invocation is guaranteed. On every wake: `pgrep` the runner + read the log tail FIRST, then continue the round in that same turn. Never end a turn "waiting" with no verified live process and no armed exiting Monitor; a dead or missing process means the run is done — read its log and drive on. Prefer several foreground-sized scoped runs — via the `integration-scoped` / `unit-scoped` slot (scoped-slot resolution rule above) — over one giant background run whenever the tier can be scoped to specific files. (This is the mechanical form of the phase-executor's long-run survival protocol; it applies to inline runs too.)
 
-**2. Agent reviews.** Launch 2 `code-reviewer` agents in parallel — **two synchronous Agent calls in a single message** (no `run_in_background` on either). "Parallel" here means the runtime fans them out; the parent still blocks until both return. Each receives:
+**2. Agent reviews.** At `reviewScope: none`, skip this step entirely (the mechanical checks in step 1 still gate; record `no review agents — reviewScope none` in the round summary and proceed to the compromise summary once they pass). At `reviewScope: light`, launch ONE `code-reviewer`; at `full`, launch 2 `code-reviewer` agents in parallel — **synchronous Agent calls in a single message** (no `run_in_background`). "Parallel" here means the runtime fans them out; the parent still blocks until both return. Each receives:
 - **Round 1**: full phase diff (`git diff <phase-start-SHA>..HEAD`) plus any unresolved items from Round 0's `skipped` or `bugsNoted` lists.
 - **Round N > 1**: only the fix diff from the previous round (scoped per ROADMAP.md:77-81).
 - The phase file for context.
@@ -262,7 +303,7 @@ The principle behind "relevant tests": always include the specific test(s) that 
 - **Severity range: CRITICAL through LOW are in scope for fixing.** INFO findings are recorded but do not block the gate. Agents must surface every ≥80% confidence issue — the loop triages, the agents don't.
 
 **3. Evaluate round result:**
-- **Both agents return 0 actionable findings (CRITICAL/HIGH/MEDIUM/LOW)** → gate passes for this round. Record the round (including any INFO observations) and proceed to the compromise summary.
+- **Every launched agent returns 0 actionable findings (CRITICAL/HIGH/MEDIUM/LOW)** → gate passes for this round. Record the round (including any INFO observations) and proceed to the compromise summary.
 - **At least one agent returns ≥1 actionable finding** → fix, record, loop. INFO-only findings do not trigger another round but must still be persisted in `gateRounds[].findings` for the audit trail.
 
 **4. Fix findings and record round:**
@@ -284,7 +325,7 @@ The principle behind "relevant tests": always include the specific test(s) that 
 
 If the loop has not converged after 5 rounds, STOP and surface the remaining findings to the user. Agents may be cycling (finding-then-rewriting-then-finding). Do not silently loop forever.
 
-**NO EXCEPTIONS to the gate itself** — not for "docs-only", "test-only", or "low-risk" phases. Every phase gets the full gate (mechanical checks → agent reviews → correctness loop). The arc-mode *test cadence* and the opt-in **Test-scope ladder** narrow the per-gate **test scope** only (prove the touched code now; the declared backstop re-covers the rest) — neither skips the gate, the agent reviews, the mechanical lint/type/build checks, the hardening closure itest, or the arc-end suite. If the phase file's validation task specifies additional checks, run those too.
+**NO EXCEPTIONS to the gate itself** — every phase runs the gate: mechanical checks, the correctness evaluation, and the compromise summary. What the gate runs INSIDE that frame is scoped by exactly two sanctioned ladders, both recorded and floor-protected: the opt-in **Test-scope ladder** narrows the test slots (the declared backstop re-covers the rest), and the **Review-scope ladder** narrows the agent chain (derived from the diff, or plan-declared and Mode-A-ratified; `## Gate specialists` paths always floor to `full`). Neither ever skips the mechanical lint/type/build checks, the hardening closure itest, the arc-end suite, or the compromise summary — and an ad-hoc narrowing outside the two ladders remains forbidden. If the phase file's validation task specifies additional checks, run those too.
 
 ---
 
