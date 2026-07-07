@@ -15,7 +15,7 @@ honest `escalated`.
 Three stages, run in order:
 
 1. **Round 0 — Quality pass** (one-shot, no looping). ONE `quality-pass` agent runs both quality mandates over the phase diff in a single read: the additive architect sweep (shortcuts, hardcodes, cross-task patterns, neighborhood issues in touched files — auto-fixed in scope, hard-stopped otherwise) and the subtractive simplify sweep (dead scaffolding, speculative abstractions, noise — deleted). Formerly two agents (architect-critique + simplifier); merged because both were one-shot judgment passes over the same diff and the second full-diff read bought nothing.
-2. **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5). Mechanical checks + two parallel `code-reviewer` agents. Each round fixes findings and re-runs until zero actionable findings.
+2. **Rounds 1..N — Correctness loop** (loops until clean, hard-cap 5). Mechanical checks + ONE `code-reviewer` (joined in parallel by the consumer's `## Gate specialists` agent when the diff touches a specialist path). Each round fixes findings and re-runs until zero actionable findings.
 3. **Compromise summary** — aggregate every task's persisted `transparencyReport` PLUS the quality pass's surfaced items and hard-stops. This is the ONLY human stop-point in the gate (inline mode; under arc-mode the `do-arc` orchestrator owns the stop — see SKILL.md Step 4b).
 
 Which of stages 1–2 run for a given phase is governed by the **Review-scope ladder** (below): `full` runs both, `light` runs a single-reviewer stage 2 only, `none` runs no review agents. Stage 3 always runs.
@@ -177,7 +177,7 @@ a backstop — a lower rung runs less review, recorded honestly; the release-tim
 |---|---|---|
 | `none` | docs/data/assets only (the same path-class test as the quality pass's pure-docs skip), or `kind: mockup` | No review agents. Mechanical checks + Compromise Summary only. |
 | `light` | executable code, ≤ ~150 changed lines, touching NO `## Gate specialists` path and adding no new governed surface / contract / ledger event kind | ONE `code-reviewer` correctness loop (Rounds 1..N, same convergence + hard-cap rules). Skip the quality pass. |
-| `full` | anything else — always when a `## Gate specialists` path is touched | The full chain: quality pass → 2 parallel reviewers. |
+| `full` | anything else — always when a `## Gate specialists` path is touched | The full chain: quality pass → ONE `code-reviewer`, joined by the consumer's `## Gate specialists` agent as a second reviewer when the diff touches a specialist path. |
 
 **Declaration semantics (deliberately different from `testScope`):** a declared
 `reviewScope` is HONORED in both directions — the planner may lower a large-but-mechanical
@@ -282,7 +282,7 @@ The principle behind "relevant tests": always include the specific test(s) that 
 
 **Long-running slots — the execution mechanic (do not improvise this).** A slot expected to run ≤ 8 min runs **foreground** under the consumer's documented wrapper with an explicit timeout; block on it. A slot expected to run longer (full unit tiers, coverage runs, integration+build chains) is backgrounded to a log file **and, in the same turn, before it ends,** a Monitor is armed whose script EXITS when the log shows the terminal line — with failure signatures (`FAILED|not ok|Error|Killed|OOM|exit [1-9]`) and a ~5-min log-stall emit included — so re-invocation is guaranteed. On every wake: `pgrep` the runner + read the log tail FIRST, then continue the round in that same turn. Never end a turn "waiting" with no verified live process and no armed exiting Monitor; a dead or missing process means the run is done — read its log and drive on. Prefer several foreground-sized scoped runs — via the `integration-scoped` / `unit-scoped` slot (scoped-slot resolution rule above) — over one giant background run whenever the tier can be scoped to specific files. (This is the mechanical form of the phase-executor's long-run survival protocol; it applies to inline runs too.)
 
-**2. Agent reviews.** At `reviewScope: none`, skip this step entirely (the mechanical checks in step 1 still gate; record `no review agents — reviewScope none` in the round summary and proceed to the compromise summary once they pass). At `reviewScope: light`, launch ONE `code-reviewer`; at `full`, launch 2 `code-reviewer` agents in parallel — **synchronous Agent calls in a single message** (no `run_in_background`). "Parallel" here means the runtime fans them out; the parent still blocks until both return. Each receives:
+**2. Agent reviews.** At `reviewScope: none`, skip this step entirely (the mechanical checks in step 1 still gate; record `no review agents — reviewScope none` in the round summary and proceed to the compromise summary once they pass). At `reviewScope: light`, launch ONE `code-reviewer`; at `full`, launch ONE `code-reviewer` — plus the consumer's `## Gate specialists` agent as a second, parallel reviewer when the diff touches a specialist path — **synchronous Agent calls in a single message** (no `run_in_background`). "Parallel" means the runtime fans them out; the parent still blocks until all return. (`full` used to spawn a second generic `code-reviewer`; attributed-yield data 2026-07-06/07 — ~20 full-chain phases — showed the generic #2's solo catch count was ZERO (one joint LOW) while the path-triggered specialist caught 4 actionable in 4 phases, so the second slot is now specialist-only.) Each receives:
 - **Round 1**: full phase diff (`git diff <phase-start-SHA>..HEAD`) plus any unresolved items from Round 0's `skipped` or `bugsNoted` lists.
 - **Round N > 1**: only the fix diff from the previous round (scoped per ROADMAP.md:77-81).
 - The phase file for context.
@@ -295,7 +295,7 @@ The principle behind "relevant tests": always include the specific test(s) that 
 
 **4. Fix findings and record round:**
 - Apply fixes. One commit per logical fix group: `fix(<scope>): phase N gate RN — <what was fixed>`.
-- Build a `StructuredGateRound` record for this round:
+- Build a `StructuredGateRound` record for this round — ALWAYS the object form below; the legacy bare-string round is read-only back-compat and writing it defeats the yield audit (`audit-roadmap` flags it on newly-done phases):
   ```typescript
   {
     round: N,
@@ -307,12 +307,14 @@ The principle behind "relevant tests": always include the specific test(s) that 
   ```
   Keep this in working memory — it gets written to the phase file in Step 5.
 - **Attribute every finding** via the optional `agent` field: which spawn reported it —
-  `'reviewer-1'` / `'reviewer-2'` for the parallel generalists, the specialist's name when a
-  `## Gate specialists` swap is active (e.g. `'governed-spine-reviewer'`), `'quality-pass'`
+  `'reviewer-1'` for the generalist (`'reviewer-2'` survives only in legacy records), the
+  specialist's name when a `## Gate specialists` path put it on the panel (e.g.
+  `'governed-spine-reviewer'`), `'quality-pass'`
   for a bug the Round-0 pass noted that a reviewer then confirmed. One word per finding at
-  record time is what makes the gate's yield auditable later — "does reviewer #2 ever catch
-  what reviewer #1 missed?" becomes a mechanical query over `gateRounds` instead of
-  archaeology. Findings without a clear source (e.g. found while fixing) omit the field.
+  record time is what makes the gate's yield auditable later — "does the specialist earn its
+  spawn?" stays a mechanical query over `gateRounds` instead of archaeology (this exact
+  query is how the generic reviewer #2 was retired: zero solo catches in ~20 attributed
+  full-chain phases). Findings without a clear source (e.g. found while fixing) omit the field.
 - Go back to step 1 with Round N+1.
 
 ### Hard limit — Round 5
@@ -405,7 +407,7 @@ The schema enforces gate results when `status: 'done'`. The `types` slot catches
          findings: [
            { file: 'lib/services/foo.ts', line: 42, severity: 'HIGH', confidence: 85,
              description: 'Missing null check when payload.user is undefined',
-             fixedInCommit: 'a1b2c3d', agent: 'reviewer-2' },
+             fixedInCommit: 'a1b2c3d', agent: 'governed-spine-reviewer' },
          ],
          summary: 'Round 1: 1 finding fixed',
        },
