@@ -97,6 +97,29 @@ in-flight sub-agents because a watchdog misread your liveness. If the orchestrat
 respawns you for a genuine stall, you re-enter via the do-phase mid-phase resume path (skip
 commit-verified done tasks; identical record-keeping).
 
+## Foreign-red protocol (shared working tree)
+
+Several sessions may share your checkout (consumer CLAUDE.md "Shared working tree"). When a
+mechanical slot goes red on paths OUTSIDE your phase diff, do NOT loop the full slot until it
+clears (a live executor burned ~40 min re-running whole-repo type-check while a sibling
+session's phase was red, 2026-07-06 — right instinct, unbounded mechanics):
+
+1. **Attribute first**: check whether any failing file is in YOUR phase diff
+   (`git diff --name-only <phase-start>..HEAD` vs the failing paths). Yours → it's your red,
+   fix it. Foreign → continue below.
+2. **Beacon it** (`gate-stage-start` note naming the foreign red + failing paths) so the
+   orchestrator's liveness read shows a legitimate wait, not a stall.
+3. **Recheck CHEAPLY**: re-run only the failing project/paths (a scoped `types` run), not the
+   whole slot, at a few-minute cadence.
+4. **Bound the wait**: still red after ~15 min → return `status: "escalated"` with the
+   attribution evidence (failing paths + the sibling commits touching them). The orchestrator
+   owns cross-session sequencing — it can wait, coordinate, or finish your gate inline once
+   the sibling lands; an executor context idling on a foreign fix cannot do anything a
+   returned result can't.
+
+Never declare `done` over a red slot regardless of whose red it is (that stays absolute) —
+this protocol bounds the WAIT, not the honesty.
+
 ## Result contract (card "Complete + return")
 
 Your final message IS the `PhaseExecutionResult` (`PhaseExecutionResultShape`), not a

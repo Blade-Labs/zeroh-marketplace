@@ -159,10 +159,10 @@ For each task, in order:
 #### testMode: "tdd" (test-first)
 
    **(3a)** Launch `test-engineer` agent with ONLY: `task.problem`, `task.acceptanceCriteria`, `task.files`, and the existing type signatures/interfaces from those files (read the type exports — NOT function bodies). Do NOT give `task.steps`.
-   **(3b)** Run the `unit` slot (commands resolve from the consumer's `## Gate commands` CLAUDE.md block — see references/gate-protocol.md) — tests MUST FAIL (red). If they pass, tests are trivial — reject and have test-engineer rewrite.
+   **(3b)** Run the NEW test files via the `unit-scoped` slot (scoped-slot resolution rule, references/gate-protocol.md — an unbound scoped slot falls back to the full `unit` slot with the honest note; NEVER the full tier by default: red/green runs twice per tdd task, and a full-tier run each time is minutes of overhead per task for zero extra proof) — tests MUST FAIL (red). If they pass, tests are trivial — reject and have test-engineer rewrite.
    **(3c)** If tests don't compile, provide the compilation error to test-engineer for 1 retry. If still broken, skip TDD and note in transparency report: "TDD skipped — test-engineer could not produce compilable tests."
    **(3d)** Code agent implements `task.steps`.
-   **(3e)** Run the `unit` slot — tests MUST PASS (green).
+   **(3e)** Run the same scoped test files — tests MUST PASS (green).
    **(3f)** Commit test + code together.
 
 #### testMode: "e2e" (test-after, blind to source)
@@ -176,7 +176,7 @@ For each task, in order:
 
    Implement the changes described in `steps`. Each step has a `file` path — go to that file and make the described change.
 
-4. **Verify** — run the `types` slot at minimum (resolved from the consumer `## Gate commands` block; a missing binding fails loud — never guess a command). If the task touches tests, run the `unit` slot. If the task touches UI, run the `build` slot.
+4. **Verify** — run the `types` slot at minimum (resolved from the consumer `## Gate commands` block; a missing binding fails loud — never guess a command). If the task touches tests, run the touched test files via the `unit-scoped` slot (scoped-slot resolution rule — the full `unit` tier belongs to the gate, not to every task). If the task touches UI, run the `build` slot.
 5. **Commit** — commit the changes with message format: `<type>(<scope>): phase N — <task title>`
 6. **Update phase file** — set `done: true` and `doneDate: 'YYYY-MM-DD'` on the task
 7. **TaskUpdate** — set status to `completed`
