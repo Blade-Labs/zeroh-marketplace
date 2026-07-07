@@ -99,6 +99,17 @@ The `kind` field is required at schema parse time; the legacy fallback only cove
 
 ---
 
+**Failure-identity rule (applies to EVERY test slot, full and scoped):** a slot's RED
+output must NAME its failing tests without a rerun. A tier piped through `tail`/`grep`
+(or any bounded filter) discards exactly the `not ok` lines a red run exists to surface —
+the recorded failure mode is a gate note reading "failure name lost to output truncation"
+followed by a full-tier rerun to learn ONE name. If the consumer's raw runner floods
+stdout (a 10k-test TAP stream), the consumer binds its slots to a wrapper that emits a
+BOUNDED summary carrying every failing test's name/file to stdout and routes the full
+stream to a log file, preserving the exit code (dual test reporters are the standard
+mechanism; see the consumer's slot bindings for the concrete runner). An executor must
+never re-filter a slot's output — run the slot verbatim, read what it prints.
+
 ## Test-scope ladder (opt-in — narrows the TEST slots only, never the gate)
 
 `kind` selects the agent chain, but it is a poor proxy for how much of the test pyramid a
@@ -129,8 +140,8 @@ mechanical `git diff --name-only` classification the Round-0 docs-only skip uses
 |---|---|---|
 | `static` | docs/data/assets/generated artifacts only (no executable code) | none — lint/types/emit only, plus a determinism re-run of any generator whose source is in the diff |
 | `scoped` | code whose proving tests are enumerable | test files IN the diff + colocated `<name>.test.*` siblings of changed files + `phase.scopedTests` globs — exactly those files |
-| `relevant` | src changes with cross-module consumers, **including any `## Gate specialists` path** | scoped + the suites that exercise the touched modules (the arc-mode rule, promoted to inline) |
-| `full` | declared, or a `release`-kind phase | the whole kind × mode cell (the pre-ladder behavior) |
+| `relevant` | src changes with cross-module consumers, **including any `## Gate specialists` path** | scoped + the suites that exercise the touched modules — a REASONED selection (trace the diff's importers/consumers, pick the suites that actually execute the changed seams), not a fixed path→suite map; the rationale is recorded (honesty record below) |
+| `full` | declared (with a stated one-line justification in the phase file — review-phase challenges an unjustified `full`), or a `release`-kind phase | the whole kind × mode cell (the pre-ladder behavior) |
 
 **Floor rule (fail-loud):** derive the floor from the diff FIRST; a declared `testScope`
 may only RAISE it. Declared below the derived floor → the gate REFUSES:
@@ -152,12 +163,29 @@ suite` note. The ladder decides WHICH files; the resolution rule decides HOW the
 **Honesty record:** any scope below `full` writes what was deferred and which backstop
 covers it into `gate.unitTests.notes` (e.g. `deferred: full unit+integration tiers →
 ci-pr-gate + nightly per ## Test cadence`) — a narrowed gate is a recorded state, never a
-silent or ad-hoc one.
+silent or ad-hoc one. A `relevant` selection additionally records its RATIONALE in one
+line (`ran: <suites> — they exercise <seams>; deferred: <what> → <backstop>`): reasoned
+selection is sanctioned exactly to the extent it is legible afterwards.
 
 **Arc-mode note:** the arc-mode column of the kind × mode table already implements
 `relevant` with the arc-end full run (do-arc Step 8) as its backstop. Under the ladder both
 modes read as one rule — prove the touched code at the gate; the declared backstop
 (`## Test cadence` inline, arc-end suite in arc-mode) re-covers the world.
+
+**Sequence cadence (inline multi-phase runs get the arc amortization):** when one session
+executes ≥2 queued phases back-to-back inline (a tier, a program, an explicit "do X then Y"
+— NOT an arc, which already has Step 8), running each phase's full cell re-proves the same
+untouched world N times. Under a declared `## Test cadence` block, a sequence member's gate
+caps its test slots at `relevant` — including a member that DECLARED `testScope: 'full'`,
+whose full run defers to the sequence end — and ONE sequence-end pass runs after the last
+member: the highest deferred scope across members (any member declaring `full`/`release` ⇒
+the full cell, once). Floors are UNTOUCHED per member: the hardening closure itest never
+defers, `## Gate specialists` module suites always run at that member's own gate, and
+lint/types/build run per phase (they are cheap and diff-local). Each deferring member's
+honesty record names the forward cover (`deferred → sequence-end suite after phase N`),
+and the sequence-end result is recorded on the LAST member's gate notes. A sequence
+interrupted before its end-pass leaves the deferral covered by the declared backstop —
+recorded, never silent; the next phase gate or release sweep sees it in the notes.
 
 ---
 
