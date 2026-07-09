@@ -23,17 +23,22 @@ situation.
    `software-architect` `ESCALATE_TO_USER` verdict, or a `[MULTI-REPO]`/`[PRODUCT]`
    quality-pass hard-stop → escalate, never guess past it.) A result that narrows a
    criterion is a self-descope — do-arc's collect-and-branch bounces it (never routine).
-2. **Commit before you background; never background the TERMINAL run.** Run gate/validation as
-   foreground-sized SCOPED chunks (the `types`/`lint` slots + the phase-relevant
-   `unit-scoped`/`integration-scoped` slot) — block to the exit code, no yield. Background ONLY a
-   genuinely >~8-min INTERMEDIATE run, and only AFTER committing the work it covers (a durable
-   committed checkpoint is what makes a non-resuming turn losslessly recoverable — an uncommitted
-   pause strands the phase), with a `background-run` beacon + a Monitor that exits on the log's
-   terminal line. The FINAL validation → flip-done → `executionResult` → return is ONE continuous
-   execution: SPLIT an over-cap terminal run into foreground scoped runs, never background it and
-   yield. **"Awaiting the Monitor" / "standing by" is NEVER your last message** — the Monitor's
-   re-invocation is not guaranteed for a terminal run (this stranded phases on 2026-07-05), so a
-   backgrounded final run is a stall you caused, not a handoff. (Mechanics: executor-reference.md.)
+2. **Commit before you background; never background the TERMINAL run; mid-phase there is NO
+   legal turn end at all.** Run gate/validation as foreground-sized SCOPED chunks (the
+   `types`/`lint` slots + the phase-relevant `unit-scoped`/`integration-scoped` slot) — block to
+   the exit code, no yield. Background ONLY a genuinely >~8-min INTERMEDIATE run, and only AFTER
+   committing the work it covers (a durable committed checkpoint is what makes a non-resuming
+   turn losslessly recoverable — an uncommitted pause strands the phase), with a `background-run`
+   beacon + a Monitor that exits on the log's terminal line. The FINAL validation → flip-done →
+   `executionResult` → return is ONE continuous execution: SPLIT an over-cap terminal run into
+   foreground scoped runs, never background it and yield. **"Awaiting the Monitor" / "standing
+   by" is NEVER your last message** — the Monitor's re-invocation is not guaranteed for a
+   terminal run (this stranded phases on 2026-07-05), so a backgrounded final run is a stall you
+   caused, not a handoff. And the general form: **a turn may end on exactly three things — tool
+   calls still running, a beacon'd background-run with its armed Monitor, or the typed
+   `PhaseExecutionResult`. A bare status line between tasks is none of them: your turn is simply
+   OVER, nothing re-invokes you, and the phase dies where you stood** (five hours on 2026-07-09,
+   ended mid-phase on "committed 1397.1, prepping 1397.2"). (Mechanics: executor-reference.md.)
 3. **Never skip a per-task `transparencyReport`** — including in recovery/resume mode. The
    recorded recovery failures lost exactly this.
 4. **Never improvise a gate/scoping command** — resolve slots from `## Gate commands`; scope
@@ -52,7 +57,8 @@ For each task, in order — one task = one commit:
 3. Verify — the `types` slot at minimum; the relevant tests per the gate protocol.
 4. **Commit** the task (the phase-1368 commit hook stamps the `commit` beacon for you).
 5. Persist the task's `transparencyReport` + `done: true` (never-rule 3).
-6. **RE-ANCHOR: re-read THIS card**, then start the next task.
+6. **RE-ANCHOR: re-read THIS card**, then start the next task **in the same turn** — the task
+   boundary is a commit boundary, never a turn boundary (never-rule 2's general form).
 
 ## The gate
 

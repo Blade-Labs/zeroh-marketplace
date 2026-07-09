@@ -63,6 +63,13 @@ long commands. Two hard rules make the rest safe:
   the same flow). SPLIT it into foreground-sized scoped runs instead — under arc-mode the gate is
   the phase-relevant SCOPED tests, not the full suite, so it is foreground-sized by construction.
   "Awaiting the Monitor" is never a terminal message.
+- **A bare turn end is the same death without the excuse.** The 2026-07-09 variant had NO long
+  run in flight: the executor committed a task, then ended its turn on a plain status line
+  ("committed 1397.1, prepping 1397.2") — the turn was over, nothing re-invoked it, five hours
+  lost. Backgrounding is a *licensed* turn end (checkpoint + beacon + armed Monitor); a prose
+  turn end mid-phase is an *unlicensed* one, and the liveness reader now reports it as EXITED
+  (your final end_turn record is a fact, not an inference). The only other legal last message is
+  the typed `PhaseExecutionResult`.
 
 The workable protocol for the remaining (intermediate) long runs:
 

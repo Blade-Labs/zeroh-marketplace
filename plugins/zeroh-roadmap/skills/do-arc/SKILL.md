@@ -104,23 +104,50 @@ Iterate the member phases in **dependency order** (respect each phase's `depends
 
 - **Executor-band phase** → spawn ONE `phase-executor` sub-agent for the phase. It runs do-phase end to end and **returns** the `PhaseExecutionResult` — a real return channel: the sub-agent stops and you read its result.
 
-  **Stalled-executor watchdog + recovery ladder (executor-band phases only — an inline /
-  inline-supervised phase has no executor to probe).** The field failure: an executor
-  backgrounds a long gate run, its turn ends, the run finishes or dies, and it never resumes.
-  The orchestrator watches with the ONE liveness SCRIPT — never hand-improvised forensics (the
-  2026-07-03 false positive came from hand-probing a symlinked transcript stub). Every ~15 min OR
-  on every wake:
+  **Stalled/exited-executor watchdog + recovery ladder (executor-band phases only — an inline /
+  inline-supervised phase has no executor to probe).** Two field failures define this section:
+  an executor backgrounds a long gate run, its turn ends, the run finishes or dies, and it never
+  resumes (2026-07-05); and an executor ends a turn on a plain status line between tasks — the
+  turn is simply OVER, nothing will ever re-invoke it (2026-07-09: five hours lost because a
+  hand-rolled watcher read the corpse as alive). The orchestrator watches with the plugin's
+  scripts — never hand-improvised forensics (both field failures were hand-rolled watchers; the
+  2026-07-03 false positive came from hand-probing a symlinked transcript stub).
+
+  **Arm the fallback wake in the SAME turn you spawn the executor** (the executor's own return
+  stays the primary wake) — background this and let its EXIT re-invoke you:
+
+  ```bash
+  node <plugin>/scripts/executor-watch.mjs roadmap/arcs/.building/<ID>.json   # run_in_background
+  ```
+
+  It loops the liveness read and exits on the first actionable state: **exit 3 = STALLED,
+  exit 4 = EXITED, exit 0 = sidecar gone / max-duration** (final verdict JSON on stdout). For a
+  point-in-time read on any other wake:
 
   ```bash
   node <plugin>/scripts/executor-liveness.mjs roadmap/arcs/.building/<ID>.json --json
   ```
 
-  It returns **ALIVE / QUIET / STALLED** with an evidence block (beacon age + event,
-  realpath-resolved transcript growth, pgrep, worktree commits — the symlink-stat trap is
-  handled inside the script, so that false-positive class is structurally gone). Then:
+  Verdicts are **ALIVE / QUIET / EXITED / STALLED** with an evidence block (final-transcript-
+  record state, beacon age + event, realpath-resolved transcript growth, self-match-proofed
+  pgrep, worktree commits — the symlink-stat and pgrep-self-match traps are handled inside the
+  script, so those false-verdict classes are structurally gone).
+
+  **On ANY wake, check the return channel BEFORE liveness:** an executor task that already
+  completed is not a liveness question. A completed return that parses → the normal
+  collect-and-branch. A completed return that is prose with the phase not done → the parse
+  ladder above (re-ask ONCE for the typed result), not the stall ladder. Only a task still
+  RUNNING is a liveness question. Then:
 
   - **ALIVE / QUIET → wait.** Mid-gate quiet is normal and the verdict says so — do NOT nudge a
     QUIET executor (a mid-gate "re-engage NOW" interrupt can derail a healthy run).
+  - **EXITED → resume-with-directive (rung 0 — this is a fact, not a suspicion).** The final
+    transcript record is a completed assistant turn: the executor ended on prose without the
+    typed `PhaseExecutionResult` and will never self-resume — waiting is pointless and a
+    "nudge and re-probe" is theater. SendMessage the SAME executor (its context is intact):
+    cite the evidence block + its own final message, name the next open task, and direct it to
+    finish the remaining tasks → gate → end ONLY on the typed `PhaseExecutionResult`. If it
+    exits on prose AGAIN, go straight to rung 2 (respawn-with-resume).
   - **STALLED → the recovery ladder (human rescue is the LAST rung, not the first):**
     1. **Nudge once** — SendMessage the standard nudge, citing the script's evidence block so a
        healthy executor can refute a misread. Re-probe after ~10 min.
@@ -132,6 +159,10 @@ Iterate the member phases in **dependency order** (respect each phase's `depends
     3. **The respawn also STALLES, or the phase fails again → NOW `status: "failed"` + human
        escalation** (branch 4 below, unchanged from there on). Human rescue moves from rung 1 to
        rung 3.
+
+  When a phase completes normally, the watcher exits on its own soon after (a returned executor
+  reads EXITED — that is the expected shape once you hold the parsed result; ignore it) or when
+  the sidecar is removed at arc exit. Re-arm a fresh watcher when you spawn the next executor.
 
 - **Inline-band phase** (a TRIVIAL phase run inline, or a HEAVY phase run inline-supervised — the orchestrator driving software-developer/test-engineer per task while owning commits, transparencyReports, and the gate) → run `do-phase` for the phase IN THE MAIN SESSION, in arc-mode (so do-phase skips backlog grooming + emit:phases per its Step-5 arc-mode override, and produces a `PhaseExecutionResult` instead of stopping to ask the user). **There is no separate return channel here — you are both do-phase and do-arc.** So the collect-and-branch below is YOUR control flow: after do-phase produces the result, you MUST evaluate it (step 2) before doing anything else. Do not let do-phase's "continue immediately to the next task" momentum (Prime Rule 1) carry the session past an `escalated`/`failed` result into Step 5 or the next phase.
 

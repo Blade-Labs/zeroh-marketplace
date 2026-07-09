@@ -9,6 +9,10 @@
  * Usage: executor-liveness.mjs <path-to-.building/<ID>.json> [--json] [--transcript-dir <dir>]
  *
  * Signals gathered from the sidecar ({arcId, worktree, ...}):
+ *  - exit-state: the FINAL record of the newest agent transcript under the
+ *      transcript dir — an assistant record with stop_reason 'end_turn' as the
+ *      file's last line means the agent COMPLETED its turn and will never
+ *      self-resume; no liveness inference applies (deterministic, checked first)
  *  - beacon: last-line age + event kind of <ID>-executor.jsonl (the 1368 heartbeat)
  *  - transcript: total *.output size under the transcript dir, read via
  *      statSync(realpathSync(p)) so a symlinked stub reports its TARGET size (the
@@ -17,7 +21,10 @@
  *  - pgrep: process table match for the worktree (injectable: LIVENESS_PGREP_CMD)
  *  - git: `git -C <worktree> log --oneline -5` + last-commit age
  *
- * Verdict table:
+ * Verdict table (top row wins):
+ *   final transcript record = assistant end_turn, ≥3 min old → EXITED (turn over;
+ *     evidence carries the final-message excerpt so the orchestrator can see
+ *     "prose, no typed result" at a glance)
  *   beacon age < 20 min                                   → ALIVE
  *   last event 'gate-stage-start' AND age < 45 min        → QUIET (gate work is silent)
  *   last event 'background-run' AND its log grew          → ALIVE (evidence: log + growth)
@@ -27,14 +34,16 @@
  * transcript/pgrep, and prefix the verdict `pre-beacon`.
  *
  * Injectable seams (hermetic tests): LIVENESS_PGREP_CMD overrides the pgrep default;
- * LIVENESS_PROBE_MS (default 10000) is the inter-probe delay.
+ * LIVENESS_PROBE_MS (default 10000) is the inter-probe delay;
+ * LIVENESS_EXITED_MIN_AGE_MIN (default 3) is the end_turn settle window.
  */
-import { readFileSync, statSync, realpathSync, readdirSync, existsSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { readFileSync, statSync, realpathSync, readdirSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
+import { execSync, execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 
 const ALIVE_MAX_MIN = 20
 const GATE_QUIET_MAX_MIN = 45
+const EXITED_MIN_AGE_MIN = Number(process.env.LIVENESS_EXITED_MIN_AGE_MIN ?? 3)
 
 const args = process.argv.slice(2)
 const sidecarPath = args.find((a) => !a.startsWith('--'))
@@ -91,11 +100,117 @@ function transcriptSize(dir) {
   return seen ? total : null
 }
 
-function pgrepHits() {
-  const cmd = process.env.LIVENESS_PGREP_CMD ?? `pgrep -f ${JSON.stringify(worktree)}`
+/** Newest (by realpath mtime) *.output under dir whose target is an agent JSONL. */
+function newestAgentTranscript(dir) {
+  if (!dir || !existsSync(dir)) return null
+  let best = null
+  const walk = (d) => {
+    let entries
+    try {
+      entries = readdirSync(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      const p = join(d, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (e.name.endsWith('.output')) {
+        try {
+          const real = realpathSync(p)
+          if (!/agent-.*\.jsonl$/.test(real)) continue // background-run logs are *.output too
+          const st = statSync(real)
+          if (!best || st.mtimeMs > best.mtimeMs) best = { path: real, mtimeMs: st.mtimeMs }
+        } catch {
+          /* unreadable entry — skip, never crash the reader */
+        }
+      }
+    }
+  }
+  walk(dir)
+  return best
+}
+
+/** Parse the final JSONL record of a transcript (tail-read, files can be large). */
+function lastTranscriptRecord(path) {
   try {
-    const out = execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-    return out ? out.split('\n').filter(Boolean).length : 0
+    const size = statSync(path).size
+    const span = Math.min(size, 64 * 1024)
+    const buf = Buffer.alloc(span)
+    const fd = openSync(path, 'r')
+    try {
+      readSync(fd, buf, 0, span, size - span)
+    } finally {
+      closeSync(fd)
+    }
+    const lines = buf.toString('utf8').trim().split('\n').filter(Boolean)
+    return lines.length ? JSON.parse(lines[lines.length - 1]) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * EXITED probe: a final assistant record with stop_reason 'end_turn' means the
+ * agent's turn is OVER — nothing re-invokes a sub-agent whose turn ended, so
+ * waiting on it is pointless regardless of every other signal. The settle
+ * window guards the race where the orchestrator is about to read the return.
+ */
+function exitState(dir) {
+  const t = newestAgentTranscript(dir)
+  if (!t) return null
+  const rec = lastTranscriptRecord(t.path)
+  if (!rec || rec.type !== 'assistant' || rec.message?.stop_reason !== 'end_turn') return null
+  const ts = Date.parse(rec.timestamp ?? '')
+  const ageMin = (now - (Number.isNaN(ts) ? t.mtimeMs : ts)) / 60000
+  if (ageMin < EXITED_MIN_AGE_MIN) return null
+  const text = (rec.message.content ?? []).find((b) => b?.type === 'text')?.text ?? ''
+  return { path: t.path, ageMin, excerpt: text.slice(0, 180) }
+}
+
+/** PIDs of this process and its ancestor chain (the shells/agents that ran us). */
+function ownAncestry() {
+  const pids = new Set()
+  let pid = process.pid
+  while (pid > 1 && !pids.has(pid)) {
+    pids.add(pid)
+    try {
+      // /proc/<pid>/stat field 4 is ppid; field 2 (comm) can contain spaces but
+      // is parenthesized, so split after the closing paren.
+      const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+      pid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
+    } catch {
+      break
+    }
+  }
+  return pids
+}
+
+function pgrepHits() {
+  // The LIVENESS_PGREP_CMD override (test seam) runs through a shell; the DEFAULT
+  // must NOT: execSync's `sh -c 'pgrep -f <worktree>'` wrapper put the pattern in
+  // the shell's own cmdline — pgrep excludes itself but not its parent sh — so
+  // hits was always ≥1 and the STALLED row was unreachable (the 2026-07-09
+  // five-hour false-ALIVE). execFileSync spawns pgrep directly (no wrapper), and
+  // the survivors are filtered: the watchdog TOOLING (this script, executor-watch —
+  // their argv carries the sidecar path, which usually lives under the worktree)
+  // and our own ancestor chain are monitoring, never evidence of executor life.
+  const override = process.env.LIVENESS_PGREP_CMD
+  try {
+    if (override) {
+      const out = execSync(override, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+      return out ? out.split('\n').filter(Boolean).length : 0
+    }
+    const out = execFileSync('pgrep', ['-af', worktree], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    if (!out) return 0
+    const ancestry = ownAncestry()
+    return out.split('\n').filter(Boolean).filter((line) => {
+      const sp = line.indexOf(' ')
+      const pid = Number(line.slice(0, sp < 0 ? line.length : sp))
+      const cmd = sp < 0 ? '' : line.slice(sp + 1)
+      if (ancestry.has(pid)) return false
+      if (/executor-(liveness|watch)\.mjs/.test(cmd)) return false
+      return true
+    }).length
   } catch {
     return 0 // pgrep exits 1 with no match — that's zero hits, not an error
   }
@@ -161,8 +276,18 @@ evidence.beacon = beacon.exists
 
 let verdict = null
 
-// Beacon age-based rows need no growth probe — decide them first.
-if (beacon.exists) {
+// EXITED first — it is a FACT, not an inference, and it outranks every liveness
+// row: a fresh commit beacon (< 20 min) must not read ALIVE when the transcript
+// proves the executor ended its turn right after that commit.
+const exited = exitState(transcriptDir)
+if (exited) {
+  verdict = 'EXITED'
+  evidence.exit = `final record is a completed assistant turn (end_turn, ${exited.ageMin.toFixed(1)}min ago) in ${exited.path}`
+  evidence.finalMessage = exited.excerpt || '(no text block in the final record)'
+}
+
+// Beacon age-based rows need no growth probe — decide them next.
+if (verdict === null && beacon.exists) {
   if (beacon.ageMin < ALIVE_MAX_MIN) verdict = 'ALIVE'
   else if (beacon.lastEvent === 'gate-stage-start' && beacon.ageMin < GATE_QUIET_MAX_MIN) verdict = 'QUIET'
 }

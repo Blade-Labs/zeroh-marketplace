@@ -49,11 +49,32 @@ function makeArc(dir, arcId, beaconLines) {
 }
 
 function run(sidecar, extraArgs = [], env = {}) {
+  const merged = { ...process.env, LIVENESS_PGREP_CMD: 'true', LIVENESS_PROBE_MS: '20', ...env }
+  for (const k of Object.keys(merged)) if (merged[k] === undefined) delete merged[k]
   const out = execFileSync('node', [SCRIPT, sidecar, '--json', ...extraArgs], {
     encoding: 'utf8',
-    env: { ...process.env, LIVENESS_PGREP_CMD: 'true', LIVENESS_PROBE_MS: '20', ...env },
+    env: merged,
   })
   return JSON.parse(out)
+}
+
+/** An agent-transcript JSONL record in the harness shape the EXITED probe reads. */
+function agentRecord(type, stopReason, text, tsIso) {
+  return {
+    type,
+    timestamp: tsIso,
+    message: type === 'assistant' ? { role: 'assistant', stop_reason: stopReason, content: [{ type: 'text', text }] } : { role: 'user', content: [] },
+  }
+}
+
+/** Write agent-<id>.jsonl + its .output symlink the way the harness lays them out. */
+function makeAgentTranscript(dir, records) {
+  const tdir = join(dir, 'transcripts')
+  mkdirSync(tdir, { recursive: true })
+  const target = join(tdir, 'agent-abc123.jsonl')
+  writeFileSync(target, records.map((r) => JSON.stringify(r)).join('\n') + '\n')
+  symlinkSync(target, join(tdir, 'aabc123.output'))
+  return tdir
 }
 
 /** Start a short-lived appender that grows `file` for ~2s; returns a stop fn. */
@@ -114,6 +135,52 @@ test('4) background-run beacon + a log that grows between probes → ALIVE', () 
   } finally {
     stop()
   }
+})
+
+test('6) DEFAULT pgrep path must not self-match its own invocation (the 2026-07-09 false-ALIVE)', () => {
+  // No LIVENESS_PGREP_CMD override: the script's real pgrep runs against a
+  // worktree path that exists nowhere in the process table. The old execSync
+  // form matched its own `sh -c` wrapper (hits always ≥1 → QUIET forever); the
+  // fix must report 0 hits and let the STALLED row fire.
+  const d = newTmp()
+  const sc = makeArc(d, 'A6', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
+  const r = run(sc, [], { LIVENESS_PGREP_CMD: undefined })
+  assert.equal(r.verdict, 'STALLED')
+  assert.match(r.evidence.pgrep, /^0 process/)
+})
+
+test('7) final transcript record = assistant end_turn (old) → EXITED, outranking a fresh beacon', () => {
+  const d = newTmp()
+  // A 2-min-old commit beacon would read ALIVE — the transcript fact must win.
+  const sc = makeArc(d, 'A7', [{ ts: isoAgo(2), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
+  const tdir = makeAgentTranscript(d, [
+    agentRecord('assistant', 'tool_use', 'committing task 1', isoAgo(12)),
+    agentRecord('assistant', 'end_turn', 'Task 1397.1 committed. Preparing 1397.2 next.', isoAgo(10)),
+  ])
+  const r = run(sc, ['--transcript-dir', tdir])
+  assert.equal(r.verdict, 'EXITED')
+  assert.match(r.evidence.exit, /end_turn/)
+  assert.match(r.evidence.finalMessage, /Preparing 1397\.2/)
+})
+
+test('8) mid-turn transcript (last record not end_turn) → no EXITED, normal rows decide', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'A8', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
+  const tdir = makeAgentTranscript(d, [
+    agentRecord('assistant', 'end_turn', 'earlier turn', isoAgo(60)),
+    agentRecord('user', null, '', isoAgo(10)), // tool result just landed — agent is mid-turn
+  ])
+  const r = run(sc, ['--transcript-dir', tdir])
+  assert.equal(r.verdict, 'STALLED') // stale beacon, no growth, no procs — but NOT exited
+  assert.equal(r.evidence.exit, undefined)
+})
+
+test('9) end_turn younger than the settle window → not yet EXITED', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'A9', [{ ts: isoAgo(2), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
+  const tdir = makeAgentTranscript(d, [agentRecord('assistant', 'end_turn', 'done-ish', isoAgo(1))])
+  const r = run(sc, ['--transcript-dir', tdir])
+  assert.equal(r.verdict, 'ALIVE') // the fresh beacon row decides; the race window holds
 })
 
 test('5) no beacon + growing transcript → pre-beacon QUIET', () => {
