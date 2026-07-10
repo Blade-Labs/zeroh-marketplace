@@ -130,8 +130,12 @@ Iterate the member phases in **dependency order** (respect each phase's `depends
 
   Verdicts are **ALIVE / QUIET / EXITED / STALLED** with an evidence block (final-transcript-
   record state, beacon age + event, realpath-resolved transcript growth, self-match-proofed
-  pgrep, worktree commits — the symlink-stat and pgrep-self-match traps are handled inside the
-  script, so those false-verdict classes are structurally gone).
+  pgrep, worktree commit + file activity — the symlink-stat, pgrep-self-match, beacon-path
+  (reader scans BOTH `roadmap/arcs/.building/` and `<worktree>/.building/`, any `*-executor.jsonl`
+  key), just-spawned-executor (pre-beacon grace window, default 15 min), and beacon-idle-inside-
+  one-big-task (worktree commit/file-activity rows) traps are all handled inside the script, so
+  those false-verdict classes are structurally gone; executor-watch additionally debounces —
+  two consecutive STALLED reads before exit 3).
 
   **On ANY wake, check the return channel BEFORE liveness:** an executor task that already
   completed is not a liveness question. A completed return that parses → the normal

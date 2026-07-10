@@ -13,13 +13,25 @@
  *      transcript dir — an assistant record with stop_reason 'end_turn' as the
  *      file's last line means the agent COMPLETED its turn and will never
  *      self-resume; no liveness inference applies (deterministic, checked first)
- *  - beacon: last-line age + event kind of <ID>-executor.jsonl (the 1368 heartbeat)
+ *  - beacon: last-line age + event kind of the newest *-executor.jsonl found in
+ *      EITHER the sidecar's own dir (roadmap/arcs/.building/) OR the worktree's
+ *      top-level .building/ — executors have written both places, keyed by arc
+ *      id or phase number, so the reader discovers rather than assumes (the
+ *      2026-07-10 false pre-beacon STALLED: the reader hard-coded
+ *      <sidecar-dir>/<arcId>-executor.jsonl while the executor wrote
+ *      <worktree>/.building/<phase>-executor.jsonl — never found, whole arc
+ *      read pre-beacon)
+ *  - worktree activity: last-commit age + the newest file mtime across the
+ *      worktree (skipping .git/node_modules/.building/transcripts and build
+ *      dirs) — the spawn-mechanism-agnostic signal; a harness sub-agent is not
+ *      an OS process and can go 10+ min between beacon events inside one big
+ *      task, but it cannot work without touching files
  *  - transcript: total *.output size under the transcript dir, read via
  *      statSync(realpathSync(p)) so a symlinked stub reports its TARGET size (the
  *      symlink trap, as code) — double-probed for growth; 'not recorded' when no
  *      dir is known (never guess a harness path)
  *  - pgrep: process table match for the worktree (injectable: LIVENESS_PGREP_CMD)
- *  - git: `git -C <worktree> log --oneline -5` + last-commit age
+ *      — POSITIVE evidence only; zero hits means nothing for a harness sub-agent
  *
  * Verdict table (top row wins):
  *   final transcript record = assistant end_turn, ≥3 min old → EXITED (turn over;
@@ -29,13 +41,17 @@
  *   last event 'gate-stage-start' AND age < 45 min        → QUIET (gate work is silent)
  *   last event 'background-run' AND its log grew          → ALIVE (evidence: log + growth)
  *   otherwise, transcript grew OR pgrep hits              → QUIET
+ *   last commit < 15 min OR newest worktree file < 10 min → ALIVE (activity)
+ *   no beacon AND sidecar younger than the grace window   → QUIET (pre-beacon grace —
+ *     a just-spawned executor has produced no signal yet; that is not a stall)
  *   none of the above                                     → STALLED
  * A MISSING beacon = a pre-beacon executor: skip the beacon rows, decide from
- * transcript/pgrep, and prefix the verdict `pre-beacon`.
+ * the remaining rows, and prefix the verdict `pre-beacon`.
  *
  * Injectable seams (hermetic tests): LIVENESS_PGREP_CMD overrides the pgrep default;
  * LIVENESS_PROBE_MS (default 10000) is the inter-probe delay;
- * LIVENESS_EXITED_MIN_AGE_MIN (default 3) is the end_turn settle window.
+ * LIVENESS_EXITED_MIN_AGE_MIN (default 3) is the end_turn settle window;
+ * LIVENESS_PREBEACON_GRACE_MIN (default 15) is the pre-beacon grace window.
  */
 import { readFileSync, statSync, realpathSync, readdirSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
 import { execSync, execFileSync } from 'node:child_process'
@@ -44,6 +60,14 @@ import { join, dirname } from 'node:path'
 const ALIVE_MAX_MIN = 20
 const GATE_QUIET_MAX_MIN = 45
 const EXITED_MIN_AGE_MIN = Number(process.env.LIVENESS_EXITED_MIN_AGE_MIN ?? 3)
+const PREBEACON_GRACE_MIN = Number(process.env.LIVENESS_PREBEACON_GRACE_MIN ?? 15)
+const ACTIVITY_COMMIT_MAX_MIN = 15
+const ACTIVITY_FILE_MAX_MIN = 10
+// Dirs the activity scan skips: not-executor-work (.git internals, installs,
+// build output) plus the two dirs the WATCHDOG side itself writes into
+// (.building sidecars/beacons, transcripts) — monitoring must never read as work.
+const ACTIVITY_SKIP_DIRS = new Set(['.git', 'node_modules', '.building', 'transcripts', 'dist', 'build', '.next', '.turbo', 'coverage'])
+const ACTIVITY_SCAN_CAP = 50_000
 
 const args = process.argv.slice(2)
 const sidecarPath = args.find((a) => !a.startsWith('--'))
@@ -60,9 +84,72 @@ const sidecar = JSON.parse(readFileSync(sidecarPath, 'utf8'))
 const worktree = sidecar.worktree
 const arcId = sidecar.arcId
 const registryDir = dirname(sidecarPath)
-const beaconPath = join(registryDir, `${arcId}-executor.jsonl`)
 const PROBE_MS = Number(process.env.LIVENESS_PROBE_MS ?? 10000)
 const now = Date.now()
+
+/**
+ * Beacon DISCOVERY, not a hard-coded path: executors have written
+ * <registry>/<arcId>-executor.jsonl AND <worktree>/.building/<phase>-executor.jsonl
+ * (the card's `.building/<ID>` was ambiguous on both dir and key). Scan both dirs
+ * for any *-executor.jsonl and take the newest by mtime — a wrong guess here is a
+ * false STALLED against a healthy executor.
+ */
+function discoverBeacon() {
+  const dirs = [...new Set([registryDir, join(worktree, '.building')])]
+  let best = null
+  for (const d of dirs) {
+    if (!existsSync(d)) continue
+    let entries = []
+    try {
+      entries = readdirSync(d)
+    } catch {
+      continue
+    }
+    for (const name of entries) {
+      if (!name.endsWith('-executor.jsonl')) continue
+      const p = join(d, name)
+      try {
+        const st = statSync(p)
+        if (!best || st.mtimeMs > best.mtimeMs) best = { path: p, mtimeMs: st.mtimeMs }
+      } catch {
+        /* unreadable — skip */
+      }
+    }
+  }
+  return best?.path ?? null
+}
+const beaconPath = discoverBeacon()
+
+/** Newest file mtime across the worktree (skip-list bounded) — age in minutes, or null. */
+function newestWorktreeFileAgeMin() {
+  let newest = 0
+  let visited = 0
+  const walk = (d) => {
+    if (visited > ACTIVITY_SCAN_CAP) return
+    let entries
+    try {
+      entries = readdirSync(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (visited++ > ACTIVITY_SCAN_CAP) return
+      if (e.isDirectory()) {
+        if (!ACTIVITY_SKIP_DIRS.has(e.name)) walk(join(d, e.name))
+      } else if (e.isFile()) {
+        try {
+          const m = statSync(join(d, e.name)).mtimeMs
+          if (m > newest) newest = m
+        } catch {
+          /* raced/unreadable — skip */
+        }
+      }
+    }
+  }
+  if (!worktree || !existsSync(worktree)) return null
+  walk(worktree)
+  return newest > 0 ? (now - newest) / 60000 : null
+}
 
 /** statSync through a realpath so a symlink reports its TARGET size (the trap). */
 function realSize(p) {
@@ -238,7 +325,7 @@ function gitInfo() {
 
 // ── beacon ────────────────────────────────────────────────────────────────────
 let beacon = { exists: false }
-if (existsSync(beaconPath)) {
+if (beaconPath) {
   let lines = []
   try {
     lines = readFileSync(beaconPath, 'utf8').trim().split('\n').filter(Boolean)
@@ -269,10 +356,10 @@ const log1 = logPath ? realSize(logPath) : null
 
 const evidence = {}
 evidence.beacon = beacon.exists
-  ? `last event '${beacon.lastEvent}', age ${beacon.ageMin.toFixed(1)}min`
+  ? `last event '${beacon.lastEvent}', age ${beacon.ageMin.toFixed(1)}min (${beaconPath})`
   : beacon.malformed
     ? 'present but unparseable last line (treated as pre-beacon)'
-    : 'absent (pre-beacon executor)'
+    : 'absent in both beacon dirs (pre-beacon executor)'
 
 let verdict = null
 
@@ -293,6 +380,7 @@ if (verdict === null && beacon.exists) {
 }
 
 // Growth-based rows (background-run log, transcript) need a second probe.
+const git = gitInfo()
 if (verdict === null) {
   await new Promise((r) => setTimeout(r, PROBE_MS))
   const t2 = transcriptSize(transcriptDir)
@@ -310,9 +398,25 @@ if (verdict === null) {
   if (logPath) evidence.log = `${logPath}: ${log1}B → ${log2}B (grew: ${logGrew})`
   evidence.pgrep = `${hits} process(es) match the worktree`
 
+  // Worktree activity — the spawn-mechanism-agnostic rows. A harness sub-agent
+  // is invisible to pgrep and can go 10+ min between beacon events inside one
+  // big task, but it cannot work without committing or touching files.
+  const fileAgeMin = newestWorktreeFileAgeMin()
+
   if (beacon.exists && beacon.lastEvent === 'background-run' && logGrew) verdict = 'ALIVE'
   else if (transcriptGrew || hits > 0) verdict = 'QUIET'
-  else verdict = 'STALLED'
+  else if (git.lastCommitAgeMin != null && git.lastCommitAgeMin < ACTIVITY_COMMIT_MAX_MIN) {
+    verdict = 'ALIVE'
+    evidence.activity = `last commit ${git.lastCommitAgeMin.toFixed(1)}min ago (< ${ACTIVITY_COMMIT_MAX_MIN}min)`
+  } else if (fileAgeMin != null && fileAgeMin < ACTIVITY_FILE_MAX_MIN) {
+    verdict = 'ALIVE'
+    evidence.activity = `newest worktree file touched ${fileAgeMin.toFixed(1)}min ago (< ${ACTIVITY_FILE_MAX_MIN}min)`
+  } else if (!beacon.exists && sidecarAgeMin() < PREBEACON_GRACE_MIN) {
+    // A just-spawned executor has produced NO signal yet — that is a grace
+    // window, not a stall (the 2026-07-10 false STALLED fired seconds after spawn).
+    verdict = 'QUIET'
+    evidence.grace = `sidecar ${sidecarAgeMin().toFixed(1)}min old, within the ${PREBEACON_GRACE_MIN}min pre-beacon grace window`
+  } else verdict = 'STALLED'
 } else {
   // Decided on the beacon alone — still record the cheap signals for the evidence block.
   evidence.transcript =
@@ -320,9 +424,17 @@ if (verdict === null) {
   if (logPath) evidence.log = `${logPath}: ${log1}B`
 }
 
+function sidecarAgeMin() {
+  try {
+    return (now - statSync(sidecarPath).mtimeMs) / 60000
+  } catch {
+    return Infinity // unreadable sidecar → no grace, never a crash
+  }
+}
+
 const preBeacon = !beacon.exists
 const finalVerdict = preBeacon ? `pre-beacon ${verdict}` : verdict
-evidence.git = ((g) => `${g.recentCount} recent commit(s), last ${g.lastCommitAgeMin == null ? '?' : g.lastCommitAgeMin.toFixed(1)}min ago`)(gitInfo())
+evidence.git = `${git.recentCount} recent commit(s), last ${git.lastCommitAgeMin == null ? '?' : git.lastCommitAgeMin.toFixed(1)}min ago`
 
 if (jsonOut) {
   console.log(JSON.stringify({ verdict: finalVerdict, arcId, worktree, preBeacon, evidence }, null, 2))

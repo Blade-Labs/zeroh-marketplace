@@ -92,3 +92,15 @@ test('completed final assistant turn → exit 4 with the EXITED verdict JSON', (
   assert.match(r.stdout, /"verdict": "EXITED"/)
   assert.match(r.stdout, /prepping 1397\.2/)
 })
+
+test('just-spawned executor (no beacon yet, fresh sidecar) → does NOT exit 3; runs to max duration', () => {
+  // The 2026-07-10 field failure: the watcher fired STALLED seconds after
+  // spawn, before the executor could write its first beacon. With the grace
+  // window the verdict stays pre-beacon QUIET, so the watch loops to its max
+  // duration instead of waking the orchestrator with a false stall.
+  const d = newTmp()
+  const sc = makeArc(d, 'W3', null) // no beacon — pre-beacon executor
+  const r = runWatch(sc, ['--max-hours', '0.0002']) // ~0.7s of looping
+  assert.equal(r.status, 0)
+  assert.match(r.stdout, /max duration reached/)
+})

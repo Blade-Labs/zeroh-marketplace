@@ -200,3 +200,65 @@ test('5) no beacon + growing transcript → pre-beacon QUIET', () => {
     stop()
   }
 })
+
+test('10) PRODUCTION layout — sidecar in roadmap/arcs/.building, beacon in <worktree>/.building keyed by PHASE → discovered, ALIVE', () => {
+  // The 2026-07-10 false pre-beacon STALLED: the reader hard-coded
+  // <sidecar-dir>/<arcId>-executor.jsonl; the executor wrote
+  // <worktree>/.building/<phase>-executor.jsonl. This fixture is the REAL
+  // do-arc layout the old makeArc helper accidentally papered over.
+  const d = newTmp()
+  const registry = join(d, 'roadmap', 'arcs', '.building')
+  mkdirSync(registry, { recursive: true })
+  const sidecar = join(registry, 'MKT.json')
+  writeFileSync(sidecar, JSON.stringify({ arcId: 'MKT', worktree: d, branch: 'arc/mkt', baseRef: 'develop', mode: 'mixed' }))
+  const beaconDir = join(d, '.building')
+  mkdirSync(beaconDir, { recursive: true })
+  writeFileSync(join(beaconDir, '1333-executor.jsonl'), JSON.stringify({ ts: isoAgo(2), phase: 1333, event: 'task-start' }) + '\n')
+  const r = run(sidecar)
+  assert.equal(r.verdict, 'ALIVE')
+  assert.equal(r.preBeacon, false)
+  assert.match(r.evidence.beacon, /1333-executor\.jsonl/)
+})
+
+test('11) stale beacon but a worktree file touched moments ago → ALIVE (activity row)', () => {
+  // One big task can hold the beacon idle 10+ min while the executor edits the
+  // whole time — file activity is the spawn-mechanism-agnostic liveness signal.
+  const d = newTmp()
+  const sc = makeArc(d, 'A11', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
+  mkdirSync(join(d, 'src'), { recursive: true })
+  writeFileSync(join(d, 'src', 'turn.ts'), 'export {}\n')
+  const r = run(sc)
+  assert.equal(r.verdict, 'ALIVE')
+  assert.match(r.evidence.activity, /newest worktree file/)
+})
+
+test('12) stale beacon but a git commit minutes ago → ALIVE (activity row, commit signal)', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'A12', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
+  const g = (...a) => execFileSync('git', ['-C', d, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { stdio: ['ignore', 'pipe', 'ignore'] })
+  g('init', '-q')
+  writeFileSync(join(d, 'work.txt'), 'x')
+  g('add', 'work.txt')
+  g('commit', '-qm', 'work')
+  const r = run(sc)
+  assert.equal(r.verdict, 'ALIVE')
+  assert.match(r.evidence.activity, /last commit/)
+})
+
+test('13) no beacon, nothing else, sidecar just written → pre-beacon QUIET (grace window, not a stall)', () => {
+  // The 2026-07-10 watcher fired STALLED seconds after spawn, before the
+  // executor could produce any signal. A fresh sidecar IS the spawn timestamp.
+  const d = newTmp()
+  const sc = makeArc(d, 'A13', null)
+  const r = run(sc)
+  assert.equal(r.verdict, 'pre-beacon QUIET')
+  assert.match(r.evidence.grace, /grace window/)
+})
+
+test('14) no beacon, grace expired, no activity → pre-beacon STALLED (grace is a window, not amnesty)', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'A14', null)
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'pre-beacon STALLED')
+  assert.equal(r.evidence.grace, undefined)
+})

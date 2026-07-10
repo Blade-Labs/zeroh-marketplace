@@ -48,11 +48,17 @@ situation.
 
 ## The task loop (re-anchor after every task)
 
-**Step 0 (before the first task):** run the phase's `assumptions[]` tripwires per do-phase
-Step 0.6 — a failed `verify` escalates with its raw output BEFORE any code.
+**Step 0 (before the first task):** FIRST ACTION on spawn — append an `executor-start` beacon
+event (see the beacon path below) so the orchestrator's watchdog sees you exist within seconds
+(a beacon that first appears minutes in reads as a pre-beacon stall). Then run the phase's
+`assumptions[]` tripwires per do-phase Step 0.6 — a failed `verify` escalates with its raw
+output BEFORE any code.
 
 For each task, in order — one task = one commit:
-1. Beacon `task-start` (append the JSONL event to `.building/<ID>-executor.jsonl`).
+1. Beacon `task-start` — append the JSONL event to **`<worktree>/.building/<phase-number>-executor.jsonl`**
+   (the TOP-LEVEL `.building/` at the worktree root, keyed by PHASE number — NOT
+   `roadmap/arcs/.building/`, which holds the arc sidecar; the liveness reader scans both, but
+   this is the canonical path).
 2. Implement `steps` (TDD via `test-engineer` when `testMode` is tdd/e2e).
 3. Verify — the `types` slot at minimum; the relevant tests per the gate protocol.
 4. **Commit** the task (the phase-1368 commit hook stamps the `commit` beacon for you).

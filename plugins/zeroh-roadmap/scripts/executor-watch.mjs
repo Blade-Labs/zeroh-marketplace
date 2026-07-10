@@ -42,6 +42,7 @@ const intervalMs = Number(process.env.LIVENESS_WATCH_INTERVAL_MS ?? Number(flag(
 const maxMs = Number(flag('--max-hours', 6)) * 3_600_000
 const transcriptDir = flag('--transcript-dir', null)
 const started = Date.now()
+let consecutiveStalled = 0
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -63,8 +64,16 @@ while (true) {
   }
   if (result) {
     if (result.verdict.endsWith('STALLED')) {
-      console.log(JSON.stringify(result, null, 2))
-      process.exit(3)
+      // Debounce: one STALLED read can be a boundary artifact (just-spawned
+      // executor, probe racing a task hand-off). Two consecutive reads, one
+      // interval apart, is a sustained stall worth waking the orchestrator for.
+      consecutiveStalled += 1
+      if (consecutiveStalled >= 2) {
+        console.log(JSON.stringify(result, null, 2))
+        process.exit(3)
+      }
+    } else {
+      consecutiveStalled = 0
     }
     if (result.verdict.endsWith('EXITED')) {
       console.log(JSON.stringify(result, null, 2))
