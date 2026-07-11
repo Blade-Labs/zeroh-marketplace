@@ -11,18 +11,18 @@ metadata:
 
 ## Trigger
 
-User says: `review phase N`, `/review-phase N`, `verify phase N`, `audit phase N`
+User says: `review phase N`, `/review-phase N`, `verify phase N`, `audit phase N`, `review arc <ID>`
 
 ## Arguments
 
-- **Phase number** (required): parse from user input
+- **Phase number or arc id** (required): parse from user input. An arc id means: review the arc entity + EVERY member phase — the holistic pass (Step H) runs ONCE at arc level, then the per-phase protocol runs for each member.
 - **Additional prompt** (optional): extra checks the user wants, appended after the standard protocol. Example: `/review-phase 145 also check that all currency fields use _cents suffix`
 
 ## What This Is (and Is NOT)
 
-**This IS:** Verification that CLAIMED work actually happened correctly. Did the task say "add X to line 42"? Is X actually at line 42? Did the task say "fix the bug"? Is the bug actually fixed?
+**This IS:** Two questions, in order. (1) **Fitness** — is this the right feature, the right shape, whole (nothing missing), and lean (nothing that shouldn't be built)? (2) **Verification** — did/will the claimed work actually match reality? Did the task say "add X to line 42"? Is X actually at line 42?
 
-**This is NOT:** Code review (which finds NEW bugs the phase didn't claim to address). Code review is `/code-review`. This skill verifies the phase's own claims.
+**This is NOT:** Code review (which finds NEW bugs the phase didn't claim to address — that's `/code-review`), and NOT a re-run of the design gate (plan-arc Step 1b already explored alternatives with the user — ratified decisions are checked for drift and new information, never relitigated).
 
 ## Protocol
 
@@ -51,6 +51,51 @@ For phases not yet executed. Review as a **senior software architect** — don't
 Do NOT just read the task description and check if it "sounds right." Open the files. Read the functions. Verify the claims. The plan was written by an agent that may have hallucinated file paths, function names, or line numbers.
 
 Note: plan-phase runs a superset of these checks (its Step-5 9-check list) as self-verification before committing. Review-phase re-runs the 7 checks below because (a) the codebase may have changed since planning, and (b) self-verification can be lazy — an independent pass catches what the author missed.
+
+#### Mode A — Step H: Holistic feature review (issued FIRST in the report, finalized after the per-task pass)
+
+Before grading the tasks, judge the FEATURE. A plan can be mechanically flawless and still be the
+wrong thing, half a thing, or too much thing. Four questions, each answered with evidence (source,
+memory, roadmap, live state) — never vibes:
+
+**H1. Right problem, still true, worth doing now?** Does the problem the phase/arc claims still
+exist — or did landed work, a shipped arc, or a live-state change supersede it since planning?
+(The "stale OPERATOR-PENDING actually live" class.) Is it worth its slot relative to the queue,
+or is it a nice-to-have wearing a HIGH priority?
+
+**H2. Right shape?** Check the plan against the CONFIRMED designRefs + the arc's locked decisions
+— drift since confirmation is a finding; relitigating a ratified decision is not. Then the
+substrate questions: does it EXTEND an existing seam or quietly fork one (`singleSeams` honesty)?
+Is it at the right altitude (a substrate capability vs. a one-off vertical — and if vertical, is
+the generalization recorded as a named follow-up per the rule of three)? Is there a simpler
+mechanism that does the same job (over-engineering)?
+
+**H3. Anything missing that makes it whole?** The loop-completeness scan: fail-closed arms on
+every new decision point, audit/receipt disclosure for every governed effect, the kill-switch
+(flag) and its OFF-path proof, the wired test per new surface, canon/docs, and the adjacent gap
+that would leave the shipped feature half-useful (a control with no visibility, a grant with no
+revoke, one surface where the JTBD names two).
+
+**H4. Anything to remove?** Scope that doesn't pay: a task duplicating shipped capability
+(verify in source — if confirmed, that's a check-2-class repair: the problem doesn't exist),
+speculative abstraction with one consumer, gold-plating beyond the acceptance bar.
+
+**Disposition** rides the Step 7b split: a missing-but-mechanical piece (an absent fail-closed
+arm, a missing test task) may be ADDED to the plan as an auto-repair when it preserves intent;
+RESHAPE / CUT / new-scope recommendations are report-only for the user. Output:
+
+```
+## Holistic review — <feature/arc>
+  H1 Right problem: YES / SUPERSEDED / QUESTION — <evidence>
+  H2 Right shape:   YES / CONCERN — <seam, altitude, drift-from-design findings>
+  H3 Missing:       none / <list — each ADDED (auto-repair) | FOLLOW-UP (named) | ASK-USER>
+  H4 Remove:        none / <list — each CONFIRMED-DEAD (check-2 repair) | RECOMMEND-CUT (user)>
+  Verdict: SOUND | RESHAPE (what + why) | QUESTION (the ruling needed)
+```
+
+For an ARC review, run Step H once against the arc entity (planes, singleSeams, honestyRails,
+acceptanceCriteria vs. the JTBD) and let the per-phase passes inherit it; do not repeat it per
+phase. Mode B does NOT run Step H — post-build intent judgment belongs to validate-arc.
 
 **For each task, run the 7-check verification list:**
 
@@ -264,19 +309,23 @@ After reviewing all tasks, output a summary:
 ## Phase {N} Review: <phase name>
 
 Mode: Plan Quality / Post-Execution Audit
+
+(Mode A only) ## Holistic review — the Step H block, first
+
 Tasks reviewed: X
   PASS/READY: Y
+  FIXED (Step 7b auto-repair): F
   CONCERN/NEEDS WORK: Z
   FAIL/BLOCKER: W
 
 ### Findings
 
-(all concerns and failures listed with task reference)
+(all concerns and failures listed with task reference; auto-repaired findings tagged [FIXED] with what changed)
 
 ### Verdict: CLEAN | HAS CONCERNS | BLOCKED
 
-CLEAN = all tasks pass, no issues found
-HAS CONCERNS = minor issues that should be addressed but aren't blockers
+CLEAN = all tasks pass (auto-repaired findings count as pass), Step H verdict SOUND
+HAS CONCERNS = minor issues that should be addressed but aren't blockers, or Step H says RESHAPE/QUESTION
 BLOCKED = critical issues that must be fixed before the phase can be considered complete
 ```
 
