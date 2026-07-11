@@ -135,9 +135,36 @@ Task N.1: <title>
     - [NEEDS WORK] same pattern in settlement-preview.ts:89 — NOT covered by any task
 ```
 
+#### Mode A — Step 7b: Apply plan repairs (auto-fix, then re-verify)
+
+The point of a plan review is a phase that is **fixed and queued**, not a findings list the user
+must relay back. After the 7-check pass, APPLY every finding that is a repair to the PLAN itself
+— directly in the `.phase.ts` file — then re-run the affected checks on the edited plan.
+
+**Auto-repair (the default) — findings whose fix is knowable from the code you already read:**
+- a wrong/imprecise file or line anchor (point the task at the file/symbol you verified)
+- blast-radius gaps (add the uncovered file paths to the owning task's `steps[]`/`files[]`)
+- an unverifiable acceptance criterion (reword to name the command/observable you identified)
+- a malformed/misordered task `dependsOn`, a stale name, a missing `batchMode` split that is
+  purely mechanical
+- an ambiguous either/or left in a task ("shim OR delete") when the code you read makes one arm
+  clearly correct — pick it, record the decision in the task text
+
+**Report-only (never auto-fix) — findings that change the phase's INTENT or need an owner:**
+- the task's `problem` does not exist in source (check 2) — the plan may be wrong at concept level
+- a missing dependency PHASE or a scope change (new work, not a repair of described work)
+- anything contradicting a user-LOCKED decision in the arc/phase, or requiring a product choice
+- unresolved `[NEEDS CLARIFICATION]` markers — those are the planner's questions to the USER
+
+Each auto-repair is listed in the findings output with `[FIXED]` in place of the bare verdict tag,
+naming what changed. Commit the plan edits (explicit paths only) as
+`plan(roadmap): phase N review fixes — <short summary>`, running the consumer's emit/cross-validate
+step (e.g. the `emit` Gate-commands slot) first if phase files feed generated views. The phase
+verdict is issued on the POST-fix plan.
+
 #### Mode A — Step 8: Backlog placement
 
-After the 7-check pass, decide whether and where this phase belongs in `roadmap/backlog.ts`. This step **only runs when the phase verdict is READY** (no BLOCKER, no NEEDS WORK, no unresolved `[NEEDS CLARIFICATION]` markers). NEEDS WORK / BLOCKER phases do NOT enter the backlog — fix the findings first, re-review, then queue.
+After the 7-check pass and Step 7b repairs, decide whether and where this phase belongs in `roadmap/backlog.ts`. This step runs when the **post-fix** verdict is READY (no remaining BLOCKER, no remaining NEEDS WORK, no unresolved `[NEEDS CLARIFICATION]` markers) — auto-repaired findings do not block queueing. Phases with REPORT-ONLY findings still open do NOT enter the backlog — surface them to the user, re-review, then queue.
 
 **Read the current backlog:**
 
@@ -267,7 +294,7 @@ If the phase file references files in another repo (e.g., zeroh2), read those fi
 
 ## What NOT to do
 
-- **Do NOT fix issues** — this skill reports findings, it does not make changes. If fixes are needed, the user runs `/do-phase` or fixes manually.
+- **Mode A fixes the PLAN, never the CODE** — Step 7b auto-repairs the `.phase.ts` (anchors, blast radius, criteria wording) and queues, but this skill never edits source files; source changes belong to `/do-phase`. Mode B (post-execution) stays report-only — findings there mean shipped work is wrong, and the fix goes through a phase, not a review edit.
 - **Do NOT run tests** — this skill reads code and verifies claims. The validation gate runs tests.
 - **Do NOT review code outside the phase scope** — only check what the phase claimed to do, plus blast radius of those changes.
 - **Do NOT weaken findings** — if something is wrong, say so. "Probably fine" is not a verdict.
