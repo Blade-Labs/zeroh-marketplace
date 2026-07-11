@@ -92,13 +92,13 @@ for (const p of phases) {
       let note: string | null = null
       if (r?.status === 'planned') {
         state = 'OPEN-planned'
-        note = r.note ?? null
-        const via = /phase[- ](\d+)/i.exec(r.note ?? '')?.[1]
+        note = r.via ?? null
+        const via = /phase[- ](\d+)/i.exec(r.via ?? '')?.[1]
         const viaPhase = via ? phaseById.get(Number(via)) : undefined
         if (viaPhase && ['done', 'historical'].includes(viaPhase.status)) state = 'RESOLVABLE'
       } else if (r?.status === 'operator-pending') {
         state = 'OPEN-operator'
-        note = r.note ?? null
+        note = r.via ?? null
       }
       entries.push({
         phase: p.phase,
