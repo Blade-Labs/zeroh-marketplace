@@ -16,11 +16,15 @@ User says: `release-sweep`, `release-sweep 0.7.0`, `release-sweep 0.7.0 --archiv
 ## Arguments
 
 ```
-release-sweep [<version>] [--archive]
+release-sweep [<version> | --arc <id> | --all-done] [--archive]
 ```
 
-- `<version>` — semver string matching the schema regex `^\d+\.\d+\.\d+$` (e.g. `0.7.0`, **no `v` prefix** — the schema's `version` field stores the bare semver). If omitted, prompt the user (do NOT guess from `package.json` — the version you're sweeping may not be the current one). The archive directory mirrors this exactly: `roadmap/archive/0.7.0/`.
-- `--archive` — after resolution, move all `status: 'done'` phases with `version: <version>` into `roadmap/archive/<version>/`. Refuses if any open debt remains. Without this flag, the skill is review-only.
+- `<version>` — semver string matching the schema regex `^\d+\.\d+\.\d+$` (e.g. `0.7.0`, **no `v` prefix** — the schema's `version` field stores the bare semver). If omitted and no other selector given, prompt the user (do NOT guess from `package.json` — the version you're sweeping may not be the current one). The archive directory mirrors this exactly: `roadmap/archive/0.7.0/`.
+- `--arc <id>` — ALTERNATIVE SELECTOR: sweep the done phases whose `arcId` matches, regardless of version tag. Exists because consumers that don't version-stamp phases (most, in practice — one estate had 23 tagged out of 1,445) get an empty sweep from the version selector; the arc is their natural debt unit. Archive target: `roadmap/archive/arc-<id>/`.
+- `--all-done` — ALTERNATIVE SELECTOR: sweep EVERY done/historical phase (the estate sweep). Pair with the plugin's mechanical tools — `scripts/debt-census.mts` derives the joined open-debt ledger first, `scripts/debt-dispose.mts` lands the decided resolutions in bulk — so the skill's per-phase protocol is reserved for the entries a human/agent actually has to reason about. Archive with this selector groups by version when tagged, else `roadmap/archive/untagged/`.
+- `--archive` — after resolution, move the selected `status: 'done'` phases into their archive directory. Refuses if any open debt remains on a candidate. Without this flag, the skill is review-only.
+
+> **Estate-scale note.** For thousands of phases, run the census first and work from its ledger (`reviews/debt-census.json`); a `--check` mode also exists as a CI ratchet against a committed ceiling (`reviews/debt-ceiling.json`). See the script headers for contracts.
 
 ## PRIME RULE: ARCHIVE GATES ON CLEAN DEBTS
 

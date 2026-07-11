@@ -24,9 +24,17 @@
  * so the census can't disagree with the roadmap's own validation.
  *
  * Usage (from the consumer repo, which provides tsx):
- *   node --import tsx <plugin>/scripts/debt-census.ts [repo-root] [--json <out.json>] [--md <out.md>]
+ *   node --import tsx <plugin>/scripts/debt-census.ts [repo-root] [--json <out.json>] [--md <out.md>] [--check]
  * Default repo-root: cwd. With no --json/--md, prints the summary + writes
  * reviews/debt-census.json under the repo root.
+ *
+ * --check — the DEBT RATCHET: compares the fresh census against the committed
+ * ceiling at reviews/debt-ceiling.json ({ maxOpen, maxOpenOperator, maxDangling,
+ * ratifiedAt, ratifiedBy }) and exits non-zero when any figure RISES above it.
+ * New debt is fine (arc-sweep disposes it at merge); new UNDISPOSITIONED debt
+ * accumulating past the ceiling is not. When the census comes in BELOW the
+ * ceiling, it prints a reminder to ratchet the ceiling down (never auto-lowers —
+ * the ceiling is user-ratified).
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -182,3 +190,24 @@ console.log(`  CLOSED (fixed/won't_fix/dismissed): ${t.closed}   dangling resolu
 console.log(`  followups: ${t.followupFilesWithOpenMarkers} file(s) with ${t.followupOpenMarkerLines} open-marker line(s)`)
 console.log(`  top arcs by open debt: ${Object.entries(census.byArc).slice(0, 8).map(([a, n]) => `${a}:${n}`).join('  ')}`)
 console.log(`  ledger: ${jsonOut}`)
+
+if (args.includes('--check')) {
+  const ceilingPath = join(repo, 'reviews/debt-ceiling.json')
+  if (!existsSync(ceilingPath)) {
+    console.error(`debt-census --check: no ceiling at ${ceilingPath} — commit one ({ maxOpen, maxOpenOperator, maxDangling, ratifiedAt, ratifiedBy }) to arm the ratchet`)
+    process.exit(1)
+  }
+  const ceiling = JSON.parse(readFileSync(ceilingPath, 'utf8'))
+  const breaches: string[] = []
+  if (t.open > ceiling.maxOpen) breaches.push(`OPEN ${t.open} > ceiling ${ceiling.maxOpen}`)
+  if (t.openOperator > (ceiling.maxOpenOperator ?? Infinity)) breaches.push(`OPEN-operator ${t.openOperator} > ceiling ${ceiling.maxOpenOperator}`)
+  if (t.danglingResolutions > (ceiling.maxDangling ?? Infinity)) breaches.push(`dangling ${t.danglingResolutions} > ceiling ${ceiling.maxDangling}`)
+  if (breaches.length) {
+    console.error(`debt-census --check FAILED (ceiling ratified ${ceiling.ratifiedAt} by ${ceiling.ratifiedBy}):`)
+    for (const b of breaches) console.error(`  ✗ ${b}`)
+    console.error('  dispose the new debt (debt-dispose.mts / arc-sweep) or get a new ceiling ratified — never bump it silently.')
+    process.exit(1)
+  }
+  const slack = ceiling.maxOpen - t.open
+  console.log(`debt-census --check OK (OPEN ${t.open} ≤ ${ceiling.maxOpen}${slack > 25 ? ` — ${slack} under ceiling; consider ratifying it down` : ''})`)
+}
