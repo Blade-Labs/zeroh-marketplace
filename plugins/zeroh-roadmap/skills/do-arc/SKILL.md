@@ -150,10 +150,15 @@ Iterate the member phases in **dependency order** (respect each phase's `depends
   improvised EXECUTOR-liveness reads, which stay script-owned; a beacon'd run has no plugin
   script yet, and the beacon exists precisely to make watching it mechanical). The sentinel
   probes `kill -0 <beacon pid>` + log mtime + the beacon'd DONE marker — never a pattern
-  `pgrep` (same trap as ever). Exit conditions, in strictness order: (1) DONE marker present →
-  completed; (2) failure signature (`FAILED|Traceback|OOM|Killed`) **AND worker gone** — the
-  signature ALONE is not terminal: healthy datagen logs contain `Error`/retry lines from
-  bounded-retry wrappers, so signature-only exits false-fire; (3) worker gone + log stale,
+  `pgrep` (same trap as ever), and ON THE BEACON'S HOST: a training/datagen worker often lives
+  on a remote box (the beacon carries `host`; probe via ssh there — a local `kill -0` on a
+  remote pid proves nothing). Exit conditions, in strictness order: (1) DONE marker present →
+  completed; (2) failure signature (`FAILED|Traceback|OOM|Killed`) **AND worker gone AND
+  settled** (log quiet for minutes, and no NEWER log/attempt exists — an executor mid-relaunch
+  makes brief sig-plus-gone windows normal, so an unsettled read false-verdicts an
+  already-handled failure) — the signature ALONE is never terminal: healthy datagen logs
+  contain `Error`/retry lines from bounded-retry wrappers, so signature-only exits false-fire;
+  (3) worker gone + log stale,
   debounced twice → died silently; (4) worker alive + log stale well past the run's longest
   legitimate quiet period → wedged (probe before killing). Let its exit re-invoke you; on ITS
   wake verify the state yourself, then SendMessage the executor the evidence (completed →

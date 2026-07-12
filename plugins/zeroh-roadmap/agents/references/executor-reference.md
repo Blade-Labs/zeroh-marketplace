@@ -93,10 +93,13 @@ The workable protocol for the remaining (intermediate) long runs:
   of what happens to your session. The mandatory bookkeeping that comes with detachment:
   - The command must end by writing an unambiguous **DONE marker** to its log
     (e.g. `[launcher] DONE rc=$?`) — detachment removes every other completion signal.
-  - **Beacon the worker's `pid` + `sid` + `log` + the DONE-marker string** (`background-run`
-    beacon). This is the orchestrator's cold-start verification AND the kill bookkeeping if the
-    arc is aborted — a detached process outlives everything, so the beacon is the only record
-    it exists. Orphaned workers on a shared box are the cost of skipping this.
+  - **Beacon the worker's `pid` + `sid` + `host` + `log` + the DONE-marker string**
+    (`background-run` beacon; `host` because training/datagen workers often live on a remote
+    box, and every later probe — yours or the orchestrator's — must run THERE, over ssh: a
+    local `kill -0` on a remote pid proves nothing). This is the orchestrator's cold-start
+    verification AND the kill bookkeeping if the arc is aborted — a detached process outlives
+    everything, so the beacon is the only record it exists. Orphaned workers on a shared box
+    are the cost of skipping this.
   - **Compose with the consumer's resource wrapper, never replace it**: the detached command is
     still the documented wrapper (`capbuild …`, `cap-train.sh …`) — `setsid` changes the process
     session, not the resource discipline.
@@ -118,8 +121,11 @@ The workable protocol for the remaining (intermediate) long runs:
     more often than it fails mid-run: yielding on launch turned four serial launcher bugs into
     a full wake-cycle each (2026-07-12, RAGFID 1537 — a bootstrap install failure, flash-attn
     build order, an unsupported CLI flag, a transformers API rename; ~4 h of wall clock for
-    ~4 min of fixes). This COMPOSES with detached launch: launch detached as usual, then watch
-    the log foreground for the first minutes; yield only after the run has proven itself.
+    ~4 min of fixes). For a FIRST-RUN launcher, the strongest form is a bounded foreground
+    smoke of the EXACT command (a few `max_steps`/chunks, minutes not hours) BEFORE the real
+    launch — it converts every launch-class bug into a same-turn fix (this, not patience, is
+    what ended the five-bug loop). Then it COMPOSES with detached launch: launch the real run
+    detached as usual, watch its log until real work ticks, and only then yield.
   - **Version errors align in ONE pass, not serially.** On the FIRST dependency/API-mismatch
     error from a freshly-bootstrapped tool (unexpected kwarg, unknown flag, import error):
     stop patching symptom-by-symptom — read the package's OWN pins (`pip download <pkg>
