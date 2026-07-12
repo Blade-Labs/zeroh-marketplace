@@ -84,6 +84,33 @@ The workable protocol for the remaining (intermediate) long runs:
   check the process table). The Monitor's exit is your guaranteed re-invocation. Only with BOTH
   the background task and that exiting Monitor armed may the turn end — and the turn's last text
   names exactly what is running and which log it writes.
+- **Expected > 30 min external worker (datagen, training, ingest) → launch it DETACHED, by
+  default:** `nohup setsid <cmd> >> <logfile> 2>&1 &` so the worker lives in its OWN process
+  session. A session-limit / account-refresh event kills your API loop AND reaps every process
+  in your harness session tree — a plain backgrounded worker dies with you and its half-run is
+  lost (2026-07-11/12, arc RAGFID phase 1537: two ~90-min generation runs lost to exactly this;
+  the one detached run survived and completed). A detached worker runs to completion regardless
+  of what happens to your session. The mandatory bookkeeping that comes with detachment:
+  - The command must end by writing an unambiguous **DONE marker** to its log
+    (e.g. `[launcher] DONE rc=$?`) — detachment removes every other completion signal.
+  - **Beacon the worker's `pid` + `sid` + `log` + the DONE-marker string** (`background-run`
+    beacon). This is the orchestrator's cold-start verification AND the kill bookkeeping if the
+    arc is aborted — a detached process outlives everything, so the beacon is the only record
+    it exists. Orphaned workers on a shared box are the cost of skipping this.
+  - **Compose with the consumer's resource wrapper, never replace it**: the detached command is
+    still the documented wrapper (`capbuild …`, `cap-train.sh …`) — `setsid` changes the process
+    session, not the resource discipline.
+  - **On every wake, probe the BEACON pid with `kill -0` + the log's mtime/DONE marker** — never
+    a pattern `pgrep` (a pattern match on the launcher script name read a live detached worker
+    as terminal once the launcher shell exited, and can self-match your own poller; both
+    misreads happened live on 2026-07-11). pid-reuse can fake "alive": trust `kill -0` only
+    together with a fresh log.
+  - **Your Monitor/poller stays session-bound and therefore fragile** — it dies with a
+    session-limit kill and its exit-based re-invocation is then gone. Arm it anyway (it is the
+    fast path), but treat it as best-effort: the durable wake chain is the ORCHESTRATOR's
+    watchdog + resume-from-transcript, and your beacon is what makes that resume lossless.
+    Poller-dead + worker-alive is a NORMAL state after an account refresh, never evidence the
+    run failed.
 - **On EVERY wake**: FIRST `pgrep` the runner + read the tail of its log, THEN drive on in that
   same wake turn (parse the result, run the next gate step, commit, or relaunch a dead run). A
   wake turn that ends without advancing the phase is the bug; never "still waiting" twice.

@@ -29,7 +29,11 @@ situation.
    the exit code, no yield. Background ONLY a genuinely >~8-min INTERMEDIATE run, and only AFTER
    committing the work it covers (a durable committed checkpoint is what makes a non-resuming
    turn losslessly recoverable — an uncommitted pause strands the phase), with a `background-run`
-   beacon + a Monitor that exits on the log's terminal line. The FINAL validation → flip-done →
+   beacon + a Monitor that exits on the log's terminal line. A >30-min EXTERNAL worker (datagen,
+   training, ingest) launches DETACHED by default — `nohup setsid`, own process session, DONE
+   marker in its log, pid+sid+log in the beacon — so a session-limit/account-refresh kill of
+   your session cannot reap it (it reaps plain background children AND your Monitor; the
+   reference's long-run protocol has the full discipline). The FINAL validation → flip-done →
    `executionResult` → return is ONE continuous execution: SPLIT an over-cap terminal run into
    foreground scoped runs, never background it and yield. **"Awaiting the Monitor" / "standing
    by" is NEVER your last message** — the Monitor's re-invocation is not guaranteed for a

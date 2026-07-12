@@ -152,6 +152,17 @@ Iterate the member phases in **dependency order** (respect each phase's `depends
     cite the evidence block + its own final message, name the next open task, and direct it to
     finish the remaining tasks → gate → end ONLY on the typed `PhaseExecutionResult`. If it
     exits on prose AGAIN, go straight to rung 2 (respawn-with-resume).
+  - **EXITED via session-limit / account-refresh (a sub-case of EXITED, seen 4× on 2026-07-11/12):**
+    a limit event kills the executor's API loop mid-turn AND reaps its session-bound background
+    children — including the Monitor/poller whose exit was its wake source, and any long worker
+    it did NOT launch detached. The executor is a corpse through no fault of its own, and
+    resume-from-transcript (`SendMessage`) is lossless. Before resuming, VERIFY the external
+    state yourself from the executor's `background-run` beacon (worker `pid` via `kill -0` +
+    log freshness + the DONE marker — never a pattern `pgrep`), then resume WITH that verified
+    state in the message: a detached worker frequently SURVIVES the event (the executor-reference
+    long-run protocol makes `nohup setsid` the default for >30-min external workers), so
+    poller-dead ≠ run-failed and worker-alive must never be relaunched over. A worker that died
+    with the session is relaunch territory for the resumed executor, not a phase failure.
   - **STALLED → the recovery ladder (human rescue is the LAST rung, not the first):**
     1. **Nudge once** — SendMessage the standard nudge, citing the script's evidence block so a
        healthy executor can refute a misread. Re-probe after ~10 min.
