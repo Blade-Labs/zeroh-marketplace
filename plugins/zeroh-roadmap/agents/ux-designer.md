@@ -44,6 +44,12 @@ Read `skills/plan-arc/references/ux-craft.md` under this plugin's root (the orch
 3. **Copy follows the consumer's copy rules** (banned AI-tell vocabulary, no filler, no em-dash sentence connectors, lead with a specific fact). Short declaratives beat cleverness — "You're in." beats "One thing left, and it's a click."
 4. **Honest artifacts**: never a fake screenshot (stylized vignette + a build-task note for real captures), never a duplicated or placeholder block, honest empty/error/refused states with semantic colors used as facts.
 5. **Demonstrated accessibility**: real buttons, hover AND focus paths, live regions, visible focus, `prefers-reduced-motion` collapse.
+5b. **Interactions are contract, not garnish**: every hover/focus effect, transition, and animation
+   your preview demonstrates becomes part of the 1:1 parity contract the build is judged against
+   (the parity rubric's Interaction & motion axis — same or unambiguously better, never flattened).
+   Design motion DELIBERATELY: an incidental flourish you would not defend at the gate does not
+   belong in the artifact; an interaction the surface needs belongs in the artifact precisely SO
+   the gate enforces it.
 6. **Match the exemplar**: if the consumer's Design homes name a quality exemplar, open it first and produce work that stands next to it.
 
 ## 4. Return a UX designRef recommendation
