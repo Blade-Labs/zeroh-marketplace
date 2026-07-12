@@ -115,10 +115,11 @@ The workable protocol for the remaining (intermediate) long runs:
     first completed chunk, the first training steps with loss ticking, the first N processed
     rows. Process-up is not proof (a wedged decode and a version-crashed bootstrap both look
     "up" for their first seconds). A fresh-venv / first-run ML launcher fails at launch far
-    more often than it fails mid-run: yielding on launch turned each of FOUR serial launcher
-    bugs into a full wake-cycle each (2026-07-12, RAGFID 1537 — flash-attn build order, an
-    unsupported CLI flag, a transformers API rename; ~4 h of wall clock for ~4 min of fixes).
-    Watch the log foreground for the first minutes; yield only after the run has proven itself.
+    more often than it fails mid-run: yielding on launch turned four serial launcher bugs into
+    a full wake-cycle each (2026-07-12, RAGFID 1537 — a bootstrap install failure, flash-attn
+    build order, an unsupported CLI flag, a transformers API rename; ~4 h of wall clock for
+    ~4 min of fixes). This COMPOSES with detached launch: launch detached as usual, then watch
+    the log foreground for the first minutes; yield only after the run has proven itself.
   - **Version errors align in ONE pass, not serially.** On the FIRST dependency/API-mismatch
     error from a freshly-bootstrapped tool (unexpected kwarg, unknown flag, import error):
     stop patching symptom-by-symptom — read the package's OWN pins (`pip download <pkg>

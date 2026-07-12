@@ -145,14 +145,21 @@ Iterate the member phases in **dependency order** (respect each phase's `depends
   (2026-07-12, arc RAGFID 1537: four poller deaths in one phase — a completed 90-min run sat
   unnoticed for 37 min, a failed training launch for 3 h, until an orchestrator probe caught
   each). So when a wake (or a STALLED verdict) shows the executor parked on a `background-run`
-  beacon: background a small orchestrator sentinel loop built FROM THE BEACON's fields —
-  `kill -0 <pid>` + log mtime + the DONE marker + failure signatures
-  (`FAILED|Error|Traceback|OOM|Killed`), debounced, exiting on the first actionable state —
-  and let its exit re-invoke you. On ITS wake: verify the state yourself, then SendMessage the
-  executor the evidence (completed → "proceed", failed → the root-cause line from the log,
-  wedged → the kill/relaunch directive). Treat REPEATED STALLED exits while a beacon'd run is
-  live as "watch the run" — never as grounds to kill a healthy executor (rung 2 is for a run
-  that is NOT parked on external work).
+  beacon: background a small orchestrator sentinel loop built FROM THE BEACON's declared fields
+  (this is the NAMED exception to the no-hand-improvised-forensics rule above — that rule bans
+  improvised EXECUTOR-liveness reads, which stay script-owned; a beacon'd run has no plugin
+  script yet, and the beacon exists precisely to make watching it mechanical). The sentinel
+  probes `kill -0 <beacon pid>` + log mtime + the beacon'd DONE marker — never a pattern
+  `pgrep` (same trap as ever). Exit conditions, in strictness order: (1) DONE marker present →
+  completed; (2) failure signature (`FAILED|Traceback|OOM|Killed`) **AND worker gone** — the
+  signature ALONE is not terminal: healthy datagen logs contain `Error`/retry lines from
+  bounded-retry wrappers, so signature-only exits false-fire; (3) worker gone + log stale,
+  debounced twice → died silently; (4) worker alive + log stale well past the run's longest
+  legitimate quiet period → wedged (probe before killing). Let its exit re-invoke you; on ITS
+  wake verify the state yourself, then SendMessage the executor the evidence (completed →
+  "proceed", failed → the root-cause line from the log, wedged → the kill/relaunch directive).
+  Treat REPEATED STALLED exits while a beacon'd run is live as "watch the run" — never as
+  grounds to kill a healthy executor (rung 2 is for a run that is NOT parked on external work).
 
   **On ANY wake, check the return channel BEFORE liveness:** an executor task that already
   completed is not a liveness question. A completed return that parses → the normal
