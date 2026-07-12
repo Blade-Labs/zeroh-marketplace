@@ -92,6 +92,9 @@ The gate set is selected from the phase's `kind` field (introduced in `@zeroh-ro
 | `hardening` | All four stages **plus** the bug-fix closure rule from `review-phase` Mode B Step 2(b): for any persistence/event/marshal-chain task, the integration-suite rerun is the closure criterion. Quote the integration test diff in the compromise summary. Unit-test pass alone is NOT sufficient. |
 | `release` | All four stages **plus** the `e2e` slot in Round 1's mechanical checks. |
 
+**Orthogonal to this table:** the **Design-parity stage** (below) runs for ANY kind whenever the
+phase implements a `ux` designRef — a `mockup` phase that skips the review chain still runs it.
+
 If `kind` is missing on a legacy phase, treat as `logic` and emit a one-time warning pointing at `scripts/migrate/audit.ts`.
 
 The `kind` field is required at schema parse time; the legacy fallback only covers phases authored before v3.
