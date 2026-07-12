@@ -114,14 +114,19 @@ escalation). A design the user confirmed is a CONTRACT; "roughly inspired by" is
 **Protocol (a LOOP, not a checkbox):**
 1. Render the built surface via the consumer's `live-ui` Validation-tiers binding (or the consumer's
    dev-server + screenshot lane when the binding needs a deploy). Capture screenshot(s) of every
-   state the design artifact shows (default, loading, error, empty — the states ARE part of the design).
+   state the design artifact shows (default, loading, error, empty — the states ARE part of the
+   design) — AND drive every interaction the design defines: hover/focus each styled control,
+   trigger the transitions/animations (open/close, expand, reveal), and screenshot the hovered/
+   focused/mid-transition states. A static screenshot pass is blind to interaction drift — the
+   drift users notice first.
 2. Open the design artifact named by the designRef `ref` (static HTML preview → render + screenshot
-   it too; a prose layout note → read it).
+   it too, AND drive its interactions the same way; a prose layout note → read it).
 3. Compare side by side with a vision-capable judgment against the parity rubric (the
    `intent-validator` agent's "UX design-parity rubric" section — same rubric, applied per phase):
-   layout structure, component presence/hierarchy, states, copy, and visual tokens
-   (spacing/typography/color family). Judged-equivalent is fine; missing/moved/renamed/degraded is a
-   deviation.
+   layout structure, component presence/hierarchy, states, interaction & motion (hover/focus
+   effects, transitions/animations — same or unambiguously better, never flattened or inert), copy,
+   and visual tokens (spacing/typography/color family). Judged-equivalent is fine;
+   missing/moved/renamed/degraded is a deviation.
 4. Every MATERIAL deviation → fix it in this phase, re-render, re-compare. Loop until parity or
    until a deviation is genuinely out of the phase's scope — that residual is recorded in the
    phase's `compromises` naming the designRef + the exact deviation (never silently shipped), and it

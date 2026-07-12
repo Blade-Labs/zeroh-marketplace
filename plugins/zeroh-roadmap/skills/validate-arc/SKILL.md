@@ -28,8 +28,9 @@ User says: `validate arc <id>`, `/validate-arc <id>`, `check arc <id> met its in
 3. **UX design-parity fail-safe (the one sanctioned derivation — NOT criteria invention).** Read
    `arc.designRefs`. For every `kind: 'ux'` designRef with NO matching `ux-parity:*` criterion in
    `acceptanceCriteria`, DERIVE the standard parity criterion (the plan-arc Step 1b(4) template:
-   tier `live-ui`, signal = side-by-side screenshots of the shipped surface vs the rendered design
-   artifact across every state the design shows, judged by the parity rubric) and ADD it to the
+   tier `live-ui`, signal = side-by-side comparison of the shipped surface vs the rendered design
+   artifact across every state the design shows AND every interaction it defines — hover/focus,
+   transitions, animations, driven live — judged by the parity rubric) and ADD it to the
    panel for THIS run (do not edit the arc file — record `derived: true` in the report). This is
    not circular: the design artifact was USER-CONFIRMED at the design gate, so the intent is
    ratified — only the check was missing. A confirmed design with no parity check is exactly how
