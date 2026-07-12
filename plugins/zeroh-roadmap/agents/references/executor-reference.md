@@ -111,6 +111,21 @@ The workable protocol for the remaining (intermediate) long runs:
     watchdog + resume-from-transcript, and your beacon is what makes that resume lossless.
     Poller-dead + worker-alive is a NORMAL state after an account refresh, never evidence the
     run failed.
+  - **Proof-before-yield:** never yield on a launch that has not yet LOGGED REAL WORK — the
+    first completed chunk, the first training steps with loss ticking, the first N processed
+    rows. Process-up is not proof (a wedged decode and a version-crashed bootstrap both look
+    "up" for their first seconds). A fresh-venv / first-run ML launcher fails at launch far
+    more often than it fails mid-run: yielding on launch turned each of FOUR serial launcher
+    bugs into a full wake-cycle each (2026-07-12, RAGFID 1537 — flash-attn build order, an
+    unsupported CLI flag, a transformers API rename; ~4 h of wall clock for ~4 min of fixes).
+    Watch the log foreground for the first minutes; yield only after the run has proven itself.
+  - **Version errors align in ONE pass, not serially.** On the FIRST dependency/API-mismatch
+    error from a freshly-bootstrapped tool (unexpected kwarg, unknown flag, import error):
+    stop patching symptom-by-symptom — read the package's OWN pins (`pip download <pkg>
+    --no-deps` + its requirements, or its repo's setup.py/pyproject) and align the whole
+    environment in one recorded pass. Pin the resolved versions IN the committed launcher's
+    bootstrap (reproducibility is part of the recipe; an unpinned bootstrap re-breaks on the
+    next box).
 - **On EVERY wake**: FIRST `pgrep` the runner + read the tail of its log, THEN drive on in that
   same wake turn (parse the result, run the next gate step, commit, or relaunch a dead run). A
   wake turn that ends without advancing the phase is the bug; never "still waiting" twice.

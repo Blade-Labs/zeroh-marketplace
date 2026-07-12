@@ -137,6 +137,23 @@ Iterate the member phases in **dependency order** (respect each phase's `depends
   those false-verdict classes are structurally gone; executor-watch additionally debounces —
   two consecutive STALLED reads before exit 3).
 
+  **When the executor yields on a beacon'd EXTERNAL run, arm a second sentinel — on the RUN,
+  not the executor.** `executor-watch` reads executor liveness; an executor legitimately parked
+  awaiting a detached external run (datagen, training, ingest) reads STALLED there while the
+  real question — is the RUN alive? — goes unwatched. And the executor's own completion poller
+  is session-bound: account/login events reap it silently, so its exit-wake is best-effort
+  (2026-07-12, arc RAGFID 1537: four poller deaths in one phase — a completed 90-min run sat
+  unnoticed for 37 min, a failed training launch for 3 h, until an orchestrator probe caught
+  each). So when a wake (or a STALLED verdict) shows the executor parked on a `background-run`
+  beacon: background a small orchestrator sentinel loop built FROM THE BEACON's fields —
+  `kill -0 <pid>` + log mtime + the DONE marker + failure signatures
+  (`FAILED|Error|Traceback|OOM|Killed`), debounced, exiting on the first actionable state —
+  and let its exit re-invoke you. On ITS wake: verify the state yourself, then SendMessage the
+  executor the evidence (completed → "proceed", failed → the root-cause line from the log,
+  wedged → the kill/relaunch directive). Treat REPEATED STALLED exits while a beacon'd run is
+  live as "watch the run" — never as grounds to kill a healthy executor (rung 2 is for a run
+  that is NOT parked on external work).
+
   **On ANY wake, check the return channel BEFORE liveness:** an executor task that already
   completed is not a liveness question. A completed return that parses → the normal
   collect-and-branch. A completed return that is prose with the phase not done → the parse
