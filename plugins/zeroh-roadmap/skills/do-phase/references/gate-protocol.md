@@ -96,6 +96,40 @@ If `kind` is missing on a legacy phase, treat as `logic` and emit a one-time war
 
 The `kind` field is required at schema parse time; the legacy fallback only covers phases authored before v3.
 
+## Design-parity stage (runs whenever the phase implements a `ux` designRef)
+
+**Trigger:** the phase's tasks cite an arc designRef with `kind: 'ux'` (plan-arc Step 2b requires the
+citation) AND the phase's diff touches a rendered surface. Applies to EVERY kind — `mockup`
+included (a mockup phase that builds a designed surface is exactly the case this exists for).
+
+**Why this stage exists (history):** arcs shipped with ratified UX previews (a static HTML design
+the user confirmed at the design gate) whose DELIVERED surfaces drifted — the per-phase gate judged
+code, arc-sweep judged the diff, and nobody put the rendered pixels next to the design until the
+user did it themselves in production (Ask Ali web, the Studio builder, Agent HQ — 2026-07 user
+escalation). A design the user confirmed is a CONTRACT; "roughly inspired by" is a silent breach.
+
+**Protocol (a LOOP, not a checkbox):**
+1. Render the built surface via the consumer's `live-ui` Validation-tiers binding (or the consumer's
+   dev-server + screenshot lane when the binding needs a deploy). Capture screenshot(s) of every
+   state the design artifact shows (default, loading, error, empty — the states ARE part of the design).
+2. Open the design artifact named by the designRef `ref` (static HTML preview → render + screenshot
+   it too; a prose layout note → read it).
+3. Compare side by side with a vision-capable judgment against the parity rubric (the
+   `intent-validator` agent's "UX design-parity rubric" section — same rubric, applied per phase):
+   layout structure, component presence/hierarchy, states, copy, and visual tokens
+   (spacing/typography/color family). Judged-equivalent is fine; missing/moved/renamed/degraded is a
+   deviation.
+4. Every MATERIAL deviation → fix it in this phase, re-render, re-compare. Loop until parity or
+   until a deviation is genuinely out of the phase's scope — that residual is recorded in the
+   phase's `compromises` naming the designRef + the exact deviation (never silently shipped), and it
+   becomes an arc-level item validate-arc's parity criterion will re-catch.
+5. Record the outcome as a `gateRounds` entry (`agent: 'design-parity'`, verdict `clean` |
+   `deviations-recorded`, summary naming the screenshots compared and any residuals).
+
+**No self-grading shortcut:** the comparison uses fresh eyes — a spawned reviewer/judge with the two
+images, never the implementing agent squinting at its own build. Under arc-mode the executor spawns
+it like any gate agent; inline, the do-phase runner spawns it.
+
 
 ---
 

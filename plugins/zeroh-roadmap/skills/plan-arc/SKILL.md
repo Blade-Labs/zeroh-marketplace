@@ -87,8 +87,28 @@ The **orchestrator** (not the architect — the architect advises, the orchestra
 1. Spawn the **`ux-designer`** agent — an advisor, like the architect. It reads the consumer's UX canon, designs the surface's layout within it, and **decides per arc** whether a prose layout note or a static HTML preview is warranted (its call — a preview for a net-new surface, prose for a tweak/extension). It produces that artifact and returns a recommended UX designRef.
 2. The **orchestrator** records the UX designRef `{ kind: 'ux', ref: <layout-note / preview path>, status: 'reused' | 'designed', summary }` onto the arc (`designRefs`) — `reused` when the surface follows an existing canonical pattern, `designed` when a new layout was created.
 3. **Confirm.** PAUSE for the user's explicit go on the UX design before continuing — the user is the design gate, same as the architecture sub-gate. A no-surface arc skips this sub-gate (record the skip; never silent).
+4. **Mint the paired design-parity criterion (MANDATORY — not the author's option).** A confirmed
+   `ux` designRef is a CONTRACT: the shipped surface must match it 1:1, not "take inspiration from
+   it". For EVERY `kind: 'ux'` designRef, the orchestrator adds a matching entry to the arc's
+   `acceptanceCriteria`:
+   ```typescript
+   {
+     id: 'ux-parity:<short-ref-slug>',
+     job: 'The shipped <surface> matches the confirmed design (<ref>) 1:1 — the design the user signed off is what ships.',
+     surfaces: [<the surface>],
+     signal: 'Side-by-side screenshots (shipped surface vs the rendered design artifact, every state the design shows) judged against the UX design-parity rubric with no material deviation.',
+     tier: 'live-ui',
+     bar: 'Layout structure, component presence/hierarchy, states, copy, and visual tokens all match; judged-equivalent allowed, missing/moved/renamed/degraded is a deviation. Ratified descopes are the only exemption.',
+   }
+   ```
+   An arc with `ux` designRefs but no `ux-parity:*` criteria is malformed — validate-arc DERIVES the
+   criterion anyway (its fail-safe), but minting it here is what lets member phases carry the
+   per-phase design-parity gate stage (gate-protocol.md "Design-parity stage") instead of
+   discovering drift only at arc end. History: Ask Ali web / Studio / Agent HQ each shipped off
+   their confirmed previews because nothing downstream re-opened the design artifact (2026-07 user
+   escalation) — this pairing is the closure.
 
-The confirmed `designRefs` are now the design spec the rest of plan-arc builds on: Step 2b plans each member phase against them, and `arc-sweep` later judges the build's conformance.
+The confirmed `designRefs` are now the design spec the rest of plan-arc builds on: Step 2b plans each member phase against them (each surface-building phase citing a `ux` designRef inherits the design-parity gate stage), `validate-arc` judges the paired `ux-parity:*` criteria at arc end, and `arc-sweep` judges the build's conformance.
 
 ## Step 2a: Reserve a contiguous phase-number block FIRST
 

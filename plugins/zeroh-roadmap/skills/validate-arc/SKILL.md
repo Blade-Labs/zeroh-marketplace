@@ -25,6 +25,16 @@ User says: `validate arc <id>`, `/validate-arc <id>`, `check arc <id> met its in
 
 1. Call `discoverArcs()` and select the arc whose `id` equals `<id>`. If none matches, STOP: `No arc with id <id>. Run /plan-arc first, or check the id.`
 2. Read `arc.acceptanceCriteria`. **If it is empty, STOP with an HONEST no-op:** report `Arc <id> declares no acceptance criteria — validate-arc is a no-op. (Author criteria in plan-arc Step 1 to make this gate real.)` Do NOT invent criteria to judge against — that is circular. When criteria DO exist, note that they are **immutable post-planning** (the 1367 validator enforces it via `criteriaRatifications`), so the intent judged here is always the ORIGINAL — never one quietly narrowed during the build.
+3. **UX design-parity fail-safe (the one sanctioned derivation — NOT criteria invention).** Read
+   `arc.designRefs`. For every `kind: 'ux'` designRef with NO matching `ux-parity:*` criterion in
+   `acceptanceCriteria`, DERIVE the standard parity criterion (the plan-arc Step 1b(4) template:
+   tier `live-ui`, signal = side-by-side screenshots of the shipped surface vs the rendered design
+   artifact across every state the design shows, judged by the parity rubric) and ADD it to the
+   panel for THIS run (do not edit the arc file — record `derived: true` in the report). This is
+   not circular: the design artifact was USER-CONFIRMED at the design gate, so the intent is
+   ratified — only the check was missing. A confirmed design with no parity check is exactly how
+   Ask Ali web / Studio / Agent HQ shipped off-design (2026-07). A `ux` designRef pointing at a
+   missing/moved artifact → a GAP naming the broken ref, never a silent skip.
 
 ## Step 1: Confirm the arc is built and the surface is runnable
 

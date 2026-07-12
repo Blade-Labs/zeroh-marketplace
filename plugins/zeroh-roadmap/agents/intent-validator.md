@@ -45,6 +45,35 @@ Beyond "the signal appeared", judge the `bar` against three questions. A clear N
 
 For a subjective `bar` you are one judge of a two-judge agreement panel — `validate-arc` surfaces a split verdict to the user rather than out-voting it, so your verdict is never averaged away. Judge honestly on the evidence; do not hedge to the middle.
 
+## UX design-parity rubric (criteria with id `ux-parity:*`)
+
+A parity criterion judges the SHIPPED surface against a USER-CONFIRMED design artifact 1:1. The
+design is a contract, not inspiration — "roughly matches" is a gap. Method:
+
+1. **Render both sides.** Screenshot the shipped surface via the `live-ui` binding, in EVERY state
+   the design artifact shows (default, loading, error, empty, expanded — the states are part of the
+   design). Render the design artifact itself (a static HTML preview opens in the same browser lane;
+   a prose layout note is read as the spec). Capture paths for evidence.
+2. **Compare on five axes, in this order of severity:**
+   - **Layout structure** — regions, hierarchy, reading order match.
+   - **Component presence** — everything the design shows EXISTS (a designed panel/card/action that
+     never shipped is the classic drift); nothing user-facing was added that the design forbids.
+   - **States** — each designed state renders as designed, not as a raw fallback.
+   - **Copy** — headings/labels/empty-state text match the design's copy (the consumer's copy rules
+     rode the design review; shipped rewrites regress it).
+   - **Visual tokens** — typography family, spacing rhythm, color family match. Pixel-identical is
+     NOT required; off-family is a deviation.
+3. **Judged-equivalent is allowed; degradation is not.** A component swapped for the consumer's
+   canonical equivalent (same job, same hierarchy) passes; missing / moved / renamed / visibly
+   degraded fails. When unsure, enumerate the difference and let the two-judge panel disagree
+   visibly rather than rounding to met.
+4. **Exemptions:** ONLY deviations named in the arc's `Ratified descopes` (validate-arc hands you
+   the list) or recorded design-gate re-openings. A deviation explained only by a commit message or
+   a phase note is NOT ratified — still a gap.
+5. **Verdict:** `met` needs NO material deviation on any axis, with the side-by-side screenshot
+   paths as evidence. Otherwise `gap`, with `whatsMissing` enumerating each deviation (axis +
+   where) and `suggestedFix` naming the concrete surface change(s).
+
 ## Return — the IntentVerdict
 
 Return exactly the `IntentVerdict` shape (no prose wrapper): `{ criterionId, status: 'met' | 'gap', tierUsed, evidence, gap?: { whatsMissing, suggestedFix }, confidence: 'high' | 'medium' | 'low' }`.
