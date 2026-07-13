@@ -491,7 +491,7 @@ The schema enforces gate results when `status: 'done'`. The `types` slot catches
 2. Run the `types` slot — confirms gate enforcement passes.
 3. Run the `emit` slot to regenerate `reviews/changelog.json`.
 4. Commit: `docs(roadmap): mark phase N complete` (include compromise summary in commit body).
-5. Push to develop.
+5. Push to develop — inline (non-arc) runs only. In arc-mode the executor never pushes: landing and pushing belong to the do-arc orchestrator (Step 8's landing mechanics).
 
 ### Alternative: automated metrics
 
