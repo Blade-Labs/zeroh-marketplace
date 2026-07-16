@@ -119,7 +119,10 @@ async function serializeSharedMutation(phase, { repoRoot, cfg }) {
     writeFileSync(backlogPath, groomed.source)
   }
   const emit = resolveSlot(cfg, 'emit')
-  if (emit.command && !emit.declaredAbsent) await runSlot(emit, { cwd: repoRoot })
+  // A MISSING emit binding fails loud (the arc honesty rail: a missing gate slot never
+  // silently no-ops); a `declaredAbsent` ('none') emit is a deliberate consumer opt-out.
+  if (emit.refused) return buildHaltPayload('failed', { phase, evidence: { emitSlot: emit.refused } })
+  if (emit.command) await runSlot(emit, { cwd: repoRoot })
   return null
 }
 

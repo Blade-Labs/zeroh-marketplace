@@ -105,9 +105,12 @@ test('classifyNextAction — a blocked fixture short-circuits to halt', () => {
 })
 
 // ── detectSelfDescope ─────────────────────────────────────────────────────────────────
+// Keys match EXACTLY what arc-plane.workflow.mjs feeds detectSelfDescope: `acceptanceCriteria`
+// (the phase's), `tasks[].acceptanceCriteria`, and `arcCriteria` (the mapped arc criteria).
 const PHASE_DATA = {
   acceptanceCriteria: ['The masking service enforces every configured category before any model call'],
-  arcAcceptanceCriteria: ['A consumer arc runs end-to-end with every transition a CLI call a test can replay'],
+  tasks: [{ acceptanceCriteria: ['The ledger append is hash-chained across every governed turn'] }],
+  arcCriteria: ['A consumer arc runs end-to-end with every transition a CLI call a test can replay'],
 }
 test('detectSelfDescope — routine decisionRef compromise stays empty', () => {
   const result = { compromises: [{ text: 'used the injected fetcher instead of a live call', decisionRef: 'architect PROCEED_WITH_FIX' }], skipped: 'None' }
@@ -122,11 +125,17 @@ test('detectSelfDescope — flags a skipped entry narrowing a task criterion', (
   assert.equal(m.length, 1)
   assert.equal(m[0].kind, 'task')
 })
-test('detectSelfDescope — flags a compromise narrowing an ARC acceptanceCriterion', () => {
+test('detectSelfDescope — flags a compromise narrowing an ARC criterion (arcCriteria, the production key)', () => {
   const result = { compromises: ['the land transition is not something a test can replay — it stays narrated in prose'] }
   const m = detectSelfDescope(result, PHASE_DATA)
   assert.equal(m.length, 1)
   assert.equal(m[0].kind, 'arc')
+})
+test('detectSelfDescope — flags a skipped narrowing a tasks[].acceptanceCriteria entry', () => {
+  const result = { skipped: ['the ledger append is not hash-chained across a resumed turn'] }
+  const m = detectSelfDescope(result, PHASE_DATA)
+  assert.equal(m.length, 1)
+  assert.equal(m[0].kind, 'task')
 })
 test('detectSelfDescope — no criteria to check → empty (never a false positive)', () => {
   assert.deepEqual(detectSelfDescope({ skipped: ['dropped a whole feature'] }, {}), [])

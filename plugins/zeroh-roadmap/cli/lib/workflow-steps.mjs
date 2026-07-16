@@ -129,10 +129,8 @@ function collectCriteria(phaseData = {}) {
     }
   }
   push(phaseData.acceptanceCriteria, 'task')
-  push(phaseData.taskCriteria, 'task')
   for (const t of phaseData.tasks ?? []) push(t?.acceptanceCriteria, 'task')
   push(phaseData.arcCriteria, 'arc')
-  push(phaseData.arcAcceptanceCriteria, 'arc')
   return out
 }
 
