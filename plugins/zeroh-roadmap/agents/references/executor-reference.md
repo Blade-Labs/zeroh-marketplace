@@ -1,187 +1,62 @@
 # phase-executor reference
 
-The full rationale and edge cases behind `agents/phase-executor.md` (the operating card).
-The card is the always-hot surface; this file is what you consult when a situation is not
-covered by it. Nothing here overrides a card NEVER-rule.
+What you consult when the card (`agents/phase-executor.md`) doesn't cover a situation; nothing here
+overrides a card NEVER-rule. The do-phase rules are NOT restated — `skills/do-phase/SKILL.md` is
+the single statement.
 
-## Full do-phase inheritance
+## Long-run survival protocol (card never-rule 2)
 
-You are a do-phase runner: **every rule that applies to an inline `do-phase` run applies to
-you, verbatim** — read `skills/do-phase/SKILL.md` and `skills/do-phase/references/gate-protocol.md`.
+A long run cannot always be one foreground Bash call (the tool caps foreground timeouts at ~10
+min; shared-host rules mandate backgrounding long commands). Two hard rules make it safe:
 
-- **Prime Rule 1** — no compromises; escalate to `software-architect` (foreground, single
-  hop) before writing any non-`"None"` compromise, hardcode, silenced ambiguity, TODO, or
-  would-stop. Apply the verdict literally. (Card never-rule 1 is the arc-mode face of this: a
-  hard `ESCALATE_TO_USER` verdict returns `status: "escalated"`, it does not stop and ask.)
-- **Prime Rule 2** — one task at a time, one task = one commit, verify between each. No
-  batching except `batchMode: true` tasks (run the Batch Protocol).
-- **The kind-selected gate** — `phase.kind` picks the gate set (mockup / logic / hardening /
-  release). Run the Round 0 quality pass → Rounds 1..N correctness loop where the
-  kind requires it. Zero findings to pass. Running inside an executor never licenses skipping a
-  gate stage, batching tasks, or accepting a compromise the architect did not bless.
+- **Commit before you background.** A backgrounded run must sit on a COMMITTED checkpoint, so a
+  turn that never resumes is losslessly recoverable — the orchestrator reads the persisted state
+  and drives on. An uncommitted background-and-yield strands the phase; the Monitor's
+  re-invocation is NOT guaranteed.
+- **Never background the TERMINAL run** (the final validation you commit + return in one flow).
+  SPLIT it into foreground-sized scoped runs — under arc-mode the gate is the phase-relevant SCOPED
+  tests, foreground-sized by construction. A bare prose turn end mid-phase is unlicensed and reads
+  as EXITED.
 
-## Capability + spawn boundary
+The protocol for the remaining (intermediate) long runs:
 
-You hold the `Agent` tool (unlike `software-developer` / `test-engineer`) for ONE reason:
-do-phase itself spawns sub-agents, and those calls must originate from the runner. The `Agent`
-tool exists ONLY to spawn the do-phase-authorized sub-agents:
-- `software-architect` — Prime Rule 1 escalations.
-- `test-engineer` — `testMode: "tdd" | "e2e"` tasks.
-- the gate chain — `quality-pass`, `code-reviewer` — at the Step 4 gate.
-
-Everything else is forbidden. You MUST NOT spawn:
-- another **phase-executor** (no nested executor — recursion stops at you; the authorized
-  sub-agents hold NO `Agent` tool, a hard boundary, so they cannot spawn anything — you are the
-  single spawn-capable node),
-- **`do-arc`** (the orchestrator spawned you; you never spawn it back),
-- **`Explore`** / **`general-purpose`** / arbitrary `Task` forks, or any fork that absorbs a
-  phase task because it "feels too big" (a too-big task is either fine to push through or
-  wrongly planned — STOP and surface it, never offload it).
-
-**Inline-supervised (heavy-band) exemption:** when the do-arc orchestrator runs a heavy-band
-phase inline-supervised (do-arc's recursion bands), IT — not you — drives `software-developer`/
-`test-engineer` per task while owning every commit, transparencyReport, and the gate. That is a
-sanctioned orchestrator pattern, a named exemption to the auto-spawn ban, not a licence for an
-executor to offload its own tasks.
-
-## Long-run survival protocol — the mechanics (card never-rule 2)
-
-The failure, seen on four+ arcs (recurred 3× on 2026-07-05 — the "mid-build pause"): the
-executor starts a long suite in the background, ends its turn "waiting"/"standing by", then
-either burns wake cycles doing nothing or goes permanently quiet after the process dies —
-stalling the whole arc until a human nudges it. The old rule ("never end your turn to wait")
-was IMPOSSIBLE for the runs that matter: a 15-20 min suite cannot run as one foreground Bash
-call (the tool caps foreground timeouts at 10 min) and shared-host rules mandate backgrounding
-long commands. Two hard rules make the rest safe:
-
-- **Commit before you background.** A backgrounded run must sit on top of a COMMITTED checkpoint
-  (the task/gate work it validates is already committed), so a turn that never resumes is
-  losslessly recoverable — the orchestrator reads the persisted state and drives on. An
-  uncommitted background-and-yield (the 2026-07-05 537 case: 6 files uncommitted) strands the
-  phase; the Monitor's re-invocation is NOT guaranteed.
-- **Never background the TERMINAL run** (the final validation whose result you commit + return in
-  the same flow). SPLIT it into foreground-sized scoped runs instead — under arc-mode the gate is
-  the phase-relevant SCOPED tests, not the full suite, so it is foreground-sized by construction.
-  "Awaiting the Monitor" is never a terminal message.
-- **A bare turn end is the same death without the excuse.** The 2026-07-09 variant had NO long
-  run in flight: the executor committed a task, then ended its turn on a plain status line
-  ("committed 1397.1, prepping 1397.2") — the turn was over, nothing re-invoked it, five hours
-  lost. Backgrounding is a *licensed* turn end (checkpoint + beacon + armed Monitor); a prose
-  turn end mid-phase is an *unlicensed* one, and the liveness reader now reports it as EXITED
-  (your final end_turn record is a fact, not an inference). The only other legal last message is
-  the typed `PhaseExecutionResult`.
-
-The workable protocol for the remaining (intermediate) long runs:
-
-- **Expected ≤ 8 min** (single suites, builds, scoped tests): run **foreground** under the
-  consumer's documented wrapper (e.g. capbuild) with an explicit `timeout`. Block. No yield.
-- **Expected > 8 min** AND intermediate (not the terminal run): background it to a log
-  file — and **in the same turn, before ending it**, (a) beacon `background-run` with
-  `log: <logfile>` (this is the writer for the liveness reader's log-growth ALIVE lane — without
-  it, a legitimately quiet >45-min backgrounded run can read STALLED), and (b) arm a Monitor whose
-  script EXITS on the log's terminal line, and ALSO emits on failure signatures
-  (`FAILED|Error|not ok|Killed|OOM|exit [1-9]`) and on a ~5-min log-size stall (so you wake to
-  check the process table). The Monitor's exit is your guaranteed re-invocation. Only with BOTH
-  the background task and that exiting Monitor armed may the turn end — and the turn's last text
-  names exactly what is running and which log it writes.
-- **Expected > 30 min external worker (datagen, training, ingest) → launch it DETACHED, by
-  default:** `nohup setsid <cmd> >> <logfile> 2>&1 &` so the worker lives in its OWN process
-  session. A session-limit / account-refresh event kills your API loop AND reaps every process
-  in your harness session tree — a plain backgrounded worker dies with you and its half-run is
-  lost (2026-07-11/12, arc RAGFID phase 1537: two ~90-min generation runs lost to exactly this;
-  the one detached run survived and completed). A detached worker runs to completion regardless
-  of what happens to your session. The mandatory bookkeeping that comes with detachment:
-  - The command must end by writing an unambiguous **DONE marker** to its log
-    (e.g. `[launcher] DONE rc=$?`) — detachment removes every other completion signal.
-  - **Beacon the worker's `pid` + `sid` + `host` + `log` + the DONE-marker string**
-    (`background-run` beacon; `host` because training/datagen workers often live on a remote
-    box, and every later probe — yours or the orchestrator's — must run THERE, over ssh: a
-    local `kill -0` on a remote pid proves nothing). This is the orchestrator's cold-start
-    verification AND the kill bookkeeping if the arc is aborted — a detached process outlives
-    everything, so the beacon is the only record it exists. Orphaned workers on a shared box
-    are the cost of skipping this.
-  - **Compose with the consumer's resource wrapper, never replace it**: the detached command is
-    still the documented wrapper (`capbuild …`, `cap-train.sh …`) — `setsid` changes the process
-    session, not the resource discipline.
-  - **On every wake, probe the BEACON pid with `kill -0` + the log's mtime/DONE marker** — never
-    a pattern `pgrep` (a pattern match on the launcher script name read a live detached worker
-    as terminal once the launcher shell exited, and can self-match your own poller; both
-    misreads happened live on 2026-07-11). pid-reuse can fake "alive": trust `kill -0` only
-    together with a fresh log.
-  - **Your Monitor/poller stays session-bound and therefore fragile** — it dies with a
-    session-limit kill and its exit-based re-invocation is then gone. Arm it anyway (it is the
-    fast path), but treat it as best-effort: the durable wake chain is the ORCHESTRATOR's
-    watchdog + resume-from-transcript, and your beacon is what makes that resume lossless.
-    Poller-dead + worker-alive is a NORMAL state after an account refresh, never evidence the
-    run failed.
-  - **Proof-before-yield:** never yield on a launch that has not yet LOGGED REAL WORK — the
-    first completed chunk, the first training steps with loss ticking, the first N processed
-    rows. Process-up is not proof (a wedged decode and a version-crashed bootstrap both look
-    "up" for their first seconds). A fresh-venv / first-run ML launcher fails at launch far
-    more often than it fails mid-run: yielding on launch turned four serial launcher bugs into
-    a full wake-cycle each (2026-07-12, RAGFID 1537 — a bootstrap install failure, flash-attn
-    build order, an unsupported CLI flag, a transformers API rename; ~4 h of wall clock for
-    ~4 min of fixes). For a FIRST-RUN launcher, the strongest form is a bounded foreground
-    smoke of the EXACT command (a few `max_steps`/chunks, minutes not hours) BEFORE the real
-    launch — it converts every launch-class bug into a same-turn fix (this, not patience, is
-    what ended the five-bug loop). Then it COMPOSES with detached launch: launch the real run
-    detached as usual, watch its log until real work ticks, and only then yield.
-  - **Version errors align in ONE pass, not serially.** On the FIRST dependency/API-mismatch
-    error from a freshly-bootstrapped tool (unexpected kwarg, unknown flag, import error):
-    stop patching symptom-by-symptom — read the package's OWN pins (`pip download <pkg>
-    --no-deps` + its requirements, or its repo's setup.py/pyproject) and align the whole
-    environment in one recorded pass. Pin the resolved versions IN the committed launcher's
-    bootstrap (reproducibility is part of the recipe; an unpinned bootstrap re-breaks on the
-    next box).
-- **On EVERY wake**: FIRST `pgrep` the runner + read the tail of its log, THEN drive on in that
-  same wake turn (parse the result, run the next gate step, commit, or relaunch a dead run). A
-  wake turn that ends without advancing the phase is the bug; never "still waiting" twice.
-- **A quiet Monitor is not evidence of a live run — the process table is.** If `pgrep` finds
-  nothing, the run is DONE or DEAD: read its log and drive on now.
-- **Splitting beats waiting**: prefer several foreground-sized runs of the `integration-scoped`
-  / `unit-scoped` slot (`{files}` = specific suites) over one giant background run — same
-  coverage, no yield risk. Never improvise a filter onto the full slot; an unbound scoped slot
-  means run the full slot and record the honest `scoped slot missing — ran full suite` note.
-
-## Liveness-nudge protocol (card gate section)
-
-The orchestrator watches you with `scripts/executor-liveness.mjs` (evidence-first verdicts, no
-improvised stat/pgrep). A nudge WHILE you are healthy is a misread, not an order: reply with
-concrete state — branch, commits landed, current stage, what is verifiably running — and carry
-on exactly where you were. Never restart completed tasks, re-run a live gate stage, or abandon
-in-flight sub-agents because a watchdog misread your liveness. If the orchestrator kills and
-respawns you for a genuine stall, you re-enter via the do-phase mid-phase resume path (skip
-commit-verified done tasks; identical record-keeping).
+- **≤ ~8 min** (single suites, builds, scoped tests): run FOREGROUND under the consumer's
+  documented wrapper (e.g. capbuild) with an explicit `timeout`. Block. No yield.
+- **> ~8 min AND intermediate**: background it to a log file — and in the SAME turn, before ending
+  it, (a) beacon `background-run` with `log: <logfile>` (without it a quiet >45-min run reads
+  STALLED), and (b) arm a Monitor whose script EXITS on the log's terminal line, on failure
+  signatures (`FAILED|Error|not ok|Killed|OOM|exit [1-9]`), and on a ~5-min log-size stall — its
+  exit is your guaranteed re-invocation. Only with BOTH armed may the turn end.
+- **> ~30 min external worker (datagen, training, ingest) → launch DETACHED**: `nohup setsid <cmd>
+  >> <log> 2>&1 &` so it lives in its OWN process session — a session-limit / account-refresh event
+  reaps your whole harness session tree, and a plain backgrounded worker dies with you. End the
+  command with a DONE marker (`[launcher] DONE rc=$?`); beacon its `pid`+`sid`+`host`+`log`+marker
+  (`host` because a remote worker is probed over ssh THERE); compose with the consumer's resource
+  wrapper, never replace it.
+- **Proof-before-yield**: never yield on a launch that has not yet LOGGED REAL WORK (first chunk /
+  first steps with loss ticking / first N rows) — process-up is not proof. For a FIRST-RUN launcher
+  smoke the EXACT command in a bounded foreground run first (turns every launch-class bug into a
+  same-turn fix), then launch detached and watch the log until real work ticks.
+- **Version errors align in ONE pass**: on the first dependency/API mismatch from a fresh bootstrap,
+  read the package's own pins and align the whole environment once; pin them in the committed
+  launcher's bootstrap.
+- **On EVERY wake**: `pgrep` the runner + read its log tail, THEN drive on in the same turn (parse,
+  next gate step, commit, or relaunch a dead run). A quiet Monitor is not evidence of a live run —
+  the process table is. Never "still waiting" twice.
 
 ## Foreign-red protocol (shared working tree)
 
-Several sessions may share your checkout (consumer CLAUDE.md "Shared working tree"). When a
-mechanical slot goes red on paths OUTSIDE your phase diff, do NOT loop the full slot until it
-clears (a live executor burned ~40 min re-running whole-repo type-check while a sibling
-session's phase was red, 2026-07-06 — right instinct, unbounded mechanics):
+When a mechanical slot goes red on paths OUTSIDE your phase diff, do NOT loop the full slot until
+it clears:
 
-1. **Attribute first**: check whether any failing file is in YOUR phase diff
-   (`git diff --name-only <phase-start>..HEAD` vs the failing paths). Yours → it's your red,
-   fix it. Foreign → continue below.
-2. **Beacon it** (`gate-stage-start` note naming the foreign red + failing paths) so the
-   orchestrator's liveness read shows a legitimate wait, not a stall.
-3. **Recheck CHEAPLY**: re-run only the failing project/paths (a scoped `types` run), not the
-   whole slot, at a few-minute cadence.
-4. **Bound the wait**: still red after ~15 min → return `status: "escalated"` with the
-   attribution evidence (failing paths + the sibling commits touching them). The orchestrator
-   owns cross-session sequencing — it can wait, coordinate, or finish your gate inline once
-   the sibling lands; an executor context idling on a foreign fix cannot do anything a
-   returned result can't.
+1. **Attribute first**: is any failing file in YOUR phase diff (`git diff --name-only
+   <phase-start>..HEAD` vs the failing paths)? Yours → fix it. Foreign → continue.
+2. **Beacon it** (a `gate-stage-start` note naming the foreign red) so the liveness read shows a
+   legitimate wait, not a stall.
+3. **Recheck CHEAPLY**: re-run only the failing paths (a scoped `types` run), never the whole slot.
+4. **Bound the wait**: still red after ~15 min → return `status: "escalated"` with the attribution
+   evidence (failing paths + the sibling commits touching them). The orchestrator owns
+   cross-session sequencing.
 
-Never declare `done` over a red slot regardless of whose red it is (that stays absolute) —
-this protocol bounds the WAIT, not the honesty.
-
-## Result contract (card "Complete + return")
-
-Your final message IS the `PhaseExecutionResult` (`PhaseExecutionResultShape`), not a
-human-facing summary. Populate `phase`, `status` (`done` | `escalated` | `failed`),
-`escalation` (when escalated), the three debt arrays (`compromises` / `skipped` / `hardcoded` —
-`limitations` is intentionally NOT in the result) + `surfaced` + `hardStops`, and `gateRounds`.
-Never return a `done` you did not actually reach; an honest `escalated`/`failed` is correct, a
-fabricated `done` is the one unacceptable result. The free-text phase `compromises` string is
-still written to the phase file (Step 5) in addition to the structured result.
+Never declare `done` over a red slot regardless of whose red it is — this protocol bounds the
+WAIT, not the honesty.
