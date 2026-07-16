@@ -7,5 +7,12 @@
   "private": true,
   "bin": {
     "roadmap": "bin/roadmap.mjs"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "tsx": "^4.23.1"
   }
 }
