@@ -122,7 +122,13 @@ async function serializeSharedMutation(phase, { repoRoot, cfg }) {
   // A MISSING emit binding fails loud (the arc honesty rail: a missing gate slot never
   // silently no-ops); a `declaredAbsent` ('none') emit is a deliberate consumer opt-out.
   if (emit.refused) return buildHaltPayload('failed', { phase, evidence: { emitSlot: emit.refused } })
-  if (emit.command) await runSlot(emit, { cwd: repoRoot })
+  if (emit.command) {
+    // runSlot's exitCode is DATA (never thrown) — a red emit must map to a typed halt,
+    // exactly as gate.mjs / landing.mjs treat their runSlot returns; discarding it would
+    // narrate around a red the honesty rail exists to catch.
+    const er = await runSlot(emit, { cwd: repoRoot })
+    if (er.exitCode !== 0) return buildHaltPayload('failed', { phase, evidence: { emitSlot: er } })
+  }
   return null
 }
 
@@ -198,6 +204,9 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
         // STALLED — probe the beacon FIRST: a live background-run ⇒ external work is alive, keep
         // waiting (never a false halt on a healthy 40-min capbuild).
         const b = latestPhaseBeacon(worktree, phase)
+        // `continue` re-awaits the SAME still-running executor (the watchdog woke us, the
+        // executor did not return) — so the once-built `prompt` is not re-sent and needs no
+        // re-render; only a fresh spawn (a relaunch by the session after a halt) rebuilds it.
         if (b && b.event === 'background-run' && b.log) continue
         disarmExecutor(worktree, phase)
         return buildHaltPayload('stalled', { phase, evidence: spawn.watchVerdict })
@@ -223,7 +232,10 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     const descope = detectSelfDescope(result, { acceptanceCriteria: meta.acceptanceCriteria, tasks: meta.tasks, arcCriteria: meta.arcCriteria })
     if (descope.length > 0) return buildHaltPayload('self-descope', { phase, evidence: descope }) // bounce/ratify stays HUMAN
 
-    run(`roadmap gate run ${phase} --verify-complete`, { cwd }) // phase-file / gate-report consistency
+    // phase-file / gate-report consistency (the anti-narration check, DESIGN §2). A red
+    // verify-complete (exit 2 = inconsistent) must halt, not be silently accepted.
+    const vc = run(`roadmap gate run ${phase} --verify-complete`, { cwd })
+    if (vc.exitCode !== 0) return buildHaltPayload('failed', { phase, evidence: { verifyComplete: vc.stderr || vc.stdout } })
 
     const mut = await serializeSharedMutation(phase, { repoRoot, cfg }) // groom backlog + emit — the loop's final step
     if (mut) return mut
