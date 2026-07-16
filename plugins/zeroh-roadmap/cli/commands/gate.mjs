@@ -22,7 +22,15 @@ import {
   deriveReviewScope,
   EXECUTABLE_EXTS,
 } from '../lib/ladder.mjs'
-import { resolveSlot, resolveScopedOrFallback } from '../lib/slots.mjs'
+import { resolveSlot, resolveScopedOrFallback, runSlot } from '../lib/slots.mjs'
+import {
+  writeReport,
+  latestReport,
+  appendAgentRound,
+  checkPhaseConsistency,
+  gateDir,
+  AgentRoundInputShape,
+} from '../lib/gate-report.mjs'
 
 /** A typed gate failure carrying its exit code + stderr lines. */
 export class GateError extends Error {
@@ -330,12 +338,168 @@ export default async function run(argv) {
     return built.refused ? 2 : 0
   }
 
-  if (sub === 'run') {
-    // gate run lands in 1656.5 (mechanical slot execution + the GateRunReport).
-    process.stderr.write('roadmap gate run: not yet implemented (lands in ROADCODE 1656.5)\n')
-    return 1
-  }
+  if (sub === 'run') return runGate(phaseNum, opts)
 
   process.stderr.write(`roadmap gate: unknown subcommand '${sub}' (plan | run)\n`)
   return 1
+}
+
+/**
+ * gate run <phase> — three modes:
+ *   --record-round '<json>'  append an agent round to the latest report (exit 2 malformed)
+ *   --verify-complete        phase-file ↔ latest-report consistency (exit 1 no report, 2 problems)
+ *   (default)                execute the mechanical slots, persist the GateRunReport (exit 2 any red)
+ */
+export async function runGate(phaseNum, opts) {
+  let toplevel, cfg
+  try {
+    toplevel = gitToplevel(process.cwd())
+    const { loadConfig } = await import('../lib/config.mjs')
+    cfg = loadConfig(process.cwd())
+  } catch (e) {
+    if (e?.name === 'ConfigError') {
+      for (const l of e.messageLines) process.stderr.write(l + '\n')
+      return 1
+    }
+    process.stderr.write(`roadmap gate run: ${e.message}\n`)
+    return 1
+  }
+
+  // ── --record-round: append to the latest report ──
+  if (opts.recordRound != null) {
+    let input
+    try {
+      input = JSON.parse(opts.recordRound)
+    } catch (e) {
+      process.stderr.write(`gate run --record-round: input is not valid JSON: ${e.message}\n`)
+      return 2
+    }
+    const check = AgentRoundInputShape.safeParse(input)
+    if (!check.success) {
+      for (const iss of check.error.issues)
+        process.stderr.write(`gate run --record-round: ${iss.path.join('.') || '(root)'}: ${iss.message}\n`)
+      return 2
+    }
+    try {
+      appendAgentRound(toplevel, phaseNum, check.data)
+    } catch (e) {
+      process.stderr.write(`gate run --record-round: ${e.message}\n`)
+      return 2
+    }
+    process.stdout.write(`recorded round ${check.data.round} (${check.data.agent}: ${check.data.verdict})\n`)
+    return 0
+  }
+
+  // ── --verify-complete: phase ↔ report consistency ──
+  if (opts.verifyComplete) {
+    if (!existsSync(gateDir(toplevel, phaseNum))) {
+      process.stderr.write(
+        `gate run --verify-complete: no roadmap/.gate/${phaseNum}/ — a verify-complete requires the code gate to have run (roadmap gate run ${phaseNum})\n`,
+      )
+      return 1
+    }
+    const phaseFile = join(toplevel, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
+    const imp = bridgeImport(phaseFile, { consumerRoot: toplevel })
+    if (!imp.ok) {
+      if (imp.kind === 'tsx-absent') process.stderr.write(TSX_ABSENT_HINT + '\n')
+      else process.stderr.write(`gate run --verify-complete: cannot read ${phaseFile}: ${imp.stderr || imp.kind}\n`)
+      return 1
+    }
+    const latest = latestReport(toplevel, phaseNum)
+    if (!latest) {
+      process.stderr.write(`gate run --verify-complete: no readable report under roadmap/.gate/${phaseNum}/\n`)
+      return 1
+    }
+    const result = checkPhaseConsistency(imp.parsed, latest.report)
+    if (!result.ok) {
+      process.stderr.write(`gate run --verify-complete: phase ${phaseNum} inconsistent with ${latest.path}:\n`)
+      for (const p of result.problems) process.stderr.write(`  - ${p}\n`)
+      return 2
+    }
+    process.stdout.write(`phase ${phaseNum} consistent with the latest green gate report\n`)
+    return 0
+  }
+
+  // ── default: execute the mechanical half + persist the report ──
+  let built
+  try {
+    built = buildPlan(process.cwd(), phaseNum, { ...opts, cfg })
+  } catch (e) {
+    if (e instanceof GateError) {
+      for (const l of e.lines) process.stderr.write(l + '\n')
+      return e.code
+    }
+    throw e
+  }
+  if (built.refused) {
+    process.stdout.write(JSON.stringify(built.plan, null, 2) + '\n')
+    process.stderr.write('gate run: the plan is refused (a floor violation) — no slot ran\n')
+    return 2
+  }
+  const plan = built.plan
+  const wanted = opts.slots ? new Set(opts.slots.split(',').map((s) => s.trim())) : null
+  const ts = new Date().toISOString().replace(/[:.]/g, '-')
+  const logsDir = join(gateDir(toplevel, phaseNum), 'logs')
+
+  const rows = []
+  let green = true
+  for (const s of plan.slots) {
+    if (wanted && !wanted.has(s.slot)) continue
+    if (s.declaredAbsent) {
+      rows.push({ slot: s.slot, command: '(declared none)', exitCode: 0, durationMs: 0, logPath: null, declaredAbsent: true })
+      continue
+    }
+    if (s.refused || !s.command) continue // buildPlan.refused already gated true refusals
+    const logPath = join(logsDir, `${s.slot}-${ts}.log`)
+    const res = await runSlot({ slot: s.slot, command: s.command, note: s.note }, { cwd: toplevel, logPath })
+    rows.push({
+      slot: res.slot,
+      command: res.command,
+      ...(s.files ? { files: s.files } : {}),
+      exitCode: res.exitCode,
+      durationMs: res.durationMs,
+      logPath: res.logPath,
+      ...(res.note ? { note: res.note } : {}),
+    })
+    if (res.exitCode !== 0) green = false
+  }
+
+  // exec.preReview — ONE extra recorded slot AFTER the mechanical slots, BEFORE the agent
+  // rounds. Absent key ⇒ skipped silently (today's rule).
+  if (cfg.exec?.preReview && (!wanted || wanted.has('preReview'))) {
+    const logPath = join(logsDir, `preReview-${ts}.log`)
+    const command = `${cfg.exec.preReview} ${plan.baseSha}`
+    const res = await runSlot({ slot: 'preReview', command }, { cwd: toplevel, logPath })
+    rows.push({ slot: 'preReview', command, exitCode: res.exitCode, durationMs: res.durationMs, logPath: res.logPath })
+    if (res.exitCode !== 0) green = false
+  }
+
+  const report = {
+    phase: phaseNum,
+    startedAt: new Date().toISOString(),
+    baseSha: plan.baseSha,
+    mode: plan.mode,
+    kind: plan.kind,
+    testScope: { derived: plan.testScope.derived, declared: plan.testScope.declared ?? null, effective: plan.testScope.effective },
+    reviewScope: { derived: plan.reviewScope.derived, declared: plan.reviewScope.declared ?? null, effective: plan.reviewScope.effective },
+    slots: rows,
+    agents: [],
+    green,
+    notes: plan.notes,
+  }
+  let written
+  try {
+    written = writeReport(toplevel, report)
+  } catch (e) {
+    process.stderr.write(`gate run: failed to write report: ${e.message}\n`)
+    return 1
+  }
+
+  if (opts.json) process.stdout.write(JSON.stringify(written.report) + '\n')
+  else {
+    process.stdout.write(`\ngate run phase ${phaseNum} — ${green ? 'GREEN' : 'RED'} (${written.path})\n`)
+    for (const r of rows)
+      process.stdout.write(`  ${r.slot.padEnd(20)} ${r.declaredAbsent ? 'declared-none' : `exit ${r.exitCode} (${r.durationMs}ms)`}${r.note ? ` — ${r.note}` : ''}\n`)
+  }
+  return green ? 0 : 2
 }

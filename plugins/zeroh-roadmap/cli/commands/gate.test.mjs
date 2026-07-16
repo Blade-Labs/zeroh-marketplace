@@ -12,7 +12,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -195,4 +195,120 @@ test('gate plan — FOREIGN commit in range: scope binds to phase-own files, for
   assert.deepEqual(r.plan.diff.specialistPaths, [])
   // the foreign relay file is surfaced, not scoped in
   assert.ok(r.plan.foreignCommitsInRange.includes('src/relay/governed-turn.ts'))
+})
+
+// ── gate run — mechanical execution + the GateRunReport ─────────────────────────────
+// A config with runnable fake slot commands (no gate specialists → no floors interfere).
+const RUN_CFG = (over = {}) => ({
+  configVersion: 1,
+  gateCommands: {
+    lint: 'true',
+    types: 'true',
+    unit: 'true',
+    integration: 'true',
+    build: 'true',
+    e2e: 'none',
+    emit: 'true',
+    'unit-scoped': 'true',
+    'integration-scoped': 'true',
+    ...(over.gateCommands ?? {}),
+  },
+  testCadence: { enabled: true, backstop: 'ci + nightly', floors: 'blocking' },
+  gateSpecialists: [],
+  ...over,
+})
+
+function runGateCmd(root, args) {
+  try {
+    const stdout = execFileSync('node', [BIN, 'gate', 'run', ...args], {
+      cwd: root, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, ROADMAP_CONFIG: join(root, 'roadmap', 'roadmap.config.json') },
+    })
+    return { code: 0, stdout, stderr: '' }
+  } catch (err) {
+    return { code: err.status ?? 1, stdout: (err.stdout ?? '').toString(), stderr: (err.stderr ?? '').toString() }
+  }
+}
+const latestReportOf = (root, phase) => {
+  const dir = join(root, 'roadmap', '.gate', String(phase))
+  const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort()
+  return JSON.parse(readFileSync(join(dir, files[files.length - 1]), 'utf8'))
+}
+
+test('gate run — a green run exits 0 and writes a green report under roadmap/.gate/<phase>/', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1000, phaseObj({ phase: 1000 }))
+  repo.commit('feat: phase 1000 — code', { 'lib/a.ts': 'export const a = 1\n' })
+  const r = runGateCmd(repo.root, ['1000'])
+  assert.equal(r.code, 0, r.stderr)
+  const rep = latestReportOf(repo.root, 1000)
+  assert.equal(rep.green, true)
+  assert.ok(rep.slots.length > 0)
+  // roadmap/.gate self-gitignores; no consumer .gitignore was touched
+  assert.equal(readFileSync(join(repo.root, 'roadmap', '.gate', '.gitignore'), 'utf8').trim(), '*')
+})
+
+test('gate run — a RED slot forces exit 2 and records that slot exitCode + the marker in the log', () => {
+  const repo = makeRepo(RUN_CFG({ gateCommands: { ...RUN_CFG().gateCommands, types: 'echo TYPES_BOOM >&2; exit 1' } }))
+  repo.writePhase(1100, phaseObj({ phase: 1100 }))
+  repo.commit('feat: phase 1100 — code', { 'lib/b.ts': 'export const b = 1\n' })
+  const r = runGateCmd(repo.root, ['1100'])
+  assert.equal(r.code, 2, 'a red slot must exit 2')
+  const rep = latestReportOf(repo.root, 1100)
+  assert.equal(rep.green, false)
+  const typesRow = rep.slots.find((s) => s.slot === 'types')
+  assert.equal(typesRow.exitCode, 1)
+  // failure-identity rule: the marker survives to the tee'd slot log
+  assert.match(readFileSync(typesRow.logPath, 'utf8'), /TYPES_BOOM/)
+})
+
+test('gate run — exec.preReview runs as one recorded row; an absent key produces none', () => {
+  const withPre = makeRepo(RUN_CFG({ exec: { preReview: 'true' } }))
+  withPre.writePhase(1200, phaseObj({ phase: 1200 }))
+  withPre.commit('feat: phase 1200 — code', { 'lib/c.ts': 'export const c = 1\n' })
+  assert.equal(runGateCmd(withPre.root, ['1200']).code, 0)
+  assert.ok(latestReportOf(withPre.root, 1200).slots.some((s) => s.slot === 'preReview'), 'preReview row present')
+
+  const noPre = makeRepo(RUN_CFG())
+  noPre.writePhase(1201, phaseObj({ phase: 1201 }))
+  noPre.commit('feat: phase 1201 — code', { 'lib/d.ts': 'export const d = 1\n' })
+  assert.equal(runGateCmd(noPre.root, ['1201']).code, 0)
+  assert.equal(latestReportOf(noPre.root, 1201).slots.some((s) => s.slot === 'preReview'), false, 'no preReview row when absent')
+})
+
+test('gate run --record-round — appends to the SAME report file', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1300, phaseObj({ phase: 1300 }))
+  repo.commit('feat: phase 1300 — code', { 'lib/e.ts': 'export const e = 1\n' })
+  runGateCmd(repo.root, ['1300'])
+  const before = readdirSync(join(repo.root, 'roadmap', '.gate', '1300')).filter((f) => f.endsWith('.json')).length
+  const r = runGateCmd(repo.root, ['1300', '--record-round', JSON.stringify({ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: '0 findings' })])
+  assert.equal(r.code, 0, r.stderr)
+  const after = readdirSync(join(repo.root, 'roadmap', '.gate', '1300')).filter((f) => f.endsWith('.json')).length
+  assert.equal(after, before, 'no new run file — appended to the latest')
+  assert.equal(latestReportOf(repo.root, 1300).agents.length, 1)
+})
+
+test('gate run --verify-complete — exit 2 on a gateRounds mismatch, exit 0 on the coherent twin', () => {
+  const repo = makeRepo(RUN_CFG())
+  // phase declares ONE correctness round but the report has none yet → mismatch
+  repo.writePhase(1400, phaseObj({ phase: 1400, gateRounds: [{ round: 0 }, { round: 1 }] }))
+  repo.commit('feat: phase 1400 — code', { 'lib/f.ts': 'export const f = 1\n' })
+  runGateCmd(repo.root, ['1400'])
+  const bad = runGateCmd(repo.root, ['1400', '--verify-complete'])
+  assert.equal(bad.code, 2, bad.stdout)
+  assert.match(bad.stderr, /gateRounds count mismatch/)
+  // record the missing round → now coherent
+  runGateCmd(repo.root, ['1400', '--record-round', JSON.stringify({ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: '0 findings' })])
+  const good = runGateCmd(repo.root, ['1400', '--verify-complete'])
+  assert.equal(good.code, 0, good.stderr)
+})
+
+test('gate run --verify-complete — no report dir exits 1', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1500, phaseObj({ phase: 1500 }))
+  repo.commit('feat: phase 1500 — code', { 'lib/g.ts': 'export const g = 1\n' })
+  const r = runGateCmd(repo.root, ['1500', '--verify-complete'])
+  assert.equal(r.code, 1)
+  assert.match(r.stderr, /no roadmap\/\.gate\/1500/)
 })
