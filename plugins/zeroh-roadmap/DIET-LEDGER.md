@@ -112,13 +112,25 @@ trigger + invocation + verdict interpretation + is/is-not routing.
 | Step 3 report + verdict rules (CLEAN/HAS ISSUES/BROKEN) | enforced-by-code(cli/commands/audit.mjs renderReport + exit contract: BROKEN=2, else 0) | design §2 universal exit codes |
 | "What NOT to do" (report-only, no short-circuit, no infer) | relocated | condensed into the thin SKILL's Report-only + routing paragraphs (kept as judgment) |
 
-## plan-phase/SKILL.md (25.7 KB → ≤11,000 B) — phase 1659.4
+## plan-phase/SKILL.md (25.7 KB → 10,992 B) — phase 1659.4
 
-_populated in 1659.4_
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| Step 1 claim-script mechanics (claim-phase-number.sh internals, git-common-dir noclobber prose) | enforced-by-code(`roadmap claim`; cli/commands/claim.mjs) | the atomic-claim lock is the CLI's job; the skill states intent only |
+| Step 4 slot-resolution prose (types/emit slot binding via `## Gate commands`) | enforced-by-code(`roadmap phase validate`; cli/lib/validate.mjs) | one command runs the write engine + emit |
+| Step 5 mechanical members (paths resolve, size lint, unresolved-marker grep, emit/parse) | enforced-by-code(`roadmap phase validate` + `roadmap audit` check 4/11; audit.test.mjs) | the 9-check list keeps its JUDGMENT members as prose, points the mechanical ones at the CLI |
+| Step 6 claim-rm mechanics (`rm -f …/<N>.claim`) | enforced-by-code(`roadmap claim` frees the reservation on commit) | cli/commands/claim.mjs |
+| the yield-audit ATELIER granularity example + the full definePhase signature dump | relocated | condensed inline to the granularity rule + a compact signature line (judgment kept, narration cut) |
+| `step → verify:` REQUIRED grammar + grandfather rule (NEW content, not a deletion) | enforced-by-code(cli/lib/validate.mjs stepVerifyGrammarWarnings — WARN on new-to-git only; bin/validate-roadmap-file.test.mjs) | review-phase Mode A is the enforcement; the lint is the reminder |
 
-## review-phase/SKILL.md (23.2 KB → ≤9,000 B) — phase 1659.4
+## review-phase/SKILL.md (23.2 KB → 8,995 B) — phase 1659.4
 
-_populated in 1659.4_
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| the restated 7-check verification catalogue (Checks 1-7 bodies) | enforced-by-code + relocated | REPLACED by ONE reference to plan-phase Step 5's self-verify list, applied adversarially (design decision 6); mechanical members are `roadmap phase validate`'s job |
+| the `## Model policy` CLAUDE.md-block reference (Mode A HOME statement) | enforced-by-code(reads `modelPolicy.judgeModel` from roadmap.config.json; absent key = frontmatter default) | the config seam replaces the anchored block |
+| the `## Gate specialists` CLAUDE.md-block references (testScope/reviewScope ratification) | enforced-by-code(a "specialist path" = a `gateSpecialists` path in roadmap.config.json) | config key replaces the anchored block |
+| verbose per-task/Mode-B output templates + dated-defect asides (1281.7/1282.6, 1345, 1367) | relocated | trimmed to the rule; the KEEP-LIST (Step H, Mode A judge-model routing, Step 8 backlog-placement rules, Mode B hardening-closure rule) survives verbatim in spirit |
 
 ## do-phase/references/gate-protocol.md (38.6 KB → DELETED) — phase 1659.5
 

@@ -38,6 +38,10 @@ if (typeof filePath !== 'string') process.exit(0)
 const result = validateRoadmapFile(filePath, { strict: false })
 const file = basename(resolve(filePath))
 
+// WARN-level lints (e.g. the `step → verify:` grammar on new phase files) print to stderr
+// and NEVER change the exit code — a reminder, not a gate.
+for (const w of result.warnings ?? []) console.error(w)
+
 switch (result.kind) {
   case 'ok':
   case 'skip':

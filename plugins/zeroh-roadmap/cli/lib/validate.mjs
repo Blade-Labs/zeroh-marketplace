@@ -67,8 +67,57 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
     if (phaseMatch) errors.push(...runPhaseNumberAndClaimChecks(normalized, phaseMatch))
   }
 
-  if (errors.length > 0) return { kind: 'errors', ok: false, errors }
-  return { kind: 'ok', ok: true }
+  // ── WARN-level `step → verify:` grammar lint (NEW-to-git phase files only) ─────────
+  // Never a non-zero exit — a reminder of plan-phase's authoring grammar, not enforcement
+  // (review-phase Mode A is the enforcement). The ~1,100 already-committed phase files are
+  // grandfathered: the file must be new to git (no HEAD blob) for the lint to fire.
+  const warnings = isPhase && parsed ? stepVerifyGrammarWarnings(parsed, normalized) : []
+
+  if (errors.length > 0) return { kind: 'errors', ok: false, errors, warnings }
+  return { kind: 'ok', ok: true, warnings }
+}
+
+/**
+ * One WARN string per steps[].description missing " → verify:" — but ONLY for a phase file
+ * that is NEW to git (no HEAD blob). Returns [] for a committed (grandfathered) file, a
+ * git-absent context (fail open), or a phase whose steps all carry the clause.
+ */
+function stepVerifyGrammarWarnings(phase, normalizedPath) {
+  if (!isNewToGit(normalizedPath)) return []
+  const num = phase?.phase ?? '?'
+  const out = []
+  for (const t of Array.isArray(phase?.tasks) ? phase.tasks : []) {
+    const steps = Array.isArray(t?.steps) ? t.steps : []
+    steps.forEach((s, i) => {
+      const d = typeof s?.description === 'string' ? s.description : ''
+      if (!/→\s*verify:/.test(d)) {
+        out.push(
+          `[zeroh-roadmap] WARN phase ${num} task ${t?.id ?? '?'} step ${i + 1}: description missing ` +
+            `" → verify: <command|observable>" (plan-phase authoring grammar; new phase files only)`,
+        )
+      }
+    })
+  }
+  return out
+}
+
+/** A phase file with no HEAD blob is new to git. git-absent → NOT new (fail open — no warn). */
+function isNewToGit(normalizedPath) {
+  let roadmapRoot
+  try {
+    roadmapRoot = gitToplevel(dirname(normalizedPath))
+  } catch {
+    return false
+  }
+  try {
+    execFileSync('git', ['-C', roadmapRoot, 'cat-file', '-e', `HEAD:${relToRepo(roadmapRoot, normalizedPath)}`], {
+      stdio: 'ignore',
+      timeout: 10_000,
+    })
+    return false // HEAD blob exists → committed → grandfathered
+  } catch (err) {
+    return err?.code !== 'ENOENT' // git ran and the blob is absent → new; git missing (ENOENT) → fail open
+  }
 }
 
 // ── NEW: the gate-report done-flip consistency rule ─────────────────────────────────
