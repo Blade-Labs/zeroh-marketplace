@@ -33,9 +33,9 @@ const TREE = {
   arc: { phase: 1657, sub: ['next <arcId>', 'land <arcId>'], desc: 'position derivation + the ONE landing engine' },
   watch: { phase: 1657, sub: ['<arcId>', '--once'], desc: 'executor liveness (absorbs executor-watch/liveness)' },
   phase: { phase: 1657, sub: ['validate <N|file>', 'start <N>'], desc: 'phase-file validation + start convenience' },
-  audit: { phase: 1658, sub: ['--json'], desc: "audit-roadmap's 12 checks, mechanized" },
+  audit: { phase: 1659, sub: ['--json'], desc: "audit-roadmap's 12 checks, mechanized" },
   debt: { phase: 1658, sub: ['census', 'dispose', 'check'], desc: 'debt census/dispose wrappers' },
-  measure: { phase: 1658, sub: ['--flow', '--assert'], desc: 'protocol-load meter (bytes/4 over the invocation path)' },
+  measure: { phase: 1659, sub: ['--flow', '--assert'], desc: 'protocol-load meter (bytes/4 over the invocation path)' },
 }
 
 function printHelp() {
