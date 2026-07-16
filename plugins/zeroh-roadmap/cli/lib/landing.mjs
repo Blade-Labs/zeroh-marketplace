@@ -58,6 +58,7 @@ export function gatherLandingState({ repoRoot, arcId, config, exec = defaultExec
     return {
       num: n,
       status: parsed.status,
+      kind: parsed.kind ?? null,
       done: parsed.status === 'done' || parsed.status === 'historical',
       executionResult: parsed.executionResult ?? null,
       debtResolutions: parsed.debtResolutions ?? [],
@@ -188,5 +189,251 @@ export function evaluateBlockers(state) {
   return BLOCKERS.map((b) => ({ id: b.id, name: b.name, reason: b.check(state) })).filter((x) => x.reason)
 }
 
-// LandingError/DeriveError are surfaced so half 2 (1657.5) and the command layer map exits.
+// ─────────────────────────────────────────────────────────────────────────────
+// HALF 2 (1657.5) — the git ACTS: arc-end suite, landing mechanics, the
+// structurally-impossible forbidden push, the RunnerSummary, exits 0/3/2.
+// ─────────────────────────────────────────────────────────────────────────────
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { resolveSlot, runSlot } from './slots.mjs'
+import { removeSidecar, releaseClaims } from './sidecar.mjs'
+import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
+import { gitToplevel } from './gitroot.mjs'
+import { loadConfig, ConfigError } from './config.mjs'
+
+/**
+ * The deferred arc-end full suite (do-arc Step 8, "First, the arc-end full-suite gate"):
+ * the `unit` + `integration` slots verbatim, + `e2e` iff a member is release-kind. Each
+ * slot runs through runSlot (the ONE slot executor); a red slot ⇒ suiteGreen false. A
+ * declared-`none` slot is SKIPPED, recorded honestly (never a fake green); an arc whose
+ * every slot is absent records the no-runtime-suite note rather than pretending it ran.
+ */
+export async function runArcEndSuite({ config, cwd, includeE2e = false }) {
+  const wanted = ['unit', 'integration', ...(includeE2e ? ['e2e'] : [])]
+  const results = []
+  let anyRan = false
+  let anyRed = false
+  for (const slot of wanted) {
+    const resolved = resolveSlot(config, slot)
+    if (resolved.declaredAbsent) {
+      results.push({ slot, skipped: 'declared none' })
+      continue
+    }
+    if (resolved.refused) {
+      results.push({ slot, refused: resolved.refused })
+      anyRed = true // an unresolvable required slot is a red, not a silent skip
+      continue
+    }
+    const run = await runSlot(resolved, { cwd })
+    anyRan = true
+    if (run.exitCode !== 0) anyRed = true
+    results.push({ slot, exitCode: run.exitCode, durationMs: run.durationMs })
+  }
+  const note = !anyRan ? 'no runtime suite ran (every arc-end slot is declared none — docs-only arc)' : undefined
+  return { slots: results, suiteGreen: !anyRed, ran: anyRan, ...(note ? { note } : {}) }
+}
+
+/**
+ * The injectable git layer. Its ONLY push helper is pushBaseRef(checkout, baseRefName) →
+ * argv ['push','origin', baseRefName]: no function accepts a refspec, no interpolation can
+ * produce `<branch>:<baseRef>` (the ONEPROMPT 2026-07-13 incident class, made UNWRITABLE
+ * rather than checked-after). Plus the hard rail ABOVE config (decision 8): pushBaseRef
+ * REFUSES master/main regardless of autonomousPushRefs — a release is a held human act.
+ */
+function gitLayer(exec) {
+  const run = (cwd, args) => exec('git', ['-C', cwd, ...args])
+  return {
+    fetch: (cwd, ref) => run(cwd, ['fetch', 'origin', ref]),
+    headBranch: (cwd) => run(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']).stdout.trim(),
+    hasMergeHead: (cwd) => run(cwd, ['rev-parse', '--verify', '-q', 'MERGE_HEAD']).status === 0,
+    mergeTreeConflict: (cwd, base, branch) => run(cwd, ['merge-tree', '--write-tree', base, branch]).status === 1,
+    merge: (cwd, branch) => run(cwd, ['merge', '--no-edit', branch]),
+    worktreeRemove: (cwd, wt) => run(cwd, ['worktree', 'remove', '--force', wt]),
+    pushBaseRef: (checkout, baseRefName) => {
+      if (baseRefName === 'master' || baseRefName === 'main') {
+        return { refused: true, reason: `pushBaseRef refuses ${baseRefName} — a release is a held human act (do-arc Step 8 invariant)` }
+      }
+      return exec('git', ['-C', checkout, 'push', 'origin', baseRefName])
+    },
+  }
+}
+
+/** Build the RunnerSummary for a landed arc (decision 10 — honest gateSignals, 'none' receipt). */
+export function buildRunnerSummary(state, { suiteGreen }) {
+  const openCount = state.censusEntries === null ? null : state.censusEntries.filter((e) => e.state === 'OPEN').length
+  const arcSweepClean = openCount === 0
+  const validateArcPassed = state.hasCriteria ? state.verdict?.verdict === 'PASS' : true
+  const summary = {
+    arcId: state.arcId,
+    outcome: 'shipped',
+    compromiseDisposition: [],
+    gateSignals: { arcSweepClean, validateArcPassed, fullSuiteGreen: suiteGreen === true },
+    receiptRef: 'none', // honest sentinel — no consumer governance-receipt surface
+  }
+  if (state.openFollowups != null) summary.openFollowups = state.openFollowups
+  return summary
+}
+
+/** Validate a RunnerSummary through the CONSUMER's RunnerSummaryShape (seam 3 — no second Zod copy). */
+export function validateRunnerSummary(consumerRoot, summary) {
+  const schemaPath = consumerSchemaPath(consumerRoot) // throws BridgeError('schema-missing') → caller maps exit 1
+  const script = `
+const schemaPath = process.argv[1]
+import('file://' + schemaPath).then((m) => {
+  const shape = m.RunnerSummaryShape || (m.default && m.default.RunnerSummaryShape)
+  if (!shape) { process.stderr.write('RunnerSummaryShape not exported from ' + schemaPath); process.exit(4) }
+  const r = shape.safeParse(JSON.parse(process.argv[2]))
+  if (r.success) process.stdout.write('OK')
+  else { process.stderr.write('ZODISSUES:' + JSON.stringify(r.error.issues)); process.exit(3) }
+}).catch((e) => { process.stderr.write(String((e && e.stack) || e)); process.exit(4) })
+`
+  const res = bridgeEval(consumerRoot, script, { args: [schemaPath, JSON.stringify(summary)] })
+  if (res.ok) return
+  if (res.kind === 'tsx-absent') throw new LandingError('tsx-absent', ['roadmap arc land: cannot validate the RunnerSummary — tsx unavailable', TSX_ABSENT_HINT])
+  throw new LandingError('load', ['roadmap arc land: the RunnerSummary failed RunnerSummaryShape.parse (a broken summary must fail loud, never ship)', (res.stderr ?? '').trim()])
+}
+
+/** Write the RunnerSummary keyed (never overwritten) + the latest pointer. */
+function writeRunnerSummary(repoRoot, summary) {
+  const day = new Date().toISOString().slice(0, 10)
+  const dir = join(repoRoot, 'roadmap', 'arc-summaries')
+  mkdirSync(dir, { recursive: true })
+  const keyed = join(dir, `${summary.arcId}-${day}.json`)
+  if (!existsSync(keyed)) writeFileSync(keyed, JSON.stringify(summary, null, 2) + '\n') // keyed history is never overwritten
+  writeFileSync(join(repoRoot, 'roadmap', 'arc-summary.json'), JSON.stringify(summary, null, 2) + '\n')
+  return keyed
+}
+
+/**
+ * landArc — the decision-9 landing sequence over the injectable exec seam. Assumes
+ * blockers already cleared (landCommand gates it). Returns { outcome, exitCode, record,
+ * pushed, pushRefused, summaryPath }. record is the ordered step log the tests replay.
+ */
+export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = repoRoot }) {
+  const git = gitLayer(exec)
+  const mp = config.mergePolicy
+  const primary = mp.primaryCheckout
+  const baseRef = state.baseRef
+  const arcBranch = state.arcBranch
+  const record = []
+
+  if (state.integrationModel === 'direct') {
+    record.push({ step: 'direct-on-baseRef', note: 'sidecar worktree IS the primary checkout on baseRef — no merge performed' })
+  } else {
+    git.fetch(primary, baseRef)
+    record.push({ step: 'fetch', ref: baseRef })
+    const head = git.headBranch(primary)
+    if (head !== baseRef) {
+      return { outcome: 'blocker', exitCode: 2, held: [{ name: 'primary HEAD not baseRef', reason: `primary checkout ${primary} is on ${head}, not ${baseRef} — wait for the sibling; never branch-switch under it` }], record }
+    }
+    if (git.hasMergeHead(primary)) {
+      return { outcome: 'blocker', exitCode: 2, held: [{ name: 'MERGE_HEAD present', reason: `primary checkout ${primary} has an in-progress merge (MERGE_HEAD) — resolve it first` }], record }
+    }
+    if (git.mergeTreeConflict(primary, baseRef, arcBranch)) {
+      return { outcome: 'blocker', exitCode: 2, held: [{ name: 'merge conflict', reason: `merge of ${arcBranch} into ${baseRef} conflicts` }], record }
+    }
+    const merged = git.merge(primary, arcBranch)
+    record.push({ step: 'merge', branch: arcBranch, into: baseRef, status: merged.status })
+    if (merged.status !== 0) {
+      return { outcome: 'blocker', exitCode: 2, held: [{ name: 'merge failed', reason: `git merge ${arcBranch} into ${baseRef} failed: ${merged.stderr}` }], record }
+    }
+  }
+
+  // Backlog regroom against the landed baseRef is orchestrator-owned in arc mode (serial,
+  // post-return) — landing records the hand-off point rather than forking a second groom.
+  record.push({ step: 'regroom-handoff', note: 'backlog regroom against landed baseRef is orchestrator-owned (serial)' })
+
+  // Cleanup — worktree, sidecar, RESUME.md, claims.
+  if (state.integrationModel === 'isolated' && state.sidecar?.worktree) {
+    git.worktreeRemove(primary, state.sidecar.worktree)
+    record.push({ step: 'worktree-remove', worktree: state.sidecar.worktree })
+  }
+  removeSidecar(repoRoot, arcId)
+  const resumeMd = join(repoRoot, 'roadmap', 'arcs', `${arcId}-RESUME.md`)
+  rmSync(resumeMd, { force: true })
+  releaseClaims(repoRoot, state.members.map((m) => m.num))
+  record.push({ step: 'cleanup', removed: ['.building sidecar', 'RESUME.md', 'claims'] })
+
+  // RunnerSummary — validated through the consumer shape (seam 3), written keyed + pointer.
+  const summary = buildRunnerSummary(state, { suiteGreen: state.suiteGreen })
+  validateRunnerSummary(consumerRoot, summary)
+  const summaryPath = writeRunnerSummary(repoRoot, summary)
+  record.push({ step: 'runner-summary', path: summaryPath })
+
+  // Push — iff autonomousPushRefs contains baseRef (decision 9); --no-push forces skip;
+  // --push is user authority over an absent listing, but NEVER the master/main rail (decision 8).
+  const wantPush = flags.noPush ? false : flags.push ? true : (mp.autonomousPushRefs ?? []).includes(baseRef)
+  let pushed = false
+  let pushRefused = null
+  if (wantPush) {
+    const pr = git.pushBaseRef(primary, baseRef)
+    if (pr.refused) pushRefused = pr.reason
+    else pushed = pr.status === 0
+    record.push({ step: 'push', pushed, ...(pushRefused ? { refused: pushRefused } : {}) })
+  }
+
+  return { outcome: 'landed', exitCode: 0, record, pushed, pushRefused, summaryPath, summary }
+}
+
+/** roadmap arc land <arcId> [--push|--no-push|--hold] [--json] — the §2 land command. */
+export async function landCommand(rest) {
+  const json = rest.includes('--json')
+  const flags = { push: rest.includes('--push'), noPush: rest.includes('--no-push'), hold: rest.includes('--hold') }
+  const arcId = rest.find((a) => !a.startsWith('--'))
+  if (!arcId) {
+    process.stderr.write('usage: roadmap arc land <arcId> [--push|--no-push|--hold] [--json]\n')
+    return 1
+  }
+  let toplevel, cfg
+  try {
+    toplevel = gitToplevel(process.cwd())
+    cfg = loadConfig(process.cwd())
+  } catch (e) {
+    for (const l of e instanceof ConfigError ? e.messageLines : [`roadmap arc land: ${e.message}`]) process.stderr.write(l + '\n')
+    return 1
+  }
+  let state
+  try {
+    state = gatherLandingState({ repoRoot: toplevel, arcId, config: cfg })
+  } catch (e) {
+    if (e instanceof LandingError || e instanceof DeriveError || e instanceof BridgeError) {
+      for (const l of e.messageLines ?? [e.message]) process.stderr.write(l + '\n')
+      return e.exitCode ?? 1
+    }
+    throw e
+  }
+
+  const emit = (obj) => process.stdout.write(JSON.stringify(obj, null, json ? 0 : 2) + '\n')
+  const mp = cfg.mergePolicy
+
+  // Held-for-user (exit 3, the fail-safe default): --hold, an absent mergePolicy, or arcIntegration hold.
+  if (flags.hold || !mp || mp.arcIntegration === 'hold') {
+    emit({ action: 'held', arcId, reason: flags.hold ? 'user --hold' : !mp ? 'no mergePolicy configured (fail-safe hold)' : 'mergePolicy.arcIntegration is hold' })
+    return 3
+  }
+
+  // Arc-end suite → suiteGreen → blockers.
+  const includeE2e = state.members.some((m) => m.kind === 'release')
+  const suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e })
+  state.suiteGreen = suite.suiteGreen
+  const held = evaluateBlockers(state)
+  if (held.length) {
+    emit({ action: 'blocked', arcId, held, suite })
+    return 2
+  }
+
+  let res
+  try {
+    res = landArc({ repoRoot: toplevel, arcId, config: cfg, flags, state })
+  } catch (e) {
+    if (e instanceof LandingError || e instanceof BridgeError) {
+      for (const l of e.messageLines ?? [e.message]) process.stderr.write(l + '\n')
+      return e.exitCode ?? 1
+    }
+    throw e
+  }
+  emit({ action: res.outcome, arcId, ...res, suite })
+  return res.exitCode
+}
+
+// LandingError/DeriveError are surfaced so the command layer maps exits.
 export { DeriveError }
