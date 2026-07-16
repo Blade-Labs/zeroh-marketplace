@@ -9,7 +9,7 @@
     "roadmap": "bin/roadmap.mjs"
   },
   "scripts": {
-    "test": "node --test $(find bin cli hooks scripts test -name '*.test.mjs')"
+    "test": "node --test --test-concurrency=1 $(find bin cli hooks scripts test -name '*.test.mjs')"
   },
   "dependencies": {
     "zod": "^4.4.3"
