@@ -38,6 +38,7 @@ import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
 import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine } from '../cli/lib/beacon.mjs'
+import { pidAlive } from '../cli/lib/sidecar.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
 const BACKGROUND_RUN_MAX_MIN = 10 // mirror hooks/executor-result-guard.mjs — one 10-min rule
@@ -98,13 +99,9 @@ function backgroundRunAlive(b) {
   // readBeaconLine already parsed the age; b.ts is a number (ms), so never re-Date.parse it.
   const ageMin = Number.isFinite(b.ageMin) ? b.ageMin : (Date.now() - b.ts) / 60000
   if (!Number.isFinite(ageMin) || ageMin >= BACKGROUND_RUN_MAX_MIN) return false
-  if (b.pid != null) {
-    try {
-      process.kill(b.pid, 0)
-    } catch (e) {
-      if (!(e && e.code === 'EPERM')) return false // ESRCH ⇒ dead; EPERM ⇒ alive but not ours
-    }
-  }
+  // pidAlive is a signal-0 liveness PROBE (in sidecar.mjs) — the workflow never holds the kill
+  // primitive itself (its "never kills a process" invariant). A recorded-but-dead pid ⇒ not alive.
+  if (b.pid != null && !pidAlive(b.pid)) return false
   return true
 }
 

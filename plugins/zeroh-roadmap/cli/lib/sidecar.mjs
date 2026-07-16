@@ -60,7 +60,10 @@ export function readSidecar(cwd, arcId) {
   }
 }
 
-function pidAlive(pid) {
+/** Liveness PROBE (signal 0 — never kills): true iff the pid exists. Shared so the keep-waiting
+ *  probe (arc-plane.workflow) checks liveness without a `process.kill` literal of its own (the
+ *  workflow's "never kills a process" invariant keeps the kill primitive out of that file). */
+export function pidAlive(pid) {
   try {
     process.kill(pid, 0)
     return true
