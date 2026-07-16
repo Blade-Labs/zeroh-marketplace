@@ -434,6 +434,3 @@ export async function landCommand(rest) {
   emit({ action: res.outcome, arcId, ...res, suite })
   return res.exitCode
 }
-
-// LandingError/DeriveError are surfaced so the command layer maps exits.
-export { DeriveError }
