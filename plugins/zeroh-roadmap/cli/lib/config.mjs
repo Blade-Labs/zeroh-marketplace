@@ -169,8 +169,15 @@ export function loadConfig(cwd, opts = {}) {
   }
 
   // configVersion migration guard — a future version fails loud with a pointer, never
-  // silently under-validates against the v1 shape.
-  if (typeof parsed.configVersion === 'number' && parsed.configVersion !== 1) {
+  // silently under-validates against the v1 shape. A non-object top level (null, array,
+  // primitive) is left to the strict-Zod parse below, which reports it cleanly rather
+  // than dereferencing and crashing with a raw TypeError.
+  if (
+    parsed !== null
+    && typeof parsed === 'object'
+    && typeof parsed.configVersion === 'number'
+    && parsed.configVersion !== 1
+  ) {
     throw new ConfigError('invalid', [
       configPath,
       `configVersion: unsupported configVersion ${parsed.configVersion} — this plugin speaks configVersion 1; migrate the config (no automatic migration path exists yet)`,
