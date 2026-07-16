@@ -1,6 +1,6 @@
 ---
 name: "Do Phase"
-description: "Execute a roadmap phase task-by-task with enforced sequential discipline. Reads the .phase.ts file, creates a task for each item, and executes ONE AT A TIME with commit verification between each."
+description: "Execute a roadmap phase task-by-task with enforced sequential discipline: one task = one commit + a transparencyReport, then the kind-selected gate."
 user-invocable: true
 metadata:
   keywords: phase, execute, do, start, roadmap, sequential
@@ -9,303 +9,99 @@ metadata:
 
 # Do Phase — Sequential Execution Protocol
 
-## Trigger
+**Trigger:** `do phase N`, `/do-phase N`, `do next phase` (→ `roadmap status`). Invoke the CLI as
+`roadmap <cmd>` (fallback `node ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`).
 
-User says: `do phase N`, `start phase N`, `/do-phase N`, `/start-phase N`, `do next phase`, or `what's next`
+## PRIME RULE 1 — no compromises; escalate to the ARCHITECT, not the user
 
-## Arguments
+Senior-architect rigor per task: magic numbers → constants, ambiguity → throw, no TODO deferrals.
 
-Parse the phase number from user input. If no number provided, check the backlog:
+**Before you would** (a) write a non-`"None"` `compromises`/`hardcoded`/`skipped`, (b) hardcode
+a value, (c) silence ambiguity, (d) defer with a TODO, or (e) STOP to ask the user — FIRST invoke
+`zeroh-roadmap:software-architect` (foreground, single hop) per its **Decision Contract**
+(`agents/software-architect.md`), passing the task's `acceptanceCriteria` + `files` + `notes`,
+the convenient path, and the proper path you see:
+- `PROCEED_WITH_FIX` → implement it; `compromises` stays `"None"`.
+- `ESCALATE_TO_USER` → the ONLY verdict that justifies stopping. Inline: post it, wait.
+  **Arc-mode: no reachable user — return `status: "escalated"` with the question + options.**
 
-```bash
-# Read the ordered backlog to find the next phase
-cat roadmap/backlog.ts
-```
+One compromise = one architect call, no batching. Three+ in a phase = the plan is too broad → STOP.
 
-Read `roadmap/backlog.ts` — the first entry is the next phase to execute. Confirm it with the user:
+## PRIME RULE 2 — one task at a time
 
-> **Next up: Phase {N} — {name}.** Start it?
+Batching loses work. **Never** batch tasks, launch parallel agents for tasks,
+reorder/skip them, or mark a task done before it is committed.
 
-If `roadmap/backlog.ts` doesn't exist or is empty, ask the user for a phase number.
+## Step 0 — read the phase; run the tripwires
 
-## PRIME RULE 1: NO COMPROMISES — ESCALATE TO ARCHITECT, NOT TO USER
+Read the phase (`status` must be `backlog`/`in-progress`; terminal = stop). If it declares
+`assumptions[]`, run each `verify` **before any code**: any failure ⇒ STOP and escalate with the
+raw output (arc-mode: `status: "escalated"`) — escalating IS success. Set a `backlog` phase to
+`in-progress` and commit before task 1.
 
-Every task ships at senior-architect rigor. Goal is correctness, not convenience. Magic numbers → named constants. Duplicate-name ambiguity → throw. Twin JSX blocks → one array. Tokens are not the constraint; hallucinations and shortcuts are.
+## The per-task loop (one task = one commit)
 
-**Comment discipline.** Code comments earn their keep by explaining **non-obvious WHY** — a hidden invariant, a workaround for a specific bug, behavior that would surprise a reader. Comments must NOT:
-- Reference phases (`// added in phase 374.1`, `// phase 184.5 metadata`) — phase numbers rot when the phase archives, and provenance already lives in git blame + the phase file.
-- Explain WHEN or WHO (`// added 2026-05-18`, `// from the dual-write migration`) — git log owns that.
-- Explain WHAT (`// builds the form-tag dictionary at startup`) — well-named identifiers already say what.
-- Live at the re-export site when the real explanation belongs on the function declaration.
+For each task in order:
+1. **Implement `steps`.** `testMode: "tdd"` — `test-engineer` FIRST with only
+   problem/acceptanceCriteria/files/type-signatures (NOT `steps`); new tests scoped (RED),
+   implement, scoped (GREEN), commit test+code. `"e2e"` — implement, then `test-engineer` writes
+   the flow test blind to source; commit together (e2e runs at the gate). `"none"` — the steps.
+2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; scope touched tests via
+   the scoped slot (never a hand-built filter); a UI change runs `build`.
+3. **Commit** — `<type>(<scope>): phase N — <task title>`.
+4. **Persist** `transparencyReport` + `done: true` + `doneDate`, same commit.
+5. **Continue immediately** — the task boundary is a commit boundary, never a turn boundary.
 
-If a comment is non-obvious-WHY, put it on the function/type where the invariant lives, not at every call site. If you're tempted to write phase-numbered section dividers (`// ── Event metadata (phase 184.5) ──`), strip the parenthetical — `// ── Event metadata ──` is the keeper.
+**Batch tasks (`batchMode: true`, mechanical only):** one commit per `steps[]` entry (`… phase N
+task N.X (k/M) — <step>`), the `types` slot each, NO forks; one aggregated `transparencyReport`
+in a final commit. A step red twice running → STOP.
 
-**Whenever you would otherwise:** (a) write a non-`"None"` value into `transparencyReport.compromises`/`hardcoded`/`skipped`, (b) hardcode a value, (c) silence ambiguity, (d) defer a real problem with a TODO, or (e) STOP and ask the user a question — **first** invoke `zeroh-roadmap:software-architect` (foreground, synchronous, single hop) per its **Decision Contract** in `agents/software-architect.md`.
+## Transparency contract (per task)
 
-Pass the agent: the task's `acceptanceCriteria` + `files` + relevant `phase.notes`, plus a one-line description of the convenient path you were about to take and the proper path you can see (or "can't see one"). The agent returns `PROCEED_WITH_FIX` or `ESCALATE_TO_USER`.
+Persist all six fields — `whatWasDone`, `how` (real content), and
+`compromises`/`skipped`/`hardcoded`/`limitations` (the literal `"None"`, or ≥10 chars of substance
+— `"n/a"`/`"tbd"` fail parse). Echo the four debt lines ONLY when not `"None"`.
 
-**Apply the verdict literally:**
-- `PROCEED_WITH_FIX` → implement the named approach. `compromises` stays `"None"`. No user interruption.
-- `ESCALATE_TO_USER` → post the architect's specific question to the user, wait. This is the only verdict that justifies stopping a do-phase run.
-  - User picks proper-solution option → implement it; no debt logged.
-  - User accepts the compromise → record in the appropriate `transparencyReport` field per schema's field-meaning rules (`TransparencyReportShape` doc). do-phase does NOT write to `phase.debtResolutions` — that's release-sweep's job.
-  - **Arc-mode:** there is no reachable user inside a phase-executor. `ESCALATE_TO_USER` does NOT prompt — it bounces up as the executor's `PhaseExecutionResult` with `status: "escalated"` (carrying the architect's question + options) for the `do-arc` orchestrator to surface. See Step 4b.
+## Commit grammar (BINDING — the CLI parses these subjects)
 
-**Escalation rules** (full Decision Contract lives in `agents/software-architect.md`):
-- One compromise = one architect call. No batching.
-- If three+ escalations land in the same phase, the **plan was too broad** — STOP, surface the pattern to the user, ask whether to re-plan.
-- This escalation is exempt from the Step 4 auto-spawn ban — same exemption as `test-engineer` for `testMode: "tdd"|"e2e"`.
+`docs(roadmap): phase N — <desc>` · task commits carry `phase N` + the task id · `fix(scope):
+phase N gate RX` · `docs(roadmap): mark phase N complete`. The CLI parses these (base-SHA
+derivation, unverified-done detection, the beacon-stamp hook) — the `—` boundary stops 136
+matching 1369.
 
-## PRIME RULE 2: ONE TASK AT A TIME
+## The gate (after the last task)
 
-**This skill exists to PREVENT batch execution.** Each task in the phase file was carefully designed as an independent unit of work. Batching them introduces errors (proven: phase 160-170 migration lost data when batched).
+`roadmap gate plan <N>` prints the resolved cell (slots, scopes, floors, agent chain) for the
+`kind`: mockup = lint+types; logic = Round 0 quality pass → Rounds 1..N correctness loop (cap 5);
+hardening adds the closure integration rerun; release adds the e2e slot. Run `roadmap gate run
+<N>` for the mechanical half, then the agent chain the plan names. A docs-only diff skips the
+quality pass. Under arc-mode the gate runs only phase-relevant SCOPED tests — the full suite
+defers to the arc end.
 
-**You MUST:**
-1. Execute ONE task
-2. Commit that task
-3. Verify it works (type-check at minimum)
-4. Mark it complete
-5. THEN move to the next task
+**Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
+confirmed design is a CONTRACT. Render via `live-ui`, screenshot every state AND drive every
+interaction (hover/focus/transition), and compare against the design artifact with FRESH eyes (a
+spawned vision judge, never the implementer) on layout/states/interaction/copy/tokens. Fix
+material deviations and re-compare; an out-of-scope residual → `compromises` naming the designRef;
+record a `gateRounds` entry (`agent: 'design-parity'`).
 
-**You MUST NOT:**
-- Execute multiple tasks in a single agent call
-- Launch parallel agents for phase tasks
-- Skip tasks or reorder them
-- Combine tasks "for efficiency"
-- Mark tasks done before they are committed
+**Echo contract:** after each gate-agent stage echo a ~10-line summary to chat (`[Quality pass]
+nothing to fix` if empty); the full report stays in the transcript.
 
-## Protocol
+**Sub-agent rule:** gate agents run synchronously; only the architect and `test-engineer` may
+absorb phase work — never another phase-executor, `Explore`, or a fork for a "too-big" task.
 
-### Step 0: Read the phase file
+## Complete + return
 
-```bash
-# Find and read the phase file
-cat roadmap/phases/phase-{N}.phase.ts
-```
+Set in ONE edit: `status: 'done'`, `gate`, `gateRounds` (Round 0 at index 0, ≥1 entry),
+`metrics`, `compromises`, `completedDate`. Then `roadmap gate run <N> --verify-complete` (phase ↔
+gate-report consistency — a done phase can no longer be narrated).
 
-Read the full phase data. Note:
-- `status` — must be `'backlog'` or `'in-progress'`. If `'done'`, `'cancelled'`, or `'historical'` (all terminal), tell the user and stop.
-- `executionMode` — `'sequential'` (default) or `'parallel'`. Sequential = this protocol. Parallel = you may batch truly independent tasks (rare).
-- `tasks[]` — the ordered list of work. Execute in order.
-- `notes` — read for context (architecture decisions, investigation data).
+**Arc-mode** (iff `roadmap/.arc-mode` exists — read via `roadmap status` — OR this session IS a
+phase-executor): also persist `executionResult`, commit the phase, and **return that
+PhaseExecutionResult** (`status` done/escalated/failed; map the roll-up). SKIP grooming, the emit
+slot, and the push — the do-arc workflow serializes those.
 
-### Step 0.5: Verify phase dependencies
-
-If the phase declares `dependsOn: [X, Y, ...]` (phase-level deps), check that every referenced phase exists and is terminal-complete — `status: 'done'` OR `status: 'historical'` (a historical phase is a completed legacy prerequisite, exactly like an archived done phase):
-
-```bash
-for dep in <each number from dependsOn>; do
-  grep -H "status:" "roadmap/phases/phase-${dep}.phase.ts" 2>/dev/null || echo "MISSING: phase-${dep}.phase.ts"
-done
-```
-
-If any dependency is missing or is neither `'done'` nor `'historical'`, STOP and tell the user:
-
-> Phase N declares a dependency on phase X, which is currently {missing | backlog | in-progress | cancelled}. Run `/do-phase X` first, or remove it from `dependsOn` if it's no longer required.
-
-Do NOT proceed until every entry in `dependsOn` resolves to a `done` phase. This prevents executing a phase whose prerequisite work doesn't exist yet — a failure mode the schema already modelled but never enforced.
-
-### Step 0.6: Run the assumptions tripwires (BEFORE any code)
-
-If the phase declares `assumptions: [...]`, run each `verify` command **BEFORE writing any code**. **Any failure ⇒ beacon the result + STOP: escalate with the raw command output** — inline: surface it and wait; arc-mode: return `status: "escalated"` carrying the output. A false assumption CHANGES THE PLAN, so escalating IS success — never adapt silently past it (the RAGUNIFY 1343.6 failure, where a wrong assumption became a mid-execution rewrite recorded only in a commit message). **Never edit code past a failed tripwire.** (The Step-1b resume path re-runs the tripwires on takeover, so a resumed phase re-verifies its assumptions.)
-
-### Step 1: Set status to in-progress
-
-If status is `'backlog'`, edit the .phase.ts file to set `status: 'in-progress'`. Commit:
-```
-docs(roadmap): phase N — move to in-progress
-```
-
-### Step 1b: Resume path (a phase already `in-progress`)
-
-When Step 0 finds `status: 'in-progress'` (a takeover after a stall, or a respawn from
-do-arc's recovery ladder), do NOT restart — resume from the durable checkpoint (`done: true`
-+ one-commit-per-task in the worktree):
-
-1. **Verify the done flags against commits.** For each `done: true` task, confirm a matching
-   commit exists in the worktree. A `done: true` with NO matching commit is untrustworthy —
-   treat that task as NOT done and redo it.
-2. **TaskCreate only the remainder** — the not-done tasks (plus any redone per step 1). Skip
-   the commit-verified done tasks.
-3. **Re-derive the phase-start SHA** as the PARENT (`^`) of the OLDEST worktree commit matching
-   `git log --reverse --grep "phase N —"` (normally the `docs(roadmap): phase N — move to
-   in-progress` commit). The parent matters because the gate diffs `<phase-start-SHA>..HEAD`
-   EXCLUSIVE of the base — deriving from the first IMPLEMENTING commit would drop task 1 from
-   the gate diff. The `—` (em dash) boundary in the grep prevents phase-number-prefix
-   collisions (resuming 136 must not match 1369's commits).
-4. **Resume the loop** at the first remaining task. Every resumed task obeys every rule an
-   unstalled run does — including the per-task `transparencyReport` (the recorded recovery
-   failures lost exactly this). **A resumed phase produces the SAME record as an unstalled
-   one:** one commit per task, a `transparencyReport` per task, the full gate at the end.
-
-Then go to Step 2 for the remaining tasks only (Step 1's move-to-in-progress commit is already
-in history — skip it).
-
-### Step 2: Create Claude Code tasks
-
-Use `TaskCreate` to create ONE task for each task in the phase file. Use the task title as the subject and the problem as the description. This gives the user live progress visibility.
-
-### Step 3: Execute tasks sequentially
-
-For each task, in order:
-
-1. **TaskUpdate** — set status to `in_progress`
-2. **Read the task** — read the `problem`, `steps`, `acceptanceCriteria`, `files`, `testMode`, and `batchMode` fields
-
-**If `batchMode: true`, run the Batch Protocol below instead of steps 3–8.** Batch tasks have a different commit shape (one commit per step) and a different transparency report contract (aggregated across commits). The standard flow below assumes `batchMode: false`.
-
-3. **Execute** — branch on `testMode` (`batchMode: false` only):
-
-#### testMode: "tdd" (test-first)
-
-   **(3a)** Launch `test-engineer` agent with ONLY: `task.problem`, `task.acceptanceCriteria`, `task.files`, and the existing type signatures/interfaces from those files (read the type exports — NOT function bodies). Do NOT give `task.steps`.
-   **(3b)** Run the NEW test files via the `unit-scoped` slot (scoped-slot resolution rule, references/gate-protocol.md — an unbound scoped slot falls back to the full `unit` slot with the honest note; NEVER the full tier by default: red/green runs twice per tdd task, and a full-tier run each time is minutes of overhead per task for zero extra proof) — tests MUST FAIL (red). If they pass, tests are trivial — reject and have test-engineer rewrite.
-   **(3c)** If tests don't compile, provide the compilation error to test-engineer for 1 retry. If still broken, skip TDD and note in transparency report: "TDD skipped — test-engineer could not produce compilable tests."
-   **(3d)** Code agent implements `task.steps`.
-   **(3e)** Run the same scoped test files — tests MUST PASS (green).
-   **(3f)** Commit test + code together.
-
-#### testMode: "e2e" (test-after, blind to source)
-
-   **(3a)** Code agent implements `task.steps`.
-   **(3b)** Launch `test-engineer` agent with: `task.problem`, `task.acceptanceCriteria`, page URLs, `data-testid` values from the components. Do NOT give component source code, API route implementation, or state management details.
-   **(3c)** test-engineer writes E2E test from user-flow perspective.
-   **(3d)** Commit test + code together. E2E tests run at validation gate, not per-task.
-
-#### testMode: "none" (default)
-
-   Implement the changes described in `steps`. Each step has a `file` path — go to that file and make the described change.
-
-4. **Verify** — run the `types` slot at minimum (resolved from the consumer `## Gate commands` block; a missing binding fails loud — never guess a command). If the task touches tests, run the touched test files via the `unit-scoped` slot (scoped-slot resolution rule — the full `unit` tier belongs to the gate, not to every task). If the task touches UI, run the `build` slot.
-5. **Commit** — commit the changes with message format: `<type>(<scope>): phase N — <task title>`
-6. **Update phase file** — set `done: true` and `doneDate: 'YYYY-MM-DD'` on the task
-7. **TaskUpdate** — set status to `completed`
-8. **Transparency report** — output a structured block AND persist it into the phase file.
-
-   a. Output to the conversation so the user sees it in real time. **Always print `WHAT WAS DONE` and `HOW`. For `COMPROMISES`, `SKIPPED`, `HARDCODED`, `LIMITATIONS` — print the line ONLY when the value is not `"None"`.** A clean task should be a 2-line report; a compromised task surfaces only the sections that actually have something to say. This applies to the chat output only — the persisted `transparencyReport` field (step b) still records all six sections so the audit trail stays complete.
-
-   ```
-   ### Transparency Report — Task N.X: <title>
-
-   **WHAT WAS DONE:** <1-2 sentence summary>
-   **HOW:** <approach, key decisions>
-   [**COMPROMISES:** <trade-offs made and why>]      ← omit line if "None"
-   [**SKIPPED:** <acceptance criteria not fully addressed>]  ← omit line if "None"
-   [**HARDCODED:** <values that should be configurable>]     ← omit line if "None"
-   [**LIMITATIONS:** <known limitations>]            ← omit line if "None"
-   ```
-
-   b. Persist the same content as a structured `transparencyReport` field on the task in the phase file. The schema (`TransparencyReportShape`) requires all six sections and rejects noise — use either:
-      - The literal string `"None"` when a section genuinely has nothing to report (compromises/skipped/hardcoded/limitations only — `whatWasDone` and `how` must always be real content).
-      - At least 10 characters of substantive content.
-
-      Short tokens like `"n/a"`, `"."`, `"tbd"` will fail schema parse. This is intentional — the field exists to force honesty, not placate a type check.
-
-   ```typescript
-   // In the phase file, inside the task object:
-   transparencyReport: {
-     whatWasDone: '...',
-     how: '...',
-     compromises: 'None',
-     skipped: 'None',
-     hardcoded: 'None',
-     limitations: 'None',
-   }
-   ```
-
-   c. This edit goes in the same commit that sets `done: true` and `doneDate` on the task — one commit per task transitioning to done.
-
-The agent continues immediately to the next task after persisting the report. No waiting, no asking "should I continue?"
-
-### Batch Protocol (`batchMode: true` tasks)
-
-Replaces steps 3–8 above. Use ONLY for tasks with `batchMode: true` — set deliberately at plan time for genuinely mechanical multi-commit work (rename `Foo` → `Bar` across 22 files, author N parallel shapes from a template). The plan-phase / review-phase size lint forbids `batchMode: true` for non-mechanical work.
-
-1. **TaskCreate one subtask per `steps[]` entry.** Subject: `Phase N task N.X (k/M) — <step.description>`. activeForm follows the same template. The user sees per-unit progress in the parent transcript.
-2. **Implement and commit each subtask serially.** For each step:
-   a. TaskUpdate status to `in_progress`.
-   b. Apply the step's edits to the named file.
-   c. Run the `types` slot. Failure → fix it in this same step's commit; do not roll back, do not skip ahead.
-   d. Commit with message: `<type>(<scope>): phase N task N.X (k/M) — <step.description first ~60 chars>`.
-   e. TaskUpdate status to `completed`.
-3. **No sub-agent forks for the steps.** `batchMode: true` is permission to make many commits inline, NOT permission to spawn sub-agents to absorb the steps. Forking the steps abandons the per-step commit discipline and produces an opaque mega-deliverable. The auto-spawn discipline rule (Step 4 prelude) applies in full force here — including its arc-mode scoping: it bans forks that absorb phase work, not the do-phase runner itself being a phase-executor sub-agent.
-4. **Aggregated transparency report after the last step.** One report covering the entire batch task:
-   - `whatWasDone`: bullet list, one line per step, summarizing per-unit deltas (`step k/M: <file> — <one-line>`).
-   - `how`: 1–2 sentences describing the overall approach (e.g. "applied template `lib/shape-template.ts` to each of 22 catalog entries, derived test from existing `lib/__tests__/shape-template.test.ts`").
-   - `compromises` / `skipped` / `hardcoded` / `limitations`: aggregate across all steps. Same `"None"`-or-≥10-chars rule as standard flow.
-5. **Update phase file** in its own commit AFTER the last step lands. Set `done: true`, `doneDate`, and persist the aggregated `transparencyReport`. Commit message: `docs(roadmap): phase N task N.X — mark batch done`. Always one commit, never folded into a step's commit — predictability matters more than commit count.
-6. **TaskUpdate** the original phase-task (created in the do-phase setup before per-task iteration) to `completed`. The per-step subtasks are already individually completed in step 2e.
-7. **Chat output cap**: per-step commit messages stream through naturally. The end-of-task aggregated transparency report follows the standard ~30-line / ~1500-char cap from Step 4b — long step lists go into the persisted `whatWasDone` field, the chat shows a head + tail with `+N more in roadmap/phases/phase-N.phase.ts`.
-
-If a step fails twice in a row (type-check still red after one fix attempt), STOP. Do not power through the batch. Surface the failing step and the actual error to the user — the batch's mechanical assumption is broken.
-
-### Step 4: Validation gate
-
-After the last task commits, run the validation gate per **`references/gate-protocol.md`** — load it once per session for stage detail, echo contract, and `StructuredGateRound` shape.
-
-**Gate set is selected by `phase.kind`:**
-
-| `kind` | Gate set |
-|---|---|
-| `mockup` | Mechanical only: the `lint` + `types` slots. **Skip** the quality-pass → code-reviewer chain. Step 4b summary still runs. |
-| `logic` | Full gate: Round 0 quality pass → Rounds 1..N correctness loop (hard-cap 5). |
-| `hardening` | Full gate **plus** the integration-suite-rerun closure rule for persistence/event/marshal-chain tasks (see `review-phase` Mode B Step 2(b)). |
-| `release` | Full gate **plus** the `e2e` slot in Round 1's mechanical checks. |
-
-Which slots run per kind × mode is the decision table in `references/gate-protocol.md` — a table lookup, not a judgment call.
-
-Missing `kind` on a legacy phase → default to `logic`, warn once. **No exceptions** — every phase gets its kind's gate, docs and tests included.
-
-**Four refinements (see `references/gate-protocol.md`):** (0) **Test-scope ladder** — when the consumer declares a `## Test cadence` backstop block, the `unit`/`integration` slots narrow to the diff-derived scope (`static`/`scoped`/`relevant`/`full`; `phase.testScope` may only RAISE the derived floor, and `## Gate specialists` paths floor to `relevant` — their module suites always run, while the full-tier rerun defers to the declared backstop); anything below `full` records what deferred + the covering backstop in `gate.unitTests.notes`. (0b) **Review-scope ladder** — `phase.reviewScope` (plan-declared + Mode-A-ratified, else derived from the diff) selects the agent chain: `none` (no review agents — mechanical checks + compromise summary) / `light` (ONE code-reviewer loop, no quality pass) / `full` (the whole chain); a `## Gate specialists` path always forces `full`, and any lower rung is recorded in `gateRounds`, never silent. (1) **Test cadence** — under **arc-mode** the gate runs only the tests *relevant* to the phase diff (plus lint/type/build); the full unit+integration+e2e suite is deferred to the arc end (`do-arc` Step 8, once, after the sweep + validate-arc, gating the merge). Inline single-phase runs keep the full suite at the gate ONLY when the consumer has no `## Test cadence` block — with one declared, the ladder in (0) narrows inline runs the same way, and the named backstop re-covers the rest. (2) **The quality pass skips a pure-docs/prose diff** — Round 0 has no code to act on when the diff is entirely Markdown/docs; it records a skipped `round: 0` entry (same spirit as `mockup` skipping the chain). A mixed diff with any executable code still runs it.
-
-**Sub-agent rules:** launch all gate agents synchronously (no `run_in_background`). Auto-spawn discipline applies during Steps 1–4 — the quality-pass → code-reviewer chain is the only auto-spawned set during the gate; the architect-gate from Prime Rule 1 and `test-engineer` from `testMode` are the only sub-agent calls that may **absorb phase work** during task execution. No `Explore` / `general-purpose` / arbitrary `Task` forks. A task that "feels too big" is either fine (push through) or wrongly planned (STOP, surface split proposal) — never launch a sub-agent to absorb it.
-
-**Inline-supervised (heavy-band) exemption.** When the `do-arc` orchestrator runs a HEAVY-band phase inline-supervised (do-arc Step 2's execution bands), the ORCHESTRATOR — not an executor — may drive `software-developer` / `test-engineer` sub-agents PER TASK while itself owning every commit, `transparencyReport`, and the gate. This is the one sanctioned way to fork per-task implementation work, and it is the orchestrator's alone: an executor still never offloads its own tasks. Without this exemption the heavy band would violate the ban above.
-
-This ban scopes the actor **while executing a phase's tasks and gate** — it does NOT forbid do-phase from *being* a sub-agent. Under arc-mode (the `do-arc` orchestrator skill) the do-phase runner is itself a **phase-executor** sub-agent: one executor = one whole phase. What stays forbidden, in arc-mode exactly as inline: a phase-executor spawning another phase-executor (no recursion past a single phase), `Explore` / `general-purpose` forks, or any fork that offloads a "too-big" task.
-
-### Step 4b: Phase compromise summary (the ONLY human stop — inline mode)
-
-Aggregate into a phase-level summary:
-1. Every task's persisted `transparencyReport` (compromises, skipped criteria, hardcoded values, limitations).
-2. The quality pass's `SURFACED` entries (e.g. DB migrations — applied, but worth knowing before deploy).
-3. The quality pass's `HARD-STOPS` by tag: `[MULTI-REPO]`, `[SCOPED-OUT]`, `[PRODUCT]`, `[SPECULATIVE]`.
-
-**Inline mode (do-phase driven by the main session — the default):** this is the ONLY human stop, unchanged. The user decides: mark done, address items first, or plan follow-up phases (especially for `[MULTI-REPO]` entries).
-
-**Arc-mode is re-derivable, never remembered:** you are in arc-mode **iff** `roadmap/.arc-mode` exists (do-arc's inline-mode marker — re-READ it here, at this step, don't rely on recalling Step-3 context) **or** this session IS a `phase-executor` sub-agent (your agent card says so). Neither → inline mode.
-
-**Arc-mode (do-phase running inside a phase-executor, or under do-arc's inline marker):** do NOT stop and ask — there is no reachable user. Emit the same aggregate as a typed `PhaseExecutionResult` (`PhaseExecutionResultShape` in `templates/schema.ts`) as the executor's final message:
-- `status: "escalated"` on a hard `ESCALATE_TO_USER` verdict or a `[MULTI-REPO]` / `[PRODUCT]` hard-stop — carry the architect's `question` + `options` in `escalation`. Do NOT guess past the escalation.
-- otherwise `status: "done"` with the compromise roll-up mapped into `compromises` / `skipped` / `hardcoded` / `surfaced` / `hardStops` / `gateRounds`.
-
-The human stop relocates to the orchestrator (`do-arc`), which surfaces escalations and the arc-wide roll-up before merge. The phase-file `compromises` string is still written either way (Step 5) — the structured result is an addition, not a replacement.
-
-**Chat-output cap: ~30 lines / ~1500 chars.** The full summary is already persisted to the phase file's `compromises` field and the completion commit body — don't repeat the long form inline. If the summary would overflow, render a head + tail with a `+N more in roadmap/phases/phase-N.phase.ts` pointer. The cap exists because output-token truncation has historically blocked phase completion mid-summary; treat the file as the long-form surface and chat as the headline.
-
-Record the summary in BOTH the phase file's `compromises` field AND the completion commit body. Skipping the phase-file write loses the signal for `audit-roadmap`.
-
-Full format in `references/gate-protocol.md`.
-
-### Step 5: Complete the phase
-
-The schema enforces gate results when `status: 'done'`. In one edit to the `.phase.ts` file, set: `status: 'done'`, `gate` (from Rounds 1..N results), `gateRounds` (structured entries including Round 0), `metrics`, `compromises` (from Step 4b), `completedDate: 'YYYY-MM-DD'`.
-
-**Groom the backlog in the same commit.** If `roadmap/backlog.ts` contains an entry for this phase, remove it. Done phases do not belong in the execution queue — leaving them there pollutes `do-phase`'s next-up resolution and forces `audit-roadmap` to flag the staleness later. The removal is a one-line edit to `backlog.ts`. If the phase was never queued (e.g. it ran via explicit `/do-phase N`), no edit is needed.
-
-**Also strip narrative referencing this phase.** If `backlog.ts` has track-narrative comments that explicitly name the phase being removed (`// Track 1 — phase 467 shipped 2026-…`, `// 467 + 472 complete; remaining: 359`, etc.), remove those comments too in the same edit. The backlog is queue-only per its header — narrative about completed work belongs in the commit history, the phase file's `compromises` field, and `reviews/changelog.json`, not in backlog comments. Operator-curated comments NOT naming this phase (track-priority headers, in-flight notes for other phases) stay.
-
-Then: the `types` slot → the `emit` slot (regenerates `reviews/changelog.json`) → commit `docs(roadmap): mark phase N complete` (compromise summary in body) → push to develop (inline runs only — arc-mode never pushes; see the override below).
-
-**Arc-mode override.** When do-phase runs in arc-mode (re-derive it exactly as Step 4b does: the `roadmap/.arc-mode` marker exists, or this session IS a phase-executor), the executor still sets the phase-file fields (`status`, `gate`, `gateRounds`, `metrics`, `compromises`, `completedDate`) **plus `executionResult`** — the typed Step-4b roll-up it is about to return — and commits the phase, but it SKIPS the backlog grooming above, the `emit`-slot regen, **and the push** — landing and pushing are the do-arc orchestrator's act (Step 8's landing mechanics), never the executor's. An executor on an arc branch pushes NOTHING: not the arc branch, and never a branch-ref shortcut (`git push origin HEAD:<baseRef>` — the exact move do-arc's landing mechanics ban). Persisting `executionResult` is what makes the roll-up durable: `do-arc`/`arc-sweep` read the in-context array as an optimization but can re-read it via `discoverResults()`, so a resumed or context-compacted arc is not lossy. Both `roadmap/backlog.ts` and `reviews/changelog.json` are shared-mutable; the `do-arc` orchestrator grooms the backlog and runs `emit:phases` **serially** after each phase-executor returns, so concurrent phase completions never race those files. Inline (non-arc) runs do the grooming + emit themselves exactly as described above, and leave `executionResult` unset — unchanged.
-
-If `scripts/collect-phase-metrics.ts` exists, it fills `gate` and `metrics` automatically:
-```bash
-npx tsx scripts/collect-phase-metrics.ts N
-```
-
-Field-level detail, `StructuredGateRound` shape, and Round 0 schema integration in **`references/gate-protocol.md`**.
-
-## Execution Mode: parallel
-
-If the phase has `executionMode: 'parallel'`, you MAY batch tasks that are truly independent (different files, no shared state). One TaskCreate per task, one commit per task, type-check between batches. Any cross-task dependency forces sequential — no exceptions.
+**Standalone** (no arc-mode): after the completion commit, groom `roadmap/backlog.ts` (remove this
+phase's entry + any single-phase narrative naming only it), run the `emit` slot, then push per the
+consumer's `mergePolicy` (workflow serialization covers arc-mode only).
