@@ -20,9 +20,13 @@ export function beaconPath(arcId, { mainRoot }) {
   return join(mainRoot, 'arcs', '.building', `${arcId}-executor.jsonl`)
 }
 
-// The last parseable event from one JSONL file, else null — an I/O or parse error
-// degrades to null (the commit-age fallback's job), never crashes the whole board.
-function readLast(path) {
+/**
+ * The last parseable JSONL record of one beacon file → { ts, ageMin, event, log } | null.
+ * An I/O or parse error degrades to null (the commit-age fallback's job), never crashes
+ * the board. THE one line parser: status (lastEvent) and watch/liveness (1657) both read
+ * beacons through this, so the JSONL shape is decoded in exactly one place.
+ */
+export function readBeaconLine(path) {
   if (!existsSync(path)) return null
   let lines
   try {
@@ -34,11 +38,12 @@ function readLast(path) {
   try {
     const last = JSON.parse(lines[lines.length - 1])
     const ts = Date.parse(last.ts)
-    return { ts, ageMin: (Date.now() - ts) / 60000, event: last.event }
+    return { ts, ageMin: (Date.now() - ts) / 60000, event: last.event, log: last.log ?? null }
   } catch {
     return null
   }
 }
+const readLast = readBeaconLine
 
 /**
  * The freshest last-event for an arc. `worktree` OPTIONAL: given ⇒ scan BOTH the
