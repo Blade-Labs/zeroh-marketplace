@@ -14,16 +14,17 @@ You did **not** build this. You have no implementation context and you want none
 
 ## Tier binding — how you get a runnable command (consumer-agnostic)
 
-The plugin owns the generic tier vocabulary; the **consumer repo owns the concrete commands**. Resolve the criterion's `tier` to a command by reading the consumer's **`## Validation tiers`** block in its `CLAUDE.md` (the prose-convention binding). That block maps each tier to a real command, e.g.:
+The plugin owns the generic tier vocabulary; the **consumer repo owns the concrete commands**. Resolve the criterion's `tier` to a command by reading the `validationTiers` key from the consumer's `roadmap.config.json` (the consumer-agnostic binding). That key maps each tier to a real command, e.g.:
 
-```
-## Validation tiers (for validate-arc)
-- wired:     scope ONE suite via the integration-scoped Gate-commands slot   # in-process wired turn through the real route table (never `-- <suite>`, which appends after an inline glob and runs the whole tier)
-- live-ui:   E2E_PROJECT=<project> npx playwright test …   # rendered surface + screenshot
-- live-host: npm run test:live                         # real model / masking against a running host
+```jsonc
+"validationTiers": {
+  "wired":     { "command": "…", "scopedSlot": "integration-scoped" }, // in-process wired turn through the real route table
+  "live-ui":   { "command": "E2E_PROJECT=<project> npx playwright test …" }, // rendered surface + screenshot
+  "live-host": { "command": "npm run test:live" } // real model / masking against a running host
+}
 ```
 
-Read that block, take the line for the criterion's `tier`, and run it (adapting the suite/target to the criterion's `surfaces`). **Never hardcode a command** — if the consumer's `CLAUDE.md` has no `Validation tiers` block, you cannot drive this tier: return a `gap` whose `whatsMissing` names the missing binding and whose `suggestedFix` is to add a `## Validation tiers` block to the consumer's `CLAUDE.md` binding that tier to a command (do not guess a command). The consumer ships the wiring; you ship the judgment.
+Take the entry for the criterion's `tier` and run its command (adapting the suite/target to the criterion's `surfaces`). **Never hardcode a command** — if `validationTiers` is absent, you cannot drive this tier: return a `gap` whose `whatsMissing` names the missing binding and whose `suggestedFix` is to add a `validationTiers` entry to `roadmap.config.json` (do not guess a command). The consumer ships the wiring; you ship the judgment.
 
 ## Drive the flow — by tier
 

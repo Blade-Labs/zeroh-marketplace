@@ -132,17 +132,47 @@ trigger + invocation + verdict interpretation + is/is-not routing.
 | the `## Gate specialists` CLAUDE.md-block references (testScope/reviewScope ratification) | enforced-by-code(a "specialist path" = a `gateSpecialists` path in roadmap.config.json) | config key replaces the anchored block |
 | verbose per-task/Mode-B output templates + dated-defect asides (1281.7/1282.6, 1345, 1367) | relocated | trimmed to the rule; the KEEP-LIST (Step H, Mode A judge-model routing, Step 8 backlog-placement rules, Mode B hardening-closure rule) survives verbatim in spirit |
 
-## do-phase/references/gate-protocol.md (38.6 KB → DELETED) — phase 1659.5
+## do-phase/references/gate-protocol.md (38,575 B → DELETED) — phase 1659.5
 
-_populated in 1659.5_
+The entire file is `git rm`'d. Every top-level section's disposition:
 
-## plan-arc/SKILL.md (17.4 KB → ≤13,000 B) — phase 1659.5
+| passage (origin heading) | disposition | evidence |
+|---|---|---|
+| Gate commands — the consumer binding + resolution rules (REFUSE-on-missing, scoped-slot fallback note, never-invent-a-filter) | enforced-by-code(cli/lib/slots.mjs — the scoped-slot resolution rule + fallback note + verbatim execution; `roadmap gate run`) | cli/lib/slots.test.mjs |
+| Gate Set by `phase.kind` (kind×mode table) | enforced-by-code(cli/lib/ladder.mjs gateCell; `roadmap gate plan` prints the resolved cell) | cli/lib/ladder.test.mjs |
+| Design-parity stage (the LOOP protocol + rubric) | relocated | folded into skills/do-phase/SKILL.md "Design-parity stage" (1658.4) — a fold, not a deletion |
+| Failure-identity rule (RED output must name failing tests; never re-filter a slot) | enforced-by-code(cli/lib/slots.mjs streams slot stdout/stderr unfiltered, tees to a log) | slots.mjs |
+| Test-scope ladder (static/scoped/relevant/full derivation, floor rule, specialist floor, sequence cadence) | enforced-by-code(cli/lib/ladder.mjs deriveTestScope + specialistFloor) | cli/lib/ladder.test.mjs |
+| Review-scope ladder (none/light/full, ≤150-line threshold, specialist hard floor, declared semantics) | enforced-by-code(cli/lib/ladder.mjs deriveReviewScope) | cli/lib/ladder.test.mjs |
+| Per-Stage Echo Contract | relocated | folded into skills/do-phase/SKILL.md "Echo contract" (1658.4) |
+| Round 0 — Quality Pass | relocated | the protocol is in skills/do-phase/SKILL.md gate section + agents/quality-pass.md |
+| Rounds 1..N — Correctness Loop (mechanical checks half) | enforced-by-code(cli/lib/ladder.mjs + slots.mjs + `roadmap gate run`) / relocated(the agent-review loop + hard-cap 5 in do-phase) | ladder.mjs, slots.mjs |
+| Compromise Summary | relocated | skills/do-phase/SKILL.md Step 4b (already the durable statement) |
+| Phase Completion (done-fields, gate enforcement) | enforced-by-code(`roadmap gate run --verify-complete` + cli/lib/validate.mjs done-transition check) / relocated(do-phase Step 5) | validate.mjs |
 
-_populated in 1659.5_
+Provenance note: cli/lib/ladder.mjs, ladder.test.mjs, and slots.mjs carry `gate-protocol.md:NNN`
+source-line comments BY DESIGN (ROADCODE-DESIGN §2: "the deleted gate-protocol tables live on only
+as these functions' test fixtures"; ladder.mjs:9 anticipates this deletion). Those are the
+enforced-by-code provenance record and are OUT of the 1659.5 grep scope (skills/hooks/templates/bin/
+scripts), which is 0.
 
-## plan-arc/references/design-gate.md (9.5 KB → ≤8,700 B) — phase 1659.5
+## plan-arc/SKILL.md (17,386 B → 12,998 B) — phase 1659.5
 
-_populated in 1659.5_
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| the gate-protocol.md "Design-parity stage" pointer (Step 1b.3 ux-parity minting) | enforced-by-code(the thin do-phase gate section carries the design-parity stage) | skills/do-phase/SKILL.md |
+| `## Design homes` anchor (arch + UX sub-gate reads) | enforced-by-code(read `designHomes` from roadmap.config.json; absent key → the same loud STOP) | cli/lib/config.mjs |
+| `## Model policy` anchor (Step 3 reviewer routing) | enforced-by-code(`modelPolicy.judgeModel` config key) | review-phase HOME statement |
+| Ask Ali / Studio / Agent HQ 2026-07 escalation narration | obsolete-with-evidence(the ux-parity pairing + validate-arc fail-safe derivation now close the drift the incident taught; the story added no operative rule) | plan-arc Step 1b.4 + validate-arc |
+| verbose defineArc stub comments + reuse-first/sub-gate explanatory prose | relocated | condensed inline — the design-first protocol (classify → arch → UX → confirm) is kept intact, narration trimmed |
+
+## plan-arc/references/design-gate.md (9,465 B → 8,673 B) — phase 1659.5
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| `## Design homes` anchor (§3 UX reuse, §4 homes, absent-block STOP) | enforced-by-code(`designHomes` config key; absent key → the same loud STOP) | cli/lib/config.mjs |
+| `## Validation tiers` anchor (missing-binding mirror) | enforced-by-code(`validationTiers` config key) | cli/lib/config.mjs |
+| reuse-first / generalize-forward / craft-bar explanatory prose | relocated | light-trimmed inline — the reuse-or-design protocol is untouched, only wording compressed |
 
 ## arc-sweep/SKILL.md (14 KB → ≤9,000 B) — phase 1659.6
 

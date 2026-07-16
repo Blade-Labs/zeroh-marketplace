@@ -1,6 +1,6 @@
 # Driving tiers — what each can honestly judge
 
-`validate-arc` and the `intent-validator` agent speak ONE generic tier vocabulary. The plugin owns the vocabulary; each **consumer repo binds each tier to a concrete command** in its `CLAUDE.md` `## Validation tiers` block (the prose-convention binding the judge reads). The plugin hardcodes no consumer command.
+`validate-arc` and the `intent-validator` agent speak ONE generic tier vocabulary. The plugin owns the vocabulary; each **consumer repo binds each tier to a concrete command** in the `validationTiers` key of its `roadmap.config.json` (the binding the judge reads). The plugin hardcodes no consumer command.
 
 A criterion's `tier` is the **cheapest tier that can honestly see its `signal` and `bar`** — not the most thorough.
 
@@ -25,7 +25,7 @@ A criterion's `tier` is the **cheapest tier that can honestly see its `signal` a
 
 ## Worked example — `azure_private_agent` (an example consumer, NOT a plugin default)
 
-This is how one consumer binds the tiers (its `CLAUDE.md` `## Validation tiers` block); the commands are **that repo's**, shown to make the vocabulary concrete — the plugin ships none of them:
+This is how one consumer binds the tiers (its `validationTiers` config); the commands are **that repo's**, shown to make the vocabulary concrete — the plugin ships none of them:
 
 - `wired` → in-process wired turn through `integration/harness.ts` `driveTurn` (`app.run` with external boundaries faked) — run ONE suite via the consumer's `integration-scoped` Gate-commands slot (scoped-slot resolution rule); never `-- <suite>`, which appends after the inline glob and runs the whole tier.
 - `live-ui` → the Playwright projects in `e2e/playwright.config.ts` (`deployed` = the console, loginless; `office-pane`; `sharepoint`) + a screenshot — `E2E_PROJECT=<project> npx playwright test …` (storageState auth via `npm run e2e:auth` where needed).

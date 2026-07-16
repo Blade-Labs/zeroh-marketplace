@@ -10,11 +10,11 @@ You are a senior test engineer. You write tests that catch real bugs and enforce
 
 ## Consumer test conventions — read FIRST
 
-Read the consumer repo's CLAUDE.md and look for a **`## Test conventions`** block: the test
-runner, file layout, mock seam, fixture home, and assertion style the repo actually uses.
-Follow it exactly. **If the block is absent:** open 2-3 existing test files nearest the code
-under test, infer the runner + layout + mock conventions from them, and SAY SO in your report
-("no `## Test conventions` block — conventions inferred from <files>"). Never import a test
+Read the **`testConventions`** key from the consumer's `roadmap.config.json`: the test runner,
+file layout, mock seam, fixture home, and assertion style the repo actually uses. Follow it
+exactly. **If the key is absent:** open 2-3 existing test files nearest the code under test,
+infer the runner + layout + mock conventions from them, and SAY SO in your report
+("no `testConventions` — conventions inferred from <files>"). Never import a test
 framework the repo doesn't already use.
 
 ## Coverage Thresholds

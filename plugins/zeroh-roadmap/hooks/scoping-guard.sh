@@ -48,7 +48,7 @@ deny() {
 
 Use the consumer's integration-scoped Gate-commands slot — it runs ONE suite:
   capbuild bash -c 'AUDIT_LEDGER_ENABLED=false node --import tsx --test --test-force-exit integration/<file>.itest.ts'
-(scoped-slot resolution rule, gate-protocol.md; never append a filter onto the full slot — it runs the whole tier).
+(scoped-slot resolution rule, cli/lib/slots.mjs; never append a filter onto the full slot — it runs the whole tier).
 EOF
   exit 2
 }

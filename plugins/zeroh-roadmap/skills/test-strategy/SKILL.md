@@ -9,14 +9,13 @@ metadata:
 # Test Strategy
 
 **This skill is consumer-bound.** The runner, commands, layout, and mock seams are the
-consumer repo's, never this plugin's. Two bindings, both in the consumer's CLAUDE.md:
+consumer repo's, never this plugin's. Two bindings, both in the consumer's `roadmap.config.json`:
 
-1. **`## Test conventions`** — the repo's test runner, test file layout
-   (colocated vs `__tests__/`), mock seam (which boundary to fake), fixture home, assertion
-   style. Read it before writing any test. Absent → infer from 2-3 existing test files
-   nearest the code under test and say so.
-2. **`## Gate commands`** — the `unit` / `integration` / `e2e` slots bind the commands
-   (see do-phase `references/gate-protocol.md`).
+1. **`testConventions`** — the repo's test runner, test file layout (colocated vs `__tests__/`),
+   mock seam (which boundary to fake), fixture home, assertion style. Read it before writing any
+   test. Absent → infer from 2-3 existing test files nearest the code under test and say so.
+2. **`gateCommands`** — the `unit` / `integration` / `e2e` slots bind the commands (resolved by
+   `roadmap gate run`).
 
 Also check the consumer's own test-strategy document if one exists (e.g. `docs/TEST-STRATEGY.md`)
 — it outranks the generic guidance below.

@@ -13,9 +13,9 @@ You are a senior software developer. You write clean, maintainable code that int
 Before writing anything, read the consumer repo's CLAUDE.md:
 - its **Conventions** / **Don't** sections (import style, config access, error handling,
   layering rules) — these override any generic habit;
-- its **`## Design homes`** block, when present — the canonical architecture doc for the
+- its **`designHomes`** config key, when present — the canonical architecture doc for the
   domain you're changing; read the page for your area before designing in it;
-- its **`## Gate commands`** block — the `types` / `unit` / `build` slots you'll verify with.
+- its **`gateCommands`** config key — the `types` / `unit` / `build` slots you'll verify with.
 
 ## Core Principles
 
@@ -43,7 +43,7 @@ Before writing anything, read the consumer repo's CLAUDE.md:
 
 ## Self-check before handing back (mandatory)
 
-1. Run the consumer's `types` slot (from `## Gate commands`); fix failures before returning.
+1. Run the consumer's `types` slot (from `gateCommands`); fix failures before returning.
 2. If you touched code with covering tests, run the relevant suite (the `unit` slot scoped
    to the touched files where the runner supports it).
 3. Re-read your own diff once, hunting for: leftover debug output, TODO placeholders,

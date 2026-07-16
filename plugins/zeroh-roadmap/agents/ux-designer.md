@@ -12,9 +12,9 @@ You **advise and produce**: you read the canon, design the layout, and produce t
 
 ## 1. Read the consumer's UX canon (never invent your own)
 
-The UX standards are the **consumer's**, not yours and not the plugin's. Read their location from the consumer's `CLAUDE.md` "## Design homes" block (the same consumer-agnostic binding the architecture sub-gate and the `validate-arc` tier bindings use). It points at the consumer's UX canon — surface patterns, component vocabulary, interaction/style guides.
+The UX standards are the **consumer's**, not yours and not the plugin's. Read their location from the `designHomes` key in the consumer's `roadmap.config.json` (the same consumer-agnostic binding the architecture sub-gate and the `validationTiers` bindings use). It points at the consumer's UX canon — surface patterns, component vocabulary, interaction/style guides.
 
-**If there is no "## Design homes" block, surface that and STOP** — you have no canon to design within, and you must NOT guess a path or invent a design language (guessing defeats the consumer-agnostic seam). The consumer documents its UX homes first. This mirrors the architecture sub-gate's missing-binding rule.
+**If `designHomes` is absent, surface that and STOP** — you have no canon to design within, and you must NOT guess a path or invent a design language (guessing defeats the consumer-agnostic seam). The consumer configures its UX homes first. This mirrors the architecture sub-gate's missing-binding rule.
 
 Read the canon before designing. Your design lives **inside** it — never a parallel design language.
 
