@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
+import { derivePhaseStartSha, GitScanError } from '../lib/gitscan.mjs'
 import { bridgeImport, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
   gateCell,
@@ -49,39 +50,24 @@ const isExecutable = (p) => EXECUTABLE_EXTS.some((e) => p.endsWith(e))
 /**
  * baseSha = parent (^) of the OLDEST commit matching `phase <N> —` (the em-dash
  * boundary prevents 136 matching 1369 — do-phase SKILL.md:127-135). --base overrides.
- * No match → GateError(1) naming the expected move-to-in-progress commit form. A root
- * commit with no parent falls back to itself.
+ * Thin wrapper over the shared gitscan.derivePhaseStartSha (pre-made decision 3: ONE
+ * em-dash rule; derive.mjs's resume.startSha uses the same helper) — this wrapper only
+ * maps the typed GitScanError onto gate's exit-code contract (no-match ⇒ GateError(1)
+ * naming the expected move-to-in-progress commit form).
  */
 export function deriveBaseSha(cwd, phaseNum, { base } = {}) {
-  if (base) {
-    try {
-      return git(cwd, ['rev-parse', base])
-    } catch {
-      return base
-    }
-  }
-  const grep = `phase ${phaseNum} —` // em-dash boundary
-  let out
   try {
-    out = execFileSync('git', ['-C', cwd, 'log', '--reverse', `--grep=${grep}`, '--format=%H'], {
-      timeout: 15_000,
-      encoding: 'utf8',
-    }).trim()
+    return derivePhaseStartSha(cwd, phaseNum, { base })
   } catch (e) {
-    throw new GateError(1, [`gate: git log failed in ${cwd}: ${e.message}`])
-  }
-  const oldest = out.split('\n').filter(Boolean)[0]
-  if (!oldest) {
-    throw new GateError(1, [
-      `gate plan: no commit matching "phase ${phaseNum} —" — expected the move-to-in-progress`,
-      `commit (e.g. "plan(roadmap): phase ${phaseNum} — …" or "feat(scope): phase ${phaseNum} — …").`,
-      'Pass --base <sha> to override.',
-    ])
-  }
-  try {
-    return git(cwd, ['rev-parse', `${oldest}^`])
-  } catch {
-    return oldest // root commit — no parent
+    if (e instanceof GitScanError && e.kind === 'no-match') {
+      throw new GateError(1, [
+        `gate plan: no commit matching "phase ${phaseNum} —" — expected the move-to-in-progress`,
+        `commit (e.g. "plan(roadmap): phase ${phaseNum} — …" or "feat(scope): phase ${phaseNum} — …").`,
+        'Pass --base <sha> to override.',
+      ])
+    }
+    if (e instanceof GitScanError) throw new GateError(1, e.messageLines)
+    throw e
   }
 }
 
