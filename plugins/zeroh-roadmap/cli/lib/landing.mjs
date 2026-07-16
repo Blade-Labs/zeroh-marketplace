@@ -128,6 +128,7 @@ export const BLOCKERS = [
     check: (s) => {
       for (const m of s.members) {
         if (!m.done) return `phase ${m.num} is not done (status ${m.status})`
+        if (!m.executionResult) return `phase ${m.num} is done but has no executionResult (the typed roll-up is a landing precondition — do-arc Step 8 (1))`
         const st = m.executionResult?.status
         if (st === 'failed' || st === 'escalated') return `phase ${m.num} executionResult.status is ${st}`
       }
