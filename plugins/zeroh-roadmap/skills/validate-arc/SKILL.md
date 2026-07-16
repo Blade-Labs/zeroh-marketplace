@@ -32,7 +32,7 @@ before the merge-hold). `<id>` matches `Arc.id`.
    `arc.designRefs`. For every `kind: 'ux'` designRef with NO matching `ux-parity:*` criterion, DERIVE the
    standard parity criterion (plan-arc Step 1b(4) template: tier `live-ui`, signal = side-by-side of the
    shipped surface vs the rendered artifact across every state AND every interaction it defines — hover/
-   focus, transitions, animations, driven live — judged by the parity rubric) and ADD it to THIS run's
+   focus, transitions, animations, driven live — judged by references/parity-rubric.md) and ADD it to THIS run's
    panel (don't edit the arc file — record `derived: true`). Not circular: the artifact was USER-CONFIRMED
    at the design gate, so the intent is ratified — only the check was missing. A `ux` designRef pointing at
    a missing/moved artifact → a GAP naming the broken ref.
@@ -100,8 +100,8 @@ the user's go** (mirrors do-arc's merge-hold). With the user present, proceed. E
    two-layered (each phase's `do-phase` gate + do-arc's terminal full-arc re-validate). Widen if a phase's
    blast radius plausibly reaches other criteria.
 
-Loop until PASS or the **bound** trips: `maxRounds` default **2** + a budget ceiling.
-**Exhaustion exit (never spin / silently pass):** when the bound trips with criteria unmet,
+Loop until PASS or the **bound** trips: `maxRounds` default **2** + a budget cap.
+**Exhaustion exit (never spin/silently-pass):** when the bound trips with criteria unmet,
 **DISPOSITION each residual gap through the arc-sweep disposition table** (IN-ARC author-and-execute, or a
 user-ratified DESCOPE typed on `Arc.descopes`) — NOT prose into the backlog. Report `GAPS: N residual —
 dispositioned <in-arc | descope>`. Never report PASS with a criterion unmet.

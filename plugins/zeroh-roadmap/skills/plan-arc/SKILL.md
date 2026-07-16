@@ -129,7 +129,7 @@ fails loud — surface + STOP, don't guess — exactly as above). Then:
      id: 'ux-parity:<short-ref-slug>',
      job: 'The shipped <surface> matches the confirmed design (<ref>) 1:1 — the design the user signed off is what ships.',
      surfaces: [<the surface>],
-     signal: 'Side-by-side comparison (shipped surface vs the rendered design artifact — every state the design shows AND every interaction it defines, driven live: hover/focus effects, transitions, animations) judged against the UX design-parity rubric with no material deviation.',
+     signal: 'Side-by-side comparison (shipped surface vs the rendered design artifact — every state the design shows AND every interaction it defines, driven live: hover/focus effects, transitions, animations) judged against references/parity-rubric.md with no material deviation.',
      tier: 'live-ui',
      bar: 'Layout structure, component presence/hierarchy, states, interaction & motion (hover/focus effects, transitions/animations — same or unambiguously better, never flattened or inert), copy, and visual tokens all match; judged-equivalent allowed, missing/moved/renamed/degraded is a deviation. Ratified descopes are the only exemption.',
    }

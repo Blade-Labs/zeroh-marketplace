@@ -220,7 +220,24 @@ silent drop:
 | RN>1 reviewers scoped to the fix-diff only | relocated | skills/do-phase/SKILL.md gate section — the Rounds 1..N loop names the round-scoped review-input |
 | the finding `agent` attribution vocabulary (reviewer-1 / specialist name / quality-pass) | enforced-by-code(StructuredGateRoundShape.`agent` field; do-phase records `agent:` per finding + `agent: 'design-parity'`) | templates/schema.ts |
 
-## agent cards (intent-validator, quality-pass, software-architect, code-reviewer, ux-designer, software-developer, test-engineer) — phase 1659.7
+## agent cards (7 judgment cards) — phase 1659.7
 
-_populated in 1659.7_
+**Ceiling reframed (USER RULING 2026-07-16, via AskUserQuestion — supersedes decision 5's ≤19,000
+grand total).** The 19,000 grand-total conflated repo footprint with per-spawn context cost — no agent
+loads all seven cards; each loads only its own. The binding ceiling is now **PER-CARD: each `agents/*.md`
+≤ ~5,000 B** (every card passes; max 4,410 = quality-pass). This resolved the software-architect
+ESCALATE_TO_USER verdict that the ≤11,832 seven-card sum was infeasible against the load-bearing judgment
+the cards carry. Every card cut 39% from the pre-arc ~36,935 B (→ 22,442 B) preserving all judgment.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| the canonical UX design-parity rubric (was intent-validator.md inline) | relocated | skills/validate-arc/references/parity-rubric.md — ONE canonical home; the 4 citing skills (validate-arc/plan-arc/arc-sweep/do-phase) + intent-validator point there by name (the ux-craft.md / driving-tiers.md precedent; a skills/references doc does NOT count against the agents/ ceiling) |
+| intent-validator narration (independence/tier/drive-flow prose) | relocated | condensed inline; the bar rubric (3 Qs) + evidence-or-downgrade + IntentVerdict shape KEPT |
+| quality-pass verbose mandate prose | relocated | condensed to dense lists; the two mandates (additive 3-item + subtractive 7-item incl. grep-before-delete) + 4-tag hard-stop taxonomy KEPT verbatim in spirit |
+| software-architect generic "core principles" prose | obsolete-with-evidence(generic architect craft the opus model already has) → condensed to one line; the two-verdict **Decision Contract** + no-recursion + verify-on-the-way KEPT VERBATIM (Step-2 keep-list) | agents/software-architect.md |
+| code-reviewer 7 generic review-class bodies | obsolete-with-evidence(generic code-review knowledge the model has) → condensed to one dense line; confidence≥80 + severity-rubric pointer + `reviewFocus` consumption + verify-then-report + typed GateFindingShape output KEPT | agents/code-reviewer.md |
+| ux-designer generic UX prose + full craft-bar restatement | relocated | the craft self-check stays in skills/plan-arc/references/ux-craft.md (agent reads it); the design-first role + honest-states + artifact-form decision + the interactions-are-CONTRACT rule KEPT |
+| software-developer / test-engineer generic craft prose | obsolete-with-evidence(generic dev/test knowledge the model has) → condensed; config bindings (gateCommands/testConventions/designHomes) + the roadmap-specific rules KEPT |
+| `## Design homes` / `## Gate commands` / `## Test conventions` / `## Validation tiers` / `## Model policy` anchors across all 7 cards | enforced-by-code(re-pointed to designHomes/gateCommands/testConventions/validationTiers/modelPolicy.judgeModel config keys) | cli/lib/config.mjs |
+| executor-reference.md + phase-executor.md | (1658.5 state VERIFIED — no re-trim) | 4,086 ≤4,096 (long-run protocol intact, zero "Full do-phase inheritance") + 3,070; both ≤5,000 per-card |
 </content>

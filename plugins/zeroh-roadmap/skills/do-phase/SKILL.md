@@ -79,9 +79,9 @@ quality pass. Under arc-mode the gate runs only phase-relevant SCOPED tests — 
 defers to the arc end.
 
 **Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
-confirmed design is a CONTRACT. Render via `live-ui`, screenshot every state AND drive every
-interaction (hover/focus/transition), and compare against the design artifact with FRESH eyes (a
-spawned vision judge, never the implementer) on layout/states/interaction/copy/tokens. Fix
+confirmed design is a CONTRACT. Apply the canonical `skills/validate-arc/references/parity-rubric.md`
+with FRESH eyes (a spawned vision judge, never the implementer) — render via `live-ui`, screenshot
+every state AND drive every interaction (hover/focus/transition), compare on its six axes. Fix
 material deviations and re-compare; an out-of-scope residual → `compromises` naming the designRef;
 record a `gateRounds` entry (`agent: 'design-parity'`).
 

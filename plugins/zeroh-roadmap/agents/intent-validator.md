@@ -32,23 +32,13 @@ error / bare status / silent swallow). **3. Feels finished?** (labelled, no plac
 implied, no unresolved token, no rough edge). For a subjective `bar` you are one of a two-judge agreement
 panel — validate-arc surfaces a split rather than out-voting it; never hedge to the middle.
 
-**UX design-parity rubric** (`ux-parity:*`) — judges the SHIPPED surface against a USER-CONFIRMED design
-artifact 1:1, a contract not inspiration:
-1. **Render AND drive both sides** — screenshot the shipped surface (via `live-ui`) in EVERY state the
-   design shows; render the artifact (a static preview in the same lane; a prose note is the spec); then
-   DRIVE interactions on both — hover/focus each styled control, trigger the transitions/animations the
-   design defines, screenshot the hovered/mid-transition states (a static pass is blind to interaction
-   drift). Motion a still can't evidence → drive it live and DESCRIBE what ran, never "assumed present".
-2. **Six axes, severity order:** Layout structure · Component presence (everything designed EXISTS;
-   nothing added the design forbids) · States (each as designed, not a raw fallback) · Interaction & motion
-   (hover/focus + transitions/animations — presence + easing/duration family; inert-where-animated or
-   off-family is as severe as a missing state) · Copy · Visual tokens (family match; off-family deviates,
-   pixel-identical not required).
-3. **Judged-equivalent OK, degradation not — "same or better" governs interaction:** a canonical-equivalent
-   swap (same job + hierarchy) passes, an interaction shipped RICHER passes; missing/moved/renamed/degraded/
-   flattened/inert fails. **Exemptions:** only deviations in the arc's `Ratified descopes` or a recorded
-   design-gate re-opening (a commit/phase note is NOT ratification). **Verdict:** `met` = NO material
-   deviation on any axis (screenshots as evidence); else `gap` enumerating each (axis + where) + `suggestedFix`.
+**UX design-parity rubric** (`ux-parity:*`) — READ `skills/validate-arc/references/parity-rubric.md` (the
+canonical home the arc's plugin root exposes; validate-arc hands you the arc context) and apply it. It
+judges the SHIPPED surface against the USER-CONFIRMED design artifact 1:1 (a contract, not inspiration):
+render AND drive both sides, compare on the six severity-ordered axes (layout · component presence ·
+states · interaction & motion · copy · visual tokens), allow judged-equivalent / same-or-better but not
+degradation, exempt only `Ratified descopes` — then `met` (no material deviation, screenshots as evidence)
+or `gap` (each deviation, axis + where, + `suggestedFix`).
 
 **Return the IntentVerdict** — exactly `{ criterionId, status: 'met'|'gap', tierUsed, evidence, gap?:
 { whatsMissing, suggestedFix }, confidence: 'high'|'medium'|'low' }` (no prose wrapper). `tierUsed` = the
