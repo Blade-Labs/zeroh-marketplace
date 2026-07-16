@@ -21,6 +21,7 @@ import {
   specialistFloor,
   deriveTestScope,
   deriveReviewScope,
+  classifyBand,
   EXECUTABLE_EXTS,
 } from '../lib/ladder.mjs'
 import { resolveSlot, resolveScopedOrFallback, runSlot } from '../lib/slots.mjs'
@@ -244,10 +245,16 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
 
   const refused = !!(testScope.refused || reviewScope.refused || slots.some((s) => s.refused))
 
+  // Execution band — the same classifyBand `arc next` emits, echoed here so `gate plan`
+  // is a COMPLETE decision table (the workflow surfaces banding to the user at plan time).
+  const band = classifyBand(phase, opts.cfg)
+
   const plan = {
     phase: phaseNum,
     kind,
     mode,
+    band: band.band,
+    bandReason: band.reason,
     baseSha: base,
     diff: {
       files: ownFiles.length,
