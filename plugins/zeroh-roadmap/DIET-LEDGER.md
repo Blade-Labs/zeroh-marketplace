@@ -87,9 +87,30 @@ outputs. The measured do-arc protocol load vs the ~49k baseline is recorded here
 
 <!-- Sections below are populated by phase 1659's own trim tasks. -->
 
-## audit-roadmap/SKILL.md (14.7 KB → ≤1,600 B) — phase 1659.2
+## audit-roadmap/SKILL.md (14.7 KB → 1,592 B) — phase 1659.2
 
-_populated in 1659.2_
+Every hand-run check section is now `roadmap audit` code (cli/commands/audit.mjs +
+cli/audit-checks.mjs, tested by cli/commands/audit.test.mjs). The thin SKILL keeps only
+trigger + invocation + verdict interpretation + is/is-not routing.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| Step 1 enumerate (ls/find/cat + in-memory maps) | enforced-by-code(cli/audit-checks.mjs discoverPhases over phases/ + archive/<v>/ + backlog import) | audit-checks.mjs |
+| Check 1 dangling phase dependsOn | enforced-by-code(cli/audit-checks.mjs check 1 + audit.test.mjs) | CRITICAL preserved |
+| Check 2 dependency cycles | enforced-by-code(cli/audit-checks.mjs check 2 DFS + audit.test.mjs) | CRITICAL preserved |
+| Check 3 backlog→missing phase | enforced-by-code(cli/audit-checks.mjs check 3 + audit.test.mjs) | HIGH preserved |
+| Check 4 [NEEDS CLARIFICATION] markers | enforced-by-code(cli/commands/audit.mjs check 4 raw file:line + queued→CRITICAL + audit.test.mjs) | MEDIUM/CRITICAL preserved |
+| Check 5 done phase incomplete tasks | enforced-by-code(cli/audit-checks.mjs check 5, historical exempt + audit.test.mjs) | HIGH preserved |
+| Check 6 task dependsOn bad IDs | enforced-by-code(cli/audit-checks.mjs check 6 + audit.test.mjs) | HIGH/HIGH/MEDIUM preserved |
+| Check 7 stale in-progress | enforced-by-code(cli/commands/audit.mjs check 7 git-log staleness + audit.test.mjs) | LOW preserved |
+| Check 8 duplicate phase numbers (active+archive) | enforced-by-code(cli/audit-checks.mjs check 8, reuses DUPLICATE_PHASE_NUMBER_PREFIX wording + audit.test.mjs) | CRITICAL preserved |
+| Check 9 missing kind (+ suggestKind backfill) | enforced-by-code(cli/audit-checks.mjs check 9, REUSES scripts/migrate/audit.ts suggestKind + audit.test.mjs) | HIGH preserved |
+| Check 10 stale done entries in backlog | enforced-by-code(cli/audit-checks.mjs check 10 + audit.test.mjs) | MEDIUM/LOW/LOW/HIGH preserved |
+| Check 11 oversized tasks without batchMode | enforced-by-code(cli/audit-checks.mjs check 11, done-task exempt + audit.test.mjs) | HIGH preserved |
+| Check 12 archive integrity (12.1-12.4) | enforced-by-code(12.1/12.2 in cli/audit-checks.mjs; 12.3/12.4 REUSE debt-census join via `--include-archive` in cli/commands/audit.mjs + audit.test.mjs) | CRITICAL/CRITICAL/HIGH/MEDIUM preserved |
+| arc↔phase consistency bonus | enforced-by-code(cli/audit-checks.mjs REUSES registry crossValidate() verbatim) | crossValidate |
+| Step 3 report + verdict rules (CLEAN/HAS ISSUES/BROKEN) | enforced-by-code(cli/commands/audit.mjs renderReport + exit contract: BROKEN=2, else 0) | design §2 universal exit codes |
+| "What NOT to do" (report-only, no short-circuit, no infer) | relocated | condensed into the thin SKILL's Report-only + routing paragraphs (kept as judgment) |
 
 ## plan-phase/SKILL.md (25.7 KB → ≤11,000 B) — phase 1659.4
 

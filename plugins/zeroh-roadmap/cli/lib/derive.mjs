@@ -85,6 +85,25 @@ export function readValidateVerdict(repoRoot, arcId) {
  * null as "not swept / over budget", fail-closed).
  */
 export function runDebtCensus(repoRoot, arcId, { exec = defaultExec } = {}) {
+  const data = debtCensusJson(repoRoot, { exec })
+  if (!data) return null
+  const entries = (data.entries ?? []).filter((e) => String(e.arcId) === String(arcId))
+  return {
+    open: entries.filter((e) => e.state === 'OPEN').length,
+    openPlanned: entries.filter((e) => e.state === 'OPEN-planned').length,
+    openOperator: entries.filter((e) => e.state === 'OPEN-operator').length,
+    entries,
+  }
+}
+
+/**
+ * The ONE debt-census INVOCATION seam — runs the consumer's debt-census.mts CLI and
+ * returns its full parsed census JSON (or null on any invocation/parse failure — decision
+ * 6: unable-to-count is never a fabricated zero). `runDebtCensus` (arc-slice summary) and
+ * `roadmap audit` check 12.3-12.4 (`includeArchive: true` → the additive census.archive
+ * block) both go through here so the census is never invoked or parsed twice.
+ */
+export function debtCensusJson(repoRoot, { includeArchive = false, exec = defaultExec } = {}) {
   const censusScript = join(pluginRoot(), 'scripts', 'debt-census.mts')
   const tmp = mkdtempSync(join(tmpdir(), 'roadmap-census-'))
   const outFile = join(tmp, 'census.json')
@@ -93,16 +112,11 @@ export function runDebtCensus(repoRoot, arcId, { exec = defaultExec } = {}) {
     // then the global install (the proven tsx-bridge resolution) — so census runs against
     // a production consumer AND a bare scratch fixture. debt-census.mts is a CLI invoked
     // by argv, never imported (assumption A5): plugin carries no second census parser.
-    const r = exec('npx', ['--no-install', 'tsx', censusScript, repoRoot, '--json', outFile], { cwd: repoRoot })
+    const argv = ['--no-install', 'tsx', censusScript, repoRoot, '--json', outFile]
+    if (includeArchive) argv.push('--include-archive')
+    const r = exec('npx', argv, { cwd: repoRoot })
     if (r.status !== 0 || !existsSync(outFile)) return null
-    const data = JSON.parse(readFileSync(outFile, 'utf8'))
-    const entries = (data.entries ?? []).filter((e) => String(e.arcId) === String(arcId))
-    return {
-      open: entries.filter((e) => e.state === 'OPEN').length,
-      openPlanned: entries.filter((e) => e.state === 'OPEN-planned').length,
-      openOperator: entries.filter((e) => e.state === 'OPEN-operator').length,
-      entries,
-    }
+    return JSON.parse(readFileSync(outFile, 'utf8'))
   } catch {
     return null
   } finally {
