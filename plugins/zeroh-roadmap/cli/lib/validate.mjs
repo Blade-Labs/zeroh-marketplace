@@ -1,0 +1,415 @@
+/**
+ * validate — the roadmap-file validation ENGINE, extracted from
+ * bin/validate-roadmap-file.mjs (arc ROADCODE 1656.7). The write-hook bin and the new
+ * `roadmap phase validate` CLI both call validateRoadmapFile(absPath, { strict }) — ONE
+ * engine, two faces. Behavior is preserved verbatim (the bin's own fixture suite passes
+ * UNMODIFIED — the parity proof), including every fail-open branch; the ONLY addition is
+ * the NEW gate-report done-flip rule (below), which arms only when a report already
+ * exists, so historical phases keep today's behavior.
+ *
+ * NO process.exit here — exit mapping belongs to the callers (the bin maps to 0/2 with
+ * its verbatim strings; the CLI to 0/1/2, tsx-absent being 1 in its strict context).
+ */
+import { execFileSync } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
+import { bridgeImport } from './tsx-bridge.mjs'
+import { gitToplevel } from './gitroot.mjs'
+import { gateDir, latestReport, checkPhaseConsistency } from './gate-report.mjs'
+
+/** Phases planned after arc ROADOPUS — below this floor the provenance rules (c)/(d) are exempt. */
+const ENFORCEMENT_FLOOR = 1365
+
+/**
+ * Validate a roadmap file. Returns a discriminated result; NO process.exit.
+ *   { kind: 'ok' | 'skip' }                                  — pass / not-a-roadmap-file
+ *   { kind: 'toolchain-missing', ok }                        — tsx absent (ok:true non-strict, false strict)
+ *   { kind: 'load-error', ok:false, loadError }              — import failed (non-Zod)
+ *   { kind: 'zod', ok:false, zod: { file, issues } }         — import-time Zod failure
+ *   { kind: 'errors', ok:false, errors: [{rule,msg,fix} | {rawLines}] } — structural failures
+ */
+export function validateRoadmapFile(absPath, { strict = false } = {}) {
+  const normalized = resolve(absPath).replace(/\\/g, '/')
+  const isPhase = /\/roadmap\/.*\.phase\.ts$/.test(normalized)
+  const isArc = /\/roadmap\/.*\.arc\.ts$/.test(normalized)
+  const isBacklog = /\/roadmap\/backlog\.ts$/.test(normalized)
+  if (!isPhase && !isArc && !isBacklog) return { kind: 'skip', ok: true }
+  if (!existsSync(normalized)) return { kind: 'skip', ok: true } // deleted/renamed since the edit
+
+  // ── Pass 1: import-parse (Zod) via the tsx bridge ─────────────────────────────────
+  let consumerRoot
+  try {
+    consumerRoot = gitToplevel(dirname(normalized))
+  } catch {
+    consumerRoot = dirname(normalized)
+  }
+  const imp = bridgeImport(normalized, { consumerRoot })
+  if (!imp.ok) {
+    if (imp.kind === 'tsx-absent') return { kind: 'toolchain-missing', ok: !strict }
+    if (imp.kind === 'zod') return { kind: 'zod', ok: false, zod: { file: basename(normalized), issues: imp.issues } }
+    return { kind: 'load-error', ok: false, loadError: imp.stderr }
+  }
+  const parsed = imp.parsed
+  const content = readFileSync(normalized, 'utf8')
+  const errors = []
+
+  // ── Pass 2: v2 structural checks (verbatim rules) ─────────────────────────────────
+  if (isPhase || isArc) errors.push(...duplicateTopLevelKeyErrors(content))
+  if (isPhase && parsed) errors.push(...phaseChecks(parsed))
+  if (isArc && parsed) errors.push(...arcImmutabilityChecks(parsed, content, normalized))
+
+  // ── NEW rule: done-without-green-gate-report (arms only when a report exists) ──────
+  if (isPhase && parsed) errors.push(...gateReportConsistencyErrors(parsed, normalized))
+
+  // ── Pass 3: duplicate phase-number + claim-before-start (phase files) ─────────────
+  if (isPhase) {
+    const phaseMatch = normalized.match(/\/roadmap\/phases\/phase-(\d+)\.phase\.ts$/)
+    if (phaseMatch) errors.push(...runPhaseNumberAndClaimChecks(normalized, phaseMatch))
+  }
+
+  if (errors.length > 0) return { kind: 'errors', ok: false, errors }
+  return { kind: 'ok', ok: true }
+}
+
+// ── NEW: the gate-report done-flip consistency rule ─────────────────────────────────
+
+function gateReportConsistencyErrors(phase, normalizedPath) {
+  if (phase?.status !== 'done') return []
+  const num = typeof phase.phase === 'number' ? phase.phase : Number(phase.phase)
+  if (!Number.isFinite(num)) return []
+  let toplevel
+  try {
+    toplevel = gitToplevel(dirname(normalizedPath))
+  } catch {
+    return [] // git absent → fail open (today's behavior)
+  }
+  const dir = gateDir(toplevel, num)
+  if (!existsSync(dir) || readdirSync(dir).filter((f) => /^run-\d+-.*\.json$/.test(f)).length === 0) {
+    return [] // no report yet → today's behavior (non-breaking during the parallel-impl window)
+  }
+  const latest = latestReport(toplevel, num)
+  if (!latest) return []
+  const result = checkPhaseConsistency(phase, latest.report)
+  if (result.ok) return []
+  return result.problems.map((p) => ({
+    rule: 'done-without-green-gate-report',
+    msg: `${p} (report: ${latest.path})`,
+    fix: `re-run \`roadmap gate run ${num}\` green and record the correctness rounds with \`roadmap gate run ${num} --record-round …\` before flipping to done`,
+  }))
+}
+
+// ── ported helpers (verbatim behavior from bin/validate-roadmap-file.mjs) ────────────
+
+function phaseChecks(phase) {
+  const errs = []
+  const num = typeof phase.phase === 'number' ? phase.phase : Number(phase.phase)
+  const tasks = Array.isArray(phase.tasks) ? phase.tasks : []
+  if (phase.status === 'done') {
+    const open = tasks.filter((t) => t && t.done === false)
+    if (open.length > 0) {
+      const ids = open.map((t) => t.id ?? '?').join(', ')
+      errs.push({
+        rule: 'done-with-open-task',
+        msg: `status:'done' but ${open.length} task(s) have done:false (${ids})`,
+        fix: 'finish or escalate the task, or set status back to in-progress — a done phase cannot carry open work (the 1281.7/1282.6 defect)',
+      })
+    }
+  }
+  if (Number.isFinite(num) && num >= ENFORCEMENT_FLOOR) {
+    for (const t of tasks) {
+      const tr = t?.transparencyReport
+      if (!tr) continue
+      const hasComp = tr.compromises && tr.compromises !== 'None'
+      const hasSkip = tr.skipped && tr.skipped !== 'None'
+      if ((hasComp || hasSkip) && !tr.decisionRef) {
+        errs.push({
+          rule: 'compromise-without-decisionRef',
+          msg: `task ${t.id ?? '?'} records a non-"None" ${hasComp ? 'compromise' : 'skipped'} but transparencyReport has no decisionRef`,
+          fix: 'add transparencyReport.decisionRef — the architect verdict or user ratification that authorized it (a compromise in a commit message alone is the 1343.6 defect)',
+        })
+      }
+    }
+    if (phase.userFacing === true && phase.flag == null) {
+      errs.push({
+        rule: 'userFacing-without-flag',
+        msg: 'userFacing:true but no flag',
+        fix: 'add flag:{id:"FLAG_ID"} (a runtime kill-switch) or flag:{bootWired:true, justification:"…"} + a feature-manifest entry (the 1345 unflagged-feature defect)',
+      })
+    }
+  }
+  return errs
+}
+
+function duplicateTopLevelKeyErrors(content) {
+  const open = content.match(/define(?:Phase|Arc)\(\{/)
+  if (!open) return []
+  const lines = content.slice(open.index + open[0].length).split('\n')
+  const seen = new Set()
+  const dups = new Set()
+  let inTemplate = false
+  for (const line of lines) {
+    if (!inTemplate && /^\}\)/.test(line)) break
+    if (!inTemplate) {
+      const km = line.match(/^ {2}([A-Za-z_$][\w$]*):/)
+      if (km) {
+        if (seen.has(km[1])) dups.add(km[1])
+        else seen.add(km[1])
+      }
+    }
+    let sq = false
+    let dq = false
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i]
+      if (c === '\\') {
+        i++
+        continue
+      }
+      if (inTemplate) {
+        if (c === '`') inTemplate = false
+      } else if (sq) {
+        if (c === "'") sq = false
+      } else if (dq) {
+        if (c === '"') dq = false
+      } else if (c === "'") sq = true
+      else if (c === '"') dq = true
+      else if (c === '`') inTemplate = true
+    }
+  }
+  return [...dups].map((k) => ({
+    rule: 'duplicate-key',
+    msg: `top-level key '${k}' appears more than once (JS keeps only the last — the 1287 latent trap)`,
+    fix: `remove the duplicate '${k}' (keep the intended value)`,
+  }))
+}
+
+function arcImmutabilityChecks(arc, content, arcFile) {
+  const id = arc?.id
+  if (id == null) return []
+  const arcDir = dirname(arcFile)
+  const sidecar = join(arcDir, '.building', `${id}.json`)
+  if (!existsSync(sidecar)) return []
+  const roadmapRoot = arcDir.replace(/\/arcs$/, '')
+  let headContent
+  try {
+    headContent = execFileSync('git', ['-C', roadmapRoot, 'show', `HEAD:${relToRepo(roadmapRoot, arcFile)}`], {
+      timeout: 10_000,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+  } catch {
+    return []
+  }
+  const norm = (s) => (s ? s.replace(/\s+/g, ' ').trim() : '')
+  const curAC = norm(extractKeyBlock(content, 'acceptanceCriteria'))
+  const headAC = norm(extractKeyBlock(headContent, 'acceptanceCriteria'))
+  if (curAC === headAC) return []
+  const curRat = countTopLevelElements(extractKeyBlock(content, 'criteriaRatifications'))
+  const headRat = countTopLevelElements(extractKeyBlock(headContent, 'criteriaRatifications'))
+  if (curRat > headRat) return []
+  return [
+    {
+      rule: 'acceptanceCriteria-immutable',
+      msg: `arc ${id} is building but its acceptanceCriteria changed without a new criteriaRatifications entry (was ${headRat}, now ${curRat})`,
+      fix: 'append a dated entry to criteriaRatifications explaining the change, or record a typed descope — never silently narrow a criterion (the 1343.6 defect)',
+    },
+  ]
+}
+
+function extractKeyBlock(content, key) {
+  if (!content) return null
+  const at = content.search(new RegExp(`(^|\\n)\\s*${key}:`))
+  if (at < 0) return null
+  let i = content.indexOf(':', at) + 1
+  while (i < content.length && /\s/.test(content[i])) i++
+  if (content[i] !== '[' && content[i] !== '{') return null
+  return extractBalanced(content, i)
+}
+
+function extractBalanced(text, openIdx) {
+  const open = text[openIdx]
+  const close = open === '[' ? ']' : '}'
+  let depth = 0
+  let quote = null
+  for (let i = openIdx; i < text.length; i++) {
+    const c = text[i]
+    if (quote) {
+      if (c === '\\') {
+        i++
+        continue
+      }
+      if (c === quote) quote = null
+      continue
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      quote = c
+      continue
+    }
+    if (c === open) depth++
+    else if (c === close) {
+      depth--
+      if (depth === 0) return text.slice(openIdx, i + 1)
+    }
+  }
+  return null
+}
+
+function countTopLevelElements(arrayBlock) {
+  if (!arrayBlock) return 0
+  const inner = arrayBlock.slice(1, -1)
+  let depth = 0
+  let quote = null
+  let count = 0
+  let segHasContent = false
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i]
+    if (quote) {
+      if (c === '\\') {
+        i++
+        continue
+      }
+      if (c === quote) quote = null
+      segHasContent = true
+      continue
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      quote = c
+      segHasContent = true
+    } else if (c === '[' || c === '{' || c === '(') {
+      depth++
+      segHasContent = true
+    } else if (c === ']' || c === '}' || c === ')') {
+      depth--
+      segHasContent = true
+    } else if (c === ',' && depth === 0) {
+      if (segHasContent) count++
+      segHasContent = false
+    } else if (!/\s/.test(c)) {
+      segHasContent = true
+    }
+  }
+  return segHasContent ? count + 1 : count
+}
+
+function runPhaseNumberAndClaimChecks(normalizedPath, phaseMatch) {
+  const errs = []
+  const declared = readFileSync(normalizedPath, 'utf8').match(/(?:^|[{,])\s*phase:\s*(\d+)\s*,/m)
+  const phaseNum = declared?.[1] ?? phaseMatch[1]
+  if (declared && declared[1] !== phaseMatch[1]) {
+    return [{ rawLines: [`[zeroh-roadmap] filename/content mismatch: ${basename(normalizedPath)} declares phase: ${declared[1]}`] }]
+  }
+  const roadmapRoot = normalizedPath.replace(/\/phases\/phase-\d+\.phase\.ts$/, '')
+  const holders = []
+  const scanDir = (dir) => {
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) scanDir(full)
+      else if (entry.name.endsWith('.phase.ts')) {
+        try {
+          if (new RegExp(`(?:^|[{,])\\s*phase:\\s*${phaseNum}\\s*,`, 'm').test(readFileSync(full, 'utf8'))) holders.push(full)
+        } catch {
+          /* unreadable sibling */
+        }
+      }
+    }
+  }
+  scanDir(join(roadmapRoot, 'phases'))
+  scanDir(join(roadmapRoot, 'archive'))
+  const others = holders.filter((f) => resolve(f).replace(/\\/g, '/') !== normalizedPath)
+  if (others.length > 0) {
+    return [
+      {
+        rawLines: [
+          `[zeroh-roadmap] duplicate phase number ${phaseNum}: ${basename(normalizedPath)} collides with ${others.join(', ')}`,
+          'Pick the next free number (scripts/claim-phase-number.sh reserves one atomically).',
+        ],
+      },
+    ]
+  }
+
+  const legacyClaim = join(roadmapRoot, 'phases', '.claims', `${phaseNum}.claim`)
+  const common = gitCommonDir(roadmapRoot)
+  const sharedClaim = common ? join(common, 'zeroh-roadmap-claims', `${phaseNum}.claim`) : null
+  if ((sharedClaim && existsSync(sharedClaim)) || existsSync(legacyClaim)) return errs
+  let isNewFile = false
+  try {
+    execFileSync('git', ['-C', roadmapRoot, 'cat-file', '-e', `HEAD:${relToRepo(roadmapRoot, normalizedPath)}`], {
+      stdio: 'ignore',
+      timeout: 10_000,
+    })
+  } catch (err) {
+    isNewFile = err?.code !== 'ENOENT'
+  }
+  if (isNewFile && process.env.ZEROH_ROADMAP_STRICT_CLAIMS === '1') {
+    return [
+      {
+        rawLines: [
+          `[zeroh-roadmap] phase ${phaseNum} is NEW but holds no claim (${sharedClaim ?? legacyClaim} missing). ` +
+            'Concurrent sessions collide without one — reserve numbers BEFORE authoring: ' +
+            'bash <plugin>/scripts/claim-phase-number.sh (creation is the lock; delete the .claim in the landing commit).',
+        ],
+      },
+    ]
+  }
+  return errs
+}
+
+function gitCommonDir(root) {
+  try {
+    const out = execFileSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], { timeout: 10_000, encoding: 'utf8' }).trim()
+    return resolve(root, out)
+  } catch {
+    return null
+  }
+}
+
+function relToRepo(roadmapRoot, absPath) {
+  try {
+    const top = execFileSync('git', ['-C', roadmapRoot, 'rev-parse', '--show-toplevel'], { timeout: 10_000 })
+      .toString()
+      .trim()
+      .replace(/\\/g, '/')
+    return absPath.startsWith(top + '/') ? absPath.slice(top.length + 1) : absPath
+  } catch {
+    return absPath
+  }
+}
+
+/** Render a Zod-issue result to the bin's verbatim stderr lines (schema validation failed …). */
+export function renderZodIssues(file, issuesJson, { debug } = {}) {
+  const lines = [`[zeroh-roadmap] schema validation failed: ${file}`]
+  let issues
+  if (Array.isArray(issuesJson)) issues = issuesJson
+  else {
+    try {
+      issues = JSON.parse(issuesJson)
+    } catch {
+      issues = []
+    }
+  }
+  if (!Array.isArray(issues) || issues.length === 0) {
+    lines.push('  (unparseable Zod error — set ZEROH_ROADMAP_DEBUG=1 for the raw error)')
+    return lines
+  }
+  for (const iss of issues) {
+    const path = Array.isArray(iss.path) && iss.path.length > 0 ? iss.path.join('.') : '(root)'
+    let extra = ''
+    if (iss.code === 'too_big' && iss.maximum != null) extra = ` (max ${iss.maximum})`
+    else if (iss.code === 'too_small' && iss.minimum != null) extra = ` (min ${iss.minimum})`
+    lines.push(`  ${path}: ${iss.message}${extra}`)
+  }
+  if (!debug) lines.push('  (set ZEROH_ROADMAP_DEBUG=1 for the full stack)')
+  return lines
+}
+
+export function firstMeaningfulLine(stderr) {
+  return (stderr || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .find(Boolean) || ''
+}
