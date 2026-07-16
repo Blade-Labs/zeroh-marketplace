@@ -8,6 +8,9 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import {
   HALT_KINDS,
   RESUME_LINE,
@@ -197,4 +200,24 @@ test('groomBacklogSource — a single-phase comment naming ONLY N is removed; a 
   assert.ok(r.source, r.error)
   assert.doesNotMatch(r.source, /1658 shipped/)
   assert.match(r.source, /1658 \+ 1659 coordinate/)
+})
+
+// ── workflow-composition pins (1658.2) — the SEPARABLE parts of arc-plane.workflow.mjs ────
+const WORKFLOW = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'workflows', 'arc-plane.workflow.mjs'),
+  'utf8',
+)
+test('workflow — every halt is built by buildHaltPayload (no ad-hoc { halt: … } literals)', () => {
+  // Ad-hoc object literals would let a halt drift from the seam's shape — forbidden.
+  assert.doesNotMatch(WORKFLOW, /\{\s*halt:/)
+  const uses = (WORKFLOW.match(/buildHaltPayload/g) ?? []).length
+  assert.ok(uses >= 3, `expected ≥3 buildHaltPayload uses, saw ${uses}`)
+})
+test('workflow — never kills a process (STALLED with a live background-run keeps waiting)', () => {
+  assert.doesNotMatch(WORKFLOW, /\bprocess\.kill\b|SIGKILL|SIGTERM/)
+})
+test('workflow — arms the Stop-hook guard (ROADMAP_EXECUTOR_PHASE + arm file) and generates the schema (seam 3)', () => {
+  assert.match(WORKFLOW, /ROADMAP_EXECUTOR_PHASE/)
+  assert.match(WORKFLOW, /-executor\.armed/)
+  assert.match(WORKFLOW, /contract show --json-schema/)
 })
