@@ -1,0 +1,87 @@
+/**
+ * roadmap claim [roadmap-root] [--count N] — atomically reserve the next free phase
+ * number(s). Ported from scripts/claim-phase-number.sh (locked decision 5 keeps atomic
+ * number claims). CREATION is the lock: writeFileSync(<N>.claim, '', { flag: 'wx' }) —
+ * wx is noclobber; a concurrent loser gets EEXIST and retries at N+1. Claims land in the
+ * git COMMON dir (<common>/zeroh-roadmap-claims) so they are SHARED across all worktrees;
+ * a non-repo root falls back to the legacy per-dir <root>/phases/.claims.
+ *
+ * Prints ONLY the claimed number(s) on stdout, one per line — callers capture stdout.
+ */
+import { existsSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { gitCommonDir } from '../lib/gitroot.mjs'
+import { maxDeclaredPhase } from '../lib/phasescan.mjs'
+
+const RUNAWAY = 1_000_000
+
+function maxClaim(dir) {
+  if (!existsSync(dir)) return 0
+  let max = 0
+  for (const f of readdirSync(dir)) {
+    const m = f.match(/^(\d+)\.claim$/)
+    if (m) {
+      const n = Number(m[1])
+      if (n > max) max = n
+    }
+  }
+  return max
+}
+
+export default async function run(argv) {
+  let count = 1
+  const positional = []
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--count') {
+      count = Number(argv[++i])
+      if (!Number.isInteger(count) || count < 1) {
+        process.stderr.write(`roadmap claim: --count must be a positive integer\n`)
+        return 1
+      }
+    } else if (!argv[i].startsWith('--')) {
+      positional.push(argv[i])
+    }
+  }
+  const root = resolve(positional[0] ?? 'roadmap')
+  const phasesDir = join(root, 'phases')
+  if (!existsSync(phasesDir)) {
+    process.stderr.write(`roadmap claim: no such dir: ${phasesDir}\n`)
+    return 1
+  }
+
+  const legacyClaimsDir = join(phasesDir, '.claims')
+  let claimsDir
+  try {
+    claimsDir = join(gitCommonDir(root), 'zeroh-roadmap-claims')
+  } catch {
+    claimsDir = legacyClaimsDir // non-repo fallback (single-checkout use)
+  }
+  mkdirSync(claimsDir, { recursive: true })
+
+  // Max across active + archived phase files (declared value) AND outstanding claims
+  // in BOTH dirs — an uncommitted reservation is still taken.
+  let max = maxDeclaredPhase([phasesDir, join(root, 'archive')])
+  max = Math.max(max, maxClaim(claimsDir), maxClaim(legacyClaimsDir))
+
+  const claimed = []
+  let N = max + 1
+  while (claimed.length < count) {
+    if (N > RUNAWAY) {
+      process.stderr.write(`roadmap claim: runaway retry loop — inspect ${claimsDir}\n`)
+      return 2
+    }
+    try {
+      writeFileSync(join(claimsDir, `${N}.claim`), '', { flag: 'wx' }) // wx = noclobber; creation IS the lock
+      claimed.push(N)
+    } catch (e) {
+      if (e && e.code === 'EEXIST') {
+        N++
+        continue
+      }
+      throw e
+    }
+    N++
+  }
+  process.stdout.write(claimed.join('\n') + '\n')
+  return 0
+}
