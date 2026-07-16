@@ -106,6 +106,22 @@ here:
 
 ---
 
+## Design-parity origin incident (relocated from plan-arc / arc-sweep / validate-arc)
+
+**2026-07 — Ask Ali web, the Studio builder, and Agent HQ each shipped OFF their confirmed
+previews.** Each arc had a user-ratified UX preview at the design gate, but the delivered surface
+drifted because nothing downstream re-opened the design artifact: the per-phase gate judged code,
+arc-sweep judged the diff, and nobody put the rendered pixels next to the design until the user did
+it in production. The closure (now enforced in code + thin skills, so the story no longer needs to
+ride in the model-loaded prose):
+- plan-arc Step 1b(4) MINTS a paired `ux-parity:*` acceptance criterion for every confirmed `ux`
+  designRef (a confirmed design is a 1:1 CONTRACT, not "inspiration");
+- validate-arc DERIVES that criterion as a fail-safe when an arc has `ux` designRefs but no
+  `ux-parity:*` criterion (the drifted-arc shape);
+- the per-phase design-parity gate stage (thin do-phase) re-opens the artifact and compares
+  layout + states + interaction/motion against the parity rubric;
+- arc-sweep's design-conformance check judges the built surface against the confirmed designRefs.
+
 ## Measure scoping (rationale for cli/measure-manifest.json)
 
 `roadmap measure --flow F` sums `bytes/4` over the files the model actually loads into flow

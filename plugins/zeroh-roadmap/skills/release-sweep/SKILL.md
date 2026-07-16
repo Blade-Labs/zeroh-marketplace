@@ -9,177 +9,98 @@ metadata:
 
 # Release Sweep — Resolve Debts and Archive a Version
 
-## Trigger
-
-User says: `release-sweep`, `release-sweep 0.7.0`, `release-sweep 0.7.0 --archive`, `archive 0.7.0`, `sweep debts`.
-
-## Arguments
+**Trigger:** `release-sweep`, `release-sweep 0.7.0 [--archive]`, `archive 0.7.0`, `sweep debts`.
 
 ```
 release-sweep [<version> | --arc <id> | --all-done] [--archive]
 ```
 
-- `<version>` — semver string matching the schema regex `^\d+\.\d+\.\d+$` (e.g. `0.7.0`, **no `v` prefix** — the schema's `version` field stores the bare semver). If omitted and no other selector given, prompt the user (do NOT guess from `package.json` — the version you're sweeping may not be the current one). The archive directory mirrors this exactly: `roadmap/archive/0.7.0/`.
-- `--arc <id>` — ALTERNATIVE SELECTOR: sweep the done phases whose `arcId` matches, regardless of version tag. Exists because consumers that don't version-stamp phases (most, in practice — one estate had 23 tagged out of 1,445) get an empty sweep from the version selector; the arc is their natural debt unit. Archive target: `roadmap/archive/arc-<id>/`.
-- `--all-done` — ALTERNATIVE SELECTOR: sweep EVERY done/historical phase (the estate sweep). Pair with the plugin's mechanical tools — `scripts/debt-census.mts` derives the joined open-debt ledger first, `scripts/debt-dispose.mts` lands the decided resolutions in bulk — so the skill's per-phase protocol is reserved for the entries a human/agent actually has to reason about. Archive with this selector groups by version when tagged, else `roadmap/archive/untagged/`.
-- `--archive` — after resolution, move the selected `status: 'done'` phases into their archive directory. Refuses if any open debt remains on a candidate. Without this flag, the skill is review-only.
+- `<version>` — bare semver `^\d+\.\d+\.\d+$` (no `v` prefix; the archive dir mirrors it:
+  `roadmap/archive/0.7.0/`). Omitted with no other selector → prompt (never guess from `package.json`).
+- `--arc <id>` — ALTERNATIVE SELECTOR: sweep done phases whose `arcId` matches, regardless of version.
+  Exists because most consumers don't version-stamp phases (one estate: 23 tagged of 1,445); the arc is
+  their natural debt unit. Archive → `roadmap/archive/arc-<id>/`.
+- `--all-done` — ALTERNATIVE SELECTOR: sweep EVERY done/historical phase (the estate sweep). Pair with
+  the CLI: **`roadmap debt census`** derives the joined open-debt ledger first, **`roadmap debt dispose`**
+  lands decided resolutions in bulk — so the per-phase protocol below is reserved for entries a human
+  actually reasons about. Archive groups by version when tagged, else `roadmap/archive/untagged/`.
+- `--archive` — after resolution, `git mv` the selected `done` phases into their archive dir. Refuses if
+  any open debt remains. Without it, review-only.
 
-> **Estate-scale note.** For thousands of phases, run the census first and work from its ledger (`reviews/debt-census.json`); a `--check` mode also exists as a CI ratchet against a committed ceiling (`reviews/debt-ceiling.json`). See the script headers for contracts.
+> **Estate scale:** run `roadmap debt census` first and work from its ledger; **`roadmap debt check`** is
+> a CI ratchet against a committed ceiling. See the `roadmap debt` help for contracts.
 
 ## PRIME RULE: ARCHIVE GATES ON CLEAN DEBTS
 
-**Release does NOT gate on debts.** A phase can ship with open debts on a patch, a minor, or even a major if the operator explicitly chooses — release-sweep does not block any release.
-
-**Archive DOES gate on debts.** Once a phase is in `roadmap/archive/<version>/`, the operator commits to never revisiting its open debts. So archive requires every candidate debt (a non-`"None"` transparency-report entry on a task in this phase) to have a matching `debtResolutions[].ref` with a CLOSING status. "Open" is the absence of a matching ref — **or** a matching entry whose status is still open (the 1371 follow-up contract): `'planned'` is open until its `via: 'phase-<N>'` phase is `done`; `'operator-pending'` is open until this sweep disposes it post-deploy, and that disposition REPLACES the entry (one ref, latest disposition wins). Archive stays blocked on both.
-
-**Recommended timing** (operator choice — none of these are enforced):
-- **Patch release** (0.7.0 → 0.7.1) — sweep is *optional*. Patches commonly close debts from prior releases; a quick sweep against the prior minor is the natural moment. Never required.
-- **Minor release** (0.7.0 → 0.8.0) — sweep is *recommended*. Debts accumulated over the minor's lifetime are still in operator memory.
-- **Major release** (0.7.0 → 1.0.0) — sweep is **strongly recommended before archive**. Shipping a major commits to a public-API surface; archive is the discipline that prevents shipping rot with it.
+**Release does NOT gate on debts** — a phase can ship with open debts on any release if the operator
+chooses; release-sweep blocks no release. **Archive DOES gate.** Once a phase is in
+`roadmap/archive/<version>/` the operator commits to never revisiting its open debts, so archive requires
+every candidate debt (a non-`"None"` transparency-report entry) to have a matching `debtResolutions[].ref`
+with a CLOSING status. "Open" = no matching ref, **OR** a matching entry still open (the 1371 contract):
+`'planned'` is open until its `via: 'phase-<N>'` phase is `done`; `'operator-pending'` is open until this
+sweep disposes it post-deploy (that disposition REPLACES the entry — one ref, latest wins). Archive stays
+blocked on both. Timing is operator choice (none enforced): patch = optional, minor = recommended, major =
+strongly recommended before archive.
 
 ## Protocol
 
-### Step 1: Locate done phases for the version
+### Step 1 — Locate done phases
+Find the version's phase files (`roadmap debt census` slices this, or `grep -lE "version:
+['\"]<version>['\"]" roadmap/phases/*.phase.ts`) and **filter to `status: 'done'` only**. Surface a
+non-done match as a warning and EXCLUDE it (prevents `--archive` from `git mv`-ing in-progress/backlog
+phases out of the active queue). Zero done matches → surface and stop.
 
-```bash
-# Lists matching phase files (substitute <version> with the bare semver, e.g. 0.7.0)
-grep -lE "version: ['\"]<version>['\"]" roadmap/phases/*.phase.ts
-```
+### Step 2 — Aggregate open debts (join transparency reports × debtResolutions)
+This join IS `roadmap debt census` (reuse it, don't re-derive). A **candidate debt** is any task whose
+`transparencyReport.{compromises,hardcoded,skipped,limitations} !== "None"`; its `ref = "<task.id>.<field>"`.
+Open per the PRIME RULE (no closing ref, or a still-open `planned`/`operator-pending`). Output grouped by
+phase, ordered by number; the `ref` IS the synthetic id, used verbatim in prompts. **Field discipline:** a
+debt on `limitations` matching a deferred-work pattern (per `schema.ts` `TransparencyReportShape` doc) gets
+a "compromise-disguised-as-limitation — consider re-classifying" note. A `debtResolutions` ref pointing at a
+`"None"`/absent entry is a schema-drift warning (flag, never auto-repair).
 
-For each matched file, parse it and **filter to `status: 'done'` only**. Surface non-done matches as a separate warning before continuing:
+### Step 3 — Resolve each open debt (interactive; do NOT auto-resolve)
+Each item gets an operator decision; each choice appends ONE `debtResolutions[]` entry
+(`{ ref, status, via, date }`) + its own commit:
+- **(f) Fix inline** — invoke `zeroh-roadmap:software-architect` for the proper-solution blueprint, apply,
+  run the phase-`kind` gate, commit → `status: 'fixed', via: '<commitSHA>'`.
+- **(p) Plan a new phase** — `/plan-phase <debt>` (same version, or the next if the user prefers); after it
+  commits → `status: 'fixed', via: 'phase-<N>'`.
+- **(w) Won't fix** — substantive reason ≥20 chars (schema rejects shorter) → `status: "won't_fix", via: '<reason>'`.
+- **(d) Dismiss** — never-was-debt → `status: 'dismissed', via: '<optional one-liner>'`. **Nudge:** if
+  >half a phase's resolutions are `dismissed`, suggest tightening transparency-report field discipline.
+- **(k) Keep open** — no append; blocks archive. **(s) Skip** — decide later.
 
-> Phase N has `version: <version>` but status `<status>` — excluded from sweep. Finish or cancel before re-running.
+### Step 4 — Summary
+Report counts (fixed inline / fixed new-phase / won't_fix / dismissed / still-open). If the dismissed ratio
+> 0.5, surface the field-meaning-drift warning. If open debts remain and `--archive` was requested, refuse
+archive naming the count; if clean, proceed.
 
-This prevents `--archive` from `git mv`-ing in-progress / backlog phases out of `roadmap/phases/` and breaking the active queue.
-
-If zero done phases match, surface and stop: "No done phases tagged `version: <version>`. Nothing to sweep."
-
-### Step 2: Aggregate open debts (join transparency reports × debtResolutions)
-
-For each matched phase file, read `tasks[].transparencyReport` for every task. An entry is a **candidate debt** if:
-- `transparencyReport.compromises !== "None"`, OR
-- `transparencyReport.hardcoded !== "None"`, OR
-- `transparencyReport.skipped !== "None"`, OR
-- `transparencyReport.limitations !== "None"`
-
-For each candidate, compose `ref = "<task.id>.<field>"` (e.g. `"467.5.hardcoded"`). The debt is **open** if no entry in `phase.debtResolutions` has a matching `ref` — **OR** the matching entry carries a still-open status (the 1371 follow-up contract): `status: 'planned'` is OPEN until its `via: 'phase-<N>'` phase is itself `status: done` (re-check that phase file — an authored-but-unexecuted follow-up is not resolved); `status: 'operator-pending'` is OPEN until this sweep disposes it post-deploy. `'fixed'` / `"won't_fix"` / `'dismissed'` close the debt as before.
-
-Output the open set grouped by phase, ordered by phase number:
-
-```
-Open debts for <version> (M phases, N open debts):
-
-Phase 467 — Currency mode picker
-  [467.5.hardcoded]    1000ms poll interval in lib/services/sync.ts:42 —
-                       needs config registry.
-  [467.3.compromises]  Switched to USD-only — exchange rate API blocked.
-
-Phase 472 — Notification ratchet
-  [472.3.limitations]  NOT-ON-CALL bypass not implemented for SSB role;
-                       policy says role is "best-effort" only.
-```
-
-The `ref` (`<taskId>.<field>`) IS the synthetic ID — use it verbatim in subsequent prompts.
-
-**Field-discipline check before prompting:** when a debt sits on `limitations`, re-read it against the field-meaning rules in `schema.ts` `TransparencyReportShape` doc. If it matches a deferred-work pattern listed there, surface a one-line note in the prompt: *"this looks like compromise-disguised-as-limitation per schema field rules — consider re-classifying."* The schema is the single source of truth for trigger phrases; do not restate them here.
-
-**Sanity check before prompting:** if a `phase.debtResolutions[i].ref` points to a transparency-report entry that is `"None"` (or doesn't exist), surface as a schema-drift warning. The skill does not auto-repair drift — flag and continue.
-
-### Step 3: Resolve each open debt (interactive)
-
-**Do NOT auto-resolve.** Every debt needs an operator decision. For each item:
-
-> **`[467.5.hardcoded]` 1000ms poll interval in lib/services/sync.ts:42 — needs config registry.**
->
-> How do you want to close it? (status vocabulary lifted from GitHub Code Scanning)
-> - **(f)** Fix inline now (I'll patch and you commit; closed `fixed` via that commit SHA)
-> - **(p)** Plan a new phase to fix it properly (invokes `/plan-phase`; closed `fixed` via new phase ref)
-> - **(w)** Won't fix — keep as-is for a substantive reason ≥20 chars (closed `won't_fix`)
-> - **(d)** Dismiss (this was never debt — permanent design constraint or a note logged in the wrong field; closed `dismissed`, optional one-line `via` note)
-> - **(k)** Keep open (do nothing; blocks archive for this version)
-> - **(s)** Skip to next (decide later)
-
-**Implementation per choice (each appends ONE entry to `phase.debtResolutions[]`):**
-
-- **(f) Fix inline.** Invoke `zeroh-roadmap:software-architect` (foreground, synchronous) with the debt text + relevant files to get the proper-solution blueprint. Apply the fix, run the validation gate appropriate to the phase's `kind`, commit. Then append `{ ref: '<ref>', status: 'fixed', via: '<commitSHA>', date: 'YYYY-MM-DD' }` to `phase.debtResolutions`. Commit the schema update separately: `docs(roadmap): phase N — close debt <ref> (fixed by <SHA>)`.
-- **(p) Plan a new phase.** Invoke `/zeroh-roadmap:plan-phase <debt text>` — new phase carries the same `version` (or the *next* version if the user prefers; confirm). After the new phase commits, append `{ ref, status: 'fixed', via: 'phase-<N>', date }`. Commit: `docs(roadmap): phase N — close debt <ref> (fixed by phase-<N>)`.
-- **(w) Won't fix.** Capture a substantive reason (≥20 chars; schema rejects shorter). Append `{ ref, status: "won't_fix", via: '<reason>', date }`. Commit: `docs(roadmap): phase N — won't_fix debt <ref> (<short summary>)`.
-- **(d) Dismiss.** Append `{ ref, status: 'dismissed', via: '<optional one-liner — omit if obvious>', date }`. Commit: `docs(roadmap): phase N — dismiss debt <ref>`. **Operator-facing nudge:** if more than half of a phase's resolutions are `dismissed`, suggest revising the planner's transparency-report field-meaning discipline — most debts should be `fixed` or `won't_fix`, not waved through.
-- **(k) Keep open.** No append. Note in summary. Blocks archive.
-- **(s) Skip.** Move on.
-
-### Step 4: Summary
-
-After processing all debts, output:
-
-```
-Sweep complete for <version>:
-  Fixed (inline):              X
-  Fixed (new phase):           Y
-  Won't fix:                   Z
-  Dismissed:                   D
-  Still open:                  W
-
-[If D/(X+Y+Z+D) > 0.5, surface:]
-  ⚠ Dismissed ratio is {D}/{total} ({pct}%). Likely planner field-meaning
-    drift (deferred work logged in `limitations` instead of `compromises` /
-    `skipped`). Consider tightening discipline before the next minor.
-
-[If W > 0 and --archive was requested:]
-  Archive refused — W debt(s) still open. Re-run release-sweep <version> --archive
-  after resolving the remaining items.
-
-[If W == 0 and --archive was requested:]
-  All debts clean. Proceeding to archive.
-```
-
-### Step 5: Archive (only if `--archive` and W == 0)
-
+### Step 5 — Archive (only if `--archive` and zero open) — the git-mv mechanics (PROSE-carried; NOT in `roadmap debt`)
 ```bash
 mkdir -p roadmap/archive/<version>
-# For each done phase with version: <version>:
-#   - Skip if source already missing (already archived) OR destination already exists.
-#   - Otherwise git mv source → destination.
 for N in <phase-numbers>; do
-  src="roadmap/phases/phase-${N}.phase.ts"
-  dst="roadmap/archive/<version>/phase-${N}.phase.ts"
-  if [ ! -f "$src" ] && [ -f "$dst" ]; then
-    echo "Already archived: phase-${N}"
-    continue
-  fi
-  if [ -f "$src" ] && [ -f "$dst" ]; then
-    echo "CONFLICT: both $src and $dst exist — investigate manually"
-    exit 1
-  fi
+  src="roadmap/phases/phase-${N}.phase.ts"; dst="roadmap/archive/<version>/phase-${N}.phase.ts"
+  if [ ! -f "$src" ] && [ -f "$dst" ]; then echo "Already archived: phase-${N}"; continue; fi   # re-runnable skip guard
+  if [ -f "$src" ] && [ -f "$dst" ]; then echo "CONFLICT: both exist — investigate"; exit 1; fi  # conflict is FATAL, never overwrite
   git mv "$src" "$dst"
 done
 ```
+The skip-if-already-archived guard makes `--archive` **re-runnable** (a Ctrl-C'd partial archive resumes on
+re-invoke); a both-paths-exist conflict is **fatal** and demands manual investigation. Commit:
+`chore(roadmap): archive <version> — N phases moved`. After the move: `roadmap audit` covers archive
+integrity; `reviews/changelog.json` keeps archived phases with their `archivePath`; transparency reports +
+`debtResolutions` are preserved on the archived files (`won't_fix`/`dismissed` stay visible to auditors).
 
-The skip-if-already-archived guard makes `--archive` re-runnable: a partial archive (operator hit Ctrl-C mid-loop) can be resumed by re-invoking the same command. A conflict (both paths exist) is fatal and demands manual investigation — never silently overwrite.
+## Edge cases + scope
+- No non-`"None"` entries → zero debts, archive-eligible immediately. `version: undefined` → skipped
+  (version is the partition key); warn. A version match that isn't `done` → excluded (Step 1). A
+  `debtResolutions` ref matching no entry → schema-drift warning (no auto-repair). An inline fix that forces
+  its own trade-off → the new compromise lands on the FIX's phase, never reopening this closed debt. User
+  aborts → per-resolution commits are independent; re-run resumes; `--archive` is idempotent (Step 5 guards).
+- **Does NOT:** change a phase's version (that's plan/review-phase); run gates on archived phases (archive is
+  a move, not re-validation); enforce release timing; cancel/remove phases.
 
-Commit: `chore(roadmap): archive <version> — N phases moved to roadmap/archive/<version>/`.
-
-After the move:
-- `audit-roadmap` reads both `roadmap/phases/` and `roadmap/archive/**/` (see audit-roadmap SKILL.md — covers archive integrity as its own check).
-- `reviews/changelog.json` remains the canonical queryable index — archived phases stay in changelog with their `archivePath` recorded.
-- Transparency reports and `debtResolutions` are preserved on the archived files; `won't_fix` and `dismissed` items remain visible for future auditors.
-
-## Edge Cases
-
-- **Phase has no non-`"None"` transparency entries.** Zero candidate debts — nothing to resolve. Eligible for archive immediately when `--archive` is passed.
-- **Phase has `version: undefined`.** Skipped (version is the partition key). Output a warning: "Phase N has no version — assign before sweeping."
-- **Phase matches version but `status` is not `'done'`.** Excluded from sweep with a per-phase warning (Step 1). Operator finishes or cancels before re-running.
-- **`debtResolutions` ref doesn't match any transparency entry.** Surfaced as schema-drift warning; sweep does not auto-repair. Likely cause: a transparency report was edited post-hoc; the ref no longer resolves. Operator should fix manually.
-- **Resolution introduces new compromises.** Possible if an inline fix forces its own trade-off. The new compromise goes into the *fix commit's* transparency report (which lives on the FIX'S phase, possibly a new one). It does NOT retroactively reopen this phase's debt — that debt is closed by `via: <commitSHA>`, and the new compromise is tracked on its own phase.
-- **User aborts mid-sweep.** Per-resolution commits land independently. Re-running the skill resumes from the remaining open debts. `--archive` is also idempotent — see Step 5 guards.
-
-## What this skill does NOT do
-
-- It does NOT modify the version of any phase. Versioning is set during plan-phase / review-phase, not here.
-- It does NOT run validation gates on archived phases. Gates already ran when the phase was done; archive is a move, not a re-validation.
-- It does NOT enforce any release timing. The operator decides when to sweep and when to archive — this skill only enforces the *archive is gated on clean debts* invariant.
-- It does NOT cancel or remove phases — only `cancelled` status does that, and that's not a debt resolution.
-
-## Boilerplate compromise
-
-If you're tempted to write a "summary" or "report" file (`reviews/{version}-debt-sweep.md`) as part of this skill — don't. The phase files ARE the audit trail; `debtResolutions[]` (with `ref` + `status` + `via` + `date`) plus the transparency reports it points to carries everything an auditor needs. A separate markdown file drifts.
+**No summary file.** The phase files ARE the audit trail — `debtResolutions[]` + the transparency reports it
+points to carry everything an auditor needs; a separate `reviews/<version>-debt-sweep.md` drifts. Don't write one.
+</content>

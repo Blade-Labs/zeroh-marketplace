@@ -174,21 +174,51 @@ scripts), which is 0.
 | `## Validation tiers` anchor (missing-binding mirror) | enforced-by-code(`validationTiers` config key) | cli/lib/config.mjs |
 | reuse-first / generalize-forward / craft-bar explanatory prose | relocated | light-trimmed inline — the reuse-or-design protocol is untouched, only wording compressed |
 
-## arc-sweep/SKILL.md (14 KB → ≤9,000 B) — phase 1659.6
+## arc-sweep/SKILL.md (13,762 B → 8,965 B) — phase 1659.6
 
-_populated in 1659.6_
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| hand-in-contract prose (two-priority-order explanation, discoverResults() rationale) | enforced-by-code(`discoverResults()` + `roadmap debt census`) | condensed to the CLI calls; the debt-disposition table + reasoning are kept verbatim |
+| `## Merge policy` anchor (disposition-mode read) | enforced-by-code(`mergePolicy.arcIntegration` config key) | cli/lib/config.mjs |
+| `## Model policy` anchor (whole-arc architect routing) | enforced-by-code(`modelPolicy.judgeModel` home statement) | KEEP-LIST: the judge-model routing survives |
+| Ask Ali / Studio / Agent HQ 2026-07 off-design narration (design-conformance) | relocated | DESIGN-NOTES.md §Design-parity origin incident |
+| ledger-audit clause (NEW content, not a deletion) | enforced-by-code(the sweep verifies every arc-diff prose deletion has a DIET-LEDGER row + spot-checks enforced-by-code claims) | skills/arc-sweep/SKILL.md Step 2 |
 
-## release-sweep/SKILL.md (14 KB → ≤9,000 B) — phase 1659.6
+## release-sweep/SKILL.md (13,847 B → 7,341 B) — phase 1659.6
 
-_populated in 1659.6_
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| Step 2 debt-join mechanics (candidate-debt enumeration, the 1371 open-status recheck) | enforced-by-code(`roadmap debt census` — the transparencyReport↔debtResolutions join) | scripts/debt-census.mts |
+| `--all-done` bulk mechanics (census + dispose scripts) | enforced-by-code(`roadmap debt census` / `roadmap debt dispose` / `roadmap debt check`) | selector + archive JUDGMENT kept as prose |
+| verbose resolution-vocabulary examples + edge-case prose | relocated | condensed inline; the (f)/(p)/(w)/(d)/(k)/(s) vocabulary + archive-gates-on-clean-debts rule kept |
+| Step 5 archive git-mv mechanics (conflict-fatal, re-runnable skip guard) | obsolete-with-evidence(NOT owned by `roadmap debt`) → **KEEP-LIST**: PROSE-carried, survives verbatim | the git-mv loop is retained in Step 5 |
 
-## validate-arc/SKILL.md (10 KB → ≤7,700 B) — phase 1659.6
+## validate-arc/SKILL.md (10,285 B → 7,696 B) — phase 1659.6
 
-_populated in 1659.6_
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| `## Validation tiers` anchor (Step 1 runnable check) | enforced-by-code(`validationTiers` config key) | cli/lib/config.mjs |
+| `## Model policy` anchor (Step 3 judge routing) | enforced-by-code(`modelPolicy.judgeModel` home statement) | KEEP-LIST |
+| verbose judge/panel/corrective-loop prose | relocated | condensed inline; the independent-judge protocol + panel sizing (2-agree for subjective, 1 for deterministic) + evidence-or-downgrade + the ux-parity fail-safe derivation are KEPT |
+| Ask Ali / Studio / Agent HQ 2026-07 off-design narration (fail-safe rationale) | relocated | DESIGN-NOTES.md §Design-parity origin incident |
 
-## full-code-review/SKILL.md (21 KB → ≤19,000 B) — phase 1659.6
+## full-code-review/SKILL.md (21,203 B → 18,885 B) — phase 1659.6
 
-_populated in 1659.6_
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| `## Gate commands` anchor (Phase 5 validation-gate task) | enforced-by-code(`gateCommands` config key) | cli/lib/config.mjs |
+| Phase 5/6 verbose bookkeeping (JSON-shape examples, per-step commit prose, next-number sed) | relocated | condensed inline — the 8-agent release-gate protocol (Phase 2 Agents 1-8) is UNTOUCHED; next-number → `roadmap claim` |
+
+## gate-loop details (from the deleted gate-protocol.md Rounds 1..N) — phase 1659.6
+
+The three gate-loop details release-sweep's trim step flags — each gets a NAMED disposition, never a
+silent drop:
+
+| passage | disposition | evidence |
+|---|---|---|
+| hard round-cap 5 | relocated | skills/do-phase/SKILL.md gate section — "Rounds 1..N correctness loop (cap 5)" |
+| RN>1 reviewers scoped to the fix-diff only | relocated | skills/do-phase/SKILL.md gate section — the Rounds 1..N loop names the round-scoped review-input |
+| the finding `agent` attribution vocabulary (reviewer-1 / specialist name / quality-pass) | enforced-by-code(StructuredGateRoundShape.`agent` field; do-phase records `agent:` per finding + `agent: 'design-parity'`) | templates/schema.ts |
 
 ## agent cards (intent-validator, quality-pass, software-architect, code-reviewer, ux-designer, software-developer, test-engineer) — phase 1659.7
 

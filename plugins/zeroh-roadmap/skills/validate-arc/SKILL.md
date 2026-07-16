@@ -9,78 +9,99 @@ metadata:
 
 # Validate Arc — Intent Validation Protocol
 
-`validate-arc` closes the arc loop. The per-phase gate proves the code is correct; `arc-sweep` proves the arc coheres. Neither drives the **shipped product** as a user and asks *did this do the job, at the bar that was set?* That is this skill: resolve the arc's `acceptanceCriteria`, drive the real flow at each criterion's tier with a **fresh independent judge** (`intent-validator` — never the agent that built it), and report **PASS** (all met) or **GAPS** (≥1 unmet) with concrete evidence.
+`validate-arc` closes the arc loop. The per-phase gate proves the code correct; `arc-sweep` proves the
+arc coheres. Neither drives the **shipped product** as a user and asks *did this do the job, at the bar
+set?* That is this skill: resolve `acceptanceCriteria`, drive the real flow at each criterion's tier with
+a **fresh independent judge** (`intent-validator` — never the agent that built it), and report **PASS**
+(all met) or **GAPS** (≥1 unmet) with concrete evidence. It **never merges** (do-arc's call); on GAPS its
+bounded corrective loop (Step 5) turns gaps into fixes via the normal gated `plan-phase` + `do-phase`
+pipeline (never a parallel executor).
 
-This skill **never merges** — merge stays do-arc's call. It reports the verdict, and on GAPS its bounded corrective loop (Step 5) turns gaps into fixes by reusing the normal, gated `plan-phase` + `do-phase` pipeline (never a parallel executor).
+**Trigger:** `validate arc <id>`, `/validate-arc <id>`; also `do-arc`'s terminal Step 7 (after `arc-sweep`,
+before the merge-hold). `<id>` matches `Arc.id`.
 
-## Trigger
+## Step 0: Resolve the arc + its criteria
 
-User says: `validate arc <id>`, `/validate-arc <id>`, `check arc <id> met its intent`. Also invoked by `do-arc` as its terminal Step 7 (after `arc-sweep`, before the merge-hold).
-
-## Arguments
-
-- **`<id>`** (required) — the Arc id, matching `Arc.id` in `roadmap/arcs/<id>.arc.ts`.
-
-## Step 0: Resolve the arc and its criteria
-
-1. Call `discoverArcs()` and select the arc whose `id` equals `<id>`. If none matches, STOP: `No arc with id <id>. Run /plan-arc first, or check the id.`
-2. Read `arc.acceptanceCriteria`. **If it is empty AND step 3 below derives nothing, STOP with an HONEST no-op:** report `Arc <id> declares no acceptance criteria — validate-arc is a no-op. (Author criteria in plan-arc Step 1 to make this gate real.)` Do NOT invent criteria to judge against — that is circular. (Run step 3 BEFORE declaring the no-op: an arc with zero authored criteria but confirmed `ux` designRefs is exactly the drifted-arc shape the parity fail-safe exists for.) When criteria DO exist, note that they are **immutable post-planning** (the 1367 validator enforces it via `criteriaRatifications`), so the intent judged here is always the ORIGINAL — never one quietly narrowed during the build.
+1. `discoverArcs()` → the arc whose `id` equals `<id>`. None → STOP: `No arc with id <id>.`
+2. Read `arc.acceptanceCriteria`. **Empty AND step 3 derives nothing → STOP with an HONEST no-op:**
+   `Arc <id> declares no acceptance criteria — a no-op.` Never invent criteria (circular).
+   (Run step 3 FIRST — zero authored criteria + confirmed `ux` designRefs is exactly the drifted-arc the
+   parity fail-safe exists for.) Criteria are **immutable post-planning** (the validator enforces it via
+   `criteriaRatifications`), so the intent judged is always the ORIGINAL, never one quietly narrowed.
 3. **UX design-parity fail-safe (the one sanctioned derivation — NOT criteria invention).** Read
-   `arc.designRefs`. For every `kind: 'ux'` designRef with NO matching `ux-parity:*` criterion in
-   `acceptanceCriteria`, DERIVE the standard parity criterion (the plan-arc Step 1b(4) template:
-   tier `live-ui`, signal = side-by-side comparison of the shipped surface vs the rendered design
-   artifact across every state the design shows AND every interaction it defines — hover/focus,
-   transitions, animations, driven live — judged by the parity rubric) and ADD it to the
-   panel for THIS run (do not edit the arc file — record `derived: true` in the report). This is
-   not circular: the design artifact was USER-CONFIRMED at the design gate, so the intent is
-   ratified — only the check was missing. A confirmed design with no parity check is exactly how
-   Ask Ali web / Studio / Agent HQ shipped off-design (2026-07). A `ux` designRef pointing at a
-   missing/moved artifact → a GAP naming the broken ref, never a silent skip.
+   `arc.designRefs`. For every `kind: 'ux'` designRef with NO matching `ux-parity:*` criterion, DERIVE the
+   standard parity criterion (plan-arc Step 1b(4) template: tier `live-ui`, signal = side-by-side of the
+   shipped surface vs the rendered artifact across every state AND every interaction it defines — hover/
+   focus, transitions, animations, driven live — judged by the parity rubric) and ADD it to THIS run's
+   panel (don't edit the arc file — record `derived: true`). Not circular: the artifact was USER-CONFIRMED
+   at the design gate, so the intent is ratified — only the check was missing. A `ux` designRef pointing at
+   a missing/moved artifact → a GAP naming the broken ref.
 
-## Step 1: Confirm the arc is built and the surface is runnable
-
-1. Confirm every member phase across `arc.planes[].phases` is `done` (validating an unbuilt arc is meaningless). If any is not, STOP and name it.
-2. Confirm the consumer can be driven: it must document a **`## Validation tiers`** block in its `CLAUDE.md` binding each tier (`wired` / `live-ui` / `live-host`) to a command (the binding `intent-validator` reads). If the block is absent, surface that — the live-ui/live-host criteria cannot be driven and will come back as gaps naming the missing binding.
+## Step 1: Confirm the arc is built and runnable
+1. Every member phase across `arc.planes[].phases` is `done` (validating an unbuilt arc is meaningless);
+   if any isn't, STOP and name it.
+2. The consumer's `roadmap.config.json` sets `validationTiers`, binding each tier (`wired`/`live-ui`/
+   `live-host`) to a command (`intent-validator` reads it). Absent → surface it; the live-ui/live-host
+   criteria come back as gaps naming the missing binding.
 
 ## Step 2: Tier-pick — honour each criterion's tier, with a tier-honesty down-check
 
-What each tier can and cannot honestly judge, its evidence, and the consumer-binding convention are in **`references/driving-tiers.md`** — read it once for the tier vocabulary the down-check below and the judge in Step 3 both rely on.
+The tier vocabulary — what each can/can't honestly judge, its evidence, the consumer binding — is in
+**`references/driving-tiers.md`** (read once; the down-check and Step-3 judge both rely on it).
 
-Each criterion carries its `tier` (set at plan time — the cheapest tier that can honestly judge it). Honour it, but apply a **tier-honesty down-check**: if a criterion's `bar` is about the *rendered experience* (how it looks/feels) yet its `tier` is `wired` (in-process logic, which cannot see a screen), **flag it** — logic alone can't judge rendered UX. Surface the mismatch in the report and run the judge at the flagged tier anyway (the judge will itself return a gap naming the mismatch). Do not silently upgrade the tier; the mismatch is a planning signal worth seeing.
+Each criterion carries its `tier` (the cheapest that can honestly judge it). Honour it, but apply a
+**tier-honesty down-check:** if a criterion's `bar` is about the *rendered experience* yet its `tier` is
+`wired` (in-process logic, blind to a screen), **flag it** and run the judge at that tier anyway (it will
+return a gap naming the mismatch). Never silently upgrade the tier — the mismatch is a planning signal.
 
 ## Step 3: Fan out the judge — one `intent-validator` per criterion, in parallel
 
-Spawn the `intent-validator` agent **once per criterion, concurrently** — the same safe read-mostly fan-out shape `plan-arc` Step 3 uses. **Spawn each judge with `model` per the `## Model policy` home statement (review-phase SKILL.md)** — this applies to EVERY judge in a panel. Two invariants:
+Spawn `intent-validator` **once per criterion, concurrently** (the safe read-mostly fan-out `plan-arc`
+Step 3 uses). **Spawn each with `model` per the `modelPolicy.judgeModel` home statement (review-phase
+SKILL.md)** — EVERY judge in a panel. Two invariants:
 
-- **Edit-confinement:** the judges are READ-ONLY. They drive the flow and observe; they write NOTHING in the consumer tree or the roadmap. (Driving may run the consumer's own tests/build, which is fine — but no judge edits source, backlog, or a phase file.)
-- **Independence:** each judge is spawned FRESH with only (the criterion + the consumer's tier bindings + the running surface). Never pass it the building agents' reasoning, the phase diffs, or the commit log — that is self-grading. This is the independent-judge singleSeam.
+- **Edit-confinement:** judges are READ-ONLY — they drive and observe, writing NOTHING in the consumer tree
+  or roadmap (driving may run the consumer's tests/build; no judge edits source, backlog, or a phase file).
+- **Independence:** each judge is spawned FRESH with only (the criterion + the tier bindings + the running
+  surface). Never pass it the building agents' reasoning, the diffs, or the commit log — that is
+  self-grading. This is the independent-judge singleSeam.
 
-For a criterion whose `bar` is **subjective** (a rendered-UX / "feels finished" judgment, typically `live-ui`), spawn **2 judges and require AGREEMENT** — one judge cannot rubber-stamp a screenshot, and a third tie-breaker buys less than surfacing the disagreement: both MET → MET; both unmet → GAP; a **split verdict is recorded as a GAP carrying BOTH verdicts** (fail-visible — the user arbitrates from the report, which is cheaper and more honest than majority-voting the doubt away). A deterministic `wired`/`live-host` criterion runs a **single judge**.
+For a **subjective** `bar` (rendered-UX / "feels finished", typically `live-ui`), spawn **2 judges and
+require AGREEMENT** (one can't rubber-stamp a screenshot; a tie-breaker buys less than surfacing the
+disagreement): both MET → MET; both unmet → GAP; a **split verdict is a GAP carrying BOTH verdicts**
+(fail-visible — the user arbitrates, cheaper and more honest than majority-voting the doubt away). A
+deterministic `wired`/`live-host` criterion runs a **single judge**.
 
 ## Step 4: Collect, aggregate, report
 
-1. `.parse()` each returned `IntentVerdict` (the typed shape — reject free prose; a judge that didn't return the shape is re-run once, then recorded as an inconclusive gap).
-2. Per criterion: **MET** (single judge met, or both panel judges met) or **GAP** (carrying the judge's `whatsMissing` + `suggestedFix` + the evidence; a split panel's GAP carries both verdicts, marked `split — user arbitrates`).
-3. Arc-level: **PASS** iff every criterion is MET; otherwise **GAPS** with the list of unmet criteria, each with its evidence and suggested fix.
+1. `.parse()` each `IntentVerdict` (typed shape — reject free prose; a mis-shaped judge is re-run once,
+   then recorded as an inconclusive gap).
+2. Per criterion: **MET** (single judge, or both panel judges) or **GAP** (carrying `whatsMissing` +
+   `suggestedFix` + evidence; a split panel's GAP carries both verdicts, marked `split — user arbitrates`).
+3. Arc-level: **PASS** iff every criterion MET; else **GAPS** + the unmet list + evidence + fix.
 
-Report the result — per-criterion verdict, the evidence, the tier each was judged at (and any tier-honesty flag from Step 2), a **Ratified descopes** section (read `Arc.descopes`; list each `{ item, ratifiedBy, ratifiedAt }`, or state `Ratified descopes: none` when empty — honest, NEVER omitted, so a descoped criterion is visible next to the verdict), and the arc-level PASS/GAPS. **Stop here on PASS** (the arc met its intent — merge-readiness is do-arc's call). On GAPS, the corrective loop (Step 5) takes over.
+Report per-criterion verdict + evidence + the tier judged at (+ any tier-honesty flag), a **Ratified
+descopes** section (read `Arc.descopes`; list each `{ item, ratifiedBy, ratifiedAt }`, or `none` — NEVER
+omitted), and PASS/GAPS. **Stop on PASS** (merge-readiness is do-arc's call). On GAPS, Step 5 takes over.
 
 ## Step 5: Corrective loop (on GAPS) — bounded
 
-A GAPS result is not the end; it is the input to a fix-and-re-check loop. The loop **reuses `plan-phase` + `do-phase`** — a gap becomes a normal, gated corrective phase. There is NO parallel executor and NO forked phase pipeline (the singleSeam).
+A GAPS result feeds a fix-and-re-check loop that **reuses `plan-phase` + `do-phase`** — a gap becomes a
+normal gated corrective phase. NO parallel executor, NO forked pipeline (the singleSeam). **From `do-arc`
+(Step 7), do NOT auto-correct unattended:** surface the GAPS + proposed corrective phase(s) and **PAUSE for
+the user's go** (mirrors do-arc's merge-hold). With the user present, proceed. Each round:
 
-**When invoked from `do-arc` (Step 7), do NOT auto-correct unattended.** Surface the GAPS + the proposed corrective phase(s) and **PAUSE for the user's go** — auto-fixing an arc's intent gaps is a bigger commitment than a per-task gate fix, so it mirrors do-arc's "hold the merge for an explicit go". When invoked directly with the user present, proceed through the loop.
+1. **Author a corrective phase per gap via `plan-phase`** — `problem` = `whatsMissing`, tasks seeded by
+   `suggestedFix`. `plan-phase` does NOT stamp `arcId`, so DO what `plan-arc` Step 2b does: set the phase's
+   `arcId` AND append its number to `planes[].phases` (else `crossValidate` rejects).
+2. **Execute each via `do-phase`** (full gate — corrective work is gated code).
+3. **Re-validate the affected criteria** (re-run Steps 2–4 for the criteria whose phase landed, not the
+   whole arc). A bound, not a guarantee: a corrective phase could regress a MET criterion — the backstop is
+   two-layered (each phase's `do-phase` gate + do-arc's terminal full-arc re-validate). Widen if a phase's
+   blast radius plausibly reaches other criteria.
 
-Each round:
-
-1. **For each gap, author a corrective phase via `plan-phase`** — its `problem` is the gap's `whatsMissing`, its tasks seeded by the `suggestedFix`. **Arc membership:** vanilla `plan-phase` does NOT stamp `arcId` (that is `plan-arc` Step 2b's job), so the corrective step MUST do what `plan-arc` Step 2b does: set the new phase's `arcId` to this arc AND append its number to the arc entity's `planes[].phases` — otherwise `crossValidate` rejects the dangling `arcId`.
-2. **Execute each corrective phase via `do-phase`** (full gate — corrective work is still gated code).
-3. **Re-validate the affected criteria** (the bounded default) — re-run Steps 2–4 for the criteria whose corrective phase landed, not the whole arc, to spend the loop's budget on what actually changed. This is a deliberate bound, not a guarantee: a corrective phase *could* regress a previously-MET criterion. The backstop is two-layered — each corrective phase still passes its own `do-phase` gate (which guards the touched code), and do-arc's terminal validate stage re-runs the full arc before merge. If a corrective phase's blast radius plausibly reaches other criteria, widen the re-validation to include them.
-
-Loop until PASS or the bound trips.
-
-**The bound (termination is guaranteed):**
-- `maxRounds` — default **2**. After this many correct→re-validate rounds, stop.
-- a **token/budget ceiling** — stop if the loop would exceed it.
-
-**Exhaustion exit (never spin, never silently pass, never launder):** when the bound trips with criteria still unmet, **DISPOSITION each named residual gap through the arc-sweep disposition table** (arc-sweep SKILL.md — **IN-ARC** author-and-execute, or a user-ratified **DESCOPE** typed on `Arc.descopes`), NOT as prose shipped into the backlog (that is the same laundering, at the intent gate itself). Report `GAPS: N residual gaps — dispositioned <in-arc | descope>` so the human sees each disposition. Never loop forever; never report PASS when a criterion is still unmet; never ship a residual gap as prose-only.
+Loop until PASS or the **bound** trips: `maxRounds` default **2** + a budget ceiling.
+**Exhaustion exit (never spin / silently pass):** when the bound trips with criteria unmet,
+**DISPOSITION each residual gap through the arc-sweep disposition table** (IN-ARC author-and-execute, or a
+user-ratified DESCOPE typed on `Arc.descopes`) — NOT prose into the backlog. Report `GAPS: N residual —
+dispositioned <in-arc | descope>`. Never report PASS with a criterion unmet.

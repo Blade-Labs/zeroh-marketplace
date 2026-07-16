@@ -250,18 +250,12 @@ Present findings as a **single numbered master list** grouped by severity. Every
 After presenting the report, **automatically create a new phase file** in `roadmap/phases/`. This is mandatory — do not ask, just create it.
 
 ### Step 1: Determine the next phase number
-
-Read the filesystem and pick `max + 1`. Phase numbers are **monotonic** — never reuse historical numbers, even if lower slots are vacant.
-
-```bash
-(sed -nE 's/^  phase: ([0-9]+),.*/\1/p' roadmap/phases/*.phase.ts 2>/dev/null; echo 0) | sort -n | tail -1
-```
-
-Increment the output by 1. That is your new phase number. Same form as `plan-phase` — see that skill for a full explanation.
+`roadmap claim` reserves the next monotonic number (never reuse a historical one, even a vacant slot).
 
 ### Step 2: Write the phase file
 
-Create `roadmap/phases/phase-{N}.phase.ts` using `definePhase()` from `lib/roadmap/schema.ts`. Map every finding from the master list into a task. Group related findings into the same task when they share a fix (e.g., multiple auth findings in the same file).
+Create `roadmap/phases/phase-{N}.phase.ts` via `definePhase()`. Map every finding from the master list into
+a task; group related findings sharing a fix into the same task (e.g. multiple auth findings in one file).
 
 ```typescript
 import { definePhase } from '../../lib/roadmap/schema'
@@ -299,7 +293,7 @@ export default definePhase({
       problem:
         'Gate must pass after all findings are resolved to confirm no regressions.',
       steps: [
-        { file: 'package.json', description: 'Run the lint, types, unit, and build slots (consumer `## Gate commands` block)' },
+        { file: 'package.json', description: 'Run the lint, types, unit, and build slots (`gateCommands` config)' },
         { file: 'CLAUDE.md', description: 'Re-run /full-code-review — zero critical/high findings' },
       ],
       acceptanceCriteria: ['All gate steps pass', 'Zero critical/high findings on re-run'],
@@ -331,138 +325,36 @@ After committing, run the `emit` slot to regenerate `reviews/changelog.json`.
 
 Also save the full report as `reviews/{date}-FULL-CODE-REVIEW.md` for historical reference. Commit alongside the phase file.
 
-### Step 5: Serialize findings to JSON and append to release review report
+### Step 5: Serialize findings to JSON + append to the release review report
 
-After all agents complete and findings are consolidated, serialize the results to the current version's release review JSON file.
-
-1. Read the current version from `package.json`:
-```bash
-node -p "require('./package.json').version"
-```
-
-2. Determine the output path: `reviews/releases/v{version}-review.json`
-
-3. If the file already exists, read it and merge this run as additional rounds (append to `rounds[]` and `findings[]`). If the file does not exist, create it using the schema from the existing review files in `reviews/releases/`.
-
-4. The JSON structure to add/merge:
-```json
-{
-  "version": "{version}",
-  "date": "{YYYY-MM-DD}",
-  "verdict": "PASSED or FAILED",
-  "rounds": [
-    {
-      "round": {N},
-      "agents": [
-        { "name": "Quality", "findings": {count} },
-        { "name": "Regression", "findings": {count} }
-      ],
-      "verdict": "ZERO FINDINGS or N findings fixed"
-    }
-  ],
-  "findings": [
-    {
-      "severity": "CRITICAL|HIGH|MEDIUM|LOW",
-      "description": "...",
-      "resolution": "... or null if unresolved",
-      "round": {round_number},
-      "agent": "agent_name"
-    }
-  ]
-}
-```
-
-5. Write the updated JSON back to `reviews/releases/v{version}-review.json`.
-
-6. Validate the written JSON: verify the `gate` section conforms to `GateResultShape` from `lib/roadmap/schema.ts` — ensure lint, typeCheck, build, and test count fields are present and well-formed.
-
-7. Rebuild the dashboard:
-```bash
-bash scripts/build-dashboard.sh   # resolves reviews/ from the git toplevel
-```
-
-8. Commit both files:
-```bash
-git add reviews/releases/v{version}-review.json reviews/dashboard/index.html
-git commit -m "docs(reviews): v{version} — code review round {N}, {X} findings"
-```
+Serialize the consolidated results to `reviews/releases/v{version}-review.json` (version from
+`package.json`). If the file exists, MERGE this run as additional rounds (append to `rounds[]` +
+`findings[]`); else create it from the schema of the existing `reviews/releases/` files. Each `rounds[]`
+entry: `{ round, agents:[{name, findings}], verdict }`; each `findings[]` entry: `{ severity, description,
+resolution|null, round, agent }`; top-level `{ version, date, verdict }`. Validate the `gate` section
+against `GateResultShape` (`lib/roadmap/schema.ts` — lint/typeCheck/build + test counts present +
+well-formed). Then rebuild the dashboard (`bash scripts/build-dashboard.sh`) and commit both files
+(`docs(reviews): v{version} — code review round {N}, {X} findings`).
 
 ### Step 6: Update gate test counts
-
-Read the latest test counts from the current test run and update the review JSON:
-
-```bash
-# Run tests and capture counts (the consumer's `unit` slot command)
-<unit slot command> 2>&1 | tail -5  # Extract the runner's pass-count line
-```
-
-Update the review JSON `gate` section:
-```json
-{
-  "gate": {
-    "lint": "clean",
-    "typeCheck": "clean",
-    "unitTests": { "passed": X, "total": X },
-    "integrationTests": { "passed": Y, "total": Y },
-    "e2eTests": { "passed": Z, "total": W, "notes": "..." },
-    "build": "clean"
-  }
-}
-```
+Run the consumer's `unit`/`integration`/`e2e` slots, capture the pass counts, and update the review JSON
+`gate` section (`unitTests: {passed, total}`, etc.).
 
 ### Step 7: Present next steps
-
-After creating all files, tell the user:
-1. The phase file path and number
-2. Count of tasks created
-3. Whether it's release-blocking (any critical findings)
-4. The review JSON path where findings were saved
-5. Suggest: "Run `do phase {N}` to start remediation"
+Tell the user: the phase file path + number, task count, whether it's release-blocking (any critical
+finding), the review JSON path, and "Run `do phase {N}` to start remediation".
 
 ---
 
-## Phase 6: Post-Remediation Update (run after fixing findings)
+## Phase 6: Post-Remediation Update (after fixing findings)
 
-After the remediation phase is completed (all tasks done, gate passed), update the review data:
-
-### Step 1: Update finding resolutions
-
-For each finding in `reviews/releases/v{version}-review.json`:
-- If the finding was fixed → set `"resolution": "Fixed in phase {N}.{X} — {description}"`
-- If deferred → set `"resolution": "Deferred to Phase {M} — {reason}"`
-- Leave no `"resolution": null` entries without explanation
-
-### Step 2: Update verdict
-
-If all critical and high findings are resolved:
-```json
-"verdict": "RELEASED"
-```
-If any critical findings remain unresolved:
-```json
-"verdict": "BLOCKED"
-```
-
-### Step 3: Update gate test counts
-
-Re-run tests and update the `gate` section with the latest counts (same as Phase 5, Step 6).
-
-### Step 4: Add deferred items list
-
-If any findings were deferred, add a `deferredToBacklog` array:
-```json
-"deferredToBacklog": [
-  "FCR-1: Description (Phase N)",
-  "FCR-2: Description (Phase M)"
-]
-```
-
-### Step 5: Rebuild and commit
-
-```bash
-bash scripts/build-dashboard.sh   # resolves reviews/ from the git toplevel
-git add reviews/releases/v{version}-review.json reviews/dashboard/index.html
-git commit -m "docs(reviews): v{version} — remediation complete, verdict updated"
-```
-
-This ensures the release review dashboard always reflects the current state — findings found, findings resolved, test counts, and release verdict.
+After the remediation phase completes (all tasks done, gate passed), update
+`reviews/releases/v{version}-review.json`:
+1. **Finding resolutions** — each fixed → `"resolution": "Fixed in phase {N}.{X} — …"`; each deferred →
+   `"Deferred to Phase {M} — {reason}"`; no unexplained `null`.
+2. **Verdict** — all critical+high resolved → `"RELEASED"`; any critical unresolved → `"BLOCKED"`.
+3. **Gate counts** — re-run tests, update the `gate` section (as Step 6).
+4. **Deferred list** — if any deferred, add `"deferredToBacklog": ["FCR-1: … (Phase N)", …]`.
+5. **Rebuild + commit** — `bash scripts/build-dashboard.sh`; commit both files (`docs(reviews): v{version}
+   — remediation complete, verdict updated`). The dashboard always reflects current state (found, resolved,
+   counts, verdict).
