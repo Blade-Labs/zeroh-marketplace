@@ -113,3 +113,13 @@ test('human output carries the per-file table + total', () => {
   assert.match(r.stdout, /TOTAL/)
   assert.match(r.stdout, /10/)
 })
+
+// The REAL-tree budget (armed at 1659.8 once the diet completed — the default manifest, no override):
+// the do-arc protocol load must stay ≤ 12,000 tokens forever. Plugin CI (1660) runs this on every push.
+test('real tree: measure --flow do-arc --assert 12000 exits 0 (the protocol-load-cut criterion)', () => {
+  const out = JSON.parse(
+    execFileSync('node', [BIN, 'measure', '--flow', 'do-arc', '--assert', '12000', '--json'], { encoding: 'utf8' }),
+  )
+  assert.ok(out.totalTokens <= 12000, `do-arc load ${out.totalTokens} > 12000`)
+  assert.equal(out.withinBudget, true)
+})

@@ -159,12 +159,12 @@ test('5) `roadmap --help` exits 0 and lists the command tree on stdout', () => {
   }
 })
 
-test('6) `roadmap audit` — a not-yet-implemented tree command exits 1 with the owning-phase note', () => {
-  // (gate/result/contract/phase landed in 1656; audit still lands in 1658 — retargeted here.)
+test('6) `roadmap debt` — a not-yet-implemented tree command exits 1 with the owning-phase note', () => {
+  // (gate/result/contract/phase landed in 1656; audit/measure landed in 1659; debt still lands in 1658.)
   const repo = newRepo()
   assert.equal(roadmap(repo, 'init', '--config').status, 0)
 
-  const res = roadmap(repo, 'audit')
+  const res = roadmap(repo, 'debt')
   assert.equal(res.status, 1, `not-yet-implemented is a usage error → exit 1; stderr:\n${res.stderr}`)
   assert.match(
     res.stderr,
