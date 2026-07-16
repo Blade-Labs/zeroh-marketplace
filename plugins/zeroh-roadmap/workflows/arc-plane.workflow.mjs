@@ -40,6 +40,7 @@ import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine } from '../cli/lib/beacon.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
+const BACKGROUND_RUN_MAX_MIN = 10 // mirror hooks/executor-result-guard.mjs — one 10-min rule
 
 /** Default `run` primitive: shell one `roadmap <cmd>` string to the bin, returning
  *  { stdout, stderr, exitCode } (never throws — the exit code IS the verdict). */
@@ -83,6 +84,28 @@ function disarmExecutor(worktree, phase) {
  *  means a detached run is alive — the STALLED probe uses this to KEEP WAITING, never halt. */
 function latestPhaseBeacon(worktree, phase) {
   return readBeaconLine(join(worktree, '.building', `${phase}-executor.jsonl`))
+}
+
+/**
+ * A background-run beacon that demonstrably proves external work is STILL ALIVE — the ONLY
+ * ground for suppressing a STALLED watch-wake halt (the design §N8/N9 contract, mirroring the
+ * Stop-hook's licensed-yield rule). It must be a `background-run` with a `log`, YOUNGER than
+ * the 10-min window, AND — when it records a pid — that pid must be live. A stale (>10 min) or
+ * dead-pid beacon is NOT proof of life, so the wake becomes the typed stalled halt.
+ */
+function backgroundRunAlive(b) {
+  if (!b || b.event !== 'background-run' || !b.log) return false
+  // readBeaconLine already parsed the age; b.ts is a number (ms), so never re-Date.parse it.
+  const ageMin = Number.isFinite(b.ageMin) ? b.ageMin : (Date.now() - b.ts) / 60000
+  if (!Number.isFinite(ageMin) || ageMin >= BACKGROUND_RUN_MAX_MIN) return false
+  if (b.pid != null) {
+    try {
+      process.kill(b.pid, 0)
+    } catch (e) {
+      if (!(e && e.code === 'EPERM')) return false // ESRCH ⇒ dead; EPERM ⇒ alive but not ours
+    }
+  }
+  return true
 }
 
 /** Read the phase's + arc's acceptanceCriteria + the arc designRefs via the typed bridge
@@ -201,13 +224,14 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
       })
       if (spawn.result !== undefined) break
       if (spawn.watchExit === 3) {
-        // STALLED — probe the beacon FIRST: a live background-run ⇒ external work is alive, keep
-        // waiting (never a false halt on a healthy 40-min capbuild).
+        // STALLED — probe the beacon FIRST: a demonstrably-alive background-run (fresh + live
+        // pid) ⇒ external work is alive, keep waiting (never a false halt on a healthy 40-min
+        // capbuild). A stale/dead-pid beacon is NOT proof of life → fall through to the halt.
         const b = latestPhaseBeacon(worktree, phase)
         // `continue` re-awaits the SAME still-running executor (the watchdog woke us, the
         // executor did not return) — so the once-built `prompt` is not re-sent and needs no
         // re-render; only a fresh spawn (a relaunch by the session after a halt) rebuilds it.
-        if (b && b.event === 'background-run' && b.log) continue
+        if (backgroundRunAlive(b)) continue
         disarmExecutor(worktree, phase)
         return buildHaltPayload('stalled', { phase, evidence: spawn.watchVerdict })
       }

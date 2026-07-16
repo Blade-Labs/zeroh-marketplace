@@ -38,7 +38,7 @@ export function readBeaconLine(path) {
   try {
     const last = JSON.parse(lines[lines.length - 1])
     const ts = Date.parse(last.ts)
-    return { ts, ageMin: (Date.now() - ts) / 60000, event: last.event, log: last.log ?? null }
+    return { ts, ageMin: (Date.now() - ts) / 60000, event: last.event, log: last.log ?? null, pid: last.pid ?? null }
   } catch {
     return null
   }

@@ -1,0 +1,188 @@
+#!/usr/bin/env node
+/**
+ * arc-next.test.mjs — the full `arc next` action vocabulary + kill-and-resume + the
+ * stalled-watch-wake fork (arc ROADCODE 1660.3). Locked decision 3 (files are the only
+ * truth): every resume case spawns a FRESH CLI process — statelessness IS the kill — and no
+ * test reads or writes a RESUME.md; the derivation is disk-only by construction. Titles carry
+ * N1-N9. Run: node --test test/fixture-consumer/arc-next.test.mjs
+ */
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { writeFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  makeFixtureRepo, runCli, writePhaseFile, writeArcFile, writePhaseRaw, commitAll, git,
+} from './harness.mjs'
+import arcPlaneWorkflow from '../../workflows/arc-plane.workflow.mjs'
+
+/** Build arc FX over the given member phase objects (+ optional acceptanceCriteria). */
+function arcRepo(members, { criteria = true, arcId = 'FX', extra = {} } = {}) {
+  const root = makeFixtureRepo()
+  writeArcFile(root, {
+    id: arcId, baseRef: 'develop', planes: [{ name: 'P', phases: members.map((m) => m.phase) }],
+    ...(criteria ? { acceptanceCriteria: [{ id: 'c1', job: 'the fixture arc job here', surfaces: ['plugin'], signal: 'observable signal here', tier: 'wired', bar: 'good enough to judge' }] } : {}),
+    ...extra,
+  })
+  for (const m of members) writePhaseFile(root, m)
+  commitAll(root, 'seed: FX arc + members')
+  return root
+}
+const next = (root, extraArgs = []) => runCli(root, ['arc', 'next', 'FX', '--json', ...extraArgs])
+
+// ── N1 — fresh arc → run-phase on the first member ──────────────────────────────────────
+test('N1 — a fresh fixture arc → action run-phase on the first member', () => {
+  const root = arcRepo([
+    { phase: 9101, status: 'backlog', arcId: 'FX', tasks: [{ id: '9101.1', done: false }] },
+    { phase: 9102, status: 'backlog', arcId: 'FX', tasks: [{ id: '9102.1', done: false }] },
+  ])
+  const r = next(root)
+  assert.equal(r.code, 0)
+  assert.equal(r.json.action, 'run-phase')
+  assert.equal(r.json.phase, 9101)
+})
+
+// ── N2 — mid-phase post-commit kill → resume-phase listing the committed task ────────────
+test('N2 — mid-phase post-commit kill → resume-phase with the committed task in resume.doneTasks', () => {
+  const root = arcRepo([
+    { phase: 9101, status: 'in-progress', arcId: 'FX', tasks: [{ id: '9101.1', done: true }, { id: '9101.2', done: false }] },
+    { phase: 9102, status: 'backlog', arcId: 'FX', tasks: [{ id: '9102.1', done: false }] },
+  ])
+  // a matching commit whose message carries the task id (verifyTaskCommit's --grep)
+  git(root, 'commit', '-q', '--allow-empty', '-m', 'feat: phase 9101 — 9101.1 landed')
+  const r = next(root) // FRESH process — statelessness is the kill
+  assert.equal(r.json.action, 'resume-phase')
+  assert.equal(r.json.phase, 9101)
+  assert.ok(r.json.resume.doneTasks.includes('9101.1'), `committed task listed: ${JSON.stringify(r.json.resume)}`)
+})
+
+// ── N3 — done:true with NO matching commit → unverifiedDoneFlags, still resume-phase ─────
+test('N3 — a done:true task with no matching commit → unverifiedDoneFlags + resume-phase scoping it', () => {
+  const root = arcRepo([
+    { phase: 9101, status: 'in-progress', arcId: 'FX', tasks: [{ id: '9101.1', done: true }, { id: '9101.2', done: false }] },
+  ])
+  // NO commit carries "9101.1" → the done flag is unverified.
+  const r = next(root)
+  assert.equal(r.json.action, 'resume-phase')
+  assert.ok(r.json.resume.unverifiedDoneFlags.includes('9101.1'), `unverified flag reported: ${JSON.stringify(r.json.resume)}`)
+  assert.ok(!r.json.resume.doneTasks.includes('9101.1'), 'an unverified flag is NOT counted as done')
+})
+
+// ── N4 — between-phase kill → run-phase on the next member (pure disk fast-forward) ──────
+test('N4 — member 1 done with executionResult → run-phase on member 2', () => {
+  const root = arcRepo([
+    { phase: 9101, status: 'done', arcId: 'FX', tasks: [{ id: '9101.1', done: true }], executionResult: { phase: 9101, status: 'done', gateRounds: 1, hardStops: [] } },
+    { phase: 9102, status: 'backlog', arcId: 'FX', tasks: [{ id: '9102.1', done: false }] },
+  ])
+  const r = next(root)
+  assert.equal(r.json.action, 'run-phase')
+  assert.equal(r.json.phase, 9102)
+})
+
+// ── N5 — all done → sweep, then validate, then land (derived in order from disk) ─────────
+test('N5 — the terminal chain: sweep → validate → land, each derived from disk state alone', () => {
+  const members = [
+    { phase: 9101, status: 'done', arcId: 'FX', tasks: [{ id: '9101.1', done: true }], executionResult: { phase: 9101, status: 'done', gateRounds: 1, hardStops: [] } },
+    { phase: 9102, status: 'done', arcId: 'FX', tasks: [{ id: '9102.1', done: true }], executionResult: { phase: 9102, status: 'done', gateRounds: 1, hardStops: [] } },
+  ]
+  // (a) sweep — a broken registry makes the debt census unable-to-count ⇒ not-confirmed-swept.
+  const sweepRoot = arcRepo(members)
+  writeFileSync(join(sweepRoot, 'lib', 'roadmap', 'registry.ts'), 'export async function discoverPhases(){ throw new Error("boom") }\nexport async function discoverArcs(){ return { arcs: [] } }\n')
+  commitAll(sweepRoot, 'chore: break the census registry')
+  assert.equal(next(sweepRoot).json.action, 'sweep', 'census unable-to-count ⇒ sweep')
+
+  // (b) validate — working (empty) census ⇒ swept; acceptanceCriteria present, no verdict.
+  const root = arcRepo(members)
+  assert.equal(next(root).json.action, 'validate', 'swept + criteria + no verdict ⇒ validate')
+
+  // (c) land — stamp the validate verdict PASS → the derivation advances to land.
+  assert.equal(runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS']).code, 0)
+  assert.equal(next(root).json.action, 'land', 'swept + PASS verdict ⇒ land')
+})
+
+// ── N6 — landed arc → complete, idempotent no-op with an identical clean report ──────────
+test('N6 — a landed arc → complete, invoked TWICE with deep-equal JSON and exit 0 both times', () => {
+  const root = arcRepo([
+    { phase: 9101, status: 'done', arcId: 'FX', tasks: [{ id: '9101.1', done: true }], executionResult: { phase: 9101, status: 'done', gateRounds: 1, hardStops: [] } },
+  ], { criteria: false })
+  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId: 'FX', outcome: 'shipped' }))
+  const a = next(root)
+  const b = next(root)
+  assert.equal(a.code, 0)
+  assert.equal(b.code, 0)
+  assert.equal(a.json.action, 'complete')
+  assert.deepEqual(a.json, b.json, 'the completed-arc report is an idempotent no-op (resume-by-rederive)')
+})
+
+// ── N7 — blocked with the matching reason (all three reasons in the vocabulary) ──────────
+test('N7 — blocked: unmet dep, foreign lane, and a malformed member file', () => {
+  // (a) unmet cross-phase dependency
+  const depRoot = arcRepo([{ phase: 9101, status: 'backlog', arcId: 'FX', dependsOn: [8888], tasks: [{ id: '9101.1', done: false }] }])
+  let r = runCli(depRoot, ['arc', 'next', 'FX'])
+  assert.equal(r.code, 2)
+  assert.match(r.stdout, /"action": "blocked"/)
+  assert.match(r.stdout, /dependenc/i, 'names the unmet-dependency reason')
+
+  // (b) foreign lane — a sidecar armed to a DIFFERENT worktree
+  const foreignRoot = arcRepo([{ phase: 9101, status: 'backlog', arcId: 'FX', tasks: [{ id: '9101.1', done: false }] }])
+  mkdirSync(join(foreignRoot, 'roadmap', 'arcs', '.building'), { recursive: true })
+  writeFileSync(join(foreignRoot, 'roadmap', 'arcs', '.building', 'FX.json'), JSON.stringify({ arcId: 'FX', worktree: '/some/other/tree' }))
+  r = runCli(foreignRoot, ['arc', 'next', 'FX'])
+  assert.equal(r.code, 2)
+  assert.match(r.stdout, /foreign lane/, 'names the foreign lane')
+
+  // (c) malformed member file (truncated export, no status:) — a contract exit, never a stack trace
+  const badRoot = arcRepo([{ phase: 9101, status: 'backlog', arcId: 'FX', tasks: [{ id: '9101.1', done: false }] }])
+  writePhaseRaw(badRoot, 9101, 'export default { phase: 9101,')
+  commitAll(badRoot, 'chore: corrupt the member file')
+  r = runCli(badRoot, ['arc', 'next', 'FX'])
+  assert.equal(r.code, 2)
+  assert.match(r.stdout, /malformed/, 'names the malformed FILE reason')
+})
+
+// ── N8/N9 — the stalled-watch-wake fork (the workflow LOOP's reaction is under test) ─────
+/** Build a real fixture repo for a mid-band member + drive arcPlaneWorkflow with a canned
+ *  `run` (the CLI decisions) and a two-step `agent` (the watch wake, then a terminal). */
+function driveWorkflow(root, phase, { agentReturns }) {
+  const fakeRun = (cmd) => {
+    if (cmd.includes('arc next')) return { stdout: JSON.stringify({ arc: 'FX', action: 'run-phase', phase, band: 'mid', plane: 'P', done: [], remaining: [], gates: {} }), stderr: '', exitCode: 0 }
+    if (cmd.includes('gate plan')) return { stdout: JSON.stringify({ phase, slots: [], testScope: { effective: 'relevant' }, reviewScope: { effective: 'full' }, agents: {} }), stderr: '', exitCode: 0 }
+    return { stdout: '{}', stderr: '', exitCode: 0 } // config check, arm, contract show
+  }
+  let calls = 0
+  const fakeAgent = async () => agentReturns[Math.min(calls++, agentReturns.length - 1)]
+  return { promise: arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, { run: fakeRun, agent: fakeAgent, cwd: root }), calls: () => calls }
+}
+function beacon(root, phase, event) {
+  mkdirSync(join(root, '.building'), { recursive: true })
+  writeFileSync(join(root, '.building', `${phase}-executor.jsonl`), JSON.stringify(event) + '\n')
+}
+
+test('N8 — a fresh live-pid background-run beacon suppresses the stalled halt on a watch exit 3 (keep-waiting)', async () => {
+  const root = arcRepo([{ phase: 9801, status: 'in-progress', arcId: 'FX', tasks: [{ id: '9801.1', done: false }] }])
+  beacon(root, 9801, { ts: new Date().toISOString(), phase: 9801, event: 'background-run', log: '.test-logs/run.tap', pid: process.pid })
+  const d = driveWorkflow(root, 9801, { agentReturns: [
+    { watchExit: 3, watchVerdict: { verdict: 'STALLED' } }, // wake 1: keep-waiting (fresh, live)
+    { watchExit: 4, watchVerdict: { verdict: 'EXITED' } },  // wake 2: a real exit → terminal
+  ] })
+  const result = await d.promise
+  assert.notEqual(result.halt, 'stalled', 'the fresh live beacon must SUPPRESS the stalled halt')
+  assert.equal(result.halt, 'exited', 'the loop kept waiting, then took the real EXITED terminal')
+  assert.equal(d.calls(), 2, 'the executor was re-awaited (keep-waiting branch taken)')
+})
+
+test('N9 — a stale or absent beacon on a watch exit 3 → the TYPED stalled halt payload', async () => {
+  // (a) absent beacon
+  const absent = arcRepo([{ phase: 9801, status: 'in-progress', arcId: 'FX', tasks: [{ id: '9801.1', done: false }] }])
+  let result = await driveWorkflow(absent, 9801, { agentReturns: [{ watchExit: 3, watchVerdict: { verdict: 'STALLED' } }] }).promise
+  assert.equal(result.halt, 'stalled', 'no beacon ⇒ typed stalled halt')
+  assert.equal(result.phase, 9801)
+  assert.ok(result.evidence, 'the halt carries the watch verdict evidence verbatim')
+
+  // (b) STALE beacon (>10 min, live pid) — freshness gate fails ⇒ still a stalled halt
+  const stale = arcRepo([{ phase: 9801, status: 'in-progress', arcId: 'FX', tasks: [{ id: '9801.1', done: false }] }])
+  beacon(stale, 9801, { ts: new Date(Date.now() - 20 * 60000).toISOString(), phase: 9801, event: 'background-run', log: '.test-logs/run.tap', pid: process.pid })
+  const d = driveWorkflow(stale, 9801, { agentReturns: [{ watchExit: 3, watchVerdict: { verdict: 'STALLED' } }] })
+  result = await d.promise
+  assert.equal(result.halt, 'stalled', 'a >10-min beacon is not proof of life ⇒ stalled halt')
+  assert.equal(d.calls(), 1, 'no keep-waiting on a stale beacon')
+})
