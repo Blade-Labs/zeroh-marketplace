@@ -159,15 +159,16 @@ test('5) `roadmap --help` exits 0 and lists the command tree on stdout', () => {
   }
 })
 
-test('6) `roadmap gate plan 1` — not-yet-implemented tree command exits 1 with the owning-phase note', () => {
+test('6) `roadmap audit` — a not-yet-implemented tree command exits 1 with the owning-phase note', () => {
+  // (gate/result/contract/phase landed in 1656; audit still lands in 1658 — retargeted here.)
   const repo = newRepo()
   assert.equal(roadmap(repo, 'init', '--config').status, 0)
 
-  const res = roadmap(repo, 'gate', 'plan', '1')
+  const res = roadmap(repo, 'audit')
   assert.equal(res.status, 1, `not-yet-implemented is a usage error → exit 1; stderr:\n${res.stderr}`)
   assert.match(
     res.stderr,
-    /not yet implemented .*1656/,
+    /not yet implemented .*1658/,
     `stderr must carry the owning-phase not-implemented line; got:\n${res.stderr}`,
   )
 })
