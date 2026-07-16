@@ -89,7 +89,11 @@ export function runDebtCensus(repoRoot, arcId, { exec = defaultExec } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'roadmap-census-'))
   const outFile = join(tmp, 'census.json')
   try {
-    const r = exec('node', ['--import', 'tsx', censusScript, repoRoot, '--json', outFile], { cwd: repoRoot })
+    // `npx --no-install tsx` resolves tsx from the consumer's local node_modules first,
+    // then the global install (the proven tsx-bridge resolution) — so census runs against
+    // a production consumer AND a bare scratch fixture. debt-census.mts is a CLI invoked
+    // by argv, never imported (assumption A5): plugin carries no second census parser.
+    const r = exec('npx', ['--no-install', 'tsx', censusScript, repoRoot, '--json', outFile], { cwd: repoRoot })
     if (r.status !== 0 || !existsSync(outFile)) return null
     const data = JSON.parse(readFileSync(outFile, 'utf8'))
     const entries = (data.entries ?? []).filter((e) => String(e.arcId) === String(arcId))

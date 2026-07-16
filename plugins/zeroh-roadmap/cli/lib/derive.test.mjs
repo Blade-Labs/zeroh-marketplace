@@ -60,7 +60,7 @@ function writeArcSummary(root, arcId, outcome) {
 function makeExec(entries, recorder) {
   return (file, args, opts) => {
     recorder?.push({ file, args })
-    if (file === 'node' && args.some((a) => String(a).endsWith('debt-census.mts'))) {
+    if (args.some((a) => String(a).endsWith('debt-census.mts'))) {
       const out = args[args.indexOf('--json') + 1]
       writeFileSync(out, JSON.stringify({ entries }))
       return { status: 0, stdout: '', stderr: '' }

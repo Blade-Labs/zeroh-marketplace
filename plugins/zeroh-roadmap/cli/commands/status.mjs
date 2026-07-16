@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { scanProgress } from '../lib/phasescan.mjs'
+import { arcProgress } from '../lib/derive.mjs'
 import { lastEvent, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN, WORK_EVENTS } from '../lib/beacon.mjs'
 
 const git = (args, cwd) => {
@@ -64,7 +65,9 @@ function derive(root) {
     }
   }
 
-  // 4) Per-arc phase progress (worktree-preferred), via the shared regex tier.
+  // 4) Per-arc phase progress (worktree-preferred). The projection lives in derive.mjs
+  //    (arcProgress) so status and `arc next` share ONE lane-state reader (singleSeam 2);
+  //    scanProgress here supplies only the in-progress map for the IN-FLIGHT rows.
   const local = scanProgress(join(root, 'phases'))
   const inProgress = local.inProgress
   const progressTxt = (id, worktree) => {
@@ -72,9 +75,9 @@ function derive(root) {
       worktree && existsSync(join(worktree, 'roadmap', 'phases'))
         ? join(worktree, 'roadmap', 'phases')
         : join(root, 'phases')
-    const p = scanProgress(dir).progress.get(id)
+    const p = arcProgress(dir, id)
     if (!p) return ''
-    const next = p.done === p.total ? 'all phases done → sweep/validate/land' : `next: ${p.next.slice(0, 3).join(', ')}`
+    const next = p.allDone ? 'all phases done → sweep/validate/land' : `next: ${p.next.join(', ')}`
     return `${p.done}/${p.total} done${p.inprog ? ` (${p.inprog} in-progress)` : ''} · ${next}`
   }
 
