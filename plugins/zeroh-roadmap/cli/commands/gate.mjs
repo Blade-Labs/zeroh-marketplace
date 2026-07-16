@@ -123,11 +123,14 @@ function changedLinesFor(cwd, base, files) {
   return total
 }
 
+/** The colocated-sibling extensions the purity predicate and the scoped file selection
+ *  must agree on — ONE list so the two lookups can never drift apart. */
+const COLOCATED_TEST_EXTS = ['.test.ts', '.test.tsx', '.test.js', '.test.mjs', '.test.cjs', '.itest.ts', '.itest.mjs', '.spec.ts']
+
 /** A precomputed Set of exec paths that are a test or have a colocated sibling test on
  *  disk (the ONLY on-disk lookup — passed to ladder.mjs so it stays pure). */
 function colocatedTestSet(toplevel, paths) {
   const set = new Set()
-  const cands = ['.test.ts', '.test.tsx', '.test.js', '.test.mjs', '.test.cjs', '.itest.ts', '.itest.mjs', '.spec.ts']
   for (const p of paths) {
     if (isTestFile(p)) {
       set.add(p)
@@ -135,7 +138,7 @@ function colocatedTestSet(toplevel, paths) {
     }
     if (!isExecutable(p)) continue
     const stem = p.replace(/\.[^./]+$/, '')
-    if (cands.some((ext) => existsSync(join(toplevel, stem + ext)))) set.add(p)
+    if (COLOCATED_TEST_EXTS.some((ext) => existsSync(join(toplevel, stem + ext)))) set.add(p)
   }
   return set
 }
@@ -144,7 +147,6 @@ function colocatedTestSet(toplevel, paths) {
  *  colocated siblings of changed exec files (relative paths). */
 function selectTestFiles(toplevel, paths) {
   const out = []
-  const cands = ['.test.ts', '.test.tsx', '.test.js', '.test.mjs', '.test.cjs', '.itest.ts', '.itest.mjs', '.spec.ts']
   for (const p of paths) {
     if (isTestFile(p)) {
       out.push(p)
@@ -152,7 +154,7 @@ function selectTestFiles(toplevel, paths) {
     }
     if (!isExecutable(p)) continue
     const stem = p.replace(/\.[^./]+$/, '')
-    for (const ext of cands) if (existsSync(join(toplevel, stem + ext))) out.push(stem + ext)
+    for (const ext of COLOCATED_TEST_EXTS) if (existsSync(join(toplevel, stem + ext))) out.push(stem + ext)
   }
   return [...new Set(out)]
 }
@@ -294,7 +296,6 @@ function parseArgs(argv) {
     else if (a === '--sequence-member') opts.sequenceMember = true
     else if (a === '--json') opts.json = true
     else if (a === '--slots') opts.slots = argv[++i]
-    else if (a === '--report') opts.report = argv[++i]
     else if (a === '--record-round') opts.recordRound = argv[++i]
     else if (a === '--verify-complete') opts.verifyComplete = true
     else if (!a.startsWith('--')) positional.push(a)
@@ -307,7 +308,7 @@ export default async function run(argv) {
   const sub = argv[0]
   if (sub === '--help' || sub === '-h' || !sub) {
     process.stdout.write('roadmap gate plan <phase> [--base <sha>] [--mode inline|arc] [--sequence-member] [--json]\n')
-    process.stdout.write('roadmap gate run  <phase> [--base <sha>] [--slots a,b] [--report <path>] [--record-round <json>] [--verify-complete] [--json]\n')
+    process.stdout.write('roadmap gate run  <phase> [--base <sha>] [--slots a,b] [--record-round <json>] [--verify-complete] [--json]\n')
     return sub ? 0 : 1
   }
   const { opts, positional } = parseArgs(argv.slice(1))
