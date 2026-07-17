@@ -121,6 +121,23 @@ test('fresh background-run beacon with a log → ALLOW (the licensed yield)', ()
   assert.equal(r.stdout.trim(), '', 'fresh background-run must be allowed')
 })
 
+test('fresh background-run beacon with an EPOCH-MS ts → ALLOW (the lib accepts numeric ts; the hook must too)', () => {
+  const root = makeWorktree()
+  const t = writeTranscript(root, 'Backgrounded the full suite; Monitor armed. See log.')
+  writeBeacon(root, 1670, { ts: Date.now(), phase: 1670, event: 'background-run', log: '.test-logs/run.tap' })
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.stdout.trim(), '', 'a numeric-ts fresh background-run must be allowed')
+})
+
+test('Stop WITHOUT .arc-mode (executor-band orchestrator, arm file present) → WARN not block', () => {
+  const root = makeWorktree()
+  const t = writeTranscript(root, 'Waiting on the phase-1670 executor; will act on its return.')
+  writeFileSync(join(root, '.building', '1670-executor.armed'), '')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'Stop' }, {})
+  assert.equal(r.stdout.trim(), '', 'a main-session Stop must never hard-block')
+  assert.match(r.stderr, /advisory: not blocking a Stop/)
+})
+
 test('STALE background-run beacon (>10 min) → BLOCK', () => {
   const root = makeWorktree()
   const t = writeTranscript(root, 'Still waiting on the background run.')

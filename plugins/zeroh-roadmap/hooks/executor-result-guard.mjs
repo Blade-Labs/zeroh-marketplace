@@ -246,7 +246,10 @@ function main() {
   // (3) latest beacon event is a fresh background-run with a log field.
   const beacon = lastBeaconEvent(join(worktree, '.building', `${phase}-executor.jsonl`))
   if (beacon && beacon.event === 'background-run' && beacon.log) {
-    const ageMin = (Date.now() - Date.parse(beacon.ts)) / 60000
+    // ts may be an ISO string OR epoch ms — the lib's backgroundRunAlive accepts both, so
+    // the hook must too (a NaN here would refuse to license a legitimate yield).
+    const ts = typeof beacon.ts === 'number' ? beacon.ts : Date.parse(beacon.ts)
+    const ageMin = (Date.now() - ts) / 60000
     if (Number.isFinite(ageMin) && ageMin < BACKGROUND_RUN_MAX_MIN) return 0
   }
 
@@ -258,8 +261,11 @@ function main() {
   const taskId = nextOpenTask(phaseSrc)
   const reason = blockReason(phase, taskId)
 
-  // Stop softening: an inline arc-mode session (roadmap/.arc-mode present) WARNS, never blocks.
-  if (payload.hook_event_name === 'Stop' && existsSync(join(worktree, 'roadmap', '.arc-mode'))) {
+  // Stop softening: a MAIN-session Stop NEVER hard-blocks — the human may legitimately
+  // interrupt their own session (design §3.4), and an orchestrator waiting on an
+  // executor-band subagent ends turns routinely with the lane's arm-file present. Hard
+  // enforcement is SubagentStop's (the executor's own turn end).
+  if (payload.hook_event_name === 'Stop') {
     const arcId = firstArcModeArc(worktree)
     process.stderr.write(
       `[executor-result-guard] phase ${phase} looks open — re-enter with \`roadmap arc next${arcId ? ' ' + arcId : ''}\` (advisory: not blocking a Stop)\n`,
