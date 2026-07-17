@@ -27,7 +27,10 @@ workflow engine cannot host its imports).
 ## Run it
 
 1. `roadmap arm <id>` — claim the lane (refuses a lane a sibling already holds); `roadmap
-   status` shows live lanes.
+   status` shows live lanes. Then TaskCreate ONE task per member phase (`Phase <N> — <plane>`)
+   so the user watches the arc tick down: set it in_progress at phase start, completed at
+   phase done. (An executor-band phase's per-task tier lives in the subagent — this arc tier
+   is the main session's only progress surface.)
 2. **The loop** (repeat until the plane's phases are exhausted):
    1. `roadmap arc next <id> --json` → the ONE next action. `complete` → done. `blocked` /
       `sweep` / `validate` / `land` → the matching branch below. `run-phase`/`resume-phase` →
