@@ -74,9 +74,13 @@ matching 1369.
 `roadmap gate plan <N>` prints the resolved cell (slots, scopes, floors, agent chain) for the
 `kind`: mockup = lint+types; logic = Round 0 quality pass → Rounds 1..N correctness loop (cap 5);
 hardening adds the closure integration rerun; release adds the e2e slot. Run `roadmap gate run
-<N>` for the mechanical half, then the agent chain the plan names. A docs-only diff skips the
-quality pass. Under arc-mode the gate runs only phase-relevant SCOPED tests — the full suite
-defers to the arc end.
+<N>` for the mechanical half, then the agent chain the plan names. **Record EACH agent round
+into the gate report** as it finishes: `roadmap gate run <N> --record-round
+'{"round":R,"agent":"code-reviewer","verdict":"clean","summary":"…"}'` (round 0 = the
+quality pass, rounds ≥1 = each correctness loop). `--verify-complete` (below) REFUSES a done
+flip whose latest report carries no recorded agent round — recording is not optional. A
+docs-only diff skips the quality pass. Under arc-mode the gate runs only phase-relevant SCOPED
+tests — the full suite defers to the arc end.
 
 **Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
 confirmed design is a CONTRACT. Apply the canonical `skills/validate-arc/references/parity-rubric.md`
