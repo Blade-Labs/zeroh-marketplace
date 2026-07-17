@@ -1,17 +1,18 @@
 /**
  * landing — THE landing implementation (arc ROADCODE singleSeam 4). `roadmap arc land`
  * is its only caller; no prose alternative survives in any skill. This module encodes
- * do-arc Step 8's landing LAW (SKILL.md:290-326) as CODE: the seven-blocker table, the
- * openFollowups computation, and the precondition list — exactly the transitions
- * "nothing verifies" today, where each historical breach got a paragraph, not a check.
+ * do-arc Step 8's landing LAW as CODE: the eight-blocker table, the openFollowups
+ * computation, and the precondition list — exactly the transitions "nothing verifies"
+ * today, where each historical breach got a paragraph, not a check.
  *
  * HALF 1 (1657.4 — this file's first section): the DECISIONS — gatherLandingState reads
- * persisted state only; BLOCKERS is the seven-entry data table; evaluateBlockers is one
+ * persisted state only; BLOCKERS is the eight-entry data table; evaluateBlockers is one
  * pure function. HALF 2 (1657.5): the git ACTS — runArcEndSuite, landArc, landCommand,
- * the structurally-impossible forbidden push.
+ * the structurally-impossible forbidden push. Blocker 8 (arc base stale beyond ceiling)
+ * is MECHRATCHET rank 6 — the stale-base/overlap refusal.
  *
- * "The blocker list (exactly seven — autonomous landing proceeds iff NONE hold)" and
- * "An item NOT on this list is NOT a blocker" are the ported law (do-arc SKILL.md:313).
+ * "The blocker list (exactly eight — autonomous landing proceeds iff NONE hold)" and
+ * "An item NOT on this list is NOT a blocker" are the ported law (do-arc Step 8).
  */
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -85,11 +86,30 @@ export function gatherLandingState({ repoRoot, arcId, config, exec = defaultExec
   // default (false), the 1657.5 mechanics fixtures exercise the true positives over real refs.
   let conflict = false
   let baseRefMoved = false
+  // Staleness probes (blocker 8, MECHRATCHET rank 6): commits-behind + both-sides-changed
+  // overlap files. Isolated model only, isolated (read-only) git, conservative on any probe
+  // failure (behind 0 / overlap [] — never a guessed refusal).
+  let baseBehindCount = 0
+  let overlapFiles = []
   if (primaryCheckout && arcBranch && baseRef && integrationModel === 'isolated') {
     const anc = exec('git', ['-C', primaryCheckout, 'merge-base', '--is-ancestor', baseRef, arcBranch])
     if (anc.status === 1) baseRefMoved = true // 1 = not an ancestor (baseRef moved); other codes = probe unavailable
     const mt = exec('git', ['-C', primaryCheckout, 'merge-tree', '--write-tree', baseRef, arcBranch])
     if (mt.status === 1) conflict = true // 1 = conflicts; 0 = clean; >1 = probe unavailable
+
+    const mb = exec('git', ['-C', primaryCheckout, 'merge-base', baseRef, arcBranch])
+    const mergeBase = mb.status === 0 ? mb.stdout.trim() : ''
+    const rl = exec('git', ['-C', primaryCheckout, 'rev-list', '--count', `${arcBranch}..${baseRef}`])
+    if (rl.status === 0) {
+      const n = parseInt(rl.stdout.trim(), 10)
+      if (Number.isFinite(n)) baseBehindCount = n
+    }
+    if (mergeBase) {
+      const toSet = (r) => new Set((r.status === 0 ? r.stdout : '').split('\n').map((l) => l.trim()).filter(Boolean))
+      const arcSide = toSet(exec('git', ['-C', primaryCheckout, 'diff', '--name-only', `${mergeBase}..${arcBranch}`]))
+      const baseSide = toSet(exec('git', ['-C', primaryCheckout, 'diff', '--name-only', `${mergeBase}..${baseRef}`]))
+      overlapFiles = [...baseSide].filter((f) => arcSide.has(f)).sort()
+    }
   }
 
   return {
@@ -110,16 +130,20 @@ export function gatherLandingState({ repoRoot, arcId, config, exec = defaultExec
     integrationModel,
     conflict,
     baseRefMoved,
+    baseBehindCount,
+    overlapFiles,
+    staleAcknowledged: false, // set true by --force-stale in landCommand before evaluate (blocker 8 only)
     suiteGreen: null, // set by the caller after runArcEndSuite (1657.5)
     reconciledGreen: false, // set true after a post-reconciliation green suite (1657.5)
   }
 }
 
 /**
- * THE seven-blocker table (do-arc Step 8:313-321), encoded as DATA + one check per row.
- * Each check(state) → null (clear) | reason string. Exactly seven — an item NOT on this
+ * THE eight-blocker table (do-arc Step 8), encoded as DATA + one check per row.
+ * Each check(state) → null (clear) | reason string. Exactly eight — an item NOT on this
  * list is NOT a blocker; the length is pinned by the test. maxOpenFollowups defaults to 0
- * (today's fail-safe) when no mergePolicy is configured.
+ * (today's fail-safe) when no mergePolicy is configured; staleBaseCeiling defaults to 100
+ * (blocker 8, MECHRATCHET rank 6).
  */
 export const BLOCKERS = [
   {
@@ -182,6 +206,19 @@ export const BLOCKERS = [
     id: 7,
     name: 'baseRef moved with no post-reconciliation green suite',
     check: (s) => (s.baseRefMoved && !s.reconciledGreen ? `baseRef ${s.baseRef} moved under the arc with no post-reconciliation green suite` : null),
+  },
+  {
+    id: 8,
+    name: 'arc base stale beyond ceiling (unacknowledged)',
+    check: (s) => {
+      const ceiling = s.mergePolicy?.staleBaseCeiling ?? 100
+      if (s.staleAcknowledged) return null // --force-stale clears blocker 8 alone (6/7 still hold on their own terms)
+      if ((s.baseBehindCount ?? 0) <= ceiling) return null
+      const overlap = (s.overlapFiles ?? []).length
+        ? `overlapping files: ${s.overlapFiles.join(', ')}`
+        : 'no overlapping files'
+      return `arc base is ${s.baseBehindCount} commits behind ${s.baseRef} (ceiling ${ceiling}) — ${overlap}; reconcile then acknowledge with --force-stale`
+    },
   },
 ]
 
@@ -375,13 +412,13 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
   return { outcome: 'landed', exitCode: 0, record, pushed, pushRefused, summaryPath, summary }
 }
 
-/** roadmap arc land <arcId> [--push|--no-push|--hold] [--json] — the §2 land command. */
+/** roadmap arc land <arcId> [--push|--no-push|--hold|--force-stale] [--json] — the §2 land command. */
 export async function landCommand(rest) {
   const json = rest.includes('--json')
-  const flags = { push: rest.includes('--push'), noPush: rest.includes('--no-push'), hold: rest.includes('--hold') }
+  const flags = { push: rest.includes('--push'), noPush: rest.includes('--no-push'), hold: rest.includes('--hold'), forceStale: rest.includes('--force-stale') }
   const arcId = rest.find((a) => !a.startsWith('--'))
   if (!arcId) {
-    process.stderr.write('usage: roadmap arc land <arcId> [--push|--no-push|--hold] [--json]\n')
+    process.stderr.write('usage: roadmap arc land <arcId> [--push|--no-push|--hold|--force-stale] [--json]\n')
     return 1
   }
   let toplevel, cfg
@@ -412,13 +449,19 @@ export async function landCommand(rest) {
     return 3
   }
 
-  // Arc-end suite → suiteGreen → blockers.
+  // Arc-end suite → suiteGreen → blockers. --force-stale is an ACKNOWLEDGMENT (blocker 8
+  // alone), never a bypass of 6/7. The overlap list is the mandatory reconciliation output
+  // whenever the base is behind — emitted under --force-stale too (arc honesty rail 3).
+  if (flags.forceStale) state.staleAcknowledged = true
+  const staleBase = state.baseBehindCount > 0
+    ? { behind: state.baseBehindCount, ceiling: mp.staleBaseCeiling ?? 100, overlapFiles: state.overlapFiles }
+    : null
   const includeE2e = state.members.some((m) => m.kind === 'release')
   const suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e })
   state.suiteGreen = suite.suiteGreen
   const held = evaluateBlockers(state)
   if (held.length) {
-    emit({ action: 'blocked', arcId, held, suite })
+    emit({ action: 'blocked', arcId, held, suite, ...(staleBase ? { staleBase } : {}) })
     return 2
   }
 
@@ -432,6 +475,6 @@ export async function landCommand(rest) {
     }
     throw e
   }
-  emit({ action: res.outcome, arcId, ...res, suite })
+  emit({ action: res.outcome, arcId, ...res, suite, ...(staleBase ? { staleBase } : {}) })
   return res.exitCode
 }

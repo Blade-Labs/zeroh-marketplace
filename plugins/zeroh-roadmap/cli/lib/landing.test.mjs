@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * landing.test.mjs — the DECISION half of cli/lib/landing.mjs (arc ROADCODE 1657.4):
- * the seven-blocker table (each blocker individually provoked + an all-clear fixture,
- * BLOCKERS.length pinned at exactly 7), the openFollowups arithmetic over the wrapped
+ * the eight-blocker table (each blocker individually provoked + an all-clear fixture,
+ * BLOCKERS.length pinned at exactly 8, blocker 8 the MECHRATCHET rank-6 stale-base gate),
+ * the openFollowups arithmetic over the wrapped
  * census (planned counted, operator exempt+reported, census-failure ⇒ null ⇒ hold),
  * hardStop-vs-descopes matching, and the validate-artifact absent-with-criteria rule.
  * Run: node --test cli/lib/landing.test.mjs
@@ -58,13 +59,16 @@ const clear = () => ({
   baseRef: 'develop',
   conflict: false,
   baseRefMoved: false,
+  baseBehindCount: 0,
+  overlapFiles: [],
+  staleAcknowledged: false,
   suiteGreen: true,
   reconciledGreen: false,
 })
 const ids = (held) => held.map((h) => h.id).sort((a, b) => a - b)
 
-test('BLOCKERS is exactly seven; an all-clear state holds none', () => {
-  assert.equal(BLOCKERS.length, 7)
+test('BLOCKERS is exactly eight; an all-clear state holds none', () => {
+  assert.equal(BLOCKERS.length, 8)
   assert.deepEqual(evaluateBlockers(clear()), [])
 })
 
@@ -118,6 +122,31 @@ test('blocker 7 — baseRef moved with no reconciliation; a green reconciliation
   assert.deepEqual(ids(evaluateBlockers(s)), [7])
   s.reconciledGreen = true
   assert.deepEqual(evaluateBlockers(s), [])
+})
+
+test('blocker 8 — behind beyond the default ceiling holds; the reason names count, ceiling AND overlap', () => {
+  const s = clear(); s.baseBehindCount = 101; s.overlapFiles = ['src/foo.ts', 'src/bar.ts']
+  const held = evaluateBlockers(s)
+  assert.deepEqual(ids(held), [8])
+  const reason = held.find((h) => h.id === 8).reason
+  assert.match(reason, /\b101\b/, 'names the behind-count')
+  assert.match(reason, /\b100\b/, 'names the default ceiling')
+  assert.match(reason, /src\/foo\.ts/, 'names the overlapping files')
+  assert.match(reason, /src\/bar\.ts/, 'names every overlapping file')
+})
+
+test('blocker 8 — --force-stale acknowledgment clears it; behind AT the ceiling never held', () => {
+  const ack = clear(); ack.baseBehindCount = 101; ack.staleAcknowledged = true
+  assert.deepEqual(evaluateBlockers(ack), [], 'acknowledgment clears blocker 8 alone')
+  const atCeiling = clear(); atCeiling.baseBehindCount = 100
+  assert.deepEqual(evaluateBlockers(atCeiling), [], 'behind == ceiling is not over')
+})
+
+test('blocker 8 — an explicit low ceiling holds one commit over it; no-overlap reason is honest', () => {
+  const s = clear(); s.mergePolicy = { maxOpenFollowups: 0, staleBaseCeiling: 5 }; s.baseBehindCount = 6; s.overlapFiles = []
+  const held = evaluateBlockers(s)
+  assert.deepEqual(ids(held), [8])
+  assert.match(held.find((h) => h.id === 8).reason, /no overlapping files/, 'honest when the sets do not intersect')
 })
 
 test('gatherLandingState — openFollowups = OPEN + OPEN-planned; OPEN-operator exempt but reported', () => {

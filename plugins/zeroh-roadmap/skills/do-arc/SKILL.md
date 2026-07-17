@@ -86,6 +86,11 @@ workflow engine cannot host its imports).
    consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user · 2 = blocker; surface the
    blocker JSON on any non-zero exit. `baseRef → master` is NEVER part of landing — a release
    is a held human act. A user instruction to review-before-merge always overrides autonomy.
+   A stale base is its own blocker: an arc more than `mergePolicy.staleBaseCeiling` commits
+   (default 100) behind `baseRef` is refused (exit 2) with the both-sides-changed overlap
+   file list as the mandatory reconciliation output; `--force-stale` ACKNOWLEDGES it (clears
+   that blocker alone, never a conflict) after you have read and reconciled that list — which
+   is still emitted under the acknowledgment.
 
 ## Pause & resume
 
