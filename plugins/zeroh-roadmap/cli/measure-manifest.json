@@ -8,6 +8,7 @@
         { "path": "skills/do-arc/SKILL.md", "why": "the orchestration skill invoked by /do-arc <id>" },
         { "path": "skills/do-phase/SKILL.md", "why": "do-arc:40 — inline / inline-supervised bands run do-phase in the main session (arc-mode worst case)" },
         { "path": "skills/arc-sweep/SKILL.md", "why": "do-arc:60 — sweep → run the arc-sweep skill in-session" },
+        { "path": "skills/release-sweep/SKILL.md", "why": "arc-sweep:18 — 'Read skills/release-sweep/SKILL.md FIRST' (the debt vocabulary) — a genuine in-session load on the sweep leg" },
         { "path": "skills/validate-arc/SKILL.md", "why": "do-arc:65 — validate → run validate-arc <id> in-session" },
         { "path": "skills/validate-arc/references/driving-tiers.md", "why": "validate-arc:47 — read references/driving-tiers.md for the tier vocabulary" }
       ]
