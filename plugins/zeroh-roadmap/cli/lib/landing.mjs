@@ -35,6 +35,11 @@ export class LandingError extends Error {
 const arcFilePath = (repoRoot, arcId) => join(repoRoot, 'roadmap', 'arcs', `${arcId}.arc.ts`)
 const phaseFilePath = (repoRoot, n) => join(repoRoot, 'roadmap', 'phases', `phase-${n}.phase.ts`)
 
+// Use-site default for mergePolicy.staleBaseCeiling (blocker 8, MECHRATCHET rank 6). Applied
+// wherever the ceiling is read so the ENFORCED ceiling and the emitted reconciliation ceiling
+// can never drift apart. Not defaulted in the schema — every existing consumer config stays valid.
+const DEFAULT_STALE_BASE_CEILING = 100
+
 /** Strict typed read (tsx absent ⇒ loud) — a landing precondition must never guess. */
 function typedRead(path, repoRoot) {
   if (!existsSync(path)) throw new LandingError('load', [`roadmap: no file at ${path}`])
@@ -211,7 +216,7 @@ export const BLOCKERS = [
     id: 8,
     name: 'arc base stale beyond ceiling (unacknowledged)',
     check: (s) => {
-      const ceiling = s.mergePolicy?.staleBaseCeiling ?? 100
+      const ceiling = s.mergePolicy?.staleBaseCeiling ?? DEFAULT_STALE_BASE_CEILING
       if (s.staleAcknowledged) return null // --force-stale clears blocker 8 alone (6/7 still hold on their own terms)
       if ((s.baseBehindCount ?? 0) <= ceiling) return null
       const overlap = (s.overlapFiles ?? []).length
@@ -454,7 +459,7 @@ export async function landCommand(rest) {
   // whenever the base is behind — emitted under --force-stale too (arc honesty rail 3).
   if (flags.forceStale) state.staleAcknowledged = true
   const staleBase = state.baseBehindCount > 0
-    ? { behind: state.baseBehindCount, ceiling: mp.staleBaseCeiling ?? 100, overlapFiles: state.overlapFiles }
+    ? { behind: state.baseBehindCount, ceiling: mp.staleBaseCeiling ?? DEFAULT_STALE_BASE_CEILING, overlapFiles: state.overlapFiles }
     : null
   const includeE2e = state.members.some((m) => m.kind === 'release')
   const suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e })
