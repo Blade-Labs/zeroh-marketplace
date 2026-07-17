@@ -201,6 +201,47 @@ test('8) mergePolicy absent → loaded config invents no default policy', () => 
   assert.equal(cfg.mergePolicy, undefined)
 })
 
+test('8b) mergePolicy.staleBaseCeiling positive int parses (strict-key acceptance)', () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      mergePolicy: {
+        arcIntegration: 'autonomous',
+        maxOpenFollowups: 0,
+        autonomousPushRefs: ['develop'],
+        primaryCheckout: '/tmp/x',
+        staleBaseCeiling: 50,
+      },
+    }),
+  )
+  const cfg = loadConfig(repo)
+  assert.equal(cfg.mergePolicy.staleBaseCeiling, 50)
+})
+
+test('8c) mergePolicy.staleBaseCeiling: 0 (non-positive) rejects with the key named', () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      mergePolicy: {
+        arcIntegration: 'autonomous',
+        maxOpenFollowups: 0,
+        autonomousPushRefs: ['develop'],
+        primaryCheckout: '/tmp/x',
+        staleBaseCeiling: 0,
+      },
+    }),
+  )
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^mergePolicy\.staleBaseCeiling:\s/.test(l)),
+    `expected a "mergePolicy.staleBaseCeiling: <message>" dotted-path line; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
 test('9) gateCommands.e2e "none" is accepted', () => {
   const repo = newRepo()
   const cfg = validConfig()

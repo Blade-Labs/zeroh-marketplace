@@ -55,6 +55,9 @@ const MergePolicyShape = z.strictObject({
   maxOpenFollowups: z.number().int().nonnegative(),
   autonomousPushRefs: z.array(z.string()),
   primaryCheckout: z.string(),
+  // arc-land refusal ceiling on commits-behind-baseRef; default 100 applied at the
+  // use-site in landing.mjs (`?? 100`, the maxOpenFollowups idiom) — MECHRATCHET rank 6.
+  staleBaseCeiling: z.number().int().positive().optional(),
 })
 
 const ModelPolicyShape = z.strictObject({
