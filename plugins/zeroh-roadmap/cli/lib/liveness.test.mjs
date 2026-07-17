@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Fixtures for executor-liveness.mjs — the five verdict rows, each hermetic
- * (fake pgrep via LIVENESS_PGREP_CMD, shrink the inter-probe delay via
- * LIVENESS_PROBE_MS, growth driven by a short-lived `sh` appender — no real
- * sleeps, no real process table). Run: node --test scripts/executor-liveness.test.mjs
+ * liveness.test.mjs — the PORTED executor-liveness suite driving the CLI entry
+ * `node bin/roadmap.mjs watch --once <sidecar> --json` (arc ROADCODE 1657.6). Every case
+ * keeps its assertion verbatim from scripts/executor-liveness.test.mjs; only the entry
+ * invocation changed (the verdict engine is now cli/lib/liveness.mjs). Hermetic via the
+ * LIVENESS_* seams. Run: node --test cli/lib/liveness.test.mjs
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -14,7 +15,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const SCRIPT = join(HERE, 'executor-liveness.mjs')
+const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
 
 const tmps = []
 function newTmp() {
@@ -32,33 +33,24 @@ process.on('exit', () => {
   }
 })
 
-function isoAgo(min) {
-  return new Date(Date.now() - min * 60_000).toISOString()
-}
+const isoAgo = (min) => new Date(Date.now() - min * 60_000).toISOString()
 
-/** Write a sidecar + optional beacon lines; return the sidecar path. */
 function makeArc(dir, arcId, beaconLines) {
   const registry = join(dir, '.building')
   mkdirSync(registry, { recursive: true })
   const sidecar = join(registry, `${arcId}.json`)
   writeFileSync(sidecar, JSON.stringify({ arcId, worktree: dir, branch: 'develop', baseRef: 'develop', mode: 'inline' }))
-  if (beaconLines) {
-    writeFileSync(join(registry, `${arcId}-executor.jsonl`), beaconLines.map((l) => JSON.stringify(l)).join('\n') + '\n')
-  }
+  if (beaconLines) writeFileSync(join(registry, `${arcId}-executor.jsonl`), beaconLines.map((l) => JSON.stringify(l)).join('\n') + '\n')
   return sidecar
 }
 
 function run(sidecar, extraArgs = [], env = {}) {
   const merged = { ...process.env, LIVENESS_PGREP_CMD: 'true', LIVENESS_PROBE_MS: '20', ...env }
   for (const k of Object.keys(merged)) if (merged[k] === undefined) delete merged[k]
-  const out = execFileSync('node', [SCRIPT, sidecar, '--json', ...extraArgs], {
-    encoding: 'utf8',
-    env: merged,
-  })
+  const out = execFileSync('node', [BIN, 'watch', '--once', sidecar, '--json', ...extraArgs], { encoding: 'utf8', env: merged })
   return JSON.parse(out)
 }
 
-/** An agent-transcript JSONL record in the harness shape the EXITED probe reads. */
 function agentRecord(type, stopReason, text, tsIso) {
   return {
     type,
@@ -66,8 +58,6 @@ function agentRecord(type, stopReason, text, tsIso) {
     message: type === 'assistant' ? { role: 'assistant', stop_reason: stopReason, content: [{ type: 'text', text }] } : { role: 'user', content: [] },
   }
 }
-
-/** Write agent-<id>.jsonl + its .output symlink the way the harness lays them out. */
 function makeAgentTranscript(dir, records) {
   const tdir = join(dir, 'transcripts')
   mkdirSync(tdir, { recursive: true })
@@ -76,33 +66,27 @@ function makeAgentTranscript(dir, records) {
   symlinkSync(target, join(tdir, 'aabc123.output'))
   return tdir
 }
-
-/** Start a short-lived appender that grows `file` for ~2s; returns a stop fn. */
 function startAppender(file) {
-  const p = spawn('sh', ['-c', `for i in $(seq 1 100); do printf x >> "${file}"; sleep 0.02; done`], {
-    stdio: 'ignore',
-  })
+  const p = spawn('sh', ['-c', `for i in $(seq 1 100); do printf x >> "${file}"; sleep 0.02; done`], { stdio: 'ignore' })
   return () => {
     try {
       p.kill('SIGKILL')
     } catch {
-      /* already gone */
+      /* gone */
     }
   }
 }
 
 test('1) fresh commit beacon → ALIVE', () => {
   const d = newTmp()
-  const sc = makeArc(d, 'A1', [{ ts: isoAgo(2), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
-  const r = run(sc)
+  const r = run(makeArc(d, 'A1', [{ ts: isoAgo(2), phase: 100, event: 'commit', detail: 'abc123 feat: x' }]))
   assert.equal(r.verdict, 'ALIVE')
   assert.match(r.evidence.beacon, /age 2\.\dmin/)
 })
 
-test('2) 30-min gate-stage-start beacon → QUIET (mid-gate-quiet)', () => {
+test('2) 30-min gate-stage-start beacon → QUIET', () => {
   const d = newTmp()
-  const sc = makeArc(d, 'A2', [{ ts: isoAgo(30), phase: null, event: 'gate-stage-start', detail: 'code-review' }])
-  const r = run(sc)
+  const r = run(makeArc(d, 'A2', [{ ts: isoAgo(30), phase: null, event: 'gate-stage-start', detail: 'code-review' }]))
   assert.equal(r.verdict, 'QUIET')
   assert.match(r.evidence.beacon, /gate-stage-start/)
 })
@@ -110,8 +94,6 @@ test('2) 30-min gate-stage-start beacon → QUIET (mid-gate-quiet)', () => {
 test('3) 90-min beacon + symlink .output not growing + no pgrep → STALLED (symlink trap dead)', () => {
   const d = newTmp()
   const sc = makeArc(d, 'A3', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
-  // A transcript dir whose .output is a SYMLINK to a 5000-byte target. A bare
-  // lstat would report the tiny symlink size; the script must report 5000.
   const tdir = join(d, 'transcripts')
   mkdirSync(tdir, { recursive: true })
   const target = join(tdir, 'real-transcript.jsonl')
@@ -137,11 +119,7 @@ test('4) background-run beacon + a log that grows between probes → ALIVE', () 
   }
 })
 
-test('6) DEFAULT pgrep path must not self-match its own invocation (the 2026-07-09 false-ALIVE)', () => {
-  // No LIVENESS_PGREP_CMD override: the script's real pgrep runs against a
-  // worktree path that exists nowhere in the process table. The old execSync
-  // form matched its own `sh -c` wrapper (hits always ≥1 → QUIET forever); the
-  // fix must report 0 hits and let the STALLED row fire.
+test('6) DEFAULT pgrep path must not self-match its own invocation', () => {
   const d = newTmp()
   const sc = makeArc(d, 'A6', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
   const r = run(sc, [], { LIVENESS_PGREP_CMD: undefined })
@@ -151,7 +129,6 @@ test('6) DEFAULT pgrep path must not self-match its own invocation (the 2026-07-
 
 test('7) final transcript record = assistant end_turn (old) → EXITED, outranking a fresh beacon', () => {
   const d = newTmp()
-  // A 2-min-old commit beacon would read ALIVE — the transcript fact must win.
   const sc = makeArc(d, 'A7', [{ ts: isoAgo(2), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
   const tdir = makeAgentTranscript(d, [
     agentRecord('assistant', 'tool_use', 'committing task 1', isoAgo(12)),
@@ -163,15 +140,12 @@ test('7) final transcript record = assistant end_turn (old) → EXITED, outranki
   assert.match(r.evidence.finalMessage, /Preparing 1397\.2/)
 })
 
-test('8) mid-turn transcript (last record not end_turn) → no EXITED, normal rows decide', () => {
+test('8) mid-turn transcript → no EXITED, normal rows decide', () => {
   const d = newTmp()
   const sc = makeArc(d, 'A8', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
-  const tdir = makeAgentTranscript(d, [
-    agentRecord('assistant', 'end_turn', 'earlier turn', isoAgo(60)),
-    agentRecord('user', null, '', isoAgo(10)), // tool result just landed — agent is mid-turn
-  ])
+  const tdir = makeAgentTranscript(d, [agentRecord('assistant', 'end_turn', 'earlier turn', isoAgo(60)), agentRecord('user', null, '', isoAgo(10))])
   const r = run(sc, ['--transcript-dir', tdir])
-  assert.equal(r.verdict, 'STALLED') // stale beacon, no growth, no procs — but NOT exited
+  assert.equal(r.verdict, 'STALLED')
   assert.equal(r.evidence.exit, undefined)
 })
 
@@ -180,12 +154,12 @@ test('9) end_turn younger than the settle window → not yet EXITED', () => {
   const sc = makeArc(d, 'A9', [{ ts: isoAgo(2), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
   const tdir = makeAgentTranscript(d, [agentRecord('assistant', 'end_turn', 'done-ish', isoAgo(1))])
   const r = run(sc, ['--transcript-dir', tdir])
-  assert.equal(r.verdict, 'ALIVE') // the fresh beacon row decides; the race window holds
+  assert.equal(r.verdict, 'ALIVE')
 })
 
 test('5) no beacon + growing transcript → pre-beacon QUIET', () => {
   const d = newTmp()
-  const sc = makeArc(d, 'A5', null) // no beacon file
+  const sc = makeArc(d, 'A5', null)
   const tdir = join(d, 'transcripts')
   mkdirSync(tdir, { recursive: true })
   const out = join(tdir, 'agent.output')
@@ -201,11 +175,7 @@ test('5) no beacon + growing transcript → pre-beacon QUIET', () => {
   }
 })
 
-test('10) PRODUCTION layout — sidecar in roadmap/arcs/.building, beacon in <worktree>/.building keyed by PHASE → discovered, ALIVE', () => {
-  // The 2026-07-10 false pre-beacon STALLED: the reader hard-coded
-  // <sidecar-dir>/<arcId>-executor.jsonl; the executor wrote
-  // <worktree>/.building/<phase>-executor.jsonl. This fixture is the REAL
-  // do-arc layout the old makeArc helper accidentally papered over.
+test('10) PRODUCTION layout — beacon in <worktree>/.building keyed by PHASE → discovered, ALIVE', () => {
   const d = newTmp()
   const registry = join(d, 'roadmap', 'arcs', '.building')
   mkdirSync(registry, { recursive: true })
@@ -221,8 +191,6 @@ test('10) PRODUCTION layout — sidecar in roadmap/arcs/.building, beacon in <wo
 })
 
 test('11) stale beacon but a worktree file touched moments ago → ALIVE (activity row)', () => {
-  // One big task can hold the beacon idle 10+ min while the executor edits the
-  // whole time — file activity is the spawn-mechanism-agnostic liveness signal.
   const d = newTmp()
   const sc = makeArc(d, 'A11', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
   mkdirSync(join(d, 'src'), { recursive: true })
@@ -245,20 +213,16 @@ test('12) stale beacon but a git commit minutes ago → ALIVE (activity row, com
   assert.match(r.evidence.activity, /last commit/)
 })
 
-test('13) no beacon, nothing else, sidecar just written → pre-beacon QUIET (grace window, not a stall)', () => {
-  // The 2026-07-10 watcher fired STALLED seconds after spawn, before the
-  // executor could produce any signal. A fresh sidecar IS the spawn timestamp.
+test('13) no beacon, nothing else, sidecar just written → pre-beacon QUIET (grace window)', () => {
   const d = newTmp()
-  const sc = makeArc(d, 'A13', null)
-  const r = run(sc)
+  const r = run(makeArc(d, 'A13', null))
   assert.equal(r.verdict, 'pre-beacon QUIET')
   assert.match(r.evidence.grace, /grace window/)
 })
 
-test('14) no beacon, grace expired, no activity → pre-beacon STALLED (grace is a window, not amnesty)', () => {
+test('14) no beacon, grace expired, no activity → pre-beacon STALLED', () => {
   const d = newTmp()
-  const sc = makeArc(d, 'A14', null)
-  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  const r = run(makeArc(d, 'A14', null), [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
   assert.equal(r.verdict, 'pre-beacon STALLED')
   assert.equal(r.evidence.grace, undefined)
 })

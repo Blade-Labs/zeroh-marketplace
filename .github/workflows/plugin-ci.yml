@@ -1,0 +1,26 @@
+name: plugin-ci
+
+# The fixture-e2e bar (arc ROADCODE): the fixture-consumer wired tier runs on EVERY push and
+# pull_request, and the do-arc protocol-load budget is asserted (measured, never asserted-in-
+# prose). A red slot, a caught banding/scoping/landing error, or a budget breach fails the push.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/zeroh-roadmap
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: install (zod + the tsx/ajv test devDeps)
+        run: npm install
+      - name: plugin test tier (incl. the fixture-consumer wired suite)
+        run: npm test
+      - name: protocol-load budget (do-arc ≤ 12k tokens, measured)
+        run: node bin/roadmap.mjs measure --flow do-arc --assert 12000

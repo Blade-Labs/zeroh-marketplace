@@ -135,7 +135,7 @@ export type GateFinding = z.output<typeof GateFindingShape>
 
 /** Structured record of one round of validation agents + the findings they raised. */
 export const StructuredGateRoundShape = z.object({
-  // 0 is valid: gate-protocol numbers the one-shot simplify pass "Round 0", correctness rounds 1..N.
+  // 0 is valid: the gate numbers the one-shot simplify pass "Round 0", correctness rounds 1..N.
   round: z.number().int().nonnegative(),
   /** Which gate agent produced this round — makes "which gates actually ran"
    *  queryable instead of remembered. Optional for pre-v9 rounds.
@@ -423,12 +423,12 @@ const BasePhaseFields = {
   kind: z.enum(['mockup', 'logic', 'hardening', 'release']).default('logic'),
   /** Test-scope ladder for the gate's MECHANICAL test slots (the agent chain
    *  is scoped separately, via `reviewScope` below). Optional: absent →
-   *  the gate derives the scope from the diff's path classes (gate-protocol.md
-   *  "Test-scope ladder"); a declared value may only RAISE the derived floor,
-   *  and paths in the consumer's `## Gate specialists` block always force
-   *  'full'. Honored ONLY when the consumer declares a `## Test cadence`
-   *  backstop block in CLAUDE.md — without it the gate keeps today's
-   *  full-suite default, so the field is inert until a consumer opts in.
+   *  the gate derives the scope from the diff's path classes (cli/lib/ladder.mjs
+   *  deriveTestScope); a declared value may only RAISE the derived floor,
+   *  and a `gateSpecialists` config path always forces 'full'. Honored ONLY
+   *  when the consumer's roadmap.config.json sets `testCadence` — without it
+   *  the gate keeps today's full-suite default, so the field is inert until
+   *  a consumer opts in.
    *  static  — lint/types/emit only (docs/data/generated-artifact diffs)
    *  scoped  — tests in/colocated with the diff + `scopedTests` globs
    *  relevant— scoped + the suites exercising the touched modules
@@ -438,8 +438,8 @@ const BasePhaseFields = {
    *  diff-colocated tests (the planner enumerates them; review-phase vetoes
    *  under-scoping). */
   scopedTests: z.array(z.string().min(1)).optional(),
-  /** Review-scope ladder for the gate's AGENT chain (gate-protocol.md
-   *  "Review-scope ladder") — the planner's assessment of what review is
+  /** Review-scope ladder for the gate's AGENT chain (cli/lib/ladder.mjs
+   *  deriveReviewScope) — the planner's assessment of what review is
    *  genuinely high-value for THIS phase's diff, made at plan time and
    *  ratified by review-phase Mode A (an unjustified low rung = NEEDS WORK).
    *  none  — no review agents; mechanical checks + compromise summary only

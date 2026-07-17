@@ -12,7 +12,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -254,4 +254,66 @@ test('a Zod failure is pretty-printed (one path: message line) with NO stack tra
   assert.match(r.stderr, /schema validation failed/)
   assert.match(r.stderr, /name: /, 'names the offending path')
   assert.doesNotMatch(r.stderr, /at .*\(.*:\d+:\d+\)/, 'no stack frames in default (non-debug) output')
+})
+
+// ── `step → verify:` grammar lint — WARN-level, NEW-to-git phase files only ───────
+// Grandfather rule (plan-phase authoring grammar): the lint reminds on a phase file that
+// has no HEAD blob; the ~1,100 committed files are exempt; it NEVER changes the exit code.
+const gitInit = (base) => {
+  const g = (...a) => execFileSync('git', ['-C', base, ...a], { stdio: 'ignore' })
+  g('init', '-q')
+  g('config', 'user.email', 't@t')
+  g('config', 'user.name', 't')
+}
+/** Write a phase into a git-inited roadmap tree; `commit:true` makes it grandfathered. */
+function writeGitPhase(name, body, { commit = false } = {}) {
+  const { path, base } = writeRoadmapFile(name, body)
+  gitInit(base)
+  if (commit) {
+    execFileSync('git', ['-C', base, 'add', `roadmap/phases/${name}`], { stdio: 'ignore' })
+    execFileSync('git', ['-C', base, 'commit', '-qm', 'seed'], { stdio: 'ignore' })
+  }
+  return { path, base }
+}
+// runValidator discards stderr on exit 0; a WARN-level lint prints to stderr WITH exit 0,
+// so the grammar tests capture stderr regardless of exit code via spawnSync.
+function runValidatorCaptured(filePath) {
+  const r = spawnSync('node', [VALIDATOR], {
+    input: JSON.stringify({ tool_input: { file_path: filePath } }),
+    encoding: 'utf8',
+    timeout: 120_000,
+  })
+  return { code: r.status ?? 1, stderr: r.stderr ?? '' }
+}
+const stepsPhase = (desc) => `${IMPORT}
+export default definePhase({
+  phase: 9008, name: 'fixture verify-grammar phase', status: 'backlog',
+  category: 'infra', kind: 'logic', source: 'fixture source', priority: 'LOW',
+  dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',
+  tasks: [{ id: '9008.1', title: 'the fixture task title', problem: 'the fixture problem statement is intentionally long', steps: [{ file: 'x', description: '${desc}' }], acceptanceCriteria: ['it works as specified'], files: ['x'], testMode: 'none', done: false }],
+})
+`
+const MISSING = 'do the described thing'
+const COMPLIANT = 'do the described thing → verify: grep -n thing x'
+
+test('grammar lint WARNS on a NEW-to-git phase step missing → verify: (exit still 0)', () => {
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(MISSING))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, 'the grammar lint NEVER blocks — exit stays 0 when the Zod parse passes')
+  assert.match(r.stderr, /WARN phase 9008 task 9008\.1 step 1/, 'names the offending step')
+  assert.match(r.stderr, /→ verify:/, 'the WARN cites the missing clause')
+})
+
+test('grammar lint is SILENT on a COMMITTED (grandfathered) phase missing → verify:', () => {
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(MISSING), { commit: true })
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0)
+  assert.doesNotMatch(r.stderr, /WARN phase 9008/, 'a committed file is exempt forever')
+})
+
+test('grammar lint is SILENT on a NEW-to-git phase whose step carries → verify:', () => {
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(COMPLIANT))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0)
+  assert.doesNotMatch(r.stderr, /WARN phase 9008/, 'a compliant new file draws no warning')
 })

@@ -72,56 +72,91 @@ type Entry = {
   state: 'OPEN' | 'OPEN-planned' | 'OPEN-operator' | 'RESOLVABLE'
   note: string | null
   text: string
+  archiveVersion?: string
+}
+
+// The ONE transparencyReport↔debtResolutions join (the 1371 follow-up contract),
+// extracted so it runs verbatim over both the active set and — opt-in — the archive
+// set. `lookupById` resolves an OPEN-planned entry's `via: phase-N` to decide
+// RESOLVABLE; the caller passes the phase universe the via-ref may point into.
+function censusOf(phaseList: any[], lookupById: Map<number, any>) {
+  const entries: Entry[] = []
+  const dangling: string[] = []
+  let closedCount = 0
+  for (const p of phaseList) {
+    const resolutions = new Map<string, any>()
+    for (const r of p.debtResolutions ?? []) resolutions.set(r.ref, r) // latest disposition wins (one ref)
+
+    const seenRefs = new Set<string>()
+    for (const t of p.tasks ?? []) {
+      if (t.minimal || !t.transparencyReport) continue
+      for (const f of DEBT_FIELDS) {
+        const v = t.transparencyReport[f]
+        if (!v || String(v).trim() === 'None') continue
+        const ref = `${t.id}.${f}`
+        seenRefs.add(ref)
+        const r = resolutions.get(ref)
+        if (r && CLOSING.has(r.status)) {
+          closedCount++
+          continue
+        }
+        let state: Entry['state'] = 'OPEN'
+        let note: string | null = null
+        if (r?.status === 'planned') {
+          state = 'OPEN-planned'
+          note = r.via ?? null
+          const via = /phase[- ](\d+)/i.exec(r.via ?? '')?.[1]
+          const viaPhase = via ? lookupById.get(Number(via)) : undefined
+          if (viaPhase && ['done', 'historical'].includes(viaPhase.status)) state = 'RESOLVABLE'
+        } else if (r?.status === 'operator-pending') {
+          state = 'OPEN-operator'
+          note = r.via ?? null
+        }
+        entries.push({
+          phase: p.phase,
+          phaseStatus: p.status,
+          arcId: p.arcId ?? null,
+          version: p.version ?? null,
+          ref,
+          field: f,
+          state,
+          note,
+          text: String(v).replace(/\s+/g, ' ').slice(0, 240),
+          ...(p.archiveVersion ? { archiveVersion: p.archiveVersion } : {}),
+        })
+      }
+    }
+    for (const ref of resolutions.keys()) if (!seenRefs.has(ref)) dangling.push(`phase ${p.phase}: ${ref} (resolution with no matching non-"None" field)`)
+  }
+  entries.sort((a, b) => a.phase - b.phase || a.ref.localeCompare(b.ref))
+  return { entries, dangling, closedCount }
 }
 
 const phaseById = new Map<number, any>(phases.map((p: any) => [p.phase, p]))
-const entries: Entry[] = []
-const dangling: string[] = []
-let closedCount = 0
+const active = censusOf(phases, phaseById)
+const entries = active.entries
+const dangling = active.dangling
+const closedCount = active.closedCount
 
-for (const p of phases) {
-  const resolutions = new Map<string, any>()
-  for (const r of p.debtResolutions ?? []) resolutions.set(r.ref, r) // latest disposition wins (one ref)
-
-  const seenRefs = new Set<string>()
-  for (const t of p.tasks ?? []) {
-    if (t.minimal || !t.transparencyReport) continue
-    for (const f of DEBT_FIELDS) {
-      const v = t.transparencyReport[f]
-      if (!v || String(v).trim() === 'None') continue
-      const ref = `${t.id}.${f}`
-      seenRefs.add(ref)
-      const r = resolutions.get(ref)
-      if (r && CLOSING.has(r.status)) {
-        closedCount++
-        continue
-      }
-      let state: Entry['state'] = 'OPEN'
-      let note: string | null = null
-      if (r?.status === 'planned') {
-        state = 'OPEN-planned'
-        note = r.via ?? null
-        const via = /phase[- ](\d+)/i.exec(r.via ?? '')?.[1]
-        const viaPhase = via ? phaseById.get(Number(via)) : undefined
-        if (viaPhase && ['done', 'historical'].includes(viaPhase.status)) state = 'RESOLVABLE'
-      } else if (r?.status === 'operator-pending') {
-        state = 'OPEN-operator'
-        note = r.via ?? null
-      }
-      entries.push({
-        phase: p.phase,
-        phaseStatus: p.status,
-        arcId: p.arcId ?? null,
-        version: p.version ?? null,
-        ref,
-        field: f,
-        state,
-        note,
-        text: String(v).replace(/\s+/g, ' ').slice(0, 240),
-      })
+// Opt-in archive pass (roadmap audit check 12.3-12.4). Default OFF: the active
+// census, its byArc/MD/console output, and the --check debt ratchet are all
+// untouched. Emitted as an ADDITIVE census.archive block, never merged into the
+// active totals. Filter is archive LOCATION (files under roadmap/archive/<v>/),
+// never the version field (active phases may carry a version too).
+let archive: { entries: Entry[]; dangling: string[] } | null = null
+if (args.includes('--include-archive')) {
+  const archiveRoot = join(roadmap, 'archive')
+  const archivePhases: any[] = []
+  if (existsSync(archiveRoot)) {
+    for (const ver of readdirSync(archiveRoot, { withFileTypes: true }).filter((d) => d.isDirectory())) {
+      const { phases: vp } = await discoverPhases(join(archiveRoot, ver.name))
+      for (const p of vp) archivePhases.push({ ...p, archiveVersion: ver.name, location: 'archive' })
     }
   }
-  for (const ref of resolutions.keys()) if (!seenRefs.has(ref)) dangling.push(`phase ${p.phase}: ${ref} (resolution with no matching non-"None" field)`)
+  // via-refs may point at active phases, so resolve RESOLVABLE over active+archive.
+  const combinedById = new Map<number, any>([...phases, ...archivePhases].map((p: any) => [p.phase, p]))
+  const a = censusOf(archivePhases, combinedById)
+  archive = { entries: a.entries, dangling: a.dangling }
 }
 
 // followups open-marker scan (heuristic, per-file counts — a join hint, not a parse)
@@ -162,6 +197,7 @@ const census = {
   entries,
   dangling,
   followups,
+  archive, // null unless --include-archive; additive, never folded into totals/ratchet
 }
 
 const jsonOut = flag('json') ?? join(repo, 'reviews/debt-census.json')

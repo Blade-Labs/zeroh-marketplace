@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
- * Fixtures for executor-watch.mjs — the three exit contracts (sidecar-gone → 0,
- * STALLED → 3, EXITED → 4), hermetic via the liveness seams the child inherits.
- * Run: node --test scripts/executor-watch.test.mjs
+ * watch.test.mjs — the PORTED executor-watch suite driving `node bin/roadmap.mjs watch
+ * <sidecar> …` (arc ROADCODE 1657.6). The three exit contracts (sidecar-gone → 0, STALLED
+ * → 3, EXITED → 4) + the pre-beacon grace loop-to-max, verbatim from
+ * scripts/executor-watch.test.mjs — only the entry invocation changed.
+ * Run: node --test cli/lib/watch.test.mjs
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -13,7 +15,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const SCRIPT = join(HERE, 'executor-watch.mjs')
+const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
 
 const tmps = []
 function newTmp() {
@@ -31,31 +33,22 @@ process.on('exit', () => {
   }
 })
 
-function isoAgo(min) {
-  return new Date(Date.now() - min * 60_000).toISOString()
-}
+const isoAgo = (min) => new Date(Date.now() - min * 60_000).toISOString()
 
 function makeArc(dir, arcId, beaconLines) {
   const registry = join(dir, '.building')
   mkdirSync(registry, { recursive: true })
   const sidecar = join(registry, `${arcId}.json`)
   writeFileSync(sidecar, JSON.stringify({ arcId, worktree: dir, branch: 'develop', baseRef: 'develop', mode: 'inline' }))
-  if (beaconLines) {
-    writeFileSync(join(registry, `${arcId}-executor.jsonl`), beaconLines.map((l) => JSON.stringify(l)).join('\n') + '\n')
-  }
+  if (beaconLines) writeFileSync(join(registry, `${arcId}-executor.jsonl`), beaconLines.map((l) => JSON.stringify(l)).join('\n') + '\n')
   return sidecar
 }
 
 function runWatch(sidecar, extraArgs = []) {
-  return spawnSync('node', [SCRIPT, sidecar, ...extraArgs], {
+  return spawnSync('node', [BIN, 'watch', sidecar, ...extraArgs], {
     encoding: 'utf8',
     timeout: 20_000,
-    env: {
-      ...process.env,
-      LIVENESS_PGREP_CMD: 'true',
-      LIVENESS_PROBE_MS: '20',
-      LIVENESS_WATCH_INTERVAL_MS: '50',
-    },
+    env: { ...process.env, LIVENESS_PGREP_CMD: 'true', LIVENESS_PROBE_MS: '20', LIVENESS_WATCH_INTERVAL_MS: '50' },
   })
 }
 
@@ -80,11 +73,7 @@ test('completed final assistant turn → exit 4 with the EXITED verdict JSON', (
   const tdir = join(d, 'transcripts')
   mkdirSync(tdir, { recursive: true })
   const target = join(tdir, 'agent-w2.jsonl')
-  const rec = {
-    type: 'assistant',
-    timestamp: isoAgo(10),
-    message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'Committed 1397.1, prepping 1397.2.' }] },
-  }
+  const rec = { type: 'assistant', timestamp: isoAgo(10), message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'Committed 1397.1, prepping 1397.2.' }] } }
   writeFileSync(target, JSON.stringify(rec) + '\n')
   symlinkSync(target, join(tdir, 'aw2.output'))
   const r = runWatch(sc, ['--transcript-dir', tdir])
@@ -94,13 +83,9 @@ test('completed final assistant turn → exit 4 with the EXITED verdict JSON', (
 })
 
 test('just-spawned executor (no beacon yet, fresh sidecar) → does NOT exit 3; runs to max duration', () => {
-  // The 2026-07-10 field failure: the watcher fired STALLED seconds after
-  // spawn, before the executor could write its first beacon. With the grace
-  // window the verdict stays pre-beacon QUIET, so the watch loops to its max
-  // duration instead of waking the orchestrator with a false stall.
   const d = newTmp()
-  const sc = makeArc(d, 'W3', null) // no beacon — pre-beacon executor
-  const r = runWatch(sc, ['--max-hours', '0.0002']) // ~0.7s of looping
+  const sc = makeArc(d, 'W3', null)
+  const r = runWatch(sc, ['--max-hours', '0.0002'])
   assert.equal(r.status, 0)
   assert.match(r.stdout, /max duration reached/)
 })

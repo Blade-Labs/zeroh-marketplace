@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// FROZEN FOR PARITY (ROADCODE 1655) — VERBATIM pre-shim body of scripts/arc-status.mjs;
+// the status-parity test diffs `roadmap status` against THIS. Deleted with the shims at 1661.
 /**
  * arc-status — derive the LIVE multi-session lane state. Never hand-written,
  * so it cannot go stale: reads the machine truth and prints the table the

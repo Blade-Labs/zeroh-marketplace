@@ -10,8 +10,8 @@ metadata:
 
 ## Focus Areas (Priority Order)
 
-Read the consumer repo's CLAUDE.md `## Review focus` block first — its repo-specific finding
-classes PREPEND this generic list and outrank it (absent block → generic list only, note it).
+Read the consumer's `reviewFocus` config key first — its repo-specific finding classes PREPEND
+this generic list and outrank it (absent → generic list only, note it).
 
 1. **Logic errors** — undefined references, stale closures, race conditions, incorrect mock setups
 2. **Business rule correctness** — do gates enforce the right rules? Are calculations correct?

@@ -23,6 +23,7 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -288,7 +289,7 @@ function scanPhaseFile(filePath: string): PhaseScan {
  *
  *  Prose mirror: skills/audit-roadmap/SKILL.md Check 9. Keep these in sync —
  *  if you edit one, edit the other. */
-function suggestKind(text: string): 'mockup' | 'logic' | 'hardening' | 'release' {
+export function suggestKind(text: string): 'mockup' | 'logic' | 'hardening' | 'release' {
   const cat = text.match(/\bcategory:\s*['"](\w+)['"]/)?.[1] ?? ''
   const demo = text.match(/\bstakeholderDemo:\s*['"]([^'"]+)['"]/)?.[1]?.toLowerCase() ?? ''
 
@@ -556,4 +557,7 @@ function main(): void {
   process.stdout.write(report)
 }
 
-main()
+// Run as a CLI only when invoked directly — so `roadmap audit` check 9 can `import
+// { suggestKind }` from this module (the single-source backfill rule) without the
+// migration report executing on import.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main()

@@ -4,5 +4,18 @@
   "description": "Phase-driven development with a design-first gate, validation gates, intent validation, review reports, and changelog generation",
   "author": "Blade Labs <info@blade-labs.com>",
   "license": "SEE LICENSE",
-  "private": true
+  "private": true,
+  "bin": {
+    "roadmap": "bin/roadmap.mjs"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 $(find bin cli hooks scripts test -name '*.test.mjs')"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "tsx": "^4.23.1"
+  }
 }
