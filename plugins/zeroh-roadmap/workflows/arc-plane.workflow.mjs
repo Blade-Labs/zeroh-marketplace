@@ -70,11 +70,14 @@ function defaultAgent() {
 const jsonOf = (r) => JSON.parse(r.stdout)
 
 /** Write the arm FILE the executor-result-guard hook reads (the env-propagation-INDEPENDENT
- *  channel 1656 added — the reliable primary). Written PRE-SPAWN, removed after result-check. */
-function armExecutor(worktree, phase) {
+ *  channel 1656 added — the reliable primary). Written PRE-SPAWN, removed after result-check.
+ *  Content = the arming SESSION's id (sessionId dep): the guard arms only for that session's
+ *  agents — an unbound file is inert (2026-07-17: a session-blind arm made a FOREIGN session's
+ *  subagent fabricate executor JSON + forge a beacon entry). */
+function armExecutor(worktree, phase, sessionId = '') {
   const dir = join(worktree, '.building')
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, `${phase}-executor.armed`), String(phase))
+  writeFileSync(join(dir, `${phase}-executor.armed`), String(sessionId))
 }
 function disarmExecutor(worktree, phase) {
   const f = join(worktree, '.building', `${phase}-executor.armed`)
@@ -207,7 +210,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     })
     const schema = jsonOf(run('roadmap contract show --json-schema', { cwd })) // seam 3 — GENERATED, never restated
 
-    armExecutor(worktree, phase) // arm the Stop-hook guard channel (.building/<N>-executor.armed) BEFORE the spawn
+    armExecutor(worktree, phase, deps.sessionId ?? input.sessionId ?? '') // arm the guard SESSION-BOUND, BEFORE the spawn
 
     let spawn
     try {

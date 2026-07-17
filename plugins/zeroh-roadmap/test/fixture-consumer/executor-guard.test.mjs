@@ -124,7 +124,7 @@ test('H6 — a main-session Stop with roadmap/.arc-mode + a member in-progress �
 // ── H7/H8 — the arm-FILE channel: armed-by-file blocks; file removed fail-opens ──────────
 test('H7 — the arm-FILE channel (.building/<N>-executor.armed) blocks a prose ending with NO env', () => {
   const root = guardRepo()
-  writeFileSync(join(root, '.building', '9500-executor.armed'), '9500')
+  writeFileSync(join(root, '.building', '9500-executor.armed'), 's1') // session-bound to the payload session
   const t = transcript(root, 'Prose ending, no result.')
   const r = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }) // NO env
   assert.equal(JSON.parse(r.stdout).decision, 'block', 'file arming ≡ env arming')

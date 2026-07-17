@@ -76,10 +76,25 @@ function detectArm(worktree, payload, cfgOk) {
   } catch {
     return null
   }
-  // (b) arm file
+  // (b) arm file — SESSION-BOUND: the file carries the arming session's id and arms only
+  // for that session's agents. A bare/legacy arm file must NOT arm: with several sessions
+  // sharing a worktree, a session-blind arm intercepted an UNRELATED session's subagent,
+  // which then FABRICATED executor JSON + forged a beacon entry to satisfy the demand
+  // (2026-07-17, skills-import session vs the MEASURE lane). Foreign or unbound = untouched.
   for (const f of entries) {
     const m = f.match(/^(\d+)-executor\.armed$/)
-    if (m) return { phase: Number(m[1]), channel: 'arm-file' }
+    if (!m) continue
+    let armedSession = null
+    try {
+      const raw = readFileSync(join(buildingDir, f), 'utf8').trim()
+      if (raw.startsWith('{')) armedSession = JSON.parse(raw).sessionId ?? null
+      else if (raw.length > 0) armedSession = raw
+    } catch {
+      /* unreadable arm file = unbound */
+    }
+    if (armedSession && payload.session_id && armedSession === payload.session_id) {
+      return { phase: Number(m[1]), channel: 'arm-file' }
+    }
   }
   // (c) beacon session-id match
   for (const f of entries) {

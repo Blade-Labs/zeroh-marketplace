@@ -132,7 +132,7 @@ test('fresh background-run beacon with an EPOCH-MS ts → ALLOW (the lib accepts
 test('Stop WITHOUT .arc-mode (executor-band orchestrator, arm file present) → WARN not block', () => {
   const root = makeWorktree()
   const t = writeTranscript(root, 'Waiting on the phase-1670 executor; will act on its return.')
-  writeFileSync(join(root, '.building', '1670-executor.armed'), '')
+  writeFileSync(join(root, '.building', '1670-executor.armed'), 's1') // session-bound; the Stop event still only warns
   const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'Stop' }, {})
   assert.equal(r.stdout.trim(), '', 'a main-session Stop must never hard-block')
   assert.match(r.stderr, /advisory: not blocking a Stop/)
@@ -162,9 +162,25 @@ test('UNARMED (no env, no arm file, no matching beacon) → untouched (exit 0, e
   assert.equal(r.stdout.trim(), '')
 })
 
+test('arm file from a FOREIGN session → untouched (the 2026-07-17 fabrication class: never guard another session\'s agents)', () => {
+  const root = makeWorktree()
+  const t = writeTranscript(root, 'Research summary: the repo has 10 skills. Done.')
+  writeFileSync(join(root, '.building', '1670-executor.armed'), 'some-other-session-uuid')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, {})
+  assert.equal(r.stdout.trim(), '', 'a foreign-session arm file must not arm')
+})
+
+test('bare/legacy arm file (no session id) → untouched (unbound files must never induce fabrication)', () => {
+  const root = makeWorktree()
+  const t = writeTranscript(root, 'Plain prose ending mid-phase.')
+  writeFileSync(join(root, '.building', '1670-executor.armed'), '')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, {})
+  assert.equal(r.stdout.trim(), '', 'an unbound arm file must not arm')
+})
+
 test('arm FILE channel (.building/<N>-executor.armed) arms independently of env', () => {
   const root = makeWorktree()
-  writeFileSync(join(root, '.building', '1670-executor.armed'), '')
+  writeFileSync(join(root, '.building', '1670-executor.armed'), 's1') // session-bound to the payload session
   const t = writeTranscript(root, 'Prose ending, no result.')
   const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }) // NO env — the arm file must arm
   assert.equal(JSON.parse(r.stdout).decision, 'block')

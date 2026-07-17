@@ -100,7 +100,8 @@ phasenum=$(printf '%s' "$subject" | grep -oiE 'phase[[:space:]]+[0-9]+' | grep -
 ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 beacon="$registry/$arcid-executor.jsonl"
 
-jq -cn --arg ts "$ts" --argjson phase "$phasejson" --arg detail "$subject" \
-  '{ts:$ts, phase:$phase, event:"commit", detail:$detail}' >> "$beacon" 2>/dev/null \
+SID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
+jq -cn --arg ts "$ts" --argjson phase "$phasejson" --arg detail "$subject" --arg sid "$SID" \
+  '{ts:$ts, phase:$phase, event:"commit", detail:$detail} + (if $sid != "" then {session_id:$sid} else {} end)' >> "$beacon" 2>/dev/null \
   || echo "beacon-stamp: failed to append $beacon" >&2
 exit 0
