@@ -158,3 +158,15 @@ implement, commit) → `roadmap result check` the typed PhaseExecutionResult →
 steps (there is no Stop-hook enforcing the typed-return contract off the Claude harness, so the
 runner self-checks). `gemini-extension.json` (version tracked in step with the plugin — 0.18.0)
 points a Gemini CLI at `CLAUDE.md` + `skills/`; the same CLI-direct loop applies.
+
+## 2026-07-17 — the per-plane workflow is a LIBRARY, not a hosted workflow script
+
+First live do-arc under the rebuilt plugin (arc MEASURE) hit: the harness Workflow runtime
+requires `export const meta` as the first statement and gives scripts no imports, no
+filesystem, and no Bash primitive — `workflows/arc-plane.workflow.mjs` is a Node ES module
+(imports, fs, child_process, injectable deps) and can never be hosted there. The DESIGN §4
+"Agent-SDK workflow" vehicle assumption was wrong for this harness; the 1658 result and
+rehearsal finding D4 both recorded that the nested launch was never exercisable pre-cutover.
+Disposition: the sequencing loop is driven INLINE by the do-arc skill via the same CLI calls
+(decisions stay code; only the vehicle changed — do-arc SKILL.md §Run it); the module stays
+as the loop's tested library form (fixture tier + non-Claude runners per locked decision 2).
