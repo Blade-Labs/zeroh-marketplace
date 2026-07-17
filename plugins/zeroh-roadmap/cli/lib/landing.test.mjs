@@ -162,6 +162,19 @@ test('gatherLandingState — openFollowups = OPEN + OPEN-planned; OPEN-operator 
   assert.equal(s.openOperator, 1, 'operator-pending exempt from the count but reported')
 })
 
+test('gatherLandingState — OPEN limitations are EXEMPT from openFollowups (release-sweep\'s) but reported', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P', phases: [10] }] }, [{ phase: 10, status: 'done', arcId: 'A', tasks: [{ id: '10.1', done: true }], executionResult: { status: 'done', hardStops: [] } }])
+  const entries = [
+    { arcId: 'A', state: 'OPEN', field: 'limitations' },
+    { arcId: 'A', state: 'OPEN', field: 'limitations' },
+    { arcId: 'A', state: 'OPEN', field: 'hardcoded' },
+  ]
+  const s = gatherLandingState({ repoRoot: root, arcId: 'A', config: CONFIG, exec: censusExec(entries) })
+  assert.equal(s.openFollowups, 1, 'only the hardcoded entry counts — limitations never budget (arc-sweep SKILL.md: release-sweep disposes them pre-archive)')
+  assert.equal(s.openLimitations, 2, 'limitations exempt but reported')
+  assert.deepEqual(ids(evaluateBlockers({ ...clear(), openFollowups: 0, openLimitations: 5 })), [], 'limitations alone never hold blocker 5')
+})
+
 test('gatherLandingState — census invocation failure ⇒ openFollowups null (never a fabricated 0)', () => {
   const root = makeRepo('A', { planes: [{ name: 'P', phases: [10] }] }, [{ phase: 10, status: 'done', arcId: 'A', tasks: [{ id: '10.1', done: true }] }])
   const s = gatherLandingState({ repoRoot: root, arcId: 'A', config: CONFIG, exec: () => ({ status: 1, stdout: '', stderr: 'boom' }) })

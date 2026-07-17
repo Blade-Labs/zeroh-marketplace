@@ -88,10 +88,15 @@ export function runDebtCensus(repoRoot, arcId, { exec = defaultExec } = {}) {
   const data = debtCensusJson(repoRoot, { exec })
   if (!data) return null
   const entries = (data.entries ?? []).filter((e) => String(e.arcId) === String(arcId))
+  // `limitations` are EXEMPT from the arc budget (arc-sweep SKILL.md: a permanent design
+  // constraint is not arc-disposable — release-sweep walks it pre-archive; counting it here
+  // coerced arcs into disposing limitations at sweep time, the exact laundering the split
+  // exists to prevent). Counted separately so the report + RunnerSummary still surface them.
   return {
-    open: entries.filter((e) => e.state === 'OPEN').length,
+    open: entries.filter((e) => e.state === 'OPEN' && e.field !== 'limitations').length,
     openPlanned: entries.filter((e) => e.state === 'OPEN-planned').length,
     openOperator: entries.filter((e) => e.state === 'OPEN-operator').length,
+    openLimitations: entries.filter((e) => e.state === 'OPEN' && e.field === 'limitations').length,
     entries,
   }
 }

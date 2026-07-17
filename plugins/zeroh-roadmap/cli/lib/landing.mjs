@@ -76,6 +76,7 @@ export function gatherLandingState({ repoRoot, arcId, config, exec = defaultExec
   const census = runDebtCensus(repoRoot, arcId, { exec })
   const openFollowups = census === null ? null : census.open + census.openPlanned // decision 6; null = unable-to-count
   const openOperator = census?.openOperator ?? null // exempt from the count, reported in the RunnerSummary
+  const openLimitations = census?.openLimitations ?? null // exempt (release-sweep's, per arc-sweep SKILL.md) — reported, never budgeted
 
   const mergePolicy = config.mergePolicy ?? null
   const sidecar = readSidecar(repoRoot, arcId)
@@ -126,6 +127,7 @@ export function gatherLandingState({ repoRoot, arcId, config, exec = defaultExec
     verdict,
     openFollowups,
     openOperator,
+    openLimitations,
     censusEntries: census?.entries ?? null,
     mergePolicy,
     baseRef,
