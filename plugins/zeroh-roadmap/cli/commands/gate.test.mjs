@@ -16,6 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, exist
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { untestedGateFixFindings } from './gate.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -145,6 +146,44 @@ test('gate plan — a ladder-OFF consumer (no testCadence) yields effective full
   const r = planOf(repo.root, ['400'])
   assert.equal(r.code, 0, r.stderr)
   assert.equal(r.plan.testScope.effective, 'full')
+})
+
+// ── untestedGateFixFindings — the MECHRATCHET rank-9 detection helper ────────────────────
+test('untestedGateFixFindings — a gate-fix touching ONLY source → one finding naming its sha7 + subject', () => {
+  const repo = makeRepo()
+  repo.commit('feat: phase 500 — work', { 'lib/a.ts': 'export const a = 1\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit('fix(core): phase 500 gate R1', { 'lib/a.ts': 'export const a = 2\n' })
+  const sha = repo.git('rev-parse', 'HEAD').trim()
+  const findings = untestedGateFixFindings(repo.root, 500, base)
+  assert.equal(findings.length, 1, JSON.stringify(findings))
+  assert.match(findings[0], new RegExp(sha.slice(0, 7)), 'names the fix sha7')
+  assert.match(findings[0], /fix\(core\): phase 500 gate R1/, 'quotes the subject')
+  assert.match(findings[0], /untested gate-fix/, 'is the named warning class')
+})
+
+test('untestedGateFixFindings — a gate-fix touching src + a .test.mjs sibling → no finding', () => {
+  const repo = makeRepo()
+  repo.commit('feat: phase 501 — work', { 'lib/a.ts': 'export const a = 1\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit('fix(core): phase 501 gate R1', { 'lib/a.ts': 'export const a = 2\n', 'lib/a.test.mjs': 'export const t = 1\n' })
+  assert.deepEqual(untestedGateFixFindings(repo.root, 501, base), [], 'a test in the diff clears the warning')
+})
+
+test('untestedGateFixFindings — a docs-only gate-fix → no finding (no executable source touched)', () => {
+  const repo = makeRepo()
+  repo.commit('feat: phase 502 — work', { 'lib/a.ts': 'export const a = 1\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit('fix(docs): phase 502 gate R1', { 'docs/note.md': '# note\n' })
+  assert.deepEqual(untestedGateFixFindings(repo.root, 502, base), [], 'a non-executable-only diff is not a source-without-test fix')
+})
+
+test('untestedGateFixFindings — a non-gate-fix subject (feat) touching only src → no finding', () => {
+  const repo = makeRepo()
+  repo.commit('feat: phase 503 — work', { 'lib/a.ts': 'export const a = 1\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit('feat(core): phase 503 — more', { 'lib/a.ts': 'export const a = 2\n' })
+  assert.deepEqual(untestedGateFixFindings(repo.root, 503, base), [], 'only fix(... gate R*) subjects are in scope')
 })
 
 test('gate plan — a docs-only diff yields static test scope + none review scope', () => {

@@ -84,6 +84,46 @@ function phaseOwnFiles(cwd, phaseNum, base) {
   return [...new Set(out.split('\n').map((s) => s.trim()).filter(Boolean))]
 }
 
+/**
+ * Findings for gate-fix commits that patched ONLY source with no test in their diff
+ * (MECHRATCHET rank 9): a `fix(scope): phase <N> gate R<k>` commit (the em-dash-free
+ * gate-fix convention `fix(scope): phase N gate RX`) whose file set is non-empty, every
+ * file isExecutable, and NONE isTestFile. WARN ONLY — the caller appends these to the
+ * report notes / prints them; exit codes never change. Conservative on any git failure ([]).
+ * The trailing ` gate` boundary keeps `phase 940` from matching `phase 9401 gate` (the
+ * em-dash rule's analogue for this convention).
+ */
+export function untestedGateFixFindings(cwd, phaseNum, base) {
+  let log
+  try {
+    log = git(cwd, ['log', '--format=%H%x09%s', `${base}..HEAD`])
+  } catch {
+    return []
+  }
+  const re = new RegExp(`^fix\\(.*\\): phase ${phaseNum} gate R\\d+`)
+  const findings = []
+  for (const line of log.split('\n').filter(Boolean)) {
+    const tab = line.indexOf('\t')
+    if (tab < 0) continue
+    const sha = line.slice(0, tab)
+    const subject = line.slice(tab + 1)
+    if (!re.test(subject)) continue
+    let files
+    try {
+      files = git(cwd, ['show', '--name-only', '--format=', sha]).split('\n').map((s) => s.trim()).filter(Boolean)
+    } catch {
+      continue
+    }
+    if (files.length === 0) continue
+    if (!files.every((f) => isExecutable(f))) continue
+    if (files.some((f) => isTestFile(f))) continue
+    findings.push(
+      `untested gate-fix: ${sha.slice(0, 7)} "${subject}" touches only source files with no test in its diff — reviewer judges (MECHRATCHET rank 9)`,
+    )
+  }
+  return findings
+}
+
 /** The raw base..HEAD file set (all commits in range) — the cross-check for foreign commits. */
 function rawRangeFiles(cwd, base) {
   try {
@@ -404,6 +444,12 @@ export async function runGate(phaseNum, opts) {
       process.stderr.write(`gate run --verify-complete: no readable report under roadmap/.gate/${phaseNum}/\n`)
       return 1
     }
+    // MECHRATCHET rank 9 — recompute the untested-gate-fix warnings over the FULL phase range
+    // (the moment all fix commits exist) and print them BEFORE the verdict. WARN ONLY: the exit
+    // code is decided by consistency alone (0 consistent / 2 problems), warnings notwithstanding.
+    let warnBase = null
+    try { warnBase = deriveBaseSha(toplevel, phaseNum) } catch { /* no move-to-in-progress commit ⇒ no warnings */ }
+    if (warnBase) for (const w of untestedGateFixFindings(toplevel, phaseNum, warnBase)) process.stdout.write(`warning: ${w}\n`)
     const result = checkPhaseConsistency(imp.parsed, latest.report)
     if (!result.ok) {
       process.stderr.write(`gate run --verify-complete: phase ${phaseNum} inconsistent with ${latest.path}:\n`)
@@ -497,7 +543,7 @@ export async function runGate(phaseNum, opts) {
     slots: rows,
     agents: [],
     green,
-    notes: plan.notes,
+    notes: [...plan.notes, ...untestedGateFixFindings(toplevel, phaseNum, plan.baseSha)],
   }
   let written
   try {
