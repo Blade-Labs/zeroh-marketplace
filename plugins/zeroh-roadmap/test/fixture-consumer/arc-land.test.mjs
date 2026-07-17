@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * arc-land.test.mjs — the seven landing blockers individually forced, contention refusal,
- * structural push discipline, RunnerSummary, and disarm (arc ROADCODE 1660.4). Landing is
- * where prose historically leaked worst (the ONEPROMPT branch:baseRef push); every assertion
- * here reads an EXIT CODE + a machine-named blocker / recorded git argv, never human prose.
- * Titles carry B1-B12. Run: node --test test/fixture-consumer/arc-land.test.mjs
+ * arc-land.test.mjs — the eight landing blockers individually forced, contention refusal,
+ * structural push discipline, RunnerSummary, and disarm (arc ROADCODE 1660.4; blocker 8 the
+ * MECHRATCHET rank-6 stale-base/overlap gate). Landing is where prose historically leaked
+ * worst (the ONEPROMPT branch:baseRef push); every assertion here reads an EXIT CODE + a
+ * machine-named blocker / staleBase field / recorded git argv, never human prose.
+ * Titles carry B0-B15. Run: node --test test/fixture-consumer/arc-land.test.mjs
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -111,6 +112,60 @@ test('B7 — baseRef moved under the arc → exit 2 naming blocker 7', () => {
   const r = land(root)
   assert.equal(r.code, 2)
   assert.ok(heldIds(r.json).includes(7), `blocker 7 held: ${JSON.stringify(r.json.held)}`)
+})
+
+// ── B13-B15 — the stale-base / overlap gate (MECHRATCHET rank 6) ─────────────────────────
+const SHARED = ['export const a = 1', 'export const b = 2', 'export const c = 3', 'export const d = 4', 'export const e = 5', 'export const f = 6'].join('\n') + '\n'
+
+/** An isolated arc whose base advanced THREE commits past a low ceiling, with a
+ *  both-sides-changed (non-conflicting, different-hunk) overlap file src/shared.ts. The arc
+ *  edits line 1; develop edits line 6 + two unrelated files. Returns { root, iso }. */
+function staleTopology({ ceiling = 2, member = 9314 } = {}) {
+  const root = makeFixtureRepo()
+  writeFileSync(join(root, 'src', 'shared.ts'), SHARED)
+  commitAll(root, 'develop: seed the shared file') // in the branch point, so it is common ancestor
+  const iso = makeIsolatedArc(root, { arcId: 'FX', member })
+  runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS'])
+  patchConfig(root, (c) => { c.mergePolicy.staleBaseCeiling = ceiling })
+  // Arc-branch edit (in the worktree): change line 1.
+  writeFileSync(join(iso.worktree, 'src', 'shared.ts'), SHARED.replace('export const a = 1', 'export const a = 100'))
+  git(iso.worktree, 'add', '-A'); git(iso.worktree, 'commit', '-q', '-m', 'arc: edit shared line 1')
+  // develop advances THREE: edit line 6 (different hunk → overlap without conflict) + two unrelated files.
+  writeFileSync(join(root, 'src', 'shared.ts'), SHARED.replace('export const f = 6', 'export const f = 600'))
+  commitAll(root, 'develop: edit shared line 6')
+  writeFileSync(join(root, 'src', 'other1.ts'), 'export const o1 = 1\n'); commitAll(root, 'develop: other1')
+  writeFileSync(join(root, 'src', 'other2.ts'), 'export const o2 = 1\n'); commitAll(root, 'develop: other2')
+  return { root, iso }
+}
+
+test('B13 — base beyond a low ceiling with a both-sides-changed file → exit 2 naming blocker 8, staleBase.overlapFiles names the file', () => {
+  const { root } = staleTopology({ ceiling: 2, member: 9314 })
+  const r = land(root)
+  assert.equal(r.code, 2)
+  assert.equal(r.json.action, 'blocked')
+  assert.ok(heldIds(r.json).includes(8), `blocker 8 held: ${JSON.stringify(r.json.held)}`)
+  assert.ok(r.json.staleBase, 'the blocked JSON carries the staleBase reconciliation object')
+  assert.equal(r.json.staleBase.behind, 3, `three develop advances → behind 3: ${JSON.stringify(r.json.staleBase)}`)
+  assert.ok(r.json.staleBase.overlapFiles.includes('src/shared.ts'), `overlap names the both-sides file (machine field): ${JSON.stringify(r.json.staleBase)}`)
+})
+
+test('B14 — --force-stale acknowledges blocker 8 (held excludes 8) yet still emits the reconciliation overlap list', () => {
+  const { root } = staleTopology({ ceiling: 2, member: 9315 })
+  const r = runCli(root, ['arc', 'land', 'FX', '--json', '--force-stale'])
+  assert.equal(r.code, 2, `blocker 7 (baseRef moved) legitimately remains → still exit 2; stderr:\n${r.stderr}`)
+  assert.ok(!heldIds(r.json).includes(8), `--force-stale clears blocker 8 alone: ${JSON.stringify(r.json.held)}`)
+  assert.ok(r.json.staleBase && r.json.staleBase.overlapFiles.includes('src/shared.ts'), `the overlap list survives the acknowledgment: ${JSON.stringify(r.json.staleBase)}`)
+})
+
+test('B15 — one develop advance under the default ceiling does NOT hold blocker 8', () => {
+  const root = makeFixtureRepo()
+  makeIsolatedArc(root, { arcId: 'FX', member: 9316 })
+  runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS'])
+  writeFileSync(join(root, 'src', 'plain.ts'), 'export const plain = 2\n')
+  commitAll(root, 'develop: one advance under the default ceiling')
+  const r = land(root)
+  assert.equal(r.code, 2, 'blocker 7 baseRef-moved still holds on one advance')
+  assert.ok(!heldIds(r.json).includes(8), `1 < default 100 → blocker 8 not held: ${JSON.stringify(r.json.held)}`)
 })
 
 // ── B8 contention + B9 push discipline + B12 hold ───────────────────────────────────────
