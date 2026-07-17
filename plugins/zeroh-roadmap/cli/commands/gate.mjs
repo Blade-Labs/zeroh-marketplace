@@ -431,14 +431,32 @@ export async function runGate(phaseNum, opts) {
     return 2
   }
   const plan = built.plan
+  // --slots matches the RESOLVED slot name, its base tier ('unit' matches 'unit-scoped' —
+  // the ladder resolves scoped names the caller can't predict), or 'preReview'. A wanted
+  // name matching NOTHING is exit 2, never a silent zero-slot green run.
   const wanted = opts.slots ? new Set(opts.slots.split(',').map((s) => s.trim())) : null
+  const slotMatches = (resolved) => {
+    if (!wanted) return true
+    if (wanted.has(resolved)) return true
+    const base = resolved.replace(/-(scoped|impacted)$/, '')
+    return base !== resolved && wanted.has(base)
+  }
+  if (wanted) {
+    const matchable = new Set(plan.slots.map((s) => s.slot).flatMap((n) => [n, n.replace(/-(scoped|impacted)$/, '')]))
+    if (cfg.exec?.preReview) matchable.add('preReview')
+    const unmatched = [...wanted].filter((w) => !matchable.has(w))
+    if (unmatched.length > 0) {
+      process.stderr.write(`gate run: --slots name(s) match no plan slot: ${unmatched.join(', ')} (plan has: ${plan.slots.map((s) => s.slot).join(', ')})\n`)
+      return 2
+    }
+  }
   const ts = new Date().toISOString().replace(/[:.]/g, '-')
   const logsDir = join(gateDir(toplevel, phaseNum), 'logs')
 
   const rows = []
   let green = true
   for (const s of plan.slots) {
-    if (wanted && !wanted.has(s.slot)) continue
+    if (!slotMatches(s.slot)) continue
     if (s.declaredAbsent) {
       rows.push({ slot: s.slot, command: '(declared none)', exitCode: 0, durationMs: 0, logPath: null, declaredAbsent: true })
       continue

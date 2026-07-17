@@ -210,6 +210,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     armExecutor(worktree, phase) // arm the Stop-hook guard channel (.building/<N>-executor.armed) BEFORE the spawn
 
     let spawn
+    try {
     while (true) {
       // agent() resolves on executor return OR on the backgrounded `roadmap watch` watchdog
       // exit (3 STALLED / 4 EXITED). The workflow NEVER kills a process.
@@ -229,21 +230,22 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
         // executor did not return) — so the once-built `prompt` is not re-sent and needs no
         // re-render; only a fresh spawn (a relaunch by the session after a halt) rebuilds it.
         if (backgroundRunAlive(b)) continue
-        disarmExecutor(worktree, phase)
         return buildHaltPayload('stalled', { phase, evidence: spawn.watchVerdict })
       }
       if (spawn.watchExit === 4) {
-        disarmExecutor(worktree, phase)
         return buildHaltPayload('exited', { phase, evidence: spawn.watchVerdict })
       }
       // an unrecognized wake with no result — treat as a stall, evidence in hand
-      disarmExecutor(worktree, phase)
       return buildHaltPayload('stalled', { phase, evidence: spawn })
     }
 
     // ── the result tail (§4 order) ──
-    const rc = run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(spawn.result) }) // parse or die
-    disarmExecutor(worktree, phase) // arm file removed right after result-check lands
+    var rc = run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(spawn.result) }) // parse or die
+    } finally {
+      // EVERY exit from the spawn→result-check region disarms — a throw (e.g. from run())
+      // must never leave a stale .armed file to false-arm the next SubagentStop (§8 risk 2).
+      disarmExecutor(worktree, phase)
+    }
     if (rc.exitCode !== 0) return buildHaltPayload('failed', { phase, evidence: { resultCheck: rc.stderr || 'invalid PhaseExecutionResult' } })
     const result = jsonOf(rc)
     if (result.status !== 'done') {

@@ -39,7 +39,10 @@ function derive(root) {
     if (path) worktrees.set(resolve(path), branch)
   }
 
-  // 2) Build registrations
+  // 2) Build registrations — deliberately NOT sidecar.listSidecars(): that reader silently
+  // skips a corrupt sidecar and derives the main checkout from cwd, while status must
+  // REPORT unreadable sidecars (parity with the legacy script) and honor an explicit
+  // [roadmap-root] argument.
   const buildingDir = join(root, 'arcs', '.building')
   const sidecars = new Map() // arcId -> sidecar
   const unreadableSidecars = []

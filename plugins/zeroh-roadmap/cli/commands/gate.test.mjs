@@ -262,6 +262,25 @@ test('gate run — a RED slot forces exit 2 and records that slot exitCode + the
   assert.match(readFileSync(typesRow.logPath, 'utf8'), /TYPES_BOOM/)
 })
 
+test('gate run --slots — a BASE tier name matches its resolved -scoped/-impacted slot (never a silent zero-slot green)', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1250, phaseObj({ phase: 1250 }))
+  repo.commit('feat: phase 1250 — code', { 'lib/c.ts': 'export const c = 1\n' })
+  const r = runGateCmd(repo.root, ['1250', '--slots', 'types'])
+  assert.equal(r.code, 0, r.stderr)
+  const rep = latestReportOf(repo.root, 1250)
+  assert.ok(rep.slots.some((s) => s.slot === 'types'), 'the wanted tier actually ran')
+})
+
+test('gate run --slots — a name matching NO plan slot exits 2, never a green report with zero slots run', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1260, phaseObj({ phase: 1260 }))
+  repo.commit('feat: phase 1260 — code', { 'lib/d.ts': 'export const d = 1\n' })
+  const r = runGateCmd(repo.root, ['1260', '--slots', 'no-such-slot'])
+  assert.equal(r.code, 2, 'an unmatched --slots name must refuse')
+  assert.match(r.stderr, /match no plan slot/)
+})
+
 test('gate run — exec.preReview runs as one recorded row; an absent key produces none', () => {
   const withPre = makeRepo(RUN_CFG({ exec: { preReview: 'true' } }))
   withPre.writePhase(1200, phaseObj({ phase: 1200 }))

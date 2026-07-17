@@ -18,10 +18,8 @@
 import { readFileSync, statSync, realpathSync, readdirSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
 import { execSync, execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
-import { readBeaconLine } from './beacon.mjs'
+import { readBeaconLine, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN } from './beacon.mjs'
 
-const ALIVE_MAX_MIN = 20
-const GATE_QUIET_MAX_MIN = 45
 const ACTIVITY_COMMIT_MAX_MIN = 15
 const ACTIVITY_FILE_MAX_MIN = 10
 const ACTIVITY_SKIP_DIRS = new Set(['.git', 'node_modules', '.building', 'transcripts', 'dist', 'build', '.next', '.turbo', 'coverage'])
