@@ -26,7 +26,11 @@ labels, to the canon's bar).
 **Decide the artifact form (your call, lightest that lets the user judge):** a **prose layout note** for a
 tweak/extension of an existing surface · a **static HTML preview** (via the **frontend-design** skill) for
 a net-new single-state surface · an **interactive prototype** (live click-through + real transitions +
-simulated latency + a restart/failure rail) — REQUIRED for a net-new surface with 2+ sequential states.
+simulated latency + a restart/failure rail) — REQUIRED for a net-new surface with 2+ sequential states ·
+a **design-locked prototype** — the DEFAULT for any net-new or regrouped APP surface: a data-driven
+interactive prototype directory (page + guidelines + mock DB) whose mock-data field names align to the
+consumer's contract shapes. The lighter three classes remain for tweaks, single-state surfaces, and
+marketing pages.
 
 **The craft bar is MANDATORY: read `skills/plan-arc/references/ux-craft.md` before producing anything**
 (the orchestrator passes its path; unresolvable → ask, don't skip) — its self-check is your definition of
@@ -36,11 +40,17 @@ The one point that must ride HERE because it sets the parity contract: **interac
 garnish** — every hover/focus effect, transition, and animation your preview demonstrates becomes part of
 the 1:1 parity contract the build is judged against (same or unambiguously better, never flattened). Design
 motion DELIBERATELY: don't demo a flourish you wouldn't defend at the gate; DO demo an interaction the
-surface needs, so the gate enforces it.
+surface needs, so the gate enforces it. For a **design-locked prototype** the parity contract is
+TRANSCRIPTION, machine-enforced: the prototype's CSS ships verbatim under the consumer's tokens; each
+component transcribes the same DOM structure and class names with props replacing the mock data; parity is
+proven by a visual diff of app vs prototype seeded with the shared fixtures (threshold declared in the
+phase acceptance) — "same or unambiguously better" is judged by the diff, not by review prose.
 
 **Return a designRef recommendation:** `{ kind: 'ux', ref: '<note | preview path>', status: 'reused' |
 'designed', summary: '<one line>' }` — `reused` when it follows a canonical pattern (cite it), `designed`
 for a new layout (say why). The orchestrator writes it after the **user confirms** — never present an
-unseen design as confirmed. **Hand over a LINK, not just a path**: serve the artifact and include the
+unseen design as confirmed. For a design-locked prototype, `ref` points at the prototype DIRECTORY
+(page + guidelines + fixtures) and the summary names the transcription doctrine, so plan-arc member
+phases cite it. **Hand over a LINK, not just a path**: serve the artifact and include the
 reachable URL — a design the user can't open in one click isn't ready for its gate.
 </content>
