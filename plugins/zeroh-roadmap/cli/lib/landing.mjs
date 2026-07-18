@@ -270,6 +270,7 @@ export function evaluateBlockers(state) {
 // structurally-impossible forbidden push, the RunnerSummary, exits 0/3/2.
 // ─────────────────────────────────────────────────────────────────────────────
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolveSlot, resolveImpactedOrFallback, runSlot } from './slots.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
@@ -322,6 +323,51 @@ export async function runArcEndSuite({ config, cwd, includeE2e = false, mode = '
  * falls back to a genuine full suite — never a fabricated range). The consumer's impacted
  * runner is itself fail-toward-full, so even a too-wide range degrades safe.
  */
+/**
+ * Derive the arc's OWN file scope for the impacted arc-end suite — the sharper form of
+ * deriveArcSuiteRange. A contiguous `<start>..HEAD` range on a SHARED base branch sweeps
+ * in sibling sessions' commits (work their own arcs already gated and landed), so the
+ * impacted selector balloons toward the full tier for an arc whose own diff is tiny.
+ * This derivation instead subject-scans the arc's member commits (`phase <N> —`, the
+ * same grammar derivePhaseStartSha anchors on), unions the files THOSE commits touched,
+ * and writes the list to a temp manifest. The caller passes `@<manifest>` through the
+ * impacted slot's `{range}` template — the consumer's runner dispatches on the leading
+ * `@` (files-from) vs a git range. Conservative by construction: zero member commits or
+ * any git failure ⇒ null (the caller falls back to the contiguous range, then to full);
+ * the consumer's selector remains fail-toward-full on whatever it is handed.
+ */
+export function deriveArcSuiteScope(worktree, memberNums, exec = defaultExec) {
+  // Per-member server-side --grep narrows the scan (an unfiltered full-history log
+  // overruns the exec buffer on a real repo), then a client-side SUBJECT-only check
+  // confirms each hit: git's --grep searches the whole message, so a foreign commit
+  // merely MENTIONING "phase N" in its body would otherwise leak into the scope. The
+  // number boundary — not the em-dash derivePhaseStartSha anchors on — catches every
+  // member commit grammar ("phase N task N.X —", "fix: phase N gate RX", "mark phase N
+  // complete") while still refusing 136-inside-1369.
+  const shas = new Set()
+  for (const n of memberNums) {
+    const r = exec('git', ['-C', worktree, 'log', `--grep=phase ${n}`, '--format=%H%x09%s'])
+    if (r.status !== 0) return null // scan unavailable ⇒ no scope (conservative)
+    const re = new RegExp(`(?:^|[^0-9])phase ${n}(?:[^0-9]|$)`)
+    for (const line of r.stdout.split('\n')) {
+      const tab = line.indexOf('\t')
+      if (tab < 0) continue
+      if (re.test(line.slice(tab + 1))) shas.add(line.slice(0, tab))
+    }
+  }
+  if (shas.size === 0) return null
+  const files = new Set()
+  for (const sha of shas) {
+    const r = exec('git', ['-C', worktree, 'show', '--name-only', '--format=', sha])
+    if (r.status !== 0) return null // cannot enumerate a member commit ⇒ no scope
+    for (const f of r.stdout.split('\n').map((s) => s.trim()).filter(Boolean)) files.add(f)
+  }
+  const first = shas.values().next().value
+  const manifest = join(tmpdir(), `roadmap-arc-scope-${process.pid}-${first.slice(0, 8)}.txt`)
+  writeFileSync(manifest, [...files].sort().join('\n') + '\n')
+  return { filesFrom: manifest, fileCount: files.size, commitCount: shas.size }
+}
+
 export function deriveArcSuiteRange(worktree, memberNums, exec = defaultExec) {
   const shas = []
   for (const n of memberNums) {
@@ -556,8 +602,18 @@ export async function landCommand(rest) {
   let effectiveMode = suiteMode
   let suiteRange = null
   if (suiteMode === 'impacted') {
-    suiteRange = deriveArcSuiteRange(state.sidecar?.worktree ?? toplevel, state.members.map((m) => m.num))
-    if (suiteRange === null) effectiveMode = 'full'
+    const wt = state.sidecar?.worktree ?? toplevel
+    // Prefer the arc's OWN file scope (subject-matched member commits → `@manifest`);
+    // a shared-base contiguous range re-tests sibling arcs' already-gated work. Fall back
+    // to the contiguous range, then to a genuine full run — never a guessed scope.
+    const scope = deriveArcSuiteScope(wt, state.members.map((m) => m.num))
+    if (scope !== null) {
+      suiteRange = `@${scope.filesFrom}`
+      state.suiteScope = { fileCount: scope.fileCount, commitCount: scope.commitCount }
+    } else {
+      suiteRange = deriveArcSuiteRange(wt, state.members.map((m) => m.num))
+      if (suiteRange === null) effectiveMode = 'full'
+    }
   }
   const suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e, mode: effectiveMode, range: suiteRange })
   state.suiteGreen = suite.suiteGreen

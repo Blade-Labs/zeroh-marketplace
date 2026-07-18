@@ -15,7 +15,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BLOCKERS, evaluateBlockers, gatherLandingState, buildRunnerSummary, runArcEndSuite, deriveArcSuiteRange } from './landing.mjs'
+import { BLOCKERS, evaluateBlockers, gatherLandingState, buildRunnerSummary, runArcEndSuite, deriveArcSuiteRange, deriveArcSuiteScope } from './landing.mjs'
 import { IMPACTED_FALLBACK_NOTE } from './slots.mjs'
 import { defaultExec } from './exec.mjs'
 
@@ -269,6 +269,24 @@ test('deriveArcSuiteRange — picks the DEEPEST member start sha; zero derivable
   assert.ok(deepestSha)
   // no member matches ⇒ null (never a guessed range)
   assert.equal(deriveArcSuiteRange(root, [9999], defaultExec), null)
+})
+
+test('deriveArcSuiteScope — unions ONLY the member commits\' files into an @manifest; sibling commits excluded; zero members ⇒ null', () => {
+  const root = mkdtempSync(join(tmpdir(), 'zr-scope-'))
+  bases.push(root)
+  const gg = (...a) => execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' })
+  gg('init', '-q')
+  writeFileSync(join(root, 'seed.txt'), '1'); gg('add', '-A'); gg('commit', '-q', '-m', 'seed')
+  writeFileSync(join(root, 'mine-a.txt'), '1'); gg('add', '-A'); gg('commit', '-q', '-m', 'feat: phase 10 — task one')
+  writeFileSync(join(root, 'sibling.txt'), '1'); gg('add', '-A'); gg('commit', '-q', '-m', 'feat: other arc work')
+  writeFileSync(join(root, 'mine-b.txt'), '1'); gg('add', '-A'); gg('commit', '-q', '-m', 'docs: phase 10 — task two')
+  const scope = deriveArcSuiteScope(root, [10], defaultExec)
+  assert.ok(scope !== null, 'scope derives')
+  assert.equal(scope.commitCount, 2)
+  const listed = readFileSync(scope.filesFrom, 'utf8').split('\n').filter(Boolean)
+  assert.deepEqual(listed, ['mine-a.txt', 'mine-b.txt'], 'only the member commits\' files — the sibling commit is excluded')
+  // no member commit matches ⇒ null (the caller falls back to the contiguous range)
+  assert.equal(deriveArcSuiteScope(root, [9999], defaultExec), null)
 })
 
 test('buildRunnerSummary — an impacted-scope landing reports fullSuiteGreen:false + a reason naming the range and the CI backstop', () => {

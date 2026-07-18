@@ -243,13 +243,14 @@ test('arc land command — exit 0 landed end-to-end (direct-on-baseRef, no membe
   assert.ok(existsSync(join(root, 'roadmap', 'arc-summary.json')), 'RunnerSummary written by the command')
 })
 
-test('arc land command — direct + arcEndSuite impacted runs the impacted slots with a <sha>..HEAD range, lands exit 0, summary defers honestly', () => {
+test('arc land command — direct + arcEndSuite impacted runs the impacted slots with the arc-scope @manifest (never the full slot), lands exit 0, summary defers honestly', () => {
   const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true })
   const r = landBin(root, ['A', '--json'])
   assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
-  // the impacted stub ran with the derived range substituted verbatim (never the full slot)
-  assert.match(r.stdout, /IMPACTED_UNIT_RAN [0-9a-f]{7,40}\.\.HEAD/, 'unit-impacted ran with the derived range')
-  assert.match(r.stdout, /IMPACTED_INT_RAN [0-9a-f]{7,40}\.\.HEAD/, 'integration-impacted ran with the derived range')
+  // the impacted stub ran with the ARC-SCOPE manifest substituted verbatim (the member-commit
+  // file union — sharper than the contiguous <sha>..HEAD range, which is now the fallback)
+  assert.match(r.stdout, /IMPACTED_UNIT_RAN @\S+roadmap-arc-scope-\S+/, 'unit-impacted ran with the arc-scope @manifest')
+  assert.match(r.stdout, /IMPACTED_INT_RAN @\S+roadmap-arc-scope-\S+/, 'integration-impacted ran with the arc-scope @manifest')
   assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN/, 'the full unit slot did NOT run')
   const summary = JSON.parse(readFileSync(join(root, 'roadmap', 'arc-summary.json'), 'utf8'))
   assert.equal(summary.gateSignals.fullSuiteGreen, false, 'an impacted landing never claims a full green')
