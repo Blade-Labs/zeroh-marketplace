@@ -13,8 +13,9 @@
  * returns the classification as DATA; the caller owns the exit code.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { join, dirname, resolve } from 'node:path'
 
 /** The VERBATIM worktree-hazard line a strict context prints on tsx-absent. */
 export const TSX_ABSENT_HINT =
@@ -48,18 +49,39 @@ import('file://' + process.argv[1])
 `
 
 /**
- * Run an inline tsx script in the consumer repo via `npx --no-install tsx -e`.
- * `args` become process.argv[1..] inside the script. Returns a discriminated result;
- * NEVER throws on a non-zero exit (the script's exit code is DATA):
+ * Resolve the tsx invocation ONCE per consumer root (the npx-resolution tax is a large
+ * share of the ~7s/read). A consumer-local node_modules/.bin/tsx is invoked directly
+ * (no npx); absent, the `npx --no-install tsx` fallback is kept VERBATIM. Memoized in a
+ * module Map keyed by the resolved root. Returns { file, prefix }.
+ */
+const tsxInvocationCache = new Map()
+export function resolveTsxInvocation(consumerRoot) {
+  const key = resolve(consumerRoot)
+  const memo = tsxInvocationCache.get(key)
+  if (memo) return memo
+  const local = join(key, 'node_modules', '.bin', 'tsx')
+  const inv = existsSync(local)
+    ? { file: local, prefix: [] }
+    : { file: 'npx', prefix: ['--no-install', 'tsx'] }
+  tsxInvocationCache.set(key, inv)
+  return inv
+}
+
+/**
+ * Run an inline tsx script in the consumer repo via the resolved tsx invocation.
+ * `args` become process.argv[1..] inside the script. `exec` (default execFileSync) is
+ * injectable so the one-spawn assertions are testable without a real tsx. Returns a
+ * discriminated result; NEVER throws on a non-zero exit (the script's exit code is DATA):
  *   { ok:true, stdout }
  *   { ok:false, kind:'zod', issues, stderr, exitCode:3 }
  *   { ok:false, kind:'load', stderr, exitCode:4 }
  *   { ok:false, kind:'tsx-absent', stderr }
  *   { ok:false, kind:'eval-error', stderr, exitCode }
  */
-export function bridgeEval(consumerRoot, script, { args = [], timeout = 60_000 } = {}) {
+export function bridgeEval(consumerRoot, script, { args = [], timeout = 60_000, exec = execFileSync } = {}) {
+  const { file, prefix } = resolveTsxInvocation(consumerRoot)
   try {
-    const stdout = execFileSync('npx', ['--no-install', 'tsx', '-e', script, ...args], {
+    const stdout = exec(file, [...prefix, '-e', script, ...args], {
       cwd: consumerRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout,
@@ -87,21 +109,78 @@ export function bridgeEval(consumerRoot, script, { args = [], timeout = 60_000 }
   }
 }
 
+// ── Content-keyed parse cache ─────────────────────────────────────────────────────────
+// key = absolute path + sha256(file bytes) — NEVER mtime, so a content change is a new key
+// and a hash mismatch is a plain miss (staleness is structurally impossible). In-process
+// Map + a best-effort disk mirror under <consumerRoot>/roadmap/.gate/.typed-cache/<hash>.json
+// (already gitignored via roadmap/.gate/.gitignore). Every disk op is try/catch: a cache
+// failure is a MISS, never an error. Only ok results are cached.
+const typedCache = new Map()
+const typedCacheDir = (consumerRoot) => join(consumerRoot, 'roadmap', '.gate', '.typed-cache')
+
+function readTypedCacheDisk(consumerRoot, hash) {
+  try {
+    const p = join(typedCacheDir(consumerRoot), `${hash}.json`)
+    if (!existsSync(p)) return undefined
+    return JSON.parse(readFileSync(p, 'utf8'))
+  } catch {
+    return undefined // any failure ⇒ a miss
+  }
+}
+
+function writeTypedCacheDisk(consumerRoot, hash, parsed) {
+  try {
+    if (!existsSync(join(consumerRoot, 'roadmap'))) return // only mirror inside a real consumer
+    const dir = typedCacheDir(consumerRoot)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, `${hash}.json`), JSON.stringify(parsed))
+  } catch {
+    /* best-effort — a cache write failure is silently a MISS on the next read */
+  }
+}
+
 /**
  * Parse a roadmap file (phase/arc/backlog) through its own import-time .parse(). cwd
  * defaults to the target's directory (tsx is resolved globally; zod resolves relative
- * to the imported file). Returns { ok:true, parsed } | a bridgeEval failure result.
+ * to the imported file). Content-keyed cached unless { cache:false } (phase validate,
+ * the write-guard, must always genuinely parse). `exec` is forwarded to bridgeEval.
+ * Returns { ok:true, parsed } | a bridgeEval failure result.
  */
-export function bridgeImport(targetPath, { consumerRoot, timeout } = {}) {
-  const res = bridgeEval(consumerRoot ?? dirname(targetPath), IMPORT_CHECK, { args: [targetPath], timeout })
+export function bridgeImport(targetPath, { consumerRoot, timeout, cache = true, exec } = {}) {
+  const root = consumerRoot ?? dirname(targetPath)
+  let hash = null
+  let memKey = null
+  if (cache) {
+    try {
+      hash = createHash('sha256').update(readFileSync(targetPath)).digest('hex')
+    } catch {
+      hash = null // unreadable ⇒ no caching, fall through to a real parse (which will error loud)
+    }
+    if (hash) {
+      memKey = resolve(targetPath) + ':' + hash
+      if (typedCache.has(memKey)) return { ok: true, parsed: typedCache.get(memKey) }
+      const disk = readTypedCacheDisk(root, hash)
+      if (disk !== undefined) {
+        typedCache.set(memKey, disk)
+        return { ok: true, parsed: disk }
+      }
+    }
+  }
+  const res = bridgeEval(root, IMPORT_CHECK, { args: [targetPath], timeout, exec })
   if (!res.ok) return res
   const idx = res.stdout.indexOf('PARSED:')
   if (idx < 0) return { ok: false, kind: 'load', stderr: res.stdout, exitCode: 4 }
+  let parsed
   try {
-    return { ok: true, parsed: JSON.parse(res.stdout.slice(idx + 'PARSED:'.length)) }
+    parsed = JSON.parse(res.stdout.slice(idx + 'PARSED:'.length))
   } catch (e) {
     return { ok: false, kind: 'load', stderr: `unparseable PARSED payload: ${e.message}`, exitCode: 4 }
   }
+  if (cache && hash) {
+    typedCache.set(memKey, parsed)
+    writeTypedCacheDisk(root, hash, parsed)
+  }
+  return { ok: true, parsed }
 }
 
 /**

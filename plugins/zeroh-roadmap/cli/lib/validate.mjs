@@ -43,7 +43,9 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
   } catch {
     consumerRoot = dirname(normalized)
   }
-  const imp = bridgeImport(normalized, { consumerRoot })
+  // cache:false — validation IS the product (the write-guard), never a read; it must
+  // genuinely parse every time and never serve a cached verdict.
+  const imp = bridgeImport(normalized, { consumerRoot, cache: false })
   if (!imp.ok) {
     if (imp.kind === 'tsx-absent') return { kind: 'toolchain-missing', ok: !strict }
     if (imp.kind === 'zod') return { kind: 'zod', ok: false, zod: { file: basename(normalized), issues: imp.issues } }
