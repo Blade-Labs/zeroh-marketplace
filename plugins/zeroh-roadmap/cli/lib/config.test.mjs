@@ -265,6 +265,64 @@ test('8e) testCadence.build outside the enum rejects with the key named', () => 
   )
 })
 
+test("8f) mergePolicy.arcEndSuite 'impacted' parses (strict-key acceptance)", () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      mergePolicy: {
+        arcIntegration: 'autonomous',
+        maxOpenFollowups: 0,
+        autonomousPushRefs: ['develop'],
+        primaryCheckout: '/tmp/x',
+        arcEndSuite: 'impacted',
+      },
+    }),
+  )
+  const cfg = loadConfig(repo)
+  assert.equal(cfg.mergePolicy.arcEndSuite, 'impacted')
+})
+
+test('8g) mergePolicy WITHOUT arcEndSuite still parses (optional key — behavior-identical when absent)', () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      mergePolicy: {
+        arcIntegration: 'autonomous',
+        maxOpenFollowups: 0,
+        autonomousPushRefs: ['develop'],
+        primaryCheckout: '/tmp/x',
+      },
+    }),
+  )
+  const cfg = loadConfig(repo)
+  assert.equal(cfg.mergePolicy.arcEndSuite, undefined)
+})
+
+test("8h) mergePolicy.arcEndSuite 'sometimes' (outside the enum) rejects with the key named", () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      mergePolicy: {
+        arcIntegration: 'autonomous',
+        maxOpenFollowups: 0,
+        autonomousPushRefs: ['develop'],
+        primaryCheckout: '/tmp/x',
+        arcEndSuite: 'sometimes',
+      },
+    }),
+  )
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^mergePolicy\.arcEndSuite:\s/.test(l)),
+    `expected a "mergePolicy.arcEndSuite: <message>" dotted-path line; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
 test('9) gateCommands.e2e "none" is accepted', () => {
   const repo = newRepo()
   const cfg = validConfig()

@@ -19,6 +19,10 @@ import { dirname } from 'node:path'
  *  callers machine-emit it into the GateRunReport. Never restated. */
 export const SCOPED_FALLBACK_NOTE = 'scoped slot missing — ran full suite'
 
+/** The impacted-slot fallback note — the SCOPED_FALLBACK_NOTE sibling for the {range}
+ *  arc-end path (decision 2). Defined ONCE; callers machine-emit it. Never restated. */
+export const IMPACTED_FALLBACK_NOTE = 'impacted slot missing — ran full suite'
+
 const refusal = (slot) =>
   `gate cannot run: gateCommands.${slot} missing in roadmap/roadmap.config.json — add it`
 
@@ -75,6 +79,27 @@ export function resolveScopedOrFallback(cfg, tier, files) {
   if (full === 'none') return { slot: tier, declaredAbsent: true, scoped: false }
   // BYTE-IDENTICAL to the full binding — no substitution, no invented filter.
   return { slot: tier, command: full, note: SCOPED_FALLBACK_NOTE, scoped: false }
+}
+
+/**
+ * The impacted-slot resolution rule — the {range} sibling of resolveScopedOrFallback
+ * for the arc-end suite (decision 2). `tier` ∈ 'unit' | 'integration'. When the consumer
+ * has bound `<tier>-impacted`, resolve it with {range} substituted. When it has NOT (or
+ * it is the literal 'none'), run the FULL `<tier>` slot command BYTE-IDENTICAL plus the
+ * verbatim IMPACTED_FALLBACK_NOTE — NEVER an appended/invented filter, and never a range
+ * grafted onto the full command (the returned command IS the full binding, unchanged).
+ */
+export function resolveImpactedOrFallback(cfg, tier, range) {
+  const impactedSlot = `${tier}-impacted`
+  const impactedTemplate = cfg?.gateCommands?.[impactedSlot]
+  if (impactedTemplate != null && impactedTemplate !== 'none') {
+    return { ...resolveSlot(cfg, impactedSlot, { range }), scoped: true }
+  }
+  const full = cfg?.gateCommands?.[tier]
+  if (full == null) return { slot: tier, refused: refusal(tier) }
+  if (full === 'none') return { slot: tier, declaredAbsent: true, scoped: false }
+  // BYTE-IDENTICAL to the full binding — no substitution, no invented filter.
+  return { slot: tier, command: full, note: IMPACTED_FALLBACK_NOTE, scoped: false }
 }
 
 /**

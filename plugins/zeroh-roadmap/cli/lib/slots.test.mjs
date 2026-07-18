@@ -11,7 +11,14 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveSlot, resolveScopedOrFallback, runSlot, SCOPED_FALLBACK_NOTE } from './slots.mjs'
+import {
+  resolveSlot,
+  resolveScopedOrFallback,
+  resolveImpactedOrFallback,
+  runSlot,
+  SCOPED_FALLBACK_NOTE,
+  IMPACTED_FALLBACK_NOTE,
+} from './slots.mjs'
 
 const CFG = Object.freeze({
   gateCommands: Object.freeze({
@@ -71,6 +78,42 @@ test('resolveScopedOrFallback — an UNBOUND scoped slot returns the full comman
   assert.equal(r.note, SCOPED_FALLBACK_NOTE)
   assert.equal(r.note, 'scoped slot missing — ran full suite')
   // BYTE-IDENTICAL to the full binding — no appended/invented filter (the FM2 class)
+  assert.equal(r.command, CFG.gateCommands.unit)
+})
+
+// ── impacted fallback — the {range} single seam (mirrors scoped) ──────────────────────
+test('resolveImpactedOrFallback — a bound impacted slot substitutes the {range} verbatim', () => {
+  const r = resolveImpactedOrFallback(CFG, 'unit', 'origin/develop..HEAD')
+  assert.equal(r.scoped, true)
+  assert.equal(r.command, 'bash scripts/test/run-tier.sh unit-impacted origin/develop..HEAD')
+})
+
+test('resolveImpactedOrFallback — an UNBOUND impacted slot returns the full command byte-identical + the verbatim note', () => {
+  // CFG has no integration-impacted → fall back to the full integration slot
+  const r = resolveImpactedOrFallback(CFG, 'integration', 'origin/develop..HEAD')
+  assert.equal(r.scoped, false)
+  assert.equal(r.note, IMPACTED_FALLBACK_NOTE)
+  assert.equal(r.note, 'impacted slot missing — ran full suite')
+  // BYTE-IDENTICAL to the full binding — no appended/invented filter, no range grafted on
+  assert.equal(r.command, CFG.gateCommands.integration)
+})
+
+test('resolveImpactedOrFallback — a bound impacted slot with NO range REFUSES (never a literal-brace command)', () => {
+  const r = resolveImpactedOrFallback(CFG, 'unit', null)
+  assert.match(r.refused, /\{range\} placeholder but no range/)
+  assert.equal(r.command, undefined)
+})
+
+test("resolveImpactedOrFallback — an impacted slot bound to the literal 'none' falls back to the full tier", () => {
+  const cfg = {
+    gateCommands: {
+      ...CFG.gateCommands,
+      'unit-impacted': 'none',
+    },
+  }
+  const r = resolveImpactedOrFallback(cfg, 'unit', 'origin/develop..HEAD')
+  assert.equal(r.scoped, false)
+  assert.equal(r.note, IMPACTED_FALLBACK_NOTE)
   assert.equal(r.command, CFG.gateCommands.unit)
 })
 

@@ -62,6 +62,10 @@ const MergePolicyShape = z.strictObject({
   // arc-land refusal ceiling on commits-behind-baseRef; default 100 applied at the
   // use-site in landing.mjs (`?? 100`, the maxOpenFollowups idiom) — MECHRATCHET rank 6.
   staleBaseCeiling: z.number().int().positive().optional(),
+  // arc-end suite scope: default 'full' applied at the landing.mjs use-site (the
+  // staleBaseCeiling `??` idiom) and honored ONLY for integrationModel 'direct' — an
+  // isolated-branch landing always runs the full suite regardless.
+  arcEndSuite: z.enum(['full', 'impacted']).optional(),
   // validate-arc GAPS handling under do-arc (user ruling 2026-07-18): 'autonomous' = run the
   // bounded corrective loop unattended (plan -> do -> re-validate until PASS) and land on the
   // judge's PASS; 'hold' (default, fail-safe) = pause for the user's go. Bound exhaustion and
