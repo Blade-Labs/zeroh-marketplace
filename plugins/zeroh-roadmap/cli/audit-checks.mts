@@ -10,7 +10,8 @@
  *   5 done-phase incomplete tasks · 6 task dependsOn bad IDs · 8 duplicate phase numbers
  *   (active+archive) · 9 missing kind (raw scan + reused suggestKind) · 10 stale backlog
  *   entries · 11 oversized tasks without batchMode · 12.1 archive status · 12.2 archive
- *   version↔dir · plus crossValidate() arc↔phase consistency (verbatim, as a bonus section).
+ *   version↔dir · 13 limitations disposed pre-archive (WARN) · plus crossValidate()
+ *   arc↔phase consistency (verbatim, as a bonus section).
  * Checks 4 (NEEDS CLARIFICATION, needs file:line), 7 (git staleness), and 12.3/12.4
  * (the debt-census join over archived phases) stay in the .mjs orchestrator.
  *
@@ -215,6 +216,24 @@ for (const p of activePhases) {
 for (const p of archivePhases) {
   if (p.status !== 'done') add({ check: 12, severity: 'CRITICAL', phase: p.phase, message: `Phase ${p.phase} archived at roadmap/archive/${p.archiveVersion}/ has status: '${p.status}' (expected 'done').` })
   if (p.version != null && p.version !== p.archiveVersion) add({ check: 12, severity: 'CRITICAL', phase: p.phase, message: `Phase ${p.phase} at roadmap/archive/${p.archiveVersion}/ has version: '${p.version}' — directory says ${p.archiveVersion}.` })
+}
+
+// ── Check 13: limitations disposed pre-archive (release-sweep's walk) ─────────
+// A `limitations` census field is by design NOT arc-disposable — release-sweep walks it
+// pre-archive. A CLOSING resolution (fixed/dismissed/won't_fix) on a `.limitations` ref of
+// an UNARCHIVED phase is the MEASURE 2026-07-17 drift class. WARN (MEDIUM, exit stays 0);
+// planned / operator-pending are legitimate open dispositions, NOT findings.
+for (const p of activePhases) {
+  for (const r of (p as any).debtResolutions ?? []) {
+    if (!r.ref?.endsWith('.limitations')) continue
+    if (r.status !== 'fixed' && r.status !== 'dismissed' && r.status !== "won't_fix") continue
+    add({
+      check: 13,
+      severity: 'MEDIUM',
+      phase: p.phase,
+      message: `Phase ${p.phase} disposed ${r.ref} as ${r.status} while UNARCHIVED — limitations disposed pre-archive (release-sweep's walk, not the arc's; MEASURE 2026-07-17 drift class).`,
+    })
+  }
 }
 
 // ── crossValidate() arc↔phase consistency (bonus section, verbatim) ──────────

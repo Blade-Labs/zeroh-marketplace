@@ -488,6 +488,41 @@ test('check 12.4 GREEN — a debtResolution matching a real non-"None" field →
 })
 
 // ════════════════════════════════════════════════════════════════════════════
+// Check 13 — limitations disposed pre-archive (release-sweep's walk) → MEDIUM (WARN)
+// ════════════════════════════════════════════════════════════════════════════
+test('check 13 RED — an ACTIVE phase disposing a .limitations ref as fixed → MEDIUM, exit 0, verdict HAS ISSUES', () => {
+  const root = makeRepo()
+  writePhase(root, 900, basePhase(900, {
+    tasks: [doneTask('900.1', { transparencyReport: cleanTR({ limitations: 'known gap left for a later phase' }) })],
+    debtResolutions: [{ ref: '900.1.limitations', status: 'fixed', via: 'abc1234', date: '2026-01-01' }],
+  }))
+  const { code, report } = audit(root)
+  assert.equal(code, 0, 'a check-13 MEDIUM never breaks the §2 exit contract')
+  assert.equal(report.verdict, 'HAS ISSUES', 'MEDIUM-only → HAS ISSUES, never BROKEN')
+  assert.ok(has(report, 13, 'MEDIUM'), 'disposing limitations pre-archive on an unarchived phase is a check-13 MEDIUM')
+})
+
+test('check 13 GREEN planned — the same .limitations ref left status:planned → no check-13 finding', () => {
+  const root = makeRepo()
+  writePhase(root, 900, basePhase(900, {
+    tasks: [doneTask('900.1', { transparencyReport: cleanTR({ limitations: 'known gap left for a later phase' }) })],
+    debtResolutions: [{ ref: '900.1.limitations', status: 'planned', date: '2026-01-01' }],
+  }))
+  const { report } = audit(root)
+  assert.ok(!has(report, 13, 'MEDIUM'), 'planned is a legitimate open disposition, not a check-13 finding')
+})
+
+test("check 13 GREEN archived — an ARCHIVED phase disposing .limitations as fixed → no check-13 finding", () => {
+  const root = makeRepo()
+  writeArchive(root, '1.0.0', 900, archived(900, '1.0.0', {
+    tasks: [doneTask('900.1', { transparencyReport: cleanTR({ limitations: 'known gap left for a later phase' }) })],
+    debtResolutions: [{ ref: '900.1.limitations', status: 'fixed', via: 'abc1234', date: '2026-01-01' }],
+  }))
+  const { report } = audit(root)
+  assert.ok(!has(report, 13, 'MEDIUM'), "an archived phase's limitations disposal is release-sweep's legitimate walk")
+})
+
+// ════════════════════════════════════════════════════════════════════════════
 // Bonus crossValidate — arc-consistency HIGH
 // ════════════════════════════════════════════════════════════════════════════
 test("arc-consistency RED — phase.arcId names an arc whose planes don't list it → HIGH, exit 2", () => {

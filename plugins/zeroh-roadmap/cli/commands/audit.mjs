@@ -1,9 +1,9 @@
 /**
- * roadmap audit [repo-root] [--json] — audit-roadmap's 12 structural checks, mechanized
+ * roadmap audit [repo-root] [--json] — audit-roadmap's 13 structural checks, mechanized
  * (ROADCODE 1659.2, replacing skills/audit-roadmap's hand-run prose). Read-only: never
  * opens source code, never fixes — reports findings + a verdict.
  *
- * Two tiers (ROADCODE §2): the typed structural checks (1-3, 5-6, 8-12.2 + crossValidate)
+ * Two tiers (ROADCODE §2): the typed structural checks (1-3, 5-6, 8-12.2, 13 + crossValidate)
  * run in cli/audit-checks.mts under the consumer's tsx so they reuse the consumer registry's
  * discoverPhases/crossValidate + the plugin's suggestKind — never a second parser. This
  * orchestrator owns the checks that need git or raw file:line, and reuses the debt-census
