@@ -67,3 +67,12 @@ Pick the lightest option that lets the user actually judge the design. The UX de
 The plugin owns the **gate**; the consumer owns the **homes**. Neither the architecture doc set nor the UX canon path is hardcoded here — both are read from the `designHomes` key in the consumer's `roadmap.config.json` (the same consumer-agnostic seam the `validationTiers` bindings use). A consumer that configures its design homes gets the gate for free; the plugin stays portable.
 
 **Absent key → fail loud, don't guess.** If the gate fires (new pattern / surface) but `designHomes` is absent, surface that and STOP — no home to search, and guessing a doc path is exactly what the seam exists to prevent. The consumer configures its design homes first (mirrors the absent-`validationTiers` gap rule — never a silent pass).
+
+## 5. Apply-arc template — implementing a RATIFIED prototype
+
+When an arc implements a ratified design-locked prototype, the design gate is **ALREADY SATISFIED** — cite the ratification + the prototype directory as the designRef; run NO new UX sub-gate. The arc plans mechanically:
+
+- **Phase 1** — the parity harness + shared fixtures + token wiring (the consumer's theme token source, e.g. `zeroh-theme.css`).
+- **Then one phase per surface group, in prototype-nav order** — each phase = transcribe + fixture-swap + visual-diff + wired itest, per the consumer's `TRANSCRIPTION-PROTOCOL.md`.
+
+**Deviations from the prototype are DEFECTS, never judgment calls** — they route back through the prototype + re-ratification, keeping the mock and the product in lockstep.
