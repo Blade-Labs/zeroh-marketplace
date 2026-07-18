@@ -223,3 +223,119 @@ test('8) missing roadmap root → exit 1 with the no-roadmap line on stderr', ()
   assert.match(res.stderr, /no roadmap at/, `stderr must name the missing roadmap; got:\n${res.stderr}`)
   assert.equal(res.stdout.trim(), '', 'nothing on stdout on the error path')
 })
+
+// ── lane-integrity flags: DIVERGED? (phase/task-state drift) + STALE-ARM (leaked arm) ──
+// Additive, like the post-merge-watch banner: absent whenever the condition does not
+// hold, so the synthetic parity estate (no done-task-under-backlog, no arm files) stays
+// byte-identical and status.parity.test.mjs is untouched.
+
+/** A BUILDING lane whose backlog member carries a REAL done:true task → a status/task divergence. */
+function estateWithDivergedArc() {
+  const root = join(newTmp(), 'roadmap')
+  const phases = join(root, 'phases')
+  const building = join(root, 'arcs', '.building')
+  mkdirSync(phases, { recursive: true })
+  mkdirSync(building, { recursive: true })
+  // done:true is a real task field (NOT prose in a notes string) — a genuine divergence:
+  // work landed but the phase was never moved to in-progress.
+  writeFileSync(
+    join(phases, 'phase-3001.phase.ts'),
+    [
+      'export default {',
+      '  phase: 3001,',
+      "  status: 'backlog',",
+      "  arcId: 'DIVERGE',",
+      '  tasks: [',
+      "    { id: '3001.1', done: true },",
+      '  ],',
+      '}',
+      '',
+    ].join('\n'),
+  )
+  writeFileSync(
+    join(building, 'DIVERGE.json'),
+    JSON.stringify({ arcId: 'DIVERGE', worktree: '/nonexistent/wt-diverge', branch: 'arc/diverge', mode: 'mixed' }) + '\n',
+  )
+  return root
+}
+
+/** A BUILDING lane with a REAL linked worktree carrying a bare-format (leaked) executor arm. */
+function estateWithStaleArm() {
+  const repoDir = join(newTmp(), 'repo')
+  mkdirSync(repoDir, { recursive: true })
+  const g = gitify(repoDir)
+  const root = join(repoDir, 'roadmap')
+  const phases = join(root, 'phases')
+  const building = join(root, 'arcs', '.building')
+  mkdirSync(phases, { recursive: true })
+  mkdirSync(building, { recursive: true })
+
+  const wt = join(newTmp(), 'wt')
+  const added = g('worktree', 'add', '-q', wt, '-b', 'arc-stalearm')
+  assert.equal(added.status, 0, `worktree add must succeed; stderr:\n${added.stderr}`)
+  // A BARE/legacy arm body (not session-bound JSON) is stale by definition (executor-arm.mjs).
+  mkdirSync(join(wt, '.building'), { recursive: true })
+  const armFile = join(wt, '.building', '2001-executor.armed')
+  writeFileSync(armFile, 'sess-legacy-bare\n')
+
+  writePhase(phases, 'phase-2001.phase.ts', { phase: 2001, status: 'in-progress', arcId: 'STALEARM' })
+  writeFileSync(
+    join(building, 'STALEARM.json'),
+    JSON.stringify({ arcId: 'STALEARM', worktree: wt, branch: 'arc-stalearm', mode: 'mixed' }) + '\n',
+  )
+  return { root, wt, armFile }
+}
+
+test('9) DIVERGED? — a backlog member with a done:true task marks the lane diverged (--json row.diverged + human flag)', () => {
+  const root = estateWithDivergedArc()
+
+  const json = status(root, '--json')
+  assert.equal(json.status, 0, `status --json must exit 0; stderr:\n${json.stderr}`)
+  const parsed = JSON.parse(json.stdout)
+  const row = parsed.rows.find((r) => r.arc === 'DIVERGE')
+  assert.ok(row, 'the DIVERGE lane must be present in rows')
+  assert.ok(Array.isArray(row.diverged), `row.diverged must be a typed array; got ${JSON.stringify(row.diverged)}`)
+  assert.ok(
+    row.diverged.map(String).includes('3001'),
+    `row.diverged must name the diverged phase 3001; got ${JSON.stringify(row.diverged)}`,
+  )
+
+  const human = status(root)
+  assert.equal(human.status, 0)
+  assert.match(human.stdout, /DIVERGED\?/, `the human table must carry the DIVERGED? flag; got:\n${human.stdout}`)
+})
+
+test('10) STALE-ARM — a bare-format arm in the lane worktree marks the lane (--json row.staleArms + human flag)', () => {
+  const { root } = estateWithStaleArm()
+
+  const json = status(root, '--json')
+  assert.equal(json.status, 0, `status --json must exit 0; stderr:\n${json.stderr}`)
+  const parsed = JSON.parse(json.stdout)
+  const row = parsed.rows.find((r) => r.arc === 'STALEARM')
+  assert.ok(row, 'the STALEARM lane must be present in rows')
+  assert.ok(Array.isArray(row.staleArms), `row.staleArms must be a typed array; got ${JSON.stringify(row.staleArms)}`)
+  assert.ok(
+    row.staleArms.some((f) => /2001-executor\.armed/.test(String(f))),
+    `row.staleArms must name the leaked arm file; got ${JSON.stringify(row.staleArms)}`,
+  )
+
+  const human = status(root)
+  assert.equal(human.status, 0)
+  assert.match(human.stdout, /STALE-ARM/, `the human table must carry the STALE-ARM flag; got:\n${human.stdout}`)
+})
+
+test('11) clean lane — an in-progress member with no task divergence and no arm carries NEITHER marker', () => {
+  const root = estateWithBuildingArc() // BUILDA: in-progress 2001 + backlog 2002, no done-tasks, no arms
+
+  const json = status(root, '--json')
+  assert.equal(json.status, 0, `status --json must exit 0; stderr:\n${json.stderr}`)
+  const parsed = JSON.parse(json.stdout)
+  const row = parsed.rows.find((r) => r.arc === 'BUILDA')
+  assert.ok(row, 'the BUILDA lane is present')
+  assert.deepEqual(row.diverged ?? [], [], 'a clean lane carries no diverged phases')
+  assert.deepEqual(row.staleArms ?? [], [], 'a clean lane carries no stale arms')
+
+  const human = status(root)
+  assert.equal(human.status, 0)
+  assert.doesNotMatch(human.stdout, /DIVERGED\?|STALE-ARM/, 'a clean lane prints neither integrity flag')
+})

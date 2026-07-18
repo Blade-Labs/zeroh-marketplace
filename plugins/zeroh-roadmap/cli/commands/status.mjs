@@ -17,9 +17,10 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { scanProgress } from '../lib/phasescan.mjs'
+import { scanProgress, scanPhaseFile } from '../lib/phasescan.mjs'
 import { arcProgress } from '../lib/derive.mjs'
 import { lastEvent, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN, WORK_EVENTS } from '../lib/beacon.mjs'
+import { staleArms } from '../lib/executor-arm.mjs'
 
 const git = (args, cwd) => {
   try {
@@ -119,6 +120,33 @@ function derive(root) {
     const h = (Date.now() / 1000 - epoch) / 3600
     return { txt: h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`, stale: h > 24 }
   }
+  // 5b) Advisory divergence + stale-arm detection (1737.3; display-only, never exit codes).
+  //  DIVERGED? = the 1702 class: a member phase file still status 'backlog' while carrying
+  //  done:true tasks (regex tier — advisory precision is the deliberate trade).
+  //  STALE-ARM = a leaked .building/<N>-executor.armed per executor-arm.staleArms.
+  const divergedOf = (arcId, phasesDir) => {
+    const out = []
+    if (!existsSync(phasesDir)) return out
+    for (const f of readdirSync(phasesDir).filter((f) => f.endsWith('.phase.ts'))) {
+      const p = join(phasesDir, f)
+      const r = scanPhaseFile(p)
+      if (!r || String(r.arcId) !== String(arcId) || r.status !== 'backlog') continue
+      try {
+        if (/\bdone:\s*true\b/.test(readFileSync(p, 'utf8'))) out.push(r.phase)
+      } catch {
+        /* unreadable → skip (advisory) */
+      }
+    }
+    return out
+  }
+  const staleArmsOf = (wt) => {
+    try {
+      return staleArms(wt, join(wt, 'roadmap', 'phases')).map((s) => s.file)
+    } catch {
+      return []
+    }
+  }
+
   const livenessOf = (arcId, wt) => {
     const b = lastEvent(arcId, { mainRoot: root })
     if (b) {
@@ -139,12 +167,24 @@ function derive(root) {
     const wt = resolve(s.worktree ?? '')
     const gone = !worktrees.has(wt)
     const age = gone ? { txt: '-', stale: false, flag: '' } : livenessOf(id, wt)
-    const flags = [gone && 'WORKTREE GONE', age.flag].filter(Boolean).join(' ')
+    const lanePhases = gone || !existsSync(join(wt, 'roadmap', 'phases')) ? join(root, 'phases') : join(wt, 'roadmap', 'phases')
+    const diverged = divergedOf(id, lanePhases)
+    const armFiles = gone ? [] : staleArmsOf(wt)
+    const flags = [
+      gone && 'WORKTREE GONE',
+      age.flag,
+      diverged.length && `DIVERGED? (phase ${diverged.join(', ')} has done tasks under status backlog)`,
+      armFiles.length && `STALE-ARM (${armFiles.join(', ')})`,
+    ]
+      .filter(Boolean)
+      .join(' ')
     rows.push({
       arc: id,
       state: s.paused ? 'PAUSED' : 'BUILDING',
       where: `${s.worktree}${s.branch ? ` @ ${s.branch}` : ''}`,
       age: age.txt,
+      ...(diverged.length ? { diverged } : {}),
+      ...(armFiles.length ? { staleArms: armFiles } : {}),
       note: [progressTxt(id, gone ? undefined : wt), s.note, resumes.get(id) && `resume: ${resumes.get(id).file}`, flags]
         .filter(Boolean)
         .join(' · '),
