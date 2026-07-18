@@ -25,7 +25,7 @@ import { join, resolve, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { scanPhaseFile, scanProgress } from './phasescan.mjs'
-import { bridgeImport, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
+import { bridgeImport, bridgeImportMany, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
 import { derivePhaseStartSha, GitScanError } from './gitscan.mjs'
 import { readSidecar } from './sidecar.mjs'
 import { classifyBand } from './ladder.mjs'
@@ -230,9 +230,29 @@ export function deriveArcPosition({ repoRoot, arcId, config, worktree = repoRoot
   // 3) RUN-PHASE — the next backlog member in plane order whose deps are done (typed candidate re-read).
   const backlog = members.filter((m) => !isDone(m.status)) // status 'backlog' (in-progress handled above)
   if (backlog.length > 0) {
+    // Batch-read ALL candidates in ONE tsx process BEFORE the loop (reads are side-effect-free).
+    // The DeriveError is thrown LAZILY — only when the selection loop actually CONSULTS a failed
+    // entry: today's loop returns on the first runnable candidate, so a broken file positioned
+    // AFTER it is never read; an eager throw at batch time would be a behavior change.
+    const batch = bridgeImportMany(backlog.map((m) => m.file), { consumerRoot: repoRoot })
+    if (!batch.ok) {
+      // tsx-absent / eval-error is a whole-toolchain failure — loud immediately, as a single read would be.
+      if (batch.kind === 'tsx-absent') {
+        throw new DeriveError('tsx-absent', [`roadmap: cannot typed-read backlog candidates — tsx unavailable in ${repoRoot}`, TSX_ABSENT_HINT])
+      }
+      throw new DeriveError('load', ['roadmap: failed to batch typed-read backlog candidates', (batch.stderr ?? '').trim()])
+    }
     let anyRunnable = false
     for (const m of backlog) {
-      const parsed = typedRead(m.file, repoRoot) // TYPED candidate — wins over any regex prose false-positive
+      const r = batch.byPath[m.file]
+      if (!r || !r.ok) {
+        // LAZY: this candidate is being consulted now → surface its failure exactly as typedRead would.
+        if (!r || r.kind === 'tsx-absent') {
+          throw new DeriveError('tsx-absent', [`roadmap: cannot typed-read ${m.file} — tsx unavailable in ${repoRoot}`, TSX_ABSENT_HINT])
+        }
+        throw new DeriveError('load', [`roadmap: failed to typed-read ${m.file}`, (r.stderr ?? '').trim()])
+      }
+      const parsed = r.parsed // TYPED candidate — wins over any regex prose false-positive
       if (isDone(parsed.status)) continue // typed truth: not actually backlog
       const deps = parsed.dependsOn ?? []
       const depsMet = deps.every((d) => isDone(statusOf(repoRoot, d)))

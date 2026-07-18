@@ -96,6 +96,27 @@ test('run-phase — a backlog member whose deps are unmet is skipped; block when
   assert.equal(pos.phase, 12)
 })
 
+const BROKEN_PHASE_SRC = "export default { phase: 11, status: 'backlog', tasks: [ THIS_IS_BROKEN @#$ }\n"
+
+test('run-phase — a broken candidate AFTER the first runnable is never read (batch lazy-throw preserves early return)', () => {
+  // [10 runnable backlog, 11 broken] — the loop returns on 10 and never consults 11.
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10, 11] }] }, [backlog(10)])
+  writeFileSync(join(root, 'roadmap', 'phases', 'phase-11.phase.ts'), BROKEN_PHASE_SRC)
+  const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'run-phase')
+  assert.equal(pos.phase, 10, 'a broken file after the first runnable candidate must not blow up the derive')
+})
+
+test('run-phase — a broken candidate BEFORE the first runnable throws a DeriveError naming THAT file', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [11, 10] }] }, [backlog(10)])
+  writeFileSync(join(root, 'roadmap', 'phases', 'phase-11.phase.ts'), BROKEN_PHASE_SRC)
+  assert.throws(
+    () => deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) }),
+    (e) => e instanceof DeriveError && e.messageLines.some((l) => /phase-11\.phase\.ts/.test(l)),
+    'consulting the broken candidate first throws lazily for that file',
+  )
+})
+
 test('blocked — a backlog member with an unmet dep and no runnable sibling', () => {
   const root = makeRepo('A', { planes: [{ name: 'P1', phases: [11] }] }, [backlog(11, { dependsOn: [9999] })])
   const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })

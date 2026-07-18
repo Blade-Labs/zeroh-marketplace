@@ -16,7 +16,7 @@
  */
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { bridgeImport, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
+import { bridgeImport, bridgeImportMany, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
 import { readSidecar } from './sidecar.mjs'
 import { readValidateVerdict, runDebtCensus, DeriveError } from './derive.mjs'
 import { derivePhaseStartSha, GitScanError } from './gitscan.mjs'
@@ -51,6 +51,31 @@ function typedRead(path, repoRoot) {
 }
 
 /**
+ * Batch typed-read (ONE tsx process for all N paths). Per-file failure maps to the SAME
+ * LandingError typedRead throws (tsx-absent ⇒ loud hint; else load naming THAT file), so
+ * the converted call site is behavior-identical to the per-file loop it replaces. Returns
+ * a path→parsed map.
+ */
+function typedReadMany(paths, repoRoot) {
+  for (const p of paths) if (!existsSync(p)) throw new LandingError('load', [`roadmap: no file at ${p}`])
+  const res = bridgeImportMany(paths, { consumerRoot: repoRoot })
+  if (!res.ok) {
+    if (res.kind === 'tsx-absent') throw new LandingError('tsx-absent', ['roadmap: cannot typed-read member phase files — tsx unavailable', TSX_ABSENT_HINT])
+    throw new LandingError('load', ['roadmap: failed to batch typed-read member phase files', (res.stderr ?? '').trim()])
+  }
+  const out = {}
+  for (const p of paths) {
+    const r = res.byPath[p]
+    if (!r || !r.ok) {
+      if (r?.kind === 'tsx-absent') throw new LandingError('tsx-absent', [`roadmap: cannot typed-read ${p} — tsx unavailable`, TSX_ABSENT_HINT])
+      throw new LandingError('load', [`roadmap: failed to typed-read ${p}`, (r?.stderr ?? '').trim()])
+    }
+    out[p] = r.parsed
+  }
+  return out
+}
+
+/**
  * Gather the landing preconditions from PERSISTED state only (do-arc Step 8 (1)): every
  * member typed-read (done + executionResult + debtResolutions), the validate verdict, the
  * census slice → openFollowups (decision 6), the integration model (decision 9), and the
@@ -60,8 +85,10 @@ function typedRead(path, repoRoot) {
 export function gatherLandingState({ repoRoot, arcId, config, exec = defaultExec }) {
   const arc = typedRead(arcFilePath(repoRoot, arcId), repoRoot)
   const memberNums = (arc.planes ?? []).flatMap((p) => p.phases ?? [])
+  // Batch every member phase file in ONE tsx process (was one ~7s spawn per member).
+  const parsedByPath = typedReadMany(memberNums.map((n) => phaseFilePath(repoRoot, n)), repoRoot)
   const members = memberNums.map((n) => {
-    const parsed = typedRead(phaseFilePath(repoRoot, n), repoRoot)
+    const parsed = parsedByPath[phaseFilePath(repoRoot, n)]
     return {
       num: n,
       status: parsed.status,

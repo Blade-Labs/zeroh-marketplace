@@ -183,6 +183,91 @@ export function bridgeImport(targetPath, { consumerRoot, timeout, cache = true, 
   return { ok: true, parsed }
 }
 
+// The batch import-parse script — the IMPORT_CHECK mechanic over N paths with a PER-FILE
+// try/catch (one bad file fails THAT entry, not the batch), emitting a path-keyed map.
+const MANY_IMPORT_CHECK = `
+const out = {}
+const paths = process.argv.slice(1)
+;(async () => {
+  for (const p of paths) {
+    try {
+      const m = await import('file://' + p)
+      let d = m && m.default
+      if (d && typeof d === 'object' && d.default != null) d = d.default
+      out[p] = { ok: true, parsed: d ?? null }
+    } catch (e) {
+      if (e && Array.isArray(e.issues)) out[p] = { ok: false, kind: 'zod', issues: e.issues }
+      else out[p] = { ok: false, kind: 'load', stderr: String((e && e.stack) || e) }
+    }
+  }
+  process.stdout.write('PARSEDMANY:' + JSON.stringify(out))
+})()
+`
+
+/**
+ * Import N roadmap files in ONE tsx process (the N-spawn tax killer). Content-cache hits
+ * are served first; only the misses go through a single batched invocation. Per-file
+ * failure is ISOLATED (one bad file yields { ok:false, kind:'zod'|'load' } for THAT path,
+ * never failing its siblings) — mirroring bridgeImport's classification. A tsx-absent /
+ * eval-error fails the WHOLE call (a toolchain matter, as today). Only ok results are
+ * cached. `exec` is forwarded to bridgeEval.
+ * Returns { ok:true, byPath: { [path]: { ok:true, parsed } | { ok:false, kind, issues?, stderr } } }
+ *   | a bridgeEval whole-call failure result ({ ok:false, kind:'tsx-absent'|'eval-error'|'load', ... }).
+ */
+export function bridgeImportMany(paths, { consumerRoot, timeout, exec, cache = true } = {}) {
+  const root = consumerRoot ?? (paths[0] ? dirname(paths[0]) : process.cwd())
+  const byPath = {}
+  const misses = []
+  const hashByPath = {}
+  for (const p of paths) {
+    if (cache) {
+      let hash = null
+      try {
+        hash = createHash('sha256').update(readFileSync(p)).digest('hex')
+      } catch {
+        hash = null
+      }
+      if (hash) {
+        hashByPath[p] = hash
+        const memKey = resolve(p) + ':' + hash
+        if (typedCache.has(memKey)) {
+          byPath[p] = { ok: true, parsed: typedCache.get(memKey) }
+          continue
+        }
+        const disk = readTypedCacheDisk(root, hash)
+        if (disk !== undefined) {
+          typedCache.set(memKey, disk)
+          byPath[p] = { ok: true, parsed: disk }
+          continue
+        }
+      }
+    }
+    misses.push(p)
+  }
+  if (misses.length === 0) return { ok: true, byPath }
+
+  const res = bridgeEval(root, MANY_IMPORT_CHECK, { args: misses, timeout, exec })
+  if (!res.ok) return res // tsx-absent / eval-error fails the whole call (toolchain matter)
+  const idx = res.stdout.indexOf('PARSEDMANY:')
+  if (idx < 0) return { ok: false, kind: 'load', stderr: res.stdout, exitCode: 4 }
+  let parsedMap
+  try {
+    parsedMap = JSON.parse(res.stdout.slice(idx + 'PARSEDMANY:'.length))
+  } catch (e) {
+    return { ok: false, kind: 'load', stderr: `unparseable PARSEDMANY payload: ${e.message}`, exitCode: 4 }
+  }
+  for (const p of misses) {
+    const r = parsedMap[p] ?? { ok: false, kind: 'load', stderr: `no batch result for ${p}` }
+    byPath[p] = r
+    if (r.ok && cache && hashByPath[p]) {
+      const memKey = resolve(p) + ':' + hashByPath[p]
+      typedCache.set(memKey, r.parsed)
+      writeTypedCacheDisk(root, hashByPath[p], r.parsed)
+    }
+  }
+  return { ok: true, byPath }
+}
+
 /**
  * <consumerRoot>/lib/roadmap/schema.ts — the ONE consumer schema seam-3 validates
  * through. Existence-checked: a non-consumer tree throws BridgeError('schema-missing')

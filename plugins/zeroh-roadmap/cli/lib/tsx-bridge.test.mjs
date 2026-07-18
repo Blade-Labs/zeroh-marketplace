@@ -14,6 +14,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   bridgeImport,
+  bridgeImportMany,
   bridgeEval,
   resolveTsxInvocation,
   consumerSchemaPath,
@@ -194,4 +195,55 @@ test('bridgeImport — a FAILED parse is never cached (two calls ⇒ two execs)'
   assert.equal(a.ok, false)
   assert.equal(b.ok, false)
   assert.equal(calls, 2, 'failures re-parse every time — only ok results are cached')
+})
+
+// ── 1719.4 — bridgeImportMany batch import ────────────────────────────────────────────
+test('bridgeImportMany — batch output matches per-file bridgeImport for real fixture files', () => {
+  const root = makeConsumer()
+  const f1 = join(root, 'phase-9101.phase.ts')
+  const f2 = join(root, 'phase-9101b.phase.ts')
+  writeFileSync(f1, validPhase)
+  writeFileSync(f2, validPhase.replace('9101', '9111').replace('a fixture bridge phase', 'a second fixture phase'))
+  const many = bridgeImportMany([f1, f2], { consumerRoot: root, cache: false })
+  assert.equal(many.ok, true)
+  const one1 = bridgeImport(f1, { consumerRoot: root, cache: false })
+  const one2 = bridgeImport(f2, { consumerRoot: root, cache: false })
+  assert.deepEqual(many.byPath[f1].parsed, one1.parsed)
+  assert.deepEqual(many.byPath[f2].parsed, one2.parsed)
+})
+
+test('bridgeImportMany — per-file failure isolation: one broken file does not fail its siblings', () => {
+  const root = makeConsumer()
+  const good1 = join(root, 'g1.phase.ts')
+  const bad = join(root, 'bad.phase.ts')
+  const good2 = join(root, 'g2.phase.ts')
+  writeFileSync(good1, validPhase)
+  writeFileSync(bad, zodBadPhase)
+  writeFileSync(good2, validPhase.replace('9101', '9121'))
+  const many = bridgeImportMany([good1, bad, good2], { consumerRoot: root, cache: false })
+  assert.equal(many.ok, true)
+  assert.equal(many.byPath[good1].ok, true)
+  assert.equal(many.byPath[good2].ok, true)
+  assert.equal(many.byPath[bad].ok, false)
+  assert.equal(many.byPath[bad].kind, 'zod')
+  assert.ok(Array.isArray(many.byPath[bad].issues) && many.byPath[bad].issues.length > 0)
+})
+
+test('bridgeImportMany — N=5 misses make exactly ONE spawn (counted via the injected exec)', () => {
+  const root = bareRoot()
+  const paths = [1, 2, 3, 4, 5].map((n) => join(root, `p${n}.ts`))
+  paths.forEach((p) => writeFileSync(p, `CONTENT_${p}`))
+  let calls = 0
+  const fakeExec = (file, args) => {
+    calls++
+    const evalIdx = args.indexOf('-e')
+    const passed = args.slice(evalIdx + 2) // [...prefix,'-e',script,...paths]
+    const out = {}
+    for (const p of passed) out[p] = { ok: true, parsed: { phase: 1 } }
+    return 'PARSEDMANY:' + JSON.stringify(out)
+  }
+  const many = bridgeImportMany(paths, { consumerRoot: root, cache: false, exec: fakeExec })
+  assert.equal(many.ok, true)
+  assert.equal(calls, 1, 'all five misses import in a single tsx process')
+  assert.equal(Object.keys(many.byPath).length, 5)
 })
