@@ -300,6 +300,12 @@
             },
             "copyRules": {
               "type": "string"
+            },
+            "bindingDesignSystem": {
+              "type": "string"
+            },
+            "superseded": {
+              "type": "string"
             }
           },
           "additionalProperties": false
