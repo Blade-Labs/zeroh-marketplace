@@ -127,6 +127,34 @@ test('gate plan — --base overrides the derivation', () => {
   assert.equal(r.plan.baseSha, seed)
 })
 
+test('gate plan — D1: an ancient `phase N —` mention + a newer move-to-in-progress → base is the move-commit parent, no false specialist floor', () => {
+  const repo = makeRepo()
+  repo.writePhase(7305, phaseObj({ phase: 7305 }))
+  // Ancient `phase 7305 —` commit touching a SPINE path — this is the D1 trap: under the
+  // oldest-match rule its parent becomes the base and src/relay pollutes the phase-own set.
+  repo.commit('docs: phase 7305 — old mention', { 'src/relay/governed-turn.ts': 'export const x = 1\n' })
+  // Newer move-to-in-progress commit (docs-only) + real docs-only work.
+  repo.commit('plan(roadmap): phase 7305 — move to in-progress', { 'docs/plan.md': '# plan\n' })
+  const moveParent = repo.git('rev-parse', 'HEAD~1').trim() // parent of the move commit = the ancient commit
+  repo.commit('docs: phase 7305 — work', { 'docs/work.md': '# work\n' })
+  const r = planOf(repo.root, ['7305'])
+  assert.equal(r.code, 0, `no floor should fire once the ancient relay file is excluded; stderr: ${r.stderr}`)
+  assert.equal(r.plan.baseSha, moveParent, 'baseSha = parent of the NEWEST move-to-in-progress commit')
+  assert.deepEqual(r.plan.diff.specialistPaths, [], 'the ancient spine file is before the base, excluded from phase-own')
+})
+
+test('gate plan — D6: an ancient spine mention with NO move-commit → --base excludes it from diff/floor', () => {
+  const repo = makeRepo()
+  repo.writePhase(7306, phaseObj({ phase: 7306 }))
+  repo.commit('docs: phase 7306 — old mention', { 'src/relay/governed-turn.ts': 'export const x = 1\n' })
+  const recent = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit('docs: phase 7306 — work', { 'docs/w.md': '# w\n' })
+  const r = planOf(repo.root, ['7306', '--base', recent])
+  assert.equal(r.code, 0, `--base must exclude the ancient spine file; stderr: ${r.stderr}`)
+  assert.equal(r.plan.baseSha, recent)
+  assert.deepEqual(r.plan.diff.specialistPaths, [], 'the ancient spine file is at/before --base, excluded')
+})
+
 test('gate plan — a declared static over a SPECIALIST-path diff REFUSES with exit 2', () => {
   const repo = makeRepo()
   repo.writePhase(300, phaseObj({ phase: 300, testScope: 'static' }))

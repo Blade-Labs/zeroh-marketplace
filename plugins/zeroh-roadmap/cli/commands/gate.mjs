@@ -478,7 +478,7 @@ export async function runGate(phaseNum, opts) {
     // (the moment all fix commits exist) and print them BEFORE the verdict. WARN ONLY: the exit
     // code is decided by consistency alone (0 consistent / 2 problems), warnings notwithstanding.
     let warnBase = null
-    try { warnBase = deriveBaseSha(toplevel, phaseNum) } catch { /* no move-to-in-progress commit ⇒ no warnings */ }
+    try { warnBase = deriveBaseSha(toplevel, phaseNum, { base: opts.base }) } catch { /* no move-to-in-progress commit ⇒ no warnings */ }
     if (warnBase) for (const w of untestedGateFixFindings(toplevel, phaseNum, warnBase)) process.stdout.write(`warning: ${w}\n`)
     if (warnBase) for (const w of deviantGrammarFindings(toplevel, phaseNum, warnBase)) process.stdout.write(`warning: ${w}\n`)
     const result = checkPhaseConsistency(imp.parsed, latest.report)
