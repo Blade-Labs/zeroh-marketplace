@@ -47,7 +47,10 @@ For each task in order:
    implement, scoped (GREEN), commit test+code. `"e2e"` — implement, then `test-engineer` writes
    the flow test blind to source; commit together (e2e runs at the gate). `"none"` — the steps.
 2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; scope touched tests via
-   the scoped slot (never a hand-built filter); a UI change runs `build`.
+   the scoped slot (never a hand-built filter); a UI change runs `build`. **Any run expected
+   under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (a session
+   event kills the Monitor's wake silently; the executor-reference long-run protocol governs
+   only genuinely long runs).
 3. **Commit** — `<type>(<scope>): phase N — <task title>`.
 4. **Persist** `transparencyReport` + `done: true` + `doneDate`, same commit.
 5. **Continue immediately** — the task boundary is a commit boundary, never a turn boundary.
