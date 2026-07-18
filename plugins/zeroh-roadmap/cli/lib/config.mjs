@@ -104,6 +104,8 @@ const DesignHomesShape = z.strictObject({
       canon: z.array(z.string()).optional(),
       qualityExemplar: z.string().optional(),
       copyRules: z.string().optional(),
+      bindingDesignSystem: z.string().optional(),
+      superseded: z.string().optional(),
     })
     .optional(),
 })
