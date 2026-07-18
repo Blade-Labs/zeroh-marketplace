@@ -284,13 +284,19 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   const slots = []
   for (const s of nonTest) slots.push(compactSlot(resolveSlot(opts.cfg, s)))
   const testFiles = selectTestFiles(toplevel, ownFiles)
+  const emptyScopeSkip = []
   if (wantsTests && testScope.effective !== 'static' && !testScope.refused) {
     if (testScope.effective === 'full') {
       slots.push(compactSlot(resolveSlot(opts.cfg, 'unit')))
       slots.push(compactSlot(resolveSlot(opts.cfg, 'integration')))
-    } else {
+    } else if (testFiles.length > 0) {
       slots.push(compactSlot({ ...resolveScopedOrFallback(opts.cfg, 'unit', testFiles), files: testFiles }))
       slots.push(compactSlot({ ...resolveScopedOrFallback(opts.cfg, 'integration', testFiles), files: testFiles }))
+    } else {
+      // An EMPTY scoped selection is a skip, not a refusal: running a scoped tier with no
+      // files exits 2 and paints the whole gate RED over nothing (the 1737 gate run-000001
+      // incident — a consumer-side docs/roadmap diff whose tests all live out-of-repo).
+      emptyScopeSkip.push('scoped test slots skipped — no test files in the phase-own set (an empty scope is a skip, never a refusal)')
     }
   }
   if (cell.e2e === 'inline') slots.push(compactSlot(resolveSlot(opts.cfg, 'e2e')))
@@ -306,6 +312,7 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   const notes = [
     ...testScope.notes,
     ...reviewScope.notes,
+    ...emptyScopeSkip,
     'reviewScope: the "adds no new governed surface / contract / ledger event kind" light-exclusion is plan-time judgment (review-phase Mode A), not machine-decided (pre-made decision 2b)',
   ]
   if (cell.closureItest) notes.push('hardening closure integration test required — never defers (both modes)')
