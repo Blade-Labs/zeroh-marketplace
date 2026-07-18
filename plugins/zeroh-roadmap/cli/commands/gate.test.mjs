@@ -517,3 +517,20 @@ test('gate run --verify-complete — no report dir exits 1', () => {
   assert.equal(r.code, 1)
   assert.match(r.stderr, /no roadmap\/\.gate\/1500/)
 })
+
+test('gate plan — an EMPTY scoped selection SKIPS the scoped slots with a named note, never a refusal (1737 run-000001 class)', () => {
+  const repo = makeRepo()
+  // Declared 'relevant' RAISES the docs-derived floor (the real 1737 shape) while the
+  // phase-own diff carries no test files → the scoped selection is empty.
+  repo.writePhase(5005, phaseObj({ phase: 5005, testScope: 'relevant' }))
+  repo.commit('docs: phase 5005 — move to in-progress', { 'roadmap/notes-a.md': '# a\n' })
+  repo.commit('docs: phase 5005 — followup prose', { 'roadmap/notes-b.md': '# b\n' })
+  const r = planOf(repo.root, ['5005'])
+  assert.equal(r.code, 0, r.stderr)
+  const slots = r.plan.slots.map((s) => s.slot)
+  assert.ok(!slots.includes('unit-scoped') && !slots.includes('integration-scoped'), `no scoped slots on an empty selection; got ${slots}`)
+  assert.ok(
+    r.plan.notes.some((n) => /scoped test slots skipped — no test files/.test(n)),
+    `the skip is NAMED in notes; got ${JSON.stringify(r.plan.notes)}`,
+  )
+})
