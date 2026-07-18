@@ -273,10 +273,12 @@ function estateWithStaleArm() {
   const wt = join(newTmp(), 'wt')
   const added = g('worktree', 'add', '-q', wt, '-b', 'arc-stalearm')
   assert.equal(added.status, 0, `worktree add must succeed; stderr:\n${added.stderr}`)
-  // A BARE/legacy arm body (not session-bound JSON) is stale by definition (executor-arm.mjs).
+  // The pre-D9 phase-number FOSSIL — genuinely unbound, stale by definition. (A raw
+  // session-id string would be the old BOUND prose format the guard honors — it must
+  // NOT flag on a live phase: the 1703 near-miss.)
   mkdirSync(join(wt, '.building'), { recursive: true })
   const armFile = join(wt, '.building', '2001-executor.armed')
-  writeFileSync(armFile, 'sess-legacy-bare\n')
+  writeFileSync(armFile, '2001\n')
 
   writePhase(phases, 'phase-2001.phase.ts', { phase: 2001, status: 'in-progress', arcId: 'STALEARM' })
   writeFileSync(

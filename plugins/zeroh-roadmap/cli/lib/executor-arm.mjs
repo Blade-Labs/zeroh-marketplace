@@ -8,7 +8,12 @@
  *
  * Staleness = the arm outlived its executor: the phase is terminal (status done/
  * historical), OR the beacon's last event is phase-complete (read through beacon.mjs's
- * readBeaconLine so legacy terminal aliases count), OR the body is bare/legacy.
+ * readBeaconLine so legacy terminal aliases count), OR the body is UNBOUND. Unbound is
+ * judged by the GUARD's own contract (detectArm): JSON {sessionId} and a raw non-empty
+ * string are BOTH bound formats (the raw string is the pre-1737 prose format the guard
+ * honors — sweeping it on a live phase would disarm a running executor, the 1703
+ * near-miss); truly unbound = empty body, unreadable, JSON without a sessionId, or a
+ * purely-numeric body (the pre-D9 phase-number fossil, e.g. a file containing `1713`).
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -67,11 +72,12 @@ export function staleArms(worktree, phasesDir) {
     try {
       const raw = readFileSync(file, 'utf8').trim()
       if (raw.startsWith('{')) bound = typeof JSON.parse(raw).sessionId === 'string'
+      else bound = raw.length > 0 && !/^\d+$/.test(raw) // raw session id = the old BOUND prose format (guard detectArm honors it)
     } catch {
       /* unreadable = unbound */
     }
     if (!bound) {
-      out.push({ file, phase, reason: 'bare/legacy arm format (pre-session-binding) — unbound is stale by definition' })
+      out.push({ file, phase, reason: 'unbound arm (empty / phase-number fossil / JSON without sessionId) — stale by definition' })
       continue
     }
     if (phaseTerminal(phasesDir, phase)) {

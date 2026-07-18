@@ -197,16 +197,25 @@ test('9b) staleArms (b) — a LEGACY executor-done beacon line counts (normalize
   assert.equal(stale[0].phase, 1727)
 })
 
-test('10) staleArms (c) — a BARE/legacy arm body (not JSON with sessionId) is STALE by definition', () => {
+test('10) staleArms (c) — a phase-number FOSSIL body (e.g. `1713`) is STALE; a raw session-id body is BOUND (the 1703 near-miss)', () => {
   const worktree = newTmp()
   const phasesDir = join(newTmp(), 'phases')
-  writeRawArm(worktree, 1727, 'sess-abc') // pre-session-binding raw-string body
-  writePhaseFile(phasesDir, 1727, 'in-progress') // otherwise-live phase, no terminal beacon
-
+  // The pre-D9 fossil: the file contains the PHASE NUMBER, not a session id → unbound → stale.
+  writeRawArm(worktree, 1727, '1727')
+  writePhaseFile(phasesDir, 1727, 'in-progress')
   const stale = staleArms(worktree, phasesDir)
-  assert.equal(stale.length, 1, 'a bare-format arm is stale regardless of phase state')
+  assert.equal(stale.length, 1, 'a phase-number fossil arm is stale regardless of phase state')
   assert.equal(stale[0].phase, 1727)
-  assert.match(stale[0].reason, /bare|legacy|format|json|session/i, `reason names the bare-format class; got ${stale[0].reason}`)
+  assert.match(stale[0].reason, /unbound|fossil|format|json|session/i, `reason names the unbound class; got ${stale[0].reason}`)
+
+  // The OLD BOUND prose format: a raw session-id string — the guard's detectArm honors it
+  // (`else if (raw.length > 0) armedSession = raw`), so on a LIVE phase it is NOT stale.
+  // Sweeping it would disarm a running executor (the live 1703 near-miss, 2026-07-18).
+  const worktree2 = newTmp()
+  const phasesDir2 = join(newTmp(), 'phases')
+  writeRawArm(worktree2, 1728, 'ed737add-1b2c-4d5e-8f90-a1b2c3d4e5f6')
+  writePhaseFile(phasesDir2, 1728, 'in-progress')
+  assert.deepEqual(staleArms(worktree2, phasesDir2), [], 'a raw session-id arm on a live phase is BOUND — never swept')
 })
 
 test('10b) staleArms (c) — a JSON body WITHOUT a sessionId key is bare/legacy ⇒ STALE', () => {
@@ -256,8 +265,8 @@ test('12) staleArms — mixed estate returns the EXACT stale set, each reason na
   writePhaseFile(phasesDir, 1721, 'in-progress')
   writeBeacon(worktree, 1721, [{ ts: isoAgo(2), event: 'phase-complete', phase: 1721 }])
 
-  // 1722: bare-format arm → stale (class c)
-  writeRawArm(worktree, 1722, 'sess-3')
+  // 1722: phase-number fossil arm → stale (class c: unbound)
+  writeRawArm(worktree, 1722, '1722')
   writePhaseFile(phasesDir, 1722, 'in-progress')
 
   // 1723: live JSON arm, in-progress, non-terminal beacon → NOT stale
@@ -271,7 +280,7 @@ test('12) staleArms — mixed estate returns the EXACT stale set, each reason na
   assert.deepEqual([...byPhase.keys()].sort((a, b) => a - b), [1720, 1721, 1722], 'exactly the three leaked arms')
   assert.match(byPhase.get(1720).reason, /done|phase.?complete|status/i, 'class a reason')
   assert.match(byPhase.get(1721).reason, /beacon|phase.?complete|terminal|complete/i, 'class b reason')
-  assert.match(byPhase.get(1722).reason, /bare|legacy|format|json|session/i, 'class c reason')
+  assert.match(byPhase.get(1722).reason, /unbound|fossil|format|json|session/i, 'class c reason')
   assert.equal(byPhase.has(1723), false, 'the live in-progress arm is never flagged')
 
   for (const s of stale) {
