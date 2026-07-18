@@ -19,9 +19,10 @@
  * the JSON `{"decision":"block","reason":…}` channel; exit code stays 0.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, appendFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { appendExecutorEvent } from '../cli/lib/beacon.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
 const BACKGROUND_RUN_MAX_MIN = 10
@@ -201,12 +202,7 @@ function resultCheckPasses(json, phase, cwd) {
 
 function appendResultReturned(worktree, phase) {
   try {
-    const dir = join(worktree, '.building')
-    mkdirSync(dir, { recursive: true })
-    appendFileSync(
-      join(dir, `${phase}-executor.jsonl`),
-      JSON.stringify({ ts: new Date().toISOString(), phase, event: 'result-returned' }) + '\n',
-    )
+    appendExecutorEvent(worktree, phase, 'result-returned')
   } catch {
     /* best-effort */
   }

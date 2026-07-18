@@ -36,8 +36,9 @@ reorder/skip them, or mark a task done before it is committed.
 
 Read the phase (`status` must be `backlog`/`in-progress`; terminal = stop). If it declares
 `assumptions[]`, run each `verify` **before any code**: any failure ⇒ STOP and escalate with the
-raw output (arc-mode: `status: "escalated"`) — escalating IS success. Set a `backlog` phase to
-`in-progress` and commit before task 1.
+raw output (arc-mode: `status: "escalated"`) — escalating IS success. Then `roadmap phase start
+<N>` (the atomic flip + move-commit + executor-start beacon; idempotent if already in-progress)
+before task 1 — never a hand edit of the status field.
 
 ## The per-task loop (one task = one commit)
 

@@ -28,9 +28,10 @@ long-run + foreign-red: `agents/references/executor-reference.md`.
 
 ## The task loop (re-anchor after every task)
 
-**Step 0:** run the `assumptions[]` tripwires — a failed `verify` escalates BEFORE any code. Then,
-one task = one commit:
-1. Beacon `task-start` → `<worktree>/.building/<N>-executor.jsonl`.
+**Step 0:** run the `assumptions[]` tripwires — a failed `verify` escalates BEFORE any code; then
+`roadmap phase start <N>` (the atomic backlog→in-progress flip + move-commit + executor-start
+beacon — never a hand edit). Then, one task = one commit:
+1. `roadmap beacon task-start --phase <N>` (the typed writer — never a hand-appended JSONL line).
 2. Implement `steps` (TDD via `test-engineer` for `testMode` tdd/e2e).
 3. Verify — `roadmap gate run <N> --slots types` + the phase-relevant scoped tests.
 4. Commit (the hook stamps the `commit` beacon); persist `transparencyReport` + `done: true`.
@@ -40,7 +41,9 @@ one task = one commit:
 ## The gate + return
 
 After the last task run the `kind`-selected gate — `roadmap gate plan <N>` → `gate run <N>` → the
-agent chain it names — FOREGROUND to exit code, beaconing each stage. Record each agent round into
+agent chain it names — FOREGROUND to exit code, beaconing each stage via
+`roadmap beacon gate-stage-start|gate-stage-end --phase <N> --detail <stage>`. The ONE terminal
+beacon event is `phase-complete` (the closed vocabulary refuses variants). Record each agent round into
 the report with `gate run <N> --record-round <json>` as it finishes (else `--verify-complete`
 refuses the done flip). Then in ONE continuous execution set the completion fields +
 `executionResult`, commit, run `gate run <N> --verify-complete`, and return. SKIP grooming/emit/push

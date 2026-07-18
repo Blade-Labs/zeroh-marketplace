@@ -37,12 +37,13 @@ workflow engine cannot host its imports).
    3. Band `trivial`/`heavy` (or `--inline`) → the inline handoff below. Band `mid` → spawn
       ONE `phase-executor` subagent: prompt = the phase file + the gate plan + the arc's
       execution-prompt doc; result schema from `roadmap contract show --json-schema`. BEFORE
-      the spawn, arm the Stop-hook guard: write `<worktree>/.building/<phase>-executor.armed`
-      containing YOUR SESSION ID (the session-scoped dir name in your transcript/scratchpad
-      paths) — an unbound file is inert and a foreign session is never guarded;
+      the spawn, arm the Stop-hook guard: `roadmap executor-arm <phase> --session <YOUR
+      SESSION ID>` (the session-scoped dir name in your transcript/scratchpad paths) — the
+      CLI refuses an unbound arm, and a foreign session is never guarded;
       background `roadmap watch <id>` as its watchdog (exit 3 STALLED / 4 EXITED).
    4. On return: `roadmap result check --phase <phase>` over the returned JSON (parse or
-      die — never trust prose), then REMOVE the `.armed` file (always, even on a halt).
+      die — never trust prose), then `roadmap executor-disarm <phase>` (always, even on a
+      halt; `roadmap executor-disarm --sweep` at arc start clears stale leftovers).
       `status` ≠ `done` → the halt branch below. Criterion-narrowing compromise → the
       self-descope branch. Else `roadmap gate run <phase> --verify-complete`, groom the
       backlog entry, run the `emit` slot, and loop.
