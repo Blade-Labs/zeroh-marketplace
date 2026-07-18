@@ -294,6 +294,95 @@ test('gate plan — FOREIGN commit in range: scope binds to phase-own files, for
   assert.ok(r.plan.foreignCommitsInRange.includes('src/relay/governed-turn.ts'))
 })
 
+// ── the "1661 class" (ROADCODE D6): a docs-only phase on a heavily-interleaved shared
+//    branch derives a docs floor; foreign + MERGE commits never enter phase-own attribution.
+//    Regression locks over the EXISTING phaseOwnFiles em-dash grep + gitscan move-commit base.
+test('gate plan — 1661 class: docs-only phase interleaved with foreign exec commits derives the docs floor; foreign + phase files never cross', () => {
+  const repo = makeRepo()
+  repo.writePhase(5001, phaseObj({ phase: 5001 }))
+  // move-to-in-progress (docs-only) fixes the base at its parent (gitscan Tier 1).
+  repo.commit('plan(roadmap): phase 5001 — move to in-progress', { 'roadmap/plan.md': '# plan\n' })
+  const moveParent = repo.git('rev-parse', 'HEAD~1').trim()
+  // Foreign exec work interleaved between the phase's own docs commits — no phase subject.
+  repo.commit('feat: sibling relay work (no phase tag)', { 'src/relay/governed-turn.ts': 'export const a = 1\n' })
+  repo.commit('docs: phase 5001 — notes one', { 'roadmap/a.md': '# a\n' })
+  repo.commit('refactor: other module (no phase tag)', { 'src/model/select.ts': 'export const b = 2\n' })
+  repo.commit('docs: phase 5001 — notes two', { 'roadmap/b.md': '# b\n' })
+
+  const r = planOf(repo.root, ['5001'])
+  assert.equal(r.code, 0, `docs-only phase-own set → no specialist floor; stderr: ${r.stderr}`)
+  assert.equal(r.plan.baseSha, moveParent, 'base = parent of the newest move-to-in-progress commit')
+  // phase-own = the three roadmap/*.md docs files (move + two notes) — NOT the foreign exec files
+  assert.equal(r.plan.diff.files, 3, `phase-own file count: ${r.plan.diff.files}`)
+  assert.deepEqual(r.plan.diff.classes, ['docs'], 'phase-own set is docs-only')
+  assert.deepEqual(r.plan.diff.specialistPaths, [], 'no foreign spine file leaks into the floor')
+  assert.equal(r.plan.testScope.effective, 'static', 'docs-tier floor')
+  // both foreign exec files surfaced, never scoped in
+  assert.ok(r.plan.foreignCommitsInRange.includes('src/relay/governed-turn.ts'), 'foreign relay file surfaced')
+  assert.ok(r.plan.foreignCommitsInRange.includes('src/model/select.ts'), 'second foreign exec file surfaced')
+})
+
+test('gate plan — 1661 class: a plain (foreign, no phase subject) merge commit in range is excluded — no crash, no leak', () => {
+  const repo = makeRepo()
+  repo.writePhase(5002, phaseObj({ phase: 5002 }))
+  repo.commit('plan(roadmap): phase 5002 — move to in-progress', { 'roadmap/plan.md': '# plan\n' })
+  const moveParent = repo.git('rev-parse', 'HEAD~1').trim()
+  const branch = repo.git('rev-parse', '--abbrev-ref', 'HEAD').trim()
+  repo.git('checkout', '-q', '-b', 'sib2')
+  repo.commit('feat: sibling relay work on a branch', { 'src/relay/governed-turn.ts': 'export const a = 1\n' })
+  repo.git('checkout', '-q', branch)
+  repo.git('merge', '--no-ff', '-q', '-m', 'Merge branch sib2', 'sib2')
+  repo.commit('docs: phase 5002 — work', { 'roadmap/w.md': '# w\n' })
+
+  const r = planOf(repo.root, ['5002'])
+  assert.equal(r.code, 0, `a plain merge must not crash or trip a floor; stderr: ${r.stderr}`)
+  assert.equal(r.plan.baseSha, moveParent)
+  // phase-own = move + work docs; the merged-in exec file is foreign
+  assert.equal(r.plan.diff.files, 2, `phase-own file count: ${r.plan.diff.files}`)
+  assert.deepEqual(r.plan.diff.specialistPaths, [], 'merged-in spine file is not phase-own')
+  assert.equal(r.plan.testScope.effective, 'static')
+  assert.ok(r.plan.foreignCommitsInRange.includes('src/relay/governed-turn.ts'), 'merged-in exec file surfaced as foreign')
+})
+
+test('gate plan — 1661 class: an ADVERSARIAL merge whose subject names "phase 5003 —" still keeps its merged-in files OUT of the phase-own set', () => {
+  const repo = makeRepo()
+  repo.writePhase(5003, phaseObj({ phase: 5003 }))
+  repo.commit('plan(roadmap): phase 5003 — move to in-progress', { 'roadmap/plan.md': '# plan\n' })
+  const branch = repo.git('rev-parse', '--abbrev-ref', 'HEAD').trim()
+  repo.git('checkout', '-q', '-b', 'sib3')
+  // A SPECIALIST-path exec file: were the merge to leak it into phase-own, the floor would fire (exit 2).
+  repo.commit('feat: sibling relay work on a branch', { 'src/relay/governed-turn.ts': 'export const a = 1\n' })
+  repo.git('checkout', '-q', branch)
+  // The merge subject ACCIDENTALLY names the phase — the em-dash attribution grep matches this merge.
+  repo.git('merge', '--no-ff', '-q', '-m', 'Merge develop — phase 5003 — sync', 'sib3')
+  repo.commit('docs: phase 5003 — work', { 'roadmap/w.md': '# w\n' })
+
+  const r = planOf(repo.root, ['5003'])
+  // CORRECT behavior: git log's default merge-diff suppression keeps the merge commit's files out of
+  // `git log --grep --name-only`, so no spine file is attributed to the phase and no floor fires.
+  assert.equal(r.code, 0, `the phase-named merge must NOT leak src/relay into the floor (a leak would exit 2); stderr: ${r.stderr}`)
+  assert.deepEqual(r.plan.diff.specialistPaths, [], 'merge-named-phase files must NOT enter the phase-own specialist set')
+  assert.equal(r.plan.testScope.effective, 'static', 'phase-own stays docs-only')
+  assert.equal(r.plan.diff.files, 2, 'phase-own = move + work docs only, not the merged relay file')
+  assert.ok(r.plan.foreignCommitsInRange.includes('src/relay/governed-turn.ts'), 'the relay file is surfaced as foreign, never phase-own')
+})
+
+test('gate plan — 1661 class: --base binds baseSha to the given sha verbatim (the b8a4250 contract)', () => {
+  const repo = makeRepo()
+  repo.writePhase(5004, phaseObj({ phase: 5004 }))
+  repo.commit('plan(roadmap): phase 5004 — move to in-progress', { 'roadmap/plan.md': '# plan\n' })
+  repo.commit('feat: foreign exec (no phase tag)', { 'src/relay/governed-turn.ts': 'export const a = 1\n' })
+  repo.commit('docs: phase 5004 — work', { 'roadmap/w.md': '# w\n' })
+  // Pin the base explicitly at the foreign commit → only the trailing docs commit is in range.
+  const foreignSha = repo.git('rev-parse', 'HEAD~1').trim()
+  const r = planOf(repo.root, ['5004', '--base', foreignSha])
+  assert.equal(r.code, 0, r.stderr)
+  assert.equal(r.plan.baseSha, foreignSha, '--base overrides the em-dash derivation')
+  // only the post-base phase docs commit is attributed
+  assert.equal(r.plan.diff.files, 1, `phase-own file count: ${r.plan.diff.files}`)
+  assert.deepEqual(r.plan.diff.classes, ['docs'], 'the single attributed file is docs')
+})
+
 // ── gate run — mechanical execution + the GateRunReport ─────────────────────────────
 // A config with runnable fake slot commands (no gate specialists → no floors interfere).
 const RUN_CFG = (over = {}) => ({
