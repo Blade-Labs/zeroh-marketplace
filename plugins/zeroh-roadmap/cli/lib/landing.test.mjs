@@ -15,7 +15,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BLOCKERS, evaluateBlockers, gatherLandingState, buildRunnerSummary } from './landing.mjs'
+import { BLOCKERS, evaluateBlockers, gatherLandingState, buildRunnerSummary, runArcEndSuite, deriveArcSuiteRange } from './landing.mjs'
+import { IMPACTED_FALLBACK_NOTE } from './slots.mjs'
 import { defaultExec } from './exec.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -216,4 +217,71 @@ test('buildRunnerSummary — a null census stays fail-closed (arcSweepClean fals
   const state = { arcId: 'A', censusEntries: null, hasCriteria: false }
   const s = buildRunnerSummary(state, { suiteGreen: true })
   assert.equal(s.gateSignals.arcSweepClean, false, 'null !== 0 ⇒ fail-closed, unchanged')
+})
+
+// ── 1719.2 — impacted-mode arc-end suite + honest deferral summary ────────────────────
+test('runArcEndSuite — mode impacted resolves the impacted slots and substitutes {range} verbatim', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'zr-impacted-'))
+  bases.push(dir)
+  const cfg = {
+    gateCommands: {
+      unit: 'echo FULL_UNIT',
+      integration: 'echo FULL_INT',
+      'unit-impacted': 'echo IMP_UNIT {range} > u.txt',
+      'integration-impacted': 'echo IMP_INT {range} > i.txt',
+    },
+  }
+  const r = await runArcEndSuite({ config: cfg, cwd: dir, mode: 'impacted', range: 'seedsha..HEAD' })
+  assert.equal(r.suiteGreen, true)
+  assert.equal(r.mode, 'impacted')
+  assert.equal(r.range, 'seedsha..HEAD')
+  // the impacted slot ran (not the full one) and the range was substituted verbatim
+  assert.match(readFileSync(join(dir, 'u.txt'), 'utf8'), /IMP_UNIT seedsha\.\.HEAD/)
+  assert.match(readFileSync(join(dir, 'i.txt'), 'utf8'), /IMP_INT seedsha\.\.HEAD/)
+})
+
+test('runArcEndSuite — mode impacted with NO impacted bindings runs the full commands byte-identical + the note', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'zr-impacted-fb-'))
+  bases.push(dir)
+  const cfg = { gateCommands: { unit: 'true', integration: 'true' } } // no *-impacted bindings
+  const r = await runArcEndSuite({ config: cfg, cwd: dir, mode: 'impacted', range: 'x..HEAD' })
+  assert.equal(r.suiteGreen, true)
+  assert.equal(r.mode, 'impacted')
+  // every scoped slot fell back to the full binding + surfaced the verbatim fallback note
+  assert.ok(r.slots.every((s) => s.note === IMPACTED_FALLBACK_NOTE), 'each slot carries the impacted-fallback note')
+})
+
+test('deriveArcSuiteRange — picks the DEEPEST member start sha; zero derivable shas ⇒ null', () => {
+  const root = mkdtempSync(join(tmpdir(), 'zr-range-'))
+  bases.push(root)
+  const gg = (...a) => execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' })
+  gg('init', '-q')
+  writeFileSync(join(root, 'a'), '1'); gg('add', '-A'); gg('commit', '-q', '-m', 'seed')
+  writeFileSync(join(root, 'b'), '1'); gg('add', '-A'); gg('commit', '-q', '-m', 'feat: phase 10 — move to in-progress')
+  writeFileSync(join(root, 'c'), '1'); gg('add', '-A'); gg('commit', '-q', '-m', 'feat: phase 11 — move to in-progress')
+  writeFileSync(join(root, 'd'), '1'); gg('add', '-A'); gg('commit', '-q', '-m', 'work')
+  // phase 10's start (parent of its move-commit) is DEEPER than phase 11's → range anchors on 10.
+  const range = deriveArcSuiteRange(root, [10, 11], defaultExec)
+  assert.match(range, /^[0-9a-f]{7,40}\.\.HEAD$/, 'a <sha>..HEAD range')
+  const deepestSha = range.split('..')[0]
+  const count = parseInt(execFileSync('git', ['-C', root, 'rev-list', '--count', range], { encoding: 'utf8' }).trim(), 10)
+  assert.equal(count, 3, 'phase 10 start = parent of its move-commit ⇒ 3 commits to HEAD (deepest)')
+  assert.ok(deepestSha)
+  // no member matches ⇒ null (never a guessed range)
+  assert.equal(deriveArcSuiteRange(root, [9999], defaultExec), null)
+})
+
+test('buildRunnerSummary — an impacted-scope landing reports fullSuiteGreen:false + a reason naming the range and the CI backstop', () => {
+  const state = { arcId: 'A', censusEntries: [], hasCriteria: false, suiteMode: 'impacted', suiteRange: 'abc123..HEAD' }
+  const s = buildRunnerSummary(state, { suiteGreen: true })
+  assert.equal(s.gateSignals.fullSuiteGreen, false, 'an impacted run never claims a full green')
+  assert.match(s.reason, /IMPACTED scope only \(abc123\.\.HEAD\)/, 'the reason names the impacted range')
+  assert.match(s.reason, /ci-pr-gate per PR \+ nightly/, 'the reason names the CI full-suite backstop')
+})
+
+test('buildRunnerSummary — a full-scope landing keeps fullSuiteGreen:true with no reason', () => {
+  const state = { arcId: 'A', censusEntries: [], hasCriteria: false, suiteMode: 'full', suiteRange: null }
+  const s = buildRunnerSummary(state, { suiteGreen: true })
+  assert.equal(s.gateSignals.fullSuiteGreen, true)
+  assert.equal(s.reason, undefined, 'a genuine full green carries no deferral reason')
 })

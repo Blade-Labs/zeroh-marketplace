@@ -19,6 +19,7 @@ import { join, resolve } from 'node:path'
 import { bridgeImport, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
 import { readSidecar } from './sidecar.mjs'
 import { readValidateVerdict, runDebtCensus, DeriveError } from './derive.mjs'
+import { derivePhaseStartSha, GitScanError } from './gitscan.mjs'
 import { defaultExec } from './exec.mjs'
 
 /** A typed landing failure. kind ∈ 'tsx-absent' | 'load' | 'usage'. */
@@ -192,7 +193,10 @@ export const BLOCKERS = [
   {
     id: 4,
     name: 'arc-end suite not green',
-    check: (s) => (s.suiteGreen === true ? null : 'the arc-end full suite is not green'),
+    check: (s) =>
+      s.suiteGreen === true
+        ? null
+        : `the arc-end suite (${s.suiteMode === 'impacted' ? 'impacted scope' : 'full'}) is not green`,
   },
   {
     id: 5,
@@ -239,7 +243,7 @@ export function evaluateBlockers(state) {
 // structurally-impossible forbidden push, the RunnerSummary, exits 0/3/2.
 // ─────────────────────────────────────────────────────────────────────────────
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
-import { resolveSlot, runSlot } from './slots.mjs'
+import { resolveSlot, resolveImpactedOrFallback, runSlot } from './slots.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
@@ -252,13 +256,19 @@ import { loadConfig, ConfigError } from './config.mjs'
  * declared-`none` slot is SKIPPED, recorded honestly (never a fake green); an arc whose
  * every slot is absent records the no-runtime-suite note rather than pretending it ran.
  */
-export async function runArcEndSuite({ config, cwd, includeE2e = false }) {
+export async function runArcEndSuite({ config, cwd, includeE2e = false, mode = 'full', range = null }) {
   const wanted = ['unit', 'integration', ...(includeE2e ? ['e2e'] : [])]
   const results = []
   let anyRan = false
   let anyRed = false
   for (const slot of wanted) {
-    const resolved = resolveSlot(config, slot)
+    // 'impacted' mode scopes unit/integration to the arc's commit range via the impacted
+    // slot (byte-identical full fallback when unbound); e2e has no impacted variant, so it
+    // ALWAYS resolves its full slot.
+    const resolved =
+      mode === 'impacted' && (slot === 'unit' || slot === 'integration')
+        ? resolveImpactedOrFallback(config, slot, range)
+        : resolveSlot(config, slot)
     if (resolved.declaredAbsent) {
       results.push({ slot, skipped: 'declared none' })
       continue
@@ -271,10 +281,42 @@ export async function runArcEndSuite({ config, cwd, includeE2e = false }) {
     const run = await runSlot(resolved, { cwd })
     anyRan = true
     if (run.exitCode !== 0) anyRed = true
-    results.push({ slot, exitCode: run.exitCode, durationMs: run.durationMs })
+    results.push({ slot, exitCode: run.exitCode, durationMs: run.durationMs, ...(run.note ? { note: run.note } : {}) })
   }
   const note = !anyRan ? 'no runtime suite ran (every arc-end slot is declared none — docs-only arc)' : undefined
-  return { slots: results, suiteGreen: !anyRed, ran: anyRan, ...(note ? { note } : {}) }
+  return { slots: results, suiteGreen: !anyRed, ran: anyRan, mode, range, ...(note ? { note } : {}) }
+}
+
+/**
+ * Derive the arc's own commit range `<sha>..HEAD` for the impacted arc-end suite (decision
+ * 5): derivePhaseStartSha per member (a GitScanError — no matching commit / git failure —
+ * SKIPS that member, never guesses), then pick the DEEPEST start (the most commits to HEAD,
+ * so the range covers every member's work). Zero derivable shas ⇒ null (the caller then
+ * falls back to a genuine full suite — never a fabricated range). The consumer's impacted
+ * runner is itself fail-toward-full, so even a too-wide range degrades safe.
+ */
+export function deriveArcSuiteRange(worktree, memberNums, exec = defaultExec) {
+  const shas = []
+  for (const n of memberNums) {
+    try {
+      shas.push(derivePhaseStartSha(worktree, n))
+    } catch (e) {
+      if (e instanceof GitScanError) continue
+      throw e
+    }
+  }
+  let best = null
+  let bestCount = -1
+  for (const sha of shas) {
+    const r = exec('git', ['-C', worktree, 'rev-list', '--count', `${sha}..HEAD`])
+    if (r.status !== 0) continue // probe unavailable ⇒ skip this candidate (conservative)
+    const c = parseInt(r.stdout.trim(), 10)
+    if (Number.isFinite(c) && c > bestCount) {
+      bestCount = c
+      best = sha
+    }
+  }
+  return best === null ? null : `${best}..HEAD`
 }
 
 /**
@@ -312,12 +354,21 @@ export function buildRunnerSummary(state, { suiteGreen }) {
       : state.censusEntries.filter((e) => e.state === 'OPEN' && e.field !== 'limitations').length
   const arcSweepClean = openCount === 0 // null census stays fail-closed: null !== 0 ⇒ false
   const validateArcPassed = state.hasCriteria ? state.verdict?.verdict === 'PASS' : true
+  // An impacted-scope arc-end run NEVER claims a full green (decision 6): fullSuiteGreen is
+  // true only when a genuinely-full suite ran green. When impacted, the honest deferral is
+  // named in the top-level reason (RunnerSummaryShape.reason — the ANYPLAN precedent shape).
+  const ranImpacted = state.suiteMode === 'impacted'
   const summary = {
     arcId: state.arcId,
     outcome: 'shipped',
     compromiseDisposition: [],
-    gateSignals: { arcSweepClean, validateArcPassed, fullSuiteGreen: suiteGreen === true },
+    gateSignals: { arcSweepClean, validateArcPassed, fullSuiteGreen: suiteGreen === true && !ranImpacted },
     receiptRef: 'none', // honest sentinel — no consumer governance-receipt surface
+  }
+  if (ranImpacted) {
+    summary.reason =
+      `arc-end suite ran IMPACTED scope only (${state.suiteRange}) — impacted slots green; `
+      + 'full-suite backstop = ci-pr-gate per PR + nightly (testCadence.backstop)'
   }
   if (state.openFollowups != null) summary.openFollowups = state.openFollowups
   return summary
@@ -469,11 +520,25 @@ export async function landCommand(rest) {
     ? { behind: state.baseBehindCount, ceiling: mp.staleBaseCeiling ?? DEFAULT_STALE_BASE_CEILING, overlapFiles: state.overlapFiles }
     : null
   const includeE2e = state.members.some((m) => m.kind === 'release')
-  const suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e })
+  // Direct-only guard (decision 4): the impacted scope is honored ONLY for the direct
+  // integration model (the code is already integrated on baseRef, the suite is fix-forward).
+  // An isolated-branch landing ALWAYS runs the full suite regardless of config — there the
+  // suite genuinely gates the merge. A null derivable range ⇒ a genuine full run (never a
+  // guessed range).
+  const suiteMode = state.integrationModel === 'direct' ? (mp.arcEndSuite ?? 'full') : 'full'
+  let effectiveMode = suiteMode
+  let suiteRange = null
+  if (suiteMode === 'impacted') {
+    suiteRange = deriveArcSuiteRange(state.sidecar?.worktree ?? toplevel, state.members.map((m) => m.num))
+    if (suiteRange === null) effectiveMode = 'full'
+  }
+  const suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e, mode: effectiveMode, range: suiteRange })
   state.suiteGreen = suite.suiteGreen
+  state.suiteMode = effectiveMode
+  state.suiteRange = suiteRange
   const held = evaluateBlockers(state)
   if (held.length) {
-    emit({ action: 'blocked', arcId, held, suite, ...(staleBase ? { staleBase } : {}) })
+    emit({ action: 'blocked', arcId, held, suite, suiteMode: effectiveMode, suiteRange, ...(staleBase ? { staleBase } : {}) })
     return 2
   }
 
@@ -487,6 +552,6 @@ export async function landCommand(rest) {
     }
     throw e
   }
-  emit({ action: res.outcome, arcId, ...res, suite, ...(staleBase ? { staleBase } : {}) })
+  emit({ action: res.outcome, arcId, ...res, suite, suiteMode: effectiveMode, suiteRange, ...(staleBase ? { staleBase } : {}) })
   return res.exitCode
 }

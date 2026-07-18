@@ -187,18 +187,36 @@ function landBin(root, args) {
   }
 }
 /** A full arc consumer: schema + zod + registry stub + arc file + one member + config. */
-function makeArcConsumer({ memberStatus = 'done', arcIntegration = 'autonomous' } = {}) {
+function makeArcConsumer({ memberStatus = 'done', arcIntegration = 'autonomous', arcEndSuite = null, impacted = false, isolated = false } = {}) {
   const root = makeConsumer('zr-landbin-')
   writeFileSync(join(root, 'lib', 'roadmap', 'registry.ts'), 'export async function discoverPhases() { return { phases: [], errors: [] } }\nexport async function discoverArcs() { return { arcs: [] } }\n')
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
   writeFileSync(join(root, 'roadmap', 'arcs', 'A.arc.ts'), tsSrc({ id: 'A', baseRef: 'develop', planes: [{ name: 'P', phases: [10] }] }))
   writeFileSync(join(root, 'roadmap', 'phases', 'phase-10.phase.ts'), tsSrc({ phase: 10, status: memberStatus, arcId: 'A', kind: 'logic', tasks: [{ id: '10.1', done: memberStatus === 'done' }], executionResult: { status: 'done', hardStops: [] } }))
-  writeFileSync(join(root, 'roadmap', 'roadmap.config.json'), JSON.stringify({ configVersion: 1, gateCommands: { lint: 'true', types: 'true', unit: 'true', integration: 'true', build: 'true', e2e: 'none', emit: 'true' }, mergePolicy: { arcIntegration, maxOpenFollowups: 0, autonomousPushRefs: [], primaryCheckout: root } }))
-  // Sidecar on the primary checkout @ develop ⇒ direct-on-baseRef model (no merge to perform).
+  // Default slots stay SILENT ('true') so the existing JSON.parse(r.stdout) tests are
+  // unmodified; the new impacted/isolated fixtures opt into echoing stubs to observe which
+  // slot actually ran (those tests extract the JSON line rather than parse the whole stream).
+  const observe = impacted || isolated
+  const gateCommands = observe
+    ? { lint: 'true', types: 'true', unit: 'echo FULL_UNIT_RAN', integration: 'echo FULL_INT_RAN', build: 'true', e2e: 'none', emit: 'true' }
+    : { lint: 'true', types: 'true', unit: 'true', integration: 'true', build: 'true', e2e: 'none', emit: 'true' }
+  if (impacted) {
+    // range-echoing stubs so the substituted {range} proves impacted resolution in stdout
+    gateCommands['unit-impacted'] = 'echo IMPACTED_UNIT_RAN {range}'
+    gateCommands['integration-impacted'] = 'echo IMPACTED_INT_RAN {range}'
+  }
+  const mergePolicy = { arcIntegration, maxOpenFollowups: 0, autonomousPushRefs: [], primaryCheckout: root }
+  if (arcEndSuite) mergePolicy.arcEndSuite = arcEndSuite
+  writeFileSync(join(root, 'roadmap', 'roadmap.config.json'), JSON.stringify({ configVersion: 1, gateCommands, mergePolicy }))
+  // Sidecar: worktree@develop ⇒ direct-on-baseRef model (no merge); branch 'arc/a' ⇒ isolated.
   mkdirSync(join(root, 'roadmap', 'arcs', '.building'), { recursive: true })
-  writeFileSync(join(root, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: root, branch: 'develop' }))
+  writeFileSync(join(root, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: root, branch: isolated ? 'arc/a' : 'develop' }))
   g(root, 'add', '-A')
   g(root, 'commit', '-q', '-m', 'seed arc consumer')
+  // A `phase 10 —` move-commit so deriveArcSuiteRange resolves a real <sha>..HEAD range.
+  writeFileSync(join(root, 'member-work.txt'), 'work\n')
+  g(root, 'add', '-A')
+  g(root, 'commit', '-q', '-m', 'feat: phase 10 — move to in-progress')
   return root
 }
 
@@ -223,6 +241,31 @@ test('arc land command — exit 0 landed end-to-end (direct-on-baseRef, no membe
   assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
   assert.equal(JSON.parse(r.stdout).action, 'landed')
   assert.ok(existsSync(join(root, 'roadmap', 'arc-summary.json')), 'RunnerSummary written by the command')
+})
+
+test('arc land command — direct + arcEndSuite impacted runs the impacted slots with a <sha>..HEAD range, lands exit 0, summary defers honestly', () => {
+  const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true })
+  const r = landBin(root, ['A', '--json'])
+  assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
+  // the impacted stub ran with the derived range substituted verbatim (never the full slot)
+  assert.match(r.stdout, /IMPACTED_UNIT_RAN [0-9a-f]{7,40}\.\.HEAD/, 'unit-impacted ran with the derived range')
+  assert.match(r.stdout, /IMPACTED_INT_RAN [0-9a-f]{7,40}\.\.HEAD/, 'integration-impacted ran with the derived range')
+  assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN/, 'the full unit slot did NOT run')
+  const summary = JSON.parse(readFileSync(join(root, 'roadmap', 'arc-summary.json'), 'utf8'))
+  assert.equal(summary.gateSignals.fullSuiteGreen, false, 'an impacted landing never claims a full green')
+  assert.match(summary.reason, /IMPACTED scope only/, 'the summary reason names the impacted scope')
+  assert.match(summary.reason, /ci-pr-gate per PR \+ nightly/, 'the summary reason names the CI backstop')
+})
+
+test('arc land command — ISOLATED model IGNORES arcEndSuite impacted and runs the FULL slots (direct-only guard)', () => {
+  // The sidecar branch is arc/a (≠ baseRef develop) ⇒ isolated model ⇒ the guard forces full.
+  const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true, isolated: true })
+  const r = landBin(root, ['A', '--json'])
+  // echoing slots interleave with the emitted JSON line — extract the JSON object line
+  const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
+  assert.equal(out.suite.mode, 'full', 'an isolated landing runs the full suite regardless of arcEndSuite: impacted')
+  assert.match(r.stdout, /FULL_UNIT_RAN/, 'the full unit slot ran')
+  assert.doesNotMatch(r.stdout, /IMPACTED_UNIT_RAN/, 'the impacted slot did NOT run under the isolated model')
 })
 
 test('REAL merge — landing merges into LOCAL develop and a sibling unpushed commit SURVIVES (never clobbered)', () => {
