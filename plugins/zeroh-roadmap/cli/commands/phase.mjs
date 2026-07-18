@@ -61,10 +61,20 @@ function runStart(argv) {
   // bare `git commit` commits the whole index, sweeping a shared worktree's
   // sibling-session dirt under the move subject that gitscan's Tier-1 base derivation
   // keys off (CLAUDE.md: stage explicit paths only).
-  execFileSync('git', ['-C', toplevel, 'commit', rel, '-m', `docs(roadmap): phase ${n} — move to in-progress`], {
-    timeout: 30_000,
-    stdio: 'ignore',
-  })
+  try {
+    execFileSync('git', ['-C', toplevel, 'commit', rel, '-m', `docs(roadmap): phase ${n} — move to in-progress`], {
+      timeout: 30_000,
+      stdio: 'ignore',
+    })
+  } catch (e) {
+    // The flip is atomic WITH its commit: a failed commit (index-lock contention, a
+    // failing hook) must not leave the file flipped-but-uncommitted — a retry would
+    // then hit the idempotent branch and return 0 with NO move-commit and NO beacon,
+    // silently reintroducing the 1702 class. Revert and refuse so a retry re-attempts.
+    writeFileSync(file, src)
+    process.stderr.write(`roadmap phase start: the move-commit FAILED (${e?.message?.split('\n')[0] ?? e}) — flip reverted, nothing landed; fix the repo state and retry\n`)
+    return 2
+  }
   const sid = process.env.CLAUDE_SESSION_ID
   appendExecutorEvent(toplevel, n, 'executor-start', sid ? { session_id: sid } : {})
   process.stderr.write(`roadmap phase start: phase ${n} → in-progress (move-commit landed, executor-start beacon stamped)\n`)

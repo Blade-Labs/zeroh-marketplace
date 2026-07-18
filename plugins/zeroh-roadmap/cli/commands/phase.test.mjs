@@ -177,3 +177,28 @@ test('phase start — an already in-progress phase is an idempotent no-op: exit 
   assert.equal(readFileSync(phaseFile(root, 4007), 'utf8'), body, 'no second flip on an already-in-progress phase')
   assert.equal(git('rev-parse', 'HEAD').trim(), headBefore, 'no second move-commit on the idempotent path')
 })
+
+test('phase start — a FAILED move-commit reverts the flip and exits 2 (never flipped-but-uncommitted; a retry re-attempts cleanly)', () => {
+  const { root, git } = makeRepo()
+  const body = backlogWithDecoy(4008)
+  seedPhase(root, git, 4008, body)
+  const headBefore = git('rev-parse', 'HEAD').trim()
+  // A failing pre-commit hook simulates index-lock/hook contention at commit time.
+  const hookDir = join(root, '.git', 'hooks')
+  mkdirSync(hookDir, { recursive: true })
+  writeFileSync(join(hookDir, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+
+  const res = phaseStart(root, '4008')
+  assert.equal(res.status, 2, `a failed move-commit refuses with exit 2; stderr:\n${res.stderr}`)
+  assert.match(res.stderr, /move-commit FAILED.*flip reverted/s, 'stderr names the failure + the revert')
+  assert.equal(readFileSync(phaseFile(root, 4008), 'utf8'), body, 'the flip is REVERTED — never flipped-but-uncommitted')
+  assert.equal(git('rev-parse', 'HEAD').trim(), headBefore, 'no commit landed')
+  assert.equal(existsSync(join(root, '.building', '4008-executor.jsonl')), false, 'no beacon on the failure path')
+
+  // The retry (hook removed) re-attempts CLEANLY — the 1702-class silent no-op is impossible.
+  rmSync(join(hookDir, 'pre-commit'))
+  const retry = phaseStart(root, '4008')
+  assert.equal(retry.status, 0, `the retry lands; stderr:\n${retry.stderr}`)
+  assert.match(readFileSync(phaseFile(root, 4008), 'utf8'), /status: 'in-progress'/, 'retry flips')
+  assert.match(git('log', '-1', '--format=%s').trim(), /^docs\(roadmap\): phase 4008 — move to in-progress$/, 'retry lands the move-commit')
+})
