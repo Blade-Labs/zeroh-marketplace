@@ -91,8 +91,9 @@ normal gated corrective phase. NO parallel executor, NO forked pipeline (the sin
 (Step 7), the consumer's `mergePolicy.gapsCorrection` decides:** `autonomous` → run this loop UNATTENDED
 (surface the gaps to chat as you go, but do not wait) until PASS or the bound trips — the judge's PASS is
 the approval (user ruling 2026-07-18); `hold` or absent → surface the GAPS + proposed corrective phase(s)
-and **PAUSE for the user's go** (the fail-safe default). Under EITHER mode, bound exhaustion and any
-descope-shaped disposition STILL stop for the user — autonomy never shrinks the arc's promise. Each round:
+and **PAUSE for the user's go** (the fail-safe default). Under EITHER mode, three stops survive: bound
+exhaustion, any descope-shaped disposition (autonomy never shrinks the arc's promise), and a SPLIT
+panel verdict (marked "user arbitrates" — a gap the judges dispute is not autonomy's to fix). Each round:
 
 1. **Author a corrective phase per gap via `plan-phase`** — `problem` = `whatsMissing`, tasks seeded by
    `suggestedFix`. `plan-phase` does NOT stamp `arcId`, so DO what `plan-arc` Step 2b does: set the phase's
