@@ -15,6 +15,32 @@ export const ALIVE_MAX_MIN = 20
 export const GATE_QUIET_MAX_MIN = 45
 export const WORK_EVENTS = new Set(['gate-stage-start', 'task-start', 'background-run'])
 
+/**
+ * The CLOSED phase-executor event vocabulary (1737.1) — the ONE terminal name is
+ * 'phase-complete'. Writers refuse anything outside this set; the three pre-1737
+ * terminal variants observed in live sidecars (phase-done / executor-complete /
+ * executor-done) are READ-side aliases only (normalized below), never writable.
+ */
+export const EXECUTOR_EVENTS = new Set([
+  'executor-start',
+  'task-start',
+  'commit',
+  'gate-stage-start',
+  'gate-stage-end',
+  'background-run',
+  'escalated',
+  'resume',
+  'result-returned',
+  'phase-complete',
+])
+
+/** Legacy terminal names → the one canonical terminal (read-side normalization only). */
+const LEGACY_TERMINAL_ALIASES = new Map([
+  ['phase-done', 'phase-complete'],
+  ['executor-complete', 'phase-complete'],
+  ['executor-done', 'phase-complete'],
+])
+
 /** <mainRoot>/arcs/.building/<arcId>-executor.jsonl */
 export function beaconPath(arcId, { mainRoot }) {
   return join(mainRoot, 'arcs', '.building', `${arcId}-executor.jsonl`)
@@ -38,7 +64,8 @@ export function readBeaconLine(path) {
   try {
     const last = JSON.parse(lines[lines.length - 1])
     const ts = Date.parse(last.ts)
-    return { ts, ageMin: (Date.now() - ts) / 60000, event: last.event, log: last.log ?? null, pid: last.pid ?? null }
+    const event = LEGACY_TERMINAL_ALIASES.get(last.event) ?? last.event
+    return { ts, ageMin: (Date.now() - ts) / 60000, event, log: last.log ?? null, pid: last.pid ?? null }
   } catch {
     return null
   }
@@ -67,5 +94,25 @@ export function appendEvent(arcId, event, { mainRoot, ...extra } = {}) {
   const p = beaconPath(arcId, { mainRoot })
   mkdirSync(dirname(p), { recursive: true })
   appendFileSync(p, JSON.stringify({ ts: new Date().toISOString(), event, ...extra }) + '\n')
+  return p
+}
+
+/**
+ * THE typed phase-executor writer (1737.1): append one heartbeat line to
+ * <worktree>/.building/<phase>-executor.jsonl. Closed set — an event outside
+ * EXECUTOR_EVENTS throws before anything is written; `phase` always serializes as a
+ * JSON number regardless of input type. Returns the beacon path.
+ */
+export function appendExecutorEvent(worktree, phase, event, extra = {}) {
+  if (!EXECUTOR_EVENTS.has(event)) {
+    throw new Error(
+      `beacon: unknown executor event '${event}' — the closed vocabulary is: ${[...EXECUTOR_EVENTS].join(', ')}`,
+    )
+  }
+  const phaseNum = Number(phase)
+  if (!Number.isFinite(phaseNum)) throw new Error(`beacon: phase must be numeric, got '${phase}'`)
+  const p = join(worktree, '.building', `${phaseNum}-executor.jsonl`)
+  mkdirSync(dirname(p), { recursive: true })
+  appendFileSync(p, JSON.stringify({ ts: new Date().toISOString(), phase: phaseNum, event, ...extra }) + '\n')
   return p
 }
