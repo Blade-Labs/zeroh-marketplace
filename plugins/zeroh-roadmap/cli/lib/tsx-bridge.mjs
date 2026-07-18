@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /** The VERBATIM worktree-hazard line a strict context prints on tsx-absent. */
 export const TSX_ABSENT_HINT =
@@ -110,13 +111,35 @@ export function bridgeEval(consumerRoot, script, { args = [], timeout = 60_000, 
 }
 
 // ── Content-keyed parse cache ─────────────────────────────────────────────────────────
-// key = absolute path + sha256(file bytes) — NEVER mtime, so a content change is a new key
-// and a hash mismatch is a plain miss (staleness is structurally impossible). In-process
-// Map + a best-effort disk mirror under <consumerRoot>/roadmap/.gate/.typed-cache/<hash>.json
-// (already gitignored via roadmap/.gate/.gitignore). Every disk op is try/catch: a cache
-// failure is a MISS, never an error. Only ok results are cached.
+// key = absolute path + sha256(schema-signature + file bytes) — NEVER mtime. A change to
+// either the file OR the schema it parses through (definePhase/defineArc apply defaults at
+// import) is a new key ⇒ a plain miss, so a cross-process disk hit can never serve a parse
+// from a superseded schema. In-process Map + a best-effort disk mirror under
+// <consumerRoot>/roadmap/.gate/.typed-cache/<hash>.json (already gitignored via
+// roadmap/.gate/.gitignore). Every disk op is try/catch: a cache failure is a MISS, never
+// an error. Only ok results are cached.
 const typedCache = new Map()
 const typedCacheDir = (consumerRoot) => join(consumerRoot, 'roadmap', '.gate', '.typed-cache')
+
+// The plugin's own schema definition file — folded into every cache key so a re-vendored /
+// edited schema invalidates prior parses (the parsed value is schema-dependent, not just
+// file-dependent). Memoized; absent ⇒ a stable sentinel (the file itself is the only key).
+let _schemaSig
+function schemaSignature() {
+  if (_schemaSig !== undefined) return _schemaSig
+  try {
+    const schemaFile = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'templates', 'schema.ts')
+    _schemaSig = createHash('sha256').update(readFileSync(schemaFile)).digest('hex').slice(0, 16)
+  } catch {
+    _schemaSig = 'noschema'
+  }
+  return _schemaSig
+}
+
+/** Content hash = sha256(schema-signature + file bytes). Throws if the file is unreadable. */
+function contentHash(path) {
+  return createHash('sha256').update(schemaSignature()).update(readFileSync(path)).digest('hex')
+}
 
 function readTypedCacheDisk(consumerRoot, hash) {
   try {
@@ -152,7 +175,7 @@ export function bridgeImport(targetPath, { consumerRoot, timeout, cache = true, 
   let memKey = null
   if (cache) {
     try {
-      hash = createHash('sha256').update(readFileSync(targetPath)).digest('hex')
+      hash = contentHash(targetPath)
     } catch {
       hash = null // unreadable ⇒ no caching, fall through to a real parse (which will error loud)
     }
@@ -196,7 +219,7 @@ const paths = process.argv.slice(1)
       if (d && typeof d === 'object' && d.default != null) d = d.default
       out[p] = { ok: true, parsed: d ?? null }
     } catch (e) {
-      if (e && Array.isArray(e.issues)) out[p] = { ok: false, kind: 'zod', issues: e.issues }
+      if (e && Array.isArray(e.issues)) out[p] = { ok: false, kind: 'zod', issues: e.issues, stderr: 'ZODISSUES:' + JSON.stringify(e.issues) }
       else out[p] = { ok: false, kind: 'load', stderr: String((e && e.stack) || e) }
     }
   }
@@ -223,7 +246,7 @@ export function bridgeImportMany(paths, { consumerRoot, timeout, exec, cache = t
     if (cache) {
       let hash = null
       try {
-        hash = createHash('sha256').update(readFileSync(p)).digest('hex')
+        hash = contentHash(p)
       } catch {
         hash = null
       }
