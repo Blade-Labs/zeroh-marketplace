@@ -304,8 +304,13 @@ function gitLayer(exec) {
 
 /** Build the RunnerSummary for a landed arc (decision 10 — honest gateSignals, 'none' receipt). */
 export function buildRunnerSummary(state, { suiteGreen }) {
-  const openCount = state.censusEntries === null ? null : state.censusEntries.filter((e) => e.state === 'OPEN').length
-  const arcSweepClean = openCount === 0
+  // Align with runDebtCensus's exemption (derive.mjs:96): limitations are release-sweep's
+  // (reported via openLimitations, never budgeted OR sweep-signaled — D10 / census fix 171848e).
+  const openCount =
+    state.censusEntries === null
+      ? null
+      : state.censusEntries.filter((e) => e.state === 'OPEN' && e.field !== 'limitations').length
+  const arcSweepClean = openCount === 0 // null census stays fail-closed: null !== 0 ⇒ false
   const validateArcPassed = state.hasCriteria ? state.verdict?.verdict === 'PASS' : true
   const summary = {
     arcId: state.arcId,

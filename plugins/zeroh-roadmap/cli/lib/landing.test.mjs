@@ -15,7 +15,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BLOCKERS, evaluateBlockers, gatherLandingState } from './landing.mjs'
+import { BLOCKERS, evaluateBlockers, gatherLandingState, buildRunnerSummary } from './landing.mjs'
 import { defaultExec } from './exec.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -197,4 +197,23 @@ test('singleSeam — landing.mjs consumes derive.runDebtCensus; no debt-census i
   const src = readFileSync(join(HERE, 'landing.mjs'), 'utf8')
   assert.ok(!/debt-census\.mts/.test(src), 'landing.mjs must not import/reference debt-census.mts directly')
   assert.match(src, /runDebtCensus/)
+})
+
+// ── buildRunnerSummary — arcSweepClean exempts limitations exactly as openFollowups does ──
+test('buildRunnerSummary — an OPEN limitations entry does NOT deny arcSweepClean (D10/171848e)', () => {
+  const state = { arcId: 'A', censusEntries: [{ state: 'OPEN', field: 'limitations' }], hasCriteria: false }
+  const s = buildRunnerSummary(state, { suiteGreen: true })
+  assert.equal(s.gateSignals.arcSweepClean, true, 'limitations are release-sweep\'s — never sweep-signaled, exactly as never budgeted')
+})
+
+test('buildRunnerSummary — an OPEN non-limitations entry (hardcoded) DENIES arcSweepClean', () => {
+  const state = { arcId: 'A', censusEntries: [{ state: 'OPEN', field: 'hardcoded' }], hasCriteria: false }
+  const s = buildRunnerSummary(state, { suiteGreen: true })
+  assert.equal(s.gateSignals.arcSweepClean, false, 'a real open compromise still denies a clean sweep')
+})
+
+test('buildRunnerSummary — a null census stays fail-closed (arcSweepClean false)', () => {
+  const state = { arcId: 'A', censusEntries: null, hasCriteria: false }
+  const s = buildRunnerSummary(state, { suiteGreen: true })
+  assert.equal(s.gateSignals.arcSweepClean, false, 'null !== 0 ⇒ fail-closed, unchanged')
 })
