@@ -16,7 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, exist
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { untestedGateFixFindings } from './gate.mjs'
+import { untestedGateFixFindings, deviantGrammarFindings } from './gate.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -184,6 +184,36 @@ test('untestedGateFixFindings — a non-gate-fix subject (feat) touching only sr
   const base = repo.git('rev-parse', 'HEAD').trim()
   repo.commit('feat(core): phase 503 — more', { 'lib/a.ts': 'export const a = 2\n' })
   assert.deepEqual(untestedGateFixFindings(repo.root, 503, base), [], 'only fix(... gate R*) subjects are in scope')
+})
+
+// ── deviantGrammarFindings — the 1696/1699 task-id-before-em-dash attribution defeat ─────
+test('deviantGrammarFindings — a `phase N N.X —` subject → one finding naming its sha7 + subject', () => {
+  const repo = makeRepo()
+  repo.commit('feat: phase 7301 — move to in-progress', { 'lib/a.ts': 'export const a = 1\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit('feat(x): phase 7301 7301.2 — work', { 'lib/a.ts': 'export const a = 2\n' })
+  const sha = repo.git('rev-parse', 'HEAD').trim()
+  const findings = deviantGrammarFindings(repo.root, 7301, base)
+  assert.equal(findings.length, 1, JSON.stringify(findings))
+  assert.match(findings[0], new RegExp(sha.slice(0, 7)), 'names the deviant sha7')
+  assert.match(findings[0], /feat\(x\): phase 7301 7301\.2 — work/, 'quotes the subject')
+  assert.match(findings[0], /attribution-breaking commit grammar/, 'is the named warning class')
+})
+
+test('deviantGrammarFindings — the correct `phase N — N.X` form → no finding', () => {
+  const repo = makeRepo()
+  repo.commit('feat: phase 7301 — move to in-progress', { 'lib/a.ts': 'export const a = 1\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit('feat(x): phase 7301 — 7301.2 work', { 'lib/a.ts': 'export const a = 2\n' })
+  assert.deepEqual(deviantGrammarFindings(repo.root, 7301, base), [], 'the em-dash-first form is the correct grammar')
+})
+
+test('deviantGrammarFindings — a DIFFERENT phase\'s deviant commit → no finding for this phase', () => {
+  const repo = makeRepo()
+  repo.commit('feat: phase 7301 — move to in-progress', { 'lib/a.ts': 'export const a = 1\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit('feat(x): phase 7302 7302.1 — other', { 'lib/b.ts': 'export const b = 2\n' })
+  assert.deepEqual(deviantGrammarFindings(repo.root, 7301, base), [], 'a different phase number is out of scope')
 })
 
 test('gate plan — a docs-only diff yields static test scope + none review scope', () => {

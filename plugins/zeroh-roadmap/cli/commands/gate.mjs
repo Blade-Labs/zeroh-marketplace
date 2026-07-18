@@ -124,6 +124,36 @@ export function untestedGateFixFindings(cwd, phaseNum, base) {
   return findings
 }
 
+/**
+ * WARN-only scan for the task-id-before-em-dash commit grammar that silently defeats
+ * phase-own attribution (1696/1699 committed `… phase N N.X — …`). The attribution grep
+ * `phase <N> —` cannot match that form, so those commits' files fall OUT of the phase-own
+ * set and scope/floor under-derive with nothing surfacing it. Conservative on any git
+ * failure ([]); exit codes never change (caller appends to report notes / prints them).
+ * Correct grammar is `… phase N — N.X …` (em-dash straight after the number).
+ */
+export function deviantGrammarFindings(cwd, phaseNum, base) {
+  let log
+  try {
+    log = git(cwd, ['log', '--format=%H%x09%s', `${base}..HEAD`])
+  } catch {
+    return []
+  }
+  const re = new RegExp(`phase ${phaseNum} ${phaseNum}\\.\\d+ —`)
+  const findings = []
+  for (const line of log.split('\n').filter(Boolean)) {
+    const tab = line.indexOf('\t')
+    if (tab < 0) continue
+    const sha = line.slice(0, tab)
+    const subject = line.slice(tab + 1)
+    if (!re.test(subject)) continue
+    findings.push(
+      `attribution-breaking commit grammar: ${sha.slice(0, 7)} "${subject}" — \`phase N N.X —\` defeats the em-dash phase-own attribution; use "… phase N — N.X …" (1696/1699 class)`,
+    )
+  }
+  return findings
+}
+
 /** The raw base..HEAD file set (all commits in range) — the cross-check for foreign commits. */
 function rawRangeFiles(cwd, base) {
   try {
@@ -450,6 +480,7 @@ export async function runGate(phaseNum, opts) {
     let warnBase = null
     try { warnBase = deriveBaseSha(toplevel, phaseNum) } catch { /* no move-to-in-progress commit ⇒ no warnings */ }
     if (warnBase) for (const w of untestedGateFixFindings(toplevel, phaseNum, warnBase)) process.stdout.write(`warning: ${w}\n`)
+    if (warnBase) for (const w of deviantGrammarFindings(toplevel, phaseNum, warnBase)) process.stdout.write(`warning: ${w}\n`)
     const result = checkPhaseConsistency(imp.parsed, latest.report)
     if (!result.ok) {
       process.stderr.write(`gate run --verify-complete: phase ${phaseNum} inconsistent with ${latest.path}:\n`)
@@ -543,7 +574,11 @@ export async function runGate(phaseNum, opts) {
     slots: rows,
     agents: [],
     green,
-    notes: [...plan.notes, ...untestedGateFixFindings(toplevel, phaseNum, plan.baseSha)],
+    notes: [
+      ...plan.notes,
+      ...untestedGateFixFindings(toplevel, phaseNum, plan.baseSha),
+      ...deviantGrammarFindings(toplevel, phaseNum, plan.baseSha),
+    ],
   }
   let written
   try {
