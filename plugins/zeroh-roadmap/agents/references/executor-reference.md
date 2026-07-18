@@ -22,11 +22,16 @@ The protocol for the remaining (intermediate) long runs:
 
 - **≤ ~8 min** (single suites, builds, scoped tests): run FOREGROUND under the consumer's
   documented wrapper (e.g. capbuild) with an explicit `timeout`. Block. No yield.
-- **> ~8 min AND intermediate**: background it to a log file — and in the SAME turn, before ending
-  it, (a) beacon `background-run` with `log: <logfile>` (without it a quiet >45-min run reads
+- **> ~8 min AND intermediate**: background it to a log file ENDING in a terminal marker the run
+  writes itself (`; echo "DONE rc=$?" >> <log>`) — and in the SAME turn, before ending it,
+  (a) beacon `background-run` with `log: <logfile>` (without it a quiet >45-min run reads
   STALLED), and (b) arm a Monitor whose script EXITS on the log's terminal line, on failure
   signatures (`FAILED|Error|not ok|Killed|OOM|exit [1-9]`), and on a ~5-min log-size stall — its
-  exit is your guaranteed re-invocation. Only with BOTH armed may the turn end.
+  exit is your guaranteed re-invocation. Only with BOTH armed may the turn end. **The Monitor is
+  a convenience wake, not the contract**: a session-limit / account-refresh event kills it
+  silently (4× on 2026-07-17) while the run itself survives — the beacon + the in-log DONE
+  marker are what let ANY watcher (the orchestrator, or you resumed) verify the outcome
+  mechanically. Never park on a Monitor for a run a bounded foreground block could cover.
 - **> ~30 min external worker (datagen, training, ingest) → launch DETACHED**: `nohup setsid <cmd>
   >> <log> 2>&1 &` so it lives in its OWN process session — a session-limit / account-refresh event
   reaps your whole harness session tree, and a plain backgrounded worker dies with you. End the
