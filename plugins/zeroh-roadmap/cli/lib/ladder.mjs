@@ -85,7 +85,7 @@ export function matchGlobPath(glob, path) {
 const isTestFile = (p) => /(?:\.|-)(?:test|itest|spec)\.[cm]?[jt]sx?$/.test(p)
 const isExecutable = (p) => EXECUTABLE_EXTS.some((ext) => p.endsWith(ext))
 
-// ── gateCell(kind, mode) — the kind × mode mechanical slot cell ────────────────────
+// ── gateCell(kind, mode, cfg) — the kind × mode mechanical slot cell ───────────────
 
 const LOGIC_INLINE_SLOTS = ['lint', 'types', 'unit', 'integration', 'build']
 const ARC_SLOTS = ['lint', 'types', 'build']
@@ -98,17 +98,26 @@ const ARC_SLOTS = ['lint', 'types', 'build']
  *   - closureItest: the hardening closure integration test — NEVER defers (both modes).
  *   - e2e: 'inline' (release inline, Round-1 mechanical) | 'deferred' (release arc, →
  *          arc end) | false (all other kinds).
+ *   - cfg (optional): the consumer config. `testCadence.build: 'arc-end'` drops the
+ *     `build` slot from the INLINE cells only — it defers to the arc-end column, which
+ *     keeps `build` unconditionally (ARC_SLOTS / do-arc Step 8, where it defers TO).
+ *     Absent config or `'phase'` = today's cells, byte-identical.
  */
-export function gateCell(kind, mode) {
+export function gateCell(kind, mode, cfg) {
   const arc = mode === 'arc'
+  const deferBuild = !arc && cfg?.testCadence?.build === 'arc-end'
+  const inlineSlots = deferBuild
+    ? LOGIC_INLINE_SLOTS.filter((s) => s !== 'build')
+    : LOGIC_INLINE_SLOTS
   const notes = []
   if (arc) notes.push('arc-mode: unit+integration narrow to relevant-to-diff; full tiers defer to the arc-end run (do-arc Step 8)')
+  if (deferBuild) notes.push('build defers to the arc-end run — testCadence.build: arc-end')
   switch (kind) {
     case 'mockup':
       return { slots: ['lint', 'types'], closureItest: false, e2e: false, scopedTests: false, notes }
     case 'logic':
       return {
-        slots: arc ? [...ARC_SLOTS] : [...LOGIC_INLINE_SLOTS],
+        slots: arc ? [...ARC_SLOTS] : [...inlineSlots],
         closureItest: false,
         e2e: false,
         scopedTests: arc,
@@ -116,7 +125,7 @@ export function gateCell(kind, mode) {
       }
     case 'hardening':
       return {
-        slots: arc ? [...ARC_SLOTS] : [...LOGIC_INLINE_SLOTS],
+        slots: arc ? [...ARC_SLOTS] : [...inlineSlots],
         closureItest: true, // the closure criterion never defers — both modes
         e2e: false,
         scopedTests: arc,
@@ -124,7 +133,7 @@ export function gateCell(kind, mode) {
       }
     case 'release':
       return {
-        slots: arc ? [...ARC_SLOTS] : [...LOGIC_INLINE_SLOTS],
+        slots: arc ? [...ARC_SLOTS] : [...inlineSlots],
         closureItest: false,
         e2e: arc ? 'deferred' : 'inline',
         scopedTests: arc,
@@ -133,7 +142,7 @@ export function gateCell(kind, mode) {
     default:
       // legacy phase with no kind → treat as logic (gate-protocol.md:98)
       return {
-        slots: arc ? [...ARC_SLOTS] : [...LOGIC_INLINE_SLOTS],
+        slots: arc ? [...ARC_SLOTS] : [...inlineSlots],
         closureItest: false,
         e2e: false,
         scopedTests: arc,

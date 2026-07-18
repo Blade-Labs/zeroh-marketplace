@@ -242,6 +242,29 @@ test('8c) mergePolicy.staleBaseCeiling: 0 (non-positive) rejects with the key na
   )
 })
 
+test('8d) testCadence.build "arc-end" parses; absent stays absent (no invented default)', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ testCadence: { enabled: true, build: 'arc-end' } }))
+  const cfg = loadConfig(repo)
+  assert.equal(cfg.testCadence.build, 'arc-end')
+
+  const repo2 = newRepo()
+  writeConfig(repo2, validConfig({ testCadence: { enabled: true } }))
+  assert.equal(loadConfig(repo2).testCadence.build, undefined)
+})
+
+test('8e) testCadence.build outside the enum rejects with the key named', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ testCadence: { enabled: true, build: 'never' } }))
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^testCadence\.build:\s/.test(l)),
+    `expected a "testCadence.build: <message>" dotted-path line; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
 test('9) gateCommands.e2e "none" is accepted', () => {
   const repo = newRepo()
   const cfg = validConfig()

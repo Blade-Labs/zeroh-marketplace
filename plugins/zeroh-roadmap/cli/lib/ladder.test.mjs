@@ -58,6 +58,38 @@ test('gateCell — the 8 kind × mode table cells', () => {
   assert.equal(gateCell('logic', 'inline').e2e, false)
 })
 
+// ── gateCell — the testCadence.build cadence rung (TESTARCH §1533 follow-up 1) ──────
+test('gateCell — testCadence.build absent/"phase" = today\'s cells byte-identical; "arc-end" drops build from every INLINE cell only', () => {
+  const CFG_BUILD_ARC_END = Object.freeze({
+    configVersion: 1,
+    testCadence: Object.freeze({ enabled: true, build: 'arc-end' }),
+  })
+  const CFG_BUILD_PHASE = Object.freeze({
+    configVersion: 1,
+    testCadence: Object.freeze({ enabled: true, build: 'phase' }),
+  })
+  const kinds = ['mockup', 'logic', 'hardening', 'release', undefined]
+
+  for (const kind of kinds) {
+    for (const mode of ['inline', 'arc']) {
+      // absent key (no cfg / CFG without build) and explicit 'phase' = today's cells EXACTLY
+      assert.deepEqual(gateCell(kind, mode, CFG), gateCell(kind, mode), `cfg without build must not change ${kind}/${mode}`)
+      assert.deepEqual(gateCell(kind, mode, CFG_BUILD_PHASE), gateCell(kind, mode), `build:'phase' must equal today's ${kind}/${mode}`)
+    }
+    // 'arc-end' — build absent from the INLINE cell for every kind…
+    const inline = gateCell(kind, 'inline', CFG_BUILD_ARC_END)
+    assert.ok(!inline.slots.includes('build'), `build must be absent from the ${kind}/inline cell under arc-end cadence`)
+    assert.ok(inline.notes.some((n) => /testCadence\.build: arc-end/.test(n)), `${kind}/inline must carry the deferral honesty note`)
+    // …and the arc-end column KEEPS it (that is where it defers TO) — mockup never had build in any mode
+    const arcCell = gateCell(kind, 'arc', CFG_BUILD_ARC_END)
+    assert.deepEqual(arcCell, gateCell(kind, 'arc'), `the arc cell is untouched by the cadence key (${kind})`)
+    if (kind !== 'mockup') assert.ok(arcCell.slots.includes('build'), `build stays in the ${kind}/arc cell`)
+  }
+
+  // the non-build inline slots are unchanged under arc-end cadence
+  assert.deepEqual(gateCell('logic', 'inline', CFG_BUILD_ARC_END).slots, ['lint', 'types', 'unit', 'integration'])
+})
+
 // ── specialistFloor — the two divergent floors (gate-protocol.md:188-197, :252-260) ─
 test('specialistFloor — a spine path floors test→relevant, review→full; an unmatched diff floors nothing', () => {
   const hit = specialistFloor({ paths: ['src/relay/governed-turn.ts', 'src/foo.ts'] }, CFG)

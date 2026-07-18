@@ -248,7 +248,7 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   const reviewScope = deriveReviewScope(diff, phase, opts.cfg)
 
   // ── slots — the non-test frame from the cell + test slots per effective testScope ──
-  const cell = gateCell(kind, mode)
+  const cell = gateCell(kind, mode, opts.cfg)
   const nonTest = cell.slots.filter((s) => s !== 'unit' && s !== 'integration')
   const wantsTests = cell.slots.includes('unit') || cell.slots.includes('integration') || cell.scopedTests
   const slots = []

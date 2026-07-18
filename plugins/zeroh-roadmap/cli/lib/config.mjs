@@ -48,6 +48,10 @@ const TestCadenceShape = z.strictObject({
   enabled: z.boolean().optional(),
   backstop: z.string().optional(),
   floors: z.enum(['blocking', 'advisory', 'none']).optional(),
+  // build-slot cadence: absent = 'phase' (build runs at every phase gate, today's
+  // behavior); 'arc-end' defers the inline build slot to the arc-end run, where
+  // ARC_SLOTS/do-arc Step 8 still runs it unconditionally (ladder.mjs gateCell).
+  build: z.enum(['phase', 'arc-end']).optional(),
 })
 
 const MergePolicyShape = z.strictObject({

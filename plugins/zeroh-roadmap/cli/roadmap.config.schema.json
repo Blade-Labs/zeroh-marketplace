@@ -84,6 +84,13 @@
             "advisory",
             "none"
           ]
+        },
+        "build": {
+          "type": "string",
+          "enum": [
+            "phase",
+            "arc-end"
+          ]
         }
       },
       "additionalProperties": false
