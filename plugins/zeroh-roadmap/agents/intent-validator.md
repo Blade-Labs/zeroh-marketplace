@@ -38,7 +38,11 @@ judges the SHIPPED surface against the USER-CONFIRMED design artifact 1:1 (a con
 render AND drive both sides, compare on the six severity-ordered axes (layout · component presence ·
 states · interaction & motion · copy · visual tokens), allow judged-equivalent / same-or-better but not
 degradation, exempt only `Ratified descopes` — then `met` (no material deviation, screenshots as evidence)
-or `gap` (each deviation, axis + where, + `suggestedFix`).
+or `gap` (each deviation, axis + where, + `suggestedFix`). When the confirmed designRef is a
+**design-locked prototype**, the criterion's PRIMARY evidence is the machine **visual-diff artifact** (diff
+percentage vs the declared threshold + fixture provenance): verify the diff ran against the confirmed
+prototype and spot-check interactions via click-through — do NOT re-judge pixels subjectively; the gate
+promises machine parity, so a subjective judge would undercut it.
 
 **Return the IntentVerdict** — exactly `{ criterionId, status: 'met'|'gap', tierUsed, evidence, gap?:
 { whatsMissing, suggestedFix }, confidence: 'high'|'medium'|'low' }` (no prose wrapper). `tierUsed` = the

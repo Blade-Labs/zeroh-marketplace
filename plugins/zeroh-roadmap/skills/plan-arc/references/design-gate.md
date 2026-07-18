@@ -54,7 +54,11 @@ Run by the `ux-designer` agent when the classifier finds a **surface**. Same adv
 - **Static HTML preview** for a **net-new single-state** surface, where seeing it beats reading about it (produced with the `frontend-design` skill where available). `ref` then points at the preview file.
 - **Interactive prototype** for a net-new surface with 2+ sequential states (funnel, wizard, stepper) — one live click-through page with real transitions and a designer rail for the failure states.
 
+- **Design-locked prototype** — the default for a net-new or regrouped APP surface: a data-driven prototype directory (page + guidelines + mock DB) whose mock-data field names align to the consumer's contract shapes. The prototype IS the final UI; implementation is transcription.
+
 Pick the lightest option that lets the user actually judge the design. The UX designRef is then **confirmed by the user** (Step 1b pauses) and **recorded by the orchestrator** onto the arc — same as the architecture designRef.
+
+**Design-locked prototype → transcription acceptance (BINDING).** When the confirmed artifact is a design-locked prototype, every member phase implementing one of its surfaces MUST carry acceptance criteria of the form "Playwright visual-diff of `<surface route>` app-vs-prototype under the declared threshold, seeded with the shared fixtures" plus the wired itest — and MUST NOT carry free-form "matches the design" criteria (subjective parity is exactly what the doctrine retires). Live-only behavior (streaming, auth, latency) keeps wired-itest discipline, with the prototype documenting the intended states.
 
 **The craft bar.** Whatever the form, the artifact must meet `references/ux-craft.md` — identity fidelity (REAL webfonts, the consumer's real logo/icon assets, tokens verbatim, type roles honored), the say-it-once restraint doctrine + an explicit declutter pass, the consumer's copy rules, honest-artifact rules (no fake screenshots, no placeholder blocks), demonstrated accessibility, exemplar conformance. **The orchestrator passes the ux-craft.md absolute path to the `ux-designer` agent** (its §3b requires it), and — when `designHomes` names a **quality exemplar** — that exemplar path too.
 
