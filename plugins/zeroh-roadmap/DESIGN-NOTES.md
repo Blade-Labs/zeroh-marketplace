@@ -170,3 +170,32 @@ rehearsal finding D4 both recorded that the nested launch was never exercisable 
 Disposition: the sequencing loop is driven INLINE by the do-arc skill via the same CLI calls
 (decisions stay code; only the vehicle changed — do-arc SKILL.md §Run it); the module stays
 as the loop's tested library form (fixture tier + non-Claude runners per locked decision 2).
+
+## 2026-07-18 — the sidecar disk-state CONTRACT (phase 1737; the SEATS dispatcher reads this as its spec)
+
+The `.building/<N>-executor.*` files are a machine-read dispatch substrate, not a scratch log
+— the SEATS dispatcher (arc 1727-1730) selects and verifies work FROM them. Phase 1737 closed
+the drift lanes:
+
+- **Beacon events are a CLOSED vocabulary** (`cli/lib/beacon.mjs` `EXECUTOR_EVENTS`):
+  executor-start · task-start · commit · gate-stage-start · gate-stage-end · background-run ·
+  escalated · resume · result-returned · **phase-complete** (the ONE terminal name). The only
+  writers are `roadmap beacon <event> --phase <N>` / `appendExecutorEvent` (throw on an unknown
+  event; `phase` always a JSON number) and the bash `beacon-stamp.sh` hook (the `commit` event,
+  conforming by convention). Pre-1737 sidecars are NEVER rewritten — the three legacy terminal
+  names (phase-done / executor-complete / executor-done) normalize to `phase-complete` at READ
+  time in `readBeaconLine`, so consumers (status, watch, liveness, SEATS) must read through it,
+  never raw-match event strings.
+- **Arm files are CLI-owned and session-bound**: `roadmap executor-arm <N> --session <id>`
+  writes JSON `{ sessionId, armedAt }` (an unbound arm is REFUSED — the 2026-07-17 fabrication
+  hazard); `roadmap executor-disarm <N>` removes it (always, even on a halt);
+  `--sweep` removes exactly the STALE set. Staleness classes: terminal phase status, terminal
+  beacon, or an UNBOUND body (empty / phase-number fossil / JSON without sessionId). A raw
+  session-id string is the old BOUND prose format the guard honors — never swept on a live
+  phase (the 2026-07-18 near-miss: an early sweep draft disarmed the live 1703 lane; the env
+  channel covered it, and the corrected contract is regression-locked).
+- **The status flip is a CLI verb**: `roadmap phase start <N>` — first-match-only regex flip,
+  the exact `docs(roadmap): phase N — move to in-progress` subject (feeds gitscan's
+  newest-move-commit base preference), executor-start beacon. `roadmap status` flags the
+  divergence class (`DIVERGED?` — done tasks under status backlog) and leaked arms
+  (`STALE-ARM`) as advisory row flags, typed in `--json` (`row.diverged` / `row.staleArms`).
