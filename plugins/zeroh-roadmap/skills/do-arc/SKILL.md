@@ -79,8 +79,11 @@ workflow engine cannot host its imports).
    it up automatically. A SECOND sweep over a loop-back phase may only
    ACCEPT / DESCOPE / OPERATOR-PENDING — never author again.
 2. **validate** → run `validate-arc <id>`, then `roadmap arc record-validate <id> --verdict
-   <PASS|GAPS|no-op>` (stamps the verdict artifact `arc land` reads). GAPS → surface the gaps
-   and PAUSE for the user's go before any corrective phase.
+   <PASS|GAPS|no-op>` (stamps the verdict artifact `arc land` reads). GAPS → per
+   `mergePolicy.gapsCorrection`: `autonomous` → run validate-arc's corrective loop UNATTENDED
+   (plan → do → re-validate until PASS; the judge's PASS is the approval; re-record the
+   verdict), then land; `hold`/absent → surface the gaps and PAUSE for the user's go. Bound
+   exhaustion or a descope-shaped gap ALWAYS stops for the user.
 3. **land** → `roadmap arc land <id>` — the ONE landing engine (preconditions, arc-end suite,
    the blocker check, backlog regroom, RunnerSummary, and the autonomous push per the
    consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user · 2 = blocker; surface the
