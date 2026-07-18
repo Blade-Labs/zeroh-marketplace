@@ -57,8 +57,11 @@ function runStart(argv) {
   const flipped = src.slice(0, m.index) + src.slice(m.index).replace("'backlog'", "'in-progress'")
   writeFileSync(file, flipped)
   const rel = relative(toplevel, file)
-  execFileSync('git', ['-C', toplevel, 'add', rel], { timeout: 15_000 })
-  execFileSync('git', ['-C', toplevel, 'commit', '-m', `docs(roadmap): phase ${n} — move to in-progress`], {
+  // Pathspec-scoped commit: the move-commit must be provably the phase file ONLY — a
+  // bare `git commit` commits the whole index, sweeping a shared worktree's
+  // sibling-session dirt under the move subject that gitscan's Tier-1 base derivation
+  // keys off (CLAUDE.md: stage explicit paths only).
+  execFileSync('git', ['-C', toplevel, 'commit', rel, '-m', `docs(roadmap): phase ${n} — move to in-progress`], {
     timeout: 30_000,
     stdio: 'ignore',
   })
