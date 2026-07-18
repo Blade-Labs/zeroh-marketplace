@@ -33,6 +33,8 @@ const TREE = {
   arc: { phase: 1657, sub: ['next <arcId>', 'land <arcId>'], desc: 'position derivation + the ONE landing engine' },
   watch: { phase: 1657, sub: ['<arcId>', '--once'], desc: 'executor liveness (absorbs executor-watch/liveness)' },
   beacon: { phase: 1737, sub: ['<event> --phase <N>', '--detail', '--log', '--session'], desc: 'typed executor heartbeat (closed vocabulary)' },
+  'executor-arm': { phase: 1737, sub: ['<N> --session <id>'], desc: 'write the session-bound executor arm file (never unbound)' },
+  'executor-disarm': { phase: 1737, sub: ['<N>', '--sweep'], desc: 'remove an executor arm / sweep exactly the stale set' },
   phase: { phase: 1657, sub: ['validate <N|file>', 'start <N>'], desc: 'phase-file validation + start convenience' },
   audit: { phase: 1659, sub: ['--json'], desc: "audit-roadmap's 12 checks, mechanized" },
   debt: { phase: 1658, sub: ['census', 'dispose', 'check'], desc: 'debt census/dispose wrappers' },
