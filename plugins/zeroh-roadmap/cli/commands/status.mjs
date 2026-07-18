@@ -5,6 +5,10 @@
  * than reimplementing it). The human output stays BYTE-COMPATIBLE with the old script
  * so the status-parity test can diff them; --json is a new, additive machine shape.
  *
+ * One ADDITIVE divergence from the legacy oracle: the post-merge-watch RED banner
+ * (postMergeRedLine) — absent whenever the marker is absent/green/running, so the
+ * parity estates (never a git repo with a red marker) still diff byte-identical.
+ *
  * The shared substrate does the reading: phasescan.scanProgress (the progress fold),
  * beacon.lastEvent WITHOUT a worktree (main-registry-only, matching legacy beaconOf
  * :143-145 — the dual-dir scan is watch territory and would break parity here), and
@@ -12,7 +16,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { scanProgress } from '../lib/phasescan.mjs'
 import { arcProgress } from '../lib/derive.mjs'
 import { lastEvent, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN, WORK_EVENTS } from '../lib/beacon.mjs'
@@ -26,6 +30,30 @@ const git = (args, cwd) => {
 }
 
 const fmtMin = (m) => (m < 60 ? `${Math.round(m)}m` : m < 2880 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`)
+
+/**
+ * Read the consumer's async post-merge sweep marker and return ONE bounded banner
+ * line iff it reports RED — the coordinator's "what next" flow sees the async red
+ * alongside lane state. Resolution mirrors the consumer watcher's --hook rule
+ * (post-merge-watch.mjs): `git rev-parse --git-common-dir` → its parent is the MAIN
+ * checkout, so a linked-worktree session reads the main checkout's .test-logs.
+ * READ-ONLY, never a second writer. Absent / green / running / unparseable marker,
+ * or a non-repo root → null (zero output change).
+ */
+function postMergeRedLine(root) {
+  const common = git(['rev-parse', '--git-common-dir'], root)
+  if (!common) return null
+  const marker = join(dirname(resolve(root, common)), '.test-logs', 'post-merge-status.json')
+  try {
+    const m = JSON.parse(readFileSync(marker, 'utf8'))
+    if (!m || typeof m !== 'object' || m.result !== 'red') return null
+    const sha7 = String(m.sha ?? '').slice(0, 7) || '?'
+    const headline = String(m.headline ?? '').replace(/\s+/g, ' ').slice(0, 200) || '(no headline)'
+    return `post-merge-watch RED @ ${sha7} (${m.finishedAt ?? '?'}): ${headline}`
+  } catch {
+    return null // absent or unparseable — the marker is advisory, never an error
+  }
+}
 
 function derive(root) {
   const derivedAt = new Date().toISOString()
@@ -157,13 +185,17 @@ function derive(root) {
     }
   }
 
-  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars }
+  // 7) The async post-merge sweep marker (read-only; null in the common case)
+  const postMergeRed = postMergeRedLine(root)
+
+  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed }
 }
 
 function printHuman(m) {
   for (const w of m.unreadableSidecars) process.stderr.write(`  ⚠ ${w}\n`)
   const out = []
   out.push(`arc-status — derived ${m.derivedAt} (repo ${m.repo})\n`)
+  if (m.postMergeRed) out.push(`  ⚠ ${m.postMergeRed}\n`)
   if (m.rows.length === 0) out.push('No arcs building, paused, or in-flight. All lanes free.')
   for (const r of m.rows) {
     out.push(`  ${r.arc.padEnd(12)} ${r.state.padEnd(10)} ${r.where}`)
@@ -188,6 +220,7 @@ export default async function run(argv) {
     const warnings = [
       ...model.unreadableSidecars,
       ...(model.noArcId.length ? [`in-progress phase(s) with NO arcId: ${model.noArcId.join(', ')}`] : []),
+      ...(model.postMergeRed ? [model.postMergeRed] : []),
     ]
     process.stdout.write(
       JSON.stringify(
