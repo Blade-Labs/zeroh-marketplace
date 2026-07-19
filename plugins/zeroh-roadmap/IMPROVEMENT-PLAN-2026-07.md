@@ -196,3 +196,39 @@ Env facts for calibration: the same executor ran phase 1638 CLEAN in ~2.5h once
 "foreground only" was in its brief — the stall classes, not executor capability, were
 the bottleneck. Also confirmed live: executor-arm/disarm + phase start + beacon (1737)
 work end-to-end; executor-disarm --sweep correctly swept a terminal phase's arm.
+
+## Addendum — 2026-07-19 (night 2): WORKSIM confirms the executor-band stall classes; supervision arrow inverted
+
+Evidence base: arc WORKSIM (1693 inline + 1694 via an Opus phase-executor) driven from a Fable
+session on the shared MAIN checkout, three sibling lanes committing concurrently. ~7h wall-clock
+for 3 phases + sweep/validate/land, ~40% lost to coordination waste. Confirms every 2026-07-19
+TENANTCORE class and adds two:
+
+1. **The agent card BLESSES the broken park** (root cause behind item 1 above): phase-executor.md
+   line ~19 sanctions ending a turn on "a beacon'd background-run with its armed Monitor" — on this
+   host Monitors/watchers are reaper-bait (four killed in one night, incl. an `arc land` that
+   backgrounded at the 600s Bash cap and died with an EMPTY output file while reporting exit 0).
+   The 1694 executor stalled twice exactly this way (20–40 min each until a SendMessage). Fix
+   scope decided later; the fix shape: turn ends on running tool calls or the typed result,
+   NOTHING else; foreground every bounded run; unbounded work = detached setsid + own-log +
+   sentinel + beacon, supervisor spot-checks only.
+2. **The executor-arm Stop-hook guard did NOT fire on either yield** — it guards the top-level
+   session, not the spawned executor's stop. A durable guard must trip on the executor's own
+   stop while its phase shows undone tasks and no terminal result.
+3. **NEW — `arc land` full-tier fallback + buffered silence:** impacted.mjs cannot class
+   sim-runner/** (own package), scenario-library .json (loader-test-owned), or .py — selector
+   rc=3 → FULL unit tier on a contended box (~1h), with npm buffering all output so a dead run
+   and a live run look identical from outside. Owed: classing rules for non-module-graph files +
+   stage-progress streaming to the land log.
+4. **NEW — foreign-red polling is unowned:** two of three phase gates went red on FOREIGN
+   sibling in-flight work (a type break, a contracts-pure violation); every session hand-rolls
+   the same poll-until-green loop. Owed: `gate run --wait-foreign-green` (bounded, only when the
+   red is provably outside the phase-own set).
+5. **Throughput calibration:** the INLINE drive (1693: 6 TDD tasks + quality pass + 3 reviewer
+   rounds, ~2h) ran ~2x the delegated executor's pace (1694: 5 tasks, ~2.5h + two stalls).
+   Consumer policy worth blessing: prefer inline for arcs ≤2–3 phases when the driver is Fable —
+   the executor band protects orchestrator context, but on short arcs it costs more than it saves.
+
+User directive on record (2026-07-19): "we need a durable executor that actually gets the work
+done… he should be the watcher." The supervision arrow must invert: the executor watches its own
+children by foregrounding; the supervisor only reacts to the typed result or a stale disk beacon.
