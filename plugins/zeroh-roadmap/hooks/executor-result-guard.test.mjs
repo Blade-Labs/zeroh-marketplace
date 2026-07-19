@@ -3,8 +3,9 @@
  * Fixtures for hooks/executor-result-guard.mjs — SYNTHETIC transcripts (tmp jsonl) + a
  * tmp worktree (git + roadmap.config.json + a re-export lib/roadmap/schema.ts + a zod
  * symlink so `roadmap result check` resolves + .building beacons). Cases: prose-ending
- * block (verbatim reason string-pin), valid/escalated result allow, fresh/stale
- * background-run, done+executionResult allow, unarmed + internally-erroring fail-open,
+ * block (verbatim two-exit reason string-pin), valid/escalated/checkpoint result allow,
+ * a fresh background-run beacon NO LONGER licenses (path 3 deleted), payload-free
+ * checkpoint block, done+executionResult allow, unarmed + internally-erroring fail-open,
  * BOTH arm channels (env + arm file), Stop+.arc-mode warn-not-block. Run:
  * node --test hooks/executor-result-guard.test.mjs
  */
@@ -22,9 +23,13 @@ const GUARD = join(HERE, 'executor-result-guard.mjs')
 const SCHEMA = join(PLUGIN_ROOT, 'templates', 'schema.ts')
 const PLUGIN_ZOD = realpathSync(join(PLUGIN_ROOT, 'node_modules', 'zod'))
 
-// The VERBATIM §3 block reason (pre-made decision 6), string-pinned here (NOT imported).
+// The VERBATIM two-exit block reason (post-1753 contract), string-pinned here (NOT imported).
+// blockReason() teaches the two-exit turn contract: a turn may end only on a running tool
+// call or the typed PhaseExecutionResult — and checkpoint (committed + watch + resume) is a
+// first-class exit alongside done/escalated/failed. The stale "beacon'd background-run"
+// clause is GONE (path 3 deleted).
 const REASON = (n, id) =>
-  `phase ${n} is open (next task ${id}); a turn may end only on a running tool, a beacon'd background-run, or the typed PhaseExecutionResult — continue the task loop or return the typed result (status escalated/failed is a valid honest return)`
+  `phase ${n} is open (next task ${id}); a turn may end only on a running tool call or the typed PhaseExecutionResult — done, escalated, failed, or checkpoint (committed + watch + resume)`
 
 const CONFIG = { configVersion: 1, gateCommands: { lint: 'true', types: 'true', unit: 'true', integration: 'true', build: 'true', e2e: 'none', emit: 'true' } }
 
@@ -113,20 +118,59 @@ test('escalated-status result ending → ALLOW (an honest escalated return is va
   assert.equal(r.stdout.trim(), '', `escalated must be allowed; got: ${r.stdout}`)
 })
 
-test('fresh background-run beacon with a log → ALLOW (the licensed yield)', () => {
+test('checkpoint-status result ending → ALLOW (the two-exit unbounded-work hand-off is a valid typed return)', () => {
+  const root = makeWorktree()
+  const checkpoint = {
+    phase: 1670,
+    status: 'checkpoint',
+    checkpoint: {
+      committedSha: 'abc1234',
+      reason: 'unbounded ingest running detached',
+      resume: 'read the log tail, then continue task 2',
+    },
+    gateRounds: 0,
+  }
+  const t = writeTranscript(root, fence(checkpoint))
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  // The worktree re-exports the LIVE templates/schema.ts (1753.2 checkpoint schema), so
+  // `roadmap result check` already parses this via license path 1 — GREEN pre-implementation.
+  assert.equal(r.stdout.trim(), '', `a valid checkpoint result must be allowed; got: ${r.stdout}`)
+  const beacon = readFileSync(join(root, '.building', '1670-executor.jsonl'), 'utf8')
+  assert.match(beacon, /"event":"result-returned"/)
+})
+
+test('payload-free {"status":"checkpoint"} (no checkpoint field) → BLOCK (the superRefine rejects it at result check)', () => {
+  const root = makeWorktree()
+  const t = writeTranscript(root, fence({ phase: 1670, status: 'checkpoint', gateRounds: 0 }))
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(JSON.parse(r.stdout).decision, 'block', 'a checkpoint with no committed hand-off is a nap in a costume — it must not license a stop')
+})
+
+test('the block reason names the two-exit contract — mentions "checkpoint", never "background-run"', () => {
+  const root = makeWorktree()
+  const t = writeTranscript(root, 'Committed 1670.1, prepping 1670.2. Standing by.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  const reason = JSON.parse(r.stdout).reason
+  assert.match(reason, /checkpoint/, 'the reason must teach the checkpoint exit')
+  assert.doesNotMatch(reason, /background-run/, 'the retired background-run license must not appear in the reason')
+})
+
+test('fresh background-run beacon with a log → BLOCK (path 3 deleted: a beacon no longer licenses bare prose)', () => {
   const root = makeWorktree()
   const t = writeTranscript(root, 'Backgrounded the full suite; Monitor armed. See log.')
   writeBeacon(root, 1670, { ts: new Date().toISOString(), phase: 1670, event: 'background-run', log: '.test-logs/run.tap' })
   const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
-  assert.equal(r.stdout.trim(), '', 'fresh background-run must be allowed')
+  const decision = JSON.parse(r.stdout)
+  assert.equal(decision.decision, 'block', 'a fresh background-run beacon must NOT license a bare-prose stop — return a checkpoint result instead')
+  assert.equal(decision.reason, REASON(1670, '1670.2'))
 })
 
-test('fresh background-run beacon with an EPOCH-MS ts → ALLOW (the lib accepts numeric ts; the hook must too)', () => {
+test('fresh background-run beacon with an EPOCH-MS ts → BLOCK (freshness window gone; unbounded work returns a checkpoint)', () => {
   const root = makeWorktree()
   const t = writeTranscript(root, 'Backgrounded the full suite; Monitor armed. See log.')
   writeBeacon(root, 1670, { ts: Date.now(), phase: 1670, event: 'background-run', log: '.test-logs/run.tap' })
   const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
-  assert.equal(r.stdout.trim(), '', 'a numeric-ts fresh background-run must be allowed')
+  assert.equal(JSON.parse(r.stdout).decision, 'block', 'a numeric-ts fresh background-run must also block now')
 })
 
 test('Stop WITHOUT .arc-mode (executor-band orchestrator, arm file present) → WARN not block', () => {
@@ -138,7 +182,7 @@ test('Stop WITHOUT .arc-mode (executor-band orchestrator, arm file present) → 
   assert.match(r.stderr, /advisory: not blocking a Stop/)
 })
 
-test('STALE background-run beacon (>10 min) → BLOCK', () => {
+test('background-run beacon of ANY age → BLOCK (no freshness window survives path-3 deletion)', () => {
   const root = makeWorktree()
   const t = writeTranscript(root, 'Still waiting on the background run.')
   const stale = new Date(Date.now() - 20 * 60000).toISOString()

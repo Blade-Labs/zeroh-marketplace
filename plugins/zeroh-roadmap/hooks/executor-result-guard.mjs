@@ -25,14 +25,15 @@ import { fileURLToPath } from 'node:url'
 import { appendExecutorEvent } from '../cli/lib/beacon.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
-const BACKGROUND_RUN_MAX_MIN = 10
 
-/** The VERBATIM block reason (pre-made decision 6) with <N> and the next open task interpolated. */
+/** The VERBATIM block reason (the two-exit turn contract, phase 1753) with <N> and the next
+ *  open task interpolated. There is NO licensed park: unbounded external work hands off via a
+ *  typed checkpoint result, which license path 1 (result check) admits like any other return. */
 function blockReason(phase, taskId) {
   return (
-    `phase ${phase} is open (next task ${taskId}); a turn may end only on a running tool, `
-    + "a beacon'd background-run, or the typed PhaseExecutionResult — continue the task loop "
-    + 'or return the typed result (status escalated/failed is a valid honest return)'
+    `phase ${phase} is open (next task ${taskId}); a turn may end only on a running tool call `
+    + 'or the typed PhaseExecutionResult — done, escalated, failed, or checkpoint '
+    + '(committed + watch + resume)'
   )
 }
 
@@ -254,15 +255,10 @@ function main() {
   }
   if (phaseSrc && /status:\s*'done'/.test(phaseSrc) && /executionResult\s*:/.test(phaseSrc)) return 0
 
-  // (3) latest beacon event is a fresh background-run with a log field.
-  const beacon = lastBeaconEvent(join(worktree, '.building', `${phase}-executor.jsonl`))
-  if (beacon && beacon.event === 'background-run' && beacon.log) {
-    // ts may be an ISO string OR epoch ms — the lib's backgroundRunAlive accepts both, so
-    // the hook must too (a NaN here would refuse to license a legitimate yield).
-    const ts = typeof beacon.ts === 'number' ? beacon.ts : Date.parse(beacon.ts)
-    const ageMin = (Date.now() - ts) / 60000
-    if (Number.isFinite(ageMin) && ageMin < BACKGROUND_RUN_MAX_MIN) return 0
-  }
+  // There is deliberately NO background-run license (phase 1753): a fresh background-run
+  // beacon used to buy a 10-min legal park with no wake owner — the exact nap class this
+  // guard exists to kill. A legal unbounded-work stop now carries a typed checkpoint result,
+  // admitted by license path 1 (result check) like any other return.
 
   // An unreadable/absent transcript is an INTERNAL ERROR → fail OPEN (never block on a
   // payload we could not inspect). A readable prose-ending transcript falls through to block.
