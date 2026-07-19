@@ -148,3 +148,47 @@ worked. What should graduate from convention to plugin protocol:
    motivated the pin completed 2026-07-02 — revert software-architect too; planning
    sessions that want Fable pass the call-site model override per the consumer's standing
    rule.
+
+## Addendum — 2026-07-19: TENANTCORE executor-band findings (first full arc on the new arm/beacon CLI)
+
+From driving arc TENANTCORE (1637–1644, spine-wide) with per-phase Opus phase-executors,
+supervised from a Fable session. Roughly half the elapsed wall-clock was lost to four
+codifiable classes:
+
+1. **Background-park stalls, again and harder (extends item 4 above).** Six incidents,
+   ~4h lost in one arc: the executor ends its turn "anchored on the background run + armed
+   Monitor", and the wake dies silently (session events reap Monitors on shared hosts).
+   The prompt fix in item 4 under-shoots — the executor treated 10–15 min tiers/doc builds
+   as background-worthy. Tighten executor-reference: FOREGROUND every bounded run
+   regardless of duration (tiers, type-check, docs builds); a background park is legal
+   ONLY for genuinely unbounded work, and then the turn must end on a disk-heartbeat
+   contract (beacon file the supervisor can poll), never a Monitor.
+
+2. **Subagent results route to the ORCHESTRATOR, not the spawning executor.** Two
+   architect Decision Contracts finished (145s/178s) while the executor yielded
+   "awaiting the architect" — the verdicts landed as task-notifications in the
+   supervising session, and the executor sat dark until a SendMessage relay (~40 min
+   each). Codify in phase-executor.md: the architect consult is a SYNCHRONOUS in-turn
+   spawn (read the return value directly); an executor must NEVER end its turn to await
+   a subagent it spawned.
+
+3. **Commit-grammar attribution fails silent → cryptic red gate.** Subjects of the form
+   `phase N task N.X — …` defeat phaseOwnFiles (grep `phase N —`): every file classes
+   foreign, the scoped slots run with `files: []` and exit 2 with no cause named.
+   deviantGrammarFindings only catches the `phase N N.X —` variant, so this shipped 23
+   commits deep and cost a filter-branch reword + a full gate re-cycle. Fixes:
+   (a) widen the deviant regex to `phase N task N.X`; (b) gate plan/run should FAIL LOUD
+   ("0 phase-own files but K commits in range — commit-grammar attribution broken?")
+   instead of running empty slots; (c) print the canonical grammar in `roadmap phase
+   start` output so executors see it at the moment it matters.
+
+4. **`roadmap watch` as a long-lived daemon is reaped on shared hosts.** Two daemon
+   instances died within minutes (test-orphan-reaper class). The working pattern was
+   supervisor-driven `watch --once --json` spot-checks on each executor notification +
+   a commit-tail monitor. Bless that in do-arc's step 2.3 (or make `watch` itself
+   re-exec-resilient via a cron/heartbeat mode).
+
+Env facts for calibration: the same executor ran phase 1638 CLEAN in ~2.5h once
+"foreground only" was in its brief — the stall classes, not executor capability, were
+the bottleneck. Also confirmed live: executor-arm/disarm + phase start + beacon (1737)
+work end-to-end; the executor-disarm --sweep correctly swept a terminal phase's arm.
