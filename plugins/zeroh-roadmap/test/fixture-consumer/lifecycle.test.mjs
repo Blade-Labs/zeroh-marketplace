@@ -148,8 +148,11 @@ test('L8 — integration-scoped removed → the full integration slot runs and t
   writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n')
   git(root, 'add', '-A')
   git(root, 'commit', '-q', '-m', 'chore: drop integration-scoped binding')
-  // testScope relevant (a plain source touch, no declared full) → the scoped branch runs.
-  seedPhase(root, { phase: 9080, status: 'in-progress', arcId: 'FX', kind: 'logic', tasks: [{ id: '9080.1', done: true }] }, { touch: ['src/plain.ts'] })
+  // testScope relevant (a plain source touch, no declared full) → the scoped branch runs. The
+  // phase-own set MUST carry a test file so the scoped selection is non-empty and reaches the
+  // scoped-OR-fallback resolution (post-1737 an EMPTY scoped selection is a skip, not a fallback —
+  // this test exercises the fallback, so it seeds a test file to get there).
+  seedPhase(root, { phase: 9080, status: 'in-progress', arcId: 'FX', kind: 'logic', tasks: [{ id: '9080.1', done: true }] }, { touch: ['src/plain.ts'], create: { 'src/plain.test.ts': 'export const t = 1\n' } })
   const r = runCli(root, ['gate', 'run', '9080'])
   assert.equal(r.code, 0, `green run; stderr:\n${r.stderr}`)
   const report = latestReport(root, 9080)
