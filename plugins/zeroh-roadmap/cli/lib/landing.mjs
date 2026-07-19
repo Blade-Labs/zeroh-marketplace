@@ -272,6 +272,7 @@ export function evaluateBlockers(state) {
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolveSlot, resolveImpactedOrFallback, runSlot } from './slots.mjs'
+import { sweepOrphanCapbuildUnits } from './orphan-sweep.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
@@ -284,7 +285,10 @@ import { loadConfig, ConfigError } from './config.mjs'
  * declared-`none` slot is SKIPPED, recorded honestly (never a fake green); an arc whose
  * every slot is absent records the no-runtime-suite note rather than pretending it ran.
  */
-export async function runArcEndSuite({ config, cwd, includeE2e = false, mode = 'full', range = null }) {
+export async function runArcEndSuite({ config, cwd, includeE2e = false, mode = 'full', range = null, sweepOrphans = sweepOrphanCapbuildUnits }) {
+  // A prior engine run reaped mid-suite leaves its capbuild unit running ownerless;
+  // launching this suite beside it duplicates a full tier (see orphan-sweep.mjs).
+  sweepOrphans()
   const wanted = ['unit', 'integration', ...(includeE2e ? ['e2e'] : [])]
   const results = []
   let anyRan = false
