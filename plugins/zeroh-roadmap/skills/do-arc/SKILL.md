@@ -39,8 +39,10 @@ workflow engine cannot host its imports).
       execution-prompt doc; result schema from `roadmap contract show --json-schema`. BEFORE
       the spawn, arm the Stop-hook guard: `roadmap executor-arm <phase> --session <YOUR
       SESSION ID>` (the session-scoped dir name in your transcript/scratchpad paths) — the
-      CLI refuses an unbound arm, and a foreign session is never guarded;
-      background `roadmap watch <id>` as its watchdog (exit 3 STALLED / 4 EXITED).
+      CLI refuses an unbound arm, and a foreign session is never guarded. Liveness =
+      `roadmap watch <id> --once --json` SPOT-CHECKS on each executor notification and before
+      every resume decision — never a long-lived background `watch` daemon (every daemon
+      instance to date was reaped by a session event before its arc finished).
    4. On return: `roadmap result check --phase <phase>` over the returned JSON (parse or
       die — never trust prose), then `roadmap executor-disarm <phase>` (always, even on a
       halt; `roadmap executor-disarm --sweep` at arc start clears stale leftovers).
@@ -66,8 +68,16 @@ workflow engine cannot host its imports).
     acceptanceCriterion. The bounce-vs-ratify call is yours with the user: **bounce** the phase
     (redo with the criterion honored) or record a user-ratified `Arc.descopes` item. Never wave
     it through — this is the arc face of the executor's never-rule 1.
+  - `checkpoint` → the executor's honest unbounded-work hand-off (the two-exit turn contract):
+    verify `checkpoint.committedSha` resolves on disk (`git cat-file -t <sha>`), then respawn the
+    phase-executor UNCONDITIONALLY with the checkpoint verbatim in the spawn prompt — resume is
+    lossless from disk, and the respawned executor's first act is the on-wake drill over
+    `checkpoint.watch`. No SendMessage negotiation, no judgment call: the wake is owned by this
+    contract. Bound: THREE consecutive checkpoints with no new commit between them → escalate to
+    the user with the beacon trail (a progress ratchet, not a leash). A committedSha that does
+    not resolve → treat as `failed` (the lossless precondition is broken).
   - `blocked` → surface the reason (unmet dep, foreign lane), resolve it, relaunch.
-  - `stalled` / `exited` → the evidence IS the `roadmap watch` verdict JSON. If the executor
+  - `stalled` / `exited` → the evidence IS the `roadmap watch --once` verdict JSON. If the executor
     is addressable, `SendMessage` it once with that evidence; otherwise respawn it mid-phase
     (resume is free — re-derivation from disk makes a respawn lossless). Still stuck after a
     bounded wait → escalate to the user. Never restart committed work.
