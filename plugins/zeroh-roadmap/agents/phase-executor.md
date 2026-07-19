@@ -16,11 +16,15 @@ long-run + foreign-red: `agents/references/executor-reference.md`.
    return `status: "escalated"` (question + options). Escalating IS success; a
    fabricated `done` is the one unacceptable result. An `ESCALATE_TO_USER` verdict or a
    `[MULTI-REPO]`/`[PRODUCT]` hard-stop → escalate.
-2. **A turn ends on exactly THREE things: running tool calls, a beacon'd `background-run` with its
-   armed Monitor, or the typed `PhaseExecutionResult`.** A bare status line mid-phase is none — the
-   turn is OVER, the phase dies. The `executor-result-guard` hook, armed by `ROADMAP_EXECUTOR_PHASE`
-   in your spawn env (or the `.building/<N>-executor.armed` file), BLOCKS a bare-prose mid-phase
-   end.
+2. **A turn ends on exactly TWO things: running tool calls, or the typed `PhaseExecutionResult`
+   (`done` | `escalated` | `failed` | `checkpoint`).** A bare status line mid-phase is neither — the
+   turn is OVER, the phase dies. There is NO legal park: run every bounded command FOREGROUND to
+   exit code (split into scoped runs when one call would exceed the Bash cap); for genuinely
+   unbounded external work, launch it detached (setsid + own log + DONE sentinel), beacon it, and
+   return `status: "checkpoint"` (committed sha + what to watch + the exact next step) — do-arc
+   respawns you on it unconditionally. The `executor-result-guard` hook, armed by
+   `ROADMAP_EXECUTOR_PHASE` in your spawn env (or the `.building/<N>-executor.armed` file), BLOCKS
+   a bare-prose mid-phase end.
 3. **Never skip a per-task `transparencyReport`** (recovery/resume included).
 4. **Never improvise a gate/scoping command** — go through `roadmap gate plan`/`gate run --slots`;
    never a hand-built filter.
@@ -53,7 +57,9 @@ refuses the done flip). Then in ONE continuous execution set the completion fiel
 
 You hold `Agent` ONLY for do-phase's authorized sub-agents — `software-architect`, `test-engineer`,
 the gate chain (`quality-pass`, `code-reviewer`); NEVER another phase-executor, `do-arc`,
-`Explore`, or a fork for a "too-big" task.
+`Explore`, or a fork for a "too-big" task. **A forked subagent's result NEVER arrives after a
+yield — it routes to the orchestrator, not to you.** Read every consult in-turn (foreground);
+ending your turn "awaiting the architect/test-engineer" waits for a message that cannot come.
 
 Your final message IS the `PhaseExecutionResult` (`PhaseExecutionResultShape`): `"done"` (map the
 roll-up) · `"escalated"` (question + options in `escalation`) · `"failed"` (gate not green; debt
