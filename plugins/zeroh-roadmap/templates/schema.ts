@@ -247,7 +247,25 @@ export type TransparencyReport = z.output<typeof TransparencyReportShape>
  *  - `gateRounds`: how many correctness rounds the gate took (0 for mockup). */
 export const PhaseExecutionResultShape = z.object({
   phase: z.number().int().positive(),
-  status: z.enum(['done', 'escalated', 'failed']),
+  status: z.enum(['done', 'escalated', 'failed', 'checkpoint']),
+  /** The honest unbounded-work hand-off (two-exit turn contract): committed state + what to
+   *  watch + the exact next step. do-arc respawns on a checkpoint UNCONDITIONALLY — the wake is
+   *  owned by contract. committedSha proves the lossless-respawn precondition. REQUIRED when
+   *  status === 'checkpoint' (the superRefine below); meaningless otherwise. */
+  checkpoint: z
+    .object({
+      committedSha: z.string().min(7),
+      reason: z.string().min(10),
+      resume: z.string().min(10),
+      watch: z
+        .object({
+          log: z.string().min(1).optional(),
+          pid: z.number().int().positive().optional(),
+          doneMarker: z.string().min(1).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
   escalation: z
     .object({
       question: z.string().min(10),
@@ -267,6 +285,12 @@ export const PhaseExecutionResultShape = z.object({
     )
     .default([]),
   gateRounds: z.number().int().nonnegative(),
+}).superRefine((r, ctx) => {
+  // A payload-free checkpoint is a nap with a typed costume — the committed sha is the whole
+  // point of the hand-off, so the cross-requirement is schema-enforced, never advisory.
+  if (r.status === 'checkpoint' && r.checkpoint === undefined) {
+    ctx.addIssue({ code: 'custom', path: ['checkpoint'], message: "status 'checkpoint' requires the checkpoint field (committedSha + reason + resume)" })
+  }
 })
 
 export type PhaseExecutionResult = z.output<typeof PhaseExecutionResultShape>

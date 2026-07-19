@@ -79,13 +79,73 @@ test('result check — --phase mismatch exits 2', () => {
   assert.match(r.stderr, /9001.*!==.*9999/)
 })
 
+// ── Checkpoint status widening (RED-first; targets the not-yet-landed PhaseExecutionResultShape
+//    widening: status gains 'checkpoint', a new optional `checkpoint` object, and a superRefine
+//    that REQUIRES `checkpoint` when status === 'checkpoint'). Cases run against the SAME re-export
+//    consumer schema the siblings use, so today the 'checkpoint' enum member is rejected. ─────────
+
+const checkpointResult = {
+  phase: 9001,
+  status: 'checkpoint',
+  checkpoint: {
+    committedSha: 'abc1234',
+    reason: 'unbounded ingest running detached',
+    resume: 'read the log tail, then continue task 2',
+    watch: { log: '/tmp/x.log' },
+  },
+  gateRounds: 0,
+}
+
+test('result check — a well-formed checkpoint result passes (exit 0) [RED until the widening lands]', () => {
+  const root = makeConsumer()
+  const f = join(root, 'checkpoint.json')
+  writeFileSync(f, JSON.stringify(checkpointResult))
+  const r = roadmap(root, ['result', 'check', '--phase', '9001', f])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  assert.match(r.stdout, /"status":\s*"checkpoint"/)
+})
+
+test('result check — a checkpoint result missing checkpoint.committedSha fails (non-zero)', () => {
+  const root = makeConsumer()
+  const { committedSha, ...watchlessCheckpoint } = checkpointResult.checkpoint
+  const bad = { ...checkpointResult, checkpoint: watchlessCheckpoint }
+  const f = join(root, 'no-sha.json')
+  writeFileSync(f, JSON.stringify(bad))
+  const r = roadmap(root, ['result', 'check', '--phase', '9001', f])
+  assert.notEqual(r.code, 0, r.stdout + r.stderr)
+})
+
+test('result check — a payload-free checkpoint (no checkpoint field) fails via the superRefine (non-zero)', () => {
+  const root = makeConsumer()
+  const f = join(root, 'payload-free.json')
+  writeFileSync(f, JSON.stringify({ phase: 9001, status: 'checkpoint', gateRounds: 0 }))
+  const r = roadmap(root, ['result', 'check', '--phase', '9001', f])
+  assert.notEqual(r.code, 0, r.stdout + r.stderr)
+})
+
+test('result check — an escalated result carrying escalation question+options still passes (exit 0)', () => {
+  const root = makeConsumer()
+  const escalated = {
+    phase: 9001,
+    status: 'escalated',
+    escalation: { question: 'which store backend for the detached ingest?', options: ['postgres', 'sqlite'] },
+    gateRounds: 0,
+  }
+  const f = join(root, 'escalated.json')
+  writeFileSync(f, JSON.stringify(escalated))
+  const r = roadmap(root, ['result', 'check', '--phase', '9001', f])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  assert.match(r.stdout, /"status":\s*"escalated"/)
+})
+
 test('contract show --json-schema — emits the schema with the drift-visible anchors', () => {
   const root = makeConsumer()
   const r = roadmap(root, ['contract', 'show', '--json-schema'])
   assert.equal(r.code, 0, r.stderr)
   const schema = JSON.parse(r.stdout)
   assert.ok(schema.properties.phase, 'properties.phase present')
-  assert.deepEqual(schema.properties.status.enum, ['done', 'escalated', 'failed'])
+  assert.deepEqual(schema.properties.status.enum, ['done', 'escalated', 'failed', 'checkpoint'])
+  assert.ok(schema.properties.checkpoint, 'properties.checkpoint present (the typed hand-off)')
   assert.ok(schema.properties.hardStops, 'properties.hardStops present')
 })
 
