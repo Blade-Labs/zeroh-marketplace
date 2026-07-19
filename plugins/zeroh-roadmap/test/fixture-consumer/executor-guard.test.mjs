@@ -16,9 +16,9 @@ import { join } from 'node:path'
 import { makeFixtureRepo, writePhaseFile, PLUGIN_ROOT } from './harness.mjs'
 
 const GUARD = join(PLUGIN_ROOT, 'hooks', 'executor-result-guard.mjs')
-/** The VERBATIM §3 block reason (pre-made decision 6), string-pinned here (NOT imported). */
+/** The VERBATIM block reason (the two-exit turn contract, phase 1753), string-pinned here (NOT imported). */
 const REASON = (n, id) =>
-  `phase ${n} is open (next task ${id}); a turn may end only on a running tool, a beacon'd background-run, or the typed PhaseExecutionResult — continue the task loop or return the typed result (status escalated/failed is a valid honest return)`
+  `phase ${n} is open (next task ${id}); a turn may end only on a running tool call or the typed PhaseExecutionResult — done, escalated, failed, or checkpoint (committed + watch + resume)`
 
 /** Mirror the hooks.json registration: spawn the guard with the payload on stdin. spawnSync
  *  captures BOTH streams (the Stop warn writes to stderr on an exit-0 allow). */
@@ -62,8 +62,9 @@ test('H1 — an armed executor ending in bare prose → block with the exact §3
   assert.equal(decision.reason, REASON(9500, '9500.2'), 'the reason is the verbatim §3 contract')
   assert.match(decision.reason, /phase 9500 is open/)
   assert.match(decision.reason, /next task 9500\.2/)
-  for (const end of ['running tool', "beacon'd background-run", 'typed PhaseExecutionResult'])
+  for (const end of ['running tool call', 'typed PhaseExecutionResult', 'checkpoint'])
     assert.ok(decision.reason.includes(end), `names the sanctioned turn end: ${end}`)
+  assert.ok(!decision.reason.includes('background-run'), 'the deleted background-run park is NOT offered')
 })
 
 // ── H2 — a valid typed result → ALLOW + a result-returned beacon ─────────────────────────
@@ -84,17 +85,26 @@ test('H3 — phase already done with executionResult persisted, prose ending →
   assert.equal(r.stdout.trim(), '', 'a durable persisted result allows a prose ending')
 })
 
-// ── H4 — fresh background-run beacon → ALLOW; stale >10 min → BLOCK ──────────────────────
-test('H4 — a fresh background-run beacon allows the yield; a stale (>10 min) one blocks', () => {
+// ── H4 — a background-run beacon NO LONGER licenses a bare park; a typed checkpoint does ──
+test('H4 — a background-run beacon (fresh or stale) with a prose ending → BLOCK; the honest yield is a typed checkpoint', () => {
+  // The background-run license (path 3) is DELETED (phase 1753): a beacon can never license a
+  // bare-prose park, because the wake it promised was reaper-bait with no owner.
   const fresh = guardRepo()
   beacon(fresh, 9500, { ts: new Date().toISOString(), phase: 9500, event: 'background-run', log: '.test-logs/run.tap' })
-  const r1 = runGuard(fresh, { session_id: 's1', transcript_path: transcript(fresh, 'Backgrounded the suite; Monitor armed.'), hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
-  assert.equal(r1.stdout.trim(), '', 'a fresh background-run beacon is the licensed yield')
+  const r1 = runGuard(fresh, { session_id: 's1', transcript_path: transcript(fresh, 'Backgrounded the suite; standing by.'), hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
+  assert.equal(JSON.parse(r1.stdout).decision, 'block', 'a fresh background-run beacon no longer licenses a prose park')
 
   const stale = guardRepo()
   beacon(stale, 9500, { ts: new Date(Date.now() - 20 * 60000).toISOString(), phase: 9500, event: 'background-run', log: '.test-logs/run.tap' })
   const r2 = runGuard(stale, { session_id: 's1', transcript_path: transcript(stale, 'Still waiting on the run.'), hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
-  assert.equal(JSON.parse(r2.stdout).decision, 'block', 'a >10-min beacon no longer licenses the yield')
+  assert.equal(JSON.parse(r2.stdout).decision, 'block', 'a stale beacon blocks too — the license is gone, not merely narrowed')
+
+  // The honest unbounded-work hand-off: a typed checkpoint result (committed + reason + resume)
+  // passes result-check (license path 1), so it licenses the turn end.
+  const cp = guardRepo()
+  const checkpoint = { phase: 9500, status: 'checkpoint', checkpoint: { committedSha: 'abc1234', reason: 'unbounded ingest running detached', resume: 'read the log tail, then continue task 9500.2' }, gateRounds: 0, compromises: [], skipped: [], hardcoded: [], surfaced: [], hardStops: [] }
+  const r3 = runGuard(cp, { session_id: 's1', transcript_path: transcript(cp, fence(checkpoint)), hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
+  assert.equal(r3.stdout.trim(), '', `a typed checkpoint result is the licensed yield; got: ${r3.stdout}`)
 })
 
 // ── H5 — fail-open for the unarmed agent AND the broken-config path ──────────────────────
