@@ -115,9 +115,26 @@ trimmed passage with no ledger row is a sweep failure, not a style nit.
 Apply any **RESOLVE-NOW** fixes the architect identifies and **re-gate each** to its phase's `kind`;
 author **PLAN-PHASE** follow-ups for real debt that should not block the merge.
 
+## Step 2.5: Estate ratchets — the whole-tree conformance pack, ONCE per arc
+
+Per-phase gates are diff-scoped by design, so an arc's accumulated drift only shows up where a
+WHOLE-TREE check runs. Today that is `arc land` and the release PR — the two most expensive
+moments (a v0.36.0 release burned three CI rounds on drift every phase gate had passed, and the
+FRONTDOOR land tripped five ratchets at once). Once per arc, here, is the right altitude: too slow
+per phase, too late at land.
+
+When the consumer binds `gateCommands.ratchets`, run it **FOREGROUND** after the whole-arc review.
+Its scope is the consumer's own conformance estate (count/threshold ratchets, test-inventory and
+scan locks, migration-knob cross-checks — whatever the consumer put behind the binding). A red run
+is a sweep FINDING disposed through the Step-1 table like any other, with **RESOLVE-NOW as the
+default** (ratchet fixes are mechanical: reword the comment, add the knob, ratchet the number down).
+No binding → record the named skip (`ratchets: not bound in gateCommands — estate ratchets skipped`)
+in the Step-3 report; never a silent pass.
+
 ## Step 3: Report merge-readiness (ephemeral, chat only)
 
-Aggregate: **per-phase gate status** (every member `done`, passing gate); **debt dispositions** (counts
+Aggregate: **the estate-ratchet result** (Step 2.5 — green, the dispositions its reds became, or the
+named skip); **per-phase gate status** (every member `done`, passing gate); **debt dispositions** (counts
 by RESOLVE-NOW / PLAN-PHASE IN-ARC vs DESCOPE / ACCEPT / OPERATOR-PENDING + the `debtResolutions[]`
 refs); **whole-arc architect verdict** (seam single-vs-forked + design-conformance, or "no designRefs";
 + the ledger-audit result when prose was trimmed); **deferred to release-sweep** (`limitations`);
