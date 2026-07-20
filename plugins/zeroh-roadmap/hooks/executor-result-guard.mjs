@@ -180,7 +180,10 @@ function lastJsonBlock(text) {
  */
 function transcriptAgentType(path) {
   if (!path || !existsSync(path)) return null
+  let found = null
   try {
+    // The LAST attribution wins: the stopping agent's own turns are the newest, so an interleaved
+    // transcript can never exempt the executor by an earlier sibling's attribution.
     for (const line of readFileSync(path, 'utf8').trim().split('\n')) {
       if (!line) continue
       let obj
@@ -189,12 +192,12 @@ function transcriptAgentType(path) {
       } catch {
         continue
       }
-      if (typeof obj?.attributionAgent === 'string') return obj.attributionAgent
+      if (typeof obj?.attributionAgent === 'string') found = obj.attributionAgent
     }
   } catch {
     /* unreadable → unknown */
   }
-  return null
+  return found
 }
 
 /** The agent type the executor guard is FOR. A different named agent in the same armed session

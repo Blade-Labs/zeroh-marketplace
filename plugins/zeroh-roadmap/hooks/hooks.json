@@ -1,5 +1,5 @@
 {
-  "description": "zeroh-roadmap runtime hooks \u2014 validate roadmap files at write time so a malformed phase/arc/backlog file never lands (the import-time Zod parse IS the validator), and block the known-broken integration-test scoping forms that silently run the full suite",
+  "description": "zeroh-roadmap runtime hooks — validate roadmap files at write time so a malformed phase/arc/backlog file never lands (the import-time Zod parse IS the validator), and block the known-broken integration-test scoping forms that silently run the full suite",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scoping-guard.sh\" || exit 0",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scoping-guard.sh\"; c=$?; [ \"$c\" -eq 2 ] && exit 2; exit 0",
             "statusMessage": "Checking test-scoping form..."
           }
         ]

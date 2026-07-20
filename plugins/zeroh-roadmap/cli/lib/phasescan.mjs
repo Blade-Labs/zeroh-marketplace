@@ -6,6 +6,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { defaultExec } from './exec.mjs'
 
 const STATUS_RE = /status:\s*'([a-z-]+)'/
 const DECLARED_RE = /(?:^|[{,])\s*phase:\s*(\d+)\s*,/m

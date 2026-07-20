@@ -261,7 +261,6 @@ export const BLOCKERS = [
   },
 ]
 
-/** Evaluate every blocker against the state; return the held list ({ id, name, reason }). */
 /**
  * The detached-land JOURNAL (1792.4): a landing run's own state file beside the arc sidecar.
  * A session event reaps a plain background land, so `arc land --detach` self-daemonizes and
@@ -337,6 +336,7 @@ export function staleBaseWarning(behindCount, ceiling, baseRef) {
   }
 }
 
+/** Evaluate every blocker against the state; return the held list ({ id, name, reason }). */
 export function evaluateBlockers(state) {
   return BLOCKERS.map((b) => ({ id: b.id, name: b.name, reason: b.check(state) })).filter((x) => x.reason)
 }
