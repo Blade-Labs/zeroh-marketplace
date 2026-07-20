@@ -24,7 +24,7 @@ import {
   classifyBand,
   EXECUTABLE_EXTS,
 } from '../lib/ladder.mjs'
-import { resolveSlot, resolveScopedOrFallback, runSlot, resolveHygieneSlots, historyCommentFindings } from '../lib/slots.mjs'
+import { resolveSlot, resolveScopedOrFallback, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings } from '../lib/slots.mjs'
 import {
   writeReport,
   latestReport,
@@ -287,6 +287,12 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   // Per-phase hygiene (1792.1): the diff-scoped consumer lint, {base}-substituted; an unbound
   // consumer renders the NAMED skip in the plan — visible, never a silent hole.
   for (const h of resolveHygieneSlots(opts.cfg, base)) slots.push(compactSlot(h))
+  // Conditional slots (1792.2): diff-triggered consumer slots, each carrying WHY it joined.
+  for (const c of resolveConditionalSlots(opts.cfg, ownFiles)) {
+    const compact = compactSlot(c)
+    if (c.reason != null) compact.reason = c.reason
+    slots.push(compact)
+  }
   const testFiles = selectTestFiles(toplevel, ownFiles)
   const emptyScopeSkip = []
   if (wantsTests && testScope.effective !== 'static' && !testScope.refused) {

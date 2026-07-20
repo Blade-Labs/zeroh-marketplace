@@ -132,6 +132,12 @@ export const RoadmapConfigShape = z.strictObject({
   $schema: z.string().optional(),
   configVersion: z.literal(1),
   gateCommands: GateCommandsShape,
+  // Conditional gate slots (1792.2) — the generic diff-triggered mechanism: when ANY changed path
+  // matches an entry's globs, the named slot joins the phase gate (uc02 binds ONE instance:
+  // src/contracts/** -> types-web, the web exhaustive-vocabulary catch). Optional; absent = none.
+  gateConditionalSlots: z
+    .array(z.strictObject({ whenDiffMatches: z.array(nonEmpty).min(1), slot: nonEmpty }))
+    .optional(),
   testCadence: TestCadenceShape.optional(),
   mergePolicy: MergePolicyShape.optional(),
   modelPolicy: ModelPolicyShape.optional(),

@@ -371,6 +371,85 @@ test('11c) hygiene slots are OPTIONAL yet strictness holds — an unknown gateCo
   assert.equal(err.kind, 'invalid')
 })
 
+test('12) gateConditionalSlots — a bound array of {whenDiffMatches, slot} entries parses', () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      gateConditionalSlots: [
+        { whenDiffMatches: ['src/contracts/**'], slot: 'integration' },
+        { whenDiffMatches: ['web/**', 'office/**'], slot: 'unit' },
+      ],
+    }),
+  )
+  const cfg = loadConfig(repo)
+  assert.equal(cfg.gateConditionalSlots.length, 2)
+  assert.deepEqual(cfg.gateConditionalSlots[0], {
+    whenDiffMatches: ['src/contracts/**'],
+    slot: 'integration',
+  })
+  assert.deepEqual(cfg.gateConditionalSlots[1].whenDiffMatches, ['web/**', 'office/**'])
+})
+
+test('12b) gateConditionalSlots absent → stays absent (no invented default)', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig())
+  assert.equal(loadConfig(repo).gateConditionalSlots, undefined)
+})
+
+test('12c) gateConditionalSlots — an unknown MEMBER key rejects (strictObject), the entry named', () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      gateConditionalSlots: [{ whenDiffMatches: ['src/**'], slot: 'unit', bogus: 1 }],
+    }),
+  )
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^gateConditionalSlots\.0(\.|:\s)/.test(l)),
+    `expected an issue scoped to the entry (gateConditionalSlots.0…), not a root-level ` +
+      `unrecognized-key line; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
+test('12d) gateConditionalSlots — an EMPTY whenDiffMatches array rejects with the key named (min(1))', () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      gateConditionalSlots: [{ whenDiffMatches: [], slot: 'unit' }],
+    }),
+  )
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^gateConditionalSlots\.0\.whenDiffMatches:\s/.test(l)),
+    `expected a "gateConditionalSlots.0.whenDiffMatches: <message>" dotted-path line; ` +
+      `got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
+test('12e) gateConditionalSlots — an EMPTY slot string rejects with the key named (nonEmpty)', () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      gateConditionalSlots: [{ whenDiffMatches: ['src/**'], slot: '' }],
+    }),
+  )
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^gateConditionalSlots\.0\.slot:\s/.test(l)),
+    `expected a "gateConditionalSlots.0.slot: <message>" dotted-path line; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
 test('10) DRIFT — z.toJSONSchema(RoadmapConfigShape) equals the committed schema file', () => {
   const generated = z.toJSONSchema(RoadmapConfigShape)
   const committed = JSON.parse(readFileSync(SCHEMA_FILE, 'utf8'))

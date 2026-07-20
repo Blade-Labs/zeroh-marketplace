@@ -12,6 +12,7 @@
  * and they're the caller's to set).
  */
 import { spawn } from 'node:child_process'
+import { matchGlobPath } from './ladder.mjs'
 import { createWriteStream, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -120,6 +121,23 @@ export function resolveHygieneSlots(cfg, baseSha) {
   const template = cfg?.gateCommands?.['lint-diff']
   if (template == null) return [{ slot: 'lint-diff', skipped: HYGIENE_SKIP_NOTE }]
   return [resolveSlot(cfg, 'lint-diff', { base: baseSha })]
+}
+
+/**
+ * Conditional gate slots (1792.2): resolve every gateConditionalSlots entry whose globs match ANY
+ * diff path — glob semantics ARE ladder.mjs matchGlobPath (imported; one matcher, never a fork).
+ * A matching entry resolves through resolveSlot (so an unbound slot surfaces the standard refusal)
+ * and carries `reason` naming the matching glob; non-matching entries contribute nothing.
+ */
+export function resolveConditionalSlots(cfg, diffPaths) {
+  const entries = cfg?.gateConditionalSlots ?? []
+  const out = []
+  for (const entry of entries) {
+    const glob = entry.whenDiffMatches.find((g) => (diffPaths ?? []).some((p) => matchGlobPath(g, p)))
+    if (glob == null) continue
+    out.push({ ...resolveSlot(cfg, entry.slot), reason: `${glob} matched → ${entry.slot}` })
+  }
+  return out
 }
 
 /** Comment-line discriminator for an ADDED diff line (the text after the leading '+'). */

@@ -80,6 +80,31 @@
       ],
       "additionalProperties": false
     },
+    "gateConditionalSlots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "whenDiffMatches": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "slot": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "whenDiffMatches",
+          "slot"
+        ],
+        "additionalProperties": false
+      }
+    },
     "testCadence": {
       "type": "object",
       "properties": {

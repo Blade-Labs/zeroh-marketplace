@@ -20,10 +20,16 @@ import {
   IMPACTED_FALLBACK_NOTE,
 } from './slots.mjs'
 
-// New task-1792.1 exports pulled DYNAMICALLY: a not-yet-implemented export resolves to
-// `undefined` here (no link-time SyntaxError), so RED lands ONLY on the new tests below —
+// matchGlobPath is the ONE glob matcher (ladder.mjs) — imported here to cross-check that
+// resolveConditionalSlots reuses it, never forks a second matcher.
+import { matchGlobPath } from './ladder.mjs'
+
+// New task-1792.1/1792.2 exports pulled DYNAMICALLY: a not-yet-implemented export resolves
+// to `undefined` here (no link-time SyntaxError), so RED lands ONLY on the new tests below —
 // the static-import suite above stays green until the feature ships.
-const { resolveHygieneSlots, historyCommentFindings } = await import('./slots.mjs')
+const { resolveHygieneSlots, historyCommentFindings, resolveConditionalSlots } = await import(
+  './slots.mjs'
+)
 
 const CFG = Object.freeze({
   gateCommands: Object.freeze({
@@ -310,4 +316,73 @@ test('historyCommentFindings — REMOVED and CONTEXT comment lines never match (
     '',
   ].join('\n')
   assert.deepEqual(historyCommentFindings(diff), [])
+})
+
+// ── resolveConditionalSlots — glob-gated extra slots, reusing matchGlobPath (task 1792.2) ─
+const CONDITIONAL_CFG = Object.freeze({
+  gateCommands: CFG.gateCommands, // has integration + unit; NO build (an unbound slot to test)
+  gateConditionalSlots: Object.freeze([
+    Object.freeze({ whenDiffMatches: ['src/contracts/**'], slot: 'integration' }),
+    Object.freeze({ whenDiffMatches: ['web/**'], slot: 'unit' }),
+  ]),
+})
+
+test('resolveConditionalSlots — a matching glob resolves its slot, augmented with a reason naming the glob', () => {
+  const arr = resolveConditionalSlots(CONDITIONAL_CFG, ['src/contracts/foo.ts'])
+  assert.ok(Array.isArray(arr), 'always returns an array')
+  assert.equal(arr.length, 1)
+  assert.equal(arr[0].slot, 'integration')
+  assert.equal(arr[0].command, CFG.gateCommands.integration) // resolveSlot's own command, unchanged
+  assert.equal(arr[0].reason, 'src/contracts/** matched → integration')
+})
+
+test('resolveConditionalSlots — no diff path matches any entry → [] (no phantom slots)', () => {
+  const arr = resolveConditionalSlots(CONDITIONAL_CFG, ['docs/readme.md', 'scripts/x.sh'])
+  assert.deepEqual(arr, [])
+})
+
+test('resolveConditionalSlots — mixed entries: only the matching one resolves', () => {
+  const arr = resolveConditionalSlots(CONDITIONAL_CFG, ['web/src/x.ts'])
+  assert.equal(arr.length, 1)
+  assert.equal(arr[0].slot, 'unit')
+  assert.equal(arr[0].reason, 'web/** matched → unit')
+})
+
+test('resolveConditionalSlots — two entries both match → both resolve, each with its own glob reason', () => {
+  const arr = resolveConditionalSlots(CONDITIONAL_CFG, ['src/contracts/a.ts', 'web/src/b.ts'])
+  assert.equal(arr.length, 2)
+  assert.deepEqual(
+    arr.map((e) => e.slot).sort(),
+    ['integration', 'unit'],
+  )
+  assert.equal(arr.find((e) => e.slot === 'integration').reason, 'src/contracts/** matched → integration')
+  assert.equal(arr.find((e) => e.slot === 'unit').reason, 'web/** matched → unit')
+})
+
+test('resolveConditionalSlots — a matching entry whose slot is UNBOUND returns the refusal shape verbatim', () => {
+  const cfg = {
+    gateCommands: CFG.gateCommands, // no 'build' binding
+    gateConditionalSlots: [{ whenDiffMatches: ['src/build/**'], slot: 'build' }],
+  }
+  const arr = resolveConditionalSlots(cfg, ['src/build/thing.ts'])
+  assert.equal(arr.length, 1)
+  assert.equal(arr[0].slot, 'build')
+  // the SAME refusal resolveSlot already produces — no swallowed/renamed error
+  assert.equal(
+    arr[0].refused,
+    'gate cannot run: gateCommands.build missing in roadmap/roadmap.config.json — add it',
+  )
+  assert.equal(arr[0].command, undefined)
+})
+
+test('resolveConditionalSlots — glob semantics ARE matchGlobPath (src/contracts/** hits src/contracts/foo.ts, misses web/src/x.ts)', () => {
+  // pin the exact matcher behavior this function must reuse — never a second glob engine
+  assert.equal(matchGlobPath('src/contracts/**', 'src/contracts/foo.ts'), true)
+  assert.equal(matchGlobPath('src/contracts/**', 'web/src/x.ts'), false)
+  const cfg = {
+    gateCommands: CFG.gateCommands,
+    gateConditionalSlots: [{ whenDiffMatches: ['src/contracts/**'], slot: 'integration' }],
+  }
+  assert.equal(resolveConditionalSlots(cfg, ['src/contracts/foo.ts']).length, 1)
+  assert.deepEqual(resolveConditionalSlots(cfg, ['web/src/x.ts']), [])
 })
