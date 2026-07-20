@@ -411,3 +411,53 @@ test('classifyLandJournal — a journal missing pid never throws (falls to stale
   assert.equal(v.step, 'suite')
   assert.deepEqual(seen, [undefined], 'the probe is still called — the seam decides, not a silent short-circuit')
 })
+
+// ── 1792.5b — stale-base EARLY WARNING (staleBaseWarning) ─────────────────────────────
+// Pure band [40% of ceiling, ceiling) — at/over the ceiling blocker 8 owns it, so the
+// warning must go silent there rather than double-report the same drift.
+// Ceiling 250 keeps the 40% boundary exact (100) with no rounding ambiguity.
+const warn = (behind, ceiling, ref = 'develop') => LAND.staleBaseWarning(behind, ceiling, ref)
+
+test('staleBaseWarning — below 40% of the ceiling is silent (null), including one commit under', () => {
+  assert.equal(warn(0, 250), null)
+  assert.equal(warn(1, 250), null)
+  assert.equal(warn(99, 250), null, '99/250 = 39.6% — still under the band, exactly at the boundary-1')
+})
+
+test('staleBaseWarning — EXACTLY 40% of the ceiling warns (the band is inclusive at its floor)', () => {
+  const w = warn(100, 250)
+  assert.ok(w, '100/250 = 40% must warn — the boundary itself is in the band')
+  assert.equal(w.behind, 100)
+  assert.equal(w.ceiling, 250)
+  assert.equal(w.pct, 40)
+})
+
+test('staleBaseWarning — inside the band the pct is the real ratio, not a constant', () => {
+  assert.equal(warn(175, 250).pct, 70)
+  assert.equal(warn(200, 250).pct, 80)
+  assert.equal(warn(40, 100).pct, 40, 'a different ceiling rescales the band, not just the pct')
+  assert.equal(warn(39, 100), null, 'and rescales the floor with it')
+})
+
+test('staleBaseWarning — one commit UNDER the ceiling still warns; AT and OVER the ceiling are silent', () => {
+  assert.ok(warn(249, 250), 'the last commit inside the band still warns')
+  assert.equal(warn(250, 250), null, 'at the ceiling blocker 8 owns the case — no duplicate warning')
+  assert.equal(warn(251, 250), null, 'over the ceiling is the land-time BLOCKER, not a warning')
+  assert.equal(warn(10_000, 250), null)
+})
+
+test('staleBaseWarning — the message names behind, ceiling AND the caller-supplied merge ref', () => {
+  const w = warn(175, 250, 'develop')
+  assert.match(w.message, /\b175\b/, 'the message names the behind-count')
+  assert.match(w.message, /\b250\b/, 'the message names the ceiling it is approaching')
+  assert.ok(
+    w.message.includes('git merge origin/develop'),
+    `the remedy must be the exact runnable command; got: ${w.message}`,
+  )
+})
+
+test('staleBaseWarning — the ref is NOT baked in: a different baseRef changes the remedy', () => {
+  const w = warn(175, 250, 'master')
+  assert.ok(w.message.includes('git merge origin/master'), `got: ${w.message}`)
+  assert.ok(!w.message.includes('origin/develop'), 'no hardcoded develop leaks into another arc\'s remedy')
+})

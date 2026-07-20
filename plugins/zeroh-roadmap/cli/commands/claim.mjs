@@ -11,7 +11,8 @@
 import { existsSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { gitCommonDir } from '../lib/gitroot.mjs'
-import { maxDeclaredPhase } from '../lib/phasescan.mjs'
+import { maxDeclaredPhase, maxRemotePhase } from '../lib/phasescan.mjs'
+import { defaultExec } from '../lib/exec.mjs'
 
 const RUNAWAY = 1_000_000
 
@@ -62,6 +63,24 @@ export default async function run(argv) {
   // in BOTH dirs — an uncommitted reservation is still taken.
   let max = maxDeclaredPhase([phasesDir, join(root, 'archive')])
   max = Math.max(max, maxClaim(claimsDir), maxClaim(legacyClaimsDir))
+
+  // REMOTE collision guard (1792.5): a sibling session may have PUSHED a phase this checkout
+  // has not fetched — claiming over it is the recurring renumber. Best-effort: fetch the
+  // upstream, read its declared max, fold it in. Offline/no-upstream degrades LOUD (stderr,
+  // never stdout — callers capture the numbers) to local-only, never a hard failure.
+  const upstream = defaultExec('git', ['rev-parse', '--abbrev-ref', '@{u}'], { cwd: root, timeout: 15_000 })
+  if (upstream.status === 0 && upstream.stdout.trim()) {
+    const ref = upstream.stdout.trim()
+    const fetched = defaultExec('git', ['fetch', '--quiet', ref.split('/')[0], ref.split('/').slice(1).join('/')], { cwd: root, timeout: 30_000 })
+    if (fetched.status !== 0) process.stderr.write(`roadmap claim: could not fetch ${ref} — claiming against the LOCAL tree only\n`)
+    const remoteMax = maxRemotePhase(root, ref, defaultExec)
+    if (remoteMax > max) {
+      process.stderr.write(`roadmap claim: ${ref} declares phase ${remoteMax} (ahead of this checkout) — claiming above it\n`)
+      max = remoteMax
+    }
+  } else {
+    process.stderr.write('roadmap claim: no upstream for the current branch — claiming against the LOCAL tree only\n')
+  }
 
   const claimed = []
   let N = max + 1

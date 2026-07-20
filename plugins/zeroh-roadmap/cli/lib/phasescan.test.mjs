@@ -140,6 +140,94 @@ test('5c) maxDeclaredPhase — uses the DECLARED value, not the filename', () =>
   assert.equal(maxDeclaredPhase([dir]), 42)
 })
 
+// ── 1792.5a — claim remote-collision awareness (maxRemotePhase) ───────────────────────
+// Dynamic import so a MISSING export reds only its own cases, never the whole file.
+const SCAN = await import(MOD)
+
+/** exec recorder mirroring exec.mjs's contract: (file, args, opts) → {status,stdout,stderr}. */
+function recordExec(stdout, { status = 0, throws = false } = {}) {
+  const calls = []
+  const fn = (file, args, opts) => {
+    calls.push({ file, args, opts })
+    if (throws) throw new Error('fatal: not a valid object name: origin/develop')
+    return { status, stdout, stderr: status === 0 ? '' : 'boom' }
+  }
+  fn.calls = calls
+  return fn
+}
+
+const LS_TREE = [
+  'roadmap/phases/phase-1710.phase.ts',
+  'roadmap/phases/phase-1792.phase.ts',
+  'roadmap/phases/phase-1674.phase.ts',
+].join('\n') + '\n'
+
+test('7) maxRemotePhase — parses a multi-file listing to the MAX number, not the last/first line', () => {
+  const exec = recordExec(LS_TREE)
+  assert.equal(SCAN.maxRemotePhase('/repo', 'origin/develop', exec), 1792)
+})
+
+test('7b) maxRemotePhase — non-phase basenames are ignored (no stray number leaks in)', () => {
+  // A README with a big number, a .phase.ts.bak, and a dir entry must all be inert;
+  // only real phase-<N>.phase.ts basenames count ⇒ 12 wins over the 9999s.
+  const listing = [
+    'roadmap/phases/README-9999.md',
+    'roadmap/phases/phase-9999.phase.ts.bak',
+    'roadmap/phases/archive-9999/',
+    'roadmap/phases/phase-12.phase.ts',
+  ].join('\n') + '\n'
+  assert.equal(SCAN.maxRemotePhase('/repo', 'origin/develop', recordExec(listing)), 12)
+})
+
+test('7c) maxRemotePhase — an empty listing is 0 (never a fabricated number)', () => {
+  assert.equal(SCAN.maxRemotePhase('/repo', 'origin/develop', recordExec('')), 0)
+  assert.equal(SCAN.maxRemotePhase('/repo', 'origin/develop', recordExec('\n')), 0)
+})
+
+test('7d) maxRemotePhase — a FAILED listing (unknown ref / offline) is 0, best-effort', () => {
+  const failed = recordExec('', { status: 128 })
+  assert.equal(SCAN.maxRemotePhase('/repo', 'origin/nope', failed), 0, 'a non-zero exit yields 0, never a partial parse')
+})
+
+test('7e) maxRemotePhase — exec THROWING is swallowed: returns 0 and no exception escapes', () => {
+  const thrower = recordExec('', { throws: true })
+  let escaped = null
+  let out
+  try {
+    out = SCAN.maxRemotePhase('/repo', 'origin/develop', thrower)
+  } catch (e) {
+    escaped = e
+  }
+  assert.equal(escaped, null, 'claim must never hard-fail on an offline/unknown upstream ref')
+  assert.equal(out, 0)
+  assert.equal(thrower.calls.length, 1, 'the throwing seam was genuinely exercised')
+})
+
+test('7f) maxRemotePhase — the injected exec receives the UPSTREAM REF and the phases dir (seam pinned)', () => {
+  const exec = recordExec(LS_TREE)
+  SCAN.maxRemotePhase('/repo', 'origin/develop', exec)
+  assert.equal(exec.calls.length, 1, 'exactly one listing call — no shelling out per file')
+  const { file, args } = exec.calls[0]
+  assert.equal(file, 'git', 'the seam is git, not a shell string')
+  const argv = args.map(String)
+  assert.ok(argv.includes('ls-tree'), `expected an ls-tree listing; got ${JSON.stringify(argv)}`)
+  assert.ok(
+    argv.some((a) => a === 'origin/develop' || a.startsWith('origin/develop:')),
+    `the caller-supplied upstream ref must be the tree read; got ${JSON.stringify(argv)}`,
+  )
+  assert.ok(
+    argv.some((a) => /roadmap\/phases/.test(a)),
+    `the listing must be scoped to the roadmap phases dir; got ${JSON.stringify(argv)}`,
+  )
+  // a DIFFERENT ref must reach git verbatim — the ref is never hardcoded
+  const other = recordExec(LS_TREE)
+  SCAN.maxRemotePhase('/repo', 'upstream/master', other)
+  assert.ok(
+    other.calls[0].args.map(String).some((a) => a === 'upstream/master' || a.startsWith('upstream/master:')),
+    'the ref argument is honored, not pinned to origin/develop',
+  )
+})
+
 test('6) scanProgress — a statusless / unparseable phase file is skipped, never crashes', () => {
   const phases = join(newTmp(), 'phases')
   writePhase(phases, 'phase-1.phase.ts', { phase: 1, status: 'done', arcId: 'X' })

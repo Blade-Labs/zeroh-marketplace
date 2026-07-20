@@ -48,6 +48,29 @@ async function arcNext(rest) {
     throw e
   }
   process.stdout.write(JSON.stringify(pos, null, json ? 0 : 2) + '\n')
+
+  // Stale-base EARLY warning + detached-land status (1792.4/1792.5) — advisory, on stderr so the
+  // machine-read JSON on stdout stays clean. Both answer "what does the driver need to know
+  // BEFORE the next plane" that today only surfaces at land.
+  try {
+    const { gatherLandingState, staleBaseWarning, readLandJournal, classifyLandJournal, pidAlive, landJournalPath, DEFAULT_STALE_BASE_CEILING } =
+      await import('../lib/landing.mjs')
+    const journalHome = process.env.ZEROH_LAND_JOURNAL_HOME ?? toplevel
+    const verdict = classifyLandJournal(readLandJournal(journalHome, arcId), { isAlive: pidAlive })
+    if (verdict.state === 'live')
+      process.stderr.write(`arc next: a detached land for ${arcId} is RUNNING (pid ${verdict.pid}, step: ${verdict.step ?? 'starting'}) — journal ${landJournalPath(journalHome, arcId)}\n`)
+    else if (verdict.state === 'finished')
+      process.stderr.write(`arc next: a detached land for ${arcId} finished with exit ${verdict.exitCode} — read ${landJournalPath(journalHome, arcId)}\n`)
+    else if (verdict.state === 'stale')
+      process.stderr.write(`arc next: a previous detached land for ${arcId} died without an exit code (pid ${verdict.pid}) — re-run \`roadmap arc land ${arcId}\`\n`)
+
+    const state = gatherLandingState({ repoRoot: toplevel, arcId, config: cfg })
+    const ceiling = cfg.mergePolicy?.staleBaseCeiling ?? DEFAULT_STALE_BASE_CEILING
+    const warn = staleBaseWarning(state.baseBehindCount, ceiling, state.baseRef ?? 'develop')
+    if (warn) process.stderr.write(`arc next: ${warn.message}\n`)
+  } catch {
+    /* advisory only — an unreadable landing state never fails arc next */
+  }
   return pos.action === 'blocked' ? 2 : 0
 }
 

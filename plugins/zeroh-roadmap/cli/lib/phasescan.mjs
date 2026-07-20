@@ -105,3 +105,30 @@ export function maxDeclaredPhase(roots) {
   }
   return max
 }
+
+/**
+ * The max phase number DECLARED on a remote ref's phase files (1792.5): a sibling session may
+ * have PUSHED a phase this checkout has not fetched, and claiming over it is the recurring
+ * collision (1735-37 renumbered to 1738-40). Best-effort by construction — an unknown ref, a
+ * non-zero git status, or a thrown exec all yield 0 so an offline claim degrades to local-only
+ * (loud at the call site) rather than failing.
+ */
+export function maxRemotePhase(repoRoot, upstreamRef, exec = defaultExec) {
+  if (!upstreamRef) return 0
+  let res
+  try {
+    res = exec('git', ['ls-tree', '-r', '--name-only', upstreamRef, 'roadmap/phases'], { cwd: repoRoot })
+  } catch {
+    return 0 // a spawn failure is not a claim failure
+  }
+  if (!res || res.status !== 0 || !res.stdout) return 0
+  let max = 0
+  for (const line of String(res.stdout).split('\n')) {
+    const m = line.trim().match(/phase-(\d+)\.phase\.ts$/)
+    if (m) {
+      const n = Number(m[1])
+      if (n > max) max = n
+    }
+  }
+  return max
+}

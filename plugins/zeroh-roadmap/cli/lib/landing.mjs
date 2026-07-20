@@ -40,7 +40,7 @@ const phaseFilePath = (repoRoot, n) => join(repoRoot, 'roadmap', 'phases', `phas
 // Use-site default for mergePolicy.staleBaseCeiling (blocker 8, MECHRATCHET rank 6). Applied
 // wherever the ceiling is read so the ENFORCED ceiling and the emitted reconciliation ceiling
 // can never drift apart. Not defaulted in the schema — every existing consumer config stays valid.
-const DEFAULT_STALE_BASE_CEILING = 100
+export const DEFAULT_STALE_BASE_CEILING = 100
 
 /** Strict typed read (tsx absent ⇒ loud) — a landing precondition must never guess. */
 function typedRead(path, repoRoot) {
@@ -314,6 +314,27 @@ export function classifyLandJournal(journal, { isAlive } = {}) {
   if (typeof journal.exitCode === 'number') return { state: 'finished', exitCode: journal.exitCode }
   const alive = isAlive ? isAlive(journal.pid) : false
   return { state: alive ? 'live' : 'stale', pid: journal.pid, step: journal.step }
+}
+
+/**
+ * The stale-base EARLY warning (1792.5): a long-lived arc worktree learns about drift only at
+ * land today, where the blocker fires after a full reconciliation is already owed (TENANTCORE:
+ * 763 files). From 40% of the ceiling this warns with the exact mid-arc merge checkpoint, and
+ * it deliberately goes SILENT at/above the ceiling — there the land-time blocker owns the case
+ * and a second voice would just dilute it. Pure; the caller supplies the ref.
+ */
+export function staleBaseWarning(behindCount, ceiling, baseRef) {
+  if (!Number.isFinite(behindCount) || !Number.isFinite(ceiling) || ceiling <= 0) return null
+  if (behindCount >= ceiling) return null // the blocker's territory
+  const ratio = behindCount / ceiling
+  if (ratio < 0.4) return null // compared BEFORE rounding: 39.6% must stay silent, not round into the band
+  const pct = Math.round(ratio * 100)
+  return {
+    behind: behindCount,
+    ceiling,
+    pct,
+    message: `arc base is ${behindCount} commits behind (${pct}% of the ${ceiling} stale ceiling) — checkpoint now with \`git merge origin/${baseRef}\` rather than reconciling the whole drift at land`,
+  }
 }
 
 export function evaluateBlockers(state) {
