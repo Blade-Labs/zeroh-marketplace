@@ -52,7 +52,10 @@ For each task in order:
    under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (a session
    event kills the Monitor's wake silently; the executor-reference long-run protocol governs
    only genuinely long runs).
-3. **Commit** — `<type>(<scope>): phase N — <task title>`.
+3. **Commit** — `<type>(<scope>): phase N — <task title>`. First, when the consumer binds a
+   formatter (the `lint-diff` gate binding's `--write` twin, e.g. biome), run it on the task's
+   touched files — the gate's diff-scoped lint + history-comments checks catch what slips, but
+   hygiene that never reaches the gate is cheaper.
 4. **Persist** `transparencyReport` + `done: true` + `doneDate`, same commit.
 5. **Continue immediately** — the task boundary is a commit boundary, never a turn boundary.
 

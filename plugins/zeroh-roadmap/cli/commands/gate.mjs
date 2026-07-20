@@ -24,7 +24,7 @@ import {
   classifyBand,
   EXECUTABLE_EXTS,
 } from '../lib/ladder.mjs'
-import { resolveSlot, resolveScopedOrFallback, runSlot } from '../lib/slots.mjs'
+import { resolveSlot, resolveScopedOrFallback, runSlot, resolveHygieneSlots, historyCommentFindings } from '../lib/slots.mjs'
 import {
   writeReport,
   latestReport,
@@ -239,6 +239,7 @@ const compactSlot = (r) => {
   if (r.note != null) out.note = r.note
   if (r.refused != null) out.refused = r.refused
   if (r.declaredAbsent) out.declaredAbsent = true
+  if (r.skipped != null) out.skipped = r.skipped
   return out
 }
 
@@ -283,6 +284,9 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   const wantsTests = cell.slots.includes('unit') || cell.slots.includes('integration') || cell.scopedTests
   const slots = []
   for (const s of nonTest) slots.push(compactSlot(resolveSlot(opts.cfg, s)))
+  // Per-phase hygiene (1792.1): the diff-scoped consumer lint, {base}-substituted; an unbound
+  // consumer renders the NAMED skip in the plan — visible, never a silent hole.
+  for (const h of resolveHygieneSlots(opts.cfg, base)) slots.push(compactSlot(h))
   const testFiles = selectTestFiles(toplevel, ownFiles)
   const emptyScopeSkip = []
   if (wantsTests && testScope.effective !== 'static' && !testScope.refused) {
@@ -528,6 +532,7 @@ export async function runGate(phaseNum, opts) {
   if (wanted) {
     const matchable = new Set(plan.slots.map((s) => s.slot).flatMap((n) => [n, n.replace(/-(scoped|impacted)$/, '')]))
     if (cfg.exec?.preReview) matchable.add('preReview')
+    matchable.add('history-comments')
     const unmatched = [...wanted].filter((w) => !matchable.has(w))
     if (unmatched.length > 0) {
       process.stderr.write(`gate run: --slots name(s) match no plan slot: ${unmatched.join(', ')} (plan has: ${plan.slots.map((s) => s.slot).join(', ')})\n`)
@@ -545,6 +550,10 @@ export async function runGate(phaseNum, opts) {
       rows.push({ slot: s.slot, command: '(declared none)', exitCode: 0, durationMs: 0, logPath: null, declaredAbsent: true })
       continue
     }
+    if (s.skipped) {
+      rows.push({ slot: s.slot, command: `(skipped: ${s.skipped})`, exitCode: 0, durationMs: 0, logPath: null })
+      continue
+    }
     if (s.refused || !s.command) continue // buildPlan.refused already gated true refusals
     const logPath = join(logsDir, `${s.slot}-${ts}.log`)
     const res = await runSlot({ slot: s.slot, command: s.command, note: s.note }, { cwd: toplevel, logPath })
@@ -558,6 +567,44 @@ export async function runGate(phaseNum, opts) {
       ...(res.note ? { note: res.note } : {}),
     })
     if (res.exitCode !== 0) green = false
+  }
+
+  // Plugin-native history-comment hygiene (1792.1 decision 2): scan the phase diff's ADDED
+  // comment lines for phase-number/date/version narration — the front-runner of the consumer's
+  // historyComment ratchet, at the commit that writes it instead of the release PR. Foreign
+  // files in the range are excluded (the phase-own discipline).
+  if (!wanted || wanted.has('history-comments')) {
+    let findings = []
+    let scanErr = null
+    try {
+      const diffText = execFileSync('git', ['-C', toplevel, 'diff', `${plan.baseSha}..HEAD`], {
+        encoding: 'utf8',
+        timeout: 30_000,
+        maxBuffer: 64 * 1024 * 1024,
+      })
+      const foreign = new Set(plan.foreignCommitsInRange ?? [])
+      findings = historyCommentFindings(diffText).filter((f) => !foreign.has(f.file))
+    } catch (e) {
+      scanErr = e.message
+    }
+    const red = scanErr != null || findings.length > 0
+    rows.push({
+      slot: 'history-comments',
+      command: `(plugin-native scan of ${plan.baseSha}..HEAD added comment lines)`,
+      exitCode: red ? 2 : 0,
+      durationMs: 0,
+      logPath: null,
+      ...(findings.length > 0 ? { findings: findings.map((f) => `${f.file}:${f.line} — "${f.match}"`) } : {}),
+      ...(scanErr ? { note: `scan failed: ${scanErr}` } : {}),
+    })
+    if (red) {
+      green = false
+      if (scanErr) process.stderr.write(`history-comments: scan failed: ${scanErr}\n`)
+      for (const f of findings)
+        process.stderr.write(
+          `history-comments: ${f.file}:${f.line} — comment narrates history ("${f.match}"); reword to the non-obvious WHY (this front-runs the codehealth historyComment ratchet)\n`,
+        )
+    }
   }
 
   // exec.preReview — ONE extra recorded slot AFTER the mechanical slots, BEFORE the agent

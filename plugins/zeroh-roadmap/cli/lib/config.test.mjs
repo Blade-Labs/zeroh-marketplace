@@ -332,6 +332,45 @@ test('9) gateCommands.e2e "none" is accepted', () => {
   assert.equal(loaded.gateCommands.e2e, 'none')
 })
 
+test('11) hygiene gateCommands (lint-diff, types-web, ratchets) — binding all three parses', () => {
+  const repo = newRepo()
+  const cfg = validConfig()
+  cfg.gateCommands['lint-diff'] = 'npm run lint:diff {base}'
+  cfg.gateCommands['types-web'] = 'npm --prefix web run type-check'
+  cfg.gateCommands['ratchets'] = 'node scripts/ratchets.mjs'
+  writeConfig(repo, cfg)
+  const loaded = loadConfig(repo)
+  assert.equal(loaded.gateCommands['lint-diff'], 'npm run lint:diff {base}')
+  assert.equal(loaded.gateCommands['types-web'], 'npm --prefix web run type-check')
+  assert.equal(loaded.gateCommands['ratchets'], 'node scripts/ratchets.mjs')
+})
+
+test('11b) a hygiene slot bound to an EMPTY string fails with the key named (nonEmpty preserved)', () => {
+  const repo = newRepo()
+  const cfg = validConfig()
+  cfg.gateCommands['ratchets'] = '' // empty — must fail like every other command binding
+  writeConfig(repo, cfg)
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^gateCommands\.ratchets:\s/.test(l)),
+    `expected a "gateCommands.ratchets: <message>" dotted-path line (empty binding rejected AT the key, ` +
+      `not swept up as an unrecognized key); got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
+test('11c) hygiene slots are OPTIONAL yet strictness holds — an unknown gateCommands key still rejects', () => {
+  // the new optionals must not be added via a loosened/passthrough object
+  const repo = newRepo()
+  const cfg = validConfig()
+  cfg.gateCommands['lint-diffs'] = 'x' // near-miss typo of the real slot — must NOT slip through
+  writeConfig(repo, cfg)
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+})
+
 test('10) DRIFT — z.toJSONSchema(RoadmapConfigShape) equals the committed schema file', () => {
   const generated = z.toJSONSchema(RoadmapConfigShape)
   const committed = JSON.parse(readFileSync(SCHEMA_FILE, 'utf8'))

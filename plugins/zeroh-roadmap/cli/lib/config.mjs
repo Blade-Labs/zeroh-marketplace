@@ -42,6 +42,12 @@ const GateCommandsShape = z.strictObject({
   'integration-scoped': nonEmpty.optional(),
   'unit-impacted': nonEmpty.optional(),
   'integration-impacted': nonEmpty.optional(),
+  // optional hygiene/conditional/sweep slots (1792): lint-diff runs diff-scoped at every phase
+  // gate ({base} placeholder); types-web is a gateConditionalSlots target; ratchets is the
+  // arc-sweep estate pack. Unbound => a NAMED skip, never a silent hole.
+  'lint-diff': nonEmpty.optional(),
+  'types-web': nonEmpty.optional(),
+  ratchets: nonEmpty.optional(),
 })
 
 const TestCadenceShape = z.strictObject({

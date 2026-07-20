@@ -55,6 +55,18 @@
         "integration-impacted": {
           "type": "string",
           "minLength": 1
+        },
+        "lint-diff": {
+          "type": "string",
+          "minLength": 1
+        },
+        "types-web": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ratchets": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [

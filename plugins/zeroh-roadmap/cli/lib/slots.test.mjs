@@ -20,6 +20,11 @@ import {
   IMPACTED_FALLBACK_NOTE,
 } from './slots.mjs'
 
+// New task-1792.1 exports pulled DYNAMICALLY: a not-yet-implemented export resolves to
+// `undefined` here (no link-time SyntaxError), so RED lands ONLY on the new tests below —
+// the static-import suite above stays green until the feature ships.
+const { resolveHygieneSlots, historyCommentFindings } = await import('./slots.mjs')
+
 const CFG = Object.freeze({
   gateCommands: Object.freeze({
     lint: 'npm run lint:boundaries',
@@ -163,4 +168,146 @@ test('runSlot — carries a scoped-fallback note through to the result row', asy
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// ── {base} substitution — the hygiene-lint sibling of {files}/{range} (task 1792.1) ────
+const HYGIENE_CFG = Object.freeze({
+  gateCommands: Object.freeze({
+    ...CFG.gateCommands,
+    'lint-diff': 'npm run lint:diff {base}',
+  }),
+})
+
+test('resolveSlot — {base} substitutes VERBATIM (sibling of {files}/{range})', () => {
+  const r = resolveSlot(HYGIENE_CFG, 'lint-diff', { base: 'origin/develop..HEAD' })
+  // the base ref arrives raw — the template author owns quoting, exactly like {files}/{range}
+  assert.equal(r.command, 'npm run lint:diff origin/develop..HEAD')
+})
+
+test('resolveSlot — a {base} placeholder with no value REFUSES (never a literal-brace command)', () => {
+  const r = resolveSlot(HYGIENE_CFG, 'lint-diff', {})
+  assert.match(r.refused, /\{base\} placeholder but no base/)
+  assert.equal(r.command, undefined)
+})
+
+// ── resolveHygieneSlots — a NAMED skip, never a silent omission (task 1792.1) ──────────
+test('resolveHygieneSlots — a bound lint-diff resolves with {base} → the base sha', () => {
+  const arr = resolveHygieneSlots(HYGIENE_CFG, 'abc1234')
+  assert.ok(Array.isArray(arr), 'returns an array')
+  const ld = arr.find((s) => s.slot === 'lint-diff')
+  assert.ok(ld, 'lint-diff entry present')
+  assert.equal(ld.command, 'npm run lint:diff abc1234')
+  assert.equal(ld.skipped, undefined)
+  assert.equal(ld.declaredAbsent, undefined)
+})
+
+test('resolveHygieneSlots — an UNBOUND lint-diff is a NAMED skip OBJECT, never omitted', () => {
+  const arr = resolveHygieneSlots(CFG, 'abc1234') // CFG binds no lint-diff
+  assert.ok(Array.isArray(arr))
+  const ld = arr.find((s) => s.slot === 'lint-diff')
+  assert.ok(ld, 'lint-diff must appear as a skip entry (named, never a silent omission)')
+  assert.equal(
+    ld.skipped,
+    'not bound in gateCommands — hygiene lint skipped (named, never silent)',
+  )
+  assert.equal(ld.command, undefined)
+})
+
+test("resolveHygieneSlots — lint-diff bound to 'none' is declaredAbsent like its siblings", () => {
+  const cfg = { gateCommands: { ...CFG.gateCommands, 'lint-diff': 'none' } }
+  const arr = resolveHygieneSlots(cfg, 'abc1234')
+  const ld = arr.find((s) => s.slot === 'lint-diff')
+  assert.ok(ld)
+  assert.equal(ld.declaredAbsent, true)
+  assert.equal(ld.command, undefined)
+  assert.equal(ld.skipped, undefined)
+})
+
+// ── historyCommentFindings — pure scan of a unified diff's ADDED comment lines ─────────
+test('historyCommentFindings — an ADDED comment with a phase number is a finding (file+line+match)', () => {
+  const diff = [
+    'diff --git a/src/a.ts b/src/a.ts',
+    '--- a/src/a.ts',
+    '+++ b/src/a.ts',
+    '@@ -1,2 +1,3 @@',
+    ' const a = 1',
+    '+// phase-1792 wiring for the hygiene gate',
+    ' const b = 2',
+    '',
+  ].join('\n')
+  const found = historyCommentFindings(diff)
+  assert.equal(found.length, 1)
+  assert.deepEqual(found[0], { file: 'src/a.ts', line: 2, match: 'phase-1792' })
+})
+
+test('historyCommentFindings — a date literal in a # comment is a finding at the right line', () => {
+  const diff = [
+    'diff --git a/scripts/x.py b/scripts/x.py',
+    '--- a/scripts/x.py',
+    '+++ b/scripts/x.py',
+    '@@ -10,1 +10,3 @@',
+    ' keep = 1',
+    '+x = 2',
+    '+# shipped 2026-07-20',
+    '',
+  ].join('\n')
+  const found = historyCommentFindings(diff)
+  // new line 10 = context 'keep = 1', 11 = '+x = 2' (code, no match), 12 = '+# shipped 2026-07-20'
+  assert.equal(found.length, 1)
+  assert.deepEqual(found[0], { file: 'scripts/x.py', line: 12, match: '2026-07-20' })
+})
+
+test('historyCommentFindings — a version literal in a jsdoc (*) comment is a finding', () => {
+  const diff = [
+    'diff --git a/src/v.ts b/src/v.ts',
+    '--- a/src/v.ts',
+    '+++ b/src/v.ts',
+    '@@ -1 +1,2 @@',
+    ' code()',
+    '+ * bumped to v0.36.0 in this pass',
+    '',
+  ].join('\n')
+  const found = historyCommentFindings(diff)
+  assert.equal(found.length, 1)
+  assert.deepEqual(found[0], { file: 'src/v.ts', line: 2, match: 'v0.36.0' })
+})
+
+test('historyCommentFindings — an ADDED CODE line carrying a version literal is NOT a finding', () => {
+  const diff = [
+    'diff --git a/src/b.ts b/src/b.ts',
+    '--- a/src/b.ts',
+    '+++ b/src/b.ts',
+    '@@ -1 +1,2 @@',
+    ' x()',
+    "+const VERSION = 'v0.36.0'",
+    '',
+  ].join('\n')
+  // the string lives in real code, not a comment — narration hygiene targets comments only
+  assert.deepEqual(historyCommentFindings(diff), [])
+})
+
+test('historyCommentFindings — files under roadmap/ are EXEMPT (phase files legitimately carry numbers)', () => {
+  const diff = [
+    'diff --git a/roadmap/phases/phase-1792.phase.ts b/roadmap/phases/phase-1792.phase.ts',
+    '--- a/roadmap/phases/phase-1792.phase.ts',
+    '+++ b/roadmap/phases/phase-1792.phase.ts',
+    '@@ -1 +1,2 @@',
+    ' x',
+    '+// phase 1792 — 2026-07-20 — v0.36.0, all fine under roadmap/',
+    '',
+  ].join('\n')
+  assert.deepEqual(historyCommentFindings(diff), [])
+})
+
+test('historyCommentFindings — REMOVED and CONTEXT comment lines never match (added-only)', () => {
+  const diff = [
+    'diff --git a/src/d.ts b/src/d.ts',
+    '--- a/src/d.ts',
+    '+++ b/src/d.ts',
+    '@@ -1,2 +1,1 @@',
+    '-// phase 1700 old narration',
+    ' // touched in phase 1650 (context, unchanged)',
+    '',
+  ].join('\n')
+  assert.deepEqual(historyCommentFindings(diff), [])
 })
