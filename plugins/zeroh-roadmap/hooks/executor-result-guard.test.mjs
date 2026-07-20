@@ -250,3 +250,42 @@ test('Stop + roadmap/.arc-mode → WARN not block (armed-and-open blocks under S
   const sub = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
   assert.equal(JSON.parse(sub.stdout).decision, 'block')
 })
+
+// ── 1792.6: guard scoping — a SIBLING subagent in the armed session is not the executor ──
+// The SubagentStop payload carries no per-agent identity (session_id + transcript_path only),
+// but the TRANSCRIPT self-identifies via attributionAgent. A non-executor agent that ends its
+// turn with prose owes no PhaseExecutionResult and must pass through untouched (the misfire
+// class: architect/reviewer spawns killed mid-arc while an executor sentinel is armed).
+
+/** A transcript whose lines carry an attributionAgent (the real Claude Code shape). */
+function writeAttributedTranscript(root, agent, finalAssistantText) {
+  const p = join(root, `transcript-${agent.replace(/[^\w]/g, '_')}.jsonl`)
+  const lines = [
+    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'review the diff' }] }, attributionAgent: agent },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: finalAssistantText }] }, attributionAgent: agent },
+  ]
+  writeFileSync(p, lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
+  return p
+}
+
+test('1792.6 — an armed session\'s REVIEWER subagent ending in prose passes through (never blocked)', () => {
+  const root = makeWorktree()
+  const t = writeAttributedTranscript(root, 'zeroh-roadmap:code-reviewer', 'Verdict: clean. No findings.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.code, 0)
+  assert.equal(r.stdout.trim(), '', 'a non-executor subagent must never be blocked by the executor guard')
+})
+
+test('1792.6 — the EXECUTOR agent ending in prose still blocks (scoping narrows, never disarms)', () => {
+  const root = makeWorktree()
+  const t = writeAttributedTranscript(root, 'zeroh-roadmap:phase-executor', 'I did some work and stopped.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(JSON.parse(r.stdout).decision, 'block', 'the armed executor still owes a result')
+})
+
+test('1792.6 — a transcript with NO attributionAgent keeps today\'s behavior (conservative fallback)', () => {
+  const root = makeWorktree()
+  const t = writeTranscript(root, 'Prose ending, no attribution field.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(JSON.parse(r.stdout).decision, 'block', 'an unattributed transcript is not silently exempted')
+})

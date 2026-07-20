@@ -173,6 +173,35 @@ function lastJsonBlock(text) {
   return null
 }
 
+/**
+ * The completing subagent's own agent type, read from the transcript's attributionAgent field
+ * (the SubagentStop payload carries none — only session_id + transcript_path). null when the
+ * transcript is unreadable or predates the field.
+ */
+function transcriptAgentType(path) {
+  if (!path || !existsSync(path)) return null
+  try {
+    for (const line of readFileSync(path, 'utf8').trim().split('\n')) {
+      if (!line) continue
+      let obj
+      try {
+        obj = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (typeof obj?.attributionAgent === 'string') return obj.attributionAgent
+    }
+  } catch {
+    /* unreadable → unknown */
+  }
+  return null
+}
+
+/** The agent type the executor guard is FOR. A different named agent in the same armed session
+ *  (an architect, a reviewer, a test-engineer) owes no PhaseExecutionResult — blocking it was the
+ *  misfire every arc paid an armor line to work around. */
+const EXECUTOR_AGENT = 'zeroh-roadmap:phase-executor'
+
 /** First task without done:true (document order), or '?'. */
 function nextOpenTask(src) {
   if (!src) return '?'
@@ -263,6 +292,12 @@ function main() {
   // An unreadable/absent transcript is an INTERNAL ERROR → fail OPEN (never block on a
   // payload we could not inspect). A readable prose-ending transcript falls through to block.
   if (text == null) return 0
+
+  // (3) SCOPING (1792.6): a DIFFERENT named agent in the armed session is not the executor —
+  // pass it through untouched. An unattributed transcript keeps today's behavior (conservative:
+  // narrow the guard where identity is known, never widen the exemption on a guess).
+  const agentType = transcriptAgentType(payload.transcript_path)
+  if (agentType && agentType !== EXECUTOR_AGENT) return 0
 
   // ── block / warn ──
   const taskId = nextOpenTask(phaseSrc)
