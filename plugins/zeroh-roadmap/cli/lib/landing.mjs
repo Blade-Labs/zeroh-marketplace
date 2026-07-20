@@ -651,13 +651,17 @@ function spawnDetachedLand(arcId, rest, journalHome) {
   mkdirSync(dirname(logPath), { recursive: true })
   const out = openSync(logPath, 'a')
   const args = [process.argv[1], 'arc', 'land', ...rest.filter((a) => a !== '--detach')]
+  // The journal lands BEFORE the spawn: a second --detach racing this window must see a claim,
+  // and a fast child's own recorded exitCode must never be clobbered by a late parent write.
+  writeLandJournal(journalHome, arcId, { pid: null, startedAt: new Date().toISOString(), step: 'starting', exitCode: null })
   const child = spawn(process.execPath, args, {
     detached: true,
     stdio: ['ignore', out, out],
     env: { ...process.env, ZEROH_LAND_DETACHED: '1', ZEROH_LAND_JOURNAL_HOME: journalHome },
   })
   child.unref()
-  writeLandJournal(journalHome, arcId, { pid: child.pid, startedAt: new Date().toISOString(), step: 'starting', exitCode: null })
+  const live = readLandJournal(journalHome, arcId)
+  if (!live?.corrupt && typeof live?.exitCode !== 'number') writeLandJournal(journalHome, arcId, { pid: child.pid })
   process.stdout.write(
     `roadmap arc land: detached (pid ${child.pid}) — journal ${landJournalPath(journalHome, arcId)}, log ${logPath}. Re-run \`roadmap arc land ${arcId}\` (or \`arc next\`) to read its outcome.\n`,
   )
@@ -722,7 +726,9 @@ export async function landCommand(rest) {
   } catch (e) {
     if (e instanceof LandingError || e instanceof DeriveError || e instanceof BridgeError) {
       for (const l of e.messageLines ?? [e.message]) process.stderr.write(l + '\n')
-      return e.exitCode ?? 1
+      const code = e.exitCode ?? 1
+      if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'gather failed', exitCode: code })
+      return code
     }
     throw e
   }
@@ -733,6 +739,7 @@ export async function landCommand(rest) {
   // Held-for-user (exit 3, the fail-safe default): --hold, an absent mergePolicy, or arcIntegration hold.
   if (flags.hold || !mp || mp.arcIntegration === 'hold') {
     emit({ action: 'held', arcId, reason: flags.hold ? 'user --hold' : !mp ? 'no mergePolicy configured (fail-safe hold)' : 'mergePolicy.arcIntegration is hold' })
+    if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'held', exitCode: 3 })
     return 3
   }
 
@@ -785,7 +792,11 @@ export async function landCommand(rest) {
   } catch (e) {
     if (e instanceof LandingError || e instanceof BridgeError) {
       for (const l of e.messageLines ?? [e.message]) process.stderr.write(l + '\n')
-      return e.exitCode ?? 1
+      const code = e.exitCode ?? 1
+      // CRITICAL: this fires AFTER the merge/worktree/claim acts — a missing exitCode here would
+      // read as 'stale' and re-run a land over an already-landed arc.
+      if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'post-merge error', exitCode: code })
+      return code
     }
     throw e
   }

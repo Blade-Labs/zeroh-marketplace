@@ -111,15 +111,31 @@ export function resolveImpactedOrFallback(cfg, tier, range) {
  *  plan (recorded, visible), never a silent omission (the release-only-catch failure class). */
 export const HYGIENE_SKIP_NOTE = 'not bound in gateCommands — hygiene lint skipped (named, never silent)'
 
+/** The empty-scope hygiene skip — no lintable file in the phase-own set (a docs/roadmap-only
+ *  phase). A linter given nothing to lint exits non-zero; a skip is the honest reading. */
+export const HYGIENE_EMPTY_NOTE = 'no lintable file in the phase-own set — hygiene lint skipped'
+
+/** Extensions a source linter/formatter owns. Markdown/HTML/JSON are deliberately absent. */
+const LINTABLE_EXT = /\.(m|c)?[jt]sx?$/
+
 /**
  * The per-phase hygiene slots (1792.1): today exactly the diff-scoped lint. Bound →
  * resolveSlot with {base}→baseSha; bound to 'none' → declaredAbsent like every sibling;
  * unbound → the NAMED skip object. Always returns an array so the plan renders every
  * hygiene decision, including the skips.
  */
-export function resolveHygieneSlots(cfg, baseSha) {
+export function resolveHygieneSlots(cfg, baseSha, ownFiles = null) {
   const template = cfg?.gateCommands?.['lint-diff']
   if (template == null) return [{ slot: 'lint-diff', skipped: HYGIENE_SKIP_NOTE }]
+  // The phase-OWN files (never the raw range): a sibling's committed violation in base..HEAD must
+  // not red THIS phase, and an EMPTY lintable set is a SKIP — a linter handed nothing to check
+  // exits non-zero on "no files processed", which would paint a docs-only gate red over nothing
+  // (the empty-scope-skip precedent the test slots already follow).
+  if (template.includes('{files}')) {
+    const files = (ownFiles ?? []).filter((f) => LINTABLE_EXT.test(f))
+    if (files.length === 0) return [{ slot: 'lint-diff', skipped: HYGIENE_EMPTY_NOTE }]
+    return [{ ...resolveSlot(cfg, 'lint-diff', { base: baseSha, files }), files }]
+  }
   return [resolveSlot(cfg, 'lint-diff', { base: baseSha })]
 }
 
@@ -175,6 +191,9 @@ export function historyCommentFindings(diffText) {
     if (raw.startsWith('+') && !raw.startsWith('+++')) {
       line++
       if (exempt || file == null) continue
+      // Prose files have no code comments: a Markdown heading (#) or bullet (*) carrying a date or
+      // a version is CONTENT, not history narration (RELEASE_NOTES.md is made of them).
+      if (!LINTABLE_EXT.test(file) && !/\.(sh|py|go|rs|rb|ya?ml)$/.test(file)) continue
       const text = raw.slice(1)
       if (!COMMENT_LINE.test(text)) continue
       const m = text.match(HISTORY_COMMENT_RE)

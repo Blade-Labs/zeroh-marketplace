@@ -286,7 +286,14 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   for (const s of nonTest) slots.push(compactSlot(resolveSlot(opts.cfg, s)))
   // Per-phase hygiene (1792.1): the diff-scoped consumer lint, {base}-substituted; an unbound
   // consumer renders the NAMED skip in the plan — visible, never a silent hole.
-  for (const h of resolveHygieneSlots(opts.cfg, base)) slots.push(compactSlot(h))
+  // Only files that still EXIST can be linted — a phase that deleted a file still carries it in
+  // its own-file set, and handing a linter a missing path is an error, not a finding.
+  const livingOwnFiles = ownFiles.filter((f) => existsSync(join(toplevel, f)))
+  for (const h of resolveHygieneSlots(opts.cfg, base, livingOwnFiles)) {
+    const compact = compactSlot(h)
+    if (h.files != null) compact.files = h.files
+    slots.push(compact)
+  }
   // Conditional slots (1792.2): diff-triggered consumer slots, each carrying WHY it joined.
   for (const c of resolveConditionalSlots(opts.cfg, ownFiles)) {
     const compact = compactSlot(c)
