@@ -105,6 +105,12 @@ workflow engine cannot host its imports).
    file list as the mandatory reconciliation output; `--force-stale` ACKNOWLEDGES it (clears
    that blocker alone, never a conflict) after you have read and reconciled that list — which
    is still emitted under the acknowledgment.
+   **`--detach` for a long land** (the arc-end suite can outlive a session): the CLI
+   self-daemonizes, records `{pid, step, exitCode}` in `.building/<ID>-land.json`, and returns
+   immediately with the journal + log paths. Re-running `arc land` (or `arc next`) reads that
+   journal instead of starting a duplicate: a LIVE run reports its step and refuses to double-run,
+   a FINISHED one reports its exit and clears, a dead-pid-no-exit journal is named STALE and
+   cleared before retrying. Never hand-roll setsid/sentinel/Monitor for a land again.
 
 ## Pause & resume
 

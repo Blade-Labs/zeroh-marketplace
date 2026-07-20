@@ -14,8 +14,9 @@
  * "The blocker list (exactly eight — autonomous landing proceeds iff NONE hold)" and
  * "An item NOT on this list is NOT a blocker" are the ported law (do-arc Step 8).
  */
-import { existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, resolve, dirname } from 'node:path'
 import { bridgeImport, bridgeImportMany, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
 import { readSidecar } from './sidecar.mjs'
 import { readValidateVerdict, runDebtCensus, DeriveError } from './derive.mjs'
@@ -261,6 +262,60 @@ export const BLOCKERS = [
 ]
 
 /** Evaluate every blocker against the state; return the held list ({ id, name, reason }). */
+/**
+ * The detached-land JOURNAL (1792.4): a landing run's own state file beside the arc sidecar.
+ * A session event reaps a plain background land, so `arc land --detach` self-daemonizes and
+ * records its progress HERE — the next session reads the journal instead of re-deriving the
+ * setsid+sentinel ladder by hand or starting a DUPLICATE suite over a live run.
+ */
+export function landJournalPath(worktree, arcId) {
+  return join(worktree, '.building', `${arcId}-land.json`)
+}
+
+/** Merge `patch` into the journal (creating it when absent), always re-stamping updatedAt.
+ *  Returns the written object — the caller never re-reads to know what landed. */
+export function writeLandJournal(worktree, arcId, patch) {
+  const path = landJournalPath(worktree, arcId)
+  let current = {}
+  if (existsSync(path)) {
+    try {
+      current = JSON.parse(readFileSync(path, 'utf8'))
+    } catch {
+      current = {} // a corrupt journal is replaced by the live run's truth, never merged into
+    }
+  }
+  const next = { ...current, ...patch, updatedAt: new Date().toISOString() }
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, JSON.stringify(next, null, 2) + '\n')
+  return next
+}
+
+/** Read the journal: null when absent, the parsed object when readable, and the named
+ *  { corrupt, path } signal when it will not parse — NEVER a throw (a corrupt journal must
+ *  not wedge the CLI, and the operator gets the path to inspect). */
+export function readLandJournal(worktree, arcId) {
+  const path = landJournalPath(worktree, arcId)
+  if (!existsSync(path)) return null
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return { corrupt: true, path }
+  }
+}
+
+/**
+ * The resume verdict over a journal. `isAlive(pid)` is INJECTED (the caller supplies the real
+ * process probe; tests pin a spy). Order is load-bearing: corrupt bytes carry no trustworthy
+ * pid, and a recorded exitCode — INCLUDING 0 — is a finished run, never a liveness question.
+ */
+export function classifyLandJournal(journal, { isAlive } = {}) {
+  if (journal == null) return { state: 'none' }
+  if (journal.corrupt) return { state: 'corrupt' }
+  if (typeof journal.exitCode === 'number') return { state: 'finished', exitCode: journal.exitCode }
+  const alive = isAlive ? isAlive(journal.pid) : false
+  return { state: alive ? 'live' : 'stale', pid: journal.pid, step: journal.step }
+}
+
 export function evaluateBlockers(state) {
   return BLOCKERS.map((b) => ({ id: b.id, name: b.name, reason: b.check(state) })).filter((x) => x.reason)
 }
@@ -269,7 +324,7 @@ export function evaluateBlockers(state) {
 // HALF 2 (1657.5) — the git ACTS: arc-end suite, landing mechanics, the
 // structurally-impossible forbidden push, the RunnerSummary, exits 0/3/2.
 // ─────────────────────────────────────────────────────────────────────────────
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolveSlot, resolveImpactedOrFallback, runSlot } from './slots.mjs'
 import { sweepOrphanCapbuildUnits } from './orphan-sweep.mjs'
@@ -553,12 +608,47 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
 }
 
 /** roadmap arc land <arcId> [--push|--no-push|--hold|--force-stale] [--json] — the §2 land command. */
+/** Liveness probe for a recorded pid — signal 0 never delivers, it only asks. */
+export function pidAlive(pid) {
+  if (typeof pid !== 'number') return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e?.code === 'EPERM' // alive but foreign-owned
+  }
+}
+
+/**
+ * Self-daemonize the landing run (1792.4): re-exec THIS CLI with the same flags minus --detach,
+ * detached + own session (setsid semantics via detached:true) with output appended to the journal
+ * log, so a session event that reaps the parent leaves the land running. The child records its own
+ * pid/step/exitCode in the journal, which is how the next session resumes instead of duplicating.
+ */
+function spawnDetachedLand(arcId, rest, journalHome) {
+  const logPath = join(journalHome, '.building', `${arcId}-land.log`)
+  mkdirSync(dirname(logPath), { recursive: true })
+  const out = openSync(logPath, 'a')
+  const args = [process.argv[1], 'arc', 'land', ...rest.filter((a) => a !== '--detach')]
+  const child = spawn(process.execPath, args, {
+    detached: true,
+    stdio: ['ignore', out, out],
+    env: { ...process.env, ZEROH_LAND_DETACHED: '1', ZEROH_LAND_JOURNAL_HOME: journalHome },
+  })
+  child.unref()
+  writeLandJournal(journalHome, arcId, { pid: child.pid, startedAt: new Date().toISOString(), step: 'starting', exitCode: null })
+  process.stdout.write(
+    `roadmap arc land: detached (pid ${child.pid}) — journal ${landJournalPath(journalHome, arcId)}, log ${logPath}. Re-run \`roadmap arc land ${arcId}\` (or \`arc next\`) to read its outcome.\n`,
+  )
+  return 0
+}
+
 export async function landCommand(rest) {
   const json = rest.includes('--json')
-  const flags = { push: rest.includes('--push'), noPush: rest.includes('--no-push'), hold: rest.includes('--hold'), forceStale: rest.includes('--force-stale') }
+  const flags = { push: rest.includes('--push'), noPush: rest.includes('--no-push'), hold: rest.includes('--hold'), forceStale: rest.includes('--force-stale'), detach: rest.includes('--detach') }
   const arcId = rest.find((a) => !a.startsWith('--'))
   if (!arcId) {
-    process.stderr.write('usage: roadmap arc land <arcId> [--push|--no-push|--hold|--force-stale] [--json]\n')
+    process.stderr.write('usage: roadmap arc land <arcId> [--push|--no-push|--hold|--force-stale|--detach] [--json]\n')
     return 1
   }
   let toplevel, cfg
@@ -569,6 +659,42 @@ export async function landCommand(rest) {
     for (const l of e instanceof ConfigError ? e.messageLines : [`roadmap arc land: ${e.message}`]) process.stderr.write(l + '\n')
     return 1
   }
+  // Detached-land coordination (1792.4). A landing run is long and session events reap plain
+  // background shells, so the journal is the ONE place a run's liveness lives: a LIVE run is
+  // never duplicated (a second arc-end suite beside a running one is the orphan-capbuild class
+  // f57c6bc guards at the suite level — this guards the whole land), a FINISHED run is reported
+  // and cleared, and a STALE journal (dead pid, no exit code — the reaped case) is named.
+  const detachHome = process.env.ZEROH_LAND_JOURNAL_HOME ?? toplevel
+  if (!process.env.ZEROH_LAND_DETACHED) {
+    const verdict = classifyLandJournal(readLandJournal(detachHome, arcId), { isAlive: pidAlive })
+    if (verdict.state === 'live') {
+      process.stdout.write(
+        `roadmap arc land: a detached land for ${arcId} is already running (pid ${verdict.pid}, step: ${verdict.step ?? 'starting'}) — journal ${landJournalPath(detachHome, arcId)}; not starting a duplicate\n`,
+      )
+      return 3
+    }
+    if (verdict.state === 'finished') {
+      const p = landJournalPath(detachHome, arcId)
+      process.stdout.write(`roadmap arc land: a detached land for ${arcId} finished with exit ${verdict.exitCode} (journal ${p})\n`)
+      if (verdict.exitCode === 0) {
+        try { rmSync(p) } catch { /* leaving a read journal behind is harmless */ }
+        return 0
+      }
+      // A red detached run does NOT block a retry — clear it and fall through to run here.
+      try { rmSync(p) } catch { /* ignore */ }
+    }
+    if (verdict.state === 'stale') {
+      process.stdout.write(
+        `roadmap arc land: a previous detached land for ${arcId} died without recording an exit (pid ${verdict.pid}, step: ${verdict.step ?? 'unknown'}) — stale journal cleared, running now\n`,
+      )
+      try { rmSync(landJournalPath(detachHome, arcId)) } catch { /* ignore */ }
+    }
+    if (verdict.state === 'corrupt') {
+      process.stdout.write(`roadmap arc land: the ${arcId} land journal will not parse — replacing it with this run's state\n`)
+    }
+    if (flags.detach) return spawnDetachedLand(arcId, rest, detachHome)
+  }
+
   let state
   try {
     state = gatherLandingState({ repoRoot: toplevel, arcId, config: cfg })
@@ -619,6 +745,7 @@ export async function landCommand(rest) {
       if (suiteRange === null) effectiveMode = 'full'
     }
   }
+  if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'arc-end suite' })
   const suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e, mode: effectiveMode, range: suiteRange })
   state.suiteGreen = suite.suiteGreen
   state.suiteMode = effectiveMode
@@ -626,8 +753,10 @@ export async function landCommand(rest) {
   const held = evaluateBlockers(state)
   if (held.length) {
     emit({ action: 'blocked', arcId, held, suite, suiteMode: effectiveMode, suiteRange, ...(staleBase ? { staleBase } : {}) })
+    if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'blocked', exitCode: 2 })
     return 2
   }
+  if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'merge + push' })
 
   let res
   try {
@@ -640,5 +769,6 @@ export async function landCommand(rest) {
     throw e
   }
   emit({ action: res.outcome, arcId, ...res, suite, suiteMode: effectiveMode, suiteRange, ...(staleBase ? { staleBase } : {}) })
+  if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: res.outcome, exitCode: res.exitCode })
   return res.exitCode
 }

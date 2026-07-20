@@ -303,3 +303,111 @@ test('buildRunnerSummary — a full-scope landing keeps fullSuiteGreen:true with
   assert.equal(s.gateSignals.fullSuiteGreen, true)
   assert.equal(s.reason, undefined, 'a genuine full green carries no deferral reason')
 })
+
+// ── 1792.4 — detached arc-land journal + resume detection ─────────────────────────────
+// Dynamic import so a MISSING export reds only its own case, never the whole file.
+const LAND = await import('./landing.mjs')
+const wt = (tag) => {
+  const d = mkdtempSync(join(tmpdir(), `zr-landjrnl-${tag}-`))
+  bases.push(d)
+  return d
+}
+
+test('landJournalPath — <worktree>/.building/<arcId>-land.json (mirrors the sidecar shape)', () => {
+  const root = wt('path')
+  assert.equal(LAND.landJournalPath(root, 'FRONTDOOR'), join(root, '.building', 'FRONTDOOR-land.json'))
+})
+
+test('writeLandJournal — creates the journal (mkdir -p), stamps updatedAt, returns what it wrote', () => {
+  const root = wt('write')
+  const started = '2026-07-20T10:00:00.000Z'
+  const written = LAND.writeLandJournal(root, 'ARC1', { pid: 4242, startedAt: started, step: 'suite' })
+  const onDisk = JSON.parse(readFileSync(LAND.landJournalPath(root, 'ARC1'), 'utf8'))
+  assert.deepEqual(onDisk, written, 'the returned object IS the persisted object')
+  assert.equal(written.pid, 4242)
+  assert.equal(written.startedAt, started)
+  assert.equal(written.step, 'suite')
+  assert.ok(!Number.isNaN(Date.parse(written.updatedAt)), 'updatedAt is a real timestamp')
+})
+
+test('writeLandJournal — a second write MERGES: earlier fields survive, step/updatedAt advance', async () => {
+  const root = wt('merge')
+  const first = LAND.writeLandJournal(root, 'ARC1', { pid: 7, startedAt: '2026-07-20T10:00:00.000Z', step: 'suite' })
+  await new Promise((r) => setTimeout(r, 5))
+  const second = LAND.writeLandJournal(root, 'ARC1', { step: 'merge', exitCode: 0 })
+  assert.equal(second.pid, 7, 'pid from the first write survives the merge')
+  assert.equal(second.startedAt, first.startedAt, 'startedAt is never re-stamped')
+  assert.equal(second.step, 'merge', 'the patched field wins')
+  assert.equal(second.exitCode, 0)
+  assert.notEqual(second.updatedAt, first.updatedAt, 'updatedAt advances on every write')
+  assert.deepEqual(JSON.parse(readFileSync(LAND.landJournalPath(root, 'ARC1'), 'utf8')), second)
+})
+
+test('readLandJournal — absent ⇒ null; present ⇒ the parsed object', () => {
+  const root = wt('read')
+  assert.equal(LAND.readLandJournal(root, 'ARC1'), null, 'no journal is null, never a fabricated shell')
+  LAND.writeLandJournal(root, 'ARC1', { pid: 11, step: 'push' })
+  const got = LAND.readLandJournal(root, 'ARC1')
+  assert.equal(got.pid, 11)
+  assert.equal(got.step, 'push')
+  assert.notEqual(got.corrupt, true)
+})
+
+test('readLandJournal — corrupt bytes ⇒ { corrupt:true, path }, never a throw', () => {
+  const root = wt('corrupt')
+  const p = LAND.landJournalPath(root, 'ARC1')
+  mkdirSync(dirname(p), { recursive: true })
+  writeFileSync(p, '{"pid": 12, "step": ')
+  const got = LAND.readLandJournal(root, 'ARC1')
+  assert.equal(got.corrupt, true, 'a corrupt journal must not wedge the CLI')
+  assert.equal(got.path, p, 'the corrupt shape names the file the operator must inspect')
+})
+
+test('classifyLandJournal — none / finished / live / stale, with the injected isAlive receiving the journal pid', () => {
+  const calls = []
+  const spy = (v) => (calls.push(v), spy.next)
+
+  assert.deepEqual(LAND.classifyLandJournal(null, { isAlive: spy }), { state: 'none' })
+  assert.deepEqual(calls, [], 'an absent journal probes nothing')
+
+  // exitCode present ⇒ finished, whatever the pid's liveness (never probed as the verdict)
+  assert.deepEqual(
+    LAND.classifyLandJournal({ pid: 5, step: 'merge', exitCode: 0 }, { isAlive: () => true }),
+    { state: 'finished', exitCode: 0 },
+  )
+  assert.deepEqual(
+    LAND.classifyLandJournal({ pid: 5, step: 'merge', exitCode: 1 }, { isAlive: () => false }),
+    { state: 'finished', exitCode: 1 },
+    'a NON-zero exit is still finished — the CLI reports it, never re-runs blind',
+  )
+
+  spy.next = true
+  assert.deepEqual(LAND.classifyLandJournal({ pid: 4242, step: 'suite' }, { isAlive: spy }), {
+    state: 'live', pid: 4242, step: 'suite',
+  })
+  assert.deepEqual(calls, [4242], 'isAlive is probed with the JOURNAL\'s pid, not process.pid')
+
+  // dead pid, no exitCode ⇒ the reaped-land case: named stale, never silently overwritten
+  spy.next = false
+  assert.deepEqual(LAND.classifyLandJournal({ pid: 99, step: 'push' }, { isAlive: spy }), {
+    state: 'stale', pid: 99, step: 'push',
+  })
+  assert.deepEqual(calls, [4242, 99])
+})
+
+test('classifyLandJournal — a corrupt journal is its own state, decided BEFORE any liveness probe', () => {
+  let probed = false
+  const v = LAND.classifyLandJournal({ corrupt: true, path: '/x/.building/A-land.json' }, {
+    isAlive: () => { probed = true; return true },
+  })
+  assert.deepEqual(v, { state: 'corrupt' })
+  assert.equal(probed, false, 'unparseable bytes carry no trustworthy pid to probe')
+})
+
+test('classifyLandJournal — a journal missing pid never throws (falls to stale on a false probe)', () => {
+  const seen = []
+  const v = LAND.classifyLandJournal({ step: 'suite' }, { isAlive: (p) => (seen.push(p), false) })
+  assert.equal(v.state, 'stale', 'no pid ⇒ nothing provably alive ⇒ stale, not live and not a crash')
+  assert.equal(v.step, 'suite')
+  assert.deepEqual(seen, [undefined], 'the probe is still called — the seam decides, not a silent short-circuit')
+})
