@@ -72,6 +72,28 @@ test('1c) scanPhaseFile — no status match returns null', () => {
   assert.equal(scanPhaseFile(p), null)
 })
 
+test('1d) scanPhaseFile / matchStatusField — doc-comment prose status never shadows the definePhase field', async () => {
+  const { matchStatusField } = await import(MOD)
+  const dir = newTmp()
+  const src = [
+    '/**',
+    " * Was status:'suspended' during the rework — prose only (phase 1787 class).",
+    ' */',
+    'export const p = definePhase({',
+    '  phase: 42,',
+    "  status: 'backlog',",
+    '})',
+  ].join('\n')
+  const path = join(dir, 'phase-42.phase.ts')
+  writeFileSync(path, src + '\n')
+  assert.equal(scanPhaseFile(path).status, 'backlog', 'the field wins over doc-comment prose')
+  const m = matchStatusField(src)
+  assert.equal(m.status, 'backlog')
+  assert.ok(src.slice(m.index).startsWith("status: 'backlog'"), 'index points at the field occurrence')
+  // no definePhase in the file → scans from the top (fixture/plain-object compatibility)
+  assert.equal(matchStatusField("export const p = { status: 'done' }").status, 'done')
+})
+
 test('2) scanProgress — done+historical both count as done; inprog/backlog folded per arc', () => {
   const phases = join(newTmp(), 'phases')
   writePhase(phases, 'phase-1.phase.ts', { phase: 1, status: 'done', arcId: 'X' })

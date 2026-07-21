@@ -117,35 +117,10 @@ export function gatherLandingState({ repoRoot, arcId, config, exec = defaultExec
       ? 'direct'
       : 'isolated'
 
-  // Git probes — best-effort against the primary checkout; a missing ref ⇒ conservative
-  // default (false), the 1657.5 mechanics fixtures exercise the true positives over real refs.
-  let conflict = false
-  let baseRefMoved = false
-  // Staleness probes (blocker 8, MECHRATCHET rank 6): commits-behind + both-sides-changed
-  // overlap files. Isolated model only, isolated (read-only) git, conservative on any probe
-  // failure (behind 0 / overlap [] — never a guessed refusal).
-  let baseBehindCount = 0
-  let overlapFiles = []
-  if (primaryCheckout && arcBranch && baseRef && integrationModel === 'isolated') {
-    const anc = exec('git', ['-C', primaryCheckout, 'merge-base', '--is-ancestor', baseRef, arcBranch])
-    if (anc.status === 1) baseRefMoved = true // 1 = not an ancestor (baseRef moved); other codes = probe unavailable
-    const mt = exec('git', ['-C', primaryCheckout, 'merge-tree', '--write-tree', baseRef, arcBranch])
-    if (mt.status === 1) conflict = true // 1 = conflicts; 0 = clean; >1 = probe unavailable
-
-    const mb = exec('git', ['-C', primaryCheckout, 'merge-base', baseRef, arcBranch])
-    const mergeBase = mb.status === 0 ? mb.stdout.trim() : ''
-    const rl = exec('git', ['-C', primaryCheckout, 'rev-list', '--count', `${arcBranch}..${baseRef}`])
-    if (rl.status === 0) {
-      const n = parseInt(rl.stdout.trim(), 10)
-      if (Number.isFinite(n)) baseBehindCount = n
-    }
-    if (mergeBase) {
-      const toSet = (r) => new Set((r.status === 0 ? r.stdout : '').split('\n').map((l) => l.trim()).filter(Boolean))
-      const arcSide = toSet(exec('git', ['-C', primaryCheckout, 'diff', '--name-only', `${mergeBase}..${arcBranch}`]))
-      const baseSide = toSet(exec('git', ['-C', primaryCheckout, 'diff', '--name-only', `${mergeBase}..${baseRef}`]))
-      overlapFiles = [...baseSide].filter((f) => arcSide.has(f)).sort()
-    }
-  }
+  const probes =
+    primaryCheckout && arcBranch && baseRef && integrationModel === 'isolated'
+      ? probeIntegrationState({ primaryCheckout, arcBranch, baseRef, exec })
+      : { conflict: false, baseRefMoved: false, baseBehindCount: 0, overlapFiles: [] }
 
   return {
     arcId,
@@ -164,14 +139,71 @@ export function gatherLandingState({ repoRoot, arcId, config, exec = defaultExec
     primaryCheckout,
     sidecar,
     integrationModel,
-    conflict,
-    baseRefMoved,
-    baseBehindCount,
-    overlapFiles,
+    ...probes,
     staleAcknowledged: false, // set true by --force-stale in landCommand before evaluate (blocker 8 only)
     suiteGreen: null, // set by the caller after runArcEndSuite (1657.5)
-    reconciledGreen: false, // set true after a post-reconciliation green suite (1657.5)
+    reconciledGreen: false, // set true when the base moves again mid-suite, the drift overlaps
+    // nothing, and the just-run suite was green (the post-suite re-probe in landCommand)
   }
+}
+
+/**
+ * The blocker-6/7/8 git probes — best-effort against the primary checkout; a missing ref ⇒
+ * conservative defaults (false / 0 / [] — never a guessed refusal). Extracted so landCommand
+ * can RE-probe after a zero-overlap auto-reconcile and again after the suite (the base may
+ * move under a long run), not just once at gather.
+ */
+export function probeIntegrationState({ primaryCheckout, arcBranch, baseRef, exec = defaultExec }) {
+  let conflict = false
+  let baseRefMoved = false
+  let baseBehindCount = 0
+  let overlapFiles = []
+  const anc = exec('git', ['-C', primaryCheckout, 'merge-base', '--is-ancestor', baseRef, arcBranch])
+  if (anc.status === 1) baseRefMoved = true // 1 = not an ancestor (baseRef moved); other codes = probe unavailable
+  const mt = exec('git', ['-C', primaryCheckout, 'merge-tree', '--write-tree', baseRef, arcBranch])
+  if (mt.status === 1) conflict = true // 1 = conflicts; 0 = clean; >1 = probe unavailable
+
+  const mb = exec('git', ['-C', primaryCheckout, 'merge-base', baseRef, arcBranch])
+  const mergeBase = mb.status === 0 ? mb.stdout.trim() : ''
+  const rl = exec('git', ['-C', primaryCheckout, 'rev-list', '--count', `${arcBranch}..${baseRef}`])
+  if (rl.status === 0) {
+    const n = parseInt(rl.stdout.trim(), 10)
+    if (Number.isFinite(n)) baseBehindCount = n
+  }
+  if (mergeBase) {
+    const toSet = (r) => new Set((r.status === 0 ? r.stdout : '').split('\n').map((l) => l.trim()).filter(Boolean))
+    const arcSide = toSet(exec('git', ['-C', primaryCheckout, 'diff', '--name-only', `${mergeBase}..${arcBranch}`]))
+    const baseSide = toSet(exec('git', ['-C', primaryCheckout, 'diff', '--name-only', `${mergeBase}..${baseRef}`]))
+    overlapFiles = [...baseSide].filter((f) => arcSide.has(f)).sort()
+  }
+  return { conflict, baseRefMoved, baseBehindCount, overlapFiles }
+}
+
+/**
+ * Zero-overlap auto-reconcile (METERTENANT postmortem 3.5): baseRef moved under the arc but
+ * touched NONE of the arc's files (`overlapFiles` empty) — the exact case a re-run buys
+ * nothing. Merge baseRef into the arc branch in its worktree so baseRef is an ancestor
+ * again; blockers 7 AND 8 then clear on their own terms (the probes are re-run and written
+ * back into state). Overlap present, no live worktree, or a merge failure ⇒ no state change
+ * beyond a fresh probe — the blockers hold honestly. Mutates state; returns the attempt record.
+ */
+export function reconcileZeroOverlap(state, exec = defaultExec) {
+  if (state.integrationModel !== 'isolated' || !state.baseRefMoved) return { attempted: false, reason: 'not-applicable' }
+  if ((state.overlapFiles ?? []).length > 0) {
+    return { attempted: false, reason: `overlapping files (${state.overlapFiles.length}) — reconciliation is genuinely owed` }
+  }
+  const wt = state.sidecar?.worktree
+  if (!wt || !existsSync(wt)) return { attempted: false, reason: 'arc worktree missing — cannot merge in place' }
+  const merged = exec('git', ['-C', wt, 'merge', '--no-edit', state.baseRef])
+  if (merged.status !== 0) {
+    exec('git', ['-C', wt, 'merge', '--abort']) // best-effort; a clean tree stays clean
+    return { attempted: true, merged: false, reason: (merged.stderr ?? '').trim() || `git merge ${state.baseRef} failed` }
+  }
+  Object.assign(
+    state,
+    probeIntegrationState({ primaryCheckout: state.primaryCheckout, arcBranch: state.arcBranch, baseRef: state.baseRef, exec }),
+  )
+  return { attempted: true, merged: true }
 }
 
 /**
@@ -221,10 +253,15 @@ export const BLOCKERS = [
   {
     id: 4,
     name: 'arc-end suite not green',
-    check: (s) =>
-      s.suiteGreen === true
+    check: (s) => {
+      // 'defer-ci' is a NAMED deferral, not a green: local suites are skipped by config/flag
+      // (user ruling — CI's pipeline is the suite gate) and the RunnerSummary records
+      // fullSuiteGreen:false with the deferral reason. Never a fabricated pass.
+      if (s.suiteMode === 'defer-ci') return null
+      return s.suiteGreen === true
         ? null
-        : `the arc-end suite (${s.suiteMode === 'impacted' ? 'impacted scope' : 'full'}) is not green`,
+        : `the arc-end suite (${s.suiteMode === 'impacted' ? 'impacted scope' : 'full'}) is not green`
+    },
   },
   {
     id: 5,
@@ -522,6 +559,10 @@ export function buildRunnerSummary(state, { suiteGreen }) {
     summary.reason =
       `arc-end suite ran IMPACTED scope only (${state.suiteRange}) — impacted slots green; `
       + 'full-suite backstop = ci-pr-gate per PR + nightly (testCadence.backstop)'
+  } else if (state.suiteMode === 'defer-ci') {
+    summary.reason =
+      'arc-end suite DEFERRED to CI (arcEndSuite defer-ci / --defer-suite) — no local suite ran; '
+      + 'the release pipeline is the full-suite gate'
   }
   if (state.openFollowups != null) summary.openFollowups = state.openFollowups
   return summary
@@ -562,10 +603,16 @@ function writeRunnerSummary(repoRoot, summary) {
  * blockers already cleared (landCommand gates it). Returns { outcome, exitCode, record,
  * pushed, pushRefused, summaryPath }. record is the ordered step log the tests replay.
  */
-export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = repoRoot }) {
+export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null }) {
   const git = gitLayer(exec)
   const mp = config.mergePolicy
   const primary = mp.primaryCheckout
+  // Post-merge acts anchor on the PRIMARY checkout, never repoRoot: when the CLI was invoked
+  // from inside the arc worktree, repoRoot IS the worktree this function removes (and a
+  // sibling session may delete it mid-run) — resolving the sidecar registry or writing the
+  // summary through it fatals AFTER a successful merge (METERTENANT attempt 6).
+  const home = primary ?? repoRoot
+  const schemaRoot = consumerRoot ?? home
   const baseRef = state.baseRef
   const arcBranch = state.arcBranch
   const record = []
@@ -596,21 +643,25 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
   // post-return) — landing records the hand-off point rather than forking a second groom.
   record.push({ step: 'regroom-handoff', note: 'backlog regroom against landed baseRef is orchestrator-owned (serial)' })
 
-  // Cleanup — worktree, sidecar, RESUME.md, claims.
-  if (state.integrationModel === 'isolated' && state.sidecar?.worktree) {
-    git.worktreeRemove(primary, state.sidecar.worktree)
-    record.push({ step: 'worktree-remove', worktree: state.sidecar.worktree })
+  // Cleanup — worktree, sidecar, RESUME.md, claims. BEST-EFFORT by law: the merge has
+  // already landed, and a cleanup fatal here reads as a failed land (attempt 6's crash).
+  try {
+    if (state.integrationModel === 'isolated' && state.sidecar?.worktree) {
+      git.worktreeRemove(home, state.sidecar.worktree)
+      record.push({ step: 'worktree-remove', worktree: state.sidecar.worktree })
+    }
+    removeSidecar(home, arcId)
+    rmSync(join(home, 'roadmap', 'arcs', `${arcId}-RESUME.md`), { force: true })
+    releaseClaims(home, state.members.map((m) => m.num))
+    record.push({ step: 'cleanup', removed: ['.building sidecar', 'RESUME.md', 'claims'] })
+  } catch (e) {
+    record.push({ step: 'cleanup', warning: `best-effort cleanup failed (${e?.message?.split('\n')[0] ?? e}) — the land itself is complete; remove the sidecar/claims by hand` })
   }
-  removeSidecar(repoRoot, arcId)
-  const resumeMd = join(repoRoot, 'roadmap', 'arcs', `${arcId}-RESUME.md`)
-  rmSync(resumeMd, { force: true })
-  releaseClaims(repoRoot, state.members.map((m) => m.num))
-  record.push({ step: 'cleanup', removed: ['.building sidecar', 'RESUME.md', 'claims'] })
 
   // RunnerSummary — validated through the consumer shape (seam 3), written keyed + pointer.
   const summary = buildRunnerSummary(state, { suiteGreen: state.suiteGreen })
-  validateRunnerSummary(consumerRoot, summary)
-  const summaryPath = writeRunnerSummary(repoRoot, summary)
+  validateRunnerSummary(schemaRoot, summary)
+  const summaryPath = writeRunnerSummary(home, summary)
   record.push({ step: 'runner-summary', path: summaryPath })
 
   // Push — iff autonomousPushRefs contains baseRef (decision 9); --no-push forces skip;
@@ -670,12 +721,15 @@ function spawnDetachedLand(arcId, rest, journalHome) {
 
 export async function landCommand(rest) {
   const json = rest.includes('--json')
-  const flags = { push: rest.includes('--push'), noPush: rest.includes('--no-push'), hold: rest.includes('--hold'), forceStale: rest.includes('--force-stale'), detach: rest.includes('--detach') }
+  const flags = { push: rest.includes('--push'), noPush: rest.includes('--no-push'), hold: rest.includes('--hold'), forceStale: rest.includes('--force-stale'), detach: rest.includes('--detach'), deferSuite: rest.includes('--defer-suite') }
   const arcId = rest.find((a) => !a.startsWith('--'))
   if (!arcId) {
-    process.stderr.write('usage: roadmap arc land <arcId> [--push|--no-push|--hold|--force-stale|--detach] [--json]\n')
+    process.stderr.write('usage: roadmap arc land <arcId> [--push|--no-push|--hold|--force-stale|--defer-suite|--detach] [--json]\n')
     return 1
   }
+  // The explicit terminal verdict (postmortem 3.8): stderr, so `| tail`/`| jq` on stdout can
+  // never mask the outcome, and a pipeline's stolen exit code still leaves a readable verdict.
+  const verdictLine = (word, code) => process.stderr.write(`roadmap arc land: ${arcId} — ${word} (exit ${code})\n`)
   let toplevel, cfg
   try {
     toplevel = gitToplevel(process.cwd())
@@ -739,48 +793,88 @@ export async function landCommand(rest) {
   // Held-for-user (exit 3, the fail-safe default): --hold, an absent mergePolicy, or arcIntegration hold.
   if (flags.hold || !mp || mp.arcIntegration === 'hold') {
     emit({ action: 'held', arcId, reason: flags.hold ? 'user --hold' : !mp ? 'no mergePolicy configured (fail-safe hold)' : 'mergePolicy.arcIntegration is hold' })
+    verdictLine('held', 3)
     if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'held', exitCode: 3 })
     return 3
   }
 
-  // Arc-end suite → suiteGreen → blockers. --force-stale is an ACKNOWLEDGMENT (blocker 8
-  // alone), never a bypass of 6/7. The overlap list is the mandatory reconciliation output
-  // whenever the base is behind — emitted under --force-stale too (arc honesty rail 3).
+  // --force-stale is an ACKNOWLEDGMENT (blocker 8 alone), never a bypass of 6/7. The overlap
+  // list is the mandatory reconciliation output whenever the base is behind — emitted under
+  // --force-stale too (arc honesty rail 3).
   if (flags.forceStale) state.staleAcknowledged = true
+  // Suite scope honored for EVERY integration model — the direct-only guard is retired
+  // (user ruling 2026-07-21: arcs land on touched-scope tests; CI is the full-suite gate).
+  // 'defer-ci' (config or --defer-suite) skips local suites entirely, recorded honestly.
+  const suiteMode = flags.deferSuite ? 'defer-ci' : (mp.arcEndSuite ?? 'full')
+  state.suiteMode = suiteMode
+  const reconciles = []
+
+  // Zero-overlap auto-reconcile BEFORE anything expensive (postmortem 3.5): a moved base
+  // that touched none of the arc's files merges cleanly in the worktree and clears
+  // blockers 7 + 8 by making baseRef an ancestor again.
+  if (state.integrationModel === 'isolated' && state.baseRefMoved) {
+    reconciles.push({ when: 'pre-suite', ...reconcileZeroOverlap(state) })
+  }
   const staleBase = state.baseBehindCount > 0
     ? { behind: state.baseBehindCount, ceiling: mp.staleBaseCeiling ?? DEFAULT_STALE_BASE_CEILING, overlapFiles: state.overlapFiles }
     : null
+
+  // Cheap blockers BEFORE the suite (postmortem 3.2): every blocker except the suite's own
+  // row is knowable in milliseconds from persisted state + git probes — refuse NOW rather
+  // than after a long run (METERTENANT attempt 1 burned 65 minutes on a refusal it knew).
+  const preHeld = evaluateBlockers(state).filter((b) => b.id !== 4)
+  if (preHeld.length) {
+    emit({ action: 'blocked', arcId, held: preHeld, suite: { skipped: 'pre-suite blockers held — no suite started' }, suiteMode, ...(reconciles.length ? { reconciles } : {}), ...(staleBase ? { staleBase } : {}) })
+    verdictLine('blocked (pre-suite)', 2)
+    if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'blocked', exitCode: 2 })
+    return 2
+  }
+
   const includeE2e = state.members.some((m) => m.kind === 'release')
-  // Direct-only guard (decision 4): the impacted scope is honored ONLY for the direct
-  // integration model (the code is already integrated on baseRef, the suite is fix-forward).
-  // An isolated-branch landing ALWAYS runs the full suite regardless of config — there the
-  // suite genuinely gates the merge. A null derivable range ⇒ a genuine full run (never a
-  // guessed range).
-  const suiteMode = state.integrationModel === 'direct' ? (mp.arcEndSuite ?? 'full') : 'full'
   let effectiveMode = suiteMode
   let suiteRange = null
-  if (suiteMode === 'impacted') {
-    const wt = state.sidecar?.worktree ?? toplevel
-    // Prefer the arc's OWN file scope (subject-matched member commits → `@manifest`);
-    // a shared-base contiguous range re-tests sibling arcs' already-gated work. Fall back
-    // to the contiguous range, then to a genuine full run — never a guessed scope.
-    const scope = deriveArcSuiteScope(wt, state.members.map((m) => m.num))
-    if (scope !== null) {
-      suiteRange = `@${scope.filesFrom}`
-      state.suiteScope = { fileCount: scope.fileCount, commitCount: scope.commitCount }
-    } else {
-      suiteRange = deriveArcSuiteRange(wt, state.members.map((m) => m.num))
-      if (suiteRange === null) effectiveMode = 'full'
+  let suite
+  if (suiteMode === 'defer-ci') {
+    suite = { slots: [], suiteGreen: null, ran: false, mode: 'defer-ci', range: null, note: 'arc-end suite deferred to CI (arcEndSuite defer-ci / --defer-suite) — the release pipeline is the full-suite gate' }
+    state.suiteGreen = null
+  } else {
+    if (suiteMode === 'impacted') {
+      const wt = state.sidecar?.worktree ?? toplevel
+      // Prefer the arc's OWN file scope (subject-matched member commits → `@manifest`);
+      // a shared-base contiguous range re-tests sibling arcs' already-gated work. Fall back
+      // to the contiguous range, then to a genuine full run — never a guessed scope.
+      const scope = deriveArcSuiteScope(wt, state.members.map((m) => m.num))
+      if (scope !== null) {
+        suiteRange = `@${scope.filesFrom}`
+        state.suiteScope = { fileCount: scope.fileCount, commitCount: scope.commitCount }
+      } else {
+        suiteRange = deriveArcSuiteRange(wt, state.members.map((m) => m.num))
+        if (suiteRange === null) effectiveMode = 'full'
+      }
+    }
+    if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'arc-end suite' })
+    suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e, mode: effectiveMode, range: suiteRange })
+    state.suiteGreen = suite.suiteGreen
+
+    // Post-suite drift re-probe: the base may move DURING a long suite. Zero overlap ⇒
+    // re-merge, and — the one legitimate set-site for reconciledGreen (postmortem 3.1) —
+    // the suite that just ran green covered every arc file the drift didn't touch, so it
+    // IS the post-reconciliation green suite blocker 7 asks for.
+    if (state.integrationModel === 'isolated' && state.primaryCheckout && state.arcBranch && state.baseRef) {
+      Object.assign(state, probeIntegrationState({ primaryCheckout: state.primaryCheckout, arcBranch: state.arcBranch, baseRef: state.baseRef }))
+      if (state.baseRefMoved) {
+        const rec = reconcileZeroOverlap(state)
+        reconciles.push({ when: 'post-suite', ...rec })
+        if (rec.merged && suite.suiteGreen === true) state.reconciledGreen = true
+      }
     }
   }
-  if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'arc-end suite' })
-  const suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e, mode: effectiveMode, range: suiteRange })
-  state.suiteGreen = suite.suiteGreen
   state.suiteMode = effectiveMode
   state.suiteRange = suiteRange
   const held = evaluateBlockers(state)
   if (held.length) {
-    emit({ action: 'blocked', arcId, held, suite, suiteMode: effectiveMode, suiteRange, ...(staleBase ? { staleBase } : {}) })
+    emit({ action: 'blocked', arcId, held, suite, suiteMode: effectiveMode, suiteRange, ...(reconciles.length ? { reconciles } : {}), ...(staleBase ? { staleBase } : {}) })
+    verdictLine('blocked', 2)
     if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'blocked', exitCode: 2 })
     return 2
   }
@@ -800,7 +894,8 @@ export async function landCommand(rest) {
     }
     throw e
   }
-  emit({ action: res.outcome, arcId, ...res, suite, suiteMode: effectiveMode, suiteRange, ...(staleBase ? { staleBase } : {}) })
+  emit({ action: res.outcome, arcId, ...res, suite, suiteMode: effectiveMode, suiteRange, ...(reconciles.length ? { reconciles } : {}), ...(staleBase ? { staleBase } : {}) })
+  verdictLine(res.outcome, res.exitCode)
   if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: res.outcome, exitCode: res.exitCode })
   return res.exitCode
 }

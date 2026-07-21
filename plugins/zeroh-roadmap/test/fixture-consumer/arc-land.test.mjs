@@ -102,16 +102,14 @@ test('B6 — a merge conflict against baseRef → exit 2 naming blocker 6', () =
   assert.ok(heldIds(r.json).includes(6), `blocker 6 held: ${JSON.stringify(r.json.held)}`)
 })
 
-test('B7 — baseRef moved under the arc → exit 2 naming blocker 7', () => {
-  const root = makeFixtureRepo()
-  makeIsolatedArc(root, { arcId: 'FX', member: 9307 })
-  runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS'])
-  // develop advances past the arc branch point (a non-conflicting new commit).
-  writeFileSync(join(root, 'src', 'plain.ts'), 'export const plain = 2\n')
-  commitAll(root, 'develop: advance past the arc branch')
+test('B7 — baseRef moved WITH overlapping files → exit 2 naming blocker 7 (auto-reconcile refuses to touch an overlap)', () => {
+  // The overlap-without-conflict topology: both sides changed src/shared.ts (different hunks).
+  // A high ceiling keeps blocker 8 out — this pins blocker 7 alone under the drift.
+  const { root } = staleTopology({ ceiling: 100, member: 9307 })
   const r = land(root)
   assert.equal(r.code, 2)
   assert.ok(heldIds(r.json).includes(7), `blocker 7 held: ${JSON.stringify(r.json.held)}`)
+  assert.ok(!heldIds(r.json).includes(8), `behind 3 < ceiling 100 → blocker 8 not held: ${JSON.stringify(r.json.held)}`)
 })
 
 // ── B13-B15 — the stale-base / overlap gate (MECHRATCHET rank 6) ─────────────────────────
@@ -157,15 +155,22 @@ test('B14 — --force-stale acknowledges blocker 8 (held excludes 8) yet still e
   assert.ok(r.json.staleBase && r.json.staleBase.overlapFiles.includes('src/shared.ts'), `the overlap list survives the acknowledgment: ${JSON.stringify(r.json.staleBase)}`)
 })
 
-test('B15 — one develop advance under the default ceiling does NOT hold blocker 8', () => {
+test('B15 — baseRef moved with ZERO overlapping files → auto-reconciled (baseRef merged into the arc branch) and LANDS exit 0', () => {
   const root = makeFixtureRepo()
   makeIsolatedArc(root, { arcId: 'FX', member: 9316 })
   runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS'])
+  // Repo-level identity: the CLI's own reconcile merge commits in the worktree and must
+  // not depend on the runner's global git config.
+  git(root, 'config', 'user.email', 'fixture@test')
+  git(root, 'config', 'user.name', 'fixture')
   writeFileSync(join(root, 'src', 'plain.ts'), 'export const plain = 2\n')
-  commitAll(root, 'develop: one advance under the default ceiling')
+  commitAll(root, 'develop: one advance, zero overlap with the arc files')
   const r = land(root)
-  assert.equal(r.code, 2, 'blocker 7 baseRef-moved still holds on one advance')
-  assert.ok(!heldIds(r.json).includes(8), `1 < default 100 → blocker 8 not held: ${JSON.stringify(r.json.held)}`)
+  assert.equal(r.code, 0, `zero-overlap drift must auto-reconcile and land; stderr:\n${r.stderr}\njson: ${JSON.stringify(r.json)}`)
+  assert.equal(r.json.action, 'landed')
+  assert.ok(r.json.reconciles?.some((x) => x.when === 'pre-suite' && x.merged === true), `the pre-suite reconcile is recorded: ${JSON.stringify(r.json.reconciles)}`)
+  assert.match(git(root, 'log', '--format=%s', 'develop'), /arc FX member work/, 'the arc commit landed on develop')
+  assert.match(git(root, 'log', '--format=%s', 'develop'), /one advance, zero overlap/, 'the develop drift commit survived')
 })
 
 // ── B8 contention + B9 push discipline + B12 hold ───────────────────────────────────────

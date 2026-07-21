@@ -165,7 +165,8 @@
           "type": "string",
           "enum": [
             "full",
-            "impacted"
+            "impacted",
+            "defer-ci"
           ]
         },
         "gapsCorrection": {

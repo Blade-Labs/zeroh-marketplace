@@ -14,6 +14,20 @@ const ARCID_RE = /arcId:\s*'([^']+)'/
 const FILENAME_RE = /phase-(\d+)/
 
 /**
+ * Match the status FIELD, not prose: scan from `definePhase(` when present, so a
+ * `status:'suspended'` inside the doc-comment header never wins over the real field
+ * (phase 1787 false refusal). Files without definePhase (fixtures, plain-object
+ * exports) scan from the top — behavior-identical to the bare STATUS_RE.
+ * Returns { status, index } with index absolute into src, or null.
+ */
+export function matchStatusField(src) {
+  const anchor = src.indexOf('definePhase(')
+  const scanFrom = anchor >= 0 ? anchor : 0
+  const m = src.slice(scanFrom).match(STATUS_RE)
+  return m ? { status: m[1], index: scanFrom + m.index } : null
+}
+
+/**
  * Read one phase file. The DECLARED `phase: N` value wins over the filename.
  * Returns null when the file has no `status:` (arc-status's `continue`).
  */
@@ -24,7 +38,7 @@ export function scanPhaseFile(absPath) {
   } catch {
     return null
   }
-  const status = src.match(STATUS_RE)?.[1]
+  const status = matchStatusField(src)?.status
   if (!status) return null
   const declared = src.match(DECLARED_RE)?.[1]
   const phase = declared ?? absPath.match(FILENAME_RE)?.[1]

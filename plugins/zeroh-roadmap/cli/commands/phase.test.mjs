@@ -89,6 +89,33 @@ test('phase start — flips the FIRST status backlog→in-progress and leaves th
   )
 })
 
+test("phase start — a status literal in the DOC-COMMENT header never shadows the field (phase 1787 false refusal)", () => {
+  const { root, git } = makeRepo()
+  seedPhase(
+    root,
+    git,
+    4008,
+    [
+      '/**',
+      " * Earlier this arc was status:'suspended' while the base rework landed — prose only.",
+      ' */',
+      'export const phase = definePhase({',
+      '  phase: 4008,',
+      "  status: 'backlog',",
+      "  arcId: 'PHZ',",
+      '})',
+      'function definePhase(x) { return x }',
+      'export default phase',
+      '',
+    ].join('\n'),
+  )
+  const res = phaseStart(root, '4008')
+  assert.equal(res.status, 0, `phase start must flip the FIELD, not refuse on doc-comment prose; stderr:\n${res.stderr}`)
+  const after = readFileSync(phaseFile(root, 4008), 'utf8')
+  assert.ok(after.includes("status: 'in-progress'"), 'the field flipped')
+  assert.ok(after.includes("status:'suspended'"), 'the doc-comment prose is untouched')
+})
+
 test('phase start — commits the flip with the canonical move-to-in-progress subject', () => {
   const { root, git } = makeRepo()
   seedPhase(root, git, 4002, backlogWithDecoy(4002))

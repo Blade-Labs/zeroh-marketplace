@@ -300,6 +300,24 @@ test('8g) mergePolicy WITHOUT arcEndSuite still parses (optional key — behavio
   assert.equal(cfg.mergePolicy.arcEndSuite, undefined)
 })
 
+test("8f2) mergePolicy.arcEndSuite 'defer-ci' parses (local suites skipped, CI is the gate)", () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      mergePolicy: {
+        arcIntegration: 'autonomous',
+        maxOpenFollowups: 0,
+        autonomousPushRefs: ['develop'],
+        primaryCheckout: '/tmp/x',
+        arcEndSuite: 'defer-ci',
+      },
+    }),
+  )
+  const cfg = loadConfig(repo)
+  assert.equal(cfg.mergePolicy.arcEndSuite, 'defer-ci')
+})
+
 test("8h) mergePolicy.arcEndSuite 'sometimes' (outside the enum) rejects with the key named", () => {
   const repo = newRepo()
   writeConfig(

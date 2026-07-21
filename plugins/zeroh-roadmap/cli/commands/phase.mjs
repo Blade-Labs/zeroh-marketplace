@@ -20,9 +20,7 @@ import { gitToplevel } from '../lib/gitroot.mjs'
 import { validateRoadmapFile, renderZodIssues } from '../lib/validate.mjs'
 import { TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
-
-/** The FIRST status literal in the file — the field (phasescan STATUS_RE contract). */
-const FIRST_STATUS_RE = /status:\s*'([a-z-]+)'/
+import { matchStatusField } from '../lib/phasescan.mjs'
 
 function runStart(argv) {
   const n = argv.find((a) => /^\d+$/.test(a))
@@ -37,8 +35,10 @@ function runStart(argv) {
     return 1
   }
   const src = readFileSync(file, 'utf8')
-  const m = src.match(FIRST_STATUS_RE)
-  const status = m?.[1]
+  // Field-anchored match (phasescan.matchStatusField): a status literal in the doc-comment
+  // header must never shadow the real field (phase 1787 false refusal).
+  const m = matchStatusField(src)
+  const status = m?.status
   if (!status || (status !== 'backlog' && status !== 'in-progress')) {
     if (status === 'done' || status === 'historical') {
       process.stderr.write(`roadmap phase start: phase ${n} is terminal (status '${status}') — refusing to flip\n`)
@@ -53,7 +53,7 @@ function runStart(argv) {
     process.stderr.write(`roadmap phase start: phase ${n} is already in-progress — idempotent no-op\n`)
     return 0
   }
-  // First-match-only flip: replace exactly the matched field occurrence.
+  // Field-only flip: replace exactly the matched field occurrence.
   const flipped = src.slice(0, m.index) + src.slice(m.index).replace("'backlog'", "'in-progress'")
   writeFileSync(file, flipped)
   const rel = relative(toplevel, file)

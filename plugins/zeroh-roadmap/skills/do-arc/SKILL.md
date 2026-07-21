@@ -95,16 +95,26 @@ workflow engine cannot host its imports).
    (plan → do → re-validate until PASS; the judge's PASS is the approval; re-record the
    verdict), then land; `hold`/absent → surface the gaps and PAUSE for the user's go. Bound
    exhaustion or a descope-shaped gap ALWAYS stops for the user.
-3. **land** → `roadmap arc land <id>` — the ONE landing engine (preconditions, arc-end suite,
-   the blocker check, backlog regroom, RunnerSummary, and the autonomous push per the
-   consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user · 2 = blocker; surface the
-   blocker JSON on any non-zero exit. `baseRef → master` is NEVER part of landing — a release
-   is a held human act. A user instruction to review-before-merge always overrides autonomy.
-   A stale base is its own blocker: an arc more than `mergePolicy.staleBaseCeiling` commits
-   (default 100) behind `baseRef` is refused (exit 2) with the both-sides-changed overlap
-   file list as the mandatory reconciliation output; `--force-stale` ACKNOWLEDGES it (clears
-   that blocker alone, never a conflict) after you have read and reconciled that list — which
-   is still emitted under the acknowledgment.
+3. **land** → `roadmap arc land <id>` — the ONE landing engine (cheap blockers first, then
+   the arc-end suite, the final blocker check, backlog regroom, RunnerSummary, and the
+   autonomous push per the consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user ·
+   2 = blocker; surface the blocker JSON on any non-zero exit — a `roadmap arc land: <id> —
+   <verdict> (exit N)` line also lands on stderr, so a piped stdout can never mask the
+   outcome (never trust a pipeline's exit code over that line). `baseRef → master` is NEVER
+   part of landing — a release is a held human act. A user instruction to
+   review-before-merge always overrides autonomy.
+   **Suite scope**: `mergePolicy.arcEndSuite` is honored for EVERY integration model —
+   `impacted` runs the arc's own touched-file scope (the default posture: arcs land fast,
+   CI is the full-suite gate); `defer-ci` (or the `--defer-suite` flag) skips local suites
+   entirely. Both are recorded HONESTLY in the RunnerSummary (`fullSuiteGreen: false` + a
+   deferral reason) — never claim a full green you did not run.
+   **Base drift**: a moved `baseRef` whose incoming delta overlaps NONE of the arc's files is
+   auto-reconciled (baseRef merged into the arc branch) before anything expensive — no
+   blocker, no re-run. Overlapping files hold blocker 7/8 honestly. A stale base beyond
+   `mergePolicy.staleBaseCeiling` commits (default 100) with overlap is refused (exit 2) with
+   the both-sides-changed file list as the mandatory reconciliation output; `--force-stale`
+   ACKNOWLEDGES it (clears that blocker alone, never a conflict) after you have read and
+   reconciled that list — which is still emitted under the acknowledgment.
    **`--detach` for a long land** (the arc-end suite can outlive a session): the CLI
    self-daemonizes, records `{pid, step, exitCode}` in `.building/<ID>-land.json`, and returns
    immediately with the journal + log paths. Re-running `arc land` (or `arc next`) reads that

@@ -104,6 +104,11 @@ test('blocker 4 — suite not green (false OR null both hold)', () => {
   assert.deepEqual(ids(evaluateBlockers(n)), [4])
 })
 
+test('blocker 4 — suiteMode defer-ci is a NAMED deferral: clears with suiteGreen null (CI is the gate)', () => {
+  const s = clear(); s.suiteGreen = null; s.suiteMode = 'defer-ci'
+  assert.deepEqual(evaluateBlockers(s), [], 'defer-ci never holds blocker 4 — the deferral is recorded in the RunnerSummary, not faked as green')
+})
+
 test('blocker 5 — openFollowups over max, and census-failure (null) counts as over', () => {
   const over = clear(); over.openFollowups = 1
   assert.deepEqual(ids(evaluateBlockers(over)), [5])
@@ -302,6 +307,55 @@ test('buildRunnerSummary — a full-scope landing keeps fullSuiteGreen:true with
   const s = buildRunnerSummary(state, { suiteGreen: true })
   assert.equal(s.gateSignals.fullSuiteGreen, true)
   assert.equal(s.reason, undefined, 'a genuine full green carries no deferral reason')
+})
+
+test('buildRunnerSummary — a defer-ci landing reports fullSuiteGreen:false + a reason naming the CI deferral', () => {
+  const state = { arcId: 'A', censusEntries: [], hasCriteria: false, suiteMode: 'defer-ci', suiteRange: null }
+  const s = buildRunnerSummary(state, { suiteGreen: null })
+  assert.equal(s.gateSignals.fullSuiteGreen, false, 'a deferred suite is NEVER reported green')
+  assert.match(s.reason, /DEFERRED to CI/, 'the reason names the deferral')
+  assert.match(s.reason, /release pipeline is the full-suite gate/, 'the reason names who owns the gate')
+})
+
+// ── zero-overlap auto-reconcile (postmortem 3.5) ──────────────────────────────────────
+test('reconcileZeroOverlap — overlap present ⇒ no merge attempted; zero overlap ⇒ merges baseRef in the worktree and re-probes', async () => {
+  const { reconcileZeroOverlap } = await import('./landing.mjs')
+  // overlap present → refuses to touch git
+  const calls = []
+  const spy = (file, args) => { calls.push(args); return { status: 0, stdout: '', stderr: '' } }
+  const held = { integrationModel: 'isolated', baseRefMoved: true, overlapFiles: ['src/shared.ts'], sidecar: { worktree: tmpdir() } }
+  const r1 = reconcileZeroOverlap(held, spy)
+  assert.equal(r1.attempted, false)
+  assert.match(r1.reason, /overlapping files/)
+  assert.equal(calls.length, 0, 'no git command ran')
+  // direct model / base not moved → not applicable
+  assert.equal(reconcileZeroOverlap({ integrationModel: 'direct', baseRefMoved: true }, spy).attempted, false)
+  assert.equal(reconcileZeroOverlap({ integrationModel: 'isolated', baseRefMoved: false }, spy).attempted, false)
+  // worktree gone → refuses (the blockers hold honestly, nothing fatals)
+  const gone = { integrationModel: 'isolated', baseRefMoved: true, overlapFiles: [], sidecar: { worktree: join(tmpdir(), 'zr-no-such-wt') } }
+  assert.match(reconcileZeroOverlap(gone, spy).reason, /worktree missing/)
+  // zero overlap + live worktree → merge fires, probes re-run, state updated
+  const mergeCalls = []
+  const okSpy = (file, args) => {
+    mergeCalls.push(args)
+    if (args.includes('--is-ancestor')) return { status: 0, stdout: '', stderr: '' } // ancestor again post-merge
+    if (args.includes('rev-list')) return { status: 0, stdout: '0\n', stderr: '' }
+    return { status: 0, stdout: '', stderr: '' }
+  }
+  const state = { integrationModel: 'isolated', baseRefMoved: true, overlapFiles: [], baseRef: 'develop', arcBranch: 'arc/a', primaryCheckout: '/p', sidecar: { worktree: tmpdir() } }
+  const r2 = reconcileZeroOverlap(state, okSpy)
+  assert.deepEqual(r2, { attempted: true, merged: true })
+  assert.ok(mergeCalls.some((a) => a.includes('merge') && a.includes('--no-edit') && a.includes('develop')), 'merged baseRef into the arc branch')
+  assert.equal(state.baseRefMoved, false, 'the re-probe wrote the cleared state back')
+  // merge failure → abort + honest refusal, state NOT falsely cleared
+  const failSpy = (file, args) => {
+    if (args.includes('--no-edit')) return { status: 1, stdout: '', stderr: 'merge failed' }
+    return { status: 0, stdout: '', stderr: '' }
+  }
+  const s3 = { integrationModel: 'isolated', baseRefMoved: true, overlapFiles: [], baseRef: 'develop', arcBranch: 'arc/a', primaryCheckout: '/p', sidecar: { worktree: tmpdir() } }
+  const r3 = reconcileZeroOverlap(s3, failSpy)
+  assert.equal(r3.merged, false)
+  assert.equal(s3.baseRefMoved, true, 'a failed merge leaves the moved state standing')
 })
 
 // ── 1792.4 — detached arc-land journal + resume detection ─────────────────────────────

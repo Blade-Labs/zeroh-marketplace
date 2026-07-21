@@ -69,9 +69,11 @@ const MergePolicyShape = z.strictObject({
   // use-site in landing.mjs (`?? 100`, the maxOpenFollowups idiom) — MECHRATCHET rank 6.
   staleBaseCeiling: z.number().int().positive().optional(),
   // arc-end suite scope: default 'full' applied at the landing.mjs use-site (the
-  // staleBaseCeiling `??` idiom) and honored ONLY for integrationModel 'direct' — an
-  // isolated-branch landing always runs the full suite regardless.
-  arcEndSuite: z.enum(['full', 'impacted']).optional(),
+  // staleBaseCeiling `??` idiom), honored for EVERY integration model (the direct-only
+  // guard is retired — user ruling 2026-07-21: arcs land on touched-scope tests, CI's
+  // pipeline is the full-suite gate). 'defer-ci' skips local suites entirely; the
+  // RunnerSummary records the deferral honestly (never a fake green).
+  arcEndSuite: z.enum(['full', 'impacted', 'defer-ci']).optional(),
   // validate-arc GAPS handling under do-arc (user ruling 2026-07-18): 'autonomous' = run the
   // bounded corrective loop unattended (plan -> do -> re-validate until PASS) and land on the
   // judge's PASS; 'hold' (default, fail-safe) = pause for the user's go. Bound exhaustion and

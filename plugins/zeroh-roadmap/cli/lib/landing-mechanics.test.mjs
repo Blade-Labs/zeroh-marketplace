@@ -217,6 +217,9 @@ function makeArcConsumer({ memberStatus = 'done', arcIntegration = 'autonomous',
   writeFileSync(join(root, 'member-work.txt'), 'work\n')
   g(root, 'add', '-A')
   g(root, 'commit', '-q', '-m', 'feat: phase 10 — move to in-progress')
+  // The isolated model's arc branch must EXIST (at the develop tip) or the git probes read a
+  // missing ref as a conflict/moved refusal — the pre-suite blocker pass now sees them.
+  if (isolated) g(root, 'branch', 'arc/a')
   return root
 }
 
@@ -258,15 +261,89 @@ test('arc land command — direct + arcEndSuite impacted runs the impacted slots
   assert.match(summary.reason, /ci-pr-gate per PR \+ nightly/, 'the summary reason names the CI backstop')
 })
 
-test('arc land command — ISOLATED model IGNORES arcEndSuite impacted and runs the FULL slots (direct-only guard)', () => {
-  // The sidecar branch is arc/a (≠ baseRef develop) ⇒ isolated model ⇒ the guard forces full.
+test('arc land command — ISOLATED model HONORS arcEndSuite impacted (direct-only guard retired — touched scope lands, CI is the full-suite gate)', () => {
+  // The sidecar branch is arc/a (≠ baseRef develop) ⇒ isolated model; config impacted now wins.
   const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true, isolated: true })
   const r = landBin(root, ['A', '--json'])
   // echoing slots interleave with the emitted JSON line — extract the JSON object line
   const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
-  assert.equal(out.suite.mode, 'full', 'an isolated landing runs the full suite regardless of arcEndSuite: impacted')
-  assert.match(r.stdout, /FULL_UNIT_RAN/, 'the full unit slot ran')
-  assert.doesNotMatch(r.stdout, /IMPACTED_UNIT_RAN/, 'the impacted slot did NOT run under the isolated model')
+  assert.equal(out.suite.mode, 'impacted', 'an isolated landing honors arcEndSuite: impacted')
+  assert.match(r.stdout, /IMPACTED_UNIT_RAN @\S+roadmap-arc-scope-\S+/, 'the impacted slot ran with the arc-scope @manifest')
+  assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN/, 'the full unit slot did NOT run for an isolated arc')
+})
+
+test('arc land command — arcEndSuite defer-ci skips local suites entirely; the summary records the deferral, never a green', () => {
+  const root = makeArcConsumer({ arcEndSuite: 'defer-ci', impacted: true })
+  const r = landBin(root, ['A', '--json'])
+  assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
+  const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
+  assert.equal(out.action, 'landed')
+  assert.equal(out.suite.mode, 'defer-ci')
+  assert.match(out.suite.note, /deferred to CI/)
+  assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN|IMPACTED_UNIT_RAN/, 'no test slot ran')
+  const summary = JSON.parse(readFileSync(join(root, 'roadmap', 'arc-summary.json'), 'utf8'))
+  assert.equal(summary.gateSignals.fullSuiteGreen, false, 'a deferred suite is never reported green')
+  assert.match(summary.reason, /DEFERRED to CI/)
+})
+
+test('arc land command — --defer-suite flag defers per-invocation even with NO arcEndSuite configured', () => {
+  const root = makeArcConsumer({ impacted: true })
+  const r = landBin(root, ['A', '--json', '--defer-suite'])
+  assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
+  const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
+  assert.equal(out.suite.mode, 'defer-ci')
+  assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN|IMPACTED_UNIT_RAN/, 'no test slot ran under --defer-suite')
+})
+
+test('arc land command — cheap blockers refuse BEFORE any suite starts (postmortem 3.2 ordering)', () => {
+  const root = makeArcConsumer({ memberStatus: 'backlog', impacted: true })
+  const r = landBin(root, ['A', '--json'])
+  assert.equal(r.code, 2)
+  const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
+  assert.equal(out.action, 'blocked')
+  assert.equal(out.held[0].id, 1)
+  assert.match(out.suite.skipped, /pre-suite blockers held/)
+  assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN|IMPACTED_UNIT_RAN/, 'a refusal knowable in milliseconds never starts a suite')
+  assert.match(r.stderr, /roadmap arc land: A — blocked \(pre-suite\) \(exit 2\)/, 'explicit terminal verdict on stderr')
+})
+
+test('arc land command — zero-overlap auto-reconcile: a moved baseRef touching NONE of the arc files merges automatically and the arc lands', () => {
+  const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true, isolated: true })
+  g(root, 'config', 'user.email', 't@t')
+  g(root, 'config', 'user.name', 't')
+  // A REAL arc worktree on arc/a (created at develop tip by the fixture) with its own commit…
+  const wt = realpathSync(mkdtempSync(join(tmpdir(), 'zr-landrec-wt-')))
+  bases.push(wt)
+  g(root, 'worktree', 'add', '-q', wt, 'arc/a')
+  writeFileSync(join(wt, 'arc-only.txt'), 'arc work\n')
+  g(wt, 'add', 'arc-only.txt')
+  g(wt, 'commit', '-q', '-m', 'feat: phase 10 — arc-only work')
+  // …while develop moves on with a NON-overlapping file (METERTENANT attempts 1/3/5 shape).
+  writeFileSync(join(root, 'develop-only.txt'), 'sibling work\n')
+  g(root, 'add', 'develop-only.txt')
+  g(root, 'commit', '-q', '-m', 'sibling: develop moved, zero overlap')
+  writeFileSync(join(root, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: wt, branch: 'arc/a' }))
+  const r = landBin(root, ['A', '--json'])
+  assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
+  const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
+  assert.equal(out.action, 'landed')
+  assert.ok(out.reconciles?.some((x) => x.when === 'pre-suite' && x.merged === true), `the pre-suite zero-overlap reconcile merged baseRef into the arc branch; got ${JSON.stringify(out.reconciles)}`)
+  const log = g(root, 'log', '--format=%s', 'develop')
+  assert.match(log, /arc-only work/, 'the arc commit landed on develop')
+  assert.match(log, /sibling: develop moved/, 'the sibling develop commit survived')
+})
+
+test('landArc — repoRoot pointing at a DELETED worktree still lands: post-merge acts anchor on the primary checkout (postmortem 3.6)', () => {
+  const primary = makeConsumer()
+  mkdirSync(join(primary, 'roadmap', 'arcs', '.building'), { recursive: true })
+  writeFileSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: primary }))
+  const goneWt = join(primary, '..', 'zr-gone-wt-does-not-exist')
+  const { exec } = recordingExec()
+  const state = stateFor(primary, { sidecar: { worktree: goneWt, branch: 'arc/a' } })
+  const res = landArc({ repoRoot: goneWt, arcId: 'A', config: configFor(primary), exec, flags: {}, state })
+  assert.equal(res.outcome, 'landed', 'a vanished invocation root must never fail a completed merge')
+  assert.ok(!existsSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json')), 'sidecar removed via the primary checkout')
+  assert.ok(existsSync(join(primary, 'roadmap', 'arc-summary.json')), 'RunnerSummary written to the primary checkout')
 })
 
 test('REAL merge — landing merges into LOCAL develop and a sibling unpushed commit SURVIVES (never clobbered)', () => {
