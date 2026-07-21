@@ -309,6 +309,14 @@ test('buildRunnerSummary — a full-scope landing keeps fullSuiteGreen:true with
   assert.equal(s.reason, undefined, 'a genuine full green carries no deferral reason')
 })
 
+test('buildRunnerSummary — an externally-landed arc reports fullSuiteGreen:false + a reason naming the external land', () => {
+  const state = { arcId: 'A', censusEntries: [], hasCriteria: false, suiteMode: 'external', landedExternally: true, suiteRange: null }
+  const s = buildRunnerSummary(state, { suiteGreen: null })
+  assert.equal(s.gateSignals.fullSuiteGreen, false, 'an external land never claims a green suite')
+  assert.match(s.reason, /landed EXTERNALLY/, 'the reason names the external land')
+  assert.match(s.reason, /bookkeeping only/, 'the reason scopes what arc land actually did')
+})
+
 test('buildRunnerSummary — a defer-ci landing reports fullSuiteGreen:false + a reason naming the CI deferral', () => {
   const state = { arcId: 'A', censusEntries: [], hasCriteria: false, suiteMode: 'defer-ci', suiteRange: null }
   const s = buildRunnerSummary(state, { suiteGreen: null })
@@ -334,10 +342,11 @@ test('reconcileZeroOverlap — overlap present ⇒ no merge attempted; zero over
   // worktree gone → refuses (the blockers hold honestly, nothing fatals)
   const gone = { integrationModel: 'isolated', baseRefMoved: true, overlapFiles: [], sidecar: { worktree: join(tmpdir(), 'zr-no-such-wt') } }
   assert.match(reconcileZeroOverlap(gone, spy).reason, /worktree missing/)
-  // zero overlap + live worktree → merge fires, probes re-run, state updated
+  // zero overlap + live worktree ON the arc branch → merge fires, probes re-run, state updated
   const mergeCalls = []
   const okSpy = (file, args) => {
     mergeCalls.push(args)
+    if (args.includes('--abbrev-ref')) return { status: 0, stdout: 'arc/a\n', stderr: '' }
     if (args.includes('--is-ancestor')) return { status: 0, stdout: '', stderr: '' } // ancestor again post-merge
     if (args.includes('rev-list')) return { status: 0, stdout: '0\n', stderr: '' }
     return { status: 0, stdout: '', stderr: '' }
@@ -347,8 +356,19 @@ test('reconcileZeroOverlap — overlap present ⇒ no merge attempted; zero over
   assert.deepEqual(r2, { attempted: true, merged: true })
   assert.ok(mergeCalls.some((a) => a.includes('merge') && a.includes('--no-edit') && a.includes('develop')), 'merged baseRef into the arc branch')
   assert.equal(state.baseRefMoved, false, 'the re-probe wrote the cleared state back')
+  // a re-purposed worktree (HEAD ≠ arc branch) → refuses to merge in place, no git mutation
+  const parkedSpy = (file, args) => {
+    if (args.includes('--abbrev-ref')) return { status: 0, stdout: 'feature/other\n', stderr: '' }
+    return { status: 0, stdout: '', stderr: '' }
+  }
+  const parked = { integrationModel: 'isolated', baseRefMoved: true, overlapFiles: [], baseRef: 'develop', arcBranch: 'arc/a', primaryCheckout: '/p', sidecar: { worktree: tmpdir() } }
+  const rp = reconcileZeroOverlap(parked, parkedSpy)
+  assert.equal(rp.attempted, false)
+  assert.match(rp.reason, /feature\/other, not arc\/a/, 'a foreign-branch worktree is never merged into')
+  assert.equal(parked.baseRefMoved, true, 'state stands — the blockers hold honestly')
   // merge failure → abort + honest refusal, state NOT falsely cleared
   const failSpy = (file, args) => {
+    if (args.includes('--abbrev-ref')) return { status: 0, stdout: 'arc/a\n', stderr: '' }
     if (args.includes('--no-edit')) return { status: 1, stdout: '', stderr: 'merge failed' }
     return { status: 0, stdout: '', stderr: '' }
   }

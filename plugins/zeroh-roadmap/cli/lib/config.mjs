@@ -140,6 +140,11 @@ export const RoadmapConfigShape = z.strictObject({
   gateConditionalSlots: z
     .array(z.strictObject({ whenDiffMatches: z.array(nonEmpty).min(1), slot: nonEmpty }))
     .optional(),
+  // Estate filter for the lint-diff hygiene slot (optional): only phase-own files matching one
+  // of these globs reach the linter — a linter handed files OUTSIDE its configured estate
+  // (biome on a roadmap-only diff) exits non-zero over nothing. Empty after filtering ⇒ the
+  // NAMED estate skip, never a red. Glob semantics = ladder.mjs matchGlobPath (the one matcher).
+  lintDiffMatches: z.array(nonEmpty).min(1).optional(),
   testCadence: TestCadenceShape.optional(),
   mergePolicy: MergePolicyShape.optional(),
   modelPolicy: ModelPolicyShape.optional(),

@@ -24,7 +24,9 @@ function seedPhase(root, phaseObj, { kind = 'plain', touch = [], create = {}, ms
     paths.push(rel)
   }
   for (const rel of touch) {
-    writeFileSync(join(root, rel), readFileSync(join(root, rel), 'utf8') + `\n// touched by phase ${n}\n`)
+    // The touch marker must not narrate history (a phase number in a COMMENT) — the gate's
+    // own history-comments scan reads this diff and reds the all-green fixtures (L6/L8).
+    writeFileSync(join(root, rel), readFileSync(join(root, rel), 'utf8') + `\nexport const touchedBy${n} = ${n}\n`)
     paths.push(rel)
   }
   commitPaths(root, msg ?? `feat: phase ${n} — start`, paths)

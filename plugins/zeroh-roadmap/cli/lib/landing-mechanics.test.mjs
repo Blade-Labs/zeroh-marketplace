@@ -52,6 +52,7 @@ function recordingExec(over = {}) {
     calls.push({ file, args })
     if (file !== 'git') return { status: 0, stdout: '', stderr: '' }
     if (args.includes('--abbrev-ref')) return { status: 0, stdout: (over.head ?? 'develop') + '\n', stderr: '' }
+    if (args.includes('--is-ancestor')) return { status: over.ffPossible ? 0 : 1, stdout: '', stderr: '' }
     if (args.includes('MERGE_HEAD')) return { status: over.mergeHead ? 0 : 1, stdout: '', stderr: '' }
     if (args.includes('merge-tree')) return { status: over.conflict ? 1 : 0, stdout: '', stderr: '' }
     if (args.includes('merge')) return { status: over.mergeFail ? 1 : 0, stdout: '', stderr: '' }
@@ -106,6 +107,22 @@ test('contention — primary HEAD is not baseRef ⇒ exit 2, primary UNTOUCHED (
   assert.equal(res.outcome, 'blocker')
   assert.match(res.held[0].reason, /wait for the sibling; never branch-switch/)
   assert.ok(!calls.some((c) => c.args.includes('merge') && !c.args.includes('merge-tree')), 'no merge attempted on the primary')
+})
+
+test('contention — primary parked off baseRef but the arc merge is FAST-FORWARD ⇒ ref surgery lands it (no checkout, no merge, master rail intact)', () => {
+  const primary = makeConsumer()
+  const { exec, calls } = recordingExec({ head: 'feature/sibling', ffPossible: true })
+  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
+  assert.equal(res.outcome, 'landed', 'a FF arc lands under a parked primary')
+  assert.ok(res.record.some((s) => s.step === 'ff-ref-update'), `ref surgery recorded: ${JSON.stringify(res.record)}`)
+  assert.ok(calls.some((c) => c.args.includes('fetch') && c.args.includes('.') && c.args.includes('arc/a:develop')), 'the update is `git fetch . arc/a:develop` — git refuses non-FF and checked-out targets itself')
+  assert.ok(!calls.some((c) => c.args.includes('checkout') || c.args.includes('switch')), 'the primary is never branch-switched')
+  assert.ok(!calls.some((c) => c.args.includes('merge') && !c.args.includes('merge-tree') && !c.args.includes('merge-base')), 'no merge on the parked primary')
+  // The master rail holds in the FF lane exactly like pushBaseRef.
+  const m = recordingExec({ head: 'feature/sibling', ffPossible: true })
+  const mres = landArc({ repoRoot: makeConsumer(), arcId: 'A', config: configFor(primary), exec: m.exec, flags: {}, state: stateFor(primary, { baseRef: 'master' }) })
+  assert.equal(mres.outcome, 'blocker')
+  assert.match(mres.held[0].reason, /refuses master/)
 })
 
 test('contention — a MERGE_HEAD in the primary ⇒ exit 2', () => {
@@ -213,13 +230,26 @@ function makeArcConsumer({ memberStatus = 'done', arcIntegration = 'autonomous',
   writeFileSync(join(root, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: root, branch: isolated ? 'arc/a' : 'develop' }))
   g(root, 'add', '-A')
   g(root, 'commit', '-q', '-m', 'seed arc consumer')
-  // A `phase 10 —` move-commit so deriveArcSuiteRange resolves a real <sha>..HEAD range.
-  writeFileSync(join(root, 'member-work.txt'), 'work\n')
-  g(root, 'add', '-A')
-  g(root, 'commit', '-q', '-m', 'feat: phase 10 — move to in-progress')
-  // The isolated model's arc branch must EXIST (at the develop tip) or the git probes read a
-  // missing ref as a conflict/moved refusal — the pre-suite blocker pass now sees them.
-  if (isolated) g(root, 'branch', 'arc/a')
+  g(root, 'config', 'user.email', 't@t')
+  g(root, 'config', 'user.name', 't')
+  if (isolated) {
+    // A REAL isolated topology: arc/a in its own worktree (at `${root}-wt`), carrying the
+    // member commit AHEAD of develop — a branch parked AT the develop tip reads (correctly)
+    // as already-landed and would short-circuit the flows these fixtures exercise.
+    g(root, 'branch', 'arc/a')
+    const wt = `${root}-wt`
+    bases.push(wt)
+    g(root, 'worktree', 'add', '-q', wt, 'arc/a')
+    writeFileSync(join(wt, 'member-work.txt'), 'work\n')
+    g(wt, 'add', '-A')
+    g(wt, 'commit', '-q', '-m', 'feat: phase 10 — move to in-progress')
+    writeFileSync(join(root, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: wt, branch: 'arc/a' }))
+  } else {
+    // A `phase 10 —` move-commit so deriveArcSuiteRange resolves a real <sha>..HEAD range.
+    writeFileSync(join(root, 'member-work.txt'), 'work\n')
+    g(root, 'add', '-A')
+    g(root, 'commit', '-q', '-m', 'feat: phase 10 — move to in-progress')
+  }
   return root
 }
 
@@ -309,12 +339,7 @@ test('arc land command — cheap blockers refuse BEFORE any suite starts (postmo
 
 test('arc land command — zero-overlap auto-reconcile: a moved baseRef touching NONE of the arc files merges automatically and the arc lands', () => {
   const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true, isolated: true })
-  g(root, 'config', 'user.email', 't@t')
-  g(root, 'config', 'user.name', 't')
-  // A REAL arc worktree on arc/a (created at develop tip by the fixture) with its own commit…
-  const wt = realpathSync(mkdtempSync(join(tmpdir(), 'zr-landrec-wt-')))
-  bases.push(wt)
-  g(root, 'worktree', 'add', '-q', wt, 'arc/a')
+  const wt = `${root}-wt` // the fixture's real arc worktree
   writeFileSync(join(wt, 'arc-only.txt'), 'arc work\n')
   g(wt, 'add', 'arc-only.txt')
   g(wt, 'commit', '-q', '-m', 'feat: phase 10 — arc-only work')
@@ -322,7 +347,6 @@ test('arc land command — zero-overlap auto-reconcile: a moved baseRef touching
   writeFileSync(join(root, 'develop-only.txt'), 'sibling work\n')
   g(root, 'add', 'develop-only.txt')
   g(root, 'commit', '-q', '-m', 'sibling: develop moved, zero overlap')
-  writeFileSync(join(root, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: wt, branch: 'arc/a' }))
   const r = landBin(root, ['A', '--json'])
   assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
   const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
@@ -331,6 +355,33 @@ test('arc land command — zero-overlap auto-reconcile: a moved baseRef touching
   const log = g(root, 'log', '--format=%s', 'develop')
   assert.match(log, /arc-only work/, 'the arc commit landed on develop')
   assert.match(log, /sibling: develop moved/, 'the sibling develop commit survived')
+})
+
+test('arc land command — an EXTERNALLY landed arc (hand-land direct push) completes the bookkeeping: exit 0, no suite, sidecar cleaned, summary names it', () => {
+  const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true, isolated: true })
+  // The hand-land shape: someone merged the arc branch into develop outside the engine.
+  g(root, 'merge', '--no-edit', 'arc/a')
+  const r = landBin(root, ['A', '--json'])
+  assert.equal(r.code, 0, `expected bookkeeping completion; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
+  const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
+  assert.equal(out.action, 'landed')
+  assert.ok(out.record.some((s) => s.step === 'external-land-detected'), `external land recorded: ${JSON.stringify(out.record)}`)
+  assert.match(out.suite.skipped, /externally landed/)
+  assert.doesNotMatch(r.stdout, /IMPACTED_UNIT_RAN|FULL_UNIT_RAN/, 'no suite ran for an already-done merge')
+  assert.ok(!existsSync(join(root, 'roadmap', 'arcs', '.building', 'A.json')), 'the stale sidecar is cleaned')
+  const summary = JSON.parse(readFileSync(join(root, 'roadmap', 'arc-summary.json'), 'utf8'))
+  assert.equal(summary.gateSignals.fullSuiteGreen, false, 'an external land never claims a green suite')
+  assert.match(summary.reason, /EXTERNALLY/)
+})
+
+test('arc land command — an arc branch already on baseRef with an UNDONE member is NOT external-land: falls through and blocks honestly', () => {
+  const root = makeArcConsumer({ memberStatus: 'backlog', impacted: true, isolated: true })
+  g(root, 'merge', '--no-edit', 'arc/a')
+  const r = landBin(root, ['A', '--json'])
+  assert.equal(r.code, 2)
+  const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
+  assert.equal(out.held[0].id, 1, 'blocker 1 (member not done) holds — an unstarted/unfinished arc is never auto-completed')
+  assert.ok(existsSync(join(root, 'roadmap', 'arcs', '.building', 'A.json')), 'the sidecar is NOT cleaned for an unfinished arc')
 })
 
 test('landArc — repoRoot pointing at a DELETED worktree still lands: post-merge acts anchor on the primary checkout (postmortem 3.6)', () => {

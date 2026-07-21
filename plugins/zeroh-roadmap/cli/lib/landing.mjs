@@ -194,6 +194,12 @@ export function reconcileZeroOverlap(state, exec = defaultExec) {
   }
   const wt = state.sidecar?.worktree
   if (!wt || !existsSync(wt)) return { attempted: false, reason: 'arc worktree missing — cannot merge in place' }
+  // The worktree must actually BE on the arc branch — a re-purposed worktree (shared host)
+  // parked elsewhere would receive the merge on a foreign branch.
+  const wtHead = exec('git', ['-C', wt, 'rev-parse', '--abbrev-ref', 'HEAD'])
+  if (wtHead.status !== 0 || wtHead.stdout.trim() !== state.arcBranch) {
+    return { attempted: false, reason: `worktree is on ${wtHead.status === 0 ? wtHead.stdout.trim() : 'an unreadable HEAD'}, not ${state.arcBranch} — refusing to merge in place` }
+  }
   const merged = exec('git', ['-C', wt, 'merge', '--no-edit', state.baseRef])
   if (merged.status !== 0) {
     exec('git', ['-C', wt, 'merge', '--abort']) // best-effort; a clean tree stays clean
@@ -524,6 +530,17 @@ function gitLayer(exec) {
     hasMergeHead: (cwd) => run(cwd, ['rev-parse', '--verify', '-q', 'MERGE_HEAD']).status === 0,
     mergeTreeConflict: (cwd, base, branch) => run(cwd, ['merge-tree', '--write-tree', base, branch]).status === 1,
     merge: (cwd, branch) => run(cwd, ['merge', '--no-edit', branch]),
+    isAncestor: (cwd, base, branch) => run(cwd, ['merge-base', '--is-ancestor', base, branch]).status === 0,
+    // Pure ref surgery for the contended-primary FF lane: `git fetch . <arc>:<baseRef>` —
+    // git ITSELF refuses a non-fast-forward update and refuses updating a branch checked out
+    // in ANY worktree, so no sibling's tree is touchable by construction. Same master/main
+    // rail as pushBaseRef: local master never moves autonomously either.
+    ffUpdateRef: (cwd, arcBranchName, baseRefName) => {
+      if (baseRefName === 'master' || baseRefName === 'main') {
+        return { refused: true, reason: `ffUpdateRef refuses ${baseRefName} — a release is a held human act (do-arc Step 8 invariant)` }
+      }
+      return exec('git', ['-C', cwd, 'fetch', '.', `${arcBranchName}:${baseRefName}`])
+    },
     worktreeRemove: (cwd, wt) => run(cwd, ['worktree', 'remove', '--force', wt]),
     pushBaseRef: (checkout, baseRefName) => {
       if (baseRefName === 'master' || baseRefName === 'main') {
@@ -555,7 +572,11 @@ export function buildRunnerSummary(state, { suiteGreen }) {
     gateSignals: { arcSweepClean, validateArcPassed, fullSuiteGreen: suiteGreen === true && !ranImpacted },
     receiptRef: 'none', // honest sentinel — no consumer governance-receipt surface
   }
-  if (ranImpacted) {
+  if (state.landedExternally) {
+    summary.reason =
+      'arc landed EXTERNALLY (arc tip already an ancestor of baseRef — a direct push outside the '
+      + 'engine); arc land completed the bookkeeping only, no local suite ran'
+  } else if (ranImpacted) {
     summary.reason =
       `arc-end suite ran IMPACTED scope only (${state.suiteRange}) — impacted slots green; `
       + 'full-suite backstop = ci-pr-gate per PR + nightly (testCadence.backstop)'
@@ -617,25 +638,45 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
   const arcBranch = state.arcBranch
   const record = []
 
-  if (state.integrationModel === 'direct') {
+  if (state.landedExternally) {
+    // The merge already happened outside the engine (a hand-land / direct push): completing
+    // the BOOKKEEPING is the whole job — re-merging is a no-op at best, and refusing leaves
+    // the sidecar/claims/summary rotting (the ROLEDESK/METERTENANT stale-tracker class).
+    record.push({ step: 'external-land-detected', note: `arc tip ${arcBranch} is already an ancestor of ${baseRef} — merge happened outside the engine; completing bookkeeping only` })
+  } else if (state.integrationModel === 'direct') {
     record.push({ step: 'direct-on-baseRef', note: 'sidecar worktree IS the primary checkout on baseRef — no merge performed' })
   } else {
     git.fetch(primary, baseRef)
     record.push({ step: 'fetch', ref: baseRef })
     const head = git.headBranch(primary)
     if (head !== baseRef) {
-      return { outcome: 'blocker', exitCode: 2, held: [{ name: 'primary HEAD not baseRef', reason: `primary checkout ${primary} is on ${head}, not ${baseRef} — wait for the sibling; never branch-switch under it` }], record }
-    }
-    if (git.hasMergeHead(primary)) {
-      return { outcome: 'blocker', exitCode: 2, held: [{ name: 'MERGE_HEAD present', reason: `primary checkout ${primary} has an in-progress merge (MERGE_HEAD) — resolve it first` }], record }
-    }
-    if (git.mergeTreeConflict(primary, baseRef, arcBranch)) {
-      return { outcome: 'blocker', exitCode: 2, held: [{ name: 'merge conflict', reason: `merge of ${arcBranch} into ${baseRef} conflicts` }], record }
-    }
-    const merged = git.merge(primary, arcBranch)
-    record.push({ step: 'merge', branch: arcBranch, into: baseRef, status: merged.status })
-    if (merged.status !== 0) {
-      return { outcome: 'blocker', exitCode: 2, held: [{ name: 'merge failed', reason: `git merge ${arcBranch} into ${baseRef} failed: ${merged.stderr}` }], record }
+      // Contended primary (a sibling parked it off baseRef). A working tree is only needed
+      // for a REAL merge — after reconcile the arc merge is normally fast-forward, and a FF
+      // is pure ref surgery that cannot touch the sibling's tree (the ROLEDESK hand-recovery,
+      // engine-ized). Non-FF stays a refusal: a true merge under a parked primary must wait.
+      if (!git.isAncestor(primary, baseRef, arcBranch)) {
+        return { outcome: 'blocker', exitCode: 2, held: [{ name: 'primary HEAD not baseRef', reason: `primary checkout ${primary} is on ${head}, not ${baseRef}, and the arc merge is not fast-forward — wait for the sibling; never branch-switch under it` }], record }
+      }
+      const ff = git.ffUpdateRef(primary, arcBranch, baseRef)
+      if (ff.refused) {
+        return { outcome: 'blocker', exitCode: 2, held: [{ name: 'ff-update refused', reason: ff.reason }], record }
+      }
+      if (ff.status !== 0) {
+        return { outcome: 'blocker', exitCode: 2, held: [{ name: 'ff-update failed', reason: `fast-forwarding ${baseRef} to ${arcBranch} failed: ${(ff.stderr ?? '').trim()}` }], record }
+      }
+      record.push({ step: 'ff-ref-update', note: `${baseRef} fast-forwarded to ${arcBranch} by ref surgery — the parked primary (HEAD ${head}) was never touched` })
+    } else {
+      if (git.hasMergeHead(primary)) {
+        return { outcome: 'blocker', exitCode: 2, held: [{ name: 'MERGE_HEAD present', reason: `primary checkout ${primary} has an in-progress merge (MERGE_HEAD) — resolve it first` }], record }
+      }
+      if (git.mergeTreeConflict(primary, baseRef, arcBranch)) {
+        return { outcome: 'blocker', exitCode: 2, held: [{ name: 'merge conflict', reason: `merge of ${arcBranch} into ${baseRef} conflicts` }], record }
+      }
+      const merged = git.merge(primary, arcBranch)
+      record.push({ step: 'merge', branch: arcBranch, into: baseRef, status: merged.status })
+      if (merged.status !== 0) {
+        return { outcome: 'blocker', exitCode: 2, held: [{ name: 'merge failed', reason: `git merge ${arcBranch} into ${baseRef} failed: ${merged.stderr}` }], record }
+      }
     }
   }
 
@@ -796,6 +837,42 @@ export async function landCommand(rest) {
     verdictLine('held', 3)
     if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'held', exitCode: 3 })
     return 3
+  }
+
+  // Externally-landed reconciliation: a hand-land (direct push) leaves the arc tip already
+  // reachable from baseRef — the merge is a FACT this engine cannot refuse or repeat, only
+  // record. Detect it and run the bookkeeping acts alone (cleanup, claims, RunnerSummary,
+  // push policy); no suite, no blockers — post-hoc gating of a done merge is theater.
+  // Guards: isolated model with a REAL branch (the direct model is trivially an ancestor),
+  // and every member done (an armed arc whose EMPTY branch sits at the baseRef tip is
+  // unstarted, not landed — it falls through to the normal flow and blocks honestly).
+  if (
+    state.integrationModel === 'isolated'
+    && state.arcBranch && state.arcBranch !== state.baseRef && state.primaryCheckout
+    && BLOCKERS[0].check(state) === null
+  ) {
+    const anc = defaultExec('git', ['-C', state.primaryCheckout, 'merge-base', '--is-ancestor', state.arcBranch, state.baseRef])
+    if (anc.status === 0) {
+      state.landedExternally = true
+      state.suiteGreen = null
+      state.suiteMode = 'external'
+      let res
+      try {
+        res = landArc({ repoRoot: toplevel, arcId, config: cfg, flags, state })
+      } catch (e) {
+        if (e instanceof LandingError || e instanceof BridgeError) {
+          for (const l of e.messageLines ?? [e.message]) process.stderr.write(l + '\n')
+          const code = e.exitCode ?? 1
+          if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'external-land bookkeeping error', exitCode: code })
+          return code
+        }
+        throw e
+      }
+      emit({ action: res.outcome, arcId, ...res, suite: { skipped: 'externally landed — no suite ran' }, suiteMode: 'external' })
+      verdictLine(`${res.outcome} (externally — bookkeeping completed)`, res.exitCode)
+      if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: res.outcome, exitCode: res.exitCode })
+      return res.exitCode
+    }
   }
 
   // --force-stale is an ACKNOWLEDGMENT (blocker 8 alone), never a bypass of 6/7. The overlap

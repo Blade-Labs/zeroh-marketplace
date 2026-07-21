@@ -229,6 +229,26 @@ test("resolveHygieneSlots — lint-diff bound to 'none' is declaredAbsent like i
   assert.equal(ld.skipped, undefined)
 })
 
+test('resolveHygieneSlots — lintDiffMatches filters to the linter estate; all-outside ⇒ the NAMED estate skip', () => {
+  const cfg = {
+    gateCommands: { ...CFG.gateCommands, 'lint-diff': 'biome check {files}' },
+    lintDiffMatches: ['src/**', 'web/src/**'],
+  }
+  // Mixed set: one estate file + one roadmap file → only the estate file substitutes.
+  const mixed = resolveHygieneSlots(cfg, 'abc1234', ['src/foo.ts', 'roadmap/phases/phase-1817.phase.ts'])
+  const ld = mixed.find((s) => s.slot === 'lint-diff')
+  assert.equal(ld.command, 'biome check src/foo.ts', 'the roadmap file is filtered out before substitution')
+  assert.deepEqual(ld.files, ['src/foo.ts'])
+  // Roadmap-only set → the named estate skip (the 1817 gate quirk), never exit-1-over-nothing.
+  const only = resolveHygieneSlots(cfg, 'abc1234', ['roadmap/phases/phase-1817.phase.ts'])
+  const skip = only.find((s) => s.slot === 'lint-diff')
+  assert.match(skip.skipped, /lintDiffMatches.*estate mismatch/, `named estate skip: ${JSON.stringify(skip)}`)
+  assert.equal(skip.command, undefined)
+  // No lintDiffMatches configured → behavior-identical to today (no filtering).
+  const noFilter = resolveHygieneSlots({ gateCommands: cfg.gateCommands }, 'abc1234', ['roadmap/phases/phase-1817.phase.ts'])
+  assert.equal(noFilter[0].command, 'biome check roadmap/phases/phase-1817.phase.ts')
+})
+
 // ── historyCommentFindings — pure scan of a unified diff's ADDED comment lines ─────────
 test('historyCommentFindings — an ADDED comment with a phase number is a finding (file+line+match)', () => {
   const diff = [

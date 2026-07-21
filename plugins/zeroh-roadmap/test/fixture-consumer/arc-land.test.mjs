@@ -157,36 +157,46 @@ test('B14 — --force-stale acknowledges blocker 8 (held excludes 8) yet still e
 
 test('B15 — baseRef moved with ZERO overlapping files → auto-reconciled (baseRef merged into the arc branch) and LANDS exit 0', () => {
   const root = makeFixtureRepo()
-  makeIsolatedArc(root, { arcId: 'FX', member: 9316 })
+  const iso = makeIsolatedArc(root, { arcId: 'FX', member: 9316 })
   runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS'])
   // Repo-level identity: the CLI's own reconcile merge commits in the worktree and must
   // not depend on the runner's global git config.
   git(root, 'config', 'user.email', 'fixture@test')
   git(root, 'config', 'user.name', 'fixture')
+  // The arc carries a UNIQUE commit (a branch fully contained in develop would correctly
+  // read as externally landed and take the bookkeeping path instead of reconciling).
+  writeFileSync(join(iso.worktree, 'src', 'arc-b15.ts'), 'export const b15 = 1\n')
+  git(iso.worktree, 'add', '-A'); git(iso.worktree, 'commit', '-q', '-m', 'arc: FX b15 work')
   writeFileSync(join(root, 'src', 'plain.ts'), 'export const plain = 2\n')
   commitAll(root, 'develop: one advance, zero overlap with the arc files')
   const r = land(root)
   assert.equal(r.code, 0, `zero-overlap drift must auto-reconcile and land; stderr:\n${r.stderr}\njson: ${JSON.stringify(r.json)}`)
   assert.equal(r.json.action, 'landed')
   assert.ok(r.json.reconciles?.some((x) => x.when === 'pre-suite' && x.merged === true), `the pre-suite reconcile is recorded: ${JSON.stringify(r.json.reconciles)}`)
-  assert.match(git(root, 'log', '--format=%s', 'develop'), /arc FX member work/, 'the arc commit landed on develop')
+  assert.match(git(root, 'log', '--format=%s', 'develop'), /arc: FX b15 work/, 'the arc-unique commit landed on develop')
   assert.match(git(root, 'log', '--format=%s', 'develop'), /one advance, zero overlap/, 'the develop drift commit survived')
 })
 
 // ── B8 contention + B9 push discipline + B12 hold ───────────────────────────────────────
-test('B8 — primary HEAD ≠ baseRef → refuse (exit 2), and the primary is NEVER branch-switched', () => {
+test('B8 — primary parked off baseRef: a FAST-FORWARD arc lands via ref surgery, the primary NEVER branch-switched, its tree untouched', () => {
   const root = makeFixtureRepo()
-  makeIsolatedArc(root, { arcId: 'FX', member: 9308 })
+  const iso = makeIsolatedArc(root, { arcId: 'FX', member: 9308 })
   runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS'])
+  // The arc is AHEAD of develop (a real unlanded branch — a branch parked at the tip would
+  // correctly read as already-landed and take the bookkeeping path instead).
+  writeFileSync(join(iso.worktree, 'src', 'arc-ahead.ts'), 'export const ahead = 1\n')
+  git(iso.worktree, 'add', '-A'); git(iso.worktree, 'commit', '-q', '-m', 'arc: FX ahead work')
   git(root, 'checkout', '-q', '-b', 'feature/sibling') // a sibling parked the primary off baseRef
   const shim = gitShim(root)
   const r = land(root, shim.env)
-  assert.equal(r.code, 2)
-  const held = r.json.held ?? []
-  assert.match(JSON.stringify(held), /never branch-switch|not baseRef|not develop/, `contention reason: ${JSON.stringify(held)}`)
+  assert.equal(r.code, 0, `FF landing under a parked primary expected; stderr:\n${r.stderr}\njson: ${JSON.stringify(r.json)}`)
+  assert.equal(r.json.action, 'landed')
+  assert.ok(r.json.record.some((s) => s.step === 'ff-ref-update'), `ref surgery recorded: ${JSON.stringify(r.json.record)}`)
   const argv = readGitLog(shim.logPath)
-  assert.ok(!argv.some((a) => a.includes('merge') && !a.includes('merge-tree')), 'no merge attempted on the contended primary')
   assert.ok(!argv.some((a) => a.includes('checkout') || a.includes('switch')), 'the primary is never branch-switched under a sibling')
+  assert.ok(!argv.some((a) => a.includes('merge') && !a.includes('merge-tree') && !a.includes('merge-base')), 'no merge on the parked primary')
+  assert.equal(git(root, 'branch', '--show-current'), 'feature/sibling', 'the primary stays parked where the sibling left it')
+  assert.match(git(root, 'log', '--format=%s', 'develop'), /arc: FX ahead work/, 'develop advanced to the arc tip by ref surgery')
 })
 
 test('B9 — structural push discipline: no branch:baseRef refspec ever; no push under autonomousPushRefs []', () => {
@@ -226,12 +236,16 @@ test('B12 — mergePolicy arcIntegration hold → exit 3 held-for-user, nothing 
 // ── B10 green landing + B11 disarm ──────────────────────────────────────────────────────
 test('B10 — a clean isolated arc lands: exit 0, the arc commit is reachable from LOCAL develop, RunnerSummary written', () => {
   const root = makeFixtureRepo()
-  makeIsolatedArc(root, { arcId: 'FX', member: 9311 })
+  const iso = makeIsolatedArc(root, { arcId: 'FX', member: 9311 })
   runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS'])
+  // Arc AHEAD of develop so this exercises the real merge path (at-tip = external-land path).
+  writeFileSync(join(iso.worktree, 'src', 'arc-b10.ts'), 'export const b10 = 1\n')
+  git(iso.worktree, 'add', '-A'); git(iso.worktree, 'commit', '-q', '-m', 'arc: FX b10 work')
   const r = land(root)
   assert.equal(r.code, 0, `clean landing expected; stderr:\n${r.stderr}`)
   assert.equal(r.json.action, 'landed')
-  assert.match(git(root, 'log', '--format=%s', 'develop'), /arc FX member work/, 'the arc commit is reachable from the primary local develop')
+  assert.ok(r.json.record.some((s) => s.step === 'merge'), `the true merge path ran: ${JSON.stringify(r.json.record)}`)
+  assert.match(git(root, 'log', '--format=%s', 'develop'), /arc: FX b10 work/, 'the arc commit is reachable from the primary local develop')
   assert.ok(existsSync(join(root, 'roadmap', 'arc-summary.json')), 'the RunnerSummary pointer is written (validates against RunnerSummaryShape)')
   assert.ok(!existsSync(join(root, 'roadmap', 'arcs', '.building', 'FX.json')), 'the sidecar is cleaned')
 })

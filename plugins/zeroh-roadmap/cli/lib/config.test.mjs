@@ -300,6 +300,17 @@ test('8g) mergePolicy WITHOUT arcEndSuite still parses (optional key — behavio
   assert.equal(cfg.mergePolicy.arcEndSuite, undefined)
 })
 
+test('8f3) top-level lintDiffMatches parses (strict-key acceptance); an empty array rejects', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ lintDiffMatches: ['src/**', 'web/src/**'] }))
+  const cfg = loadConfig(repo)
+  assert.deepEqual(cfg.lintDiffMatches, ['src/**', 'web/src/**'])
+  const repo2 = newRepo()
+  writeConfig(repo2, validConfig({ lintDiffMatches: [] }))
+  const err = loadErr(repo2)
+  assert.ok(err instanceof ConfigError, 'an empty estate list is a config error, not silent lint-everything')
+})
+
 test("8f2) mergePolicy.arcEndSuite 'defer-ci' parses (local suites skipped, CI is the gate)", () => {
   const repo = newRepo()
   writeConfig(

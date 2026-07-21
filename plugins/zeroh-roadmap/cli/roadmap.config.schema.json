@@ -105,6 +105,14 @@
         "additionalProperties": false
       }
     },
+    "lintDiffMatches": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "testCadence": {
       "type": "object",
       "properties": {

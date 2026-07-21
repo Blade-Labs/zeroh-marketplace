@@ -115,6 +115,11 @@ export const HYGIENE_SKIP_NOTE = 'not bound in gateCommands — hygiene lint ski
  *  phase). A linter given nothing to lint exits non-zero; a skip is the honest reading. */
 export const HYGIENE_EMPTY_NOTE = 'no lintable file in the phase-own set — hygiene lint skipped'
 
+/** The estate-mismatch hygiene skip — every lintable phase-own file sits OUTSIDE the linter's
+ *  configured estate (config.lintDiffMatches). biome on a roadmap-only diff exits 1 over
+ *  nothing — the 1817 gate quirk; a named skip is the honest reading. */
+export const HYGIENE_ESTATE_NOTE = 'no phase-own file inside lintDiffMatches — hygiene lint skipped (estate mismatch, named)'
+
 /** Extensions a source linter/formatter owns. Markdown/HTML/JSON are deliberately absent. */
 const LINTABLE_EXT = /\.(m|c)?[jt]sx?$/
 
@@ -132,8 +137,14 @@ export function resolveHygieneSlots(cfg, baseSha, ownFiles = null) {
   // exits non-zero on "no files processed", which would paint a docs-only gate red over nothing
   // (the empty-scope-skip precedent the test slots already follow).
   if (template.includes('{files}')) {
-    const files = (ownFiles ?? []).filter((f) => LINTABLE_EXT.test(f))
+    let files = (ownFiles ?? []).filter((f) => LINTABLE_EXT.test(f))
     if (files.length === 0) return [{ slot: 'lint-diff', skipped: HYGIENE_EMPTY_NOTE }]
+    // Estate filter (config.lintDiffMatches): drop files the linter's estate doesn't cover
+    // BEFORE substitution — biome handed roadmap/*.phase.ts exits 1 with nothing checked.
+    if (cfg?.lintDiffMatches) {
+      files = files.filter((f) => cfg.lintDiffMatches.some((g) => matchGlobPath(g, f)))
+      if (files.length === 0) return [{ slot: 'lint-diff', skipped: HYGIENE_ESTATE_NOTE }]
+    }
     return [{ ...resolveSlot(cfg, 'lint-diff', { base: baseSha, files }), files }]
   }
   return [resolveSlot(cfg, 'lint-diff', { base: baseSha })]

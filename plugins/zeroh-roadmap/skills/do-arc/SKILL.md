@@ -103,11 +103,16 @@ workflow engine cannot host its imports).
    outcome (never trust a pipeline's exit code over that line). `baseRef → master` is NEVER
    part of landing — a release is a held human act. A user instruction to
    review-before-merge always overrides autonomy.
-   **Suite scope**: `mergePolicy.arcEndSuite` is honored for EVERY integration model —
-   `impacted` runs the arc's own touched-file scope (the default posture: arcs land fast,
-   CI is the full-suite gate); `defer-ci` (or the `--defer-suite` flag) skips local suites
-   entirely. Both are recorded HONESTLY in the RunnerSummary (`fullSuiteGreen: false` + a
-   deferral reason) — never claim a full green you did not run.
+   **Suite scope**: `mergePolicy.arcEndSuite` applies to EVERY integration model —
+   `impacted` = the arc's own touched-file scope; `defer-ci` (or `--defer-suite`) skips
+   local suites; CI is the full-suite gate. Both are recorded honestly in the RunnerSummary
+   (`fullSuiteGreen: false` + reason) — never claim a green you did not run.
+   **Already landed** (hand-land): an arc tip already an ancestor of `baseRef` with every
+   member done → `arc land` completes the BOOKKEEPING only (cleanup, RunnerSummary, push
+   policy), exit 0, no suite. Re-run `arc land` after any hand-land so the books never rot.
+   **Contended primary**: parked off `baseRef` no longer refuses a fast-forward arc — ref
+   surgery (`git fetch . <arc>:<baseRef>`; git itself refuses non-FF/checked-out targets)
+   lands it without touching the sibling's tree. A true (non-FF) merge still waits.
    **Base drift**: a moved `baseRef` whose incoming delta overlaps NONE of the arc's files is
    auto-reconciled (baseRef merged into the arc branch) before anything expensive — no
    blocker, no re-run. Overlapping files hold blocker 7/8 honestly. A stale base beyond
