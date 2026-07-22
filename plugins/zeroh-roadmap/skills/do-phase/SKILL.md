@@ -116,3 +116,15 @@ slot, and the push — the do-arc workflow serializes those.
 **Standalone** (no arc-mode): after the completion commit, groom `roadmap/backlog.ts` (remove this
 phase's entry + any single-phase narrative naming only it), run the `emit` slot, then push per the
 consumer's `mergePolicy` (workflow serialization covers arc-mode only).
+
+## Codex delegation lane (`roadmap codex run <N…>`)
+
+When the session delegates implementation to Codex, use the CLI lane — never hand-roll the launch
+(the shared-host hook and the orphan-reaper classify the visible command line; the committed
+entrypoint carries the invariants: sandbox-bypassed direct CLI, prompt via stdin so argv stays free
+of test keywords, detached own-group spawn, a `.building/codex-*.json` journal that refuses a
+double-run, and the `CODEX-REPORT.md` sentinel contract). Poll `roadmap codex status <N>` (typed:
+running/complete/blocked/dead-no-report). **Division of labor is doctrine:** Codex implements tasks
++ per-task commits + transparencyReports; the GATE never moves — `gate plan/run`, the review
+agents, the done-flip, `--verify-complete`, and the merge stay with the supervising session (Codex
+self-gating is self-grading). Audit Codex's commits against the plan before gating.

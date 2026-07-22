@@ -39,6 +39,7 @@ const TREE = {
   audit: { phase: 1659, sub: ['--json'], desc: "audit-roadmap's 12 checks, mechanized" },
   debt: { phase: 1658, sub: ['census', 'dispose', 'check'], desc: 'debt census/dispose wrappers' },
   measure: { phase: 1659, sub: ['--flow', '--assert'], desc: 'protocol-load meter (bytes/4 over the invocation path)' },
+  codex: { phase: 1838, sub: ['run <N> [<N2>…] [--worktree] [--base]', 'status <N>'], desc: 'detached Codex delegation lane (worktree + stdin prompt + journal; gate stays with the session)' },
 }
 
 function printHelp() {
