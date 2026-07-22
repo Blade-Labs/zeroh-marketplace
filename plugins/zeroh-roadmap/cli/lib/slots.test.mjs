@@ -249,6 +249,26 @@ test('resolveHygieneSlots — lintDiffMatches filters to the linter estate; all-
   assert.equal(noFilter[0].command, 'biome check roadmap/phases/phase-1817.phase.ts')
 })
 
+test('resolveHygieneSlots — the estate filter is ANCHORED: site/src does NOT tail-collide with src/**', () => {
+  const cfg = {
+    gateCommands: { ...CFG.gateCommands, 'lint-diff': 'biome check {files}' },
+    lintDiffMatches: ['src/**', 'web/src/**'],
+  }
+  // The 1852 regression: repo-relative site/src/* carries the tail src/*, which matchGlobPath's
+  // tail-walk (built for ABSOLUTE keyFiles paths) matched against src/** — the un-onboarded site
+  // estate leaked into biome, which exits 1 over nothing. Diff paths are repo-relative; anchored
+  // matching must send an all-site set to the NAMED estate skip instead.
+  const siteOnly = resolveHygieneSlots(cfg, 'abc1234', ['site/src/components/ChatView.tsx', 'site/src/lib/title-notify.ts'])
+  const skip = siteOnly.find((s) => s.slot === 'lint-diff')
+  assert.match(skip.skipped, /lintDiffMatches.*estate mismatch/, `named estate skip: ${JSON.stringify(skip)}`)
+  assert.equal(skip.command, undefined)
+  // Positive coverage: a genuine estate file still resolves the bound slot under anchored matching.
+  const mixed = resolveHygieneSlots(cfg, 'abc1234', ['site/src/App.tsx', 'src/foo.ts'])
+  const ld = mixed.find((s) => s.slot === 'lint-diff')
+  assert.equal(ld.command, 'biome check src/foo.ts', 'the site file is filtered out; the estate file survives')
+  assert.deepEqual(ld.files, ['src/foo.ts'])
+})
+
 // ── historyCommentFindings — pure scan of a unified diff's ADDED comment lines ─────────
 test('historyCommentFindings — an ADDED comment with a phase number is a finding (file+line+match)', () => {
   const diff = [

@@ -12,7 +12,7 @@
  * and they're the caller's to set).
  */
 import { spawn } from 'node:child_process'
-import { matchGlobPath } from './ladder.mjs'
+import { matchGlob, matchGlobPath } from './ladder.mjs'
 import { createWriteStream, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -141,8 +141,10 @@ export function resolveHygieneSlots(cfg, baseSha, ownFiles = null) {
     if (files.length === 0) return [{ slot: 'lint-diff', skipped: HYGIENE_EMPTY_NOTE }]
     // Estate filter (config.lintDiffMatches): drop files the linter's estate doesn't cover
     // BEFORE substitution — biome handed roadmap/*.phase.ts exits 1 with nothing checked.
+    // ANCHORED match only: diff paths are repo-relative, and matchGlobPath's tail-walk (for
+    // absolute keyFiles paths) would let site/src/* collide with a src/** estate glob.
     if (cfg?.lintDiffMatches) {
-      files = files.filter((f) => cfg.lintDiffMatches.some((g) => matchGlobPath(g, f)))
+      files = files.filter((f) => cfg.lintDiffMatches.some((g) => matchGlob(g, f)))
       if (files.length === 0) return [{ slot: 'lint-diff', skipped: HYGIENE_ESTATE_NOTE }]
     }
     return [{ ...resolveSlot(cfg, 'lint-diff', { base: baseSha, files }), files }]
