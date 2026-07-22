@@ -27,7 +27,7 @@
  * review agents, the done-flip, and --verify-complete stay with the supervising session.
  * This command never merges and never pushes.
  */
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
@@ -60,6 +60,7 @@ function buildPrompt(root, ids) {
     '',
     'PROTOCOL per phase:',
     "1. Run the phase's assumptions[] verify commands first. Any failure = STOP and report in CODEX-REPORT.md; do not improvise.",
+    '   RESUME RULE: a task already done: true in the phase file with its commit present in git log is FINISHED — skip it, never redo or amend it (a relaunch over a half-done worktree resumes from the first unfinished task).',
     '2. Execute tasks IN ORDER. One task = ONE commit, message grammar (em-dash mandatory): "type(scope): phase <N> — <N>.<X> <short title>", ending with the trailer line: Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>',
     "   In the SAME commit set that task's done: true + a transparencyReport (whatWasDone/how/compromises/skipped/hardcoded/limitations — honest and concrete) in the phase file.",
     '3. Run every step\'s "→ verify:" command and make it pass before committing. TDD tasks: failing test RED first, then GREEN — note the RED evidence in the report.',
@@ -91,6 +92,7 @@ function runCodex(root, ids, argv) {
       process.stderr.write(`roadmap codex: a run for ${ids.join(',')} is LIVE (pgid ${j.pgid}, log ${j.log}) — refusing a double-run\n`)
       return 2
     }
+    process.stderr.write(`roadmap codex: previous run (pgid ${j.pgid}) is dead — relaunching; the prompt's resume rule skips already-done tasks\n`)
   }
 
   if (!existsSync(worktree)) {
@@ -131,11 +133,25 @@ function runCodex(root, ids, argv) {
 }
 
 function statusCodex(root, ids) {
-  const jPath = journalPath(root, ids)
+  let jPath = journalPath(root, ids)
   if (!existsSync(jPath)) {
-    // A single id may belong to a multi-phase journal — scan .building for it.
-    process.stderr.write(`roadmap codex: no journal at ${jPath}\n`)
-    return 1
+    // A single id may belong to a multi-phase journal — scan .building for one containing it.
+    const dir = join(root, '.building')
+    const hit = (existsSync(dir) ? readdirSync(dir) : [])
+      .filter((f) => /^codex-[\d-]+\.json$/.test(f))
+      .find((f) => {
+        try {
+          const ph = JSON.parse(readFileSync(join(dir, f), 'utf8')).phases ?? []
+          return ids.every((n) => ph.includes(n))
+        } catch {
+          return false
+        }
+      })
+    if (!hit) {
+      process.stderr.write(`roadmap codex: no journal covers phase(s) ${ids.join(',')} in ${dir}\n`)
+      return 1
+    }
+    jPath = join(dir, hit)
   }
   const j = JSON.parse(readFileSync(jPath, 'utf8'))
   const reportPath = join(j.worktree, 'CODEX-REPORT.md')
@@ -159,7 +175,12 @@ export default async function run(argv) {
   const sub = argv[0]
   const ai = argv.indexOf('--arc')
   const root = gitToplevel(process.cwd())
-  const ids = ai >= 0 ? arcPhases(root, argv[ai + 1]) : argv.slice(1).filter((a) => /^\d+$/.test(a))
+  const arcId = ai >= 0 ? argv[ai + 1] : undefined
+  if (ai >= 0 && (!arcId || arcId.startsWith('--') || !existsSync(join(root, 'roadmap', 'arcs', `${arcId}.arc.ts`)))) {
+    process.stderr.write(`roadmap codex: --arc needs a valid arc id (roadmap/arcs/<ID>.arc.ts not found for '${arcId ?? ''}')\n`)
+    return 1
+  }
+  const ids = arcId ? arcPhases(root, arcId) : argv.slice(1).filter((a) => /^\d+$/.test(a))
   if (sub === 'run' && ids.length > 0) return runCodex(root, ids, argv)
   if (sub === 'status' && ids.length > 0) return statusCodex(root, ids)
   process.stderr.write('roadmap codex: usage: roadmap codex run <N> [<N2>…] | run --arc <ID> [--worktree <path>] [--base <ref>] | roadmap codex status <N> [<N2>…] | status --arc <ID>\n')
