@@ -124,7 +124,11 @@ When the session delegates implementation to Codex, use the CLI lane — never h
 entrypoint carries the invariants: sandbox-bypassed direct CLI, prompt via stdin so argv stays free
 of test keywords, detached own-group spawn, a `.building/codex-*.json` journal that refuses a
 double-run, and the `CODEX-REPORT.md` sentinel contract). Poll `roadmap codex status <N>` (typed:
-running/complete/blocked/dead-no-report). **Division of labor is doctrine:** Codex implements tasks
-+ per-task commits + transparencyReports; the GATE never moves — `gate plan/run`, the review
-agents, the done-flip, `--verify-complete`, and the merge stay with the supervising session (Codex
-self-gating is self-grading). Audit Codex's commits against the plan before gating.
+running/complete/blocked/dead-no-report). A whole arc delegates as one run: `roadmap codex run
+--arc <ID>` (member phases in planes order). **Division of labor (user ruling 2026-07-22):** Codex
+runs each phase FULLY on its own — tasks, per-task commits + transparencyReports, the gate
+(`gate plan/run` to green, an honestly-labeled codex-self-review gateRound, the done-flip,
+`--verify-complete`). The supervising session's job is the back half only: AUDIT the commits and
+gate claims against the plan (spot-check verifies; a false green is a bounce), then merge, push,
+backlog-groom, and clean up the worktree. Codex never merges/pushes and never touches the primary
+checkout. For an arc, sweep/validate/land judgment also stays with the session.

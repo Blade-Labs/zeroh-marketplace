@@ -68,9 +68,11 @@ function buildPrompt(root, ids) {
     '- Every test suite / type-check / build runs wrapped: `capbuild <cmd>`. Scoped tiers run EXACTLY `bash scripts/test/run-tier.sh <slot> <files…>` (self-wraps capbuild); NEVER pipe tier output through tail/head/grep.',
     '- No dev servers; no full `npm test` — only the commands the verify clauses name.',
     '',
-    'WHEN FINISHED (or blocked): write CODEX-REPORT.md in the worktree root (do NOT commit it) with per-task commit sha + verify commands run + outcomes + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).',
+    'THE GATE IS YOURS TOO (user ruling 2026-07-22 — you run the phase fully): after the last task of each phase, run `roadmap gate plan <N> --json` then `roadmap gate run <N>` and drive every slot to GREEN (fix commits: "fix(scope): phase <N> gate RX — <what>"). Perform your OWN adversarial review of the phase diff (bugs, convention drift, honesty rails) and record it honestly in the phase file gateRounds as reviewer "codex-self-review" — never claim an agent review that did not run. Then flip the phase to done (status/completedDate/gate/metrics/gateRounds/executionResult — mirror a recent done phase\'s shape) and run `roadmap gate run <N> --verify-complete`.',
     '',
-    'The gate (quality pass, reviews, done-flip, verify-complete) is the supervising session’s job — do not run `roadmap gate`, do not merge, do not push.',
+    'WHEN FINISHED (or blocked): write CODEX-REPORT.md in the worktree root (do NOT commit it) with per-task commit sha + verify commands run + outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).',
+    '',
+    'NEVER merge, NEVER push, NEVER touch the primary checkout or backlog.ts — the supervising session double-checks your work, merges, and cleans up.',
   ].join('\n')
 }
 
@@ -145,12 +147,21 @@ function statusCodex(root, ids) {
   return state === 'complete' ? 0 : state === 'running' ? 3 : 2
 }
 
+/** --arc <ID>: resolve the arc's member phases (planes order) so a whole arc delegates as one run. */
+function arcPhases(root, arcId) {
+  const src = readFileSync(join(root, 'roadmap', 'arcs', `${arcId}.arc.ts`), 'utf8')
+  const ids = [...src.matchAll(/phases:\s*\[([\d,\s]+)\]/g)].flatMap((m) => m[1].match(/\d+/g) ?? [])
+  if (ids.length === 0) throw new Error(`no member phases found in arc ${arcId}`)
+  return ids
+}
+
 export default async function run(argv) {
   const sub = argv[0]
-  const ids = argv.slice(1).filter((a) => /^\d+$/.test(a))
+  const ai = argv.indexOf('--arc')
   const root = gitToplevel(process.cwd())
+  const ids = ai >= 0 ? arcPhases(root, argv[ai + 1]) : argv.slice(1).filter((a) => /^\d+$/.test(a))
   if (sub === 'run' && ids.length > 0) return runCodex(root, ids, argv)
   if (sub === 'status' && ids.length > 0) return statusCodex(root, ids)
-  process.stderr.write('roadmap codex: usage: roadmap codex run <N> [<N2>…] [--worktree <path>] [--base <ref>] | roadmap codex status <N> [<N2>…]\n')
+  process.stderr.write('roadmap codex: usage: roadmap codex run <N> [<N2>…] | run --arc <ID> [--worktree <path>] [--base <ref>] | roadmap codex status <N> [<N2>…] | status --arc <ID>\n')
   return 1
 }
