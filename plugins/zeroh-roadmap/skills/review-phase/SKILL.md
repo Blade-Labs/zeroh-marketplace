@@ -36,6 +36,19 @@ software-architect, validate-arc's intent-validator panel; NOT `phase-executor`/
 `test-engineer`. Judge independence is fresh read-only context + evidence-or-downgrade, not a
 different model. Mode A invoked STANDALONE runs INLINE (no spawn); the SPAWN site is plan-arc Step 3.
 
+**UNAVAILABLE judgeModel = fall back, never skip the judge.** A configured `judgeModel` can be set
+yet unusable at spawn time — quota exhausted, plan gating, the model withdrawn. The judge stage is
+NOT optional, so a spawner whose reviewer dies on a model-availability error (e.g. "You've reached
+your <model> limit", an access/permission refusal, or an unknown-model error) RE-SPAWNS the SAME
+reviewer on the fallback chain — the caller's explicitly requested model if it named one, else the
+agent's frontmatter default — and does NOT downgrade the review's rigor to compensate.
+
+The fallback is **recorded, never silent**: the report names the model that actually judged and why
+it differs from the configured one, because "which model graded this" is part of the evidence a
+later reader needs. Distinguish this from a CONTENT failure — a reviewer that ran and returned
+NEEDS WORK/BLOCKER has judged; only an availability error triggers the swap. If the fallback also
+fails, surface the stage as UNJUDGED and STOP; never queue a phase on an unrun review.
+
 ### Step H — Holistic feature review (issued FIRST in the report, finalized after the per-task pass)
 Before grading tasks, judge the FEATURE — a plan can be flawless and still be the wrong thing, half
 a thing, or too much. Four questions, each answered with EVIDENCE:
