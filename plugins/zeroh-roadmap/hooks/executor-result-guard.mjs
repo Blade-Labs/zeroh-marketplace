@@ -130,8 +130,20 @@ function lastAssistantText(transcriptPath) {
     const role = obj?.message?.role ?? obj?.role
     if (role !== 'assistant') continue
     const content = obj?.message?.content ?? obj?.content
-    if (typeof content === 'string') text = content
-    else if (Array.isArray(content)) text = content.filter((c) => c?.type === 'text' || typeof c?.text === 'string').map((c) => c.text).join('\n')
+    // Keep the last assistant entry that ACTUALLY carries text. Claude Code writes each content
+    // block as its own transcript entry, so an executor's final turn commonly ends on a tool_use
+    // entry whose text parts filter to [] — joining that yielded '' and CLOBBERED the real result.
+    // '' is not null, so it slipped past the `text == null` fail-open below, lastJsonBlock('')
+    // returned null, and every typed return that is not `done` (escalated / failed / checkpoint)
+    // became undeliverable — a one-way valve pressuring executors to fabricate a `done`. Do NOT
+    // "fix" this instead by treating '' as unreadable and failing open: that would also fail open
+    // on a genuine bare-prose ending, which is the exact class this guard exists to catch.
+    if (typeof content === 'string') {
+      if (content) text = content
+    } else if (Array.isArray(content)) {
+      const parts = content.filter((c) => c?.type === 'text' || typeof c?.text === 'string').map((c) => c.text)
+      if (parts.length) text = parts.join('\n')
+    }
   }
   return text
 }

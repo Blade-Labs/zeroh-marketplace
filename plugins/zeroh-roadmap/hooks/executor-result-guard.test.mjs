@@ -72,6 +72,24 @@ function writeTranscript(root, finalAssistantText) {
   return p
 }
 
+/** The REAL-WORLD transcript shape: a valid typed result, THEN a trailing assistant entry carrying
+ *  only a tool_use block. This is how Claude Code actually writes an executor's final turn — each
+ *  content block lands as its own entry — and it is the shape every fixture above was missing.
+ *  Against the original reader the trailing entry's text parts filtered to [], joined to '', and
+ *  CLOBBERED the real result. '' is not null, so it slipped past the `text == null` fail-open,
+ *  lastJsonBlock('') returned null, and every typed return that was not `done` became
+ *  undeliverable — a one-way valve pressuring executors to fabricate a `done`. */
+function writeTranscriptEndingOnToolUse(root, finalAssistantText) {
+  const p = join(root, 'transcript.jsonl')
+  const lines = [
+    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'do phase 1670' }] } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: finalAssistantText }] } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu_1', name: 'Bash', input: { command: 'git log -1' } }] } },
+  ]
+  writeFileSync(p, lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
+  return p
+}
+
 function writeBeacon(root, phase, event) {
   writeFileSync(join(root, '.building', `${phase}-executor.jsonl`), JSON.stringify(event) + '\n')
 }
@@ -288,4 +306,48 @@ test('1792.6 — a transcript with NO attributionAgent keeps today\'s behavior (
   const t = writeTranscript(root, 'Prose ending, no attribution field.')
   const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
   assert.equal(JSON.parse(r.stdout).decision, 'block', 'an unattributed transcript is not silently exempted')
+})
+
+// ── Regression: transcript ending on a tool_use entry (the REAL-WORLD shape) ──────────────────
+// Every fixture above ends the transcript on a text entry, which is why this class went unseen.
+// Claude Code writes each content block as its own entry, so an executor's final turn commonly
+// ends on a tool_use entry. Before the lastAssistantText fix, that entry's text parts filtered to
+// [] and joined to '', clobbering the real result; '' is not null, so it slipped past the
+// `text == null` fail-open and lastJsonBlock('') returned null. The first three cases below then
+// BLOCKED — escalated / failed / checkpoint were structurally undeliverable — while a `done`
+// return survived anyway via the separate status-done + persisted-executionResult license. That
+// asymmetry is why the defect read as "the guard sometimes misfires" rather than "the guard only
+// ever lets `done` through", and it is what pressured executors to fabricate a done.
+
+test('REGRESSION: escalated result + trailing tool_use entry → ALLOW (was: undeliverable)', () => {
+  const root = makeWorktree()
+  const escalated = { phase: 1670, status: 'escalated', gateRounds: 0, escalation: { question: 'the route count moved under the plan; how should it be handled?', options: ['re-parameterize', 'pin the literal'] } }
+  const t = writeTranscriptEndingOnToolUse(root, fence(escalated))
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.stdout.trim(), '', `an honest escalated return must survive a trailing tool_use entry; got: ${r.stdout}`)
+})
+
+test('REGRESSION: failed result + trailing tool_use entry → ALLOW (was: undeliverable)', () => {
+  const root = makeWorktree()
+  const failed = { phase: 1670, status: 'failed', gateRounds: 0, compromises: [], skipped: [], hardcoded: [], surfaced: ['the dependency is unbuildable on this host'], hardStops: [] }
+  const t = writeTranscriptEndingOnToolUse(root, fence(failed))
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.stdout.trim(), '', `an honest failed return must survive a trailing tool_use entry; got: ${r.stdout}`)
+})
+
+test('REGRESSION: checkpoint result + trailing tool_use entry → ALLOW (was: undeliverable)', () => {
+  const root = makeWorktree()
+  const checkpoint = { phase: 1670, status: 'checkpoint', gateRounds: 0, compromises: [], skipped: [], hardcoded: [], surfaced: [], hardStops: [], checkpoint: { committedSha: 'abc1234', reason: 'the suite outlives this turn', resume: 'respawn and run the on-wake drill' } }
+  const t = writeTranscriptEndingOnToolUse(root, fence(checkpoint))
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.stdout.trim(), '', `a checkpoint hand-off must survive a trailing tool_use entry; got: ${r.stdout}`)
+})
+
+test('REGRESSION: prose + trailing tool_use entry → STILL BLOCKS (the fix must not fail open)', () => {
+  const root = makeWorktree()
+  const t = writeTranscriptEndingOnToolUse(root, 'Committed 1656.1, prepping 1656.2. Standing by.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.code, 0)
+  const decision = JSON.parse(r.stdout)
+  assert.equal(decision.decision, 'block', 'a bare-prose ending is the class this guard exists to catch — the fix must not fail open on it')
 })
