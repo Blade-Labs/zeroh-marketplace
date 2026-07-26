@@ -19,6 +19,7 @@ import { readFileSync, statSync, realpathSync, readdirSync, existsSync, openSync
 import { execSync, execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { readBeaconLine, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN } from './beacon.mjs'
+import { scanPhaseFile } from './phasescan.mjs'
 
 const ACTIVITY_COMMIT_MAX_MIN = 15
 const ACTIVITY_FILE_MAX_MIN = 10
@@ -41,7 +42,41 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   const now = Date.now()
 
   // Beacon DISCOVERY (not a hard-coded path): executors write both <registry>/<arcId>-
-  // executor.jsonl AND <worktree>/.building/<phase>-executor.jsonl — scan both, newest by mtime.
+  // executor.jsonl AND <worktree>/.building/<phase>-executor.jsonl — scan both, newest by mtime,
+  // but ONLY among the beacons this arc owns. Both directories are SHARED: the registry holds a
+  // file per arc, and a busy checkout runs several arcs at once, so an unscoped newest-by-mtime
+  // scan hands one arc a sibling lane's beacon and reports a stalled executor as ALIVE. That is
+  // the one direction a liveness verdict must never fail in, because the caller's whole reason to
+  // ask is to decide whether to nudge or respawn.
+  //   <otherArcId>-executor.jsonl → provably another arc's, by NAME.
+  //   <N>-executor.jsonl          → another arc's when phase N's own file declares a DIFFERENT arcId.
+  // The test is PROVABLY-FOREIGN, not provably-ours, and the asymmetry is deliberate. Membership
+  // comes from the phase SOURCE (a hermetic regex, no TS bridge), which is not always resolvable:
+  // a phase file can be missing, unreadable, or living in a layout this engine cannot see. Treating
+  // unknown as foreign would silently blind the arc to its own beacon, trading a false ALIVE for a
+  // false STALLED. Unknown therefore stays adopted, exactly as before this filter existed, and only
+  // a beacon we can PROVE belongs elsewhere is skipped.
+  const phasesDirs = [...new Set([join(worktree, 'roadmap', 'phases'), join(dirname(registryDir), '..', 'phases')])]
+  const foreignByPhase = new Map()
+  function provablyForeignPhase(phaseNum) {
+    if (foreignByPhase.has(phaseNum)) return foreignByPhase.get(phaseNum)
+    let foreign = false
+    for (const dir of phasesDirs) {
+      const p = join(dir, `phase-${phaseNum}.phase.ts`)
+      if (!existsSync(p)) continue
+      try {
+        const declared = scanPhaseFile(p)?.arcId
+        foreign = typeof declared === 'string' && declared.length > 0 && declared !== arcId
+      } catch {
+        foreign = false // unreadable is unknown, and unknown is not proof
+      }
+      break
+    }
+    foreignByPhase.set(phaseNum, foreign)
+    return foreign
+  }
+
+  let foreignBeacons = 0
   function discoverBeacon() {
     const dirs = [...new Set([registryDir, join(worktree, '.building')])]
     let best = null
@@ -55,6 +90,14 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
       }
       for (const name of entries) {
         if (!name.endsWith('-executor.jsonl')) continue
+        const owner = name.slice(0, -'-executor.jsonl'.length)
+        const isPhaseKeyed = /^\d+$/.test(owner)
+        // A non-numeric owner IS an arcId, so a name that is not ours is proof on its own.
+        const foreign = isPhaseKeyed ? provablyForeignPhase(owner) : owner !== arcId
+        if (foreign) {
+          foreignBeacons += 1
+          continue
+        }
         const p = join(d, name)
         try {
           const st = statSync(p)
@@ -277,11 +320,16 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   const log1 = logPath ? realSize(logPath) : null
 
   const evidence = {}
-  evidence.beacon = beacon.exists
-    ? `last event '${beacon.lastEvent}', age ${beacon.ageMin.toFixed(1)}min (${beaconPath})`
-    : beacon.malformed
-      ? 'present but unparseable last line (treated as pre-beacon)'
-      : 'absent in both beacon dirs (pre-beacon executor)'
+  // The skipped count is REPORTED, not just applied: on a shared checkout the difference between
+  // "this arc has no beacon" and "this arc has no beacon but four sibling lanes do" is the whole
+  // diagnosis, and it used to be invisible because a sibling's beacon was silently adopted.
+  const foreignNote = foreignBeacons > 0 ? ` [${foreignBeacons} beacon(s) skipped: not this arc]` : ''
+  evidence.beacon =
+    (beacon.exists
+      ? `last event '${beacon.lastEvent}', age ${beacon.ageMin.toFixed(1)}min (${beaconPath})`
+      : beacon.malformed
+        ? 'present but unparseable last line (treated as pre-beacon)'
+        : 'absent in both beacon dirs (pre-beacon executor)') + foreignNote
 
   let verdict = null
 

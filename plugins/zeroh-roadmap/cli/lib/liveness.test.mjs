@@ -9,7 +9,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -225,4 +225,70 @@ test('14) no beacon, grace expired, no activity → pre-beacon STALLED', () => {
   const r = run(makeArc(d, 'A14', null), [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
   assert.equal(r.verdict, 'pre-beacon STALLED')
   assert.equal(r.evidence.grace, undefined)
+})
+
+// ── arc scoping: a shared checkout runs several arcs at once, and adopting a sibling lane's
+// beacon reported a stalled executor as ALIVE (the one direction this verdict must not fail in).
+function writePhaseFile(dir, phase, arcId) {
+  const pdir = join(dir, 'roadmap', 'phases')
+  mkdirSync(pdir, { recursive: true })
+  const p = join(pdir, `phase-${phase}.phase.ts`)
+  writeFileSync(p, `export default definePhase({\n  phase: ${phase},\n  status: 'in-progress',\n  arcId: '${arcId}',\n})\n`)
+  // Age it out of the activity row: a fixture file written moments ago would answer ALIVE through
+  // the newest-worktree-file signal and hide the beacon rule these cases exist to pin.
+  const old = new Date(Date.now() - 6 * 3600_000)
+  utimesSync(p, old, old)
+}
+
+test('15) a SIBLING arc\'s fresh phase beacon is not adopted — the stalled arc reads STALLED, not ALIVE', () => {
+  const d = newTmp()
+  // This arc's own beacon is 90 minutes cold; the sibling's is seconds old and would win on mtime.
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 500, event: 'task-start' }])
+  writePhaseFile(d, 500, 'MINE')
+  writePhaseFile(d, 900, 'SIBLING')
+  writeFileSync(
+    join(d, '.building', '900-executor.jsonl'),
+    JSON.stringify({ ts: isoAgo(0), phase: 900, event: 'task-start' }) + '\n',
+  )
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED', 'a sibling lane must not vouch for this arc')
+  assert.match(r.evidence.beacon, /age 9\d\.\dmin/, 'the verdict rests on THIS arc\'s own cold beacon')
+  assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
+})
+
+test('16) a phase beacon whose file declares THIS arc is still adopted', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', null)
+  writePhaseFile(d, 501, 'MINE')
+  writeFileSync(
+    join(d, '.building', '501-executor.jsonl'),
+    JSON.stringify({ ts: isoAgo(1), phase: 501, event: 'task-start' }) + '\n',
+  )
+  const r = run(sc)
+  assert.equal(r.verdict, 'ALIVE')
+  assert.match(r.evidence.beacon, /501-executor\.jsonl/)
+})
+
+test('17) an UNRESOLVABLE phase file stays adopted — unknown is not proof of foreignness', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', null)
+  // No phase file written at all: the engine cannot prove ownership either way.
+  writeFileSync(
+    join(d, '.building', '502-executor.jsonl'),
+    JSON.stringify({ ts: isoAgo(1), phase: 502, event: 'task-start' }) + '\n',
+  )
+  const r = run(sc)
+  assert.equal(r.verdict, 'ALIVE', 'trading a false ALIVE for a false STALLED is not a fix')
+})
+
+test('18) another ARC-keyed beacon in the shared registry is proof by name alone', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 503, event: 'task-start' }])
+  writeFileSync(
+    join(d, '.building', 'OTHERARC-executor.jsonl'),
+    JSON.stringify({ ts: isoAgo(0), phase: 999, event: 'task-start' }) + '\n',
+  )
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED')
+  assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
 })
