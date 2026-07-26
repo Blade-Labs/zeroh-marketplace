@@ -262,6 +262,17 @@ function main() {
   } catch {
     return 0
   }
+  // STOP-HOOK RE-ENTRY — checked FIRST, before any other work. Claude Code re-invokes this hook on
+  // the SAME turn it just blocked, with stop_hook_active:true, and force-ends the agent after
+  // CLAUDE_CODE_STOP_HOOK_BLOCK_CAP (default 8) consecutive blocks. Without this clause the hook
+  // block-LOOPS: the agent burns its remaining turns arguing with a hook instead of working, its
+  // output degrades to a one-liner, and the harness force-ends it. That is the true origin of
+  // "the reviewer returned an empty body with zero tool uses" — the review EXISTED and the loop
+  // destroyed it. Observed: 13 consecutive block-injections against one code-reviewer before the
+  // cap fired. The harness's own message says it outright: "check stop_hook_active in the input
+  // and return success while it's true."
+  if (payload.stop_hook_active) return 0
+
   const cwd = process.cwd()
 
   // loadConfig must succeed for the guard to arm (fail-open otherwise).
@@ -280,7 +291,14 @@ function main() {
 
   // ── allow states (in order) ──
   // (1) final assistant message carries a parseable result → allow + stamp beacon.
-  const text = lastAssistantText(payload.transcript_path)
+  // SCOPE TO THE STOPPING SUBAGENT, not to the session. Under SubagentStop, `transcript_path` is
+  // the MAIN SESSION transcript — `agent_transcript_path` is the stopping subagent's, which is
+  // exactly why the payload carries both. Reading the session file meant path 1 evaluated the
+  // ORCHESTRATOR's last message, so it could only ever pass by accident, and `done` survived only
+  // via license path 2 below. `last_assistant_message` is the subagent's final text delivered
+  // directly, so prefer it and fall back to its own transcript; the session path is the last
+  // resort and never the first choice.
+  const text = payload.last_assistant_message ?? lastAssistantText(payload.agent_transcript_path ?? payload.transcript_path)
   const json = lastJsonBlock(text)
   if (json && resultCheckPasses(json, phase, worktree)) {
     appendResultReturned(worktree, phase)
@@ -311,7 +329,10 @@ function main() {
   // (3) SCOPING (1792.6): a DIFFERENT named agent in the armed session is not the executor —
   // pass it through untouched. An unattributed transcript keeps today's behavior (conservative:
   // narrow the guard where identity is known, never widen the exemption on a guess).
-  const agentType = transcriptAgentType(payload.transcript_path)
+  // Same correction: SubagentStop carries `agent_type` for the stopping agent. Deriving it from the
+  // session transcript returned whichever attributionAgent happened to be LAST in the PARENT's log
+  // — arbitrary, not absent — so the agent-scoping exemption fired against the wrong agent.
+  const agentType = payload.agent_type ?? transcriptAgentType(payload.agent_transcript_path ?? payload.transcript_path)
   if (agentType && agentType !== EXECUTOR_AGENT) return 0
 
   // ── block / warn ──

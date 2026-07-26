@@ -72,9 +72,13 @@ function writeTranscript(root, finalAssistantText) {
   return p
 }
 
-/** The REAL-WORLD transcript shape: a valid typed result, THEN a trailing assistant entry carrying
- *  only a tool_use block. This is how Claude Code actually writes an executor's final turn — each
- *  content block lands as its own entry — and it is the shape every fixture above was missing.
+/** A transcript ending on a tool_use entry after a valid result. CORRECTED 2026-07-26 by an
+ *  adversarial architect review: this is NOT "the real-world shape" as originally claimed — across
+ *  122 phase-executor subagent transcripts, 118 end on a TEXT entry and the 4 tool_use tails are
+ *  interrupted or in-flight runs, none a completed SubagentStop. The don't-clobber behaviour it
+ *  pins is still correct and worth keeping; the claim that it was the production failure was
+ *  wrong. The real cause was the guard reading the SESSION transcript and never checking
+ *  stop_hook_active — see the tests below.
  *  Against the original reader the trailing entry's text parts filtered to [], joined to '', and
  *  CLOBBERED the real result. '' is not null, so it slipped past the `text == null` fail-open,
  *  lastJsonBlock('') returned null, and every typed return that was not `done` became
@@ -350,4 +354,43 @@ test('REGRESSION: prose + trailing tool_use entry → STILL BLOCKS (the fix must
   assert.equal(r.code, 0)
   const decision = JSON.parse(r.stdout)
   assert.equal(decision.decision, 'block', 'a bare-prose ending is the class this guard exists to catch — the fix must not fail open on it')
+})
+
+// ── The REAL defect, found by adversarial review 2026-07-26 ────────────────────────────────────
+// Under SubagentStop, `transcript_path` is the MAIN SESSION transcript; `agent_transcript_path` is
+// the stopping subagent's. Reading the session file made license path 1 evaluate the ORCHESTRATOR's
+// last message, so it could only pass by accident. And with no `stop_hook_active` check the hook
+// block-LOOPED until the harness force-ended the agent — which is what actually produced the
+// "reviewer returned an empty body with zero tool uses" failures, not a trailing tool_use entry.
+
+test('REGRESSION: stop_hook_active:true is never blocked (the block-loop that force-ends agents)', () => {
+  const root = makeWorktree()
+  const t = writeTranscript(root, 'Bare prose that would normally block.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop', stop_hook_active: true }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.stdout.trim(), '', 're-entry on an already-blocked turn must return success, or the hook loops until the harness force-ends the agent')
+})
+
+test('REGRESSION: a result in the SUBAGENT transcript licenses the stop', () => {
+  const root = makeWorktree()
+  const agentT = join(root, 'agent-transcript.jsonl')
+  writeFileSync(agentT, JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: fence(validResult) }] } }) + '\n')
+  const sessionT = writeTranscript(root, 'orchestrator prose, no result here')
+  const r = guard(root, { session_id: 's1', transcript_path: sessionT, agent_transcript_path: agentT, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.stdout.trim(), '', 'the stopping subagent’s own transcript must be what licenses its stop')
+})
+
+test('REGRESSION: last_assistant_message licenses the stop without any transcript read', () => {
+  const root = makeWorktree()
+  const sessionT = writeTranscript(root, 'orchestrator prose, no result here')
+  const r = guard(root, { session_id: 's1', transcript_path: sessionT, hook_event_name: 'SubagentStop', last_assistant_message: fence(validResult) }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(r.stdout.trim(), '', 'the payload delivers the subagent’s final text directly — prefer it')
+})
+
+test('REGRESSION: a result ONLY in the session transcript does NOT license a subagent stop', () => {
+  const root = makeWorktree()
+  const agentT = join(root, 'agent-transcript.jsonl')
+  writeFileSync(agentT, JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'I am the reviewer, not the executor.' }] } }) + '\n')
+  const sessionT = writeTranscript(root, fence(validResult))
+  const r = guard(root, { session_id: 's1', transcript_path: sessionT, agent_transcript_path: agentT, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  assert.equal(JSON.parse(r.stdout).decision, 'block', 'the orchestrator’s prose must never license a subagent’s stop — that is the widening the first fix introduced')
 })

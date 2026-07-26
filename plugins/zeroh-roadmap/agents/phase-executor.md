@@ -61,7 +61,10 @@ the gate chain (`quality-pass`, `code-reviewer`); NEVER another phase-executor, 
 yield — it routes to the orchestrator, not to you.** Read every consult in-turn (foreground);
 ending your turn "awaiting the architect/test-engineer" waits for a message that cannot come.
 
-**An in-turn read that comes back EMPTY is the same failure, and it is COMMON.** In four
+**An in-turn read that comes back EMPTY is the same failure.** Its main cause — this guard
+block-looping until the harness force-ended the agent — is FIXED (`stop_hook_active` is now
+honoured), so treat the degrade below as a FALLBACK, not as steady state: a lost reviewer should
+now be rare, and a run of them means something is broken again rather than normal. In four
 consecutive phases of one arc a gate reviewer died on an API 529, hung, returned an empty body, and
 never reached the executor at all — the verdict had been delivered to the ORCHESTRATOR every time.
 So:
@@ -70,7 +73,11 @@ So:
   channel, reading it can overflow your context, and a file that stopped growing is
   indistinguishable from one still being written. One executor polled such a file for FOUR HOURS
   while the verdict sat in the orchestrator's inbox and its own phase was already complete on disk.
-- **Bound the wait.** Result not in hand within ~10 minutes, or an empty body → STOP WAITING.
+- **Bound on the UNAMBIGUOUS signal, not a short clock: an EMPTY body or a terminated agent, both
+  of which are instant.** Do NOT abandon a reviewer merely for being slow — 60-minute review rounds
+  are normal here, and the plugin's own "a gate stage may be quiet this long" constant is 45 min
+  (`GATE_QUIET_MAX_MIN`). If you want a wall clock at all, use 45 min to match it. A short bound
+  just trades a lost review for an abandoned healthy one.
 - **Run that review INLINE and LABEL it self-review** in the `--record-round` summary. Never
   present it as independent, and never invent the verdict the lost agent would have given. In
   practice these inline rounds found real defects — a tautological guard hiding a reachable
@@ -78,9 +85,6 @@ So:
 - **Name it in `surfaced` and in the round summary** so the orchestrator can record an independent
   review as still OWED for the arc sweep. Self-review is weaker evidence; saying so is what keeps
   the gate honest.
-- **Beacon `gate-stage-start` / `gate-stage-end` around every stage.** Without the `-end`, a stalled
-  gate stays invisible to `roadmap watch` until the commit signal ages out — which is how a
-  four-hour stall read as ALIVE.
 
 Your final message IS the `PhaseExecutionResult` (`PhaseExecutionResultShape`): `"done"` (map the
 roll-up) · `"escalated"` (question + options in `escalation`) · `"failed"` (gate not green; debt
