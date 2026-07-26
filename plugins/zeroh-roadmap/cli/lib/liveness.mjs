@@ -105,10 +105,13 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   const sharedWorktree = sharedWith > 0
 
   /** Age of the newest commit whose subject names a phase THIS arc owns. The task-commit grammar
-   *  ("phase N — ...") is binding, so attribution is a read rather than a guess. */
+   *  ("phase N — ...") is binding, so attribution is a read rather than a guess. Bounded by TIME
+   *  rather than by a commit COUNT: the row it feeds asks "did this arc commit inside the window",
+   *  and on a shared tree several lanes can push past any count cap well inside that window, which
+   *  would drop this arc's own commit and report a false stall. */
   function ourCommitAgeMin() {
     try {
-      const out = execSync(`git -C ${JSON.stringify(worktree)} log -30 --format=%ct%x09%s`, {
+      const out = execSync(`git -C ${JSON.stringify(worktree)} log --since="${ACTIVITY_COMMIT_MAX_MIN} minutes ago" --format=%ct%x09%s`, {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       }).trim()

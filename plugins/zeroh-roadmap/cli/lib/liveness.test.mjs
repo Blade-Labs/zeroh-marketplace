@@ -373,3 +373,26 @@ test('23) SOLO worktree keeps the unattributed commit row exactly as it was', ()
   assert.equal(r.verdict, 'ALIVE', 'no sibling arc is armed here, so the worktree signals still speak for it')
   assert.equal(r.evidence.shared, undefined)
 })
+
+test('24) SHARED worktree: this arc\'s own commit is found behind a burst of sibling commits', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 703, event: 'task-start' }])
+  writePhaseFile(d, 703, 'MINE')
+  writePhaseFile(d, 804, 'SIBLING')
+  armSibling(d, 'SIBLING', d)
+  const g = (...a) => execFileSync('git', ['-C', d, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { stdio: ['ignore', 'pipe', 'ignore'] })
+  g('init', '-q')
+  writeFileSync(join(d, 'ours.txt'), 'x')
+  g('add', 'ours.txt')
+  g('commit', '-qm', 'feat(x): phase 703 — 703.1 this arc moves')
+  // A busy tree buries it: a count-capped scan would never reach our commit and would call a
+  // working lane stalled. The window is TIME, so the burst cannot hide it.
+  for (let i = 0; i < 35; i++) {
+    writeFileSync(join(d, `sib-${i}.txt`), 'x')
+    g('add', `sib-${i}.txt`)
+    g('commit', '-qm', `chore(x): phase 804 — 804.${i} sibling noise`)
+  }
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'ALIVE')
+  assert.match(r.evidence.activity, /naming one of this arc's phases/)
+})
