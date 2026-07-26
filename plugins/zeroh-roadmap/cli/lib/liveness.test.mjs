@@ -292,3 +292,84 @@ test('18) another ARC-keyed beacon in the shared registry is proof by name alone
   assert.equal(r.verdict, 'STALLED')
   assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
 })
+
+// ── residuals: prose-vs-field arcId, arcless phase beacons, and the worktree-wide activity rows
+// that vouch for whichever lane is busy rather than for the arc being asked about.
+function armSibling(dir, arcId, worktree) {
+  writeFileSync(join(dir, '.building', `${arcId}.json`), JSON.stringify({ arcId, worktree, branch: 'develop', mode: 'inline' }))
+}
+
+test('19) a DOCSTRING naming another arc does not hand this arc a sibling beacon', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 600, event: 'task-start' }])
+  writePhaseFile(d, 600, 'MINE')
+  const pdir = join(d, 'roadmap', 'phases')
+  // The prose names MINE above a field that declares SIBLING: a whole-file first match reads the
+  // docstring and wrongly adopts this beacon.
+  const p = join(pdir, 'phase-901.phase.ts')
+  writeFileSync(p, `/**\n * supersedes arcId: 'MINE'\n */\nexport default definePhase({\n  phase: 901,\n  status: 'in-progress',\n  arcId: 'SIBLING',\n})\n`)
+  const old = new Date(Date.now() - 6 * 3600_000)
+  utimesSync(p, old, old)
+  writeFileSync(join(d, '.building', '901-executor.jsonl'), JSON.stringify({ ts: isoAgo(0), phase: 901, event: 'task-start' }) + '\n')
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED', 'the arcId FIELD decides ownership, never the prose above it')
+  assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
+})
+
+test('20) an ARCLESS phase beacon is not adopted — a standalone run is nobody\'s executor', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 601, event: 'task-start' }])
+  writePhaseFile(d, 601, 'MINE')
+  const p = join(join(d, 'roadmap', 'phases'), 'phase-902.phase.ts')
+  writeFileSync(p, `export default definePhase({\n  phase: 902,\n  status: 'in-progress',\n})\n`)
+  const old = new Date(Date.now() - 6 * 3600_000)
+  utimesSync(p, old, old)
+  writeFileSync(join(d, '.building', '902-executor.jsonl'), JSON.stringify({ ts: isoAgo(0), phase: 902, event: 'task-start' }) + '\n')
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED')
+  assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
+})
+
+test('21) SHARED worktree: a sibling lane\'s commit no longer vouches for a stalled arc', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 700, event: 'task-start' }])
+  writePhaseFile(d, 700, 'MINE')
+  writePhaseFile(d, 800, 'SIBLING')
+  armSibling(d, 'SIBLING', d)
+  const g = (...a) => execFileSync('git', ['-C', d, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { stdio: ['ignore', 'pipe', 'ignore'] })
+  g('init', '-q')
+  writeFileSync(join(d, 'work.txt'), 'x')
+  g('add', 'work.txt')
+  g('commit', '-qm', 'feat(x): phase 800 — 800.1 the sibling lane moves')
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED', 'a sibling commit is not this arc moving')
+  assert.match(r.evidence.shared, /shared with 1 other armed arc/)
+})
+
+test('22) SHARED worktree: this arc\'s OWN phase commit still reads ALIVE', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 701, event: 'task-start' }])
+  writePhaseFile(d, 701, 'MINE')
+  armSibling(d, 'SIBLING', d)
+  const g = (...a) => execFileSync('git', ['-C', d, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { stdio: ['ignore', 'pipe', 'ignore'] })
+  g('init', '-q')
+  writeFileSync(join(d, 'work.txt'), 'x')
+  g('add', 'work.txt')
+  g('commit', '-qm', 'feat(x): phase 701 — 701.1 this arc moves')
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'ALIVE')
+  assert.match(r.evidence.activity, /naming one of this arc's phases/)
+})
+
+test('23) SOLO worktree keeps the unattributed commit row exactly as it was', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 702, event: 'task-start' }])
+  const g = (...a) => execFileSync('git', ['-C', d, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { stdio: ['ignore', 'pipe', 'ignore'] })
+  g('init', '-q')
+  writeFileSync(join(d, 'work.txt'), 'x')
+  g('add', 'work.txt')
+  g('commit', '-qm', 'chore: a commit naming no phase at all')
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'ALIVE', 'no sibling arc is armed here, so the worktree signals still speak for it')
+  assert.equal(r.evidence.shared, undefined)
+})

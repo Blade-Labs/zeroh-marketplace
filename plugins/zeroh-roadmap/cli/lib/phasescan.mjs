@@ -28,6 +28,18 @@ export function matchStatusField(src) {
 }
 
 /**
+ * Match the arcId FIELD, not prose — the same anchor `matchStatusField` uses, and for the same
+ * reason: a docstring that NAMES another arc ("supersedes arcId: 'OTHER'") sits above the real
+ * field, and a whole-file first-match hands back the wrong owner. Membership decisions read this,
+ * so a prose hit would misroute a phase to an arc that does not own it.
+ */
+export function matchArcIdField(src) {
+  const anchor = src.indexOf('definePhase(')
+  const scanFrom = anchor >= 0 ? anchor : 0
+  return src.slice(scanFrom).match(ARCID_RE)?.[1]
+}
+
+/**
  * Read one phase file. The DECLARED `phase: N` value wins over the filename.
  * Returns null when the file has no `status:` (arc-status's `continue`).
  */
@@ -42,7 +54,7 @@ export function scanPhaseFile(absPath) {
   if (!status) return null
   const declared = src.match(DECLARED_RE)?.[1]
   const phase = declared ?? absPath.match(FILENAME_RE)?.[1]
-  const arcId = src.match(ARCID_RE)?.[1]
+  const arcId = matchArcIdField(src)
   return { phase, status, arcId }
 }
 

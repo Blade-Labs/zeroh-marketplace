@@ -57,23 +57,72 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   // false STALLED. Unknown therefore stays adopted, exactly as before this filter existed, and only
   // a beacon we can PROVE belongs elsewhere is skipped.
   const phasesDirs = [...new Set([join(worktree, 'roadmap', 'phases'), join(dirname(registryDir), '..', 'phases')])]
-  const foreignByPhase = new Map()
-  function provablyForeignPhase(phaseNum) {
-    if (foreignByPhase.has(phaseNum)) return foreignByPhase.get(phaseNum)
-    let foreign = false
+  // Per phase: 'ours' | 'foreign' | 'unknown'. A phase file that PARSES but declares no arcId is
+  // 'foreign' rather than 'unknown', because an arc only ever executes phases carrying its arcId
+  // (that is how membership is derived), so an arcless phase beacon is a standalone do-phase run
+  // and can never be this arc's executor. Only a missing or unparseable file is genuinely unknown.
+  const ownershipByPhase = new Map()
+  function phaseOwnership(phaseNum) {
+    if (ownershipByPhase.has(phaseNum)) return ownershipByPhase.get(phaseNum)
+    let owner = 'unknown'
     for (const dir of phasesDirs) {
       const p = join(dir, `phase-${phaseNum}.phase.ts`)
       if (!existsSync(p)) continue
       try {
-        const declared = scanPhaseFile(p)?.arcId
-        foreign = typeof declared === 'string' && declared.length > 0 && declared !== arcId
+        const scanned = scanPhaseFile(p)
+        if (scanned) owner = scanned.arcId === arcId ? 'ours' : 'foreign'
       } catch {
-        foreign = false // unreadable is unknown, and unknown is not proof
+        owner = 'unknown' // unreadable is unknown, and unknown is not proof
       }
       break
     }
-    foreignByPhase.set(phaseNum, foreign)
-    return foreign
+    ownershipByPhase.set(phaseNum, owner)
+    return owner
+  }
+
+  // Is this worktree shared with ANOTHER armed arc? On a shared checkout the worktree-wide activity
+  // signals below (a recent commit, a freshly touched file, a pgrep hit) are produced by whichever
+  // lane happens to be busy, so they vouch for an arc that has not moved in hours. A solo worktree
+  // keeps those signals exactly as they were.
+  function otherArcsSharingWorktree() {
+    let others = 0
+    try {
+      for (const name of readdirSync(registryDir)) {
+        if (!name.endsWith('.json') || name === `${arcId}.json`) continue
+        try {
+          const s = JSON.parse(readFileSync(join(registryDir, name), 'utf8'))
+          if (s.worktree === worktree && s.arcId !== arcId) others += 1
+        } catch {
+          /* unreadable sidecar — not evidence of sharing */
+        }
+      }
+    } catch {
+      /* no registry — treat as solo */
+    }
+    return others
+  }
+  const sharedWith = otherArcsSharingWorktree()
+  const sharedWorktree = sharedWith > 0
+
+  /** Age of the newest commit whose subject names a phase THIS arc owns. The task-commit grammar
+   *  ("phase N — ...") is binding, so attribution is a read rather than a guess. */
+  function ourCommitAgeMin() {
+    try {
+      const out = execSync(`git -C ${JSON.stringify(worktree)} log -30 --format=%ct%x09%s`, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim()
+      for (const line of out.split('\n')) {
+        const tab = line.indexOf('\t')
+        if (tab < 0) continue
+        const phaseNum = line.slice(tab + 1).match(/phase[ -](\d+)/i)?.[1]
+        if (!phaseNum || phaseOwnership(phaseNum) !== 'ours') continue
+        return (now / 1000 - Number(line.slice(0, tab))) / 60
+      }
+    } catch {
+      /* not a repo — no attributable commit */
+    }
+    return null
   }
 
   let foreignBeacons = 0
@@ -93,7 +142,7 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
         const owner = name.slice(0, -'-executor.jsonl'.length)
         const isPhaseKeyed = /^\d+$/.test(owner)
         // A non-numeric owner IS an arcId, so a name that is not ours is proof on its own.
-        const foreign = isPhaseKeyed ? provablyForeignPhase(owner) : owner !== arcId
+        const foreign = isPhaseKeyed ? phaseOwnership(owner) === 'foreign' : owner !== arcId
         if (foreign) {
           foreignBeacons += 1
           continue
@@ -359,13 +408,24 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     evidence.pgrep = `${hits} process(es) match the worktree`
 
     const fileAgeMin = newestWorktreeFileAgeMin()
+    // On a SHARED worktree the three worktree-wide signals cannot tell WHICH lane produced them, so
+    // they stop deciding the verdict and stay evidence only. The commit signal survives in an
+    // attributable form, because the task-commit grammar names the phase. Letting a sibling's
+    // activity hold an arc at ALIVE is the same false-ALIVE the beacon scoping fixed, one row down.
+    const commitAgeMin = sharedWorktree ? ourCommitAgeMin() : git.lastCommitAgeMin
+    if (sharedWorktree) {
+      evidence.shared = `worktree shared with ${sharedWith} other armed arc(s): the pgrep and newest-file rows cannot attribute a lane, so they do not decide this verdict`
+      evidence.pgrep += ' (not lane-attributable, evidence only)'
+    }
 
     if (beacon.exists && beacon.lastEvent === 'background-run' && logGrew) verdict = 'ALIVE'
-    else if (transcriptGrew || hits > 0) verdict = 'QUIET'
-    else if (git.lastCommitAgeMin != null && git.lastCommitAgeMin < ACTIVITY_COMMIT_MAX_MIN) {
+    else if (transcriptGrew || (hits > 0 && !sharedWorktree)) verdict = 'QUIET'
+    else if (commitAgeMin != null && commitAgeMin < ACTIVITY_COMMIT_MAX_MIN) {
       verdict = 'ALIVE'
-      evidence.activity = `last commit ${git.lastCommitAgeMin.toFixed(1)}min ago (< ${ACTIVITY_COMMIT_MAX_MIN}min)`
-    } else if (fileAgeMin != null && fileAgeMin < ACTIVITY_FILE_MAX_MIN) {
+      evidence.activity = sharedWorktree
+        ? `last commit naming one of this arc's phases ${commitAgeMin.toFixed(1)}min ago (< ${ACTIVITY_COMMIT_MAX_MIN}min)`
+        : `last commit ${commitAgeMin.toFixed(1)}min ago (< ${ACTIVITY_COMMIT_MAX_MIN}min)`
+    } else if (!sharedWorktree && fileAgeMin != null && fileAgeMin < ACTIVITY_FILE_MAX_MIN) {
       verdict = 'ALIVE'
       evidence.activity = `newest worktree file touched ${fileAgeMin.toFixed(1)}min ago (< ${ACTIVITY_FILE_MAX_MIN}min)`
     } else if (!beacon.exists && sidecarAgeMin() < PREBEACON_GRACE_MIN) {
