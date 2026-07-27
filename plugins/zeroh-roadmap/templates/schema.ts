@@ -171,6 +171,17 @@ export const PhaseMetricsShape = z.object({
   testsAtStart: z.number().int().nonnegative(),
   testsAtEnd: z.number().int().nonnegative(),
   testsAdded: z.number().int(),
+  /** Time axis — DERIVED by collect-phase-metrics.ts, never hand-typed.
+   *  `startedAt`/`completedAt` are the author dates of the first/last commit matching the
+   *  phase commit grammar; `haltCount` counts the interruptions the record can actually
+   *  evidence (executionResult checkpoints/escalations plus the beacon resume vocabulary
+   *  when a beacon file survives). All three are OPTIONAL and follow the honest-absent
+   *  convention: a phase whose record cannot support a field carries NO field rather than a
+   *  zero standing in for absent data. Presence is deliberately NOT co-required — a
+   *  historical phase can have derivable timestamps and an underivable haltCount. */
+  startedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(),
+  haltCount: z.number().int().min(0).optional(),
 })
 
 export type PhaseMetrics = z.output<typeof PhaseMetricsShape>
@@ -341,6 +352,41 @@ export const RunnerSummaryShape = z.object({
 })
 
 export type RunnerSummary = z.output<typeof RunnerSummaryShape>
+
+/**
+ * SweepReportShape — arc-sweep Step 3's aggregate, PERSISTED. This IS the merge-readiness
+ * report, not a summary of it: the skill assembles this document first and renders the chat
+ * report FROM it, so the two can never fork. A fact absent from this file does not exist for
+ * any downstream eval — the arc-eval collector reads only disk, never chat history.
+ * Recorded by `roadmap eval record-sweep --arc <ID>` into the COMMITTED roadmap/arc-evals/
+ * home (roadmap/arc-summaries/ is gitignored by design and holds only the regenerable
+ * RunnerSummary). `disposition` reuses CompromiseDispositionShape — one debt vocabulary
+ * across the sweep, the runner summary and the transparency reports, never a parallel set.
+ */
+export const SweepReportShape = z.object({
+  // Same number|string union as Arc.id — a numeric-id arc must not fail record-time parse.
+  arcId: z.union([z.number().int().positive(), z.string().min(1)]),
+  /** ISO date the sweep ran — supplied by the caller; the recorder never mints wall-clock
+   *  silently, so a re-recorded sweep is an explicit, visible act. */
+  date: z.string().min(10),
+  /** Estate-ratchet outcome. `skipped-not-bound` is the honest sentinel for an arc whose
+   *  consumer binds no ratchets — never a green standing in for "did not run". */
+  estateRatchets: z.enum(['green', 'disposed', 'skipped-not-bound']),
+  phaseGates: z
+    .array(z.object({ phase: z.number().int().positive(), done: z.boolean(), gateGreen: z.boolean() }))
+    .min(1, 'a sweep covers at least one phase'),
+  debtDispositions: z.array(
+    z.object({ item: z.string().min(1), disposition: CompromiseDispositionShape, ref: z.string().optional() }),
+  ),
+  /** The whole-arc architect verdict. Free-form but MANDATORY — an arc with no designRefs
+   *  records the honest literal ('no designRefs'), never an empty string. */
+  architectVerdict: z.string().min(1),
+  deferredToReleaseSweep: z.array(z.string()),
+  overall: z.enum(['green', 'blocked']),
+  blockers: z.array(z.string()),
+})
+
+export type SweepReport = z.output<typeof SweepReportShape>
 
 // ── Phase Task ──────────────────────────────────────────────────────────────
 
@@ -913,6 +959,31 @@ export const IntentVerdictShape = z
   })
 
 export type IntentVerdict = z.output<typeof IntentVerdictShape>
+
+/**
+ * ArcVerdictsFileShape — validate-arc's judge panel, PERSISTED. The panel already `.parse()`s
+ * every IntentVerdict at one point and then drops them into chat; this wrapper gives that
+ * exact set a disk home so the verified-vs-intent eval dimension is scoreable from the repo
+ * alone. Recorded by `roadmap eval record-verdicts --arc <ID>` beside the sweep report.
+ * `judgeModel` is the model the panel ACTUALLY ran as (read off the spawn, never a
+ * hardcoded default) — a report compared across different judge models is baseline-reset
+ * material, so the model has to travel with the verdicts. Defined after IntentVerdictShape
+ * because it composes it verbatim rather than restating the judge's contract.
+ */
+export const ArcVerdictsFileShape = z.object({
+  // Same number|string union as Arc.id.
+  arcId: z.union([z.number().int().positive(), z.string().min(1)]),
+  date: z.string().min(10),
+  judgeModel: z.string().min(1),
+  /** Every verdict the panel returned, including both sides of a split-panel GAP exactly as
+   *  reported. `.min(1)` — a verdicts file with no verdicts is a record of nothing. */
+  verdicts: z.array(IntentVerdictShape).min(1, 'a verdicts file records at least one verdict'),
+  /** Descopes the user ratified during the validate→correct loop, so a later reader can tell
+   *  a ratified narrowing from an unaddressed gap. */
+  ratifiedDescopes: z.array(z.string()).optional(),
+})
+
+export type ArcVerdictsFile = z.output<typeof ArcVerdictsFileShape>
 
 /** Flat authoring form: a single-track arc lists its phases directly via
  *  `phases: number[]` instead of spelling out a one-plane `planes` array.

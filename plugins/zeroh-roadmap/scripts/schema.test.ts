@@ -32,9 +32,12 @@ import {
   ArcShape,
   AcceptanceCriterionShape,
   DesignRefShape,
+  ArcVerdictsFileShape,
   IntentVerdictShape,
   PhaseExecutionResultShape,
+  PhaseMetricsShape,
   RunnerSummaryShape,
+  SweepReportShape,
   StructuredGateRoundShape,
   TransparencyReportShape,
 } from '../templates/schema'
@@ -699,6 +702,171 @@ check('RunnerSummary openFollowups: accepted; absent still parses', () => {
   }
   RunnerSummaryShape.parse({ ...base, openFollowups: 3 })
   RunnerSummaryShape.parse(base)
+})
+
+console.log('\nSweepReportShape — the arc-sweep record')
+
+const sampleSweepReport = {
+  arcId: 'TESTARC',
+  date: '2026-07-27',
+  estateRatchets: 'green' as const,
+  phaseGates: [
+    { phase: 1940, done: true, gateGreen: true },
+    { phase: 1941, done: true, gateGreen: true },
+  ],
+  debtDispositions: [
+    {
+      item: 'the keyed HMAC widening',
+      disposition: 'OPERATOR-PENDING' as const,
+      ref: 'roadmap/followups/TESTARC.md',
+    },
+  ],
+  architectVerdict: 'PROCEED — no spine or contract risk left open',
+  deferredToReleaseSweep: ['the docs canon refresh'],
+  overall: 'green' as const,
+  blockers: [],
+}
+
+check('SweepReport: a full report with an OPERATOR-PENDING debt disposition round-trips', () => {
+  const r = SweepReportShape.parse(sampleSweepReport)
+  assertEq(r.arcId, 'TESTARC', 'arcId preserved')
+  assertEq(r.estateRatchets, 'green', 'estateRatchets preserved')
+  assertEq(r.phaseGates.length, 2, 'both phase gates carried')
+  assertEq(r.phaseGates[0].phase, 1940, 'first gate phase preserved')
+  assertEq(r.phaseGates[0].gateGreen, true, 'first gate verdict preserved')
+  assertEq(r.debtDispositions[0].disposition, 'OPERATOR-PENDING', 'disposition token preserved')
+  assertEq(r.debtDispositions[0].ref, 'roadmap/followups/TESTARC.md', 'disposition ref preserved')
+  assertEq(r.deferredToReleaseSweep, ['the docs canon refresh'], 'deferrals preserved')
+  assertEq(r.overall, 'green', 'overall verdict preserved')
+  assertEq(r.blockers, [], 'blockers preserved')
+})
+
+// TAXONOMY REUSE: the disposition vocabulary must be CompromiseDispositionShape itself,
+// not a parallel enum that could drift from the phase-level debt taxonomy. An invented
+// token is the cheapest proof of that reuse.
+check('SweepReport: an unknown disposition token rejects (reuses CompromiseDispositionShape)', () => {
+  assertThrows(
+    () =>
+      SweepReportShape.parse({
+        ...sampleSweepReport,
+        debtDispositions: [{ item: 'the keyed HMAC widening', disposition: 'MAYBE-LATER' }],
+      }),
+    'unknown disposition token',
+  )
+})
+
+check('SweepReport: an empty phaseGates array rejects (a sweep over no gates is unexpressible)', () => {
+  assertThrows(
+    () => SweepReportShape.parse({ ...sampleSweepReport, phaseGates: [] }),
+    'empty phaseGates',
+  )
+})
+
+console.log('\nArcVerdictsFileShape — the persisted judge run')
+
+const sampleMetVerdict = {
+  criterionId: 'ac-1',
+  status: 'met' as const,
+  tierUsed: 'wired' as const,
+  evidence: 'transcript: the pane rendered "Dear Acme team" with the masked name rehydrated',
+  confidence: 'high' as const,
+}
+
+check('ArcVerdictsFile: a file with one met verdict parses and round-trips', () => {
+  const f = ArcVerdictsFileShape.parse({
+    arcId: 855,
+    date: '2026-07-27',
+    judgeModel: 'claude-opus-4',
+    verdicts: [sampleMetVerdict],
+    ratifiedDescopes: ['AC-3 narrowed per user ratification'],
+  })
+  assertEq(f.arcId, 855, 'numeric arcId parses (parity with Arc.id)')
+  assertEq(f.judgeModel, 'claude-opus-4', 'judgeModel preserved')
+  assertEq(f.verdicts.length, 1, 'one verdict carried')
+  assertEq(f.verdicts[0].status, 'met', 'verdict status preserved')
+  assertEq(f.ratifiedDescopes, ['AC-3 narrowed per user ratification'], 'descopes preserved')
+})
+
+check('ArcVerdictsFile: an EMPTY verdicts array rejects (a judge run with no verdict is not a run)', () => {
+  assertThrows(
+    () =>
+      ArcVerdictsFileShape.parse({
+        arcId: 855,
+        date: '2026-07-27',
+        judgeModel: 'claude-opus-4',
+        verdicts: [],
+      }),
+    'empty verdicts',
+  )
+})
+
+// The IntentVerdict `.refine` (gap status requires a gap object) must still bite
+// through the array wrapper — an array of a refined shape must not relax it.
+check('ArcVerdictsFile: a gap verdict without a gap object rejects through the array wrapper', () => {
+  assertThrows(
+    () =>
+      ArcVerdictsFileShape.parse({
+        arcId: 855,
+        date: '2026-07-27',
+        judgeModel: 'claude-opus-4',
+        verdicts: [
+          sampleMetVerdict,
+          {
+            criterionId: 'ac-2',
+            status: 'gap',
+            tierUsed: 'live-ui',
+            evidence: 'screenshot pane-1.png: the reply area shows a raw 502 instead of a draft',
+            confidence: 'medium',
+          },
+        ],
+      }),
+    'gap verdict without gap object inside the file',
+  )
+})
+
+console.log('\nPhaseMetricsShape — time-axis widening (additive)')
+
+// ADDITIVE GUARANTEE: verbatim historical fixture — the seven original count fields and
+// nothing else. Every metrics record already written to a roadmap phase file looks exactly
+// like this; if the widening ever became required, this case reds.
+const historicalMetrics = {
+  commits: 4,
+  linesAdded: 312,
+  linesRemoved: 87,
+  filesChanged: 11,
+  testsAtStart: 640,
+  testsAtEnd: 651,
+  testsAdded: 11,
+}
+
+check('PhaseMetrics: a historical seven-field record still parses; the three new keys are undefined', () => {
+  const m = PhaseMetricsShape.parse(historicalMetrics)
+  assertEq(m.commits, 4, 'commits preserved')
+  assertEq(m.testsAdded, 11, 'testsAdded preserved')
+  assertEq(m.startedAt, undefined, 'startedAt absent, not defaulted')
+  assertEq(m.completedAt, undefined, 'completedAt absent, not defaulted')
+  assertEq(m.haltCount, undefined, 'haltCount absent, not zero-filled')
+})
+
+check('PhaseMetrics: a record WITH startedAt/completedAt/haltCount round-trips all three', () => {
+  const m = PhaseMetricsShape.parse({
+    ...historicalMetrics,
+    startedAt: '2026-07-26T09:15:00.000Z',
+    completedAt: '2026-07-27T11:42:00.000Z',
+    haltCount: 2,
+  })
+  assertEq(m.startedAt, '2026-07-26T09:15:00.000Z', 'startedAt preserved')
+  assertEq(m.completedAt, '2026-07-27T11:42:00.000Z', 'completedAt preserved')
+  assertEq(m.haltCount, 2, 'haltCount preserved')
+})
+
+check('PhaseMetrics: haltCount 0 parses but -1 rejects (a negative halt count is not honest-absent)', () => {
+  const zero = PhaseMetricsShape.parse({ ...historicalMetrics, haltCount: 0 })
+  assertEq(zero.haltCount, 0, 'an explicit zero is a real recorded value')
+  assertThrows(
+    () => PhaseMetricsShape.parse({ ...historicalMetrics, haltCount: -1 }),
+    'haltCount=-1',
+  )
 })
 
 // discoverArcs is async — run it and the final summary inside an async tail so
