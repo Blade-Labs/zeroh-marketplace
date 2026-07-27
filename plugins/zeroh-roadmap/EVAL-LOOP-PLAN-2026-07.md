@@ -109,6 +109,23 @@ verdict, not a failure mode.
   catches correlated against later escapes (misses) and against fix-rejected rounds
   (false positives). Small-N honesty: scorecards report sample counts and abstain
   under a floor, never rank on 2 data points.
+- **Automatic vs ratified (the operating contract, ratified 2026-07-27).**
+  Measurement is automatic (do-arc's terminal eval step, judge, ratchet, trend -
+  zero operator effort per arc); CHANGE is never automatic. Every proposal waits
+  for user ratification, then ships as a normal reviewed commit - the
+  proposer-is-never-the-actor rule, kept partly to prevent the loop reward-hacking
+  its own grader. A proposal CLASS may later earn a standing auto-apply rule, but
+  only by explicit user ruling, never by drift.
+- **Two proposal lanes, routed by home (ratified 2026-07-27).** The eval improves
+  two different things and the clustering pass must say which per proposal:
+  (a) PLUGIN-GENERIC - the senior dev's habits: skill prompts, gate structure,
+  plan templates, diets, schema tightenings; lands in the zeroh-roadmap plugin,
+  benefits every consumer. (b) CONSUMER-SPECIFIC - knowing THIS repo: reviewFocus
+  classes, CLAUDE.md consumer blocks, CODE-STYLE/TEST-STRATEGY amendments,
+  repo-local specialist skills or reviewer agents (the hand-made
+  governed-spine-reviewer is the existing exemplar of the species), release
+  practice; lands in the consumer repo via its existing consumer-block seams.
+  A proposal that cannot name its home lane is not ready to surface.
 - **Reduction is a proposal kind.** Clustering may conclude we over-engineered or
   over-prompted: a skill section no failure ever traces to, a gate stage that never
   catches, a rubric dimension that never moves. Those become diet proposals wired to
