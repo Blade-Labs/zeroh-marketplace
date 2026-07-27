@@ -1,0 +1,102 @@
+# zeroh-roadmap eval loop plan, 2026-07-27
+
+LangSmith-style evals over the plugin's own development process: after each arc lands,
+score the arc from its recorded traces, trend the scores across arcs, and distil
+recurring findings into ratified process improvements. Grounded in the 2026-07-27
+audit of the flagship consumer (azure_private_agent: ~1,900 phase files, 45+ arcs,
+`roadmap/arc-summaries/`, `roadmap/.gate/`) and mirroring the consumer's own product
+architecture (`docs/architecture/src/eval-loops.md`: OBSERVE -> ELICIT -> RATIFY ->
+PROVE; `governed-self-improvement.md`: proposer is never the actor, never rewrite
+history, ratchet instead of replay).
+
+## Verdict from the audit
+
+**The trace corpus already exists; the eval layer does not.** Every arc leaves behind:
+per-task `transparencyReport`s (compromises/skipped/hardcoded), per-phase
+`executionResult` + `PhaseMetrics` + `roadmap/.gate/<phase>/run-*.json` (test slots,
+reviewer rounds, verdicts), per-arc `RunnerSummary` + validate-arc `IntentVerdict`s,
+and a greppable git grammar for gate-fix commits (`fix(x): phase N gate RX`). Nothing
+reads this corpus after landing. The only learnings mechanism is `reviewFocus` in the
+consumer's roadmap.config.json: 20 hand-authored rules distilled manually from past
+gate catches, which is exactly the artifact the ELICIT stage should be generating as
+proposals.
+
+## The six scored dimensions
+
+| Dimension | Deterministic signals (already on disk unless noted) | Judge rubric adds |
+|---|---|---|
+| Code confidence | gateRounds per phase; reviewer-verdict trajectory across rounds; **escape rate**: post-land fix commits touching the arc's files (git) | were post-land fixes structural or cosmetic |
+| Verified-vs-intent | IntentVerdict met/gap ratio; `tierUsed` distribution (live-host > live-ui > wired); judge confidence | evidence quality: driven flow + screenshot vs bare assertion |
+| Standards adherence | reviewFocus hit counts at gates; lint/type slot exit codes | sampled adherence read of the arc diff |
+| Doc brevity (git is the archive) | comment-density delta on touched files; docs-lines per code-line on the arc diff | flags narration comments, phase-number archaeology, over-documentation |
+| Composability / testability | testsAdded vs surface added (PhaseMetrics); quality-pass finding counts; singleSeams disposition from the arc entity | did reuse-backward actually happen; are seams injectable |
+| Speed | wall-clock per phase (new timestamps, below); gateRounds as rework tax; token load (`measure.mjs` already meters flows) | where the time went: build vs gate churn vs halts |
+
+## Architecture: `roadmap eval <ARC>`
+
+One new CLI command + one thin skill step, run as do-arc Step 9 after the
+RunnerSummary (and runnable standalone on any landed arc, including historical ones).
+
+1. **Collect** (deterministic, a script not a model): walk the arc's phases, gate
+   dirs, arc-summary, IntentVerdicts, and git; emit a raw `ArcTrace` JSON.
+2. **Score**: deterministic metrics computed in code; the judge rubric columns run as
+   one bounded model pass over the trace + arc diff, returning typed findings
+   (intent-validator's evidence-or-downgrade pattern, the plugin's most
+   weak-model-proof artifact). Output: `ArcEvalReport` (Zod, in templates/schema.ts)
+   persisted at `roadmap/arc-evals/<ARCID>-<date>.json`. Never overwritten.
+3. **Ratchet, not replay** (PROVE): each dimension keeps a rolling baseline over the
+   last N reports; a new arc scoring below baseline gets a named regression line in
+   its report. No replaying of arc builds: that is the honest, affordable analogue of
+   dataset regression. Trend view bolts onto the existing `build-dashboard.sh`.
+4. **Elicit -> ratify** (the part that makes it get better): a clustering pass over
+   the last N eval reports groups recurring findings (same compromise class 3x, same
+   reviewer catch 2x, same doc-bloat pattern) into **proposals**: a candidate
+   `reviewFocus` entry, a skill-prompt amendment, a schema tightening. Proposals are
+   written to `roadmap/arc-evals/proposals/` and surfaced to the user; the eval never
+   edits the plugin or the config itself. Proposer is never the actor.
+
+## The time dimension (decided)
+
+- **Phase metrics, not per-response stamping.** `PhaseMetricsShape` gains
+  `startedAt` / `completedAt` plus `haltCount` (checkpoints, escalations,
+  session-limit resumes) so the eval can report active-ish time; elapsed alone is
+  poisoned on a shared box. `collect-phase-metrics.ts` derives most of it from what
+  already exists (gate run `startedAt`, beacon timestamps, commit times) and records
+  it durably.
+- **Estimation gets better via reference classes, not model clock-feel.** The eval
+  aggregates a small stats table (phase duration by task count / surface-or-not /
+  gate rounds) into `roadmap/arc-evals/timing-stats.json`; plan-phase and plan-arc
+  read it and annotate estimates with the historical range. Model "time sense" does
+  not persist across sessions; recorded stats do.
+- **In-session pacing**: a one-line UserPromptSubmit hook stamping the current
+  wall-clock time into each prompt, so an executor can notice a 45-minute gate round
+  mid-flight. Pacing only; it feeds no metric.
+- Per-tool-call / per-response timing: rejected as token noise with no consumer.
+
+## Gaps to close first (prerequisites, all small)
+
+| # | Gap | Fix |
+|---|---|---|
+| G1 | arc-sweep report is chat-only (SKILL.md Step 3 "ephemeral") | persist a typed sweep report next to the RunnerSummary |
+| G2 | IntentVerdicts have a schema but no durable home | validate-arc writes verdicts into the arc summary (or a sibling `<ARCID>-verdicts.json`) |
+| G3 | no timestamps or halt counts in PhaseMetrics | schema + collect-phase-metrics.ts change above |
+
+## Delivery
+
+- **Arc 1 (plugin): EVALCORE.** G1-G3, the `ArcTrace`/`ArcEvalReport` schemas, the
+  collector, deterministic scoring, the judge pass, `roadmap eval`, do-arc Step 9
+  wiring, dashboard trend line, the pacing hook. 3-4 phases. Backfill: run the
+  collector over the last ~5 landed arcs so the ratchet starts with a baseline.
+- **Arc 2 (plugin): EVALLOOP.** Clustering + proposals + the plan-time
+  timing-stats consumer, once a few real eval reports exist to cluster. 2 phases.
+
+## Resolved rulings (2026-07-27)
+
+- **Judge model: pinned `claude-sonnet-5`, never the session model.** Scores must be
+  comparable across arcs; a floating judge shifts baselines for reasons unrelated to
+  the code. Sonnet 5 is strong enough for rubric judgment over an arc diff, cheap
+  enough to run after every arc, and the evidence-or-downgrade pattern holds on
+  non-frontier drivers. Every `ArcEvalReport` records `judgeModel`; changing the pin
+  resets the baseline knowingly instead of drifting silently.
+- **Consumer-side `roadmap/arc-evals/` is COMMITTED.** It is the archive the ratchet
+  and the clustering pass read; same argument as arc-summaries.
