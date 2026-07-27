@@ -74,6 +74,34 @@ RunnerSummary (and runnable standalone on any landed arc, including historical o
   mid-flight. Pacing only; it feeds no metric.
 - Per-tool-call / per-response timing: rejected as token noise with no consumer.
 
+## Hermes harvest (added 2026-07-27; per the 2026-07-12 "copy patterns, never
+integrate" ruling — reference clone ~/hermes-agent)
+
+EVALLOOP-scope ports from Hermes' self-learning design, adapted to the ratify-only
+contract:
+
+- **Event-triggered lesson capture, never interval-triggered.** Hermes triggers
+  skill-writes on events (multi-step success, error recovery, user correction),
+  not a prompt counter. Ours: `roadmap eval lesson "<text>"` appends
+  {ts, phase?, text} to a lessons sidecar (committed under roadmap/arc-evals/);
+  the executor/skills name the trigger moments (error recovered, user correction,
+  surprising re-derivation). EVALLOOP clusters lessons beside the arc artifacts.
+  "Every 10 prompts" reflection is REJECTED: token cost + mid-flight
+  self-distraction, and phase/arc boundaries are the honest grading grain.
+- **Pre-compaction distillation, mechanized.** The consumer CLAUDE.md "on /compact,
+  preserve ..." prose becomes a PreCompact hook injecting the preservation contract
+  (modified files, active phase/task + next step, gate slots owed, flush any
+  durable lesson to the sidecar) - prose-to-mechanism, the plugin's standing
+  direction.
+- **Curator provenance invariants for the proposal machinery.** Write-origin is
+  tracked on everything the loop touches: eval proposals may CONSOLIDATE the
+  eval's own prior proposals (archive, dedupe - never silent-delete), but
+  user-authored content (rulings, hand-written reviewFocus entries, CLAUDE.md
+  blocks, user skills) is untouchable by the loop; changes against it are always
+  a routed proposal to the user. (Hermes' cautionary tale is the reason the
+  ratify-only contract stays: self-written skills with approval off became a
+  durable prompt-injection persistence surface - 3 CVEs.)
+
 ## Gaps to close first (prerequisites, all small)
 
 | # | Gap | Fix |
