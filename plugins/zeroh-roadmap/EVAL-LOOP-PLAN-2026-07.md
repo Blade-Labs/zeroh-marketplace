@@ -21,7 +21,7 @@ consumer's roadmap.config.json: 20 hand-authored rules distilled manually from p
 gate catches, which is exactly the artifact the ELICIT stage should be generating as
 proposals.
 
-## The six scored dimensions
+## The seven scored dimensions
 
 | Dimension | Deterministic signals (already on disk unless noted) | Judge rubric adds |
 |---|---|---|
@@ -31,6 +31,7 @@ proposals.
 | Doc brevity (git is the archive) | comment-density delta on touched files; docs-lines per code-line on the arc diff | flags narration comments, phase-number archaeology, over-documentation |
 | Composability / testability | testsAdded vs surface added (PhaseMetrics); quality-pass finding counts; singleSeams disposition from the arc entity | did reuse-backward actually happen; are seams injectable |
 | Speed | wall-clock per phase (new timestamps, below); gateRounds as rework tax; token load (`measure.mjs` already meters flows) | where the time went: build vs gate churn vs halts |
+| Plan quality (added 2026-07-27) | escalations + checkpoints, assumption-tripwire fires, hardStops, plan-review fix counts | right altitude: over-specified/brittle (steps invalidated by reality, tripped assumptions, stale anchors) vs under-specified (executor re-derivation, scope drift) - sliceable by plannedBy |
 
 ## Architecture: `roadmap eval <ARC>`
 
@@ -96,6 +97,13 @@ verdict, not a failure mode.
   lives in the gate run records (`agents[].agent`). The ArcEvalReport carries an
   `attribution` block (which drivers built which phases, which reviewers sat which
   rounds) so reports are sliceable later. No comparison in Arc 1 - capture only.
+- **The planner is an actor too (added 2026-07-27).** Phases and arcs record
+  `plannedBy { model }` at authoring time (plan-phase/plan-arc fill it), so plan
+  outcomes are attributable: Fable-planned vs Opus-planned arcs become sliceable
+  exactly like drivers. The `plan-quality` dimension scores the plan against what
+  execution actually did. If clustering later shows plan defects correlate with
+  task type, per-kind PLAN TEMPLATES become a proposal kind - rule of three applies,
+  never a speculative template zoo.
 - **Actor scorecards are an EVALLOOP job (Arc 2).** Per-driver slicing (gate rounds,
   escape rate, halt rate, speed by driver/lane) and the REVIEWER eval: a reviewer's
   catches correlated against later escapes (misses) and against fix-rejected rounds
