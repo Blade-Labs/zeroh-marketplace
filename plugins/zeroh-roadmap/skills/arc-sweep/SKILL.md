@@ -131,13 +131,16 @@ default** (ratchet fixes are mechanical: reword the comment, add the knob, ratch
 No binding → record the named skip (`ratchets: not bound in gateCommands — estate ratchets skipped`)
 in the Step-3 report; never a silent pass.
 
-## Step 3: Report merge-readiness (ephemeral, chat only)
+## Step 3: Record, then report merge-readiness
 
-Aggregate: **the estate-ratchet result** (Step 2.5 — green, the dispositions its reds became, or the
-named skip); **per-phase gate status** (every member `done`, passing gate); **debt dispositions** (counts
-by RESOLVE-NOW / PLAN-PHASE IN-ARC vs DESCOPE / ACCEPT / OPERATOR-PENDING + the `debtResolutions[]`
-refs); **whole-arc architect verdict** (seam single-vs-forked + design-conformance, or "no designRefs";
-+ the ledger-audit result when prose was trimmed); **deferred to release-sweep** (`limitations`);
-**overall** (green / blocked + any OPERATOR-PENDING deploy actions). **arc-sweep never merges — it
-reports.** Under `do-arc`, hand it back; standalone, hold for the user's go.
+Assemble ONE `SweepReportShape` document (the shape's own docblocks define every field): `arcId` +
+the `date` you ran; Step 2.5 as `estateRatchets`; each member phase as `phaseGates`; the Step-1
+table as `debtDispositions` (with its `debtResolutions[]` refs); the whole-arc seam +
+design-conformance call as `architectVerdict`; `limitations` as `deferredToReleaseSweep`; the call
+as `overall` + `blockers`. Pipe it through `roadmap eval record-sweep --arc <ID>`. A refusal is a
+sweep BLOCKER — a sweep whose own report will not parse does not report green.
+
+THEN render the chat report FROM that document: it is a PROJECTION, so a fact not in the file does
+not exist for any later eval. **arc-sweep never merges — it reports.** Under `do-arc`, hand it
+back; standalone, hold for the user's go.
 </content>
