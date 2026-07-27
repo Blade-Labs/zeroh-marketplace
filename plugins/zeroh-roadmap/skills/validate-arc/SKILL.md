@@ -79,6 +79,11 @@ deterministic `wired`/`live-host` criterion runs a **single judge**.
 2. Per criterion: **MET** (single judge, or both panel judges) or **GAP** (carrying `whatsMissing` +
    `suggestedFix` + evidence; a split panel's GAP carries both verdicts, marked `split — user arbitrates`).
 3. Arc-level: **PASS** iff every criterion MET; else **GAPS** + the unmet list + evidence + fix.
+4. RECORD before you report: pipe `{ arcId, date, judgeModel, verdicts, ratifiedDescopes }` through
+   `roadmap eval record-verdicts --arc <ID>` — `judgeModel` is the model the panel ACTUALLY spawned
+   as (read it off the spawn, never a default); `verdicts` is every parsed verdict, both sides of a
+   split included. A refusal blocks the report exactly as a mis-shaped judge does. Step 5 re-records
+   after each re-judge with `--force` (the dated file is that day's latest panel).
 
 Report per-criterion verdict + evidence + the tier judged at (+ any tier-honesty flag), a **Ratified
 descopes** section (read `Arc.descopes`; list each `{ item, ratifiedBy, ratifiedAt }`, or `none` — NEVER
