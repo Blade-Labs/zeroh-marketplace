@@ -81,14 +81,49 @@ RunnerSummary (and runnable standalone on any landed arc, including historical o
 | G2 | IntentVerdicts have a schema but no durable home | validate-arc writes `roadmap/arc-evals/<ARCID>-<date>-verdicts.json` |
 | G3 | no timestamps or halt counts in PhaseMetrics | schema + collect-phase-metrics.ts change above |
 
+## Driver & reviewer attribution + efficiency & reduction (ratified 2026-07-27)
+
+The workflow's actors are heterogeneous and getting more so: session drivers (Fable,
+Opus), the detached Codex lane (`roadmap codex`), possibly Grok later; reviewer
+agents per gate round; a pinned judge. The eval's overall goal is the WORKFLOW
+getting better AND reliable AND cheaper AND faster - which means outcomes must be
+attributable to the actor that produced them, and "do less" must be a first-class
+verdict, not a failure mode.
+
+- **Attribution is captured at write time (Arc 1).** `PhaseExecutionResult` gains an
+  optional `driver { model, lane }` the executor self-reports (codex journals are
+  the fallback evidence for the codex lane); reviewer identity per round already
+  lives in the gate run records (`agents[].agent`). The ArcEvalReport carries an
+  `attribution` block (which drivers built which phases, which reviewers sat which
+  rounds) so reports are sliceable later. No comparison in Arc 1 - capture only.
+- **Actor scorecards are an EVALLOOP job (Arc 2).** Per-driver slicing (gate rounds,
+  escape rate, halt rate, speed by driver/lane) and the REVIEWER eval: a reviewer's
+  catches correlated against later escapes (misses) and against fix-rejected rounds
+  (false positives). Small-N honesty: scorecards report sample counts and abstain
+  under a floor, never rank on 2 data points.
+- **Reduction is a proposal kind.** Clustering may conclude we over-engineered or
+  over-prompted: a skill section no failure ever traces to, a gate stage that never
+  catches, a rubric dimension that never moves. Those become diet proposals wired to
+  the existing `roadmap measure` budgets and DIET-LEDGER.md - same ratify-only
+  discipline, deletion PRs are still user-ratified.
+- **Cache-aware cost accounting.** Prompt caching makes the long STABLE prefix
+  (skill/agent text re-read within a session) nearly free; what stays expensive is
+  per-invocation variable bloat, cold reads, and context-window pressure. Diet
+  proposals must weigh that split: shrinking a stable cached preamble buys little,
+  cutting per-call re-explanation and variable payload buys a lot. `measure`'s
+  bytes/4 remains the load metric; the eval never fabricates a dollar figure it
+  cannot derive (token spend not recorded -> named sentinel, as everywhere).
+
 ## Delivery
 
 - **Arc 1 (plugin): EVALCORE.** G1-G3, the `ArcTrace`/`ArcEvalReport` schemas, the
   collector, deterministic scoring, the judge pass, `roadmap eval`, do-arc Step 9
   wiring, dashboard trend line, the pacing hook. 3-4 phases. Backfill: run the
   collector over the last ~5 landed arcs so the ratchet starts with a baseline.
-- **Arc 2 (plugin): EVALLOOP.** Clustering + proposals + the plan-time
-  timing-stats consumer, once a few real eval reports exist to cluster. 2 phases.
+- **Arc 2 (plugin): EVALLOOP.** Clustering + proposals (reduction/diet proposals
+  included) + the plan-time timing-stats consumer + the actor scorecards
+  (per-driver slicing, the reviewer catch-vs-escape/false-positive eval), once a
+  few real eval reports exist to cluster. 2-3 phases.
 
 ## Resolved rulings (2026-07-27)
 
