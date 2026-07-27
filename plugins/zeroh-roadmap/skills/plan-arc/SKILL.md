@@ -162,7 +162,8 @@ Pass each explicit number into the loop so `plan-phase` never recomputes it.
 Loop `plan-phase` over the reserved numbers, in **dependency / plane order**:
 - Pass the **explicit phase number** (Step 2a) so no recompute happens.
 - Pass **`--skip-review`** — reviews are batched in Step 3, not per-phase.
-- Set each phase's **`arcId`** to the arc id (accepts the same `number | string` union), always.
+- Set each phase's **`arcId`** to the arc id (accepts the same `number | string` union), always, and
+  its **`plannedBy: { model: your own model id }`** — the planner is an actor too.
 - **Plan AGAINST the confirmed design.** Each phase's tasks cite the architecture pattern / UX spec
   they implement (the `ref` + `summary`) so the implementation traces to the design. A phase that
   would deviate from a confirmed designRef must **re-open the design gate** (Step 1b), never silently

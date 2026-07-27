@@ -675,6 +675,53 @@ check('back-compat: a pre-ROADOPUS-shaped phase with NONE of the new fields pars
   assertEq((p as { assumptions?: unknown }).assumptions, undefined, 'no assumptions')
 })
 
+console.log('\nActor attribution — PhaseExecutionResult.driver + phase-level plannedBy')
+
+check('driver: a result WITH driver parses and round-trips model + lane', () => {
+  const r = PhaseExecutionResultShape.parse({
+    phase: 1995,
+    status: 'done',
+    gateRounds: 1,
+    driver: { model: 'claude-opus-5', lane: 'session' },
+  })
+  assertEq(r.driver?.model, 'claude-opus-5', 'driver.model')
+  assertEq(r.driver?.lane, 'session', 'driver.lane')
+})
+
+check('driver: a HISTORICAL result without driver still parses, and driver stays undefined', () => {
+  const r = PhaseExecutionResultShape.parse({ phase: 855, status: 'done', gateRounds: 1 })
+  assertEq(r.driver, undefined, 'absent driver is absent, never defaulted')
+})
+
+check('driver: an unlisted lane rejects until the enum widens deliberately', () => {
+  assertThrows(
+    () =>
+      PhaseExecutionResultShape.parse({
+        phase: 1995,
+        status: 'done',
+        gateRounds: 1,
+        driver: { model: 'grok-9', lane: 'grok' },
+      }),
+    'lane grok',
+  )
+})
+
+check('plannedBy: a phase WITH plannedBy parses; a historical phase WITHOUT it still parses', () => {
+  const withPlanner = definePhase({
+    ...basePhase,
+    status: 'backlog',
+    category: 'feature',
+    plannedBy: { model: 'claude-opus-5' },
+  } as never)
+  assertEq(
+    (withPlanner as { plannedBy?: { model: string } }).plannedBy?.model,
+    'claude-opus-5',
+    'plannedBy.model',
+  )
+  const without = definePhase({ ...basePhase, status: 'backlog', category: 'feature' } as never)
+  assertEq((without as { plannedBy?: unknown }).plannedBy, undefined, 'absent plannedBy is absent')
+})
+
 check('arc descopes + criteriaRatifications: accepted; a descope missing ratifiedBy rejects', () => {
   const arc = defineArc({
     id: 'TESTARC', name: 'A test arc name', baseRef: 'develop',

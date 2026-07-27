@@ -259,6 +259,20 @@ export type TransparencyReport = z.output<typeof TransparencyReportShape>
 export const PhaseExecutionResultShape = z.object({
   phase: z.number().int().positive(),
   status: z.enum(['done', 'escalated', 'failed', 'checkpoint']),
+  /** WHO produced this result — self-reported at result-write time, while the executor still
+   *  knows. The workflow runs heterogeneous actors (session models, the detached codex lane),
+   *  and outcome-to-actor attribution cannot be reconstructed afterwards from commits alone.
+   *  `model` is honest-best-effort (the id the executor believes it runs as); for lane
+   *  'codex' the `.building/codex-*.json` journal is the corroborating evidence. Optional so
+   *  historical results keep parsing — an absent driver on a NEW result is a gap the
+   *  collector can SEE, never a silent zero. Capture only in this arc; the cross-actor
+   *  comparisons are EVALLOOP's job. */
+  driver: z
+    .object({
+      model: z.string().min(1),
+      lane: z.enum(['session', 'codex']),
+    })
+    .optional(),
   /** The honest unbounded-work hand-off (two-exit turn contract): committed state + what to
    *  watch + the exact next step. do-arc respawns on a checkpoint UNCONDITIONALLY — the wake is
    *  owned by contract. committedSha proves the lossless-respawn precondition. REQUIRED when
@@ -477,6 +491,11 @@ const BasePhaseFields = {
   phase: z.number().int().positive(),
   /** Human-readable name */
   name: z.string().min(5),
+  /** The PLANNER is an actor too — the model that authored this phase, self-reported at
+   *  authoring time and carried through to done. Plan-quality slicing joins on it: without
+   *  it, "which planner produces plans that execute cleanly" is unanswerable after the fact.
+   *  Optional/additive so every historical phase file keeps parsing. */
+  plannedBy: z.object({ model: z.string().min(1) }).optional(),
   /** Changelog category — determines release note section */
   category: z.enum(['feature', 'fix', 'refactor', 'test', 'docs', 'infra', 'spike']),
   /** Phase kind — drives gate selection in do-phase.

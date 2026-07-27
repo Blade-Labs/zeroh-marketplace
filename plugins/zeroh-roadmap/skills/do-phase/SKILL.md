@@ -110,7 +110,8 @@ gate-report consistency — a done phase can no longer be narrated).
 
 **Arc-mode** (iff `roadmap/.arc-mode` exists — read via `roadmap status` — OR this session IS a
 phase-executor): also persist `executionResult`, commit the phase, and **return that
-PhaseExecutionResult** (`status` done/escalated/failed; map the roll-up). SKIP grooming, the emit
+PhaseExecutionResult** (`status` done/escalated/failed; map the roll-up; fill `driver` = your own
+model id + lane `session`, or `codex` when the codex lane assembled it). SKIP grooming, the emit
 slot, and the push — the do-arc workflow serializes those.
 
 **Standalone** (no arc-mode): after the completion commit, groom `roadmap/backlog.ts` (remove this

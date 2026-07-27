@@ -100,7 +100,8 @@ runGovernedToolCall → verify: node --test src/agui.test.ts"` (or `… → veri
 lint warns on a phase file NEW to git only, and review-phase Mode A is the actual enforcement — the
 lint is the reminder, not the gate.
 
-Author with `definePhase({ phase, name, status:'backlog', category, kind, source, priority,
+Author with `definePhase({ phase, name, plannedBy:{ model: your own model id }, status:'backlog',
+category, kind, source, priority,
 dependsOn, conflictsWith, keyFiles, stakeholderDemo, tasks:[…] })`; each task `{ id, title, problem,
 steps:[{file, description, line?}], acceptanceCriteria, files, done:false }`. `stakeholderDemo` = the
 changelog line. `batchMode: true` ONLY for mechanical multi-commit work (rename across >10 files).
