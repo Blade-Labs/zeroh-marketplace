@@ -77,8 +77,8 @@ RunnerSummary (and runnable standalone on any landed arc, including historical o
 
 | # | Gap | Fix |
 |---|---|---|
-| G1 | arc-sweep report is chat-only (SKILL.md Step 3 "ephemeral") | persist a typed sweep report next to the RunnerSummary |
-| G2 | IntentVerdicts have a schema but no durable home | validate-arc writes verdicts into the arc summary (or a sibling `<ARCID>-verdicts.json`) |
+| G1 | arc-sweep report is chat-only (SKILL.md Step 3 "ephemeral") | persist a typed sweep report as `roadmap/arc-evals/<ARCID>-<date>-sweep.json` |
+| G2 | IntentVerdicts have a schema but no durable home | validate-arc writes `roadmap/arc-evals/<ARCID>-<date>-verdicts.json` |
 | G3 | no timestamps or halt counts in PhaseMetrics | schema + collect-phase-metrics.ts change above |
 
 ## Delivery
@@ -99,4 +99,8 @@ RunnerSummary (and runnable standalone on any landed arc, including historical o
   non-frontier drivers. Every `ArcEvalReport` records `judgeModel`; changing the pin
   resets the baseline knowingly instead of drifting silently.
 - **Consumer-side `roadmap/arc-evals/` is COMMITTED.** It is the archive the ratchet
-  and the clustering pass read; same argument as arc-summaries.
+  and the clustering pass read. (Plan-review amendment 2026-07-27: the flagship
+  gitignores `roadmap/arc-summaries/` by design — the RunnerSummary is regenerable —
+  so ALL non-regenerable eval artifacts, the sweep and verdicts records included,
+  live in `roadmap/arc-evals/`; the collector reads arc-summaries with honest-absent
+  semantics.)
