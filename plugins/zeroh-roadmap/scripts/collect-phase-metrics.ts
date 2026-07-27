@@ -33,6 +33,18 @@
  * Idempotent: if all four fields are already present and look populated
  * (no `: undefined`), the script reports "already populated" and exits
  * without modification.
+ *
+ * Time axis (metrics.startedAt / completedAt / haltCount):
+ *   DERIVED, never hand-typed, from records that already exist — this script is
+ *   the single time source, so nothing else starts a stopwatch. Timestamps are
+ *   the author dates of the first/last commit matching the phase grammar,
+ *   normalized to UTC. haltCount sums the interruptions the record can EVIDENCE:
+ *   executionResult halt statuses plus the beacon's `resume` events.
+ *   Each field is OMITTED when its source is absent — a phase that predates the
+ *   beacons reports no haltCount rather than a zero that would read as "ran
+ *   clean". --historical derives timestamps (commits survive) but never a
+ *   haltCount (beacons do not). Every run prints what it derived vs what was
+ *   absent, per phase.
  */
 
 import { execSync } from 'node:child_process'
@@ -125,6 +137,84 @@ function getGitMetrics(phaseNum: number) {
   } catch {
     return { commits: 0, linesAdded: 0, linesRemoved: 0, filesChanged: 0 }
   }
+}
+
+/**
+ * The PhaseMetrics time axis, derived from records that already exist — the arc's
+ * single-time-source seam, so there is no second stopwatch anywhere.
+ *
+ * `startedAt`/`completedAt` are the author dates of the FIRST and LAST commit matching the
+ * same phase grammar the metrics above use, normalized to UTC so they satisfy the schema's
+ * `z.string().datetime()`. No commits ⇒ both ABSENT: an unrecorded phase gets no timestamps
+ * rather than an invented one.
+ */
+function getPhaseTimestamps(phaseNum: number): { startedAt?: string; completedAt?: string } {
+  const pattern = `\\bphase ${phaseNum}\\b`
+  try {
+    const out = execSync(`git log --grep="${pattern}" --extended-regexp --format="%aI" 2>/dev/null`, {
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024,
+    })
+    // MIN/MAX by instant, not by git-log traversal order: a rebase or cherry-pick can leave
+    // author dates out of order, and a startedAt later than its completedAt would read as a
+    // negative elapsed — a fabricated number, which is exactly what this arc forbids.
+    const instants = out
+      .split('\n')
+      .map((l) => new Date(l.trim()).getTime())
+      .filter((t) => !Number.isNaN(t))
+    if (instants.length === 0) return {}
+    const toUtc = (t: number) => new Date(t).toISOString()
+    const first = toUtc(Math.min(...instants))
+    const last = toUtc(Math.max(...instants))
+    // Built conditionally rather than spread with undefined: an assigned-undefined key still
+    // exists, and an underivable bound has to be genuinely ABSENT.
+    const result: { startedAt?: string; completedAt?: string } = {}
+    if (first) result.startedAt = first
+    if (last) result.completedAt = last
+    return result
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * `haltCount` — how many interruptions the record can actually EVIDENCE, from two independent
+ * markers: the phase file's own `executionResult` halt statuses (checkpoint / escalated) and
+ * the executor beacon's `resume` events (a respawn or session-limit wake).
+ *
+ * Honest-absent is the whole contract here. When NEITHER source exists there is nothing to
+ * count, so this returns undefined and the field never reaches the phase file — a phase that
+ * simply predates the beacons must not be reported as having run uninterrupted. When at least
+ * one source exists the sum is a DERIVED value, so a resulting zero means "evidence present,
+ * no halts observed", never "no evidence".
+ */
+function deriveHaltCount(phaseNum: number, phaseFileContent: string): number | undefined {
+  let sources = 0
+  let halts = 0
+
+  if (phaseFileContent.includes('executionResult:')) {
+    sources++
+    halts += (phaseFileContent.match(/status:\s*['"](?:checkpoint|escalated)['"]/g) ?? []).length
+  }
+
+  const beaconPath = path.resolve(process.cwd(), '.building', `${phaseNum}-executor.jsonl`)
+  if (fs.existsSync(beaconPath)) {
+    sources++
+    try {
+      for (const line of fs.readFileSync(beaconPath, 'utf-8').split('\n')) {
+        if (!line.trim()) continue
+        try {
+          if (JSON.parse(line).event === 'resume') halts++
+        } catch {
+          // A malformed beacon line is not evidence of a halt — skip it, never guess.
+        }
+      }
+    } catch {
+      // An unreadable beacon contributes nothing; the executionResult term still stands.
+    }
+  }
+
+  return sources === 0 ? undefined : halts
 }
 
 /** Date (YYYY-MM-DD) of the LAST commit matching this phase number.
@@ -296,6 +386,12 @@ interface CollectedData {
     testsAtStart: number
     testsAtEnd: number
     testsAdded: number
+    // The time axis — every one of these is OPTIONAL because it is derived, and an
+    // underivable field is omitted rather than defaulted (see getPhaseTimestamps /
+    // deriveHaltCount). JSON.stringify in fmtField drops absent keys for free.
+    startedAt?: string
+    completedAt?: string
+    haltCount?: number
   }
   completedDate: string
 }
@@ -383,6 +479,16 @@ function processPhase(phaseNum: number, mode: 'live' | 'historical'): boolean {
   const git = getGitMetrics(phaseNum)
   const completedDate = getLastCommitDate(phaseNum)
   const gateRounds = getGateRoundsFromCommits(phaseNum)
+  const timestamps = getPhaseTimestamps(phaseNum)
+  // --historical never derives a halt count: beacons do not survive, and the executionResult
+  // of a phase that predates the contract says nothing about interruptions. Absent, not zero.
+  const content = fs.readFileSync(phaseFile, 'utf-8')
+  const haltCount = mode === 'historical' ? undefined : deriveHaltCount(phaseNum, content)
+  console.log(
+    `  Time: startedAt ${timestamps.startedAt ?? 'ABSENT (no matching commits)'}` +
+      ` · completedAt ${timestamps.completedAt ?? 'ABSENT (no matching commits)'}` +
+      ` · haltCount ${haltCount ?? (mode === 'historical' ? 'ABSENT (historical mode)' : 'ABSENT (no executionResult, no beacon)')}`,
+  )
 
   let gate: ReturnType<typeof getLiveGateResults>['gate'] | ReturnType<typeof getHistoricalGate>
   let testsAtEnd = 0
@@ -402,11 +508,12 @@ function processPhase(phaseNum: number, mode: 'live' | 'historical'): boolean {
       testsAtStart: 0,
       testsAtEnd,
       testsAdded: 0,
+      ...timestamps,
+      ...(haltCount === undefined ? {} : { haltCount }),
     },
     completedDate,
   }
 
-  const content = fs.readFileSync(phaseFile, 'utf-8')
   const { newContent, touched } = applyData(content, data)
 
   if (!touched) {
