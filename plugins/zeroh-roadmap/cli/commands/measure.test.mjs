@@ -114,12 +114,15 @@ test('human output carries the per-file table + total', () => {
   assert.match(r.stdout, /10/)
 })
 
-// The REAL-tree budget (armed at 1659.8 once the diet completed — the default manifest, no override):
-// the do-arc protocol load must stay ≤ 12,000 tokens forever. Plugin CI (1660) runs this on every push.
-test('real tree: measure --flow do-arc --assert 12000 exits 0 (the protocol-load-cut criterion)', () => {
+// The REAL-tree budget (armed at 1659.8 once the diet completed — the default manifest, no override).
+// RE-RATCHETED 12000 → 12500 by user ruling 2026-07-27 (phase 1995 escalation): the tree was
+// already red at 12268 before 1995's four mandated recorder/attribution lines took it to 12442.
+// 12500 is the new hold-the-line number, not a growth allowance — the EVALLOOP diet lane
+// (EVAL-LOOP-PLAN §Hermes harvest / reduction proposals) owns winning bytes back.
+test('real tree: measure --flow do-arc --assert 12500 exits 0 (the protocol-load-cut criterion)', () => {
   const out = JSON.parse(
-    execFileSync('node', [BIN, 'measure', '--flow', 'do-arc', '--assert', '12000', '--json'], { encoding: 'utf8' }),
+    execFileSync('node', [BIN, 'measure', '--flow', 'do-arc', '--assert', '12500', '--json'], { encoding: 'utf8' }),
   )
-  assert.ok(out.totalTokens <= 12000, `do-arc load ${out.totalTokens} > 12000`)
+  assert.ok(out.totalTokens <= 12500, `do-arc load ${out.totalTokens} > 12500`)
   assert.equal(out.withinBudget, true)
 })
