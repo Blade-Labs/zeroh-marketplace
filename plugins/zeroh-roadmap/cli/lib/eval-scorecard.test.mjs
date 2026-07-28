@@ -609,7 +609,9 @@ test('computeScorecard — an escape fix naming a phase this cohort never saw ch
   const sc = computeScorecard([mkTrace(phases, { escapeFixes: [escapeFix('fix(cli): phase 91900 gate R1 — a longer number')] })], [])
   const m = metricsOf(reviewerCell(sc, { agent: 'code-reviewer' }), 'the code-reviewer cell')
   assert.equal(m.misses, 0, "'phase 91900' must not attribute to phase 9190")
-  assert.equal(m.recall, 0, 'no catches and no misses is still an honest zero-numerator recall')
+  // NOT 0. Recall asks what share of the CATCHABLE defects were caught; with none catchable the
+  // answer is undefined, and a 0 beside a peer's 1 in the same cohort reads as "catches nothing".
+  assertSentinel(m.recall, 'no-findings', 'recall with nothing to catch and nothing missed')
   assert.equal(
     metricsOf(driverCell(sc, { model: DRIVER_A.model }), 'the driver of the unnamed-escape cohort').escapeFixesPerPhase,
     0,

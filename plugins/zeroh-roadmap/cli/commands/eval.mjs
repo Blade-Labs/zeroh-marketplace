@@ -134,8 +134,8 @@ export default async function run(argv) {
     if (sub === 'restamp') return runRestamp(opts)
     if (sub === 'lesson') return runLesson(opts, positional)
     if (sub === 'scorecard') return runScorecard(opts)
-    // Anything that is not one of the two literal recorder names is an ARC ID. The literals
-    // are checked FIRST so a future arc called `record-sweep` could never shadow the recorder.
+    // Anything that is not one of the literal subcommands above is an ARC ID. The literals are
+    // checked FIRST so a future arc called `record-sweep` or `lesson` could never shadow one.
     return runArcEval(sub, opts)
   }
   if (!opts.arc) {

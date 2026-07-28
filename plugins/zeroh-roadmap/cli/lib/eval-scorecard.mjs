@@ -22,7 +22,7 @@
  * This module SLICES, it never re-judges: no judge model is consulted and no score is minted.
  */
 import { defaultExec } from './exec.mjs'
-import { TASK_COUNT_BANDS, SURFACE_PATH_RE, UNRECORDED_DRIVER, spanMinutes } from './eval-score.mjs'
+import { bandFor, surfaceOf, UNRECORDED_DRIVER, spanMinutes } from './eval-score.mjs'
 
 /**
  * Below this many samples a cell abstains. A RULING, not a tuning knob — it is stamped into
@@ -38,14 +38,13 @@ const SENTINEL = {
   noGateRounds: 'no-gate-rounds',
   noHaltEvidence: 'no-halt-evidence',
   noTimestamps: 'no-timestamps',
+  noFindings: 'no-findings',
 }
 
 /** NUL joins composite keys because it cannot occur in any half — a printable separator would
  *  let a model id containing it collide two distinct cells (the assembleAttribution rule). */
 const SEP = '\u0000'
 
-const bandFor = (taskCount) => (TASK_COUNT_BANDS.find((b) => (taskCount ?? 0) <= b.max) ?? TASK_COUNT_BANDS.at(-1)).label
-const surfaceOf = (phase) => (phase.keyFiles ?? []).some((f) => SURFACE_PATH_RE.test(f))
 const sum = (xs) => xs.reduce((a, b) => a + b, 0)
 
 /**
@@ -250,13 +249,16 @@ function reviewerMetrics(cell, gateFixes) {
   const falsePositives = nonClean.filter((r) => r.green && !backed.has(`${r.phase}${SEP}${r.round}`)).length
   const misses = cell.misses ?? 0
 
-  // A denominator of zero is an honest zero-numerator recall, not a division. Where the escape
-  // scan did not run the denominator is UNKNOWABLE, so recall names that instead of computing
-  // a rate over a miss count it cannot trust.
+  // Recall answers "of the defects that were CATCHABLE here, how many did you catch?" With no
+  // catches and no misses there were none, so the answer is not 0 — it is undefined, and 0 is
+  // the one rendering a reader would read as "this reviewer catches nothing". That misreading is
+  // not hypothetical: on the real corpus quality-pass and code-reviewer sit in the same cohort,
+  // and a 0 beside a 1 invites exactly the comparison the data cannot support. Where the escape
+  // scan did not run the denominator is UNKNOWABLE for a different reason, and says so.
   const recall = cell.scanDegraded
     ? SENTINEL.scanUnavailable
     : catches + misses === 0
-      ? 0
+      ? SENTINEL.noFindings
       : catches / (catches + misses)
 
   return { catches, falsePositives, misses, recall }

@@ -618,8 +618,12 @@ export function computeRatchet(report, priorReports = []) {
   return rows
 }
 
-/** The band a phase's task count falls in. */
-const bandFor = (taskCount) => (TASK_COUNT_BANDS.find((b) => (taskCount ?? 0) <= b.max) ?? TASK_COUNT_BANDS.at(-1)).label
+/** The band a phase's task count falls in. EXPORTED with `surfaceOf`: these two ARE the cohort
+ *  definition, and a consumer deriving its own stops being comparable to the timing table. */
+export const bandFor = (taskCount) => (TASK_COUNT_BANDS.find((b) => (taskCount ?? 0) <= b.max) ?? TASK_COUNT_BANDS.at(-1)).label
+
+/** The surface half of the cohort key: a HEURISTIC over keyFiles, not a declared field. */
+export const surfaceOf = (phase) => (phase.keyFiles ?? []).some((f) => SURFACE_PATH_RE.test(f))
 
 /** The usual middle; an even count averages the two middles rather than picking a side. */
 function median(sorted) {
@@ -658,7 +662,7 @@ export function computeTimingStats(traces, { generatedAt = new Date().toISOStrin
   for (const trace of traces ?? []) {
     for (const p of trace.phases ?? []) {
       const band = bandFor(p.taskCount)
-      const surface = (p.keyFiles ?? []).some((f) => SURFACE_PATH_RE.test(f))
+      const surface = surfaceOf(p)
       const key = `${band} ${surface}`
       if (!cohorts.has(key)) cohorts.set(key, { taskCountBand: band, surface, spans: [], interruptedExcluded: 0 })
       const cohort = cohorts.get(key)
