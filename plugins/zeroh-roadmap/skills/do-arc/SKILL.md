@@ -126,6 +126,8 @@ workflow engine cannot host its imports).
    journal instead of starting a duplicate: a LIVE run reports its step and refuses to double-run,
    a FINISHED one reports its exit and clears, a dead-pid-no-exit journal is named STALE and
    cleared before retrying. Never hand-roll setsid/sentinel/Monitor for a land again.
+4. **eval (Step 9)** — `roadmap eval <id>`, spawn `arc-eval-judge`, pipe its verdict to
+   `roadmap eval merge-judge --arc <id>`; echo REGRESSION rows in the close-out. Never un-lands.
 
 ## Pause & resume
 
