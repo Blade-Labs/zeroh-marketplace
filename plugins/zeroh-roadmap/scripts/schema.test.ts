@@ -34,6 +34,8 @@ import {
   DesignRefShape,
   ArcVerdictsFileShape,
   ArcEvalReportShape,
+  ArcEvalJudgeVerdictShape,
+  JUDGE_OWNED_DIMENSION_KEYS,
   ArcTraceShape,
   EvalDimensionShape,
   EvalDimensionKeyShape,
@@ -1353,6 +1355,260 @@ check('TimingStats: negative samples REJECTS; a zero-sample cohort parses (hones
       }),
     'negative medianMinutes',
   )
+})
+
+console.log('\nArcEvalJudgeVerdict — the judge returns a TYPED verdict, never prose')
+
+// Path-asserting reject helper. assertThrows only proves "something threw" —
+// for the coverage rule that is not enough, because the whole point is WHICH
+// dimension was left uncovered. Every coverage case that names a key asserts
+// the issue PATH so a blanket top-level refine can't pass this file.
+function assertIssuePath(
+  shape: unknown,
+  input: unknown,
+  expected: (string | number)[],
+  where: string,
+): void {
+  const s = shape as {
+    safeParse: (v: unknown) => {
+      success: boolean
+      error?: { issues: Array<{ path: PropertyKey[] }> }
+    }
+  }
+  const r = s.safeParse(input)
+  if (r.success) throw new Error(`${where}: expected to reject, parsed clean`)
+  const seen = (r.error?.issues ?? []).map((i) => i.path.map(String).join('.'))
+  const want = expected.map(String).join('.')
+  if (!seen.includes(want)) {
+    throw new Error(`${where}: expected an issue at path [${want}], got [${seen.join(' | ')}]`)
+  }
+}
+
+// Evidence is min(30) — quotable, not a verdict-shaped grunt. Generate it from
+// the dimension name so every fixture line is distinguishable in a failure.
+function judgeEvidence(dimension: string): string {
+  return `quoted from the diff for ${dimension}: the reviewer left the seam injected`
+}
+
+function judgeDim(
+  score: number,
+  dimension: string,
+  confidence: 'high' | 'medium' | 'low' = 'high',
+): Record<string, unknown> {
+  return { score, evidence: judgeEvidence(dimension), confidence }
+}
+
+// ONE fixture, mutated by copy: the coverage rule is about the RELATIONSHIP
+// between `dimensions` and `skipped`, so every negative below starts from a
+// verdict that is already legal and breaks exactly one thing.
+function makeJudgeVerdict(): Record<string, unknown> {
+  return {
+    arcId: 'EVALLOOP',
+    judgeModel: 'claude-opus-4',
+    dimensions: {
+      'standards-adherence': judgeDim(78, 'standards-adherence'),
+      'doc-brevity': judgeDim(91, 'doc-brevity', 'medium'),
+      'composability-testability': judgeDim(64, 'composability-testability', 'low'),
+      'plan-quality': judgeDim(0, 'plan-quality'),
+    },
+  }
+}
+
+check('JudgeVerdict: JUDGE_OWNED_DIMENSION_KEYS is exactly the four judge keys, and each is a REAL dimension key', () => {
+  requireShape(EvalDimensionKeyShape, 'EvalDimensionKeyShape')
+  assertEq([...JUDGE_OWNED_DIMENSION_KEYS].sort(), [
+    'composability-testability',
+    'doc-brevity',
+    'plan-quality',
+    'standards-adherence',
+  ], 'the judge owns four of the seven dimensions')
+  for (const key of JUDGE_OWNED_DIMENSION_KEYS) {
+    EvalDimensionKeyShape.parse(key)
+  }
+})
+
+check('JudgeVerdict: all four judge dimensions scored, nothing skipped — parses and round-trips score/evidence/confidence', () => {
+  const v = ArcEvalJudgeVerdictShape.parse(makeJudgeVerdict())
+  assertEq(v.arcId, 'EVALLOOP', 'arcId carried')
+  assertEq(v.judgeModel, 'claude-opus-4', 'the judge self-report is the model pin')
+  assertEq(v.dimensions['standards-adherence']?.score, 78, 'score round-trips')
+  assertEq(
+    v.dimensions['doc-brevity']?.evidence,
+    judgeEvidence('doc-brevity'),
+    'evidence round-trips verbatim — the quote IS the artifact',
+  )
+  assertEq(v.dimensions['composability-testability']?.confidence, 'low', 'confidence round-trips')
+  assertEq(v.dimensions['plan-quality']?.score, 0, 'a zero score is a score, not an absence')
+  assertEq(v.skipped, undefined, 'an absent skip list stays absent, never invented as []')
+  // a deterministic key the judge did not touch carries NO value
+  assertEq(v.dimensions['speed'], undefined, 'an untouched deterministic key has no value')
+})
+
+check('JudgeVerdict: two scored + two skipped parses — the honest downgrade path is REACHABLE, not a silent omission', () => {
+  const input = makeJudgeVerdict()
+  const dims = input.dimensions as Record<string, unknown>
+  delete dims['composability-testability']
+  delete dims['plan-quality']
+  input.skipped = [
+    { dimension: 'composability-testability', why: 'no test diff in this arc to read' },
+    { dimension: 'plan-quality', why: 'the phase file was authored before the plan template' },
+  ]
+  const v = ArcEvalJudgeVerdictShape.parse(input)
+  assertEq(v.dimensions['standards-adherence']?.score, 78, 'the scored half survives')
+  assertEq(v.dimensions['plan-quality'], undefined, 'the skipped half carries no score')
+  assertEq(v.skipped?.length, 2, 'both skips recorded')
+  assertEq(v.skipped?.[0].dimension, 'composability-testability', 'the skip names its dimension')
+  assertEq(
+    v.skipped?.[1].why,
+    'the phase file was authored before the plan template',
+    'the reason survives — a skip without a reason is not a skip',
+  )
+})
+
+check('JudgeVerdict: ALL FOUR skipped parses — a wholly honest non-judgement is legal, an empty dimensions map included', () => {
+  const v = ArcEvalJudgeVerdictShape.parse({
+    arcId: 1996,
+    judgeModel: 'claude-opus-4',
+    dimensions: {},
+    skipped: JUDGE_OWNED_DIMENSION_KEYS.map((dimension) => ({
+      dimension,
+      why: `the judge could not read enough of the arc to score ${dimension}`,
+    })),
+  })
+  assertEq(v.arcId, 1996, 'the numeric arcId arm of the union parses')
+  assertEq(v.skipped?.length, 4, 'four skips')
+  for (const key of JUDGE_OWNED_DIMENSION_KEYS) {
+    assertEq(v.dimensions[key], undefined, `${key} carries no score`)
+  }
+})
+
+check('JudgeVerdict: a judge key NEITHER scored NOR skipped REJECTS at path dimensions.plan-quality (anti-vacuous — an `in`/Object.keys coverage check passes this input, since z.record over an enum materializes EVERY key as undefined)', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const input = makeJudgeVerdict()
+  delete (input.dimensions as Record<string, unknown>)['plan-quality']
+  assertIssuePath(
+    ArcEvalJudgeVerdictShape,
+    input,
+    ['dimensions', 'plan-quality'],
+    'uncovered judge dimension',
+  )
+})
+
+check('JudgeVerdict: an EXPLICITLY undefined dimension value REJECTS — "absent" has exactly ONE wire representation (omission)', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const input = makeJudgeVerdict()
+  ;(input.dimensions as Record<string, unknown>)['plan-quality'] = undefined
+  assertThrows(() => ArcEvalJudgeVerdictShape.parse(input), 'explicit undefined dimension value')
+})
+
+check('JudgeVerdict: a key BOTH scored and skipped REJECTS (covered EXACTLY once — a score is not also an abstention)', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const input = makeJudgeVerdict()
+  input.skipped = [{ dimension: 'doc-brevity', why: 'ran out of budget reading the docs' }]
+  assertThrows(() => ArcEvalJudgeVerdictShape.parse(input), 'scored and skipped at once')
+})
+
+check('JudgeVerdict: a DUPLICATE dimension in skipped REJECTS (two reasons for one abstention is an unresolvable record)', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const input = makeJudgeVerdict()
+  const dims = input.dimensions as Record<string, unknown>
+  delete dims['plan-quality']
+  input.skipped = [
+    { dimension: 'plan-quality', why: 'the phase file would not import cleanly' },
+    { dimension: 'plan-quality', why: 'and the plan section was missing entirely' },
+  ]
+  assertThrows(() => ArcEvalJudgeVerdictShape.parse(input), 'duplicate skipped dimension')
+})
+
+check('JudgeVerdict: a DETERMINISTIC key alongside the four judge keys PARSES — ownership is per-report, refused by `eval merge-judge` (exit 2), NOT by this shape', () => {
+  const input = makeJudgeVerdict()
+  ;(input.dimensions as Record<string, unknown>)['code-confidence'] = judgeDim(55, 'code-confidence')
+  const v = ArcEvalJudgeVerdictShape.parse(input)
+  assertEq(v.dimensions['code-confidence']?.score, 55, 'the overreaching score is carried, not silently dropped')
+  assertEq(v.dimensions['plan-quality']?.score, 0, 'the judge-owned keys are untouched by the extra')
+})
+
+check('JudgeVerdict: an INVENTED eighth dimension key REJECTS (the enum record is closed, same bar as ArcEvalReport)', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const input = makeJudgeVerdict()
+  ;(input.dimensions as Record<string, unknown>)['vibes'] = judgeDim(99, 'vibes')
+  assertThrows(() => ArcEvalJudgeVerdictShape.parse(input), 'eighth dimension key in a verdict')
+
+  const skippedInvented = makeJudgeVerdict()
+  ;(skippedInvented.skipped as unknown) = [
+    { dimension: 'vibes', why: 'could not read the vibes of this arc' },
+  ]
+  assertThrows(() => ArcEvalJudgeVerdictShape.parse(skippedInvented), 'eighth dimension key in skipped')
+})
+
+check('JudgeVerdict: evidence at 29 chars REJECTS and at 30 parses — a score without quotable evidence is invalid BY CONSTRUCTION', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const short = makeJudgeVerdict()
+  ;(short.dimensions as Record<string, { evidence: string }>)['doc-brevity'].evidence = 'x'.repeat(29)
+  assertIssuePath(
+    ArcEvalJudgeVerdictShape,
+    short,
+    ['dimensions', 'doc-brevity', 'evidence'],
+    'evidence at 29 chars',
+  )
+  const atBound = makeJudgeVerdict()
+  ;(atBound.dimensions as Record<string, { evidence: string }>)['doc-brevity'].evidence = 'x'.repeat(30)
+  assertEq(
+    ArcEvalJudgeVerdictShape.parse(atBound).dimensions['doc-brevity']?.evidence.length,
+    30,
+    'exactly 30 chars is the floor, not one past it',
+  )
+})
+
+check('JudgeVerdict: a skip `why` at 9 chars REJECTS and at 10 parses ("no time" is not a reason)', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const base = makeJudgeVerdict()
+  delete (base.dimensions as Record<string, unknown>)['plan-quality']
+
+  const short = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
+  short.skipped = [{ dimension: 'plan-quality', why: 'x'.repeat(9) }]
+  assertIssuePath(ArcEvalJudgeVerdictShape, short, ['skipped', 0, 'why'], 'why at 9 chars')
+
+  const atBound = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
+  atBound.skipped = [{ dimension: 'plan-quality', why: 'x'.repeat(10) }]
+  assertEq(
+    ArcEvalJudgeVerdictShape.parse(atBound).skipped?.[0].why.length,
+    10,
+    'exactly 10 chars is the floor',
+  )
+})
+
+check('JudgeVerdict: score 101 and -1 REJECT; 0 and 100 parse (0..100 is the closed range, same as ArcEvalReport)', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const over = makeJudgeVerdict()
+  ;(over.dimensions as Record<string, { score: number }>)['doc-brevity'].score = 101
+  assertIssuePath(ArcEvalJudgeVerdictShape, over, ['dimensions', 'doc-brevity', 'score'], 'score 101')
+
+  const under = makeJudgeVerdict()
+  ;(under.dimensions as Record<string, { score: number }>)['doc-brevity'].score = -1
+  assertIssuePath(ArcEvalJudgeVerdictShape, under, ['dimensions', 'doc-brevity', 'score'], 'score -1')
+
+  const atTop = makeJudgeVerdict()
+  ;(atTop.dimensions as Record<string, { score: number }>)['doc-brevity'].score = 100
+  assertEq(
+    ArcEvalJudgeVerdictShape.parse(atTop).dimensions['doc-brevity']?.score,
+    100,
+    'score 100 is in range',
+  )
+  const atZero = makeJudgeVerdict()
+  ;(atZero.dimensions as Record<string, { score: number }>)['doc-brevity'].score = 0
+  assertEq(
+    ArcEvalJudgeVerdictShape.parse(atZero).dimensions['doc-brevity']?.score,
+    0,
+    'score 0 is in range',
+  )
+})
+
+check('JudgeVerdict: an empty judgeModel REJECTS (a verdict that will not say what ran it cannot pin a model)', () => {
+  requireShape(ArcEvalJudgeVerdictShape, 'ArcEvalJudgeVerdictShape')
+  const input = makeJudgeVerdict()
+  input.judgeModel = ''
+  assertIssuePath(ArcEvalJudgeVerdictShape, input, ['judgeModel'], 'empty judgeModel')
 })
 
 // discoverArcs is async — run it and the final summary inside an async tail so

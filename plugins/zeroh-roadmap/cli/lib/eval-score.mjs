@@ -35,7 +35,8 @@ export const DIMENSION_KEYS = [
   'plan-quality',
 ]
 
-/** The rubric dimensions no arithmetic can stand in for. */
+/** The rubric dimensions no arithmetic can stand in for. Mirrors JUDGE_OWNED_DIMENSION_KEYS,
+ *  whose contract home is templates/schema.ts (the coverage a judge verdict must satisfy). */
 export const JUDGE_DIMENSIONS = new Set([
   'standards-adherence',
   'doc-brevity',

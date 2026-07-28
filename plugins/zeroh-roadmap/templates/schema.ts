@@ -1221,6 +1221,103 @@ export const TimingStatsShape = z.object({
 
 export type TimingStats = z.output<typeof TimingStatsShape>
 
+/**
+ * The dimensions a judge verdict is REQUIRED to cover. Ownership itself stays per REPORT
+ * (`EvalDimension.owner`) — this list is the judge's COVERAGE obligation, not a claim about
+ * who owns a given report's dimensions, which is why `eval merge-judge` adjudicates the
+ * ownership seam against the report rather than the shape doing it here.
+ * `JUDGE_DIMENSIONS` in cli/lib/eval-score.mjs is the mjs-side mirror of this list.
+ */
+export const JUDGE_OWNED_DIMENSION_KEYS = [
+  'standards-adherence',
+  'doc-brevity',
+  'composability-testability',
+  'plan-quality',
+] as const
+
+/**
+ * One judged dimension. `evidence` is `.min(30)` for the same reason IntentVerdict makes
+ * evidence mandatory: a score nobody can trace back to a file:line or a diff hunk is an
+ * opinion wearing a number's clothes, and averaging it into a baseline launders it.
+ */
+const ArcEvalJudgeDimensionShape = z.object({
+  score: z.number().min(0).max(100),
+  evidence: z.string().min(30),
+  confidence: z.enum(['high', 'medium', 'low']),
+})
+
+/**
+ * ArcEvalJudgeVerdictShape — what the pinned arc-eval-judge returns, and the ONLY door its
+ * output uses to reach a report (`eval merge-judge`). `judgeModel` is SELF-REPORTED: the
+ * agent says what it ran as and merge-judge cross-checks it against the pin, so a
+ * wrong-model pass becomes a loud baseline reset instead of a silent average.
+ *
+ * ## Coverage is TOTAL, and that is what makes `skipped` real
+ * Every key in `JUDGE_OWNED_DIMENSION_KEYS` must appear EXACTLY ONCE — scored in
+ * `dimensions`, or listed in `skipped` with a reason. Neither is a silent omission (the
+ * failure this contract exists to stop); both is a dimension carrying a score beside its own
+ * disclaimer, the same incoherence `EvalDimensionShape`'s score-XOR-sentinel refine forbids
+ * one level down. A judge that cannot honestly score something therefore has a REACHABLE
+ * downgrade path and never has to guess.
+ *
+ * ## Why `dimensions` is keyed by z.string() and validated in the refine
+ * `z.record(EvalDimensionKeyShape, …optional())` looks like the obvious spelling and is a
+ * trap: zod materializes EVERY enum key in the output, so an omitted key comes back present
+ * with value `undefined`. A coverage check written over `Object.keys` or `key in` would then
+ * pass every verdict vacuously — enforcement that reads as implemented and enforces nothing.
+ * A string-keyed record keeps "absent" genuinely absent, keeps the value REQUIRED (so an
+ * explicit `undefined` is rejected and absence has one wire representation), and moves the
+ * closed-vocabulary check into the refine where it can name the offending key.
+ *
+ * Deterministic-owned keys are deliberately ACCEPTED here: ownership is per report, so the
+ * shape cannot know it, and `eval merge-judge` refuses them with its own exit code and the
+ * seam named. A second, weaker copy of that rule in the shape could only disagree with it.
+ */
+export const ArcEvalJudgeVerdictShape = z
+  .object({
+    // Same number|string union as Arc.id.
+    arcId: z.union([z.number().int().positive(), z.string().min(1)]),
+    judgeModel: z.string().min(1),
+    dimensions: z.record(z.string(), ArcEvalJudgeDimensionShape),
+    skipped: z.array(z.object({ dimension: EvalDimensionKeyShape, why: z.string().min(10) })).optional(),
+  })
+  .superRefine((v, ctx) => {
+    const scored = new Set(Object.keys(v.dimensions ?? {}))
+    for (const key of scored)
+      if (!EvalDimensionKeyShape.safeParse(key).success)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['dimensions', key],
+          message: `'${key}' is not one of the seven scored dimensions — a judge cannot invent a dimension`,
+        })
+
+    const skippedKeys = (v.skipped ?? []).map((s) => s.dimension)
+    if (new Set(skippedKeys).size !== skippedKeys.length)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['skipped'],
+        message: 'a dimension is skipped twice — two contradictory reasons for one skip is silence dressed as data',
+      })
+    const skipped = new Set(skippedKeys)
+
+    for (const key of JUDGE_OWNED_DIMENSION_KEYS) {
+      if (scored.has(key) && skipped.has(key))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['skipped'],
+          message: `'${key}' is both scored and skipped — a score beside its own disclaimer`,
+        })
+      else if (!scored.has(key) && !skipped.has(key))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['dimensions', key],
+          message: `'${key}' is neither scored nor skipped — a judge-owned dimension may not be silently omitted (skip it with a reason instead)`,
+        })
+    }
+  })
+
+export type ArcEvalJudgeVerdict = z.output<typeof ArcEvalJudgeVerdictShape>
+
 /** Flat authoring form: a single-track arc lists its phases directly via
  *  `phases: number[]` instead of spelling out a one-plane `planes` array.
  *  `defineArc` collapses it to a single `Default` plane — mirroring how
