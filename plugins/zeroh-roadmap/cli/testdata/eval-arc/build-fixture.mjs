@@ -44,26 +44,44 @@ export const DEFAULT_SCHEMA_PATH = join(PLUGIN_ROOT, 'templates', 'schema.ts')
 export const ARC_ID = 'EVALFIX'
 export const PHASE_NUMS = [9001, 9002]
 
-/** The scripted history, oldest → newest. `mentionsInBody` is the body-only decoy. */
+/**
+ * The scripted history, oldest → newest. The arc's member commits live on their own branch
+ * and reach the base branch through a MERGE, because that merge is the land boundary the
+ * collector anchors on — a purely linear fixture could not tell in-phase gate rework from a
+ * post-land escape. `body` carries the body-only decoy.
+ */
+export const ARC_BRANCH = 'arc/EVALFIX'
 export const FIXTURE_COMMITS = [
   { subject: 'seed', date: '2026-07-15T09:00:00', files: {} },
   {
     subject: 'feat(x): phase 9001 — 9001.1 add the collector',
     date: '2026-07-16T10:00:00',
+    branch: ARC_BRANCH,
     files: { 'src/collector.ts': 'export const collect = () => ({ phases: [] })\n' },
   },
   {
     subject: 'feat(x): phase 9002 — 9002.1 add the scorer',
     date: '2026-07-17T11:00:00',
+    branch: ARC_BRANCH,
     files: { 'src/scorer.ts': 'export const score = () => ({ dimensions: {} })\n' },
   },
-  // The land boundary: the newest MEMBER commit, so landedAt is this commit's author date.
+  // In-phase gate rework, still on the arc branch: fix grammar AND a member phase in the
+  // subject, but BEFORE the land merge — the shape that must never score as an escape.
+  {
+    subject: 'fix(x): phase 9002 gate R1 — tighten the scorer',
+    date: '2026-07-17T16:00:00',
+    branch: ARC_BRANCH,
+    files: { 'src/scorer.ts': 'export const score = () => ({ dimensions: {}, tight: true })\n' },
+  },
   {
     subject: 'docs(roadmap): mark phase 9002 complete',
-    date: '2026-07-18T12:00:00',
+    date: '2026-07-18T11:00:00',
+    branch: ARC_BRANCH,
     append: { 'roadmap/phases/phase-9002.phase.ts': '\n// recorded complete\n' },
     files: {},
   },
+  // THE LAND: the merge that brought the arc tip into the base branch. `landedAt` is this.
+  { merge: ARC_BRANCH, subject: `Merge branch '${ARC_BRANCH}'`, date: '2026-07-18T12:00:00' },
   // A body-only "phase 9001" mention AFTER the land: must never be read as a member
   // commit (it would drag landedAt forward and swallow the escape fix behind it).
   {
@@ -83,6 +101,13 @@ export const FIXTURE_COMMITS = [
     subject: 'fix(other): unrelated repair',
     date: '2026-07-20T14:00:00',
     files: { 'src/unrelated.ts': 'export const unrelated = true\n' },
+  },
+  // THE PHASE-NAMED ESCAPE FIX: post-land, fix grammar, and its SUBJECT names a member
+  // phase — the only form that scores under the bounded escape window.
+  {
+    subject: 'fix(x): phase 9001 gate R1 — re-guard the collector',
+    date: '2026-07-21T15:00:00',
+    files: { 'src/collector.ts': 'export const collect = () => ({ phases: [], guarded: 2 })\n' },
   },
 ]
 
@@ -135,8 +160,24 @@ export function buildEvalFixture(opts = {}) {
   writeFileSync(join(binDir, 'tsx'), `#!/bin/sh\nexec ${tsxBin} "$@"\n`)
   chmodSync(join(binDir, 'tsx'), 0o755)
 
-  git(root, ['init', '-q'])
+  git(root, ['init', '-q', '-b', 'main'])
+  let branch = 'main'
   for (const c of FIXTURE_COMMITS) {
+    if (c.merge) {
+      if (branch !== 'main') git(root, ['checkout', '-q', 'main'])
+      branch = 'main'
+      git(root, ['merge', '-q', '--no-ff', '-m', c.subject, c.merge], {
+        GIT_AUTHOR_DATE: c.date,
+        GIT_COMMITTER_DATE: c.date,
+      })
+      continue
+    }
+    const want = c.branch ?? 'main'
+    if (want !== branch) {
+      const exists = git(root, ['branch', '--list', want]).trim().length > 0
+      git(root, ['checkout', '-q', ...(exists ? [] : ['-b']), want])
+      branch = want
+    }
     for (const [rel, content] of Object.entries(c.files ?? {})) {
       mkdirSync(dirname(join(root, rel)), { recursive: true })
       writeFileSync(join(root, rel), content)

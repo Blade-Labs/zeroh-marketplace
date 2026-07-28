@@ -193,6 +193,9 @@ function scoreCodeConfidence(trace, readable) {
       finalRoundCleanRatio: runsWithRounds.length > 0 ? round1(cleanFinal / runsWithRounds.length) : 'no-runs',
       escapeFixes: escapeScanRan ? escapeCount : 'scan-unavailable',
       escapeFixesPerPhase: escapeScanRan ? round1(escapesPerPhase) : 'scan-unavailable',
+      // UNSCORED, carried for inspection only: the pre-2026-07-28 unbounded count, which rose
+      // with the arc's AGE. Reading it as a quality signal is the mistake the ruling fixed.
+      escapeFixesFileIntersection: trace.git?.escapeFixesFileIntersection ?? 'scan-unavailable',
       phasesConsidered: readable.length,
     },
     sourceRefs: sourceRefs.length > 0 ? sourceRefs : ['roadmap/.gate/'],
@@ -411,6 +414,13 @@ export function scoreArcTrace(trace, { backfill = false } = {}) {
     notes.push(
       'the post-land escape scan did not run — its penalty is withheld, so code-confidence is an UPPER BOUND, not a measurement',
     )
+  // The scoring model changed, so every report says so: a reader comparing an old committed
+  // report against a new one is comparing two models, and the report is the only place that
+  // fact can travel.
+  notes.push(
+    'scoring-model reset 2026-07-28: escape attribution bounded to phase-named fix commits (user ruling); ' +
+      'prior file-intersection figure retained unscored in signals',
+  )
 
   const dimensions = {
     'code-confidence': scoreCodeConfidence(trace, readable),
@@ -436,7 +446,7 @@ export function assembleAttribution(trace) {
   const drivers = new Map()
   for (const p of trace.phases ?? []) {
     const d = p.executionResult?.driver ?? UNRECORDED_DRIVER
-    const key = `${d.model} ${d.lane}`
+    const key = `${d.model}\u0000${d.lane}`
     if (!drivers.has(key)) drivers.set(key, { model: d.model, lane: d.lane, phases: [] })
     drivers.get(key).phases.push(p.phase)
   }

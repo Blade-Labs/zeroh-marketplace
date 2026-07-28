@@ -165,22 +165,46 @@ test('collectArcTrace — an unimportable phase file is RECORDED (parseError) + 
 })
 
 // ── 6. git facts: the land boundary + the escape rate ─────────────────────────────────
-test('findArcGitFacts — landedAt is the newest MEMBER commit; exactly ONE escape fix, the unrelated one excluded', () => {
+test('findArcGitFacts — the SCORED escape window is bounded to PHASE-NAMED fixes (user ruling 2026-07-28)', () => {
   const root = fixture()
   const facts = findArcGitFacts(root, PHASE_NUMS, { exec: defaultExec })
 
   // The land boundary is the `docs(roadmap): mark phase 9002 complete` commit (2026-07-18T12:00),
-  // NOT the later `chore: tidy the fixture notes` whose BODY mentions phase 9001.
+  // NOT the later `chore: tidy the fixture notes` whose BODY mentions phase 9001 — and NOT the
+  // later phase-named FIX, which is an escape candidate and so cannot define its own boundary.
   assert.equal(new Date(facts.landedAt).toISOString(), '2026-07-18T12:00:00.000Z')
 
-  assert.equal(facts.escapeFixes.length, 1, `exactly one escape fix; got ${JSON.stringify(facts.escapeFixes)}`)
+  assert.equal(facts.escapeFixes.length, 1, `exactly one scored escape; got ${JSON.stringify(facts.escapeFixes)}`)
   const [esc] = facts.escapeFixes
-  assert.equal(esc.subject, 'fix(x): repair the collector guard')
+  assert.equal(esc.subject, 'fix(x): phase 9001 gate R1 — re-guard the collector')
   assert.equal(esc.files, 1, 'files is the SIZE of the intersection with the arc files, not the commit diff size')
   assert.ok(esc.sha.length >= 7)
+
+  // THE AGE-DEPENDENCE, GONE: `fix(x): repair the collector guard` is post-land and touches an
+  // arc file, which used to score it. It names no member phase, so it no longer counts — the
+  // count now measures the arc's own rework, not how long ago it landed.
+  assert.ok(
+    !facts.escapeFixes.some((f) => /repair the collector guard/.test(f.subject)),
+    'an unrelated post-land fix touching an arc file is NOT a scored escape',
+  )
   assert.ok(
     !facts.escapeFixes.some((f) => /unrelated/.test(f.subject)),
-    'a post-land fix touching no arc file is not an escape',
+    'a post-land fix touching no arc file is not an escape either',
+  )
+
+  // IN-PHASE rework is not an escape: `fix(x): phase 9002 gate R1` carries both the fix grammar
+  // and a member phase, but it sits BEFORE the land merge. Anchoring the boundary on the tip
+  // commit instead of the merge would score this — the mirror image of the bug being fixed.
+  assert.ok(
+    !facts.escapeFixes.some((f) => /tighten the scorer/.test(f.subject)),
+    'a phase-named gate fix BEFORE the land merge is in-phase work, never an escape',
+  )
+
+  // The old rule's number survives UNSCORED, so nobody has to re-derive what changed.
+  assert.equal(
+    facts.escapeFixesFileIntersection,
+    1,
+    'the old rule counted the unrelated collector fix and nothing else — that number stays inspectable',
   )
 
   assert.ok(facts.arcFiles.includes('src/collector.ts'))
@@ -228,7 +252,8 @@ test('collectArcTrace — the git facts ride the trace under trace.git', () => {
   const { trace } = collectArcTrace(root, ARC_ID, { exec: defaultExec })
   assert.equal(new Date(trace.git.landedAt).toISOString(), '2026-07-18T12:00:00.000Z')
   assert.equal(trace.git.escapeFixes.length, 1)
-  assert.equal(trace.git.escapeFixes[0].subject, 'fix(x): repair the collector guard')
+  assert.equal(trace.git.escapeFixes[0].subject, 'fix(x): phase 9001 gate R1 — re-guard the collector')
+  assert.equal(trace.git.escapeFixesFileIntersection, 1, 'the unscored old-rule count rides the trace too')
 })
 
 // ── 7. gate run summaries ─────────────────────────────────────────────────────────────

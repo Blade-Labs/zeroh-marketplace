@@ -164,14 +164,22 @@ function commitFiles(repoRoot, sha, exec) {
  * The arc's git facts: when it landed, which files it owns, and which post-land fixes
  * escaped it.
  *
- * - `landedAt`: the author date of the NEWEST member commit. Absent when the arc has no
- *   member commits at all — an arc whose boundary cannot be evidenced gets no boundary,
- *   never today's date standing in.
+ * - `landedAt`: the date of the MERGE that carried the arc's newest member commit into the
+ *   current branch. Not the tip itself: every member-commit grammar here is in-phase work
+ *   (`fix(scope): phase N gate R2` is an ordinary gate round and is routinely the phase's
+ *   LAST commit), so any tip-derived boundary would score in-phase rework as an escape. No
+ *   such merge (a fast-forward land, or the arc is still on this branch) ⇒ the tip's own
+ *   date, which leaves the escape window empty — no evidence of a post-land window is not
+ *   the same as evidence of escapes. No member commits at all ⇒ no boundary, never today.
  * - `arcFiles`: the union of the files the member commits touched.
- * - `escapeFixes`: commits AFTER `landedAt` that are not themselves member commits, carry
- *   the conventional fix grammar, and touch at least one arc file. `files` is the SIZE OF
- *   THE INTERSECTION, not the commit's diff size: a broad refactor that happens to brush
- *   one arc file is one file of escape, not thirty.
+ * - `escapeFixes` (SCORED): commits after `landedAt` carrying the conventional fix grammar
+ *   whose SUBJECT NAMES A MEMBER PHASE — rework the arc's own gate let through, attributed
+ *   by the same subject-anchored discipline `memberCommits` uses. `files` is the SIZE OF
+ *   THE INTERSECTION with the arc's files, not the commit's diff size.
+ * - `escapeFixesFileIntersection` (UNSCORED): the count under the previous, unbounded rule
+ *   — any post-land fix touching any arc file. It measured how LONG AGO the arc landed as
+ *   much as its quality, so the user ruling of 2026-07-28 removed it from the score; it
+ *   stays here as an inspectable signal so the old number never silently disappears.
  */
 export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {}) {
   const members = new Map()
@@ -181,17 +189,47 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
   // No member commits ⇒ no land boundary ⇒ there is nothing to scan AFTER. That is a
   // complete scan of an empty window, not a failed one.
   if (members.size === 0)
-    return { landedAt: undefined, escapeScan: 'complete', escapeFixes: [], arcFiles: [] }
+    return {
+      landedAt: undefined,
+      escapeScan: 'complete',
+      escapeFixes: [],
+      escapeFixesFileIntersection: 0,
+      arcFiles: [],
+    }
 
+  // Newest member first. The land is the merge that carried the newest member commit which was
+  // MERGED at all: a member committed straight onto the base branch after that merge is exactly
+  // the escape we are looking for, so it must not be allowed to define the boundary it belongs
+  // behind. The walk stops at the first member that yields a merge, so it costs one git call
+  // plus one per post-land direct commit — not one per member.
+  const byNewest = [...members.values()].sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
   let landedAt
-  for (const c of members.values()) {
-    if (landedAt === undefined || Date.parse(c.date) > Date.parse(landedAt)) landedAt = c.date
+  for (const c of byNewest) {
+    // `--ancestry-path` keeps only merges on a path from THIS commit to HEAD, so an unrelated
+    // merge elsewhere in the history cannot be mistaken for this arc's land; `--reverse` puts
+    // the FIRST such merge (the land itself) on top rather than the newest one.
+    const merge = exec('git', [
+      '-C', repoRoot, 'log', '--merges', '--ancestry-path', '--reverse', '--format=%H%x09%aI', `${c.sha}..HEAD`,
+    ])
+    const row = merge.status === 0 ? merge.stdout.split('\n').find((l) => l.includes('\t')) : undefined
+    if (row) {
+      landedAt = row.split('\t')[1]
+      break
+    }
   }
+  // Nothing merged anywhere ⇒ a fast-forward land or an arc still on this branch. The tip's own
+  // date leaves the window empty: absence of evidence of a post-land window, not zero escapes.
+  landedAt ??= byNewest[0].date
+
+  // The scored window's attribution: a member phase named in the SUBJECT. Same digit-boundary
+  // discipline as `memberCommits` — `phase 900` must not match `phase 9001`.
+  const memberPhaseRe = new RegExp(`(?:^|[^0-9])phase (?:${[...memberNums].join('|')})(?:[^0-9]|$)`)
 
   const arcFileSet = new Set()
   for (const sha of members.keys()) for (const f of commitFiles(repoRoot, sha, exec)) arcFileSet.add(f)
 
   const escapeFixes = []
+  let fileIntersectionCount = 0
   // BOUNDED at the land boundary: an unfiltered full-history log is megabytes on a real repo
   // and every commit older than the boundary is irrelevant by definition. `--since` is
   // inclusive of the boundary commit itself, which the explicit date compare below drops.
@@ -208,11 +246,12 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
       const [sha, date, ...rest] = line.split('\t')
       const subject = rest.join('\t')
       if (!sha || !date || !subject) continue
-      if (members.has(sha)) continue
       if (Date.parse(date) <= landedMs) continue
       if (!FIX_SUBJECT_RE.test(subject)) continue
       const files = commitFiles(repoRoot, sha, exec).filter((f) => arcFileSet.has(f))
-      if (files.length === 0) continue
+      // The old, unbounded rule — retained as a signal, no longer scored.
+      if (files.length > 0 && !members.has(sha)) fileIntersectionCount += 1
+      if (!memberPhaseRe.test(subject)) continue
       escapeFixes.push({ sha, subject, files: files.length })
     }
   }
@@ -220,7 +259,15 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
   // Canonicalize to a Z-suffixed instant: git's %aI emits a local offset (+00:00), which is
   // a valid ISO string but not the datetime form the contract pins. Normalizing HERE keeps
   // one comparable time format across the whole trace instead of per-reader parsing.
-  return { landedAt: new Date(landedAt).toISOString(), escapeScan, escapeFixes, arcFiles: [...arcFileSet].sort() }
+  const facts = {
+    landedAt: new Date(landedAt).toISOString(),
+    escapeScan,
+    escapeFixes,
+    arcFiles: [...arcFileSet].sort(),
+  }
+  // A scan that did not run knows NOTHING, including the old count — absent, not zero.
+  if (escapeScan === 'complete') facts.escapeFixesFileIntersection = fileIntersectionCount
+  return facts
 }
 
 /** Lift one parsed phase file into its trace entry. */

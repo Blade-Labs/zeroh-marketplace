@@ -1182,8 +1182,8 @@ export const ArcTraceShape = z.object({
      *  failure would be indistinguishable from a clean arc — and a clean arc scores HIGHER,
      *  so the silent version of this field turns a broken scan into a reward. */
     escapeScan: z.enum(['complete', 'unavailable']),
-    /** Fix commits AFTER the arc landed that touch files the arc's own commits touched —
-     *  the escape rate. `sha` min(7) matches the checkpoint sha bar. */
+    /** Fix commits AFTER the arc landed whose SUBJECT names one of the arc's member phases
+     *  — the scored escape rate. `sha` min(7) matches the checkpoint sha bar. */
     escapeFixes: z.array(
       z.object({
         sha: z.string().min(7),
@@ -1191,6 +1191,11 @@ export const ArcTraceShape = z.object({
         files: z.number().int().nonnegative(),
       }),
     ),
+    /** The count under the PREVIOUS, unbounded rule: any post-land fix touching any file the
+     *  arc touched. It grew with how long ago the arc landed, so it scores nothing (user
+     *  ruling 2026-07-28, a declared scoring-model reset) — but it stays recorded so the old
+     *  number remains inspectable instead of vanishing. Absent when the scan did not run. */
+    escapeFixesFileIntersection: z.number().int().nonnegative().optional(),
   }),
 })
 
