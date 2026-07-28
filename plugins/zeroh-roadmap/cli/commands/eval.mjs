@@ -84,6 +84,7 @@ function parseArgs(argv) {
     else if (a === '--date') opts.date = argv[++i]
     else if (a === '--force') opts.force = true
     else if (a === '--collect-only') opts.collectOnly = true
+    else if (a === '--report') opts.report = argv[++i]
     else if (a === '--json') opts.json = true
     else positional.push(a)
   }
@@ -93,7 +94,8 @@ function parseArgs(argv) {
 const USAGE =
   'roadmap eval: usage:\n' +
   '  roadmap eval <ARCID> [--date <YYYY-MM-DD>] [--force] [--collect-only] [--json]\n' +
-  '  roadmap eval record-sweep|record-verdicts --arc <ID> [--force] [file|-]\n'
+  '  roadmap eval record-sweep|record-verdicts --arc <ID> [--force] [file|-]\n' +
+  '  roadmap eval merge-judge --arc <ID> [--report <path>]   (verdict JSON on stdin)\n'
 
 export default async function run(argv) {
   const { opts, positional } = parseArgs(argv)
@@ -104,6 +106,7 @@ export default async function run(argv) {
       process.stderr.write(USAGE)
       return 1
     }
+    if (sub === 'merge-judge') return runMergeJudge(opts)
     // Anything that is not one of the two literal recorder names is an ARC ID. The literals
     // are checked FIRST so a future arc called `record-sweep` could never shadow the recorder.
     return runArcEval(sub, opts)
@@ -182,6 +185,210 @@ export default async function run(argv) {
   process.stdout.write(
     `${overwriting ? 'OVERWROTE (--force)' : 'wrote'} ${outPath} — ${recorder.what} for arc ${opts.arc} (${parsed.date})\n`,
   )
+  return 0
+}
+
+// ── `roadmap eval merge-judge` — the judge verdict's ONE door into a report ────────────
+
+/**
+ * The pinned judge model, in its ONE code home. The other home is the `model:` frontmatter of
+ * agents/arc-eval-judge.md, which pins the SPAWN; this constant is what a returned verdict's
+ * self-reported `judgeModel` is checked against. Two homes, two different jobs — scattering the
+ * string further is how a pin quietly stops being one.
+ *
+ * Changing this value is a deliberate baseline reset: judge-owned dimensions scored by the old
+ * model stop being comparable, which computeRatchet already enforces from `judgeModel` alone.
+ */
+export const PINNED_JUDGE_MODEL = 'claude-sonnet-5'
+
+/** The newest dated report for an arc, or null. Same anchored pattern the priors reader uses,
+ *  so a `-sweep`/`-verdicts` sibling can never be mistaken for the report being finalized. */
+function newestReportPath(dir, arcId) {
+  if (!existsSync(dir)) return null
+  const re = new RegExp(`^${arcId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d{4}-\\d{2}-\\d{2}\\.json$`)
+  const hits = readdirSync(dir).filter((f) => re.test(f)).sort()
+  return hits.length > 0 ? join(dir, hits[hits.length - 1]) : null
+}
+
+/**
+ * `roadmap eval merge-judge --arc <ID> [--report <path>]` — fold a typed judge verdict into a
+ * skeleton report, enforce the ownership seam and the model pin, and finalize in place.
+ *
+ * This is a SEAM, not a convenience: the alternative is a skill hand-editing report JSON in
+ * prose, which decays on contact with the first surprising verdict. Everything the merge is
+ * allowed to refuse, it refuses here once — mis-shape, a judge reaching into a deterministic
+ * dimension, a report that does not exist — so no downstream reader has to re-litigate it.
+ *
+ * The off-pin case deliberately MERGES rather than refuses. A verdict from another model is
+ * real data about a real arc; what it must never be is silently averaged into a baseline built
+ * from a different judge. So it lands, loudly labelled, and the affected ratchet rows say why
+ * they cannot be compared. Refusing instead would only push the operator into hand-editing.
+ */
+async function runMergeJudge(opts) {
+  if (!opts.arc) {
+    process.stderr.write('roadmap eval merge-judge: --arc <ID> is required (it names the report the verdict lands in)\n')
+    return 1
+  }
+
+  let toplevel, schemaPath
+  try {
+    toplevel = gitToplevel(process.cwd())
+    schemaPath = consumerSchemaPath(toplevel)
+  } catch (e) {
+    if (e instanceof BridgeError) for (const l of e.messageLines) process.stderr.write(l + '\n')
+    else process.stderr.write(`roadmap eval merge-judge: ${e.message}\n`)
+    return 1
+  }
+
+  let inputJson
+  try {
+    inputJson = readInput('-')
+  } catch (e) {
+    process.stderr.write(`roadmap eval merge-judge: cannot read the verdict: ${e.message}\n`)
+    return 1
+  }
+  if (!inputJson.trim()) {
+    process.stderr.write('roadmap eval merge-judge: no input (pipe the judge verdict JSON on stdin)\n')
+    return 1
+  }
+
+  const parsedVerdict = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, 'ArcEvalJudgeVerdictShape', inputJson] })
+  if (!parsedVerdict.ok) {
+    if (parsedVerdict.kind === 'tsx-absent') {
+      process.stderr.write(TSX_ABSENT_HINT + '\n')
+      return 1
+    }
+    if (parsedVerdict.kind === 'zod') {
+      // The judge is an LLM; a mis-shaped verdict is an EXPECTED outcome, not an exception. It
+      // is refused here so the report stays honestly unjudged rather than half-filled.
+      process.stderr.write('roadmap eval merge-judge: refused — the verdict does not match ArcEvalJudgeVerdictShape:\n')
+      printZodIssues(parsedVerdict.issues)
+      return 2
+    }
+    process.stderr.write((parsedVerdict.stderr || 'roadmap eval merge-judge: bridge failure') + '\n')
+    return 1
+  }
+  const verdict = JSON.parse(parsedVerdict.stdout.slice(parsedVerdict.stdout.indexOf('PARSED:') + 'PARSED:'.length))
+
+  if (String(verdict.arcId) !== String(opts.arc)) {
+    process.stderr.write(
+      `roadmap eval merge-judge: refused — verdict arcId '${verdict.arcId}' !== --arc '${opts.arc}'\n`,
+    )
+    return 2
+  }
+
+  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const reportPath = opts.report ? opts.report : newestReportPath(dir, String(opts.arc))
+  if (!reportPath || !existsSync(reportPath)) {
+    process.stderr.write(
+      `roadmap eval merge-judge: refused — no dated report for arc ${opts.arc} in ${dir}.\n` +
+        `Run \`roadmap eval ${opts.arc}\` first; a verdict has nothing to merge into until the skeleton exists.\n`,
+    )
+    return 2
+  }
+
+  let report
+  try {
+    report = JSON.parse(readFileSync(reportPath, 'utf8'))
+  } catch (e) {
+    process.stderr.write(`roadmap eval merge-judge: cannot read ${reportPath}: ${e.message}\n`)
+    return 1
+  }
+
+  // THE OWNERSHIP SEAM. Owner-based rather than "already carries a score": it also catches a
+  // judge SKIPPING a dimension it was never asked to judge, which would otherwise leak a
+  // meaningless reason into the report's notes.
+  const touched = [...Object.keys(verdict.dimensions ?? {}), ...(verdict.skipped ?? []).map((s) => s.dimension)]
+  for (const key of touched) {
+    const owner = report.dimensions?.[key]?.owner
+    if (owner !== 'judge') {
+      process.stderr.write(
+        `roadmap eval merge-judge: refused — the verdict touches '${key}', whose owner in this report is ` +
+          `'${owner ?? 'absent'}', not 'judge'.\n` +
+          'The judge agent never recomputes a deterministic signal (the single-scoring-implementation seam):\n' +
+          'deterministic dimensions are scored by cli/lib/eval-score.mjs and READ by the judge, never returned by it.\n',
+      )
+      return 2
+    }
+  }
+
+  const notes = [...(report.notes ?? [])]
+
+  for (const [key, d] of Object.entries(verdict.dimensions ?? {})) {
+    const target = report.dimensions[key]
+    // The sentinel must GO, not sit beside the new number: EvalDimensionShape enforces
+    // score XOR sentinel, so leaving it would fail the pre-write parse.
+    delete target.sentinel
+    target.score = d.score
+    target.evidence = d.evidence
+    // `signals` is the only place confidence survives to disk — EvalDimensionShape strips
+    // unknown top-level keys, so a `confidence` field written beside `score` would vanish
+    // silently at the pre-write parse and the report would lose the judge's own hedge.
+    target.signals = { ...(target.signals ?? {}), confidence: d.confidence }
+  }
+
+  for (const s of verdict.skipped ?? []) {
+    // A skip stays PENDING. It is not a score, not a zero, and not a new sentinel: the judge
+    // simply has not judged it, which is exactly what `pending-judge` already means.
+    notes.push(`${s.dimension}: judge skipped - ${s.why}`)
+  }
+
+  report.judgeModel = verdict.judgeModel
+  const offPin = verdict.judgeModel !== PINNED_JUDGE_MODEL
+  if (offPin)
+    notes.push(
+      `judgeModel ${verdict.judgeModel} differs from the pin ${PINNED_JUDGE_MODEL} - baseline reset material: ` +
+        'judge-owned dimensions in this report are not comparable with priors judged by the pinned model',
+    )
+  report.notes = notes
+
+  // Recomputed, never patched: computeRatchet owns the comparability rule (a prior judged by
+  // another model is excluded from a judge-owned dimension), so stamping judgeModel above is
+  // what makes the off-pin exclusion happen — the same one function every other caller uses.
+  const priors = readPriorReports(dir, { excludePath: reportPath, onWarn: (l) => process.stdout.write(l + '\n') })
+  report.ratchet = computeRatchet(report, priors)
+  for (const row of report.ratchet) {
+    if (!JUDGE_DIMENSIONS.has(row.dimension)) continue
+    // Count what the comparability rule THREW AWAY. A row that simply has no priors is
+    // `no-baseline` and says so; a row whose priors exist but were judged by another model is
+    // a different fact, and a reader who cannot tell them apart will read a reset as a gap.
+    const excluded = priors.filter(
+      (p) => typeof p?.dimensions?.[row.dimension]?.score === 'number' && (p.judgeModel ?? null) !== report.judgeModel,
+    ).length
+    if (excluded > 0)
+      row.note = `${row.note ? row.note + ' ' : ''}incomparable-judge (${excluded} prior(s) judged by another model, excluded)`
+  }
+
+  const validated = bridgeValidate(toplevel, schemaPath, 'ArcEvalReportShape', report)
+  if (!validated.ok) {
+    if (validated.res.kind === 'tsx-absent') {
+      process.stderr.write(TSX_ABSENT_HINT + '\n')
+      return 1
+    }
+    process.stderr.write('roadmap eval merge-judge: refused — the merged report does not match ArcEvalReportShape:\n')
+    if (validated.res.kind === 'zod') printZodIssues(validated.res.issues)
+    else process.stderr.write((validated.res.stderr ?? '') + '\n')
+    return 2
+  }
+
+  try {
+    writeFileSync(reportPath, JSON.stringify(validated.parsed, null, 2) + '\n')
+  } catch (e) {
+    process.stderr.write(`roadmap eval merge-judge: cannot write ${reportPath}: ${e.message}\n`)
+    return 1
+  }
+
+  const final = validated.parsed
+  process.stdout.write(`roadmap eval merge-judge ${opts.arc} — judged by ${final.judgeModel}\n`)
+  if (offPin) process.stdout.write(`OFF-PIN: ${final.judgeModel} is not the pinned ${PINNED_JUDGE_MODEL} — baseline reset material\n`)
+  for (const key of DIMENSION_KEYS) {
+    if (!JUDGE_DIMENSIONS.has(key)) continue
+    const d = final.dimensions[key]
+    process.stdout.write(`  ${pad(key, 27)}${d.score ?? d.sentinel}\n`)
+  }
+  for (const row of final.ratchet.filter((r) => r.regression))
+    process.stdout.write(`REGRESSION ${row.dimension}: ${row.value} against a baseline of ${row.baseline} (delta ${row.delta})\n`)
+  process.stdout.write(`finalized ${reportPath}\n`)
   return 0
 }
 
