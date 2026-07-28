@@ -1,0 +1,33 @@
+{
+  "arcId": "EVALFIX",
+  "date": "2026-07-20",
+  "judgeModel": "claude-sonnet-5",
+  "verdicts": [
+    {
+      "criterionId": "c1",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "the wired collector run printed both member phases with their execution results",
+      "confidence": "high"
+    },
+    {
+      "criterionId": "c2",
+      "status": "met",
+      "tierUsed": "live-ui",
+      "evidence": "the console eval panel rendered sourceRefs on every deterministic dimension",
+      "confidence": "medium"
+    },
+    {
+      "criterionId": "c3",
+      "status": "gap",
+      "tierUsed": "wired",
+      "evidence": "the timing table rendered, but the cohort note did not name the surface heuristic",
+      "gap": {
+        "whatsMissing": "the cohort table does not state that the surface split is a keyFiles path heuristic",
+        "suggestedFix": "emit the heuristic sentence into the timing stats notes array"
+      },
+      "confidence": "low"
+    }
+  ],
+  "ratifiedDescopes": ["the live-host tier was not driven for criterion c3 — ratified 2026-07-20"]
+}

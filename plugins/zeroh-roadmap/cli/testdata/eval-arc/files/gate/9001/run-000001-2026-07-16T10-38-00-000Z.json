@@ -1,0 +1,40 @@
+{
+  "phase": 9001,
+  "startedAt": "2026-07-16T10:05:00.000Z",
+  "baseSha": "0000000000000000000000000000000000000001",
+  "mode": "phase",
+  "kind": "logic",
+  "testScope": { "derived": "relevant", "declared": null, "effective": "relevant" },
+  "reviewScope": { "derived": "full", "declared": null, "effective": "full" },
+  "slots": [
+    { "slot": "lint", "command": "npm run lint", "exitCode": 0, "durationMs": 4200, "logPath": null },
+    { "slot": "types", "command": "npm run type-check", "exitCode": 0, "durationMs": 9100, "logPath": null },
+    { "slot": "unit", "command": "npm test", "exitCode": 0, "durationMs": 18400, "logPath": null },
+    { "slot": "build", "command": "npm run build", "exitCode": 0, "durationMs": 22300, "logPath": null }
+  ],
+  "agents": [
+    {
+      "round": 0,
+      "agent": "quality-pass",
+      "verdict": "clean",
+      "summary": "no simplifications owed",
+      "recordedAt": "2026-07-16T10:12:00.000Z"
+    },
+    {
+      "round": 1,
+      "agent": "code-reviewer",
+      "verdict": "findings-fixed",
+      "summary": "one medium finding on the gate-run reader, fixed in round 1",
+      "recordedAt": "2026-07-16T10:25:00.000Z"
+    },
+    {
+      "round": 2,
+      "agent": "code-reviewer",
+      "verdict": "clean",
+      "summary": "the round-1 fix verified clean",
+      "recordedAt": "2026-07-16T10:36:00.000Z"
+    }
+  ],
+  "green": true,
+  "notes": []
+}

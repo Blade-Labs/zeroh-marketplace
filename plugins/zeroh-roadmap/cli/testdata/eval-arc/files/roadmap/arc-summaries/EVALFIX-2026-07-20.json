@@ -1,0 +1,15 @@
+{
+  "arcId": "EVALFIX",
+  "outcome": "shipped",
+  "compromiseDisposition": [
+    { "item": "the surface cohort is a keyFiles path heuristic", "disposition": "ACCEPT" },
+    { "item": "the gate-run retention count of five lives in the plugin", "disposition": "PLAN-PHASE" }
+  ],
+  "gateSignals": {
+    "arcSweepClean": true,
+    "validateArcPassed": true,
+    "fullSuiteGreen": true
+  },
+  "receiptRef": "none",
+  "openFollowups": 1
+}
