@@ -49,6 +49,10 @@ export const WORKFLOW_PROFILE = 'prod-grade'
  * like provenance to a reader, and half a provenance record is worse than an absent one that the
  * report names as a gap.
  *
+ * `pluginSha` is the HEAD short sha, suffixed `-dirty` when the plugin worktree carries
+ * uncommitted changes: a report produced from an edited tree was not produced by the commit
+ * the sha names, and the suffix is the difference between provenance and a plausible number.
+ *
  * Stamped at PRODUCTION time only. It is deliberately not restampable: the build behind a
  * historical report was never recorded, and writing today's sha onto it would invent the fact.
  */
@@ -66,11 +70,21 @@ export function assembleWorkflowStamp({ exec = defaultExec, pluginRoot = PLUGIN_
   }
 
   const rev = exec('git', ['-C', pluginRoot, 'rev-parse', '--short=12', 'HEAD'])
-  const pluginSha = rev.status === 0 ? rev.stdout.trim() : ''
-  if (!pluginSha) {
+  const head = rev.status === 0 ? rev.stdout.trim() : ''
+  if (!head) {
     warn('workflow stamp: the plugin checkout has no resolvable HEAD sha — no workflow block written')
     return null
   }
+  // A bare sha claims the report was produced BY that commit, which is false whenever the
+  // plugin is edited and run before the commit lands — the normal state of a phase in flight.
+  // The `-dirty` suffix is the honest form of the same fact; without it the stamp quietly
+  // names a build the reader could diff and would not recognise.
+  const status = exec('git', ['-C', pluginRoot, 'status', '--porcelain', '.'])
+  if (status.status !== 0) {
+    warn('workflow stamp: cannot tell whether the plugin worktree is clean — no workflow block written')
+    return null
+  }
+  const pluginSha = status.stdout.trim() === '' ? head : `${head}-dirty`
 
   const measured = flowTokens('do-arc', { manifestPath: join(pluginRoot, 'cli', 'measure-manifest.json'), baseDir: pluginRoot })
   if (!measured) {

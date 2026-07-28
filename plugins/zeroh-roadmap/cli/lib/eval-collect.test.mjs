@@ -319,10 +319,44 @@ test('assembleWorkflowStamp — a complete stamp over the real plugin checkout, 
   const stamp = assembleWorkflowStamp({ warn: (l) => warnings.push(l) })
   assert.ok(stamp, 'the plugin checkout can derive its own provenance')
   assert.deepEqual(warnings, [], 'a complete stamp warns about nothing')
-  assert.match(stamp.pluginSha, /^[0-9a-f]{12}$/, 'a 12-char short sha, not a branch name or a guess')
+  // `-dirty` is tolerated HERE only because this runs against the live plugin checkout, which
+  // a sibling session may have edited; both states are pinned exactly in the test below.
+  assert.match(stamp.pluginSha, /^[0-9a-f]{12}(-dirty)?$/, 'a 12-char short sha, not a branch name or a guess')
   assert.ok(stamp.pluginVersion.length > 0)
   assert.ok(Number.isInteger(stamp.protocolLoadTokens) && stamp.protocolLoadTokens > 0)
   assert.equal(stamp.profile, WORKFLOW_PROFILE)
+})
+
+test('assembleWorkflowStamp — an EDITED plugin worktree stamps `-dirty`, a clean one stamps the bare sha', () => {
+  // The report is produced by the tree, not by the commit. A phase in flight runs edited code
+  // against an unchanged HEAD, so a bare sha there names a build that would not reproduce the
+  // report — the exact fabricated-provenance failure the block exists to prevent.
+  const execWith = (porcelain) => (bin, args) =>
+    args.includes('rev-parse')
+      ? { status: 0, stdout: 'abc123def456\n', stderr: '' }
+      : { status: 0, stdout: porcelain, stderr: '' }
+
+  assert.equal(assembleWorkflowStamp({ exec: execWith('') }).pluginSha, 'abc123def456', 'a clean tree IS its commit')
+  assert.equal(
+    assembleWorkflowStamp({ exec: execWith(' M cli/lib/eval-score.mjs\n') }).pluginSha,
+    'abc123def456-dirty',
+    'an uncommitted edit is disclosed, never rounded down to the parent commit',
+  )
+
+  // Cleanliness that cannot be READ is not cleanliness: an unknown answer drops the block
+  // rather than guessing the flattering one.
+  const warnings = []
+  assert.equal(
+    assembleWorkflowStamp({
+      exec: (bin, args) =>
+        args.includes('rev-parse')
+          ? { status: 0, stdout: 'abc123def456\n', stderr: '' }
+          : { status: 128, stdout: '', stderr: 'fatal' },
+      warn: (l) => warnings.push(l),
+    }),
+    null,
+  )
+  assert.match(warnings[0], /clean/i, 'and the warning names which component was underivable')
 })
 
 test('assembleWorkflowStamp — ANY underivable component yields NULL plus a warning naming it', () => {

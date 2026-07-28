@@ -37,6 +37,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bridgeEval } from '../lib/tsx-bridge.mjs'
+import { DECLARED_RESETS } from '../lib/eval-score.mjs'
 import { buildEvalFixture, ARC_ID } from '../testdata/eval-arc/build-fixture.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -288,14 +289,25 @@ function parsesConsumerShape(root, shapeName, doc) {
  * REPORT name, which is the only prior form the ratchet may read.
  *
  * `sentinels` names dimensions that carry an absence instead of a number (score XOR sentinel,
- * so the score is omitted, not zeroed); `ratchet` plants ratchet rows; `arcId`/`name` let a
- * caller file the same document under another arc or under a NON-report filename. All four
- * default to today's behaviour, so every pre-existing caller is untouched.
+ * so the score is omitted, not zeroed); `ratchet` plants ratchet rows; `notes` plants the note
+ * array a restamp then edits; `arcId`/`name` let a caller file the same document under another
+ * arc or under a NON-report filename. Every knob defaults to today's behaviour, so every
+ * pre-existing caller is untouched.
  */
 function plantPrior(
   root,
   date,
-  { all = 60, per = {}, judgeModel = 'judge-A', sentinels = {}, signals = {}, ratchet = [], arcId = ARC_ID, name } = {},
+  {
+    all = 60,
+    per = {},
+    judgeModel = 'judge-A',
+    sentinels = {},
+    signals = {},
+    notes = [],
+    ratchet = [],
+    arcId = ARC_ID,
+    name,
+  } = {},
 ) {
   const dimensions = {}
   for (const key of EVAL_KEYS) {
@@ -321,7 +333,7 @@ function plantPrior(
     dimensions,
     ratchet,
     attribution: { drivers: [], reviewers: [] },
-    notes: [],
+    notes,
   }
   mkdirSync(evalsDir(root), { recursive: true })
   const p = join(evalsDir(root), name ?? `${arcId}-${date}.json`)
@@ -1156,11 +1168,14 @@ test('eval <ARCID> — a fresh report is stamped with profile, fingerprint and a
   const report = readReport(root, EVAL_DATE)
   assert.equal(report.profile, 'prod-grade')
   assert.equal(report.workflow.profile, report.profile, 'the block snapshots the profile it ran under')
-  // The sha is the PLUGIN's HEAD, and it is a measurement rather than a placeholder.
-  const pluginSha = execFileSync('git', ['-C', PLUGIN_ROOT, 'rev-parse', '--short=12', 'HEAD'], {
+  // The sha is the PLUGIN's HEAD, and it is a measurement rather than a placeholder — plus the
+  // `-dirty` marker whenever the plugin tree that RAN differs from the commit it points at,
+  // which on this shared checkout is the usual case rather than the exception.
+  const head = execFileSync('git', ['-C', PLUGIN_ROOT, 'rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8',
   }).trim()
-  assert.equal(report.workflow.pluginSha, pluginSha, 'the producing build is named, not guessed')
+  const dirty = execFileSync('git', ['-C', PLUGIN_ROOT, 'status', '--porcelain', '.'], { encoding: 'utf8' }).trim() !== ''
+  assert.equal(report.workflow.pluginSha, dirty ? `${head}-dirty` : head, 'the producing build is named, not guessed')
   const measured = JSON.parse(
     execFileSync('node', [BIN, 'measure', '--flow', 'do-arc', '--json'], { encoding: 'utf8' }),
   )
@@ -1208,6 +1223,54 @@ test('eval restamp — a second run is byte-identical (idempotent, and the gap n
     1,
     'the gap note is appended once, never once per run',
   )
+})
+
+/**
+ * The retirement half of the restamp, which is what actually edited the committed archive: a
+ * reset note is dropped from EXISTING reports once no report in the corpus is pre-reset any
+ * more. Asserted in BOTH directions on the same fixture shape, so a blanket delete (or a
+ * blanket keep) reds one of the two.
+ */
+const POST_RESET_SIGNALS = {
+  speed: { referenceMinutesPerTask: 8 },
+  'code-confidence': { escapeWindow: 'land-record-anchored' },
+}
+const FOREIGN_NOTE = 'a hand-written observation the loop does not own'
+const speedResetNote = DECLARED_RESETS.find((r) => r.id === 'speed-reference-8').note
+
+test('eval restamp — a RETIRED reset note is dropped from an existing report, foreign prose is not', () => {
+  const root = buildEvalFixture()
+  const p = plantPrior(root, '2026-07-02', {
+    all: 60,
+    signals: POST_RESET_SIGNALS,
+    notes: [FOREIGN_NOTE, speedResetNote],
+  })
+
+  assert.equal(roadmap(root, ['eval', 'restamp']).code, 0)
+  const notes = JSON.parse(readFileSync(p, 'utf8')).notes
+  assert.ok(
+    !notes.includes(speedResetNote),
+    `nothing pre-reset survives in the corpus, so the archive's copy retires too; got ${JSON.stringify(notes)}`,
+  )
+  assert.ok(notes.includes(FOREIGN_NOTE), 'a note the registry does not own is never the restamp\'s to edit')
+})
+
+test('eval restamp — the SAME note is KEPT while one pre-reset report is still in the corpus', () => {
+  const root = buildEvalFixture()
+  const p = plantPrior(root, '2026-07-02', {
+    all: 60,
+    signals: POST_RESET_SIGNALS,
+    notes: [FOREIGN_NOTE, speedResetNote],
+  })
+  // One report still scored under the old reference — the disclaimer is still true of the corpus.
+  plantPrior(root, '2026-07-03', {
+    all: 70,
+    signals: { ...POST_RESET_SIGNALS, speed: { referenceMinutesPerTask: 45 } },
+  })
+
+  assert.equal(roadmap(root, ['eval', 'restamp']).code, 0)
+  const notes = JSON.parse(readFileSync(p, 'utf8')).notes
+  assert.ok(notes.includes(speedResetNote), 'retirement is a CORPUS question, not a per-file one')
 })
 
 /**
