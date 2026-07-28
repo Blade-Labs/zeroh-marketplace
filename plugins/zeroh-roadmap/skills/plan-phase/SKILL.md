@@ -66,6 +66,15 @@ marshal-chain fix, refactor, perf) · `release` (version cut/changelog/infra/dep
 nameable reason: risk isolation (a prod-touching change landing alone), a hard dependency boundary,
 or a distinct `kind`. "Felt like a separate topic" is not one. Past ~10 tasks → do-arc's HEAVY band.
 
+**Cite the recorded reference class, never clock-feel.** When the consumer has
+`roadmap/arc-evals/timing-stats.json`, read it and annotate the phase docblock with the cohort this
+phase falls in — task-count band × surface-or-not, where surface means any `keyFiles` path matching
+`web/`, `office/` or `spa/` (the table's own heuristic — name it as one). ALWAYS give the class AND
+its N beside the numbers: `timing: band 4-6 × surface:false, N=8, median 60.8 min, p80 83.3 min`.
+No matching cohort, `samples: 0`, or no stats file at all → write the literal honest-absent form
+`timing: no reference data for <band>×<surface>`. Never an invented range, and never a bare number
+without its class and N — a range whose sample size nobody can see is clock-feel wearing a citation.
+
 **Author the `assumptions` tripwires.** Every load-bearing claim about the CURRENT territory a task
 depends on — a file's behavior, a test's status, a caller count, a seam's existence — becomes an
 `{ claim, verify: '<one runnable grep/test/ls>', onFalse: 'ESCALATE' }`. 2–6 typical; **zero is

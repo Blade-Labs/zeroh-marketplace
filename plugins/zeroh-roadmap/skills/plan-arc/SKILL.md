@@ -56,7 +56,10 @@ Decide WITH the user: `planes`, `singleSeams`, `honestyRails`, `acceptanceCriter
 
 **Size the phase count against the granularity rule** (plan-phase "Phase granularity"): gate +
 executor cost is per-phase and v1 arcs run sequentially, so phase count ≈ wall-clock ≈ token cost.
-Target 5–8 tasks/phase; a plane of 2–3-task phases → consolidate before reserving numbers.
+Target 5–8 tasks/phase; a plane of 2–3-task phases → consolidate before reserving numbers. Consult
+`roadmap/arc-evals/timing-stats.json` while sizing planes — the recorded per-cohort medians are the
+only non-clock-feel input available for that ≈. Each member phase's own annotation then lands via
+the Step 2b plan-phase loop, so there is one annotation grammar, not a second one here.
 
 **The interview (before authoring criteria).** Before writing `acceptanceCriteria` or running the
 design gate, INTERVIEW the user — one question at a time, **prioritizing questions whose answers
