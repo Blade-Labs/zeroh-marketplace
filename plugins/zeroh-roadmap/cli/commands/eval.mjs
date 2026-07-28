@@ -926,12 +926,15 @@ async function runArcEval(arcId, opts) {
       say(`WARN: arc ${other} has reports but its trace could not be collected — excluded from the timing table`)
     }
   }
-  // The SAME time source as the report's date — a second `new Date()` here would make the
-  // regenerated table differ byte-for-byte on every run over identical inputs, so the
-  // committed archive would show a spurious diff each time the eval is re-run. The instant is
-  // therefore MIDNIGHT of the report's date, not the moment of generation: the table is a
-  // projection keyed to a report date, and reproducibility beats instant-level precision.
-  const stats = computeTimingStats(traces, { generatedAt: `${date}T00:00:00.000Z` })
+  // Derived from the DATA, never from wall clock: a second `new Date()` here would make the
+  // regenerated table differ byte-for-byte on every run over identical inputs, so the committed
+  // archive would show a spurious diff each time the eval is re-run. The instant is midnight of
+  // the NEWEST date in the pool — this report's own date, or a later report's if one exists.
+  // Keying it to this report's date alone let a re-run at a HISTORICAL date backdate a
+  // corpus-wide table below data it already contained, which is a table claiming to predate its
+  // own inputs.
+  const newestDate = [date, ...priors.map((p) => String(p.date))].sort().at(-1)
+  const stats = computeTimingStats(traces, { generatedAt: `${newestDate}T00:00:00.000Z` })
   const statsValidated = bridgeValidate(toplevel, schemaPath, 'TimingStatsShape', stats)
   if (!statsValidated.ok) {
     process.stderr.write(`roadmap eval ${arcId}: refused — the timing table does not match TimingStatsShape:\n`)

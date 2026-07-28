@@ -100,14 +100,17 @@ export const DECLARED_RESETS = [
   {
     id: 'escape-anchor-option-c',
     date: '2026-07-28',
-    // Deliberately phrased about the CORPUS, never about the report carrying it: this stamp
-    // rides reports that DID measure their escape rate, and a note a reader could take as this
-    // report's own disclaimer would undo the very thing option C fixed.
+    // Phrased about the CORPUS and pointing the reader at the one signal that settles it. It
+    // must not read as this report's own disclaimer (the stamp rides reports that DID measure,
+    // and that disclaimer would undo what option C fixed), but it must not deny the carrier
+    // either: an arc evaluated with no dated RunnerSummary on disk falls back to a merge/tip
+    // window and stamps this note about itself.
     note:
       'scoring-model reset 2026-07-28: the scored escape window now anchors on the dated land record ' +
-      "(option C) rather than on the arc's own newest commit. Reports elsewhere in this corpus still " +
-      'carry a merge- or tip-anchored window, which could not see a post-land fix at all; their ' +
-      'code-confidence is not comparable to a report scored under the land record',
+      "(option C) rather than on the arc's own newest commit. Reports in this corpus — possibly " +
+      "including this one, see its own code-confidence escapeWindow signal — still carry a merge- or " +
+      'tip-anchored window, which could not see a post-land fix at all; those are not comparable to a ' +
+      'report scored under the land record',
     preReset: (r) =>
       ['merge-anchored', 'tip-anchored'].includes(r?.dimensions?.['code-confidence']?.signals?.escapeWindow),
   },
