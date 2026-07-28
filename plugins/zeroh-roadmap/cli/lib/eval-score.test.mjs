@@ -1,0 +1,470 @@
+#!/usr/bin/env node
+/**
+ * eval-score.test.mjs — the deterministic SCORER and the rolling-baseline RATCHET (arc
+ * EVALCORE, 1996.3). Input is a REAL trace: the shared fixture corpus
+ * (cli/testdata/eval-arc/build-fixture.mjs) collected through the REAL collector, then
+ * mutated IN MEMORY when a test needs one input to differ. Nothing here re-implements the
+ * scoring arithmetic — a test that recomputes the formula only proves the formula equals
+ * itself. What is asserted instead:
+ *
+ * - STRUCTURE: exactly the seven closed keys, in contract order, each with score XOR
+ *   sentinel and at least one sourceRef.
+ * - THE ANTI-ZERO INVARIANT (the acceptance criterion): every missing-input path yields
+ *   its NAMED sentinel with `score` undefined — asserted as `!== 0` explicitly, so a
+ *   future regression that zeroes a dimension instead of sentinelling it reds here
+ *   rather than reading as a real, terrible arc.
+ * - DIRECTION: two traces differing in ONE input move the score the right way (an extra
+ *   escape fix lowers code-confidence, a closed gap raises verified-vs-intent, more
+ *   minutes per task never raises speed).
+ * - COMPARABILITY: a sentinel prior and a different-judge prior are EXCLUDED from a
+ *   baseline rather than zeroed into a fake regression, asserted through the sample count.
+ *
+ * ## Ratchet sample-count convention (decided here, implement to match)
+ * `computeRatchet` returns the plain `EvalRatchetRow[]` the contract declares — no second
+ * return value — and each row that HAS a baseline names the count in its `note` as the
+ * literal token `samples=<n>`. The count then survives `ArcEvalReportShape.parse()` into
+ * the persisted archive (an extra row field would be stripped by the object shape), so a
+ * human reading a year-old report can see how many priors formed the baseline. The
+ * fewer-than-2 case keeps the exact note `no-baseline`, which the contract's comment pins.
+ *
+ * Run: node --test cli/lib/eval-score.test.mjs
+ */
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { buildEvalFixture, ARC_ID } from '../testdata/eval-arc/build-fixture.mjs'
+import { collectArcTrace } from './eval-collect.mjs'
+import {
+  scoreArcTrace,
+  assembleAttribution,
+  computeRatchet,
+  DIMENSION_KEYS,
+  SPEED_REFERENCE_MINUTES_PER_TASK,
+  MIN_COMPARABLE_PRIORS,
+} from './eval-score.mjs'
+
+/** The contract's key order, restated ONCE here so a reorder upstream is a visible diff. */
+const EXPECTED_KEYS = [
+  'code-confidence',
+  'verified-vs-intent',
+  'standards-adherence',
+  'doc-brevity',
+  'composability-testability',
+  'speed',
+  'plan-quality',
+]
+const DETERMINISTIC_KEYS = ['code-confidence', 'verified-vs-intent', 'speed']
+const JUDGE_KEYS = ['standards-adherence', 'doc-brevity', 'composability-testability', 'plan-quality']
+
+// ── fixture + trace memos ─────────────────────────────────────────────────────────────
+// Fixture roots are expensive (a git script + tsx bridge reads) and collection spawns tsx,
+// so both are built once per variant; every caller gets a structuredClone so a test that
+// mutates its trace cannot leak that mutation into the next test's "unchanged" baseline.
+const fixtureMemo = new Map()
+const fixture = (opts = {}) => {
+  const key = JSON.stringify(opts)
+  if (!fixtureMemo.has(key)) fixtureMemo.set(key, buildEvalFixture(opts))
+  return fixtureMemo.get(key)
+}
+
+const traceMemo = new Map()
+const traceFor = (opts = {}) => {
+  const key = JSON.stringify(opts)
+  if (!traceMemo.has(key)) traceMemo.set(key, collectArcTrace(fixture(opts), ARC_ID).trace)
+  return structuredClone(traceMemo.get(key))
+}
+
+const byNum = (trace, n) => trace.phases.find((p) => p.phase === n)
+
+/** Every structural invariant the contract enforces, applied to a whole dimensions record. */
+function assertDimensionsWellFormed(dimensions, label) {
+  assert.deepEqual(Object.keys(dimensions), EXPECTED_KEYS, `${label}: exactly the seven closed keys, in contract order`)
+  for (const key of EXPECTED_KEYS) {
+    const d = dimensions[key]
+    assert.ok(d, `${label}: ${key} present`)
+    assert.ok(['deterministic', 'judge'].includes(d.owner), `${label}: ${key} owner is a contract value`)
+    assert.equal(
+      (d.score === undefined) !== (d.sentinel === undefined),
+      true,
+      `${label}: ${key} carries EXACTLY one of score / sentinel (got score=${d.score} sentinel=${d.sentinel})`,
+    )
+    if (d.score !== undefined) {
+      assert.equal(typeof d.score, 'number', `${label}: ${key} score is a number`)
+      assert.ok(Number.isFinite(d.score), `${label}: ${key} score is finite`)
+      assert.ok(d.score >= 0 && d.score <= 100, `${label}: ${key} score within 0..100, got ${d.score}`)
+    }
+    assert.ok(Array.isArray(d.sourceRefs) && d.sourceRefs.length >= 1, `${label}: ${key} names at least one sourceRef`)
+    for (const ref of d.sourceRefs) assert.ok(typeof ref === 'string' && ref.length > 0, `${label}: ${key} sourceRef non-empty`)
+    assert.equal(typeof d.signals, 'object', `${label}: ${key} carries a signals record`)
+  }
+}
+
+/** The anti-zero assertion, in one place: a named sentinel and NO number standing in for it. */
+function assertSentinel(dimensions, key, sentinel) {
+  const d = dimensions[key]
+  assert.equal(d.sentinel, sentinel, `${key} must carry the named sentinel '${sentinel}'`)
+  assert.equal(d.score, undefined, `${key} must have NO score beside its sentinel`)
+  assert.notEqual(d.score, 0, `${key} must sentinel, never zero — a zero reads as a real, terrible arc`)
+}
+
+const isScored = (dimensions, key) => typeof dimensions[key].score === 'number' && dimensions[key].sentinel === undefined
+
+// ── synthetic reports for the ratchet ─────────────────────────────────────────────────
+const ownerOf = (key) => (JUDGE_KEYS.includes(key) ? 'judge' : 'deterministic')
+
+/** `per` values: a number is a score, a string is that sentinel. `all` fills the rest. */
+function mkReport({ all = 60, per = {}, judgeModel, date = '2026-07-01' } = {}) {
+  const dimensions = {}
+  for (const key of DIMENSION_KEYS) {
+    const v = Object.prototype.hasOwnProperty.call(per, key) ? per[key] : all
+    dimensions[key] =
+      typeof v === 'number'
+        ? { owner: ownerOf(key), score: v, signals: { synthetic: v }, sourceRefs: ['synthetic-prior'] }
+        : { owner: ownerOf(key), sentinel: v, signals: {}, sourceRefs: ['synthetic-prior'] }
+  }
+  return { arcId: ARC_ID, date, judgeModel, dimensions, ratchet: [], attribution: { drivers: [], reviewers: [] }, notes: [] }
+}
+
+const rowOf = (rows, key) => rows.find((r) => r.dimension === key)
+
+/** The chosen convention: the baseline sample count rides the row's `note` as `samples=<n>`. */
+function samplesFromNote(row) {
+  assert.equal(typeof row.note, 'string', `${row.dimension}: a row with a baseline must carry a note`)
+  const m = row.note.match(/samples=(\d+)/)
+  assert.ok(m, `${row.dimension}: the note must name the baseline sample count as samples=<n>; got ${JSON.stringify(row.note)}`)
+  return Number(m[1])
+}
+
+// ── 0. the exported vocabulary ────────────────────────────────────────────────────────
+test('DIMENSION_KEYS is the closed seven in contract order; MIN_COMPARABLE_PRIORS is 2', () => {
+  assert.deepEqual([...DIMENSION_KEYS], EXPECTED_KEYS)
+  assert.equal(MIN_COMPARABLE_PRIORS, 2)
+  assert.equal(typeof SPEED_REFERENCE_MINUTES_PER_TASK, 'number')
+  assert.ok(SPEED_REFERENCE_MINUTES_PER_TASK > 0, 'a reference of zero would make every speed score degenerate')
+})
+
+// ── 1. the deterministic three ────────────────────────────────────────────────────────
+test('scoreArcTrace — the fully-recorded fixture scores all three deterministic dimensions, sentinel-free', () => {
+  const { dimensions, notes } = scoreArcTrace(traceFor())
+  assertDimensionsWellFormed(dimensions, 'fixture')
+  assert.ok(Array.isArray(notes), 'notes is always an array, even when there is nothing to name')
+
+  for (const key of DETERMINISTIC_KEYS) {
+    const d = dimensions[key]
+    assert.equal(d.owner, 'deterministic', `${key} is deterministic-owned`)
+    assert.equal(d.sentinel, undefined, `${key} has every input it needs in this fixture — no sentinel`)
+    assert.equal(typeof d.score, 'number', `${key} scores a real number`)
+    assert.ok(Object.keys(d.signals).length > 0, `${key} shows the raw inputs behind its score`)
+    assert.ok(d.sourceRefs.length >= 1, `${key} names the artifact its signals came from`)
+  }
+})
+
+// ── 2. the judge four ─────────────────────────────────────────────────────────────────
+test('scoreArcTrace — the four judge dimensions are pending-judge with their FEEDERS precomputed', () => {
+  const { dimensions } = scoreArcTrace(traceFor())
+  for (const key of JUDGE_KEYS) {
+    const d = dimensions[key]
+    assert.equal(d.owner, 'judge', `${key} is judge-owned`)
+    assert.equal(d.sentinel, 'pending-judge', `${key} awaits the judge pass`)
+    assert.equal(d.score, undefined, `${key} must not carry a scorer-invented number`)
+    assert.notEqual(d.score, 0, `${key} must not zero itself while waiting for the judge`)
+    assert.ok(
+      Object.keys(d.signals).length > 0,
+      `${key}: the deterministic FEEDERS must be precomputed — an empty signals record hands the judge nothing to judge`,
+    )
+    assert.ok(d.sourceRefs.length >= 1, `${key} names where its feeders came from`)
+  }
+})
+
+// ── 3. absence: the verdicts file ─────────────────────────────────────────────────────
+test('scoreArcTrace — no verdicts file flips ONLY verified-vs-intent, to no-verdicts-file', () => {
+  const { dimensions } = scoreArcTrace(traceFor({ omitVerdicts: true }))
+  assertDimensionsWellFormed(dimensions, 'omitVerdicts')
+  assertSentinel(dimensions, 'verified-vs-intent', 'no-verdicts-file')
+  assert.ok(isScored(dimensions, 'code-confidence'), 'code-confidence does not read the verdicts file')
+  assert.ok(isScored(dimensions, 'speed'), 'speed does not read the verdicts file')
+  for (const key of JUDGE_KEYS) assert.equal(dimensions[key].sentinel, 'pending-judge', `${key} is untouched`)
+})
+
+test('scoreArcTrace — dropping verdicts is SURGICAL: the other six dimensions are byte-identical', () => {
+  // Same collected trace, one field removed in memory — so the ONLY difference between the
+  // two runs is the verdicts input (two fixture ROOTS would also differ in their git shas).
+  const base = traceFor()
+  const without = traceFor()
+  delete without.verdicts
+  const a = scoreArcTrace(base).dimensions
+  const b = scoreArcTrace(without).dimensions
+
+  assert.notDeepEqual(a['verified-vs-intent'], b['verified-vs-intent'], 'the dimension that reads verdicts must change')
+  assert.equal(b['verified-vs-intent'].sentinel, 'no-verdicts-file')
+  for (const key of EXPECTED_KEYS) {
+    if (key === 'verified-vs-intent') continue
+    assert.deepEqual(b[key], a[key], `${key} must not move when an artifact it does not read disappears`)
+  }
+})
+
+// ── 4. absence: timestamps ────────────────────────────────────────────────────────────
+test('scoreArcTrace — no phase metrics flips ONLY speed, to no-timestamps with score undefined', () => {
+  const trace = traceFor()
+  for (const p of trace.phases) delete p.metrics
+  const { dimensions } = scoreArcTrace(trace)
+  assertDimensionsWellFormed(dimensions, 'no-metrics')
+  assertSentinel(dimensions, 'speed', 'no-timestamps')
+  assert.ok(isScored(dimensions, 'code-confidence'), 'gate records still score code-confidence')
+  assert.ok(isScored(dimensions, 'verified-vs-intent'), 'the verdicts file still scores verified-vs-intent')
+  for (const key of JUDGE_KEYS) assert.equal(dimensions[key].sentinel, 'pending-judge', `${key} is untouched`)
+})
+
+test('scoreArcTrace — a HALF-timed phase pair still scores speed: only ZERO usable pairs sentinel', () => {
+  const trace = traceFor()
+  delete byNum(trace, 9002).metrics.completedAt
+  const { dimensions } = scoreArcTrace(trace)
+  assert.equal(dimensions.speed.sentinel, undefined, 'one phase with both timestamps is enough evidence to score')
+  assert.equal(typeof dimensions.speed.score, 'number')
+})
+
+// ── 5. absence: gate records ──────────────────────────────────────────────────────────
+test('scoreArcTrace — no gate runs AND no recorded gateRounds flips ONLY code-confidence', () => {
+  const trace = traceFor()
+  for (const p of trace.phases) {
+    p.gateRuns = []
+    if (p.executionResult) delete p.executionResult.gateRounds
+  }
+  const { dimensions } = scoreArcTrace(trace)
+  assertDimensionsWellFormed(dimensions, 'no-gates')
+  assertSentinel(dimensions, 'code-confidence', 'no-gate-records')
+  assert.ok(isScored(dimensions, 'verified-vs-intent'))
+  assert.ok(isScored(dimensions, 'speed'))
+  for (const key of JUDGE_KEYS) assert.equal(dimensions[key].sentinel, 'pending-judge', `${key} is untouched`)
+})
+
+test('scoreArcTrace — recorded gateRounds ALONE (no .gate run files) still scores code-confidence', () => {
+  const trace = traceFor()
+  for (const p of trace.phases) p.gateRuns = []
+  const { dimensions } = scoreArcTrace(trace)
+  assert.equal(dimensions['code-confidence'].sentinel, undefined, 'executionResult.gateRounds is gate evidence too')
+  assert.equal(typeof dimensions['code-confidence'].score, 'number')
+})
+
+// ── 6. speed signals: elapsed AND halt-adjusted ───────────────────────────────────────
+test('scoreArcTrace — speed.signals reports BOTH elapsed and halt-adjusted minutes (elapsed alone is dishonest)', () => {
+  const { dimensions } = scoreArcTrace(traceFor())
+  const s = dimensions.speed.signals
+  assert.equal(typeof s.elapsedMinutes, 'number', 'speed.signals.elapsedMinutes')
+  assert.equal(typeof s.haltAdjustedMinutes, 'number', 'speed.signals.haltAdjustedMinutes')
+  assert.ok(s.elapsedMinutes > 0, 'the fixture arc took real time')
+  // Fixture phase 9002 records haltCount 2: the discount MUST be visible, or the halt
+  // record is being collected and then thrown away.
+  assert.equal(byNum(traceFor(), 9002).metrics.haltCount, 2, 'fixture precondition: the interrupted phase')
+  assert.notEqual(s.haltAdjustedMinutes, s.elapsedMinutes, 'a recorded halt must move the halt-adjusted figure')
+  assert.ok(s.haltAdjustedMinutes < s.elapsedMinutes, 'halts are DISCOUNTED from elapsed, not added to it')
+})
+
+// ── 7. direction: one input at a time ─────────────────────────────────────────────────
+test('scoreArcTrace — an extra post-land escape fix scores code-confidence STRICTLY LOWER', () => {
+  const base = scoreArcTrace(traceFor()).dimensions['code-confidence']
+  const worse = traceFor()
+  worse.git.escapeFixes.push({ sha: 'deadbee0000', subject: 'fix(x): a second escape', files: 2 })
+  const after = scoreArcTrace(worse).dimensions['code-confidence']
+
+  assert.equal(base.sentinel, undefined)
+  assert.equal(after.sentinel, undefined)
+  assert.ok(after.score < base.score, `a second escaping fix must lower code-confidence (${base.score} → ${after.score})`)
+})
+
+test('scoreArcTrace — closing the fixture gap scores verified-vs-intent STRICTLY HIGHER', () => {
+  const base = scoreArcTrace(traceFor()).dimensions['verified-vs-intent']
+  const better = traceFor()
+  const gap = better.verdicts.verdicts.find((v) => v.status === 'gap')
+  assert.ok(gap, 'fixture precondition: one gap verdict')
+  gap.status = 'met'
+  delete gap.gap
+  const after = scoreArcTrace(better).dimensions['verified-vs-intent']
+
+  assert.ok(after.score > base.score, `a met criterion must beat a gap (${base.score} → ${after.score})`)
+})
+
+test('scoreArcTrace — more halt-adjusted minutes per task never scores speed higher, and 2x the reference is strictly worse', () => {
+  const atReference = scoreArcTrace(withMinutesPerTask(traceFor(), SPEED_REFERENCE_MINUTES_PER_TASK)).dimensions.speed
+  const twiceReference = scoreArcTrace(withMinutesPerTask(traceFor(), SPEED_REFERENCE_MINUTES_PER_TASK * 2)).dimensions.speed
+  const halfReference = scoreArcTrace(withMinutesPerTask(traceFor(), SPEED_REFERENCE_MINUTES_PER_TASK / 2)).dimensions.speed
+
+  assert.equal(atReference.sentinel, undefined)
+  assert.ok(
+    twiceReference.score < atReference.score,
+    `twice the reference minutes per task must score strictly lower (${atReference.score} → ${twiceReference.score})`,
+  )
+  assert.ok(halfReference.score >= atReference.score, 'faster than the reference is never penalised')
+})
+
+/** Rewrite every phase's timing to exactly `mins` uninterrupted minutes per recorded task. */
+function withMinutesPerTask(trace, mins) {
+  const start = '2026-07-16T00:00:00.000Z'
+  for (const p of trace.phases) {
+    const tasks = Math.max(1, p.taskCount)
+    p.metrics = {
+      ...(p.metrics ?? {}),
+      startedAt: start,
+      completedAt: new Date(Date.parse(start) + mins * tasks * 60_000).toISOString(),
+      haltCount: 0,
+    }
+  }
+  return trace
+}
+
+// ── 8. the quarantined phase ──────────────────────────────────────────────────────────
+test('scoreArcTrace — a quarantined phase does not throw and IS NAMED in notes', () => {
+  const trace = traceFor({ malformedPhase: 9002 })
+  assert.equal(typeof byNum(trace, 9002).parseError, 'string', 'fixture precondition: 9002 is quarantined')
+
+  const { dimensions, notes } = scoreArcTrace(trace)
+  assertDimensionsWellFormed(dimensions, 'malformed')
+  assert.ok(
+    notes.some((n) => /9002/.test(n)),
+    `notes must name the phase whose record could not be read; got ${JSON.stringify(notes)}`,
+  )
+  assert.ok(!notes.some((n) => /\b9001\b/.test(n)), 'the healthy phase is not named as a gap')
+})
+
+// ── 9. attribution: recorded or 'unrecorded', never guessed ───────────────────────────
+test('assembleAttribution — a recorded driver travels; an unrecorded one is the literal unrecorded/session', () => {
+  const { drivers, reviewers } = assembleAttribution(traceFor())
+
+  const recorded = drivers.find((d) => d.model === 'claude-opus-5')
+  assert.ok(recorded, `phase 9001's recorded driver must appear; got ${JSON.stringify(drivers)}`)
+  assert.equal(recorded.lane, 'session')
+  assert.deepEqual(recorded.phases, [9001])
+
+  const unrecorded = drivers.find((d) => d.model === 'unrecorded')
+  assert.ok(unrecorded, `phase 9002 has no driver — it must land as 'unrecorded', never a guessed model id`)
+  assert.equal(unrecorded.lane, 'session')
+  assert.deepEqual(unrecorded.phases, [9002])
+
+  assert.equal(drivers.length, 2, `exactly the two attribution buckets; got ${JSON.stringify(drivers)}`)
+  assert.ok(
+    !drivers.some((d) => d.model !== 'unrecorded' && d.phases.includes(9002)),
+    'no real model id may be back-filled onto the unrecorded phase',
+  )
+
+  // 9001's gate run: quality-pass x1 + code-reviewer x2. 9002's: code-reviewer x1.
+  const sorted = [...reviewers].sort((a, b) => a.agent.localeCompare(b.agent))
+  assert.deepEqual(sorted, [
+    { agent: 'code-reviewer', rounds: 3 },
+    { agent: 'quality-pass', rounds: 1 },
+  ])
+})
+
+// ── 10. the ratchet: too few comparable priors ────────────────────────────────────────
+test('computeRatchet — ONE comparable prior yields a full no-baseline table, never a fake delta', () => {
+  const current = mkReport({ all: 70, judgeModel: 'judge-A' })
+  const rows = computeRatchet(current, [mkReport({ all: 60, judgeModel: 'judge-A' })])
+
+  assert.deepEqual(rows.map((r) => r.dimension), EXPECTED_KEYS, 'one row per dimension, in contract order')
+  for (const r of rows) {
+    assert.equal(r.baseline, null, `${r.dimension}: fewer than ${MIN_COMPARABLE_PRIORS} priors ⇒ no baseline`)
+    assert.equal(r.delta, null, `${r.dimension}: no baseline ⇒ no delta`)
+    assert.equal(r.regression, false, `${r.dimension}: an unquantifiable regression is not a regression`)
+    assert.equal(r.note, 'no-baseline', `${r.dimension}: the row carries the sentinel word in its note`)
+    assert.equal(r.value, 70, `${r.dimension}: the current value is still reported`)
+  }
+})
+
+test('computeRatchet — ZERO priors is the same honest no-baseline table, not a throw', () => {
+  const rows = computeRatchet(mkReport({ all: 70, judgeModel: 'judge-A' }), [])
+  assert.equal(rows.length, EXPECTED_KEYS.length)
+  for (const r of rows) {
+    assert.equal(r.baseline, null)
+    assert.equal(r.regression, false)
+    assert.equal(r.note, 'no-baseline')
+  }
+})
+
+// ── 11. the ratchet: real baselines ───────────────────────────────────────────────────
+test('computeRatchet — THREE comparable priors: a planted regression is flagged, an improvement is not', () => {
+  const priors = [60, 70, 80].map((n, i) => mkReport({ all: n, judgeModel: 'judge-A', date: `2026-07-0${i + 1}` }))
+  const current = mkReport({ all: 70, per: { speed: 20, 'code-confidence': 90 }, judgeModel: 'judge-A' })
+  const rows = computeRatchet(current, priors)
+
+  const slower = rowOf(rows, 'speed')
+  assert.equal(slower.value, 20)
+  assert.ok(slower.baseline >= 60 && slower.baseline <= 80, `the baseline is a mean of the priors; got ${slower.baseline}`)
+  assert.ok(slower.delta < 0, 'a value below the baseline is a negative delta')
+  assert.equal(slower.regression, true, 'a quantified drop IS the named regression')
+
+  const faster = rowOf(rows, 'code-confidence')
+  assert.ok(faster.delta > 0)
+  assert.equal(faster.regression, false, 'an improvement is never a regression')
+
+  // Exactly AT the baseline: the boundary is not a regression.
+  const flat = rowOf(rows, 'doc-brevity')
+  assert.equal(flat.value, 70)
+  assert.equal(flat.delta, 0, 'a value equal to the mean of 60/70/80 is a zero delta')
+  assert.equal(flat.regression, false, 'delta === 0 is the boundary and must NOT flag')
+
+  // The baseline is a MEAN over the priors, not the newest prior: adding a low outlier moves it.
+  const withOutlier = computeRatchet(current, [...priors, mkReport({ all: 10, judgeModel: 'judge-A', date: '2026-07-04' })])
+  assert.ok(
+    rowOf(withOutlier, 'speed').baseline < slower.baseline,
+    'a low extra prior must drag the rolling baseline down (a last-value baseline would not move)',
+  )
+  assert.equal(samplesFromNote(rowOf(withOutlier, 'speed')), 4)
+})
+
+// ── 12. comparability: the two exclusion reasons, independently ───────────────────────
+test('computeRatchet — a prior with a SENTINEL on a dimension is excluded from THAT dimension only', () => {
+  const good = [1, 2, 3].map((i) => mkReport({ all: 60, judgeModel: 'judge-A', date: `2026-07-0${i}` }))
+  const sentinelled = mkReport({ all: 60, per: { speed: 'no-timestamps' }, judgeModel: 'judge-A', date: '2026-07-04' })
+  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A' }), [...good, sentinelled])
+
+  assert.equal(samplesFromNote(rowOf(rows, 'speed')), 3, 'the sentinel prior contributes NO speed sample')
+  assert.equal(samplesFromNote(rowOf(rows, 'code-confidence')), 4, 'that same prior still counts where it HAS a score')
+  assert.ok(
+    rowOf(rows, 'speed').baseline === rowOf(rows, 'code-confidence').baseline,
+    'excluding a sentinel prior must not zero it into the mean — both baselines are 60-flat here',
+  )
+})
+
+test('computeRatchet — a DIFFERENT judgeModel is excluded from judge dimensions and kept for deterministic ones', () => {
+  const sameJudge = [1, 2, 3].map((i) => mkReport({ all: 60, judgeModel: 'judge-A', date: `2026-07-0${i}` }))
+  const otherJudge = mkReport({ all: 90, judgeModel: 'judge-B', date: '2026-07-04' })
+  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A' }), [...sameJudge, otherJudge])
+
+  const judged = rowOf(rows, 'standards-adherence')
+  assert.equal(samplesFromNote(judged), 3, 'a different judge is baseline-reset material for a JUDGE-owned dimension')
+  assert.ok(judged.baseline >= 60 && judged.baseline <= 60, `the judge-B 90 must not enter the mean; got ${judged.baseline}`)
+
+  const deterministic = rowOf(rows, 'speed')
+  assert.equal(samplesFromNote(deterministic), 4, 'a deterministic dimension compares across judge models freely')
+  assert.ok(deterministic.baseline > 60, 'the judge-B prior DOES raise the deterministic baseline')
+})
+
+// ── 13. a sentinel on the CURRENT report ──────────────────────────────────────────────
+test('computeRatchet — a sentinel on the current dimension yields value/delta null and no regression', () => {
+  const priors = [1, 2, 3].map((i) => mkReport({ all: 80, judgeModel: 'judge-A', date: `2026-07-0${i}` }))
+  const current = mkReport({ all: 80, per: { speed: 'no-timestamps' }, judgeModel: 'judge-A' })
+  const rows = computeRatchet(current, priors)
+
+  const row = rowOf(rows, 'speed')
+  assert.equal(row.value, null, 'there is no current number to compare')
+  assert.equal(row.delta, null, 'a regression must always have a computable delta')
+  assert.equal(row.regression, false, 'an unmeasured dimension is never a regression')
+  assert.notEqual(row.value, 0, 'an unmeasured value must not become a zero that reads as a total collapse')
+  assert.equal(typeof row.baseline, 'number', 'the baseline the priors DO support is still reported')
+  assert.ok(/no-timestamps/.test(row.note ?? ''), `the note must name why the value is missing; got ${JSON.stringify(row.note)}`)
+
+  // The healthy dimensions are unaffected by their neighbour's absence.
+  const other = rowOf(rows, 'code-confidence')
+  assert.equal(other.value, 80)
+  assert.equal(other.regression, false)
+})
+
+// ── 14. end to end over the real trace ────────────────────────────────────────────────
+test('scoreArcTrace + computeRatchet — a scorer output feeds the ratchet directly', () => {
+  const scored = scoreArcTrace(traceFor())
+  const rows = computeRatchet({ judgeModel: undefined, dimensions: scored.dimensions }, [])
+  assert.deepEqual(rows.map((r) => r.dimension), EXPECTED_KEYS)
+  for (const key of JUDGE_KEYS) {
+    const row = rowOf(rows, key)
+    assert.equal(row.value, null, `${key} awaits the judge — it has no value to ratchet`)
+    assert.equal(row.regression, false)
+  }
+})
