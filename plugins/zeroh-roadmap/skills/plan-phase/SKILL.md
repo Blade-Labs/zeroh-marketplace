@@ -100,6 +100,22 @@ runGovernedToolCall → verify: node --test src/agui.test.ts"` (or `… → veri
 lint warns on a phase file NEW to git only, and review-phase Mode A is the actual enforcement — the
 lint is the reminder, not the gate.
 
+**A verify must fail ONLY when its claim is false — RUN IT BOTH DIRECTIONS before writing it.**
+This applies to `assumptions[].verify` and every `→ verify:` clause, and it is the single most
+repeated authoring defect (one arc produced four instances across three phases, by four different
+authors). A verify that fires backwards is worse than none: a red one sends the executor to
+"escalate" and a green one certifies work nobody did. Four shapes, the first three lint-warned:
+- **Inverted** — a bare `grep -c` asserting ABSENCE exits 1 on a count of 0, so it reds exactly when
+  the thing you wanted gone is gone. Compare explicitly: `test "$(grep -c x f)" = "0"`.
+- **Piped judgement** — `npm run type-check | head -5` reports *head's* exit code, so a red compile
+  reads green. Redirect to a file and read `$?`. (This one shipped a real typecheck failure.)
+- **Wrong invocation** — `node --test foo.ts` cannot run TypeScript without a loader, so it fails
+  identically whether the work succeeded or not. Use the CONSUMER's own test script form.
+- **Self-colliding or vacuous** (a regex cannot catch these, you must): a negative grep that matches
+  the very line the task tells the executor to WRITE, or a check that passes because the target file
+  does not exist yet. Anchor a negative grep on something unique to the code being REMOVED, and
+  assert the positive half too. Test against a scratch copy carrying the line the task will add.
+
 Author with `definePhase({ phase, name, plannedBy:{ model: your own model id }, status:'backlog',
 category, kind, source, priority,
 dependsOn, conflictsWith, keyFiles, stakeholderDemo, tasks:[…] })`; each task `{ id, title, problem,

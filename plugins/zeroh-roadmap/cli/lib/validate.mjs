@@ -73,7 +73,9 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
   // Never a non-zero exit — a reminder of plan-phase's authoring grammar, not enforcement
   // (review-phase Mode A is the enforcement). The ~1,100 already-committed phase files are
   // grandfathered: the file must be new to git (no HEAD blob) for the lint to fire.
-  const warnings = isPhase && parsed ? stepVerifyGrammarWarnings(parsed, normalized) : []
+  const warnings = isPhase && parsed
+    ? [...stepVerifyGrammarWarnings(parsed, normalized), ...verifyPolarityWarnings(parsed, normalized)]
+    : []
 
   if (errors.length > 0) return { kind: 'errors', ok: false, errors, warnings }
   return { kind: 'ok', ok: true, warnings }
@@ -98,6 +100,67 @@ function stepVerifyGrammarWarnings(phase, normalizedPath) {
             `" → verify: <command|observable>" (plan-phase authoring grammar; new phase files only)`,
         )
       }
+    })
+  }
+  return out
+}
+
+/**
+ * A verify clause is only worth writing if it fails EXACTLY when its claim is false. These three
+ * shapes fail the other way round, and each cost a real turn before this lint existed (arc
+ * SEODESKFIX produced four instances across three phases, written by four different authors):
+ *
+ *  1. INVERTED — a bare `grep -c` asserting ABSENCE. `grep -c x file` exits 1 when the count is 0,
+ *     so the tripwire reds precisely when the thing it wanted gone is gone. Compare explicitly
+ *     instead: `test "$(grep -c x file)" = "0"`.
+ *  2. PIPED JUDGEMENT — a build/typecheck/test run ending in `| head`, `| tail` or `| grep`. The
+ *     pipeline's exit code belongs to the FILTER, so a red compile reads green. Redirect to a file
+ *     and read $?. This one masked a real typecheck failure in a shipped consumer.
+ *  3. WRONG TEST INVOCATION — `node --test` on a .ts/.tsx path with no loader flag. It cannot run
+ *     TypeScript, so it fails identically whether the work succeeded or not. Use the consumer's own
+ *     test script form (commonly `node --import tsx --test`).
+ *
+ * WARN only, and only for a phase file NEW to git, exactly like the grammar lint above: this is a
+ * reminder at authoring time, never enforcement. review-phase Mode A is the enforcement, and it can
+ * see the things a regex cannot (a grep that matches the very line the task tells the executor to
+ * write, or one that passes vacuously because the file does not exist yet).
+ */
+function verifyPolarityWarnings(phase, normalizedPath) {
+  if (!isNewToGit(normalizedPath)) return []
+  const num = phase?.phase ?? '?'
+  const out = []
+  const flag = (where, cmd) => {
+    // A `grep -c` whose result is never compared. `test "$(grep -c …)" = "N"` and `[ "$(…)" -eq N ]`
+    // are the correct forms and must not warn, so only fire when no comparison operator is present.
+    if (/\bgrep\s+(-[a-zA-Z]*c|--count)\b/.test(cmd) && !/(\btest\b|\[|=|-eq|-ne|-gt|-lt)/.test(cmd)) {
+      out.push(
+        `[zeroh-roadmap] WARN phase ${num} ${where}: a bare \`grep -c\` exits non-zero on a count of 0, ` +
+          `so this reds when the claim is TRUE. Compare the count explicitly, e.g. test "$(grep -c x f)" = "0".`,
+      )
+    }
+    if (/(npm run|pnpm |yarn |tsc\b|capbuild|nx run|vitest|node --test)/.test(cmd) && /\|\s*(head|tail|grep)\b/.test(cmd)) {
+      out.push(
+        `[zeroh-roadmap] WARN phase ${num} ${where}: this judges a build or test run through a pipe, so the ` +
+          `exit code is the filter's and a red run reads green. Redirect to a file and read $?.`,
+      )
+    }
+    if (/node\s+--test\b/.test(cmd) && /\.tsx?\b/.test(cmd) && !/(--import|--loader|--experimental-strip-types)/.test(cmd)) {
+      out.push(
+        `[zeroh-roadmap] WARN phase ${num} ${where}: \`node --test\` cannot run a .ts file without a loader, ` +
+          `so it fails the same way whether the work succeeded or not. Use the consumer's own test script form.`,
+      )
+    }
+  }
+
+  for (const a of Array.isArray(phase?.assumptions) ? phase.assumptions : []) {
+    if (typeof a?.verify === 'string') flag(`assumption "${String(a.claim ?? '').slice(0, 40)}"`, a.verify)
+  }
+  for (const t of Array.isArray(phase?.tasks) ? phase.tasks : []) {
+    const steps = Array.isArray(t?.steps) ? t.steps : []
+    steps.forEach((s, i) => {
+      const d = typeof s?.description === 'string' ? s.description : ''
+      const m = d.split(/→\s*verify:/)[1]
+      if (m) flag(`task ${t?.id ?? '?'} step ${i + 1}`, m)
     })
   }
   return out
