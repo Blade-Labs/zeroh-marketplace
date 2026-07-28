@@ -20,7 +20,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { defaultExec } from './exec.mjs'
 import { bridgeEval } from './tsx-bridge.mjs'
 import { buildEvalFixture, ARC_ID, PHASE_NUMS, SUMMARY_DATE } from '../testdata/eval-arc/build-fixture.mjs'
@@ -30,6 +30,9 @@ import {
   findArcGitFacts,
   newestArtifact,
   newestArtifactDated,
+  assembleWorkflowStamp,
+  assembleConsumerFingerprint,
+  WORKFLOW_PROFILE,
   CollectError,
 } from './eval-collect.mjs'
 
@@ -308,6 +311,60 @@ test('collectArcTrace — with NO dated RunnerSummary the same repo falls back t
   assert.equal(new Date(trace.git.landedAt).toISOString(), '2026-07-21T15:00:00.000Z', 'the escape itself is the tip')
   assert.deepEqual(trace.git.escapeFixes, [], 'the self-defeating empty list — pinned as the honest fallback')
   assert.equal(trace.summary, undefined, 'and the summary field is absent, never stubbed')
+})
+
+// ── the three stamps ──────────────────────────────────────────────────────────────────
+test('assembleWorkflowStamp — a complete stamp over the real plugin checkout, warning-free', () => {
+  const warnings = []
+  const stamp = assembleWorkflowStamp({ warn: (l) => warnings.push(l) })
+  assert.ok(stamp, 'the plugin checkout can derive its own provenance')
+  assert.deepEqual(warnings, [], 'a complete stamp warns about nothing')
+  assert.match(stamp.pluginSha, /^[0-9a-f]{12}$/, 'a 12-char short sha, not a branch name or a guess')
+  assert.ok(stamp.pluginVersion.length > 0)
+  assert.ok(Number.isInteger(stamp.protocolLoadTokens) && stamp.protocolLoadTokens > 0)
+  assert.equal(stamp.profile, WORKFLOW_PROFILE)
+})
+
+test('assembleWorkflowStamp — ANY underivable component yields NULL plus a warning naming it', () => {
+  // A partial stamp is a fabricated one: a block carrying a version and no sha still reads as
+  // provenance. Each leg drops the WHOLE block and says which component failed.
+  const gitDown = { status: 1, stdout: '', stderr: 'not a git repository' }
+  const warnings = []
+  assert.equal(
+    assembleWorkflowStamp({ exec: () => gitDown, warn: (l) => warnings.push(l) }),
+    null,
+    'no resolvable HEAD ⇒ no block',
+  )
+  assert.equal(warnings.length, 1)
+  assert.match(warnings[0], /sha/i, 'the warning names WHICH component was underivable')
+
+  const noPkg = []
+  assert.equal(
+    assembleWorkflowStamp({ pluginRoot: join(fixture(), 'no', 'such', 'dir'), warn: (l) => noPkg.push(l) }),
+    null,
+    'no readable package.json ⇒ no block',
+  )
+  assert.match(noPkg[0], /package\.json/)
+})
+
+test('assembleConsumerFingerprint — derived offline from the checkout, never from a remote', () => {
+  const root = fixture()
+  const fp = assembleConsumerFingerprint(root)
+  assert.equal(fp.repo, basename(root), 'the toplevel basename, so no network read decides the identity')
+  assert.equal(fp.corpusSize, 2, 'the fixture carries exactly the two member phase files')
+
+  // The language ladder, each rung on its own tree so no rung can be inferred from a sibling.
+  const scratchRoot = (files) => {
+    const d = mkdtempSync(join(tmpdir(), 'zr-evalfix-fp-'))
+    scratch.push(d)
+    for (const f of files) writeFileSync(join(d, f), '{}\n')
+    return d
+  }
+  assert.equal(assembleConsumerFingerprint(scratchRoot(['tsconfig.json', 'package.json'])).language, 'typescript')
+  assert.equal(assembleConsumerFingerprint(scratchRoot(['package.json'])).language, 'javascript')
+
+  const bare = scratchRoot([])
+  assert.deepEqual(assembleConsumerFingerprint(bare), { repo: basename(bare), language: 'unknown', corpusSize: 0 })
 })
 
 test('newestArtifactDated — returns the newest file WITH its filename date; absent stays null', () => {

@@ -16,6 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { flowTokens } from './measure.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -56,6 +57,30 @@ function measure(manifestPath, args) {
     return { code: err.status ?? 1, stdout: (err.stdout ?? '').toString(), stderr: (err.stderr ?? '').toString() }
   }
 }
+
+// ── flowTokens: the ONE metering implementation, callable without the CLI ──────────────
+test('flowTokens — the same sum the CLI prints, and null (never a partial) when underivable', () => {
+  const manifestPath = makeManifest({ alpha: [{ name: 'a', bytes: 9 }, { name: 'b', bytes: 4 }] })
+  const baseDir = dirname(manifestPath)
+
+  const viaCli = JSON.parse(measure(manifestPath, ['--flow', 'alpha', '--json']).stdout)
+  const direct = flowTokens('alpha', { manifestPath, baseDir })
+  assert.equal(direct.totalTokens, viaCli.totalTokens, 'one implementation ⇒ one number')
+  assert.equal(direct.totalTokens, 3 + 1, 'ceil(9/4) + ceil(4/4)')
+  assert.equal(direct.totalBytes, 13)
+
+  assert.equal(flowTokens('nosuchflow', { manifestPath, baseDir }), null, 'an unknown flow is not derivable')
+  assert.equal(
+    flowTokens('alpha', { manifestPath: join(baseDir, 'nope.json'), baseDir }),
+    null,
+    'nor is a missing manifest',
+  )
+
+  // The load-bearing one: a renamed file must yield NOTHING, not the sum of what survives — a
+  // partial figure would be stamped into a report as though it were the measurement.
+  const withMissing = makeManifest({ beta: [{ name: 'a', bytes: 40 }, { name: 'gone', bytes: 40, missing: true }] })
+  assert.equal(flowTokens('beta', { manifestPath: withMissing, baseDir: dirname(withMissing) }), null)
+})
 
 test('total = Σ ceil(bytes/4) per file', () => {
   // 10 → ceil(2.5)=3 ; 4 → 1 ; 7 → ceil(1.75)=2  ⇒ total 6, bytes 21

@@ -1145,6 +1145,93 @@ test('eval trend — -sweep/-verdicts siblings and timing-stats.json are neither
   )
 })
 
+// ── 27a. the three stamps, at production and on the existing corpus ────────────────────
+const WORKFLOW_GAP_RX = /workflow provenance GAP/
+
+test('eval <ARCID> — a fresh report is stamped with profile, fingerprint and a real workflow block', () => {
+  const root = buildEvalFixture()
+  const r = roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+
+  const report = readReport(root, EVAL_DATE)
+  assert.equal(report.profile, 'prod-grade')
+  assert.equal(report.workflow.profile, report.profile, 'the block snapshots the profile it ran under')
+  // The sha is the PLUGIN's HEAD, and it is a measurement rather than a placeholder.
+  const pluginSha = execFileSync('git', ['-C', PLUGIN_ROOT, 'rev-parse', '--short=12', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim()
+  assert.equal(report.workflow.pluginSha, pluginSha, 'the producing build is named, not guessed')
+  const measured = JSON.parse(
+    execFileSync('node', [BIN, 'measure', '--flow', 'do-arc', '--json'], { encoding: 'utf8' }),
+  )
+  assert.equal(report.workflow.protocolLoadTokens, measured.totalTokens, 'one metering implementation, one number')
+  // The fixture consumer ships no tsconfig.json, so 'unknown' is the HONEST answer here rather
+  // than a defect — the language ladder itself is pinned rung by rung in eval-collect.test.mjs.
+  assert.equal(report.fingerprint.language, 'unknown')
+  assert.equal(report.fingerprint.corpusSize, 2, 'the consumer corpus is COUNTED, not asserted')
+  assert.ok(!report.notes.some((n) => WORKFLOW_GAP_RX.test(n)), 'a stamped report names no provenance gap')
+})
+
+test('eval restamp — adds profile + fingerprint additively and leaves every SCORE byte-identical', () => {
+  const root = buildEvalFixture()
+  const p = plantPrior(root, '2026-07-02', { all: 60 })
+  const before = JSON.parse(readFileSync(p, 'utf8'))
+  assert.equal(before.profile, undefined, 'fixture precondition: an unstamped report')
+
+  const r = roadmap(root, ['eval', 'restamp'])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  assert.match(r.stdout, /stamped/, 'the run prints what it did per file')
+
+  const after = JSON.parse(readFileSync(p, 'utf8'))
+  assert.equal(after.profile, 'prod-grade')
+  assert.equal(after.fingerprint.repo.length > 0, true)
+  // The honesty rail, asserted structurally rather than trusted: restamp NEVER re-scores.
+  for (const key of ['dimensions', 'ratchet', 'attribution', 'date', 'arcId', 'judgeModel'])
+    assert.deepEqual(after[key], before[key], `${key} must be untouched by a restamp`)
+  // And it never invents provenance for a build nobody recorded.
+  assert.equal(after.workflow, undefined, 'a retro-stamped plugin sha would be a fabricated fact')
+  assert.ok(after.notes.some((n) => WORKFLOW_GAP_RX.test(n)), 'instead the absence is a NAMED gap')
+})
+
+test('eval restamp — a second run is byte-identical (idempotent, and the gap note is appended once)', () => {
+  const root = buildEvalFixture()
+  const p = plantPrior(root, '2026-07-02', { all: 60 })
+  assert.equal(roadmap(root, ['eval', 'restamp']).code, 0)
+  const first = readFileSync(p, 'utf8')
+
+  const second = roadmap(root, ['eval', 'restamp'])
+  assert.equal(second.code, 0, second.stdout + second.stderr)
+  assert.match(second.stdout, /unchanged/, 'a settled corpus reports unchanged, not a rewrite')
+  assert.equal(readFileSync(p, 'utf8'), first, 'a settled restamp writes nothing')
+  assert.equal(
+    (JSON.parse(first).notes.filter((n) => WORKFLOW_GAP_RX.test(n))).length,
+    1,
+    'the gap note is appended once, never once per run',
+  )
+})
+
+/**
+ * The all-or-nothing rail at the CLI boundary. The FAILURE legs are unit-tested at their seam
+ * (assembleWorkflowStamp with an injected failing exec, cli/lib/eval-collect.test.mjs) because
+ * that is where a failure can be injected without faking a git-less world; what only the CLI
+ * can prove is that the two states are mutually exclusive and that a written block is complete.
+ */
+test('eval <ARCID> — a workflow block and a workflow-gap warning never coexist, and a written block is COMPLETE', () => {
+  const root = buildEvalFixture()
+  assert.equal(roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE]).code, 0)
+  const report = readReport(root, EVAL_DATE)
+
+  const hasBlock = report.workflow !== undefined
+  assert.equal(
+    hasBlock,
+    !report.notes.some((n) => /no workflow block written/.test(n)),
+    'never both, never neither — a partial stamp has no representation',
+  )
+  if (hasBlock)
+    for (const k of ['pluginVersion', 'pluginSha', 'protocolLoadTokens', 'profile'])
+      assert.notEqual(report.workflow[k], undefined, `a written block is COMPLETE (${k} present)`)
+})
+
 // ── 27b. declared resets: the STAMP retires, the trend MARKER does not ─────────────────
 const SPEED_RESET_RX = /SPEED_REFERENCE_MINUTES_PER_TASK recalibrated 45 → 8/
 const SPEED_RESET_ID = 'speed-reference-8'

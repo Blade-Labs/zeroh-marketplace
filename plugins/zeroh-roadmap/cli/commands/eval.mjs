@@ -25,7 +25,13 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
-import { collectArcTrace, CollectError } from '../lib/eval-collect.mjs'
+import {
+  collectArcTrace,
+  assembleWorkflowStamp,
+  assembleConsumerFingerprint,
+  WORKFLOW_PROFILE,
+  CollectError,
+} from '../lib/eval-collect.mjs'
 import {
   scoreArcTrace,
   assembleAttribution,
@@ -106,7 +112,8 @@ const USAGE =
   '  roadmap eval <ARCID> [--date <YYYY-MM-DD>] [--force] [--collect-only] [--backfill] [--json]\n' +
   '  roadmap eval record-sweep|record-verdicts --arc <ID> [--force] [file|-]\n' +
   '  roadmap eval merge-judge --arc <ID> [--report <path>]   (verdict JSON on stdin)\n' +
-  '  roadmap eval trend                                      (renders roadmap/arc-evals/trend.html)\n'
+  '  roadmap eval trend                                      (renders roadmap/arc-evals/trend.html)\n' +
+  '  roadmap eval restamp [--json]                           (additively re-stamps existing reports; never re-scores)\n'
 
 export default async function run(argv) {
   const { opts, positional } = parseArgs(argv)
@@ -119,6 +126,7 @@ export default async function run(argv) {
     }
     if (sub === 'merge-judge') return runMergeJudge(opts)
     if (sub === 'trend') return runTrend(opts)
+    if (sub === 'restamp') return runRestamp(opts)
     // Anything that is not one of the two literal recorder names is an ARC ID. The literals
     // are checked FIRST so a future arc called `record-sweep` could never shadow the recorder.
     return runArcEval(sub, opts)
@@ -231,6 +239,92 @@ const esc = (s) =>
  * the URL would be the single thing on the page pointing at the network. The page must open
  * from a filesystem with no connection at all, which is the state a proof artifact is read in.
  */
+/**
+ * `roadmap eval restamp` — bring the EXISTING corpus up to the current stamp set, ADDITIVELY.
+ *
+ * The one hard rule: this never re-scores. `dimensions`, `ratchet`, `attribution`, `date` and
+ * `judgeModel` are untouched on every file; only absent `profile` / `fingerprint` are filled and
+ * only retired reset notes are dropped. A `workflow` block is NEVER written onto an existing
+ * report — the build that produced it was not recorded, and stamping today's sha would fabricate
+ * provenance — so a report without one gets its gap NAMED in notes instead, once.
+ *
+ * Every rewritten report is bridge-validated against ArcEvalReportShape BEFORE it is written, so
+ * a restamp can never leave the archive in a state the reader refuses.
+ */
+async function runRestamp(opts) {
+  let toplevel, schemaPath
+  try {
+    toplevel = gitToplevel(process.cwd())
+    schemaPath = consumerSchemaPath(toplevel)
+  } catch (e) {
+    if (e instanceof BridgeError) for (const l of e.messageLines) process.stderr.write(l + '\n')
+    else process.stderr.write(`roadmap eval restamp: ${e.message}\n`)
+    return 1
+  }
+
+  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const say = (line) => process.stdout.write(line + '\n')
+  if (!existsSync(dir)) {
+    say(`roadmap eval restamp: no ${ARC_EVALS_DIR.join('/')} directory — nothing to restamp`)
+    return 0
+  }
+
+  const fingerprint = assembleConsumerFingerprint(toplevel)
+  // Retirement is a CORPUS question, so the whole corpus is read once and the surviving note set
+  // computed from it — a per-file decision would let two files disagree about the same fact.
+  const corpus = readPriorReports(dir, { onWarn: say })
+  const surviving = new Set(declaredResetNotes(corpus))
+  const registryNotes = new Set(DECLARED_RESETS.map((r) => r.note))
+  const WORKFLOW_GAP_NOTE =
+    'workflow provenance GAP: this report predates the workflow version stamp, and the build that ' +
+    'produced it was never recorded — a retro-stamped plugin sha would be a fabricated fact, so the block stays absent'
+
+  const files = readdirSync(dir)
+    .sort()
+    .filter((f) => REPORT_NAME_RE.test(f))
+  let stamped = 0
+  for (const f of files) {
+    const p = join(dir, f)
+    let doc
+    try {
+      doc = JSON.parse(readFileSync(p, 'utf8'))
+    } catch {
+      continue // readPriorReports already warned by name
+    }
+    if (!doc || typeof doc.dimensions !== 'object' || doc.dimensions === null) continue
+
+    const before = JSON.stringify(doc)
+    if (doc.profile === undefined) doc.profile = WORKFLOW_PROFILE
+    if (doc.fingerprint === undefined) doc.fingerprint = fingerprint
+    const notes = Array.isArray(doc.notes) ? doc.notes : []
+    // Drop only notes THIS registry owns and whose reset has retired; anything else in the array
+    // is someone else's prose and is not ours to edit.
+    const kept = notes.filter((n) => !registryNotes.has(n) || surviving.has(n))
+    if (!doc.workflow && !kept.includes(WORKFLOW_GAP_NOTE)) kept.push(WORKFLOW_GAP_NOTE)
+    doc.notes = kept
+
+    if (JSON.stringify(doc) === before) {
+      say(`  unchanged  ${f}`)
+      continue
+    }
+
+    const validated = bridgeValidate(toplevel, schemaPath, 'ArcEvalReportShape', doc)
+    if (!validated.ok) {
+      process.stderr.write(`roadmap eval restamp: refused — ${f} would not match ArcEvalReportShape after stamping:\n`)
+      if (validated.res.kind === 'zod') printZodIssues(validated.res.issues)
+      else process.stderr.write((validated.res.stderr || 'bridge failure') + '\n')
+      return 2
+    }
+    writeFileSync(p, JSON.stringify(doc, null, 2) + '\n', 'utf8')
+    stamped += 1
+    say(`  stamped    ${f}`)
+  }
+
+  say(`roadmap eval restamp: ${stamped} stamped, ${files.length - stamped} unchanged (scores untouched by construction)`)
+  if (opts.json) process.stdout.write(JSON.stringify({ stamped, total: files.length }, null, 2) + '\n')
+  return 0
+}
+
 async function runTrend(opts) {
   let toplevel
   try {
@@ -782,13 +876,20 @@ async function runArcEval(arcId, opts) {
   }
 
   const scored = scoreArcTrace(collected.trace, { backfill: Boolean(opts.backfill) })
+  const stampWarnings = []
+  const workflow = assembleWorkflowStamp({ warn: (l) => stampWarnings.push(l) })
   const draft = {
     arcId,
     date,
     dimensions: scored.dimensions,
     ratchet: [],
     attribution: assembleAttribution(collected.trace),
-    notes: [...collected.warnings, ...scored.notes],
+    profile: WORKFLOW_PROFILE,
+    // Absent rather than partial, and the gap is NAMED in notes: a workflow block is provenance,
+    // and half a provenance record still reads as one.
+    ...(workflow ? { workflow } : {}),
+    fingerprint: assembleConsumerFingerprint(toplevel),
+    notes: [...collected.warnings, ...scored.notes, ...stampWarnings],
   }
   const priors = readPriorReports(dir, { excludePath: outPath, onWarn: say })
   draft.ratchet = computeRatchet(draft, priors)

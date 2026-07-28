@@ -24,10 +24,83 @@
  * have dragged down.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defaultExec } from './exec.mjs'
 import { GateRunReportShape } from './gate-report.mjs'
+import { flowTokens } from '../commands/measure.mjs'
 import { bridgeImport, bridgeImportMany } from './tsx-bridge.mjs'
+
+const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+
+/**
+ * The one workflow profile that exists. A profile names how an arc was RUN — which gate chain,
+ * which review depth, which model tier — so a score shift can be attributed to the workflow
+ * rather than to the actor. Only the cheap STAMP ships here: the per-profile seam stays unbuilt
+ * until a second profile has a concrete consumer (rule of three), and building it now would be
+ * an abstraction over a set of size one.
+ */
+export const WORKFLOW_PROFILE = 'prod-grade'
+
+/**
+ * Which plugin BUILD is producing this report: `{ pluginVersion, pluginSha, protocolLoadTokens,
+ * profile }`, or null when ANY component is underivable — in which case `warn` is called naming
+ * which one. A partial stamp is a fabricated stamp: a workflow block missing its sha still looks
+ * like provenance to a reader, and half a provenance record is worse than an absent one that the
+ * report names as a gap.
+ *
+ * Stamped at PRODUCTION time only. It is deliberately not restampable: the build behind a
+ * historical report was never recorded, and writing today's sha onto it would invent the fact.
+ */
+export function assembleWorkflowStamp({ exec = defaultExec, pluginRoot = PLUGIN_ROOT, warn = () => {} } = {}) {
+  let pluginVersion
+  try {
+    pluginVersion = JSON.parse(readFileSync(join(pluginRoot, 'package.json'), 'utf8')).version
+  } catch (e) {
+    warn(`workflow stamp: cannot read the plugin package.json (${e.message}) — no workflow block written`)
+    return null
+  }
+  if (!pluginVersion) {
+    warn('workflow stamp: the plugin package.json records no version — no workflow block written')
+    return null
+  }
+
+  const rev = exec('git', ['-C', pluginRoot, 'rev-parse', '--short=12', 'HEAD'])
+  const pluginSha = rev.status === 0 ? rev.stdout.trim() : ''
+  if (!pluginSha) {
+    warn('workflow stamp: the plugin checkout has no resolvable HEAD sha — no workflow block written')
+    return null
+  }
+
+  const measured = flowTokens('do-arc', { manifestPath: join(pluginRoot, 'cli', 'measure-manifest.json'), baseDir: pluginRoot })
+  if (!measured) {
+    warn("workflow stamp: the do-arc protocol load is not derivable (missing manifest or path) — no workflow block written")
+    return null
+  }
+
+  return { pluginVersion, pluginSha, protocolLoadTokens: measured.totalTokens, profile: WORKFLOW_PROFILE }
+}
+
+/**
+ * Which CONSUMER produced this report, so numbers from two repos are comparable. Every
+ * component is derived OFFLINE from the checkout — `repo` is the toplevel's basename rather
+ * than a git remote, because a remote read is a network call and a rename would silently
+ * repartition the corpus mid-history.
+ */
+export function assembleConsumerFingerprint(toplevel) {
+  const language = existsSync(join(toplevel, 'tsconfig.json'))
+    ? 'typescript'
+    : existsSync(join(toplevel, 'package.json'))
+      ? 'javascript'
+      : 'unknown'
+  let corpusSize = 0
+  try {
+    corpusSize = readdirSync(join(toplevel, 'roadmap', 'phases')).filter((f) => /^phase-.*\.phase\.ts$/.test(f)).length
+  } catch {
+    corpusSize = 0 // an absent phases dir is an empty corpus, not a failure
+  }
+  return { repo: basename(toplevel), language, corpusSize }
+}
 
 /** A typed collection failure. kind ∈ 'no-arc' | 'tsx-absent' | 'load'. */
 export class CollectError extends Error {

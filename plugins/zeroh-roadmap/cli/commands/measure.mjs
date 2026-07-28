@@ -21,6 +21,41 @@ const flagVal = (argv, name) => {
   return i >= 0 ? argv[i + 1] : undefined
 }
 
+/**
+ * The manifest sum for one flow: `{ rows, totalBytes, totalTokens, note }`, or null when the
+ * answer cannot be derived — no readable manifest, an unknown flow, or a manifest path that no
+ * longer exists. NEVER a partial sum: a renamed skill must break the meter loudly rather than
+ * silently shrink it, and a caller stamping a partial figure into a report would be recording
+ * a number that looks like a measurement and is not.
+ *
+ * Exported because the eval's workflow stamp needs the same figure. ONE metering
+ * implementation, two consumers — `run()` below is the other.
+ */
+export function flowTokens(flowName, { manifestPath = MANIFEST, baseDir = PLUGIN_ROOT } = {}) {
+  let manifest
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  } catch {
+    return null
+  }
+  const flow = (manifest.flows ?? {})[flowName]
+  if (!flow) return null
+
+  const rows = []
+  let totalBytes = 0
+  let totalTokens = 0
+  for (const entry of flow.files ?? []) {
+    const abs = join(baseDir, entry.path)
+    if (!existsSync(abs)) return null
+    const bytes = statSync(abs).size
+    const tokens = Math.ceil(bytes / 4)
+    totalBytes += bytes
+    totalTokens += tokens
+    rows.push({ path: entry.path, bytes, tokens, why: entry.why })
+  }
+  return { rows, totalBytes, totalTokens, note: flow.note }
+}
+
 export default async function run(argv) {
   const json = argv.includes('--json')
   const flow = flagVal(argv, '--flow')
@@ -57,22 +92,16 @@ export default async function run(argv) {
     return 1
   }
 
-  const rows = []
-  let totalTokens = 0
-  let totalBytes = 0
-  for (const entry of flows[flow].files ?? []) {
-    const abs = join(baseDir, entry.path)
-    if (!existsSync(abs)) {
-      // A renamed/deleted skill must break the meter loudly, never silently shrink it.
-      process.stderr.write(`roadmap measure: manifest path does not exist — ${entry.path} (flow '${flow}'). A renamed skill must break the meter; fix the manifest.\n`)
-      return 1
-    }
-    const bytes = statSync(abs).size
-    const tokens = Math.ceil(bytes / 4)
-    totalBytes += bytes
-    totalTokens += tokens
-    rows.push({ path: entry.path, bytes, tokens, why: entry.why })
+  // The preconditions above are validated here, with their own diagnostics, because flowTokens
+  // reports only derivable-or-not; past them, the ONE remaining null cause is a missing path.
+  const measured = flowTokens(flow, { manifestPath, baseDir })
+  if (!measured) {
+    // A renamed/deleted skill must break the meter loudly, never silently shrink it.
+    const missing = (flows[flow].files ?? []).find((entry) => !existsSync(join(baseDir, entry.path)))
+    process.stderr.write(`roadmap measure: manifest path does not exist — ${missing?.path ?? '(unresolved)'} (flow '${flow}'). A renamed skill must break the meter; fix the manifest.\n`)
+    return 1
   }
+  const { rows, totalBytes, totalTokens } = measured
 
   const overBudget = assertN != null && totalTokens > assertN
 
