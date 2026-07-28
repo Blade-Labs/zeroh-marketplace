@@ -1273,6 +1273,111 @@ export const TimingStatsShape = z.object({
 export type TimingStats = z.output<typeof TimingStatsShape>
 
 /**
+ * LessonShape — one durable lesson, one JSON document per LINE of the committed
+ * roadmap/arc-evals/lessons.jsonl sidecar. JSONL rather than a JSON array because the file is
+ * APPEND-ONLY across concurrent sessions on a shared tree: a read-modify-write array would race,
+ * and the loser of that race silently drops the lesson it was written to keep.
+ *
+ * `origin` is the write-provenance groundwork. The consolidating loop may touch ONLY artifacts
+ * carrying its own `kind: 'eval-loop'`; a `kind: 'session'` lesson is upstream content it archives
+ * and cites but never edits. `writer` is SELF-REPORTED and carries the literal `unrecorded` when
+ * the caller does not say — a named gap, never a guessed actor id.
+ */
+export const LessonShape = z.object({
+  ts: z.string().datetime(),
+  phase: z.number().int().positive().optional(),
+  text: z.string().min(1),
+  origin: z.object({
+    writer: z.string().min(1),
+    kind: z.enum(['session', 'eval-loop']),
+  }),
+})
+
+export type Lesson = z.output<typeof LessonShape>
+
+/** Metrics on a scorecard cell: numbers or NAMED string sentinels, the EvalDimensionShape
+ *  `signals` idiom — an unmeasurable metric says so in words rather than reporting a 0. */
+const ScorecardMetricsShape = z.record(z.string(), z.union([z.number(), z.string()]))
+
+/** One driver cohort cell: a model/lane pair WITHIN one reference class, never across. */
+const ScorecardDriverCellShape = z.object({
+  model: z.string().min(1),
+  lane: z.string().min(1),
+  taskCountBand: z.string().min(1),
+  surface: z.boolean(),
+  samples: z.number().int().nonnegative(),
+  abstained: z.boolean(),
+  metrics: ScorecardMetricsShape.optional(),
+})
+
+/** One reviewer cohort cell. `samples` counts ROUNDS SAT, not phases: a reviewer's evidence
+ *  is the rounds it actually judged. */
+const ScorecardReviewerCellShape = z.object({
+  agent: z.string().min(1),
+  taskCountBand: z.string().min(1),
+  surface: z.boolean(),
+  samples: z.number().int().nonnegative(),
+  abstained: z.boolean(),
+  metrics: ScorecardMetricsShape.optional(),
+})
+
+/** The two rails every cell obeys, enforced identically on both arrays so the reviewer axis
+ *  can never drift into a laxer standard than the driver axis. */
+function refineScorecardCells(
+  cells: { samples: number; abstained: boolean; metrics?: unknown }[],
+  key: 'drivers' | 'reviewers',
+  nFloor: number,
+  ctx: z.RefinementCtx,
+): void {
+  cells.forEach((cell, i) => {
+    if (cell.abstained !== cell.samples < nFloor)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key, i, 'abstained'],
+        message:
+          `abstained must be exactly (samples < nFloor): samples ${cell.samples}, nFloor ${nFloor}. ` +
+          'Below the floor a cell is an anecdote and must abstain; at or above it, abstaining hides a real reading.',
+      })
+    if (cell.abstained === (cell.metrics !== undefined))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key, i, 'metrics'],
+        message:
+          'a cell carries EXACTLY one of metrics / abstention — an abstained cell with metrics lets an ' +
+          'under-sampled number travel beside its own disclaimer, and a scored cell with none is a rank with nothing behind it',
+      })
+  })
+}
+
+/**
+ * ScorecardShape — the per-actor outcome slices. `nFloor` is STAMPED into the document so a
+ * change to the floor is a visible model change rather than a silent re-ranking, the same
+ * discipline the SPEED_REFERENCE declared resets follow.
+ *
+ * Cells are COHORT-SCOPED (taskCountBand × surface, the TimingStats axes) because work is not
+ * randomly assigned to actors: a driver handed the hard phases would look slow in any pooled
+ * mean. No field of this shape may ever carry a cross-cohort raw mean — comparison is within a
+ * cohort or not at all, which is why there is no summary row to put one in.
+ *
+ * The root superRefine is what makes an abstained cell unmistakable BY CONSTRUCTION rather than
+ * by convention: it can never carry a number a reader could mistake for a zero score.
+ */
+export const ScorecardShape = z
+  .object({
+    generatedAt: z.string().datetime(),
+    nFloor: z.number().int().positive(),
+    drivers: z.array(ScorecardDriverCellShape),
+    reviewers: z.array(ScorecardReviewerCellShape),
+    notes: z.array(z.string()).default([]),
+  })
+  .superRefine((card, ctx) => {
+    refineScorecardCells(card.drivers, 'drivers', card.nFloor, ctx)
+    refineScorecardCells(card.reviewers, 'reviewers', card.nFloor, ctx)
+  })
+
+export type Scorecard = z.output<typeof ScorecardShape>
+
+/**
  * The dimensions a judge verdict is REQUIRED to cover. Ownership itself stays per REPORT
  * (`EvalDimension.owner`) — this list is the judge's COVERAGE obligation, not a claim about
  * who owns a given report's dimensions, which is why `eval merge-judge` adjudicates the

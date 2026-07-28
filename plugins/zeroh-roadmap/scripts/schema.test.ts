@@ -41,6 +41,8 @@ import {
   EvalDimensionKeyShape,
   EvalSentinelShape,
   TimingStatsShape,
+  LessonShape,
+  ScorecardShape,
   IntentVerdictShape,
   PhaseExecutionResultShape,
   PhaseMetricsShape,
@@ -1474,6 +1476,252 @@ check('TimingStats: negative samples REJECTS; a zero-sample cohort parses (hones
       }),
     'negative medianMinutes',
   )
+})
+
+console.log('\nLesson / Scorecard — the learning record and the n-floor rails')
+
+// ONE fixture per shape, mutated by copy in every negative: the rails here are
+// RELATIONSHIPS (origin against its writer, samples against nFloor, metrics
+// against abstained), so a case that retypes the whole literal could drift a
+// field the rule doesn't concern and still reject for the wrong reason. Every
+// negative below starts from a value that is already legal and breaks exactly
+// one thing.
+function makeLesson(): Record<string, unknown> {
+  return {
+    ts: '2026-07-27T09:15:00.000Z',
+    phase: 1996,
+    text: 'A reject-only case passes vacuously when the shape is missing.',
+    origin: { writer: 'session:seat-a', kind: 'session' },
+  }
+}
+
+check('Lesson: a lesson parses with and without the optional phase; the origin round-trips', () => {
+  requireShape(LessonShape, 'LessonShape')
+  const withPhase = LessonShape.parse(makeLesson())
+  assertEq(withPhase.phase, 1996, 'phase preserved')
+  assertEq(withPhase.origin.kind, 'session', 'origin.kind preserved')
+  assertEq(withPhase.origin.writer, 'session:seat-a', 'origin.writer preserved')
+  const { phase: _dropped, ...noPhase } = makeLesson()
+  const without = LessonShape.parse(noPhase)
+  assertEq(without.phase, undefined, 'phase is genuinely optional, not defaulted')
+  assertEq(without.text, makeLesson().text, 'text preserved')
+})
+
+check('Lesson: an UNATTRIBUTED lesson REJECTS — every lesson names who wrote it', () => {
+  requireShape(LessonShape, 'LessonShape')
+  const { origin: _dropped, ...orphan } = makeLesson()
+  assertIssuePath(LessonShape, orphan, ['origin'], 'a lesson with no origin')
+  assertIssuePath(
+    LessonShape,
+    { ...makeLesson(), origin: { writer: '', kind: 'session' } },
+    ['origin', 'writer'],
+    'an empty origin.writer',
+  )
+})
+
+check('Lesson: origin.kind is CLOSED to session | eval-loop — an unknown lane REJECTS', () => {
+  requireShape(LessonShape, 'LessonShape')
+  assertEq(LessonShape.parse({ ...makeLesson(), origin: { writer: 'eval', kind: 'eval-loop' } }).origin.kind, 'eval-loop', 'eval-loop is a legal lane')
+  assertIssuePath(
+    LessonShape,
+    { ...makeLesson(), origin: { writer: 'grok', kind: 'grok' } },
+    ['origin', 'kind'],
+    'an unknown origin.kind',
+  )
+})
+
+check('Lesson: ts is a DATETIME — a bare date REJECTS, and empty text REJECTS', () => {
+  requireShape(LessonShape, 'LessonShape')
+  assertIssuePath(LessonShape, { ...makeLesson(), ts: '2026-07-28' }, ['ts'], 'a bare date as ts')
+  assertIssuePath(LessonShape, { ...makeLesson(), text: '' }, ['text'], 'empty lesson text')
+  assertIssuePath(LessonShape, { ...makeLesson(), phase: 0 }, ['phase'], 'phase 0')
+})
+
+// nFloor 5 throughout: the cells below sit AT the floor (5), one under it (2)
+// and above it (9), so every boundary case is exact rather than comfortably
+// clear of the line.
+function makeDriverCell(): Record<string, unknown> {
+  return {
+    model: 'claude-opus-5',
+    lane: 'session',
+    taskCountBand: '3-5',
+    surface: true,
+    samples: 9,
+    abstained: false,
+    metrics: { medianMinutes: 41, gateRounds: 2, verdict: 'PASS' },
+  }
+}
+
+function makeReviewerCell(): Record<string, unknown> {
+  return {
+    agent: 'code-reviewer',
+    taskCountBand: '3-5',
+    surface: false,
+    samples: 9,
+    abstained: false,
+    metrics: { rounds: 2, verdict: 'PASS' },
+  }
+}
+
+function makeScorecard(): Record<string, unknown> {
+  return {
+    generatedAt: '2026-07-27T09:15:00.000Z',
+    nFloor: 5,
+    drivers: [makeDriverCell()],
+    reviewers: [makeReviewerCell()],
+  }
+}
+
+check('Scorecard: a fully-sampled card parses, notes defaults to [], and a cell at or above the floor keeps its metrics', () => {
+  requireShape(ScorecardShape, 'ScorecardShape')
+  const s = ScorecardShape.parse(makeScorecard())
+  assertEq(s.notes, [], 'notes defaults to []')
+  assertEq(s.nFloor, 5, 'nFloor preserved')
+  assertEq(s.drivers[0].metrics?.medianMinutes, 41, 'driver metrics preserved')
+  assertEq(s.reviewers[0].metrics?.rounds, 2, 'reviewer metrics preserved')
+  const atFloor = ScorecardShape.parse({
+    ...makeScorecard(),
+    drivers: [{ ...makeDriverCell(), samples: 5 }],
+    reviewers: [{ ...makeReviewerCell(), samples: 5 }],
+  })
+  assertEq(atFloor.drivers[0].abstained, false, 'samples EXACTLY at nFloor does not abstain')
+  assertEq(atFloor.reviewers[0].abstained, false, 'the floor is >=, not >, on the reviewer axis too')
+})
+
+check('Scorecard: generatedAt is a DATETIME and nFloor is a POSITIVE int — a bare date and nFloor 0 REJECT', () => {
+  requireShape(ScorecardShape, 'ScorecardShape')
+  assertIssuePath(ScorecardShape, { ...makeScorecard(), generatedAt: '2026-07-28' }, ['generatedAt'], 'a bare date as generatedAt')
+  assertIssuePath(ScorecardShape, { ...makeScorecard(), nFloor: 0 }, ['nFloor'], 'nFloor 0')
+  assertIssuePath(
+    ScorecardShape,
+    { ...makeScorecard(), drivers: [{ ...makeDriverCell(), samples: -1, abstained: true }] },
+    ['drivers', 0, 'samples'],
+    'negative samples',
+  )
+})
+
+check('Scorecard: THE RANKED ANECDOTE — a driver cell of 2 samples under an nFloor of 5 that does NOT abstain REJECTS', () => {
+  requireShape(ScorecardShape, 'ScorecardShape')
+  const { metrics: _dropped, ...thin } = makeDriverCell()
+  assertThrows(
+    () =>
+      ScorecardShape.parse({
+        ...makeScorecard(),
+        drivers: [{ ...thin, samples: 2, abstained: false }],
+      }),
+    'a sub-floor driver cell that reports instead of abstaining',
+  )
+  assertThrows(
+    () =>
+      ScorecardShape.parse({
+        ...makeScorecard(),
+        drivers: [{ ...makeDriverCell(), samples: 4, abstained: false }],
+      }),
+    'a driver cell ONE sample under the floor that reports',
+  )
+})
+
+check('Scorecard: abstention is an EQUIVALENCE — a cell at or above the floor claiming abstained REJECTS', () => {
+  requireShape(ScorecardShape, 'ScorecardShape')
+  const { metrics: _driverMetrics, ...thinDriver } = makeDriverCell()
+  const { metrics: _reviewerMetrics, ...thinReviewer } = makeReviewerCell()
+  assertThrows(
+    () =>
+      ScorecardShape.parse({
+        ...makeScorecard(),
+        drivers: [{ ...thinDriver, samples: 9, abstained: true }],
+      }),
+    'a well-sampled driver cell that abstains anyway',
+  )
+  assertThrows(
+    () =>
+      ScorecardShape.parse({
+        ...makeScorecard(),
+        drivers: [{ ...thinDriver, samples: 5, abstained: true }],
+      }),
+    'a driver cell EXACTLY at the floor that abstains',
+  )
+  assertThrows(
+    () =>
+      ScorecardShape.parse({
+        ...makeScorecard(),
+        reviewers: [{ ...thinReviewer, samples: 9, abstained: true }],
+      }),
+    'a well-sampled reviewer cell that abstains anyway',
+  )
+})
+
+check('Scorecard: an abstained cell carries NO metrics — a sub-floor cell smuggling numbers REJECTS on BOTH axes', () => {
+  requireShape(ScorecardShape, 'ScorecardShape')
+  assertThrows(
+    () =>
+      ScorecardShape.parse({
+        ...makeScorecard(),
+        drivers: [{ ...makeDriverCell(), samples: 2, abstained: true }],
+      }),
+    'an abstained driver cell carrying metrics',
+  )
+  assertThrows(
+    () =>
+      ScorecardShape.parse({
+        ...makeScorecard(),
+        reviewers: [{ ...makeReviewerCell(), samples: 2, abstained: true }],
+      }),
+    'an abstained reviewer cell carrying metrics',
+  )
+  assertThrows(
+    () =>
+      ScorecardShape.parse({
+        ...makeScorecard(),
+        drivers: [{ ...makeDriverCell(), samples: 2, abstained: true, metrics: {} }],
+      }),
+    'an abstained driver cell carrying an EMPTY metrics object — the key itself is the claim',
+  )
+})
+
+check('Scorecard: a sub-floor cell that abstains and reports nothing PARSES — on the driver AND the reviewer axis', () => {
+  requireShape(ScorecardShape, 'ScorecardShape')
+  const { metrics: _driverMetrics, ...thinDriver } = makeDriverCell()
+  const { metrics: _reviewerMetrics, ...thinReviewer } = makeReviewerCell()
+  const s = ScorecardShape.parse({
+    ...makeScorecard(),
+    drivers: [{ ...thinDriver, samples: 2, abstained: true }],
+    reviewers: [{ ...thinReviewer, samples: 2, abstained: true }],
+    notes: ['nFloor 5; two cohorts abstained'],
+  })
+  assertEq(s.drivers[0].abstained, true, 'the driver cell abstains')
+  assertEq(s.drivers[0].metrics, undefined, 'an abstained driver cell carries no metrics')
+  assertEq(s.drivers[0].samples, 2, 'the sample count is still published — abstention is visible, not hidden')
+  assertEq(s.reviewers[0].abstained, true, 'the reviewer cell abstains')
+  assertEq(s.reviewers[0].metrics, undefined, 'an abstained reviewer cell carries no metrics')
+  assertEq(s.notes, ['nFloor 5; two cohorts abstained'], 'explicit notes are kept verbatim')
+})
+
+check('Scorecard: the reviewer axis is a DISTINCT cell — it is keyed by agent and rejects a driver cell in its place', () => {
+  requireShape(ScorecardShape, 'ScorecardShape')
+  assertIssuePath(
+    ScorecardShape,
+    { ...makeScorecard(), reviewers: [makeDriverCell()] },
+    ['reviewers', 0, 'agent'],
+    'a driver cell filed under reviewers',
+  )
+  assertIssuePath(
+    ScorecardShape,
+    { ...makeScorecard(), drivers: [{ ...makeDriverCell(), lane: '' }] },
+    ['drivers', 0, 'lane'],
+    'an empty driver lane',
+  )
+  assertIssuePath(
+    ScorecardShape,
+    { ...makeScorecard(), reviewers: [{ ...makeReviewerCell(), agent: '' }] },
+    ['reviewers', 0, 'agent'],
+    'an empty reviewer agent',
+  )
+  const s = ScorecardShape.parse({
+    ...makeScorecard(),
+    drivers: [{ ...makeDriverCell(), metrics: { medianMinutes: 41, verdict: 'PASS' } }],
+  })
+  assertEq(s.drivers[0].metrics?.verdict, 'PASS', 'metrics values may be a number OR a string')
 })
 
 console.log('\nArcEvalJudgeVerdict — the judge returns a TYPED verdict, never prose')
