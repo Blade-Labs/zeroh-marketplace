@@ -42,6 +42,7 @@ import {
   DIMENSION_KEYS,
   JUDGE_DIMENSIONS,
 } from '../lib/eval-score.mjs'
+import { computeScorecard, findGateFixCommits } from '../lib/eval-scorecard.mjs'
 
 /** The two recorders, keyed by subcommand: which consumer shape validates, which suffix lands. */
 const RECORDERS = {
@@ -116,7 +117,8 @@ const USAGE =
   '  roadmap eval merge-judge --arc <ID> [--report <path>]   (verdict JSON on stdin)\n' +
   '  roadmap eval trend                                      (renders roadmap/arc-evals/trend.html)\n' +
   '  roadmap eval restamp [--json]                           (additively re-stamps existing reports; never re-scores)\n' +
-  '  roadmap eval lesson "<text>" [--phase N] [--writer <actor-id>]  (appends one lesson to the committed sidecar)\n'
+  '  roadmap eval lesson "<text>" [--phase N] [--writer <actor-id>]  (appends one lesson to the committed sidecar)\n' +
+  '  roadmap eval scorecard [--date <YYYY-MM-DD>] [--json]   (regenerates the per-actor scorecard projection)\n'
 
 export default async function run(argv) {
   const { opts, positional } = parseArgs(argv)
@@ -131,6 +133,7 @@ export default async function run(argv) {
     if (sub === 'trend') return runTrend(opts)
     if (sub === 'restamp') return runRestamp(opts)
     if (sub === 'lesson') return runLesson(opts, positional)
+    if (sub === 'scorecard') return runScorecard(opts)
     // Anything that is not one of the two literal recorder names is an ARC ID. The literals
     // are checked FIRST so a future arc called `record-sweep` could never shadow the recorder.
     return runArcEval(sub, opts)
@@ -811,6 +814,123 @@ async function runLesson(opts, positional) {
   say(`  text    ${validated.parsed.text}`)
   return 0
 }
+
+// ── `roadmap eval scorecard` — the per-actor slice ─────────────────────────────────────
+
+/** The scorecard's fixed name. UN-dated on purpose, exactly like the timing table: it is a
+ *  PROJECTION regenerated in place, and carrying no date is also what keeps it out of
+ *  REPORT_NAME_RE — a projection must never become somebody's ratchet baseline. */
+export const SCORECARD_FILE = 'scorecard.json'
+
+/**
+ * `roadmap eval scorecard [--date <YYYY-MM-DD>] [--json]` — the slicer's command seam.
+ *
+ * Reports carry an attribution block but not the per-phase records the slice needs, so the
+ * traces are RE-COLLECTED for every arc that already has a dated report (the same "a reference
+ * class of one arc is not a reference class" rule the timing table follows; the dated report IS
+ * the enrolment). An arc whose trace will not collect is WARNed and EXCLUDED rather than
+ * failing the sweep: the corpus is historical, and an arc file that has since been renamed or
+ * removed is an ordinary state. It contributes nothing — not a cell, not a sample, not a zero.
+ */
+async function runScorecard(opts) {
+  let toplevel, schemaPath
+  try {
+    toplevel = gitToplevel(process.cwd())
+    schemaPath = consumerSchemaPath(toplevel)
+  } catch (e) {
+    if (e instanceof BridgeError) for (const l of e.messageLines) process.stderr.write(l + '\n')
+    else process.stderr.write(`roadmap eval scorecard: ${e.message}\n`)
+    return 1
+  }
+
+  // With --json the machine lane owns stdout (the runArcEval idiom), so the human table moves
+  // aside and the document stays pipeable into jq without a stripping step.
+  const say = (line) => (opts.json ? process.stderr : process.stdout).write(line + '\n')
+  const dateDefaulted = !opts.date
+  const date = opts.date ?? new Date().toISOString().slice(0, 10)
+  const dir = join(toplevel, ...ARC_EVALS_DIR)
+
+  const traces = []
+  for (const arcId of arcsWithReports(dir)) {
+    try {
+      traces.push(collectArcTrace(toplevel, arcId).trace)
+    } catch {
+      say(`WARN: arc ${arcId} has reports but its trace could not be collected — excluded from the scorecard`)
+    }
+  }
+
+  const phaseNums = [...new Set(traces.flatMap((t) => (t.phases ?? []).map((p) => p.phase)))].sort((a, b) => a - b)
+  const gateFixes = findGateFixCommits(toplevel, phaseNums)
+
+  // Midnight of the date, never `new Date()`: a committed projection that mints its own wall
+  // clock shows a spurious diff in the archive on every regeneration over identical inputs.
+  const scorecard = computeScorecard(traces, gateFixes, { generatedAt: `${date}T00:00:00.000Z` })
+
+  const validated = bridgeValidate(toplevel, schemaPath, 'ScorecardShape', scorecard)
+  if (!validated.ok) {
+    const { res } = validated
+    if (res.kind === 'tsx-absent') {
+      process.stderr.write(TSX_ABSENT_HINT + '\n')
+      return 1
+    }
+    if (res.kind === 'zod') {
+      process.stderr.write('roadmap eval scorecard: refused — the scorecard does not match ScorecardShape:\n')
+      printZodIssues(res.issues)
+      return 2
+    }
+    process.stderr.write((res.stderr || 'roadmap eval scorecard: bridge failure') + '\n')
+    return 1
+  }
+  const doc = validated.parsed
+  const outPath = join(dir, SCORECARD_FILE)
+  try {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(outPath, JSON.stringify(doc, null, 2) + '\n')
+  } catch (e) {
+    process.stderr.write(`roadmap eval scorecard: cannot write ${outPath}: ${e.message}\n`)
+    return 1
+  }
+
+  if (opts.json) process.stdout.write(JSON.stringify(doc, null, 2) + '\n')
+
+  say(`roadmap eval scorecard — ${date}`)
+  if (dateDefaulted) say(`date ${date} defaulted to today; pass --date <YYYY-MM-DD> to pin it`)
+  say('')
+  // ONE ROW PER CELL and nothing beyond them. There is deliberately no total line: a
+  // cross-cohort sum is the one number a pooled comparison would need, and work is not randomly
+  // assigned to actors, so printing it would invite exactly the comparison the cohorts prevent.
+  for (const [label, cells] of [
+    ['drivers', doc.drivers],
+    ['reviewers', doc.reviewers],
+  ]) {
+    say(`${label}:`)
+    if (cells.length === 0) say('  (none recorded)')
+    for (const c of cells) say(`  ${scorecardRow(c, doc.nFloor)}`)
+    say('')
+  }
+  for (const n of doc.notes) say(`note: ${n}`)
+  say(`wrote ${outPath}`)
+  return 0
+}
+
+/**
+ * One cell as one line. The abstention marker carries the cell's OWN n AND the floor on the
+ * same line as its identity: "ABSTAINED" three lines from its sample count leaves the reader
+ * guessing which cell was under-sampled and by how much, which is the whole judgement the
+ * floor exists to hand them.
+ */
+function scorecardRow(cell, nFloor) {
+  const who = cell.model !== undefined ? `${cell.model} [${cell.lane}]` : cell.agent
+  const cohort = `${cell.taskCountBand} surface:${cell.surface}`
+  if (cell.abstained) return `${pad(who, 34)}${pad(cohort, 22)}ABSTAINED (n=${cell.samples}, floor ${nFloor})`
+  const metrics = Object.entries(cell.metrics ?? {})
+    .map(([k, v]) => `${k}=${typeof v === 'number' ? round2(v) : v}`)
+    .join(' ')
+  return `${pad(who, 34)}${pad(cohort, 22)}n=${cell.samples}  ${metrics}`
+}
+
+/** Two decimals: enough to see a rate move, few enough digits that float noise cannot fake one. */
+const round2 = (n) => String(Math.round(n * 100) / 100)
 
 // ── `roadmap eval <ARCID>` — collect → score → ratchet → the dated report ──────────────
 
