@@ -192,40 +192,38 @@ test('findArcGitFacts — the SCORED escape window is bounded to PHASE-NAMED fix
 })
 
 /**
- * The MERGE-anchored half of the rule, driven by a scripted git rather than a repo: a real
- * fixture cannot produce it, because a post-land phase-named fix is itself a member commit and
- * therefore becomes the tip. The stub answers the four calls findArcGitFacts makes — member
- * lookup, land-merge walk, the first-parent containment test, and the post-boundary log — so
- * the scored path is exercised end to end without inventing a history on disk.
+ * THE KNOWN LIMIT OF THE BOUNDED RULE, pinned so nobody reads a zero as a clean record. A
+ * scored escape must name a member phase in its subject — but `memberCommits` recognises a
+ * member by exactly that grammar, so a post-land phase-named fix is ALSO a member commit and
+ * becomes the tip the boundary is derived from. The window therefore closes at or after the
+ * escape's own date and the scored list comes back empty. That is a scoring-model question
+ * (which set anchors the boundary vs which set is attributed), not something this collector can
+ * decide, so it is recorded as a test rather than papered over.
  */
-test('findArcGitFacts — with a real land merge, a phase-named post-land fix IS a scored escape', () => {
-  const MERGE = 'm000000000000000000000000000000000000000'
+test('findArcGitFacts — a post-land phase-named fix becomes the TIP, so the scored list stays empty', () => {
   const TIP = 't000000000000000000000000000000000000000'
   const ESC = 'e000000000000000000000000000000000000000'
+  const has = (args, s) => args.some((a) => String(a) === s || String(a).startsWith(s))
+  // Faithful git: `--grep=phase 9001` matches BOTH the arc commit and the later escape fix.
   const stub = (_file, args) => {
-    const has = (s) => args.some((a) => String(a) === s || String(a).startsWith(s))
-    if (has('--grep=phase 9001'))
-      return { status: 0, stdout: `${TIP}\t2026-07-18T11:00:00+00:00\tfeat(x): phase 9001 — 9001.1 land it`, stderr: '' }
-    if (has('--merges'))
-      return { status: 0, stdout: `${MERGE}\t2026-07-18T12:00:00+00:00`, stderr: '' }
-    // The merge's first parent does NOT contain the tip ⇒ this merge is what landed it.
-    if (has('merge-base')) return { status: 1, stdout: '', stderr: '' }
-    if (has('--since='))
+    if (has(args, '--grep=phase 9001'))
       return {
         status: 0,
-        stdout: `${ESC}\t2026-07-19T09:00:00+00:00\tfix(x): phase 9001 gate R1 — the escape`,
+        stdout:
+          `${ESC}\t2026-07-19T09:00:00+00:00\tfix(x): phase 9001 gate R1 — the escape\n` +
+          `${TIP}\t2026-07-18T11:00:00+00:00\tfeat(x): phase 9001 — 9001.1 land it`,
         stderr: '',
       }
-    if (has('show')) return { status: 0, stdout: 'src/collector.ts', stderr: '' }
+    if (has(args, '--merges')) return { status: 0, stdout: '', stderr: '' }
+    if (has(args, '--since=')) return { status: 0, stdout: '', stderr: '' }
+    if (has(args, 'show')) return { status: 0, stdout: 'src/collector.ts', stderr: '' }
     return { status: 0, stdout: '', stderr: '' }
   }
 
   const facts = findArcGitFacts('/nowhere', [9001], { exec: stub })
-  assert.equal(facts.escapeWindow, 'merge-anchored', 'the merge, not the tip, bounds the window')
-  assert.equal(new Date(facts.landedAt).toISOString(), '2026-07-18T12:00:00.000Z')
-  assert.equal(facts.escapeFixes.length, 1, `the phase-named post-land fix scores; got ${JSON.stringify(facts.escapeFixes)}`)
-  assert.equal(facts.escapeFixes[0].subject, 'fix(x): phase 9001 gate R1 — the escape')
-  assert.equal(facts.escapeFixes[0].files, 1, 'files is the intersection with the arc files')
+  assert.equal(new Date(facts.landedAt).toISOString(), '2026-07-19T09:00:00.000Z', 'the escape itself set the boundary')
+  assert.equal(facts.escapeWindow, 'tip-anchored')
+  assert.deepEqual(facts.escapeFixes, [], 'the rule as ruled cannot score this commit — the scorer must say so, not bank it')
 })
 
 test('findArcGitFacts — a member number with no commits yields no landedAt and no escapes (never a guessed boundary)', () => {

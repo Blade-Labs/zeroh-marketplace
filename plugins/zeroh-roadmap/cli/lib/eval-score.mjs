@@ -198,6 +198,9 @@ function scoreCodeConfidence(trace, readable) {
       // UNSCORED, carried for inspection only: the previous unbounded count, which rose with
       // the arc's AGE. Reading it as a quality signal is the mistake the bounded window fixes.
       escapeFixesFileIntersection: trace.git?.escapeFixesFileIntersection ?? 'scan-unavailable',
+      // How the window was bounded is part of reading the count above: a tip-anchored window had
+      // nothing to look in at all.
+      escapeWindow: trace.git?.escapeWindow ?? 'unrecorded',
       phasesConsidered: readable.length,
     },
     sourceRefs: sourceRefs.length > 0 ? sourceRefs : ['roadmap/.gate/'],
@@ -416,13 +419,16 @@ export function scoreArcTrace(trace, { backfill = false } = {}) {
     notes.push(
       'the post-land escape scan did not run — its penalty is withheld, so code-confidence is an UPPER BOUND, not a measurement',
     )
-  // An empty escape list under a tip-anchored window is not a clean record — there was no
-  // window to look in. Said out loud, because the number it produces is indistinguishable from
-  // a genuinely spotless arc and it enters every future baseline.
-  if (trace.git?.escapeWindow === 'tip-anchored')
+  // An empty escape list is NOT a clean record, whichever way the window was bounded: a
+  // phase-named post-land fix is itself a member commit, so it moves the boundary it should sit
+  // behind and the scored list comes back empty either way. Said out loud on every report that
+  // banks the full escape credit, because the number is indistinguishable from a spotless arc
+  // and it enters every future baseline.
+  if (trace.git?.escapeScan === 'complete' && (trace.git?.escapeFixes ?? []).length === 0)
     notes.push(
-      'no land merge bounds this arc (it reached the branch by direct commits), so the post-land escape window is ' +
-        'EMPTY BY CONSTRUCTION — zero escapes here is an absent measurement, not a clean record',
+      `zero scored escapes on a ${trace.git.escapeWindow ?? 'unrecorded'} window — the bounded rule cannot see a ` +
+        'post-land fix that names a member phase (such a commit is itself a member and moves the boundary), so this ' +
+        'is an UNMEASURED escape rate, not a clean one; the unscored file-intersection figure rides in signals',
     )
   // The scoring model changed, so every report says so: a reader comparing an old committed
   // report against a new one is comparing two models, and the report is the only place that

@@ -194,7 +194,6 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
       escapeScan: 'complete',
       escapeFixes: [],
       escapeFixesFileIntersection: 0,
-      escapeWindow: 'tip-anchored',
       arcFiles: [],
     }
 
