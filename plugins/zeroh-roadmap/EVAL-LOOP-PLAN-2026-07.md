@@ -1,5 +1,17 @@
 # zeroh-roadmap eval loop plan, 2026-07-27
 
+> **Reconciliation (2026-07-28, post-arc-EVALCORE).** **Arc 1 (EVALCORE, phases 1995-1998)
+> SHIPPED**: G1-G3, the `ArcTrace`/`ArcEvalReport` schemas, the collector, deterministic
+> scoring, the pinned judge pass, `roadmap eval` (incl. `--backfill` and `trend`), the
+> do-arc Step 9 wiring, the pacing hook, and the backfill of five landed arcs into the
+> committed consumer archive with honest sentinels. One scoring-model change landed with
+> it: a user ruling of 2026-07-28 bounded escape attribution to phase-named fix commits
+> after the land MERGE, because the old file-intersection count measured how long ago an
+> arc landed and manufactured a regression out of it. That count survives UNSCORED as
+> `escapeFixesFileIntersection`, and every report from that date names the reset in its
+> notes — reports written before it are not comparable on `code-confidence`. **Arc 2
+> (EVALLOOP)** and **Arc 3 (SCORECARD)** remain open, their sections below intact.
+
 LangSmith-style evals over the plugin's own development process: after each arc lands,
 score the arc from its recorded traces, trend the scores across arcs, and distil
 recurring findings into ratified process improvements. Grounded in the 2026-07-27

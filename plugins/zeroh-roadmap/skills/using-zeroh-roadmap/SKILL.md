@@ -22,12 +22,13 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | do / execute / run arc | **do-arc** |
 | arc sweep, pre-merge sweep | **arc-sweep** |
 | validate arc, intent validation | **validate-arc** |
+| arc landed / eval the arc | **eval-arc** (do-arc Step 9 auto-runs it) |
 | show roadmap, backlog | `roadmap status` + `roadmap/ROADMAP.md` |
 | what's next, next phase | `roadmap status` → **do-phase** |
 | code review | **code-review** |
 | full code review, pre-release review | **full-code-review** |
 | audit roadmap, roadmap health check | **audit-roadmap** |
-| pause the arc / after phase N | stop anywhere — pause is free; resume = relaunch the plane workflow |
+| pause the arc | stop anywhere; resume = relaunch the plane workflow |
 | resume / continue arc X | **do-arc** — `roadmap arc next` fast-forwards from disk |
 | migrate / upgrade roadmap | `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` |
 
