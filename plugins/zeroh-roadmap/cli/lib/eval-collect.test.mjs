@@ -198,6 +198,31 @@ test('findArcGitFacts — a member number with no commits yields no landedAt and
   assert.deepEqual(facts.arcFiles, [])
 })
 
+test('findArcGitFacts — a FAILED escape scan reports escapeScan unavailable, never zero escapes', () => {
+  const root = fixture()
+  // Member lookups and `git show` succeed; only the post-land log fails (the ENOBUFS shape
+  // the 1 MiB exec buffer used to produce on a real repo). An empty escapeFixes here would
+  // read as a spotless arc and RAISE the score, so the failure must travel as data.
+  const failingLog = (file, args, opts) =>
+    args.includes('--format=%H%x09%aI%x09%s') && args.some((a) => String(a).startsWith('--since='))
+      ? { status: 1, stdout: '', stderr: 'ENOBUFS' }
+      : defaultExec(file, args, opts)
+
+  const facts = findArcGitFacts(root, PHASE_NUMS, { exec: failingLog })
+  assert.equal(facts.escapeScan, 'unavailable', 'a scan that could not run says so')
+  assert.deepEqual(facts.escapeFixes, [], 'and reports no fixes — which is UNKNOWN, not zero')
+  assert.ok(facts.landedAt, 'the land boundary is still derivable from the member commits')
+
+  // The collector turns that into a WARNING, so a degraded collect is visible in the run
+  // output rather than inferred from a suspiciously good score.
+  const { trace, warnings } = collectArcTrace(root, ARC_ID, { exec: failingLog })
+  assert.equal(trace.git.escapeScan, 'unavailable')
+  assert.ok(
+    warnings.some((w) => /escape scan/i.test(w) && /not zero/i.test(w)),
+    `the run must say the escape count is unknown; got ${JSON.stringify(warnings)}`,
+  )
+})
+
 test('collectArcTrace — the git facts ride the trace under trace.git', () => {
   const root = fixture()
   const { trace } = collectArcTrace(root, ARC_ID, { exec: defaultExec })
