@@ -1,5 +1,5 @@
 {
-  "description": "zeroh-roadmap runtime hooks — validate roadmap files at write time so a malformed phase/arc/backlog file never lands (the import-time Zod parse IS the validator), block the known-broken integration-test scoping forms that silently run the full suite, and stamp wall-clock time into each prompt for in-session pacing",
+  "description": "zeroh-roadmap runtime hooks — validate roadmap files at write time so a malformed phase/arc/backlog file never lands (the import-time Zod parse IS the validator), block the known-broken integration-test scoping forms that silently run the full suite, stamp wall-clock time into each prompt for in-session pacing, and restate the compaction-preservation contract before a /compact so the working state a phase depends on survives the summary",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -8,6 +8,17 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/time-stamp.sh\" || exit 0",
             "statusMessage": "Stamping the wall clock..."
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact.sh\" || exit 0",
+            "statusMessage": "Restating what must survive the compaction..."
           }
         ]
       }
