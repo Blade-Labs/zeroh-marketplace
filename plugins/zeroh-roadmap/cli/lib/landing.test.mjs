@@ -86,6 +86,10 @@ test('blocker 2 — an unratified hardStop fires; a matching descope clears it',
   assert.deepEqual(ids(evaluateBlockers(s)), [2])
   s.descopes = ['[MULTI-REPO] touched the live marketplace checkout — ratified 2026-07-15']
   assert.deepEqual(evaluateBlockers(s), [], 'a descope quoting the hardStop text ratifies it')
+  s.descopes = [{ item: 'touched the live marketplace checkout', ratifiedBy: 'user', ratifiedAt: '2026-07-28' }]
+  assert.deepEqual(evaluateBlockers(s), [], 'a TYPED descope object matches on its item text')
+  s.descopes = [{ item: 'an unrelated ratification entry', ratifiedBy: 'user', ratifiedAt: '2026-07-28' }]
+  assert.deepEqual(ids(evaluateBlockers(s)), [2], 'a non-matching typed descope does not ratify')
 })
 
 test('blocker 3 — GAPS or artifact-absent-with-criteria; absent-WITHOUT-criteria does NOT fire', () => {

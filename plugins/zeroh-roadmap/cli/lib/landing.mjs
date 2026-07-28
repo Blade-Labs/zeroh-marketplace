@@ -239,7 +239,12 @@ export const BLOCKERS = [
     check: (s) => {
       for (const m of s.members) {
         for (const hs of m.executionResult?.hardStops ?? []) {
-          const ratified = s.descopes.some((d) => (hs.text && d.includes(hs.text)) || (hs.text && hs.text.includes(d)))
+          // Arc.descopes entries are typed objects ({ item, ratifiedBy, ratifiedAt }); legacy
+          // string entries still match on themselves.
+          const ratified = s.descopes.some((d) => {
+            const item = typeof d === 'string' ? d : d?.item
+            return !!hs.text && !!item && (item.includes(hs.text) || hs.text.includes(item))
+          })
           if (!ratified) return `phase ${m.num} hardStop ${hs.tag} is unratified (no matching arc.descopes entry)`
         }
       }
