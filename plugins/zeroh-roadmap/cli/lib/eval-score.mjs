@@ -188,8 +188,11 @@ const sentinelDimension = (owner, sentinel, signals, sourceRefs) => ({ owner, se
  * ordering, and left alone a negative span would score speed at the maximum — bad data
  * becoming the best possible number, the exact inversion of the honesty rail. Zero IS kept:
  * a single-commit phase legitimately derives both timestamps from the same commit.
+ *
+ * EXPORTED so the scorecard slicer reuses this one implementation, negative-span-is-corrupt
+ * rule included, instead of forking a second minutes-between-timestamps.
  */
-function spanMinutes(metrics) {
+export function spanMinutes(metrics) {
   if (!metrics?.startedAt || !metrics?.completedAt) return null
   const ms = Date.parse(metrics.completedAt) - Date.parse(metrics.startedAt)
   if (!Number.isFinite(ms) || ms < 0) return null
