@@ -33,6 +33,12 @@ import {
   AcceptanceCriterionShape,
   DesignRefShape,
   ArcVerdictsFileShape,
+  ArcEvalReportShape,
+  ArcTraceShape,
+  EvalDimensionShape,
+  EvalDimensionKeyShape,
+  EvalSentinelShape,
+  TimingStatsShape,
   IntentVerdictShape,
   PhaseExecutionResultShape,
   PhaseMetricsShape,
@@ -913,6 +919,417 @@ check('PhaseMetrics: haltCount 0 parses but -1 rejects (a negative halt count is
   assertThrows(
     () => PhaseMetricsShape.parse({ ...historicalMetrics, haltCount: -1 }),
     'haltCount=-1',
+  )
+})
+
+console.log('\nEval engine contracts — ArcEvalReport / ArcTrace / TimingStats')
+
+// A reject-only case would pass VACUOUSLY if the shape were missing — the
+// undefined-property TypeError is a throw too, and assertThrows can't tell it
+// from a real schema rejection. Every reject-only case below asserts the export
+// exists FIRST, outside the assertThrows.
+function requireShape(shape: unknown, name: string): void {
+  if (!shape || typeof (shape as { parse?: unknown }).parse !== 'function') {
+    throw new Error(`${name} is not exported from templates/schema.ts (or is not a zod shape)`)
+  }
+}
+
+// ONE fixture, mutated by copy in the negative cases: repeating seven dimension
+// literals per case would let a drifting key silently pass in the copies that
+// weren't updated. Every negative below starts from THIS valid report.
+function makeDimensions(): Record<string, unknown> {
+  return {
+    'code-confidence': {
+      owner: 'deterministic',
+      score: 82,
+      signals: { gateRounds: 2, slotFailures: 0 },
+      sourceRefs: ['roadmap/phases/1996.phase.ts#gate'],
+    },
+    'verified-vs-intent': {
+      owner: 'deterministic',
+      score: 100,
+      signals: { met: 4, gap: 0 },
+      sourceRefs: ['roadmap/arcs/EVALLOOP-verdicts.json'],
+    },
+    'standards-adherence': {
+      owner: 'judge',
+      sentinel: 'pending-judge',
+      signals: { reviewRounds: 1 },
+      sourceRefs: ['roadmap/arcs/EVALLOOP-sweep.json'],
+    },
+    'doc-brevity': {
+      owner: 'judge',
+      sentinel: 'pending-judge',
+      signals: { docLines: 240 },
+      sourceRefs: ['docs/architecture/src/testing.md'],
+    },
+    'composability-testability': {
+      owner: 'judge',
+      sentinel: 'pending-judge',
+      signals: { newSeams: 'two injected fetchers' },
+      sourceRefs: ['templates/schema.ts'],
+    },
+    speed: {
+      owner: 'deterministic',
+      score: 64,
+      signals: { medianMinutes: 41 },
+      sourceRefs: ['roadmap/phases/1996.phase.ts#metrics'],
+    },
+    'plan-quality': {
+      owner: 'judge',
+      sentinel: 'unjudged-backfill',
+      signals: { haltCount: 0 },
+      sourceRefs: ['roadmap/phases/1996.phase.ts#tasks'],
+    },
+  }
+}
+
+function makeEvalReport(): Record<string, unknown> {
+  return {
+    arcId: 'EVALLOOP',
+    date: '2026-07-27',
+    judgeModel: 'claude-opus-5',
+    dimensions: makeDimensions(),
+    ratchet: [
+      { dimension: 'code-confidence', baseline: 78, value: 82, delta: 4, regression: false },
+      {
+        dimension: 'plan-quality',
+        baseline: null,
+        value: null,
+        delta: null,
+        regression: false,
+        note: 'no-baseline',
+      },
+    ],
+    attribution: {
+      drivers: [{ model: 'claude-opus-5', lane: 'session', phases: [1996] }],
+      reviewers: [{ agent: 'code-reviewer', rounds: 2 }],
+    },
+    notes: [],
+  }
+}
+
+check('EvalDimension: BOTH score and sentinel REJECTS (a scored dimension is not also absent)', () => {
+  requireShape(EvalDimensionShape, 'EvalDimensionShape')
+  assertThrows(
+    () =>
+      EvalDimensionShape.parse({
+        owner: 'deterministic',
+        score: 82,
+        sentinel: 'pending-judge',
+        signals: { gateRounds: 2 },
+        sourceRefs: ['roadmap/phases/1996.phase.ts#gate'],
+      }),
+    'score and sentinel together',
+  )
+})
+
+check('EvalDimension: NEITHER score nor sentinel REJECTS (silence is not a score)', () => {
+  requireShape(EvalDimensionShape, 'EvalDimensionShape')
+  assertThrows(
+    () =>
+      EvalDimensionShape.parse({
+        owner: 'judge',
+        signals: { gateRounds: 2 },
+        sourceRefs: ['roadmap/phases/1996.phase.ts#gate'],
+      }),
+    'neither score nor sentinel',
+  )
+})
+
+check('EvalDimension: a deterministic scored dimension and a judge pending-judge dimension both parse', () => {
+  const scored = EvalDimensionShape.parse({
+    owner: 'deterministic',
+    score: 82,
+    signals: { gateRounds: 2, slotFailures: 0 },
+    sourceRefs: ['roadmap/phases/1996.phase.ts#gate'],
+    evidence: 'gate R1 clean, R2 clean',
+  })
+  assertEq(scored.score, 82, 'score preserved')
+  assertEq(scored.sentinel, undefined, 'no sentinel on a scored dimension')
+  const pending = EvalDimensionShape.parse({
+    owner: 'judge',
+    sentinel: 'pending-judge',
+    signals: { reviewRounds: 1 },
+    sourceRefs: ['roadmap/arcs/EVALLOOP-sweep.json'],
+  })
+  assertEq(pending.sentinel, 'pending-judge', 'sentinel preserved')
+  assertEq(pending.score, undefined, 'no score on a sentinel dimension')
+})
+
+check('EvalSentinel: the vocabulary is CLOSED — an invented sentinel string rejects', () => {
+  requireShape(EvalSentinelShape, 'EvalSentinelShape')
+  EvalSentinelShape.parse('no-baseline')
+  assertThrows(() => EvalSentinelShape.parse('not-yet-scored'), 'invented sentinel')
+})
+
+check('EvalDimensionKey: the dimension vocabulary is CLOSED — an eighth key rejects', () => {
+  requireShape(EvalDimensionKeyShape, 'EvalDimensionKeyShape')
+  EvalDimensionKeyShape.parse('doc-brevity')
+  assertThrows(() => EvalDimensionKeyShape.parse('vibes'), 'invented dimension key')
+})
+
+check('ArcEvalReport: a full SEVEN-key report parses and round-trips every dimension', () => {
+  const r = ArcEvalReportShape.parse(makeEvalReport())
+  assertEq(Object.keys(r.dimensions).sort(), [
+    'code-confidence',
+    'composability-testability',
+    'doc-brevity',
+    'plan-quality',
+    'speed',
+    'standards-adherence',
+    'verified-vs-intent',
+  ], 'all seven dimensions present')
+  assertEq(r.dimensions['code-confidence'].score, 82, 'deterministic score carried')
+  assertEq(r.dimensions['plan-quality'].sentinel, 'unjudged-backfill', 'sentinel carried')
+  assertEq(r.attribution.drivers[0].phases, [1996], 'driver phases carried')
+  assertEq(r.attribution.reviewers[0].rounds, 2, 'reviewer rounds carried')
+})
+
+check('ArcEvalReport: a SIX-key report REJECTS (a dropped dimension cannot be silent)', () => {
+  requireShape(ArcEvalReportShape, 'ArcEvalReportShape')
+  const report = makeEvalReport()
+  const dims = report.dimensions as Record<string, unknown>
+  delete dims['doc-brevity']
+  assertThrows(() => ArcEvalReportShape.parse(report), 'six dimensions')
+})
+
+check('ArcEvalReport: an UNKNOWN eighth dimension key REJECTS (a scorer cannot invent one)', () => {
+  requireShape(ArcEvalReportShape, 'ArcEvalReportShape')
+  const report = makeEvalReport()
+  ;(report.dimensions as Record<string, unknown>)['vibes'] = {
+    owner: 'judge',
+    score: 99,
+    signals: {},
+    sourceRefs: ['nowhere.md'],
+  }
+  assertThrows(() => ArcEvalReportShape.parse(report), 'eighth dimension key')
+})
+
+check('ArcEvalReport: sourceRefs: [] REJECTS (the reproducibility bar bites per dimension)', () => {
+  requireShape(ArcEvalReportShape, 'ArcEvalReportShape')
+  const report = makeEvalReport()
+  ;(report.dimensions as Record<string, { sourceRefs: string[] }>)['speed'].sourceRefs = []
+  assertThrows(() => ArcEvalReportShape.parse(report), 'empty sourceRefs')
+  const withEmptyRef = makeEvalReport()
+  ;(withEmptyRef.dimensions as Record<string, { sourceRefs: string[] }>)['speed'].sourceRefs = ['']
+  assertThrows(() => ArcEvalReportShape.parse(withEmptyRef), 'blank sourceRef string')
+})
+
+check('ArcEvalReport: score 101 and score -1 REJECT (0..100 is the closed range)', () => {
+  const over = makeEvalReport()
+  ;(over.dimensions as Record<string, { score?: number }>)['speed'].score = 101
+  assertThrows(() => ArcEvalReportShape.parse(over), 'score 101')
+  const under = makeEvalReport()
+  ;(under.dimensions as Record<string, { score?: number }>)['speed'].score = -1
+  assertThrows(() => ArcEvalReportShape.parse(under), 'score -1')
+  const atBounds = makeEvalReport()
+  ;(atBounds.dimensions as Record<string, { score?: number }>)['speed'].score = 100
+  assertEq(ArcEvalReportShape.parse(atBounds).dimensions['speed'].score, 100, 'score 100 is in range')
+  const atZero = makeEvalReport()
+  ;(atZero.dimensions as Record<string, { score?: number }>)['speed'].score = 0
+  assertEq(ArcEvalReportShape.parse(atZero).dimensions['speed'].score, 0, 'score 0 is in range')
+})
+
+check('ArcEvalReport ratchet: regression:true with delta:null REJECTS; with a real delta parses', () => {
+  const bad = makeEvalReport()
+  ;(bad.ratchet as unknown[])[0] = {
+    dimension: 'code-confidence',
+    baseline: null,
+    value: null,
+    delta: null,
+    regression: true,
+  }
+  assertThrows(() => ArcEvalReportShape.parse(bad), 'regression without a computable delta')
+
+  const good = makeEvalReport()
+  ;(good.ratchet as unknown[])[0] = {
+    dimension: 'code-confidence',
+    baseline: 88,
+    value: 82,
+    delta: -6,
+    regression: true,
+    note: 'gate took two extra rounds',
+  }
+  const r = ArcEvalReportShape.parse(good)
+  assertEq(r.ratchet[0].delta, -6, 'a real regression carries its delta')
+  // the no-baseline row from the fixture: null everywhere, regression false
+  assertEq(r.ratchet[1].baseline, null, 'no-baseline row keeps a null baseline')
+  assertEq(r.ratchet[1].regression, false, 'a missing baseline is not a regression')
+  assertEq(r.ratchet[1].note, 'no-baseline', 'the sentinel note survives')
+})
+
+check('ArcTrace: a minimal one-phase trace parses and the array defaults land', () => {
+  const t = ArcTraceShape.parse({
+    arcId: 1996,
+    collectedAt: '2026-07-27T09:15:00.000Z',
+    phases: [{ phase: 1996, taskCount: 3 }],
+    git: { escapeFixes: [] },
+  })
+  assertEq(t.phases[0].keyFiles, [], 'keyFiles defaults to []')
+  assertEq(t.phases[0].transparency, [], 'transparency defaults to []')
+  assertEq(t.phases[0].gateRuns, [], 'gateRuns defaults to []')
+  assertEq(t.phases[0].executionResult, undefined, 'absent executionResult stays absent')
+  assertEq(t.sweep, undefined, 'absent sweep stays absent')
+  assertEq(t.git.landedAt, undefined, 'absent landedAt stays absent, never invented')
+})
+
+check('ArcTrace: a non-datetime collectedAt REJECTS (a trace timestamp is machine-comparable)', () => {
+  requireShape(ArcTraceShape, 'ArcTraceShape')
+  assertThrows(
+    () =>
+      ArcTraceShape.parse({
+        arcId: 1996,
+        collectedAt: '2026-07-27',
+        phases: [{ phase: 1996, taskCount: 3 }],
+        git: { escapeFixes: [] },
+      }),
+    'date-only collectedAt',
+  )
+})
+
+check('ArcTrace: composes the EXISTING shapes verbatim — a real execution result + metrics parse through', () => {
+  const t = ArcTraceShape.parse({
+    arcId: 'EVALLOOP',
+    collectedAt: '2026-07-27T09:15:00.000Z',
+    phases: [
+      {
+        phase: 1996,
+        executionResult: {
+          phase: 1996,
+          status: 'done',
+          gateRounds: 2,
+          driver: { model: 'claude-opus-5', lane: 'session' },
+        },
+        metrics: {
+          ...historicalMetrics,
+          startedAt: '2026-07-26T09:15:00.000Z',
+          completedAt: '2026-07-27T11:42:00.000Z',
+          haltCount: 2,
+        },
+        plannedBy: { model: 'claude-opus-5' },
+        keyFiles: ['templates/schema.ts'],
+        taskCount: 4,
+        transparency: [
+          {
+            whatWasDone: 'added the eval engine contracts',
+            how: 'by writing the shapes into templates/schema.ts',
+            compromises: 'None',
+            skipped: 'None',
+            hardcoded: 'None',
+            limitations: 'None',
+          },
+        ],
+        gateRuns: [
+          {
+            startedAt: '2026-07-27T10:00:00.000Z',
+            green: true,
+            rounds: [{ round: 1, agent: 'code-reviewer', verdict: 'clean' }],
+            slotFailures: 0,
+          },
+        ],
+      },
+    ],
+    sweep: sampleSweepReport,
+    verdicts: {
+      arcId: 'EVALLOOP',
+      date: '2026-07-27',
+      judgeModel: 'claude-opus-4',
+      verdicts: [sampleMetVerdict],
+    },
+    git: {
+      landedAt: '2026-07-27T12:00:00.000Z',
+      escapeFixes: [{ sha: 'abc123d', subject: 'fix(roadmap): gate R1', files: 2 }],
+    },
+  })
+  assertEq(t.phases[0].executionResult?.driver?.lane, 'session', 'driver lane carried through the trace')
+  assertEq(t.phases[0].executionResult?.compromises, [], 'the composed shape keeps its own defaults')
+  assertEq(t.phases[0].metrics?.haltCount, 2, 'the metrics time axis carried through')
+  assertEq(t.sweep?.overall, 'green', 'the sweep report composes verbatim')
+  assertEq(t.verdicts?.verdicts[0].status, 'met', 'the verdicts file composes verbatim')
+  assertEq(t.phases[0].gateRuns[0].rounds[0].round, 1, 'gate round recorded')
+})
+
+check('ArcTrace: a 6-char escape-fix sha REJECTS (min(7) matches the checkpoint sha bar)', () => {
+  requireShape(ArcTraceShape, 'ArcTraceShape')
+  assertThrows(
+    () =>
+      ArcTraceShape.parse({
+        arcId: 1996,
+        collectedAt: '2026-07-27T09:15:00.000Z',
+        phases: [{ phase: 1996, taskCount: 1 }],
+        git: { escapeFixes: [{ sha: 'abc123', subject: 'fix: x', files: 1 }] },
+      }),
+    'short escape-fix sha',
+  )
+})
+
+check('ArcTrace: a parseError on a phase parses (an unreadable phase is SEEN, never dropped)', () => {
+  const t = ArcTraceShape.parse({
+    arcId: 1996,
+    collectedAt: '2026-07-27T09:15:00.000Z',
+    phases: [{ phase: 1996, taskCount: 0, parseError: 'phase file failed to import' }],
+    git: { escapeFixes: [] },
+  })
+  assertEq(t.phases[0].parseError, 'phase file failed to import', 'parseError preserved')
+  assertThrows(
+    () =>
+      ArcTraceShape.parse({
+        arcId: 1996,
+        collectedAt: '2026-07-27T09:15:00.000Z',
+        phases: [{ phase: 1996, taskCount: 0, parseError: '' }],
+        git: { escapeFixes: [] },
+      }),
+    'blank parseError',
+  )
+})
+
+check('TimingStats: a cohort with interruptedExcluded 1 parses; notes defaults to []', () => {
+  const s = TimingStatsShape.parse({
+    generatedAt: '2026-07-27T09:15:00.000Z',
+    cohorts: [
+      {
+        taskCountBand: '3-5',
+        surface: true,
+        samples: 9,
+        medianMinutes: 41,
+        p80Minutes: 78.5,
+        interruptedExcluded: 1,
+      },
+    ],
+  })
+  assertEq(s.notes, [], 'notes defaults to []')
+  assertEq(s.cohorts[0].interruptedExcluded, 1, 'excluded count preserved, never folded into samples')
+  assertEq(s.cohorts[0].surface, true, 'the surface axis is a boolean, not a label')
+})
+
+check('TimingStats: negative samples REJECTS; a zero-sample cohort parses (honest empty band)', () => {
+  requireShape(TimingStatsShape, 'TimingStatsShape')
+  const cohort = {
+    taskCountBand: '3-5',
+    surface: false,
+    samples: 0,
+    medianMinutes: 0,
+    p80Minutes: 0,
+    interruptedExcluded: 0,
+  }
+  const s = TimingStatsShape.parse({ generatedAt: '2026-07-27T09:15:00.000Z', cohorts: [cohort], notes: [] })
+  assertEq(s.cohorts[0].samples, 0, 'a zero-sample cohort is expressible')
+  assertThrows(
+    () =>
+      TimingStatsShape.parse({
+        generatedAt: '2026-07-27T09:15:00.000Z',
+        cohorts: [{ ...cohort, samples: -1 }],
+      }),
+    'negative samples',
+  )
+  assertThrows(
+    () =>
+      TimingStatsShape.parse({
+        generatedAt: '2026-07-27T09:15:00.000Z',
+        cohorts: [{ ...cohort, medianMinutes: -1 }],
+      }),
+    'negative medianMinutes',
   )
 })
 

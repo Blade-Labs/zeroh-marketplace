@@ -1004,6 +1004,218 @@ export const ArcVerdictsFileShape = z.object({
 
 export type ArcVerdictsFile = z.output<typeof ArcVerdictsFileShape>
 
+// ── Arc eval engine (arc EVALCORE) ──────────────────────────────────────────
+
+/**
+ * The CLOSED seven-dimension vocabulary an arc is scored on. Closed by construction:
+ * `dimensions` below is a record over THIS enum, so a scorer can neither invent an
+ * eighth dimension nor silently drop one — both fail `.parse()`. Ownership is per
+ * report (the `owner` field), not baked into the key, because a dimension the
+ * deterministic scorer cannot compute for a given arc still has to appear.
+ */
+export const EvalDimensionKeyShape = z.enum([
+  'code-confidence',
+  'verified-vs-intent',
+  'standards-adherence',
+  'doc-brevity',
+  'composability-testability',
+  'speed',
+  'plan-quality',
+])
+
+export type EvalDimensionKey = z.output<typeof EvalDimensionKeyShape>
+
+/**
+ * The CLOSED absent-signal vocabulary. A free-string sentinel drifts ("no data",
+ * "n/a", "TBD" all mean the same thing to a human and nothing to a reader), so the
+ * six real absences are enumerated: awaiting the judge pass, a backfilled report the
+ * judge will never see, no verdicts file, no gate records, no derivable timestamps,
+ * and too few comparable priors to form a baseline.
+ */
+export const EvalSentinelShape = z.enum([
+  'pending-judge',
+  'unjudged-backfill',
+  'no-verdicts-file',
+  'no-gate-records',
+  'no-timestamps',
+  'no-baseline',
+])
+
+export type EvalSentinel = z.output<typeof EvalSentinelShape>
+
+/**
+ * One scored (or honestly unscored) dimension. `score` XOR `sentinel` is enforced,
+ * not documented: a dimension carrying both would let a fabricated number travel
+ * beside its own disclaimer, and one carrying neither is silence dressed as data.
+ * `sourceRefs` is `.min(1)` for the reproducibility bar — every number in a report
+ * names at least one artifact it came from.
+ */
+export const EvalDimensionShape = z
+  .object({
+    owner: z.enum(['deterministic', 'judge']),
+    score: z.number().min(0).max(100).optional(),
+    sentinel: EvalSentinelShape.optional(),
+    /** The raw inputs behind the score — numbers or short labels, kept so a reader can
+     *  re-derive the value without re-running the collector. */
+    signals: z.record(z.string(), z.union([z.number(), z.string()])),
+    sourceRefs: z.array(z.string().min(1)).min(1),
+    /** The judge's quoted proof. Optional: a deterministic dimension's proof IS its signals. */
+    evidence: z.string().optional(),
+  })
+  .refine((d) => (d.score === undefined) !== (d.sentinel === undefined), {
+    message: 'a dimension carries EXACTLY one of score / sentinel (both = a number beside its own disclaimer; neither = silence dressed as data)',
+  })
+
+export type EvalDimension = z.output<typeof EvalDimensionShape>
+
+/**
+ * One rolling-baseline comparison row. `baseline`/`value`/`delta` are nullable rather
+ * than optional so an incomparable dimension is a PRESENT row saying so, never a
+ * missing row a reader could mistake for "not regressed". The refine keeps the
+ * no-baseline case honest: a regression nobody can quantify is not a regression.
+ */
+export const EvalRatchetRowShape = z
+  .object({
+    dimension: EvalDimensionKeyShape,
+    baseline: z.number().nullable(),
+    value: z.number().nullable(),
+    delta: z.number().nullable(),
+    regression: z.boolean(),
+    /** Why this row is what it is — carries the `no-baseline` sentinel word for the
+     *  fewer-than-2-comparable-priors case (the row itself has no sentinel field). */
+    note: z.string().optional(),
+  })
+  .refine((r) => !r.regression || r.delta !== null, {
+    message: 'a regression must have a computable delta (a flagged regression with no delta is an unfalsifiable claim)',
+  })
+
+export type EvalRatchetRow = z.output<typeof EvalRatchetRowShape>
+
+/**
+ * ArcEvalReportShape — the persisted per-arc eval, one dated file under the COMMITTED
+ * roadmap/arc-evals/ home. `judgeModel` is absent until the judge pass fills the
+ * judge-owned dimensions; recording it per report is what makes a cross-model
+ * comparison a visible baseline reset rather than a silent one.
+ *
+ * `attribution` is CAPTURE-ONLY in this arc: it records which driver produced which
+ * phases and which reviewers ran how many rounds, so a later per-actor analysis
+ * (EVALLOOP) has real data instead of reconstructing it from commits. An absent
+ * driver is recorded as the literal 'unrecorded' model, never a guessed id.
+ */
+export const ArcEvalReportShape = z.object({
+  // Same number|string union as Arc.id.
+  arcId: z.union([z.number().int().positive(), z.string().min(1)]),
+  date: z.string().min(10),
+  judgeModel: z.string().min(1).optional(),
+  /** A record over the CLOSED key enum: all seven required, no eighth accepted. */
+  dimensions: z.record(EvalDimensionKeyShape, EvalDimensionShape),
+  ratchet: z.array(EvalRatchetRowShape),
+  attribution: z.object({
+    drivers: z.array(
+      z.object({
+        model: z.string().min(1),
+        lane: z.string().min(1),
+        phases: z.array(z.number().int().positive()),
+      }),
+    ),
+    reviewers: z.array(z.object({ agent: z.string().min(1), rounds: z.number().int().min(0) })),
+  }),
+  /** Every gap the report knows about, named in prose for the human reader. */
+  notes: z.array(z.string()).default([]),
+})
+
+export type ArcEvalReport = z.output<typeof ArcEvalReportShape>
+
+/**
+ * ArcTraceShape — the collector's output: everything the scorer is allowed to look at,
+ * read from DISK ONLY (phase files, roadmap/.gate run records, the recorded sweep +
+ * verdicts, the regenerable RunnerSummary, git). Every leaf reuses an existing shape
+ * rather than restating it, so a widening upstream reaches the eval for free.
+ *
+ * Absence is expressed as the field being absent (`.optional()`), never as a zero or an
+ * empty string — the SCORER owns the single absence→sentinel mapping, so the vocabulary
+ * has exactly one application site.
+ */
+export const ArcTraceShape = z.object({
+  // Same number|string union as Arc.id.
+  arcId: z.union([z.number().int().positive(), z.string().min(1)]),
+  collectedAt: z.string().datetime(),
+  phases: z.array(
+    z.object({
+      phase: z.number().int().positive(),
+      executionResult: PhaseExecutionResultShape.optional(),
+      metrics: PhaseMetricsShape.optional(),
+      plannedBy: z.object({ model: z.string().min(1) }).optional(),
+      /** Verbatim from the phase file — the surface-cohort heuristic in the timing stats
+       *  reads these paths, and the report names the heuristic as such. */
+      keyFiles: z.array(z.string()).default([]),
+      taskCount: z.number().int().nonnegative(),
+      transparency: z.array(TransparencyReportShape).default([]),
+      /** Flattened GateRunReport summaries — the eval needs the rounds and the failure
+       *  count, not the full slot payload, and flattening here keeps the plugin-side
+       *  GateRunReport shape out of the consumer contract. */
+      gateRuns: z
+        .array(
+          z.object({
+            startedAt: z.string().min(1),
+            green: z.boolean(),
+            rounds: z.array(
+              z.object({ round: z.number().int(), agent: z.string().min(1), verdict: z.string().min(1) }),
+            ),
+            slotFailures: z.number().int().nonnegative(),
+          }),
+        )
+        .default([]),
+      /** Why this phase's record is incomplete. A phase file that will not import is
+       *  RECORDED as a parse failure, never dropped: a silently missing phase would
+       *  quietly improve every average it should have dragged down. */
+      parseError: z.string().min(1).optional(),
+    }),
+  ),
+  sweep: SweepReportShape.optional(),
+  verdicts: ArcVerdictsFileShape.optional(),
+  summary: RunnerSummaryShape.optional(),
+  git: z.object({
+    landedAt: z.string().datetime().optional(),
+    /** Fix commits AFTER the arc landed that touch files the arc's own commits touched —
+     *  the escape rate. `sha` min(7) matches the checkpoint sha bar. */
+    escapeFixes: z.array(
+      z.object({
+        sha: z.string().min(7),
+        subject: z.string().min(1),
+        files: z.number().int().nonnegative(),
+      }),
+    ),
+  }),
+})
+
+export type ArcTrace = z.output<typeof ArcTraceShape>
+
+/**
+ * TimingStatsShape — the reference-class table plan-phase / plan-arc cite when they
+ * estimate. A PROJECTION, regenerated on every eval run (the dated reports are the
+ * archive), so it lives at one un-dated path. `interruptedExcluded` is a first-class
+ * count beside `samples`, never folded into it: elapsed time on a shared box is not
+ * effort, and a phase that halted is excluded VISIBLY.
+ */
+export const TimingStatsShape = z.object({
+  generatedAt: z.string().datetime(),
+  cohorts: z.array(
+    z.object({
+      taskCountBand: z.string().min(1),
+      surface: z.boolean(),
+      samples: z.number().int().nonnegative(),
+      medianMinutes: z.number().nonnegative(),
+      p80Minutes: z.number().nonnegative(),
+      interruptedExcluded: z.number().int().nonnegative(),
+    }),
+  ),
+  /** Named caveats — the surface-cohort heuristic and any excluded-phase reasons. */
+  notes: z.array(z.string()).default([]),
+})
+
+export type TimingStats = z.output<typeof TimingStatsShape>
+
 /** Flat authoring form: a single-track arc lists its phases directly via
  *  `phases: number[]` instead of spelling out a one-plane `planes` array.
  *  `defineArc` collapses it to a single `Default` plane — mirroring how
