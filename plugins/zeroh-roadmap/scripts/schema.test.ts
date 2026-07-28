@@ -1308,6 +1308,125 @@ check('ArcTrace: a parseError on a phase parses (an unreadable phase is SEEN, ne
   )
 })
 
+check('ArcEvalReport: an UNSTAMPED committed-report fixture still parses (the stamps are additive)', () => {
+  const r = ArcEvalReportShape.parse(makeEvalReport())
+  assertEq(r.profile, undefined, 'absent profile stays absent, never defaulted')
+  assertEq(r.workflow, undefined, 'absent workflow block stays absent — a named gap, not a fabrication')
+  assertEq(r.fingerprint, undefined, 'absent fingerprint stays absent')
+})
+
+check('ArcEvalReport: a fully stamped report parses and round-trips all three stamps', () => {
+  const r = ArcEvalReportShape.parse({
+    ...makeEvalReport(),
+    profile: 'prod-grade',
+    workflow: {
+      pluginVersion: '1.4.0',
+      pluginSha: 'abc1234def56',
+      protocolLoadTokens: 18422,
+      profile: 'prod-grade',
+    },
+    fingerprint: { repo: 'azure_private_agent', language: 'typescript', corpusSize: 1904 },
+  })
+  assertEq(r.workflow?.pluginSha, 'abc1234def56', 'pluginSha preserved')
+  assertEq(r.workflow?.protocolLoadTokens, 18422, 'protocolLoadTokens preserved')
+  assertEq(r.fingerprint?.corpusSize, 1904, 'corpusSize preserved')
+  assertEq(r.profile, 'prod-grade', 'profile preserved')
+})
+
+check('ArcEvalReport: a workflow block MISSING pluginSha rejects (a partial stamp is a fabricated one)', () => {
+  requireShape(ArcEvalReportShape, 'ArcEvalReportShape')
+  assertThrows(
+    () =>
+      ArcEvalReportShape.parse({
+        ...makeEvalReport(),
+        profile: 'prod-grade',
+        workflow: { pluginVersion: '1.4.0', protocolLoadTokens: 18422, profile: 'prod-grade' },
+      }),
+    'workflow without pluginSha',
+  )
+  assertThrows(
+    () =>
+      ArcEvalReportShape.parse({
+        ...makeEvalReport(),
+        profile: 'prod-grade',
+        workflow: {
+          pluginVersion: '1.4.0',
+          pluginSha: 'abc123',
+          protocolLoadTokens: 18422,
+          profile: 'prod-grade',
+        },
+      }),
+    'a pluginSha shorter than 7 chars',
+  )
+})
+
+check('ArcEvalReport: profile disagreeing with workflow.profile REJECTS (two claims about one fact)', () => {
+  requireShape(ArcEvalReportShape, 'ArcEvalReportShape')
+  assertThrows(
+    () =>
+      ArcEvalReportShape.parse({
+        ...makeEvalReport(),
+        profile: 'prod-grade',
+        workflow: {
+          pluginVersion: '1.4.0',
+          pluginSha: 'abc1234def56',
+          protocolLoadTokens: 18422,
+          profile: 'ux-iteration',
+        },
+      }),
+    'profile disagreeing with workflow.profile',
+  )
+  // Only the BOTH-present case is constrained: a workflow block on a report carrying no
+  // top-level profile makes one claim, not two.
+  const oneSided = ArcEvalReportShape.parse({
+    ...makeEvalReport(),
+    workflow: {
+      pluginVersion: '1.4.0',
+      pluginSha: 'abc1234def56',
+      protocolLoadTokens: 18422,
+      profile: 'ux-iteration',
+    },
+  })
+  assertEq(oneSided.workflow?.profile, 'ux-iteration', 'an unpaired workflow.profile parses')
+})
+
+check("ArcTrace: escapeWindow 'land-record-anchored' parses; an unknown window token rejects", () => {
+  const t = ArcTraceShape.parse({
+    arcId: 'EVALLOOP',
+    collectedAt: '2026-07-27T09:15:00.000Z',
+    phases: [{ phase: 2014, taskCount: 6 }],
+    git: {
+      escapeScan: 'complete',
+      escapeFixes: [],
+      escapeWindow: 'land-record-anchored',
+      landedAt: '2026-07-19T23:59:59.999Z',
+    },
+  })
+  assertEq(t.git.escapeWindow, 'land-record-anchored', 'the land-record window token parses')
+  for (const known of ['merge-anchored', 'tip-anchored'] as const) {
+    assertEq(
+      ArcTraceShape.parse({
+        arcId: 'EVALLOOP',
+        collectedAt: '2026-07-27T09:15:00.000Z',
+        phases: [{ phase: 2014, taskCount: 6 }],
+        git: { escapeScan: 'complete', escapeFixes: [], escapeWindow: known },
+      }).git.escapeWindow,
+      known,
+      `the pre-existing ${known} token still parses`,
+    )
+  }
+  assertThrows(
+    () =>
+      ArcTraceShape.parse({
+        arcId: 'EVALLOOP',
+        collectedAt: '2026-07-27T09:15:00.000Z',
+        phases: [{ phase: 2014, taskCount: 6 }],
+        git: { escapeScan: 'complete', escapeFixes: [], escapeWindow: 'land-anchored' },
+      }),
+    'an unknown escapeWindow token',
+  )
+})
+
 check('TimingStats: a cohort with interruptedExcluded 1 parses; notes defaults to []', () => {
   const s = TimingStatsShape.parse({
     generatedAt: '2026-07-27T09:15:00.000Z',

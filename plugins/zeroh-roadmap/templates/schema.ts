@@ -1120,9 +1120,45 @@ export const ArcEvalReportShape = z.object({
     ),
     reviewers: z.array(z.object({ agent: z.string().min(1), rounds: z.number().int().min(0) })),
   }),
+  /**
+   * The workflow profile the arc ran under. One value today (`prod-grade`); the per-profile
+   * seam stays unbuilt until a second profile exists. A RESTAMPABLE fact — it describes how
+   * the arc was run, which the corpus knows retroactively.
+   */
+  profile: z.string().min(1).optional(),
+  /**
+   * Which BUILD produced this report, so a score shift is attributable to a workflow change
+   * rather than to the actor. Stamped ONLY at production time and never backfilled: the build
+   * behind a historical report was not recorded, and writing today's sha onto it would
+   * fabricate provenance. An absent block is a NAMED gap in `notes`.
+   */
+  workflow: z
+    .object({
+      pluginVersion: z.string().min(1),
+      pluginSha: z.string().min(7),
+      protocolLoadTokens: z.number().int().nonnegative(),
+      profile: z.string().min(1),
+    })
+    .optional(),
+  /**
+   * Which CONSUMER produced this report, so cross-consumer numbers are comparable. All three
+   * components are derivable offline from the checkout, so this is a RESTAMPABLE fact.
+   */
+  fingerprint: z
+    .object({
+      repo: z.string().min(1),
+      language: z.string().min(1),
+      corpusSize: z.number().int().nonnegative(),
+    })
+    .optional(),
   /** Every gap the report knows about, named in prose for the human reader. */
   notes: z.array(z.string()).default([]),
 })
+  .refine((r) => !(r.profile && r.workflow) || r.workflow.profile === r.profile, {
+    message:
+      'workflow.profile must equal profile — the block snapshots the profile its producing workflow ran, so a disagreement is two claims about one fact',
+    path: ['workflow', 'profile'],
+  })
 
 export type ArcEvalReport = z.output<typeof ArcEvalReportShape>
 
@@ -1200,8 +1236,12 @@ export const ArcTraceShape = z.object({
      *  member commit in, so commits after it are genuinely post-land. `tip-anchored`: no such
      *  merge exists (the arc reached the branch by direct commits), so the window is EMPTY by
      *  construction — an empty `escapeFixes` there is an absent measurement, not a clean
-     *  record, and the scorer says so in the report notes rather than banking the difference. */
-    escapeWindow: z.enum(['merge-anchored', 'tip-anchored']).optional(),
+     *  record, and the scorer says so in the report notes rather than banking the difference.
+     *  `land-record-anchored`: the window is bounded by the dated RunnerSummary's land date — a
+     *  NON-member source, so a phase-named post-land fix can no longer become the tip the
+     *  boundary derives from and close the window it belongs behind. There an empty
+     *  `escapeFixes` IS a measured clean record, and the scorer scores it. */
+    escapeWindow: z.enum(['merge-anchored', 'tip-anchored', 'land-record-anchored']).optional(),
   }),
 })
 
