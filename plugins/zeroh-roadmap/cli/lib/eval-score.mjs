@@ -137,7 +137,9 @@ function spanMinutes(metrics) {
  * escaped anyway. Three signals: the mean gate rounds per phase (rework at the gate), the
  * share of gate runs that ENDED clean (the reviewer trajectory: a first-round
  * findings-fixed followed by a clean second round is a different story from a run that
- * never converged), and post-land fixes per phase (rework that escaped the gate entirely).
+ * never converged), and post-land fixes per phase — only those whose subject names a member
+ * phase, so the signal is the arc's OWN rework that escaped the gate rather than every fix
+ * that later brushed a file the arc touched.
  */
 function scoreCodeConfidence(trace, readable) {
   const runs = readable.flatMap((p) => p.gateRuns ?? [])
@@ -446,6 +448,8 @@ export function assembleAttribution(trace) {
   const drivers = new Map()
   for (const p of trace.phases ?? []) {
     const d = p.executionResult?.driver ?? UNRECORDED_DRIVER
+    // NUL joins the composite key because it cannot occur in either half: a printable
+    // separator would let a model id that contains it collide two distinct driver rows.
     const key = `${d.model}\u0000${d.lane}`
     if (!drivers.has(key)) drivers.set(key, { model: d.model, lane: d.lane, phases: [] })
     drivers.get(key).phases.push(p.phase)
