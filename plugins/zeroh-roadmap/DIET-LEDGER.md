@@ -85,6 +85,7 @@ outputs. The measured do-arc protocol load vs the ~49k baseline is recorded here
 | :32-45 SessionStart schema-drift-check bash + update nudge | obsolete-with-evidence(no SessionStart hook exists to replace the grep; `roadmap config check` surfaces a schema-marker mismatch instead — no non-existent hook is cited) | cli/commands/config.mjs |
 | :78-98 multi-session coordination prose | enforced-by-code(`roadmap status` lanes / `roadmap claim` phase lock / `roadmap arm` arc lane) | condensed to three pointer lines |
 | :100-102 migration section | enforced-by-code(routing table's migrate row points at scripts/migrate/README.md) | scripts/migrate/README.md |
+| pause-row trigger + rationale phrases "/ after phase N", "— pause is free" (trimmed 2026-07-28, arc EVALCORE 1998.3, do-arc flow at 12499/12500) | obsolete-with-evidence(pause-is-free is already carried by do-arc's §Pause & resume — one statement of the fact suffices; the "/ after phase N" trigger collapses into "pause the arc" without loss) | skills/do-arc/SKILL.md §Pause & resume |
 
 ---
 

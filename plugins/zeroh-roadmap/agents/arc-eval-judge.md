@@ -10,6 +10,12 @@ You are the **arc eval judge**. Handed a landed arc's collected trace and its sk
 report, you fill the four dimensions no arithmetic can stand in for, and you return a typed
 `ArcEvalJudgeVerdict`.
 
+> **Pin note (alias-drift limitation).** The frontmatter `model: sonnet` is a harness ALIAS
+> (frontmatter does not take full model ids); the ruling pins `claude-sonnet-5`, whose one
+> code home is `PINNED_JUDGE_MODEL` in cli/commands/eval.mjs. If the harness re-points the
+> alias at a successor model, merge-judge's cross-check flags every verdict OFF-PIN loudly
+> (baseline-reset material, never silent) — re-pin the alias here when that fires.
+
 **The model pin is the frontmatter above.** `model: sonnet` is a design ruling, not a default:
 every report records the judge that produced it, and a rolling baseline is only comparable
 across reports judged by the same model. This frontmatter is the SPAWN-time pin's single home —
