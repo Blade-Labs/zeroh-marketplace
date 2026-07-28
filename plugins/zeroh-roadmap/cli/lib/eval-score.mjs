@@ -55,6 +55,26 @@ export const MIN_COMPARABLE_PRIORS = 2
  */
 export const SPEED_REFERENCE_MINUTES_PER_TASK = 45
 
+/**
+ * The reference-class bands a planner reads. Task count is the only size axis the record
+ * reliably carries across ~1,900 historical phases, and the top band is open-ended so a
+ * forty-task phase lands somewhere instead of falling out of the table.
+ */
+export const TASK_COUNT_BANDS = [
+  { label: '1-3', max: 3 },
+  { label: '4-6', max: 6 },
+  { label: '7+', max: Infinity },
+]
+
+/**
+ * The surface axis, decided from a phase's keyFiles. This is a HEURISTIC — a path guess,
+ * not a declared fact — which is why it is a named export and why computeTimingStats says
+ * so in its notes rather than presenting the split as ground truth. No `g` flag: a stateful
+ * regex would return false on every second identical call and silently flip half the phases
+ * out of the surface cohort.
+ */
+export const SURFACE_PATH_RE = /(^|\/)(web|office|spa)\//
+
 /** Points lost per gate round beyond the first — rework is the cost the round count measures. */
 const GATE_ROUND_PENALTY = 12
 /** Points lost per escape fix per phase — a defect that reached the base branch costs more
@@ -432,4 +452,88 @@ export function computeRatchet(report, priorReports = []) {
     })
   }
   return rows
+}
+
+/** The band a phase's task count falls in. */
+const bandFor = (taskCount) => (TASK_COUNT_BANDS.find((b) => (taskCount ?? 0) <= b.max) ?? TASK_COUNT_BANDS.at(-1)).label
+
+/** The usual middle; an even count averages the two middles rather than picking a side. */
+function median(sorted) {
+  const n = sorted.length
+  if (n === 0) return 0
+  const mid = Math.floor(n / 2)
+  return n % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+/** The slow tail, not the maximum: the sorted value at ceil(0.8n) - 1. */
+function p80(sorted) {
+  if (sorted.length === 0) return 0
+  return sorted[Math.ceil(0.8 * sorted.length) - 1]
+}
+
+/**
+ * computeTimingStats — the reference-class table plan-phase and plan-arc cite when they
+ * estimate, aggregated across EVERY report's trace. A PROJECTION: regenerated on each eval
+ * run into one un-dated path, while the dated reports stay the archive.
+ *
+ * Elapsed time on a shared box is not effort, so a phase is EXCLUDED from the sample set —
+ * and COUNTED in `interruptedExcluded` — when it recorded a halt, is missing either
+ * timestamp, or could not be read at all. Excluding without counting would quietly shrink
+ * the denominator and teach the estimator that work is faster than it is; the count is what
+ * keeps the loss visible.
+ *
+ * A cohort nobody worked in is not emitted (an invented row of zeros is noise). A cohort
+ * whose every phase was excluded IS emitted at zero, because that lost work is exactly what
+ * a planner needs to see.
+ */
+export function computeTimingStats(traces, { generatedAt = new Date().toISOString() } = {}) {
+  const cohorts = new Map()
+  let excludedTotal = 0
+
+  for (const trace of traces ?? []) {
+    for (const p of trace.phases ?? []) {
+      const band = bandFor(p.taskCount)
+      const surface = (p.keyFiles ?? []).some((f) => SURFACE_PATH_RE.test(f))
+      const key = `${band} ${surface}`
+      if (!cohorts.has(key)) cohorts.set(key, { taskCountBand: band, surface, spans: [], interruptedExcluded: 0 })
+      const cohort = cohorts.get(key)
+
+      const span = spanMinutes(p.metrics)
+      const halted = (p.metrics?.haltCount ?? 0) > 0
+      if (p.parseError || span === null || halted) {
+        cohort.interruptedExcluded++
+        excludedTotal++
+        continue
+      }
+      cohort.spans.push(span)
+    }
+  }
+
+  const bandIndex = (label) => TASK_COUNT_BANDS.findIndex((x) => x.label === label)
+  const ordered = [...cohorts.values()].sort(
+    (a, b) => bandIndex(a.taskCountBand) - bandIndex(b.taskCountBand) || Number(a.surface) - Number(b.surface),
+  )
+
+  return {
+    generatedAt,
+    cohorts: ordered.map((c) => {
+      const sorted = [...c.spans].sort((a, b) => a - b)
+      return {
+        taskCountBand: c.taskCountBand,
+        surface: c.surface,
+        samples: sorted.length,
+        // No samples means 0, never a number carried over: the cohort exists to show its
+        // exclusion count, and inventing a median for it would be the exact lie the
+        // exclusion is protecting against.
+        medianMinutes: round1(median(sorted)),
+        p80Minutes: round1(p80(sorted)),
+        interruptedExcluded: c.interruptedExcluded,
+      }
+    }),
+    notes: [
+      'the surface axis is a HEURISTIC over each phase keyFiles (web/, office/, spa/ paths), not a declared field',
+      `${excludedTotal} phase(s) excluded from the samples and counted per cohort: a recorded halt, a missing timestamp, or an unreadable record`,
+      'elapsed wall clock on a shared box is not effort - an interrupted phase is excluded rather than averaged in',
+    ],
+  }
 }

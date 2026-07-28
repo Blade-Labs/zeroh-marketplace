@@ -37,9 +37,12 @@ import {
   scoreArcTrace,
   assembleAttribution,
   computeRatchet,
+  computeTimingStats,
   DIMENSION_KEYS,
   SPEED_REFERENCE_MINUTES_PER_TASK,
   MIN_COMPARABLE_PRIORS,
+  TASK_COUNT_BANDS,
+  SURFACE_PATH_RE,
 } from './eval-score.mjs'
 
 /** The contract's key order, restated ONCE here so a reorder upstream is a visible diff. */
@@ -467,4 +470,223 @@ test('scoreArcTrace + computeRatchet — a scorer output feeds the ratchet direc
     assert.equal(row.value, null, `${key} awaits the judge — it has no value to ratchet`)
     assert.equal(row.regression, false)
   }
+})
+
+// ══ TIMING STATS (1996.4) ═════════════════════════════════════════════════════════════
+// The reference-class table plan-phase cites when it estimates. The invariant that matters
+// is HONESTY about what is NOT in a sample: an interrupted, half-timed or unreadable phase
+// must be excluded from the minutes AND stay visible as a count, because a shared-box halt
+// is not effort and folding it in would teach the estimator a lie. Nothing below restates
+// the median/p80 arithmetic against itself — the spans are chosen so the expected values are
+// obvious by inspection, and every other assertion is about what got in and what did not.
+
+/** Cohort lookup by its two axes — a missing cohort returns undefined, which tests assert. */
+const cohortOf = (stats, taskCountBand, surface) =>
+  stats.cohorts.find((c) => c.taskCountBand === taskCountBand && c.surface === surface)
+
+const totalSamples = (stats) => stats.cohorts.reduce((a, c) => a + c.samples, 0)
+const totalExcluded = (stats) => stats.cohorts.reduce((a, c) => a + c.interruptedExcluded, 0)
+
+// Synthetic phases: plain objects, because the timing axis reads only taskCount, keyFiles
+// and metrics — dragging the fixture into the arithmetic tests would hide the spans.
+let synthSeq = 0
+const SYNTH_START = '2026-07-16T00:00:00.000Z'
+function minutesPhase(minutes, { taskCount = 2, keyFiles = ['cli/lib/eval-score.mjs'], haltCount = 0 } = {}) {
+  return {
+    phase: 8000 + ++synthSeq,
+    taskCount,
+    keyFiles,
+    metrics: {
+      startedAt: SYNTH_START,
+      completedAt: new Date(Date.parse(SYNTH_START) + minutes * 60_000).toISOString(),
+      haltCount,
+    },
+  }
+}
+const synthTrace = (...phases) => ({ arcId: 'SYNTH', phases })
+/** One phase per trace — the aggregation path, not the within-trace path. */
+const spansAcrossTraces = (spans, opts) => spans.map((m) => synthTrace(minutesPhase(m, opts)))
+
+// ── 15. the acceptance criterion: an interrupted phase leaves the sample set ───────────
+test('computeTimingStats — the HALTED fixture phase is excluded from its cohort and counted, never averaged in', () => {
+  const trace = traceFor()
+  assert.equal(byNum(trace, 9002).metrics.haltCount, 2, 'fixture precondition: 9002 recorded halts')
+  assert.equal(byNum(trace, 9001).metrics.haltCount, 0, 'fixture precondition: 9001 ran uninterrupted')
+  assert.equal(byNum(trace, 9002).taskCount, 2, 'fixture precondition: 9002 is a 1-3 band phase')
+  assert.equal(byNum(trace, 9001).taskCount, 4, 'fixture precondition: 9001 is a 4-6 band phase')
+
+  const stats = computeTimingStats([trace])
+
+  const interrupted = cohortOf(stats, '1-3', false)
+  assert.ok(interrupted, `9002's cohort (band 1-3, non-surface) must be emitted; got ${JSON.stringify(stats.cohorts)}`)
+  assert.equal(interrupted.interruptedExcluded, 1, 'the halted phase is counted as excluded, visibly')
+  assert.equal(interrupted.samples, 0, '9002 contributed NO minutes — its 90 elapsed minutes are not a sample')
+  assert.equal(interrupted.medianMinutes, 0, 'no samples ⇒ no median to invent')
+  assert.equal(interrupted.p80Minutes, 0, 'no samples ⇒ no p80 to invent')
+
+  const healthy = cohortOf(stats, '4-6', true)
+  assert.ok(healthy, `9001's cohort (band 4-6, surface) must be emitted; got ${JSON.stringify(stats.cohorts)}`)
+  assert.equal(healthy.samples, 1, 'the uninterrupted phase IS a sample')
+  assert.equal(healthy.interruptedExcluded, 0, 'nothing was excluded from the healthy cohort')
+  assert.equal(healthy.medianMinutes, 40, "9001's single 40-minute span is its own median")
+
+  // The halted phase's 90 minutes must not have leaked into ANY cohort's numbers.
+  assert.equal(totalSamples(stats), 1, 'exactly one of the two fixture phases is a timing sample')
+  for (const c of stats.cohorts)
+    assert.ok(c.medianMinutes !== 90 && c.p80Minutes !== 90, `the halted 90-minute span leaked into ${JSON.stringify(c)}`)
+})
+
+// ── 16. the surface axis ──────────────────────────────────────────────────────────────
+test('computeTimingStats — the surface axis splits the fixture: the web/ phase is surface, the cli-only phase is not', () => {
+  const stats = computeTimingStats([traceFor()])
+  assert.equal(cohortOf(stats, '4-6', true)?.surface, true, '9001 carries a web/ keyFile')
+  assert.equal(cohortOf(stats, '1-3', false)?.surface, false, '9002 touches no surface path')
+  assert.equal(cohortOf(stats, '4-6', false), undefined, '9001 must not ALSO land in the non-surface half of its band')
+  assert.equal(cohortOf(stats, '1-3', true), undefined, '9002 must not ALSO land in the surface half of its band')
+})
+
+test('SURFACE_PATH_RE — matches the SPA/pane paths, not the CLI ones, and is not lastIndex-stateful', () => {
+  assert.ok(SURFACE_PATH_RE instanceof RegExp, 'the heuristic is exported as a NAMED regex, not buried in a closure')
+  assert.equal(SURFACE_PATH_RE.test('web/src/panels/eval-panel.tsx'), true, 'a web/ path is a surface change')
+  assert.equal(SURFACE_PATH_RE.test('cli/lib/eval-score.mjs'), false, 'a CLI library path is not a surface change')
+  assert.equal(SURFACE_PATH_RE.test('office/src/taskpane.ts'), true, 'the Office pane is a surface too')
+  // A /g regex would return false on the second identical call — that bug would silently
+  // flip every other phase out of the surface cohort.
+  assert.equal(SURFACE_PATH_RE.test('web/src/panels/eval-panel.tsx'), true, 'the same path must match twice in a row')
+})
+
+// ── 17. the other two exclusion reasons ───────────────────────────────────────────────
+test('computeTimingStats — a phase MISSING a timestamp leaves the sample set and is counted', () => {
+  const before = computeTimingStats([traceFor()])
+  const trace = traceFor()
+  delete byNum(trace, 9001).metrics.completedAt
+  const after = computeTimingStats([trace])
+
+  assert.equal(totalSamples(before), 1)
+  assert.equal(totalSamples(after), 0, 'a half-timed phase has no derivable span — it cannot be a sample')
+  assert.equal(totalExcluded(after), totalExcluded(before) + 1, 'and the loss is COUNTED, not silently dropped')
+
+  const cohort = cohortOf(after, '4-6', true)
+  assert.ok(cohort, 'the cohort survives with zero samples so the excluded work stays visible')
+  assert.equal(cohort.samples, 0)
+  assert.equal(cohort.interruptedExcluded, 1)
+  assert.equal(cohort.medianMinutes, 0, 'an unsampled cohort reports 0, never a number carried over from before')
+})
+
+test('computeTimingStats — a QUARANTINED phase leaves the sample set and is counted', () => {
+  const trace = traceFor({ malformedPhase: 9002 })
+  assert.equal(typeof byNum(trace, 9002).parseError, 'string', 'fixture precondition: 9002 is quarantined')
+
+  const stats = computeTimingStats([trace])
+  assert.equal(totalSamples(stats), 1, 'only the readable phase is a sample')
+  assert.equal(totalExcluded(stats), 1, 'an unreadable phase is an excluded phase, named in the count')
+  assert.equal(cohortOf(stats, '4-6', true).samples, 1, 'the healthy phase is untouched by its neighbour')
+})
+
+// ── 18. median and p80 over known spans ───────────────────────────────────────────────
+test('computeTimingStats — median and p80 over an ODD sample set of known spans', () => {
+  const stats = computeTimingStats(spansAcrossTraces([30, 10, 50, 20, 40]))
+  assert.equal(stats.cohorts.length, 1, 'five identically-shaped phases are ONE cohort')
+  const c = stats.cohorts[0]
+  assert.equal(c.samples, 5)
+  assert.equal(c.interruptedExcluded, 0)
+  assert.equal(c.medianMinutes, 30, 'the middle of 10/20/30/40/50, regardless of input order')
+  assert.equal(c.p80Minutes, 40, 'p80 of five samples is the 4th smallest — the slow tail, not the max')
+  assert.notEqual(c.p80Minutes, 50, 'p80 must not degenerate into the maximum')
+  assert.ok(c.p80Minutes >= c.medianMinutes, 'p80 can never sit below the median')
+})
+
+test('computeTimingStats — an EVEN sample set averages the two middles', () => {
+  const c = computeTimingStats(spansAcrossTraces([10, 20, 30, 40])).cohorts[0]
+  assert.equal(c.samples, 4)
+  assert.equal(c.medianMinutes, 25, 'the mean of 20 and 30 — not a lower-middle pick')
+  assert.equal(c.p80Minutes, 40)
+})
+
+// ── 19. aggregation across reports ────────────────────────────────────────────────────
+test('computeTimingStats — cohorts aggregate ACROSS traces: same cohort from two arcs is one row', () => {
+  const stats = computeTimingStats([synthTrace(minutesPhase(20)), synthTrace(minutesPhase(60))])
+  assert.equal(stats.cohorts.length, 1, `two traces feeding one cohort must not emit two rows; got ${JSON.stringify(stats.cohorts)}`)
+  assert.equal(stats.cohorts[0].samples, 2, 'both traces contribute to the same reference class')
+  assert.equal(stats.cohorts[0].medianMinutes, 40, 'the pooled median spans both traces')
+})
+
+// ── 20. which cohorts get emitted at all ──────────────────────────────────────────────
+test('computeTimingStats — an EMPTY cohort is not invented; an all-excluded cohort IS emitted at zero', () => {
+  const stats = computeTimingStats([
+    synthTrace(minutesPhase(30, { taskCount: 2 })),
+    synthTrace(minutesPhase(90, { taskCount: 9, keyFiles: ['web/src/app.tsx'], haltCount: 1 })),
+  ])
+
+  assert.equal(stats.cohorts.length, 2, `only the two cohorts with phases in them; got ${JSON.stringify(stats.cohorts)}`)
+  assert.equal(cohortOf(stats, '4-6', true), undefined, 'a band nobody worked in is noise, not a row')
+  assert.equal(cohortOf(stats, '7+', false), undefined, 'the non-surface half of the 7+ band saw no phases')
+
+  const allExcluded = cohortOf(stats, '7+', true)
+  assert.ok(allExcluded, 'a cohort whose only phase was excluded must STILL appear, or the lost work goes invisible')
+  assert.equal(allExcluded.samples, 0)
+  assert.equal(allExcluded.medianMinutes, 0)
+  assert.equal(allExcluded.p80Minutes, 0)
+  assert.equal(allExcluded.interruptedExcluded, 1)
+
+  assert.equal(computeTimingStats([]).cohorts.length, 0, 'no traces at all ⇒ no cohorts, not a table of zeros')
+})
+
+// ── 21. the band boundaries ───────────────────────────────────────────────────────────
+test('computeTimingStats — the task-count bands bite EXACTLY at 3/4 and 6/7', () => {
+  assert.deepEqual(
+    TASK_COUNT_BANDS.map((b) => b.label),
+    ['1-3', '4-6', '7+'],
+    'the ordered band table, restated here so a silent re-banding is a visible diff',
+  )
+  assert.equal(TASK_COUNT_BANDS[0].max, 3)
+  assert.equal(TASK_COUNT_BANDS[1].max, 6)
+  assert.equal(TASK_COUNT_BANDS[2].max, Infinity, 'the top band must be open-ended or a 40-task phase falls out of the table')
+
+  const stats = computeTimingStats([
+    synthTrace(
+      minutesPhase(10, { taskCount: 3 }),
+      minutesPhase(20, { taskCount: 4 }),
+      minutesPhase(30, { taskCount: 6 }),
+      minutesPhase(40, { taskCount: 7 }),
+    ),
+  ])
+  assert.equal(cohortOf(stats, '1-3', false).samples, 1, 'taskCount 3 is the TOP of the first band, not the bottom of the second')
+  assert.equal(cohortOf(stats, '4-6', false).samples, 2, 'taskCount 4 and 6 share the middle band')
+  assert.equal(cohortOf(stats, '7+', false).samples, 1, 'taskCount 7 opens the top band')
+  assert.equal(cohortOf(stats, '4-6', false).medianMinutes, 25, 'the 4-and-6 phases pooled — 20 and 30')
+})
+
+// ── 22. the honesty rails: notes ──────────────────────────────────────────────────────
+test('computeTimingStats — notes NAME the surface heuristic as a heuristic and report the total excluded', () => {
+  const stats = computeTimingStats([
+    synthTrace(minutesPhase(30)),
+    synthTrace(minutesPhase(40, { haltCount: 1 }), minutesPhase(50, { haltCount: 3 })),
+    synthTrace({ phase: 8999, taskCount: 2, keyFiles: [], parseError: 'Error: boom' }),
+  ])
+  assert.ok(Array.isArray(stats.notes) && stats.notes.length > 0, 'a projection with caveats must carry them')
+  assert.ok(
+    stats.notes.some((n) => /heuristic/i.test(n)),
+    `the surface axis is a path guess and must SAY so; got ${JSON.stringify(stats.notes)}`,
+  )
+  assert.equal(totalExcluded(stats), 3, 'two halted phases plus one unreadable one')
+  assert.ok(
+    stats.notes.some((n) => /exclud/i.test(n) && /\b3\b/.test(n)),
+    `a note must report the total excluded count (3 here); got ${JSON.stringify(stats.notes)}`,
+  )
+})
+
+// ── 23. generatedAt ───────────────────────────────────────────────────────────────────
+test('computeTimingStats — generatedAt is injectable and echoed verbatim; the default is an ISO datetime', () => {
+  const pinned = '2026-07-27T09:15:00.000Z'
+  assert.equal(
+    computeTimingStats([traceFor()], { generatedAt: pinned }).generatedAt,
+    pinned,
+    'an injected clock must survive untouched, or a regenerated projection is not reproducible',
+  )
+
+  const { generatedAt } = computeTimingStats([traceFor()])
+  assert.equal(typeof generatedAt, 'string')
+  assert.match(generatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, 'TimingStatsShape parses generatedAt as z.string().datetime()')
+  assert.ok(Number.isFinite(Date.parse(generatedAt)), 'and it must be a real instant')
 })
