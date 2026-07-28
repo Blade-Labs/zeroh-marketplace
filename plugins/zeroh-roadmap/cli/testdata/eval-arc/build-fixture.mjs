@@ -44,6 +44,10 @@ export const DEFAULT_SCHEMA_PATH = join(PLUGIN_ROOT, 'templates', 'schema.ts')
 export const ARC_ID = 'EVALFIX'
 export const PHASE_NUMS = [9001, 9002]
 
+/** The date in the shipped RunnerSummary's FILENAME — the land record the option-C escape
+ *  window anchors on, and the one the `omitSummary` variant removes. */
+export const SUMMARY_DATE = '2026-07-20'
+
 /**
  * The scripted history, oldest → newest. The arc's member commits live on their own branch
  * and reach the base branch through a MERGE, because that merge is the land boundary the
@@ -112,6 +116,15 @@ export const FIXTURE_COMMITS = [
     files: { 'src/other.ts': 'export const other = true\n' },
   },
   { merge: 'topic/other', subject: "Merge branch 'topic/other'", date: '2026-07-20T16:00:00' },
+  // SAME-DAY MEMBER REWORK, dated ON the RunnerSummary's land day (2026-07-20). In-phase
+  // gate-fix grammar IS member grammar, so the land-record window deliberately anchors at the
+  // END of the land day to keep this commit out of the escape list. It is the decoy that
+  // proves that conservatism, at the known cost of missing a genuine land-day escape.
+  {
+    subject: 'fix(x): phase 9002 gate R2 — same-day member rework',
+    date: '2026-07-20T18:00:00',
+    files: { 'src/scorer.ts': 'export const score = () => ({ dimensions: {}, tight: 2 })\n' },
+  },
   // THE PHASE-NAMED ESCAPE FIX: post-land, fix grammar, and its SUBJECT names a member
   // phase — the only form that scores under the bounded escape window.
   {
@@ -141,10 +154,18 @@ function git(root, args, env = {}) {
  * @param {boolean} [opts.omitVerdicts]  skip writing the verdicts artifact (field-level absence)
  * @param {number}  [opts.malformedPhase] write THIS phase's file as one that throws on import
  * @param {boolean} [opts.omitArc]        skip writing the arc file (the CollectError 'no-arc' case)
+ * @param {boolean} [opts.omitSummary]    delete the dated RunnerSummary, so the land-record
+ *                                        escape anchor is absent and the merge/tip fallback runs
  * @param {string}  [opts.schemaPath]     override the consumer schema the fixture validates through
  */
 export function buildEvalFixture(opts = {}) {
-  const { omitVerdicts = false, malformedPhase = null, omitArc = false, schemaPath = DEFAULT_SCHEMA_PATH } = opts
+  const {
+    omitVerdicts = false,
+    malformedPhase = null,
+    omitArc = false,
+    omitSummary = false,
+    schemaPath = DEFAULT_SCHEMA_PATH,
+  } = opts
   const root = mkdtempSync(join(tmpdir(), 'zr-evalfix-'))
   roots.push(root)
 
@@ -159,6 +180,7 @@ export function buildEvalFixture(opts = {}) {
   writeFileSync(schemaHome, readFileSync(schemaHome, 'utf8').replace(SCHEMA_PLACEHOLDER, schemaPath))
   if (omitVerdicts) rmSync(join(root, 'roadmap', 'arc-evals', `${ARC_ID}-2026-07-20-verdicts.json`), { force: true })
   if (omitArc) rmSync(join(root, 'roadmap', 'arcs', `${ARC_ID}.arc.ts`), { force: true })
+  if (omitSummary) rmSync(join(root, 'roadmap', 'arc-summaries', `${ARC_ID}-${SUMMARY_DATE}.json`), { force: true })
   if (malformedPhase != null)
     writeFileSync(join(root, 'roadmap', 'phases', `phase-${malformedPhase}.phase.ts`), MALFORMED_PHASE_SRC)
 

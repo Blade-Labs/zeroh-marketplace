@@ -23,8 +23,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { defaultExec } from './exec.mjs'
 import { bridgeEval } from './tsx-bridge.mjs'
-import { buildEvalFixture, ARC_ID, PHASE_NUMS } from '../testdata/eval-arc/build-fixture.mjs'
-import { collectArcTrace, summarizeGateRuns, findArcGitFacts, newestArtifact, CollectError } from './eval-collect.mjs'
+import { buildEvalFixture, ARC_ID, PHASE_NUMS, SUMMARY_DATE } from '../testdata/eval-arc/build-fixture.mjs'
+import {
+  collectArcTrace,
+  summarizeGateRuns,
+  findArcGitFacts,
+  newestArtifact,
+  newestArtifactDated,
+  CollectError,
+} from './eval-collect.mjs'
 
 const scratch = []
 process.on('exit', () => scratch.forEach((d) => rmSync(d, { recursive: true, force: true })))
@@ -261,13 +268,61 @@ test('findArcGitFacts — a FAILED escape scan reports escapeScan unavailable, n
   )
 })
 
-test('collectArcTrace — the git facts ride the trace under trace.git', () => {
+/**
+ * OPTION C, the whole point of the anchor change. The dated RunnerSummary is a NON-member
+ * source, so the planted post-land phase-named fix can no longer be the tip that closes the
+ * window it belongs behind. The two halves of this test are the proof that the anchor is
+ * non-member: the SAME repo scores the SAME commit or not, depending only on whether the land
+ * record is on disk.
+ */
+test('collectArcTrace — the land-record window SCORES the post-land phase-named fix the tip window swallowed', () => {
   const root = fixture()
   const { trace } = collectArcTrace(root, ARC_ID, { exec: defaultExec })
-  assert.equal(new Date(trace.git.landedAt).toISOString(), '2026-07-21T15:00:00.000Z')
-  assert.equal(trace.git.escapeWindow, 'tip-anchored', 'how the window was bounded rides the trace')
-  assert.deepEqual(trace.git.escapeFixes, [])
-  assert.equal(trace.git.escapeFixesFileIntersection, 0, 'the unscored old-rule count rides the trace too')
+
+  assert.equal(trace.git.escapeWindow, 'land-record-anchored', 'the dated RunnerSummary anchors the window')
+  assert.equal(
+    new Date(trace.git.landedAt).toISOString(),
+    `${SUMMARY_DATE}T23:59:59.999Z`,
+    'the anchor is the END of the land day — deliberately conservative',
+  )
+
+  const subjects = trace.git.escapeFixes.map((f) => f.subject)
+  assert.deepEqual(
+    subjects,
+    ['fix(x): phase 9001 gate R1 — re-guard the collector'],
+    'exactly the post-land phase-named fix — a MEASURED escape at last',
+  )
+  assert.equal(trace.git.escapeFixes[0].files, 1, 'sized by the intersection with the arc files')
+  assert.ok(
+    !subjects.includes('fix(x): phase 9002 gate R2 — same-day member rework'),
+    'same-day member rework sits BEFORE the end-of-day anchor and never scores as an escape',
+  )
+  assert.equal(trace.git.escapeFixesFileIntersection, 0, 'the unscored old-rule count still rides the trace')
+})
+
+test('collectArcTrace — with NO dated RunnerSummary the same repo falls back to the merge/tip window', () => {
+  const root = fixture({ omitSummary: true })
+  const { trace } = collectArcTrace(root, ARC_ID, { exec: defaultExec })
+
+  assert.equal(trace.git.escapeWindow, 'tip-anchored', 'no land record ⇒ the pre-option-C derivation, verbatim')
+  assert.equal(new Date(trace.git.landedAt).toISOString(), '2026-07-21T15:00:00.000Z', 'the escape itself is the tip')
+  assert.deepEqual(trace.git.escapeFixes, [], 'the self-defeating empty list — pinned as the honest fallback')
+  assert.equal(trace.summary, undefined, 'and the summary field is absent, never stubbed')
+})
+
+test('newestArtifactDated — returns the newest file WITH its filename date; absent stays null', () => {
+  const root = fixture()
+  const dir = join(root, 'roadmap', 'arc-summaries')
+  assert.deepEqual(newestArtifactDated(dir, ARC_ID, null), {
+    path: join(dir, `${ARC_ID}-${SUMMARY_DATE}.json`),
+    date: SUMMARY_DATE,
+  })
+  assert.equal(newestArtifactDated(dir, 'OTHERARC', null), null, 'another arc never borrows this land record')
+  assert.equal(
+    newestArtifact(dir, ARC_ID, null),
+    join(dir, `${ARC_ID}-${SUMMARY_DATE}.json`),
+    'newestArtifact stays the path projection of the same resolution',
+  )
 })
 
 // ── 7. gate run summaries ─────────────────────────────────────────────────────────────

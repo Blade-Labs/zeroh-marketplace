@@ -58,10 +58,21 @@ const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * a re-checkout rewrites mtimes and would silently reorder the archive.
  */
 export function newestArtifact(dir, arcId, suffix) {
+  return newestArtifactDated(dir, arcId, suffix)?.path ?? null
+}
+
+/**
+ * The same resolution, keeping the DATE the filename carries instead of discarding it. That
+ * date is a fact about the artifact rather than about the filesystem, which is exactly what
+ * the land-record escape anchor needs: the RunnerSummary is minted at land time, so its
+ * filename date is the land date, and no later commit can move it.
+ *
+ * Returns `{ path, date }` or null. `newestArtifact` is its path projection.
+ */
+export function newestArtifactDated(dir, arcId, suffix) {
   if (!existsSync(dir)) return null
   const re = new RegExp(`^${escapeRe(arcId)}-${DATE_RE}${suffix ? `-${escapeRe(suffix)}` : ''}\\.json$`)
   let best = null
-  let bestDate = null
   let entries
   try {
     entries = readdirSync(dir)
@@ -71,10 +82,7 @@ export function newestArtifact(dir, arcId, suffix) {
   for (const f of entries) {
     const m = f.match(re)
     if (!m) continue
-    if (bestDate === null || m[1] > bestDate) {
-      bestDate = m[1]
-      best = join(dir, f)
-    }
+    if (best === null || m[1] > best.date) best = { path: join(dir, f), date: m[1] }
   }
   return best
 }
@@ -180,8 +188,13 @@ function commitFiles(repoRoot, sha, exec) {
  *   — any post-land fix touching any arc file. It measured how LONG AGO the arc landed as
  *   much as its quality, so it no longer scores; it stays here as an inspectable signal,
  *   because a scoring-model change whose old number vanishes cannot be audited.
+ *
+ * `landAnchorDate` (option C) is the dated RunnerSummary's filename date — the LAND RECORD,
+ * written at land time by a source outside the arc's own commit set. Given one, it bounds the
+ * window outright and the merge/tip derivation is skipped: only a non-member anchor can hold
+ * still while phase-named post-land fixes accumulate behind it.
  */
-export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {}) {
+export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec, landAnchorDate } = {}) {
   const members = new Map()
   for (const n of memberNums) {
     for (const c of memberCommits(repoRoot, n, exec)) members.set(c.sha, c)
@@ -197,14 +210,48 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
       arcFiles: [],
     }
 
-  // The boundary is the merge that carried the arc's NEWEST member commit onto this branch.
-  // Only that commit is asked: an older member's merge would sit in the arc's own middle and
-  // score the phases that came after it as escapes (this repo commits many task commits with
-  // `fix(scope): phase N — ...` grammar, so "later member commit" and "escape fix" look
-  // identical from the subject alone; only the merge boundary separates them).
+  let landedAt
+  let escapeWindow
+  if (landAnchorDate) {
+    // END of the land day, not its start. In-phase gate-fix commits carry the same subject
+    // grammar as an escape, and a same-day one must not be scored as rework the gate let
+    // through. The cost is real and accepted: an escape landed on the land day itself is
+    // invisible. Erring toward the arc is the honest direction for an attribution rule whose
+    // false positives are accusations.
+    landedAt = `${landAnchorDate}T23:59:59.999Z`
+    escapeWindow = 'land-record-anchored'
+  } else {
+    landedAt = deriveCommitAnchoredBoundary(repoRoot, members, exec)
+    escapeWindow = landedAt === undefined ? 'tip-anchored' : 'merge-anchored'
+    // No merge landed the tip: the arc reached the branch by direct commits (this consumer's
+    // autonomous develop landings) or has not landed. The tip's own date then bounds the window,
+    // which leaves it EMPTY — absence of a derivable boundary, not evidence of zero escapes. The
+    // caller reports that difference rather than letting an empty list read as a spotless arc.
+    landedAt ??= [...members.values()].sort((a, b) => Date.parse(b.date) - Date.parse(a.date))[0].date
+  }
+
+  // The scored window's attribution: a member phase named in the SUBJECT. Same digit-boundary
+  // discipline as `memberCommits` — `phase 900` must not match `phase 9001`.
+  const memberPhaseRe = new RegExp(`(?:^|[^0-9])phase (?:${[...memberNums].join('|')})(?:[^0-9]|$)`)
+
+  const arcFileSet = new Set()
+  for (const sha of members.keys()) for (const f of commitFiles(repoRoot, sha, exec)) arcFileSet.add(f)
+  return finishGitFacts({ repoRoot, exec, members, landedAt, escapeWindow, memberPhaseRe, arcFileSet })
+}
+
+/**
+ * The pre-option-C boundary, kept verbatim as the fallback for an arc with no land record on
+ * disk. The boundary is the merge that carried the arc's NEWEST member commit onto this branch.
+ * Only that commit is asked: an older member's merge would sit in the arc's own middle and
+ * score the phases that came after it as escapes (this repo commits many task commits with
+ * `fix(scope): phase N — ...` grammar, so "later member commit" and "escape fix" look
+ * identical from the subject alone; only the merge boundary separates them).
+ *
+ * Returns the merge's ISO date, or undefined when no merge landed the tip.
+ */
+function deriveCommitAnchoredBoundary(repoRoot, members, exec) {
   const byNewest = [...members.values()].sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
   const tip = byNewest[0]
-  let landedAt
   // `--ancestry-path` narrows to merges the tip can reach, `--reverse` puts the oldest first.
   // Reachability alone is NOT enough: once an arc is on the base branch EVERY later topic merge
   // has it as an ancestor. The merge that LANDED it is the one whose first parent — the base
@@ -214,29 +261,22 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
   const merges = exec('git', [
     '-C', repoRoot, 'log', '--merges', '--ancestry-path', '--reverse', '--format=%H%x09%aI', `${tip.sha}..HEAD`,
   ])
-  if (merges.status === 0) {
-    for (const line of merges.stdout.split('\n')) {
-      const [sha, date] = line.split('\t')
-      if (!sha || !date) continue
-      if (exec('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', tip.sha, `${sha}^1`]).status === 0) continue
-      landedAt = date
-      break
-    }
+  if (merges.status !== 0) return undefined
+  for (const line of merges.stdout.split('\n')) {
+    const [sha, date] = line.split('\t')
+    if (!sha || !date) continue
+    if (exec('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', tip.sha, `${sha}^1`]).status === 0) continue
+    return date
   }
-  // No merge landed the tip: the arc reached the branch by direct commits (this consumer's
-  // autonomous develop landings) or has not landed. The tip's own date then bounds the window,
-  // which leaves it EMPTY — absence of a derivable boundary, not evidence of zero escapes. The
-  // caller reports that difference rather than letting an empty list read as a spotless arc.
-  const escapeWindow = landedAt === undefined ? 'tip-anchored' : 'merge-anchored'
-  landedAt ??= tip.date
+  return undefined
+}
 
-  // The scored window's attribution: a member phase named in the SUBJECT. Same digit-boundary
-  // discipline as `memberCommits` — `phase 900` must not match `phase 9001`.
-  const memberPhaseRe = new RegExp(`(?:^|[^0-9])phase (?:${[...memberNums].join('|')})(?:[^0-9]|$)`)
-
-  const arcFileSet = new Set()
-  for (const sha of members.keys()) for (const f of commitFiles(repoRoot, sha, exec)) arcFileSet.add(f)
-
+/**
+ * The escape scan itself, identical under every window: the boundary is already decided, and
+ * this only asks which post-boundary commits are attributable rework. Split out so the two
+ * boundary derivations (land record vs merge/tip) cannot drift into two scan rules.
+ */
+function finishGitFacts({ repoRoot, exec, members, landedAt, escapeWindow, memberPhaseRe, arcFileSet }) {
   const escapeFixes = []
   let fileIntersectionCount = 0
   // BOUNDED at the land boundary: an unfiltered full-history log is megabytes on a real repo
@@ -351,11 +391,16 @@ export function collectArcTrace(
   // Gate runs for the quarantined phases too — the gate record survives a broken phase file.
   for (const entry of phases) if (entry.parseError) entry.gateRuns = summarizeGateRuns(repoRoot, entry.phase)
 
+  // Resolved BEFORE the git facts, not with the other artifact reads below: the RunnerSummary's
+  // filename date is the land record the escape window anchors on (option C), so the collector
+  // must know it before it derives a boundary. The one resolution feeds both uses.
+  const summaryDated = newestArtifactDated(join(repoRoot, 'roadmap', 'arc-summaries'), arcId, null)
+
   const trace = {
     arcId,
     collectedAt,
     phases,
-    git: findArcGitFacts(repoRoot, memberNums, { exec }),
+    git: findArcGitFacts(repoRoot, memberNums, { exec, landAnchorDate: summaryDated?.date }),
   }
   // Every other degraded read warns; a failed escape scan is the one that most flatters the
   // arc, so it warns loudest rather than living only in a field nobody prints.
@@ -381,10 +426,9 @@ export function collectArcTrace(
   }
   // roadmap/arc-summaries/ is gitignored by design: absent on a fresh clone is EXPECTED,
   // never a defect, which is why it warns only when a file exists and will not read.
-  const summaryPath = newestArtifact(join(repoRoot, 'roadmap', 'arc-summaries'), arcId, null)
-  if (summaryPath) {
-    const read = readJson(summaryPath)
-    if (read.error) warnings.push(`${summaryPath}: unreadable (${read.error}) — treated as absent`)
+  if (summaryDated) {
+    const read = readJson(summaryDated.path)
+    if (read.error) warnings.push(`${summaryDated.path}: unreadable (${read.error}) — treated as absent`)
     else trace.summary = read.value
   }
 

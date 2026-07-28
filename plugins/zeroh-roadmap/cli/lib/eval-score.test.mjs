@@ -695,8 +695,8 @@ test('computeTimingStats — generatedAt is injectable and echoed verbatim; the 
 test('scoreArcTrace — escapeScan unavailable withholds the escape penalty instead of rewarding it', () => {
   const clean = traceFor()
   clean.git.escapeFixes = []
-  // The fixture arc is tip-anchored, so its own escape list is empty by construction — the
-  // "escapes cost points" leg needs one planted rather than inherited.
+  // Both legs are set explicitly rather than inherited: the fixture's own escape list is a
+  // property of its land record, and this test is about the SCAN, not about the window.
   const withEscapes = traceFor()
   withEscapes.git.escapeFixes = [{ sha: 'deadbee0000', subject: 'fix(x): phase 9001 gate R1 — an escape', files: 1 }]
 
@@ -726,6 +726,48 @@ test('scoreArcTrace — escapeScan unavailable withholds the escape penalty inst
   assert.ok(
     scoreArcTrace(withEscapes).dimensions['code-confidence'].score < cleanScore.score,
     'fixture precondition: a real escape fix costs points',
+  )
+})
+
+// ── 24b. option C: the escape penalty is reachable again, and zero MEANS zero ──────────
+test('scoreArcTrace — on a land-record window an escape costs points and no UNMEASURED claim is made', () => {
+  const clean = traceFor()
+  clean.git.escapeWindow = 'land-record-anchored'
+  clean.git.landedAt = '2026-07-20T23:59:59.999Z'
+  clean.git.escapeFixes = []
+
+  const withEscape = structuredClone(clean)
+  withEscape.git.escapeFixes = [
+    { sha: 'deadbee0000', subject: 'fix(x): phase 9001 gate R1 — re-guard the collector', files: 1 },
+  ]
+
+  const cleanCc = scoreArcTrace(clean).dimensions['code-confidence']
+  const escapedCc = scoreArcTrace(withEscape).dimensions['code-confidence']
+  assert.ok(
+    escapedCc.score < cleanCc.score,
+    'the ESCAPE_FIX_PENALTY fires from a list the land-record window can actually populate',
+  )
+  assert.equal(escapedCc.signals.escapeFixes, 1, 'and the count is a real measurement in the signals')
+
+  // The self-defeat disclaimer belongs to commit-anchored windows ONLY. Repeating it here would
+  // caveat a number that was genuinely measured.
+  const cleanNotes = scoreArcTrace(clean).notes
+  assert.ok(
+    !cleanNotes.some((n) => /UNMEASURED/.test(n)),
+    `a land-record window makes no UNMEASURED claim; got ${JSON.stringify(cleanNotes)}`,
+  )
+  assert.ok(
+    cleanNotes.some((n) => /measured over the land-record window anchored 2026-07-20T23:59:59\.999Z/.test(n)),
+    'instead the note states the window and its anchor',
+  )
+
+  // And the old disclaimer survives untouched where it still applies.
+  const tipAnchored = traceFor()
+  tipAnchored.git.escapeWindow = 'tip-anchored'
+  tipAnchored.git.escapeFixes = []
+  assert.ok(
+    scoreArcTrace(tipAnchored).notes.some((n) => /UNMEASURED escape rate/.test(n)),
+    'a tip-anchored window still says the rate is unmeasured',
   )
 })
 

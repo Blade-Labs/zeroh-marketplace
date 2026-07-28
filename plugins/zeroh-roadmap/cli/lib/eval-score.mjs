@@ -419,16 +419,21 @@ export function scoreArcTrace(trace, { backfill = false } = {}) {
     notes.push(
       'the post-land escape scan did not run — its penalty is withheld, so code-confidence is an UPPER BOUND, not a measurement',
     )
-  // An empty escape list is NOT a clean record, whichever way the window was bounded: a
-  // phase-named post-land fix is itself a member commit, so it moves the boundary it should sit
-  // behind and the scored list comes back empty either way. Said out loud on every report that
-  // banks the full escape credit, because the number is indistinguishable from a spotless arc
-  // and it enters every future baseline.
+  // On a COMMIT-anchored window an empty escape list is NOT a clean record: a phase-named
+  // post-land fix is itself a member commit, so it moves the boundary it should sit behind and
+  // the scored list comes back empty either way. Said out loud on every report that banks the
+  // full escape credit, because the number is indistinguishable from a spotless arc and it
+  // enters every future baseline. A LAND-RECORD window has no such self-defeat — its anchor is
+  // a non-member artifact that no later commit can move — so there zero escapes IS a
+  // measurement, and the note states what was measured instead of disclaiming it.
   if (trace.git?.escapeScan === 'complete' && (trace.git?.escapeFixes ?? []).length === 0)
     notes.push(
-      `zero scored escapes on a ${trace.git.escapeWindow ?? 'unrecorded'} window — the bounded rule cannot see a ` +
-        'post-land fix that names a member phase (such a commit is itself a member and moves the boundary), so this ' +
-        'is an UNMEASURED escape rate, not a clean one; the unscored file-intersection figure rides in signals',
+      trace.git.escapeWindow === 'land-record-anchored'
+        ? `escape rate measured over the land-record window anchored ${trace.git.landedAt} — zero scored escapes is a ` +
+          'result, not an absent measurement'
+        : `zero scored escapes on a ${trace.git.escapeWindow ?? 'unrecorded'} window — the bounded rule cannot see a ` +
+          'post-land fix that names a member phase (such a commit is itself a member and moves the boundary), so this ' +
+          'is an UNMEASURED escape rate, not a clean one; the unscored file-intersection figure rides in signals',
     )
   // The scoring model changed, so every report says so: a reader comparing an old committed
   // report against a new one is comparing two models, and the report is the only place that
