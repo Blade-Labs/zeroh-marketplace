@@ -95,7 +95,8 @@ const USAGE =
   'roadmap eval: usage:\n' +
   '  roadmap eval <ARCID> [--date <YYYY-MM-DD>] [--force] [--collect-only] [--json]\n' +
   '  roadmap eval record-sweep|record-verdicts --arc <ID> [--force] [file|-]\n' +
-  '  roadmap eval merge-judge --arc <ID> [--report <path>]   (verdict JSON on stdin)\n'
+  '  roadmap eval merge-judge --arc <ID> [--report <path>]   (verdict JSON on stdin)\n' +
+  '  roadmap eval trend                                      (renders roadmap/arc-evals/trend.html)\n'
 
 export default async function run(argv) {
   const { opts, positional } = parseArgs(argv)
@@ -107,6 +108,7 @@ export default async function run(argv) {
       return 1
     }
     if (sub === 'merge-judge') return runMergeJudge(opts)
+    if (sub === 'trend') return runTrend(opts)
     // Anything that is not one of the two literal recorder names is an ARC ID. The literals
     // are checked FIRST so a future arc called `record-sweep` could never shadow the recorder.
     return runArcEval(sub, opts)
@@ -186,6 +188,205 @@ export default async function run(argv) {
     `${overwriting ? 'OVERWROTE (--force)' : 'wrote'} ${outPath} — ${recorder.what} for arc ${opts.arc} (${parsed.date})\n`,
   )
   return 0
+}
+
+// ── `roadmap eval trend` — the across-arcs line the ratchet exists to draw ─────────────
+
+/** The rendered projection's fixed name; regenerated in place beside the dated archive. */
+export const TREND_FILE = 'trend.html'
+
+/** Chart geometry. Constants rather than magic numbers so a reader can change the picture
+ *  without decoding it, and so every dimension's chart is dimensionally identical. */
+const CHART = { w: 720, h: 190, padL: 44, padR: 16, padT: 14, padB: 34 }
+
+const esc = (s) =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/**
+ * `roadmap eval trend` — render every dated report in roadmap/arc-evals/ as ONE self-contained
+ * page. Cross-arc by design, exactly like the ratchet's reference class: the question the page
+ * answers is whether the WORKFLOW is improving, which a single arc can never show.
+ *
+ * ## Three properties the rendering may not quietly break
+ * A dimension carrying a SENTINEL is a HOLE in its line, not a missing row: the series is drawn
+ * as one polyline per contiguous run of scored reports, so two scored points either side of an
+ * unmeasured one are never joined. Connecting them would draw a trend nobody measured — the
+ * graphical form of the zero-standing-in-for-absent-data lie the scorer already refuses.
+ * A judgeModel change is a vertical MARKER and a named baseline reset, never another point on
+ * the same line. And a flagged regression is LISTED in words under its dimension, because a
+ * reader should not have to infer the most important fact on the page from a slope.
+ *
+ * ## No external assets, enforced by having none
+ * Inline SVG, inline CSS, no scripts. Not even an `xmlns` — inline SVG in HTML needs none, and
+ * the URL would be the single thing on the page pointing at the network. The page must open
+ * from a filesystem with no connection at all, which is the state a proof artifact is read in.
+ */
+async function runTrend(opts) {
+  let toplevel
+  try {
+    toplevel = gitToplevel(process.cwd())
+  } catch (e) {
+    process.stderr.write(`roadmap eval trend: ${e.message}\n`)
+    return 1
+  }
+
+  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const say = (line) => process.stdout.write(line + '\n')
+  // The SAME reader the ratchet uses: one definition of "a report", so the page and the
+  // baseline can never disagree about which files count.
+  const reports = readPriorReports(dir, { onWarn: say }).sort((a, b) => String(a.date).localeCompare(String(b.date)))
+
+  const outPath = join(dir, TREND_FILE)
+  try {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(outPath, renderTrendPage(reports), 'utf8')
+  } catch (e) {
+    process.stderr.write(`roadmap eval trend: cannot write ${outPath}: ${e.message}\n`)
+    return 1
+  }
+  say(`wrote ${outPath} — ${reports.length} report(s) across ${new Set(reports.map((r) => String(r.arcId))).size} arc(s)`)
+  if (opts.json) process.stdout.write(JSON.stringify({ reports: reports.length, path: outPath }, null, 2) + '\n')
+  return 0
+}
+
+/** Where a report's judge model changed from its predecessor — each one a baseline reset. */
+function judgeResets(reports) {
+  const out = []
+  for (let i = 1; i < reports.length; i++) {
+    const from = reports[i - 1].judgeModel ?? null
+    const to = reports[i].judgeModel ?? null
+    if (from !== to) out.push({ index: i, from: from ?? 'unrecorded', to: to ?? 'unrecorded', date: reports[i].date })
+  }
+  return out
+}
+
+/** One dimension's chart. Runs of CONSECUTIVE scored reports become one polyline each; every
+ *  scored report also gets its own dot, so an isolated point between two gaps is still visible.
+ *  A run of one draws NO polyline — there is nothing to connect it to. */
+function renderChart(reports, key, resets) {
+  const { w, h, padL, padR, padT, padB } = CHART
+  const plotW = w - padL - padR
+  const plotH = h - padT - padB
+  const x = (i) => (reports.length <= 1 ? padL + plotW / 2 : padL + (i * plotW) / (reports.length - 1))
+  const y = (score) => padT + ((100 - score) / 100) * plotH
+
+  const runs = []
+  let run = []
+  reports.forEach((r, i) => {
+    const score = r?.dimensions?.[key]?.score
+    if (typeof score === 'number') run.push({ i, score })
+    else if (run.length > 0) {
+      runs.push(run)
+      run = []
+    }
+  })
+  if (run.length > 0) runs.push(run)
+
+  const parts = []
+  for (const g of [0, 25, 50, 75, 100])
+    parts.push(`<line class="grid" x1="${padL}" y1="${y(g)}" x2="${w - padR}" y2="${y(g)}"/>`)
+  parts.push(`<line class="axis" x1="${padL}" y1="${padT}" x2="${padL}" y2="${h - padB}"/>`)
+  parts.push(`<line class="axis" x1="${padL}" y1="${h - padB}" x2="${w - padR}" y2="${h - padB}"/>`)
+  for (const g of [0, 50, 100]) parts.push(`<text class="tick" x="${padL - 6}" y="${y(g) + 4}">${g}</text>`)
+
+  for (const reset of resets)
+    parts.push(
+      `<line class="reset" x1="${x(reset.index)}" y1="${padT}" x2="${x(reset.index)}" y2="${h - padB}"/>`,
+    )
+
+  for (const r of runs)
+    if (r.length >= 2)
+      parts.push(`<polyline class="series" points="${r.map((p) => `${x(p.i)},${y(p.score)}`).join(' ')}"/>`)
+  for (const r of runs)
+    for (const p of r) parts.push(`<circle class="series" cx="${x(p.i)}" cy="${y(p.score)}" r="3"/>`)
+
+  reports.forEach((r, i) => {
+    if (i % Math.ceil(reports.length / 6 || 1) !== 0 && i !== reports.length - 1) return
+    parts.push(`<text class="tick date" x="${x(i)}" y="${h - padB + 16}">${esc(r.date)}</text>`)
+  })
+
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img">${parts.join('')}</svg>`
+}
+
+/** The whole page. Every section is emitted for all seven dimensions, always — a page that
+ *  rendered only the dimensions it found data for would silently shrink the picture. */
+function renderTrendPage(reports) {
+  const resets = judgeResets(reports)
+  const head = []
+  head.push('<h1>Arc eval trend</h1>')
+  if (reports.length === 0) {
+    head.push(
+      '<p class="empty">No reports in roadmap/arc-evals/ yet — the corpus is empty. ' +
+        'Nothing is plotted, because a line drawn through no data is a fabricated score of zero.</p>',
+    )
+  } else {
+    head.push(
+      `<p class="meta">${reports.length} report(s), ${esc(reports[0].date)} to ${esc(reports[reports.length - 1].date)}, ` +
+        `across ${new Set(reports.map((r) => String(r.arcId))).size} arc(s). Higher is better on every axis.</p>`,
+    )
+    if (resets.length > 0) {
+      head.push('<div class="resets"><h2>Baseline resets</h2><ul>')
+      for (const r of resets)
+        head.push(
+          `<li><strong>${esc(r.date)}</strong>: judge changed from <code>${esc(r.from)}</code> to ` +
+            `<code>${esc(r.to)}</code> — baseline reset. Judge-owned scores either side of this ` +
+            'marker are not comparable and were excluded from each other\'s baseline.</li>',
+        )
+      head.push('</ul></div>')
+    }
+  }
+
+  const sections = DIMENSION_KEYS.map((key) => {
+    const scored = reports.filter((r) => typeof r?.dimensions?.[key]?.score === 'number')
+    const missing = reports.filter((r) => typeof r?.dimensions?.[key]?.score !== 'number')
+    const body = []
+    body.push(renderChart(reports, key, resets))
+    if (scored.length === 0)
+      body.push(
+        `<p class="gap">No data: no report scored this dimension${
+          missing.length > 0 ? ` (${esc([...new Set(missing.map((r) => r.dimensions?.[key]?.sentinel ?? 'no score'))].join(', '))})` : ''
+        }. Nothing is plotted rather than plotted as zero.</p>`,
+      )
+    else if (missing.length > 0)
+      body.push(
+        '<p class="gap">Gap: no score in ' +
+          missing.map((r) => `${esc(r.date)} (${esc(r.dimensions?.[key]?.sentinel ?? 'no score')})`).join(', ') +
+          '. The line BREAKS across it — joining the neighbours would draw a trend nobody measured.</p>',
+      )
+
+    const regressions = []
+    for (const r of reports)
+      for (const row of r.ratchet ?? [])
+        if (row.regression && row.dimension === key)
+          regressions.push(
+            `<li>REGRESSION ${esc(r.date)}: ${esc(row.value)} against a baseline of ${esc(row.baseline)} (delta ${esc(row.delta)})</li>`,
+          )
+    if (regressions.length > 0) body.push(`<ul class="regressions">${regressions.join('')}</ul>`)
+
+    return `<section><h2 id="dim-${key}">${key}</h2>${body.join('')}</section>`
+  })
+
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Arc eval trend</title><style>
+:root{color-scheme:light dark}
+body{font:14px/1.5 ui-sans-serif,system-ui,sans-serif;margin:0 auto;padding:24px;max-width:840px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 6px}
+.meta,.empty{color:#666;margin:0 0 16px}
+section{border-top:1px solid #8883;padding-top:4px}
+.chart{display:block;max-width:100%;overflow:visible}
+.grid{stroke:#8882;stroke-width:1}.axis{stroke:#8886;stroke-width:1}
+.series{fill:none;stroke:#2f6feb;stroke-width:2}circle.series{fill:#2f6feb}
+.reset{stroke:#c2410c;stroke-width:2;stroke-dasharray:4 3}
+.tick{fill:#888;font-size:10px;text-anchor:end}.date{text-anchor:middle}
+.gap{color:#8a6d3b;margin:4px 0}
+.regressions{margin:4px 0;padding-left:18px;color:#b3261e}
+.resets{border-left:3px solid #c2410c;padding-left:12px}
+code{font-family:ui-monospace,monospace}
+</style></head><body>
+${head.join('\n')}
+${sections.join('\n')}
+</body></html>
+`
 }
 
 // ── `roadmap eval merge-judge` — the judge verdict's ONE door into a report ────────────
