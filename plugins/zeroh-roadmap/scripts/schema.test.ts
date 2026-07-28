@@ -1164,7 +1164,7 @@ check('ArcTrace: a minimal one-phase trace parses and the array defaults land', 
     arcId: 1996,
     collectedAt: '2026-07-27T09:15:00.000Z',
     phases: [{ phase: 1996, taskCount: 3 }],
-    git: { escapeFixes: [] },
+    git: { escapeScan: 'complete', escapeFixes: [] },
   })
   assertEq(t.phases[0].keyFiles, [], 'keyFiles defaults to []')
   assertEq(t.phases[0].transparency, [], 'transparency defaults to []')
@@ -1182,7 +1182,7 @@ check('ArcTrace: a non-datetime collectedAt REJECTS (a trace timestamp is machin
         arcId: 1996,
         collectedAt: '2026-07-27',
         phases: [{ phase: 1996, taskCount: 3 }],
-        git: { escapeFixes: [] },
+        git: { escapeScan: 'complete', escapeFixes: [] },
       }),
     'date-only collectedAt',
   )
@@ -1239,6 +1239,7 @@ check('ArcTrace: composes the EXISTING shapes verbatim — a real execution resu
     },
     git: {
       landedAt: '2026-07-27T12:00:00.000Z',
+      escapeScan: 'complete',
       escapeFixes: [{ sha: 'abc123d', subject: 'fix(roadmap): gate R1', files: 2 }],
     },
   })
@@ -1258,10 +1259,31 @@ check('ArcTrace: a 6-char escape-fix sha REJECTS (min(7) matches the checkpoint 
         arcId: 1996,
         collectedAt: '2026-07-27T09:15:00.000Z',
         phases: [{ phase: 1996, taskCount: 1 }],
-        git: { escapeFixes: [{ sha: 'abc123', subject: 'fix: x', files: 1 }] },
+        git: { escapeScan: 'complete', escapeFixes: [{ sha: 'abc123', subject: 'fix: x', files: 1 }] },
       }),
     'short escape-fix sha',
   )
+})
+
+check('ArcTrace: a git block with NO escapeScan REJECTS (an empty escape list needs its provenance)', () => {
+  requireShape(ArcTraceShape, 'ArcTraceShape')
+  assertThrows(
+    () =>
+      ArcTraceShape.parse({
+        arcId: 1996,
+        collectedAt: '2026-07-27T09:15:00.000Z',
+        phases: [{ phase: 1996, taskCount: 1 }],
+        git: { escapeFixes: [] },
+      }),
+    'git block without escapeScan',
+  )
+  const unavailable = ArcTraceShape.parse({
+    arcId: 1996,
+    collectedAt: '2026-07-27T09:15:00.000Z',
+    phases: [{ phase: 1996, taskCount: 1 }],
+    git: { escapeScan: 'unavailable', escapeFixes: [] },
+  })
+  assertEq(unavailable.git.escapeScan, 'unavailable', 'a failed scan is expressible, and is NOT zero escapes')
 })
 
 check('ArcTrace: a parseError on a phase parses (an unreadable phase is SEEN, never dropped)', () => {
@@ -1269,7 +1291,7 @@ check('ArcTrace: a parseError on a phase parses (an unreadable phase is SEEN, ne
     arcId: 1996,
     collectedAt: '2026-07-27T09:15:00.000Z',
     phases: [{ phase: 1996, taskCount: 0, parseError: 'phase file failed to import' }],
-    git: { escapeFixes: [] },
+    git: { escapeScan: 'complete', escapeFixes: [] },
   })
   assertEq(t.phases[0].parseError, 'phase file failed to import', 'parseError preserved')
   assertThrows(
@@ -1278,7 +1300,7 @@ check('ArcTrace: a parseError on a phase parses (an unreadable phase is SEEN, ne
         arcId: 1996,
         collectedAt: '2026-07-27T09:15:00.000Z',
         phases: [{ phase: 1996, taskCount: 0, parseError: '' }],
-        git: { escapeFixes: [] },
+        git: { escapeScan: 'complete', escapeFixes: [] },
       }),
     'blank parseError',
   )

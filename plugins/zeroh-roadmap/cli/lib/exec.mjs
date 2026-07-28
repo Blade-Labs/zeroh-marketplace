@@ -10,13 +10,18 @@
  */
 import { execFileSync } from 'node:child_process'
 
-export function defaultExec(file, args, { cwd, input, timeout = 120_000 } = {}) {
+// execFileSync's 1 MiB default silently truncates and THEN throws ENOBUFS, which a caller
+// reads as "the command failed" — indistinguishable from "the command found nothing". A git
+// log over a real repo's history clears 1 MiB easily (the flagship consumer's is ~2.9 MB), so
+// the seam carries headroom by default: ~100k commit subjects.
+export function defaultExec(file, args, { cwd, input, timeout = 120_000, maxBuffer = 16 * 1024 * 1024 } = {}) {
   try {
     const stdout = execFileSync(file, args, {
       cwd,
       input,
       encoding: 'utf8',
       timeout,
+      maxBuffer,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     return { status: 0, stdout, stderr: '' }

@@ -102,11 +102,18 @@ const phaseRef = (n) => `roadmap/phases/phase-${n}.phase.ts`
 /** A dimension that could not be computed: the named sentinel and NO number beside it. */
 const sentinelDimension = (owner, sentinel, signals, sourceRefs) => ({ owner, sentinel, signals, sourceRefs })
 
-/** Minutes between two timestamps, or null when either is missing. */
+/**
+ * Minutes between two timestamps, or null when the pair is unusable. A NEGATIVE span
+ * (completedAt before startedAt) is corrupt, not fast: the metrics shape does not enforce
+ * ordering, and left alone a negative span would score speed at the maximum — bad data
+ * becoming the best possible number, the exact inversion of the honesty rail. Zero IS kept:
+ * a single-commit phase legitimately derives both timestamps from the same commit.
+ */
 function spanMinutes(metrics) {
   if (!metrics?.startedAt || !metrics?.completedAt) return null
   const ms = Date.parse(metrics.completedAt) - Date.parse(metrics.startedAt)
-  return Number.isFinite(ms) ? ms / 60_000 : null
+  if (!Number.isFinite(ms) || ms < 0) return null
+  return ms / 60_000
 }
 
 /**
@@ -123,6 +130,9 @@ function scoreCodeConfidence(trace, readable) {
     ...readable.map((p) => phaseRef(p.phase)),
     ...readable.filter((p) => (p.gateRuns ?? []).length > 0).map((p) => `roadmap/.gate/${p.phase}/`),
   ]
+  // An empty escape list counts as evidence ONLY when the scan actually ran. A failed scan
+  // that reported zero would RAISE this score, turning a broken git read into a reward.
+  const escapeScanRan = trace.git?.escapeScan !== 'unavailable'
   const escapeCount = trace.git?.escapeFixes?.length ?? 0
   for (const f of trace.git?.escapeFixes ?? []) sourceRefs.push(`git:${f.sha}`)
 
@@ -130,16 +140,18 @@ function scoreCodeConfidence(trace, readable) {
     return sentinelDimension(
       'deterministic',
       'no-gate-records',
-      { phasesConsidered: readable.length, escapeFixes: escapeCount },
+      { phasesConsidered: readable.length, escapeFixes: escapeScanRan ? escapeCount : 'scan-unavailable' },
       sourceRefs.length > 0 ? sourceRefs : ['roadmap/.gate/'],
     )
 
   // Recorded gateRounds is the phase's own claim; the .gate run files are the corroboration.
   // Prefer the claim when present, fall back to counting correctness rounds off the runs.
+  // DISTINCT round numbers, not agent entries: two reviewers recorded in one round is one
+  // round of rework, and counting entries would inflate the penalty for a wider panel.
   const gateRoundsMean =
     recorded.length > 0
       ? mean(recorded.map((p) => p.executionResult.gateRounds))
-      : mean(runs.map((r) => r.rounds.filter((x) => x.round >= 1).length))
+      : mean(runs.map((r) => new Set(r.rounds.filter((x) => x.round >= 1).map((x) => x.round)).size))
 
   const runsWithRounds = runs.filter((r) => r.rounds.length > 0)
   const cleanFinal = runsWithRounds.filter((r) => r.rounds[r.rounds.length - 1].verdict === 'clean').length
@@ -148,7 +160,7 @@ function scoreCodeConfidence(trace, readable) {
   const trajectoryPenalty =
     runsWithRounds.length > 0 ? UNCLEAN_FINAL_ROUND_PENALTY * (1 - cleanFinal / runsWithRounds.length) : 0
 
-  const escapesPerPhase = escapeCount / Math.max(1, readable.length)
+  const escapesPerPhase = escapeScanRan ? escapeCount / Math.max(1, readable.length) : 0
   const score = clamp(
     100 -
       GATE_ROUND_PENALTY * Math.max(0, gateRoundsMean - 1) -
@@ -163,8 +175,8 @@ function scoreCodeConfidence(trace, readable) {
       gateRoundsMean: round1(gateRoundsMean),
       gateRunsObserved: runsWithRounds.length,
       finalRoundCleanRatio: runsWithRounds.length > 0 ? round1(cleanFinal / runsWithRounds.length) : 'no-runs',
-      escapeFixes: escapeCount,
-      escapeFixesPerPhase: round1(escapesPerPhase),
+      escapeFixes: escapeScanRan ? escapeCount : 'scan-unavailable',
+      escapeFixesPerPhase: escapeScanRan ? round1(escapesPerPhase) : 'scan-unavailable',
       phasesConsidered: readable.length,
     },
     sourceRefs: sourceRefs.length > 0 ? sourceRefs : ['roadmap/.gate/'],
@@ -187,7 +199,26 @@ function scoreVerifiedVsIntent(trace) {
   if (verdicts.length === 0)
     return sentinelDimension('deterministic', 'no-verdicts-file', { verdicts: 0 }, [ref])
 
-  const weight = (v) => (TIER_RANK[v.tierUsed] ?? 1) * (CONFIDENCE_WEIGHT[v.confidence] ?? 1)
+  // STRICT tokens. Defaulting an unrecognised tier or confidence to a weight of 1 would score
+  // a typo'd `live-host` as if it had been checked at the weakest tier, and a typo'd status as
+  // a gap — a real-looking number out of unreadable evidence. An unreadable verdicts file is
+  // an ABSENT verdicts file, which is what the sentinel already means.
+  const unreadable = verdicts.filter(
+    (v) => !(v.tierUsed in TIER_RANK) || !(v.confidence in CONFIDENCE_WEIGHT) || !['met', 'gap'].includes(v.status),
+  )
+  if (unreadable.length > 0)
+    return sentinelDimension(
+      'deterministic',
+      'no-verdicts-file',
+      {
+        verdicts: verdicts.length,
+        unreadableVerdicts: unreadable.length,
+        firstUnreadable: unreadable[0].criterionId ?? 'unnamed',
+      },
+      [ref],
+    )
+
+  const weight = (v) => TIER_RANK[v.tierUsed] * CONFIDENCE_WEIGHT[v.confidence]
   const total = sum(verdicts.map(weight))
   const met = sum(verdicts.filter((v) => v.status === 'met').map(weight))
 

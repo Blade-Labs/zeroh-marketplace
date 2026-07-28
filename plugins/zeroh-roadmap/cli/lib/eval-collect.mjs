@@ -178,7 +178,10 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
   for (const n of memberNums) {
     for (const c of memberCommits(repoRoot, n, exec)) members.set(c.sha, c)
   }
-  if (members.size === 0) return { landedAt: undefined, escapeFixes: [], arcFiles: [] }
+  // No member commits ⇒ no land boundary ⇒ there is nothing to scan AFTER. That is a
+  // complete scan of an empty window, not a failed one.
+  if (members.size === 0)
+    return { landedAt: undefined, escapeScan: 'complete', escapeFixes: [], arcFiles: [] }
 
   let landedAt
   for (const c of members.values()) {
@@ -189,8 +192,16 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
   for (const sha of members.keys()) for (const f of commitFiles(repoRoot, sha, exec)) arcFileSet.add(f)
 
   const escapeFixes = []
-  const all = exec('git', ['-C', repoRoot, 'log', '--format=%H%x09%aI%x09%s'])
-  if (all.status === 0) {
+  // BOUNDED at the land boundary: an unfiltered full-history log is megabytes on a real repo
+  // and every commit older than the boundary is irrelevant by definition. `--since` is
+  // inclusive of the boundary commit itself, which the explicit date compare below drops.
+  const all = exec('git', ['-C', repoRoot, 'log', '--no-merges', `--since=${landedAt}`, '--format=%H%x09%aI%x09%s'])
+  let escapeScan = 'complete'
+  if (all.status !== 0) {
+    // The scan did not run. Recording an empty escape list here would read as a spotless arc
+    // and RAISE the code-confidence score, so the failure travels as data instead.
+    escapeScan = 'unavailable'
+  } else {
     const landedMs = Date.parse(landedAt)
     // Oldest-first so the escape list reads in the order the fixes actually happened.
     for (const line of all.stdout.split('\n').reverse()) {
@@ -209,7 +220,7 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
   // Canonicalize to a Z-suffixed instant: git's %aI emits a local offset (+00:00), which is
   // a valid ISO string but not the datetime form the contract pins. Normalizing HERE keeps
   // one comparable time format across the whole trace instead of per-reader parsing.
-  return { landedAt: new Date(landedAt).toISOString(), escapeFixes, arcFiles: [...arcFileSet].sort() }
+  return { landedAt: new Date(landedAt).toISOString(), escapeScan, escapeFixes, arcFiles: [...arcFileSet].sort() }
 }
 
 /** Lift one parsed phase file into its trace entry. */

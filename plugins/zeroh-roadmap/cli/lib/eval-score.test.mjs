@@ -690,3 +690,60 @@ test('computeTimingStats — generatedAt is injectable and echoed verbatim; the 
   assert.match(generatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, 'TimingStatsShape parses generatedAt as z.string().datetime()')
   assert.ok(Number.isFinite(Date.parse(generatedAt)), 'and it must be a real instant')
 })
+
+// ── 24. gate R1: a FAILED escape scan is not a clean arc ──────────────────────────────
+test('scoreArcTrace — escapeScan unavailable withholds the escape penalty instead of rewarding it', () => {
+  const clean = traceFor()
+  clean.git.escapeFixes = []
+  const withEscapes = traceFor()
+
+  const failed = traceFor()
+  failed.git.escapeScan = 'unavailable'
+  failed.git.escapeFixes = []
+
+  const cleanScore = scoreArcTrace(clean).dimensions['code-confidence']
+  const failedDim = scoreArcTrace(failed).dimensions['code-confidence']
+
+  // A scan that did not run must NOT read as the spotless case: the signal says so by name.
+  assert.equal(failedDim.signals.escapeFixes, 'scan-unavailable', 'the absence is NAMED, not a zero')
+  assert.equal(failedDim.signals.escapeFixesPerPhase, 'scan-unavailable')
+  assert.equal(cleanScore.signals.escapeFixes, 0, 'a scan that DID run and found nothing reports a real zero')
+  assert.ok(
+    scoreArcTrace(withEscapes).dimensions['code-confidence'].score < cleanScore.score,
+    'fixture precondition: a real escape fix costs points',
+  )
+})
+
+// ── 25. gate R1: a negative span is corrupt, not instantaneous ────────────────────────
+test('scoreArcTrace — an inverted timestamp pair is UNUSABLE, never the maximum speed score', () => {
+  const inverted = traceFor()
+  for (const p of inverted.phases) {
+    p.metrics = { ...p.metrics, startedAt: '2026-07-16T12:00:00.000Z', completedAt: '2026-07-16T09:00:00.000Z' }
+  }
+  const d = scoreArcTrace(inverted).dimensions.speed
+  assert.equal(d.sentinel, 'no-timestamps', 'every span unusable means no timestamps to score')
+  assert.equal(d.score, undefined, 'bad data must never become the best possible number')
+  assert.notEqual(d.score, 100)
+
+  // And the timing table excludes it rather than emitting a negative median (which
+  // TimingStatsShape's nonnegative bound would reject, failing the whole run).
+  const stats = computeTimingStats([inverted])
+  assert.equal(stats.cohorts.reduce((a, c) => a + c.samples, 0), 0)
+  assert.equal(stats.cohorts.reduce((a, c) => a + c.interruptedExcluded, 0), inverted.phases.length)
+})
+
+// ── 26. gate R1: an unreadable verdict token is an unreadable verdicts file ────────────
+test('scoreArcTrace — an unrecognised tier/confidence/status sentinels instead of guessing a weight', () => {
+  for (const mutate of [
+    (v) => { v.tierUsed = 'live-hosts' },
+    (v) => { v.confidence = 'very-high' },
+    (v) => { v.status = 'MET' },
+  ]) {
+    const trace = traceFor()
+    mutate(trace.verdicts.verdicts[0])
+    const d = scoreArcTrace(trace).dimensions['verified-vs-intent']
+    assert.equal(d.sentinel, 'no-verdicts-file', 'a token nobody can read is evidence nobody can read')
+    assert.equal(d.score, undefined, 'a typo must not be silently weighted as the weakest tier or a gap')
+    assert.equal(d.signals.unreadableVerdicts, 1)
+  }
+})

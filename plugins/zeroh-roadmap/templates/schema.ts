@@ -1177,6 +1177,11 @@ export const ArcTraceShape = z.object({
   summary: RunnerSummaryShape.optional(),
   git: z.object({
     landedAt: z.string().datetime().optional(),
+    /** Whether the post-land scan actually RAN. Required, and not defaultable: an empty
+     *  `escapeFixes` means "zero escapes" only when this says `complete`. Without it a git
+     *  failure would be indistinguishable from a clean arc — and a clean arc scores HIGHER,
+     *  so the silent version of this field turns a broken scan into a reward. */
+    escapeScan: z.enum(['complete', 'unavailable']),
     /** Fix commits AFTER the arc landed that touch files the arc's own commits touched —
      *  the escape rate. `sha` min(7) matches the checkpoint sha bar. */
     escapeFixes: z.array(

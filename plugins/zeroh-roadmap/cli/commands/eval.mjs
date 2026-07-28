@@ -190,14 +190,22 @@ export default async function run(argv) {
 /** The regenerated projection's fixed name — stats are a projection, reports are the archive. */
 export const TIMING_STATS_FILE = 'timing-stats.json'
 
-/** The dated REPORT form. The `-sweep`/`-verdicts` siblings live in the same directory and
- *  share the arc prefix, so the pattern is anchored: a record is not a report. */
-const reportNameRe = (arcId) =>
-  new RegExp(`^${String(arcId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d{4}-\\d{2}-\\d{2})\\.json$`)
+/** The dated REPORT form, for ANY arc. The `-sweep`/`-verdicts` siblings live in the same
+ *  directory and share the arc prefix, but their date is not final before `.json`, so this
+ *  anchored pattern excludes them: a record is not a report. `timing-stats.json` carries no
+ *  date at all and is likewise excluded. */
+const REPORT_NAME_RE = /^.+-\d{4}-\d{2}-\d{2}\.json$/
 
 /**
- * Every prior REPORT for an arc, oldest first, excluding `excludePath` (a re-run must never
- * ratchet against its own previous output — that would make `--force` non-reproducible).
+ * Every prior REPORT in the archive, oldest first, excluding `excludePath` (a re-run must
+ * never ratchet against its own previous output — that would make `--force` non-reproducible).
+ *
+ * CROSS-ARC by design: an arc lands once and produces one dated report, so a baseline scoped
+ * to a single arc could never reach MIN_COMPARABLE_PRIORS and the ratchet would be permanently
+ * `no-baseline`. The reference class is the workflow's recent arcs, which is also what the
+ * backfill seeds and what the timing table already pools over. Comparability is enforced
+ * per-dimension by computeRatchet (a sentinelled prior, and a differently-judged prior on a
+ * judge-owned dimension, are excluded there), not by filename.
  *
  * A file that will not read, will not JSON-parse, or carries no `dimensions` record is
  * SKIPPED with a WARN naming it. Reading a corrupt prior as an empty report would drag every
@@ -206,12 +214,11 @@ const reportNameRe = (arcId) =>
  * ratchet reads only `judgeModel` and each dimension's `score`, and one tsx spawn per
  * historical report would make the command unusable at corpus scale.
  */
-export function readPriorReports(dir, arcId, { excludePath, onWarn } = {}) {
+export function readPriorReports(dir, { excludePath, onWarn } = {}) {
   if (!existsSync(dir)) return []
-  const re = reportNameRe(arcId)
   const out = []
   for (const f of readdirSync(dir).sort()) {
-    if (!re.test(f)) continue
+    if (!REPORT_NAME_RE.test(f)) continue
     const p = join(dir, f)
     if (excludePath && p === excludePath) continue
     let doc
@@ -292,6 +299,22 @@ async function runArcEval(arcId, opts) {
   }
   for (const w of collected.warnings) say(`WARN: ${w}`)
 
+  // The trace is validated HERE, at the one boundary it crosses into the scorer. This is what
+  // the collector defers to: ArcTraceShape composes SweepReportShape / ArcVerdictsFileShape /
+  // RunnerSummaryShape by reference, so this single parse is what stops a well-formed-JSON but
+  // mis-shaped artifact from being read as a number further down.
+  const traceCheck = bridgeValidate(toplevel, schemaPath, 'ArcTraceShape', collected.trace)
+  if (!traceCheck.ok) {
+    if (traceCheck.res.kind === 'tsx-absent') {
+      process.stderr.write(TSX_ABSENT_HINT + '\n')
+      return 1
+    }
+    process.stderr.write(`roadmap eval ${arcId}: refused — the collected trace does not match ArcTraceShape:\n`)
+    if (traceCheck.res.kind === 'zod') printZodIssues(traceCheck.res.issues)
+    else process.stderr.write((traceCheck.res.stderr ?? '') + '\n')
+    return 2
+  }
+
   if (opts.collectOnly) {
     if (opts.json) process.stdout.write(JSON.stringify(collected.trace, null, 2) + '\n')
     else
@@ -322,7 +345,7 @@ async function runArcEval(arcId, opts) {
     attribution: assembleAttribution(collected.trace),
     notes: [...collected.warnings, ...scored.notes],
   }
-  const priors = readPriorReports(dir, arcId, { excludePath: outPath, onWarn: say })
+  const priors = readPriorReports(dir, { excludePath: outPath, onWarn: say })
   draft.ratchet = computeRatchet(draft, priors)
 
   const validated = bridgeValidate(toplevel, schemaPath, 'ArcEvalReportShape', draft)
@@ -353,7 +376,10 @@ async function runArcEval(arcId, opts) {
       say(`WARN: arc ${other} has reports but its trace could not be collected — excluded from the timing table`)
     }
   }
-  const stats = computeTimingStats(traces)
+  // The SAME time source as the report's date — a second `new Date()` here would make the
+  // regenerated table differ byte-for-byte on every run over identical inputs, so the
+  // committed archive would show a spurious diff each time the eval is re-run.
+  const stats = computeTimingStats(traces, { generatedAt: `${date}T00:00:00.000Z` })
   const statsValidated = bridgeValidate(toplevel, schemaPath, 'TimingStatsShape', stats)
   if (!statsValidated.ok) {
     process.stderr.write(`roadmap eval ${arcId}: refused — the timing table does not match TimingStatsShape:\n`)

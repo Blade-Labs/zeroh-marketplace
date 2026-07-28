@@ -29,6 +29,7 @@ import {
   existsSync,
   symlinkSync,
   realpathSync,
+  renameSync,
   rmSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -580,4 +581,51 @@ test('eval record-sweep — still works from the fixture root; the bare-arcid fo
   const r = roadmap(root, ['eval', 'record-sweep', '--arc', ARC_ID, f])
   assert.equal(r.code, 0, r.stdout + r.stderr)
   assert.ok(existsSync(join(evalsDir(root), `${ARC_ID}-2026-07-26-sweep.json`)), 'the recorder still lands its suffixed file')
+})
+
+// ── gate R1: the baseline is CROSS-ARC ────────────────────────────────────────────────
+test('eval <ARCID> — prior reports from OTHER arcs form the baseline (an arc lands once)', () => {
+  const root = buildEvalFixture()
+  // Two priors filed under a DIFFERENT arc id. Scoped to this arc alone there would be zero
+  // comparable priors and every row would read no-baseline forever, so the PROVE stage would
+  // never fire on a workflow where each arc lands exactly once.
+  for (const [date, all] of [['2026-07-02', 60], ['2026-07-03', 70]]) {
+    const p = plantPrior(root, date, { all })
+    renameSync(p, join(evalsDir(root), `OTHERARC-${date}.json`))
+  }
+
+  const r = roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  const row = ratchetRow(readReport(root, EVAL_DATE), 'code-confidence')
+  assert.equal(samplesOf(row), 2, 'both foreign-arc reports are part of the reference class')
+  assert.ok(row.baseline >= 60 && row.baseline <= 70, `the mean of 60 and 70; got ${row.baseline}`)
+})
+
+// ── gate R1: a mis-shaped artifact is refused at the trace boundary ────────────────────
+test('eval <ARCID> — a well-formed-JSON but MIS-SHAPED verdicts artifact is REFUSED, not scored', () => {
+  const root = buildEvalFixture()
+  const vp = join(evalsDir(root), `${ARC_ID}-2026-07-20-verdicts.json`)
+  const doc = JSON.parse(readFileSync(vp, 'utf8'))
+  // Valid JSON, invalid contract: the tier is not a member of the closed enum. Without the
+  // trace parse this would reach the scorer and become a real-looking number.
+  doc.verdicts[0].tierUsed = 'live-hosts'
+  writeFileSync(vp, JSON.stringify(doc, null, 2) + '\n')
+
+  const r = roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE])
+  assert.equal(r.code, 2, `a mis-shaped artifact must be refused, not scored: ${r.stdout + r.stderr}`)
+  assert.match(r.stderr, /ArcTraceShape/, 'the refusal names the contract that rejected it')
+  assert.equal(existsSync(reportPath(root, EVAL_DATE)), false, 'nothing derived from unreadable evidence reaches disk')
+})
+
+// ── gate R1: the regenerated projection is reproducible ───────────────────────────────
+test('eval <ARCID> — timing-stats.json is byte-identical across a --force re-run at the same date', () => {
+  const root = buildEvalFixture()
+  assert.equal(roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE]).code, 0)
+  const first = readFileSync(timingPath(root), 'utf8')
+  assert.equal(roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE, '--force']).code, 0)
+  assert.equal(
+    readFileSync(timingPath(root), 'utf8'),
+    first,
+    'a second wall-clock read here would put a spurious diff in the committed archive on every run',
+  )
 })
