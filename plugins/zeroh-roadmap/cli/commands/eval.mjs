@@ -21,7 +21,7 @@
  * Exit-code contract (the universal one): 0 written · 1 usage/toolchain/config · 2 refused
  * (mis-shape, or an existing file without --force).
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
@@ -101,6 +101,8 @@ function parseArgs(argv) {
     else if (a === '--collect-only') opts.collectOnly = true
     else if (a === '--backfill') opts.backfill = true
     else if (a === '--report') opts.report = argv[++i]
+    else if (a === '--phase') opts.phase = argv[++i]
+    else if (a === '--writer') opts.writer = argv[++i]
     else if (a === '--json') opts.json = true
     else positional.push(a)
   }
@@ -113,7 +115,8 @@ const USAGE =
   '  roadmap eval record-sweep|record-verdicts --arc <ID> [--force] [file|-]\n' +
   '  roadmap eval merge-judge --arc <ID> [--report <path>]   (verdict JSON on stdin)\n' +
   '  roadmap eval trend                                      (renders roadmap/arc-evals/trend.html)\n' +
-  '  roadmap eval restamp [--json]                           (additively re-stamps existing reports; never re-scores)\n'
+  '  roadmap eval restamp [--json]                           (additively re-stamps existing reports; never re-scores)\n' +
+  '  roadmap eval lesson "<text>" [--phase N] [--writer <actor-id>]  (appends one lesson to the committed sidecar)\n'
 
 export default async function run(argv) {
   const { opts, positional } = parseArgs(argv)
@@ -127,6 +130,7 @@ export default async function run(argv) {
     if (sub === 'merge-judge') return runMergeJudge(opts)
     if (sub === 'trend') return runTrend(opts)
     if (sub === 'restamp') return runRestamp(opts)
+    if (sub === 'lesson') return runLesson(opts, positional)
     // Anything that is not one of the two literal recorder names is an ARC ID. The literals
     // are checked FIRST so a future arc called `record-sweep` could never shadow the recorder.
     return runArcEval(sub, opts)
@@ -718,6 +722,93 @@ async function runMergeJudge(opts) {
   for (const row of final.ratchet.filter((r) => r.regression))
     process.stdout.write(`REGRESSION ${row.dimension}: ${row.value} against a baseline of ${row.baseline} (delta ${row.delta})\n`)
   process.stdout.write(`finalized ${reportPath}\n`)
+  return 0
+}
+
+// ── `roadmap eval lesson` — the event-triggered capture ────────────────────────────────
+
+/** The append-only sidecar. JSONL, not a JSON array: concurrent sessions on a shared tree
+ *  append to this file, and a read-modify-write array would let the loser of that race drop
+ *  the very lesson it was called to keep. */
+export const LESSONS_FILE = 'lessons.jsonl'
+
+/**
+ * `roadmap eval lesson "<text>" [--phase N] [--writer <actor-id>]` — flush one durable lesson
+ * to the committed sidecar the moment a session learns it.
+ *
+ * EVENT-triggered by design: the trigger MOMENTS live in the executor-facing skill text (an
+ * error recovered, a user correction, a surprising re-derivation), never a "reflect every N
+ * prompts" interval — periodic reflection produces filler, and filler is what makes a corpus
+ * unreadable.
+ *
+ * `kind` is always `session`: this command IS the session lane. The eval loop writes its own
+ * artifacts through its own path, and that split is what lets consolidation tell its own
+ * output from upstream content it must never touch.
+ */
+async function runLesson(opts, positional) {
+  const text = positional[1]
+  if (typeof text !== 'string' || !text.trim()) {
+    process.stderr.write(
+      'roadmap eval lesson: usage: roadmap eval lesson "<text>" [--phase N] [--writer <actor-id>]\n' +
+        '  the lesson text is required — an empty lesson is a line the corpus cannot learn from\n',
+    )
+    return 1
+  }
+
+  let toplevel, schemaPath
+  try {
+    toplevel = gitToplevel(process.cwd())
+    schemaPath = consumerSchemaPath(toplevel)
+  } catch (e) {
+    if (e instanceof BridgeError) for (const l of e.messageLines) process.stderr.write(l + '\n')
+    else process.stderr.write(`roadmap eval lesson: ${e.message}\n`)
+    return 1
+  }
+
+  const doc = {
+    // The command's ONE wall-clock mint, echoed loudly below: a caller cannot pin this the way
+    // --date pins a report's date, so the value it wrote is the value it must show.
+    ts: new Date().toISOString(),
+    ...(opts.phase === undefined ? {} : { phase: Number(opts.phase) }),
+    text: text.trim(),
+    // Self-reported or the literal `unrecorded` — the UNRECORDED_DRIVER discipline. A guessed
+    // actor id is worse than a named gap, because only the gap is visible later.
+    origin: { writer: opts.writer ?? 'unrecorded', kind: 'session' },
+  }
+
+  const validated = bridgeValidate(toplevel, schemaPath, 'LessonShape', doc)
+  if (!validated.ok) {
+    const { res } = validated
+    if (res.kind === 'tsx-absent') {
+      process.stderr.write(TSX_ABSENT_HINT + '\n')
+      return 1
+    }
+    if (res.kind === 'zod') {
+      process.stderr.write('roadmap eval lesson: refused — the lesson does not match LessonShape:\n')
+      printZodIssues(res.issues)
+      return 2
+    }
+    process.stderr.write((res.stderr || 'roadmap eval lesson: bridge failure') + '\n')
+    return 1
+  }
+
+  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const outPath = join(dir, LESSONS_FILE)
+  try {
+    mkdirSync(dir, { recursive: true })
+    // APPEND, never rewrite — see LESSONS_FILE.
+    appendFileSync(outPath, JSON.stringify(validated.parsed) + '\n')
+  } catch (e) {
+    process.stderr.write(`roadmap eval lesson: cannot append to ${outPath}: ${e.message}\n`)
+    return 1
+  }
+
+  const say = (line) => process.stdout.write(line + '\n')
+  say(`roadmap eval lesson — appended to ${outPath}`)
+  say(`  ts      ${validated.parsed.ts}`)
+  say(`  writer  ${validated.parsed.origin.writer} (${validated.parsed.origin.kind})`)
+  if (validated.parsed.phase !== undefined) say(`  phase   ${validated.parsed.phase}`)
+  say(`  text    ${validated.parsed.text}`)
   return 0
 }
 

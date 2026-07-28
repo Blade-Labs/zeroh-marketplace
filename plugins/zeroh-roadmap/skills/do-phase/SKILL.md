@@ -53,9 +53,9 @@ For each task in order:
    event kills the Monitor's wake silently; the executor-reference long-run protocol governs
    only genuinely long runs).
 3. **Commit** — `<type>(<scope>): phase N — <task title>`. First, when the consumer binds a
-   formatter (the `lint-diff` gate binding's `--write` twin, e.g. biome), run it on the task's
-   touched files — the gate's diff-scoped lint + history-comments checks catch what slips, but
-   hygiene that never reaches the gate is cheaper.
+   formatter (the `lint-diff` binding's `--write` twin, e.g. biome), run it on the task's touched
+   files — the gate's diff-scoped checks catch what slips, but hygiene that never reaches it is
+   cheaper.
 4. **Persist** `transparencyReport` + `done: true` + `doneDate`, same commit.
 5. **Continue immediately** — the task boundary is a commit boundary, never a turn boundary.
 
@@ -64,6 +64,10 @@ task N.X (k/M) — <step>`), the `types` slot each, NO forks; one aggregated `tr
 in a final commit. A step red twice running → STOP.
 
 ## Transparency contract (per task)
+
+**Durable-lesson moment** — an error you recovered, a user correction, a surprising
+re-derivation: flush it at once, `roadmap eval lesson "<text>" --writer <your model id> [--phase
+N]`. EVENT-triggered, never on an interval.
 
 Persist all six fields — `whatWasDone`, `how` (real content), and
 `compromises`/`skipped`/`hardcoded`/`limitations` (the literal `"None"`, or ≥10 chars of substance
@@ -90,14 +94,14 @@ docs-only diff skips the quality pass. Under arc-mode the gate runs only phase-r
 tests — the full suite defers to the arc end.
 
 **Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
-confirmed design is a CONTRACT. Apply the canonical `skills/validate-arc/references/parity-rubric.md`
-with FRESH eyes (a spawned vision judge, never the implementer) — render via `live-ui`, screenshot
-every state AND drive every interaction (hover/focus/transition), compare on its six axes. Fix
-material deviations and re-compare; an out-of-scope residual → `compromises` naming the designRef;
-record a `gateRounds` entry (`agent: 'design-parity'`).
+confirmed design is a CONTRACT. Apply `skills/validate-arc/references/parity-rubric.md` with FRESH
+eyes (a spawned vision judge, never the implementer) — render via `live-ui`, screenshot every state
+AND drive every interaction (hover/focus/transition), compare on its six axes. Fix material
+deviations and re-compare; an out-of-scope residual → `compromises` naming the designRef; record a
+`gateRounds` entry (`design-parity`).
 
 **Echo contract:** after each gate-agent stage echo a ~10-line summary to chat (`[Quality pass]
-nothing to fix` if empty); the full report stays in the transcript.
+nothing to fix` if empty).
 
 **Sub-agent rule:** gate agents run synchronously; only the architect and `test-engineer` may
 absorb phase work — never another phase-executor, `Explore`, or a fork for a "too-big" task.
@@ -110,9 +114,9 @@ gate-report consistency — a done phase can no longer be narrated).
 
 **Arc-mode** (iff `roadmap/.arc-mode` exists — read via `roadmap status` — OR this session IS a
 phase-executor): also persist `executionResult`, commit the phase, and **return that
-PhaseExecutionResult** (`status` done/escalated/failed; map the roll-up; fill `driver` = your own
-model id + lane `session`, or `codex` when the codex lane assembled it). SKIP grooming, the emit
-slot, and the push — the do-arc workflow serializes those.
+PhaseExecutionResult** (`status` done/escalated/failed; map the roll-up; `driver` = your own model
+id + lane `session`, or `codex` when that lane assembled it). SKIP grooming, the emit slot, and
+the push — the workflow serializes those.
 
 **Standalone** (no arc-mode): after the completion commit, groom `roadmap/backlog.ts` (remove this
 phase's entry + any single-phase narrative naming only it), run the `emit` slot, then push per the
@@ -121,15 +125,14 @@ consumer's `mergePolicy` (workflow serialization covers arc-mode only).
 ## Codex delegation lane (`roadmap codex run <N…>`)
 
 When the session delegates implementation to Codex, use the CLI lane — never hand-roll the launch
-(the shared-host hook and the orphan-reaper classify the visible command line; the committed
-entrypoint carries the invariants: sandbox-bypassed direct CLI, prompt via stdin so argv stays free
-of test keywords, detached own-group spawn, a `.building/codex-*.json` journal that refuses a
-double-run, and the `CODEX-REPORT.md` sentinel contract). Poll `roadmap codex status <N>` (typed:
-running/complete/blocked/dead-no-report). A whole arc delegates as one run: `roadmap codex run
---arc <ID>` (member phases in planes order). **Division of labor (user ruling 2026-07-22):** Codex
-runs each phase FULLY on its own — tasks, per-task commits + transparencyReports, the gate
-(`gate plan/run` to green, an honestly-labeled codex-self-review gateRound, the done-flip,
-`--verify-complete`). The supervising session's job is the back half only: AUDIT the commits and
-gate claims against the plan (spot-check verifies; a false green is a bounce), then merge, push,
-backlog-groom, and clean up the worktree. Codex never merges/pushes and never touches the primary
-checkout. For an arc, sweep/validate/land judgment also stays with the session.
+(the shared-host hook and the reaper classify the visible command line; the entrypoint carries the
+invariants: direct CLI, prompt via stdin so argv stays free of test keywords, detached own-group
+spawn, a `.building/codex-*.json` journal refusing a double-run, the `CODEX-REPORT.md` sentinel).
+Poll `roadmap codex status <N>` (typed: running/complete/blocked/dead-no-report). A whole arc
+delegates as one run: `roadmap codex run --arc <ID>` (members in planes order). **Division of
+labor (user ruling 2026-07-22):** Codex runs each phase FULLY — tasks, per-task commits +
+transparencyReports, the gate to green (an honestly-labeled codex-self-review gateRound, the
+done-flip, `--verify-complete`). The session owns the back half only: AUDIT the commits and gate
+claims against the plan (spot-check verifies; a false green is a bounce), then merge, push,
+backlog-groom, clean up the worktree. Codex never merges/pushes and never touches the primary
+checkout; for an arc, sweep/validate/land judgment stays with the session.
