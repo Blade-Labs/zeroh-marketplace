@@ -178,8 +178,8 @@ function commitFiles(repoRoot, sha, exec) {
  *   THE INTERSECTION with the arc's files, not the commit's diff size.
  * - `escapeFixesFileIntersection` (UNSCORED): the count under the previous, unbounded rule
  *   — any post-land fix touching any arc file. It measured how LONG AGO the arc landed as
- *   much as its quality, so the user ruling of 2026-07-28 removed it from the score; it
- *   stays here as an inspectable signal so the old number never silently disappears.
+ *   much as its quality, so it no longer scores; it stays here as an inspectable signal,
+ *   because a scoring-model change whose old number vanishes cannot be audited.
  */
 export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {}) {
   const members = new Map()

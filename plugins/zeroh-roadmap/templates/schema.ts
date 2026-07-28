@@ -1191,10 +1191,10 @@ export const ArcTraceShape = z.object({
         files: z.number().int().nonnegative(),
       }),
     ),
-    /** The count under the PREVIOUS, unbounded rule: any post-land fix touching any file the
-     *  arc touched. It grew with how long ago the arc landed, so it scores nothing (user
-     *  ruling 2026-07-28, a declared scoring-model reset) — but it stays recorded so the old
-     *  number remains inspectable instead of vanishing. Absent when the scan did not run. */
+    /** The count under the previous, unbounded rule: any post-land fix touching any file the
+     *  arc touched. It grew with how long ago the arc landed rather than with the arc's
+     *  quality, so it is recorded but NOT scored — kept because a scoring-model change whose
+     *  old number vanishes cannot be audited. Absent when the scan did not run. */
     escapeFixesFileIntersection: z.number().int().nonnegative().optional(),
   }),
 })

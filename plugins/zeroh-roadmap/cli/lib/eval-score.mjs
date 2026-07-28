@@ -193,8 +193,8 @@ function scoreCodeConfidence(trace, readable) {
       finalRoundCleanRatio: runsWithRounds.length > 0 ? round1(cleanFinal / runsWithRounds.length) : 'no-runs',
       escapeFixes: escapeScanRan ? escapeCount : 'scan-unavailable',
       escapeFixesPerPhase: escapeScanRan ? round1(escapesPerPhase) : 'scan-unavailable',
-      // UNSCORED, carried for inspection only: the pre-2026-07-28 unbounded count, which rose
-      // with the arc's AGE. Reading it as a quality signal is the mistake the ruling fixed.
+      // UNSCORED, carried for inspection only: the previous unbounded count, which rose with
+      // the arc's AGE. Reading it as a quality signal is the mistake the bounded window fixes.
       escapeFixesFileIntersection: trace.git?.escapeFixesFileIntersection ?? 'scan-unavailable',
       phasesConsidered: readable.length,
     },
