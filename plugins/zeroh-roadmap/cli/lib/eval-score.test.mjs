@@ -708,6 +708,18 @@ test('scoreArcTrace — escapeScan unavailable withholds the escape penalty inst
   assert.equal(failedDim.signals.escapeFixes, 'scan-unavailable', 'the absence is NAMED, not a zero')
   assert.equal(failedDim.signals.escapeFixesPerPhase, 'scan-unavailable')
   assert.equal(cleanScore.signals.escapeFixes, 0, 'a scan that DID run and found nothing reports a real zero')
+
+  // gate R2: naming it inside `signals` is not enough — the withheld penalty makes the score
+  // numerically identical to a spotless arc, and that number enters every future baseline.
+  const notes = scoreArcTrace(failed).notes
+  assert.ok(
+    notes.some((n) => /escape scan did not run/i.test(n) && /upper bound/i.test(n)),
+    `the notes must say the score is an upper bound, not a measurement; got ${JSON.stringify(notes)}`,
+  )
+  assert.ok(
+    !scoreArcTrace(clean).notes.some((n) => /escape scan did not run/i.test(n)),
+    'a scan that ran is not caveated'
+  )
   assert.ok(
     scoreArcTrace(withEscapes).dimensions['code-confidence'].score < cleanScore.score,
     'fixture precondition: a real escape fix costs points',

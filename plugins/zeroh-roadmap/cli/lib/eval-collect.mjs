@@ -300,6 +300,10 @@ export function collectArcTrace(
     phases,
     git: findArcGitFacts(repoRoot, memberNums, { exec }),
   }
+  // Every other degraded read warns; a failed escape scan is the one that most flatters the
+  // arc, so it warns loudest rather than living only in a field nobody prints.
+  if (trace.git.escapeScan === 'unavailable')
+    warnings.push('the post-land escape scan could not run — escapeFixes is UNKNOWN, not zero')
   // `arcFiles` is a working set for the escape-fix intersection, not part of the contract.
   delete trace.git.arcFiles
   if (trace.git.landedAt === undefined) delete trace.git.landedAt

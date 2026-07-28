@@ -380,6 +380,13 @@ export function scoreArcTrace(trace) {
   if (!trace.sweep) notes.push('no sweep report on disk — the standards-adherence feeder has no sweep verdict')
   if (!trace.summary) notes.push('no RunnerSummary on disk (roadmap/arc-summaries/ is gitignored by design)')
   if (!trace.git?.landedAt) notes.push('no member commits found — the land boundary and escape rate are underivable')
+  // The withheld penalty makes code-confidence numerically identical to a spotless arc, and
+  // that number now enters every future arc's rolling baseline. Naming it inside `signals`
+  // alone is not enough: the note is what a reader actually sees.
+  if (trace.git?.escapeScan === 'unavailable')
+    notes.push(
+      'the post-land escape scan did not run — its penalty is withheld, so code-confidence is an UPPER BOUND, not a measurement',
+    )
 
   const dimensions = {
     'code-confidence': scoreCodeConfidence(trace, readable),

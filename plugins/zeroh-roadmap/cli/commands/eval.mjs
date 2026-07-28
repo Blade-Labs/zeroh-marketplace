@@ -321,7 +321,10 @@ async function runArcEval(arcId, opts) {
       say(
         `collected ${collected.trace.phases.length} phase(s) for arc ${arcId} — ` +
           `sweep ${collected.trace.sweep ? 'present' : 'absent'}, verdicts ${collected.trace.verdicts ? 'present' : 'absent'}, ` +
-          `${collected.trace.git.escapeFixes.length} escape fix(es). Nothing written (--collect-only).`,
+          // A failed scan must never print "0 escape fix(es)" — this is the one line a human
+          // eyeballs before trusting the trace, so it is the last place a zero may stand in.
+          `${collected.trace.git.escapeScan === 'unavailable' ? 'escape scan unavailable' : `${collected.trace.git.escapeFixes.length} escape fix(es)`}. ` +
+          'Nothing written (--collect-only).',
       )
     return 0
   }
@@ -378,7 +381,9 @@ async function runArcEval(arcId, opts) {
   }
   // The SAME time source as the report's date — a second `new Date()` here would make the
   // regenerated table differ byte-for-byte on every run over identical inputs, so the
-  // committed archive would show a spurious diff each time the eval is re-run.
+  // committed archive would show a spurious diff each time the eval is re-run. The instant is
+  // therefore MIDNIGHT of the report's date, not the moment of generation: the table is a
+  // projection keyed to a report date, and reproducibility beats instant-level precision.
   const stats = computeTimingStats(traces, { generatedAt: `${date}T00:00:00.000Z` })
   const statsValidated = bridgeValidate(toplevel, schemaPath, 'TimingStatsShape', stats)
   if (!statsValidated.ok) {
