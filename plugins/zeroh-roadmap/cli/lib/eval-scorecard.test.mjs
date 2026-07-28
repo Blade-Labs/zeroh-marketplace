@@ -671,6 +671,21 @@ test('findGateFixCommits — ONE bounded `git log` per phase, -C repoRoot, subje
   )
 })
 
+test('findGateFixCommits — a subject naming TWO phases yields the pair for EACH of them', () => {
+  // One fix closing rounds on two phases at once. Parsing only the FIRST construct per subject
+  // drops the later phase's pair, and a gate fix that reads as absent turns its reviewer round
+  // into a spurious false positive — the reviewer is charged for a finding that DID land a fix.
+  const subject = 'fix(cli): phase 2015 gate R1 and phase 2016 gate R3 — one fix, two gates'
+  const r = recorder(() => ({ status: 0, stdout: subject, stderr: '' }))
+
+  const pairs = findGateFixCommits('/repo/root', [2015, 2016], { exec: r.exec })
+  assert.deepEqual(
+    [...pairs].sort((a, b) => a.phase - b.phase),
+    [{ phase: 2015, round: 1 }, { phase: 2016, round: 3 }],
+    'the SECOND construct in the subject is a pair too, with its own round',
+  )
+})
+
 test('findGateFixCommits — the digit boundary holds: `phase 20150` is not phase 2015', () => {
   const r = recorder(() => ({
     status: 0,

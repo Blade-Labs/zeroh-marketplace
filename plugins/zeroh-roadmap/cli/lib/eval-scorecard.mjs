@@ -71,11 +71,15 @@ export function findGateFixCommits(repoRoot, phaseNums, { exec = defaultExec } =
     const res = exec('git', ['-C', repoRoot, 'log', '--no-merges', '--format=%s', `--grep=phase ${n}`])
     if (res.status !== 0) continue
     for (const line of String(res.stdout ?? '').split('\n')) {
-      const m = line.match(/(?:^|[^0-9])phase (\d+) gate R(\d+)/)
-      // The grep is a PREFILTER: it matches `phase 20150` too, so the parsed number has to be
-      // the one asked for. Comparing the capture is what enforces the digit boundary.
-      if (!m || Number(m[1]) !== Number(n)) continue
-      pairs.push({ phase: Number(n), round: Number(m[2]) })
+      // EVERY construct in the subject, not just the first: a fix naming two phases
+      // ("phase 2015 gate R1 and phase 2016 gate R1") would otherwise drop the second, and a
+      // gate fix that reads as absent turns its reviewer round into a spurious false positive.
+      // The grep is only a PREFILTER — it matches `phase 20150` too — so comparing the parsed
+      // capture against the phase asked for is what actually enforces the digit boundary.
+      for (const m of line.matchAll(/(?:^|[^0-9])phase (\d+) gate R(\d+)/g)) {
+        if (Number(m[1]) !== Number(n)) continue
+        pairs.push({ phase: Number(n), round: Number(m[2]) })
+      }
     }
   }
   return pairs
