@@ -74,6 +74,49 @@ RunnerSummary (and runnable standalone on any landed arc, including historical o
   mid-flight. Pacing only; it feeds no metric.
 - Per-tool-call / per-response timing: rejected as token noise with no consumer.
 
+## Numbers program: role JTBD + ODI scorecards + benchmarking (ratified 2026-07-28)
+
+Goal: numbers behind every claim, publishable — a whitepaper on governed AI-assisted
+coding ("vibe-coded no longer means bad code"), and this workflow maturing into the
+coding agent of the ZeroH platform (docs/architecture/src/coding.md is the product
+canon it feeds). EVALCORE already made scores numeric (0-100 + typed signals) and
+attributed all four actor roles; this layer aggregates and normalizes.
+
+- **Role JTBD + ODI outcomes.** Each actor role gets a JTBD and desired outcomes in
+  ODI form (direction + metric + object + context), computed from captured signals:
+  planner (minimize executor re-derivation, tripped assumptions, plan-gap gate
+  rounds; maximize first-pass intent-met), executor (minimize escapes, gate churn,
+  halt-adjusted minutes per task point), reviewer (maximize catch-vs-escape recall;
+  minimize false positives), judge (maximize stability + agreement with later
+  ground truth). Importance weights are RULINGS (static, versioned); satisfaction
+  is measured. **Opportunity score = importance + max(importance - satisfaction, 0)
+  is EVALLOOP's proposal-prioritization function**, not just a report column.
+- **Model-vs-model scorecards** (Fable vs Opus planner; Opus vs Grok vs Codex
+  executor; etc.): slice the report corpus by role x model. Two rigor rails, load-
+  bearing for the whitepaper: (a) assignment is NOT random — compare only within
+  reference-class cohorts (task band x kind x surface x consumer), never raw means;
+  (b) N floors with abstention (already ratified). Plus a flat dataset export
+  (JSONL: one scored, attributed, cohort-tagged phase record per row) as the
+  whitepaper's data appendix.
+- **Workflow profiles.** Today ONE profile (plan-arc → do-arc prod-grade). Reports
+  record `profile` immediately; the profile SEAM (per-profile gate depth, review
+  scope, judge tier, lead-executor model — e.g. a ux-iteration profile, which the
+  ratified FLUENTFRONT in-UI loop already is in all but name) is built under the
+  rule of three: when the second concrete profile is defined, not speculatively.
+- **Consumer fingerprint** per report: { repo, language/framework, corpus size } —
+  the plugin is consumer-agnostic, so cross-codebase benchmarking (Next.js app vs
+  C++ tree vs this Node/TS estate) is aggregation over fingerprints once more
+  consumers produce reports (near-term: zeroh-spfx, the ~/zeroh monorepo).
+- **Workflow versioning** per report: { pluginVersion, pluginSha,
+  protocolLoadTokens, profile } — a score shift must be attributable to a WORKFLOW
+  change vs an ACTOR change (the judgeModel-pin logic, generalized). The collector
+  is idempotent, so existing reports re-stamp on re-collect; pre-stamp reports are
+  a named gap, never silently mixed.
+
+Delivery home: the scorecard/benchmark layer is **Arc 3 (SCORECARD)** after
+EVALLOOP; the two cheap stamps (profile, workflow version block, consumer
+fingerprint) ride EVALLOOP's schema pass so the corpus accumulates them early.
+
 ## Hermes harvest (added 2026-07-27; per the 2026-07-12 "copy patterns, never
 integrate" ruling — reference clone ~/hermes-agent)
 
