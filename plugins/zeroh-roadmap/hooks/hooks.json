@@ -1,6 +1,17 @@
 {
-  "description": "zeroh-roadmap runtime hooks — validate roadmap files at write time so a malformed phase/arc/backlog file never lands (the import-time Zod parse IS the validator), and block the known-broken integration-test scoping forms that silently run the full suite",
+  "description": "zeroh-roadmap runtime hooks — validate roadmap files at write time so a malformed phase/arc/backlog file never lands (the import-time Zod parse IS the validator), block the known-broken integration-test scoping forms that silently run the full suite, and stamp wall-clock time into each prompt for in-session pacing",
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/time-stamp.sh\" || exit 0",
+            "statusMessage": "Stamping the wall clock..."
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
