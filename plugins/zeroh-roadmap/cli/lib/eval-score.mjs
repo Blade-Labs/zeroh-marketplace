@@ -489,13 +489,17 @@ export function assembleAttribution(trace) {
  * compared is a PRESENT row saying so rather than a missing row a reader could mistake for
  * "not regressed".
  *
- * COMPARABILITY has two independent rules:
+ * COMPARABILITY has three independent rules:
  *  1. a prior contributes only where it carries a real number — a sentinelled prior is
  *     EXCLUDED from that dimension, never zeroed into the mean (zeroing would manufacture a
  *     regression out of absent data);
  *  2. for a JUDGE-owned dimension the prior must have been judged by the SAME model — a
  *     different judge is baseline-reset material. Deterministic dimensions compare across
- *     judge models freely, because no judge touched them.
+ *     judge models freely, because no judge touched them;
+ *  3. a prior must be STRICTLY EARLIER-dated than the report. A baseline is what the workflow
+ *     had already produced when this arc landed; without the bound the earliest arc in a
+ *     corpus is judged partly against its own future. Same-day is not earlier — two reports
+ *     minted the same day have no defensible order.
  *
  * Under MIN_COMPARABLE_PRIORS the row is `no-baseline`. When the CURRENT report has no
  * number, value and delta stay null and `regression` stays false: a regression must always
@@ -514,6 +518,11 @@ export function computeRatchet(report, priorReports = []) {
 
     const comparable = []
     for (const prior of priorReports ?? []) {
+      // A baseline is what the workflow had ALREADY produced when this arc landed. ISO dates
+      // compare lexicographically, so the string compare IS the chronological one. A same-day
+      // prior is excluded too: two reports minted the same day have no defensible order, and
+      // "earlier" that is not strictly earlier lets an arc be judged against its own future.
+      if (!(String(prior?.date) < String(report?.date))) continue
       const d = prior?.dimensions?.[dimension]
       if (typeof d?.score !== 'number') continue
       if (judgeOwned && (prior.judgeModel ?? null) !== (report?.judgeModel ?? null)) continue

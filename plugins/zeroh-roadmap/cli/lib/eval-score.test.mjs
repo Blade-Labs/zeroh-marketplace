@@ -384,7 +384,7 @@ test('computeRatchet — ZERO priors is the same honest no-baseline table, not a
 // ── 11. the ratchet: real baselines ───────────────────────────────────────────────────
 test('computeRatchet — THREE comparable priors: a planted regression is flagged, an improvement is not', () => {
   const priors = [60, 70, 80].map((n, i) => mkReport({ all: n, judgeModel: 'judge-A', date: `2026-07-0${i + 1}` }))
-  const current = mkReport({ all: 70, per: { speed: 20, 'code-confidence': 90 }, judgeModel: 'judge-A' })
+  const current = mkReport({ all: 70, per: { speed: 20, 'code-confidence': 90 }, judgeModel: 'judge-A', date: '2026-07-31' })
   const rows = computeRatchet(current, priors)
 
   const slower = rowOf(rows, 'speed')
@@ -412,11 +412,58 @@ test('computeRatchet — THREE comparable priors: a planted regression is flagge
   assert.equal(samplesFromNote(rowOf(withOutlier, 'speed')), 4)
 })
 
+// ── 11b. comparability: EARLIER-dated priors only ─────────────────────────────────────
+test('computeRatchet — a LATER-dated prior is excluded, and it would have changed the answer', () => {
+  const earlier = [
+    mkReport({ all: 80, judgeModel: 'judge-A', date: '2026-07-05' }),
+    mkReport({ all: 90, judgeModel: 'judge-A', date: '2026-07-06' }),
+  ]
+  const later = mkReport({ all: 20, judgeModel: 'judge-A', date: '2026-07-20' })
+  const current = mkReport({ all: 70, judgeModel: 'judge-A', date: '2026-07-10' })
+
+  const row = rowOf(computeRatchet(current, [...earlier, later]), 'speed')
+  assert.equal(row.baseline, 85, 'the baseline is the mean of the two EARLIER priors (80, 90)')
+  assert.equal(row.value, 70)
+  assert.equal(row.delta, -15)
+  assert.equal(samplesFromNote(row), 2, 'the later-dated prior is not a sample')
+
+  // The whole point: the inclusive mean is a DIFFERENT number and a different VERDICT, so this
+  // test reds if the date bound is ever dropped rather than passing under both rules.
+  const inclusiveMean = 63.3 // (80 + 90 + 20) / 3
+  assert.notEqual(row.baseline, inclusiveMean, `the unbounded mean would have been ${inclusiveMean}`)
+  assert.equal(row.regression, true, 'against what the workflow had ALREADY produced, 70 is a regression')
+  assert.ok(70 - inclusiveMean > 0, 'against its own future it would have read as an improvement instead')
+})
+
+test('computeRatchet — a SAME-DAY prior is excluded: two reports minted the same day have no order', () => {
+  const priors = [
+    mkReport({ all: 80, judgeModel: 'judge-A', date: '2026-07-05' }),
+    mkReport({ all: 90, judgeModel: 'judge-A', date: '2026-07-06' }),
+    mkReport({ all: 40, judgeModel: 'judge-A', date: '2026-07-10' }),
+  ]
+  const row = rowOf(computeRatchet(mkReport({ all: 70, judgeModel: 'judge-A', date: '2026-07-10' }), priors), 'speed')
+  assert.equal(samplesFromNote(row), 2, 'the same-day prior is not "earlier" and contributes nothing')
+  assert.equal(row.baseline, 85, 'so the baseline is unchanged by it')
+})
+
+test('computeRatchet — ONE earlier comparable prior is no-baseline even with three files in the corpus', () => {
+  const priors = [
+    mkReport({ all: 80, judgeModel: 'judge-A', date: '2026-07-05' }),
+    mkReport({ all: 90, judgeModel: 'judge-A', date: '2026-07-11' }),
+    mkReport({ all: 40, judgeModel: 'judge-A', date: '2026-07-12' }),
+  ]
+  const rows = computeRatchet(mkReport({ all: 70, judgeModel: 'judge-A', date: '2026-07-10' }), priors)
+  for (const r of rows) {
+    assert.equal(r.baseline, null, `${r.dimension}: one earlier prior is under the floor, whatever else sits on disk`)
+    assert.equal(r.note, 'no-baseline')
+  }
+})
+
 // ── 12. comparability: the two exclusion reasons, independently ───────────────────────
 test('computeRatchet — a prior with a SENTINEL on a dimension is excluded from THAT dimension only', () => {
   const good = [1, 2, 3].map((i) => mkReport({ all: 60, judgeModel: 'judge-A', date: `2026-07-0${i}` }))
   const sentinelled = mkReport({ all: 60, per: { speed: 'no-timestamps' }, judgeModel: 'judge-A', date: '2026-07-04' })
-  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A' }), [...good, sentinelled])
+  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A', date: '2026-07-31' }), [...good, sentinelled])
 
   assert.equal(samplesFromNote(rowOf(rows, 'speed')), 3, 'the sentinel prior contributes NO speed sample')
   assert.equal(samplesFromNote(rowOf(rows, 'code-confidence')), 4, 'that same prior still counts where it HAS a score')
@@ -429,7 +476,7 @@ test('computeRatchet — a prior with a SENTINEL on a dimension is excluded from
 test('computeRatchet — a DIFFERENT judgeModel is excluded from judge dimensions and kept for deterministic ones', () => {
   const sameJudge = [1, 2, 3].map((i) => mkReport({ all: 60, judgeModel: 'judge-A', date: `2026-07-0${i}` }))
   const otherJudge = mkReport({ all: 90, judgeModel: 'judge-B', date: '2026-07-04' })
-  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A' }), [...sameJudge, otherJudge])
+  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A', date: '2026-07-31' }), [...sameJudge, otherJudge])
 
   const judged = rowOf(rows, 'standards-adherence')
   assert.equal(samplesFromNote(judged), 3, 'a different judge is baseline-reset material for a JUDGE-owned dimension')
@@ -443,7 +490,7 @@ test('computeRatchet — a DIFFERENT judgeModel is excluded from judge dimension
 // ── 13. a sentinel on the CURRENT report ──────────────────────────────────────────────
 test('computeRatchet — a sentinel on the current dimension yields value/delta null and no regression', () => {
   const priors = [1, 2, 3].map((i) => mkReport({ all: 80, judgeModel: 'judge-A', date: `2026-07-0${i}` }))
-  const current = mkReport({ all: 80, per: { speed: 'no-timestamps' }, judgeModel: 'judge-A' })
+  const current = mkReport({ all: 80, per: { speed: 'no-timestamps' }, judgeModel: 'judge-A', date: '2026-07-31' })
   const rows = computeRatchet(current, priors)
 
   const row = rowOf(rows, 'speed')
@@ -891,7 +938,7 @@ test('computeRatchet — backfilled priors contribute NOTHING to a judge dimensi
       date: `2026-07-0${i}`,
     }),
   )
-  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A' }), [...scored, ...backfilled])
+  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A', date: '2026-07-31' }), [...scored, ...backfilled])
 
   for (const key of JUDGE_KEYS) {
     const row = rowOf(rows, key)
@@ -911,7 +958,7 @@ test('computeRatchet — a corpus of ONLY backfilled priors never adds up to a b
       date: `2026-07-0${i}`,
     }),
   )
-  const rows = computeRatchet(mkReport({ all: 70, judgeModel: 'judge-A' }), backfilled)
+  const rows = computeRatchet(mkReport({ all: 70, judgeModel: 'judge-A', date: '2026-07-31' }), backfilled)
 
   for (const key of JUDGE_KEYS) {
     const row = rowOf(rows, key)
@@ -928,6 +975,7 @@ test('computeRatchet — an unjudged-backfill CURRENT dimension is null/null/fal
     all: 80,
     per: Object.fromEntries(JUDGE_KEYS.map((k) => [k, BACKFILL_SENTINEL])),
     judgeModel: 'judge-A',
+    date: '2026-07-31',
   })
   const rows = computeRatchet(current, priors)
 
