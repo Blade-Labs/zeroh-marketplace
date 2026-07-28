@@ -295,7 +295,7 @@ function parsesConsumerShape(root, shapeName, doc) {
 function plantPrior(
   root,
   date,
-  { all = 60, per = {}, judgeModel = 'judge-A', sentinels = {}, ratchet = [], arcId = ARC_ID, name } = {},
+  { all = 60, per = {}, judgeModel = 'judge-A', sentinels = {}, signals = {}, ratchet = [], arcId = ARC_ID, name } = {},
 ) {
   const dimensions = {}
   for (const key of EVAL_KEYS) {
@@ -308,7 +308,9 @@ function plantPrior(
     dimensions[key] = {
       owner,
       score,
-      signals: { synthetic: score },
+      // `signals` is per-dimension override territory: the declared-reset predicates read
+      // signals, so a test about retirement has to be able to plant a pre-reset one.
+      signals: { synthetic: score, ...(signals[key] ?? {}) },
       sourceRefs: ['planted-prior'],
     }
   }
@@ -1141,6 +1143,60 @@ test('eval trend — -sweep/-verdicts siblings and timing-stats.json are neither
     1,
     `exactly the two dated REPORTS are the line — five files in the directory, two of them reports (counted ${drawn.segments} segments)`,
   )
+})
+
+// ── 27b. declared resets: the STAMP retires, the trend MARKER does not ─────────────────
+const SPEED_RESET_RX = /SPEED_REFERENCE_MINUTES_PER_TASK recalibrated 45 → 8/
+const SPEED_RESET_ID = 'speed-reference-8'
+
+test('eval <ARCID> — a PRE-reset report in the corpus stamps the speed reset note onto the new report', () => {
+  const root = buildEvalFixture()
+  // referenceMinutesPerTask 45 is the SIGNAL of a report scored under the old model. The
+  // predicate reads that, never the note's own presence, which would be circular.
+  plantPrior(root, '2026-07-02', { all: 60, signals: { speed: { referenceMinutesPerTask: 45 } } })
+  plantPrior(root, '2026-07-03', { all: 70, signals: { speed: { referenceMinutesPerTask: 45 } } })
+
+  const r = roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  const notes = readReport(root, EVAL_DATE).notes
+  assert.ok(
+    notes.some((n) => SPEED_RESET_RX.test(n)),
+    `a corpus still holding pre-reset reports must carry the stamp; got ${JSON.stringify(notes)}`,
+  )
+})
+
+test('eval <ARCID> — once NO pre-reset report is left the stamp AUTO-RETIRES, and the trend marker survives it', () => {
+  const root = buildEvalFixture()
+  // The same corpus, post-reset: every prior was produced under the new reference.
+  plantPrior(root, '2026-07-02', { all: 60, signals: { speed: { referenceMinutesPerTask: 8 } } })
+  plantPrior(root, '2026-07-03', { all: 70, signals: { speed: { referenceMinutesPerTask: 8 } } })
+
+  const r = roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  const notes = readReport(root, EVAL_DATE).notes
+  assert.ok(
+    !notes.some((n) => SPEED_RESET_RX.test(n)),
+    `nothing pre-reset remains, so the disclaimer is noise and must retire; got ${JSON.stringify(notes)}`,
+  )
+
+  // The RECORD of the reset is permanent even so: the trend page draws it from the registry,
+  // not from a surviving note, exactly as it does for a judge-model reset.
+  assert.equal(evalTrend(root).code, 0)
+  const html = readFileSync(trendPath(root), 'utf8')
+  assert.ok(html.includes(SPEED_RESET_ID), 'the permanent marker names the reset by its registry id')
+  assert.match(html, /scoring-model reset/i, 'and says what kind of reset it was')
+  assert.match(html, /class="reset"/, 'the marker is DRAWN, not merely listed in prose')
+})
+
+test('eval trend — every registry reset is marked even on a corpus that never saw one', () => {
+  const root = buildEvalFixture()
+  plantPrior(root, '2026-07-02', { all: 60, signals: { speed: { referenceMinutesPerTask: 8 } } })
+  plantPrior(root, '2026-07-03', { all: 70, signals: { speed: { referenceMinutesPerTask: 8 } } })
+
+  assert.equal(evalTrend(root).code, 0)
+  const html = readFileSync(trendPath(root), 'utf8')
+  for (const id of ['escape-attribution', 'escape-anchor-option-c', SPEED_RESET_ID])
+    assert.ok(html.includes(id), `the timeline must mark ${id} whether or not any report still predates it`)
 })
 
 // ── 28. self-containment, spelled out ──────────────────────────────────────────────────

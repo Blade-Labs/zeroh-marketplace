@@ -63,13 +63,70 @@ export const PENDING_JUDGE_SENTINEL = 'pending-judge'
 export const BACKFILL_SENTINEL = 'unjudged-backfill'
 
 /**
- * The speed reference class: minutes of halt-free wall clock per completed task. A use-site
- * default in the DEFAULT_STALE_BASE_CEILING mould — an absolute speed score needs SOME
- * reference, and on the first run there is no timing-stats table to supply one. The raw
- * elapsed and halt-adjusted figures ride in `signals` either way, so a reader who disagrees
- * with the reference can re-derive their own view without re-running anything.
+ * The speed reference class: minutes of halt-free wall clock per completed task, the pace that
+ * scores 100. The floor of the fastest halt-free pace the committed corpus has actually
+ * recorded (FINALCUT at 8.2 min/task; the recorded range is 8.2 to 19.7), so 100 now means
+ * MATCHING THE RECORDED FRONTIER rather than clearing a bar every arc already cleared — at 45
+ * every timed arc clamped at 100 and the dimension told no one anything. Changing it is a
+ * DECLARED baseline reset, registered as `speed-reference-8` in DECLARED_RESETS below; no
+ * historical score is recomputed. The raw elapsed and halt-adjusted figures ride in `signals`
+ * either way, so a reader who disagrees with the reference can re-derive their own view.
  */
-export const SPEED_REFERENCE_MINUTES_PER_TASK = 45
+export const SPEED_REFERENCE_MINUTES_PER_TASK = 8
+
+/**
+ * Every DECLARED baseline reset the scoring model has undergone, oldest first. A reader
+ * comparing an old committed report against a new one is comparing two models, and the report
+ * is the only place that fact can travel — but a disclaimer that outlives the reports it
+ * describes is noise, so each entry carries the SIGNAL predicate that identifies a PRE-reset
+ * report and the note is emitted only while such a report is still in the corpus.
+ *
+ * `preReset` reads report SIGNALS only — model-derived facts recorded at production time. It
+ * must never key on the presence of the note itself: once stamps start retiring, a note-based
+ * predicate is circular (the note proves the note). The trend page draws its markers from THIS
+ * registry rather than from any surviving note, so a reset stays visible on the timeline
+ * forever even after its per-report stamp has retired — the judge-model-reset treatment.
+ */
+export const DECLARED_RESETS = [
+  {
+    id: 'escape-attribution',
+    date: '2026-07-28',
+    note:
+      'scoring-model reset 2026-07-28: escape attribution bounded to phase-named fix commits (user ruling); ' +
+      'prior file-intersection figure retained unscored in signals',
+    // Before the bounded rule there was no window to record, so the key is simply absent.
+    preReset: (r) => !('escapeWindow' in (r?.dimensions?.['code-confidence']?.signals ?? {})),
+  },
+  {
+    id: 'escape-anchor-option-c',
+    date: '2026-07-28',
+    note:
+      'scoring-model reset 2026-07-28: the scored escape window anchors on the dated land record ' +
+      '(option C), not on the arc\'s own newest commit — a report on a merge- or tip-anchored window ' +
+      'reports an UNMEASURED escape rate and is not comparable to one that measured it',
+    preReset: (r) =>
+      ['merge-anchored', 'tip-anchored'].includes(r?.dimensions?.['code-confidence']?.signals?.escapeWindow),
+  },
+  {
+    id: 'speed-reference-8',
+    date: '2026-07-28',
+    note:
+      'scoring-model reset 2026-07-28: SPEED_REFERENCE_MINUTES_PER_TASK recalibrated 45 → 8, the floor of the ' +
+      'fastest recorded halt-free pace — at 45 every timed arc clamped at 100, so speed scores either side of ' +
+      'this reset are not comparable',
+    preReset: (r) => r?.dimensions?.speed?.signals?.referenceMinutesPerTask === 45,
+  },
+]
+
+/**
+ * Which reset notes still apply to a corpus: an entry's note iff SOME report in `reports` is
+ * still pre-reset by its own predicate. The corpus passed in must include the report being
+ * written — a report that is itself pre-reset has to carry the stamp.
+ */
+export function declaredResetNotes(reports) {
+  const corpus = reports ?? []
+  return DECLARED_RESETS.filter((reset) => corpus.some((r) => reset.preReset(r))).map((reset) => reset.note)
+}
 
 /**
  * The reference-class bands a planner reads. Task count is the only size axis the record
@@ -435,13 +492,6 @@ export function scoreArcTrace(trace, { backfill = false } = {}) {
           'post-land fix that names a member phase (such a commit is itself a member and moves the boundary), so this ' +
           'is an UNMEASURED escape rate, not a clean one; the unscored file-intersection figure rides in signals',
     )
-  // The scoring model changed, so every report says so: a reader comparing an old committed
-  // report against a new one is comparing two models, and the report is the only place that
-  // fact can travel.
-  notes.push(
-    'scoring-model reset 2026-07-28: escape attribution bounded to phase-named fix commits (user ruling); ' +
-      'prior file-intersection figure retained unscored in signals',
-  )
 
   const dimensions = {
     'code-confidence': scoreCodeConfidence(trace, readable),

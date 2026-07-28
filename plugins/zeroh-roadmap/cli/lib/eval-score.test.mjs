@@ -43,6 +43,8 @@ import {
   MIN_COMPARABLE_PRIORS,
   TASK_COUNT_BANDS,
   SURFACE_PATH_RE,
+  DECLARED_RESETS,
+  declaredResetNotes,
 } from './eval-score.mjs'
 
 /** The contract's key order, restated ONCE here so a reorder upstream is a visible diff. */
@@ -410,6 +412,61 @@ test('computeRatchet — THREE comparable priors: a planted regression is flagge
     'a low extra prior must drag the rolling baseline down (a last-value baseline would not move)',
   )
   assert.equal(samplesFromNote(rowOf(withOutlier, 'speed')), 4)
+})
+
+// ── 10b. the declared-reset registry ──────────────────────────────────────────────────
+test('scoreArcTrace — carries NO reset note of its own: retirement is a corpus question', () => {
+  const notes = scoreArcTrace(traceFor()).notes
+  assert.ok(
+    !notes.some((n) => /scoring-model reset/.test(n)),
+    `the unconditional push is gone — the scorer sees one trace, not the corpus; got ${JSON.stringify(notes)}`,
+  )
+})
+
+test('declaredResetNotes — a note is emitted only while a PRE-reset report survives', () => {
+  const preSpeed = mkReport({ all: 60 })
+  preSpeed.dimensions.speed.signals = { referenceMinutesPerTask: 45 }
+  const postSpeed = mkReport({ all: 60 })
+  postSpeed.dimensions.speed.signals = { referenceMinutesPerTask: 8 }
+  // Both need a recorded window, or the escape-attribution predicate fires and muddies the read.
+  for (const r of [preSpeed, postSpeed]) r.dimensions['code-confidence'].signals = { escapeWindow: 'land-record-anchored' }
+
+  const speedReset = DECLARED_RESETS.find((r) => r.id === 'speed-reference-8')
+  assert.ok(speedReset, 'the registry names the speed recalibration')
+  assert.ok(declaredResetNotes([preSpeed]).includes(speedReset.note), 'one pre-reset report keeps the stamp alive')
+  assert.ok(!declaredResetNotes([postSpeed]).includes(speedReset.note), 'none left ⇒ the stamp retires')
+  assert.ok(
+    declaredResetNotes([postSpeed, preSpeed]).includes(speedReset.note),
+    'ONE surviving pre-reset report anywhere in the corpus is enough',
+  )
+  assert.deepEqual(declaredResetNotes([]), [], 'an empty corpus stamps nothing rather than everything')
+})
+
+test('declaredResetNotes — every predicate reads SIGNALS, never the note it would emit', () => {
+  for (const reset of DECLARED_RESETS) {
+    assert.ok(reset.id && reset.date && reset.note, `${reset.id}: a registry entry is id + date + note`)
+    // A note-keyed predicate is circular once stamps retire: the note would prove itself and no
+    // reset could ever retire. Proven behaviourally — a report whose NOTES carry the reset text
+    // but whose signals are post-reset must not re-stamp it.
+    const decoy = mkReport({ all: 60 })
+    decoy.notes = [reset.note]
+    decoy.dimensions.speed.signals = { referenceMinutesPerTask: 8 }
+    decoy.dimensions['code-confidence'].signals = { escapeWindow: 'land-record-anchored' }
+    assert.ok(
+      !declaredResetNotes([decoy]).includes(reset.note),
+      `${reset.id}: the note's own presence must not keep it alive`,
+    )
+  }
+})
+
+test('the escape-attribution reset keys on the ABSENT window key, not on a window value', () => {
+  const reset = DECLARED_RESETS.find((r) => r.id === 'escape-attribution')
+  const old = mkReport({ all: 60 })
+  old.dimensions['code-confidence'].signals = { gateRoundsMean: 2 }
+  assert.ok(reset.preReset(old), 'a report scored before the window was recorded at all is pre-reset')
+  const current = mkReport({ all: 60 })
+  current.dimensions['code-confidence'].signals = { gateRoundsMean: 2, escapeWindow: 'tip-anchored' }
+  assert.ok(!reset.preReset(current), 'any recorded window means the bounded rule already ran')
 })
 
 // ── 11b. comparability: EARLIER-dated priors only ─────────────────────────────────────

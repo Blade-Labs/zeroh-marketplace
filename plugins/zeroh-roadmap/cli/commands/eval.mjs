@@ -26,7 +26,16 @@ import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import { collectArcTrace, CollectError } from '../lib/eval-collect.mjs'
-import { scoreArcTrace, assembleAttribution, computeRatchet, computeTimingStats, DIMENSION_KEYS, JUDGE_DIMENSIONS } from '../lib/eval-score.mjs'
+import {
+  scoreArcTrace,
+  assembleAttribution,
+  computeRatchet,
+  computeTimingStats,
+  declaredResetNotes,
+  DECLARED_RESETS,
+  DIMENSION_KEYS,
+  JUDGE_DIMENSIONS,
+} from '../lib/eval-score.mjs'
 
 /** The two recorders, keyed by subcommand: which consumer shape validates, which suffix lands. */
 const RECORDERS = {
@@ -261,6 +270,21 @@ function judgeResets(reports) {
   return out
 }
 
+/**
+ * Every DECLARED scoring-model reset, positioned on the report axis by DATE. Drawn from the
+ * registry rather than from any surviving note, so a reset stays on the timeline permanently
+ * after its per-report stamp has retired — the same treatment a judge-model reset gets.
+ *
+ * The index is the first report dated on or after the reset; a reset newer than every report
+ * pins to the right edge, so it is visible rather than silently dropped.
+ */
+function scoringModelResets(reports) {
+  return DECLARED_RESETS.map((reset) => {
+    const at = reports.findIndex((r) => String(r.date) >= reset.date)
+    return { index: at === -1 ? Math.max(0, reports.length - 1) : at, id: reset.id, date: reset.date }
+  })
+}
+
 /** One dimension's chart. Runs of CONSECUTIVE scored reports become one polyline each; every
  *  scored report also gets its own dot, so an isolated point between two gaps is still visible.
  *  A run of one draws NO polyline — there is nothing to connect it to. */
@@ -312,7 +336,9 @@ function renderChart(reports, key, resets) {
 /** The whole page. Every section is emitted for all seven dimensions, always — a page that
  *  rendered only the dimensions it found data for would silently shrink the picture. */
 function renderTrendPage(reports) {
-  const resets = judgeResets(reports)
+  const judged = judgeResets(reports)
+  const scoringResets = reports.length > 0 ? scoringModelResets(reports) : []
+  const resets = [...judged, ...scoringResets]
   const head = []
   head.push('<h1>Arc eval trend</h1>')
   if (reports.length === 0) {
@@ -327,11 +353,18 @@ function renderTrendPage(reports) {
     )
     if (resets.length > 0) {
       head.push('<div class="resets"><h2>Baseline resets</h2><ul>')
-      for (const r of resets)
+      for (const r of judged)
         head.push(
           `<li><strong>${esc(r.date)}</strong>: judge changed from <code>${esc(r.from)}</code> to ` +
             `<code>${esc(r.to)}</code> — baseline reset. Judge-owned scores either side of this ` +
             'marker are not comparable and were excluded from each other\'s baseline.</li>',
+        )
+      // Permanent, registry-driven: these outlive the per-report stamps, which retire once no
+      // pre-reset report is left. A reader a year from now still sees where the model changed.
+      for (const r of scoringResets)
+        head.push(
+          `<li><strong>${esc(r.date)}</strong>: scoring-model reset <code>${esc(r.id)}</code> — scores either ` +
+            'side of this marker were produced by different scoring models.</li>',
         )
       head.push('</ul></div>')
     }
@@ -759,6 +792,10 @@ async function runArcEval(arcId, opts) {
   }
   const priors = readPriorReports(dir, { excludePath: outPath, onWarn: say })
   draft.ratchet = computeRatchet(draft, priors)
+  // The corpus INCLUDING the report being written decides which reset stamps still apply: a
+  // report that is itself pre-reset (an unregenerated window, the old speed reference) must
+  // carry the disclaimer that describes it.
+  draft.notes.push(...declaredResetNotes([...priors, draft]))
 
   const validated = bridgeValidate(toplevel, schemaPath, 'ArcEvalReportShape', draft)
   if (!validated.ok) {
