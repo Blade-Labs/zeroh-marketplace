@@ -695,7 +695,10 @@ test('computeTimingStats — generatedAt is injectable and echoed verbatim; the 
 test('scoreArcTrace — escapeScan unavailable withholds the escape penalty instead of rewarding it', () => {
   const clean = traceFor()
   clean.git.escapeFixes = []
+  // The fixture arc is tip-anchored, so its own escape list is empty by construction — the
+  // "escapes cost points" leg needs one planted rather than inherited.
   const withEscapes = traceFor()
+  withEscapes.git.escapeFixes = [{ sha: 'deadbee0000', subject: 'fix(x): phase 9001 gate R1 — an escape', files: 1 }]
 
   const failed = traceFor()
   failed.git.escapeScan = 'unavailable'

@@ -102,6 +102,16 @@ export const FIXTURE_COMMITS = [
     date: '2026-07-20T14:00:00',
     files: { 'src/unrelated.ts': 'export const unrelated = true\n' },
   },
+  // A LATER, UNRELATED topic merge into the same base branch. Every arc commit is an ancestor
+  // of it, so a boundary that only asked "is there a merge after this commit" would adopt its
+  // date and swallow every escape behind it.
+  {
+    subject: 'feat(z): someone else\'s topic',
+    date: '2026-07-20T15:00:00',
+    branch: 'topic/other',
+    files: { 'src/other.ts': 'export const other = true\n' },
+  },
+  { merge: 'topic/other', subject: "Merge branch 'topic/other'", date: '2026-07-20T16:00:00' },
   // THE PHASE-NAMED ESCAPE FIX: post-land, fix grammar, and its SUBJECT names a member
   // phase — the only form that scores under the bounded escape window.
   {

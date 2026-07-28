@@ -194,32 +194,42 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
       escapeScan: 'complete',
       escapeFixes: [],
       escapeFixesFileIntersection: 0,
+      escapeWindow: 'tip-anchored',
       arcFiles: [],
     }
 
-  // Newest member first. The land is the merge that carried the newest member commit which was
-  // MERGED at all: a member committed straight onto the base branch after that merge is exactly
-  // the escape we are looking for, so it must not be allowed to define the boundary it belongs
-  // behind. The walk stops at the first member that yields a merge, so it costs one git call
-  // plus one per post-land direct commit — not one per member.
+  // The boundary is the merge that carried the arc's NEWEST member commit onto this branch.
+  // Only that commit is asked: an older member's merge would sit in the arc's own middle and
+  // score the phases that came after it as escapes (this repo commits many task commits with
+  // `fix(scope): phase N — ...` grammar, so "later member commit" and "escape fix" look
+  // identical from the subject alone; only the merge boundary separates them).
   const byNewest = [...members.values()].sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+  const tip = byNewest[0]
   let landedAt
-  for (const c of byNewest) {
-    // `--ancestry-path` keeps only merges on a path from THIS commit to HEAD, so an unrelated
-    // merge elsewhere in the history cannot be mistaken for this arc's land; `--reverse` puts
-    // the FIRST such merge (the land itself) on top rather than the newest one.
-    const merge = exec('git', [
-      '-C', repoRoot, 'log', '--merges', '--ancestry-path', '--reverse', '--format=%H%x09%aI', `${c.sha}..HEAD`,
-    ])
-    const row = merge.status === 0 ? merge.stdout.split('\n').find((l) => l.includes('\t')) : undefined
-    if (row) {
-      landedAt = row.split('\t')[1]
+  // `--ancestry-path` narrows to merges the tip can reach, `--reverse` puts the oldest first.
+  // Reachability alone is NOT enough: once an arc is on the base branch EVERY later topic merge
+  // has it as an ancestor. The merge that LANDED it is the one whose first parent — the base
+  // branch as it stood before the merge — did not contain it yet. Without that test a
+  // direct-committed arc would silently borrow the next unrelated merge's date, pushing the
+  // window forward, which is an error in the flattering direction.
+  const merges = exec('git', [
+    '-C', repoRoot, 'log', '--merges', '--ancestry-path', '--reverse', '--format=%H%x09%aI', `${tip.sha}..HEAD`,
+  ])
+  if (merges.status === 0) {
+    for (const line of merges.stdout.split('\n')) {
+      const [sha, date] = line.split('\t')
+      if (!sha || !date) continue
+      if (exec('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', tip.sha, `${sha}^1`]).status === 0) continue
+      landedAt = date
       break
     }
   }
-  // Nothing merged anywhere ⇒ a fast-forward land or an arc still on this branch. The tip's own
-  // date leaves the window empty: absence of evidence of a post-land window, not zero escapes.
-  landedAt ??= byNewest[0].date
+  // No merge landed the tip: the arc reached the branch by direct commits (this consumer's
+  // autonomous develop landings) or has not landed. The tip's own date then bounds the window,
+  // which leaves it EMPTY — absence of a derivable boundary, not evidence of zero escapes. The
+  // caller reports that difference rather than letting an empty list read as a spotless arc.
+  const escapeWindow = landedAt === undefined ? 'tip-anchored' : 'merge-anchored'
+  landedAt ??= tip.date
 
   // The scored window's attribution: a member phase named in the SUBJECT. Same digit-boundary
   // discipline as `memberCommits` — `phase 900` must not match `phase 9001`.
@@ -262,6 +272,7 @@ export function findArcGitFacts(repoRoot, memberNums, { exec = defaultExec } = {
   const facts = {
     landedAt: new Date(landedAt).toISOString(),
     escapeScan,
+    escapeWindow,
     escapeFixes,
     arcFiles: [...arcFileSet].sort(),
   }

@@ -165,51 +165,67 @@ test('collectArcTrace — an unimportable phase file is RECORDED (parseError) + 
 })
 
 // ── 6. git facts: the land boundary + the escape rate ─────────────────────────────────
-test('findArcGitFacts — the SCORED escape window is bounded to PHASE-NAMED fixes (user ruling 2026-07-28)', () => {
+test('findArcGitFacts — the SCORED escape window is bounded to PHASE-NAMED fixes after the land merge', () => {
   const root = fixture()
   const facts = findArcGitFacts(root, PHASE_NUMS, { exec: defaultExec })
 
-  // The land boundary is the `docs(roadmap): mark phase 9002 complete` commit (2026-07-18T12:00),
-  // NOT the later `chore: tidy the fixture notes` whose BODY mentions phase 9001 — and NOT the
-  // later phase-named FIX, which is an escape candidate and so cannot define its own boundary.
-  assert.equal(new Date(facts.landedAt).toISOString(), '2026-07-18T12:00:00.000Z')
+  // The arc's newest member commit is `fix(x): phase 9001 gate R1 …`, committed straight onto
+  // the base branch: no merge carried it in, so the window is TIP-anchored and the boundary is
+  // that commit's own date. Critically NOT the unrelated `topic/other` merge at 16:00 — every
+  // arc commit is an ancestor of that one too, and adopting it would silently push the boundary
+  // past real escapes.
+  assert.equal(facts.escapeWindow, 'tip-anchored')
+  assert.equal(new Date(facts.landedAt).toISOString(), '2026-07-21T15:00:00.000Z')
 
-  assert.equal(facts.escapeFixes.length, 1, `exactly one scored escape; got ${JSON.stringify(facts.escapeFixes)}`)
-  const [esc] = facts.escapeFixes
-  assert.equal(esc.subject, 'fix(x): phase 9001 gate R1 — re-guard the collector')
-  assert.equal(esc.files, 1, 'files is the SIZE of the intersection with the arc files, not the commit diff size')
-  assert.ok(esc.sha.length >= 7)
+  // A tip-anchored window is empty by construction. That is an ABSENT measurement, and the
+  // scorer is what says so — here we only pin that nothing was invented to fill it.
+  assert.deepEqual(facts.escapeFixes, [], 'no window ⇒ no escapes claimed')
 
-  // THE AGE-DEPENDENCE, GONE: `fix(x): repair the collector guard` is post-land and touches an
-  // arc file, which used to score it. It names no member phase, so it no longer counts — the
-  // count now measures the arc's own rework, not how long ago it landed.
-  assert.ok(
-    !facts.escapeFixes.some((f) => /repair the collector guard/.test(f.subject)),
-    'an unrelated post-land fix touching an arc file is NOT a scored escape',
-  )
-  assert.ok(
-    !facts.escapeFixes.some((f) => /unrelated/.test(f.subject)),
-    'a post-land fix touching no arc file is not an escape either',
-  )
-
-  // IN-PHASE rework is not an escape: `fix(x): phase 9002 gate R1` carries both the fix grammar
-  // and a member phase, but it sits BEFORE the land merge. Anchoring the boundary on the tip
-  // commit instead of the merge would score this — the mirror image of the bug being fixed.
-  assert.ok(
-    !facts.escapeFixes.some((f) => /tighten the scorer/.test(f.subject)),
-    'a phase-named gate fix BEFORE the land merge is in-phase work, never an escape',
-  )
-
-  // The old rule's number survives UNSCORED, so nobody has to re-derive what changed.
-  assert.equal(
-    facts.escapeFixesFileIntersection,
-    1,
-    'the old rule counted the unrelated collector fix and nothing else — that number stays inspectable',
-  )
+  // The old rule's number is still REPORTED (it is what the previous scoring model counted), and
+  // it is bounded by the same window — here that window is empty, so it is a real zero rather
+  // than a missing key.
+  assert.equal(facts.escapeFixesFileIntersection, 0, 'the unscored figure is present, not dropped')
 
   assert.ok(facts.arcFiles.includes('src/collector.ts'))
   assert.ok(facts.arcFiles.includes('src/scorer.ts'))
   assert.ok(!facts.arcFiles.includes('src/unrelated.ts'), 'only the member commits contribute arc files')
+})
+
+/**
+ * The MERGE-anchored half of the rule, driven by a scripted git rather than a repo: a real
+ * fixture cannot produce it, because a post-land phase-named fix is itself a member commit and
+ * therefore becomes the tip. The stub answers the four calls findArcGitFacts makes — member
+ * lookup, land-merge walk, the first-parent containment test, and the post-boundary log — so
+ * the scored path is exercised end to end without inventing a history on disk.
+ */
+test('findArcGitFacts — with a real land merge, a phase-named post-land fix IS a scored escape', () => {
+  const MERGE = 'm000000000000000000000000000000000000000'
+  const TIP = 't000000000000000000000000000000000000000'
+  const ESC = 'e000000000000000000000000000000000000000'
+  const stub = (_file, args) => {
+    const has = (s) => args.some((a) => String(a) === s || String(a).startsWith(s))
+    if (has('--grep=phase 9001'))
+      return { status: 0, stdout: `${TIP}\t2026-07-18T11:00:00+00:00\tfeat(x): phase 9001 — 9001.1 land it`, stderr: '' }
+    if (has('--merges'))
+      return { status: 0, stdout: `${MERGE}\t2026-07-18T12:00:00+00:00`, stderr: '' }
+    // The merge's first parent does NOT contain the tip ⇒ this merge is what landed it.
+    if (has('merge-base')) return { status: 1, stdout: '', stderr: '' }
+    if (has('--since='))
+      return {
+        status: 0,
+        stdout: `${ESC}\t2026-07-19T09:00:00+00:00\tfix(x): phase 9001 gate R1 — the escape`,
+        stderr: '',
+      }
+    if (has('show')) return { status: 0, stdout: 'src/collector.ts', stderr: '' }
+    return { status: 0, stdout: '', stderr: '' }
+  }
+
+  const facts = findArcGitFacts('/nowhere', [9001], { exec: stub })
+  assert.equal(facts.escapeWindow, 'merge-anchored', 'the merge, not the tip, bounds the window')
+  assert.equal(new Date(facts.landedAt).toISOString(), '2026-07-18T12:00:00.000Z')
+  assert.equal(facts.escapeFixes.length, 1, `the phase-named post-land fix scores; got ${JSON.stringify(facts.escapeFixes)}`)
+  assert.equal(facts.escapeFixes[0].subject, 'fix(x): phase 9001 gate R1 — the escape')
+  assert.equal(facts.escapeFixes[0].files, 1, 'files is the intersection with the arc files')
 })
 
 test('findArcGitFacts — a member number with no commits yields no landedAt and no escapes (never a guessed boundary)', () => {
@@ -250,10 +266,10 @@ test('findArcGitFacts — a FAILED escape scan reports escapeScan unavailable, n
 test('collectArcTrace — the git facts ride the trace under trace.git', () => {
   const root = fixture()
   const { trace } = collectArcTrace(root, ARC_ID, { exec: defaultExec })
-  assert.equal(new Date(trace.git.landedAt).toISOString(), '2026-07-18T12:00:00.000Z')
-  assert.equal(trace.git.escapeFixes.length, 1)
-  assert.equal(trace.git.escapeFixes[0].subject, 'fix(x): phase 9001 gate R1 — re-guard the collector')
-  assert.equal(trace.git.escapeFixesFileIntersection, 1, 'the unscored old-rule count rides the trace too')
+  assert.equal(new Date(trace.git.landedAt).toISOString(), '2026-07-21T15:00:00.000Z')
+  assert.equal(trace.git.escapeWindow, 'tip-anchored', 'how the window was bounded rides the trace')
+  assert.deepEqual(trace.git.escapeFixes, [])
+  assert.equal(trace.git.escapeFixesFileIntersection, 0, 'the unscored old-rule count rides the trace too')
 })
 
 // ── 7. gate run summaries ─────────────────────────────────────────────────────────────

@@ -416,6 +416,14 @@ export function scoreArcTrace(trace, { backfill = false } = {}) {
     notes.push(
       'the post-land escape scan did not run — its penalty is withheld, so code-confidence is an UPPER BOUND, not a measurement',
     )
+  // An empty escape list under a tip-anchored window is not a clean record — there was no
+  // window to look in. Said out loud, because the number it produces is indistinguishable from
+  // a genuinely spotless arc and it enters every future baseline.
+  if (trace.git?.escapeWindow === 'tip-anchored')
+    notes.push(
+      'no land merge bounds this arc (it reached the branch by direct commits), so the post-land escape window is ' +
+        'EMPTY BY CONSTRUCTION — zero escapes here is an absent measurement, not a clean record',
+    )
   // The scoring model changed, so every report says so: a reader comparing an old committed
   // report against a new one is comparing two models, and the report is the only place that
   // fact can travel.

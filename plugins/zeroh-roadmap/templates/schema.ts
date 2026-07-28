@@ -1196,6 +1196,12 @@ export const ArcTraceShape = z.object({
      *  quality, so it is recorded but NOT scored — kept because a scoring-model change whose
      *  old number vanishes cannot be audited. Absent when the scan did not run. */
     escapeFixesFileIntersection: z.number().int().nonnegative().optional(),
+    /** What bounds the post-land window. `merge-anchored`: a merge carried the arc's newest
+     *  member commit in, so commits after it are genuinely post-land. `tip-anchored`: no such
+     *  merge exists (the arc reached the branch by direct commits), so the window is EMPTY by
+     *  construction — an empty `escapeFixes` there is an absent measurement, not a clean
+     *  record, and the scorer says so in the report notes rather than banking the difference. */
+    escapeWindow: z.enum(['merge-anchored', 'tip-anchored']).optional(),
   }),
 })
 
