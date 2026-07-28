@@ -94,23 +94,52 @@ function resolvePhaseFile(phaseNum: number): string | null {
 
 // ── Git metrics ─────────────────────────────────────────────────────────────
 
-/** Return git commit metrics filtered to this phase number.
- *  Uses commit-message pattern `phase ${N}` with word boundary so phase 1
- *  doesn't match phase 10/100/etc. Matches both `phase ${N} —` and
- *  `phase ${N}.X` task-suffix forms. */
-function getGitMetrics(phaseNum: number) {
-  // Pattern: "phase NN " or "phase NN —" or "phase NN." or "phase NN:"
-  // \b word boundary excludes phase 10 when searching for phase 1.
-  const pattern = `\\bphase ${phaseNum}\\b`
+/**
+ * The ONE commit lister every phase-scoped derivation below reads. Two properties, both
+ * load-bearing, both learned from a measured defect rather than assumed:
+ *
+ *  1. It matches the SUBJECT only. `git log --grep` searches the whole commit message, and a
+ *     release merge's PR body enumerates every phase in the release — so phase 1889 matched two
+ *     `release: v0.4x.0 …` merges dated a day after it finished and derived a 1137-minute span
+ *     against a real 15.5-minute one, with all seven CONSOLEUX phases inheriting one identical
+ *     arc-shaped duration. Anchoring on the subject is what makes the phase grammar a contract
+ *     rather than a hint.
+ *  2. It drops merges. A merge commit's stat is the whole merged range, so counting one inflates
+ *     linesAdded/filesChanged by an entire branch.
+ *
+ * The subject grammar it reads is the consumer's BINDING commit grammar (do-phase "Commit
+ * grammar"), which is also what the CLI parses elsewhere — one grammar, not two.
+ */
+function phaseCommits(phaseNum: number): { sha: string; authoredAt: string; subject: string }[] {
+  const re = new RegExp(`\\bphase ${phaseNum}\\b`)
   try {
-    const log = execSync(
-      `git log --grep="${pattern}" --extended-regexp --stat --format="" 2>/dev/null`,
-      { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 },
-    )
-    const commitCount = execSync(
-      `git log --grep="${pattern}" --extended-regexp --oneline 2>/dev/null | wc -l`,
-      { encoding: 'utf-8' },
-    ).trim()
+    const out = execSync(`git log --no-merges --format="%H%x1f%aI%x1f%s" 2>/dev/null`, {
+      encoding: 'utf-8',
+      maxBuffer: 200 * 1024 * 1024,
+    })
+    const rows: { sha: string; authoredAt: string; subject: string }[] = []
+    for (const line of out.split('\n')) {
+      if (!line.trim()) continue
+      const [sha, authoredAt, ...rest] = line.split('\x1f')
+      const subject = rest.join('\x1f')
+      if (subject && re.test(subject)) rows.push({ sha, authoredAt, subject })
+    }
+    return rows
+  } catch {
+    return []
+  }
+}
+
+/** Return git commit metrics filtered to this phase number, via the subject-anchored lister. */
+function getGitMetrics(phaseNum: number) {
+  const shas = phaseCommits(phaseNum).map((c) => c.sha)
+  try {
+    if (shas.length === 0) return { commits: 0, linesAdded: 0, linesRemoved: 0, filesChanged: 0 }
+    const log = execSync(`git show --stat --format="" ${shas.join(' ')} 2>/dev/null`, {
+      encoding: 'utf-8',
+      maxBuffer: 50 * 1024 * 1024,
+    })
+    const commitCount = String(shas.length)
 
     let linesAdded = 0
     let linesRemoved = 0
@@ -143,38 +172,42 @@ function getGitMetrics(phaseNum: number) {
  * The PhaseMetrics time axis, derived from records that already exist — the arc's
  * single-time-source seam, so there is no second stopwatch anywhere.
  *
- * `startedAt`/`completedAt` are the author dates of the FIRST and LAST commit matching the
- * same phase grammar the metrics above use, normalized to UTC so they satisfy the schema's
- * `z.string().datetime()`. No commits ⇒ both ABSENT: an unrecorded phase gets no timestamps
- * rather than an invented one.
+ * This measures the EXECUTION window, not the span of everything ever said about the phase.
+ * `startedAt` is the `roadmap phase start` marker (`docs(roadmap): phase N — move to
+ * in-progress`); `completedAt` is the last subject-matching commit at or after it, so the
+ * post-completion `fix(scope): phase N gate RX` rounds stay inside the window. Both are
+ * normalized to UTC for the schema's `z.string().datetime()`.
+ *
+ * When the anchor is ABSENT both bounds are absent, and the phase lands in the timing table's
+ * `interruptedExcluded` rather than the sample set. The alternative — falling back to the first
+ * subject-matching commit — is not a noisier measurement of the same thing, it measures a
+ * different thing: plan-time commits (`plan(roadmap): phase N …`, review fixes, queueing) can
+ * precede execution by hours, and phase 1889 spans 62 minutes that way against a real 15.5.
+ * `computeTimingStats` would fold that into the median planners actually consume, and labelling
+ * it "approximate" in a note does not stop it. Absent, not approximated.
+ *
+ * The subject grammar read here is the consumer's BINDING commit grammar, the same contract the
+ * CLI parses for base-SHA derivation and unverified-done detection.
  */
+const IN_PROGRESS_MARKER = /move to in-progress/
+
 function getPhaseTimestamps(phaseNum: number): { startedAt?: string; completedAt?: string } {
-  const pattern = `\\bphase ${phaseNum}\\b`
-  try {
-    const out = execSync(`git log --grep="${pattern}" --extended-regexp --format="%aI" 2>/dev/null`, {
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024,
-    })
-    // MIN/MAX by instant, not by git-log traversal order: a rebase or cherry-pick can leave
-    // author dates out of order, and a startedAt later than its completedAt would read as a
-    // negative elapsed — a fabricated number, which is exactly what this arc forbids.
-    const instants = out
-      .split('\n')
-      .map((l) => new Date(l.trim()).getTime())
-      .filter((t) => !Number.isNaN(t))
-    if (instants.length === 0) return {}
-    const toUtc = (t: number) => new Date(t).toISOString()
-    const first = toUtc(Math.min(...instants))
-    const last = toUtc(Math.max(...instants))
-    // Built conditionally rather than spread with undefined: an assigned-undefined key still
-    // exists, and an underivable bound has to be genuinely ABSENT.
-    const result: { startedAt?: string; completedAt?: string } = {}
-    if (first) result.startedAt = first
-    if (last) result.completedAt = last
-    return result
-  } catch {
-    return {}
-  }
+  const commits = phaseCommits(phaseNum)
+  if (commits.length === 0) return {}
+
+  const instantOf = (c: { authoredAt: string }) => new Date(c.authoredAt).getTime()
+  const anchors = commits.filter((c) => IN_PROGRESS_MARKER.test(c.subject)).map(instantOf).filter((t) => !Number.isNaN(t))
+  if (anchors.length === 0) return {}
+  // EARLIEST anchor: a phase respawned after a checkpoint can stamp the marker more than once,
+  // and the execution window opens the first time it did.
+  const started = Math.min(...anchors)
+
+  // MAX by instant, not by git-log traversal order: a rebase or cherry-pick can leave author
+  // dates out of order, and a completedAt before its startedAt would read as a negative
+  // elapsed — a fabricated number, which is exactly what this arc forbids.
+  const after = commits.map(instantOf).filter((t) => !Number.isNaN(t) && t >= started)
+  const toUtc = (t: number) => new Date(t).toISOString()
+  return { startedAt: toUtc(started), completedAt: toUtc(Math.max(...after)) }
 }
 
 /**
@@ -220,36 +253,20 @@ function deriveHaltCount(phaseNum: number, phaseFileContent: string): number | u
 /** Date (YYYY-MM-DD) of the LAST commit matching this phase number.
  *  Falls back to today if no commits matched. */
 function getLastCommitDate(phaseNum: number): string {
-  const pattern = `\\bphase ${phaseNum}\\b`
-  try {
-    const date = execSync(
-      `git log --grep="${pattern}" --extended-regexp --format="%ad" --date=short 2>/dev/null | head -1`,
-      { encoding: 'utf-8' },
-    ).trim()
-    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date
-  } catch {
-    // fall through to today
-  }
+  const instants = phaseCommits(phaseNum)
+    .map((c) => new Date(c.authoredAt).getTime())
+    .filter((t) => !Number.isNaN(t))
+  if (instants.length > 0) return new Date(Math.max(...instants)).toISOString().split('T')[0]
   return new Date().toISOString().split('T')[0]
 }
 
 /** Extract gate-round mentions from commits. Looks for "gate R[0-9]" or
  *  "R[0-9]" patterns in commit subjects. Returns a list of summary strings. */
 function getGateRoundsFromCommits(phaseNum: number): string[] {
-  const pattern = `\\bphase ${phaseNum}\\b.*\\bR[0-9]\\b`
-  try {
-    const subjects = execSync(
-      `git log --grep="${pattern}" --extended-regexp --format="%s" 2>/dev/null`,
-      { encoding: 'utf-8' },
-    )
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-    if (subjects.length === 0) return []
-    return subjects.map((s) => s.replace(/^[a-z]+(\(.+?\))?:\s*/, '').slice(0, 200))
-  } catch {
-    return []
-  }
+  return phaseCommits(phaseNum)
+    .map((c) => c.subject)
+    .filter((s) => /\bR[0-9]\b/.test(s))
+    .map((s) => s.replace(/^[a-z]+(\(.+?\))?:\s*/, '').slice(0, 200))
 }
 
 // ── Live gate checks (live mode only) ───────────────────────────────────────
@@ -404,6 +421,31 @@ function fmtField(value: unknown, indent = 2): string {
     .replace(/"([a-zA-Z_][a-zA-Z0-9_]*)":/g, '$1:')
 }
 
+/**
+ * The phase's own `metrics: { … }` block, located by BRACE MATCHING rather than a regex.
+ *
+ * A lazy `\{[\s\S]*?\n  \}` looks equivalent and is not: phase files carry the block in two
+ * shapes (one-line and multi-line), and against a one-line block the lazy form runs straight
+ * past it to the next dedented `}` in the file — which is the end of `executionResult`. That
+ * mis-match silently appended the time axis into the WRONG object on the first run of this
+ * backfill. Counting braces is the only form that cannot care which shape it is reading.
+ */
+function findMetricsBlock(content: string): { start: number; end: number; text: string } | null {
+  const m = content.match(/\n  metrics:\s*\{/)
+  if (!m || m.index === undefined) return null
+  const start = m.index + 1 // past the newline, onto `metrics:`
+  let depth = 0
+  for (let i = content.indexOf('{', start); i < content.length; i++) {
+    const ch = content[i]
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) return { start, end: i + 1, text: content.slice(start, i + 1) }
+    }
+  }
+  return null
+}
+
 function applyData(content: string, data: CollectedData): { newContent: string; touched: boolean } {
   let touched = false
 
@@ -462,6 +504,43 @@ function applyData(content: string, data: CollectedData): { newContent: string; 
       `metrics: ${fmtField(data.metrics)}`,
     )
     touched = true
+  }
+
+  // Path 4: MERGE the time axis into an existing, non-placeholder metrics block. Paths 1-3 all
+  // write a metrics block WHOLE, so a phase that already recorded real metrics before the time
+  // axis existed could never receive it — the run derived startedAt/completedAt, printed them,
+  // and discarded them. That is every phase that shipped before this field was added.
+  //
+  // ADDITIVE ONLY, and that containment is what makes it safe across ~1,900 historical files:
+  // it inserts only keys that are ABSENT, never rewrites a recorded value, so it is idempotent
+  // and a re-run cannot churn history. `haltCount` follows the same rule and stays out of
+  // historical mode entirely (deriveHaltCount returns undefined there), because commits survive
+  // and beacons do not — an absent halt count must not become a zero that reads as "ran clean".
+  const block = findMetricsBlock(content)
+  if (block) {
+    // Presence is tested INSIDE the block, never over the whole file: `startedAt` also appears
+    // in an executionResult and in free-text transparency prose, and a match there would skip
+    // the insert and silently leave the metrics block without its time axis.
+    const timeAxis: [string, string | number][] = []
+    for (const key of ['startedAt', 'completedAt', 'haltCount'] as const) {
+      const value = data.metrics[key]
+      if (value === undefined) continue
+      if (new RegExp(`\\b${key}:`).test(block.text)) continue
+      timeAxis.push([key, value])
+    }
+    if (timeAxis.length > 0) {
+      const lit = (v: string | number) => (typeof v === 'number' ? String(v) : `'${v}'`)
+      // Re-emit in the block's OWN shape. A one-line block stays one line and a multi-line block
+      // stays indented — the alternative reformats ~1,900 historical records into a diff nobody
+      // asked for, and reformatting is how a mechanical backfill becomes unreviewable.
+      const inner = block.text.slice(block.text.indexOf('{') + 1, block.text.lastIndexOf('}'))
+      const oneLine = !inner.includes('\n')
+      const merged = oneLine
+        ? `  metrics: { ${inner.trim().replace(/,$/, '')}, ${timeAxis.map(([k, v]) => `${k}: ${lit(v)}`).join(', ')} }`
+        : `  metrics: {${inner.replace(/\s*$/, '\n')}${timeAxis.map(([k, v]) => `    ${k}: ${lit(v)},`).join('\n')}\n  }`
+      content = content.slice(0, block.start) + merged + content.slice(block.end)
+      touched = true
+    }
   }
 
   return { newContent: content, touched }

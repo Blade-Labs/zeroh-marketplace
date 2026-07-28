@@ -4,8 +4,11 @@
  * roadmap/phases tree plus a `## Gate commands` CLAUDE.md binding every gate slot to
  * `true`, so LIVE mode shells out to no-ops instead of a real lint/type-check/build)
  * driven through the REAL script under tsx with cwd = the fixture. Cases: the derived
- * time axis (startedAt = FIRST matching commit's author date, completedAt = the LAST,
- * both normalized to UTC from controlled GIT_AUTHOR_DATE values), the honest-absent
+ * EXECUTION window (startedAt = the `move to in-progress` anchor, completedAt = the last
+ * subject-matching commit at or after it, both normalized to UTC from controlled
+ * GIT_AUTHOR_DATE values) and the two ways it must refuse to guess — no anchor ⇒ both
+ * bounds absent, and a release merge naming the phase in its BODY never enters it —
+ * the additive/idempotent time-axis merge into an existing block, the honest-absent
  * haltCount in live mode with neither a beacon nor an executionResult (the key must be
  * ABSENT, never `haltCount: 0`), and schema conformance of the emitted metrics object
  * against PhaseMetricsShape — including the non-UTC-offset commit dates that would fail
@@ -49,14 +52,23 @@ const phaseSource = (num) =>
     '',
   ].join('\n')
 
-/** A git repo holding one phase file plus commits stamped with controlled author dates. */
-function makeRepo(phaseNum, commitDates) {
+/**
+ * A git repo holding one phase file plus commits stamped with controlled author dates.
+ *
+ * `opts.planCommit` prepends a PLAN-time commit (the `plan(roadmap): … queue phase N` grammar)
+ * and `opts.anchor` inserts the `roadmap phase start` marker after it. Together they reproduce
+ * the real shape the execution window has to cut through: plan-time chatter carrying the phase
+ * subject can precede execution by hours, and only the anchor says where the work began.
+ * `opts.mergeNoise` adds a release MERGE whose body enumerates the phase — the whole-message
+ * grep that this script used to run absorbed exactly that into every span.
+ */
+function makeRepo(phaseNum, commitDates, opts = {}) {
   const root = mkdtempSync(join(tmpdir(), 'zr-metrics-'))
   bases.push(root)
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
   writeFileSync(join(root, 'CLAUDE.md'), CLAUDE_MD)
   const phaseFile = join(root, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
-  writeFileSync(phaseFile, phaseSource(phaseNum))
+  writeFileSync(phaseFile, (opts.phaseSource ?? phaseSource)(phaseNum))
 
   const git = (args, env = {}) =>
     execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], {
@@ -70,20 +82,55 @@ function makeRepo(phaseNum, commitDates) {
   // Seed commit carries NO phase grammar, so it never enters the phase's own git window.
   git(['commit', '-q', '-m', 'seed fixture roadmap'])
 
+  const commitAt = (date, message) => {
+    git(['add', '-A'])
+    git(['commit', '-q', '-m', message], { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date })
+  }
+
+  if (opts.planCommit) {
+    writeFileSync(join(root, 'plan.txt'), 'planned\n')
+    commitAt(opts.planCommit, `plan(roadmap): phase ${phaseNum} review fix + queue phase ${phaseNum}`)
+  }
+  if (opts.anchor) {
+    writeFileSync(join(root, 'anchor.txt'), 'in progress\n')
+    commitAt(opts.anchor, `docs(roadmap): phase ${phaseNum} — move to in-progress`)
+  }
+
   commitDates.forEach((date, i) => {
     writeFileSync(join(root, `work-${i}.txt`), `line ${i}\n`)
-    git(['add', '-A'])
-    git(['commit', '-q', '-m', `feat(x): phase ${phaseNum} — ${phaseNum}.${i + 1} ${['first', 'second'][i] ?? `task${i}`}`], {
-      GIT_AUTHOR_DATE: date,
-      GIT_COMMITTER_DATE: date,
-    })
+    commitAt(date, `feat(x): phase ${phaseNum} — ${phaseNum}.${i + 1} ${['first', 'second'][i] ?? `task${i}`}`)
   })
+
+  if (opts.mergeNoise) {
+    git(['checkout', '-q', '-b', 'side'])
+    writeFileSync(join(root, 'side.txt'), 'side\n')
+    commitAt(opts.mergeNoise, 'feat(y): unrelated side work')
+    git(['checkout', '-q', '-'])
+    git(
+      ['merge', '--no-ff', '-q', 'side', '-m', `release: v9.9.9 — the release\n\nIncludes phase ${phaseNum} and others.`],
+      { GIT_AUTHOR_DATE: opts.mergeNoise, GIT_COMMITTER_DATE: opts.mergeNoise },
+    )
+  }
 
   return { root, phaseFile }
 }
 
 function runCollector(root, args) {
   return execFileSync(TSX, [SCRIPT, ...args], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+}
+
+/** The metrics block by BRACE MATCHING — the same reason the script does it that way: a lazy
+ *  regex against a ONE-LINE block runs past it into the next object. */
+function findMetricsText(written) {
+  const m = written.match(/\n  metrics:\s*\{/)
+  assert.ok(m, 'phase file should carry a metrics block after collection')
+  const start = m.index + 1
+  let depth = 0
+  for (let i = written.indexOf('{', start); i < written.length; i++) {
+    if (written[i] === '{') depth++
+    else if (written[i] === '}') { depth--; if (depth === 0) return written.slice(start, i + 1) }
+  }
+  throw new Error('metrics block should terminate')
 }
 
 /** The single `metrics: { … }` block as written into the phase file. */
@@ -95,21 +142,110 @@ function metricsBlock(written) {
   return written.slice(start, end + 4)
 }
 
-test('timestamps: startedAt/completedAt are the first/last matching commit author dates, in UTC', () => {
-  const { root, phaseFile } = makeRepo(9001, ['2026-01-02T03:04:05Z', '2026-03-04T05:06:07Z'])
+test('timestamps: the window opens at the in-progress ANCHOR, not at the first matching commit', () => {
+  const { root, phaseFile } = makeRepo(9001, ['2026-01-02T03:04:05Z', '2026-03-04T05:06:07Z'], {
+    planCommit: '2025-11-01T00:00:00Z',
+    anchor: '2026-01-01T00:00:00Z',
+  })
 
   runCollector(root, ['9001', '--historical'])
-  const written = readFileSync(phaseFile, 'utf8')
-  const block = metricsBlock(written)
+  const block = metricsBlock(readFileSync(phaseFile, 'utf8'))
 
-  // git log is newest-first: the FIRST commit must become startedAt, not completedAt.
-  assert.match(block, /startedAt: "2026-01-02T03:04:05\.000Z"/)
+  // The plan commit predates execution by two months and carries the phase subject. Folding it
+  // in would report a two-month phase, and computeTimingStats would put that in the median.
+  assert.match(block, /startedAt: "2026-01-01T00:00:00\.000Z"/)
+  assert.doesNotMatch(block, /2025-11-01/, 'a plan-time commit is not the start of execution')
+  // git log is newest-first: the LAST commit must become completedAt, not startedAt.
   assert.match(block, /completedAt: "2026-03-04T05:06:07\.000Z"/)
-  assert.match(block, /commits: 2/)
+  // commits counts every subject match including the plan + anchor commits; only the WINDOW
+  // is anchored. That split is deliberate: the anchor says when work began, not what counts.
+  assert.match(block, /commits: 4/)
+})
+
+test('timestamps: no in-progress anchor ⇒ BOTH bounds absent (excluded, never approximated)', () => {
+  const { root, phaseFile } = makeRepo(9005, ['2026-01-02T03:04:05Z', '2026-03-04T05:06:07Z'])
+
+  const stdout = runCollector(root, ['9005', '--historical'])
+  const block = metricsBlock(readFileSync(phaseFile, 'utf8'))
+
+  // A phase predating the `roadmap phase start` grammar has no execution window on the record.
+  // It lands in the timing table's interruptedExcluded rather than contributing a guess.
+  assert.doesNotMatch(block, /startedAt/, 'no anchor ⇒ no startedAt')
+  assert.doesNotMatch(block, /completedAt/, 'no anchor ⇒ no completedAt')
+  assert.match(block, /commits: 2/, 'the commit metrics are still derivable — only the WINDOW is not')
+  assert.match(stdout, /ABSENT/)
+})
+
+test('timestamps: a release MERGE naming the phase in its BODY never enters the window', () => {
+  // The measured defect: `git log --grep` reads the whole message, so a release merge whose PR
+  // body enumerates the phase was absorbed into its span (phase 1889 derived 1137 minutes
+  // against a real 15.5, and every phase in an arc inherited one arc-shaped duration).
+  const { root, phaseFile } = makeRepo(9006, ['2026-01-02T03:04:05Z', '2026-01-02T03:20:00Z'], {
+    anchor: '2026-01-02T03:00:00Z',
+    mergeNoise: '2026-06-01T00:00:00Z',
+  })
+
+  runCollector(root, ['9006', '--historical'])
+  const block = metricsBlock(readFileSync(phaseFile, 'utf8'))
+
+  assert.match(block, /completedAt: "2026-01-02T03:20:00\.000Z"/)
+  assert.doesNotMatch(block, /2026-06-01/, 'the release merge is five months later and is not this phase')
+  assert.match(block, /commits: 3/, 'the merge is not one of the phase’s commits either')
+})
+
+test('the time axis lands in METRICS, not in the executionResult that follows a one-line block', () => {
+  // The shape that broke it: phase files carry the metrics block BOTH one-line and multi-line,
+  // and a lazy `\{[\s\S]*?\n  \}` against the one-line form runs past it to the next dedented
+  // `}` — the end of executionResult — appending the time axis into the wrong object entirely.
+  const { root, phaseFile } = makeRepo(9008, ['2026-01-02T03:04:05Z'], {
+    anchor: '2026-01-02T03:00:00Z',
+    phaseSource: (num) =>
+      [
+        'export default {',
+        `  id: ${num},`,
+        "  status: 'done',",
+        '  gate: { lint: "clean" },',
+        "  gateRounds: ['R0'],",
+        '  metrics: { commits: 3, linesAdded: 10, linesRemoved: 1, filesChanged: 2, testsAtStart: 0, testsAtEnd: 4, testsAdded: 4 },',
+        "  completedDate: '2026-01-02',",
+        '  executionResult: {',
+        `    phase: ${num},`,
+        "    status: 'done',",
+        '    gateRounds: 1,',
+        '  },',
+        '}',
+        '',
+      ].join('\n'),
+  })
+
+  runCollector(root, ['9008', '--historical'])
+  const written = readFileSync(phaseFile, 'utf8')
+  const block = findMetricsText(written)
+
+  assert.match(block, /startedAt: '2026-01-02T03:00:00\.000Z'/, 'the time axis belongs to metrics')
+  assert.match(block, /commits: 3/, 'every pre-existing key survives untouched')
+  const execResult = written.slice(written.indexOf('executionResult:'))
+  assert.doesNotMatch(execResult, /startedAt/, 'the executionResult must not have absorbed the time axis')
+  assert.doesNotMatch(execResult, /completedAt/, 'the executionResult must not have absorbed the time axis')
+})
+
+test('the time-axis merge is ADDITIVE and idempotent over an existing metrics block', () => {
+  const { root, phaseFile } = makeRepo(9007, ['2026-01-02T03:04:05Z'], { anchor: '2026-01-02T03:00:00Z' })
+
+  runCollector(root, ['9007', '--historical'])
+  const first = readFileSync(phaseFile, 'utf8')
+  assert.match(metricsBlock(first), /startedAt: "2026-01-02T03:00:00\.000Z"/)
+
+  // A second run must not append a duplicate key or rewrite a recorded value — this is what
+  // makes the path safe to run across ~1,900 historical phase files.
+  const stdout = runCollector(root, ['9007', '--historical'])
+  const second = readFileSync(phaseFile, 'utf8')
+  assert.equal(second, first, 'a re-run over an already-populated block is a no-op')
+  assert.match(stdout, /No changes/)
 })
 
 test('haltCount is ABSENT (not 0) in live mode with no beacon and no executionResult', () => {
-  const { root, phaseFile } = makeRepo(9002, ['2026-01-02T03:04:05Z', '2026-03-04T05:06:07Z'])
+  const { root, phaseFile } = makeRepo(9002, ['2026-01-02T03:04:05Z', '2026-03-04T05:06:07Z'], { anchor: '2026-01-01T00:00:00Z' })
   // No .building/9002-executor.jsonl, and phaseSource() writes no `executionResult:`.
 
   const stdout = runCollector(root, ['9002'])
@@ -124,7 +260,7 @@ test('haltCount is ABSENT (not 0) in live mode with no beacon and no executionRe
   assert.match(written, /lint: "clean"/)
   assert.match(written, /typeCheck: "clean"/)
   assert.match(written, /build: "clean"/)
-  assert.match(written, /startedAt: "2026-01-02T03:04:05\.000Z"/)
+  assert.match(written, /startedAt: "2026-01-01T00:00:00\.000Z"/)
 })
 
 test('haltCount counts beacon resume events once a beacon exists (zero stays absent without one)', () => {
@@ -151,7 +287,7 @@ test('haltCount counts beacon resume events once a beacon exists (zero stays abs
 test('emitted metrics parse clean against PhaseMetricsShape, incl. offset commit dates normalized to Z', () => {
   // Author dates deliberately carry non-UTC offsets: %aI preserves them, and an
   // un-normalized value would fail z.string().datetime().
-  const { root, phaseFile } = makeRepo(9004, ['2026-05-06T07:08:09+05:30', '2026-06-07T08:09:10-07:00'])
+  const { root, phaseFile } = makeRepo(9004, ['2026-05-06T07:08:09+05:30', '2026-06-07T08:09:10-07:00'], { anchor: '2026-05-06T07:08:09+05:30' })
 
   runCollector(root, ['9004', '--historical'])
   const written = readFileSync(phaseFile, 'utf8')

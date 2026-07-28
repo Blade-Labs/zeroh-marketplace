@@ -759,3 +759,143 @@ test('scoreArcTrace — an unrecognised tier/confidence/status sentinels instead
     assert.equal(d.signals.unreadableVerdicts, 1)
   }
 })
+
+// ══ BACKFILL — the run whose judge pass will never happen ══════════════════════════════
+// `pending-judge` is a PROMISE ("a pass is still coming"). Over historical arcs that promise
+// is false: their diffs predate the rubric and no judge will ever read them. Those reports
+// therefore carry the TERMINAL `unjudged-backfill` sentinel, and the ratchet must treat it as
+// INCOMPARABLE — a corpus made entirely of backfilled arcs must never add up to a baseline,
+// or the first judged arc would be measured against a number nobody scored.
+
+const BACKFILL_SENTINEL = 'unjudged-backfill'
+
+// ── 27. the scorer's backfill mode: terminal sentinel, feeders intact ──────────────────
+test('scoreArcTrace(trace, { backfill: true }) — judge dims carry unjudged-backfill, never pending-judge', () => {
+  const { dimensions, notes } = scoreArcTrace(traceFor(), { backfill: true })
+  assertDimensionsWellFormed(dimensions, 'backfill')
+
+  for (const key of JUDGE_KEYS) {
+    assertSentinel(dimensions, key, BACKFILL_SENTINEL)
+    assert.equal(dimensions[key].owner, 'judge', `${key} stays judge-owned — the mode changes the sentinel, not the seam`)
+  }
+  // The promise must not survive anywhere in the output: a reader (or the trend page) that
+  // finds `pending-judge` would wait for a pass that is never coming.
+  assert.equal(
+    JSON.stringify({ dimensions, notes }).includes('pending-judge'),
+    false,
+    'a backfill scoring may not emit the string pending-judge anywhere',
+  )
+})
+
+test('scoreArcTrace — a backfill changes ONLY the judge sentinels: deterministic scores and every FEEDER are identical', () => {
+  // Same collected trace both ways, so the ONLY difference between the two runs is the mode.
+  const plain = scoreArcTrace(traceFor()).dimensions
+  const back = scoreArcTrace(traceFor(), { backfill: true }).dimensions
+
+  assert.deepEqual(Object.keys(back), Object.keys(plain), 'contract key ORDER is part of the archive and must not move')
+  for (const key of DETERMINISTIC_KEYS)
+    assert.deepEqual(back[key], plain[key], `${key} reads recorded artifacts — a backfill has the same ones`)
+
+  for (const key of JUDGE_KEYS) {
+    assert.deepEqual(
+      back[key].signals,
+      plain[key].signals,
+      `${key}: the feeders are COUNTS of recorded things, not judgements — a backfill must not drop them`,
+    )
+    assert.ok(Object.keys(back[key].signals).length > 0, `${key}: an empty signals record hands a later reader nothing`)
+    assert.deepEqual(back[key].sourceRefs, plain[key].sourceRefs, `${key}: the same artifacts are cited`)
+    assert.notEqual(back[key].sentinel, plain[key].sentinel, `${key}: the sentinel is the one thing that DOES change`)
+  }
+})
+
+test('scoreArcTrace — the backfill mode is NAMED in notes, and the artifact-gap notes still are too', () => {
+  const trace = traceFor({ omitVerdicts: true })
+  const plainNotes = scoreArcTrace(trace).notes
+  assert.ok(plainNotes.length > 0, 'fixture precondition: this variant produces at least one gap note')
+
+  const { notes } = scoreArcTrace(trace, { backfill: true })
+  const modeNote = notes.find((n) => /backfill/i.test(n))
+  assert.ok(modeNote, `the mode must be named in notes, not inferred from a sentinel; got ${JSON.stringify(notes)}`)
+  assert.match(modeNote, /judge/i, `the mode note must say what it costs (the judge pass); got ${JSON.stringify(modeNote)}`)
+
+  for (const n of plainNotes)
+    assert.ok(notes.includes(n), `the mode note ADDS to the honesty rails; ${JSON.stringify(n)} must survive`)
+})
+
+// ── 28. regression guard: the default mode is untouched ────────────────────────────────
+test('scoreArcTrace — WITHOUT the backfill option nothing carries unjudged-backfill', () => {
+  for (const args of [[traceFor()], [traceFor(), {}], [traceFor(), { backfill: false }]]) {
+    const scored = scoreArcTrace(...args)
+    for (const key of JUDGE_KEYS) assert.equal(scored.dimensions[key].sentinel, 'pending-judge', `${key} still awaits a pass`)
+    assert.equal(
+      JSON.stringify(scored).includes(BACKFILL_SENTINEL),
+      false,
+      'the terminal sentinel must never leak into an ordinary run — that would cancel a pass that IS coming',
+    )
+  }
+})
+
+// ── 29. the ratchet: a backfilled prior is INCOMPARABLE, not a data point ──────────────
+test('computeRatchet — backfilled priors contribute NOTHING to a judge dimension baseline', () => {
+  const scored = [1, 2, 3].map((i) => mkReport({ all: 60, judgeModel: 'judge-A', date: `2026-07-0${i}` }))
+  const backfilled = [4, 5, 6].map((i) =>
+    mkReport({
+      all: 90,
+      per: Object.fromEntries(JUDGE_KEYS.map((k) => [k, BACKFILL_SENTINEL])),
+      judgeModel: 'judge-A',
+      date: `2026-07-0${i}`,
+    }),
+  )
+  const rows = computeRatchet(mkReport({ all: 50, judgeModel: 'judge-A' }), [...scored, ...backfilled])
+
+  for (const key of JUDGE_KEYS) {
+    const row = rowOf(rows, key)
+    assert.equal(samplesFromNote(row), 3, `${key}: only the three JUDGED priors are samples`)
+    assert.equal(row.baseline, 60, `${key}: the backfilled 90s must not enter the mean; got ${row.baseline}`)
+  }
+  // The deterministic dimensions of those same reports are ordinary data and still count.
+  assert.equal(samplesFromNote(rowOf(rows, 'speed')), 6, 'a backfilled report is only unjudged, not unread')
+})
+
+test('computeRatchet — a corpus of ONLY backfilled priors never adds up to a baseline', () => {
+  const backfilled = [1, 2, 3, 4, 5, 6, 7, 8].map((i) =>
+    mkReport({
+      all: 90,
+      per: Object.fromEntries(JUDGE_KEYS.map((k) => [k, BACKFILL_SENTINEL])),
+      judgeModel: 'judge-A',
+      date: `2026-07-0${i}`,
+    }),
+  )
+  const rows = computeRatchet(mkReport({ all: 70, judgeModel: 'judge-A' }), backfilled)
+
+  for (const key of JUDGE_KEYS) {
+    const row = rowOf(rows, key)
+    assert.equal(row.baseline, null, `${key}: eight unjudged priors are still zero comparable samples`)
+    assert.equal(row.note, 'no-baseline', `${key}: got ${JSON.stringify(row.note)}`)
+    assert.equal(row.regression, false, `${key}: a baseline nobody can compute is never a regression`)
+    assert.equal(row.value, 70, `${key}: the CURRENT judged value is still reported`)
+  }
+})
+
+test('computeRatchet — an unjudged-backfill CURRENT dimension is null/null/false and names the sentinel', () => {
+  const priors = [1, 2, 3].map((i) => mkReport({ all: 80, judgeModel: 'judge-A', date: `2026-07-0${i}` }))
+  const current = mkReport({
+    all: 80,
+    per: Object.fromEntries(JUDGE_KEYS.map((k) => [k, BACKFILL_SENTINEL])),
+    judgeModel: 'judge-A',
+  })
+  const rows = computeRatchet(current, priors)
+
+  for (const key of JUDGE_KEYS) {
+    const row = rowOf(rows, key)
+    assert.equal(row.value, null, `${key}: there is no current number to compare`)
+    assert.equal(row.delta, null, `${key}: a regression must always have a computable delta`)
+    assert.equal(row.regression, false, `${key}: an arc nobody judged is not a regression`)
+    assert.notEqual(row.value, 0, `${key}: an unmeasured value must not become a zero that reads as a collapse`)
+    assert.ok(
+      new RegExp(BACKFILL_SENTINEL).test(row.note ?? ''),
+      `${key}: the note must name WHY the value is missing; got ${JSON.stringify(row.note)}`,
+    )
+  }
+  assert.equal(rowOf(rows, 'speed').value, 80, 'the deterministic dimensions of a backfilled report still ratchet')
+})

@@ -48,6 +48,21 @@ export const JUDGE_DIMENSIONS = new Set([
 export const MIN_COMPARABLE_PRIORS = 2
 
 /**
+ * The two judge-owned sentinels, and the difference between them is a PROMISE.
+ *
+ * `pending-judge` says a pass is still coming — a reader is right to wait for it, and
+ * merge-judge is the seam that resolves it. `unjudged-backfill` is TERMINAL: over a historical
+ * arc the promise would be false, because its diffs predate the rubric and no judge will ever
+ * read them. Scoring those arcs now would manufacture the very baseline the first honestly
+ * judged arc gets measured against, so the backfill declines to and says so permanently.
+ *
+ * Both are score-less, so `computeRatchet` already excludes either from a baseline; the naming
+ * is what stops a later reader from mistaking a closed book for an open one.
+ */
+export const PENDING_JUDGE_SENTINEL = 'pending-judge'
+export const BACKFILL_SENTINEL = 'unjudged-backfill'
+
+/**
  * The speed reference class: minutes of halt-free wall clock per completed task. A use-site
  * default in the DEFAULT_STALE_BASE_CEILING mould — an absolute speed score needs SOME
  * reference, and on the first run there is no timing-stats table to supply one. The raw
@@ -287,11 +302,12 @@ function scoreSpeed(readable) {
 }
 
 /**
- * The four judge-owned dimensions: `pending-judge` plus the deterministic FEEDERS the judge
- * would otherwise have to re-derive by hand (and would re-derive differently). Feeders are
- * counts of things already recorded — they are inputs to a judgement, never a judgement.
+ * The four judge-owned dimensions: the caller's `sentinel` plus the deterministic FEEDERS the
+ * judge would otherwise have to re-derive by hand (and would re-derive differently). Feeders are
+ * counts of things already recorded — they are inputs to a judgement, never a judgement, which
+ * is why a backfill keeps every one of them and changes only which sentinel sits beside them.
  */
-function judgeDimensions(trace, readable) {
+function judgeDimensions(trace, readable, sentinel) {
   const refs = readable.map((p) => phaseRef(p.phase))
   const results = readable.map((p) => p.executionResult).filter(Boolean)
   const reports = readable.flatMap((p) => p.transparency ?? [])
@@ -308,7 +324,7 @@ function judgeDimensions(trace, readable) {
   return {
     'standards-adherence': sentinelDimension(
       'judge',
-      'pending-judge',
+      sentinel,
       {
         nonCleanReviewRounds: findingsRounds,
         compromisesRecorded: sum(results.map((r) => (r.compromises ?? []).length)),
@@ -321,7 +337,7 @@ function judgeDimensions(trace, readable) {
     ),
     'doc-brevity': sentinelDimension(
       'judge',
-      'pending-judge',
+      sentinel,
       {
         transparencyReports: reports.length,
         transparencyChars: sum(reports.map((r) => (r.whatWasDone ?? '').length + (r.how ?? '').length)),
@@ -334,7 +350,7 @@ function judgeDimensions(trace, readable) {
     ),
     'composability-testability': sentinelDimension(
       'judge',
-      'pending-judge',
+      sentinel,
       {
         testsAdded,
         filesChanged,
@@ -347,7 +363,7 @@ function judgeDimensions(trace, readable) {
     ),
     'plan-quality': sentinelDimension(
       'judge',
-      'pending-judge',
+      sentinel,
       {
         escalations: results.filter((r) => r.status === 'escalated').length,
         checkpoints: results.filter((r) => r.status === 'checkpoint').length,
@@ -370,8 +386,15 @@ function judgeDimensions(trace, readable) {
  * folding an unreadable phase in as zeros would invent data, and dropping it silently would
  * quietly improve every average it should have dragged down.
  */
-export function scoreArcTrace(trace) {
+export function scoreArcTrace(trace, { backfill = false } = {}) {
   const notes = []
+  // Named in notes rather than left to be inferred from the sentinel: the sentinel says a
+  // dimension is unjudged, the note says WHY it will stay that way and what it cost.
+  if (backfill)
+    notes.push(
+      'backfill mode — the judge pass is deliberately NOT run over this historical arc (its diff predates the ' +
+        'rubric), so judge-owned dimensions carry the terminal unjudged-backfill sentinel and enter no baseline',
+    )
   const phases = trace.phases ?? []
   const readable = phases.filter((p) => !p.parseError)
   for (const p of phases)
@@ -392,7 +415,7 @@ export function scoreArcTrace(trace) {
   const dimensions = {
     'code-confidence': scoreCodeConfidence(trace, readable),
     'verified-vs-intent': scoreVerifiedVsIntent(trace),
-    ...judgeDimensions(trace, readable),
+    ...judgeDimensions(trace, readable, backfill ? BACKFILL_SENTINEL : PENDING_JUDGE_SENTINEL),
     speed: scoreSpeed(readable),
   }
   // Rebuild in contract order: the report's key order IS part of the archive's readability.
@@ -528,6 +551,7 @@ function p80(sorted) {
 export function computeTimingStats(traces, { generatedAt = new Date().toISOString() } = {}) {
   const cohorts = new Map()
   let excludedTotal = 0
+  let noHaltEvidence = 0
 
   for (const trace of traces ?? []) {
     for (const p of trace.phases ?? []) {
@@ -539,6 +563,9 @@ export function computeTimingStats(traces, { generatedAt = new Date().toISOStrin
 
       const span = spanMinutes(p.metrics)
       const halted = (p.metrics?.haltCount ?? 0) > 0
+      // An ABSENT haltCount is not a zero. `?? 0` above reads "no evidence" as "ran clean", so
+      // count how many spans rest on that assumption; the note below is what keeps it visible.
+      if (span !== null && p.metrics?.haltCount === undefined) noHaltEvidence++
       if (p.parseError || span === null || halted) {
         cohort.interruptedExcluded++
         excludedTotal++
@@ -573,6 +600,7 @@ export function computeTimingStats(traces, { generatedAt = new Date().toISOStrin
       'the surface axis is a HEURISTIC over each phase keyFiles (web/, office/, spa/ paths), not a declared field',
       `${excludedTotal} phase(s) excluded from the samples and counted per cohort: a recorded halt, a missing timestamp, or an unreadable record`,
       'elapsed wall clock on a shared box is not effort - an interrupted phase is excluded rather than averaged in',
+      `${noHaltEvidence} sampled phase(s) carry NO halt evidence - a historical backfill derives its span from commits, which survive, while the executor beacons that would evidence a halt do not; those spans are elapsed wall clock no halt count could correct`,
     ],
   }
 }

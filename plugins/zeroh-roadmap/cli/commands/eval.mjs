@@ -84,6 +84,7 @@ function parseArgs(argv) {
     else if (a === '--date') opts.date = argv[++i]
     else if (a === '--force') opts.force = true
     else if (a === '--collect-only') opts.collectOnly = true
+    else if (a === '--backfill') opts.backfill = true
     else if (a === '--report') opts.report = argv[++i]
     else if (a === '--json') opts.json = true
     else positional.push(a)
@@ -93,7 +94,7 @@ function parseArgs(argv) {
 
 const USAGE =
   'roadmap eval: usage:\n' +
-  '  roadmap eval <ARCID> [--date <YYYY-MM-DD>] [--force] [--collect-only] [--json]\n' +
+  '  roadmap eval <ARCID> [--date <YYYY-MM-DD>] [--force] [--collect-only] [--backfill] [--json]\n' +
   '  roadmap eval record-sweep|record-verdicts --arc <ID> [--force] [file|-]\n' +
   '  roadmap eval merge-judge --arc <ID> [--report <path>]   (verdict JSON on stdin)\n' +
   '  roadmap eval trend                                      (renders roadmap/arc-evals/trend.html)\n'
@@ -747,7 +748,7 @@ async function runArcEval(arcId, opts) {
     return 2
   }
 
-  const scored = scoreArcTrace(collected.trace)
+  const scored = scoreArcTrace(collected.trace, { backfill: Boolean(opts.backfill) })
   const draft = {
     arcId,
     date,
@@ -820,8 +821,14 @@ async function runArcEval(arcId, opts) {
     const d = report.dimensions[key]
     say(`  ${pad(key, 27)}${pad(d.owner, 15)}${d.score ?? d.sentinel}`)
   }
-  const awaiting = DIMENSION_KEYS.filter((k) => JUDGE_DIMENSIONS.has(k))
-  say(`awaiting the judge pass: ${awaiting.join(', ')}`)
+  const judgeOwned = DIMENSION_KEYS.filter((k) => JUDGE_DIMENSIONS.has(k))
+  // A backfill's judge dimensions are CLOSED, not late. Printing "awaiting" over them would
+  // tell the operator to go run a pass that this mode has deliberately declined to run.
+  say(
+    opts.backfill
+      ? `unjudged by design (backfill, no pass is coming): ${judgeOwned.join(', ')}`
+      : `awaiting the judge pass: ${judgeOwned.join(', ')}`,
+  )
   say('')
   say('ratchet:')
   for (const row of report.ratchet)
