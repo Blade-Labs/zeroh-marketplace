@@ -221,25 +221,6 @@ const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 /**
- * `roadmap eval trend` — render every dated report in roadmap/arc-evals/ as ONE self-contained
- * page. Cross-arc by design, exactly like the ratchet's reference class: the question the page
- * answers is whether the WORKFLOW is improving, which a single arc can never show.
- *
- * ## Three properties the rendering may not quietly break
- * A dimension carrying a SENTINEL is a HOLE in its line, not a missing row: the series is drawn
- * as one polyline per contiguous run of scored reports, so two scored points either side of an
- * unmeasured one are never joined. Connecting them would draw a trend nobody measured — the
- * graphical form of the zero-standing-in-for-absent-data lie the scorer already refuses.
- * A judgeModel change is a vertical MARKER and a named baseline reset, never another point on
- * the same line. And a flagged regression is LISTED in words under its dimension, because a
- * reader should not have to infer the most important fact on the page from a slope.
- *
- * ## No external assets, enforced by having none
- * Inline SVG, inline CSS, no scripts. Not even an `xmlns` — inline SVG in HTML needs none, and
- * the URL would be the single thing on the page pointing at the network. The page must open
- * from a filesystem with no connection at all, which is the state a proof artifact is read in.
- */
-/**
  * `roadmap eval restamp` — bring the EXISTING corpus up to the current stamp set, ADDITIVELY.
  *
  * The one hard rule: this never re-scores. `dimensions`, `ratchet`, `attribution`, `date` and
@@ -325,6 +306,25 @@ async function runRestamp(opts) {
   return 0
 }
 
+/**
+ * `roadmap eval trend` — render every dated report in roadmap/arc-evals/ as ONE self-contained
+ * page. Cross-arc by design, exactly like the ratchet's reference class: the question the page
+ * answers is whether the WORKFLOW is improving, which a single arc can never show.
+ *
+ * ## Three properties the rendering may not quietly break
+ * A dimension carrying a SENTINEL is a HOLE in its line, not a missing row: the series is drawn
+ * as one polyline per contiguous run of scored reports, so two scored points either side of an
+ * unmeasured one are never joined. Connecting them would draw a trend nobody measured — the
+ * graphical form of the zero-standing-in-for-absent-data lie the scorer already refuses.
+ * A judgeModel change is a vertical MARKER and a named baseline reset, never another point on
+ * the same line. And a flagged regression is LISTED in words under its dimension, because a
+ * reader should not have to infer the most important fact on the page from a slope.
+ *
+ * ## No external assets, enforced by having none
+ * Inline SVG, inline CSS, no scripts. Not even an `xmlns` — inline SVG in HTML needs none, and
+ * the URL would be the single thing on the page pointing at the network. The page must open
+ * from a filesystem with no connection at all, which is the state a proof artifact is read in.
+ */
 async function runTrend(opts) {
   let toplevel
   try {

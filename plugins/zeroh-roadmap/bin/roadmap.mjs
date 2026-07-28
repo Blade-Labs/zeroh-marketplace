@@ -40,7 +40,7 @@ const TREE = {
   debt: { phase: 1658, sub: ['census', 'dispose', 'check'], desc: 'debt census/dispose wrappers' },
   measure: { phase: 1659, sub: ['--flow', '--assert'], desc: 'protocol-load meter (bytes/4 over the invocation path)' },
   codex: { phase: 1838, sub: ['run <N> [<N2>…] [--worktree] [--base]', 'status <N>'], desc: 'detached Codex delegation lane (worktree + stdin prompt + journal; gate stays with the session)' },
-  eval: { phase: 1996, sub: ['<ARCID> [--date] [--force] [--collect-only] [--json]', 'record-sweep --arc <ID>', 'record-verdicts --arc <ID>', 'trend', 'restamp'], desc: 'arc eval: collect the trace, score the deterministic dimensions and ratchet, record the land-time aggregates (the judge pass arrives in 1997)' },
+  eval: { phase: 1996, sub: ['<ARCID> [--date] [--force] [--collect-only] [--json]', 'record-sweep --arc <ID>', 'record-verdicts --arc <ID>', 'merge-judge --arc <ID>', 'trend', 'restamp'], desc: 'arc eval: collect the trace, score the deterministic dimensions and ratchet, merge the judge verdict, record the land-time aggregates' },
 }
 
 function printHelp() {
