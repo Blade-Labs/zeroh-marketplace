@@ -1,0 +1,9 @@
+{"ts":"2026-07-01T09:00:00.000Z","phase":9001,"text":"Scoring changes land in `cli/lib/eval-score.mjs` before any consumer edit, or two machines produce incomparable numbers.","origin":{"writer":"claude-opus-5","kind":"session"}}
+{"ts":"2026-07-02T09:00:00.000Z","phase":9011,"text":"A sentinel added to `cli/lib/eval-score.mjs` needs its anti-zero twin asserted in the same round.","origin":{"writer":"unrecorded","kind":"session"}}
+{"ts":"2026-07-03T09:00:00.000Z","phase":9021,"text":"Every model call has to ride `src/relay/governed-turn.ts`, so a direct provider call in a handler is a review stop.","origin":{"writer":"grok-code","kind":"session"}}
+{"ts":"2026-07-04T09:00:00.000Z","phase":9031,"text":"Streamed turns gate the done frame on the audit append inside `src/relay/governed-turn.ts`.","origin":{"writer":"claude-opus-5","kind":"session"}}
+{"ts":"2026-07-04T10:00:00.000Z","phase":9032,"text":"Run every suite under `capbuild` or the shared box swaps itself to death.","origin":{"writer":"claude-opus-5","kind":"session"}}
+{"ts":"2026-07-05T09:00:00.000Z","phase":9041,"text":"A bare vitest under `capbuild` loses its env and executes zero tests, which reads as green.","origin":{"writer":"unrecorded","kind":"session"}}
+{"ts":"2026-07-05T10:00:00.000Z","phase":9042,"text":"The gate checklist in `skills/do-arc/SKILL.md` is the one place a new gate slot gets named.","origin":{"writer":"claude-opus-5","kind":"eval-loop"}}
+{"ts":"2026-07-05T11:00:00.000Z","phase":9043,"text":"Resuming an arc reads `skills/do-arc/skill.md` first, so a step renamed there has to be renamed in the sidecar too.","origin":{"writer":"claude-opus-5","kind":"eval-loop"}}
+{"ts":"2026-07-05T12:00:00.000Z","phase":9044,"text":"Re-read `roadmap/backlog.ts` before editing it, because concurrent sessions move it under you.","origin":{"writer":"unrecorded","kind":"session"}}

@@ -1,0 +1,117 @@
+{
+  "arcId": "CHARLIE",
+  "date": "2026-07-03",
+  "dimensions": {
+    "code-confidence": {
+      "owner": "deterministic",
+      "score": 77,
+      "signals": {
+        "gateRoundsMean": 1.6,
+        "gateRunsObserved": 3,
+        "finalRoundCleanRatio": 1,
+        "escapeFixes": 1,
+        "escapeFixesPerPhase": 0.33,
+        "escapeWindow": "land-record-anchored",
+        "phasesConsidered": 3
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-9020.phase.ts"
+      ]
+    },
+    "speed": {
+      "owner": "deterministic",
+      "score": 84,
+      "signals": {
+        "elapsedMinutes": 132,
+        "minutesPerTask": 9.8,
+        "referenceMinutesPerTask": 8,
+        "timedPhases": 3,
+        "basis": "halt-free-phases"
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-9020.phase.ts#metrics"
+      ]
+    },
+    "plan-quality": {
+      "owner": "judge",
+      "score": 42,
+      "signals": {
+        "escalations": 3,
+        "checkpoints": 0,
+        "hardStops": 1,
+        "haltCountTotal": 2,
+        "plannedByRecorded": 3
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-9020.phase.ts"
+      ]
+    },
+    "standards-adherence": {
+      "owner": "judge",
+      "sentinel": "pending-judge",
+      "signals": {
+        "nonCleanReviewRounds": 0,
+        "sweepVerdict": "no-sweep-report"
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-9020.phase.ts"
+      ]
+    }
+  },
+  "ratchet": [
+    {
+      "dimension": "code-confidence",
+      "baseline": 61,
+      "value": 77,
+      "delta": 16,
+      "regression": false,
+      "note": "improving"
+    },
+    {
+      "dimension": "speed",
+      "baseline": 91.4,
+      "value": 84,
+      "delta": -7.4,
+      "regression": true,
+      "note": "third consecutive slide"
+    },
+    {
+      "dimension": "plan-quality",
+      "baseline": null,
+      "value": 42,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline"
+    }
+  ],
+  "attribution": {
+    "drivers": [
+      {
+        "model": "grok-code",
+        "lane": "runner",
+        "phases": [9020, 9021, 9022]
+      }
+    ],
+    "reviewers": [
+      {
+        "agent": "code-reviewer",
+        "rounds": 3
+      }
+    ]
+  },
+  "profile": "fast-lane",
+  "workflow": {
+    "pluginVersion": "0.18.1",
+    "pluginSha": "cccc11112222",
+    "protocolLoadTokens": 15000,
+    "profile": "fast-lane"
+  },
+  "fingerprint": {
+    "repo": "fixture-consumer",
+    "language": "typescript",
+    "corpusSize": 9
+  },
+  "notes": [
+    "synthetic fixture report — see cli/testdata/eval-proposals/load-fixture.mjs for what each field is planted to prove"
+  ]
+}

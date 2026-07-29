@@ -1,0 +1,94 @@
+{
+  "arcId": "ECHO",
+  "date": "2026-07-05",
+  "dimensions": {
+    "composability-testability": {
+      "owner": "judge",
+      "score": 70,
+      "signals": {
+        "testsAdded": 22,
+        "filesChanged": 51,
+        "testsPerFileChanged": 0.43,
+        "phasesWithMetrics": 5
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-9040.phase.ts"
+      ]
+    },
+    "speed": {
+      "owner": "deterministic",
+      "score": 95,
+      "signals": {
+        "elapsedMinutes": 180,
+        "minutesPerTask": 8.1,
+        "referenceMinutesPerTask": 8,
+        "timedPhases": 5,
+        "basis": "halt-free-phases"
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-9040.phase.ts#metrics"
+      ]
+    },
+    "verified-vs-intent": {
+      "owner": "deterministic",
+      "sentinel": "no-verdicts-file",
+      "signals": {
+        "verdicts": 0
+      },
+      "sourceRefs": [
+        "roadmap/arc-evals/ (no verdicts file)"
+      ]
+    }
+  },
+  "ratchet": [
+    {
+      "dimension": "composability-testability",
+      "baseline": 70,
+      "value": 70,
+      "delta": 0,
+      "regression": false,
+      "note": "flat"
+    },
+    {
+      "dimension": "speed",
+      "baseline": 90,
+      "value": 95,
+      "delta": 5,
+      "regression": false,
+      "note": "improving"
+    },
+    {
+      "dimension": "verified-vs-intent",
+      "baseline": null,
+      "value": null,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline"
+    }
+  ],
+  "attribution": {
+    "drivers": [
+      {
+        "model": "claude-opus-5",
+        "lane": "session",
+        "phases": [9040, 9041, 9042, 9043, 9044]
+      }
+    ],
+    "reviewers": [
+      {
+        "agent": "code-reviewer",
+        "rounds": 5
+      }
+    ]
+  },
+  "profile": "prod-grade",
+  "fingerprint": {
+    "repo": "fixture-consumer",
+    "language": "typescript",
+    "corpusSize": 13
+  },
+  "notes": [
+    "synthetic fixture report — see cli/testdata/eval-proposals/load-fixture.mjs for what each field is planted to prove",
+    "workflow provenance GAP: this report carries NO workflow block on purpose, so the protocol-load class has nothing to read from it"
+  ]
+}
