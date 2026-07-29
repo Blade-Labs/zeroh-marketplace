@@ -43,6 +43,7 @@ import {
   JUDGE_DIMENSIONS,
 } from '../lib/eval-score.mjs'
 import { computeScorecard, findGateFixCommits } from '../lib/eval-scorecard.mjs'
+import { extractFindings, clusterFindings, consolidateAndWrite } from '../lib/eval-propose.mjs'
 
 /** The two recorders, keyed by subcommand: which consumer shape validates, which suffix lands. */
 const RECORDERS = {
@@ -105,6 +106,7 @@ function parseArgs(argv) {
     else if (a === '--phase') opts.phase = argv[++i]
     else if (a === '--writer') opts.writer = argv[++i]
     else if (a === '--json') opts.json = true
+    else if (a === '--dry-run') opts.dryRun = true
     else positional.push(a)
   }
   return { opts, positional }
@@ -118,7 +120,8 @@ const USAGE =
   '  roadmap eval trend                                      (renders roadmap/arc-evals/trend.html)\n' +
   '  roadmap eval restamp [--json]                           (additively re-stamps existing reports; never re-scores)\n' +
   '  roadmap eval lesson "<text>" [--phase N] [--writer <actor-id>]  (appends one lesson to the committed sidecar)\n' +
-  '  roadmap eval scorecard [--date <YYYY-MM-DD>] [--json]   (regenerates the per-actor scorecard projection)\n'
+  '  roadmap eval scorecard [--date <YYYY-MM-DD>] [--json]   (regenerates the per-actor scorecard projection)\n' +
+  '  roadmap eval propose [--json] [--dry-run]               (clusters the corpus into ratify-only proposals under roadmap/arc-evals/proposals/)\n'
 
 export default async function run(argv) {
   const { opts, positional } = parseArgs(argv)
@@ -134,6 +137,7 @@ export default async function run(argv) {
     if (sub === 'restamp') return runRestamp(opts)
     if (sub === 'lesson') return runLesson(opts, positional)
     if (sub === 'scorecard') return runScorecard(opts)
+    if (sub === 'propose') return runPropose(opts)
     // Anything that is not one of the literal subcommands above is an ARC ID. The literals are
     // checked FIRST so a future arc called `record-sweep` or `lesson` could never shadow one.
     return runArcEval(sub, opts)
@@ -931,6 +935,150 @@ function scorecardRow(cell, nFloor) {
 
 /** Two decimals: enough to see a rate move, few enough digits that float noise cannot fake one. */
 const round2 = (n) => String(Math.round(n * 100) / 100)
+
+// ── `roadmap eval propose` — the ELICIT stage: recurring findings become ratify-only proposals ──
+
+/** The proposals home, under the one committed corpus directory the loop is allowed to write. */
+export const PROPOSALS_SUBDIR = 'proposals'
+
+/** A validation refusal from inside the consolidation pass, carrying the bridge result so the
+ *  command can map it onto the universal exit-code contract instead of guessing. */
+class ProposalRefused extends Error {
+  constructor(id, res) {
+    super(`proposal ${id} does not match ProposalShape`)
+    this.id = id
+    this.res = res
+  }
+}
+
+/**
+ * `roadmap eval propose [--json] [--dry-run]` — read the committed corpus, cluster the recurring
+ * findings, score them, consolidate against what is already on disk, and print the queue.
+ *
+ * The command is where "surfaced to the user" becomes an OUTPUT rather than a directory somebody
+ * has to remember to read. Everything it can decline to say is said instead: an absent lessons
+ * sidecar, each refused cluster with its count, each foreign file by name, and a corpus that
+ * supports nothing at all. A silent empty list would be indistinguishable from a broken pass.
+ *
+ * `--dry-run` runs the whole pass against a no-op fs, so it cannot even mint the directory: an
+ * empty directory appearing in a committed archive is still a side effect.
+ */
+async function runPropose(opts) {
+  let toplevel, schemaPath
+  try {
+    toplevel = gitToplevel(process.cwd())
+    schemaPath = consumerSchemaPath(toplevel)
+  } catch (e) {
+    if (e instanceof BridgeError) for (const l of e.messageLines) process.stderr.write(l + '\n')
+    else process.stderr.write(`roadmap eval propose: ${e.message}\n`)
+    return 1
+  }
+
+  // The machine lane owns stdout under --json (the runArcEval / runScorecard idiom), so the
+  // document stays pipeable into jq without a stripping step.
+  const say = (line) => (opts.json ? process.stderr : process.stdout).write(line + '\n')
+
+  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const proposalsDir = join(dir, PROPOSALS_SUBDIR)
+
+  // The SAME reader the ratchet and the trend page use: one definition of "a report".
+  const reports = readPriorReports(dir, { onWarn: say })
+
+  // An absent sidecar is an ordinary corpus state, named rather than read as zero lessons: the
+  // difference between "nobody has captured a lesson yet" and "no lesson recurs" is the whole
+  // reason the lesson-key class can be legitimately empty.
+  const lessonsPath = join(dir, LESSONS_FILE)
+  const lessons = []
+  if (!existsSync(lessonsPath)) {
+    say(`${LESSONS_FILE} absent — no lesson-backed proposals in this run (the sidecar is written by \`roadmap eval lesson\`)`)
+  } else {
+    for (const [i, line] of readFileSync(lessonsPath, 'utf8').split('\n').entries()) {
+      if (line.trim() === '') continue
+      try {
+        lessons.push(JSON.parse(line))
+      } catch (e) {
+        say(`WARN: ${LESSONS_FILE} line ${i + 1} does not parse as JSON (${e.message}) — skipped, not guessed`)
+      }
+    }
+    say(`${LESSONS_FILE}: ${lessons.length} lesson(s)`)
+  }
+
+  const clustered = clusterFindings(extractFindings(reports, lessons))
+
+  // Under --dry-run the fs seam reads the world and writes none of it. mkdir is a no-op too.
+  const noop = () => {}
+  const fs = opts.dryRun
+    ? { existsSync, readdirSync, readFileSync, mkdirSync: noop, writeFileSync: noop }
+    : { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync }
+
+  let result
+  try {
+    result = consolidateAndWrite(clustered.clusters, reports, proposalsDir, {
+      fs,
+      now: () => new Date().toISOString(),
+      // Validated against the CONSUMER's ProposalShape, at the seam, before serialization: a
+      // proposal that will not parse must never become a file somebody has to read back.
+      validate: (doc) => {
+        const checked = bridgeValidate(toplevel, schemaPath, 'ProposalShape', doc)
+        if (!checked.ok) throw new ProposalRefused(doc.id, checked.res)
+        return checked.parsed
+      },
+    })
+  } catch (e) {
+    if (!(e instanceof ProposalRefused)) throw e
+    if (e.res.kind === 'tsx-absent') {
+      process.stderr.write(TSX_ABSENT_HINT + '\n')
+      return 1
+    }
+    process.stderr.write(`roadmap eval propose: refused — ${e.message}:\n`)
+    if (e.res.kind === 'zod') printZodIssues(e.res.issues)
+    else process.stderr.write((e.res.stderr ?? '') + '\n')
+    return 2
+  }
+
+  const ranked = [...result.proposals].sort((a, b) => b.opportunity.score - a.opportunity.score || a.id.localeCompare(b.id))
+  if (opts.json) process.stdout.write(JSON.stringify(ranked, null, 2) + '\n')
+
+  say('')
+  say(`roadmap eval propose — ${reports.length} report(s), ${lessons.length} lesson(s), ${ranked.length} proposal(s)`)
+  say('')
+  if (ranked.length === 0) {
+    // Honest over impressive, and SPECIFIC about which silence this is: nothing recurred often
+    // enough, versus everything that recurred has already been ruled on.
+    if (clustered.clusters.length === 0) say('corpus too thin: every candidate cluster below the 2-finding floor')
+    else say('every candidate cluster is already adjudicated or archived — nothing new to surface')
+  }
+  for (const p of ranked)
+    say(
+      // Explicit single spaces between padded columns rather than padding alone: a proposal id can
+      // outgrow any column width, and a run-together line is a line a reader mis-parses.
+      `  ${pad(round2(p.opportunity.score), 6)} ${pad(p.lane, 18)} ${pad(p.kind, 23)} ${pad(p.id, 62)} ` +
+        `${pad(`${p.evidence.length} findings`, 12)} ${p.status}`,
+    )
+
+  say('')
+  // One line per refusal, each carrying its label AND its number: a count printed away from its
+  // name leaves the reader guessing which refusal it belongs to.
+  say(`  skippedSingletons    ${clustered.skippedSingletons}  (candidate clusters below the 2-finding floor)`)
+  say(`  skippedNoLane        ${clustered.skippedNoLane}  (clusters with no derivable home lane)`)
+  say(`  already-adjudicated  ${result.alreadyAdjudicated}  (a ratified or rejected verdict outranks re-emission)`)
+  say(`  archived             ${result.archived}  (own proposals whose cluster dissolved; files kept)`)
+  say(`  foreign-skipped      ${result.foreignSkipped.length}${result.foreignSkipped.length > 0 ? `: ${result.foreignSkipped.join(', ')}` : ''}`)
+  say(`  unreadable           ${result.unreadable.length}${result.unreadable.length > 0 ? `: ${result.unreadable.join(', ')}` : ''}`)
+  say(`  skipped-archived     ${result.skippedArchived}  (the loop archived these and does not revive them)`)
+  say(`  created ${result.created}  refreshed ${result.refreshed}  unchanged ${result.unchanged}`)
+
+  say('')
+  if (opts.dryRun) {
+    say('--dry-run: nothing was written. Would have written:')
+    for (const w of result.writes) say(`  ${w}`)
+    if (result.writes.length === 0) say('  (nothing — the corpus supports no new or changed proposal)')
+  } else {
+    say(`wrote ${result.writes.length} file(s) under ${proposalsDir}`)
+  }
+  say('Proposals are SURFACED, never applied: ratifying one is a human act, shipped as an ordinary reviewed commit.')
+  return 0
+}
 
 // ── `roadmap eval <ARCID>` — collect → score → ratchet → the dated report ──────────────
 

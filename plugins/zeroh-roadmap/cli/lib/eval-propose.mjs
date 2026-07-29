@@ -455,7 +455,9 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
   const existingOwn = new Map()
   const foreignSkipped = []
   const unreadable = []
-  for (const name of fs.readdirSync(proposalsDir)) {
+  // Guarded rather than assumed: under a no-op fs (the --dry-run lane) mkdirSync creates nothing,
+  // and a missing directory there is an empty prior set, not a crash.
+  for (const name of fs.existsSync(proposalsDir) ? fs.readdirSync(proposalsDir) : []) {
     // A non-JSON file in this directory is not a proposal and is none of the loop's business.
     if (!name.endsWith('.json')) continue
     const path = `${proposalsDir}/${name}`
