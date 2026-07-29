@@ -480,6 +480,9 @@ function renderTrendPage(reports, proposals) {
     const missing = reports.filter((r) => typeof r?.dimensions?.[key]?.score !== 'number')
     const body = []
     body.push(renderChart(reports, key, resets))
+    // A baseline resting on a fraction of the corpus must say so where the trend is read
+    // (ratified proposal recurring-sentinel-verified-vs-intent-no-verdicts-file, 2026-07-29).
+    body.push(`<p class="coverage">Coverage: scored in ${scored.length} of ${reports.length} report(s).</p>`)
     if (scored.length === 0)
       body.push(
         `<p class="gap">No data: no report scored this dimension${
