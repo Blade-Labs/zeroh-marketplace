@@ -13,12 +13,6 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-// @zeroh-roadmap-schema v10
-// Bump this marker whenever the canonical schema gains a feature. The
-// SessionStart drift check in using-zeroh-roadmap greps for this exact line
-// to decide whether a target repo is behind the plugin. Keep the comment
-// literal (no template syntax) so a simple grep is sufficient.
-//
 // v10 migration notes (consumers syncing from v9 — all additive/optional, so
 // historical files keep parsing unmodified):
 // - TransparencyReport gains `decisionRef` (provenance for a non-"None"
