@@ -471,6 +471,11 @@ export function readProposalDocs(fs, proposalsDir) {
  * test-time pass writes to the real tree, and a defaulted validator is how an unparseable
  * document reaches disk; neither has a safe fallback, so neither gets one.
  *
+ * `validate(doc)` returns the parsed document or throws. When the throw is a verdict about the
+ * DOCUMENT rather than a failure of the validator itself, it must carry `documentRefused: true` —
+ * that flag is the only thing that lets a stale file on disk become a named refusal instead of
+ * ending the run, and only the validator knows which of the two happened.
+ *
  * ## What this function may touch
  * Files directly under `proposalsDir`, named `<id>.json`, whose parsed `writeOrigin` is this
  * loop's own. Nothing else, ever. A foreign-origin or unparseable file is left byte-identical —
@@ -537,6 +542,13 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
    * every other proposal in the run — that is the same rule the foreign, unreadable and misnamed
    * refusals already follow, applied to the last kind of unusable own file.
    *
+   * The softening is narrow ON PURPOSE. Only an error the validator MARKS as a verdict about the
+   * DOCUMENT (`documentRefused === true`) may be downgraded to a named refusal; a validator that
+   * could not run at all — a missing toolchain, a schema module that will not load — throws
+   * whatever it threw. Swallowing that would report a broken tool as a corrupt corpus, and would
+   * do it with a green exit code, which is the most expensive kind of wrong answer this command
+   * could give.
+   *
    * @returns true when the document was staged, false when it was refused and counted.
    */
   const stage = (path, doc, fromExisting) => {
@@ -546,7 +558,7 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
     try {
       validated = validate(doc)
     } catch (e) {
-      if (!fromExisting) throw e
+      if (!fromExisting || e?.documentRefused !== true) throw e
       unusableOwn.push(path.slice(path.lastIndexOf('/') + 1))
       return false
     }

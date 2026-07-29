@@ -1008,7 +1008,15 @@ const fixtureReports = () => loadFixtureCorpus().reports
 const mkDeps = (stub, nowIso, overrides = {}) => ({
   fs: stub.fs,
   now: () => nowIso,
-  validate: (doc) => ProposalDocShape.parse(doc),
+  // The seam's contract: a throw that is a verdict about the DOCUMENT carries `documentRefused`,
+  // so the pass can tell "this file is stale" from "the validator could not run".
+  validate: (doc) => {
+    try {
+      return ProposalDocShape.parse(doc)
+    } catch (e) {
+      throw Object.assign(e, { documentRefused: true })
+    }
+  },
   ...overrides,
 })
 
@@ -1663,5 +1671,53 @@ test('consolidateAndWrite — a FRESH document that will not parse still fails t
     },
     'the disk-derived softening must not soften the loop grading its own arithmetic',
   )
+  assert.deepEqual(stub.writes, [], 'and nothing was written: the refusal happened before any byte reached the fs')
+})
+
+// ── 35. a validator that could not RUN is not a corpus verdict ─────────────────────────
+// The softening for disk-derived documents exists for one fact: this file is stale. A validator
+// that never ran at all — a missing toolchain, a schema module that will not load — is a
+// different fact entirely, and reporting it as "your files are stale" WITH A GREEN EXIT is the
+// most expensive wrong answer this pass could give. Only an error the validator MARKS as a
+// document verdict may be downgraded.
+
+test('consolidateAndWrite — an UNMARKED validator failure on a disk-derived document aborts the run instead of being filed as a stale file', () => {
+  const cluster = liveLessonCluster()
+  const id = proposalIdOf(cluster)
+  // A live cluster with an existing own file, so the refresh path (fromExisting) is what runs.
+  const stub = makeFsStub({ [proposalPath(id)]: plantedProposal(id) })
+  const toolchainFailure = new Error('tsx is not installed in the consumer') // NO documentRefused flag
+
+  assert.throws(
+    () =>
+      // Scoped to the DISK-DERIVED document alone. A validator that threw for everything would
+      // hit a corpus-built document first and throw for that reason in either version of the
+      // guard, which would make this test pass without proving anything.
+      consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, {
+        ...mkDeps(stub, NOW_1),
+        validate: (doc) => {
+          if (doc.id === id) throw toolchainFailure
+          return doc
+        },
+      }),
+    (err) => {
+      assert.equal(err, toolchainFailure, 'the failure propagates unchanged, so the caller can map it onto its own exit code')
+      return true
+    },
+    'a validator that could not run must not be reported as a corpus problem',
+  )
   assert.deepEqual(stub.writes, [], 'and nothing was written')
+
+  // The complement, so the assertion above is about the MISSING flag and not about refresh
+  // throwing on everything: the same failure MARKED as a document verdict is a named refusal.
+  const marked = makeFsStub({ [proposalPath(id)]: plantedProposal(id) })
+  const res = consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, {
+    ...mkDeps(marked, NOW_1),
+    validate: (doc) => {
+      if (doc.id === id) throw Object.assign(new Error('stale document'), { documentRefused: true })
+      return doc
+    },
+  })
+  assert.deepEqual(res.unusableOwn, [`${id}.json`], 'marked, it is a named refusal')
+  assert.ok(res.created > 0, 'and the rest of the run proceeded')
 })

@@ -1029,6 +1029,11 @@ class ProposalRefused extends Error {
     super(`proposal ${id} does not match ProposalShape`)
     this.id = id
     this.res = res
+    // Only a `zod` outcome is a verdict about the DOCUMENT. The other bridge outcomes mean the
+    // validator never ran, and the consolidation pass must not downgrade those to "this file is
+    // stale" — a broken toolchain reported as a corrupt corpus, with a green exit, is worse than
+    // the failure it hides.
+    this.documentRefused = res.kind === 'zod'
   }
 }
 
