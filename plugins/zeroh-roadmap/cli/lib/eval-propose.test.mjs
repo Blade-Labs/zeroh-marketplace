@@ -468,3 +468,371 @@ test('clusterFindings — every evidence citation names a real corpus file and a
     assert.equal(distinct.size, c.evidence.length, `${c.findingClass}/${c.clusterKey}: every citation points at a different place`)
   }
 })
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// phase 2016.3 — the OPPORTUNITY score: a static ratified importance, a MEASURED
+// satisfaction, and no third source of numbers
+//
+// `opportunity = importance + max(importance - satisfaction, 0)` prioritizes every proposal, so
+// the two inputs have to come from places that cannot drift:
+//
+//  - IMPORTANCE is compile-time DATA carrying a version and a date (the
+//    SPEED_REFERENCE_MINUTES_PER_TASK precedent in cli/lib/eval-score.mjs). Two machines reading
+//    one corpus must not produce incomparable priorities, and a re-prioritization must show up as
+//    a diff in a versioned table rather than as a quietly different ordering.
+//  - SATISFACTION is MEASURED from the corpus, per class. The one thing that must be impossible
+//    is an UNMEASURABLE satisfaction inflating a score: a class the corpus cannot measure ranks on
+//    importance alone and SAYS SO BY NAME (`satisfaction-unmeasured`), never on a stand-in zero,
+//    which would read as "maximally unsatisfied" and float the proposal to the top of the queue.
+//
+// Every corpus below is hand-built so the WRONG reading yields a DIFFERENT number: each case says
+// in a comment what the wrong implementation would have produced.
+//
+// The exports under test do not exist yet, so they are reached through a NAMESPACE import: a
+// static named import of a missing export is a link-time SyntaxError that would red the whole
+// file, including the twelve tests above, and hide which export is actually missing.
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+import { z } from 'zod'
+import * as evalPropose from './eval-propose.mjs'
+
+/** Read a phase-2016.3 export, failing by NAME rather than as an opaque TypeError. */
+function needExport(name) {
+  const v = evalPropose[name]
+  assert.ok(v !== undefined, `cli/lib/eval-propose.mjs must export ${name} (phase 2016.3)`)
+  return v
+}
+
+const rulingsTable = () => needExport('IMPORTANCE_RULINGS')
+const computeOpportunity = (cluster, reports) => needExport('computeOpportunity')(cluster, reports)
+
+/** The v1 ruling per class, restated here so a silent re-prioritization reds this suite. */
+const EXPECTED_IMPORTANCE = {
+  'recurring-regression': 8,
+  'recurring-low-score': 7,
+  'recurring-sentinel': 6,
+  'protocol-load-over-budget': 6,
+  'recurring-lesson-key': 5,
+}
+
+/** The documented table shape, owned by the TEST: the spec, not a re-export of the code's view. */
+const ImportanceRulingsTableShape = z.strictObject({
+  version: z.number().int().positive(),
+  ratified: z.string().min(10),
+  rulings: z
+    .array(
+      z.strictObject({
+        id: z.string().min(1),
+        findingClass: z.enum(FINDING_CLASSES),
+        importance: z.number().min(0).max(10),
+        rationale: z.string().min(10),
+      }),
+    )
+    .min(1),
+})
+
+const sentinelDimension = (sentinel) => ({ owner: 'judge', sentinel, signals: {}, sourceRefs: ['roadmap/phases/phase-9999.phase.ts'] })
+
+const regressionRow = (dimension, value) => ({ dimension, baseline: value + 10, value, delta: -10, regression: true, note: 'synthetic regression' })
+
+const workflowBlock = (protocolLoadTokens, profile) => ({ pluginVersion: '0.18.0', pluginSha: 'cccc11112222', protocolLoadTokens, profile })
+
+/** Cluster a hand-built corpus and score ONE of its clusters, so the cluster under test has the
+ *  exact shape clusterFindings really emits rather than a shape invented by this file. */
+function opportunityFrom(reports, lessons, findingClass, clusterKey) {
+  const result = clusterFindings(extractFindings(reports, lessons))
+  const cluster = needCluster(result, findingClass, clusterKey)
+  return computeOpportunity(cluster, reports)
+}
+
+/** A corpus where `speed` regressed in two reports and is SCORED at `score` in both, so the
+ *  measured satisfaction of the regression cluster is exactly `score / 10`. */
+const speedCorpusAt = (score) => [
+  mkReport('SPA', '2026-07-10', { dimensions: { speed: scoredDimension(score) }, ratchet: [regressionRow('speed', score)] }),
+  mkReport('SPB', '2026-07-11', { dimensions: { speed: scoredDimension(score) }, ratchet: [regressionRow('speed', score)] }),
+]
+
+// ── 11. the formula itself, on knowns ─────────────────────────────────────────────────
+
+test('computeOpportunity — importance 8 with satisfaction 3 scores 13, and the max(...,0) floor holds at and above importance', () => {
+  const table = rulingsTable()
+  assert.equal(EXPECTED_IMPORTANCE['recurring-regression'], 8, 'this test is written against importance 8')
+
+  // satisfaction 3.0: a mean speed score of 30 across two reports. 8 + max(8-3,0) = 13.
+  const low = opportunityFrom(speedCorpusAt(30), [], 'recurring-regression', 'speed')
+  assert.equal(low.importance, 8, 'importance comes from the ratified table, not from the corpus')
+  assert.equal(low.satisfaction, 3, 'mean of the scored speed values (30 and 30), divided by 10')
+  assert.equal(low.score, 13, 'importance + max(importance - satisfaction, 0) = 8 + 5')
+  assert.equal(low.rulingsVersion, table.version, 'the score carries the table version it was computed under')
+
+  // satisfaction EXACTLY at importance: the gap term is zero, not a rounding artefact.
+  const level = opportunityFrom(speedCorpusAt(80), [], 'recurring-regression', 'speed')
+  assert.equal(level.satisfaction, 8, 'mean 80 => satisfaction 8')
+  assert.equal(level.score, 8, 'satisfaction equal to importance contributes exactly nothing extra')
+  assert.equal(level.score, level.importance, 'and the score is the bare importance')
+
+  // satisfaction ABOVE importance: a well-served class must never score BELOW a class nobody has
+  // measured. Without the floor this would be 8 + (8 - 9.5) = 6.5, a negative contribution.
+  const high = opportunityFrom(speedCorpusAt(95), [], 'recurring-regression', 'speed')
+  assert.equal(high.satisfaction, 9.5, 'mean 95 => satisfaction 9.5')
+  assert.equal(high.score, 8, 'the floor clamps the gap at 0, so an over-satisfied class scores its importance')
+  assert.notEqual(high.score, 6.5, 'a negative contribution would let satisfaction DEMOTE a class below its ruling')
+})
+
+// ── 12. a sentinelled report is EXCLUDED from the mean, and an all-sentinel dimension is null ──
+
+test('computeOpportunity — a sentinelled dimension is excluded from the mean rather than counted as zero, and the source names the count it used', () => {
+  // doc-brevity: scored 40 and 80, sentinelled once. Mean of the SCORED values is 60 => 6.0.
+  // Counting the sentinelled report as a zero would give (40+80+0)/3 = 40 => 4.0, a different
+  // number and a materially different score (8+4=12 instead of 8+2=10), so this corpus cannot
+  // pass under both readings.
+  const corpus = [
+    mkReport('EXA', '2026-07-10', { dimensions: { 'doc-brevity': scoredDimension(40) }, ratchet: [regressionRow('doc-brevity', 40)] }),
+    mkReport('EXB', '2026-07-11', { dimensions: { 'doc-brevity': scoredDimension(80) }, ratchet: [regressionRow('doc-brevity', 80)] }),
+    mkReport('EXC', '2026-07-12', { dimensions: { 'doc-brevity': sentinelDimension('no-verdicts-file') }, ratchet: [regressionRow('doc-brevity', 0)] }),
+  ]
+  const o = opportunityFrom(corpus, [], 'recurring-regression', 'doc-brevity')
+  assert.equal(o.satisfaction, 6, 'the mean is over the two SCORED values only; a sentinel is an absent measurement, not a zero')
+  assert.equal(o.score, 10, '8 + max(8 - 6, 0)')
+
+  // The provenance has to name the same count the arithmetic used, or a reader cannot check it.
+  // Expected phrasing: `mean of <n> scored <dimension> values across <m> reports`.
+  assert.equal(typeof o.satisfactionSource, 'string', 'satisfactionSource is a string')
+  assert.match(o.satisfactionSource, /doc-brevity/, 'the source names the dimension it measured')
+  assert.match(o.satisfactionSource, /\b2 scored\b/, 'the source says TWO scored values were averaged, the count the mean actually used')
+  assert.match(o.satisfactionSource, /\b3 reports\b/, 'and names the corpus size it read, so the exclusion is visible as 2 of 3')
+  assert.doesNotMatch(o.satisfactionSource, /\b3 scored\b/, 'the sentinelled report must not be reported as a scored value')
+
+  // The degenerate end of the same rule: a dimension NOBODY ever scored is unmeasurable, not
+  // maximally unsatisfied. A stand-in zero here would score 8 + 8 = 16 and float this cluster
+  // above every genuinely measured one, which is the exact failure this rail exists to stop.
+  const blind = [
+    mkReport('BLA', '2026-07-10', { dimensions: { 'plan-quality': sentinelDimension('no-verdicts-file') }, ratchet: [regressionRow('plan-quality', 0)] }),
+    mkReport('BLB', '2026-07-11', { dimensions: { 'plan-quality': sentinelDimension('no-verdicts-file') }, ratchet: [regressionRow('plan-quality', 0)] }),
+  ]
+  const unmeasured = opportunityFrom(blind, [], 'recurring-regression', 'plan-quality')
+  assert.equal(unmeasured.satisfaction, null, 'zero scored values anywhere in the corpus means UNMEASURABLE, spelled null')
+  assert.equal(unmeasured.score, 8, 'a null satisfaction scores the bare importance')
+  assert.notEqual(unmeasured.score, 16, 'never importance doubled: an unmeasured class must not outrank a measured one on nothing')
+  assert.notEqual(unmeasured.satisfaction, 0, 'and never a stand-in zero, which reads as "measured, and terrible"')
+  assert.notEqual(unmeasured.satisfactionSource, '', 'the refusal is still named')
+})
+
+// ── 13. the class the corpus cannot measure at all ────────────────────────────────────
+
+test('computeOpportunity — recurring-lesson-key is UNMEASURABLE: null satisfaction, score === importance, and the literal source', () => {
+  const { reports, lessons } = loadFixtureCorpus()
+  const o = opportunityFrom(reports, lessons, 'recurring-lesson-key', 'cli/lib/eval-score.mjs')
+
+  assert.equal(o.importance, EXPECTED_IMPORTANCE['recurring-lesson-key'], 'the v1 ruling for a shared lesson key')
+  assert.equal(o.satisfaction, null, 'no dimension backs a lesson key, so the corpus can measure no satisfaction for it')
+  assert.equal(o.score, o.importance, 'a null satisfaction contributes nothing at all')
+  assert.equal(o.score, 5, 'and that is exactly the importance, not importance + importance')
+  assert.notEqual(o.score, 10, 'never importance*2: the gap term is undefined, not maximal')
+  assert.equal(
+    o.satisfactionSource,
+    'satisfaction-unmeasured',
+    'the unmeasured case is a NAMED sentinel a reader can grep, not free prose that varies per cluster',
+  )
+})
+
+// ── 14. the rulings table is versioned, closed and exhaustive ─────────────────────────
+
+test('IMPORTANCE_RULINGS — a versioned table with exactly one ruling per finding class and the v1 values pinned', () => {
+  const table = rulingsTable()
+
+  const parsed = ImportanceRulingsTableShape.parse(table)
+  assert.equal(parsed.version, 1, 'v1 of the ruling table')
+  assert.match(parsed.ratified, /^\d{4}-\d{2}-\d{2}$/, 'the ratification date is a real date a reader can find in the ledger')
+
+  const classes = parsed.rulings.map((r) => r.findingClass)
+  // Sorted compares, so a MISSING class and an EXTRA/duplicate class both red here: a duplicate
+  // survives a set comparison but not this one.
+  assert.deepEqual([...classes].sort(), [...FINDING_CLASSES].sort(), 'exactly one ruling per finding class, no more and no fewer')
+  assert.equal(new Set(classes).size, classes.length, 'no class is ruled on twice, which would make the lookup order-dependent')
+
+  const ids = parsed.rulings.map((r) => r.id)
+  assert.equal(new Set(ids).size, ids.length, 'every ruling id is unique, so provenance points at one row')
+
+  // The VALUES, explicitly: a silent re-prioritization is a change to the queue every consumer
+  // reads, and it must fail this suite instead of shipping as a different ordering.
+  assert.deepEqual(
+    Object.fromEntries(parsed.rulings.map((r) => [r.findingClass, r.importance])),
+    EXPECTED_IMPORTANCE,
+    'the ratified v1 importances',
+  )
+})
+
+// ── 15. the sentinel class: coverage IS the satisfaction ──────────────────────────────
+
+test('computeOpportunity — a sentinel cluster measures COVERAGE: a dimension scored in 2 of 5 reports satisfies 4', () => {
+  // standards-adherence: sentinelled in three reports, scored 88 and 92 in the other two.
+  // Coverage gives 10 * 2/5 = 4. The two wrong readings both land elsewhere: averaging the scored
+  // values (the dimension-backed path) gives 9.0, and scored-over-sentinelled gives 10*2/3 = 6.67.
+  const corpus = [
+    mkReport('COA', '2026-07-10', { dimensions: { 'standards-adherence': sentinelDimension('unjudged-backfill') } }),
+    mkReport('COB', '2026-07-11', { dimensions: { 'standards-adherence': sentinelDimension('unjudged-backfill') } }),
+    mkReport('COC', '2026-07-12', { dimensions: { 'standards-adherence': sentinelDimension('unjudged-backfill') } }),
+    mkReport('COD', '2026-07-13', { dimensions: { 'standards-adherence': scoredDimension(88) } }),
+    mkReport('COE', '2026-07-14', { dimensions: { 'standards-adherence': scoredDimension(92) } }),
+  ]
+  const o = opportunityFrom(corpus, [], 'recurring-sentinel', 'standards-adherence:unjudged-backfill')
+
+  assert.equal(o.importance, EXPECTED_IMPORTANCE['recurring-sentinel'], 'the v1 ruling for a recurring measurement gap')
+  assert.equal(o.satisfaction, 4, '10 * (2 reports that SCORED the dimension / 5 reports)')
+  assert.notEqual(o.satisfaction, 9, 'the mean of the scored values is not the satisfaction of a COVERAGE finding')
+  assert.equal(o.score, 8, '6 + max(6 - 4, 0)')
+
+  // Both counts named, so the ratio is checkable from the string alone.
+  assert.match(o.satisfactionSource, /standards-adherence/, 'the source names the dimension whose coverage it measured')
+  assert.match(o.satisfactionSource, /\b2\b/, 'the numerator: reports that scored the dimension')
+  assert.match(o.satisfactionSource, /\b5\b/, 'the denominator: reports in the corpus')
+})
+
+// ── 16. the protocol-load class: budget over measured, clamped ────────────────────────
+
+test('computeOpportunity — protocol load satisfies 10 * budget / measured mean, over the CLUSTER\'S OWN cited values', () => {
+  // prod-grade over budget at 20000 and 28000 => mean 24000, satisfaction 10 * 12000/24000 = 5.
+  // The corpus also carries a prod-grade report UNDER budget (6000) and a fast-lane outlier
+  // (120000), neither of which the cluster cites: folding in the under-budget report gives a mean
+  // of 18000 (satisfaction 6.67, score 6), and averaging every report gives 43500 (satisfaction
+  // 2.76, score 9.24). Only the cited-values reading produces the 7 asserted below.
+  const corpus = [
+    mkReport('PLA', '2026-07-10', { workflow: workflowBlock(20000, 'prod-grade') }),
+    mkReport('PLB', '2026-07-11', { workflow: workflowBlock(28000, 'prod-grade') }),
+    mkReport('PLC', '2026-07-12', { workflow: workflowBlock(6000, 'prod-grade') }),
+    mkReport('PLD', '2026-07-13', { workflow: workflowBlock(120000, 'fast-lane') }),
+    mkReport('PLE', '2026-07-14', { workflow: workflowBlock(90000, 'fast-lane') }),
+  ]
+  const o = opportunityFrom(corpus, [], 'protocol-load-over-budget', 'prod-grade')
+
+  assert.equal(PROTOCOL_LOAD_BUDGET_TOKENS, 12000, 'the budget this arithmetic is written against')
+  assert.equal(o.importance, EXPECTED_IMPORTANCE['protocol-load-over-budget'], 'the v1 ruling for an over-budget protocol load')
+  assert.equal(o.satisfaction, 5, '10 * 12000 / 24000: twice the budget is half satisfied')
+  assert.equal(o.score, 7, '6 + max(6 - 5, 0)')
+  assert.match(o.satisfactionSource, /12000/, 'the source names the budget the ratio is against')
+  assert.match(o.satisfactionSource, /24000/, 'and the measured mean, so the ratio can be recomputed by hand')
+
+  // The clamp. A ratio above 1 must saturate at 10 rather than emit an 11 or a 12 that would
+  // break the documented 0..10 satisfaction range and make one class's score incomparable with
+  // another's. Unclamped this would be 10 * 12000/10000 = 12.
+  const underBudget = [
+    mkReport('CLA', '2026-07-10', { workflow: workflowBlock(9000, 'prod-grade') }),
+    mkReport('CLB', '2026-07-11', { workflow: workflowBlock(11000, 'prod-grade') }),
+  ]
+  const clamped = computeOpportunity(
+    {
+      findingClass: 'protocol-load-over-budget',
+      clusterKey: 'prod-grade',
+      lane: 'plugin-generic',
+      kind: 'reduction',
+      evidence: [
+        {
+          file: 'roadmap/arc-evals/CLA-2026-07-10.json',
+          jsonPath: 'workflow.protocolLoadTokens',
+          excerpt: `protocol load measured 9000 tokens against the ${PROTOCOL_LOAD_BUDGET_TOKENS} budget on profile prod-grade`,
+        },
+        {
+          file: 'roadmap/arc-evals/CLB-2026-07-11.json',
+          jsonPath: 'workflow.protocolLoadTokens',
+          excerpt: `protocol load measured 11000 tokens against the ${PROTOCOL_LOAD_BUDGET_TOKENS} budget on profile prod-grade`,
+        },
+      ],
+    },
+    underBudget,
+  )
+  assert.equal(clamped.satisfaction, 10, 'a mean under the budget is fully satisfied, and no more than fully')
+  assert.notEqual(clamped.satisfaction, 12, 'an unclamped ratio would leave the 0..10 range every other class is compared on')
+  assert.equal(clamped.score, 6, 'and the gap term stays floored at 0, so the score is the bare importance')
+})
+
+// ── 17. a class with no ruling row is a refusal, never a default ──────────────────────
+
+test('computeOpportunity — a finding class with no ruling row THROWS, naming the class', () => {
+  const stranger = {
+    findingClass: 'recurring-vibes',
+    clusterKey: 'atmosphere',
+    lane: 'plugin-generic',
+    kind: 'process-change',
+    evidence: [
+      { file: 'roadmap/arc-evals/ALPHA-2026-07-01.json', jsonPath: 'notes[0]', excerpt: 'x' },
+      { file: 'roadmap/arc-evals/BRAVO-2026-07-02.json', jsonPath: 'notes[0]', excerpt: 'y' },
+    ],
+  }
+
+  // The table is closed over the same enum as the classes, so this is unreachable except by
+  // editing one without the other. A default importance is precisely what would let that editing
+  // mistake ship as a plausible number nobody ratified.
+  assert.throws(
+    () => computeOpportunity(stranger, loadFixtureCorpus().reports),
+    (err) => {
+      assert.ok(err instanceof Error, 'a refusal is a thrown Error, not a returned sentinel object')
+      assert.match(err.message, /recurring-vibes/, 'the message names the unruled class, so the fix is obvious from the failure alone')
+      return true
+    },
+    'an unruled finding class must refuse to be scored',
+  )
+
+  // And the same call on a RULED class does not throw, so the assertion above is about the
+  // missing ruling and not about a computeOpportunity that throws on everything.
+  const { reports, lessons } = loadFixtureCorpus()
+  assert.equal(typeof opportunityFrom(reports, lessons, 'recurring-regression', 'speed').score, 'number', 'a ruled class scores')
+})
+
+// ── 18. every real cluster scores, and the rails hold over all of them ────────────────
+
+test('computeOpportunity — every cluster the fixture corpus emits scores, within the documented ranges', () => {
+  const { reports, lessons } = loadFixtureCorpus()
+  const table = rulingsTable()
+  const result = clusterFindings(extractFindings(reports, lessons))
+  assert.equal(result.clusters.length, EXPECTED_CLUSTERS.length, 'the corpus must emit its clusters, or the walk below is vacuous')
+
+  for (const c of result.clusters) {
+    const label = `${c.findingClass}/${c.clusterKey}`
+    const o = computeOpportunity(c, reports)
+
+    assert.equal(o.importance, EXPECTED_IMPORTANCE[c.findingClass], `${label}: importance is the ratified ruling for its class`)
+    assert.equal(typeof o.score, 'number', `${label}: the score is a number`)
+    assert.ok(Number.isFinite(o.score), `${label}: a NaN score is an unmeasured input leaking into the arithmetic`)
+    assert.ok(o.score >= 0, `${label}: no proposal scores negative, got ${o.score}`)
+
+    assert.equal(o.rulingsVersion, table.version, `${label}: every score carries the table version it was computed under`)
+    const ruling = table.rulings.find((r) => r.id === o.rulingId)
+    assert.ok(ruling, `${label}: rulingId ${JSON.stringify(o.rulingId)} names a real row in the table`)
+    assert.equal(ruling.findingClass, c.findingClass, `${label}: and that row is the one for this cluster's class`)
+
+    assert.equal(typeof o.satisfactionSource, 'string', `${label}: satisfactionSource is a string`)
+    assert.notEqual(o.satisfactionSource.trim(), '', `${label}: an unnamed satisfaction is an unciteable number`)
+
+    if (o.satisfaction === null) {
+      // The rail that makes the whole design honest, asserted for EVERY unmeasured cluster the
+      // real corpus produces rather than for the one hand-built case above.
+      assert.equal(o.score, o.importance, `${label}: an unmeasurable satisfaction scores the bare importance`)
+      assert.equal(o.satisfactionSource, 'satisfaction-unmeasured', `${label}: and says so with the named literal`)
+    } else {
+      assert.equal(typeof o.satisfaction, 'number', `${label}: satisfaction is a number or null, never undefined or a string`)
+      assert.ok(o.satisfaction >= 0 && o.satisfaction <= 10, `${label}: satisfaction stays on the 0..10 scale, got ${o.satisfaction}`)
+      assert.equal(o.score, o.importance + Math.max(o.importance - o.satisfaction, 0), `${label}: the score IS the formula, applied to its own reported inputs`)
+    }
+  }
+
+  // At least one measured and one unmeasured cluster, or one branch above never ran.
+  const scored = result.clusters.map((c) => computeOpportunity(c, reports))
+  assert.ok(scored.some((o) => o.satisfaction === null), 'the corpus exercises the unmeasured branch')
+  assert.ok(scored.some((o) => typeof o.satisfaction === 'number'), 'and the measured branch')
+})
+
+// ── 19. determinism ───────────────────────────────────────────────────────────────────
+
+test('computeOpportunity — the same cluster against the same corpus scores identically twice', () => {
+  const { reports, lessons } = loadFixtureCorpus()
+  const cluster = needCluster(clusterFindings(extractFindings(reports, lessons)), 'recurring-low-score', 'code-confidence')
+
+  const first = computeOpportunity(cluster, reports)
+  const second = computeOpportunity(cluster, reports)
+
+  // A measured cluster, so the comparison is about a real computation rather than two identical
+  // "unmeasured" shrugs.
+  assert.equal(typeof first.satisfaction, 'number', 'this cluster is measured, or the comparison below proves little')
+  assert.deepStrictEqual(second, first, 'scoring reads only typed corpus fields, so a re-run cannot reorder the queue')
+})

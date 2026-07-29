@@ -182,6 +182,162 @@ export function extractFindings(reports, lessons) {
   return findings
 }
 
+/**
+ * The importance half of the opportunity score: static, versioned DATA, in the
+ * SPEED_REFERENCE_MINUTES_PER_TASK mould (cli/lib/eval-score.mjs). It is compile-time constants
+ * rather than configuration for the reason the ratchet cannot survive otherwise — two machines
+ * reading one corpus must not produce incomparable priorities. Changing a value here is a knowing
+ * re-prioritization of every consumer's queue: bump `version`, so the change arrives as a visible
+ * diff in a versioned table instead of as a quietly different ordering.
+ *
+ * The ranking these encode: a measured slide outranks a low absolute score (a slide is the loop's
+ * reason to exist); an unmeasured dimension outranks neither but beats a shared lesson, because a
+ * gap in measurement is the scores lying by omission while a shared lesson is already written down.
+ */
+export const IMPORTANCE_RULINGS = {
+  version: 1,
+  ratified: '2026-07-28',
+  rulings: [
+    {
+      id: 'importance-recurring-regression',
+      findingClass: 'recurring-regression',
+      importance: 8,
+      rationale: 'a measured slide against a rolling baseline is the loop\'s reason to exist, so it outranks every other class',
+    },
+    {
+      id: 'importance-recurring-low-score',
+      findingClass: 'recurring-low-score',
+      importance: 7,
+      rationale: 'a dimension that is repeatedly weak is a standing cost, but a stable weakness is less urgent than a fresh slide',
+    },
+    {
+      id: 'importance-recurring-sentinel',
+      findingClass: 'recurring-sentinel',
+      importance: 6,
+      rationale: 'an unmeasured dimension is the scores lying by omission, and a gap that recurs will not close on its own',
+    },
+    {
+      id: 'importance-protocol-load-over-budget',
+      findingClass: 'protocol-load-over-budget',
+      importance: 6,
+      rationale: 'protocol load over the measured budget is a cost paid on every run, and the ledger already says what it costs',
+    },
+    {
+      id: 'importance-recurring-lesson-key',
+      findingClass: 'recurring-lesson-key',
+      importance: 5,
+      rationale: 'a lesson repeated across arcs is real signal, but it is already written down, so it is the least urgent class',
+    },
+  ],
+}
+
+/** The named refusal a null satisfaction carries. ONE literal for every unmeasurable case, so a
+ *  reader can grep the corpus for what the loop declined to measure; free prose that varied per
+ *  cluster would make that impossible. */
+export const SATISFACTION_UNMEASURED = 'satisfaction-unmeasured'
+
+/** Six places: enough to keep a real difference, few enough that float noise cannot fake one. */
+const round6 = (n) => Math.round(n * 1e6) / 1e6
+
+const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length
+
+/** The reports a cluster actually CITED, matched by the path its evidence names. The measured
+ *  input has to come from the cluster's own citations rather than from a re-filter of the corpus:
+ *  a reader checking the number opens exactly those files, and a second filtering rule here could
+ *  disagree with the one that built the evidence. */
+function citedReports(cluster, reports) {
+  const cited = new Set(cluster.evidence.map((e) => e.file))
+  return (reports ?? []).filter((r) => cited.has(reportPath(r)))
+}
+
+/** The dimension a cluster is about: the key itself, or the part before the sentinel name. */
+const clusterDimension = (cluster) =>
+  cluster.findingClass === 'recurring-sentinel' ? cluster.clusterKey.slice(0, cluster.clusterKey.indexOf(':')) : cluster.clusterKey
+
+/**
+ * The MEASURED half. Returns { satisfaction, satisfactionSource } — satisfaction on the 0..10
+ * scale, or null when the corpus cannot measure it at all.
+ *
+ * Every branch reads the corpus and names what it read. The one thing none of them may do is
+ * substitute a zero for an absent measurement: a zero reads as "measured, and terrible", which
+ * would float exactly the proposals nobody has evidence for to the top of the queue.
+ */
+function measureSatisfaction(cluster, reports) {
+  const all = reports ?? []
+  const dimension = clusterDimension(cluster)
+
+  if (cluster.findingClass === 'recurring-lesson-key')
+    // No dimension backs a lesson key. There is nothing in the corpus to be satisfied ABOUT.
+    return { satisfaction: null, satisfactionSource: SATISFACTION_UNMEASURED }
+
+  if (cluster.findingClass === 'protocol-load-over-budget') {
+    const measured = citedReports(cluster, all)
+      .map((r) => r.workflow?.protocolLoadTokens)
+      .filter((t) => typeof t === 'number')
+    if (measured.length === 0) return { satisfaction: null, satisfactionSource: SATISFACTION_UNMEASURED }
+    const measuredMean = mean(measured)
+    // Clamped at 1 before scaling: a load UNDER budget is fully satisfied and no more than fully.
+    // An unclamped ratio would leave the 0..10 range every other class is compared on.
+    return {
+      satisfaction: round6(10 * Math.min(PROTOCOL_LOAD_BUDGET_TOKENS / measuredMean, 1)),
+      satisfactionSource: `budget ${PROTOCOL_LOAD_BUDGET_TOKENS} over a measured mean of ${round6(measuredMean)} tokens across ${measured.length} cited report(s)`,
+    }
+  }
+
+  const scored = all.map((r) => r.dimensions?.[dimension]).filter((d) => typeof d?.score === 'number')
+
+  if (cluster.findingClass === 'recurring-sentinel')
+    // COVERAGE as satisfaction: the finding IS that the dimension goes unmeasured, so how often it
+    // IS measured is the honest read of how satisfied that need already is.
+    return {
+      satisfaction: all.length === 0 ? null : round6((10 * scored.length) / all.length),
+      satisfactionSource:
+        all.length === 0
+          ? SATISFACTION_UNMEASURED
+          : `${dimension} scored in ${scored.length} of ${all.length} reports (coverage as satisfaction)`,
+    }
+
+  // Dimension-backed: how well the corpus scores the dimension IS how satisfied the need is. A
+  // sentinelled report carries no score and is EXCLUDED rather than averaged in as a zero.
+  if (scored.length === 0) return { satisfaction: null, satisfactionSource: SATISFACTION_UNMEASURED }
+  return {
+    satisfaction: round6(mean(scored.map((d) => d.score)) / 10),
+    satisfactionSource: `mean of ${scored.length} scored ${dimension} values across ${all.length} reports`,
+  }
+}
+
+/**
+ * The proposal prioritizer (design doc, Numbers program):
+ *   score = importance + max(importance - satisfaction, 0)
+ *
+ * ONE exported function, so the CLI, the trend page and any later consumer rank identically. The
+ * gap term is floored at zero: a well-served class must never score BELOW its own ruling, because
+ * a negative contribution would let satisfaction DEMOTE a class rather than merely fail to promote
+ * it. An unmeasured satisfaction contributes nothing at all — exactly importance, never importance
+ * doubled — which is what stops an unmeasurable class out-ranking a measured one on nothing.
+ */
+export function computeOpportunity(cluster, reports) {
+  const ruling = IMPORTANCE_RULINGS.rulings.find((r) => r.findingClass === cluster.findingClass)
+  if (!ruling)
+    // Unreachable while the table and FindingClassShape stay closed over the same enum — which is
+    // why this must throw rather than default. A default importance is precisely what would let
+    // editing one without the other ship as a plausible number nobody ratified.
+    throw new Error(
+      `eval-propose: no importance ruling for finding class '${cluster.findingClass}' — IMPORTANCE_RULINGS v${IMPORTANCE_RULINGS.version} ` +
+        'must carry exactly one row per finding class',
+    )
+
+  const { satisfaction, satisfactionSource } = measureSatisfaction(cluster, reports)
+  return {
+    importance: ruling.importance,
+    satisfaction,
+    score: satisfaction === null ? ruling.importance : ruling.importance + Math.max(ruling.importance - satisfaction, 0),
+    rulingId: ruling.id,
+    rulingsVersion: IMPORTANCE_RULINGS.version,
+    satisfactionSource,
+  }
+}
+
 /** Which repo a cluster asks to change, or null when the corpus cannot say. */
 function deriveLane(findingClass, clusterKey) {
   const byClass = CLASS_LANE[findingClass]
