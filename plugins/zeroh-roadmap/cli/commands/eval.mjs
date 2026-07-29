@@ -51,6 +51,10 @@ const RECORDERS = {
   'record-verdicts': { shape: 'ArcVerdictsFileShape', suffix: 'verdicts', what: 'intent verdicts' },
 }
 
+/** The write-origin literal the loop stamps on its own artifacts; anything else is somebody's
+ *  else file, and the trend page reports it rather than rendering it as a proposal. */
+const PROPOSAL_WRITE_ORIGIN = 'roadmap-eval-loop'
+
 /** The archive home — committed by design (see the module docblock). */
 export const ARC_EVALS_DIR = ['roadmap', 'arc-evals']
 
@@ -354,7 +358,7 @@ async function runTrend(opts) {
   const outPath = join(dir, TREND_FILE)
   try {
     mkdirSync(dir, { recursive: true })
-    writeFileSync(outPath, renderTrendPage(reports), 'utf8')
+    writeFileSync(outPath, renderTrendPage(reports, readProposalsForTrend(join(dir, PROPOSALS_SUBDIR))), 'utf8')
   } catch (e) {
     process.stderr.write(`roadmap eval trend: cannot write ${outPath}: ${e.message}\n`)
     return 1
@@ -440,7 +444,7 @@ function renderChart(reports, key, resets) {
 
 /** The whole page. Every section is emitted for all seven dimensions, always — a page that
  *  rendered only the dimensions it found data for would silently shrink the picture. */
-function renderTrendPage(reports) {
+function renderTrendPage(reports, proposals) {
   const judged = judgeResets(reports)
   const scoringResets = reports.length > 0 ? scoringModelResets(reports) : []
   const resets = [...judged, ...scoringResets]
@@ -524,8 +528,80 @@ code{font-family:ui-monospace,monospace}
 </style></head><body>
 ${head.join('\n')}
 ${sections.join('\n')}
+${renderProposalsSection(proposals)}
 </body></html>
 `
+}
+
+/**
+ * Read the proposals directory the way the PAGE needs it: own surfaced rows to table, own decided
+ * rows to count, and the two unusable kinds named by filename.
+ *
+ * Rendering is a READ. Nothing here writes, repairs or reformats, and an absent directory is an
+ * ordinary corpus state rather than an early return that skips the section: the page owes the
+ * reader the same sentence either way.
+ */
+function readProposalsForTrend(proposalsDir) {
+  const out = { surfaced: [], ratified: 0, rejected: 0, archived: 0, unreadable: [], foreign: [] }
+  if (!existsSync(proposalsDir)) return out
+  for (const name of readdirSync(proposalsDir).sort()) {
+    if (!name.endsWith('.json')) continue
+    let doc
+    try {
+      doc = JSON.parse(readFileSync(join(proposalsDir, name), 'utf8'))
+    } catch {
+      out.unreadable.push(name)
+      continue
+    }
+    if (!doc || doc.writeOrigin !== PROPOSAL_WRITE_ORIGIN) {
+      out.foreign.push(name)
+      continue
+    }
+    if (doc.status === 'surfaced') out.surfaced.push(doc)
+    else if (doc.status in out) out[doc.status] += 1
+  }
+  out.surfaced.sort((a, b) => (b.opportunity?.score ?? 0) - (a.opportunity?.score ?? 0) || String(a.id).localeCompare(String(b.id)))
+  return out
+}
+
+/**
+ * The open-proposal queue, on the one page a human already reads across arcs.
+ *
+ * SURFACED rows only. A ratified, rejected or archived proposal is COUNTED on one line and never
+ * tabled — tabling a decided proposal would re-open, in a renderer, a decision a human already
+ * made. The section is emitted even when it is empty, carrying `no open proposals` in words: a
+ * missing section reads as a broken page and an empty table reads as a claim nobody made.
+ */
+function renderProposalsSection(p) {
+  const body = []
+  if (p.surfaced.length === 0) {
+    body.push('<p class="gap">no open proposals — nothing in roadmap/arc-evals/proposals/ is awaiting a ratification decision.</p>')
+  } else {
+    body.push(
+      '<table class="proposals"><tr><th>score</th><th>lane</th><th>kind</th><th>title</th><th>findings</th><th>created</th></tr>' +
+        p.surfaced
+          .map(
+            (d) =>
+              `<tr><td>${esc(round2(d.opportunity?.score ?? 0))}</td><td>${esc(d.lane)}</td><td>${esc(d.kind)}</td>` +
+              `<td>${esc(d.title)}</td><td>${esc((d.evidence ?? []).length)}</td><td>${esc(d.createdAt)}</td></tr>`,
+          )
+          .join('') +
+        '</table>',
+    )
+  }
+  body.push(
+    `<p class="meta">decided: ${p.ratified} ratified &middot; ${p.rejected} rejected &middot; ${p.archived} archived ` +
+      '(counted here, never tabled &mdash; a decided proposal is not an open one).</p>',
+  )
+  // Named, never dropped: a file the page cannot use is a fact about the corpus, and a silent skip
+  // is how a reader comes to believe the queue is shorter than it is.
+  for (const [label, names] of [
+    ['unreadable', p.unreadable],
+    ['foreign write-origin (left untouched)', p.foreign],
+  ])
+    if (names.length > 0) body.push(`<p class="gap">${esc(label)}: ${names.map((n) => esc(n)).join(', ')}</p>`)
+
+  return `<section><h2 id="open-proposals">Open proposals</h2>${body.join('')}</section>`
 }
 
 // ── `roadmap eval merge-judge` — the judge verdict's ONE door into a report ────────────

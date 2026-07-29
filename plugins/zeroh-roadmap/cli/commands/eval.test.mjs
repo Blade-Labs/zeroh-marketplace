@@ -2499,3 +2499,343 @@ test('roadmap --help — the eval entry advertises the propose subcommand', () =
   assert.ok(line, `--help must list eval; stdout was:\n${r.stdout}`)
   assert.match(line, /propose/, `a subcommand missing from the TREE is a subcommand nobody finds; the eval line was:\n${line}`)
 })
+
+// ══ `roadmap eval trend` — the OPEN PROPOSALS section ═══════════════════════════════════════
+// A proposal that only lives in a directory rots there unseen. The trend page is the one place a
+// human already looks at the corpus across arcs, so it is where open proposals have to surface —
+// and there are exactly two silences that must be impossible:
+//   (a) a MISSING section, which reads as a broken page;
+//   (b) an EMPTY TABLE with no sentence, which reads as a claim nobody made.
+// What the section owes, and what these tests pin:
+//   1. a table of `status === 'surfaced'` rows ONLY, sorted by opportunity.score DESCENDING,
+//      each row carrying score / lane / kind / title / evidence count / createdAt;
+//   2. a one-line count of the non-surfaced OWN proposals (ratified, rejected, archived) — those
+//      are counted, never tabled, or a decided proposal re-enters the queue as an open one;
+//   3. parse-failures and foreign-`writeOrigin` files named BY FILENAME in a footnote — a file
+//      the page cannot read is a fact about the corpus, not something to drop;
+//   4. `no open proposals` in words whenever there is nothing to table;
+//   5. the existing trend contract untouched: exit 0, trend.html written, the wrote-line printed.
+//
+// ONE RENDERING CONTRACT the assertions require (the analogue of the `id="dim-<key>"` anchor the
+// chart tests pin): the section is a real `<table>` whose proposal rows are `<tr>` elements
+// containing `<td>` cells. That is what makes "exactly these rows, in this order" machine-
+// checkable rather than eyeball-checkable, so the implementation owes it.
+//
+// The fixtures are built by a LOCAL factory (one good document, copy-mutated) rather than by
+// running `roadmap eval propose` first, for two reasons: these tests need controlled scores,
+// distinct titles, a specific archived document and two deliberately BROKEN files, none of which
+// a real pass emits; and deriving them from the propose corpus would turn an edit to that fixture
+// into a false red about the trend page. The honesty the generated route would have bought is
+// bought instead by validating the base document against the CONSUMER's ProposalShape through the
+// tsx bridge in the first test — so the factory cannot encode this test author's belief about the
+// contract.
+
+/** The impl's own escaping (cli/commands/eval.mjs `esc`), so assertions compare like with like. */
+const escHtml = (s) =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/**
+ * A VALID surfaced proposal, mutated by copy. `opportunity` merges rather than replaces so a
+ * caller can move the score alone without restating the ruling provenance beside it.
+ * The scores follow the real prioritizer (importance + max(importance - satisfaction, 0)), which
+ * is what OpportunityShape's refine is about — a fixture that ignored it would not parse.
+ */
+const PROPOSAL_BASE = {
+  id: 'recurring-sentinel-doc-brevity',
+  findingClass: 'recurring-sentinel',
+  lane: 'plugin-generic',
+  kind: 'process-change',
+  title: 'name the unjudged dimensions in the arc-end summary',
+  rationale: 'four dimensions carried a sentinel in every report of this corpus and nobody was told',
+  evidence: [
+    { file: 'roadmap/arc-evals/A-2026-07-02.json', jsonPath: 'dimensions.doc-brevity.sentinel', excerpt: 'pending-judge' },
+    { file: 'roadmap/arc-evals/A-2026-07-03.json', jsonPath: 'dimensions.doc-brevity.sentinel', excerpt: 'pending-judge' },
+  ],
+  opportunity: {
+    importance: 9,
+    satisfaction: 4,
+    score: 14,
+    rulingId: 'recurring-sentinel-weight',
+    rulingsVersion: 1,
+    satisfactionSource: 'measured over the dated reports in roadmap/arc-evals/',
+  },
+  writeOrigin: 'roadmap-eval-loop',
+  status: 'surfaced',
+  createdAt: '2026-07-10',
+  updatedAt: '2026-07-10',
+}
+
+/** Write one proposal into roadmap/arc-evals/proposals/<id>.json and hand the document back. */
+function plantProposal(root, overrides = {}) {
+  const doc = {
+    ...PROPOSAL_BASE,
+    ...overrides,
+    opportunity: { ...PROPOSAL_BASE.opportunity, ...(overrides.opportunity ?? {}) },
+  }
+  mkdirSync(proposalsDir(root), { recursive: true })
+  writeFileSync(join(proposalsDir(root), `${doc.id}.json`), JSON.stringify(doc, null, 2) + '\n')
+  return doc
+}
+
+/** The slice of the page from the Open proposals heading onward (the section is the page's last). */
+function proposalsSection(html) {
+  const at = html.search(/Open proposals/)
+  assert.notEqual(
+    at,
+    -1,
+    'the page must carry an "Open proposals" section — a missing section reads as a broken page,' +
+      ' which is one of the two silences this section exists to make impossible',
+  )
+  return html.slice(at)
+}
+
+/** The proposal ROWS of that section: `<tr>` elements carrying `<td>` cells (the header has none). */
+const proposalRows = (html) =>
+  [...proposalsSection(html).matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/g)].map(([tr]) => tr).filter((tr) => /<td\b/.test(tr))
+
+/** Section text with tags flattened to spaces — a count split across `<strong>` is still one
+ *  sentence to a reader, so the count assertions read the page the way a reader does. */
+const flattenTags = (html) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+
+/** Does the section state `<word>` with the number `n` beside it (within one short window)? */
+function statesCount(section, word, n) {
+  const text = flattenTags(section)
+  for (const m of text.matchAll(new RegExp(word, 'gi'))) {
+    const window = text.slice(Math.max(0, m.index - 32), m.index + word.length + 32)
+    if (printsNumber(window, n)) return true
+  }
+  return false
+}
+
+// ── 66. POPULATED: surfaced rows in score order, the archived one COUNTED and not tabled ──
+test('eval trend — the Open proposals table lists surfaced proposals highest-score first and only COUNTS the archived one', () => {
+  const root = buildEvalFixture()
+  plantPrior(root, '2026-07-02', { all: 60 })
+  plantPrior(root, '2026-07-03', { all: 70 })
+
+  const top = plantProposal(root, {
+    id: 'recurring-regression-code-confidence',
+    title: 'anchor the escape window to the land record',
+    kind: 'schema-tightening',
+    lane: 'plugin-generic',
+    createdAt: '2026-07-10',
+    evidence: [
+      { file: 'roadmap/arc-evals/A-2026-07-02.json', jsonPath: 'ratchet[0]', excerpt: 'regression: true' },
+      { file: 'roadmap/arc-evals/A-2026-07-03.json', jsonPath: 'ratchet[0]', excerpt: 'regression: true' },
+      { file: 'roadmap/arc-evals/lessons.jsonl', jsonPath: 'line 4', excerpt: 'the escape window drifted again' },
+    ],
+    opportunity: { importance: 9, satisfaction: 4, score: 14 },
+  })
+  const lower = plantProposal(root, {
+    id: 'recurring-lesson-key-phase-file',
+    title: 're-read the phase file before editing it',
+    kind: 'process-change',
+    lane: 'consumer-specific',
+    createdAt: '2026-07-11',
+    opportunity: { importance: 6, satisfaction: 5, score: 7 },
+  })
+  const archived = plantProposal(root, {
+    id: 'recurring-low-score-speed',
+    title: 'raise the speed reference for surface-heavy phases',
+    status: 'archived',
+    archivedReason: 'superseded by the declared speed-reference-8 reset, which already recalibrated it',
+    createdAt: '2026-07-09',
+    opportunity: { importance: 8, satisfaction: 2, score: 14 },
+  })
+
+  // The factory is only trustworthy if the CONSUMER's own contract accepts what it produces —
+  // otherwise these fixtures encode a belief about ProposalShape rather than the shape itself.
+  for (const doc of [top, lower, archived]) {
+    const res = parsesConsumerShape(root, 'ProposalShape', doc)
+    assert.equal(res.ok, true, `fixture precondition: ${doc.id} must satisfy ProposalShape; got: ${res.detail}`)
+  }
+  // Ordering is only a claim if the two scores can distinguish a right order from a wrong one.
+  assert.notEqual(
+    top.opportunity.score,
+    lower.opportunity.score,
+    'fixture precondition: two DIFFERENT scores, or "sorted descending" is satisfied by any order',
+  )
+  assert.ok(top.opportunity.score > lower.opportunity.score, 'fixture precondition: `top` is the higher-scoring one')
+
+  const r = evalTrend(root)
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  assert.ok(existsSync(trendPath(root)), `the existing contract holds: the page at ${trendPath(root)}`)
+  assert.match(r.stdout, rx(trendPath(root)), 'and the run still names the file it wrote')
+
+  const html = readFileSync(trendPath(root), 'utf8')
+  const section = proposalsSection(html)
+
+  // PRESENT first, so the absence assertion below cannot pass over a section that rendered nothing.
+  assert.ok(section.includes(escHtml(top.title)), `the higher-scoring proposal must be listed; section was:\n${section}`)
+  assert.ok(section.includes(escHtml(lower.title)), `the lower-scoring proposal must be listed; section was:\n${section}`)
+  assert.ok(
+    section.indexOf(escHtml(top.title)) < section.indexOf(escHtml(lower.title)),
+    `the table reads highest-opportunity first: ${top.id} (${top.opportunity.score}) must precede ` +
+      `${lower.id} (${lower.opportunity.score}); section was:\n${section}`,
+  )
+
+  // A decided proposal that reappears in the open queue is a decision re-opened by a renderer.
+  assert.equal(
+    html.includes(escHtml(archived.title)),
+    false,
+    `an archived proposal is COUNTED, never tabled — its title must not appear anywhere on the page;` +
+      ` page was:\n${html}`,
+  )
+  assert.ok(statesCount(section, 'archived', 1), `the section must state the archived count of 1; section was:\n${section}`)
+  // All three non-surfaced statuses are accounted for, or a reader cannot tell "none rejected"
+  // from "rejections are not counted here at all".
+  for (const word of ['ratified', 'rejected', 'archived'])
+    assert.match(flattenTags(section), new RegExp(word, 'i'), `the one-line count must name ${word}`)
+
+  const rows = proposalRows(html)
+  assert.equal(
+    rows.length,
+    2,
+    `exactly the two SURFACED proposals are rows — three files, one of them decided; rows were:\n${rows.join('\n')}`,
+  )
+  for (const doc of [top, lower]) {
+    const row = rows.find((tr) => tr.includes(escHtml(doc.title)))
+    assert.ok(row, `${doc.id} must own a table row; rows were:\n${rows.join('\n')}`)
+    assert.ok(row.includes(doc.lane), `${doc.id}: the row must name its lane ${doc.lane}; got ${row}`)
+    assert.ok(row.includes(doc.kind), `${doc.id}: the row must name its kind ${doc.kind}; got ${row}`)
+    assert.ok(
+      renderingsOf(doc.opportunity.score).some((v) => row.includes(v)),
+      `${doc.id}: the row must print the score it is ranked by (${doc.opportunity.score}); got ${row}`,
+    )
+    assert.ok(
+      printsNumber(row, doc.evidence.length),
+      `${doc.id}: the row must carry its evidence count (${doc.evidence.length}) — a proposal's weight is how` +
+        ` much backs it; got ${row}`,
+    )
+    assert.ok(row.includes(doc.createdAt), `${doc.id}: the row must carry createdAt ${doc.createdAt}; got ${row}`)
+  }
+})
+
+// ── 67. EMPTY, TWO WAYS — a missing directory and an empty result are DIFFERENT code paths ──
+// One returns early on a stat, the other falls through the filter with nothing left, and an
+// implementation can easily get one right and the other wrong. Both must produce the same honest
+// sentence, because to a reader they are the same fact: there is nothing open to look at.
+test('eval trend — with NO proposals directory the section still renders and says "no open proposals"', () => {
+  const root = buildEvalFixture()
+  plantPrior(root, '2026-07-02', { all: 60 })
+  plantPrior(root, '2026-07-03', { all: 70 })
+  assert.equal(existsSync(proposalsDir(root)), false, 'fixture precondition: no proposals directory at all')
+
+  const r = evalTrend(root)
+  assert.equal(r.code, 0, `an absent proposals directory is an ordinary corpus state: ${r.stdout + r.stderr}`)
+
+  const html = readFileSync(trendPath(root), 'utf8')
+  const section = proposalsSection(html)
+  assert.ok(
+    section.includes('no open proposals'),
+    `an empty table with no sentence reads as a claim nobody made; section was:\n${section}`,
+  )
+  assert.deepEqual(proposalRows(html), [], 'and nothing is tabled — there is nothing to table')
+  assert.equal(existsSync(proposalsDir(root)), false, 'rendering the page mints no directory as a side effect')
+})
+
+test('eval trend — a proposals directory holding ONLY a non-surfaced proposal says "no open proposals" too', () => {
+  const root = buildEvalFixture()
+  plantPrior(root, '2026-07-02', { all: 60 })
+  plantPrior(root, '2026-07-03', { all: 70 })
+  const ratified = plantProposal(root, {
+    id: 'recurring-sentinel-plan-quality',
+    title: 'require a named plan artifact per phase',
+    status: 'ratified',
+  })
+
+  const r = evalTrend(root)
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+
+  const html = readFileSync(trendPath(root), 'utf8')
+  const section = proposalsSection(html)
+  assert.ok(
+    section.includes('no open proposals'),
+    `zero SURFACED rows is the same fact as no directory, and must read the same; section was:\n${section}`,
+  )
+  assert.deepEqual(proposalRows(html), [], 'a ratified proposal is not an open one and may not be tabled')
+  assert.equal(
+    html.includes(escHtml(ratified.title)),
+    false,
+    'a decided proposal is counted, never surfaced back into the open queue',
+  )
+  assert.ok(statesCount(section, 'ratified', 1), `the count must be DATA-driven — 1 ratified here; section was:\n${section}`)
+})
+
+// ── 68. PROVENANCE FOOTNOTE — an unreadable and a foreign file are named, never dropped ─────
+test('eval trend — an unparseable and a foreign-origin proposal file are named in a footnote, tabled as nothing, and untouched', () => {
+  const root = buildEvalFixture()
+  plantPrior(root, '2026-07-02', { all: 60 })
+  plantPrior(root, '2026-07-03', { all: 70 })
+  const valid = plantProposal(root, {
+    id: 'recurring-regression-speed',
+    title: 'record the reference minutes on every timed phase',
+  })
+
+  const brokenName = 'half-written-proposal.json'
+  const brokenPath = join(proposalsDir(root), brokenName)
+  const brokenBytes = '{"id":"half-written-proposal","status":"surfaced"'
+  writeFileSync(brokenPath, brokenBytes)
+
+  const foreignName = 'user-authored-note.json'
+  const foreignPath = join(proposalsDir(root), foreignName)
+  const FOREIGN_TITLE = 'a proposal a human wrote by hand in this directory'
+  const foreignBytes =
+    JSON.stringify({ ...PROPOSAL_BASE, id: 'user-authored-note', title: FOREIGN_TITLE, writeOrigin: 'user' }, null, 2) + '\n'
+  writeFileSync(foreignPath, foreignBytes)
+
+  const r = evalTrend(root)
+  assert.equal(r.code, 0, `two unusable files must not fail the render: ${r.stdout + r.stderr}`)
+  assert.doesNotMatch(r.stderr, /\n\s+at [^\n]*\n\s+at /, 'an unreadable file is a reported fact, not a leaked stack')
+
+  const html = readFileSync(trendPath(root), 'utf8')
+  const section = proposalsSection(html)
+
+  // PRESENT first: the row assertions below mean nothing if the section rendered empty.
+  assert.ok(section.includes(escHtml(valid.title)), `the readable own proposal must still be tabled; section was:\n${section}`)
+  assert.ok(section.includes(brokenName), `the unparseable file must be named BY FILENAME; section was:\n${section}`)
+  assert.ok(section.includes(foreignName), `the foreign-origin file must be named BY FILENAME; section was:\n${section}`)
+
+  const rows = proposalRows(html)
+  assert.equal(rows.length, 1, `exactly the ONE own, readable, surfaced proposal is a row; rows were:\n${rows.join('\n')}`)
+  assert.ok(rows[0].includes(escHtml(valid.title)), `and it is the valid one; got ${rows[0]}`)
+  assert.equal(
+    rows.some((tr) => tr.includes(escHtml(FOREIGN_TITLE))),
+    false,
+    'a file the loop did not write is REPORTED, never rendered as one of its own proposals',
+  )
+
+  // Rendering is a read. A page generator that "repaired" a file it could not parse would be
+  // editing a committed archive nobody asked it to touch.
+  assert.equal(readFileSync(brokenPath, 'utf8'), brokenBytes, 'the unparseable file is byte-for-byte untouched')
+  assert.equal(readFileSync(foreignPath, 'utf8'), foreignBytes, 'and so is the foreign one')
+})
+
+// ── 69. HTML SAFETY — the new section escapes through the page's own esc() ──────────────────
+test('eval trend — a proposal title carrying markup is ESCAPED into the table, not dropped and not injected', () => {
+  const root = buildEvalFixture()
+  plantPrior(root, '2026-07-02', { all: 60 })
+  const HOSTILE = 'audit <script>alert(1)</script> & the rehydration map'
+  const doc = plantProposal(root, { id: 'recurring-lesson-key-masking', title: HOSTILE })
+  const res = parsesConsumerShape(root, 'ProposalShape', doc)
+  assert.equal(res.ok, true, `fixture precondition: the hostile-titled proposal is a VALID proposal; got: ${res.detail}`)
+
+  const r = evalTrend(root)
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  const html = readFileSync(trendPath(root), 'utf8')
+
+  assert.equal(
+    html.includes('<script>alert(1)</script>'),
+    false,
+    'the raw markup must never reach the page — the section owes the same esc() every other cell uses',
+  )
+  // Escaping, not dropping: a renderer that silently skipped the row would also pass the line
+  // above while losing a real proposal.
+  assert.ok(
+    proposalsSection(html).includes(escHtml(HOSTILE)),
+    `the title must be present in ESCAPED form; section was:\n${proposalsSection(html)}`,
+  )
+  assert.ok(html.includes('&amp;'), 'the ampersand is escaped too, or the escaper is a < > special case')
+  const rows = proposalRows(html)
+  assert.equal(rows.length, 1, `the row is rendered, not dropped; rows were:\n${rows.join('\n')}`)
+})
