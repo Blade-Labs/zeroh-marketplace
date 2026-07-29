@@ -244,4 +244,21 @@ the cards carry. Every card cut 39% from the pre-arc ~36,935 B (→ 22,442 B) pr
 | software-developer / test-engineer generic craft prose | obsolete-with-evidence(generic dev/test knowledge the model has) → condensed; config bindings (gateCommands/testConventions/designHomes) + the roadmap-specific rules KEPT |
 | `## Design homes` / `## Gate commands` / `## Test conventions` / `## Validation tiers` / `## Model policy` anchors across all 7 cards | enforced-by-code(re-pointed to designHomes/gateCommands/testConventions/validationTiers/modelPolicy.judgeModel config keys) | cli/lib/config.mjs |
 | executor-reference.md + phase-executor.md | (1658.5 state VERIFIED — no re-trim) | 4,086 ≤4,096 (long-run protocol intact, zero "Full do-phase inheritance") + 3,070; both ≤5,000 per-card |
+
+## do-phase/SKILL.md — phase 2015.2 (diet-funded)
+
+The durable-lesson trigger line (`roadmap eval lesson`) was funded byte-for-byte inside the same
+measured flow rather than granted new budget. **Measured:** do-phase/SKILL.md **8,545 B → 8,547 B**
+(`git show f778fee^:…/skills/do-phase/SKILL.md | wc -c` vs `f778fee:…`); the do-arc flow
+**12,499 tokens / 49,984 B** (`roadmap measure --flow do-arc --json`) against the enforced
+`--assert 12500` (cli/commands/measure.test.mjs:147, which exits 0). Five passages paid for the line
+— one row each.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| Step 3 Commit — the formatter clause naming the two gate checks ("the gate's diff-scoped lint + history-comments checks catch what slips") | enforced-by-code(cli/lib/slots.mjs `historyCommentFindings` :187 + the `lint-diff` slot binding; run by `roadmap gate run`) | both named checks exist and run at the gate; the surviving prose keeps the operative half — run the formatter's `--write` twin on the task's touched files before committing |
+| §Codex delegation lane — the entrypoint-invariants paragraph, incl. the dropped "sandbox-bypassed direct CLI" invariant, "the committed entrypoint", and the per-phase division-of-labor narration | enforced-by-code(cli/commands/codex.mjs:122 spawns `['exec', '--dangerously-bypass-approvals-and-sandbox', '-C', worktree, '-']`; the module header :12 states the invariant) | the invariant IS the launch argv, which the CLI lane owns; the skill keeps "never hand-roll the launch", the 2026-07-22 user ruling, the full per-phase list, and "Codex never merges/pushes and never touches the primary checkout" |
+| §Design-parity stage — "the canonical" qualifier before the parity-rubric path, and the `agent: 'design-parity'` field spelling in the `gateRounds` citation | relocated | the ONE canonical home is already ledgered (§agent cards — 7 judgment cards, 1659.7) and the skill still cites `skills/validate-arc/references/parity-rubric.md` by path, so the adjective restated a ledgered fact; the recorded value survives in the shortened citation |
+| §Echo contract — "the full report stays in the transcript" | obsolete-with-evidence(a synchronously spawned gate agent's full report is in the transcript by construction — the clause described how the transcript works, not a rule an executor can break) | the operative half is untouched: the ~10-line per-stage echo plus the `[Quality pass] nothing to fix` empty wording |
+| §Arc-mode — the `driver` fill sentence ("fill `driver` = your own model id + lane `session`") and "the **do-arc** workflow serializes those" | enforced-by-code(PhaseExecutionResultShape.`driver` is the parse boundary for the model/lane pair — templates/schema.ts:270; the grooming/emit/push tail is serializeSharedMutation — workflows/arc-plane.workflow.mjs:137) | the skill keeps the required field and both lane values (`session` / `codex`) and the SKIP list; only the imperative verb and the workflow's proper name were cut |
 </content>
