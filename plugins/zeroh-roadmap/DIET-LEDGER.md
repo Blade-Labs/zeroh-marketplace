@@ -22,7 +22,11 @@ outputs. The measured do-arc protocol load vs the ~49k baseline is recorded here
 
 > **Baseline (2026-07-15 plugin audit):** do-arc protocol load ≈ 49,000 tokens.
 > **Measured (phase 1659.8, `roadmap measure --flow do-arc`):** **8,233 tokens** (32,924 B over 6
-> model-loaded files) — an **~83% cut**, well under the ≤12,000 budget (`--assert 12000` exits 0). The
+> model-loaded files) — an **~83% cut**, well under the budget (`roadmap measure --flow do-arc
+> --assert <budget>` exits 0). The budget is **12,500 tokens**, held in ONE place —
+> `cli/lib/measure-budget.mjs` `PROTOCOL_LOAD_BUDGET_TOKENS`, read by the measure gate
+> (cli/commands/measure.test.mjs) and by the ELICIT pass (cli/lib/eval-propose.mjs); it was
+> re-ratcheted from 12,000 by user ruling 2026-07-27 (phase 1995 escalation). The
 > cut is deletion-with-disposition (every removed passage has a row below), not hidden content — the
 > fixture tier (1660) + rehearsal (1661) prove nothing load-bearing regressed.
 

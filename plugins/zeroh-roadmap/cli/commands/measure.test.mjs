@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { flowTokens } from './measure.mjs'
+import { PROTOCOL_LOAD_BUDGET_TOKENS } from '../lib/measure-budget.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -140,14 +141,17 @@ test('human output carries the per-file table + total', () => {
 })
 
 // The REAL-tree budget (armed at 1659.8 once the diet completed — the default manifest, no override).
-// RE-RATCHETED 12000 → 12500 by user ruling 2026-07-27 (phase 1995 escalation): the tree was
-// already red at 12268 before 1995's four mandated recorder/attribution lines took it to 12442.
-// 12500 is the new hold-the-line number, not a growth allowance — the EVALLOOP diet lane
-// (EVAL-LOOP-PLAN §Hermes harvest / reduction proposals) owns winning bytes back.
-test('real tree: measure --flow do-arc --assert 12500 exits 0 (the protocol-load-cut criterion)', () => {
+// The figure itself lives in cli/lib/measure-budget.mjs, the one home the ELICIT pass and
+// DIET-LEDGER.md read too; the re-ratchet rationale is recorded there.
+test(`real tree: measure --flow do-arc --assert ${PROTOCOL_LOAD_BUDGET_TOKENS} exits 0 (the protocol-load-cut criterion)`, () => {
   const out = JSON.parse(
-    execFileSync('node', [BIN, 'measure', '--flow', 'do-arc', '--assert', '12500', '--json'], { encoding: 'utf8' }),
+    execFileSync('node', [BIN, 'measure', '--flow', 'do-arc', '--assert', String(PROTOCOL_LOAD_BUDGET_TOKENS), '--json'], {
+      encoding: 'utf8',
+    }),
   )
-  assert.ok(out.totalTokens <= 12500, `do-arc load ${out.totalTokens} > 12500`)
+  assert.ok(
+    out.totalTokens <= PROTOCOL_LOAD_BUDGET_TOKENS,
+    `do-arc load ${out.totalTokens} > ${PROTOCOL_LOAD_BUDGET_TOKENS}`,
+  )
   assert.equal(out.withinBudget, true)
 })

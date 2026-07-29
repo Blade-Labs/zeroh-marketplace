@@ -24,17 +24,12 @@
  * proposal (arc EVALLOOP: a lane-less proposal is not ready).
  */
 import { PENDING_JUDGE_SENTINEL } from './eval-score.mjs'
+import { PROTOCOL_LOAD_BUDGET_TOKENS } from './measure-budget.mjs'
 
 /** Below this a dimension is a recurring weak spot. Strict: a score sitting exactly on the
  *  threshold is not scoring below it, and a boundary that drifts by a rounding error would
  *  manufacture findings out of noise. */
 export const LOW_SCORE_THRESHOLD = 70
-
-/** The measured do-arc protocol-load budget recorded in the plugin's DIET-LEDGER.md, the same
- *  number `roadmap measure --assert 12000` gates on. Strictly greater is a breach: at the budget
- *  is within it. Sourcing the figure from the ledger rather than inventing one is what lets a
- *  reduction proposal cite tokens instead of a fabricated cost. */
-export const PROTOCOL_LOAD_BUDGET_TOKENS = 12000
 
 /** The corpus home, repo-relative, so every citation opens from the consumer root. */
 const ARC_EVALS_DIR = 'roadmap/arc-evals'
