@@ -1441,3 +1441,131 @@ test('consolidateAndWrite — a missing fs, now or validate dep THROWS by name: 
   const ok = consolidateAndWrite(clusters, reports, PROPOSALS_DIR, mkDeps(makeFsStub(), NOW_1))
   assert.equal(ok.created, clusters.length, 'with all three seams present the same call succeeds')
 })
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// phase 2016 gate — TWO NAME COLLISIONS THAT USED TO OVERWRITE SILENTLY
+//
+// Test 22 above proves that a foreign or unparseable file the pass merely READS survives
+// byte-identical. It cannot catch the case that actually destroys content: a file whose
+// FILENAME is the one a live cluster derives. `readProposalDocs` files a non-own document under
+// `foreign`/`unreadable` by NAME only, so `existingOwn` carries no entry for that id and the
+// cluster took the CREATE branch — writing straight over a hand-authored file while the same run
+// printed it as `foreign-skipped`. Destroyed bytes plus a false skip line, from one run.
+//
+// The second collision is between two clusters of the SAME run: `slug` folds every non-alphanumeric
+// run to a hyphen, so `cli/lib` and `cli-lib` are one id. The later cluster overwrote the earlier
+// one and `created` counted both, which is a proposal lost while the summary claims it was written.
+//
+// Both are refusals now, each with its own count, because a proposal dropped for a name is a fact
+// the reader has to be told: silence here is exactly what made the two bugs survive review.
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+/** A minimal lesson-key cluster with a caller-chosen key and traceable citations. Lane and kind are
+ *  supplied directly rather than derived, because these tests are about the id, not about routing. */
+const lessonClusterWithKey = (clusterKey, tag) => ({
+  findingClass: 'recurring-lesson-key',
+  clusterKey,
+  lane: 'plugin-generic',
+  kind: 'process-change',
+  evidence: [
+    { file: 'roadmap/arc-evals/lessons.jsonl', jsonPath: 'lines[1]', excerpt: `${tag}: the first sighting of this key` },
+    { file: 'roadmap/arc-evals/lessons.jsonl', jsonPath: 'lines[2]', excerpt: `${tag}: the second sighting of this key` },
+  ],
+})
+
+// ── 31. a non-own file HOLDS ITS NAME against the cluster that derives it ──────────────
+
+for (const kind of ['foreign-origin', 'unparseable']) {
+  test(`consolidateAndWrite — a ${kind} file occupying a live cluster's derived FILENAME blocks the create: bytes survive, and the loss is counted`, () => {
+    const cluster = liveLessonCluster()
+    const id = proposalIdOf(cluster)
+    const path = proposalPath(id)
+
+    // The bytes a human left at that exact name. The foreign document is indented FOUR spaces —
+    // a human's formatting, not this pass's two — so a run that "helpfully" regenerated identical
+    // content still fails the byte compare below.
+    const bytes =
+      kind === 'foreign-origin'
+        ? `${JSON.stringify({ ...JSON.parse(plantedProposal(id)), writeOrigin: 'user', title: 'a proposal a HUMAN filed under this exact name' }, null, 4)}\n`
+        : '{ "id": "half-written", "writeOrigin": "roadmap-eval-loop", '
+
+    const stub = makeFsStub({ [path]: bytes })
+    const clusters = fixtureClusters()
+    const res = consolidateAndWrite(clusters, fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+    // Non-vacuity FIRST: the run really did consolidate, so the untouched file below is a targeted
+    // refusal rather than a pass that did nothing at all.
+    assert.ok(clusters.length > 1, 'the fixture emits more than the colliding cluster, or the write below proves nothing')
+    assert.ok(res.writes.length > 0, 'the OTHER clusters still wrote')
+    assert.equal(res.created, clusters.length - 1, 'exactly one cluster was withheld: every other one was created as usual')
+
+    assert.equal(
+      stub.files.get(path),
+      bytes,
+      `${path}: a file the loop did not write owns its NAME as much as its bytes — creating over it destroys hand-authored content`,
+    )
+    assert.equal(res.blockedByForeignFile, 1, 'and the withheld cluster is COUNTED, so the run cannot report a skip it did not honour')
+    assert.equal(res.idCollisions, 0, 'a name held by another file is not the same fact as two clusters folding to one id')
+
+    assert.equal(stub.writes.filter((w) => w.path === path).length, 0, 'the colliding path never entered the fs seam as a write')
+    assert.equal(res.writes.includes(path), false, 'nor the reported write set')
+    assert.equal(
+      res.proposals.filter((p) => p.id === id).length,
+      0,
+      'and no proposal carrying that id is returned: a downstream reader must not see a document that was never written',
+    )
+
+    // The same run's report about the file has to agree with what it did to the file.
+    const reportedBy = kind === 'foreign-origin' ? res.foreignSkipped : res.unreadable
+    assert.deepEqual(reportedBy, [`${id}.json`], `the ${kind} file is still reported BY NAME`)
+  })
+}
+
+// ── 32. two cluster keys that fold to one id: the FIRST wins, the second is counted ────
+
+test('consolidateAndWrite — two clusters whose keys slug to ONE proposal id write ONE file: the later is refused, not silently laid over the earlier', () => {
+  const slugOf = needConsolidationExport('slug')
+  const KEY_FIRST = 'cli/lib'
+  const KEY_SECOND = 'cli-lib'
+
+  // Preconditions, stated rather than assumed: if the two keys did not really collapse to one id
+  // this test would pass against the pre-fix code for the wrong reason.
+  assert.notEqual(KEY_FIRST, KEY_SECOND, 'two genuinely distinct cluster keys')
+  assert.equal(slugOf(KEY_FIRST), slugOf(KEY_SECOND), `slug folds both keys to one string, got ${slugOf(KEY_FIRST)} and ${slugOf(KEY_SECOND)}`)
+
+  const first = lessonClusterWithKey(KEY_FIRST, 'FIRST')
+  const second = lessonClusterWithKey(KEY_SECOND, 'SECOND')
+  const id = proposalIdOf(first)
+  assert.equal(proposalIdOf(second), id, 'and therefore both clusters derive the SAME proposal id, which is the collision under test')
+
+  const stub = makeFsStub()
+  const res = consolidateAndWrite([first, second], fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.equal(stub.writes.length, 1, `exactly one file for one id; writes were:\n${stub.writes.map((w) => w.path).join('\n')}`)
+  assert.equal(stub.writes[0].path, proposalPath(id), 'and it is the shared id\'s file')
+  assert.equal(res.idCollisions, 1, 'the dropped cluster is counted: a proposal lost to a name must not look like a proposal written')
+  assert.equal(res.created, 1, 'created counts FILES written, not clusters attempted — counting both is the claim that made this bug invisible')
+  assert.equal(res.proposals.length, 1, 'and one document is returned, not two')
+  assert.equal(res.blockedByForeignFile, 0, 'nothing here is held by a file the loop does not own')
+
+  // WHICH document survived. A refusal drops the LATER cluster; an overwrite would leave the later
+  // one on disk, so this is what tells the two implementations apart.
+  const doc = JSON.parse(stub.files.get(proposalPath(id)))
+  assert.deepStrictEqual(doc.evidence, first.evidence, 'the surviving document is the FIRST cluster\'s, citations and all')
+  assert.notDeepStrictEqual(doc.evidence, second.evidence, 'not the second\'s, which is what an overwrite would have left behind')
+  assert.ok(doc.title.startsWith(`${KEY_FIRST} `), `the title names the first key; got ${JSON.stringify(doc.title)}`)
+  assert.deepStrictEqual(res.proposals[0], doc, 'and the returned proposal is the document that actually reached disk')
+
+  // Order-dependence, proven both ways: the rule is FIRST-WINS, not "cli/lib always wins". Fed in
+  // the other order the same pair keeps the other document, so the assertion above is about
+  // position rather than about these two particular keys.
+  const reversed = makeFsStub()
+  const res2 = consolidateAndWrite([second, first], fixtureReports(), PROPOSALS_DIR, mkDeps(reversed, NOW_1))
+  assert.equal(res2.idCollisions, 1, 'the collision is symmetric')
+  assert.equal(reversed.writes.length, 1, 'still one file')
+  assert.deepStrictEqual(
+    JSON.parse(reversed.files.get(proposalPath(id))).evidence,
+    second.evidence,
+    'fed second-first, the SECOND cluster is the one kept: the refusal drops whichever arrives later',
+  )
+})

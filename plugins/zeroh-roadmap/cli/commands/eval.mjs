@@ -546,13 +546,19 @@ function readProposalsForTrend(proposalsDir) {
   // one answer, not one per reader.
   const prior = readProposalDocs({ existsSync, readdirSync, readFileSync }, proposalsDir)
   const out = { surfaced: [], ratified: 0, rejected: 0, archived: 0, unreadable: prior.unreadable, foreign: prior.foreign }
-  for (const { doc } of prior.own) {
-    if (doc.status === 'surfaced') out.surfaced.push(doc)
+  for (const { name, doc } of prior.own) {
+    // A surfaced document carrying no numeric score cannot be ranked, and rendering `0` would
+    // read as "measured, and worthless" for a document that was never measured. It joins the
+    // named footnote instead of the table.
+    if (doc.status === 'surfaced' && typeof doc.opportunity?.score !== 'number') out.unreadable.push(name)
+    else if (doc.status === 'surfaced') out.surfaced.push(doc)
     // Counted only under a status the lifecycle actually defines: a hand-edited status the
     // contract never named is neither an open proposal nor a decided one, so it inflates nothing.
     else if (DECIDED_PROPOSAL_STATUSES.includes(doc.status)) out[doc.status] += 1
   }
-  out.surfaced.sort((a, b) => (b.opportunity?.score ?? 0) - (a.opportunity?.score ?? 0) || String(a.id).localeCompare(String(b.id)))
+  // Every surfaced row is guaranteed a numeric score by the filter above, so the sort compares
+  // measurements rather than a stand-in.
+  out.surfaced.sort((a, b) => b.opportunity.score - a.opportunity.score || String(a.id).localeCompare(String(b.id)))
   return out
 }
 
@@ -574,7 +580,7 @@ function renderProposalsSection(p) {
         p.surfaced
           .map(
             (d) =>
-              `<tr><td>${esc(round2(d.opportunity?.score ?? 0))}</td><td>${esc(d.lane)}</td><td>${esc(d.kind)}</td>` +
+              `<tr><td>${esc(round2(d.opportunity.score))}</td><td>${esc(d.lane)}</td><td>${esc(d.kind)}</td>` +
               `<td>${esc(d.title)}</td><td>${esc((d.evidence ?? []).length)}</td><td>${esc(d.createdAt)}</td></tr>`,
           )
           .join('') +
@@ -1063,7 +1069,10 @@ async function runPropose(opts) {
     for (const [i, line] of readFileSync(lessonsPath, 'utf8').split('\n').entries()) {
       if (line.trim() === '') continue
       try {
-        lessons.push(JSON.parse(line))
+        // `sourceLine` is a read-time annotation, not a LessonShape field: blank and unparseable
+        // lines are skipped below, so the array index would cite the wrong lesson to a reader who
+        // opened the sidecar.
+        lessons.push({ ...JSON.parse(line), sourceLine: i + 1 })
       } catch (e) {
         say(`WARN: ${LESSONS_FILE} line ${i + 1} does not parse as JSON (${e.message}) — skipped, not guessed`)
       }
@@ -1134,6 +1143,8 @@ async function runPropose(opts) {
   say(`  foreign-skipped      ${result.foreignSkipped.length}${result.foreignSkipped.length > 0 ? `: ${result.foreignSkipped.join(', ')}` : ''}`)
   say(`  unreadable           ${result.unreadable.length}${result.unreadable.length > 0 ? `: ${result.unreadable.join(', ')}` : ''}`)
   say(`  skipped-archived     ${result.skippedArchived}  (the loop archived these and does not revive them)`)
+  say(`  blocked-by-foreign   ${result.blockedByForeignFile}  (a proposal id whose file name is already held by a file the loop does not own)`)
+  say(`  id-collisions        ${result.idCollisions}  (two cluster keys folding to one proposal id; the second is refused, never overwritten)`)
   say(`  created ${result.created}  refreshed ${result.refreshed}  unchanged ${result.unchanged}`)
 
   say('')

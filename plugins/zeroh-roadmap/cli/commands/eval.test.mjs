@@ -2839,3 +2839,98 @@ test('eval trend — a proposal title carrying markup is ESCAPED into the table,
   const rows = proposalRows(html)
   assert.equal(rows.length, 1, `the row is rendered, not dropped; rows were:\n${rows.join('\n')}`)
 })
+
+// ── 70. NO STAND-IN ZERO — a surfaced own document with no numeric score is footnoted ────────
+// Test 68 covers the two files the READER cannot use at all: unparseable bytes, and a foreign
+// writeOrigin. It cannot catch the third: a document that IS the loop's own and IS surfaced, but
+// whose opportunity block is missing or truncated. The page used to table it with `?? 0`, and to
+// SORT on that 0 — which is precisely the stand-in zero the corpus forbids everywhere else, since
+// `0` reads as "measured, and worthless" for something nobody ever measured. A number that was
+// never taken belongs in the same named footnote as a file that will not parse.
+//
+// A local raw planter rather than plantProposal: that factory MERGES the opportunity block by
+// design, so it cannot express the absence of one.
+
+/** Write a document verbatim into the proposals directory; return its filename. */
+function plantRawProposal(root, doc) {
+  mkdirSync(proposalsDir(root), { recursive: true })
+  const name = `${doc.id}.json`
+  writeFileSync(join(proposalsDir(root), name), JSON.stringify(doc, null, 2) + '\n')
+  return name
+}
+
+for (const [label, mangle] of [
+  ['NO opportunity block at all', (d) => { delete d.opportunity }],
+  ['a STRING where the score should be', (d) => { d.opportunity = { ...d.opportunity, score: '14' } }],
+]) {
+  test(`eval trend — a surfaced own proposal with ${label} is named in the footnote, never tabled with a stand-in 0`, () => {
+    const root = buildEvalFixture()
+    plantPrior(root, '2026-07-02', { all: 60 })
+    plantPrior(root, '2026-07-03', { all: 70 })
+
+    const valid = plantProposal(root, {
+      id: 'recurring-regression-speed',
+      title: 'record the reference minutes on every timed phase',
+      opportunity: { importance: 9, satisfaction: 4, score: 14 },
+    })
+
+    const SCORELESS_TITLE = 'a truncated own document nobody ever scored'
+    const scoreless = { ...PROPOSAL_BASE, id: 'recurring-sentinel-plan-quality', title: SCORELESS_TITLE }
+    mangle(scoreless)
+    const scorelessName = plantRawProposal(root, scoreless)
+
+    // Preconditions: this document is the loop's OWN and SURFACED, so test 68's provenance routes
+    // cannot be what excludes it. Without these the assertions below would pass for the wrong reason.
+    assert.equal(scoreless.writeOrigin, 'roadmap-eval-loop', 'fixture precondition: own write origin, not foreign')
+    assert.equal(scoreless.status, 'surfaced', 'fixture precondition: surfaced, so it is an OPEN proposal by status')
+    assert.notEqual(typeof scoreless.opportunity?.score, 'number', 'fixture precondition: and it carries no numeric score')
+    assert.equal(typeof valid.opportunity.score, 'number', 'fixture precondition: the control document DOES carry one')
+
+    const r = evalTrend(root)
+    assert.equal(r.code, 0, `a truncated own document must not fail the render: ${r.stdout + r.stderr}`)
+    assert.doesNotMatch(r.stderr, /\n\s+at [^\n]*\n\s+at /, 'an unusable document is a reported fact, not a leaked stack')
+
+    const html = readFileSync(trendPath(root), 'utf8')
+    const section = proposalsSection(html)
+
+    // PRESENT first, or every absence below is satisfied by a section that rendered nothing.
+    assert.ok(section.includes(escHtml(valid.title)), `the fully scored proposal must still be tabled; section was:\n${section}`)
+
+    const rows = proposalRows(html)
+    assert.equal(
+      rows.length,
+      1,
+      `exactly ONE row: the scored document. A document with no score is not a row with a zero in it; rows were:\n${rows.join('\n')}`,
+    )
+    assert.ok(rows[0].includes(escHtml(valid.title)), `and the surviving row is the scored one; got ${rows[0]}`)
+    assert.ok(
+      renderingsOf(valid.opportunity.score).some((v) => rows[0].includes(v)),
+      `the surviving row prints the score it is ranked by (${valid.opportunity.score}); got ${rows[0]}`,
+    )
+    assert.equal(
+      rows.some((tr) => tr.includes(escHtml(SCORELESS_TITLE))),
+      false,
+      `the score-less document must own no row at all — tabling it means inventing the number it is ranked by; rows were:\n${rows.join('\n')}`,
+    )
+    assert.equal(
+      html.includes(escHtml(SCORELESS_TITLE)),
+      false,
+      `and its title appears nowhere on the page: the footnote names the FILE, not a half-rendered proposal; page was:\n${html}`,
+    )
+
+    // Named, not dropped. A silent skip is how a reader comes to believe the queue is shorter.
+    assert.ok(
+      section.includes(scorelessName),
+      `the unusable document must be named BY FILENAME in the section footnote; section was:\n${section}`,
+    )
+
+    // The precise form of the old bug: a rendered score cell holding 0. Asserted as the cell, not
+    // as "the page contains no 0" — the page is full of numbers, and that weaker claim would be a
+    // test that fails for reasons unrelated to this rail.
+    assert.equal(
+      /<td[^>]*>\s*0\s*<\/td>/.test(section),
+      false,
+      `no score cell may render 0 for a document that was never measured — 0 reads as "measured, and worthless"; section was:\n${section}`,
+    )
+  })
+}

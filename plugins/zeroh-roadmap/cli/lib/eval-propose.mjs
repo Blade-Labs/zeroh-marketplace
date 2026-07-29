@@ -176,7 +176,13 @@ export function extractFindings(reports, lessons) {
   lessons?.forEach((l, i) => {
     const key = extractLessonKey(l?.text)
     if (key === null) return
-    add('recurring-lesson-key', key, LESSONS_PATH, `lines[${i}]`, String(l.text))
+    // `sourceLine` is a READ-TIME annotation the sidecar reader may attach; it is not part of
+    // LessonShape. Blank and unparseable lines are dropped before this array exists, so the array
+    // index is NOT the file line, and a citation that points a reader at the wrong lesson is worse
+    // than one that admits it cannot say. The fallback holds only for a caller that filtered
+    // nothing, which is the fixture case.
+    const line = Number.isInteger(l?.sourceLine) && l.sourceLine > 0 ? l.sourceLine : i + 1
+    add('recurring-lesson-key', key, LESSONS_PATH, `lines[${line}]`, String(l.text))
   })
 
   return findings
@@ -421,32 +427,6 @@ export function buildProposal(cluster, reports, nowIso) {
 }
 
 /**
- * Consolidate the pass's own prior proposals and write the current set.
- *
- * Every seam is INJECTED and required — `fs`, `now`, `validate`. A defaulted fs is how a
- * test-time pass writes to the real tree, and a defaulted validator is how an unparseable
- * document reaches disk; neither has a safe fallback, so neither gets one.
- *
- * ## What this function may touch
- * Files directly under `proposalsDir`, named `<id>.json`, whose parsed `writeOrigin` is this
- * loop's own. Nothing else, ever. A foreign-origin or unparseable file is left byte-identical —
- * not reformatted, not repaired — and reported by name. A `ratified` or `rejected` file is the
- * USER'S verdict and outranks a regenerated cluster carrying the same id; an `archived` file the
- * loop wrote is likewise not revived. The two refusals are counted apart because "you decided"
- * and "the loop archived it" are different facts.
- *
- * ## Why nothing is ever removed
- * A dissolved cluster's proposal is ARCHIVED IN PLACE: status flipped, reason stamped, bytes kept.
- * There is no removal path in this module at all, and its test asserts that by scanning the source
- * as well as by recording the fs calls — the Hermes lesson is that a self-writing artifact needs a
- * structural bound, not a careful author.
- *
- * ## Why a validated document is buffered before any of it is written
- * Every document that WILL be written is built and validated first; only then does anything reach
- * the fs seam. A validation failure therefore leaves the directory exactly as it found it, rather
- * than half a run's worth of files and one exception.
- */
-/**
  * Read a proposals directory and sort it by WHO OWNS each file: the loop's own documents, the
  * foreign-origin ones, and the ones that will not parse at all.
  *
@@ -484,6 +464,32 @@ export function readProposalDocs(fs, proposalsDir) {
   return { own, foreign, unreadable }
 }
 
+/**
+ * Consolidate the pass's own prior proposals and write the current set.
+ *
+ * Every seam is INJECTED and required — `fs`, `now`, `validate`. A defaulted fs is how a
+ * test-time pass writes to the real tree, and a defaulted validator is how an unparseable
+ * document reaches disk; neither has a safe fallback, so neither gets one.
+ *
+ * ## What this function may touch
+ * Files directly under `proposalsDir`, named `<id>.json`, whose parsed `writeOrigin` is this
+ * loop's own. Nothing else, ever. A foreign-origin or unparseable file is left byte-identical —
+ * not reformatted, not repaired — and reported by name. A `ratified` or `rejected` file is the
+ * USER'S verdict and outranks a regenerated cluster carrying the same id; an `archived` file the
+ * loop wrote is likewise not revived. The two refusals are counted apart because "you decided"
+ * and "the loop archived it" are different facts.
+ *
+ * ## Why nothing is ever removed
+ * A dissolved cluster's proposal is ARCHIVED IN PLACE: status flipped, reason stamped, bytes kept.
+ * There is no removal path in this module at all, and its test asserts that by scanning the source
+ * as well as by recording the fs calls — the Hermes lesson is that a self-writing artifact needs a
+ * structural bound, not a careful author.
+ *
+ * ## Why a validated document is buffered before any of it is written
+ * Every document that WILL be written is built and validated first; only then does anything reach
+ * the fs seam. A validation failure therefore leaves the directory exactly as it found it, rather
+ * than half a run's worth of files and one exception.
+ */
 export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
   if (!deps || typeof deps !== 'object') throw new Error('eval-propose: consolidateAndWrite requires a deps object carrying fs, now and validate')
   for (const name of ['fs', 'now', 'validate'])
@@ -498,6 +504,10 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
   const foreignSkipped = prior.foreign
   const unreadable = prior.unreadable
   const existingOwn = new Map(prior.own.map((e) => [e.doc.id ?? e.name.replace(/\.json$/, ''), e]))
+  // The filenames the pass must not write, whatever a cluster derives. A file it could not parse,
+  // or one it did not write, occupies its NAME as much as its bytes: creating `<id>.json` over a
+  // hand-authored file of that name would destroy it while the same run reported it as skipped.
+  const blockedNames = new Set([...prior.foreign, ...prior.unreadable])
 
   // ── decide, build and validate; write nothing yet ───────────────────────────────────
   const pending = []
@@ -509,10 +519,25 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
   let alreadyAdjudicated = 0
   let skippedArchived = 0
 
+  let blockedByForeignFile = 0
+  let idCollisions = 0
   const liveIds = new Set()
+  const emittedIds = new Set()
   for (const cluster of clusters ?? []) {
     const id = proposalId(cluster)
+    // Two cluster keys can fold to one slug (the id alphabet is deliberately narrow), and the
+    // second would otherwise overwrite the first and still be counted as created. Refused and
+    // counted instead: a proposal lost to a name collision must not look like a proposal written.
+    if (emittedIds.has(id)) {
+      idCollisions += 1
+      continue
+    }
+    emittedIds.add(id)
     liveIds.add(id)
+    if (blockedNames.has(`${id}.json`)) {
+      blockedByForeignFile += 1
+      continue
+    }
     const existing = existingOwn.get(id)
 
     if (existing && (existing.doc.status === 'ratified' || existing.doc.status === 'rejected')) {
@@ -569,7 +594,20 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
     writes.push(path)
   }
 
-  return { proposals, created, refreshed, unchanged, archived, alreadyAdjudicated, skippedArchived, foreignSkipped, unreadable, writes }
+  return {
+    proposals,
+    created,
+    refreshed,
+    unchanged,
+    archived,
+    alreadyAdjudicated,
+    skippedArchived,
+    blockedByForeignFile,
+    idCollisions,
+    foreignSkipped,
+    unreadable,
+    writes,
+  }
 }
 
 /** Which repo a cluster asks to change, or null when the corpus cannot say. */
