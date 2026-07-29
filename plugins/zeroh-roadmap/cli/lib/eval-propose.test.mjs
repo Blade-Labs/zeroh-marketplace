@@ -836,3 +836,608 @@ test('computeOpportunity — the same cluster against the same corpus scores ide
   assert.equal(typeof first.satisfaction, 'number', 'this cluster is measured, or the comparison below proves little')
   assert.deepStrictEqual(second, first, 'scoring reads only typed corpus fields, so a re-run cannot reorder the queue')
 })
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// phase 2016.4 — PROVENANCE-GUARDED CONSOLIDATION: the loop may rewrite its OWN prior
+// proposals and NOTHING else
+//
+// The Hermes cautionary tale is why this section exists: self-written artifacts with approval off
+// produced real CVEs. This loop consolidates its own output, so the guarantee cannot be a sentence
+// in a docblock — it has to be a RECORDED WRITE SET over an injected fs seam. The arc's acceptance
+// signal is literally "zero edits outside roadmap/arc-evals/", and this is where it is proven at
+// the unit seam, before any command can widen it.
+//
+// Four invariants, each with its own failure story:
+//
+//  - WRITE SET. Every recorded write lands directly under proposalsDir. The stub below records
+//    EVERY path handed to EVERY fs method, so a read of ~/.ssh or a write to roadmap.config.json
+//    reds here rather than in a postmortem. Each such test first asserts something INSIDE the
+//    directory was written, because "nothing outside" is trivially true of a pass that did nothing.
+//  - NO DELETION. Archiving is a status rewrite; the bytes stay. The stub's unlinkSync/rmSync/
+//    rmdirSync THROW, so a deleting implementation reds at runtime, and a source scan asserts the
+//    module cannot even reach a deleting API. Runtime and reachability are different claims and
+//    both are made.
+//  - PROVENANCE. A file the loop did not write is untouchable: unparseable and foreign-origin
+//    files survive BYTE-IDENTICAL and are reported by name. Ratified/rejected files outrank a
+//    regenerated cluster — the user's verdict is not something a re-run may overwrite — and an
+//    archived file is not revived, counted separately because "you decided" and "the loop archived
+//    it" are different facts a reader must be able to tell apart.
+//  - VALIDATION AT THE SEAM. Every document is parsed BEFORE it is serialized, so a malformed
+//    proposal never reaches disk at all.
+//
+// The exports under test do not exist yet, so they are reached through the same namespace-import
+// guard the 2016.3 section uses: a static named import of a missing export would red this whole
+// file and hide which export is missing.
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+import { readFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+
+/** Read a phase-2016.4 export, failing by NAME rather than as an opaque TypeError. */
+function needConsolidationExport(name) {
+  const v = evalPropose[name]
+  assert.ok(v !== undefined, `cli/lib/eval-propose.mjs must export ${name} (phase 2016.4)`)
+  return v
+}
+
+const buildProposal = (cluster, reports, nowIso) => needConsolidationExport('buildProposal')(cluster, reports, nowIso)
+const consolidateAndWrite = (clusters, reports, dir, deps) => needConsolidationExport('consolidateAndWrite')(clusters, reports, dir, deps)
+/** Already exported (2016.2), but reached the same way so a rename fails by name here too. */
+const proposalIdOf = (cluster) => needConsolidationExport('proposalId')(cluster)
+
+const PROPOSALS_DIR = '/fake-repo/roadmap/arc-evals/proposals'
+const OUTSIDE_PATHS = ['/fake-repo/roadmap/roadmap.config.json', '/fake-repo/CLAUDE.md', '/fake-repo/roadmap/arc-evals/ALPHA-2026-07-01.json']
+
+const NOW_1 = '2026-08-01T09:00:00.000Z'
+const NOW_2 = '2026-09-15T17:30:00.000Z'
+const OLD_CREATED_AT = '2026-01-02T03:04:05.000Z'
+
+const PROPOSAL_STATUSES = ['surfaced', 'ratified', 'rejected', 'archived']
+const PROPOSAL_KINDS = ['review-focus-candidate', 'skill-amendment', 'schema-tightening', 'process-change', 'reduction']
+
+/**
+ * The ProposalShape spec, owned by the TEST rather than imported from templates/schema.ts (a .ts
+ * module this .mjs suite cannot load): the same contract, restated, so `validate` at the seam is
+ * checked against the documented shape instead of against whatever the implementation happens to
+ * emit. Kept in step with templates/schema.ts:1415 by the 2016.1 schema tests.
+ */
+const ProposalDocShape = z
+  .object({
+    id: z.string().regex(/^[a-z0-9-]+$/),
+    findingClass: z.enum(FINDING_CLASSES),
+    lane: z.enum(LANES),
+    kind: z.enum(PROPOSAL_KINDS),
+    title: z.string().min(10),
+    rationale: z.string().min(10),
+    evidence: z.array(z.object({ file: z.string().min(1), jsonPath: z.string().min(1), excerpt: z.string().min(1) })).min(2),
+    opportunity: z.object({
+      importance: z.number().min(0).max(10),
+      satisfaction: z.number().min(0).max(10).nullable(),
+      score: z.number().min(0),
+      rulingId: z.string().min(1),
+      rulingsVersion: z.number().int().positive(),
+      satisfactionSource: z.string().min(1),
+    }),
+    candidateReviewFocus: z.object({ id: z.string().min(1), signature: z.string().min(1), guidance: z.string().min(1) }).optional(),
+    reductionTarget: z
+      .object({ flow: z.string().min(1), measuredTokens: z.number().int().positive(), budgetTokens: z.number().int().positive(), ledger: z.string().min(1) })
+      .optional(),
+    writeOrigin: z.literal('roadmap-eval-loop'),
+    status: z.enum(PROPOSAL_STATUSES),
+    createdAt: z.string().min(10),
+    updatedAt: z.string().min(10),
+    supersededBy: z.string().min(1).optional(),
+    archivedReason: z.string().min(10).optional(),
+  })
+  .superRefine((p, ctx) => {
+    for (const [kind, field] of [
+      ['review-focus-candidate', 'candidateReviewFocus'],
+      ['reduction', 'reductionTarget'],
+    ]) {
+      const present = p[field] !== undefined
+      if (p.kind === kind && !present) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `kind '${kind}' REQUIRES ${field}` })
+      if (p.kind !== kind && present) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${field} belongs only to kind '${kind}'` })
+    }
+    if (p.status === 'archived' && p.archivedReason === undefined)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['archivedReason'], message: 'status archived REQUIRES archivedReason' })
+  })
+
+/**
+ * A recording fs stub: an in-memory file map plus a log of every path every method was handed.
+ *
+ * The three deleting APIs are present and THROW. Their absence would prove nothing (an
+ * implementation calling `fs.unlinkSync` on a stub without one throws a TypeError that reads like
+ * a harness bug); present-and-throwing turns a deletion into a NAMED failure.
+ */
+function makeFsStub(seed = {}) {
+  const files = new Map(Object.entries(seed))
+  const dirs = new Set([PROPOSALS_DIR])
+  const writes = []
+  const mkdirs = []
+  const touched = []
+  const note = (p) => {
+    touched.push(String(p))
+    return String(p)
+  }
+  const forbidden = (name) => (p) => {
+    note(p)
+    throw new Error(`eval-propose called fs.${name}(${p}) — this pass archives by rewriting a status field and DELETES NOTHING, ever`)
+  }
+  return {
+    files,
+    writes,
+    mkdirs,
+    touched,
+    snapshot: () => Object.fromEntries([...files.entries()].sort(([a], [b]) => (a < b ? -1 : 1))),
+    fs: {
+      existsSync: (p) => dirs.has(note(p)) || files.has(String(p)),
+      mkdirSync: (p, opts) => {
+        mkdirs.push({ path: note(p), opts })
+        dirs.add(String(p))
+      },
+      readdirSync: (p) => {
+        const dir = note(p)
+        if (!dirs.has(dir)) throw Object.assign(new Error(`ENOENT: no such directory ${dir}`), { code: 'ENOENT' })
+        return [...files.keys()].filter((f) => dirname(f) === dir).map((f) => basename(f)).sort()
+      },
+      readFileSync: (p) => {
+        const f = note(p)
+        if (!files.has(f)) throw Object.assign(new Error(`ENOENT: no such file ${f}`), { code: 'ENOENT' })
+        return files.get(f)
+      },
+      writeFileSync: (p, data) => {
+        const f = note(p)
+        writes.push({ path: f, data: String(data) })
+        files.set(f, String(data))
+      },
+      unlinkSync: forbidden('unlinkSync'),
+      rmSync: forbidden('rmSync'),
+      rmdirSync: forbidden('rmdirSync'),
+    },
+  }
+}
+
+const fixtureClusters = () => {
+  const { reports, lessons } = loadFixtureCorpus()
+  return clusterFindings(extractFindings(reports, lessons)).clusters
+}
+
+const fixtureReports = () => loadFixtureCorpus().reports
+
+/** Deps with all three seams present. `validate` is the real spec parse unless overridden. */
+const mkDeps = (stub, nowIso, overrides = {}) => ({
+  fs: stub.fs,
+  now: () => nowIso,
+  validate: (doc) => ProposalDocShape.parse(doc),
+  ...overrides,
+})
+
+const proposalPath = (id) => `${PROPOSALS_DIR}/${id}.json`
+
+/** A syntactically valid proposal document to plant in the stub before a pass. */
+const plantedProposal = (id, o = {}) =>
+  JSON.stringify(
+    {
+      id,
+      findingClass: 'recurring-lesson-key',
+      lane: 'plugin-generic',
+      kind: 'process-change',
+      title: 'a planted proposal title',
+      rationale: 'a planted rationale long enough to clear the ten character floor',
+      evidence: [
+        { file: 'roadmap/arc-evals/lessons.jsonl', jsonPath: 'lines[0]', excerpt: 'stale evidence one' },
+        { file: 'roadmap/arc-evals/lessons.jsonl', jsonPath: 'lines[1]', excerpt: 'stale evidence two' },
+      ],
+      opportunity: {
+        importance: 5,
+        satisfaction: null,
+        score: 5,
+        rulingId: 'importance-recurring-lesson-key',
+        rulingsVersion: 1,
+        satisfactionSource: 'satisfaction-unmeasured',
+      },
+      writeOrigin: 'roadmap-eval-loop',
+      status: 'surfaced',
+      createdAt: OLD_CREATED_AT,
+      updatedAt: OLD_CREATED_AT,
+      ...o,
+    },
+    null,
+    2,
+  )
+
+/** The cluster the planted-file tests collide with, and its derived id. */
+function liveLessonCluster() {
+  const clusters = fixtureClusters()
+  const cluster = clusters.find((c) => c.findingClass === 'recurring-lesson-key' && c.clusterKey === 'cli/lib/eval-score.mjs')
+  assert.ok(cluster, 'the fixture must emit the lesson-key cluster these tests collide a planted file with')
+  return cluster
+}
+
+// ── 20. the write set ─────────────────────────────────────────────────────────────────
+
+test('consolidateAndWrite — every recorded write lands under proposalsDir, and NOTHING outside it is written, read or created', () => {
+  const stub = makeFsStub(Object.fromEntries(OUTSIDE_PATHS.map((p) => [p, 'user-authored bytes\n'])))
+  const clusters = fixtureClusters()
+  const before = stub.snapshot()
+
+  const res = consolidateAndWrite(clusters, fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  // Non-vacuity FIRST: a pass that wrote nothing satisfies every containment claim below for free.
+  assert.ok(clusters.length > 0, 'the fixture emits clusters, or there is nothing to consolidate')
+  assert.ok(Array.isArray(res.writes), 'the pass reports its own write set, so a caller can audit it without the stub')
+  assert.ok(res.writes.length > 0, 'the pass must actually write, or "nothing outside the directory" is vacuously true')
+  assert.equal(stub.writes.length, res.writes.length, 'the reported write set is the write set the fs seam actually saw')
+  assert.equal(res.created, clusters.length, 'a virgin directory means one new file per cluster')
+
+  for (const w of stub.writes) {
+    assert.equal(dirname(w.path), PROPOSALS_DIR, `write to ${w.path} escaped the proposals directory`)
+    assert.match(basename(w.path), /^[a-z0-9-]+\.json$/, `${w.path}: a proposal file is <id>.json and nothing else`)
+  }
+
+  // Every path the module handed to ANY fs method, not merely the writes: a pass that READ the
+  // consumer's roadmap.config.json to "check" something has already widened its blast radius.
+  for (const p of stub.touched) {
+    assert.ok(p === PROPOSALS_DIR || dirname(p) === PROPOSALS_DIR, `the fs seam was handed ${p}, which is outside ${PROPOSALS_DIR}`)
+  }
+
+  // mkdir is allowed for exactly one directory, recursively.
+  for (const m of stub.mkdirs) assert.equal(m.path, PROPOSALS_DIR, `mkdir of ${m.path}: the pass creates its own directory and no other`)
+  assert.ok(stub.mkdirs.length > 0, 'the pass creates its directory rather than assuming it exists')
+  assert.deepEqual(stub.mkdirs[0].opts, { recursive: true }, 'recursive, so a first run on a fresh corpus is not a crash')
+
+  // The planted user-authored files are still exactly what they were.
+  for (const p of OUTSIDE_PATHS) assert.equal(stub.files.get(p), before[p], `${p}: a file outside the proposals directory is not the loop's to touch`)
+})
+
+// ── 21. no deletion, at runtime AND by reachability ───────────────────────────────────
+
+test('consolidateAndWrite — the pass never calls a deleting fs API, and the module cannot reach one', () => {
+  const stub = makeFsStub()
+  // A corpus that exercises the archive path too: a planted own file with no matching cluster is
+  // exactly the case a naive implementation would clean up by deleting.
+  stub.files.set(proposalPath('recurring-lesson-key-gone-forever'), plantedProposal('recurring-lesson-key-gone-forever'))
+
+  const res = consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.equal(res.archived, 1, 'the dissolved cluster was archived, so the deletion temptation was actually reached')
+  assert.ok(stub.files.has(proposalPath('recurring-lesson-key-gone-forever')), 'and the file is still on disk')
+  // The stub's unlink/rm/rmdir throw, so reaching this line at all is the runtime half of the claim.
+
+  const source = readFileSync(new URL('./eval-propose.mjs', import.meta.url), 'utf8')
+  assert.ok(source.length > 0, 'the module source was read, or the scan below matches nothing for the wrong reason')
+  assert.doesNotMatch(
+    source,
+    /unlinkSync|rmSync|rmdirSync/,
+    'a deleting fs API must not be reachable from this module at all: the stub proves the pass does not call one today, ' +
+      'this proves a later edit cannot add one without failing here',
+  )
+})
+
+// ── 22. a file the loop did not write is untouchable ──────────────────────────────────
+
+test('consolidateAndWrite — a foreign-origin file and an unparseable file survive BYTE-IDENTICAL and are reported by name', () => {
+  const foreignPath = proposalPath('user-authored')
+  const brokenPath = proposalPath('half-written')
+  const foreignBytes = JSON.stringify(
+    {
+      id: 'user-authored',
+      findingClass: 'recurring-regression',
+      lane: 'consumer-specific',
+      kind: 'process-change',
+      title: 'a proposal a HUMAN wrote by hand',
+      rationale: 'proposal-shaped in every field except the one that matters: who wrote it',
+      evidence: [
+        { file: 'roadmap/arc-evals/ALPHA-2026-07-01.json', jsonPath: 'notes[0]', excerpt: 'a' },
+        { file: 'roadmap/arc-evals/BRAVO-2026-07-02.json', jsonPath: 'notes[0]', excerpt: 'b' },
+      ],
+      opportunity: { importance: 8, satisfaction: null, score: 8, rulingId: 'importance-recurring-regression', rulingsVersion: 1, satisfactionSource: 'satisfaction-unmeasured' },
+      writeOrigin: 'user',
+      status: 'surfaced',
+      createdAt: OLD_CREATED_AT,
+      updatedAt: OLD_CREATED_AT,
+    },
+    null,
+    4, // a HUMAN'S formatting: a pass that reformatted it would fail the byte compare below
+  )
+  const brokenBytes = '{ "id": "half-written", "writeOrigin": "roadmap-eval-loop", '
+
+  const stub = makeFsStub({ [foreignPath]: foreignBytes, [brokenPath]: brokenBytes })
+  const res = consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.ok(res.writes.length > 0, 'the pass wrote its own proposals, so the two survivals below are a skip and not a no-op run')
+
+  assert.equal(stub.files.get(foreignPath), foreignBytes, 'a file whose writeOrigin is not this loop is never rewritten, and never reformatted')
+  assert.equal(stub.files.get(brokenPath), brokenBytes, 'a file the pass cannot parse is left exactly as found: the loop does not repair what it does not own')
+
+  assert.deepEqual(res.foreignSkipped, ['user-authored.json'], 'the foreign file is reported BY NAME, not merely counted')
+  assert.deepEqual(res.unreadable, ['half-written.json'], 'and so is the unparseable one — a silent skip is how a loop hides that it ignored something')
+
+  const written = stub.writes.map((w) => w.path)
+  assert.equal(written.includes(foreignPath), false, 'the foreign file appears nowhere in the write log')
+  assert.equal(written.includes(brokenPath), false, 'nor does the unparseable one')
+})
+
+// ── 23. an adjudicated id is read-only, and the two refusals are counted apart ─────────
+
+for (const status of ['ratified', 'rejected']) {
+  test(`consolidateAndWrite — a ${status} proposal sharing an id with a live cluster is untouched and counted already-adjudicated`, () => {
+    const cluster = liveLessonCluster()
+    const id = proposalIdOf(cluster)
+    const bytes = plantedProposal(id, { status })
+    const stub = makeFsStub({ [proposalPath(id)]: bytes })
+
+    const res = consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+    assert.ok(res.writes.length > 0, 'other clusters still wrote, so the untouched file below is a targeted refusal')
+    assert.equal(stub.files.get(proposalPath(id)), bytes, `a ${status} proposal is the USER'S verdict; a re-run must not overwrite it`)
+    assert.equal(res.alreadyAdjudicated, 1, 'and the dropped cluster is counted by name rather than silently re-emitted')
+    assert.equal(res.skippedArchived, 0, 'an adjudicated verdict is not an archive: the two counts must not be pooled')
+    assert.equal(
+      res.proposals.filter((p) => p.id === id).length,
+      0,
+      'the regenerated cluster is DROPPED, so no downstream reader can see a surfaced twin of an adjudicated proposal',
+    )
+    assert.equal(stub.writes.filter((w) => w.path === proposalPath(id)).length, 0, 'and its file never entered the write log')
+  })
+}
+
+test('consolidateAndWrite — an ARCHIVED proposal is not revived, and lands in skippedArchived rather than alreadyAdjudicated', () => {
+  const cluster = liveLessonCluster()
+  const id = proposalIdOf(cluster)
+  const bytes = plantedProposal(id, { status: 'archived', archivedReason: 'no-longer-clustered' })
+  const stub = makeFsStub({ [proposalPath(id)]: bytes })
+
+  const res = consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.ok(res.writes.length > 0, 'the other clusters wrote, so this file being untouched is a decision')
+  assert.equal(stub.files.get(proposalPath(id)), bytes, 'an archived proposal is read-only: the loop archived it and does not get to change its mind')
+  assert.equal(res.skippedArchived, 1, '"the loop archived this" is its own fact')
+  assert.equal(res.alreadyAdjudicated, 0, 'and it is NOT a user verdict — pooling the two would tell the reader something false')
+  assert.equal(res.proposals.filter((p) => p.id === id).length, 0, 'the regenerated cluster does not reappear as a surfaced proposal')
+})
+
+// ── 24. archiving is a rewrite, never a removal ───────────────────────────────────────
+
+test('consolidateAndWrite — a surfaced own-proposal whose cluster dissolved is ARCHIVED IN PLACE, file kept, createdAt preserved', () => {
+  const id = 'recurring-low-score-dimension-that-recovered'
+  const stub = makeFsStub({ [proposalPath(id)]: plantedProposal(id) })
+
+  const res = consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.ok(stub.files.has(proposalPath(id)), 'THE FILE IS STILL THERE: an archive that removes the bytes is a delete with a nicer name')
+  const doc = JSON.parse(stub.files.get(proposalPath(id)))
+  assert.equal(doc.status, 'archived', 'the dissolved cluster flips its own proposal to archived')
+  assert.equal(doc.archivedReason, 'no-longer-clustered', 'with the literal reason a reader can grep, not free prose that varies per run')
+  assert.equal(doc.createdAt, OLD_CREATED_AT, 'the original creation time survives: an archive is not a new document')
+  assert.equal(doc.updatedAt, NOW_1, 'and the archive itself is stamped with the injected clock')
+  assert.equal(res.archived, 1, 'the archive is counted')
+  assert.equal(res.alreadyAdjudicated, 0, 'and it is not confused with a user verdict')
+  ProposalDocShape.parse(doc) // an archived document is still a valid proposal, reason field and all
+})
+
+// ── 25. refresh keeps the history it should keep ──────────────────────────────────────
+
+test('consolidateAndWrite — a surfaced own-proposal matching a live cluster is refreshed in place: new evidence, OLD createdAt', () => {
+  const cluster = liveLessonCluster()
+  const id = proposalIdOf(cluster)
+  const stub = makeFsStub({ [proposalPath(id)]: plantedProposal(id) })
+  const reports = fixtureReports()
+
+  const res = consolidateAndWrite(fixtureClusters(), reports, PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  const doc = JSON.parse(stub.files.get(proposalPath(id)))
+  const fresh = buildProposal(cluster, reports, NOW_1)
+
+  assert.equal(doc.status, 'surfaced', 'a refreshed proposal is still surfaced')
+  assert.deepStrictEqual(doc.evidence, fresh.evidence, 'the stale citations are REPLACED by the freshly computed ones')
+  assert.notDeepStrictEqual(doc.evidence, JSON.parse(plantedProposal(id)).evidence, 'and they really did change, or this test proves nothing')
+  assert.deepStrictEqual(doc.opportunity, fresh.opportunity, 'the opportunity is recomputed against the current corpus')
+  assert.equal(doc.createdAt, OLD_CREATED_AT, 'createdAt is the proposal\'s birthday and survives every refresh')
+  assert.equal(doc.updatedAt, NOW_1, 'updatedAt moves, because the content moved')
+  assert.equal(res.refreshed, 1, 'the refresh is counted')
+  assert.equal(res.created, fixtureClusters().length - 1, 'and it is NOT counted as a creation: the file already existed')
+})
+
+// ── 26. idempotence: a second run over unchanged input changes no byte ────────────────
+
+test('consolidateAndWrite — two passes over the same corpus leave byte-identical files, even under a different clock', () => {
+  const stub = makeFsStub()
+  const clusters = fixtureClusters()
+  const reports = fixtureReports()
+
+  const first = consolidateAndWrite(clusters, reports, PROPOSALS_DIR, mkDeps(stub, NOW_1))
+  const afterFirst = stub.snapshot()
+  assert.equal(first.created, clusters.length, 'run 1 created every proposal, so run 2 has something to be idempotent about')
+  assert.ok(Object.keys(afterFirst).length > 0, 'and the directory is non-empty')
+
+  const second = consolidateAndWrite(clusters, reports, PROPOSALS_DIR, mkDeps(stub, NOW_2))
+
+  assert.deepStrictEqual(
+    stub.snapshot(),
+    afterFirst,
+    'unchanged content keeps its existing updatedAt: bumping the stamp on every run would churn the git diff and make ' +
+      '"what changed" unanswerable',
+  )
+  assert.equal(second.created, 0, 'nothing is created twice')
+  assert.equal(second.unchanged, clusters.length, 'every cluster is reported as unchanged rather than silently rewritten')
+  assert.equal(second.refreshed, 0, 'a refresh with no change is not a refresh')
+  assert.equal(second.archived, 0, 'and nothing is archived, because every cluster is still live')
+  for (const w of stub.writes) assert.equal(dirname(w.path), PROPOSALS_DIR, 'the second run stays inside the directory too')
+})
+
+// ── 27. validation happens BEFORE the bytes exist ─────────────────────────────────────
+
+test('consolidateAndWrite — validate() runs once per written file, on a document already stamped with its origin and status', () => {
+  const stub = makeFsStub()
+  const seen = []
+  const res = consolidateAndWrite(
+    fixtureClusters(),
+    fixtureReports(),
+    PROPOSALS_DIR,
+    mkDeps(stub, NOW_1, {
+      validate: (doc) => {
+        seen.push(doc)
+        return ProposalDocShape.parse(doc)
+      },
+    }),
+  )
+
+  assert.ok(stub.writes.length > 0, 'files were written, or the count below is a vacuous zero-equals-zero')
+  assert.equal(seen.length, stub.writes.length, 'exactly one parse per write: an unvalidated write is the whole failure mode this seam exists to stop')
+  assert.equal(res.writes.length, seen.length, 'and the reported write set agrees')
+  for (const doc of seen) {
+    assert.equal(doc.writeOrigin, 'roadmap-eval-loop', 'every document the loop writes is stamped as its own before it is validated')
+    assert.ok(PROPOSAL_STATUSES.includes(doc.status), `status ${JSON.stringify(doc.status)} is outside the closed lifecycle`)
+    assert.match(doc.id, /^[a-z0-9-]+$/, 'and carries a slug-shaped id')
+  }
+})
+
+test('consolidateAndWrite — a document that fails validation NEVER reaches disk: the throw propagates and no file is written', () => {
+  const stub = makeFsStub()
+  const boom = new Error('ProposalShape: refused at the seam')
+
+  assert.throws(
+    () =>
+      consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1, { validate: () => { throw boom } })),
+    (err) => {
+      assert.equal(err, boom, 'the parse failure propagates unchanged rather than being swallowed into a warning')
+      return true
+    },
+    'a proposal that will not parse must fail the run, not ship as a file nobody can read back',
+  )
+
+  assert.deepEqual(stub.writes, [], 'and NOTHING was written: validation precedes serialization, so a bad document leaves no trace')
+  assert.deepEqual(stub.snapshot(), {}, 'the directory is still empty')
+})
+
+// ── 28. path traversal ────────────────────────────────────────────────────────────────
+
+test('consolidateAndWrite — a derived proposal id CANNOT traverse: every id is slug-shaped and every write path sits directly in proposalsDir', () => {
+  // Which of the two proofs this is, and why: the id is derived through the exported `slug`, whose
+  // /[^a-z0-9]+/ fold makes a separator or a dot-segment structurally unrepresentable — there is no
+  // cluster key that yields a traversing id, so an "escaping id rejected" test would assert against
+  // an unreachable state. The claim proven instead is the stronger one: the id ALPHABET forbids
+  // traversal, for the fixture's own clusters AND for adversarial keys, and the resulting write
+  // path's dirname is exactly proposalsDir.
+  const adversarial = ['../../etc/passwd', 'a/b', '..', '../..', './../../CLAUDE.md', 'C:\\Windows\\system32']
+  const clusters = fixtureClusters()
+  assert.ok(clusters.length > 0, 'the fixture clusters are walked below, so they must exist')
+
+  const keys = [...clusters.map((c) => c.clusterKey), ...adversarial]
+  for (const clusterKey of keys) {
+    const id = proposalIdOf({ findingClass: 'recurring-lesson-key', clusterKey })
+    assert.match(id, /^[a-z0-9-]+$/, `cluster key ${JSON.stringify(clusterKey)} derived a non-slug id ${JSON.stringify(id)}`)
+    const target = join(PROPOSALS_DIR, `${id}.json`)
+    assert.equal(dirname(target), PROPOSALS_DIR, `${JSON.stringify(clusterKey)} resolved outside the proposals directory`)
+  }
+
+  // And the runtime half, through the real pass: a hand-built cluster whose key is a traversal
+  // string still writes exactly one file, inside the directory.
+  const evil = {
+    findingClass: 'recurring-lesson-key',
+    clusterKey: '../../etc/passwd',
+    lane: 'plugin-generic',
+    kind: 'process-change',
+    evidence: [
+      { file: 'roadmap/arc-evals/lessons.jsonl', jsonPath: 'lines[0]', excerpt: 'the first sighting of the adversarial key' },
+      { file: 'roadmap/arc-evals/lessons.jsonl', jsonPath: 'lines[1]', excerpt: 'the second sighting of the adversarial key' },
+    ],
+  }
+  const stub = makeFsStub({ '/fake-repo/etc-passwd-decoy.json': 'untouched\n' })
+  consolidateAndWrite([evil], fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.equal(stub.writes.length, 1, 'the adversarial cluster wrote exactly one file, so the containment claim is not vacuous')
+  assert.equal(dirname(stub.writes[0].path), PROPOSALS_DIR, 'and it landed directly in the proposals directory')
+  assert.equal(stub.files.get('/fake-repo/etc-passwd-decoy.json'), 'untouched\n', 'nothing outside was reached')
+})
+
+// ── 29. the document a cluster becomes ────────────────────────────────────────────────
+
+test('buildProposal — every fixture cluster becomes a complete, kind-consistent proposal document', () => {
+  const clusters = fixtureClusters()
+  const reports = fixtureReports()
+  assert.ok(clusters.length > 0, 'the walk below needs clusters')
+
+  const kindsSeen = new Set()
+  for (const cluster of clusters) {
+    const label = `${cluster.findingClass}/${cluster.clusterKey}`
+    const doc = buildProposal(cluster, reports, NOW_1)
+    kindsSeen.add(doc.kind)
+
+    ProposalDocShape.parse(doc) // the contract, in one line: every field, every enum, the evidence floor
+
+    assert.equal(doc.id, proposalIdOf(cluster), `${label}: the id is the derived one, so a re-run addresses the same file`)
+    assert.equal(doc.findingClass, cluster.findingClass, `${label}: the class survives into the document`)
+    assert.equal(doc.lane, cluster.lane, `${label}: and so does the routed lane`)
+    assert.equal(doc.kind, cluster.kind, `${label}: and the kind`)
+    assert.ok(doc.title.length >= 10, `${label}: a title shorter than ten characters names nothing`)
+    assert.ok(doc.rationale.length >= 10, `${label}: same for the rationale`)
+    assert.ok(doc.evidence.length >= 2, `${label}: the >=2 floor is carried into the document, not just into the cluster`)
+    assert.deepStrictEqual(doc.evidence, cluster.evidence, `${label}: the citations are the cluster's own, not a re-derived set`)
+    assert.deepStrictEqual(doc.opportunity, computeOpportunity(cluster, reports), `${label}: the opportunity is the ONE scorer's output`)
+    assert.equal(doc.writeOrigin, 'roadmap-eval-loop', `${label}: stamped as the loop's own, which is what makes consolidation safe`)
+    assert.equal(doc.status, 'surfaced', `${label}: the pass emits surfaced and nothing else — ratified is a USER act`)
+    assert.equal(doc.createdAt, NOW_1, `${label}: created at the injected clock`)
+    assert.equal(doc.updatedAt, NOW_1, `${label}: and updated at the same instant on birth`)
+    assert.equal(doc.archivedReason, undefined, `${label}: a surfaced proposal carries no archive reason`)
+
+    // Payload pairing, asserted in BOTH directions for all three cases.
+    if (doc.kind === 'review-focus-candidate') {
+      assert.ok(doc.candidateReviewFocus, `${label}: a review-focus candidate must carry its candidate entry`)
+      for (const f of ['id', 'signature', 'guidance'])
+        assert.ok(String(doc.candidateReviewFocus[f] ?? '').length > 0, `${label}: candidateReviewFocus.${f} is non-empty`)
+      assert.equal(doc.reductionTarget, undefined, `${label}: and never a reduction target`)
+    } else if (doc.kind === 'reduction') {
+      const t = doc.reductionTarget
+      assert.ok(t, `${label}: a reduction must name what it reduces`)
+      assert.equal(t.budgetTokens, PROTOCOL_LOAD_BUDGET_TOKENS, `${label}: the budget is the measured DIET figure, not an invented one`)
+      assert.ok(Number.isInteger(t.measuredTokens) && t.measuredTokens > 0, `${label}: measuredTokens is a positive integer, got ${t.measuredTokens}`)
+      assert.ok(
+        t.measuredTokens > t.budgetTokens,
+        `${label}: an over-budget cluster whose measured load is not over the budget is citing the wrong number (${t.measuredTokens} vs ${t.budgetTokens})`,
+      )
+      assert.equal(typeof t.ledger, 'string', `${label}: the ledger is named`)
+      assert.notEqual(t.ledger.trim(), '', `${label}: an unnamed ledger is a figure nobody can check`)
+      assert.notEqual(String(t.flow ?? '').trim(), '', `${label}: the flow being reduced is named`)
+      assert.equal(doc.candidateReviewFocus, undefined, `${label}: and a reduction carries no reviewFocus candidate`)
+    } else {
+      assert.equal(doc.candidateReviewFocus, undefined, `${label}: kind ${doc.kind} promises no reviewFocus payload and must not smuggle one`)
+      assert.equal(doc.reductionTarget, undefined, `${label}: nor a reduction target`)
+    }
+  }
+
+  // All three payload branches above really ran, over this corpus.
+  for (const kind of ['review-focus-candidate', 'reduction', 'process-change'])
+    assert.ok(kindsSeen.has(kind), `the fixture must exercise kind ${kind}, or one branch of the pairing check never ran`)
+})
+
+// ── 30. the three seams are REQUIRED, never defaulted ─────────────────────────────────
+
+test('consolidateAndWrite — a missing fs, now or validate dep THROWS by name: a defaulted fs would write to the real tree', () => {
+  const stub = makeFsStub()
+  const full = mkDeps(stub, NOW_1)
+  const clusters = fixtureClusters()
+  const reports = fixtureReports()
+
+  for (const missing of ['fs', 'now', 'validate']) {
+    const deps = { ...full }
+    delete deps[missing]
+    assert.throws(
+      () => consolidateAndWrite(clusters, reports, PROPOSALS_DIR, deps),
+      (err) => {
+        assert.ok(err instanceof Error, `omitting ${missing} must throw an Error, not return a shrug`)
+        assert.match(err.message, new RegExp(missing), `the message must name the missing dep '${missing}', got: ${err.message}`)
+        return true
+      },
+      `dep '${missing}' is required — a silent default here is how a test-time pass writes to the real tree`,
+    )
+  }
+
+  assert.throws(() => consolidateAndWrite(clusters, reports, PROPOSALS_DIR, undefined), /deps|fs/, 'and no deps object at all is refused too')
+
+  // The complement, so the three assertions above are about the MISSING deps and not about a
+  // function that throws on everything.
+  const ok = consolidateAndWrite(clusters, reports, PROPOSALS_DIR, mkDeps(makeFsStub(), NOW_1))
+  assert.equal(ok.created, clusters.length, 'with all three seams present the same call succeeds')
+})

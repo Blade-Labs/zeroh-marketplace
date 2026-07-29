@@ -338,6 +338,214 @@ export function computeOpportunity(cluster, reports) {
   }
 }
 
+/** The loop's own write-origin stamp. Consolidation touches a file only when it reads back this
+ *  exact literal: anything else — including a value this code has never seen — is somebody else's. */
+export const WRITE_ORIGIN = 'roadmap-eval-loop'
+
+/** The one reason string an auto-archive carries, so a reader can grep for it. */
+const ARCHIVED_REASON_DISSOLVED = 'no-longer-clustered'
+
+/** The flow the protocol-load budget is measured over, and the ledger that recorded it. */
+const REDUCTION_FLOW = 'do-arc'
+const DIET_LEDGER = 'DIET-LEDGER.md'
+
+/** A human sentence for a class, used in titles and rationales. */
+const CLASS_PHRASE = {
+  'recurring-regression': 'regressed repeatedly',
+  'recurring-low-score': 'scores below the low-score threshold repeatedly',
+  'recurring-sentinel': 'goes unmeasured repeatedly',
+  'recurring-lesson-key': 'recurs across captured lessons',
+  'protocol-load-over-budget': 'runs over the measured protocol-load budget',
+}
+
+/** Key-sorted JSON, for comparing two documents without depending on key order. */
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object')
+    return `{${Object.keys(value)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`)
+      .join(',')}}`
+  return JSON.stringify(value) ?? 'null'
+}
+
+/**
+ * The document a cluster becomes: a complete ProposalShape payload, stamped `surfaced` and
+ * origin-marked as the loop's own.
+ *
+ * `surfaced` is the ONLY status this function can produce. `ratified` and `rejected` are user
+ * acts, and a pass able to mint them would be a pass able to approve its own proposals — the
+ * proposer-is-never-the-actor rail, expressed as the one value this code may write.
+ */
+export function buildProposal(cluster, reports, nowIso) {
+  const opportunity = computeOpportunity(cluster, reports)
+  const doc = {
+    id: proposalId(cluster),
+    findingClass: cluster.findingClass,
+    lane: cluster.lane,
+    kind: cluster.kind,
+    title: `${cluster.clusterKey} ${CLASS_PHRASE[cluster.findingClass]} across ${cluster.evidence.length} arc evals`,
+    rationale:
+      `${cluster.evidence.length} independent sources in the committed eval corpus record that ${cluster.clusterKey} ` +
+      `${CLASS_PHRASE[cluster.findingClass]}. Routed to the ${cluster.lane} lane; opportunity ${opportunity.score} ` +
+      `(importance ${opportunity.importance}, satisfaction ${opportunity.satisfaction === null ? 'unmeasured' : opportunity.satisfaction}). ` +
+      'SURFACED ONLY: nothing changes until a human ratifies this.',
+    evidence: cluster.evidence,
+    opportunity,
+    writeOrigin: WRITE_ORIGIN,
+    status: 'surfaced',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  }
+
+  if (cluster.kind === 'review-focus-candidate') doc.candidateReviewFocus = cluster.candidateReviewFocus ?? candidateReviewFocusFor(cluster)
+  if (cluster.kind === 'reduction') {
+    const measured = cluster.evidence
+      .map((e) => Number(/measured (\d+) tokens/.exec(e.excerpt)?.[1]))
+      .filter((n) => Number.isFinite(n) && n > 0)
+    doc.reductionTarget = {
+      flow: REDUCTION_FLOW,
+      // The MEAN of the cited measurements, rounded to a whole token. Derived from the cluster's
+      // own citations, so the figure a reader recomputes from the evidence is the figure here —
+      // and it is TOKENS, never a currency estimate the corpus cannot support.
+      measuredTokens: Math.round(mean(measured)),
+      budgetTokens: PROTOCOL_LOAD_BUDGET_TOKENS,
+      ledger: DIET_LEDGER,
+    }
+  }
+  return doc
+}
+
+/**
+ * Consolidate the pass's own prior proposals and write the current set.
+ *
+ * Every seam is INJECTED and required — `fs`, `now`, `validate`. A defaulted fs is how a
+ * test-time pass writes to the real tree, and a defaulted validator is how an unparseable
+ * document reaches disk; neither has a safe fallback, so neither gets one.
+ *
+ * ## What this function may touch
+ * Files directly under `proposalsDir`, named `<id>.json`, whose parsed `writeOrigin` is this
+ * loop's own. Nothing else, ever. A foreign-origin or unparseable file is left byte-identical —
+ * not reformatted, not repaired — and reported by name. A `ratified` or `rejected` file is the
+ * USER'S verdict and outranks a regenerated cluster carrying the same id; an `archived` file the
+ * loop wrote is likewise not revived. The two refusals are counted apart because "you decided"
+ * and "the loop archived it" are different facts.
+ *
+ * ## Why nothing is ever removed
+ * A dissolved cluster's proposal is ARCHIVED IN PLACE: status flipped, reason stamped, bytes kept.
+ * There is no removal path in this module at all, and its test asserts that by scanning the source
+ * as well as by recording the fs calls — the Hermes lesson is that a self-writing artifact needs a
+ * structural bound, not a careful author.
+ *
+ * ## Why a validated document is buffered before any of it is written
+ * Every document that WILL be written is built and validated first; only then does anything reach
+ * the fs seam. A validation failure therefore leaves the directory exactly as it found it, rather
+ * than half a run's worth of files and one exception.
+ */
+export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
+  if (!deps || typeof deps !== 'object') throw new Error('eval-propose: consolidateAndWrite requires a deps object carrying fs, now and validate')
+  for (const name of ['fs', 'now', 'validate'])
+    if (!deps[name]) throw new Error(`eval-propose: consolidateAndWrite requires an injected '${name}' — there is no safe default for it`)
+  const { fs, now, validate } = deps
+  const nowIso = now()
+
+  fs.mkdirSync(proposalsDir, { recursive: true })
+
+  // ── read what is already there, and sort it by who owns it ──────────────────────────
+  const existingOwn = new Map()
+  const foreignSkipped = []
+  const unreadable = []
+  for (const name of fs.readdirSync(proposalsDir)) {
+    // A non-JSON file in this directory is not a proposal and is none of the loop's business.
+    if (!name.endsWith('.json')) continue
+    const path = `${proposalsDir}/${name}`
+    let doc
+    try {
+      doc = JSON.parse(fs.readFileSync(path, 'utf8'))
+    } catch {
+      unreadable.push(name)
+      continue
+    }
+    if (!doc || doc.writeOrigin !== WRITE_ORIGIN) {
+      foreignSkipped.push(name)
+      continue
+    }
+    existingOwn.set(doc.id ?? name.replace(/\.json$/, ''), { name, path, doc })
+  }
+
+  // ── decide, build and validate; write nothing yet ───────────────────────────────────
+  const pending = []
+  const proposals = []
+  let created = 0
+  let refreshed = 0
+  let unchanged = 0
+  let archived = 0
+  let alreadyAdjudicated = 0
+  let skippedArchived = 0
+
+  const liveIds = new Set()
+  for (const cluster of clusters ?? []) {
+    const id = proposalId(cluster)
+    liveIds.add(id)
+    const existing = existingOwn.get(id)
+
+    if (existing && (existing.doc.status === 'ratified' || existing.doc.status === 'rejected')) {
+      alreadyAdjudicated += 1
+      continue
+    }
+    if (existing && existing.doc.status === 'archived') {
+      skippedArchived += 1
+      continue
+    }
+
+    const fresh = buildProposal(cluster, reports, nowIso)
+    if (!existing) {
+      created += 1
+      pending.push({ path: `${proposalsDir}/${id}.json`, doc: fresh })
+      proposals.push(fresh)
+      continue
+    }
+
+    // A refresh keeps the proposal's birthday and moves its updatedAt only when the content
+    // actually moved: bumping the stamp on every run would churn the committed diff and make
+    // "what changed since I last looked" unanswerable.
+    const candidate = { ...fresh, createdAt: existing.doc.createdAt ?? fresh.createdAt, updatedAt: existing.doc.updatedAt ?? nowIso }
+    if (stableJson(candidate) === stableJson(existing.doc)) {
+      unchanged += 1
+      proposals.push(existing.doc)
+      continue
+    }
+    candidate.updatedAt = nowIso
+    refreshed += 1
+    pending.push({ path: existing.path, doc: candidate })
+    proposals.push(candidate)
+  }
+
+  // A surfaced proposal whose cluster dissolved: archived IN PLACE, never removed.
+  for (const [id, existing] of existingOwn) {
+    if (liveIds.has(id) || existing.doc.status !== 'surfaced') continue
+    archived += 1
+    pending.push({
+      path: existing.path,
+      doc: { ...existing.doc, status: 'archived', archivedReason: ARCHIVED_REASON_DISSOLVED, updatedAt: nowIso },
+    })
+  }
+
+  // ── the ONE write path: validate at the seam, refuse any target outside the directory ──
+  const writes = []
+  const serialized = pending.map(({ path, doc }) => {
+    if (path !== `${proposalsDir}/${doc.id}.json`)
+      throw new Error(`eval-propose: refusing to write ${path} — a proposal writes to <proposalsDir>/<id>.json and nowhere else`)
+    return { path, bytes: `${JSON.stringify(validate(doc), null, 2)}\n` }
+  })
+  for (const { path, bytes } of serialized) {
+    fs.writeFileSync(path, bytes)
+    writes.push(path)
+  }
+
+  return { proposals, created, refreshed, unchanged, archived, alreadyAdjudicated, skippedArchived, foreignSkipped, unreadable, writes }
+}
+
 /** Which repo a cluster asks to change, or null when the corpus cannot say. */
 function deriveLane(findingClass, clusterKey) {
   const byClass = CLASS_LANE[findingClass]
