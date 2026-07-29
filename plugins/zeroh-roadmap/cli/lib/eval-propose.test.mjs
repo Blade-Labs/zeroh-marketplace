@@ -1612,3 +1612,56 @@ test('consolidateAndWrite — an own file whose NAME a live cluster derives is b
   assert.deepEqual(res.misnamedOwn, [`${id}.json`], 'the misfiled own file is named')
   assert.equal(res.proposals.filter((p) => p.id === id).length, 0, 'no proposal claims an id whose file the pass could not write')
 })
+
+// ── 34. a stale own document is a named refusal too, not an aborted run ────────────────
+// The last unusable-own-file class. A document DERIVED from disk (an archive rewrite, or a
+// refresh inheriting createdAt/updatedAt) carries content nobody validated on read, so a file
+// written under an older schema — or hand-edited while it was still surfaced — used to reach the
+// seam validator and throw, discarding every other proposal in the run. A document the loop built
+// from the corpus alone still throws, because that one means the loop's own arithmetic is broken.
+
+test('consolidateAndWrite — an own document whose ARCHIVED form will not parse is refused by name, and the rest of the run proceeds', () => {
+  const id = 'recurring-lesson-key-vanished-long-ago'
+  // One evidence entry: legal to plant, illegal under the >=2 floor, so the archive rewrite of it
+  // is what fails validation rather than anything the loop computed.
+  const bytes = plantedProposal(id, { evidence: [{ file: 'roadmap/arc-evals/lessons.jsonl', jsonPath: 'lines[1]', excerpt: 'a lone citation' }] })
+  const stub = makeFsStub({ [proposalPath(id)]: bytes })
+  const clusters = fixtureClusters()
+
+  const res = consolidateAndWrite(clusters, fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.equal(res.created, clusters.length, 'every live cluster still wrote: one stale file costs the run nothing')
+  assert.deepEqual(res.unusableOwn, [`${id}.json`], 'and the stale document is reported BY NAME')
+  assert.equal(res.archived, 0, 'a refusal is not an archive — counting it as one would claim a rewrite that never happened')
+  assert.equal(stub.files.get(proposalPath(id)), bytes, 'its bytes are untouched, so a human can still read and fix it')
+})
+
+test('consolidateAndWrite — an own document whose REFRESHED form will not parse is refused by name, and the live cluster is not written over', () => {
+  const cluster = liveLessonCluster()
+  const id = proposalIdOf(cluster)
+  // createdAt is inherited from disk by the refresh, so a too-short one fails the >=10 floor.
+  const bytes = plantedProposal(id, { createdAt: 'x' })
+  const stub = makeFsStub({ [proposalPath(id)]: bytes })
+  const clusters = fixtureClusters()
+
+  const res = consolidateAndWrite(clusters, fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.deepEqual(res.unusableOwn, [`${id}.json`], 'the unusable inheritance is named')
+  assert.equal(res.refreshed, 0, 'and not counted as a refresh that did not happen')
+  assert.equal(res.created, clusters.length - 1, 'every other cluster wrote')
+  assert.equal(stub.files.get(proposalPath(id)), bytes, 'the file is left exactly as found rather than half-rewritten')
+})
+
+test('consolidateAndWrite — a FRESH document that will not parse still fails the run: that one means the loop is broken', () => {
+  const stub = makeFsStub()
+  const boom = new Error('ProposalShape: refused at the seam')
+  assert.throws(
+    () => consolidateAndWrite(fixtureClusters(), fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1, { validate: () => { throw boom } })),
+    (err) => {
+      assert.equal(err, boom, 'the corpus-derived failure propagates unchanged')
+      return true
+    },
+    'the disk-derived softening must not soften the loop grading its own arithmetic',
+  )
+  assert.deepEqual(stub.writes, [], 'and nothing was written')
+})

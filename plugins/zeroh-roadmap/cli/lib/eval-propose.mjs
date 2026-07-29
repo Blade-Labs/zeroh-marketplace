@@ -526,6 +526,34 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
 
   let blockedByName = 0
   let idCollisions = 0
+  const unusableOwn = []
+
+  /**
+   * Stage one document for writing, validated at the seam BEFORE anything reaches the fs.
+   *
+   * A document built purely from the corpus is the loop's own arithmetic: if that will not parse,
+   * the loop is broken and the run must fail loudly. A document DERIVED from a file on disk carries
+   * content nobody validated on read, and one stale or hand-edited file must not cost the operator
+   * every other proposal in the run — that is the same rule the foreign, unreadable and misnamed
+   * refusals already follow, applied to the last kind of unusable own file.
+   *
+   * @returns true when the document was staged, false when it was refused and counted.
+   */
+  const stage = (path, doc, fromExisting) => {
+    if (path !== `${proposalsDir}/${doc.id}.json`)
+      throw new Error(`eval-propose: refusing to write ${path} — a proposal writes to <proposalsDir>/<id>.json and nowhere else`)
+    let validated
+    try {
+      validated = validate(doc)
+    } catch (e) {
+      if (!fromExisting) throw e
+      unusableOwn.push(path.slice(path.lastIndexOf('/') + 1))
+      return false
+    }
+    pending.push({ path, bytes: `${JSON.stringify(validated, null, 2)}\n` })
+    return true
+  }
+
   // ONE set, doing two jobs that must not diverge: it detects a repeated id, and it records that
   // the id is LIVE. Liveness is recorded even for a refused cluster, so an own proposal whose
   // cluster still exists is never auto-archived merely because this run declined to rewrite it.
@@ -561,8 +589,8 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
 
     const fresh = buildProposal(cluster, reports, nowIso)
     if (!existing) {
+      if (!stage(`${proposalsDir}/${id}.json`, fresh, false)) continue
       created += 1
-      pending.push({ path: `${proposalsDir}/${id}.json`, doc: fresh })
       proposals.push(fresh)
       continue
     }
@@ -577,29 +605,22 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
       continue
     }
     candidate.updatedAt = nowIso
+    if (!stage(existing.path, candidate, true)) continue
     refreshed += 1
-    pending.push({ path: existing.path, doc: candidate })
     proposals.push(candidate)
   }
 
   // A surfaced proposal whose cluster dissolved: archived IN PLACE, never removed.
   for (const [id, existing] of existingOwn) {
     if (liveIds.has(id) || existing.doc.status !== 'surfaced') continue
-    archived += 1
-    pending.push({
-      path: existing.path,
-      doc: { ...existing.doc, status: 'archived', archivedReason: ARCHIVED_REASON_DISSOLVED, updatedAt: nowIso },
-    })
+    const archivedDoc = { ...existing.doc, status: 'archived', archivedReason: ARCHIVED_REASON_DISSOLVED, updatedAt: nowIso }
+    if (stage(existing.path, archivedDoc, true)) archived += 1
   }
 
-  // ── the ONE write path: validate at the seam, refuse any target outside the directory ──
+  // ── the ONE write path: everything here is already validated, so a refusal above left the
+  //    directory exactly as it was found rather than half a run's worth of files ──
   const writes = []
-  const serialized = pending.map(({ path, doc }) => {
-    if (path !== `${proposalsDir}/${doc.id}.json`)
-      throw new Error(`eval-propose: refusing to write ${path} — a proposal writes to <proposalsDir>/<id>.json and nowhere else`)
-    return { path, bytes: `${JSON.stringify(validate(doc), null, 2)}\n` }
-  })
-  for (const { path, bytes } of serialized) {
+  for (const { path, bytes } of pending) {
     fs.writeFileSync(path, bytes)
     writes.push(path)
   }
@@ -617,6 +638,7 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
     foreignSkipped,
     unreadable,
     misnamedOwn,
+    unusableOwn,
     writes,
   }
 }

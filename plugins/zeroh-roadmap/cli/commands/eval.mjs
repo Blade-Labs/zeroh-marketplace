@@ -545,7 +545,7 @@ function readProposalsForTrend(proposalsDir) {
   // The SAME provenance check the consolidation pass applies: "is this the loop's own file" gets
   // one answer, not one per reader.
   const prior = readProposalDocs({ existsSync, readdirSync, readFileSync }, proposalsDir)
-  const out = { surfaced: [], ratified: 0, rejected: 0, archived: 0, unreadable: prior.unreadable, foreign: prior.foreign, unscored: [] }
+  const out = { surfaced: [], ratified: 0, rejected: 0, archived: 0, unreadable: prior.unreadable, foreign: prior.foreign, unscored: [], unknownStatus: [] }
   for (const { name, doc } of prior.own) {
     // A surfaced document carrying no numeric score cannot be ranked, and rendering `0` would
     // read as "measured, and worthless" for a document that was never measured. It joins the
@@ -555,6 +555,9 @@ function readProposalsForTrend(proposalsDir) {
     // Counted only under a status the lifecycle actually defines: a hand-edited status the
     // contract never named is neither an open proposal nor a decided one, so it inflates nothing.
     else if (DECIDED_PROPOSAL_STATUSES.includes(doc.status)) out[doc.status] += 1
+    // Not inflating a count and not being mentioned at all are different decisions, and this
+    // section's rule is that a file it cannot use is a fact about the corpus.
+    else out.unknownStatus.push(name)
   }
   // Every surfaced row is guaranteed a numeric score by the filter above, so the sort compares
   // measurements rather than a stand-in.
@@ -599,6 +602,7 @@ function renderProposalsSection(p) {
     // Its own label: this file parses fine, so sending a reader to hunt for a parse error would be
     // a wrong answer to the question the footnote just raised.
     ['surfaced but carrying no numeric score (not ranked)', p.unscored],
+    ['status outside the proposal lifecycle (not counted)', p.unknownStatus],
   ])
     if (names.length > 0) body.push(`<p class="gap">${esc(label)}: ${names.map((n) => esc(n)).join(', ')}</p>`)
 
@@ -1148,6 +1152,7 @@ async function runPropose(opts) {
   say(`  skipped-archived     ${result.skippedArchived}  (the loop archived these and does not revive them)`)
   say(`  blocked-by-name      ${result.blockedByName}  (a proposal id whose file name is already held by a file this pass must not write over)`)
   say(`  misnamed-own         ${result.misnamedOwn.length}${result.misnamedOwn.length > 0 ? `: ${result.misnamedOwn.join(', ')}` : ''}  (own files not filed under their own id; left alone)`)
+  say(`  unusable-own         ${result.unusableOwn.length}${result.unusableOwn.length > 0 ? `: ${result.unusableOwn.join(', ')}` : ''}  (own files whose refreshed or archived form will not parse; left alone)`)
   say(`  id-collisions        ${result.idCollisions}  (two cluster keys folding to one proposal id; the second is refused, never overwritten)`)
   say(`  created ${result.created}  refreshed ${result.refreshed}  unchanged ${result.unchanged}`)
 

@@ -2896,6 +2896,22 @@ for (const [label, mangle] of [
     // PRESENT first, or every absence below is satisfied by a section that rendered nothing.
     assert.ok(section.includes(escHtml(valid.title)), `the fully scored proposal must still be tabled; section was:\n${section}`)
 
+    // The LABEL it is filed under, not merely that it is named somewhere. Filing a document that
+    // parses perfectly under `unreadable` sends the reader hunting for a parse error that does not
+    // exist, and makes the page's `unreadable` mean something different from the propose command's.
+    const footnoteLine = flattenTags(section)
+      .split(/(?=surfaced but carrying|unreadable:|foreign write-origin|status outside)/)
+      .find((chunk) => chunk.includes(scorelessName))
+    assert.ok(
+      footnoteLine,
+      `the score-less document must be named in a footnote; section was:\n${section}`,
+    )
+    assert.match(
+      footnoteLine,
+      /surfaced but carrying no numeric score/,
+      `and under the label that describes it, not "unreadable"; the chunk naming it was:\n${footnoteLine}`,
+    )
+
     const rows = proposalRows(html)
     assert.equal(
       rows.length,
@@ -2934,3 +2950,42 @@ for (const [label, mangle] of [
     )
   })
 }
+
+// ── 71. A STATUS THE LIFECYCLE NEVER NAMED IS NAMED, NOT DROPPED ─────────────────────────
+// The section's own rule is that a file it cannot use is a fact about the corpus. An own,
+// parseable document whose `status` is outside ProposalStatusShape — hand-edited, or written by an
+// older vintage — matched none of the surfaced / decided branches and so was neither tabled, nor
+// counted, nor mentioned. Not inflating a count and not being mentioned at all are different
+// decisions, and only the first of them was the intent.
+test('eval trend — an own proposal carrying a status outside the lifecycle is named in a footnote, not silently dropped', () => {
+  const root = buildEvalFixture()
+  plantPrior(root, '2026-07-02', { all: 60 })
+  plantPrior(root, '2026-07-03', { all: 70 })
+
+  const valid = plantProposal(root, { id: 'recurring-regression-speed', title: 'record the reference minutes on every timed phase' })
+
+  const STRANGE_TITLE = 'a document filed under a status nobody defined'
+  const strange = { ...PROPOSAL_BASE, id: 'recurring-sentinel-plan-quality', title: STRANGE_TITLE, status: 'deferred' }
+  const strangeName = plantRawProposal(root, strange)
+
+  // Preconditions: own origin and parseable, so neither provenance route can be what excluded it.
+  assert.equal(strange.writeOrigin, 'roadmap-eval-loop', 'fixture precondition: the loop owns this file')
+  assert.equal(
+    ['surfaced', 'ratified', 'rejected', 'archived'].includes(strange.status),
+    false,
+    'fixture precondition: the status really is outside the contract lifecycle',
+  )
+
+  const r = evalTrend(root)
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+
+  const html = readFileSync(trendPath(root), 'utf8')
+  const section = proposalsSection(html)
+
+  assert.ok(section.includes(escHtml(valid.title)), 'the valid proposal is still tabled, so the assertions below are not about an empty section')
+  assert.equal(proposalRows(html).length, 1, 'and it is the only row: a document with no known status is not an open proposal')
+  assert.equal(html.includes(escHtml(STRANGE_TITLE)), false, 'nor is it tabled under some other heading')
+  assert.ok(section.includes(strangeName), `it must be named BY FILENAME; section was:\n${section}`)
+  assert.ok(statesCount(section, 'ratified', 0), 'and it inflates no decided count')
+  assert.ok(statesCount(section, 'archived', 0), 'under any of them')
+})
