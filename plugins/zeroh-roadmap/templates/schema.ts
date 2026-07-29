@@ -1295,6 +1295,194 @@ export const LessonShape = z.object({
 
 export type Lesson = z.output<typeof LessonShape>
 
+/**
+ * The CLOSED vocabulary of recurring findings the clustering pass may recognize. An open
+ * string here would let the pass invent a class nobody ratified and then rank it against the
+ * ones that were — the enum is what keeps the importance rulings table exhaustive.
+ */
+export const FindingClassShape = z.enum([
+  /** The same dimension flagged `regression: true` in >=2 reports' ratchet rows. */
+  'recurring-regression',
+  /** The same (dimension x sentinel) pair in >=2 reports — a MEASUREMENT gap, not a bad score. */
+  'recurring-sentinel',
+  /** The same dimension scored below the low-score threshold in >=2 reports. */
+  'recurring-low-score',
+  /** >=2 lessons sharing one extracted key (a file path or a backticked token). */
+  'recurring-lesson-key',
+  /** The workflow stamp's protocolLoadTokens over the DIET budget in >=2 stamped reports. */
+  'protocol-load-over-budget',
+])
+
+/**
+ * Which repo a proposal is asking to change. A lane-less proposal is NOT ready (arc EVALLOOP
+ * locked decision): without a home, "improve this" is an observation, and the reader has to
+ * re-derive the routing the loop already knew.
+ */
+export const ProposalLaneShape = z.enum(['plugin-generic', 'consumer-specific'])
+
+/** What SHAPE of change is being proposed — closed, because each kind carries a different
+ *  payload obligation the ProposalShape refine enforces. */
+export const ProposalKindShape = z.enum([
+  'review-focus-candidate',
+  'skill-amendment',
+  'schema-tightening',
+  'process-change',
+  'reduction',
+])
+
+/**
+ * The proposal lifecycle. The pass emits ONLY `surfaced` and may flip its OWN surfaced files to
+ * `archived`; `ratified` and `rejected` are USER acts. That split is the whole ratify-only
+ * guarantee expressed in one field: a status the loop cannot write is a decision it cannot make.
+ */
+export const ProposalStatusShape = z.enum(['surfaced', 'ratified', 'rejected', 'archived'])
+
+/**
+ * One citation behind a proposal. All three fields are load-bearing: the file says WHICH report,
+ * the jsonPath says which field inside it, and the excerpt lets a reader judge without opening
+ * anything. A proposal whose evidence cannot be re-opened is an opinion wearing a number.
+ */
+export const ProposalEvidenceShape = z.object({
+  /** Repo-relative path of the report or lessons sidecar the finding came from. */
+  file: z.string().min(1),
+  /** Where inside that document, e.g. `ratchet[2]` or `dimensions.speed.sentinel`. */
+  jsonPath: z.string().min(1),
+  excerpt: z.string().min(1),
+})
+
+/**
+ * The prioritizer (design doc, Numbers program): score = importance + max(importance - satisfaction, 0).
+ * `importance` comes from the versioned rulings table; `satisfaction` is MEASURED from the corpus,
+ * or `null` when the corpus cannot measure it.
+ *
+ * The refine is the honesty rail: when satisfaction is unmeasured the score is EXACTLY importance.
+ * Any other arithmetic on a null would let an unmeasurable class out-rank a measured one on a
+ * number nobody computed — the fabricated-figure failure, applied to ranking instead of to scores.
+ */
+export const OpportunityShape = z
+  .object({
+    importance: z.number().min(0).max(10),
+    satisfaction: z.number().min(0).max(10).nullable(),
+    score: z.number().min(0),
+    rulingId: z.string().min(1),
+    rulingsVersion: z.number().int().positive(),
+    /** Names the corpus computation behind `satisfaction`, or the literal unmeasured source. */
+    satisfactionSource: z.string().min(1),
+  })
+  .refine((o) => o.satisfaction !== null || o.score === o.importance, {
+    message:
+      'an unmeasured satisfaction (null) binds score to importance exactly — any other value ranks this ' +
+      'proposal on arithmetic nobody performed',
+    path: ['score'],
+  })
+
+/** One importance ruling: a class, its 0-10 weight, and WHY. The rationale floor exists because
+ *  a weight without a reason cannot be argued with, only obeyed. */
+export const ImportanceRulingShape = z.object({
+  id: z.string().min(1),
+  findingClass: FindingClassShape,
+  importance: z.number().min(0).max(10),
+  rationale: z.string().min(10),
+})
+
+/**
+ * The versioned rulings table. Static DATA, not configuration (the SPEED_REFERENCE precedent):
+ * two machines must not be able to produce incomparable priorities. Bumping `version` is how a
+ * knowing re-prioritization becomes visible instead of silent.
+ */
+export const ImportanceRulingsTableShape = z.object({
+  version: z.number().int().positive(),
+  ratified: z.string().min(10),
+  rulings: z.array(ImportanceRulingShape).min(1),
+})
+
+/**
+ * ProposalShape — the ONE contract crossing the plugin/consumer boundary: written by the plugin
+ * CLI, committed and read in the consumer repo, and one day ratified into either home.
+ *
+ * `evidence.min(2)` is the rule-of-three discipline made STRUCTURAL: a single-source finding is
+ * an anecdote, and a loop that can emit anecdotes will bury its real findings under them. The
+ * floor is enforced here rather than in the clustering code so no second caller can lower it.
+ *
+ * `writeOrigin` is the provenance seam consolidation checks before touching anything. It is a
+ * LITERAL, not an enum: the loop can recognize exactly one origin as its own, and every other
+ * value — including one it has never seen — is somebody else's file.
+ *
+ * The superRefine makes payload/kind pairing TWO-directional. A kind that promises a payload must
+ * carry it, and a kind that promises none must not: a process-change smuggling a reviewFocus
+ * candidate would route a config edit through a kind the reader believes cannot cause one.
+ */
+export const ProposalShape = z
+  .object({
+    /** Slug-shaped and derived from (class, cluster key), so a re-run over the same corpus lands
+     *  on the same file instead of accumulating near-duplicates. */
+    id: z.string().regex(/^[a-z0-9-]+$/),
+    findingClass: FindingClassShape,
+    lane: ProposalLaneShape,
+    kind: ProposalKindShape,
+    title: z.string().min(10),
+    rationale: z.string().min(10),
+    evidence: z.array(ProposalEvidenceShape).min(2),
+    opportunity: OpportunityShape,
+    /** The consumer roadmap.config.json reviewFocus entry shape — a CANDIDATE payload only. The
+     *  loop never opens that config for writing; ratification is what moves this across. */
+    candidateReviewFocus: z
+      .object({ id: z.string().min(1), signature: z.string().min(1), guidance: z.string().min(1) })
+      .optional(),
+    /** Measured tokens against a measured budget, with the ledger that recorded both — never a
+     *  fabricated dollar figure (arc honesty rail). */
+    reductionTarget: z
+      .object({
+        flow: z.string().min(1),
+        measuredTokens: z.number().int().positive(),
+        budgetTokens: z.number().int().positive(),
+        ledger: z.string().min(1),
+      })
+      .optional(),
+    writeOrigin: z.literal('roadmap-eval-loop'),
+    status: ProposalStatusShape,
+    createdAt: z.string().min(10),
+    updatedAt: z.string().min(10),
+    supersededBy: z.string().min(1).optional(),
+    /** Required on `archived`: the pass archives instead of deleting, and an archive with no
+     *  stated reason is a deletion that merely left the bytes behind. */
+    archivedReason: z.string().min(10).optional(),
+  })
+  .superRefine((p, ctx) => {
+    const PAYLOADS = [
+      { kind: 'review-focus-candidate', field: 'candidateReviewFocus' },
+      { kind: 'reduction', field: 'reductionTarget' },
+    ] as const
+    for (const { kind, field } of PAYLOADS) {
+      const present = p[field] !== undefined
+      if (p.kind === kind && !present)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: `kind '${kind}' REQUIRES ${field} — the kind is the promise of that payload`,
+        })
+      if (p.kind !== kind && present)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message:
+            `${field} belongs only to kind '${kind}' — carrying it under '${p.kind}' hides the change's real ` +
+            'shape from a reader who filtered on kind',
+        })
+    }
+    if (p.status === 'archived' && p.archivedReason === undefined)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['archivedReason'],
+        message: 'status archived REQUIRES archivedReason — an unexplained archive is a silent delete',
+      })
+  })
+
+export type Proposal = z.output<typeof ProposalShape>
+export type ProposalEvidence = z.output<typeof ProposalEvidenceShape>
+export type Opportunity = z.output<typeof OpportunityShape>
+export type ImportanceRulingsTable = z.output<typeof ImportanceRulingsTableShape>
+
 /** Metrics on a scorecard cell: numbers or NAMED string sentinels, the EvalDimensionShape
  *  `signals` idiom — an unmeasurable metric says so in words rather than reporting a 0. */
 const ScorecardMetricsShape = z.record(z.string(), z.union([z.number(), z.string()]))

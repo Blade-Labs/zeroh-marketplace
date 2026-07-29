@@ -50,6 +50,15 @@ import {
   SweepReportShape,
   StructuredGateRoundShape,
   TransparencyReportShape,
+  FindingClassShape,
+  ProposalLaneShape,
+  ProposalKindShape,
+  ProposalStatusShape,
+  ProposalEvidenceShape,
+  OpportunityShape,
+  ImportanceRulingShape,
+  ImportanceRulingsTableShape,
+  ProposalShape,
 } from '../templates/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
 
@@ -1976,6 +1985,376 @@ check('JudgeVerdict: an empty judgeModel REJECTS (a verdict that will not say wh
   const input = makeJudgeVerdict()
   input.judgeModel = ''
   assertIssuePath(ArcEvalJudgeVerdictShape, input, ['judgeModel'], 'empty judgeModel')
+})
+
+console.log('\nProposal contract — the ONE shape crossing the plugin/consumer boundary')
+
+// Proposals are written by the plugin CLI and committed + read in the consumer
+// repo, so the shape IS the contract: a closed finding-class vocabulary (an open
+// string would let the clustering pass invent classes), lane + kind as closed
+// enums, and evidence enforced STRUCTURALLY at min(2) so no speculative
+// single-source proposal can be written at all.
+
+// ONE known-good base per shape, mutated by copy in every negative case: a
+// negative fixture that was never valid to begin with proves nothing.
+function makeEvidence(n: number): Record<string, unknown> {
+  return {
+    file: `roadmap/arcs/EVALLOOP-eval-${n}.json`,
+    jsonPath: `$.dimensions['code-confidence'].signals.gateRounds`,
+    excerpt: `gate R${n} reopened on the same masking seam`,
+  }
+}
+
+function makeOpportunity(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    importance: 8,
+    satisfaction: 3,
+    score: 13,
+    rulingId: 'ruling-recurring-regression',
+    rulingsVersion: 1,
+    satisfactionSource: 'roadmap/arcs/EVALLOOP-eval.json#dimensions.code-confidence',
+    ...overrides,
+  }
+}
+
+function makeCandidateReviewFocus(): Record<string, unknown> {
+  return {
+    id: 'masking-seam-regression',
+    signature: 'maskPrompt(.*)\\s*//\\s*TODO',
+    guidance: 'every masking seam change ships a wired-turn itest',
+  }
+}
+
+function makeReductionTarget(): Record<string, unknown> {
+  return {
+    flow: 'do-phase protocol load',
+    measuredTokens: 41000,
+    budgetTokens: 30000,
+    ledger: 'roadmap/eval/reduction-ledger.json',
+  }
+}
+
+function makeProposal(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'recurring-regression-masking-seam',
+    findingClass: 'recurring-regression',
+    lane: 'consumer-specific',
+    kind: 'review-focus-candidate',
+    title: 'Masking seam regressions keep reopening the same gate',
+    rationale: 'Three arcs in a row reopened gate R1 on the same masking seam.',
+    evidence: [makeEvidence(1), makeEvidence(2)],
+    opportunity: makeOpportunity(),
+    candidateReviewFocus: makeCandidateReviewFocus(),
+    writeOrigin: 'roadmap-eval-loop',
+    status: 'surfaced',
+    createdAt: '2026-07-28',
+    updatedAt: '2026-07-28',
+    ...overrides,
+  }
+}
+
+function makeRulingsTable(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const classes = [
+    'recurring-regression',
+    'recurring-sentinel',
+    'recurring-low-score',
+    'recurring-lesson-key',
+    'protocol-load-over-budget',
+  ]
+  return {
+    version: 1,
+    ratified: '2026-07-28',
+    rulings: classes.map((findingClass, i) => ({
+      id: `ruling-${findingClass}`,
+      findingClass,
+      importance: 5 + i * 0.5,
+      rationale: `ratified importance for ${findingClass} findings across the fleet`,
+    })),
+    ...overrides,
+  }
+}
+
+check('Proposal: a full review-focus-candidate with TWO evidence entries parses and round-trips lane/kind/evidence', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  const p = ProposalShape.parse(makeProposal())
+  assertEq(p.id, 'recurring-regression-masking-seam', 'id round-trips')
+  assertEq(p.lane, 'consumer-specific', 'lane round-trips — a lane-less proposal is not ready')
+  assertEq(p.kind, 'review-focus-candidate', 'kind round-trips')
+  assertEq(p.findingClass, 'recurring-regression', 'findingClass round-trips')
+  assertEq(p.evidence.length, 2, 'both evidence entries survive')
+  assertEq(p.evidence[1].file, 'roadmap/arcs/EVALLOOP-eval-2.json', 'the SECOND source is carried, not collapsed')
+  assertEq(p.candidateReviewFocus?.id, 'masking-seam-regression', 'the kind payload round-trips')
+  assertEq(p.writeOrigin, 'roadmap-eval-loop', 'the write origin is the provenance stamp')
+  assertEq(p.status, 'surfaced', 'status round-trips')
+  assertEq(p.reductionTarget, undefined, 'no reduction payload on a review-focus proposal')
+})
+
+check('Proposal: exactly ONE evidence entry REJECTS at [evidence] — the rule-of-three floor is STRUCTURAL, not advisory', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  assertIssuePath(
+    ProposalShape,
+    makeProposal({ evidence: [makeEvidence(1)] }),
+    ['evidence'],
+    'a single-source proposal',
+  )
+  assertIssuePath(ProposalShape, makeProposal({ evidence: [] }), ['evidence'], 'a zero-evidence proposal')
+  const atFloor = ProposalShape.parse(makeProposal({ evidence: [makeEvidence(1), makeEvidence(2)] }))
+  assertEq(atFloor.evidence.length, 2, 'EXACTLY two is the floor, not one past it')
+  assertIssuePath(
+    ProposalShape,
+    makeProposal({ evidence: [makeEvidence(1), { ...makeEvidence(2), excerpt: '' }] }),
+    ['evidence', 1, 'excerpt'],
+    'an empty excerpt smuggled in as the second source',
+  )
+})
+
+check('FindingClass: the vocabulary is CLOSED — a sixth class rejects, in the enum AND inside a proposal', () => {
+  requireShape(FindingClassShape, 'FindingClassShape')
+  requireShape(ProposalShape, 'ProposalShape')
+  for (const known of [
+    'recurring-regression',
+    'recurring-sentinel',
+    'recurring-low-score',
+    'recurring-lesson-key',
+    'protocol-load-over-budget',
+  ]) {
+    FindingClassShape.parse(known)
+  }
+  assertThrows(() => FindingClassShape.parse('recurring-vibes'), 'an invented sixth finding class')
+  assertIssuePath(
+    ProposalShape,
+    makeProposal({ findingClass: 'recurring-vibes' }),
+    ['findingClass'],
+    'an invented finding class on a proposal',
+  )
+})
+
+check('Proposal: kind review-focus-candidate WITHOUT candidateReviewFocus REJECTS (the kind IS the promise of a payload)', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  const { candidateReviewFocus: _dropped, ...noPayload } = makeProposal()
+  assertThrows(() => ProposalShape.parse(noPayload), 'a review-focus-candidate with no candidate')
+})
+
+check('Proposal: kind reduction REQUIRES reductionTarget — missing REJECTS, present parses and round-trips the ledger', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  const { candidateReviewFocus: _dropped, ...base } = makeProposal({ kind: 'reduction' })
+  assertThrows(() => ProposalShape.parse(base), 'a reduction proposal with no target')
+  const p = ProposalShape.parse({ ...base, reductionTarget: makeReductionTarget() })
+  assertEq(p.kind, 'reduction', 'kind round-trips')
+  assertEq(p.reductionTarget?.measuredTokens, 41000, 'the measured token count round-trips')
+  assertEq(p.reductionTarget?.budgetTokens, 30000, 'the budget round-trips')
+  assertEq(p.reductionTarget?.ledger, 'roadmap/eval/reduction-ledger.json', 'the ledger ref round-trips')
+  assertEq(p.candidateReviewFocus, undefined, 'no review-focus payload on a reduction')
+})
+
+check('Proposal: payload/kind pairing is TWO-DIRECTIONAL — process-change carrying EITHER payload REJECTS', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  assertThrows(
+    () => ProposalShape.parse(makeProposal({ kind: 'process-change' })),
+    'a process-change smuggling a candidateReviewFocus',
+  )
+  const { candidateReviewFocus: _dropped, ...bare } = makeProposal({ kind: 'process-change' })
+  assertThrows(
+    () => ProposalShape.parse({ ...bare, reductionTarget: makeReductionTarget() }),
+    'a process-change smuggling a reductionTarget',
+  )
+  const clean = ProposalShape.parse(bare)
+  assertEq(clean.kind, 'process-change', 'a payload-free process-change is the legal form')
+  assertEq(clean.candidateReviewFocus, undefined, 'and it carries neither payload')
+  assertEq(clean.reductionTarget, undefined, 'neither payload, both directions')
+  const { candidateReviewFocus: _also, ...schema } = makeProposal({ kind: 'schema-tightening' })
+  assertThrows(
+    () => ProposalShape.parse({ ...schema, reductionTarget: makeReductionTarget() }),
+    'a schema-tightening smuggling a reductionTarget',
+  )
+})
+
+check('Proposal: writeOrigin is the LITERAL roadmap-eval-loop — a user-written origin REJECTS', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  assertIssuePath(ProposalShape, makeProposal({ writeOrigin: 'user' }), ['writeOrigin'], 'writeOrigin user')
+  assertIssuePath(
+    ProposalShape,
+    makeProposal({ writeOrigin: 'roadmap-eval-loop ' }),
+    ['writeOrigin'],
+    'a trailing-space near-miss origin',
+  )
+})
+
+check('Proposal: status archived REQUIRES archivedReason — bare REJECTS, a >=10-char reason parses', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  assertThrows(
+    () => ProposalShape.parse(makeProposal({ status: 'archived' })),
+    'an archived proposal with no reason',
+  )
+  assertThrows(
+    () => ProposalShape.parse(makeProposal({ status: 'archived', archivedReason: 'stale' })),
+    'a 5-char archived reason',
+  )
+  const p = ProposalShape.parse(
+    makeProposal({ status: 'archived', archivedReason: 'superseded by the ratified review focus' }),
+  )
+  assertEq(p.status, 'archived', 'status round-trips')
+  assertEq(p.archivedReason, 'superseded by the ratified review focus', 'the reason survives verbatim')
+  const live = ProposalShape.parse(makeProposal({ status: 'ratified' }))
+  assertEq(live.archivedReason, undefined, 'a non-archived proposal needs no reason')
+})
+
+check('Opportunity: satisfaction null BINDS score to importance — a diverging score REJECTS, an equal one parses', () => {
+  requireShape(OpportunityShape, 'OpportunityShape')
+  assertThrows(
+    () => OpportunityShape.parse(makeOpportunity({ satisfaction: null, score: 13 })),
+    'an unmeasured opportunity claiming a gap-inflated score',
+  )
+  assertThrows(
+    () => OpportunityShape.parse(makeOpportunity({ satisfaction: null, score: 0 })),
+    'an unmeasured opportunity scored at zero instead of importance',
+  )
+  const unmeasured = OpportunityShape.parse(makeOpportunity({ satisfaction: null, score: 8 }))
+  assertEq(unmeasured.satisfaction, null, 'null satisfaction is an honest absence, not 0')
+  assertEq(unmeasured.score, 8, 'score falls back to importance exactly')
+  const measured = OpportunityShape.parse(makeOpportunity())
+  assertEq(measured.score, 13, 'a MEASURED satisfaction is free to diverge — the refine binds only the null case')
+  assertEq(measured.rulingsVersion, 1, 'the rulings version pins which table scored this')
+  assertEq(measured.rulingId, 'ruling-recurring-regression', 'the ruling id round-trips')
+})
+
+check('Opportunity: the 0..10 range is closed and the provenance fields are required', () => {
+  requireShape(OpportunityShape, 'OpportunityShape')
+  assertIssuePath(OpportunityShape, makeOpportunity({ importance: 11 }), ['importance'], 'importance 11')
+  assertIssuePath(OpportunityShape, makeOpportunity({ importance: -1 }), ['importance'], 'importance -1')
+  assertIssuePath(
+    OpportunityShape,
+    makeOpportunity({ satisfaction: 11 }),
+    ['satisfaction'],
+    'satisfaction 11',
+  )
+  assertIssuePath(OpportunityShape, makeOpportunity({ score: -1 }), ['score'], 'a negative score')
+  assertIssuePath(OpportunityShape, makeOpportunity({ rulingId: '' }), ['rulingId'], 'an empty rulingId')
+  assertIssuePath(
+    OpportunityShape,
+    makeOpportunity({ rulingsVersion: 0 }),
+    ['rulingsVersion'],
+    'rulingsVersion 0',
+  )
+  assertIssuePath(
+    OpportunityShape,
+    makeOpportunity({ satisfactionSource: '' }),
+    ['satisfactionSource'],
+    'an unsourced satisfaction',
+  )
+  const atBounds = OpportunityShape.parse(makeOpportunity({ importance: 10, satisfaction: 0, score: 0 }))
+  assertEq(atBounds.importance, 10, 'importance 10 is in range')
+  assertEq(atBounds.satisfaction, 0, 'satisfaction 0 is a MEASURED zero, distinct from null')
+})
+
+check('Proposal: the id is slug-shaped — /^[a-z0-9-]+$/ rejects underscores, capitals and spaces', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  assertIssuePath(ProposalShape, makeProposal({ id: 'Recurring_Regression' }), ['id'], 'a capitalized snake id')
+  assertIssuePath(ProposalShape, makeProposal({ id: 'recurring regression' }), ['id'], 'a spaced id')
+  assertIssuePath(ProposalShape, makeProposal({ id: '' }), ['id'], 'an empty id')
+  assertEq(ProposalShape.parse(makeProposal({ id: 'a-1' })).id, 'a-1', 'a lowercase slug parses')
+})
+
+check('ImportanceRulingsTable: a v1 table with one ruling per finding class parses and keeps every ruling', () => {
+  requireShape(ImportanceRulingsTableShape, 'ImportanceRulingsTableShape')
+  const t = ImportanceRulingsTableShape.parse(makeRulingsTable())
+  assertEq(t.version, 1, 'version round-trips')
+  assertEq(t.rulings.length, 5, 'one ruling per finding class survives')
+  assertEq(
+    t.rulings.map((r) => r.findingClass).sort(),
+    [
+      'protocol-load-over-budget',
+      'recurring-lesson-key',
+      'recurring-low-score',
+      'recurring-regression',
+      'recurring-sentinel',
+    ],
+    'the table covers the closed class vocabulary',
+  )
+  assertEq(t.rulings[0].importance, 5, 'the ratified importance round-trips')
+})
+
+check('ImportanceRulingsTable: a <10-char rationale REJECTS, version 0 REJECTS, and an empty rulings list REJECTS', () => {
+  requireShape(ImportanceRulingsTableShape, 'ImportanceRulingsTableShape')
+  requireShape(ImportanceRulingShape, 'ImportanceRulingShape')
+  const short = makeRulingsTable()
+  ;(short.rulings as Array<{ rationale: string }>)[0].rationale = 'x'.repeat(9)
+  assertIssuePath(ImportanceRulingsTableShape, short, ['rulings', 0, 'rationale'], 'a 9-char rationale')
+  const atBound = makeRulingsTable()
+  ;(atBound.rulings as Array<{ rationale: string }>)[0].rationale = 'x'.repeat(10)
+  assertEq(
+    ImportanceRulingsTableShape.parse(atBound).rulings[0].rationale.length,
+    10,
+    'exactly 10 chars is the floor',
+  )
+  assertIssuePath(ImportanceRulingsTableShape, makeRulingsTable({ version: 0 }), ['version'], 'version 0')
+  assertIssuePath(ImportanceRulingsTableShape, makeRulingsTable({ version: 1.5 }), ['version'], 'a fractional version')
+  assertIssuePath(ImportanceRulingsTableShape, makeRulingsTable({ rulings: [] }), ['rulings'], 'an empty rulings list')
+  assertIssuePath(
+    ImportanceRulingsTableShape,
+    makeRulingsTable({ ratified: '2026' }),
+    ['ratified'],
+    'a truncated ratified date',
+  )
+  assertThrows(
+    () =>
+      ImportanceRulingShape.parse({
+        id: 'ruling-vibes',
+        findingClass: 'recurring-vibes',
+        importance: 5,
+        rationale: 'vibes matter a great deal to the fleet',
+      }),
+    'a ruling for an invented finding class',
+  )
+})
+
+check('Proposal: lane and status vocabularies are CLOSED — an unknown lane and an unknown status each REJECT', () => {
+  requireShape(ProposalLaneShape, 'ProposalLaneShape')
+  requireShape(ProposalStatusShape, 'ProposalStatusShape')
+  requireShape(ProposalKindShape, 'ProposalKindShape')
+  requireShape(ProposalShape, 'ProposalShape')
+  ProposalLaneShape.parse('plugin-generic')
+  ProposalLaneShape.parse('consumer-specific')
+  assertThrows(() => ProposalLaneShape.parse('both'), 'an invented lane')
+  for (const s of ['surfaced', 'ratified', 'rejected', 'archived']) ProposalStatusShape.parse(s)
+  assertThrows(() => ProposalStatusShape.parse('pending'), 'an invented status')
+  for (const k of [
+    'review-focus-candidate',
+    'skill-amendment',
+    'schema-tightening',
+    'process-change',
+    'reduction',
+  ]) {
+    ProposalKindShape.parse(k)
+  }
+  assertThrows(() => ProposalKindShape.parse('refactor'), 'an invented kind')
+  assertIssuePath(ProposalShape, makeProposal({ lane: 'both' }), ['lane'], 'an unknown lane on a proposal')
+  assertIssuePath(ProposalShape, makeProposal({ status: 'pending' }), ['status'], 'an unknown status on a proposal')
+  const { candidateReviewFocus: _dropped, ...bare } = makeProposal()
+  assertIssuePath(ProposalShape, { ...bare, kind: 'refactor' }, ['kind'], 'an unknown kind on a proposal')
+})
+
+check('ProposalEvidence: every field is load-bearing — a blank file, jsonPath or excerpt REJECTS', () => {
+  requireShape(ProposalEvidenceShape, 'ProposalEvidenceShape')
+  const e = ProposalEvidenceShape.parse(makeEvidence(1))
+  assertEq(e.file, 'roadmap/arcs/EVALLOOP-eval-1.json', 'the source file round-trips')
+  assertEq(e.jsonPath, "$.dimensions['code-confidence'].signals.gateRounds", 'the json path round-trips')
+  assertIssuePath(ProposalEvidenceShape, { ...makeEvidence(1), file: '' }, ['file'], 'an unnamed source file')
+  assertIssuePath(ProposalEvidenceShape, { ...makeEvidence(1), jsonPath: '' }, ['jsonPath'], 'an empty json path')
+  assertIssuePath(ProposalEvidenceShape, { ...makeEvidence(1), excerpt: '' }, ['excerpt'], 'an empty excerpt')
+})
+
+check('Proposal: title and rationale carry a >=10-char floor, and supersededBy is optional-but-nonempty when present', () => {
+  requireShape(ProposalShape, 'ProposalShape')
+  assertIssuePath(ProposalShape, makeProposal({ title: 'x'.repeat(9) }), ['title'], 'a 9-char title')
+  assertIssuePath(ProposalShape, makeProposal({ rationale: 'x'.repeat(9) }), ['rationale'], 'a 9-char rationale')
+  assertIssuePath(ProposalShape, makeProposal({ createdAt: '2026' }), ['createdAt'], 'a truncated createdAt')
+  assertIssuePath(ProposalShape, makeProposal({ updatedAt: '2026' }), ['updatedAt'], 'a truncated updatedAt')
+  const atBound = ProposalShape.parse(makeProposal({ title: 'x'.repeat(10), rationale: 'y'.repeat(10) }))
+  assertEq(atBound.title.length, 10, 'exactly 10 chars is the title floor')
+  const superseded = ProposalShape.parse(makeProposal({ supersededBy: 'recurring-regression-v2' }))
+  assertEq(superseded.supersededBy, 'recurring-regression-v2', 'the supersession pointer round-trips')
+  assertEq(ProposalShape.parse(makeProposal()).supersededBy, undefined, 'absent stays absent, never invented')
 })
 
 // discoverArcs is async — run it and the final summary inside an async tail so
