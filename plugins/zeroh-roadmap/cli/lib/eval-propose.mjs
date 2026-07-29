@@ -503,11 +503,16 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
   const prior = readProposalDocs(fs, proposalsDir)
   const foreignSkipped = prior.foreign
   const unreadable = prior.unreadable
-  const existingOwn = new Map(prior.own.map((e) => [e.doc.id ?? e.name.replace(/\.json$/, ''), e]))
-  // The filenames the pass must not write, whatever a cluster derives. A file it could not parse,
-  // or one it did not write, occupies its NAME as much as its bytes: creating `<id>.json` over a
-  // hand-authored file of that name would destroy it while the same run reported it as skipped.
-  const blockedNames = new Set([...prior.foreign, ...prior.unreadable])
+  // An own file is USABLE only when it is filed under its own id. A hand-renamed one cannot be
+  // rewritten in place without writing outside the <id>.json rule, and the alternative to refusing
+  // it is throwing on the way to the fs seam, which would discard every other proposal in the run.
+  const misnamedOwn = prior.own.filter((e) => e.name !== `${e.doc.id}.json`).map((e) => e.name)
+  const existingOwn = new Map(prior.own.filter((e) => e.name === `${e.doc.id}.json`).map((e) => [e.doc.id, e]))
+  // The filenames the pass must not write over, whatever a cluster derives. A file it could not
+  // parse, one it did not write, or one of its own filed under the wrong name occupies its NAME as
+  // much as its bytes: creating `<id>.json` over it would destroy it while the same run reported
+  // it as skipped.
+  const blockedNames = new Set([...prior.foreign, ...prior.unreadable, ...misnamedOwn])
 
   // ── decide, build and validate; write nothing yet ───────────────────────────────────
   const pending = []
@@ -519,23 +524,28 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
   let alreadyAdjudicated = 0
   let skippedArchived = 0
 
-  let blockedByForeignFile = 0
+  let blockedByName = 0
   let idCollisions = 0
+  // ONE set, doing two jobs that must not diverge: it detects a repeated id, and it records that
+  // the id is LIVE. Liveness is recorded even for a refused cluster, so an own proposal whose
+  // cluster still exists is never auto-archived merely because this run declined to rewrite it.
   const liveIds = new Set()
-  const emittedIds = new Set()
   for (const cluster of clusters ?? []) {
     const id = proposalId(cluster)
+    const repeated = liveIds.has(id)
+    liveIds.add(id)
+    // Checked before the repeat, so every cluster blocked by a name is counted as blocked. The two
+    // counts exist because they are different facts, and a second cluster on a blocked id is still
+    // a cluster the name refused.
+    if (blockedNames.has(`${id}.json`)) {
+      blockedByName += 1
+      continue
+    }
     // Two cluster keys can fold to one slug (the id alphabet is deliberately narrow), and the
     // second would otherwise overwrite the first and still be counted as created. Refused and
     // counted instead: a proposal lost to a name collision must not look like a proposal written.
-    if (emittedIds.has(id)) {
+    if (repeated) {
       idCollisions += 1
-      continue
-    }
-    emittedIds.add(id)
-    liveIds.add(id)
-    if (blockedNames.has(`${id}.json`)) {
-      blockedByForeignFile += 1
       continue
     }
     const existing = existingOwn.get(id)
@@ -602,10 +612,11 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
     archived,
     alreadyAdjudicated,
     skippedArchived,
-    blockedByForeignFile,
+    blockedByName,
     idCollisions,
     foreignSkipped,
     unreadable,
+    misnamedOwn,
     writes,
   }
 }

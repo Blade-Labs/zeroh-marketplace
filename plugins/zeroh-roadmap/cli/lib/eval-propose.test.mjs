@@ -1504,7 +1504,7 @@ for (const kind of ['foreign-origin', 'unparseable']) {
       bytes,
       `${path}: a file the loop did not write owns its NAME as much as its bytes — creating over it destroys hand-authored content`,
     )
-    assert.equal(res.blockedByForeignFile, 1, 'and the withheld cluster is COUNTED, so the run cannot report a skip it did not honour')
+    assert.equal(res.blockedByName, 1, 'and the withheld cluster is COUNTED, so the run cannot report a skip it did not honour')
     assert.equal(res.idCollisions, 0, 'a name held by another file is not the same fact as two clusters folding to one id')
 
     assert.equal(stub.writes.filter((w) => w.path === path).length, 0, 'the colliding path never entered the fs seam as a write')
@@ -1546,7 +1546,7 @@ test('consolidateAndWrite — two clusters whose keys slug to ONE proposal id wr
   assert.equal(res.idCollisions, 1, 'the dropped cluster is counted: a proposal lost to a name must not look like a proposal written')
   assert.equal(res.created, 1, 'created counts FILES written, not clusters attempted — counting both is the claim that made this bug invisible')
   assert.equal(res.proposals.length, 1, 'and one document is returned, not two')
-  assert.equal(res.blockedByForeignFile, 0, 'nothing here is held by a file the loop does not own')
+  assert.equal(res.blockedByName, 0, 'nothing here is held by a file the loop does not own')
 
   // WHICH document survived. A refusal drops the LATER cluster; an overwrite would leave the later
   // one on disk, so this is what tells the two implementations apart.
@@ -1568,4 +1568,47 @@ test('consolidateAndWrite — two clusters whose keys slug to ONE proposal id wr
     second.evidence,
     'fed second-first, the SECOND cluster is the one kept: the refusal drops whichever arrives later',
   )
+})
+
+// ── 33. an OWN file filed under the wrong name is a refusal, never an aborted run ──────
+// Every other unusable file in this module is a named, counted refusal that lets the rest of the
+// run proceed. An own document whose FILENAME is not `<id>.json` used to be the exception: it
+// matched a live cluster by id, was pushed with its own path, and then hit the seam guard, which
+// threw on the way to the fs and discarded every other proposal in the run. One misfiled byte
+// range must not cost the operator the whole queue.
+
+test('consolidateAndWrite — an own proposal filed under the wrong name does not abort the run, and is reported by name', () => {
+  const cluster = liveLessonCluster()
+  const id = proposalIdOf(cluster)
+  const wrongName = 'hand-renamed.json'
+  const bytes = plantedProposal(id) // the document says `id`, the FILE says something else
+  const stub = makeFsStub({ [`${PROPOSALS_DIR}/${wrongName}`]: bytes })
+  const clusters = fixtureClusters()
+
+  // Pre-fix this call threw; the assertion is that it returns at all, and returns honestly.
+  const res = consolidateAndWrite(clusters, fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.equal(res.created, clusters.length, 'every cluster still wrote: one misfiled document costs the run nothing')
+  assert.deepEqual(res.misnamedOwn, [wrongName], 'and the misfiled document is reported BY NAME rather than silently ignored')
+  assert.equal(stub.files.get(`${PROPOSALS_DIR}/${wrongName}`), bytes, 'its bytes are untouched: the pass cannot rewrite it in place without leaving the <id>.json rule')
+  assert.ok(stub.files.has(proposalPath(id)), 'the live cluster still got its own correctly-named file')
+  assert.equal(res.writes.filter((w) => w.endsWith(wrongName)).length, 0, 'and the wrong name never entered the write log')
+})
+
+test('consolidateAndWrite — an own file whose NAME a live cluster derives is blocked, not overwritten', () => {
+  const cluster = liveLessonCluster()
+  const id = proposalIdOf(cluster)
+  // The file is called `<id>.json` but the document inside claims a DIFFERENT id, so it is an own
+  // proposal the pass cannot address — and the name it occupies is one a live cluster wants.
+  const bytes = plantedProposal('some-other-proposal-entirely')
+  const stub = makeFsStub({ [proposalPath(id)]: bytes })
+  const clusters = fixtureClusters()
+
+  const res = consolidateAndWrite(clusters, fixtureReports(), PROPOSALS_DIR, mkDeps(stub, NOW_1))
+
+  assert.equal(stub.files.get(proposalPath(id)), bytes, 'an own proposal is not collateral damage for a name collision either')
+  assert.equal(res.blockedByName, 1, 'the cluster that wanted that name is counted as blocked')
+  assert.equal(res.created, clusters.length - 1, 'and exactly one cluster was withheld, so the rest of the run proceeded')
+  assert.deepEqual(res.misnamedOwn, [`${id}.json`], 'the misfiled own file is named')
+  assert.equal(res.proposals.filter((p) => p.id === id).length, 0, 'no proposal claims an id whose file the pass could not write')
 })

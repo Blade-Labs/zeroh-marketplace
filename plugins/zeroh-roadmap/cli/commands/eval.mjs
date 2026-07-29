@@ -545,12 +545,12 @@ function readProposalsForTrend(proposalsDir) {
   // The SAME provenance check the consolidation pass applies: "is this the loop's own file" gets
   // one answer, not one per reader.
   const prior = readProposalDocs({ existsSync, readdirSync, readFileSync }, proposalsDir)
-  const out = { surfaced: [], ratified: 0, rejected: 0, archived: 0, unreadable: prior.unreadable, foreign: prior.foreign }
+  const out = { surfaced: [], ratified: 0, rejected: 0, archived: 0, unreadable: prior.unreadable, foreign: prior.foreign, unscored: [] }
   for (const { name, doc } of prior.own) {
     // A surfaced document carrying no numeric score cannot be ranked, and rendering `0` would
     // read as "measured, and worthless" for a document that was never measured. It joins the
     // named footnote instead of the table.
-    if (doc.status === 'surfaced' && typeof doc.opportunity?.score !== 'number') out.unreadable.push(name)
+    if (doc.status === 'surfaced' && typeof doc.opportunity?.score !== 'number') out.unscored.push(name)
     else if (doc.status === 'surfaced') out.surfaced.push(doc)
     // Counted only under a status the lifecycle actually defines: a hand-edited status the
     // contract never named is neither an open proposal nor a decided one, so it inflates nothing.
@@ -596,6 +596,9 @@ function renderProposalsSection(p) {
   for (const [label, names] of [
     ['unreadable', p.unreadable],
     ['foreign write-origin (left untouched)', p.foreign],
+    // Its own label: this file parses fine, so sending a reader to hunt for a parse error would be
+    // a wrong answer to the question the footnote just raised.
+    ['surfaced but carrying no numeric score (not ranked)', p.unscored],
   ])
     if (names.length > 0) body.push(`<p class="gap">${esc(label)}: ${names.map((n) => esc(n)).join(', ')}</p>`)
 
@@ -1143,7 +1146,8 @@ async function runPropose(opts) {
   say(`  foreign-skipped      ${result.foreignSkipped.length}${result.foreignSkipped.length > 0 ? `: ${result.foreignSkipped.join(', ')}` : ''}`)
   say(`  unreadable           ${result.unreadable.length}${result.unreadable.length > 0 ? `: ${result.unreadable.join(', ')}` : ''}`)
   say(`  skipped-archived     ${result.skippedArchived}  (the loop archived these and does not revive them)`)
-  say(`  blocked-by-foreign   ${result.blockedByForeignFile}  (a proposal id whose file name is already held by a file the loop does not own)`)
+  say(`  blocked-by-name      ${result.blockedByName}  (a proposal id whose file name is already held by a file this pass must not write over)`)
+  say(`  misnamed-own         ${result.misnamedOwn.length}${result.misnamedOwn.length > 0 ? `: ${result.misnamedOwn.join(', ')}` : ''}  (own files not filed under their own id; left alone)`)
   say(`  id-collisions        ${result.idCollisions}  (two cluster keys folding to one proposal id; the second is refused, never overwritten)`)
   say(`  created ${result.created}  refreshed ${result.refreshed}  unchanged ${result.unchanged}`)
 
