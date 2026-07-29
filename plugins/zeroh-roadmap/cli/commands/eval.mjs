@@ -43,17 +43,13 @@ import {
   JUDGE_DIMENSIONS,
 } from '../lib/eval-score.mjs'
 import { computeScorecard, findGateFixCommits } from '../lib/eval-scorecard.mjs'
-import { extractFindings, clusterFindings, consolidateAndWrite } from '../lib/eval-propose.mjs'
+import { extractFindings, clusterFindings, consolidateAndWrite, readProposalDocs } from '../lib/eval-propose.mjs'
 
 /** The two recorders, keyed by subcommand: which consumer shape validates, which suffix lands. */
 const RECORDERS = {
   'record-sweep': { shape: 'SweepReportShape', suffix: 'sweep', what: 'arc-sweep report' },
   'record-verdicts': { shape: 'ArcVerdictsFileShape', suffix: 'verdicts', what: 'intent verdicts' },
 }
-
-/** The write-origin literal the loop stamps on its own artifacts; anything else is somebody's
- *  else file, and the trend page reports it rather than rendering it as a proposal. */
-const PROPOSAL_WRITE_ORIGIN = 'roadmap-eval-loop'
 
 /** The archive home — committed by design (see the module docblock). */
 export const ARC_EVALS_DIR = ['roadmap', 'arc-evals']
@@ -533,6 +529,10 @@ ${renderProposalsSection(proposals)}
 `
 }
 
+/** The statuses that mean a human (or the loop's own archive) has closed a proposal: counted on
+ *  the page, never tabled. */
+const DECIDED_PROPOSAL_STATUSES = ['ratified', 'rejected', 'archived']
+
 /**
  * Read the proposals directory the way the PAGE needs it: own surfaced rows to table, own decided
  * rows to count, and the two unusable kinds named by filename.
@@ -542,23 +542,15 @@ ${renderProposalsSection(proposals)}
  * reader the same sentence either way.
  */
 function readProposalsForTrend(proposalsDir) {
-  const out = { surfaced: [], ratified: 0, rejected: 0, archived: 0, unreadable: [], foreign: [] }
-  if (!existsSync(proposalsDir)) return out
-  for (const name of readdirSync(proposalsDir).sort()) {
-    if (!name.endsWith('.json')) continue
-    let doc
-    try {
-      doc = JSON.parse(readFileSync(join(proposalsDir, name), 'utf8'))
-    } catch {
-      out.unreadable.push(name)
-      continue
-    }
-    if (!doc || doc.writeOrigin !== PROPOSAL_WRITE_ORIGIN) {
-      out.foreign.push(name)
-      continue
-    }
+  // The SAME provenance check the consolidation pass applies: "is this the loop's own file" gets
+  // one answer, not one per reader.
+  const prior = readProposalDocs({ existsSync, readdirSync, readFileSync }, proposalsDir)
+  const out = { surfaced: [], ratified: 0, rejected: 0, archived: 0, unreadable: prior.unreadable, foreign: prior.foreign }
+  for (const { doc } of prior.own) {
     if (doc.status === 'surfaced') out.surfaced.push(doc)
-    else if (doc.status in out) out[doc.status] += 1
+    // Counted only under a status the lifecycle actually defines: a hand-edited status the
+    // contract never named is neither an open proposal nor a decided one, so it inflates nothing.
+    else if (DECIDED_PROPOSAL_STATUSES.includes(doc.status)) out[doc.status] += 1
   }
   out.surfaced.sort((a, b) => (b.opportunity?.score ?? 0) - (a.opportunity?.score ?? 0) || String(a.id).localeCompare(String(b.id)))
   return out

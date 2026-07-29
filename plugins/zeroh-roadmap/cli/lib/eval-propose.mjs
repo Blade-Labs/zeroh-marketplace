@@ -1,6 +1,6 @@
 /**
  * eval-propose — the ELICIT stage: the committed eval corpus in, ratify-only proposals out
- * (arc EVALLOOP, phase 2016). ONE clustering implementation beside eval-collect / eval-score /
+ * (arc EVALLOOP). ONE clustering implementation beside eval-collect / eval-score /
  * eval-scorecard, consumed by `roadmap eval propose` AND the trend page, so no second reader can
  * disagree about what recurs.
  *
@@ -250,6 +250,15 @@ function citedReports(cluster, reports) {
   return (reports ?? []).filter((r) => cited.has(reportPath(r)))
 }
 
+/** The protocol-load measurements behind a protocol-load cluster, read STRUCTURALLY off the cited
+ *  reports. Both the satisfaction ratio and the proposal's reductionTarget derive from this one
+ *  reading: two derivations of one number could disagree, and a number a reader recomputes from
+ *  the citations has to be the number the document carries. */
+const citedProtocolLoadTokens = (cluster, reports) =>
+  citedReports(cluster, reports)
+    .map((r) => r.workflow?.protocolLoadTokens)
+    .filter((t) => typeof t === 'number')
+
 /** The dimension a cluster is about: the key itself, or the part before the sentinel name. */
 const clusterDimension = (cluster) =>
   cluster.findingClass === 'recurring-sentinel' ? cluster.clusterKey.slice(0, cluster.clusterKey.indexOf(':')) : cluster.clusterKey
@@ -271,9 +280,7 @@ function measureSatisfaction(cluster, reports) {
     return { satisfaction: null, satisfactionSource: SATISFACTION_UNMEASURED }
 
   if (cluster.findingClass === 'protocol-load-over-budget') {
-    const measured = citedReports(cluster, all)
-      .map((r) => r.workflow?.protocolLoadTokens)
-      .filter((t) => typeof t === 'number')
+    const measured = citedProtocolLoadTokens(cluster, all)
     if (measured.length === 0) return { satisfaction: null, satisfactionSource: SATISFACTION_UNMEASURED }
     const measuredMean = mean(measured)
     // Clamped at 1 before scaling: a load UNDER budget is fully satisfied and no more than fully.
@@ -398,17 +405,14 @@ export function buildProposal(cluster, reports, nowIso) {
     updatedAt: nowIso,
   }
 
-  if (cluster.kind === 'review-focus-candidate') doc.candidateReviewFocus = cluster.candidateReviewFocus ?? candidateReviewFocusFor(cluster)
+  if (cluster.kind === 'review-focus-candidate') doc.candidateReviewFocus = candidateReviewFocusFor(cluster)
   if (cluster.kind === 'reduction') {
-    const measured = cluster.evidence
-      .map((e) => Number(/measured (\d+) tokens/.exec(e.excerpt)?.[1]))
-      .filter((n) => Number.isFinite(n) && n > 0)
     doc.reductionTarget = {
       flow: REDUCTION_FLOW,
       // The MEAN of the cited measurements, rounded to a whole token. Derived from the cluster's
       // own citations, so the figure a reader recomputes from the evidence is the figure here —
       // and it is TOKENS, never a currency estimate the corpus cannot support.
-      measuredTokens: Math.round(mean(measured)),
+      measuredTokens: Math.round(mean(citedProtocolLoadTokens(cluster, reports))),
       budgetTokens: PROTOCOL_LOAD_BUDGET_TOKENS,
       ledger: DIET_LEDGER,
     }
@@ -442,22 +446,25 @@ export function buildProposal(cluster, reports, nowIso) {
  * the fs seam. A validation failure therefore leaves the directory exactly as it found it, rather
  * than half a run's worth of files and one exception.
  */
-export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
-  if (!deps || typeof deps !== 'object') throw new Error('eval-propose: consolidateAndWrite requires a deps object carrying fs, now and validate')
-  for (const name of ['fs', 'now', 'validate'])
-    if (!deps[name]) throw new Error(`eval-propose: consolidateAndWrite requires an injected '${name}' — there is no safe default for it`)
-  const { fs, now, validate } = deps
-  const nowIso = now()
-
-  fs.mkdirSync(proposalsDir, { recursive: true })
-
-  // ── read what is already there, and sort it by who owns it ──────────────────────────
-  const existingOwn = new Map()
-  const foreignSkipped = []
+/**
+ * Read a proposals directory and sort it by WHO OWNS each file: the loop's own documents, the
+ * foreign-origin ones, and the ones that will not parse at all.
+ *
+ * The ONE provenance check in the codebase (arc EVALLOOP: one provenance discipline). The
+ * consolidation pass and the trend page both come through here, so "is this mine" cannot be
+ * answered one way by the writer and another way by the reader. Reading only: nothing here
+ * writes, repairs or reformats, and both refused kinds come back BY NAME so a caller can say what
+ * it ignored.
+ *
+ * @param {object} fs the injected seam, needing existsSync / readdirSync / readFileSync
+ */
+export function readProposalDocs(fs, proposalsDir) {
+  const own = []
+  const foreign = []
   const unreadable = []
   // Guarded rather than assumed: under a no-op fs (the --dry-run lane) mkdirSync creates nothing,
   // and a missing directory there is an empty prior set, not a crash.
-  for (const name of fs.existsSync(proposalsDir) ? fs.readdirSync(proposalsDir) : []) {
+  for (const name of fs.existsSync(proposalsDir) ? [...fs.readdirSync(proposalsDir)].sort() : []) {
     // A non-JSON file in this directory is not a proposal and is none of the loop's business.
     if (!name.endsWith('.json')) continue
     const path = `${proposalsDir}/${name}`
@@ -469,11 +476,28 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
       continue
     }
     if (!doc || doc.writeOrigin !== WRITE_ORIGIN) {
-      foreignSkipped.push(name)
+      foreign.push(name)
       continue
     }
-    existingOwn.set(doc.id ?? name.replace(/\.json$/, ''), { name, path, doc })
+    own.push({ name, path, doc })
   }
+  return { own, foreign, unreadable }
+}
+
+export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
+  if (!deps || typeof deps !== 'object') throw new Error('eval-propose: consolidateAndWrite requires a deps object carrying fs, now and validate')
+  for (const name of ['fs', 'now', 'validate'])
+    if (!deps[name]) throw new Error(`eval-propose: consolidateAndWrite requires an injected '${name}' — there is no safe default for it`)
+  const { fs, now, validate } = deps
+  const nowIso = now()
+
+  fs.mkdirSync(proposalsDir, { recursive: true })
+
+  // ── read what is already there, and sort it by who owns it ──────────────────────────
+  const prior = readProposalDocs(fs, proposalsDir)
+  const foreignSkipped = prior.foreign
+  const unreadable = prior.unreadable
+  const existingOwn = new Map(prior.own.map((e) => [e.doc.id ?? e.name.replace(/\.json$/, ''), e]))
 
   // ── decide, build and validate; write nothing yet ───────────────────────────────────
   const pending = []
@@ -613,15 +637,16 @@ export function clusterFindings(findings) {
       skippedNoLane += 1
       continue
     }
-    const cluster = {
+    // The candidate reviewFocus payload is synthesized by `buildProposal` alone: a cluster is what
+    // the corpus supports, a proposal is what is being asked for, and deriving the payload twice
+    // is two chances for the two to disagree.
+    clusters.push({
       findingClass: g.findingClass,
       clusterKey: g.clusterKey,
       lane,
       kind: CLASS_KIND[g.findingClass],
       evidence: g.evidence,
-    }
-    if (cluster.kind === 'review-focus-candidate') cluster.candidateReviewFocus = candidateReviewFocusFor(cluster)
-    clusters.push(cluster)
+    })
   }
   return { clusters, skippedSingletons, skippedNoLane }
 }
