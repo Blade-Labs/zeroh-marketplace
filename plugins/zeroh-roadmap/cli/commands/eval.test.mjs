@@ -36,7 +36,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { bridgeEval } from '../lib/tsx-bridge.mjs'
+import { bridgeEval, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import { DECLARED_RESETS } from '../lib/eval-score.mjs'
 import { SCORECARD_N_FLOOR } from '../lib/eval-scorecard.mjs'
 import { readPriorReports } from './eval.mjs'
@@ -2988,4 +2988,97 @@ test('eval trend — an own proposal carrying a status outside the lifecycle is 
   assert.ok(section.includes(strangeName), `it must be named BY FILENAME; section was:\n${section}`)
   assert.ok(statesCount(section, 'ratified', 0), 'and it inflates no decided count')
   assert.ok(statesCount(section, 'archived', 0), 'under any of them')
+})
+
+// ── 72. `eval propose` — A VALIDATOR THAT COULD NOT RUN IS NOT A VERDICT ABOUT THE CORPUS ──
+// The command-side half of the rail cli/lib/eval-propose.test.mjs pins from the library side. The
+// consolidation pass may only downgrade a validation failure the validator MARKED as a verdict
+// about the document (`documentRefused`), and the real validator sets that flag for exactly one
+// bridge outcome: `zod`. Every library test injects its own validator, so no test below the CLI
+// can observe which outcomes the shipped one marks.
+//
+// WHY THIS DISCRIMINATES: the run below reaches the validator on a REFRESH — a document derived
+// from a file on disk — which is the ONLY lane where the two behaviours differ (a freshly built
+// document throws either way). With the flag as shipped (`res.kind === 'zod'`, false for a missing
+// toolchain) the failure propagates, the command prints the worktree hint and exits 1. Flip it to
+// a constant `true` and the identical run files the proposal under `unusable-own`, writes the rest
+// of the queue and EXITS 0 — a broken tool reported as a stale corpus, in green. The exit code and
+// the hint line both fail on that mutant.
+
+/**
+ * `eval propose` in a consumer whose tsx bridge cannot be resolved. The child gets a PATH holding
+ * a symlink to git and NOTHING else, so `npx --no-install tsx` is a genuine ENOENT rather than a
+ * stubbed one, while gitToplevel still works; node is spawned by absolute path, so the scrub takes
+ * away only what the bridge goes looking for.
+ */
+function proposeWithoutTsx(root) {
+  const binDir = mkdtempSync(join(tmpdir(), 'zr-nopath-'))
+  bases.push(binDir)
+  symlinkSync(execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim(), join(binDir, 'git'))
+  const r = spawnSync(process.execPath, [BIN, 'eval', 'propose'], {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 120_000,
+    env: { ...process.env, PATH: binDir },
+  })
+  if (r.error) throw r.error
+  const out = { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+  assert.doesNotMatch(out.stderr, /propose\.arc\.ts/, `'propose' was parsed as an ARC ID, not dispatched as a subcommand:\n${out.stderr}`)
+  return out
+}
+
+test('eval propose — an UNRESOLVABLE tsx bridge aborts the run with the worktree hint (exit 1), never a stale-file count', () => {
+  const root = seedProposalCorpus(makeConsumer())
+
+  // A full pass with a working bridge first, so the proposals directory holds this loop's own files.
+  const first = propose(root)
+  assert.equal(first.code, 0, first.stdout + first.stderr)
+  const files = proposalFiles(root)
+  assert.ok(files.length > 0, 'fixture precondition: the first run wrote the proposals the second run derives from')
+
+  // One hand-edit to a REGENERATED field, which is what turns the next run's staging into a
+  // refresh. Left on disk exactly so: every assertion below is about a disk-derived document.
+  const edited = join(proposalsDir(root), files[0])
+  writeFileSync(
+    edited,
+    JSON.stringify({ ...readProposal(root, files[0]), title: 'hand-edited, so the pass has something to refresh' }, null, 2) + '\n',
+  )
+  const before = Object.fromEntries(files.map((f) => [f, readFileSync(join(proposalsDir(root), f), 'utf8')]))
+
+  // The precondition that makes this test about the FLAG: with the toolchain present, this corpus
+  // stages exactly one document and that document is disk-derived. A run that also created or
+  // archived one would throw on that one first, in EITHER version of the guard, and prove nothing.
+  const dry = propose(root, ['--dry-run'])
+  assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+  assert.match(
+    dry.stdout + dry.stderr,
+    /created 0 {2}refreshed 1\b/,
+    `fixture precondition: exactly one staged document, and it is a refresh; output was:\n${dry.stdout + dry.stderr}`,
+  )
+  const archivedLine = (dry.stdout + dry.stderr).split('\n').find((l) => /^\s*archived\b/.test(l))
+  assert.ok(
+    archivedLine && printsNumber(archivedLine, 0),
+    `fixture precondition: no cluster dissolved, so the refresh really is the only staged document; the line was: ${archivedLine}`,
+  )
+
+  const r = proposeWithoutTsx(root)
+  assert.equal(
+    r.code,
+    1,
+    `a toolchain that could not run is the exit-1 lane: never 0 (a stale-file count) and never 2 (a refused document); output was:\n${r.stdout + r.stderr}`,
+  )
+  assert.ok(
+    r.stderr.includes(TSX_ABSENT_HINT),
+    `and it has to print the one line that says how to fix it; stderr was:\n${r.stderr}`,
+  )
+  assert.equal(
+    (r.stdout + r.stderr).includes('unusable-own'),
+    false,
+    `the corpus was never judged, so nothing may be filed as an unusable own file; output was:\n${r.stdout + r.stderr}`,
+  )
+  assert.deepEqual(
+    Object.fromEntries(proposalFiles(root).map((f) => [f, readFileSync(join(proposalsDir(root), f), 'utf8')])),
+    before,
+    'and the refusal left the directory exactly as it found it',
+  )
 })
