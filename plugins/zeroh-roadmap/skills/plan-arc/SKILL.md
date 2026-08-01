@@ -97,9 +97,10 @@ design **home is the consumer's** canonical doc set; read it from the `designHom
 consumer's `roadmap.config.json` (the consumer-agnostic seam). **If `designHomes` is absent, surface
 that and STOP the gate** — no doc home to search, and guessing a path defeats the seam; the consumer
 configures its design homes first. With the home bound:
-1. Spawn the **`software-architect`** agent to **search** that doc set and **recommend**
-   reuse-or-design — returning the recommendation + the `ref` + `summary`. Advisory: the orchestrator,
-   not the architect, makes the file writes and owns the record.
+1. Spawn the **`software-architect`** agent to **search** that doc set AND the prior-arc record
+   (design-gate.md §2) and **recommend** reuse-or-design — returning the recommendation + the `ref` +
+   `summary` + the "prior art:" line. Advisory: the orchestrator, not the architect, makes the file
+   writes and owns the record.
 2. **Reuse-first:** an existing pattern fits → the orchestrator records `{ kind: 'architecture', ref,
    status: 'reused', summary }`. No new pattern when one exists (the reuse-first honesty rail).
 3. **Design-when-needed:** none fits → the architect designs the long-term-correct pattern; the
