@@ -266,6 +266,22 @@ measured flow rather than granted new budget. **Measured:** do-phase/SKILL.md **
 | §Echo contract — "the full report stays in the transcript" | obsolete-with-evidence(a synchronously spawned gate agent's full report is in the transcript by construction — the clause described how the transcript works, not a rule an executor can break) | the operative half is untouched: the ~10-line per-stage echo plus the `[Quality pass] nothing to fix` empty wording |
 | §Arc-mode — the `driver` fill sentence ("fill `driver` = your own model id + lane `session`") and "the **do-arc** workflow serializes those" | enforced-by-code(PhaseExecutionResultShape.`driver` is the parse boundary for the model/lane pair — templates/schema.ts:270; the grooming/emit/push tail is serializeSharedMutation — workflows/arc-plane.workflow.mjs:137) | the skill keeps the required field and both lane values (`session` / `codex`) and the SKIP list; only the imperative verb and the workflow's proper name were cut |
 
+## do-phase/SKILL.md — phase 2094.1 (diet-funded)
+
+The mode-agnostic `executionResult`/`driver` completion prose (phase 2094.1) was funded inside the
+measured flow: the addition tipped the do-arc load to 12,532 tokens against the enforced
+`--assert 12500`, and five compressions paid it back. **Measured:** do-phase/SKILL.md
+**8,678 B → 8,371 B** (`git show 27b35a3^:…/skills/do-phase/SKILL.md | wc -c` vs the tree); the
+do-arc flow **12,455 tokens / 49,808 B** (`roadmap measure --flow do-arc --json`), exits 0.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| Step 0 — the phase-start parenthetical's long form "the atomic flip + move-commit + executor-start beacon; idempotent if already in-progress" | obsolete-with-evidence(pure wording compression — all three named mechanisms plus idempotency survive as "atomic flip + move-commit + beacon; idempotent") | the operative rule (CLI flip, never a hand edit of the status field) is untouched |
+| Per-task loop 2 — "the executor-reference long-run protocol governs only genuinely long runs" | relocated | the long-run protocol's one home is agents/references/executor-reference.md (already ledgered, §agent cards); the pointer survives as "the long-run protocol covers genuinely long runs" |
+| Per-task loop 3 Commit — the formatter rationale clause "the gate's diff-scoped checks catch what slips, but hygiene that never reaches it is cheaper" | enforced-by-code(the `lint-diff` slot binding + `historyCommentFindings` — cli/lib/slots.mjs — run at `roadmap gate run` regardless of the executor's hygiene) | the imperative half survives verbatim: run the formatter's `--write` twin on the task's touched files first; only the why-clause (restating what the gate already enforces) was cut |
+| The gate — "— recording is not optional" | obsolete-with-evidence(restated the REFUSES clause of the same sentence; the enforcement is gate.mjs --verify-complete's refusal of a done flip with no recorded agent round, tested in cli/commands/gate.test.mjs) | the REFUSES sentence survives |
+| §Codex delegation lane — "classify the visible command line" → "classify argv"; "prompt via stdin so argv stays free of test keywords" → "prompt via stdin"; "a `.building/codex-*.json` journal refusing a double-run" → "a double-run-refusing `.building/codex-*.json` journal" | enforced-by-code(cli/commands/codex.mjs owns the launch argv and the journal — the same evidence as the 2015.2 entrypoint-invariants row above) | every invariant is still named; only connective prose was cut |
+
 ## templates/schema.ts + the vendored lib/roadmap/schema.ts — the v10 drift marker (EVALLOOP sweep)
 
 | passage (origin heading/anchor) | disposition | evidence |
