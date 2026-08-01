@@ -19,8 +19,8 @@ green + no blocker); **standalone** (`/arc-sweep`), hold for the user's go.
 vocabulary and `debtResolutions[]` persistence verbatim — never a parallel taxonomy.
 
 **When vs release-sweep:** arc-sweep runs **pre-merge** on an unversioned arc; release-sweep runs
-**pre-archive** on versioned phases. Same persistence target (`debtResolutions[]`). arc-sweep is NOT
-`full-code-review` (the 8-agent pre-prod audit) — it is a lighter, seam-specific architect pass.
+**pre-archive** on versioned phases. arc-sweep is NOT `full-code-review` — it is a lighter,
+seam-specific architect pass.
 
 ## Step 1: Consolidated debt sweep
 
@@ -83,15 +83,14 @@ release-sweep's — do not redefine them.
 disposes those pre-archive. To avoid a silent hole, arc-sweep re-reads each phase's `limitations` and
 LISTS any present in the Step-3 report under "deferred to release-sweep".
 
-**No summary file.** Like release-sweep, arc-sweep NEVER writes a persisted summary — `debtResolutions[]`
+**No summary file.** arc-sweep NEVER writes a persisted summary — `debtResolutions[]`
 + the transparency reports ARE the audit trail; the merge-readiness report is EPHEMERAL chat only.
 `roadmap/followups/<arcId>.md` holds ONLY OPERATOR-PENDING detail + ratified-descope rationale.
 
 ## Step 2: Whole-arc cross-phase review (against singleSeams + designRefs)
 
-A per-phase gate sees only its own diff — it CANNOT catch a seam one phase quietly forked (3 hardcodes
-that should be 1 config; a shared type two phases redefined). **Only a whole-arc view catches a forked
-seam** — that is this step's whole job.
+A per-phase gate sees only its own diff — it CANNOT catch a seam one phase quietly forked. **Only a
+whole-arc view catches a forked seam** — that is this step's whole job.
 
 Run ONE `zeroh-roadmap:software-architect` over `git diff <arc.baseRef>..HEAD` and judge it as **a
 single system** against `arc.singleSeams`: for each seam, did any consumer fork it, or is it a single
@@ -105,6 +104,10 @@ confirmed preview — layout AND interactions/motion (hover/focus, transitions, 
 unambiguously better, never flattened — references/parity-rubric.md, Interaction & motion). **The design is
 the spec** — drift from a confirmed designRef is a finding, disposed like any other (RESOLVE-NOW if
 cheap, else PLAN-PHASE). No `designRefs` (mechanical arc) → skip explicitly, never silent.
+**Supersession:** the architect also asks whether this arc's build made a PRIOR arc's designRef
+claim false (same-seam refs — grep `roadmap/arcs/`). A contradiction is a FINDING disposed through
+the Step-1 table; its disposition stamps the old entry's `supersededBy`, and the report names each
+stamp.
 
 **Ledger-audit clause (when the arc trims plugin/skill prose).** If the arc diff deletes or compresses
 model-loaded skill/agent prose, the sweep verifies EVERY such deletion in the diff carries a

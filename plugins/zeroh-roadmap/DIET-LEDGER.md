@@ -282,6 +282,19 @@ do-arc flow **12,455 tokens / 49,808 B** (`roadmap measure --flow do-arc --json`
 | The gate — "— recording is not optional" | obsolete-with-evidence(restated the REFUSES clause of the same sentence; the enforcement is gate.mjs --verify-complete's refusal of a done flip with no recorded agent round, tested in cli/commands/gate.test.mjs) | the REFUSES sentence survives |
 | §Codex delegation lane — "classify the visible command line" → "classify argv"; "prompt via stdin so argv stays free of test keywords" → "prompt via stdin"; "a `.building/codex-*.json` journal refusing a double-run" → "a double-run-refusing `.building/codex-*.json` journal" | enforced-by-code(cli/commands/codex.mjs owns the launch argv and the journal — the same evidence as the 2015.2 entrypoint-invariants row above) | every invariant is still named; only connective prose was cut |
 
+## arc-sweep/SKILL.md — phase 2094.4 (diet-funded)
+
+The Step-2 supersession check (phase 2094.4) was funded in-file. **Measured:** the do-arc flow
+after the addition + both trims stays within the enforced budget (`roadmap measure --flow do-arc
+--assert 12500` exits 0; figure recorded in the phase 2094 transparency report).
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| §When vs release-sweep — "Same persistence target (`debtResolutions[]`)." | obsolete-with-evidence(duplicate of the paragraph directly above it — "reuses release-sweep's debt-disposition vocabulary and `debtResolutions[]` persistence verbatim" — and of the Step-1 table column header) | both surviving statements name the same target |
+| Step 2 intro — the forked-seam examples parenthetical "(3 hardcodes that should be 1 config; a shared type two phases redefined)" | obsolete-with-evidence(pedagogical examples of a concept the sentence itself defines; generic reviewer knowledge the judge model has) | the rule survives in full: a per-phase gate cannot catch a cross-phase forked seam, the whole-arc view is this step's job |
+| §When vs release-sweep — the gloss "(the 8-agent pre-prod audit)" after `full-code-review` | obsolete-with-evidence(`full-code-review` is a named skill whose own card states its 8-agent scope; the gloss restated another skill's description) | the contrast survives: "NOT `full-code-review` — a lighter, seam-specific architect pass" |
+| §No summary file — the opener "Like release-sweep, " | obsolete-with-evidence(the reuse-release-sweep framing is already stated twice above — the read-FIRST paragraph and Step 1's vocabulary rule) | the operative rule (never a persisted summary) survives verbatim |
+
 ## templates/schema.ts + the vendored lib/roadmap/schema.ts — the v10 drift marker (EVALLOOP sweep)
 
 | passage (origin heading/anchor) | disposition | evidence |
