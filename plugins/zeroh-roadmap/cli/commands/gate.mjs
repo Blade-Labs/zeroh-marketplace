@@ -505,6 +505,12 @@ export async function runGate(phaseNum, opts) {
     try { warnBase = deriveBaseSha(toplevel, phaseNum, { base: opts.base }) } catch { /* no move-to-in-progress commit ⇒ no warnings */ }
     if (warnBase) for (const w of untestedGateFixFindings(toplevel, phaseNum, warnBase)) process.stdout.write(`warning: ${w}\n`)
     if (warnBase) for (const w of deviantGrammarFindings(toplevel, phaseNum, warnBase)) process.stdout.write(`warning: ${w}\n`)
+    // WARN ONLY, same lane as above: a done completion that never recorded who drove it lands
+    // in the scorecard's unrecorded cohort — visible here, while the executor can still fix it.
+    if (imp.parsed.status === 'done' && !imp.parsed.executionResult?.driver?.model)
+      process.stdout.write(
+        'warning: executionResult.driver absent: this completion will attribute to the unrecorded cohort in the eval scorecard (record { model, lane } in executionResult)\n',
+      )
     const result = checkPhaseConsistency(imp.parsed, latest.report)
     if (!result.ok) {
       process.stderr.write(`gate run --verify-complete: phase ${phaseNum} inconsistent with ${latest.path}:\n`)

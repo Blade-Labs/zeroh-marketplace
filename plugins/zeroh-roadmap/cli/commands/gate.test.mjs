@@ -518,6 +518,70 @@ test('gate run --verify-complete — no report dir exits 1', () => {
   assert.match(r.stderr, /no roadmap\/\.gate\/1500/)
 })
 
+// ── --verify-complete: the WARN-only unrecorded-driver check ─────────────────────────
+// A done phase with no executionResult.driver.model is the "unrecorded" scorecard cohort —
+// today nothing on the completion path names it, so the gap only surfaces months later at
+// scorecard time. The check joins the EXISTING warn-only lane (untested-gate-fix /
+// deviant-grammar `warning: …` stdout lines): it may never move the exit code, which
+// consistency alone decides. Both cases below are CONSISTENT fixtures (green report, no
+// declared scopes, no gateRounds) so the shared expectation is a sharp exit 0.
+const VERIFY_COMPLETE_CONSISTENT_EXIT = 0
+const DRIVER_ABSENT_PHRASE = 'executionResult.driver absent'
+const driverAbsentLines = (stdout) => stdout.split('\n').filter((l) => l.includes(DRIVER_ABSENT_PHRASE))
+
+test('gate run --verify-complete — a DONE phase with no executionResult.driver warns on stdout, exit code unchanged', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1600, phaseObj({ phase: 1600, status: 'done' }))
+  repo.commit('feat: phase 1600 — code', { 'lib/h.ts': 'export const h = 1\n' })
+  // the report dir must exist before --verify-complete (else exit 1, a different lane)
+  assert.equal(runGateCmd(repo.root, ['1600']).code, 0)
+  const rep = latestReportOf(repo.root, 1600)
+  assert.equal(rep.green, true, 'the fixture gate run is green')
+  assert.equal(rep.agents.length, 0, 'no recorded rounds — coherent with a phase declaring no gateRounds')
+
+  const r = runGateCmd(repo.root, ['1600', '--verify-complete'])
+  assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `consistency decides the exit code; stderr: ${r.stderr}`)
+  assert.match(r.stdout, /phase 1600 consistent with the latest green gate report/, 'the consistency verdict still prints')
+  const hits = driverAbsentLines(r.stdout)
+  assert.equal(hits.length, 1, `exactly one unrecorded-driver warning (never one per task); stdout: ${r.stdout}`)
+  assert.match(hits[0], /^warning: /, 'it joins the existing warn-only stdout lane')
+})
+
+test('gate run --verify-complete — the SAME done phase WITH executionResult.driver emits no warning and the same exit code', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(
+    1601,
+    phaseObj({
+      phase: 1601,
+      status: 'done',
+      executionResult: { phase: 1601, status: 'done', driver: { model: 'test-model', lane: 'session' } },
+    }),
+  )
+  repo.commit('feat: phase 1601 — code', { 'lib/h.ts': 'export const h = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1601']).code, 0)
+  assert.equal(latestReportOf(repo.root, 1601).green, true, 'the fixture gate run is green')
+
+  const r = runGateCmd(repo.root, ['1601', '--verify-complete'])
+  assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, 'a recorded driver cannot change the exit code either')
+  assert.match(r.stdout, /phase 1601 consistent with the latest green gate report/, 'same lane, same verdict')
+  assert.deepEqual(driverAbsentLines(r.stdout), [], 'a recorded driver.model silences the warning')
+})
+
+test('gate run --verify-complete — a NOT-done phase without executionResult.driver is not warned about (the done guard)', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1602, phaseObj({ phase: 1602, status: 'in-progress' }))
+  repo.commit('feat: phase 1602 — code', { 'lib/h.ts': 'export const h = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1602']).code, 0)
+
+  const r = runGateCmd(repo.root, ['1602', '--verify-complete'])
+  assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, r.stderr)
+  assert.deepEqual(
+    driverAbsentLines(r.stdout),
+    [],
+    'a phase still in flight has not missed its chance to record a driver — warning it is noise',
+  )
+})
+
 test('gate plan — an EMPTY scoped selection SKIPS the scoped slots with a named note, never a refusal (1737 run-000001 class)', () => {
   const repo = makeRepo()
   // Declared 'relevant' RAISES the docs-derived floor (the real 1737 shape) while the
