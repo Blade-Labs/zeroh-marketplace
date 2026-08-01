@@ -902,6 +902,12 @@ export const DesignRefShape = z.object({
   ref: z.string().min(1),
   status: z.enum(['reused', 'designed']),
   summary: z.string().min(10),
+  /** Supersession stamp — a later arc that replaces or contradicts this design
+   *  STAMPS the old entry rather than silently leaving both current. A stamped
+   *  ref is history, never a reuse candidate; the prior-arc search skips it. */
+  supersededBy: z
+    .object({ byArc: z.string().min(1), reason: z.string().min(10), date: z.string().min(10) })
+    .optional(),
 })
 
 export type DesignRef = z.output<typeof DesignRefShape>

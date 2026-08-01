@@ -401,6 +401,56 @@ check('designRefs: rejects an unknown status (fail-loud at the boundary)', () =>
   )
 })
 
+// SUPERSESSION: a replaced design and its successor must not both read as current,
+// so a superseded ref carries WHO replaced it, WHY and WHEN. The stamp is optional:
+// every already-committed arc file predates it and must keep parsing untouched.
+const sampleSupersession = {
+  byArc: 'CARDKIT',
+  reason: 'replaced by the unified card grammar v1.3, one renderer and one vocabulary',
+  date: '2026-08-01',
+}
+
+check('designRefs: a ref WITHOUT supersededBy still parses and stays absent (back-compat)', () => {
+  const d = DesignRefShape.parse({ ...sampleDesignRef })
+  assertEq(d.supersededBy, undefined, 'absent stays absent, never invented')
+  const a = defineArc({
+    id: 'B',
+    name: 'Arc Bravo',
+    baseRef: 'main',
+    planes: [{ name: 'core', phases: [855] }],
+    designRefs: [sampleDesignRef],
+  })
+  assertEq(a.designRefs[0].supersededBy, undefined, 'every committed arc file keeps parsing')
+})
+
+check('designRefs: a supersededBy stamp round-trips through defineArc (byArc/reason/date all carried)', () => {
+  const a = defineArc({
+    id: 'B',
+    name: 'Arc Bravo',
+    baseRef: 'main',
+    planes: [{ name: 'core', phases: [855] }],
+    designRefs: [{ ...sampleDesignRef, supersededBy: sampleSupersession }],
+  })
+  assertEq(a.designRefs[0].supersededBy, sampleSupersession, 'the whole stamp survives the parse, not stripped')
+  assertEq(a.designRefs[0].supersededBy?.byArc, 'CARDKIT', 'the successor arc is nameable, so a dead pattern points at its replacement')
+  assertEq(a.designRefs[0].status, 'reused', 'the rest of the ref is untouched by the stamp')
+})
+
+check('designRefs: a supersededBy reason below 10 chars rejects, exactly 10 parses (the .min(10) boundary)', () => {
+  assertThrows(
+    () => DesignRefShape.parse({
+      ...sampleDesignRef,
+      supersededBy: { ...sampleSupersession, reason: 'too short' }, // 9 chars
+    }),
+    'a 9-char supersession reason',
+  )
+  const ok = DesignRefShape.parse({
+    ...sampleDesignRef,
+    supersededBy: { ...sampleSupersession, reason: 'superseded' }, // 10 chars
+  })
+  assertEq(ok.supersededBy?.reason, 'superseded', 'exactly 10 chars is accepted')
+})
+
 console.log('\nIntentVerdictShape — the judge return')
 
 check('IntentVerdict: a met verdict parses', () => {
