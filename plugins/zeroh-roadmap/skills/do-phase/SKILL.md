@@ -37,8 +37,8 @@ reorder/skip them, or mark a task done before it is committed.
 Read the phase (`status` must be `backlog`/`in-progress`; terminal = stop). If it declares
 `assumptions[]`, run each `verify` **before any code**: any failure ⇒ STOP and escalate with the
 raw output (arc-mode: `status: "escalated"`) — escalating IS success. Then `roadmap phase start
-<N>` (the atomic flip + move-commit + executor-start beacon; idempotent if already in-progress)
-before task 1 — never a hand edit of the status field.
+<N>` (atomic flip + move-commit + beacon; idempotent) before task 1 — never a hand edit of the
+status field.
 
 ## The per-task loop (one task = one commit)
 
@@ -50,12 +50,10 @@ For each task in order:
 2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; scope touched tests via
    the scoped slot (never a hand-built filter); a UI change runs `build`. **Any run expected
    under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (a session
-   event kills the Monitor's wake silently; the executor-reference long-run protocol governs
-   only genuinely long runs).
+   event kills the Monitor's wake silently; the long-run protocol covers genuinely long runs).
 3. **Commit** — `<type>(<scope>): phase N — <task title>`. First, when the consumer binds a
-   formatter (the `lint-diff` binding's `--write` twin, e.g. biome), run it on the task's touched
-   files — the gate's diff-scoped checks catch what slips, but hygiene that never reaches it is
-   cheaper.
+   formatter (the `lint-diff` binding's `--write` twin, e.g. biome), run it on the task's
+   touched files.
 4. **Persist** `transparencyReport` + `done: true` + `doneDate`, same commit.
 5. **Continue immediately** — the task boundary is a commit boundary, never a turn boundary.
 
@@ -89,8 +87,8 @@ hardening adds the closure integration rerun; release adds the e2e slot. Run `ro
 into the gate report** as it finishes: `roadmap gate run <N> --record-round
 '{"round":R,"agent":"code-reviewer","verdict":"clean","summary":"…"}'` (round 0 = the
 quality pass, rounds ≥1 = each correctness loop). `--verify-complete` (below) REFUSES a done
-flip whose latest report carries no recorded agent round — recording is not optional. A
-docs-only diff skips the quality pass. Under arc-mode the gate runs only phase-relevant SCOPED
+flip whose latest report carries no recorded agent round. A docs-only diff skips the quality
+pass. Under arc-mode the gate runs only phase-relevant SCOPED
 tests — the full suite defers to the arc end.
 
 **Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
@@ -109,11 +107,10 @@ absorb phase work — never another phase-executor, `Explore`, or a fork for a "
 ## Complete + return
 
 Set in ONE edit: `status: 'done'`, `gate`, `gateRounds` (Round 0 at index 0, ≥1 entry),
-`metrics`, `compromises`, `completedDate`, `executionResult` (with `driver: { model: <your own
-model id>, lane: 'session' | 'codex' }`). Persist `executionResult` in BOTH modes; `driver` is
-what lets the eval scorecard attribute the outcome, an absent driver scores as unrecorded. Then
-`roadmap gate run <N> --verify-complete` (phase ↔ gate-report consistency — a done phase can no
-longer be narrated).
+`metrics`, `compromises`, `completedDate`, `executionResult` (with `driver: { model: <your
+model id>, lane: 'session' | 'codex' }`) — in BOTH modes; `driver` lets the eval scorecard
+attribute the outcome, absent scores as unrecorded. Then `roadmap gate run <N>
+--verify-complete` (phase ↔ gate-report consistency — a done phase can no longer be narrated).
 
 **Arc-mode** (iff `roadmap/.arc-mode` exists — read via `roadmap status` — OR this session IS a
 phase-executor): commit the phase and **return the PhaseExecutionResult you persisted**
@@ -126,10 +123,10 @@ consumer's `mergePolicy` (workflow serialization covers arc-mode only).
 
 ## Codex delegation lane (`roadmap codex run <N…>`)
 
-When the session delegates implementation to Codex, use the CLI lane — never hand-roll the launch
-(the shared-host hook and the reaper classify the visible command line; the entrypoint carries the
-invariants: direct CLI, prompt via stdin so argv stays free of test keywords, detached own-group
-spawn, a `.building/codex-*.json` journal refusing a double-run, the `CODEX-REPORT.md` sentinel).
+When the session delegates implementation to Codex, use the CLI lane — never hand-roll the
+launch (the shared-host hook and reaper classify argv; the entrypoint carries the invariants:
+direct CLI, prompt via stdin, detached own-group spawn, a double-run-refusing
+`.building/codex-*.json` journal, the `CODEX-REPORT.md` sentinel).
 Poll `roadmap codex status <N>` (typed: running/complete/blocked/dead-no-report). A whole arc
 delegates as one run: `roadmap codex run --arc <ID>` (members in planes order). **Division of
 labor (user ruling 2026-07-22):** Codex runs each phase FULLY — tasks, per-task commits +
