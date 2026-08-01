@@ -50,7 +50,8 @@ agent chain it names — FOREGROUND to exit code, beaconing each stage via
 beacon event is `phase-complete` (the closed vocabulary refuses variants). Record each agent round into
 the report with `gate run <N> --record-round <json>` as it finishes (else `--verify-complete`
 refuses the done flip). Then in ONE continuous execution set the completion fields +
-`executionResult`, commit, run `gate run <N> --verify-complete`, and return. SKIP grooming/emit/push
+`executionResult` (including `driver`: your own model id + lane), commit, run `gate run <N>
+--verify-complete`, and return. SKIP grooming/emit/push
 — the workflow serializes those.
 
 ## Spawn boundary + return

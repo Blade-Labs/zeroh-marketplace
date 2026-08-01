@@ -109,14 +109,16 @@ absorb phase work — never another phase-executor, `Explore`, or a fork for a "
 ## Complete + return
 
 Set in ONE edit: `status: 'done'`, `gate`, `gateRounds` (Round 0 at index 0, ≥1 entry),
-`metrics`, `compromises`, `completedDate`. Then `roadmap gate run <N> --verify-complete` (phase ↔
-gate-report consistency — a done phase can no longer be narrated).
+`metrics`, `compromises`, `completedDate`, `executionResult` (with `driver: { model: <your own
+model id>, lane: 'session' | 'codex' }`). Persist `executionResult` in BOTH modes; `driver` is
+what lets the eval scorecard attribute the outcome, an absent driver scores as unrecorded. Then
+`roadmap gate run <N> --verify-complete` (phase ↔ gate-report consistency — a done phase can no
+longer be narrated).
 
 **Arc-mode** (iff `roadmap/.arc-mode` exists — read via `roadmap status` — OR this session IS a
-phase-executor): also persist `executionResult`, commit the phase, and **return that
-PhaseExecutionResult** (`status` done/escalated/failed; map the roll-up; `driver` = your own model
-id + lane `session`, or `codex` when that lane assembled it). SKIP grooming, the emit slot, and
-the push — the workflow serializes those.
+phase-executor): commit the phase and **return the PhaseExecutionResult you persisted**
+(`status` done/escalated/failed; map the roll-up). SKIP grooming, the emit slot, and the push —
+the workflow serializes those.
 
 **Standalone** (no arc-mode): after the completion commit, groom `roadmap/backlog.ts` (remove this
 phase's entry + any single-phase narrative naming only it), run the `emit` slot, then push per the
