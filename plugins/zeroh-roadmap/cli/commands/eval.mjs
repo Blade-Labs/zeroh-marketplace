@@ -54,16 +54,21 @@ const RECORDERS = {
 /** The archive home — committed by design (see the module docblock). */
 export const ARC_EVALS_DIR = ['roadmap', 'arc-evals']
 
-// Parse the stdin document against the named consumer shape. argv[1] = schema path,
-// argv[2] = shape name, argv[3] = the input JSON. Mirrors result.mjs's PARSE_SCRIPT so
+// Parse a document against the named consumer shape. argv[1] = schema path, argv[2] = shape name,
+// argv[3] = the input JSON, or '-' to read it from STDIN. Mirrors result.mjs's PARSE_SCRIPT so
 // there is one bridge idiom, not two.
+//
+// Use '-' for anything document-sized: a single argv entry is capped at 128KB by MAX_ARG_STRLEN,
+// so a big arc's trace fails the spawn with E2BIG and an EMPTY stderr — which reads as a schema
+// mismatch it is not. Arc UCAUDIT (20 members, ~520KB of transparency reports) hit it first.
 const PARSE_SCRIPT = `
 const schemaPath = process.argv[1]
 const shapeName = process.argv[2]
-const inputJson = process.argv[3]
-import('file://' + schemaPath).then((m) => {
+const inputArg = process.argv[3]
+Promise.all([import('file://' + schemaPath), import('node:fs')]).then(([m, fs]) => {
   const shape = m[shapeName] || (m.default && m.default[shapeName])
   if (!shape) { process.stderr.write(shapeName + ' not exported from ' + schemaPath + ' — the consumer schema predates arc EVALCORE; re-sync lib/roadmap/schema.ts'); process.exit(4) }
+  const inputJson = inputArg === '-' ? fs.readFileSync(0, 'utf8') : inputArg
   let input
   try { input = JSON.parse(inputJson) } catch (e) { process.stderr.write('input is not valid JSON: ' + e.message); process.exit(4) }
   const r = shape.safeParse(input)
@@ -169,7 +174,7 @@ export default async function run(argv) {
     return 1
   }
 
-  const res = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, recorder.shape, inputJson] })
+  const res = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, recorder.shape, '-'], input: inputJson })
   if (!res.ok) {
     if (res.kind === 'tsx-absent') {
       process.stderr.write(TSX_ABSENT_HINT + '\n')
@@ -676,7 +681,7 @@ async function runMergeJudge(opts) {
     return 1
   }
 
-  const parsedVerdict = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, 'ArcEvalJudgeVerdictShape', inputJson] })
+  const parsedVerdict = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, 'ArcEvalJudgeVerdictShape', '-'], input: inputJson })
   if (!parsedVerdict.ok) {
     if (parsedVerdict.kind === 'tsx-absent') {
       process.stderr.write(TSX_ABSENT_HINT + '\n')
@@ -1230,7 +1235,7 @@ export function readPriorReports(dir, { excludePath, onWarn } = {}) {
 
 /** Validate a document against a CONSUMER shape through the bridge (the record-sweep idiom). */
 function bridgeValidate(toplevel, schemaPath, shapeName, doc) {
-  const res = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, shapeName, JSON.stringify(doc)] })
+  const res = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, shapeName, '-'], input: JSON.stringify(doc) })
   if (res.ok) return { ok: true, parsed: JSON.parse(res.stdout.slice(res.stdout.indexOf('PARSED:') + 'PARSED:'.length)) }
   return { ok: false, res }
 }

@@ -25,10 +25,12 @@ import {
 // invalid, exit 4 on a load/shape/JSON error.
 const PARSE_SCRIPT = `
 const schemaPath = process.argv[1]
-const inputJson = process.argv[2]
-import('file://' + schemaPath).then((m) => {
+const inputArg = process.argv[2]
+Promise.all([import('file://' + schemaPath), import('node:fs')]).then(([m, fs]) => {
   const shape = m.PhaseExecutionResultShape || (m.default && m.default.PhaseExecutionResultShape)
   if (!shape) { process.stderr.write('PhaseExecutionResultShape not exported from ' + schemaPath); process.exit(4) }
+  // '-' ⇒ the doc is on STDIN (one argv entry caps at 128KB; a big doc fails E2BIG, empty stderr).
+  const inputJson = inputArg === '-' ? fs.readFileSync(0, 'utf8') : inputArg
   let input
   try { input = JSON.parse(inputJson) } catch (e) { process.stderr.write('input is not valid JSON: ' + e.message); process.exit(4) }
   const r = shape.safeParse(input)
@@ -114,7 +116,7 @@ export default async function run(argv) {
     return 1
   }
 
-  const res = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, inputJson] })
+  const res = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, '-'], input: inputJson })
   if (res.ok) {
     const idx = res.stdout.indexOf('PARSED:')
     const parsed = JSON.parse(res.stdout.slice(idx + 'PARSED:'.length))

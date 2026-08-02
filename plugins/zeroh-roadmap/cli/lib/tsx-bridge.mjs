@@ -78,19 +78,72 @@ export function resolveTsxInvocation(consumerRoot) {
  *   { ok:false, kind:'load', stderr, exitCode:4 }
  *   { ok:false, kind:'tsx-absent', stderr }
  *   { ok:false, kind:'eval-error', stderr, exitCode }
+ *
+ * `input` carries a payload on STDIN instead of argv, and a caller with a DOCUMENT must use it —
+ * the guard below REFUSES an oversize argv entry rather than trusting convention. Linux caps a
+ * SINGLE argv entry at 128KB (MAX_ARG_STRLEN, 32 pages) regardless of the ~2MB total ARG_MAX, so a
+ * JSON.stringify'd doc over that size fails the spawn with E2BIG — and E2BIG arrives with EMPTY
+ * stderr, which is why this read as a schema mismatch for the first arc big enough to hit it
+ * (UCAUDIT, 20 members, ~520KB of transparency reports). The pattern is `args: [..., '-']` +
+ * `input: json`, the script reading fd 0 when it sees the '-' sentinel — the same idiom
+ * `cli/commands/codex.mjs` already uses to keep argv clean ("Prompt on STDIN").
+ *
+ * `input` alone delivers the payload (node overrides stdio[0] when it is set); the explicit 'pipe'
+ * is documentation, not the mechanism.
  */
-export function bridgeEval(consumerRoot, script, { args = [], timeout = 60_000, exec = execFileSync } = {}) {
+// Well under MAX_ARG_STRLEN (128KB), leaving headroom for the -e script body and the environment.
+// BYTES, not characters: the kernel counts bytes, and a 71,680-char Arabic string is 143,360 utf8
+// bytes — a length-based guard waves through exactly the payloads this consumer's traces carry.
+const MAX_ARGV_ENTRY_BYTES = 96 * 1024
+
+export function bridgeEval(
+  consumerRoot,
+  script,
+  { args = [], timeout = 60_000, exec = execFileSync, input = undefined } = {},
+) {
+  const oversize = args.findIndex(
+    (a) => typeof a === 'string' && Buffer.byteLength(a, 'utf8') > MAX_ARGV_ENTRY_BYTES,
+  )
+  if (oversize >= 0) {
+    const bytes = Buffer.byteLength(args[oversize], 'utf8')
+    return {
+      ok: false,
+      kind: 'eval-error',
+      exitCode: 1,
+      stderr:
+        `bridgeEval: argv entry ${oversize} is ${bytes} bytes — one argv entry caps at 128KB ` +
+        `(MAX_ARG_STRLEN), and the spawn would fail E2BIG with no stderr. Pass it as \`input\` ` +
+        `with a '-' sentinel in that slot.`,
+    }
+  }
   const { file, prefix } = resolveTsxInvocation(consumerRoot)
   try {
     const stdout = exec(file, [...prefix, '-e', script, ...args], {
       cwd: consumerRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+      ...(input === undefined ? {} : { input }),
       timeout,
       encoding: 'utf8',
+      // The house ceiling (see exec.mjs): the 1MB default TRUNCATES and then throws ENOBUFS, which
+      // reads as "the command failed". PARSE_SCRIPT echoes the whole parsed doc back, so a large
+      // arc's round trip clears 1MB — UCAUDIT's 520KB in returns ~532KB out.
+      maxBuffer: 16 * 1024 * 1024,
     })
     return { ok: true, stdout }
   } catch (err) {
-    const stderr = err?.stderr?.toString?.() ?? ''
+    // EPIPE means the CHILD stopped reading stdin, not that the run failed — its exit status is the
+    // truth. Without this, a script that short-circuits on success (an early exit before it reads
+    // fd 0) returns ok:false with exitCode 0 and its stdout thrown away.
+    if (err?.code === 'EPIPE' && err?.status === 0) return { ok: true, stdout: err.stdout?.toString?.() ?? '' }
+    // A spawn that never reached the script (E2BIG, ENOBUFS, EPIPE) has NO stderr, so report the
+    // errno rather than an empty string — an empty reason is what made this read as a zod failure.
+    const stderr =
+      (err?.stderr?.toString?.() ?? '') ||
+      (err?.code === 'ENOBUFS'
+        ? `spawn failed: ENOBUFS — the child's stdout exceeded maxBuffer and was truncated`
+        : err?.code
+          ? `spawn failed: ${err.code}${err.message ? ` — ${err.message}` : ''}`
+          : '')
     // Classify OUR wrapper's structured exits FIRST — a real ZodError must never be
     // misread as a missing toolchain even if its message contains "not found".
     if (err?.status === 3 && stderr.startsWith('ZODISSUES:')) {

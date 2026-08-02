@@ -599,15 +599,17 @@ export function validateRunnerSummary(consumerRoot, summary) {
   const schemaPath = consumerSchemaPath(consumerRoot) // throws BridgeError('schema-missing') → caller maps exit 1
   const script = `
 const schemaPath = process.argv[1]
-import('file://' + schemaPath).then((m) => {
+Promise.all([import('file://' + schemaPath), import('node:fs')]).then(([m, fs]) => {
   const shape = m.RunnerSummaryShape || (m.default && m.default.RunnerSummaryShape)
   if (!shape) { process.stderr.write('RunnerSummaryShape not exported from ' + schemaPath); process.exit(4) }
-  const r = shape.safeParse(JSON.parse(process.argv[2]))
+  // '-' ⇒ the doc is on STDIN (one argv entry caps at 128KB; a big doc fails E2BIG, empty stderr).
+  const raw = process.argv[2] === '-' ? fs.readFileSync(0, 'utf8') : process.argv[2]
+  const r = shape.safeParse(JSON.parse(raw))
   if (r.success) process.stdout.write('OK')
   else { process.stderr.write('ZODISSUES:' + JSON.stringify(r.error.issues)); process.exit(3) }
 }).catch((e) => { process.stderr.write(String((e && e.stack) || e)); process.exit(4) })
 `
-  const res = bridgeEval(consumerRoot, script, { args: [schemaPath, JSON.stringify(summary)] })
+  const res = bridgeEval(consumerRoot, script, { args: [schemaPath, '-'], input: JSON.stringify(summary) })
   if (res.ok) return
   if (res.kind === 'tsx-absent') throw new LandingError('tsx-absent', ['roadmap arc land: cannot validate the RunnerSummary — tsx unavailable', TSX_ABSENT_HINT])
   throw new LandingError('load', ['roadmap arc land: the RunnerSummary failed RunnerSummaryShape.parse (a broken summary must fail loud, never ship)', (res.stderr ?? '').trim()])

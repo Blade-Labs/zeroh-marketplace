@@ -247,3 +247,137 @@ test('bridgeImportMany — N=5 misses make exactly ONE spawn (counted via the in
   assert.equal(calls, 1, 'all five misses import in a single tsx process')
   assert.equal(Object.keys(many.byPath).length, 5)
 })
+
+test('bridgeEval — a document rides STDIN, never argv (the 128KB MAX_ARG_STRLEN cap)', () => {
+  const root = bareRoot()
+  const seen = []
+  const fakeExec = (file, args, opts) => {
+    seen.push({ args, stdin: opts.stdio[0], input: opts.input })
+    return 'OUT'
+  }
+  const doc = 'x'.repeat(200 * 1024) // over the single-argument cap, under nothing else
+  const res = bridgeEval(root, 'S', { args: ['schema', 'Shape', '-'], input: doc, exec: fakeExec })
+
+  assert.equal(res.ok, true)
+  // The doc must NOT appear in argv — that is the whole defect. A 200KB argv entry fails the
+  // spawn with E2BIG, and E2BIG carries no stderr, so it used to read as a schema mismatch.
+  assert.ok(
+    !seen[0].args.some((a) => Buffer.byteLength(a, 'utf8') > 4096),
+    'no argv entry may carry the document — it goes on stdin',
+  )
+  assert.equal(seen[0].args.at(-1), '-', "the sentinel tells the script to read fd 0")
+  assert.equal(seen[0].input, doc, 'the document is handed to the child on stdin')
+  assert.equal(seen[0].stdin, 'pipe', 'stdin must be piped when input is supplied')
+})
+
+test('bridgeEval — a caller with no input keeps stdin ignored (unchanged for every other caller)', () => {
+  const root = bareRoot()
+  let opts
+  const fakeExec = (_f, _a, o) => ((opts = o), 'OUT')
+  bridgeEval(root, 'S', { args: ['ARG1'], exec: fakeExec })
+  assert.equal(opts.stdio[0], 'ignore')
+  assert.equal('input' in opts, false, 'no input key when the caller passed none')
+})
+
+test('bridgeEval — a spawn that never reached the script reports its errno, not an empty reason', () => {
+  const root = bareRoot()
+  const fakeExec = () => {
+    const e = new Error('spawnSync /bin/x E2BIG')
+    e.code = 'E2BIG' // no .stderr at all — the shape E2BIG actually arrives in
+    throw e
+  }
+  const res = bridgeEval(root, 'S', { args: [], exec: fakeExec })
+  assert.equal(res.ok, false)
+  assert.match(res.stderr, /E2BIG/, 'the refusal must name its own cause rather than print nothing')
+})
+
+test('bridgeEval — an oversize argv entry is REFUSED, not spawned (the cliff is closed by construction)', () => {
+  const root = bareRoot()
+  let spawned = false
+  const fakeExec = () => ((spawned = true), 'OUT')
+  const res = bridgeEval(root, 'S', { args: ['schema', 'x'.repeat(200 * 1024)], exec: fakeExec })
+
+  assert.equal(res.ok, false)
+  assert.equal(spawned, false, 'it must refuse BEFORE the spawn, not discover E2BIG afterwards')
+  assert.match(res.stderr, /MAX_ARG_STRLEN/)
+  assert.match(res.stderr, /argv entry 1 is \d+ bytes/)
+})
+
+test('bridgeEval — the argv guard counts BYTES, so a multi-byte payload cannot slip under it', () => {
+  const root = bareRoot()
+  let spawned = false
+  const fakeExec = () => ((spawned = true), 'OUT')
+  // 70k Arabic characters: well under 96k by .length, ~140KB by utf8 bytes — over the kernel cap.
+  const arabic = 'ب'.repeat(70 * 1024)
+  assert.ok(arabic.length < 96 * 1024, 'the fixture must be under the cap by CHARACTERS')
+  assert.ok(Buffer.byteLength(arabic, 'utf8') > 128 * 1024, 'and over the kernel cap by BYTES')
+
+  const res = bridgeEval(root, 'S', { args: [arabic], exec: fakeExec })
+  assert.equal(res.ok, false, 'a length-based guard would have waved this through')
+  assert.equal(spawned, false)
+})
+
+test('bridgeEval — EPIPE with a ZERO status is a SUCCESS whose child stopped reading stdin', () => {
+  const root = bareRoot()
+  const fakeExec = () => {
+    const e = new Error('spawnSync EPIPE')
+    e.code = 'EPIPE'
+    e.status = 0 // the child exited fine; it just never drained fd 0
+    e.stdout = 'PARSED:{"ok":true}'
+    throw e
+  }
+  const res = bridgeEval(root, 'S', { args: ['-'], input: 'x'.repeat(200 * 1024), exec: fakeExec })
+  assert.equal(res.ok, true, 'a child that exited 0 did not fail because it ignored stdin')
+  assert.equal(res.stdout, 'PARSED:{"ok":true}', 'and its stdout must not be thrown away')
+})
+
+test('bridgeEval — EPIPE with a NON-zero status still classifies on the exit code', () => {
+  const root = bareRoot()
+  const fakeExec = () => {
+    const e = new Error('spawnSync EPIPE')
+    e.code = 'EPIPE'
+    e.status = 4
+    e.stderr = 'SHAPE_NOT_EXPORTED'
+    throw e
+  }
+  const res = bridgeEval(root, 'S', { args: ['-'], input: 'big', exec: fakeExec })
+  assert.equal(res.ok, false)
+  assert.equal(res.kind, 'load', 'a real load failure must not be rescued by the EPIPE early-return')
+})
+
+test('bridgeEval — the errno synthesis does not misroute the classification chain', () => {
+  const root = bareRoot()
+  const throwing = (props) => () => {
+    const e = new Error(props.message ?? 'boom')
+    Object.assign(e, props)
+    throw e
+  }
+  // ENOENT still reads as a missing toolchain, and now carries a reason where it had none.
+  const missing = bridgeEval(root, 'S', { exec: throwing({ code: 'ENOENT', message: 'spawnSync npx ENOENT' }) })
+  assert.equal(missing.kind, 'tsx-absent')
+
+  // A plain script exit carries NO .code, so the synthesis must stay out of the way entirely.
+  const plain = bridgeEval(root, 'S', { exec: throwing({ status: 3 }) })
+  assert.equal(plain.kind, 'eval-error')
+  assert.equal(plain.stderr, '', 'an ordinary non-zero exit must not gain a fabricated spawn reason')
+
+  // ENOBUFS names the truncation rather than just the errno.
+  const over = bridgeEval(root, 'S', { exec: throwing({ code: 'ENOBUFS' }) })
+  assert.match(over.stderr, /exceeded maxBuffer/)
+})
+
+test('bridgeEval — REAL SPAWN: a >128KB document round-trips through stdin byte-exact', () => {
+  const root = bareRoot()
+  // The one test that exercises the CHILD side: the '-' sentinel, readFileSync(0) and the utf8
+  // leg. A fake exec proves none of it — a typo in an inline script's sentinel would stay green.
+  const script =
+    "import('node:fs').then((fs) => {" +
+    "  const raw = process.argv[1] === '-' ? fs.readFileSync(0, 'utf8') : process.argv[1];" +
+    "  process.stdout.write('LEN:' + Buffer.byteLength(raw, 'utf8') + ':' + raw.slice(-6))" +
+    '})'
+  const doc = 'é'.repeat(100 * 1024) + 'ENDING' // ~200KB utf8, far past the argv cap
+  const res = bridgeEval(root, script, { args: ['-'], input: doc })
+
+  assert.equal(res.ok, true, res.stderr ?? 'the round trip must succeed')
+  assert.equal(res.stdout, `LEN:${Buffer.byteLength(doc, 'utf8')}:ENDING`)
+})
