@@ -232,3 +232,100 @@ TENANTCORE class and adds two:
 User directive on record (2026-07-19): "we need a durable executor that actually gets the work
 done… he should be the watcher." The supervision arrow must invert: the executor watches its own
 children by foregrounding; the supervisor only reacts to the typed result or a stale disk beacon.
+
+## Addendum, 2026-07-25: parallel phases within an arc (the "graph engineering" question). NOT SCHEDULED
+
+Trigger: Anatoli Kopadze, "Graph Engineering explained: what it is, when to use it and when not
+to" (x.com/AnatoliKopadze/status/2080668775796314331, 2026-07-24). Despite the framing it is a
+Claude Code dynamic-workflows tutorial, not a LangGraph pitch, so the engine it advocates is the
+same one `workflows/arc-plane.workflow.mjs` already composes against. Evaluated against the
+plugin on 2026-07-25; recorded here rather than built.
+
+**Where the plugin already satisfies the article.** Schema-enforced node output (`roadmap
+contract show --json-schema`, passed to every executor spawn). Fan out / reduce / synthesize
+(full-code-review's 8 specialists, plan-arc's parallel phase reviews, validate-arc's judge
+panel). A verifier that never shares the worker's context (intent-validator "never grades work
+it built"; code-review runs on the diff). Worktree isolation as a primitive. Silent-node-failure
+detection (`executor-result-guard`, `roadmap watch` exit 3/4, beacon `kill -0` probing). The
+article's best section, "anchors" (nodes that cannot be argued with, plus frozen rules an
+optimizer would bend to win), is asserted there and enforced here as gate exit codes, per-arc
+`honestyRails`, and the hook blocks.
+
+**The one real gap.** The arc DAG is fully expressed but scheduled sequentially. `dependsOn`
+exists and is enforced (`cli/lib/derive.mjs` run-phase branch: a backlog candidate runs only
+once `deps.every(isDone)`), and `planes` group phases, but `deriveArcPosition` derives "the ONE
+next action" and returns on the FIRST runnable candidate; `arc-plane.workflow` drives one plane
+and hands `planeDone` back for the session to launch the next. So the graph picks a valid ORDER
+and never runs two phases at once. Applying the article's fake-edge test to a plane is therefore
+a question nobody has asked of an arc.
+
+**What making it concurrent would cost.**
+1. `roadmap arc next` returns a SET of ready phases. Return-shape contract change, read downstream.
+2. The foreign-lane guard (sidecar armed to a different worktree ⇒ blocked) moves from per-arc
+   to per-phase. This guard exists for exactly the article's "false independence" hazard, so it
+   is the item with teeth. `armExecutor(worktree, phase, sessionId)` is already phase-scoped.
+3. A join step: N worktrees committing to one arc branch needs a rebase/merge at the plane
+   boundary. Today commits land directly in one tree.
+4. `roadmap watch <arcId>` is arc-scoped; with two live executors, exit 3 STALLED no longer
+   identifies WHICH.
+
+**Why it is deferred, not rejected.** Phase wall-clock is dominated by the gate (type-check,
+lint, build, tests) and on the flagship consumer's host that is `capbuild`, a hard 6G foreground
+cgroup with ~5 sessions over 16GB. Two concurrent phase gates buy contention, not speed, and the
+failure mode lands in a sibling lane. Secondary: the one-task-one-commit order IS the audit
+trail, and interleaved commits from N worktrees stop `git log` reading as a narrative.
+
+**The cheap version, if this is ever picked up.** Do not build a general parallel scheduler.
+`classifyBand` already tags a phase `trivial`, and a docs-only diff already skips the unit and
+integration tiers, so its gate is nearly free. Let `arc next` hand back one heavy phase PLUS any
+ready trivial-band phases. That captures most of the win at a fraction of the blast radius.
+
+**Owed before any of this: measure.** Apply the fake-edge test to the planes of three recently
+shipped arcs and count the members with no real data dependency on their predecessor. If arcs
+are mostly one long chain there is nothing to harvest and this addendum closes cheaply. Build
+only if several arcs turn out to be independent strands.
+
+## Addendum, 2026-08-04: the Workflow tool itself (Thariq's dynamic-workflows post). ONE ITEM WORTH BUILDING
+
+Trigger: Thariq Shihipar + Sid Bidasaria (Claude Code team), "A harness for every task: dynamic
+workflows in Claude Code" (x.com/trq212/status/2061907337154367865, also on the Claude Blog).
+Unlike the 2026-07-25 article above, this is the official post on the Workflow TOOL's API
+surface: script-driven `agent()`/`parallel()`/`pipeline()` orchestration with per-agent
+`schema`/`model`/`agentType`/worktree options, journal-based resume, token budgets, and skills
+as the sanctioned distribution vehicle for workflow scripts. Evaluated 2026-08-04; recorded
+here rather than built (except item 1, flagged build-worthy).
+
+**Nothing is invalidated.** The do-arc SKILL.md warning (do NOT hand `arc-plane.workflow.mjs`
+to a workflow runtime) is correct for this feature too: the dynamic-workflow sandbox has no
+filesystem or Node API access, so the arc loop's CLI-driven typed halts (escalate, self-descope,
+checkpoint) cannot and should not move there. The loop stays inline.
+
+**1. full-code-review is the article's canonical use case, implemented pre-Workflow — the one
+build-worthy item.** Phase 2 launches 8 Agent-tool spawns asking for PROSE-formatted findings
+with a self-assessed >=80% confidence filter; Phase 3 has the orchestrator dedupe and triage in
+its own context. As a Workflow: schema-enforced findings (validation retries at the tool layer),
+a deterministic dedup barrier, and an adversarial-verify stage the skill currently lacks
+entirely. The article's "agentic laziness" failure mode (report 20 of 50, declare done) is
+exactly the risk of one orchestrator consolidating 8 agents' output in one window.
+
+**2. validate-arc's judge panel maps ~1:1 onto Workflow primitives.** Step 3-4 fan out one
+`intent-validator` per criterion, `.parse()` each verdict, re-run once on mis-shape, apply
+2-judge agreement for subjective bars. Workflow `agentType` + `schema` gives the typed verdict
+with automatic retry; panel-agreement/split-verdict logic becomes deterministic code instead of
+protocol prose the driving model must follow faithfully. Same for plan-arc Step 3's parallel
+phase reviews, lower stakes. Deferred: the protocol prose works today, and the judge fan-outs
+are small (one agent per criterion, not 8 specialists over a whole tree).
+
+**3. Distribution needs no new mechanism.** The article blesses shipping workflow .mjs scripts
+inside skill folders, referenced from SKILL.md as templates. If 1 or 2 is built, the plugin's
+existing skill packaging is the delivery vehicle.
+
+**4. Two doc touches, cheap.** (a) Name the Workflow tool explicitly in the do-arc warning so a
+future session connects "a workflow runtime" to the shipped feature. (b) The article's budget
+syntax ("use 10k tokens" sets a hard cap) is a natural binding for the gate token-budget knob.
+
+**Counterweights.** The supervision machinery (executor-arm Stop-hook guard, `roadmap watch`,
+beacons, executor-result-guard) is coupled to Agent-tool spawns; any stage migrated to Workflow
+loses that rail or needs it reworked. Workflow's journal resume should HELP against this host's
+reaper/session-kill history (2026-07-19 addendum) but is unproven here. And the article itself
+cautions workflows cost significantly more tokens — the per-phase gate loop stays as it is.
