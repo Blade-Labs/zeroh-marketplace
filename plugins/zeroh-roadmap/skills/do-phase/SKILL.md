@@ -47,6 +47,10 @@ For each task in order:
    problem/acceptanceCriteria/files/type-signatures (NOT `steps`); new tests scoped (RED),
    implement, scoped (GREEN), commit test+code. `"e2e"` — implement, then `test-engineer` writes
    the flow test blind to source; commit together (e2e runs at the gate). `"none"` — the steps.
+   A `"none"` task authors NO new test file; a guard that seems missing is a PRIME RULE 1
+   architect call (which lane owns it), never a test minted on the spot. Under `tdd`/`e2e` the
+   test file IS part of the task's diff; if the plan omitted it from `files[]`, note the
+   addition in `limitations`.
 2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; scope touched tests via
    the scoped slot (never a hand-built filter); a UI change runs `build`. **Any run expected
    under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (a session

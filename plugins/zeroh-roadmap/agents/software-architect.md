@@ -37,7 +37,8 @@ symbol that doesn't exist → surface that as part of the verdict, never a confi
 Be decisive (pick ONE approach, brief trade-offs, then recommend). Study the codebase's existing patterns
 before designing and EXTEND them — never reinvent; cite specific files as examples. Trace features to a
 documented requirement; follow the consumer's own layering rules (its CLAUDE.md Conventions). Specify every
-file to create/modify, interface + signatures, connection points, and the test-coverage requirement.
+file to create/modify, interface + signatures, connection points, and the test-coverage requirement
+(declarative-artifact work names the consumer's ratchet/lint lane instead of a bespoke test).
 
 **Architecture reference — the `designHomes` config-read.** The consumer's canonical architecture docs are
 bound in the **`designHomes`** key of `roadmap.config.json` (both modes). Resolve the domain you're deciding

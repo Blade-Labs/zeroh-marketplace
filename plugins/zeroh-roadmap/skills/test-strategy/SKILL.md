@@ -31,7 +31,26 @@ Also check the consumer's own test-strategy document if one exists (e.g. `docs/T
 Push every assertion as far DOWN the pyramid as it can live: a rule provable in a unit test
 does not belong in an E2E test.
 
+## What gets a test at all — the declarative-artifact rule
+
+The pyramid ranks WHERE an assertion lives; this rule decides WHETHER one exists. Before writing
+a test, name what a RED would mean. *A function's behavior changed* is a test. *A data file's
+contents changed* is not: declarative artifacts (yaml/json/md, images, manifests, lockfiles, seed
+data) get no bespoke test file, and never a byte-for-byte content assertion — that is a second
+copy of the data that moves with it, guarding nothing. The honest guard for an artifact is its
+INVARIANT (parses, references resolve, set exhaustive, ids unique), expressed as one more CASE in
+a lane the consumer already runs (`gateCommands.ratchets` / `lint` / `emit`, or its documented
+validator script). One scan extended with a case beats one new file per rule: a new `*.test.ts`
+is permanently wired into the unit tier (inventory checks, coverage floors), while a lane leg is
+one line.
+
+This is NOT a carve-out for the loader, resolver, or schema parser that reads an artifact — that
+is runtime logic and carries the full coverage targets below. Nor for checks that execute a
+mapping function over a contract union, nor for the wired test a new governed surface owes.
+
 ## Coverage Targets
+
+Coverage scores EXECUTABLE LOGIC only; a declarative artifact has no coverage number.
 
 | Risk Tier | Target |
 |-----------|--------|

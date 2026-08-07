@@ -329,3 +329,11 @@ beacons, executor-result-guard) is coupled to Agent-tool spawns; any stage migra
 loses that rail or needs it reworked. Workflow's journal resume should HELP against this host's
 reaper/session-kill history (2026-07-19 addendum) but is unproven here. And the article itself
 cautions workflows cost significantly more tokens — the per-phase gate loop stays as it is.
+
+## Follow-up 2026-08-07 — mechanical backstop for the declarative-artifact test rule
+The 2026-08-07 test-posture trim (test-engineer doctrine + do-phase/plan-phase/review-phase/
+test-strategy/schema clauses) is prose, and this plugin's own record says prose decays
+(hooks/scoping-guard.sh header). Named backstop, architect-ratified: `roadmap phase validate`
+gains a WARN when a task with `testMode: 'none'` lists a path matching a test glob
+(`*.test.*`, `*.spec.*`) in `files[]`. Pure plan-time lint, no CLI surface change; catches the
+planner half where it is cheapest.

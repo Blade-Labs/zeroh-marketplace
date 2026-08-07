@@ -80,6 +80,8 @@ verify:` grammar** (this review is the enforcement the grandfathered lint defers
 Bonus ratifications Mode A owns (a "specialist path" = a `gateSpecialists` path in `roadmap.config.json`):
 - **`testScope` sanity** (when declared): a specialist / cross-module `src/` path is incompatible
   with `static`/`scoped`; `scopedTests` globs resolve → else NEEDS WORK.
+- **Test shape:** a task whose diff is declarative planning a NEW test file = NEEDS WORK (point it
+  at the consumer's ratchets/lint lane); a byte-for-byte content assertion over a data file = NEEDS WORK.
 - **`reviewScope` ratification** (declared below `full`): THIS review IS the ratification the gate
   trusts. Verify no `keyFiles`/`files[]` path is a specialist path, the rung fits the diff (`none`
   docs/data only; `light` only small/mechanical — no new governed surface/contract/ledger-kind/subtle
@@ -125,7 +127,8 @@ Verify the CLAIMED work happened, COMPLETELY. `git log --grep="phase N"`; read e
   + every changed symbol (imports AND string-literals) repo-wide; a renamed field → check catalog,
   disclosure matrix, E2E, seed data, routes, rules. Uncovered → FAIL.
 - **Line numbers accurate**, **architecture compliance** (logic in `lib/`, no side effects in pure
-  functions, SSOT, canonical errors, integer-cents finance), **criteria met**, **test coverage**.
+  functions, SSOT, canonical errors, integer-cents finance), **criteria met**, **test coverage**
+  (executable logic; a declarative artifact's guard is its lane, not a bespoke test).
 Output per task: `PASS|CONCERN|FAIL`, bug-confirmed, pattern-elsewhere.
 
 ---

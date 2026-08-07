@@ -425,7 +425,8 @@ export const PhaseTaskShape = z.object({
   /** Test mode — determines test-engineer involvement during /do-phase execution.
    *  "tdd" = test-engineer writes failing tests BEFORE code (red → green).
    *  "e2e" = test-engineer writes E2E AFTER implementation (blind to source).
-   *  "none" = no separate test step (default for docs, infra, config tasks). */
+   *  "none" = no separate test step (default for docs, infra, config tasks, which author
+   *  no test files — a data/docs guard rides the consumer's ratchets/lint lane). */
   testMode: z.enum(['tdd', 'e2e', 'none']).default('none'),
   /** Task IDs from the same phase that must complete before this task can run.
    *  Empty / omitted = strict sequential (previous task is the implicit dep).

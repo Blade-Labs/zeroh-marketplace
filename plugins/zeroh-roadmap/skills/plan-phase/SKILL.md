@@ -140,7 +140,8 @@ trust it. Apply JUDGMENT to the rest, re-reading the code NOW (not Step-2 memory
 1. **Source confirms** — open each function a task modifies; does `problem` actually exist there? (BLOCKER.)
 2. **Blast radius** — grep each changed pattern/symbol repo-wide; every other occurrence is covered
    by a task here or documented out-of-scope. (NEEDS WORK.)
-3. **Criteria verifiable** — each names a command or observable; reject "works correctly"/"verified". (NEEDS WORK.)
+3. **Criteria verifiable** — each names a command or observable (a lane command or a grep counts;
+   verifiable does NOT mean a test); reject "works correctly"/"verified". (NEEDS WORK.)
 4. **Data flow** — no task depends on a later task's output or assumes a file an earlier task changes. (BLOCKER.)
 5. **Hypotheses refuted** (only `category:'fix'`/`kind:'hardening'`) — `notes` has a `## Hypotheses`
    block: ≥2 ranked causes, a one-line refutation/evidence each, exactly ONE `CONFIRMED` with
@@ -169,6 +170,9 @@ not queued.
   downward (N.3 may depend on N.2, never N.4).
 - **`testMode`:** `tdd` for pure logic/error-paths/business-rules · `e2e` for browser/user-flow ·
   `none` for build/file/docs/lint/config. **Default `none` when unsure** (TDD costs ~5 min/task).
+  A task whose diff is declarative (data/config/docs/assets) takes `testMode: 'none'` AND lists no
+  test file in `files[]`; an owed guard is a case added to the consumer's ratchets/lint/emit lane,
+  named in the step, and its `→ verify:` clause is that lane's command.
 - **Anti-patterns (all fail Prime Rule 1):** `description:'Implement task N.1'`,
   `acceptanceCriteria:['Task N.1 verified']`, `problem:'This needs to be done'`, `title:'Fix things'`.
 - **Special:** an *investigation task* when root cause is unknown; a *gate task* last.
