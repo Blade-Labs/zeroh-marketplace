@@ -233,8 +233,12 @@ function phaseChecks(phase) {
     for (const t of tasks) {
       const tr = t?.transparencyReport
       if (!tr) continue
-      const hasComp = tr.compromises && tr.compromises !== 'None'
-      const hasSkip = tr.skipped && tr.skipped !== 'None'
+      // The schema floors these strings at 10 chars, so a bare 'None' cannot be written —
+      // authors say "None — nothing was traded away". Treat any None-leading phrase as none,
+      // else the two rules contradict and every clean task is forced to invent a decisionRef.
+      const isNone = (v) => !v || /^none\b/i.test(String(v).trim())
+      const hasComp = !isNone(tr.compromises)
+      const hasSkip = !isNone(tr.skipped)
       if ((hasComp || hasSkip) && !tr.decisionRef) {
         errs.push({
           rule: 'compromise-without-decisionRef',
