@@ -129,6 +129,7 @@ const emit = (identity, samples, nFloor, metrics) => {
  */
 export function computeScorecard(traces, gateFixes, { nFloor = SCORECARD_N_FLOOR, generatedAt } = {}) {
   const drivers = new Map()
+  const planners = new Map()
   const reviewers = new Map()
   const fixes = gateFixes ?? []
 
@@ -152,6 +153,17 @@ export function computeScorecard(traces, gateFixes, { nFloor = SCORECARD_N_FLOOR
       })
       driver.phases.push({ phase, escapes })
       if (degraded) driver.scanDegraded = true
+
+      // Planner cells mirror driver cells minus lane (planning has no lane); absence
+      // attributes to the literal 'unrecorded', the same honest-gap discipline.
+      const plannerModel = phase.plannedBy?.model ?? 'unrecorded'
+      const planner = cellFor(planners, [plannerModel, band, surface].join(SEP), {
+        model: plannerModel,
+        taskCountBand: band,
+        surface,
+      })
+      planner.phases.push({ phase, escapes })
+      if (degraded) planner.scanDegraded = true
 
       const green = finalGreenRun(phase)
       // A reviewer is charged a miss only where it signed THIS phase's final green run clean.
@@ -186,6 +198,10 @@ export function computeScorecard(traces, gateFixes, { nFloor = SCORECARD_N_FLOOR
     drivers: [...drivers.values()].map((c) => {
       const { model, lane, taskCountBand, surface } = c
       return emit({ model, lane, taskCountBand, surface }, c.phases.length, nFloor, () => driverMetrics(c))
+    }),
+    planners: [...planners.values()].map((c) => {
+      const { model, taskCountBand, surface } = c
+      return emit({ model, taskCountBand, surface }, c.phases.length, nFloor, () => driverMetrics(c))
     }),
     reviewers: [...reviewers.values()].map((c) => {
       const { agent, taskCountBand, surface } = c

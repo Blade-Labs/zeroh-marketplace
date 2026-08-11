@@ -39,12 +39,18 @@ const CLI_FILE = 'cli/lib/eval-scorecard.mjs'
 const SURFACE_FILE = 'web/src/panels/scorecard-panel.tsx'
 const DRIVER_A = { model: 'claude-opus-5', lane: 'session' }
 const DRIVER_B = { model: 'grok-code', lane: 'runner' }
+// Deliberately NOT a driver model id: a planner cell built off `executionResult.driver` instead
+// of `plannedBy` would then look right, and every planner assertion here would pass on the
+// wrong axis. Keeping the two vocabularies disjoint is what makes that mistake visible.
+const PLANNER_A = { model: 'claude-fable-5' }
+const PLANNER_B = { model: 'gpt-5-codex' }
 
 let seq = 0
 
 /**
  * @param o.driver          driver object, or null for an executionResult WITHOUT a driver
  * @param o.executionResult null to omit executionResult entirely
+ * @param o.plannedBy       planner object, or null to omit plannedBy (an UNRECORDED planner)
  * @param o.gateRounds      number, or null for "not recorded"
  * @param o.haltCount       number, or null for "no halt evidence"
  * @param o.minutes         span length, or null to omit completedAt (an unusable span)
@@ -57,6 +63,9 @@ function mkPhase(o = {}) {
     keyFiles: o.keyFiles ?? [CLI_FILE],
     gateRuns: o.gateRuns ?? [mkRun(o)],
   }
+  // eval-collect lifts `plannedBy` onto every trace phase entry, so the default fixture phase
+  // carries one; `plannedBy: null` is the real-trace absence case.
+  if (o.plannedBy !== null) p.plannedBy = o.plannedBy ?? PLANNER_A
   if (o.executionResult !== null) {
     const er = {}
     if (o.driver !== null) er.driver = o.driver ?? DRIVER_A
@@ -101,6 +110,20 @@ const driverCell = (sc, { model, lane = 'session', band = '1-3', surface = false
 
 const reviewerCell = (sc, { agent, band = '1-3', surface = false }) =>
   sc.reviewers.find((c) => c.agent === agent && c.taskCountBand === band && c.surface === surface)
+
+/** The planners table, asserted PRESENT: a missing table must read as a named contract failure
+ *  ("no planners array") rather than a TypeError from `.find` on undefined. */
+function plannersOf(sc) {
+  assert.ok(
+    Array.isArray(sc.planners),
+    `computeScorecard must return a planners array beside drivers and reviewers; got ${JSON.stringify(sc.planners)}`,
+  )
+  return sc.planners
+}
+
+/** No `lane`: a planning turn has no lane to key on (the assembleAttribution ruling). */
+const plannerCell = (sc, { model, band = '1-3', surface = false }) =>
+  plannersOf(sc).find((c) => c.model === model && c.taskCountBand === band && c.surface === surface)
 
 const allCells = (sc) => [...sc.drivers, ...sc.reviewers]
 
@@ -619,6 +642,176 @@ test('computeScorecard — an escape fix naming a phase this cohort never saw ch
   )
 })
 
+// ── 12b. planner cells: outcomes cross-cut by who PLANNED ─────────────────────────────
+/**
+ * `plannedBy` rides every trace phase (eval-collect lifts it; assembleAttribution groups it)
+ * but the scorecard could only slice outcomes by who DROVE and who REVIEWED, so no eval could
+ * answer "do Fable-planned phases take more gate rounds than Opus-planned ones". `planners` is
+ * that third table, under the SAME three rails as the other two:
+ *
+ *  - cohort-keyed by band × surface, and by NOTHING ELSE — planning has no lane, so a planner
+ *    cell that carried one would fragment a planner's evidence across the executors that
+ *    happened to pick the work up, and drop half of it under the floor for no reason about
+ *    planning at all;
+ *  - the same nFloor abstention, so two planned phases can never be read as a ranking;
+ *  - the driver payload (`driverMetrics`) computed over the CELL'S phases only — the point of
+ *    the table is that a planner's outcomes differ from the arc's pooled ones.
+ *
+ * The drivers half must be untouched by the addition: planning attribution is independent of
+ * execution, so no phase may move between driver cells and no driver figure may shift.
+ */
+const PLANNER_IDENTITY_KEYS = ['model', 'surface', 'taskCountBand']
+
+test('computeScorecard — two planner models in one cohort get their OWN cells, and the drivers half is unchanged', () => {
+  // Eleven phases in ONE cohort, all driven by DRIVER_A: six planned by A, five by B. One
+  // escape fix lands on 9252, a phase A planned.
+  const cohort = (plannerFor) =>
+    nPhases(11, (i) => ({ phase: 9250 + i, driver: DRIVER_A, gateRounds: 2, plannedBy: plannerFor(i) }))
+  const opts = { escapeFixes: [escapeFix("fix(cli): phase 9252 gate R1 — an escape on a phase A planned")] }
+
+  const sc = computeScorecard([mkTrace(cohort((i) => (i < 6 ? PLANNER_A : PLANNER_B)), opts)], [])
+
+  const a = plannerCell(sc, { model: PLANNER_A.model })
+  const b = plannerCell(sc, { model: PLANNER_B.model })
+  assert.equal(samplesOf(a, 'planner A'), 6, 'the six phases A planned')
+  assert.equal(samplesOf(b, 'planner B'), 5, 'and the five B planned')
+  assert.equal(plannersOf(sc).length, 2, `one cell per planner model in this single cohort; got ${JSON.stringify(sc.planners)}`)
+  assertNoPooledCell(plannersOf(sc), 11, 'two planners, one cohort')
+  assert.equal(a.samples + b.samples, 11, 'and nothing was dropped on the way')
+
+  // The payload is driverMetrics over the CELL'S phases: the escape charges A alone.
+  const am = metricsOf(a, 'planner A')
+  const bm = metricsOf(b, 'planner B')
+  assert.equal(am.escapeFixesPerPhase, 1 / 6, 'one escape over the six phases A planned')
+  assert.equal(bm.escapeFixesPerPhase, 0, "B planned none of the escaping phase's cohort-mates — a real zero")
+  assert.notEqual(am.escapeFixesPerPhase, 1 / 11, 'the arc-wide rate is not a planner figure')
+
+  // The drivers half, asserted against the SAME phases planned by nobody: adding the planner
+  // axis must not move a phase between driver cells or shift a driver figure by a digit.
+  const control = computeScorecard([mkTrace(cohort(() => null), opts)], [])
+  assert.deepEqual(sc.drivers, control.drivers, 'the driver cells are identical whoever planned the work')
+  assert.deepEqual(sc.reviewers, control.reviewers, 'and so are the reviewer cells')
+  const driver = driverCell(sc, { model: DRIVER_A.model })
+  assert.equal(samplesOf(driver, 'the single driver cell'), 11, 'one driver drove all eleven — the planner axis does not partition it')
+  assert.equal(metricsOf(driver, 'the driver cell').escapeFixesPerPhase, 1 / 11, 'and it keeps its own arc-wide rate')
+})
+
+test("computeScorecard — a phase with NO plannedBy lands in the literal 'unrecorded' planner cell, never folded into a real one", () => {
+  const sc = computeScorecard(
+    [
+      mkTrace([
+        ...nPhases(6, (i) => ({ phase: 9280 + i, plannedBy: PLANNER_A })),
+        ...nPhases(3, (i) => ({ phase: 9290 + i, plannedBy: null })),
+      ]),
+    ],
+    [],
+  )
+
+  const real = plannerCell(sc, { model: PLANNER_A.model })
+  assert.equal(samplesOf(real, 'the recorded planner'), 6, 'the recorded planner owns exactly the six phases it planned')
+
+  const unrecorded = plannerCell(sc, { model: 'unrecorded' })
+  assertAbstains(unrecorded, 3, 'the unrecorded planner bucket')
+  assert.equal(unrecorded.model, 'unrecorded', 'the literal sentinel model id, never a guessed one')
+  assert.equal(
+    plannerCell(sc, { model: DRIVER_A.model }),
+    undefined,
+    "the driver's model id must not appear on the planner axis — an unrecorded planner is not the executor",
+  )
+
+  assertNoPooledCell(plannersOf(sc), 9, 'recorded plus unrecorded')
+  assert.equal(
+    plannersOf(sc).filter((c) => c.model !== 'unrecorded' && c.samples > 6).length,
+    0,
+    'no real planner absorbed a phase whose planner was never recorded',
+  )
+
+  // Nothing recorded anywhere is one honest bucket, not an empty table a reader could mistake
+  // for "this work was never planned".
+  const none = computeScorecard([mkTrace(nPhases(6, (i) => ({ phase: 9295 + i, plannedBy: null })))], [])
+  assert.equal(plannersOf(none).length, 1, `one bucket, not zero; got ${JSON.stringify(none.planners)}`)
+  assert.equal(samplesOf(plannerCell(none, { model: 'unrecorded' }), 'the all-unrecorded bucket'), 6)
+})
+
+test('computeScorecard — a planner cell is keyed model × band × surface and carries NO lane, anywhere', () => {
+  // One planner, two cohorts. Within the first cohort the work is split across TWO driver
+  // lanes: a lane term in the planner key would split that cell in half.
+  const sc = computeScorecard(
+    [
+      mkTrace([
+        ...nPhases(3, (i) => ({ phase: 9320 + i, plannedBy: PLANNER_A, driver: DRIVER_A })),
+        ...nPhases(3, (i) => ({ phase: 9325 + i, plannedBy: PLANNER_A, driver: DRIVER_B })),
+        ...nPhases(5, (i) => ({ phase: 9330 + i, plannedBy: PLANNER_A, taskCount: 9, keyFiles: [SURFACE_FILE] })),
+      ]),
+    ],
+    [],
+  )
+
+  const easy = plannerCell(sc, { model: PLANNER_A.model, band: '1-3', surface: false })
+  const hard = plannerCell(sc, { model: PLANNER_A.model, band: '7+', surface: true })
+  assert.equal(samplesOf(easy, 'the 1-3 CLI cohort'), 6, 'both lanes of the cohort in ONE planner cell')
+  assert.equal(samplesOf(hard, 'the 7+ surface cohort'), 5, 'the second cohort is its own cell')
+  assert.equal(plannersOf(sc).length, 2, `one cell per cohort, not one per lane; got ${JSON.stringify(sc.planners)}`)
+  assertNoPooledCell(plannersOf(sc), 11, 'one planner across two cohorts')
+  // Fixture precondition: the two lanes really are distinct on the driver axis, so the single
+  // planner cell above is a ruling about the planner key and not an accident of the fixture.
+  assert.equal(sc.drivers.filter((c) => c.taskCountBand === '1-3' && c.surface === false).length, 2, 'two lanes drove the first cohort')
+
+  // The identity + emit envelope, exactly.
+  assert.deepEqual(
+    Object.keys(easy).sort(),
+    [...PLANNER_IDENTITY_KEYS, 'abstained', 'metrics', 'samples'].sort(),
+    `a scoring planner cell carries its identity plus the emit envelope, no more; got ${JSON.stringify(easy)}`,
+  )
+  for (const cell of plannersOf(sc)) {
+    assert.equal('lane' in cell, false, `planning has no lane to key on; got ${JSON.stringify(cell)}`)
+    assert.equal('agent' in cell, false, 'a planner is not a reviewer round')
+    assert.equal(typeof cell.model, 'string', 'the planner identity is a model id')
+    assert.equal(typeof cell.taskCountBand, 'string', 'cohort-keyed by the same band axis as the other two tables')
+    assert.equal(typeof cell.surface, 'boolean', 'and by the same surface heuristic')
+  }
+
+  // The table exists on the envelope even with nothing to put in it — an absent key would read
+  // as "this scorecard predates planner slicing" rather than "no phases".
+  assert.deepEqual(plannersOf(computeScorecard([], [])), [], 'no phases ⇒ an EMPTY planners table, never undefined')
+})
+
+test('computeScorecard — the nFloor abstention applies to planner cells identically', () => {
+  const phases = [
+    mkPhase({ phase: 9360, plannedBy: PLANNER_B, gateRounds: 9, minutes: 600, haltCount: 1, taskCount: 3 }),
+    ...nPhases(SCORECARD_N_FLOOR, (i) => ({ phase: 9370 + i, plannedBy: PLANNER_A, gateRounds: 1, minutes: 30, haltCount: 0, taskCount: 3 })),
+  ]
+  const sc = computeScorecard([mkTrace(phases)], [])
+
+  const one = plannerCell(sc, { model: PLANNER_B.model })
+  assertAbstains(one, 1, 'a one-phase planner')
+  assert.deepEqual(
+    Object.keys(one).sort(),
+    [...PLANNER_IDENTITY_KEYS, 'abstained', 'samples'].sort(),
+    `an abstaining planner cell carries identity + samples + abstained and NOTHING that reads as a score; got ${JSON.stringify(one)}`,
+  )
+
+  const at = plannerCell(sc, { model: PLANNER_A.model })
+  assert.equal(at.samples, SCORECARD_N_FLOOR, 'EXACTLY at the floor')
+  assertMetricKeys(at, DRIVER_METRIC_KEYS, 'a planner cell at the floor')
+  const m = at.metrics
+  const POOLED_MEAN = (SCORECARD_N_FLOOR * 1 + 9) / (SCORECARD_N_FLOOR + 1)
+  assert.equal(m.gateRoundsMean, 1, 'the mean over the phases THIS planner planned')
+  assert.notEqual(m.gateRoundsMean, POOLED_MEAN, `the arc-pooled mean would have been ${POOLED_MEAN}`)
+  assert.equal(m.haltRate, 0, "the other planner's halted phase is not in this denominator")
+  assert.equal(m.minutesPerTask, 10, '150 halt-free minutes over 15 pooled tasks')
+
+  // The injected floor changes the SAME input's verdict, and the freed cell reports its own
+  // phase rather than the cohort's — including the sentinel rail on a signal it cannot measure.
+  const lowered = computeScorecard([mkTrace(phases)], [], { nFloor: 1 })
+  assert.equal(lowered.nFloor, 1, 'the floor rides the output verbatim')
+  const freed = plannerCell(lowered, { model: PLANNER_B.model })
+  assertMetricKeys(freed, DRIVER_METRIC_KEYS, 'the one-phase planner under a floor of one')
+  assert.equal(freed.metrics.gateRoundsMean, 9, 'its OWN nine rounds, not the cohort mean')
+  assert.equal(freed.metrics.haltRate, 1, 'its one phase halted — a measured one')
+  assertSentinel(freed.metrics.minutesPerTask, 'no-timestamps', "a planner whose only phase halted has no usable span")
+})
+
 // ── 13. findGateFixCommits: the argv stream ───────────────────────────────────────────
 function recorder(impl) {
   const calls = []
@@ -735,8 +928,11 @@ test('computeScorecard — generatedAt and nFloor ride into the output verbatim'
 
   assert.equal(sc.generatedAt, pinned, 'an injected clock survives untouched, or the projection is not reproducible')
   assert.equal(sc.nFloor, 3, 'the floor the table was computed against is reported with it')
-  assert.deepEqual(Object.keys(sc).sort(), ['drivers', 'generatedAt', 'nFloor', 'notes', 'reviewers'].sort())
-  assert.ok(Array.isArray(sc.drivers) && Array.isArray(sc.reviewers), 'drivers and reviewers are always arrays')
+  assert.deepEqual(Object.keys(sc).sort(), ['drivers', 'generatedAt', 'nFloor', 'notes', 'planners', 'reviewers'].sort())
+  assert.ok(
+    Array.isArray(sc.drivers) && Array.isArray(sc.reviewers) && Array.isArray(sc.planners),
+    'drivers, reviewers and planners are always arrays',
+  )
   assert.ok(Array.isArray(sc.notes), 'notes is always an array, even with nothing to name')
 
   const { generatedAt } = computeScorecard([mkTrace(nPhases(6))], [])

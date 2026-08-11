@@ -1503,6 +1503,16 @@ const ScorecardDriverCellShape = z.object({
   metrics: ScorecardMetricsShape.optional(),
 })
 
+/** One planner cohort cell — ScorecardDriverCellShape minus lane (planning has no lane). */
+const ScorecardPlannerCellShape = z.object({
+  model: z.string().min(1),
+  taskCountBand: z.string().min(1),
+  surface: z.boolean(),
+  samples: z.number().int().nonnegative(),
+  abstained: z.boolean(),
+  metrics: ScorecardMetricsShape.optional(),
+})
+
 /** One reviewer cohort cell. `samples` counts ROUNDS SAT, not phases: a reviewer's evidence
  *  is the rounds it actually judged. */
 const ScorecardReviewerCellShape = z.object({
@@ -1518,7 +1528,7 @@ const ScorecardReviewerCellShape = z.object({
  *  can never drift into a laxer standard than the driver axis. */
 function refineScorecardCells(
   cells: { samples: number; abstained: boolean; metrics?: unknown }[],
-  key: 'drivers' | 'reviewers',
+  key: 'drivers' | 'planners' | 'reviewers',
   nFloor: number,
   ctx: z.RefinementCtx,
 ): void {
@@ -1560,11 +1570,14 @@ export const ScorecardShape = z
     generatedAt: z.string().datetime(),
     nFloor: z.number().int().positive(),
     drivers: z.array(ScorecardDriverCellShape),
+    /** Planner cells (OPTIONAL: archived scorecards predate the axis). */
+    planners: z.array(ScorecardPlannerCellShape).optional(),
     reviewers: z.array(ScorecardReviewerCellShape),
     notes: z.array(z.string()).default([]),
   })
   .superRefine((card, ctx) => {
     refineScorecardCells(card.drivers, 'drivers', card.nFloor, ctx)
+    if (card.planners) refineScorecardCells(card.planners, 'planners', card.nFloor, ctx)
     refineScorecardCells(card.reviewers, 'reviewers', card.nFloor, ctx)
   })
 

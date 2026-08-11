@@ -994,6 +994,7 @@ async function runScorecard(opts) {
   // assigned to actors, so printing it would invite exactly the comparison the cohorts prevent.
   for (const [label, cells] of [
     ['drivers', doc.drivers],
+    ['planners', doc.planners ?? []],
     ['reviewers', doc.reviewers],
   ]) {
     say(`${label}:`)
@@ -1013,7 +1014,8 @@ async function runScorecard(opts) {
  * floor exists to hand them.
  */
 function scorecardRow(cell, nFloor) {
-  const who = cell.model !== undefined ? `${cell.model} [${cell.lane}]` : cell.agent
+  // A planner cell has a model but no lane (planning has no lane) — never print "[undefined]".
+  const who = cell.model !== undefined ? (cell.lane !== undefined ? `${cell.model} [${cell.lane}]` : cell.model) : cell.agent
   const cohort = `${cell.taskCountBand} surface:${cell.surface}`
   if (cell.abstained) return `${pad(who, 34)}${pad(cohort, 22)}ABSTAINED (n=${cell.samples}, floor ${nFloor})`
   const metrics = Object.entries(cell.metrics ?? {})
