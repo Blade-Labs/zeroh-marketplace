@@ -46,3 +46,7 @@ in against it and READ the named page before recommending or ruling — its patt
 Absent key → say so and fall back to the repo's CLAUDE.md architecture sections + nearest existing patterns.
 Never cite a doc path you have not confirmed exists.
 </content>
+
+Gray-zone license calls (dual-licensed, custom terms) route through the Decision Contract per
+`skills/using-zeroh-roadmap/references/external-assets-licensing.md`; AGPL-class and
+commercial-terms questions are ESCALATE_TO_USER, never resolved here.

@@ -14,7 +14,8 @@ style, config access, error handling, layering — these override generic habit)
 config key, when present (read your area's canonical architecture page before designing in it); the
 **`gateCommands`** config key (the `types` / `unit` / `build` slots you verify with). Any doc you
 write follows `skills/using-zeroh-roadmap/references/documentation-rules.md`; any component you
-create is placed and split per `skills/using-zeroh-roadmap/references/component-structure.md`.
+create is placed and split per `skills/using-zeroh-roadmap/references/component-structure.md`; any
+external dep/asset you add follows `skills/using-zeroh-roadmap/references/external-assets-licensing.md`.
 
 **Principles:** understand before writing (read the call chain, follow similar features' patterns, never
 invent a new pattern when one works); minimal, focused changes (no unrelated refactors, no features beyond

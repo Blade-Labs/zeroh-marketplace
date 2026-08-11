@@ -168,7 +168,9 @@ not queued.
   "and also…" is two tasks. A task producing or touching a doc names
   `skills/using-zeroh-roadmap/references/documentation-rules.md` as its standard; a UI task NAMES
   its component placement (shared home vs own folder) per
-  `skills/using-zeroh-roadmap/references/component-structure.md`.
+  `skills/using-zeroh-roadmap/references/component-structure.md`; a task introducing an external
+  dependency/asset names its license + placement tier per
+  `skills/using-zeroh-roadmap/references/external-assets-licensing.md` (unknown = not plannable).
 - **Ordering:** foundation (schema/utils/types) → consumers → validation-gate task last; deps flow
   downward (N.3 may depend on N.2, never N.4).
 - **`testMode`:** assigned per `skills/using-zeroh-roadmap/references/test-worthiness.md` — `tdd`
