@@ -33,7 +33,10 @@ ships silently green; a surfaced item lands in front of a human).
 3. **Redundant error handling** (try/catch that just rethrows; catch-alls swallowing specific errors;
    runtime validation a Zod schema already guarantees). 4. **Comments that restate code** (keep only WHY).
    5. **Unused vars/imports** (incl. `_`-silencers). 6. **Premature backwards-compat** (re-exports/shims/
-   tombstones before a caller migrated). 7. **Over-generic types** (`Record<string, unknown>` where a
+   tombstones before a caller migrated). 6b. **Doc noise** (per
+   `skills/using-zeroh-roadmap/references/documentation-rules.md`): session-log docs, decision
+   narration without a critical trigger, dated archaeology in docs — delete or fold into the
+   transparencyReport. 7. **Over-generic types** (`Record<string, unknown>` where a
    narrow shape is known).
 
 **Do NOT:** style rewrites (renames/import-reorders/arrow-swaps/ternary-collapsing — explicit beats

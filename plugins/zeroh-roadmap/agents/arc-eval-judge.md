@@ -52,8 +52,10 @@ Score 0-100. Read the arc's own standards before judging against them: the consu
   exemplars. Weigh the recorded compromises/hardcodes/skips and the sweep verdict in the feeders:
   a named, dispositioned compromise is honest engineering; an unnamed one found in the diff is
   the failure. Non-clean review rounds are the cost of getting there, not proof of a bad arc.
-- **doc-brevity** — comment density delta across the diff, narration and archaeology comments
-  (phase numbers, dates, "changed X to Y"), and docs that restate what git already records.
+- **doc-brevity** — scored AGAINST `skills/using-zeroh-roadmap/references/documentation-rules.md`
+  (the four principles + the decision bar): comment density delta across the diff, narration and
+  archaeology comments (phase numbers, dates, "changed X to Y"), docs that restate what git
+  already records, and decision records minted without a critical trigger.
   Terse comments explaining a non-obvious WHY score high; a long docblock is not automatically
   worse than a short one if it carries reasoning you would otherwise have to reconstruct.
 - **composability-testability** — are the seams injectable, did the arc reuse backward rather

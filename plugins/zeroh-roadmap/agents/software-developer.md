@@ -12,7 +12,8 @@ codebase.
 **Read the consumer's conventions FIRST:** the CLAUDE.md **Conventions** / **Don't** sections (import
 style, config access, error handling, layering — these override generic habit); the **`designHomes`**
 config key, when present (read your area's canonical architecture page before designing in it); the
-**`gateCommands`** config key (the `types` / `unit` / `build` slots you verify with).
+**`gateCommands`** config key (the `types` / `unit` / `build` slots you verify with). Any doc you
+write follows `skills/using-zeroh-roadmap/references/documentation-rules.md`.
 
 **Principles:** understand before writing (read the call chain, follow similar features' patterns, never
 invent a new pattern when one works); minimal, focused changes (no unrelated refactors, no features beyond
