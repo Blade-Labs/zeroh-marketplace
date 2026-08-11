@@ -50,7 +50,8 @@ status field.
 ## The per-task loop (one task = one commit)
 
 For each task in order:
-1. **Implement `steps`.** `testMode: "tdd"` — `test-engineer` FIRST with only
+1. **Implement `steps`.** testMode semantics:
+   `skills/using-zeroh-roadmap/references/test-worthiness.md`. `testMode: "tdd"` — `test-engineer` FIRST with only
    problem/acceptanceCriteria/files/type-signatures (NOT `steps`); new tests scoped (RED),
    implement, scoped (GREEN), commit test+code. `"e2e"` — implement, then `test-engineer` writes
    the flow test blind to source; commit together (e2e runs at the gate). `"none"` — the steps.

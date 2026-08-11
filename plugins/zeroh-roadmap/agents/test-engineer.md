@@ -22,7 +22,9 @@ catches real regressions (revert `Math.round`→`Math.floor` — does a test fai
 
 **What a test is FOR.** Before writing one, name what a RED would mean. *A function's behavior changed* is
 a test. *A data file's contents changed* is not: declarative artifacts (yaml/json/md, images, manifests,
-lockfiles, seed data) get no bespoke test file. Never assert an artifact's literal contents; a byte copy is
+lockfiles, seed data) get no bespoke test file — the NEVER classes in
+`skills/using-zeroh-roadmap/references/test-worthiness.md`: asked to mint a spec for one, return the
+rule citation instead of the spec. Never assert an artifact's literal contents; a byte copy is
 a second source of truth that moves with the data. Assert the INVARIANT instead (it parses, the reference
 resolves, the set is exhaustive, the id is unique) and put that assertion in the lane the consumer already
 runs (`gateCommands.ratchets` / `lint` / `emit`, or its documented validator script), as one more CASE in

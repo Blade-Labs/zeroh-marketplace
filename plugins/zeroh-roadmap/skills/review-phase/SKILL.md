@@ -80,7 +80,10 @@ verify:` grammar** (this review is the enforcement the grandfathered lint defers
 Bonus ratifications Mode A owns (a "specialist path" = a `gateSpecialists` path in `roadmap.config.json`):
 - **`testScope` sanity** (when declared): a specialist / cross-module `src/` path is incompatible
   with `static`/`scoped`; `scopedTests` globs resolve → else NEEDS WORK.
-- **Test shape:** a task whose diff is declarative planning a NEW test file = NEEDS WORK (point it
+- **Test shape:** every task's `testMode` is ratified against
+  `skills/using-zeroh-roadmap/references/test-worthiness.md` — a violation (a NEVER-class spec, a
+  skipped tdd on pure logic) without a recorded architect verdict in the notes = NEEDS WORK; a task
+  whose diff is declarative planning a NEW test file = NEEDS WORK (point it
   at the consumer's ratchets/lint lane); a byte-for-byte content assertion over a data file = NEEDS WORK.
 - **`reviewScope` ratification** (declared below `full`): THIS review IS the ratification the gate
   trusts. Verify no `keyFiles`/`files[]` path is a specialist path, the rung fits the diff (`none`

@@ -33,7 +33,9 @@ does not belong in an E2E test.
 
 ## What gets a test at all — the declarative-artifact rule
 
-The pyramid ranks WHERE an assertion lives; this rule decides WHETHER one exists. Before writing
+The pyramid ranks WHERE an assertion lives; this rule decides WHETHER one exists. (testMode
+assignment and the deviation protocol live in
+`skills/using-zeroh-roadmap/references/test-worthiness.md` — the two homes must not drift.) Before writing
 a test, name what a RED would mean. *A function's behavior changed* is a test. *A data file's
 contents changed* is not: declarative artifacts (yaml/json/md, images, manifests, lockfiles, seed
 data) get no bespoke test file, and never a byte-for-byte content assertion — that is a second
