@@ -650,3 +650,75 @@ test('phase curate — a --groups spec asking for FOUR groups refuses with exit 
     assert.equal(r.rescueRefs(), '', `no rescue ref, because nothing was attempted (apply=${apply})`)
   }
 })
+
+test('phase curate --groups "2,3" with task 1 in the range refuses \u2014 an uncovered task never buckets silently', () => {
+  const r = makeCurateRepo(86)
+  r.commit('docs(roadmap): phase 86 \u2014 move to in-progress')
+  r.commit('feat(cli): phase 86 \u2014 86.1 first task')
+  r.commit('feat(cli): phase 86 \u2014 86.2 second task')
+  r.commit('feat(cli): phase 86 \u2014 86.3 third task')
+  const record = {
+    phase: 86,
+    name: 'The coverage phase',
+    tasks: [
+      { id: '86.1', title: 'First' },
+      { id: '86.2', title: 'Second' },
+      { id: '86.3', title: 'Third' },
+    ],
+  }
+  const preHead = r.head()
+  const err = sink()
+  const code = runCurate({ cwd: r.root, toplevel: r.root, phaseNum: 86, apply: true, groupsSpec: '2,3', loadPhase: () => record, out: sink(), err })
+  assert.equal(code, 1, 'a spec leaving a task uncovered refuses before any surgery')
+  assert.ok(/task index\(es\) 1/.test(err.text), `the refusal names the uncovered index; got:\n${err.text}`)
+  assert.equal(r.head(), preHead, 'HEAD untouched')
+})
+
+test('phase curate --apply records CORRECTLY PAIRED red proofs when two scratch pairs interleave', () => {
+  const r = makeCurateRepo(87)
+  r.commit('docs(roadmap): phase 87 \u2014 move to in-progress')
+  r.commit('feat(cli): phase 87 \u2014 87.1 the task')
+  const sA = r.commit('scratch(cli): phase 87 \u2014 prove guard A bites')
+  const sB = r.commit('scratch(cli): phase 87 \u2014 prove guard B bites')
+  const rB = r.commit('Revert "scratch(cli): phase 87 \u2014 prove guard B bites"')
+  const rA = r.commit('Revert "scratch(cli): phase 87 \u2014 prove guard A bites"')
+  const record = { phase: 87, name: 'The pairing phase', tasks: [{ id: '87.1', title: 'The task' }] }
+  seedGateReport(r.root, 87)
+  const err = sink()
+  const code = runCurate({ cwd: r.root, toplevel: r.root, phaseNum: 87, apply: true, loadPhase: () => record, out: sink(), err })
+  assert.equal(code, 0, `stderr:\n${err.text}`)
+  const rep = latestReport(r.root, 87)
+  assert.deepEqual(
+    rep.report.curation.redProofs,
+    [
+      { scratch: sA, revert: rA, subject: 'scratch(cli): phase 87 \u2014 prove guard A bites' },
+      { scratch: sB, revert: rB, subject: 'scratch(cli): phase 87 \u2014 prove guard B bites' },
+    ],
+    'each scratch pairs with ITS OWN revert by inner subject, each revert consumed once',
+  )
+})
+
+test('phase curate: an ABORTED apply leaves no false curation evidence in the report', () => {
+  const r = makeCurateRepo(88)
+  r.commit('docs(roadmap): phase 88 \u2014 move to in-progress')
+  r.commit('feat(cli): phase 88 \u2014 88.1 first task')
+  r.commit('feat(cli): phase 88 \u2014 88.2 second task')
+  const record = {
+    phase: 88,
+    name: 'The abort phase',
+    tasks: [
+      { id: '88.1', title: 'First' },
+      { id: '88.2', title: 'Second' },
+    ],
+  }
+  seedGateReport(r.root, 88)
+  const preHead = r.head()
+  // A reversed spec assembles a chain whose tip carries group "1"'s tree \u2014 a legitimate
+  // tree mismatch, the same abort class a tamper produces.
+  const err = sink()
+  const code = runCurate({ cwd: r.root, toplevel: r.root, phaseNum: 88, apply: true, groupsSpec: '2,1', loadPhase: () => record, out: sink(), err })
+  assert.notEqual(code, 0, 'the reversed spec must abort on the tree assertion')
+  assert.equal(r.head(), preHead, 'HEAD unmoved')
+  const rep = latestReport(r.root, 88)
+  assert.equal(rep.report.curation, undefined, `an aborted curate must leave NO curation block; got ${JSON.stringify(rep.report.curation)}`)
+})

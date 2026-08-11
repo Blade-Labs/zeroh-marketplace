@@ -10,9 +10,10 @@
  * until the session-worktree lane makes interleaves impossible.
  */
 import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 
 import { derivePhaseStartSha } from './gitscan.mjs'
-import { recordCuration } from './gate-report.mjs'
+import { recordCuration, latestReport } from './gate-report.mjs'
 
 const git = (cwd, args, opts = {}) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8', ...opts }).trim()
@@ -36,17 +37,24 @@ export class CurateError extends Error {
  * (`phase N gate R<d>`), the one place the landed grammar has no em dash.
  */
 function classifySubject(subject, phaseNum) {
-  const dash = `phase ${phaseNum} —`
+  const P = String(phaseNum)
+  // Every ownership test is ANCHORED to the subject's own prefix: a subject that merely
+  // QUOTES the grammar mid-sentence must stay foreign, or the squash rewrites a sibling's
+  // commit that happened to mention it.
+  const prefix = '^[a-z]+(\\([^)]*\\))?: '
   const isRevert = /^Revert "/.test(subject)
   const inner = isRevert ? subject.slice('Revert "'.length) : subject
-  if (/^scratch(\(|:)/.test(inner) && inner.includes(dash)) return 'scratch'
+  if (new RegExp(`^scratch(\\([^)]*\\))?: phase ${P} —`).test(inner)) return 'scratch'
   if (isRevert) return null // a revert of anything but this phase's scratch work is foreign
-  if (new RegExp(`: phase ${phaseNum} gate R\\d+`).test(subject)) return 'gate-fix'
-  if (!subject.includes(dash)) return null
-  if (/^docs\(roadmap\):/.test(subject)) {
+  if (new RegExp(`${prefix}phase ${P} gate R\\d+`).test(subject)) return 'gate-fix'
+  // The batchMode step grammar (`… phase N task N.X (k/M) — <step>`) carries its boundary
+  // in the task token, not the dash phrase.
+  if (new RegExp(`${prefix}phase ${P} task ${P}\\.\\d+ \\(\\d+/\\d+\\) —`).test(subject)) return 'task'
+  if (!new RegExp(`${prefix}phase ${P} —`).test(subject)) return null
+  if (subject.startsWith('docs(roadmap):')) {
     // The task-id grammar (`N.x`) also appears on roadmap-repo task commits; both kinds
     // curate identically, so 'task' wins only on an explicit task id.
-    return new RegExp(`${dash} ${phaseNum}\\.\\d+`).test(subject) ? 'task' : 'state'
+    return new RegExp(`^docs\\(roadmap\\): phase ${P} — ${P}\\.\\d+`).test(subject) ? 'task' : 'state'
   }
   return 'task'
 }
@@ -102,13 +110,6 @@ export function deriveCurationRange(cwd, phaseNum) {
  * the granular history intact. Returns { tip, rescueRef }.
  */
 export function executeCurate(cwd, plan, evidence) {
-  if (evidence) {
-    recordCuration(evidence.toplevel, evidence.phase, {
-      squashedCount: plan.groups.reduce((n, g) => n + g.commits.length, 0),
-      landedSubjects: plan.groups.map((g) => g.message.subject),
-      redProofs: evidence.redProofs ?? [],
-    })
-  }
   const preHead = git(cwd, ['rev-parse', 'HEAD'])
   const preTree = git(cwd, ['rev-parse', 'HEAD^{tree}'])
   const rescueRef = `refs/curate-rescue/${preHead.slice(0, 12)}`
@@ -137,7 +138,27 @@ export function executeCurate(cwd, plan, evidence) {
     )
   }
 
-  git(cwd, ['update-ref', 'HEAD', parent, preHead])
+  // Evidence lands AFTER the tree assertion (an aborted curate must leave no false
+  // "squashed" claim in the report) and BEFORE the ref move (the destructive step the
+  // evidence must precede). The only window left is a failed update-ref — restored below.
+  let prevLatest = null
+  if (evidence) {
+    prevLatest = latestReport(evidence.toplevel, evidence.phase)
+    recordCuration(evidence.toplevel, evidence.phase, {
+      squashedCount: plan.groups.reduce((n, g) => n + g.commits.length, 0),
+      landedSubjects: plan.groups.map((g) => g.message.subject),
+      redProofs: evidence.redProofs ?? [],
+    })
+  }
+
+  try {
+    git(cwd, ['update-ref', 'HEAD', parent, preHead])
+  } catch (e) {
+    // The old-value guard refused (the branch moved underneath): the squash did NOT land,
+    // so the report must not say it did.
+    if (prevLatest) writeFileSync(prevLatest.path, JSON.stringify(prevLatest.report, null, 2) + '\n')
+    throw e
+  }
   return { tip: parent, rescueRef }
 }
 

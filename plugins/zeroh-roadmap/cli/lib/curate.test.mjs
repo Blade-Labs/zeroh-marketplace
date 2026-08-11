@@ -272,6 +272,21 @@ test('a roadmap-repo task commit (docs(roadmap) + a task id) is curatable, never
   assert.ok(['task', 'state'].includes(row.kind), `a docs(roadmap) task commit must classify task|state, got ${row.kind}`)
 })
 
+test('anchoring + the batch grammar: a quoted mention stays foreign, a batch step commit is the phase\u2019s own', () => {
+  const r = makeRepo()
+  r.commit('docs(roadmap): phase 93 \u2014 move to in-progress')
+  r.commit('feat(cli): phase 93 \u2014 93.1 the real task')
+  r.commit('chore(repo): phase 93 task 93.2 (1/3) \u2014 a batch step lands')
+  const quoted = r.commit('docs(skills): document the "phase 93 \u2014 <desc>" commit grammar')
+  const out = deriveCurationRange(r.root, 93)
+  assert.equal(out.ok, false, 'a subject that merely QUOTES the grammar mid-sentence must refuse the range')
+  assert.deepEqual(
+    out.foreign.map((f) => f.sha),
+    [quoted],
+    'exactly the quoting commit is foreign \u2014 the batch-grammar step commit is the phase\u2019s own work',
+  )
+})
+
 test('the range is base-EXCLUSIVE: foreign commits under the base are out of scope (tier-2 base, no move commit)', () => {
   const r = makeRepo()
   r.commit('root: seed the tree')

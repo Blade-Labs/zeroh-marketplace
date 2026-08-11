@@ -165,8 +165,25 @@ export function runCurate({
   }
   const groupOfIndex = (idx) => {
     if (!ranges) return 0
-    const at = ranges.findIndex(([lo, hi]) => idx >= lo && idx <= hi)
-    return at === -1 ? ranges.length - 1 : at
+    return ranges.findIndex(([lo, hi]) => idx >= lo && idx <= hi)
+  }
+  // A spec must cover every task index the range actually carries: silently bucketing an
+  // uncovered task would land its diff in one commit while the bodies claim otherwise.
+  if (ranges) {
+    const uncovered = [
+      ...new Set(
+        range.commits
+          .filter((c) => c.kind === 'task')
+          .map((c) => taskIndexOf(c.subject))
+          .filter((idx) => idx !== null && groupOfIndex(idx) === -1),
+      ),
+    ]
+    if (uncovered.length > 0) {
+      err.write(
+        `phase curate: --groups '${groupsSpec}' covers no group for task index(es) ${uncovered.join(', ')} — every task in the range must have a group\n`,
+      )
+      return 1
+    }
   }
   const groupCount = ranges ? ranges.length : 1
   const buckets = Array.from({ length: groupCount }, () => [])
@@ -201,11 +218,13 @@ export function runCurate({
   // ritual runs curate AFTER the gate, so a missing report is a real ordering violation
   // and the recorder's throw (curate aborted, history intact) is the correct answer.
   const redProofs = []
-  for (let i = 0; i < range.commits.length; i += 1) {
-    const c = range.commits[i]
+  const revertPool = range.commits.filter((c) => c.kind === 'scratch' && /^Revert "/.test(c.subject))
+  for (const c of range.commits) {
     if (c.kind !== 'scratch' || /^Revert "/.test(c.subject)) continue
-    const twin = range.commits.slice(i + 1).find((r) => r.kind === 'scratch' && /^Revert "/.test(r.subject))
-    if (twin) redProofs.push({ scratch: c.sha, revert: twin.sha, subject: c.subject })
+    // Pair by the revert's INNER subject, consuming each revert once — two scratches
+    // before their reverts must not both claim the same twin.
+    const at = revertPool.findIndex((r) => r.subject.slice('Revert "'.length).startsWith(c.subject))
+    if (at >= 0) redProofs.push({ scratch: c.sha, revert: revertPool.splice(at, 1)[0].sha, subject: c.subject })
   }
   try {
     const { tip } = executeCurate(cwd, { base: range.base, groups }, { toplevel, phase: phaseNum, redProofs })
