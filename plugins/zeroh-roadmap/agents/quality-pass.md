@@ -38,7 +38,10 @@ ships silently green; a surfaced item lands in front of a human).
    narration without a critical trigger, dated archaeology in docs — delete or fold into the
    transparencyReport. 6c. **Component placement** (per
    `skills/using-zeroh-roadmap/references/component-structure.md`): a component dropped loose in a
-   flat directory, or one wearing distinct state/render concerns unsplit — the dead-code class.
+   flat directory, or one wearing distinct state/render concerns unsplit — SURFACE as a finding,
+   never auto-restructure (the remedy is additive and belongs to a planned task); a deliberate
+   single-consumer subcomponent/state-hook split is EXEMPT from items 1-2's inline/over-extraction
+   tests.
    7. **Over-generic types** (`Record<string, unknown>` where a
    narrow shape is known).
 

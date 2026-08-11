@@ -25,7 +25,8 @@ exclusion; looks are judged by parity/vision gates).
 One folder: the panel component, its carved subcomponents (dock, chat, receipt row), the
 state hook (`useDeskChat.ts`) holding every service call and transition, and
 `useDeskChat.spec.ts` driving the hook's logic with a faked transport. The markup files
-carry no specs; the hook carries them all.
+carry no specs; the hook carries them all. (The hook spec is the `tdd` slice of
+`test-worthiness.md`; the surface's real-boundary flow stays `e2e` — two rows, no collision.)
 
 ## Deference — the consumer's own conventions win
 
