@@ -113,6 +113,13 @@
         "minLength": 1
       }
     },
+    "executionIsolation": {
+      "type": "string",
+      "enum": [
+        "primary",
+        "worktree"
+      ]
+    },
     "testCadence": {
       "type": "object",
       "properties": {

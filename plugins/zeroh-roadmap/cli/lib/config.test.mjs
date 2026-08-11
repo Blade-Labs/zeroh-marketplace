@@ -488,3 +488,30 @@ test('10) DRIFT — z.toJSONSchema(RoadmapConfigShape) equals the committed sche
     'cli/roadmap.config.schema.json is stale — rerun node cli/generate-config-schema.mjs',
   )
 })
+
+// ── executionIsolation (phase 2146.3) ───────────────────────────────────────
+
+test('executionIsolation: absent reads primary through the accessor, and the raw parse invents nothing', async () => {
+  const { executionIsolationOf } = await import(MOD)
+  const repo = newRepo()
+  writeConfig(repo, validConfig())
+  const cfg = loadConfig(repo)
+  assert.equal(cfg.executionIsolation, undefined, 'the raw parse invents nothing (round-trip identity holds)')
+  assert.equal(executionIsolationOf(cfg), 'primary', 'absent knob = exactly today’s behavior')
+})
+
+test('executionIsolation: "worktree" round-trips and the accessor honors it', async () => {
+  const { executionIsolationOf } = await import(MOD)
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ executionIsolation: 'worktree' }))
+  const cfg = loadConfig(repo)
+  assert.equal(cfg.executionIsolation, 'worktree')
+  assert.equal(executionIsolationOf(cfg), 'worktree')
+})
+
+test('executionIsolation: an unknown value fails the parse loud, naming the field', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ executionIsolation: 'chroot' }))
+  const e = loadErr(repo)
+  assert.ok(/executionIsolation/.test(String(e.message)), `the refusal names the field; got: ${e.message}`)
+})
