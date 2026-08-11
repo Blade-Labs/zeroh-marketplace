@@ -18,9 +18,10 @@ import { execFileSync } from 'node:child_process'
 import { join, relative } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { validateRoadmapFile, renderZodIssues } from '../lib/validate.mjs'
-import { TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
+import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
+import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
 
 function runStart(argv) {
   const n = argv.find((a) => /^\d+$/.test(a))
@@ -99,11 +100,132 @@ function resolveTarget(arg) {
   return arg
 }
 
+/** The production phase-record loader: the tsx bridge, consumer-rooted. */
+function bridgeLoadPhase(phaseFile, toplevel) {
+  const imp = bridgeImport(phaseFile, { consumerRoot: toplevel })
+  if (!imp.ok) {
+    if (imp.kind === 'tsx-absent') throw new Error(TSX_ABSENT_HINT)
+    throw new Error(`phase curate: failed to read ${phaseFile}: ${imp.stderr || `bridge ${imp.kind}`}`)
+  }
+  return imp.parsed
+}
+
+/** Parse a --groups spec ("1-3,4-6,7") into inclusive task-index ranges. */
+function parseGroupsSpec(spec) {
+  const ranges = String(spec)
+    .split(',')
+    .map((part) => {
+      const m = /^(\d+)(?:-(\d+))?$/.exec(part.trim())
+      if (!m) throw new Error(`phase curate: unparseable --groups segment '${part.trim()}'`)
+      return [Number(m[1]), Number(m[2] ?? m[1])]
+    })
+  if (ranges.length > 3) throw new Error(`phase curate: --groups asks for ${ranges.length} groups — the ceiling is 3 (born-clean means 1-3 logical commits)`)
+  return ranges
+}
+
+/**
+ * `roadmap phase curate <N>` — dry-run by default (a destructive tool shows its hand);
+ * only --apply executes. Groups: default ONE; a --groups task-id spec yields up to
+ * three, with non-task commits folding into the group of the nearest PRECEDING task
+ * commit (the first group when none precedes). A foreign interleave refuses with exit
+ * 2 and every offender named — never forced.
+ */
+export function runCurate({
+  cwd,
+  toplevel,
+  phaseNum,
+  apply = false,
+  groupsSpec = null,
+  loadPhase = (phaseFile) => bridgeLoadPhase(phaseFile, toplevel),
+  out = process.stdout,
+  err = process.stderr,
+}) {
+  const range = deriveCurationRange(cwd, phaseNum)
+  if (!range.ok) {
+    err.write(`${range.reason}\n`)
+    for (const f of range.foreign) err.write(`  foreign: ${f.sha} ${f.subject}\n`)
+    return 2
+  }
+
+  let ranges
+  try {
+    ranges = groupsSpec ? parseGroupsSpec(groupsSpec) : null
+  } catch (e) {
+    err.write(`${e.message}\n`)
+    return 1
+  }
+
+  // Group assembly: a task commit picks its group by task index; everything else folds
+  // into the nearest preceding task commit's group (the first group when none precedes).
+  const taskIndexOf = (subject) => {
+    const m = new RegExp(`\\b${phaseNum}\\.(\\d+)\\b`).exec(subject)
+    return m ? Number(m[1]) : null
+  }
+  const groupOfIndex = (idx) => {
+    if (!ranges) return 0
+    const at = ranges.findIndex(([lo, hi]) => idx >= lo && idx <= hi)
+    return at === -1 ? ranges.length - 1 : at
+  }
+  const groupCount = ranges ? ranges.length : 1
+  const buckets = Array.from({ length: groupCount }, () => [])
+  let current = 0
+  for (const c of range.commits) {
+    if (c.kind === 'task') {
+      const idx = taskIndexOf(c.subject)
+      if (idx !== null) current = groupOfIndex(idx)
+    }
+    buckets[current].push(c)
+  }
+  const nonEmpty = buckets.filter((b) => b.length > 0)
+
+  const phaseFile = join(toplevel, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
+  const record = loadPhase(phaseFile)
+  const groups = nonEmpty.map((commits) => ({ commits, message: composeLandedMessage(record, { commits }) }))
+
+  out.write(`phase ${phaseNum} curation plan — base ${range.base}\n`)
+  for (const c of range.commits) out.write(`  ${c.sha.slice(0, 9)} [${c.kind}] ${c.subject}\n`)
+  for (const [i, g] of groups.entries()) {
+    out.write(`group ${i + 1}/${groups.length} (${g.commits.length} commits):\n`)
+    out.write(`  subject: ${g.message.subject}\n`)
+    out.write(`${g.message.body.replace(/^/gm, '  ')}\n`)
+  }
+
+  if (!apply) {
+    out.write('dry run — nothing moved; re-run with --apply to land the curated commits\n')
+    return 0
+  }
+  try {
+    const { tip } = executeCurate(cwd, { base: range.base, groups })
+    out.write(`landed ${groups.length} curated commit(s), tip ${tip}\n`)
+    for (const g of groups) out.write(`  ${g.message.subject}\n`)
+    return 0
+  } catch (e) {
+    err.write(`${e.message}\n`)
+    return e instanceof CurateError ? 2 : 1
+  }
+}
+
+function runCurateCli(argv) {
+  const n = argv.find((a) => /^\d+$/.test(a))
+  if (!n) {
+    process.stderr.write('roadmap phase curate: usage: roadmap phase curate <N> [--apply] [--groups "1-3,4-6,7"]\n')
+    return 1
+  }
+  const apply = argv.includes('--apply')
+  const gi = argv.indexOf('--groups')
+  const groupsSpec = gi >= 0 ? argv[gi + 1] : null
+  const toplevel = gitToplevel(process.cwd())
+  return runCurate({ cwd: toplevel, toplevel, phaseNum: Number(n), apply, groupsSpec })
+}
+
 export default async function run(argv) {
   const sub = argv[0]
   if (sub === 'start') return runStart(argv.slice(1))
+  if (sub === 'curate') return runCurateCli(argv.slice(1))
   if (sub !== 'validate') {
-    process.stderr.write('roadmap phase: usage: roadmap phase validate <N|file> [--json]\n')
+    process.stderr.write(
+      'roadmap phase: usage: roadmap phase validate <N|file> [--json] | start <N> | curate <N> [--apply] [--groups "1-3,4-6,7"]\n',
+    )
     return 1
   }
   const { opts, positional } = parseArgs(argv.slice(1))
