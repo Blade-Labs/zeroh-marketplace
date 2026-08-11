@@ -12,7 +12,9 @@ a behavior change is maintenance debt wearing a green badge.
 | `e2e` | user-visible flows crossing a real boundary (browser, host, wire) | only driving the real seam proves the flow; a faked boundary tests the fake |
 | `none` | everything else | the steps' own `→ verify:` commands are the check |
 
-Default `none` when unsure — an unnecessary TDD loop costs more than it catches.
+Default `none` when unsure — an unnecessary TDD loop costs more than it catches. NOT a
+carve-out: a new governed surface still owes its wired itest (the consumer's own
+surface rule) — that obligation rides the surface, not this table.
 
 ## The NEVER classes — no bespoke spec, whatever the mode
 
