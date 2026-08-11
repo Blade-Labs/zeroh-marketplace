@@ -24,6 +24,24 @@
  * names what it refused on. Exercised through the injectable impl (the landArc house
  * pattern: cli/lib/landing.mjs landArc + a thin CLI wrapper), with loadPhase injected so
  * a fixture never needs tsx, and out/err captured so the printed plan is assertable.
+ *
+ * TEST-FIRST for `roadmap phase land <N>` (phase 2146.4; runLand does not exist yet → RED until
+ * it lands) at the bottom. Land is the worktree lane's exit door: curate the phase's granular
+ * history in the WORKTREE, then move those 1-3 curated commits onto the integration branch. Its
+ * invariants are the ones a one-way door owes: it REFUSES under executionIsolation 'primary'
+ * (landing is a worktree-lane act, and an absent knob reads primary — fail closed) with nothing
+ * moved; the base ref it advances comes from the CONSUMER's mergePolicy.autonomousPushRefs[0]
+ * (the fixtures name that ref 'integration' precisely so a hardcoded 'develop' cannot pass) with
+ * 'develop' only as the documented fallback; it goes THROUGH curate --apply, so the integration
+ * branch gains exactly ONE curated commit and the gate report carries the curation evidence; and
+ * when curate refuses (no gate report — evidence before surgery) the base ref never moves and the
+ * granular history survives for a retry.
+ *
+ * PINNED for the implementer: a worktree-executed phase reads and writes its gate reports under
+ * the WORKTREE's own toplevel — runLand is handed cwd === toplevel === the worktree dir (which is
+ * what gitToplevel returns inside a linked worktree, and the worktree carries the whole roadmap
+ * tree). Push is out of scope for the fixtures: they have no origin remote, so a land that
+ * completes locally is a pass.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -35,6 +53,7 @@ import { fileURLToPath } from 'node:url'
 import { derivePhaseStartSha } from '../lib/gitscan.mjs'
 import { deriveCurationRange, composeLandedMessage } from '../lib/curate.mjs'
 import { writeReport, latestReport } from '../lib/gate-report.mjs'
+import { ensureWorktree } from '../lib/worktree.mjs'
 import * as phaseCmd from './phase.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url)) // cli/commands/
@@ -744,4 +763,246 @@ test('phase curate: a scratch subject that PREFIXES another still pairs with its
     ],
     'exact inner-subject matching: the shorter scratch never steals the longer one\u2019s twin, and BOTH pairs are recorded',
   )
+})
+
+// \u2500\u2500 roadmap phase land <N> (2146.4) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+// runLand lands with 2146.4. Same lazy resolution as runCurate above: a missing export must be
+// a per-test RED naming the contract, never a link-time SyntaxError that reds the whole file.
+const runLand = (opts) => {
+  assert.equal(
+    typeof phaseCmd.runLand,
+    'function',
+    'cli/commands/phase.mjs must export runLand({ cwd, toplevel, phaseNum, loadPhase, config, out, err })',
+  )
+  return phaseCmd.runLand(opts)
+}
+
+/** The integration ref the land fixtures advance. Deliberately NOT 'develop': the config-read
+ *  case must be able to fail when the implementation hardcodes the fallback. */
+const LAND_BASE = 'integration'
+const SEED_SUBJECT = 'seed: the integration branch exists'
+
+/** git in any checkout (worktree or primary), identity pinned on the command line. */
+const gitAt = (dir, ...a) =>
+  execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    encoding: 'utf8',
+  }).trim()
+
+/** One commit in any checkout; each writes its own file so no two commits share a tree. */
+function commitAt(dir, msg, rel) {
+  const abs = join(dir, rel)
+  mkdirSync(dirname(abs), { recursive: true })
+  writeFileSync(abs, `${msg}\n`)
+  gitAt(dir, 'add', '--', rel)
+  gitAt(dir, 'commit', '-q', '-m', msg)
+  return gitAt(dir, 'rev-parse', 'HEAD')
+}
+
+/** Subjects of a ref in a checkout, newest first \u2014 the WHOLE list, because "gained ours" is not
+ *  the invariant: a land that dropped the base's own history also gains ours. */
+const subjectsAt = (dir, ref) =>
+  gitAt(dir, 'log', '--format=%s', ref)
+    .split('\n')
+    .filter(Boolean)
+
+/** -uall so an untracked directory is not collapsed to `?? dir/`. */
+const statusAt = (dir) => gitAt(dir, 'status', '--porcelain', '-uall')
+
+/**
+ * The post-gate state `phase land` is handed: a repo whose integration branch is a NON-checked-out
+ * ref, plus slot 1's real worktree (built with the shipped cli/lib/worktree.mjs) carrying the
+ * phase's granular history \u2014 move commit, one task commit, the transparency-report commit.
+ */
+function landFixture(phaseNum, baseName = LAND_BASE) {
+  const root = mkdtempSync(join(tmpdir(), 'zr-phase-land-'))
+  bases.push(root)
+  for (let k = 1; k <= 3; k += 1) bases.push(`${root}-wt-${k}`)
+  gitAt(root, 'init', '-q')
+  gitAt(root, 'config', 'user.email', 't@t')
+  gitAt(root, 'config', 'user.name', 't')
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  writeFileSync(
+    join(root, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`),
+    `export default { phase: ${phaseNum}, status: 'in-progress' }\n`,
+  )
+  writeFileSync(join(root, '.gitignore'), '.building/\n')
+  gitAt(root, 'add', '-A')
+  gitAt(root, 'commit', '-q', '-m', SEED_SUBJECT)
+  const seed = gitAt(root, 'rev-parse', 'HEAD')
+  // Host-independent: whatever init.defaultBranch is, the primary must not sit ON the base ref.
+  if (gitAt(root, 'rev-parse', '--abbrev-ref', 'HEAD') === baseName) gitAt(root, 'branch', '-m', `${baseName}-primary`)
+  gitAt(root, 'branch', baseName)
+  const primaryBranch = gitAt(root, 'rev-parse', '--abbrev-ref', 'HEAD')
+
+  const { dir: wt } = ensureWorktree(root, 1, { baseRef: baseName })
+  const granular = [
+    commitAt(wt, `docs(roadmap): phase ${phaseNum} \u2014 move to in-progress`, 'roadmap/move.txt'),
+    commitAt(wt, `feat(cli): phase ${phaseNum} \u2014 ${phaseNum}.1 the task`, 'cli/lib/thing.txt'),
+    commitAt(wt, `docs(roadmap): phase ${phaseNum} \u2014 record the transparency report`, 'roadmap/report.txt'),
+  ]
+  const granularSubjects = granular.map((sha) => gitAt(wt, 'log', '-1', '--format=%s', sha))
+  const range = deriveCurationRange(wt, phaseNum)
+  assert.equal(range.ok, true, `fixture bug: the worktree range must derive before it can be landed: ${range.reason ?? ''}`)
+  assert.equal(range.base, seed, 'fixture bug: the curation base is the integration tip the worktree branched from')
+
+  const record = recordOf(phaseNum, 'Land a phase from the session worktree', [
+    {
+      id: `${phaseNum}.1`,
+      title: 'The task',
+      transparencyReport: { whatWasDone: 'built it in the session worktree', compromises: 'None' },
+    },
+  ])
+
+  return {
+    root,
+    wt,
+    seed,
+    baseName,
+    primaryBranch,
+    record,
+    range,
+    granularSubjects,
+    git: (...a) => gitAt(root, ...a),
+    baseTip: () => gitAt(root, 'rev-parse', `refs/heads/${baseName}`),
+    baseSubjects: () => subjectsAt(root, `refs/heads/${baseName}`),
+  }
+}
+
+/** The mergePolicy block a consumer carries; autonomousPushRefs[0] is the ref land advances. */
+const mergePolicyFor = (root, ref) => ({
+  arcIntegration: 'autonomous',
+  maxOpenFollowups: 0,
+  autonomousPushRefs: [ref],
+  primaryCheckout: root,
+})
+
+test('phase land \u2014 under executionIsolation "primary" (and under an ABSENT knob) it refuses with exit 1 naming the knob, and nothing moves', () => {
+  const f = landFixture(90)
+  seedGateReport(f.wt, 90) // the evidence is present: the KNOB is the only thing refusing here
+
+  // Absent reads primary (executionIsolationOf) \u2014 a land that ran on an unconfigured consumer
+  // would rewrite the shared checkout's history behind the operator's back.
+  for (const config of [{ executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) }, {}]) {
+    const out = sink()
+    const err = sink()
+    const code = runLand({ cwd: f.wt, toplevel: f.wt, phaseNum: 90, loadPhase: () => f.record, config, out, err })
+
+    const named = JSON.stringify(config)
+    assert.equal(code, 1, `landing outside the worktree lane is a configuration refusal \u2192 exit 1 (config ${named}); stderr:\n${err.text}`)
+    assert.match(err.text, /executionIsolation/, `the refusal must name the knob the operator has to flip (config ${named}); got:\n${err.text}`)
+    assert.equal(f.baseTip(), f.seed, `the integration ref never moved (config ${named})`)
+    assert.deepEqual(
+      subjectsAt(f.wt, 'HEAD'),
+      [...f.granularSubjects].reverse().concat(SEED_SUBJECT),
+      `nothing was curated either (config ${named}) \u2014 a refusal that had already rewritten history is not a refusal`,
+    )
+  }
+})
+
+test('phase land \u2014 under "worktree" it curates then lands ONE commit on the ref mergePolicy names, leaving the worktree clean on the new tip', () => {
+  const f = landFixture(91)
+  const expected = composeLandedMessage(f.record, { commits: f.range.commits })
+  seedGateReport(f.wt, 91)
+  const out = sink()
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 91,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'worktree', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out,
+    err,
+  })
+
+  assert.equal(code, 0, `a clean land exits 0; stderr:\n${err.text}`)
+  assert.deepEqual(
+    f.baseSubjects(),
+    [expected.subject, SEED_SUBJECT],
+    'the integration branch gained EXACTLY the curated commit, with its own history intact underneath \u2014 not the granular task commits, and not a second copy',
+  )
+  assert.equal(f.git('rev-list', '--count', `${f.seed}..refs/heads/${f.baseName}`), '1', 'one curated commit, one new commit on the base')
+  assert.equal(f.git('rev-list', '--merges', `${f.seed}..refs/heads/${f.baseName}`), '', 'the land is a rebase + fast-forward \u2014 a merge commit means the ff discipline was abandoned')
+  for (const subject of f.granularSubjects) {
+    assert.ok(!f.baseSubjects().includes(subject), `the granular subject "${subject}" must NOT reach the integration branch \u2014 that is what curate is for`)
+  }
+
+  assert.equal(gitAt(f.wt, 'rev-parse', 'HEAD'), f.baseTip(), 'the worktree ends on the new tip \u2014 the next phase starts from what actually landed')
+  assert.equal(f.git('rev-parse', 'refs/heads/wt/1'), f.baseTip(), 'and the wt/1 BRANCH moved with it, not merely a detached HEAD')
+  assert.equal(gitAt(f.wt, 'rev-parse', '--abbrev-ref', 'HEAD'), 'wt/1', 'still on the scratch head')
+  assert.equal(statusAt(f.wt), '', 'the worktree ends CLEAN \u2014 a session that inherits rebase wreckage cannot start its next phase')
+
+  // Land goes THROUGH curate --apply: the curation evidence is the proof, and it is what review
+  // and eval read after the granular shas become unreachable.
+  const rep = latestReport(f.wt, 91)
+  assert.ok(rep?.report.curation, 'the gate report must carry the curation block \u2014 land curates, it does not land granular commits')
+  assert.deepEqual(rep.report.curation.landedSubjects, [expected.subject], 'landedSubjects is the subject that reached the branch')
+  assert.equal(rep.report.curation.squashedCount, f.range.commits.length, 'squashedCount counts every commit the land swallowed')
+  assert.ok(out.text.includes(f.baseName), `land must name the ref it advanced \u2014 the operator reports it; got:\n${out.text}`)
+
+  // The primary checkout belongs to a sibling session mid-phase.
+  assert.equal(f.git('rev-parse', 'HEAD'), f.seed, 'the primary checkout\u2019s HEAD never moves \u2014 only the base REF does')
+  assert.equal(f.git('rev-parse', '--abbrev-ref', 'HEAD'), f.primaryBranch, 'nor its branch')
+  assert.equal(statusAt(f.root), '', 'and the primary is left clean')
+})
+
+test('phase land \u2014 with NO mergePolicy the base ref falls back to develop (the documented default), not to whatever ref happens to exist', () => {
+  const f = landFixture(92, 'develop')
+  const expected = composeLandedMessage(f.record, { commits: f.range.commits })
+  seedGateReport(f.wt, 92)
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 92,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'worktree' },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 0, `the fallback base must land, not refuse; stderr:\n${err.text}`)
+  assert.deepEqual(f.baseSubjects(), [expected.subject, SEED_SUBJECT], 'develop is the fallback integration ref when the consumer names none')
+  assert.equal(gitAt(f.wt, 'rev-parse', 'HEAD'), f.baseTip(), 'and the worktree follows the landed tip')
+})
+
+test('phase land \u2014 a curate refusal (no gate report) lands NOTHING: the base ref is unmoved and the granular history survives for a retry', () => {
+  const f = landFixture(93)
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 93,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'worktree', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.notEqual(code, 0, `land must propagate curate\u2019s refusal \u2014 evidence before surgery; stderr:\n${err.text}`)
+  assert.ok(/no run report/.test(err.text), `the refusal names the missing report; got:\n${err.text}`)
+  assert.equal(f.baseTip(), f.seed, 'a refused curate must never reach the land step \u2014 the integration ref is unmoved')
+  assert.deepEqual(f.baseSubjects(), [SEED_SUBJECT], 'and the branch carries only its own history')
+  assert.deepEqual(
+    subjectsAt(f.wt, 'HEAD'),
+    [...f.granularSubjects].reverse().concat(SEED_SUBJECT),
+    'the granular commits are intact in the worktree, so the phase is re-landable once the gate report exists',
+  )
+})
+
+test('phase \u2014 the dispatcher advertises `land <N>` beside validate/start/curate', () => {
+  const { root } = makeRepo()
+
+  const res = spawnSync('node', [BIN, 'phase'], { cwd: root, encoding: 'utf8' })
+
+  assert.equal(res.status, 1, `a bare \`roadmap phase\` is a usage error \u2192 exit 1; stderr:\n${res.stderr}`)
+  assert.match(res.stderr, /land <N>/, `the usage line must advertise the land subcommand; got:\n${res.stderr}`)
+  for (const sub of ['validate', 'start', 'curate']) {
+    assert.ok(res.stderr.includes(sub), `the existing subcommand '${sub}' must stay advertised; got:\n${res.stderr}`)
+  }
 })

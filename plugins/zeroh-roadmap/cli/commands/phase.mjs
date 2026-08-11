@@ -26,6 +26,8 @@ import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
+import { landPhase } from '../lib/worktree.mjs'
+import { loadConfig, executionIsolationOf } from '../lib/config.mjs'
 
 function runStart(argv) {
   const n = argv.find((a) => /^\d+$/.test(a))
@@ -238,6 +240,61 @@ export function runCurate({
   }
 }
 
+/**
+ * `roadmap phase land <N>` — the worktree lane's closing act: curate --apply, then land
+ * the curated commits on the integration branch (rebase-onto-tip + guarded ff), then
+ * push when an origin exists and the ref is push-authorized. REFUSES under primary
+ * isolation: landing rewrites and moves refs, which only the worktree lane makes safe.
+ */
+export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr }) {
+  if (executionIsolationOf(config) !== 'worktree') {
+    err.write(
+      `phase land: executionIsolation is '${executionIsolationOf(config)}' — landing is a worktree-lane act; set executionIsolation: "worktree" in roadmap.config.json to activate the lane\n`,
+    )
+    return 1
+  }
+  const curateCode = runCurate({ cwd, toplevel, phaseNum, apply: true, loadPhase, out, err })
+  if (curateCode !== 0) return curateCode
+  const baseRef = config?.mergePolicy?.autonomousPushRefs?.[0] ?? 'develop'
+  let landed
+  try {
+    landed = landPhase(cwd, baseRef)
+  } catch (e) {
+    err.write(`${e.message}\n`)
+    return 2
+  }
+  out.write(`landed ${landed.landed} commit(s) on ${baseRef}, tip ${landed.tip}\n`)
+  const hasOrigin = (() => {
+    try {
+      execFileSync('git', ['-C', cwd, 'remote', 'get-url', 'origin'], { stdio: 'ignore' })
+      return true
+    } catch {
+      return false
+    }
+  })()
+  if (hasOrigin && (config?.mergePolicy?.autonomousPushRefs ?? []).includes(baseRef)) {
+    try {
+      execFileSync('git', ['-C', cwd, 'push', 'origin', baseRef], { stdio: 'ignore', timeout: 120_000 })
+      out.write(`pushed ${baseRef} to origin\n`)
+    } catch (e) {
+      err.write(`phase land: the local land succeeded but the push failed — push ${baseRef} manually (${e.message})\n`)
+      return 2
+    }
+  }
+  return 0
+}
+
+function runLandCli(argv) {
+  const n = argv.find((a) => /^\d+$/.test(a))
+  if (!n) {
+    process.stderr.write('roadmap phase land: usage: roadmap phase land <N>\n')
+    return 1
+  }
+  const toplevel = gitToplevel(process.cwd())
+  const config = loadConfig(toplevel)
+  return runLand({ cwd: toplevel, toplevel, phaseNum: Number(n), config })
+}
+
 function runCurateCli(argv) {
   const gi = argv.indexOf('--groups')
   const groupsSpec = gi >= 0 ? argv[gi + 1] : null
@@ -264,9 +321,10 @@ export default async function run(argv) {
   const sub = argv[0]
   if (sub === 'start') return runStart(argv.slice(1))
   if (sub === 'curate') return runCurateCli(argv.slice(1))
+  if (sub === 'land') return runLandCli(argv.slice(1))
   if (sub !== 'validate') {
     process.stderr.write(
-      'roadmap phase: usage: roadmap phase validate <N|file> [--json] | start <N> | curate <N> [--apply] [--groups "1-3,4-6,7"]\n',
+      'roadmap phase: usage: roadmap phase validate <N|file> [--json] | start <N> | curate <N> [--apply] [--groups "1-3,4-6,7"] | land <N>\n',
     )
     return 1
   }

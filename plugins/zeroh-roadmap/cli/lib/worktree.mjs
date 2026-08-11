@@ -54,6 +54,13 @@ function readSlots(root) {
   return rows.map((r) => ({ ...r, slot: Number(r.slot), pid: Number(r.pid) }))
 }
 
+/** The registry rows as recorded (dead claimers included — pruning is claimSlot's job),
+ *  each annotated with live-ness. THE reader for `worktree status`: a second tolerant
+ *  parser forked elsewhere is exactly the double-booking hazard the loud parse guards. */
+export function listSlots(root) {
+  return readSlots(root).map((r) => ({ ...r, dir: `${root}-wt-${r.slot}`, live: alive(r.pid) }))
+}
+
 function writeSlots(root, rows) {
   mkdirSync(join(root, '.building'), { recursive: true })
   writeFileSync(registryPath(root), JSON.stringify(rows, null, 2) + '\n')
