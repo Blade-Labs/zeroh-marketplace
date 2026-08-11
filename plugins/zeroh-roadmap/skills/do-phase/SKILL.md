@@ -117,7 +117,9 @@ absorb phase work — never another phase-executor, `Explore`, or a fork for a "
 
 ## Curate the landed history
 
-After the gate goes green, before Complete + return: run `roadmap phase curate <N>` (a DRY RUN —
+After the gate goes green, before Complete + return (that order is BINDING: `docs(roadmap): mark
+phase N complete` carries no `—` boundary, so a completion commit inside the range reads as
+foreign and refuses the whole curate): run `roadmap phase curate <N>` (a DRY RUN —
 read the plan: range, classification, groups, composed messages), then re-run with `--apply` to
 land the phase as 1-3 logical commits (`--groups "1-3,4-6"` splits by task-id ranges when the
 phase is genuinely composite). The command records the curation evidence — squashed SHAs and

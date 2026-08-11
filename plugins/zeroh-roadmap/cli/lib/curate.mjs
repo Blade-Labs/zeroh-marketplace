@@ -1,13 +1,13 @@
 /**
  * curate — `roadmap phase curate <N>`: the do-phase squash step that lands a phase's
- * task/gate/scratch history as 1-3 logical commits (phase 2145, the born-clean ruling).
+ * task/gate/scratch history as 1-3 logical commits (the born-clean ruling).
  *
  * Range derivation wraps gitscan's derivePhaseStartSha (the ONE em-dash rule home —
  * never a second grammar) and walks base..HEAD oldest-first. Every commit in the range
  * must belong to the phase; a sibling session's commit inside it would make a squash
  * rewrite someone else's work, so the ONLY safe answer to a foreign interleave is a
  * typed refusal naming the offenders — history staying granular is the honest fallback
- * until the session-worktree lane (phase 2146) makes interleaves impossible.
+ * until the session-worktree lane makes interleaves impossible.
  */
 import { execFileSync } from 'node:child_process'
 
@@ -148,28 +148,24 @@ const TRAILER = 'Co-Authored-By: Claude <noreply@anthropic.com>'
  *  only (state bookkeeping, scratch/revert pairs and unparseable subjects never vote);
  *  ties break by first occurrence. */
 function majorityPrefix(commits) {
-  const votes = { type: new Map(), scope: new Map() }
+  const types = new Map()
+  const scopes = new Map()
   for (const c of commits) {
     if (c.kind !== 'task' && c.kind !== 'gate-fix') continue
     const m = /^([a-z]+)\(([a-z0-9-]+)\):/.exec(c.subject)
     if (!m) continue
-    for (const [key, val] of [
-      ['type', m[1]],
-      ['scope', m[2]],
-    ]) {
-      const map = votes[key]
-      if (!map.has(val)) map.set(val, { count: 0, first: map.size })
-      map.get(val).count += 1
-    }
+    types.set(m[1], (types.get(m[1]) ?? 0) + 1)
+    scopes.set(m[2], (scopes.get(m[2]) ?? 0) + 1)
   }
+  // Map iteration is insertion-ordered, so a STRICT > keeps the first-seen winner on a tie.
   const pick = (map, fallback) => {
     let best = null
-    for (const [val, v] of map) {
-      if (!best || v.count > best.v.count) best = { val, v }
+    for (const [val, count] of map) {
+      if (!best || count > best.count) best = { val, count }
     }
     return best ? best.val : fallback
   }
-  return { type: pick(votes.type, 'chore'), scope: pick(votes.scope, 'repo') }
+  return { type: pick(types, 'chore'), scope: pick(scopes, 'repo') }
 }
 
 /**

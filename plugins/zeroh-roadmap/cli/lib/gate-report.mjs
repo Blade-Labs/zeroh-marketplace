@@ -43,7 +43,7 @@ const AgentRoundShape = z.object({
   recordedAt: z.string(),
 })
 
-/** Curation evidence (phase 2145): recorded BEFORE the squash so the granular record —
+/** Curation evidence: recorded BEFORE the squash so the granular record —
  *  above all the scratch/revert RED-proof pairs, unreachable after the rewrite — keeps a
  *  durable home review-phase and eval can read. */
 const CurationShape = z.object({
@@ -152,8 +152,7 @@ export function appendAgentRound(toplevel, phase, roundInput) {
 export function recordCuration(toplevel, phase, block) {
   const latest = latestReport(toplevel, phase)
   if (!latest) throw new Error(`gate report: no run report for phase ${phase} to record curation evidence into`)
-  const updated = { ...latest.report, curation: CurationShape.parse(block) }
-  const validated = GateRunReportShape.parse(updated)
+  const validated = GateRunReportShape.parse({ ...latest.report, curation: block })
   writeFileSync(latest.path, JSON.stringify(validated, null, 2) + '\n')
   return validated
 }

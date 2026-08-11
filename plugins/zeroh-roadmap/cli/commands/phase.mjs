@@ -11,6 +11,10 @@
  * executor-start beacon. Idempotent on in-progress (exit 0, no second commit);
  * terminal status refuses exit 2; no recognizable status pattern refuses exit 1.
  *
+ * roadmap phase curate <N> [--apply] [--groups "1-3,4-6"] — the born-clean squash step
+ * (cli/lib/curate.mjs): dry run by default, --apply lands the phase's task/gate history
+ * as 1-3 curated commits, a foreign interleave refuses rather than rewrite it.
+ *
  * Exit: 0 clean · 1 usage/config/toolchain · 2 validation failed / refused.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -155,8 +159,6 @@ export function runCurate({
     return 1
   }
 
-  // Group assembly: a task commit picks its group by task index; everything else folds
-  // into the nearest preceding task commit's group (the first group when none precedes).
   const taskIndexOf = (subject) => {
     const m = new RegExp(`\\b${phaseNum}\\.(\\d+)\\b`).exec(subject)
     return m ? Number(m[1]) : null
@@ -206,14 +208,23 @@ export function runCurate({
 }
 
 function runCurateCli(argv) {
-  const n = argv.find((a) => /^\d+$/.test(a))
+  const gi = argv.indexOf('--groups')
+  const groupsSpec = gi >= 0 ? argv[gi + 1] : null
+  // A --groups that lost its value must refuse, never fall through to the ONE-group
+  // default: under --apply that silently squashes a split the caller asked to keep apart.
+  if (gi >= 0 && (!groupsSpec || groupsSpec.startsWith('--'))) {
+    process.stderr.write('roadmap phase curate: --groups needs a spec, e.g. --groups "1-3,4-6"\n')
+    return 1
+  }
+  // The phase number is never read out of the --groups value: `curate --groups 3 --apply`
+  // with the number forgotten would otherwise curate phase 3.
+  const specIdx = gi >= 0 ? gi + 1 : -1
+  const n = argv.find((a, i) => i !== specIdx && /^\d+$/.test(a))
   if (!n) {
     process.stderr.write('roadmap phase curate: usage: roadmap phase curate <N> [--apply] [--groups "1-3,4-6,7"]\n')
     return 1
   }
   const apply = argv.includes('--apply')
-  const gi = argv.indexOf('--groups')
-  const groupsSpec = gi >= 0 ? argv[gi + 1] : null
   const toplevel = gitToplevel(process.cwd())
   return runCurate({ cwd: toplevel, toplevel, phaseNum: Number(n), apply, groupsSpec })
 }
