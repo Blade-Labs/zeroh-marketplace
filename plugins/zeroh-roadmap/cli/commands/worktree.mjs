@@ -1,5 +1,5 @@
 /**
- * roadmap worktree — the session worktree lane's command surface (phase 2146):
+ * roadmap worktree — the session worktree lane's command surface:
  *
  *   roadmap worktree up                  claim a slot + ensure the worktree; prints the DIR
  *                                        (last stdout line) the session cds into
@@ -15,18 +15,16 @@ import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
-import { loadConfig } from '../lib/config.mjs'
+import { loadConfig, integrationRefOf } from '../lib/config.mjs'
 import { claimSlot, ensureWorktree, resetForPhase, listSlots, WorktreeError } from '../lib/worktree.mjs'
 
+/** A config that will not load REFUSES here (the ConfigError → exit 1 house posture the bin
+ *  dispatcher owns): guessing 'develop' would reset or land the lane onto a branch the
+ *  consumer never named. */
 function integrationRef(root, argv) {
   const bi = argv.indexOf('--base')
   if (bi >= 0 && argv[bi + 1]) return argv[bi + 1]
-  try {
-    const config = loadConfig(root)
-    return config.mergePolicy?.autonomousPushRefs?.[0] ?? 'develop'
-  } catch {
-    return 'develop'
-  }
+  return integrationRefOf(loadConfig(root))
 }
 
 /** npm ci per subdir carrying a package.json — the codex-lane install pattern; a repo
@@ -48,16 +46,19 @@ function installDeps(dir) {
 }
 
 function runUp(root, argv) {
-  const { slot, dir } = claimSlot(root)
+  // Base BEFORE claim: a config refusal must not leave a slot row behind for a worktree it
+  // never created.
   const baseRef = integrationRef(root, argv)
-  const base = (() => {
-    try {
-      execFileSync('git', ['-C', root, 'rev-parse', '--verify', `${baseRef}^{commit}`], { stdio: 'ignore' })
-      return baseRef
-    } catch {
-      return 'HEAD'
-    }
-  })()
+  let base = baseRef
+  try {
+    execFileSync('git', ['-C', root, 'rev-parse', '--verify', `${baseRef}^{commit}`], { stdio: 'ignore' })
+  } catch {
+    // A consumer whose integration ref does not exist yet still gets a worktree, but the
+    // session must hear WHERE it started — `worktree reset` is what puts it on the real tip.
+    base = 'HEAD'
+    process.stderr.write(`roadmap worktree up: ${baseRef} does not resolve in ${root} — starting the worktree at HEAD instead\n`)
+  }
+  const { slot, dir } = claimSlot(root)
   ensureWorktree(root, slot, { baseRef: base, installDeps })
   process.stdout.write(`${dir}\n`)
   return 0

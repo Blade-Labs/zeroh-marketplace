@@ -1,5 +1,5 @@
 /**
- * worktree — the session worktree lane (phase 2146): each session claims ONE persistent
+ * worktree — the session worktree lane: each session claims ONE persistent
  * worktree with ONE reusable scratch head (`wt/<k>`), resets it to the integration tip at
  * phase start, and lands curated commits back on the integration branch. No per-phase
  * branches, nothing accumulates.

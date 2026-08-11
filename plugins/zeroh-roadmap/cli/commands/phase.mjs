@@ -27,7 +27,7 @@ import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
 import { landPhase } from '../lib/worktree.mjs'
-import { loadConfig, executionIsolationOf } from '../lib/config.mjs'
+import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
 
 function runStart(argv) {
   const n = argv.find((a) => /^\d+$/.test(a))
@@ -247,15 +247,16 @@ export function runCurate({
  * isolation: landing rewrites and moves refs, which only the worktree lane makes safe.
  */
 export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr }) {
-  if (executionIsolationOf(config) !== 'worktree') {
+  const isolation = executionIsolationOf(config)
+  if (isolation !== 'worktree') {
     err.write(
-      `phase land: executionIsolation is '${executionIsolationOf(config)}' — landing is a worktree-lane act; set executionIsolation: "worktree" in roadmap.config.json to activate the lane\n`,
+      `phase land: executionIsolation is '${isolation}' — landing is a worktree-lane act; set executionIsolation: "worktree" in roadmap.config.json to activate the lane\n`,
     )
     return 1
   }
   const curateCode = runCurate({ cwd, toplevel, phaseNum, apply: true, loadPhase, out, err })
   if (curateCode !== 0) return curateCode
-  const baseRef = config?.mergePolicy?.autonomousPushRefs?.[0] ?? 'develop'
+  const baseRef = integrationRefOf(config)
   let landed
   try {
     landed = landPhase(cwd, baseRef)

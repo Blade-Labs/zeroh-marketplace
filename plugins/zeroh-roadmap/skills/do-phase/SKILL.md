@@ -34,11 +34,12 @@ reorder/skip them, or mark a task done before it is committed.
 
 ## Step 0 — read the phase; run the tripwires
 
-**Worktree lane first** (when the consumer's `roadmap.config.json` sets `executionIsolation:
-"worktree"`): run `roadmap worktree up`, cd into the printed dir, `roadmap worktree reset` to
-put the scratch head on the integration tip, and execute the WHOLE phase there — the primary
-checkout never sees task commits. Under `"primary"` (or absent) everything below runs where it
-always did.
+**Worktree lane first** (a STANDALONE phase, when the consumer's `roadmap.config.json` sets
+`executionIsolation: "worktree"`): run `roadmap worktree up`, cd into the printed dir, `roadmap
+worktree reset` to put the scratch head on the integration tip, and execute the WHOLE phase
+there — the primary checkout never sees task commits. Under `"primary"` (or absent) everything
+below runs where it always did. **Arc-mode phases never claim a slot**: they commit in the arc's
+own worktree on the arc branch, which `roadmap arc land` integrates.
 
 Read the phase (`status` must be `backlog`/`in-progress`; terminal = stop). If it declares
 `assumptions[]`, run each `verify` **before any code**: any failure ⇒ STOP and escalate with the
@@ -92,8 +93,8 @@ matching 1369.
 curation should already aim at): `type(scope): phase N — <imperative summary>` ≤72 chars — the
 change to the tree, never the story of making it (no round numbers, no task bookkeeping in the
 subject; that detail lives in the body and the gate report). Task-commit prose is working
-material: once the session-worktree lane is active it stays worktree-internal and only the
-curated commits reach the integration branch.
+material: in the worktree lane it stays worktree-internal and only the curated commits reach
+the integration branch.
 
 ## The gate (after the last task)
 

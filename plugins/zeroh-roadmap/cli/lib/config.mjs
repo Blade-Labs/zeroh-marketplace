@@ -145,10 +145,10 @@ export const RoadmapConfigShape = z.strictObject({
   // (biome on a roadmap-only diff) exits non-zero over nothing. Empty after filtering ⇒ the
   // NAMED estate skip, never a red. Glob semantics = ladder.mjs matchGlobPath (the one matcher).
   lintDiffMatches: z.array(nonEmpty).min(1).optional(),
-  // Where phases EXECUTE (phase 2146): 'primary' = today's shared-checkout behavior (the
-  // kill-switch is flipping back to it); 'worktree' = each session claims a per-session
-  // worktree and lands curated commits via `roadmap phase land`. Optional (not defaulted)
-  // so the parse round-trips byte-faithful; read through executionIsolationOf().
+  // Where phases EXECUTE: 'primary' = today's shared-checkout behavior (the kill-switch is
+  // flipping back to it); 'worktree' = each session claims a per-session worktree and lands
+  // curated commits via `roadmap phase land`. Optional (not defaulted) so the parse
+  // round-trips byte-faithful; read through executionIsolationOf().
   executionIsolation: z.enum(['primary', 'worktree']).optional(),
   testCadence: TestCadenceShape.optional(),
   mergePolicy: MergePolicyShape.optional(),
@@ -174,6 +174,19 @@ function baseTipHasConfig(toplevel, baseRef) {
   }
 }
 
+/** The effective execution-isolation mode: absent reads 'primary' (exactly today's
+ *  behavior — the deliberate opt-in is writing 'worktree' into the consumer config). */
+export function executionIsolationOf(config) {
+  return config?.executionIsolation ?? 'primary'
+}
+
+/** The integration ref phases reset onto and land back on: the FIRST push-authorized ref, with
+ *  'develop' the documented fallback when a consumer names none. The one reader — `worktree
+ *  reset` and `phase land` must never disagree about which branch the lane targets. */
+export function integrationRefOf(config) {
+  return config?.mergePolicy?.autonomousPushRefs?.[0] ?? 'develop'
+}
+
 /**
  * Load + validate the consumer's roadmap.config.json.
  * @param {string} cwd  a path inside the consumer repo
@@ -181,12 +194,6 @@ function baseTipHasConfig(toplevel, baseRef) {
  * @returns the parsed, strictly-validated config
  * @throws {ConfigError}
  */
-/** The effective execution-isolation mode: absent reads 'primary' (exactly today's
- *  behavior — the deliberate opt-in is writing 'worktree' into the consumer config). */
-export function executionIsolationOf(config) {
-  return config?.executionIsolation ?? 'primary'
-}
-
 export function loadConfig(cwd, opts = {}) {
   const toplevel = gitToplevel(cwd)
   const configPath = process.env.ROADMAP_CONFIG || join(toplevel, 'roadmap', 'roadmap.config.json')
