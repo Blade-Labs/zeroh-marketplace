@@ -82,6 +82,13 @@ phase N gate RX` · `docs(roadmap): mark phase N complete`. The CLI parses these
 derivation, unverified-done detection, the beacon-stamp hook) — the `—` boundary stops 136
 matching 1369.
 
+**The LANDED subject** (what `phase curate` composes, and the style every commit that survives
+curation should already aim at): `type(scope): phase N — <imperative summary>` ≤72 chars — the
+change to the tree, never the story of making it (no round numbers, no task bookkeeping in the
+subject; that detail lives in the body and the gate report). Task-commit prose is working
+material: once the session-worktree lane is active it stays worktree-internal and only the
+curated commits reach the integration branch.
+
 ## The gate (after the last task)
 
 `roadmap gate plan <N>` prints the resolved cell (slots, scopes, floors, agent chain) for the
@@ -107,6 +114,19 @@ nothing to fix` if empty).
 
 **Sub-agent rule:** gate agents run synchronously; only the architect and `test-engineer` may
 absorb phase work — never another phase-executor, `Explore`, or a fork for a "too-big" task.
+
+## Curate the landed history
+
+After the gate goes green, before Complete + return: run `roadmap phase curate <N>` (a DRY RUN —
+read the plan: range, classification, groups, composed messages), then re-run with `--apply` to
+land the phase as 1-3 logical commits (`--groups "1-3,4-6"` splits by task-id ranges when the
+phase is genuinely composite). The command records the curation evidence — squashed SHAs and
+every scratch/revert RED-proof pair — into the gate report BEFORE the squash, so nothing the
+review relied on goes unreachable. A **foreign-commit refusal** (a sibling session's commit
+interleaves the range) is recorded in the phase's `limitations` and left alone — history staying
+granular is the honest fallback, NEVER a forced rewrite of someone else's work. (The
+session-worktree lane that makes interleaves impossible arrives with its own config flip; until
+then expect refusals on a busy shared checkout.)
 
 ## Complete + return
 
