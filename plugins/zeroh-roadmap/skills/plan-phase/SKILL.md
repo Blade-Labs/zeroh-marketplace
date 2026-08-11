@@ -165,7 +165,8 @@ not queued.
 - **Every task:** real `steps[].file` paths; a concrete `steps[].description` with its `→ verify:`
   clause; 1–4 observable `acceptanceCriteria` (slot command or UI/API observable, never
   "implementation verified"); complete `files[]`. One task = one focused change in one pass;
-  "and also…" is two tasks.
+  "and also…" is two tasks. A task producing or touching a doc names
+  `skills/using-zeroh-roadmap/references/documentation-rules.md` as its standard.
 - **Ordering:** foundation (schema/utils/types) → consumers → validation-gate task last; deps flow
   downward (N.3 may depend on N.2, never N.4).
 - **`testMode`:** `tdd` for pure logic/error-paths/business-rules · `e2e` for browser/user-flow ·

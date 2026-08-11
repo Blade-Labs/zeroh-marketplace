@@ -64,7 +64,9 @@ For each task in order:
    event kills the Monitor's wake silently; the long-run protocol covers genuinely long runs).
 3. **Commit** — `<type>(<scope>): phase N — <task title>`. First, when the consumer binds a
    formatter (the `lint-diff` binding's `--write` twin, e.g. biome), run it on the task's
-   touched files.
+   touched files. A doc-touching task follows
+   `skills/using-zeroh-roadmap/references/documentation-rules.md`; a decision without a
+   critical trigger or user flag records itself in the `transparencyReport`, never a doc.
 4. **Persist** `transparencyReport` + `done: true` + `doneDate`, same commit.
 5. **Continue immediately** — the task boundary is a commit boundary, never a turn boundary.
 
