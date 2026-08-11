@@ -86,8 +86,8 @@ Bonus ratifications Mode A owns (a "specialist path" = a `gateSpecialists` path 
   whose diff is declarative planning a NEW test file, absent that verdict, = NEEDS WORK (point it
   at the consumer's ratchets/lint lane); a byte-for-byte content assertion over a data file = NEEDS WORK.
 - **License check:** a task introducing an external dep/asset names its license + placement tier
-  per `skills/using-zeroh-roadmap/references/external-assets-licensing.md`; missing or banned-tier
-  = NEEDS WORK.
+  per `skills/using-zeroh-roadmap/references/external-assets-licensing.md`; missing, banned-tier,
+  or a server-side-only license placed in a shipped client artifact = NEEDS WORK.
 - **`reviewScope` ratification** (declared below `full`): THIS review IS the ratification the gate
   trusts. Verify no `keyFiles`/`files[]` path is a specialist path, the rung fits the diff (`none`
   docs/data only; `light` only small/mechanical — no new governed surface/contract/ledger-kind/subtle

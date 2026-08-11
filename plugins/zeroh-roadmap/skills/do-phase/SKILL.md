@@ -51,7 +51,10 @@ status field.
 
 For each task in order:
 1. **Implement `steps`.** testMode semantics:
-   `skills/using-zeroh-roadmap/references/test-worthiness.md`. `testMode: "tdd"` — `test-engineer` FIRST with only
+   `skills/using-zeroh-roadmap/references/test-worthiness.md`. An external dep/asset is verified
+   against its planned license per
+   `skills/using-zeroh-roadmap/references/external-assets-licensing.md` BEFORE it is
+   installed/vendored. `testMode: "tdd"` — `test-engineer` FIRST with only
    problem/acceptanceCriteria/files/type-signatures (NOT `steps`); new tests scoped (RED),
    implement, scoped (GREEN), commit test+code. `"e2e"` — implement, then `test-engineer` writes
    the flow test blind to source; commit together (e2e runs at the gate). `"none"` — the steps.
@@ -67,9 +70,7 @@ For each task in order:
    formatter (the `lint-diff` binding's `--write` twin, e.g. biome), run it on the task's
    touched files. A doc-touching task follows
    `skills/using-zeroh-roadmap/references/documentation-rules.md`; a decision without a
-   critical trigger or user flag records itself in the `transparencyReport`, never a doc. An
-   external dep/asset is verified against its planned license per
-   `skills/using-zeroh-roadmap/references/external-assets-licensing.md` before it lands.
+   critical trigger or user flag records itself in the `transparencyReport`, never a doc.
 4. **Persist** `transparencyReport` + `done: true` + `doneDate`, same commit.
 5. **Continue immediately** — the task boundary is a commit boundary, never a turn boundary.
 
