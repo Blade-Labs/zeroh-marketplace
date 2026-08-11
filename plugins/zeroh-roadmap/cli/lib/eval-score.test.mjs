@@ -358,6 +358,101 @@ test('assembleAttribution — a recorded driver travels; an unrecorded one is th
   ])
 })
 
+// ── 9b. attribution: the PLANNER half (2158.2) ────────────────────────────────────────
+// `plannedBy` rides every trace phase entry (eval-collect lifts `p.plannedBy = { model }`)
+// but attribution only ever COUNTED it, so no eval could answer "does a Fable-planned phase
+// outperform an Opus-planned one". `planners` is that grouping: keyed by MODEL ALONE — a
+// planning turn has no lane to key on — and an absent plannedBy attributes to the literal
+// 'unrecorded' model, the same honest-absence discipline the drivers block already keeps.
+const sortByModel = (rows) => [...rows].sort((a, b) => a.model.localeCompare(b.model))
+
+test('assembleAttribution — planners group BY MODEL: two planners split their phases, the drivers half is untouched', () => {
+  const trace = traceFor()
+  byNum(trace, 9001).plannedBy = { model: 'claude-a' }
+  byNum(trace, 9002).plannedBy = { model: 'claude-b' }
+
+  const { planners, drivers } = assembleAttribution(trace)
+  assert.ok(Array.isArray(planners), `attribution must carry a planners array beside drivers; got ${JSON.stringify(planners)}`)
+  assert.deepEqual(
+    sortByModel(planners),
+    [
+      { model: 'claude-a', phases: [9001] },
+      { model: 'claude-b', phases: [9002] },
+    ],
+    'each planner model carries exactly the phases it planned',
+  )
+
+  // The SAME trace's executor grouping: planning attribution is independent of who drove, so
+  // adding it must not move a phase between driver rows or invent a third one.
+  assert.deepEqual(sortByModel(drivers), [
+    { model: 'claude-opus-5', lane: 'session', phases: [9001] },
+    { model: 'unrecorded', lane: 'session', phases: [9002] },
+  ])
+
+  // Grouping, not one row per phase: two phases planned by one model collapse into one entry.
+  const sameModel = traceFor()
+  for (const p of sameModel.phases) p.plannedBy = { model: 'claude-a' }
+  assert.deepEqual(assembleAttribution(sameModel).planners, [{ model: 'claude-a', phases: [9001, 9002] }])
+})
+
+test("assembleAttribution — a phase with NO plannedBy lands in the literal 'unrecorded' planner, never a guess", () => {
+  // The shipped fixture IS the mixed case: 9001 records plannedBy, 9002 records none.
+  const mixed = traceFor()
+  assert.equal(byNum(mixed, 9001).plannedBy?.model, 'claude-opus-5', 'fixture precondition: 9001 names its planner')
+  assert.equal(byNum(mixed, 9002).plannedBy, undefined, 'fixture precondition: 9002 has no plannedBy')
+
+  const { planners } = assembleAttribution(mixed)
+  assert.ok(Array.isArray(planners), `attribution must carry a planners array; got ${JSON.stringify(planners)}`)
+  assert.deepEqual(
+    sortByModel(planners),
+    [
+      { model: 'claude-opus-5', phases: [9001] },
+      { model: 'unrecorded', phases: [9002] },
+    ],
+    'a recorded planner and an unrecorded one are BOTH entries, side by side',
+  )
+  assert.ok(
+    !planners.some((p) => p.model !== 'unrecorded' && p.phases.includes(9002)),
+    'no real model id may be back-filled onto the phase whose planner was never recorded',
+  )
+
+  // Nothing recorded anywhere is one honest bucket, not an empty planners block a reader
+  // could mistake for "this arc was never planned".
+  const none = traceFor()
+  for (const p of none.phases) delete p.plannedBy
+  assert.deepEqual(assembleAttribution(none).planners, [{ model: 'unrecorded', phases: [9001, 9002] }])
+})
+
+test('assembleAttribution — a planner entry is EXACTLY { model, phases } (no lane), and drivers/reviewers are unchanged by the addition', () => {
+  const { planners, drivers, reviewers } = assembleAttribution(traceFor())
+  assert.ok(Array.isArray(planners), `planners must be an array; got ${JSON.stringify(planners)}`)
+  assert.ok(planners.length > 0, 'the fixture arc has phases, so it has at least one planner bucket')
+  for (const p of planners) {
+    assert.deepEqual(
+      Object.keys(p).sort(),
+      ['model', 'phases'],
+      `a planner row carries exactly model + phases — planning has no lane to key on; got ${JSON.stringify(p)}`,
+    )
+    assert.equal(typeof p.model, 'string')
+    assert.ok(p.model.length > 0, 'a planner model id is never the empty string')
+    assert.ok(Array.isArray(p.phases) && p.phases.length > 0, `a planner row exists because phases point at it; got ${JSON.stringify(p)}`)
+    for (const n of p.phases) assert.ok(Number.isInteger(n) && n > 0, `phase numbers stay positive ints; got ${JSON.stringify(n)}`)
+  }
+  // Every phase is attributed exactly once across the planner buckets: no drop, no double-count.
+  assert.deepEqual(planners.flatMap((p) => p.phases).sort((a, b) => a - b), [9001, 9002])
+
+  // The other two halves, pinned at TODAY's values for this same trace: the planners block is
+  // an addition, not a rewrite.
+  assert.deepEqual(sortByModel(drivers), [
+    { model: 'claude-opus-5', lane: 'session', phases: [9001] },
+    { model: 'unrecorded', lane: 'session', phases: [9002] },
+  ])
+  assert.deepEqual([...reviewers].sort((a, b) => a.agent.localeCompare(b.agent)), [
+    { agent: 'code-reviewer', rounds: 3 },
+    { agent: 'quality-pass', rounds: 1 },
+  ])
+})
+
 // ── 10. the ratchet: too few comparable priors ────────────────────────────────────────
 test('computeRatchet — ONE comparable prior yields a full no-baseline table, never a fake delta', () => {
   const current = mkReport({ all: 70, judgeModel: 'judge-A' })

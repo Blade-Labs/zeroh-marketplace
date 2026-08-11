@@ -533,6 +533,15 @@ export function assembleAttribution(trace) {
     if (!drivers.has(key)) drivers.set(key, { model: d.model, lane: d.lane, phases: [] })
     drivers.get(key).phases.push(p.phase)
   }
+  // Planner attribution mirrors the drivers discipline: keyed by plannedBy.model alone
+  // (planning has no lane), absence attributes to the literal 'unrecorded' — a wrong
+  // attribution is worse than a named gap.
+  const planners = new Map()
+  for (const p of trace.phases ?? []) {
+    const model = p.plannedBy?.model ?? 'unrecorded'
+    if (!planners.has(model)) planners.set(model, { model, phases: [] })
+    planners.get(model).phases.push(p.phase)
+  }
   const reviewers = new Map()
   for (const p of trace.phases ?? [])
     for (const run of p.gateRuns ?? [])
@@ -540,6 +549,7 @@ export function assembleAttribution(trace) {
 
   return {
     drivers: [...drivers.values()],
+    planners: [...planners.values()],
     reviewers: [...reviewers.entries()].map(([agent, rounds]) => ({ agent, rounds })),
   }
 }

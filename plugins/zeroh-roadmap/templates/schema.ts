@@ -1119,6 +1119,10 @@ export const ArcEvalReportShape = z.object({
         phases: z.array(z.number().int().positive()),
       }),
     ),
+    /** Planner attribution (mirrors drivers, no lane). OPTIONAL: archived reports predate it. */
+    planners: z
+      .array(z.object({ model: z.string().min(1), phases: z.array(z.number().int().positive()) }))
+      .optional(),
     reviewers: z.array(z.object({ agent: z.string().min(1), rounds: z.number().int().min(0) })),
   }),
   /**
