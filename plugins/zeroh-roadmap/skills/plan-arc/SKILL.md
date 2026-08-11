@@ -118,7 +118,8 @@ configures its design homes first. With the home bound:
 The UX standards are the consumer's, bound the same way: the `designHomes` config key (an absent key
 fails loud — surface + STOP, don't guess — exactly as above). Then:
 1. Spawn the **`ux-designer`** agent (an advisor, like the architect). It reads the consumer's UX
-   canon, designs the surface's layout within it, and **decides per arc** whether a prose layout note
+   canon, designs the surface's layout within it (component placement per
+   `skills/using-zeroh-roadmap/references/component-structure.md`), and **decides per arc** whether a prose layout note
    or a static HTML preview is warranted (preview for a net-new surface, prose for a tweak), producing
    that artifact + a recommended UX designRef.
 2. The **orchestrator** records `{ kind: 'ux', ref, status: 'reused' | 'designed', summary }` onto

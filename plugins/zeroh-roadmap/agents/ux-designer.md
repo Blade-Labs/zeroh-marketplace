@@ -17,6 +17,8 @@ records the designRef. Your return is a *recommendation*.
 surface that and STOP** (no canon to design within; never guess a path or invent a design language). Your
 design lives INSIDE the canon, never a parallel language.
 
+**Place the components** per `skills/using-zeroh-roadmap/references/component-structure.md` (reuse
+decides the home; granular splits along state/render seams) — placement is part of the design.
 **Design the layout:** structure & hierarchy (primary vs secondary, reading order); **states** (empty,
 loading, populated, error, and the honest not-yet-measured / fails-closed states the governed substrate
 implies — never a faked-full state); **components** (reuse the consumer's existing ones first; propose a

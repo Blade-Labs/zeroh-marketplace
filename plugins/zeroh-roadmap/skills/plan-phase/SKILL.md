@@ -166,7 +166,9 @@ not queued.
   clause; 1–4 observable `acceptanceCriteria` (slot command or UI/API observable, never
   "implementation verified"); complete `files[]`. One task = one focused change in one pass;
   "and also…" is two tasks. A task producing or touching a doc names
-  `skills/using-zeroh-roadmap/references/documentation-rules.md` as its standard.
+  `skills/using-zeroh-roadmap/references/documentation-rules.md` as its standard; a UI task NAMES
+  its component placement (shared home vs own folder) per
+  `skills/using-zeroh-roadmap/references/component-structure.md`.
 - **Ordering:** foundation (schema/utils/types) → consumers → validation-gate task last; deps flow
   downward (N.3 may depend on N.2, never N.4).
 - **`testMode`:** assigned per `skills/using-zeroh-roadmap/references/test-worthiness.md` — `tdd`

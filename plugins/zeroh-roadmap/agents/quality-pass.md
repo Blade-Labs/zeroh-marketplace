@@ -36,7 +36,10 @@ ships silently green; a surfaced item lands in front of a human).
    tombstones before a caller migrated). 6b. **Doc noise** (per
    `skills/using-zeroh-roadmap/references/documentation-rules.md`): session-log docs, decision
    narration without a critical trigger, dated archaeology in docs — delete or fold into the
-   transparencyReport. 7. **Over-generic types** (`Record<string, unknown>` where a
+   transparencyReport. 6c. **Component placement** (per
+   `skills/using-zeroh-roadmap/references/component-structure.md`): a component dropped loose in a
+   flat directory, or one wearing distinct state/render concerns unsplit — the dead-code class.
+   7. **Over-generic types** (`Record<string, unknown>` where a
    narrow shape is known).
 
 **Do NOT:** style rewrites (renames/import-reorders/arrow-swaps/ternary-collapsing — explicit beats
