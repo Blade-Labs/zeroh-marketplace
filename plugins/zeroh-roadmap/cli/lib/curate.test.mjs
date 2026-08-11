@@ -17,9 +17,21 @@
  * mechanism is commit-tree + update-ref (never reset --hard), a sibling session's untracked
  * and modified-unstaged files in the shared checkout must come through byte-identical.
  *
+ * TEST-FIRST for composeLandedMessage(phaseRecord, group) (phase 2145.3) at the bottom:
+ * the curated message IS the product, so the properties are (a) the subject stays inside
+ * git's 72-char subject budget while still carrying `phase N —`, the one boundary every
+ * downstream scan (gitscan, gate, derive) greps on, and truncation never severs a word;
+ * (b) the type(scope) is the MAJORITY of the work commits the group actually squashed,
+ * so the landed commit still says what kind of change it was; (c) the body names EVERY
+ * task the group swallowed — after curation those task SHAs are gone, so a title missing
+ * from the body is work that vanished from history.
+ *
  * Real seeded git repos (execFileSync git, never a shell string), the makeRepo idiom from
  * cli/commands/gate.test.mjs — the em-dash boundary and revert pairing only mean anything
- * against a real git. Run: capbuild node --test cli/lib/curate.test.mjs
+ * against a real git. The composer is pure, so its records are built inline; one case
+ * still round-trips a composed subject through a real repo, because "parses with the
+ * existing grammar" is only proven by the existing grammar.
+ * Run: capbuild node --test cli/lib/curate.test.mjs
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -43,6 +55,15 @@ const executeCurate = (...args) => {
 const CurateError = () => {
   assert.equal(typeof curate.CurateError, 'function', 'curate.mjs must export the CurateError class')
   return curate.CurateError
+}
+// 2145.3 lands composeLandedMessage — same lazy guard, same reason.
+const composeLandedMessage = (...args) => {
+  assert.equal(
+    typeof curate.composeLandedMessage,
+    'function',
+    'curate.mjs must export composeLandedMessage(phaseRecord, group)',
+  )
+  return curate.composeLandedMessage(...args)
 }
 
 /** A git repo with a root commit, plus commit()/revert() helpers returning the new SHA. */
@@ -435,4 +456,337 @@ test('executeCurate: a sibling session’s untracked + modified-unstaged files s
   assert.equal(unstaged(), 'src/shared.txt', 'the tracked edit is still MODIFIED-UNSTAGED — a reset --hard would have erased it')
   assert.equal(r.status(), preStatus, 'index and worktree state are exactly as the sibling left them')
   assert.equal(r.git('diff', '--cached', '--name-only'), '', 'curation staged nothing on the sibling’s behalf')
+})
+
+// ── composeLandedMessage: the landed message (2145.3) ────────────────────────────────
+
+/** git's own subject budget — the number every one of these subjects must live inside. */
+const SUBJECT_MAX = 72
+
+/**
+ * A group as deriveCurationRange hands it over: [subject, kind] pairs, synthetic SHAs.
+ * The composer is pure, so nothing here needs a repo — but the kinds are real, because
+ * "majority over the TASK/GATE-FIX commits" is only testable if state and scratch rows
+ * are present to be ignored.
+ */
+function groupOf(rows) {
+  return {
+    commits: rows.map(([subject, kind], i) => ({ sha: String(i + 1).padStart(40, 'a'), subject, kind })),
+  }
+}
+
+/** Everything after the `phase N —` boundary: the summary the composer derived. */
+function summaryOf(subject, phaseNum) {
+  const dash = `phase ${phaseNum} —`
+  const at = subject.indexOf(dash)
+  assert.ok(at >= 0, `the subject must carry the "${dash}" boundary every downstream scan greps on, got: ${subject}`)
+  return subject.slice(at + dash.length).trim()
+}
+
+/** The trailer test's currency — git reads trailers from the end of the message. */
+function lastNonEmptyLine(body) {
+  const line = body.split('\n').reverse().find((l) => l.trim() !== '')
+  assert.ok(line !== undefined, 'the body must not be empty')
+  return line
+}
+
+/**
+ * Assert the composed subject is a landed subject: inside the budget, one line, and
+ * carrying the em-dash boundary for phase N.
+ */
+function assertSubjectShape(subject, phaseNum) {
+  assert.equal(typeof subject, 'string')
+  assert.ok(!subject.includes('\n'), 'the subject is ONE line — executeCurate joins it to the body with a blank line')
+  assert.ok(
+    subject.length <= SUBJECT_MAX,
+    `the subject must fit git's ${SUBJECT_MAX}-char budget, got ${subject.length}: ${subject}`,
+  )
+  assert.match(subject, /^[a-z]+\([a-z0-9-]+\): phase \d+ — \S/, 'type(scope): phase N — summary')
+  assert.equal(subject, subject.trim(), 'no leading/trailing whitespace — a truncation must not leave the space it cut on')
+  assert.ok(!subject.includes('  '), `no doubled spaces in the subject: ${subject}`)
+  summaryOf(subject, phaseNum)
+}
+
+test('composeLandedMessage: the subject takes the MAJORITY type(scope) of the WORK commits and reads as phase grammar', () => {
+  // fix(cli) is the majority only if state commits do not vote: docs(roadmap) is 3 rows
+  // (a tie with fix on type, and the FIRST occurrence on scope), so an implementation
+  // that counted every commit would land docs(roadmap) here.
+  const group = groupOf([
+    ['docs(roadmap): phase 70 — move to in-progress', 'state'],
+    ['feat(cli): phase 70 — 70.1 derive the curation range', 'task'],
+    ['fix(web): phase 70 — 70.2 the console lane', 'task'],
+    ['scratch(web): phase 70 — prove the foreign tripwire bites', 'scratch'],
+    ['Revert "scratch(web): phase 70 — prove the foreign tripwire bites"', 'scratch'],
+    ['fix(cli): phase 70 gate R0 — quality-pass findings', 'gate-fix'],
+    ['fix(cli): phase 70 gate R1 — code-review findings', 'gate-fix'],
+    ['docs(roadmap): phase 70 — record the transparency report', 'state'],
+    ['docs(roadmap): phase 70 — move to done', 'state'],
+  ])
+  const phaseRecord = {
+    phase: 70,
+    name: 'Squash the phase into landed history',
+    tasks: [
+      { id: '70.1', title: 'Derive the curation range', transparencyReport: { whatWasDone: 'walked base..HEAD', compromises: 'None' } },
+      { id: '70.2', title: 'The console lane', transparencyReport: { whatWasDone: 'wired the lane', compromises: 'None' } },
+    ],
+  }
+
+  const out = composeLandedMessage(phaseRecord, group)
+
+  assert.deepEqual(Object.keys(out).sort(), ['body', 'subject'], 'the composer returns exactly subject + body')
+  assertSubjectShape(out.subject, 70)
+  assert.ok(
+    out.subject.startsWith('fix(cli): phase 70 — '),
+    `type and scope are each the majority over task+gate-fix commits (fix 3:1, cli 3:1), got: ${out.subject}`,
+  )
+  // The summary is derived from the phase NAME, not a constant: its tail survives verbatim
+  // at this length (21 prefix chars + a 36-char name is well inside the budget).
+  assert.ok(
+    out.subject.includes('landed history'),
+    `the summary must come from phaseRecord.name, got: ${out.subject}`,
+  )
+})
+
+test('composeLandedMessage: type/scope ties break by FIRST occurrence, and unparseable prefixes never vote', () => {
+  const group = groupOf([
+    ['refactor(gate): phase 72 — 72.1 lift the report writer', 'task'],
+    ['feat(gate): phase 72 — 72.2 the new lane', 'task'],
+    ['merged develop into the phase branch', 'task'], // no conventional prefix → no vote
+    ['scratch(web): phase 72 — prove the tripwire bites', 'scratch'],
+    ['Revert "scratch(web): phase 72 — prove the tripwire bites"', 'scratch'],
+    ['feat(web): phase 72 — 72.3 the console row', 'task'],
+  ])
+  const phaseRecord = {
+    phase: 72,
+    name: 'Lift the gate report writer',
+    tasks: [
+      { id: '72.1', title: 'Lift the report writer' },
+      { id: '72.2', title: 'The new lane' },
+      { id: '72.3', title: 'The console row' },
+    ],
+  }
+
+  const out = composeLandedMessage(phaseRecord, group)
+
+  assertSubjectShape(out.subject, 72)
+  // type: refactor 1, feat 2 → feat outright. scope: gate 2, web 1 → gate outright.
+  // Neither the merge line nor the scratch/revert pair may vote: if the scratch pair's
+  // `scratch(web)` counted, web would reach 3 and BEAT gate — scratch commits are proof
+  // of a tripwire, never a statement about what the phase changed.
+  assert.ok(
+    out.subject.startsWith('feat(gate): phase 72 — '),
+    `majority type + majority scope, votes only from parseable work prefixes, got: ${out.subject}`,
+  )
+
+  // A genuine tie: feat 2 : fix 2, feat first → feat. Scope cli 2 : api 2, cli first → cli.
+  const tie = groupOf([
+    ['feat(cli): phase 72 — 72.1 the first', 'task'],
+    ['fix(api): phase 72 — 72.2 the second', 'task'],
+    ['fix(api): phase 72 gate R0 — quality-pass findings', 'gate-fix'],
+    ['feat(cli): phase 72 — 72.3 the third', 'task'],
+  ])
+  const tied = composeLandedMessage(phaseRecord, tie)
+  assertSubjectShape(tied.subject, 72)
+  assert.ok(
+    tied.subject.startsWith('feat(cli): phase 72 — '),
+    `a 2:2 tie breaks to the FIRST occurrence, got: ${tied.subject}`,
+  )
+})
+
+test('composeLandedMessage: a 62-word phase name truncates at a WORD boundary, ≤72 chars, em dash intact', () => {
+  const rest =
+    'irreproachably readable landed commit messages from the phase record and the '
+    + 'squashed commit group, deriving the majority type and scope from the commit '
+    + 'subjects themselves, an imperative summary from the phase name, and a body '
+    + 'enumerating every task title, transparency report, and compromise the phase '
+    + 'recorded, because after curation those granular commits become unreachable '
+    + 'archaeology nobody can run again'
+  // THREE heads of length L, L+1, L+3: the same char offset falls mid-word in at least
+  // one of them for every cut position 36..58, so a naive slice-at-N truncation cannot
+  // get lucky on all three the way it can on a single fixture.
+  const names = [
+    `The composer assembling ${rest}`,
+    `The composers assembling ${rest}`,
+    `The subcomposer assembling ${rest}`,
+  ]
+  const group = groupOf([
+    ['feat(cli): phase 73 — 73.1 compose the landed message', 'task'],
+    ['feat(cli): phase 73 gate R0 — quality-pass findings', 'gate-fix'],
+  ])
+
+  for (const name of names) {
+    const tokens = name.toLowerCase().match(/[a-z0-9][a-z0-9'-]*/g)
+    const words = new Set(tokens)
+    assert.ok(tokens.length >= 60, `fixture bug: the name must be long enough to force truncation (${tokens.length} words)`)
+    const phaseRecord = { phase: 73, name, tasks: [{ id: '73.1', title: 'Compose the landed message' }] }
+
+    const out = composeLandedMessage(phaseRecord, group)
+
+    assertSubjectShape(out.subject, 73) // carries the ≤72 and `phase 73 —` assertions
+    const summary = summaryOf(out.subject, 73)
+    assert.ok(summary.length > 0, 'truncation must not eat the whole summary')
+    assert.ok(
+      out.subject.length > 55,
+      `a 62-word name must FILL the subject rather than collapse to a stub, got ${out.subject.length}: ${out.subject}`,
+    )
+    // Word boundary: strip an optional trailing ellipsis/punctuation, then the final token
+    // must be a WHOLE word of the phase name — a mid-word cut leaves a fragment that is not.
+    const tail = summary.replace(/[….]+$/u, '').trim().split(/\s+/).at(-1).replace(/[^a-z0-9'-]+$/iu, '').toLowerCase()
+    assert.ok(
+      words.has(tail),
+      `truncation must land on a word boundary — "${tail}" is not a whole word of the phase name (${out.subject})`,
+    )
+    // Imperative: the pinned, mechanically checkable subset is that the summary does not
+    // open with an article — "The composer assembling…" is a label, not an instruction.
+    assert.doesNotMatch(summary, /^(the|a|an)\s/i, `the summary must read imperative, got: ${summary}`)
+  }
+})
+
+test('composeLandedMessage: a composed subject re-derives as the phase’s OWN commit through deriveCurationRange', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  const preBase = r.commit('seed phase-74 file')
+
+  const group = groupOf([
+    ['feat(cli): phase 74 — 74.1 derive the range', 'task'],
+    ['fix(cli): phase 74 gate R0 — quality-pass findings', 'gate-fix'],
+  ])
+  const phaseRecord = {
+    phase: 74,
+    name: 'Curate a phase into landed history',
+    tasks: [{ id: '74.1', title: 'Derive the range', transparencyReport: { whatWasDone: 'walked the range', compromises: 'None' } }],
+  }
+
+  const out = composeLandedMessage(phaseRecord, group)
+  const landed = r.commit(out.subject)
+
+  // One grammar, not two: the composed subject must survive the SAME scan that built the
+  // range, or a curated phase becomes unresumable/foreign to its own tooling.
+  const res = deriveCurationRange(r.root, 74)
+  assert.equal(res.ok, true, `a curated commit must not read as foreign to its own phase: ${out.subject}`)
+  assert.equal(res.base, preBase)
+  assert.deepEqual(res.commits.map((c) => c.sha), [landed])
+  assert.equal(res.commits[0].kind, 'task', 'a landed work commit classifies as the phase’s own work')
+  assert.equal(r.subject(landed), out.subject, 'git kept the subject verbatim — no wrap, no truncation on its side')
+})
+
+test('composeLandedMessage: the body names every squashed task + whatWasDone; a "None" compromise contributes no line', () => {
+  // Every fixture string is short on purpose: the assertions are about PRESENCE, and a
+  // body wrapper must not be able to split them mid-string.
+  const phaseRecord = {
+    phase: 75,
+    name: 'Land the curated history',
+    tasks: [
+      {
+        id: '75.1',
+        title: 'Derive the curation range',
+        transparencyReport: {
+          whatWasDone: 'walked base..HEAD oldest-first',
+          compromises: 'None',
+          skipped: 'nothing skipped here',
+          hardcoded: 'the em-dash boundary string',
+          limitations: 'single-branch ranges only',
+        },
+      },
+      {
+        id: '75.2',
+        title: 'Squash the range losslessly',
+        transparencyReport: {
+          whatWasDone: 'commit-tree plus update-ref',
+          compromises: 'reused the gate rescue-ref naming',
+          skipped: 'no reflog pruning',
+          hardcoded: 'the rescue ref prefix',
+          limitations: 'no octopus merges',
+        },
+      },
+      { id: '75.3', title: 'A task that filed no report' }, // no transparencyReport at all
+    ],
+  }
+  const group = groupOf([
+    ['docs(roadmap): phase 75 — move to in-progress', 'state'],
+    ['feat(cli): phase 75 — 75.1 derive the curation range', 'task'],
+    ['feat(cli): phase 75 — 75.2 squash the range losslessly', 'task'],
+    ['feat(cli): phase 75 — 75.3 a task that filed no report', 'task'],
+    ['fix(cli): phase 75 gate R0 — quality-pass findings', 'gate-fix'],
+  ])
+
+  const out = composeLandedMessage(phaseRecord, group)
+
+  // Nothing lands unlisted: after curation the task SHAs are gone, so a title absent from
+  // the body is work that disappeared from history.
+  for (const t of phaseRecord.tasks) {
+    assert.ok(out.body.includes(t.title), `the body must name task ${t.id} ("${t.title}"), got:\n${out.body}`)
+  }
+  assert.ok(out.body.includes('walked base..HEAD oldest-first'), '75.1 whatWasDone must be in the body')
+  assert.ok(out.body.includes('commit-tree plus update-ref'), '75.2 whatWasDone must be in the body')
+  assert.ok(out.body.includes('reused the gate rescue-ref naming'), 'a REAL compromise must survive into the landed body')
+  // 'None' is the only occurrence of that token anywhere in the fixture, so its absence is
+  // exactly the "a None compromise contributes no line" rule.
+  assert.ok(
+    !/none/i.test(out.body),
+    `a compromises value of "None" must contribute NO line, got:\n${out.body}`,
+  )
+})
+
+test('composeLandedMessage: a multi-group split lists only ITS group’s tasks, matched on the N.x token (76.1 ≠ 76.10)', () => {
+  const phaseRecord = {
+    phase: 76,
+    name: 'Split the phase across landed commits',
+    tasks: [
+      { id: '76.1', title: 'The excluded first task', transparencyReport: { whatWasDone: 'excluded groundwork', compromises: 'None' } },
+      { id: '76.2', title: 'The included second task', transparencyReport: { whatWasDone: 'included groundwork', compromises: 'None' } },
+      { id: '76.3', title: 'The included third task', transparencyReport: { whatWasDone: 'included follow-through', compromises: 'None' } },
+      { id: '76.4', title: 'The other excluded task', transparencyReport: { whatWasDone: 'excluded follow-through', compromises: 'None' } },
+      { id: '76.10', title: 'The included tenth task', transparencyReport: { whatWasDone: 'included tenth work', compromises: 'None' } },
+    ],
+  }
+  // 76.10 is in the group and 76.1 is NOT: a prefix match on "76.1" would drag the first
+  // task's title into a commit that never contained its work.
+  const group = groupOf([
+    ['feat(cli): phase 76 — 76.2 the included second task', 'task'],
+    ['feat(cli): phase 76 — 76.3 the included third task', 'task'],
+    ['feat(cli): phase 76 — 76.10 the included tenth task', 'task'],
+    ['fix(cli): phase 76 gate R0 — quality-pass findings', 'gate-fix'],
+  ])
+
+  const out = composeLandedMessage(phaseRecord, group)
+
+  for (const id of ['76.2', '76.3', '76.10']) {
+    const t = phaseRecord.tasks.find((x) => x.id === id)
+    assert.ok(out.body.includes(t.title), `task ${id} is in the group and must be named, got:\n${out.body}`)
+    assert.ok(out.body.includes(t.transparencyReport.whatWasDone), `task ${id}'s whatWasDone must be in the body`)
+  }
+  for (const id of ['76.1', '76.4']) {
+    const t = phaseRecord.tasks.find((x) => x.id === id)
+    assert.ok(
+      !out.body.includes(t.title),
+      `task ${id} has no commit in this group — claiming it would attribute work to the wrong commit, got:\n${out.body}`,
+    )
+    assert.ok(!out.body.includes(t.transparencyReport.whatWasDone), `task ${id}'s whatWasDone belongs to another group`)
+  }
+})
+
+test('composeLandedMessage: the Co-Authored-By trailer is the LAST non-empty line, exactly once', () => {
+  const phaseRecord = {
+    phase: 77,
+    name: 'Preserve the co-author trailer',
+    tasks: [
+      { id: '77.1', title: 'First task', transparencyReport: { whatWasDone: 'did the first thing', compromises: 'None' } },
+      { id: '77.2', title: 'Second task', transparencyReport: { whatWasDone: 'did the second thing', compromises: 'a real compromise here' } },
+    ],
+  }
+  const group = groupOf([
+    ['feat(cli): phase 77 — 77.1 first task', 'task'],
+    ['feat(cli): phase 77 — 77.2 second task', 'task'],
+  ])
+
+  const out = composeLandedMessage(phaseRecord, group)
+
+  const lines = out.body.split('\n')
+  const trailers = lines.filter((l) => l.startsWith('Co-Authored-By:'))
+  assert.equal(trailers.length, 1, `exactly one Co-Authored-By trailer, not one per squashed task, got ${trailers.length}`)
+  assert.match(trailers[0], /^Co-Authored-By: .+ <[^ >]+@[^ >]+>$/, 'the trailer keeps git\'s name <email> shape')
+  assert.equal(lastNonEmptyLine(out.body), trailers[0], 'the trailer is the LAST non-empty line — git only reads trailers at the end')
+  assert.ok(lines.indexOf(trailers[0]) > 0, 'the trailer follows the body content, it is not the whole body')
+  assert.ok(out.body.includes('did the second thing'), 'the trailer rule must not have swallowed the content')
 })

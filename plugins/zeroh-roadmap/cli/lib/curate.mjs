@@ -128,3 +128,70 @@ export function executeCurate(cwd, plan) {
   git(cwd, ['update-ref', 'HEAD', parent, preHead])
   return { tip: parent, rescueRef }
 }
+
+const SUBJECT_MAX = 72
+const TRAILER = 'Co-Authored-By: Claude <noreply@anthropic.com>'
+
+/** Majority vote over the WORK commits' `type(scope):` prefixes — task and gate-fix rows
+ *  only (state bookkeeping, scratch/revert pairs and unparseable subjects never vote);
+ *  ties break by first occurrence. */
+function majorityPrefix(commits) {
+  const votes = { type: new Map(), scope: new Map() }
+  for (const c of commits) {
+    if (c.kind !== 'task' && c.kind !== 'gate-fix') continue
+    const m = /^([a-z]+)\(([a-z0-9-]+)\):/.exec(c.subject)
+    if (!m) continue
+    for (const [key, val] of [
+      ['type', m[1]],
+      ['scope', m[2]],
+    ]) {
+      const map = votes[key]
+      if (!map.has(val)) map.set(val, { count: 0, first: map.size })
+      map.get(val).count += 1
+    }
+  }
+  const pick = (map, fallback) => {
+    let best = null
+    for (const [val, v] of map) {
+      if (!best || v.count > best.v.count) best = { val, v }
+    }
+    return best ? best.val : fallback
+  }
+  return { type: pick(votes.type, 'chore'), scope: pick(votes.scope, 'repo') }
+}
+
+/**
+ * Compose the landed commit message for one curated group: the message IS the product.
+ * Subject: `type(scope): phase N — <imperative summary>` — majority type/scope, summary
+ * from the phase name (leading article dropped, first letter lowercased unless an
+ * acronym), truncated on WORD boundaries so the whole subject stays ≤72 chars. Body:
+ * every task whose `N.x` token appears in the group's task commits — title +
+ * whatWasDone + any real (non-'None') compromises — closed by exactly one
+ * Co-Authored-By trailer. Nothing lands unlisted.
+ */
+export function composeLandedMessage(phaseRecord, group) {
+  const { type, scope } = majorityPrefix(group.commits)
+  const head = `${type}(${scope}): phase ${phaseRecord.phase} — `
+
+  let words = String(phaseRecord.name).trim().split(/\s+/)
+  if (/^(the|a|an)$/i.test(words[0] ?? '')) words = words.slice(1)
+  if (words[0] && !/^[A-Z]{2,}/.test(words[0])) words[0] = words[0][0].toLowerCase() + words[0].slice(1)
+  while (words.length > 1 && head.length + words.join(' ').length > SUBJECT_MAX) words = words.slice(0, -1)
+  const subject = `${head}${words.join(' ')}`
+
+  const inGroup = (taskId) => {
+    const token = new RegExp(`\\b${taskId.replace('.', '\\.')}\\b`)
+    return group.commits.some((c) => c.kind === 'task' && token.test(c.subject))
+  }
+  const lines = []
+  for (const task of phaseRecord.tasks ?? []) {
+    if (!inGroup(task.id)) continue
+    lines.push(`${task.id} ${task.title}`)
+    const report = task.transparencyReport
+    if (report?.whatWasDone) lines.push('', report.whatWasDone)
+    if (report?.compromises && report.compromises !== 'None') lines.push('', `Compromise: ${report.compromises}`)
+    lines.push('')
+  }
+  lines.push(TRAILER)
+  return { subject, body: lines.join('\n') }
+}
