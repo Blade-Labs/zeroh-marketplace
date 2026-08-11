@@ -110,8 +110,9 @@ the curated commits plus the phase's closing state commits (`mark phase N comple
 hardening adds the closure integration rerun; release adds the e2e slot. Run `roadmap gate run
 <N>` for the mechanical half, then the agent chain the plan names. **Record EACH agent round
 into the gate report** as it finishes: `roadmap gate run <N> --record-round
-'{"round":R,"agent":"code-reviewer","verdict":"clean","summary":"…"}'` (round 0 = the
-quality pass, rounds ≥1 = each correctness loop). `--verify-complete` (below) REFUSES a done
+'{"round":R,"agent":"code-reviewer","verdict":"clean","model":"<your model id>","summary":"…"}'` (round 0 = the
+quality pass, rounds ≥1 = each correctness loop; `model` is the reviewer-attribution the
+evals slice by — stamp it). `--verify-complete` (below) REFUSES a done
 flip whose latest report carries no recorded agent round. A docs-only diff skips the quality
 pass. Under arc-mode the gate runs only phase-relevant SCOPED
 tests — the full suite defers to the arc end.
