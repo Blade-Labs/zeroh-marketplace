@@ -35,6 +35,29 @@ const alive = (pid) => {
   }
 }
 
+/** A session-owned claim outlives any single CLI spawn; this TTL is the only reaper it
+ *  has, refreshed on every re-claim (each phase start), so an abandoned session frees
+ *  its slot within a day while an active one never loses it. */
+const SESSION_CLAIM_TTL_MS = 24 * 60 * 60 * 1000
+
+/** The claimer identity. The CLI process is EPHEMERAL — its pid dies seconds after
+ *  `worktree up` returns, so pid alone would let every later session reclaim slot 1 and
+ *  double-book the worktree (the exact shared-dirt hazard the lane removes). The session
+ *  id is the stable identity across all of a session's spawns; a bare pid identity is
+ *  the honest fallback for callers outside a session. */
+export function ownerIdentity() {
+  return process.env.CLAUDE_SESSION_ID ?? `pid:${process.pid}`
+}
+
+/** A claim row is live while its recorded pid runs; a pid-identity row dies with its
+ *  pid, and a session-identity row survives dead pids until its TTL lapses. */
+const rowLive = (row) => {
+  if (alive(row.pid)) return true
+  if (String(row.owner ?? '').startsWith('pid:')) return false
+  const claimed = Date.parse(row.claimedAt ?? '')
+  return Number.isFinite(claimed) && Date.now() - claimed < SESSION_CLAIM_TTL_MS
+}
+
 /** Tolerant registry read: an array, a {slots:[…]} wrapper, or a slot-keyed map all
  *  parse; anything else fails LOUD naming the accepted shapes — a silently-empty read
  *  would hand two sessions the same slot. */
@@ -58,7 +81,7 @@ function readSlots(root) {
  *  each annotated with live-ness. THE reader for `worktree status`: a second tolerant
  *  parser forked elsewhere is exactly the double-booking hazard the loud parse guards. */
 export function listSlots(root) {
-  return readSlots(root).map((r) => ({ ...r, dir: `${root}-wt-${r.slot}`, live: alive(r.pid) }))
+  return readSlots(root).map((r) => ({ ...r, dir: `${root}-wt-${r.slot}`, live: rowLive(r) }))
 }
 
 function writeSlots(root, rows) {
@@ -67,21 +90,24 @@ function writeSlots(root, rows) {
 }
 
 /**
- * Claim the lowest free slot for this pid. Idempotent per pid (a re-claim returns the
- * SAME slot); dead claimers' rows are dropped so their slots free up. Returns
- * { slot, dir } — dir is `${root}-wt-${slot}`, not created here.
+ * Claim the lowest free slot for this OWNER (the session identity — stable across the
+ * session's many short-lived CLI spawns). Idempotent per owner: a re-claim returns the
+ * SAME slot with its claimedAt refreshed (the TTL heartbeat). Dead claims — a pid
+ * identity whose pid exited, a session identity past its TTL — are dropped so their
+ * slots free up. Returns { slot, dir }; dir is `${root}-wt-${slot}`, not created here.
  */
-export function claimSlot(root, { pid = process.pid } = {}) {
-  const rows = readSlots(root).filter((r) => alive(r.pid))
-  const mine = rows.find((r) => r.pid === pid)
+export function claimSlot(root, { owner = ownerIdentity(), pid = process.pid } = {}) {
+  const rows = readSlots(root).filter(rowLive)
+  const mine = rows.find((r) => r.owner === owner)
   if (mine) {
+    mine.claimedAt = new Date().toISOString()
     writeSlots(root, rows)
     return { slot: mine.slot, dir: `${root}-wt-${mine.slot}` }
   }
   const taken = new Set(rows.map((r) => r.slot))
   let k = 1
   while (taken.has(k)) k += 1
-  rows.push({ slot: k, pid, claimedAt: new Date().toISOString() })
+  rows.push({ slot: k, owner, pid, claimedAt: new Date().toISOString() })
   writeSlots(root, rows)
   return { slot: k, dir: `${root}-wt-${k}` }
 }

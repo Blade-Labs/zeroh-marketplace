@@ -16,7 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { loadConfig, integrationRefOf } from '../lib/config.mjs'
-import { claimSlot, ensureWorktree, resetForPhase, listSlots, WorktreeError } from '../lib/worktree.mjs'
+import { claimSlot, ensureWorktree, resetForPhase, listSlots, ownerIdentity, WorktreeError } from '../lib/worktree.mjs'
 
 /** A config that will not load REFUSES here (the ConfigError → exit 1 house posture the bin
  *  dispatcher owns): guessing 'develop' would reset or land the lane onto a branch the
@@ -78,7 +78,7 @@ function runStatus(root) {
 
 function runReset(root, argv) {
   const rows = listSlots(root)
-  const mine = rows.find((r) => r.pid === process.pid) ?? (rows.length === 1 ? rows[0] : null)
+  const mine = rows.find((r) => r.owner === ownerIdentity()) ?? (rows.length === 1 ? rows[0] : null)
   if (!mine) {
     process.stderr.write(
       rows.length === 0

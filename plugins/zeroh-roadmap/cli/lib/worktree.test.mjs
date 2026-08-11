@@ -247,7 +247,7 @@ test('claimSlot: a fresh claim takes slot 1, a second LIVE claimer takes slot 2,
     'claiming is a REGISTRY act: creating the checkout is ensureWorktree’s job, so a claim that loses a race costs nothing',
   )
 
-  const second = await claimSlot(r.root, { pid: other.pid })
+  const second = await claimSlot(r.root, { pid: other.pid, owner: 'session-b' })
 
   assert.equal(second.slot, 2, 'slot 1 is held by a LIVE claimer, so the next session gets 2 — two sessions never share a worktree')
   assert.equal(second.dir, `${r.root}-wt-2`)
@@ -267,13 +267,13 @@ test('claimSlot: the same pid re-claiming gets ITS slot back and consumes exactl
   const mine = liveClaimer()
   const neighbour = liveClaimer()
 
-  const first = await claimSlot(r.root, { pid: mine.pid })
-  const again = await claimSlot(r.root, { pid: mine.pid })
+  const first = await claimSlot(r.root, { pid: mine.pid, owner: 'session-m' })
+  const again = await claimSlot(r.root, { pid: mine.pid, owner: 'session-m' })
 
   assert.deepEqual(again, first, 'a re-claim is idempotent — `roadmap worktree up` runs at every phase start')
   assert.deepEqual(readSlots(r.root), [{ slot: 1, pid: mine.pid }], 'one claimer, ONE registry row — a repeat claim must not stack rows')
 
-  const other = await claimSlot(r.root, { pid: neighbour.pid })
+  const other = await claimSlot(r.root, { pid: neighbour.pid, owner: 'session-n' })
   assert.equal(other.slot, 2, 'the repeat claim consumed no second slot, so the next session still lands on 2')
 })
 
@@ -283,13 +283,13 @@ test('claimSlot: a dead claimer’s slot is reclaimed (lowest free wins) while l
   const crashed = liveClaimer()
   const held = liveClaimer()
 
-  assert.equal((await claimSlot(r.root, { pid: crashed.pid })).slot, 1)
+  assert.equal((await claimSlot(r.root, { pid: crashed.pid, owner: `pid:${crashed.pid}` })).slot, 1)
   assert.equal((await claimSlot(r.root)).slot, 2)
-  assert.equal((await claimSlot(r.root, { pid: held.pid })).slot, 3)
+  assert.equal((await claimSlot(r.root, { pid: held.pid, owner: 'session-h' })).slot, 3)
 
   await reap(crashed)
   const successor = liveClaimer()
-  const reclaimed = await claimSlot(r.root, { pid: successor.pid })
+  const reclaimed = await claimSlot(r.root, { pid: successor.pid, owner: 'session-s' })
 
   assert.equal(reclaimed.slot, 1, 'a dead claimer frees its slot — otherwise every crashed session leaks a worktree onto a 16GB box')
   assert.equal(reclaimed.dir, `${r.root}-wt-1`)
@@ -305,10 +305,29 @@ test('claimSlot: a dead claimer’s slot is reclaimed (lowest free wins) while l
 
   const fourth = liveClaimer()
   assert.equal(
-    (await claimSlot(r.root, { pid: fourth.pid })).slot,
+    (await claimSlot(r.root, { pid: fourth.pid, owner: 'session-f' })).slot,
     4,
     'with 1-3 all held by LIVE pids the next claim allocates 4 — reclamation must be liveness, never round-robin reuse',
   )
+})
+
+test('claimSlot: a session claim SURVIVES its CLI pid — two sessions with dead spawn pids never share a slot', async () => {
+  // THE lane-premise pin: `roadmap worktree up` runs in a short-lived CLI process whose
+  // pid is dead seconds later. If liveness were pid-only, every later session would
+  // reclaim slot 1 and two sessions would share one worktree — the exact shared-dirt
+  // hazard the lane exists to remove.
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  const spawnA = liveClaimer()
+  const spawnB = liveClaimer()
+  const a = await claimSlot(r.root, { pid: spawnA.pid, owner: 'session-a' })
+  await reap(spawnA)
+  const b = await claimSlot(r.root, { pid: spawnB.pid, owner: 'session-b' })
+  await reap(spawnB)
+  assert.equal(a.slot, 1)
+  assert.equal(b.slot, 2, 'session-a’s claim outlives its dead spawn pid — session-b must NOT reclaim slot 1')
+  const again = await claimSlot(r.root, { pid: process.pid, owner: 'session-a' })
+  assert.equal(again.slot, 1, 'session-a’s next spawn (a different live pid) still resolves to ITS slot')
 })
 
 // ── ensureWorktree: create once, reuse forever ───────────────────────────────────────
