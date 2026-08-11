@@ -169,11 +169,13 @@ not queued.
   `skills/using-zeroh-roadmap/references/documentation-rules.md` as its standard.
 - **Ordering:** foundation (schema/utils/types) → consumers → validation-gate task last; deps flow
   downward (N.3 may depend on N.2, never N.4).
-- **`testMode`:** `tdd` for pure logic/error-paths/business-rules · `e2e` for browser/user-flow ·
-  `none` for build/file/docs/lint/config. **Default `none` when unsure** (TDD costs ~5 min/task).
-  A task whose diff is declarative (data/config/docs/assets) takes `testMode: 'none'` AND lists no
-  test file in `files[]`; an owed guard is a case added to the consumer's ratchets/lint/emit lane,
-  named in the step, and its `→ verify:` clause is that lane's command.
+- **`testMode`:** assigned per `skills/using-zeroh-roadmap/references/test-worthiness.md` — `tdd`
+  where it earns its keep (pure logic/contracts/error paths), `e2e` for real-boundary user flows,
+  `none` for everything else incl. the NEVER classes (declarative artifacts, UI presentation,
+  process guards — an owed guard goes to the consumer's ratchets/lint/emit lane, named in the
+  step, its `→ verify:` that lane's command). **Default `none` when unsure** (TDD costs ~5
+  min/task). A testMode contradicting the rule is plannable ONLY with a recorded
+  software-architect Decision Contract verdict in the phase notes.
 - **Anti-patterns (all fail Prime Rule 1):** `description:'Implement task N.1'`,
   `acceptanceCriteria:['Task N.1 verified']`, `problem:'This needs to be done'`, `title:'Fix things'`.
 - **Special:** an *investigation task* when root cause is unknown; a *gate task* last.
