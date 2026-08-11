@@ -24,6 +24,7 @@ import { basename, join } from 'node:path'
 import { defaultExec } from './exec.mjs'
 import { bridgeEval } from './tsx-bridge.mjs'
 import { buildEvalFixture, ARC_ID, PHASE_NUMS, SUMMARY_DATE } from '../testdata/eval-arc/build-fixture.mjs'
+import { GateRunReportShape } from './gate-report.mjs'
 import {
   collectArcTrace,
   summarizeGateRuns,
@@ -441,6 +442,94 @@ test('summarizeGateRuns — rounds and slotFailures per phase; an absent .gate d
   assert.equal(g2[0].slotFailures, 1, 'the one exit-1 slot is counted; the two exit-0 slots are not')
 
   assert.deepEqual(summarizeGateRuns(root, 9999), [], 'a phase with no .gate dir has no runs — never a throw')
+})
+
+/**
+ * The reviewer MODEL on a gate round (2158.1). A round names its role (code-reviewer,
+ * quality-pass) but not the model that ran it, which makes reviewer attribution impossible for
+ * the evals. The field is optional on the report, so the collector owes two behaviours that
+ * only a per-round assertion can tell apart: carry it when it is there, and add NO key when it
+ * is not — a `model: undefined` on every round would read as "attribution attempted and empty"
+ * to every downstream consumer that checks presence.
+ */
+const MODEL_RUN = 'run-000002-2026-07-16T12-00-00-000Z.json'
+const MODEL_ROUND = { round: 0, agent: 'quality-pass', verdict: 'clean', model: 'claude-opus-5' }
+const PLAIN_ROUND = { round: 1, agent: 'code-reviewer', verdict: 'clean' }
+
+/**
+ * A dedicated fixture root: this corpus is MUTATED (a second gate run is planted), and the
+ * shared `fixture()` memo would hand that mutation to every later test keyed on the same opts.
+ * Built once, lazily, so the git script runs only when these tests do.
+ */
+let modelRoot = null
+const modelRoundFixture = () => {
+  if (modelRoot) return modelRoot
+  modelRoot = buildEvalFixture()
+  const run = {
+    phase: 9001,
+    startedAt: '2026-07-16T12:00:00.000Z',
+    baseSha: '0000000000000000000000000000000000000002',
+    mode: 'phase',
+    kind: 'logic',
+    testScope: { derived: 'relevant', declared: null, effective: 'relevant' },
+    reviewScope: { derived: 'full', declared: null, effective: 'full' },
+    slots: [{ slot: 'lint', command: 'npm run lint', exitCode: 0, durationMs: 1200, logPath: null }],
+    agents: [
+      { ...MODEL_ROUND, summary: 'no simplifications owed', recordedAt: '2026-07-16T12:05:00.000Z' },
+      { ...PLAIN_ROUND, summary: '0 findings', recordedAt: '2026-07-16T12:20:00.000Z' },
+    ],
+    green: true,
+    notes: [],
+  }
+  // Precondition, not the assertion under test: a run the shape REJECTS is silently skipped by
+  // summarizeGateRuns, which would red the tests below for a reason that is not the model field.
+  assert.equal(GateRunReportShape.safeParse(run).success, true, 'fixture: the planted run must be a valid report')
+  writeFileSync(join(modelRoot, 'roadmap', '.gate', '9001', MODEL_RUN), JSON.stringify(run, null, 2) + '\n')
+  return modelRoot
+}
+
+/** The planted run as the collector flattened it onto the phase entry (one collect, two tests). */
+let plantedRunCache = null
+const plantedRun = () => {
+  if (plantedRunCache) return plantedRunCache
+  const { trace } = collectArcTrace(modelRoundFixture(), ARC_ID)
+  const runs = byNum(trace, 9001).gateRuns
+  assert.equal(runs.length, 2, 'fixture: the planted run is collected alongside the shipped one')
+  plantedRunCache = runs[1]
+  return plantedRunCache
+}
+
+test('collectArcTrace — a round records the MODEL that ran it, all the way onto the trace', () => {
+  const run = plantedRun()
+  assert.equal(
+    run.rounds[0].model,
+    'claude-opus-5',
+    'the reviewer model must survive report → summarizeGateRuns → trace; a dropped one makes attribution impossible',
+  )
+  assert.equal(run.rounds[0].agent, 'quality-pass', 'the ROLE still travels — the model is additional, not a replacement')
+  assert.equal(run.rounds[0].verdict, 'clean')
+})
+
+test('collectArcTrace — a round with no recorded model carries NO model key (never a stub)', () => {
+  const run = plantedRun()
+  assert.equal(
+    'model' in run.rounds[1],
+    false,
+    'an unrecorded model is an ABSENT KEY — the scorer owns the single absence→sentinel mapping, not the collector',
+  )
+  // Whole-round deepEqual, so a summary/recordedAt leaking into the trace (or a `model: undefined`
+  // key on the second round) fails here rather than travelling unnoticed into the eval corpus.
+  assert.deepEqual(
+    run.rounds,
+    [MODEL_ROUND, PLAIN_ROUND],
+    'exactly round/agent/verdict, plus model only where one was recorded',
+  )
+})
+
+test('summarizeGateRuns — the shipped model-less corpus is unchanged by the new field', () => {
+  const root = fixture()
+  const rounds = summarizeGateRuns(root, 9001)[0].rounds
+  assert.equal(rounds.every((r) => !('model' in r)), true, 'no model key is invented for rounds recorded without one')
 })
 
 test('summarizeGateRuns — a mis-shaped run file is SKIPPED, never thrown, and never half-counted', () => {

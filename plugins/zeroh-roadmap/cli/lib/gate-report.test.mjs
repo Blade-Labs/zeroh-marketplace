@@ -15,6 +15,14 @@
  * report IN PLACE (no new run file, older runs untouched), and (d) a block that does not
  * validate is refused with the on-disk report left exactly as it was: a half-written
  * evidence record is worse than none, because curation is about to make it unverifiable.
+ *
+ * TEST-FIRST for the optional `model` on a gate round (phase 2158.1) at the very bottom: a
+ * recorded round names its ROLE (code-reviewer, quality-pass) but not the model that ran it,
+ * so reviewer attribution is impossible for the evals. The field is additive and optional, so
+ * the properties are (a) a model given is CARRIED to disk and back rather than stripped as an
+ * unknown key, (b) a round with no model persists no `model` key at all (an attribution nobody
+ * supplied must never be invented), and (c) an unusable model (empty string, non-string) is
+ * REFUSED at the parse rather than recorded as attribution the evals would go on to read.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -23,6 +31,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   GateRunReportShape,
+  AgentRoundInputShape,
   writeReport,
   latestReport,
   appendAgentRound,
@@ -284,4 +293,122 @@ test('recordCuration — a malformed block is refused and the on-disk report is 
   assert.equal(names.length, 1)
   assert.equal(readFileSync(join(gateDir(root, 1670), names[0]), 'utf8'), before, 'the report file is byte-identical — no partial write')
   assert.equal(latestReport(root, 1670).report.curation, undefined, 'nothing was recorded')
+})
+
+// ── the optional `model` on an agent round (2158.1) ──────────────────────────────────
+
+/** A round as `gate run --record-round` hands it over (no recordedAt — that is stamped on append). */
+const roundInput = (over = {}) => ({
+  round: 1,
+  agent: 'code-reviewer',
+  verdict: 'clean',
+  summary: '0 findings',
+  ...over,
+})
+
+/** The same round as it sits INSIDE a report on disk. */
+const recordedRound = (over = {}) => ({ ...roundInput(), recordedAt: '2026-07-16T10:25:00.000Z', ...over })
+
+test('the round shapes CARRY a model through the parse (an unmodelled key would be stripped)', () => {
+  // Both shapes, because a round crosses two of them: --record-round parses the INPUT shape,
+  // and every read/write of the report re-parses the round inside GateRunReportShape. A field
+  // modelled on only one side survives the append and vanishes on the next read.
+  assert.equal(
+    AgentRoundInputShape.parse(roundInput({ model: 'claude-x' })).model,
+    'claude-x',
+    'AgentRoundInputShape must model `model` — otherwise --record-round drops it before it is ever written',
+  )
+  const parsed = GateRunReportShape.parse(baseReport({ agents: [recordedRound({ model: 'claude-x' })] }))
+  assert.deepEqual(
+    parsed.agents[0],
+    recordedRound({ model: 'claude-x' }),
+    'the round round-trips field for field — the model is not stripped between write and read',
+  )
+})
+
+test('appendAgentRound — a round recorded WITH a model reaches disk and comes back', () => {
+  const root = tmpRoot()
+  writeReport(root, baseReport())
+
+  const returned = appendAgentRound(root, 1670, roundInput({ model: 'claude-x' }))
+
+  assert.equal(returned.agents[0].model, 'claude-x', 'the writer returns the round with its model')
+  const latest = latestReport(root, 1670)
+  assert.equal(latest.report.agents[0].model, 'claude-x', 'a re-read through the shape still carries it')
+  // The raw file, not the parsed report: a field that parses and then vanishes on write is
+  // exactly how the attribution would be lost between the gate run and the eval that reads it.
+  const names = runFileNames(root, 1670)
+  const raw = rawRun(root, 1670, names[0])
+  assert.equal(raw.agents[0].model, 'claude-x', 'the PERSISTED round names the model that ran it')
+  // The rest of the round is untouched by the new field.
+  assert.equal(raw.agents[0].agent, 'code-reviewer', 'the ROLE still travels — model is additional, not a replacement')
+  assert.equal(raw.agents[0].verdict, 'clean')
+  assert.equal(raw.agents[0].summary, '0 findings')
+  assert.ok(raw.agents[0].recordedAt, 'still stamped on append')
+  assert.equal(names.length, 1, 'no new run file')
+})
+
+test('appendAgentRound — a round recorded WITHOUT a model persists NO model key (nothing invented)', () => {
+  const root = tmpRoot()
+  writeReport(root, baseReport())
+
+  appendAgentRound(root, 1670, roundInput())
+
+  const raw = rawRun(root, 1670, runFileNames(root, 1670)[0])
+  assert.equal(
+    'model' in raw.agents[0],
+    false,
+    'an unsupplied model is an ABSENT KEY — never a null, an empty string or a guessed default',
+  )
+  assert.equal(latestReport(root, 1670).report.agents[0].model, undefined, 'and the read side agrees')
+  assert.equal(latestReport(root, 1670).report.agents[0].verdict, 'clean', 'the round is otherwise recorded as before')
+})
+
+test('a report whose rounds predate the model field still parses (additive, not a migration)', () => {
+  const root = tmpRoot()
+  const legacy = baseReport({ agents: [recordedRound()] })
+  assert.doesNotThrow(() => GateRunReportShape.parse(legacy), 'the field is OPTIONAL — pre-2158.1 reports must keep parsing')
+  writeReport(root, legacy)
+  assert.equal(latestReport(root, 1670).report.agents[0].model, undefined, 'no model is back-filled onto a historical round')
+})
+
+test('an UNUSABLE model is REFUSED by the parse, not recorded as attribution', () => {
+  // An empty string is the dangerous one: it parses as a string, reads as "attributed" to any
+  // consumer that only checks presence, and names no model at all. Absent means unknown; ''
+  // would mean unknown while LOOKING answered.
+  const bad = [
+    ['an empty model', ''],
+    ['a numeric model', 42],
+    ['an explicitly null model (absent is how unknown is spelled)', null],
+    ['a model as an object', { name: 'claude-x' }],
+  ]
+  const isError = (e) => e instanceof Error
+  for (const [why, model] of bad) {
+    assert.throws(
+      () => AgentRoundInputShape.parse(roundInput({ model })),
+      isError,
+      `${why}: AgentRoundInputShape must REFUSE it, not strip it and record an unattributed round`,
+    )
+    assert.throws(
+      () => GateRunReportShape.parse(baseReport({ agents: [recordedRound({ model })] })),
+      isError,
+      `${why}: GateRunReportShape must REFUSE it — a report on disk is what the evals read`,
+    )
+  }
+})
+
+test('appendAgentRound — a round with an unusable model is refused BEFORE the write', () => {
+  const root = tmpRoot()
+  writeReport(root, baseReport())
+  const path = latestReport(root, 1670).path
+  const before = readFileSync(path, 'utf8')
+
+  assert.throws(
+    () => appendAgentRound(root, 1670, roundInput({ model: '' })),
+    (e) => e instanceof Error,
+    'an empty model must abort the append, not be stripped and written as an unattributed round',
+  )
+
+  assert.equal(readFileSync(path, 'utf8'), before, 'the report file is byte-identical — no half-recorded round')
+  assert.equal(latestReport(root, 1670).report.agents.length, 0, 'nothing was appended')
 })

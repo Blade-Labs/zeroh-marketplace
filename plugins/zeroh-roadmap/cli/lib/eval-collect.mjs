@@ -217,7 +217,7 @@ export function summarizeGateRuns(repoRoot, phaseNum) {
     out.push({
       startedAt: report.startedAt,
       green: report.green,
-      rounds: report.agents.map((a) => ({ round: a.round, agent: a.agent, verdict: a.verdict })),
+      rounds: report.agents.map((a) => ({ round: a.round, agent: a.agent, verdict: a.verdict, ...(a.model ? { model: a.model } : {}) })),
       // A slot with no exitCode did not RUN (skipped/declared-absent); only a recorded
       // non-zero exit is a failure. Counting a skip as a failure would invent a red.
       slotFailures: report.slots.filter((s) => typeof s.exitCode === 'number' && s.exitCode !== 0).length,

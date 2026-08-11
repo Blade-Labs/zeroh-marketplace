@@ -40,6 +40,8 @@ const AgentRoundShape = z.object({
   agent: z.string(),
   verdict: z.string(),
   summary: z.string(),
+  // WHO ran the round — reviewer attribution for the evals; absent = unrecorded, never invented.
+  model: z.string().min(1).optional(),
   recordedAt: z.string(),
 })
 
@@ -74,6 +76,7 @@ export const AgentRoundInputShape = z.object({
   agent: z.string(),
   verdict: z.string(),
   summary: z.string(),
+  model: z.string().min(1).optional(),
 })
 
 export function gateDir(toplevel, phase) {
