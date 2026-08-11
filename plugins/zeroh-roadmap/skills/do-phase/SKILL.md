@@ -93,8 +93,9 @@ matching 1369.
 curation should already aim at): `type(scope): phase N — <imperative summary>` ≤72 chars — the
 change to the tree, never the story of making it (no round numbers, no task bookkeeping in the
 subject; that detail lives in the body and the gate report). Task-commit prose is working
-material: in the worktree lane it stays worktree-internal and only the curated commits reach
-the integration branch.
+material: in the worktree lane it stays worktree-internal and the integration branch receives
+the curated commits plus the phase's closing state commits (`mark phase N complete`, the groom)
+— those are records in their own right, never squash fodder.
 
 ## The gate (after the last task)
 

@@ -78,12 +78,19 @@ function runStatus(root) {
 
 function runReset(root, argv) {
   const rows = listSlots(root)
-  const mine = rows.find((r) => r.owner === ownerIdentity()) ?? (rows.length === 1 ? rows[0] : null)
+  // The caller's OWN claim, or an explicit --slot <k> for an orphan. No silent fallback:
+  // resetting an unowned worktree eats another session's state.
+  const si = argv.indexOf('--slot')
+  const wanted = si >= 0 ? Number(argv[si + 1]) : null
+  const mine =
+    wanted !== null ? (rows.find((r) => r.slot === wanted) ?? null) : (rows.find((r) => r.owner === ownerIdentity()) ?? null)
   if (!mine) {
     process.stderr.write(
-      rows.length === 0
-        ? 'roadmap worktree reset: no slot claimed — run `roadmap worktree up` first\n'
-        : `roadmap worktree reset: ${rows.length} slots exist and none is this process's — ambiguous target, run from the claiming session\n`,
+      wanted !== null
+        ? `roadmap worktree reset: no registry row for --slot ${wanted}\n`
+        : rows.length === 0
+          ? 'roadmap worktree reset: no slot claimed — run `roadmap worktree up` first\n'
+          : `roadmap worktree reset: none of the ${rows.length} slot(s) is this session's — target an orphan explicitly with --slot <k>\n`,
     )
     return 1
   }
@@ -104,6 +111,6 @@ export default async function run(argv) {
   if (sub === 'up') return runUp(root, argv.slice(1))
   if (sub === 'status') return runStatus(root)
   if (sub === 'reset') return runReset(root, argv.slice(1))
-  process.stderr.write('roadmap worktree: usage: roadmap worktree up | status | reset [--base <ref>]\n')
+  process.stderr.write('roadmap worktree: usage: roadmap worktree up | status | reset [--base <ref>] [--slot <k>]\n')
   return 1
 }

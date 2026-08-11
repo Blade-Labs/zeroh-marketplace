@@ -1016,6 +1016,26 @@ test('phase land \u2014 the documented order (curate, then the completion commit
   assert.equal(f.git('rev-parse', `${completion}^{commit}`), f.baseTip(), 'the completion commit IS the landed tip')
 })
 
+test('phase land \u2014 refuses master and main: a release branch is a held human act, never a lane act', () => {
+  const f = landFixture(94, 'master')
+  seedGateReport(f.wt, 94)
+  for (const ref of ['master', 'main']) {
+    const err = sink()
+    const code = runLand({
+      cwd: f.wt,
+      toplevel: f.wt,
+      phaseNum: 94,
+      loadPhase: () => f.record,
+      config: { executionIsolation: 'worktree', mergePolicy: mergePolicyFor(f.root, ref) },
+      out: sink(),
+      err,
+    })
+    assert.equal(code, 1, `landing onto ${ref} must refuse`)
+    assert.match(err.text, new RegExp(ref), `the refusal names ${ref}; got:\n${err.text}`)
+  }
+  assert.equal(f.baseTip(), f.seed, 'the ref never moved')
+})
+
 test('phase \u2014 the dispatcher advertises `land <N>` beside validate/start/curate', () => {
   const { root } = makeRepo()
 

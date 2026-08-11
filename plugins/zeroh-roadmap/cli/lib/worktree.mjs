@@ -60,13 +60,19 @@ const rowLive = (row) => {
 }
 
 /** An expired row's slot is reclaimable only when taking it cannot eat work: a missing
- *  worktree always is; an existing one must be CLEAN (a dirty tree is a session's live
- *  state whatever the calendar says — the row is kept and the next free slot is used). */
+ *  worktree always is; an existing one must be CLEAN and carry NO unlanded commits —
+ *  commits reachable from the scratch head but from no other branch are a session's
+ *  committed-but-unlanded phase, and the reclaimer's reset would orphan them. */
 const reclaimable = (root, row) => {
   const dir = `${root}-wt-${row.slot}`
   if (!existsSync(dir)) return true
   try {
-    return git(dir, ['status', '--porcelain', '-uall']) === ''
+    if (git(dir, ['status', '--porcelain', '-uall']) !== '') return false
+    // The exclude glob is SHORT-form on purpose: --branches expands short names, and a
+    // refs/heads/-prefixed pattern silently matches nothing (measured — the guard then
+    // reads every wt branch as landed and reclaims a worktree carrying unlanded work).
+    const unlanded = git(dir, ['rev-list', '--count', 'HEAD', '--not', '--exclude=wt/*', '--branches'])
+    return Number(unlanded) === 0
   } catch {
     return false
   }

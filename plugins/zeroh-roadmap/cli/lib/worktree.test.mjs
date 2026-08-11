@@ -330,6 +330,62 @@ test('claimSlot: a session claim SURVIVES its CLI pid — two sessions with dead
   assert.equal(again.slot, 1, 'session-a’s next spawn (a different live pid) still resolves to ITS slot')
 })
 
+test('claimSlot: five PARALLEL claimers get five distinct slots and the registry survives untorn', async () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  const script = `
+    import('${'file://'}${'/home/patrik/zeroh-marketplace/plugins/zeroh-roadmap/cli/lib/worktree.mjs'}').then((m) => {
+      const out = m.claimSlot(process.argv[1], { owner: process.argv[2] })
+      console.log(JSON.stringify(out))
+    })
+  `
+  const runs = await Promise.all(
+    ['pa', 'pb', 'pc', 'pd', 'pe'].map(
+      (owner) =>
+        new Promise((resolve) => {
+          const c = spawn('node', ['--input-type=module', '-e', script, r.root, owner], { stdio: ['ignore', 'pipe', 'pipe'] })
+          let outText = ''
+          let errText = ''
+          c.stdout.on('data', (d) => (outText += d))
+          c.stderr.on('data', (d) => (errText += d))
+          c.on('exit', (code) => resolve({ code, outText, errText }))
+        }),
+    ),
+  )
+  for (const run of runs) assert.equal(run.code, 0, `a parallel claim crashed (a torn registry read?): ${run.errText}`)
+  const slots = runs.map((run) => JSON.parse(run.outText.trim()).slot).sort()
+  assert.deepEqual(slots, [1, 2, 3, 4, 5], 'five concurrent claimers must serialize onto five DISTINCT slots — a duplicate is a shared worktree')
+  assert.equal(readSlots(r.root).length, 5, 'all five rows survive — no lost update')
+})
+
+test('claimSlot: an EXPIRED session row is reclaimed only when its worktree cannot lose work', async () => {
+  const r = makeRepo()
+  const base = r.commit('root: seed the tree')
+  // Three expired claims, three worktree states: missing (reclaimable), clean-and-landed
+  // (reclaimable), clean-but-carrying-unlanded-commits (KEPT — the reset would orphan them).
+  // The rows must record a DEAD pid (the live test-runner pid would keep them alive
+  // regardless of the calendar — exactly the deployment shape, where the recorded pid
+  // is a long-dead CLI spawn).
+  const spawnPid = liveClaimer()
+  await reap(spawnPid)
+  await claimSlot(r.root, { owner: 'gone-missing', pid: spawnPid.pid })
+  await claimSlot(r.root, { owner: 'gone-clean', pid: spawnPid.pid })
+  await claimSlot(r.root, { owner: 'gone-working', pid: spawnPid.pid })
+  await ensureWorktree(r.root, 2, { baseRef: base })
+  await ensureWorktree(r.root, 3, { baseRef: base })
+  execFileSync('git', ['-C', `${r.root}-wt-3`, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '--allow-empty', '-m', 'a week of unlanded phase work'], { stdio: 'ignore' })
+  // Backdate all three rows past the TTL.
+  const regPath = join(r.root, REGISTRY_REL)
+  const rows = JSON.parse(readFileSync(regPath, 'utf8'))
+  for (const row of rows) row.claimedAt = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString()
+  writeFileSync(regPath, JSON.stringify(rows, null, 2) + '\n')
+
+  const fresh = await claimSlot(r.root, { owner: 'newcomer' })
+  assert.equal(fresh.slot, 1, 'the missing-worktree slot is the lowest reclaimable one')
+  const after = readSlots(r.root).map((row) => row.slot).sort()
+  assert.deepEqual(after, [1, 3], 'clean-landed slot 2 was also pruned; slot 3 with UNLANDED commits kept its row — reclamation never orphans committed work')
+})
+
 // ── ensureWorktree: create once, reuse forever ───────────────────────────────────────
 
 test('ensureWorktree: creates wt/<k> at baseRef and installs deps ONCE; a second call reuses without resetting the scratch head', async () => {
@@ -599,6 +655,30 @@ test('landPhase: landing onto a base CHECKED OUT in the primary keeps that check
   const tree = r.git('ls-tree', '--name-only', '-r', sibling)
   assert.ok(tree.includes('cli/lib/feature.txt'), `the landed file SURVIVES a sibling commit; tree was:\n${tree}`)
   assert.equal(r.git('rev-list', '--count', `${seed}..${sibling}`), '2', 'land + sibling = two commits over the seed')
+})
+
+test('landPhase: a REAL git failure is not laundered as a race — it rethrows once with the underlying stderr', async () => {
+  // The bare-catch hazard: a primary holding the base with CONFLICTING dirty changes makes
+  // merge --ff-only refuse; retrying that 4 times and reporting "kept advancing" would send
+  // the operator hunting a phantom race. The error must carry git\u2019s own words.
+  const r = makeRepo()
+  commitIn(r.root, 'seed: the integration branch exists', 'src/seed.txt')
+  if (r.branch() !== BASE) r.git('checkout', '-q', '-b', BASE)
+  const wt = await ensureWorktree(r.root, 1, { baseRef: BASE, installDeps: () => {} })
+  commitIn(wt.dir, 'feat(cli): phase 2146 — 2146.2 rewrites the seed file', 'src/seed.txt')
+  writeFileSync(join(r.root, 'src/seed.txt'), 'primary dirt on the very file the land touches\n')
+
+  let caught = null
+  try {
+    await landPhase(wt.dir, BASE)
+  } catch (e) {
+    caught = e
+  }
+  assert.ok(caught, 'the land must fail — the primary would be clobbered')
+  assert.notEqual(caught.name, 'WorktreeRaceError', 'a local-changes refusal is NOT a race')
+  assert.equal(caught.raceLoss, undefined, 'nor marked as a race loss internally')
+  assert.match(caught.message, /overwritten|local changes/i, `the error carries git\u2019s real reason; got: ${caught.message}`)
+  assert.equal(r.git('rev-parse', `refs/heads/${BASE}`) === gitIn(wt.dir, 'rev-parse', 'HEAD'), false, 'the base did not advance')
 })
 
 test('landPhase: a base that advances between rebase and swap is DETECTED, retried once, and the sibling’s commit survives underneath', async () => {
