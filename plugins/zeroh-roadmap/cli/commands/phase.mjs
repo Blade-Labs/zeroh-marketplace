@@ -196,8 +196,19 @@ export function runCurate({
     out.write('dry run — nothing moved; re-run with --apply to land the curated commits\n')
     return 0
   }
+  // Evidence before surgery: pair each scratch commit with its Revert twin so the
+  // RED-proof record lands in the gate report before the SHAs become unreachable. The
+  // ritual runs curate AFTER the gate, so a missing report is a real ordering violation
+  // and the recorder's throw (curate aborted, history intact) is the correct answer.
+  const redProofs = []
+  for (let i = 0; i < range.commits.length; i += 1) {
+    const c = range.commits[i]
+    if (c.kind !== 'scratch' || /^Revert "/.test(c.subject)) continue
+    const twin = range.commits.slice(i + 1).find((r) => r.kind === 'scratch' && /^Revert "/.test(r.subject))
+    if (twin) redProofs.push({ scratch: c.sha, revert: twin.sha, subject: c.subject })
+  }
   try {
-    const { tip } = executeCurate(cwd, { base: range.base, groups })
+    const { tip } = executeCurate(cwd, { base: range.base, groups }, { toplevel, phase: phaseNum, redProofs })
     out.write(`landed ${groups.length} curated commit(s), tip ${tip}\n`)
     for (const g of groups) out.write(`  ${g.message.subject}\n`)
     return 0

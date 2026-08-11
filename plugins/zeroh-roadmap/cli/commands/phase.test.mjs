@@ -34,6 +34,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { derivePhaseStartSha } from '../lib/gitscan.mjs'
 import { deriveCurationRange, composeLandedMessage } from '../lib/curate.mjs'
+import { writeReport, latestReport } from '../lib/gate-report.mjs'
 import * as phaseCmd from './phase.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url)) // cli/commands/
@@ -273,6 +274,22 @@ function sink() {
   }
 }
 
+/** Seed the minimal green gate report an --apply requires: the ritual runs curate AFTER
+ *  the gate, so evidence-before-surgery needs a report to land in. */
+function seedGateReport(toplevel, phase) {
+  writeReport(toplevel, {
+    phase,
+    startedAt: new Date().toISOString(),
+    baseSha: 'fixture',
+    mode: 'inline',
+    kind: 'logic',
+    testScope: { derived: 'relevant', declared: 'relevant', effective: 'relevant' },
+    reviewScope: { derived: 'full', declared: 'full', effective: 'full' },
+    slots: [],
+    green: true,
+  })
+}
+
 /**
  * A git repo carrying a curatable phase range: root commit, a committed phase file that
  * sits UNDER the base, and the tree/parent archaeology the squash trades in. Kept apart
@@ -432,6 +449,7 @@ test('phase curate --apply — lands ONE curated commit over the base, tree-iden
   assert.equal(r.head(), preHead, 'the preceding dry run left HEAD alone')
 
   // …must be the hand it plays.
+  seedGateReport(r.root, 81)
   const out = sink()
   const err = sink()
   const code = runCurate({ cwd: r.root, toplevel: r.root, phaseNum: 81, apply: true, loadPhase: () => record, out, err })
@@ -454,6 +472,27 @@ test('phase curate --apply — lands ONE curated commit over the base, tree-iden
     dry.text.includes(expected.subject),
     `the dry run must have printed the SAME subject --apply landed — a plan that differs from the act is not a plan; dry:\n${dry.text}`,
   )
+
+  // The production wiring, not just the lib: --apply records the curation evidence.
+  const after = latestReport(r.root, 81)
+  assert.ok(after?.report.curation, 'a successful --apply records the curation block into the gate report')
+  assert.equal(after.report.curation.squashedCount, range.commits.length, 'squashedCount counts every commit in the range')
+  assert.deepEqual(after.report.curation.landedSubjects, [expected.subject], 'landedSubjects carries the composed subject')
+})
+
+test('phase curate --apply with NO gate report refuses — evidence before surgery, history intact', () => {
+  const r = makeCurateRepo(85)
+  r.commit('docs(roadmap): phase 85 — move to in-progress')
+  r.commit('feat(cli): phase 85 — 85.1 the only task')
+  const record = { phase: 85, name: 'The evidence ordering phase', tasks: [{ id: '85.1', title: 'The only task' }] }
+  const preHead = r.head()
+  const range = deriveCurationRange(r.root, 85)
+  const err = sink()
+  const code = runCurate({ cwd: r.root, toplevel: r.root, phaseNum: 85, apply: true, loadPhase: () => record, out: sink(), err })
+  assert.notEqual(code, 0, 'an --apply with nowhere to record evidence must not succeed')
+  assert.equal(r.head(), preHead, 'HEAD is unmoved')
+  assert.deepEqual(r.rangeShas(range.base), r.rangeShas(range.base), 'sanity')
+  assert.ok(/no run report/.test(err.text), `the refusal names the missing report; got:\n${err.text}`)
 })
 
 test('phase curate --apply --groups "1,2-3" — task 1 and its gate fix land first, tasks 2-3 second (non-task commits fold into the nearest preceding task)', () => {
@@ -509,6 +548,7 @@ test('phase curate --apply --groups "1,2-3" — task 1 and its gate fix land fir
   )
   assert.equal(r.head(), preHead, 'the dry run with --groups still touches nothing')
 
+  seedGateReport(r.root, 82)
   const out = sink()
   const err = sink()
   const code = runCurate({ cwd: r.root, toplevel: r.root, phaseNum: 82, apply: true, groupsSpec: '1,2-3', loadPhase: () => record, out, err })
