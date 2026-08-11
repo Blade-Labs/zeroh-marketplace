@@ -13,8 +13,17 @@ import { execFileSync } from 'node:child_process'
 
 import { derivePhaseStartSha } from './gitscan.mjs'
 
-const git = (cwd, args) =>
-  execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8' }).trim()
+const git = (cwd, args, opts = {}) =>
+  execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8', ...opts }).trim()
+
+/** A typed curation failure. `rescueRef` names the ref holding the untouched pre-curation HEAD. */
+export class CurateError extends Error {
+  constructor(message, rescueRef) {
+    super(message)
+    this.name = 'CurateError'
+    this.rescueRef = rescueRef
+  }
+}
 
 /**
  * Classify one subject against phase N's own commit grammar.
@@ -69,4 +78,53 @@ export function deriveCurationRange(cwd, phaseNum) {
     }
   }
   return { ok: true, base, commits }
+}
+
+/**
+ * Execute a curation plan: rewrite plan.base..HEAD into one curated commit per group,
+ * each group's tree being its LAST original commit's tree, provably lossless.
+ *
+ * Safety order is the whole design:
+ *  1. a rescue ref captures the pre-curation HEAD before anything else;
+ *  2. the chain is assembled with git commit-tree — pure object writes, nothing moves;
+ *  3. the assembled tip's tree is asserted equal to the pre-curation HEAD tree; a
+ *     mismatch throws CurateError naming the rescue ref with HEAD unmoved;
+ *  4. only then does the branch advance, via update-ref — NEVER reset --hard, so the
+ *     index and worktree (a sibling session's uncommitted dirt included) are untouched;
+ *     the trees are identical by the step-3 assertion, so the checkout stays coherent.
+ *
+ * plan = { base, groups: [{ commits: [{sha, subject, kind}], message: {subject, body} }] }
+ * Returns { tip, rescueRef }.
+ */
+export function executeCurate(cwd, plan) {
+  const preHead = git(cwd, ['rev-parse', 'HEAD'])
+  const preTree = git(cwd, ['rev-parse', 'HEAD^{tree}'])
+  const rescueRef = `refs/curate-rescue/${preHead.slice(0, 12)}`
+  git(cwd, ['update-ref', rescueRef, preHead])
+
+  let parent = git(cwd, ['rev-parse', `${plan.base}^{commit}`])
+  for (const group of plan.groups) {
+    const last = group.commits[group.commits.length - 1]
+    const tree = git(cwd, ['rev-parse', `${last.sha}^{tree}`])
+    const [aName, aEmail, aDate] = git(cwd, ['show', '-s', '--format=%an%x00%ae%x00%aI', last.sha]).split('\0')
+    parent = git(cwd, ['commit-tree', tree, '-p', parent, '-m', `${group.message.subject}\n\n${group.message.body}`], {
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: aName,
+        GIT_AUTHOR_EMAIL: aEmail,
+        GIT_AUTHOR_DATE: aDate,
+      },
+    })
+  }
+
+  const tipTree = git(cwd, ['rev-parse', `${parent}^{tree}`])
+  if (tipTree !== preTree) {
+    throw new CurateError(
+      `curate: the assembled chain's tree (${tipTree.slice(0, 12)}) differs from the pre-curation tree (${preTree.slice(0, 12)}) — HEAD is unmoved; the original history is at ${rescueRef}`,
+      rescueRef,
+    )
+  }
+
+  git(cwd, ['update-ref', 'HEAD', parent, preHead])
+  return { tip: parent, rescueRef }
 }
