@@ -221,9 +221,10 @@ export function runCurate({
   const revertPool = range.commits.filter((c) => c.kind === 'scratch' && /^Revert "/.test(c.subject))
   for (const c of range.commits) {
     if (c.kind !== 'scratch' || /^Revert "/.test(c.subject)) continue
-    // Pair by the revert's INNER subject, consuming each revert once — two scratches
-    // before their reverts must not both claim the same twin.
-    const at = revertPool.findIndex((r) => r.subject.slice('Revert "'.length).startsWith(c.subject))
+    // Pair by the revert's EXACT inner subject (git writes `Revert "<subject>"`), consuming
+    // each revert once — a scratch subject that is a strict prefix of another must not
+    // steal the longer one's twin.
+    const at = revertPool.findIndex((r) => r.subject.slice('Revert "'.length) === `${c.subject}"`)
     if (at >= 0) redProofs.push({ scratch: c.sha, revert: revertPool.splice(at, 1)[0].sha, subject: c.subject })
   }
   try {

@@ -722,3 +722,26 @@ test('phase curate: an ABORTED apply leaves no false curation evidence in the re
   const rep = latestReport(r.root, 88)
   assert.equal(rep.report.curation, undefined, `an aborted curate must leave NO curation block; got ${JSON.stringify(rep.report.curation)}`)
 })
+
+test('phase curate: a scratch subject that PREFIXES another still pairs with its own revert exactly', () => {
+  const r = makeCurateRepo(89)
+  r.commit('docs(roadmap): phase 89 \u2014 move to in-progress')
+  r.commit('feat(cli): phase 89 \u2014 89.1 the task')
+  const short = r.commit('scratch(cli): phase 89 \u2014 prove the tripwire bites')
+  const long = r.commit('scratch(cli): phase 89 \u2014 prove the tripwire bites twice')
+  const rvLong = r.commit('Revert "scratch(cli): phase 89 \u2014 prove the tripwire bites twice"')
+  const rvShort = r.commit('Revert "scratch(cli): phase 89 \u2014 prove the tripwire bites"')
+  const record = { phase: 89, name: 'The prefix phase', tasks: [{ id: '89.1', title: 'The task' }] }
+  seedGateReport(r.root, 89)
+  const err = sink()
+  const code = runCurate({ cwd: r.root, toplevel: r.root, phaseNum: 89, apply: true, loadPhase: () => record, out: sink(), err })
+  assert.equal(code, 0, `stderr:\n${err.text}`)
+  assert.deepEqual(
+    latestReport(r.root, 89).report.curation.redProofs,
+    [
+      { scratch: short, revert: rvShort, subject: 'scratch(cli): phase 89 \u2014 prove the tripwire bites' },
+      { scratch: long, revert: rvLong, subject: 'scratch(cli): phase 89 \u2014 prove the tripwire bites twice' },
+    ],
+    'exact inner-subject matching: the shorter scratch never steals the longer one\u2019s twin, and BOTH pairs are recorded',
+  )
+})
