@@ -1,6 +1,6 @@
 /**
  * eval-scorecard — PER-ACTOR outcome slicing (arc EVALLOOP). `assembleAttribution` already
- * records who drove and who reviewed; this turns that capture into outcomes without turning it
+ * records who planned, who drove and who reviewed; this turns that capture into outcomes without turning it
  * into a leaderboard.
  *
  * Three rails decide every design choice here:
@@ -94,7 +94,7 @@ const finalGreenRun = (phase) => [...runsOf(phase)].reverse().find((r) => r.gree
 
 /**
  * A cell's shared cohort/keying pass. `cells` is the map being built; `make` supplies the
- * identity fields so the driver and reviewer lanes share one accumulation rule and cannot
+ * identity fields so the driver, planner and reviewer axes share one accumulation rule and cannot
  * drift into two definitions of a cohort.
  */
 function cellFor(cells, key, identity) {
@@ -209,6 +209,7 @@ export function computeScorecard(traces, gateFixes, { nFloor = SCORECARD_N_FLOOR
     }),
     notes: [
       'cells are cohort-scoped (task-count band × surface) because assignment is NOT random — no figure here is comparable across cohorts',
+      'planner cells measure the EXECUTION of phases that planner planned — plan quality shows through the executor, never directly',
       'the surface axis is the timing table\'s HEURISTIC over each phase keyFiles (web/, office/, spa/ paths), not a declared field',
       `cells under ${nFloor} samples ABSTAIN and carry no metrics — an abstained cell is not a zero score`,
     ],

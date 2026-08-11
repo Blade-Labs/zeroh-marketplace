@@ -1821,6 +1821,7 @@ const readScorecard = (root) => JSON.parse(readFileSync(scorecardPath(root), 'ut
 /** Every cell of the document, each tagged with the identity string a row must name it by. */
 const scorecardCells = (doc) => [
   ...doc.drivers.map((cell) => ({ kind: 'driver', id: cell.model, cell })),
+  ...(doc.planners ?? []).map((cell) => ({ kind: 'planner', id: cell.model, cell })),
   ...doc.reviewers.map((cell) => ({ kind: 'reviewer', id: cell.agent, cell })),
 ]
 
@@ -2073,8 +2074,8 @@ test('eval scorecard — nothing rendered or persisted claims a cross-cohort tot
   // an overall or a fleet mean to live. An added field would fail here by name.
   assert.deepEqual(
     Object.keys(doc).sort(),
-    ['drivers', 'generatedAt', 'nFloor', 'notes', 'reviewers'],
-    'the envelope carries the two cell arrays and nothing that could hold a pooled figure',
+    ['drivers', 'generatedAt', 'nFloor', 'notes', 'planners', 'reviewers'],
+    'the envelope carries the three cell arrays and nothing that could hold a pooled figure',
   )
 
   const cells = scorecardCells(doc)

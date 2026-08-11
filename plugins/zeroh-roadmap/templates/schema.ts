@@ -1201,7 +1201,7 @@ export const ArcTraceShape = z.object({
             startedAt: z.string().min(1),
             green: z.boolean(),
             rounds: z.array(
-              z.object({ round: z.number().int(), agent: z.string().min(1), verdict: z.string().min(1) }),
+              z.object({ round: z.number().int(), agent: z.string().min(1), verdict: z.string().min(1), model: z.string().min(1).optional() }),
             ),
             slotFailures: z.number().int().nonnegative(),
           }),

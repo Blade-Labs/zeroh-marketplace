@@ -125,7 +125,7 @@ function plannersOf(sc) {
 const plannerCell = (sc, { model, band = '1-3', surface = false }) =>
   plannersOf(sc).find((c) => c.model === model && c.taskCountBand === band && c.surface === surface)
 
-const allCells = (sc) => [...sc.drivers, ...sc.reviewers]
+const allCells = (sc) => [...sc.drivers, ...(sc.planners ?? []), ...sc.reviewers]
 
 /** Guarded sample access, same reason: an absent cell is a named failure, not a TypeError. */
 const samplesOf = (cell, label) => {
