@@ -94,6 +94,74 @@ export function ensureWorktree(root, slot, { baseRef = 'HEAD', installDeps } = {
   return { dir, created: true }
 }
 
+/** The land lost its race more times than the budget allows — the base kept advancing. */
+export class WorktreeRaceError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'WorktreeRaceError'
+  }
+}
+
+/** A rebase conflict: a sibling landed overlapping files. Never auto-resolved. */
+export class WorktreeConflictError extends Error {
+  constructor(message, conflicts) {
+    super(message)
+    this.name = 'WorktreeConflictError'
+    this.conflicts = conflicts
+  }
+}
+
+/**
+ * Land the worktree's curated commits on the integration branch: rebase the scratch
+ * head onto baseRef's CURRENT tip, then advance the base via the compare-and-swap
+ * update-ref form — a lost race is DETECTED (the expected-old guard refuses), never
+ * clobbered, and the loser re-reads the tip, rebases again and retries up to `retries`
+ * times before throwing typed. A genuine file conflict aborts the rebase (worktree
+ * restored, no mid-rebase state) and throws its own typed error naming the paths —
+ * resolution belongs to the executor, never to this function.
+ *
+ * `retries` counts retries: total swap attempts = retries + 1. `onRetry(n)` fires per
+ * retry actually taken; `beforeSwap(attempt)` is the injectable seam between rebase and
+ * swap (tests race the base there deterministically). Returns { tip, landed }.
+ */
+export function landPhase(worktreeDir, baseRef, { retries = 3, onRetry, beforeSwap } = {}) {
+  const ref = `refs/heads/${baseRef}`
+  let attempt = 0
+  for (;;) {
+    const tip = git(worktreeDir, ['rev-parse', ref])
+    try {
+      git(worktreeDir, ['rebase', tip])
+    } catch (e) {
+      try {
+        git(worktreeDir, ['rebase', '--abort'])
+      } catch {
+        // no rebase in progress (the failure predates it) — nothing to abort
+      }
+      const text = `${e.stdout ?? ''}\n${e.stderr ?? ''}`
+      const conflicts = [...text.matchAll(/Merge conflict in (.+)/g)].map((m) => m[1].trim())
+      throw new WorktreeConflictError(
+        `land: rebasing onto ${baseRef} hit a merge CONFLICT in ${conflicts.join(', ') || 'unknown files'} — a sibling landed overlapping work; resolve in the worktree, never auto-merge`,
+        conflicts,
+      )
+    }
+    const newTip = git(worktreeDir, ['rev-parse', 'HEAD'])
+    const landed = Number(git(worktreeDir, ['rev-list', '--count', `${tip}..${newTip}`]))
+    if (beforeSwap) beforeSwap(attempt)
+    try {
+      git(worktreeDir, ['update-ref', ref, newTip, tip])
+      return { tip: newTip, landed }
+    } catch {
+      attempt += 1
+      if (attempt > retries) {
+        throw new WorktreeRaceError(
+          `land: ${baseRef} kept advancing under the swap — retry budget (${retries}) exhausted; pull, re-curate if needed, and land again`,
+        )
+      }
+      if (onRetry) onRetry(attempt)
+    }
+  }
+}
+
 /**
  * Reset the scratch head to the integration tip for a new phase. A dirty worktree
  * REFUSES — uncommitted work is a session's live state, and a reset that eats it is the
