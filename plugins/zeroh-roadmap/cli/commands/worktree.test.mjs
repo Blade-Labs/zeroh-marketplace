@@ -216,6 +216,31 @@ test('worktree up — a second run returns the SAME dir and leaves in-flight wor
   assert.equal(readFileSync(scratchNotes, 'utf8'), 'uncommitted session state\n', 'nor touch the worktree’s uncommitted files')
 })
 
+test('worktree reset — no silent fallback: an unclaimed caller refuses pointing at --slot, and --slot targets the orphan', () => {
+  const r = makeRepo()
+  const first = runWt(r.root, 'up')
+  assert.equal(first.status, 0, `up must exit 0; stderr:\n${first.stderr}`)
+  const dir = lastLine(first.stdout)
+  const orphanTip = commitIn(dir, 'feat(cli): phase 2146 — an orphan scratch commit', 'work/orphan.txt')
+  const base = gitIn(r.root, 'rev-parse', 'HEAD')
+
+  // A DIFFERENT session (a fresh id) must not reset the orphan implicitly…
+  const strangerEnv = { CLAUDE_CODE_SESSION_ID: 'a-different-session' }
+  const refused = spawnSync('node', [BIN, 'worktree', 'reset', '--base', base], {
+    cwd: r.root, encoding: 'utf8', timeout: 120_000, env: { ...process.env, ...strangerEnv },
+  })
+  assert.equal(refused.status, 1, `an unowned reset must refuse; stderr:\n${refused.stderr}`)
+  assert.match(refused.stderr, /--slot/, 'the refusal points at the explicit escape hatch')
+  assert.equal(gitIn(dir, 'rev-parse', 'HEAD'), orphanTip, 'the orphan worktree is untouched')
+
+  // …and WITH --slot the same stranger resets it deliberately.
+  const targeted = spawnSync('node', [BIN, 'worktree', 'reset', '--slot', '1', '--base', base], {
+    cwd: r.root, encoding: 'utf8', timeout: 120_000, env: { ...process.env, ...strangerEnv },
+  })
+  assert.equal(targeted.status, 0, `an explicit --slot reset succeeds; stderr:\n${targeted.stderr}`)
+  assert.equal(gitIn(dir, 'rev-parse', 'HEAD'), base, 'the orphan scratch head moved to the requested base')
+})
+
 // ── status ────────────────────────────────────────────────────────────────────────────
 
 test('worktree status — prints one row per REGISTRY slot carrying slot, dir, claimer pid and live|dead (dead rows are never pruned)', () => {

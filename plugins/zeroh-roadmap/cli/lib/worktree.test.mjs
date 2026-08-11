@@ -331,10 +331,17 @@ test('claimSlot: a session claim SURVIVES its CLI pid — two sessions with dead
 })
 
 test('claimSlot: five PARALLEL claimers get five distinct slots and the registry survives untorn', async () => {
+  // Honest scope: this pins the CONTRACT (distinct slots, intact registry, no crash).
+  // The underlying race is timing-dependent, so a removed mutex fails this only
+  // sometimes — the deterministic proof of the lock is its design (mkdir is atomic)
+  // plus the review round's torn-registry repro that motivated it.
   const r = makeRepo()
   r.commit('root: seed the tree')
+  // The module UNDER TEST, resolved from this file's own URL — a hardcoded path would make
+  // the children load the shipped copy and the pin inert in any other checkout.
+  const modUrl = new URL('./worktree.mjs', import.meta.url).href
   const script = `
-    import('${'file://'}${'/home/patrik/zeroh-marketplace/plugins/zeroh-roadmap/cli/lib/worktree.mjs'}').then((m) => {
+    import(process.argv[3]).then((m) => {
       const out = m.claimSlot(process.argv[1], { owner: process.argv[2] })
       console.log(JSON.stringify(out))
     })
@@ -343,7 +350,7 @@ test('claimSlot: five PARALLEL claimers get five distinct slots and the registry
     ['pa', 'pb', 'pc', 'pd', 'pe'].map(
       (owner) =>
         new Promise((resolve) => {
-          const c = spawn('node', ['--input-type=module', '-e', script, r.root, owner], { stdio: ['ignore', 'pipe', 'pipe'] })
+          const c = spawn('node', ['--input-type=module', '-e', script, r.root, owner, modUrl], { stdio: ['ignore', 'pipe', 'pipe'] })
           let outText = ''
           let errText = ''
           c.stdout.on('data', (d) => (outText += d))
