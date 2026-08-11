@@ -34,6 +34,12 @@ reorder/skip them, or mark a task done before it is committed.
 
 ## Step 0 — read the phase; run the tripwires
 
+**Worktree lane first** (when the consumer's `roadmap.config.json` sets `executionIsolation:
+"worktree"`): run `roadmap worktree up`, cd into the printed dir, `roadmap worktree reset` to
+put the scratch head on the integration tip, and execute the WHOLE phase there — the primary
+checkout never sees task commits. Under `"primary"` (or absent) everything below runs where it
+always did.
+
 Read the phase (`status` must be `backlog`/`in-progress`; terminal = stop). If it declares
 `assumptions[]`, run each `verify` **before any code**: any failure ⇒ STOP and escalate with the
 raw output (arc-mode: `status: "escalated"`) — escalating IS success. Then `roadmap phase start
@@ -126,9 +132,9 @@ phase is genuinely composite). The command records the curation evidence — squ
 every scratch/revert RED-proof pair — into the gate report BEFORE the squash, so nothing the
 review relied on goes unreachable. A **foreign-commit refusal** (a sibling session's commit
 interleaves the range) is recorded in the phase's `limitations` and left alone — history staying
-granular is the honest fallback, NEVER a forced rewrite of someone else's work. (The
-session-worktree lane that makes interleaves impossible arrives with its own config flip; until
-then expect refusals on a busy shared checkout.)
+granular is the honest fallback, NEVER a forced rewrite of someone else's work. In the worktree
+lane a refusal cannot fire (the scratch head carries only this phase's commits by construction) —
+one on a primary-checkout phase means siblings shared the range.
 
 ## Complete + return
 
@@ -145,7 +151,10 @@ the workflow serializes those.
 
 **Standalone** (no arc-mode): after the completion commit, groom `roadmap/backlog.ts` (remove this
 phase's entry + any single-phase narrative naming only it), run the `emit` slot, then push per the
-consumer's `mergePolicy` (workflow serialization covers arc-mode only).
+consumer's `mergePolicy` (workflow serialization covers arc-mode only). **Worktree lane:** `roadmap
+phase land <N>` REPLACES the bare push — it lands the curated commits on the integration branch
+(guarded fast-forward, bounded retry) and pushes when the ref is push-authorized; grooming/emit
+still happen, in the worktree, before the land so they ride the curated commits.
 
 ## Codex delegation lane (`roadmap codex run <N…>`)
 
