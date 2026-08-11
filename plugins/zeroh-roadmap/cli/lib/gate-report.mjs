@@ -43,6 +43,15 @@ const AgentRoundShape = z.object({
   recordedAt: z.string(),
 })
 
+/** Curation evidence (phase 2145): recorded BEFORE the squash so the granular record —
+ *  above all the scratch/revert RED-proof pairs, unreachable after the rewrite — keeps a
+ *  durable home review-phase and eval can read. */
+const CurationShape = z.object({
+  squashedCount: z.number().int(),
+  landedSubjects: z.array(z.string()),
+  redProofs: z.array(z.object({ scratch: z.string(), revert: z.string(), subject: z.string() })),
+})
+
 /** The persisted GateRunReport (plugin-side Zod). */
 export const GateRunReportShape = z.object({
   phase: z.number().int().positive(),
@@ -56,6 +65,7 @@ export const GateRunReportShape = z.object({
   agents: z.array(AgentRoundShape).default([]),
   green: z.boolean(),
   notes: z.array(z.string()).default([]),
+  curation: CurationShape.optional(),
 })
 
 /** The record element gate run --record-round parses (without recordedAt — added on append). */
@@ -129,6 +139,20 @@ export function appendAgentRound(toplevel, phase, roundInput) {
     ...latest.report,
     agents: [...latest.report.agents, { ...round, recordedAt: new Date().toISOString() }],
   }
+  const validated = GateRunReportShape.parse(updated)
+  writeFileSync(latest.path, JSON.stringify(validated, null, 2) + '\n')
+  return validated
+}
+
+/** Attach (or replace) the curation-evidence block on the LATEST report, in place — the
+ *  same run file, never a new one. Validates the block through the report shape BEFORE
+ *  touching disk, so a malformed block leaves the file byte-identical. Throws when the
+ *  phase has no report: curation evidence has nowhere to live, and the caller
+ *  (executeCurate) treats that as an abort — evidence before surgery. */
+export function recordCuration(toplevel, phase, block) {
+  const latest = latestReport(toplevel, phase)
+  if (!latest) throw new Error(`gate report: no run report for phase ${phase} to record curation evidence into`)
+  const updated = { ...latest.report, curation: CurationShape.parse(block) }
   const validated = GateRunReportShape.parse(updated)
   writeFileSync(latest.path, JSON.stringify(validated, null, 2) + '\n')
   return validated

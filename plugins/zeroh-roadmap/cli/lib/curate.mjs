@@ -12,6 +12,7 @@
 import { execFileSync } from 'node:child_process'
 
 import { derivePhaseStartSha } from './gitscan.mjs'
+import { recordCuration } from './gate-report.mjs'
 
 const git = (cwd, args, opts = {}) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8', ...opts }).trim()
@@ -94,9 +95,20 @@ export function deriveCurationRange(cwd, phaseNum) {
  *     the trees are identical by the step-3 assertion, so the checkout stays coherent.
  *
  * plan = { base, groups: [{ commits: [{sha, subject, kind}], message: {subject, body} }] }
- * Returns { tip, rescueRef }.
+ * evidence (optional) = { toplevel, phase, redProofs: [{scratch, revert, subject}] }:
+ * when present, the curation block is recorded into the phase's latest gate report
+ * BEFORE any surgery — the squashed SHAs (the RED-proof pairs above all) become
+ * unreachable afterwards, so a report that cannot be written aborts the curate with
+ * the granular history intact. Returns { tip, rescueRef }.
  */
-export function executeCurate(cwd, plan) {
+export function executeCurate(cwd, plan, evidence) {
+  if (evidence) {
+    recordCuration(evidence.toplevel, evidence.phase, {
+      squashedCount: plan.groups.reduce((n, g) => n + g.commits.length, 0),
+      landedSubjects: plan.groups.map((g) => g.message.subject),
+      redProofs: evidence.redProofs ?? [],
+    })
+  }
   const preHead = git(cwd, ['rev-parse', 'HEAD'])
   const preTree = git(cwd, ['rev-parse', 'HEAD^{tree}'])
   const rescueRef = `refs/curate-rescue/${preHead.slice(0, 12)}`

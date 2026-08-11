@@ -17,6 +17,14 @@
  * mechanism is commit-tree + update-ref (never reset --hard), a sibling session's untracked
  * and modified-unstaged files in the shared checkout must come through byte-identical.
  *
+ * TEST-FIRST for the evidence argument executeCurate(cwd, plan, evidence) gains in phase
+ * 2145.4: a scratch/revert pair is the proof a tripwire actually bit, and the squash makes
+ * those SHAs unreachable — so the pair, the squashed count and the landed subjects must be
+ * in the phase's gate report BEFORE the rewrite, or the proof dies with the SHAs. That
+ * makes the ORDER the property: a gate report that cannot be written aborts the curate
+ * with HEAD unmoved and the granular history still there, because history-with-no-evidence
+ * is the one outcome nobody can undo. A 2-arg call keeps today's behaviour exactly.
+ *
  * TEST-FIRST for composeLandedMessage(phaseRecord, group) (phase 2145.3) at the bottom:
  * the curated message IS the product, so the properties are (a) the subject stays inside
  * git's 72-char subject budget while still carrying `phase N —`, the one boundary every
@@ -36,11 +44,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { deriveCurationRange } from './curate.mjs'
 import * as curate from './curate.mjs'
+import { writeReport, latestReport, gateDir } from './gate-report.mjs'
 
 const bases = []
 process.on('exit', () => bases.forEach((b) => rmSync(b, { recursive: true, force: true })))
@@ -132,6 +141,29 @@ function planFrom(range, sizes, messages) {
   }
   return { base: range.base, groups }
 }
+
+/**
+ * The green gate report a phase already has by the time curation runs — curation edits the
+ * LATEST report, it never opens a new gate run.
+ */
+function seedGateReport(toplevel, phase) {
+  return writeReport(toplevel, {
+    phase,
+    startedAt: '2026-08-11T10:00:00.000Z',
+    baseSha: 'seeded',
+    mode: 'phase',
+    kind: 'logic',
+    testScope: { derived: 'relevant', declared: null, effective: 'relevant' },
+    reviewScope: { derived: 'full', declared: null, effective: 'full' },
+    slots: [{ slot: 'types', command: 'npm run type-check', exitCode: 0, durationMs: 12, logPath: null }],
+    agents: [{ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: '0 findings', recordedAt: '2026-08-11T10:05:00.000Z' }],
+    green: true,
+    notes: [],
+  })
+}
+
+/** Run files under a phase's gate dir — curation must not add one. */
+const runFileCount = (toplevel, phase) => readdirSync(gateDir(toplevel, phase)).filter((f) => f.endsWith('.json')).length
 
 test('a clean phase range derives: base is the move commit parent, every commit classified oldest-first', () => {
   const r = makeRepo()
@@ -456,6 +488,188 @@ test('executeCurate: a sibling session’s untracked + modified-unstaged files s
   assert.equal(unstaged(), 'src/shared.txt', 'the tracked edit is still MODIFIED-UNSTAGED — a reset --hard would have erased it')
   assert.equal(r.status(), preStatus, 'index and worktree state are exactly as the sibling left them')
   assert.equal(r.git('diff', '--cached', '--name-only'), '', 'curation staged nothing on the sibling’s behalf')
+})
+
+// ── executeCurate + evidence: the curation record (2145.4) ───────────────────────────
+
+test('executeCurate: with evidence, the curation block lands in the phase’s LATEST gate report', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-60 file')
+
+  r.commit('docs(roadmap): phase 60 — move to in-progress')
+  r.commit('feat(cli): phase 60 — 60.1 the range')
+  const scratch = r.commit('scratch(cli): phase 60 — prove the foreign tripwire bites')
+  const revert = r.revert(scratch)
+  r.commit('feat(cli): phase 60 — 60.2 the executor')
+  r.commit('fix(cli): phase 60 gate R0 — quality-pass findings')
+  r.commit('docs(roadmap): phase 60 — record the transparency report')
+
+  const range = deriveCurationRange(r.root, 60)
+  assert.equal(range.ok, true, 'fixture bug: the range must derive before it can be curated')
+  assert.equal(range.commits.length, 7)
+  const preTree = r.tree(r.head())
+  const messages = [
+    { subject: 'feat(cli): phase 60 — derive the curation range', body: 'The base and the walk.' },
+    { subject: 'feat(cli): phase 60 — squash the range losslessly', body: 'commit-tree plus update-ref.' },
+    { subject: 'feat(cli): phase 60 — record the curation evidence', body: 'The gate report keeps the proof.' },
+  ]
+  const plan = planFrom(range, [3, 2, 2], messages)
+  const { path: reportPath } = seedGateReport(r.root, 60)
+  const redProofs = [{ scratch, revert, subject: r.subject(scratch) }]
+
+  const out = executeCurate(r.root, plan, { toplevel: r.root, phase: 60, redProofs })
+
+  // The curate itself is unchanged by carrying evidence.
+  assert.equal(r.tree(out.tip), preTree, 'the curated tip is still tree-identical to the pre-curation HEAD')
+  assert.equal(r.rangeShas(range.base).length, 3, 'the three-group plan still landed three commits')
+
+  const latest = latestReport(r.root, 60)
+  assert.ok(latest, 'the phase report must still be readable after curation')
+  assert.equal(latest.path, reportPath, 'the SAME report was amended — curation does not open a new gate run')
+  assert.equal(runFileCount(r.root, 60), 1, 'no new run file')
+  assert.ok(latest.report.curation, 'the latest gate report must carry the curation block')
+  // 7 commits swallowed by 3 groups: an implementation that recorded the GROUP count (3) or
+  // the landed-subject count would pass a laxer assertion than this one.
+  assert.equal(
+    latest.report.curation.squashedCount,
+    7,
+    'squashedCount is every commit the plan swallowed, not the number of groups',
+  )
+  assert.deepEqual(
+    latest.report.curation.landedSubjects,
+    messages.map((m) => m.subject),
+    'the landed subjects are recorded in plan order — the report is how anyone maps the old range onto the new commits',
+  )
+  assert.deepEqual(latest.report.curation.redProofs, redProofs, 'the scratch/revert pair is recorded verbatim')
+  assert.equal(latest.report.agents.length, 1, 'the gate rounds already in the report survive the curation write')
+  assert.equal(latest.report.green, true)
+
+  // Why the block exists at all: those SHAs are gone now, so the report is their only record.
+  const reachable = r.git('rev-list', 'HEAD').split('\n')
+  assert.ok(!reachable.includes(scratch), 'the scratch commit is unreachable from HEAD after the squash')
+  assert.ok(!reachable.includes(revert), 'so is its revert — the RED proof survives only in the gate report')
+  assert.ok(
+    !r.git('log', '--format=%s', `${range.base}..HEAD`).includes('prove the foreign tripwire bites'),
+    'the curated history no longer narrates the scratch pair',
+  )
+})
+
+test('executeCurate: a gate report that cannot be written ABORTS — evidence before surgery', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-61 file')
+
+  r.commit('docs(roadmap): phase 61 — move to in-progress')
+  r.commit('feat(cli): phase 61 — 61.1 the range')
+  const scratch = r.commit('scratch(cli): phase 61 — prove the tripwire bites')
+  const revert = r.revert(scratch)
+  r.commit('feat(cli): phase 61 — 61.2 the executor')
+  r.commit('docs(roadmap): phase 61 — record the transparency report')
+
+  const range = deriveCurationRange(r.root, 61)
+  assert.equal(range.ok, true, 'fixture bug: the range must derive before it can be curated')
+  const preHead = r.head()
+  const preTree = r.tree(preHead)
+  const preShas = range.commits.map((c) => c.sha)
+  const branch = r.git('rev-parse', '--abbrev-ref', 'HEAD')
+  const plan = planFrom(range, [range.commits.length], [
+    { subject: 'feat(cli): phase 61 — land the executor', body: 'One curated commit.' },
+  ])
+  // No gate report for phase 61: the evidence has nowhere to go.
+  assert.equal(latestReport(r.root, 61), null, 'fixture: the phase must have no gate report')
+
+  let caught = null
+  try {
+    executeCurate(r.root, plan, { toplevel: r.root, phase: 61, redProofs: [{ scratch, revert, subject: r.subject(scratch) }] })
+  } catch (err) {
+    if (err instanceof assert.AssertionError) throw err // the missing-export guard, not the refusal
+    caught = err
+  }
+
+  assert.ok(caught, 'unrecordable evidence must ABORT the curate — a squash whose proof was never written is unrecoverable')
+  assert.match(caught.message, /report/i, 'the abort names the gate report as the reason')
+
+  assert.equal(r.head(), preHead, 'HEAD is UNMOVED — the evidence write happens BEFORE any ref surgery')
+  assert.equal(r.git('rev-parse', branch), preHead, 'the branch ref is unmoved too')
+  assert.equal(r.tree(r.head()), preTree)
+  assert.deepEqual(r.rangeShas(range.base), preShas, 'the original granular history is intact, commit for commit')
+  assert.ok(r.git('rev-list', 'HEAD').split('\n').includes(scratch), 'the scratch commit is still reachable — nothing was rewritten')
+})
+
+test('executeCurate: an UNWRITABLE gate report aborts too, with no partial evidence and history intact', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-62 file')
+
+  r.commit('docs(roadmap): phase 62 — move to in-progress')
+  r.commit('feat(cli): phase 62 — 62.1 the range')
+  r.commit('feat(cli): phase 62 — 62.2 the executor')
+  r.commit('docs(roadmap): phase 62 — record the transparency report')
+
+  const range = deriveCurationRange(r.root, 62)
+  assert.equal(range.ok, true, 'fixture bug: the range must derive before it can be curated')
+  const preHead = r.head()
+  const preTree = r.tree(preHead)
+  const preShas = range.commits.map((c) => c.sha)
+  const branch = r.git('rev-parse', '--abbrev-ref', 'HEAD')
+  const plan = planFrom(range, [range.commits.length], [
+    { subject: 'feat(cli): phase 62 — land the executor', body: 'One curated commit.' },
+  ])
+
+  const { path: reportPath } = seedGateReport(r.root, 62)
+  const dir = gateDir(r.root, 62)
+  // Read-only report AND read-only dir: an in-place write and a write-temp-then-rename
+  // both fail, so the test does not silently depend on which one the writer picked.
+  chmodSync(reportPath, 0o444)
+  chmodSync(dir, 0o555)
+
+  let caught = null
+  try {
+    executeCurate(r.root, plan, { toplevel: r.root, phase: 62, redProofs: [] })
+  } catch (err) {
+    if (err instanceof assert.AssertionError) throw err
+    caught = err
+  } finally {
+    chmodSync(dir, 0o755)
+    chmodSync(reportPath, 0o644)
+  }
+
+  assert.ok(caught, 'an unwritable gate report must abort the curate before it rewrites anything')
+  assert.equal(r.head(), preHead, 'HEAD is UNMOVED')
+  assert.equal(r.git('rev-parse', branch), preHead)
+  assert.equal(r.tree(r.head()), preTree)
+  assert.deepEqual(r.rangeShas(range.base), preShas, 'the original granular history is intact')
+  assert.equal(latestReport(r.root, 62).report.curation, undefined, 'no half-written curation block was left behind')
+  assert.equal(runFileCount(r.root, 62), 1, 'and no second run file was invented to route around the failure')
+})
+
+test('executeCurate: a 2-arg call curates exactly as before and records NO curation block', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-63 file')
+
+  r.commit('docs(roadmap): phase 63 — move to in-progress')
+  r.commit('feat(cli): phase 63 — 63.1 the executor')
+  r.commit('docs(roadmap): phase 63 — record the transparency report')
+
+  const range = deriveCurationRange(r.root, 63)
+  assert.equal(range.ok, true, 'fixture bug: the range must derive before it can be curated')
+  const preHead = r.head()
+  const preTree = r.tree(preHead)
+  const { path: reportPath } = seedGateReport(r.root, 63)
+
+  const out = executeCurate(r.root, planFrom(range, [range.commits.length], [
+    { subject: 'feat(cli): phase 63 — land the executor', body: 'One curated commit.' },
+  ]))
+
+  assert.deepEqual(r.rangeShas(range.base), [out.tip], 'the un-evidenced curate behaves exactly as it does today')
+  assert.equal(r.tree(out.tip), preTree)
+  assert.notEqual(out.tip, preHead)
+  assert.equal(r.git('rev-parse', out.rescueRef), preHead)
+  const latest = latestReport(r.root, 63)
+  assert.equal(latest.path, reportPath)
+  assert.equal(latest.report.curation, undefined, 'no caller evidence means no block — a fabricated one would be invented evidence')
 })
 
 // ── composeLandedMessage: the landed message (2145.3) ────────────────────────────────
