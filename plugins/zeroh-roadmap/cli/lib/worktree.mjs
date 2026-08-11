@@ -10,7 +10,7 @@
  * stolen. Claiming is a REGISTRY act only — git happens in ensureWorktree.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const git = (cwd, args) =>
@@ -35,18 +35,19 @@ const alive = (pid) => {
   }
 }
 
-/** A session-owned claim outlives any single CLI spawn; this TTL is the only reaper it
- *  has, refreshed on every re-claim (each phase start), so an abandoned session frees
- *  its slot within a day while an active one never loses it. */
-const SESSION_CLAIM_TTL_MS = 24 * 60 * 60 * 1000
+/** A session-owned claim outlives any single CLI spawn; this TTL is its only calendar
+ *  reaper, refreshed on every re-claim (each phase start). A week, not a day: an arc
+ *  paused over a weekend must not lose its slot, and reclamation ADDITIONALLY refuses a
+ *  worktree carrying uncommitted work (see reclaimable). */
+const SESSION_CLAIM_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 /** The claimer identity. The CLI process is EPHEMERAL — its pid dies seconds after
  *  `worktree up` returns, so pid alone would let every later session reclaim slot 1 and
- *  double-book the worktree (the exact shared-dirt hazard the lane removes). The session
- *  id is the stable identity across all of a session's spawns; a bare pid identity is
- *  the honest fallback for callers outside a session. */
+ *  double-book the worktree (the exact shared-dirt hazard the lane removes). The
+ *  harness exports CLAUDE_CODE_SESSION_ID — the stable identity across all of a
+ *  session's spawns; a bare pid identity is the honest fallback outside a session. */
 export function ownerIdentity() {
-  return process.env.CLAUDE_SESSION_ID ?? `pid:${process.pid}`
+  return process.env.CLAUDE_CODE_SESSION_ID ?? process.env.CLAUDE_SESSION_ID ?? `pid:${process.pid}`
 }
 
 /** A claim row is live while its recorded pid runs; a pid-identity row dies with its
@@ -56,6 +57,19 @@ const rowLive = (row) => {
   if (String(row.owner ?? '').startsWith('pid:')) return false
   const claimed = Date.parse(row.claimedAt ?? '')
   return Number.isFinite(claimed) && Date.now() - claimed < SESSION_CLAIM_TTL_MS
+}
+
+/** An expired row's slot is reclaimable only when taking it cannot eat work: a missing
+ *  worktree always is; an existing one must be CLEAN (a dirty tree is a session's live
+ *  state whatever the calendar says — the row is kept and the next free slot is used). */
+const reclaimable = (root, row) => {
+  const dir = `${root}-wt-${row.slot}`
+  if (!existsSync(dir)) return true
+  try {
+    return git(dir, ['status', '--porcelain', '-uall']) === ''
+  } catch {
+    return false
+  }
 }
 
 /** Tolerant registry read: an array, a {slots:[…]} wrapper, or a slot-keyed map all
@@ -86,7 +100,45 @@ export function listSlots(root) {
 
 function writeSlots(root, rows) {
   mkdirSync(join(root, '.building'), { recursive: true })
-  writeFileSync(registryPath(root), JSON.stringify(rows, null, 2) + '\n')
+  // Write-temp-then-rename: a reader never sees a torn registry.
+  const tmp = `${registryPath(root)}.tmp-${process.pid}`
+  writeFileSync(tmp, JSON.stringify(rows, null, 2) + '\n')
+  renameSync(tmp, registryPath(root))
+}
+
+/** A directory-based mutex around the claim's read-modify-write: mkdir is atomic, so two
+ *  simultaneous claims serialize instead of both reading the same registry and writing
+ *  conflicting rows (a lost update hands two sessions one slot). Stale locks (a crashed
+ *  claimer) break after LOCK_STALE_MS. */
+const LOCK_STALE_MS = 10_000
+function withRegistryLock(root, fn) {
+  mkdirSync(join(root, '.building'), { recursive: true })
+  const lock = `${registryPath(root)}.lock`
+  const deadline = Date.now() + LOCK_STALE_MS
+  for (;;) {
+    try {
+      mkdirSync(lock)
+      break
+    } catch {
+      let stale = false
+      try {
+        stale = Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS
+      } catch {
+        continue // the holder released between our attempt and the stat — retry at once
+      }
+      if (stale) {
+        rmSync(lock, { recursive: true, force: true })
+        continue
+      }
+      if (Date.now() > deadline) throw new WorktreeError(`worktree registry lock ${lock} held past ${LOCK_STALE_MS}ms — a claimer is stuck or the lock is orphaned`)
+      execFileSync('sleep', ['0.05'])
+    }
+  }
+  try {
+    return fn()
+  } finally {
+    rmSync(lock, { recursive: true, force: true })
+  }
 }
 
 /**
@@ -97,19 +149,24 @@ function writeSlots(root, rows) {
  * slots free up. Returns { slot, dir }; dir is `${root}-wt-${slot}`, not created here.
  */
 export function claimSlot(root, { owner = ownerIdentity(), pid = process.pid } = {}) {
-  const rows = readSlots(root).filter(rowLive)
-  const mine = rows.find((r) => r.owner === owner)
-  if (mine) {
-    mine.claimedAt = new Date().toISOString()
+  return withRegistryLock(root, () => {
+    const all = readSlots(root)
+    // Dead rows are dropped only when their slot is safely reclaimable; a dead-but-dirty
+    // worktree keeps its row so nobody resets a tree that still carries live state.
+    const rows = all.filter((r) => rowLive(r) || !reclaimable(root, r))
+    const mine = rows.find((r) => r.owner === owner)
+    if (mine) {
+      mine.claimedAt = new Date().toISOString()
+      writeSlots(root, rows)
+      return { slot: mine.slot, dir: `${root}-wt-${mine.slot}` }
+    }
+    const taken = new Set(rows.map((r) => r.slot))
+    let k = 1
+    while (taken.has(k)) k += 1
+    rows.push({ slot: k, owner, pid, claimedAt: new Date().toISOString() })
     writeSlots(root, rows)
-    return { slot: mine.slot, dir: `${root}-wt-${mine.slot}` }
-  }
-  const taken = new Set(rows.map((r) => r.slot))
-  let k = 1
-  while (taken.has(k)) k += 1
-  rows.push({ slot: k, owner, pid, claimedAt: new Date().toISOString() })
-  writeSlots(root, rows)
-  return { slot: k, dir: `${root}-wt-${k}` }
+    return { slot: k, dir: `${root}-wt-${k}` }
+  })
 }
 
 /**
@@ -181,9 +238,10 @@ export function landPhase(worktreeDir, baseRef, { retries = 3, onRetry, beforeSw
     const landed = Number(git(worktreeDir, ['rev-list', '--count', `${tip}..${newTip}`]))
     if (beforeSwap) beforeSwap(attempt)
     try {
-      git(worktreeDir, ['update-ref', ref, newTip, tip])
+      advanceBase(worktreeDir, baseRef, newTip, tip)
       return { tip: newTip, landed }
-    } catch {
+    } catch (e) {
+      if (!e.raceLoss) throw e
       attempt += 1
       if (attempt > retries) {
         throw new WorktreeRaceError(
@@ -192,6 +250,52 @@ export function landPhase(worktreeDir, baseRef, { retries = 3, onRetry, beforeSw
       }
       if (onRetry) onRetry(attempt)
     }
+  }
+}
+
+/** The path of the worktree that has baseRef CHECKED OUT, or null. */
+function checkoutOf(worktreeDir, baseRef) {
+  const rows = git(worktreeDir, ['worktree', 'list', '--porcelain']).split('\n\n')
+  for (const row of rows) {
+    if (row.includes(`branch refs/heads/${baseRef}`)) {
+      const m = /^worktree (.+)$/m.exec(row)
+      if (m) return m[1]
+    }
+  }
+  return null
+}
+
+/**
+ * Advance the base branch to newTip, expecting it at expectedTip — coherently.
+ *
+ * A bare update-ref on a branch CHECKED OUT elsewhere (the azure primary keeps develop
+ * checked out) silently desyncs that checkout's index: `git status` there shows every
+ * landed file as a staged deletion, and a sibling's ordinary commit then deletes the
+ * landed work from the branch. git's porcelain refuses exactly this; the plumbing does
+ * not. So: when a checkout holds baseRef, the advance happens IN that checkout via
+ * `merge --ff-only` (index and worktree move with the ref; refuses rather than clobbers
+ * local changes); only an unchecked-out base takes the plumbing CAS. A lost race throws
+ * with `raceLoss = true`; any other git failure carries its real stderr.
+ */
+function advanceBase(worktreeDir, baseRef, newTip, expectedTip) {
+  const ref = `refs/heads/${baseRef}`
+  const home = checkoutOf(worktreeDir, baseRef)
+  if (git(worktreeDir, ['rev-parse', ref]) !== expectedTip) {
+    const lost = new WorktreeError(`land: ${baseRef} advanced before the swap`)
+    lost.raceLoss = true
+    throw lost
+  }
+  try {
+    if (home) git(home, ['merge', '--ff-only', newTip])
+    else git(worktreeDir, ['update-ref', ref, newTip, expectedTip])
+  } catch (e) {
+    const text = `${e.stderr ?? ''}${e.stdout ?? ''}`
+    if (/but expected|not possible to fast-forward|Not possible to fast-forward/i.test(text)) {
+      const lost = new WorktreeError(`land: ${baseRef} advanced under the swap`)
+      lost.raceLoss = true
+      throw lost
+    }
+    throw new WorktreeError(`land: advancing ${baseRef} failed — ${text.trim() || e.message}`)
   }
 }
 

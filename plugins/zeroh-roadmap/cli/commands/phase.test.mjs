@@ -901,10 +901,17 @@ test('phase land \u2014 under executionIsolation "primary" (and under an ABSENT 
   }
 })
 
-test('phase land \u2014 under "worktree" it curates then lands ONE commit on the ref mergePolicy names, leaving the worktree clean on the new tip', () => {
+test('phase land \u2014 under "worktree" it lands the CURATED scratch head on the ref mergePolicy names, leaving the worktree clean on the new tip', () => {
   const f = landFixture(91)
   const expected = composeLandedMessage(f.record, { commits: f.range.commits })
   seedGateReport(f.wt, 91)
+  // The protocol order: curate is its OWN step before the done flip; land lands whatever
+  // the scratch head carries.
+  assert.equal(
+    runCurate({ cwd: f.wt, toplevel: f.wt, phaseNum: 91, apply: true, loadPhase: () => f.record, out: sink(), err: sink() }),
+    0,
+    'fixture: the pre-land curate must succeed',
+  )
   const out = sink()
   const err = sink()
 
@@ -935,10 +942,9 @@ test('phase land \u2014 under "worktree" it curates then lands ONE commit on the
   assert.equal(gitAt(f.wt, 'rev-parse', '--abbrev-ref', 'HEAD'), 'wt/1', 'still on the scratch head')
   assert.equal(statusAt(f.wt), '', 'the worktree ends CLEAN \u2014 a session that inherits rebase wreckage cannot start its next phase')
 
-  // Land goes THROUGH curate --apply: the curation evidence is the proof, and it is what review
-  // and eval read after the granular shas become unreachable.
+  // The curate STEP recorded the evidence; land must not have disturbed it.
   const rep = latestReport(f.wt, 91)
-  assert.ok(rep?.report.curation, 'the gate report must carry the curation block \u2014 land curates, it does not land granular commits')
+  assert.ok(rep?.report.curation, 'the gate report still carries the curation block the curate step recorded')
   assert.deepEqual(rep.report.curation.landedSubjects, [expected.subject], 'landedSubjects is the subject that reached the branch')
   assert.equal(rep.report.curation.squashedCount, f.range.commits.length, 'squashedCount counts every commit the land swallowed')
   assert.ok(out.text.includes(f.baseName), `land must name the ref it advanced \u2014 the operator reports it; got:\n${out.text}`)
@@ -953,6 +959,11 @@ test('phase land \u2014 with NO mergePolicy the base ref falls back to develop (
   const f = landFixture(92, 'develop')
   const expected = composeLandedMessage(f.record, { commits: f.range.commits })
   seedGateReport(f.wt, 92)
+  assert.equal(
+    runCurate({ cwd: f.wt, toplevel: f.wt, phaseNum: 92, apply: true, loadPhase: () => f.record, out: sink(), err: sink() }),
+    0,
+    'fixture: the pre-land curate must succeed',
+  )
   const err = sink()
 
   const code = runLand({
@@ -970,8 +981,19 @@ test('phase land \u2014 with NO mergePolicy the base ref falls back to develop (
   assert.equal(gitAt(f.wt, 'rev-parse', 'HEAD'), f.baseTip(), 'and the worktree follows the landed tip')
 })
 
-test('phase land \u2014 a curate refusal (no gate report) lands NOTHING: the base ref is unmoved and the granular history survives for a retry', () => {
+test('phase land \u2014 the documented order (curate, then the completion commit, then land) lands BOTH, never refusing on its own closing commits', () => {
+  // The regression the reviewer proved: a land that re-curated would read the
+  // mark-complete commit (no em-dash boundary) as FOREIGN and refuse every
+  // properly-sequenced phase. Land is the LAND act only.
   const f = landFixture(93)
+  const expected = composeLandedMessage(f.record, { commits: f.range.commits })
+  seedGateReport(f.wt, 93)
+  assert.equal(
+    runCurate({ cwd: f.wt, toplevel: f.wt, phaseNum: 93, apply: true, loadPhase: () => f.record, out: sink(), err: sink() }),
+    0,
+    'fixture: the curate step succeeds',
+  )
+  const completion = commitAt(f.wt, 'docs(roadmap): mark phase 93 complete', 'roadmap/complete.txt')
   const err = sink()
 
   const code = runLand({
@@ -984,15 +1006,14 @@ test('phase land \u2014 a curate refusal (no gate report) lands NOTHING: the bas
     err,
   })
 
-  assert.notEqual(code, 0, `land must propagate curate\u2019s refusal \u2014 evidence before surgery; stderr:\n${err.text}`)
-  assert.ok(/no run report/.test(err.text), `the refusal names the missing report; got:\n${err.text}`)
-  assert.equal(f.baseTip(), f.seed, 'a refused curate must never reach the land step \u2014 the integration ref is unmoved')
-  assert.deepEqual(f.baseSubjects(), [SEED_SUBJECT], 'and the branch carries only its own history')
+  assert.equal(code, 0, `the documented sequence must land; stderr:\n${err.text}`)
   assert.deepEqual(
-    subjectsAt(f.wt, 'HEAD'),
-    [...f.granularSubjects].reverse().concat(SEED_SUBJECT),
-    'the granular commits are intact in the worktree, so the phase is re-landable once the gate report exists',
+    f.baseSubjects(),
+    ['docs(roadmap): mark phase 93 complete', expected.subject, SEED_SUBJECT],
+    'the base gains the curated commit AND the completion commit, in order',
   )
+  assert.equal(gitAt(f.wt, 'rev-parse', 'HEAD'), f.baseTip(), 'the worktree follows the landed tip')
+  assert.equal(f.git('rev-parse', `${completion}^{commit}`), f.baseTip(), 'the completion commit IS the landed tip')
 })
 
 test('phase \u2014 the dispatcher advertises `land <N>` beside validate/start/curate', () => {

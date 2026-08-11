@@ -139,7 +139,11 @@ function makeRepo() {
 /** Drive the REAL bin. A timeout guards the npm-ci hazard: a hung install must fail the test,
  *  never hang the tier. */
 function runWt(cwd, ...args) {
-  const res = spawnSync('node', [BIN, 'worktree', ...args], { cwd, encoding: 'utf8', timeout: 120_000 })
+  // The harness always exports CLAUDE_CODE_SESSION_ID for a real session; capbuild strips
+  // it from the test env, so the fixture restores a stable one — without it every spawned
+  // CLI is a distinct pid-identity owner and the same-session semantics are untestable.
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: process.env.CLAUDE_CODE_SESSION_ID ?? 'wt-test-session' }
+  const res = spawnSync('node', [BIN, 'worktree', ...args], { cwd, encoding: 'utf8', timeout: 120_000, env })
   assert.ok(!res.error, `roadmap worktree ${args.join(' ')} failed to run: ${res.error?.message}`)
   return res
 }

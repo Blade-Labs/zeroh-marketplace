@@ -573,6 +573,34 @@ test('landPhase: a clean land fast-forwards the base ref by exactly the curated 
   assert.equal(r.status(r.root), '', 'and the primary is left clean')
 })
 
+test('landPhase: landing onto a base CHECKED OUT in the primary keeps that checkout coherent — no phantom deletions, no eatable index', async () => {
+  // THE deployment pin (reviewer repro fx2): the azure primary keeps develop checked out.
+  // A bare update-ref there desyncs the primary\u2019s index — `git status` shows every landed
+  // file as a staged deletion and a sibling\u2019s ordinary commit then DELETES the landed work.
+  // The advance must go through the primary\u2019s own porcelain when it holds the ref.
+  const r = makeRepo()
+  const seed = commitIn(r.root, 'seed: the integration branch exists', 'src/seed.txt')
+  if (r.branch() !== BASE) r.git('checkout', '-q', '-b', BASE)
+  assert.equal(r.branch(), BASE, 'fixture: the primary IS on the integration branch — the shipped azure topology')
+
+  const wt = await ensureWorktree(r.root, 1, { baseRef: BASE, installDeps: () => {} })
+  commitIn(wt.dir, 'feat(cli): phase 2146 — 2146.2 the landed feature', 'cli/lib/feature.txt')
+
+  const out = await landPhase(wt.dir, BASE)
+
+  assert.equal(r.git('rev-parse', `refs/heads/${BASE}`), out.tip, 'the base ref advanced')
+  assert.equal(r.head(), out.tip, 'the primary checkout FOLLOWED its branch — ref and checkout move together')
+  assert.equal(r.status(r.root), '', 'the primary shows NO phantom staged deletions')
+  assert.ok(existsSync(join(r.root, 'cli/lib/feature.txt')), 'the landed file is ON DISK in the primary — the working tree moved with the ref')
+
+  // The kill shot the desync enabled: a sibling\u2019s ordinary explicit-path commit must not
+  // silently delete the landed work.
+  const sibling = commitIn(r.root, 'feat(web): a sibling lands its own file', 'web/sibling.txt')
+  const tree = r.git('ls-tree', '--name-only', '-r', sibling)
+  assert.ok(tree.includes('cli/lib/feature.txt'), `the landed file SURVIVES a sibling commit; tree was:\n${tree}`)
+  assert.equal(r.git('rev-list', '--count', `${seed}..${sibling}`), '2', 'land + sibling = two commits over the seed')
+})
+
 test('landPhase: a base that advances between rebase and swap is DETECTED, retried once, and the sibling’s commit survives underneath', async () => {
   const { r, wt, seed, subjects } = await landFixture([
     { subject: 'feat(cli): phase 2146 — 2146.2 the land half', rel: 'cli/lib/land.txt' },

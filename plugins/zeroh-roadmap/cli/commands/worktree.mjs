@@ -4,7 +4,7 @@
  *   roadmap worktree up                  claim a slot + ensure the worktree; prints the DIR
  *                                        (last stdout line) the session cds into
  *   roadmap worktree status              one row per registry slot: slot, dir, pid, live|dead
- *   roadmap worktree reset [--base <r>]  reset the claimed worktree's scratch head for a new
+ *   roadmap worktree reset [--base <r>] [--slot <k>]  reset the claimed worktree's scratch head for a new
  *                                        phase (refuses dirty, exit 2)
  *
  * `up` never resets — entering the lane must not eat in-flight work; reset is its own

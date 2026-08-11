@@ -82,7 +82,7 @@ function runStart(argv) {
     process.stderr.write(`roadmap phase start: the move-commit FAILED (${e?.message?.split('\n')[0] ?? e}) — flip reverted, nothing landed; fix the repo state and retry\n`)
     return 2
   }
-  const sid = process.env.CLAUDE_SESSION_ID
+  const sid = process.env.CLAUDE_CODE_SESSION_ID ?? process.env.CLAUDE_SESSION_ID
   appendExecutorEvent(toplevel, n, 'executor-start', sid ? { session_id: sid } : {})
   process.stderr.write(`roadmap phase start: phase ${n} → in-progress (move-commit landed, executor-start beacon stamped)\n`)
   return 0
@@ -254,9 +254,19 @@ export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = proc
     )
     return 1
   }
-  const curateCode = runCurate({ cwd, toplevel, phaseNum, apply: true, loadPhase, out, err })
-  if (curateCode !== 0) return curateCode
   const baseRef = integrationRefOf(config)
+  // A release is a HELD human act (the landing.mjs discipline): the lane never rewrites
+  // or pushes master/main autonomously, whatever the config names.
+  if (baseRef === 'master' || baseRef === 'main') {
+    err.write(`phase land: refusing to land onto ${baseRef} — a release branch is a held human act, never a lane act\n`)
+    return 1
+  }
+  // Land is the LAND act only. Curation is its own earlier protocol step (gate → curate
+  // → done flip): by land time the range carries the completion/groom commits, whose
+  // subjects the curation grammar deliberately reads as foreign — re-curating here would
+  // refuse every properly-sequenced phase (and re-squash a deliberate --groups split).
+  // Whatever sits on the scratch head, curated commits and closing state commits alike,
+  // lands as-is.
   let landed
   try {
     landed = landPhase(cwd, baseRef)
