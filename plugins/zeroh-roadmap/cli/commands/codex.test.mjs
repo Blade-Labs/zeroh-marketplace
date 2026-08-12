@@ -107,7 +107,7 @@ test('fresh report: sentinel written after launch is the verdict', () => {
   assert.equal(code, 0)
 })
 
-test('codex run clears a leftover CODEX-REPORT.md before launching', () => {
+test('codex run preserves a leftover CODEX-REPORT.md as .prev before launching', () => {
   const root = tmpRepo()
   // Phase file so buildPrompt resolves; premade worktree so no git-worktree/npm-ci runs.
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
@@ -126,11 +126,49 @@ test('codex run clears a leftover CODEX-REPORT.md before launching', () => {
     env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
   })
   assert.equal(r.status, 0, r.stderr)
-  assert.ok(!existsSync(report), 'the stale report must be cleared at launch')
-  assert.match(r.stderr, /cleared a stale CODEX-REPORT\.md/)
+  assert.ok(!existsSync(report), 'the stale report must be moved aside at launch')
+  assert.ok(existsSync(join(j.worktree, 'CODEX-REPORT.prev.md')), 'the hand-off is preserved, never deleted')
+  assert.match(r.stderr, /preserved the previous run's CODEX-REPORT\.md/)
 })
 
-test('a journal with an unparseable startedAt trusts the report (older journal versions)', () => {
+test('a relaunch whose phase file is missing destroys no evidence', () => {
+  const root = tmpRepo()
+  // No roadmap/phases/phase-48.phase.ts — buildPrompt throws.
+  const j = writeJournal(root, [48])
+  const report = join(j.worktree, 'CODEX-REPORT.md')
+  writeFileSync(report, 'previous run\nCODEX-RUN-BLOCKED\n')
+  const r = spawnSync('node', [BIN, 'codex', 'run', '48', '--worktree', j.worktree], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  assert.notEqual(r.status, 0)
+  assert.ok(existsSync(report), 'a failed relaunch must leave the previous hand-off untouched')
+})
+
+test('a LIVE run under a different journal id refuses a launch into the same worktree', () => {
+  const root = tmpRepo()
+  const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
+  child.unref()
+  cleanups.push(() => {
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch {}
+  })
+  const j = writeJournal(root, [50, 51], { pgid: child.pid }) // an arc journal, alive
+  const report = join(j.worktree, 'CODEX-REPORT.md')
+  writeFileSync(report, 'live run in progress\n')
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  writeFileSync(join(root, 'roadmap', 'phases', 'phase-50.phase.ts'), 'export default {}\n')
+  const r = spawnSync('node', [BIN, 'codex', 'run', '50', '--worktree', j.worktree], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  assert.equal(r.status, 2, r.stderr)
+  assert.match(r.stderr, /LIVE run .* in this worktree — refusing/)
+  assert.ok(existsSync(report), "the live run's report is untouched")
+})
+
+test('a journal with a malformed startedAt trusts the report', () => {
   const root = tmpRepo()
   const j = writeJournal(root, [47], { startedAt: 'not-a-date' })
   writeFileSync(join(j.worktree, 'CODEX-REPORT.md'), 'done\nCODEX-RUN-COMPLETE\n')

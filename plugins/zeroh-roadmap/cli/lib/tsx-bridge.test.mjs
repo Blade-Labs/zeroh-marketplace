@@ -135,21 +135,65 @@ test('resolveTsxInvocation — consumer tsx wins; else the plugin tsx; else npx;
     assert.equal(inv2.file, 'npx')
     assert.deepEqual(inv2.prefix, ['--no-install', 'tsx'])
   }
+
+  // The npx rung, pinned DETERMINISTICALLY via the injectable plugin-tsx path — this is
+  // the rung end-user installs without node_modules actually reach, so its exact
+  // composition must stay covered regardless of what this checkout has installed.
+  const inv3 = resolveTsxInvocation(bareRoot(), { pluginTsx: '/nonexistent/plugin-tsx' })
+  assert.equal(inv3.file, 'npx')
+  assert.deepEqual(inv3.prefix, ['--no-install', 'tsx'])
 })
 
-test('bridgeEval — composes the resolved invocation and passes -e + args through the injected exec', () => {
-  const root = bareRoot() // no local tsx → plugin tsx (or npx in a bare checkout)
+test('bridgeEval — composes the npx invocation and passes the prefix + -e + args through the injected exec', () => {
+  // The plugin-tsx rung is disabled by injection so the npx composition — the one rung a
+  // dropped-prefix mutation would break for end users — is pinned, not derived from the
+  // function under test's own collaborator.
+  const root = bareRoot()
   const calls = []
   const fakeExec = (file, args) => {
     calls.push({ file, args })
     return 'OUT'
   }
-  const res = bridgeEval(root, 'SCRIPT_BODY', { args: ['ARG1'], exec: fakeExec })
+  const res = bridgeEval(root, 'SCRIPT_BODY', { args: ['ARG1'], exec: fakeExec, pluginTsx: '/nonexistent/plugin-tsx' })
   assert.equal(res.ok, true)
   assert.equal(calls.length, 1)
-  const expected = resolveTsxInvocation(root)
-  assert.equal(calls[0].file, expected.file)
-  assert.deepEqual(calls[0].args, [...expected.prefix, '-e', 'SCRIPT_BODY', 'ARG1'])
+  assert.equal(calls[0].file, 'npx')
+  assert.deepEqual(calls[0].args, ['--no-install', 'tsx', '-e', 'SCRIPT_BODY', 'ARG1'])
+})
+
+test('bridgeEval — exit 4 with unresolvable modules on an UNINSTALLED consumer fails OPEN as tsx-absent', () => {
+  const root = bareRoot() // no node_modules here
+  const err = Object.assign(new Error('spawn failed'), {
+    status: 4,
+    stderr: "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'zod' imported from /x/phase.ts",
+  })
+  const res = bridgeEval(root, 'S', { exec: () => { throw err }, pluginTsx: '/nonexistent/plugin-tsx' })
+  assert.equal(res.ok, false)
+  assert.equal(res.kind, 'tsx-absent', 'an uninstalled tree cannot validate — toolchain-missing, never a file verdict')
+  assert.match(res.stderr, /run npm ci in the consumer checkout/)
+})
+
+test('bridgeEval — exit 4 with unresolvable modules on an INSTALLED consumer is a genuine load error', () => {
+  const root = bareRoot()
+  mkdirSync(join(root, 'node_modules'), { recursive: true })
+  const err = Object.assign(new Error('spawn failed'), {
+    status: 4,
+    stderr: "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'left-pad' imported from /x/phase.ts",
+  })
+  const res = bridgeEval(root, 'S', { exec: () => { throw err } })
+  assert.equal(res.kind, 'load')
+  assert.equal(res.exitCode, 4)
+})
+
+test('bridgeEval — a structured exit 4 whose text contains "not found" is a load error, not tsx-absent', () => {
+  const root = bareRoot()
+  mkdirSync(join(root, 'node_modules'), { recursive: true })
+  const err = Object.assign(new Error('spawn failed'), {
+    status: 4,
+    stderr: 'Error: config profile not found in the registry\n    at file:///x/phase.ts:3',
+  })
+  const res = bridgeEval(root, 'S', { exec: () => { throw err } })
+  assert.equal(res.kind, 'load', "the wrapper's structured exit outranks the not-found text heuristic")
 })
 
 test('bridgeImport — cache HIT: two calls on an unchanged file make ONE exec (+ a disk mirror written)', () => {

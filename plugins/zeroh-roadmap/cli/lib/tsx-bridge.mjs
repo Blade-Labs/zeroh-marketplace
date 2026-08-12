@@ -59,7 +59,8 @@ import('file://' + process.argv[1])
  *      fixture suites (tmp trees with no node_modules) and thin consumers validate at
  *      all instead of failing open;
  *   3. the `npx --no-install tsx` fallback, kept VERBATIM.
- * Memoized in a module Map keyed by the resolved root. Returns { file, prefix }.
+ * Memoized in a module Map keyed by resolved root + the (injectable) plugin-tsx path.
+ * Returns { file, prefix }.
  */
 export const PLUGIN_TSX = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -70,15 +71,15 @@ export const PLUGIN_TSX = join(
   'tsx',
 )
 const tsxInvocationCache = new Map()
-export function resolveTsxInvocation(consumerRoot) {
-  const key = resolve(consumerRoot)
+export function resolveTsxInvocation(consumerRoot, { pluginTsx = PLUGIN_TSX } = {}) {
+  const key = resolve(consumerRoot) + '|' + pluginTsx
   const memo = tsxInvocationCache.get(key)
   if (memo) return memo
-  const local = join(key, 'node_modules', '.bin', 'tsx')
+  const local = join(resolve(consumerRoot), 'node_modules', '.bin', 'tsx')
   const inv = existsSync(local)
     ? { file: local, prefix: [] }
-    : existsSync(PLUGIN_TSX)
-      ? { file: PLUGIN_TSX, prefix: [] }
+    : existsSync(pluginTsx)
+      ? { file: pluginTsx, prefix: [] }
       : { file: 'npx', prefix: ['--no-install', 'tsx'] }
   tsxInvocationCache.set(key, inv)
   return inv
@@ -115,7 +116,7 @@ const MAX_ARGV_ENTRY_BYTES = 96 * 1024
 export function bridgeEval(
   consumerRoot,
   script,
-  { args = [], timeout = 60_000, exec = execFileSync, input = undefined } = {},
+  { args = [], timeout = 60_000, exec = execFileSync, input = undefined, pluginTsx = PLUGIN_TSX } = {},
 ) {
   const oversize = args.findIndex(
     (a) => typeof a === 'string' && Buffer.byteLength(a, 'utf8') > MAX_ARGV_ENTRY_BYTES,
@@ -132,7 +133,7 @@ export function bridgeEval(
         `with a '-' sentinel in that slot.`,
     }
   }
-  const { file, prefix } = resolveTsxInvocation(consumerRoot)
+  const { file, prefix } = resolveTsxInvocation(consumerRoot, { pluginTsx })
   try {
     const stdout = exec(file, [...prefix, '-e', script, ...args], {
       cwd: consumerRoot,
@@ -171,6 +172,19 @@ export function bridgeEval(
       }
       return { ok: false, kind: 'zod', issues, stderr, exitCode: 3 }
     }
+    if (err?.status === 4) {
+      // The wrapper's structured exit outranks every text heuristic (a load error whose
+      // message merely CONTAINS "not found" is not a missing toolchain). One carve-out
+      // keeps the fail-open contract: on a consumer tree with NO installed dependencies,
+      // the plugin-tsx rung reaches the import and fails on unresolvable modules — that
+      // is the toolchain-missing class (the tree cannot validate), never a verdict on
+      // the file. With node_modules present, the same failure is a genuine load error.
+      const depsMissing =
+        /ERR_MODULE_NOT_FOUND|Cannot find (module|package)/.test(stderr) &&
+        !existsSync(join(resolve(consumerRoot), 'node_modules'))
+      if (depsMissing) return { ok: false, kind: 'tsx-absent', stderr: `${stderr}\n${TSX_ABSENT_HINT}` }
+      return { ok: false, kind: 'load', stderr, exitCode: 4 }
+    }
     // "canceled due to missing packages" is modern npm's --no-install refusal wording —
     // without it a tsx-less environment misreads as a load-error (exit 2, blocking edits)
     // instead of failing OPEN as the toolchain-missing contract demands.
@@ -178,7 +192,6 @@ export function bridgeEval(
       err?.code === 'ENOENT' ||
       /not found|could not determine executable|npx: command|canceled due to missing packages/i.test(stderr)
     if (notFound) return { ok: false, kind: 'tsx-absent', stderr }
-    if (err?.status === 4) return { ok: false, kind: 'load', stderr, exitCode: 4 }
     return { ok: false, kind: 'eval-error', stderr, exitCode: err?.status ?? 1 }
   }
 }

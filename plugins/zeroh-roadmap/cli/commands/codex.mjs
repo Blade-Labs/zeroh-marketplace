@@ -27,7 +27,7 @@
  * review agents, the done-flip, and --verify-complete stay with the supervising session.
  * This command never merges and never pushes.
  */
-import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
@@ -98,6 +98,22 @@ function runCodex(root, ids, argv) {
     process.stderr.write(`roadmap codex: previous run (pgid ${j.pgid}) is dead — relaunching; the prompt's resume rule skips already-done tasks\n`)
   }
 
+  // The same-id check above cannot see a DIFFERENT id set living in the same worktree (an
+  // arc journal codex-2101-2102.json vs `codex run 2101 --worktree <same>`), and launching
+  // over a live run would disturb its files. Guard at the worktree level.
+  for (const f of readdirSync(building).filter((n) => /^codex-[\d-]+\.json$/.test(n))) {
+    if (join(building, f) === jPath) continue
+    try {
+      const oj = JSON.parse(readFileSync(join(building, f), 'utf8'))
+      if (oj.worktree === worktree && oj.pgid && groupAlive(oj.pgid)) {
+        process.stderr.write(`roadmap codex: journal ${f} has a LIVE run (pgid ${oj.pgid}) in this worktree — refusing to launch over it\n`)
+        return 2
+      }
+    } catch {
+      /* an unreadable sibling journal cannot prove liveness */
+    }
+  }
+
   if (!existsSync(worktree)) {
     const wt = spawnSync('git', ['worktree', 'add', worktree, '-b', `codex/${ids.join('-')}`, base], { cwd: root, stdio: 'inherit' })
     if (wt.status !== 0) return wt.status ?? 1
@@ -114,17 +130,22 @@ function runCodex(root, ids, argv) {
     }
   }
 
+  // buildPrompt can still throw (a renamed/renumbered phase file) — resolve it BEFORE
+  // touching the previous run's hand-off, so a failed relaunch destroys no evidence.
+  const prompt = buildPrompt(root, ids)
+
   // A CODEX-REPORT.md left by a previous run makes `codex status` read its stale sentinel as
   // this run's verdict (bit 2026-08-11: a relaunch polled "blocked" while the live run worked).
-  // The report is never committed, so the launching run owns the file: clear it.
+  // The report is never committed, so the launching run owns the file — preserved as .prev,
+  // never deleted (the status mtime guard already keeps the verdict safe).
   const staleReport = join(worktree, 'CODEX-REPORT.md')
   if (existsSync(staleReport)) {
-    rmSync(staleReport)
-    process.stderr.write('roadmap codex: cleared a stale CODEX-REPORT.md from the previous run\n')
+    renameSync(staleReport, join(worktree, 'CODEX-REPORT.prev.md'))
+    process.stderr.write("roadmap codex: preserved the previous run's CODEX-REPORT.md as CODEX-REPORT.prev.md\n")
   }
 
   const promptPath = join(building, `codex-${ids.join('-')}-prompt.txt`)
-  writeFileSync(promptPath, buildPrompt(root, ids))
+  writeFileSync(promptPath, prompt)
   const logPath = join(building, `codex-${ids.join('-')}.log`)
   const logFd = openSync(logPath, 'a')
 
@@ -169,11 +190,11 @@ function statusCodex(root, ids) {
   const reportPath = join(j.worktree, 'CODEX-REPORT.md')
   // A report older than this run's launch is a PREVIOUS run's hand-off — reading its sentinel
   // as the current verdict is the stale-sentinel bug (a live relaunch polled "blocked"). The
-  // launch path also clears it; the mtime guard covers journals written by older versions.
+  // launch path also moves it aside; this mtime guard is the second, independent defense.
   const reportExists = existsSync(reportPath)
-  // An absent or unparseable startedAt (older journal versions) must trust the report —
-  // Date.parse(bad) is NaN and `mtime >= NaN` is always false, which would read every
-  // COMPLETE run as dead-no-report forever.
+  // A malformed startedAt (a hand-edited journal) must trust the report — Date.parse(bad)
+  // is NaN and `mtime >= NaN` is always false, which would read every COMPLETE run as
+  // dead-no-report forever.
   const launchedAt = j.startedAt ? Date.parse(j.startedAt) : NaN
   const fresh = reportExists && (!Number.isFinite(launchedAt) || statSync(reportPath).mtimeMs >= launchedAt)
   const report = fresh ? readFileSync(reportPath, 'utf8') : ''

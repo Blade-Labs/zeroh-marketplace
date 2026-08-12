@@ -177,8 +177,10 @@ labor (user ruling 2026-07-22):** Codex runs each phase FULLY — tasks, per-tas
 transparencyReports, the gate to green (an honestly-labeled codex-self-review gateRound, the
 done-flip, `--verify-complete`). The session owns the back half only: AUDIT the commits and gate
 claims against the plan (spot-check verifies; a false green is a bounce), then merge, push,
-backlog-groom, clean up the worktree. Codex never merges/pushes and never touches the primary
-checkout; for an arc, sweep/validate/land judgment stays with the session.
+backlog-groom, clean up the worktree. Codex never merges/pushes in ANY checkout, and never
+touches THIS repo's primary checkout (a cross-repo phase's product commits in the OTHER repo's
+checkout are the plan's own instruction, not a violation); for an arc, sweep/validate/land
+judgment stays with the session.
 
 **Integration routing (the session's merge, after CODEX-RUN-COMPLETE):** rebase `codex/<N>`
 onto develop inside the codex worktree, then run `git merge --ff-only codex/<N>` FROM THE
