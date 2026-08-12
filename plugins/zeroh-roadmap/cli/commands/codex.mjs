@@ -171,7 +171,11 @@ function statusCodex(root, ids) {
   // as the current verdict is the stale-sentinel bug (a live relaunch polled "blocked"). The
   // launch path also clears it; the mtime guard covers journals written by older versions.
   const reportExists = existsSync(reportPath)
-  const fresh = reportExists && (!j.startedAt || statSync(reportPath).mtimeMs >= Date.parse(j.startedAt))
+  // An absent or unparseable startedAt (older journal versions) must trust the report —
+  // Date.parse(bad) is NaN and `mtime >= NaN` is always false, which would read every
+  // COMPLETE run as dead-no-report forever.
+  const launchedAt = j.startedAt ? Date.parse(j.startedAt) : NaN
+  const fresh = reportExists && (!Number.isFinite(launchedAt) || statSync(reportPath).mtimeMs >= launchedAt)
   const report = fresh ? readFileSync(reportPath, 'utf8') : ''
   const sentinel = report.match(SENTINEL_RE)?.[0] ?? null
   const alive = j.pgid ? groupAlive(j.pgid) : false

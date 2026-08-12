@@ -130,6 +130,15 @@ test('codex run clears a leftover CODEX-REPORT.md before launching', () => {
   assert.match(r.stderr, /cleared a stale CODEX-REPORT\.md/)
 })
 
+test('a journal with an unparseable startedAt trusts the report (older journal versions)', () => {
+  const root = tmpRepo()
+  const j = writeJournal(root, [47], { startedAt: 'not-a-date' })
+  writeFileSync(join(j.worktree, 'CODEX-REPORT.md'), 'done\nCODEX-RUN-COMPLETE\n')
+  const { code, out } = status(root, 47)
+  assert.equal(out.state, 'complete', 'an unparseable startedAt must not eat a real verdict')
+  assert.equal(code, 0)
+})
+
 test('the lane prompt carries the cross-repo instruction', () => {
   const root = tmpRepo()
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
