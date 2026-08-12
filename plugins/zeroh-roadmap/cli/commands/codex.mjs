@@ -29,7 +29,7 @@
  */
 import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
@@ -105,7 +105,8 @@ function runCodex(root, ids, argv) {
     if (join(building, f) === jPath) continue
     try {
       const oj = JSON.parse(readFileSync(join(building, f), 'utf8'))
-      if (oj.worktree === worktree && oj.pgid && groupAlive(oj.pgid)) {
+      // resolve() both sides: a relative --worktree must not slip past an absolute journal path.
+      if (oj.worktree && resolve(oj.worktree) === resolve(worktree) && oj.pgid && groupAlive(oj.pgid)) {
         process.stderr.write(`roadmap codex: journal ${f} has a LIVE run (pgid ${oj.pgid}) in this worktree — refusing to launch over it\n`)
         return 2
       }
