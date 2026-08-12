@@ -27,7 +27,7 @@
  * review agents, the done-flip, and --verify-complete stay with the supervising session.
  * This command never merges and never pushes.
  */
-import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
@@ -60,6 +60,7 @@ function buildPrompt(root, ids) {
     '',
     'PROTOCOL per phase:',
     "1. Run the phase's assumptions[] verify commands first. Any failure = STOP and report in CODEX-REPORT.md; do not improvise.",
+    "   CROSS-REPO PHASES: a plan whose steps/files name paths in ANOTHER checkout (a different git toplevel than this worktree) is a cross-repo phase, and the plan's own paths ARE the instruction — implement and commit the PRODUCT work in that checkout on its currently checked-out branch (same per-task commit grammar), while every roadmap-state commit (the phase file, gate artifacts) stays in THIS worktree. The never-touch-the-primary rule protects this roadmap repo's primary checkout only. In the other checkout too: stage explicit paths, never push, never merge, never switch branches.",
     '   RESUME RULE: a task already done: true in the phase file with its commit present in git log is FINISHED — skip it, never redo or amend it (a relaunch over a half-done worktree resumes from the first unfinished task).',
     '2. Execute tasks IN ORDER. One task = ONE commit, message grammar (em-dash mandatory): "type(scope): phase <N> — <N>.<X> <short title>", ending with the trailer line: Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>',
     "   In the SAME commit set that task's done: true + a transparencyReport (whatWasDone/how/compromises/skipped/hardcoded/limitations — honest and concrete) in the phase file.",
@@ -113,6 +114,15 @@ function runCodex(root, ids, argv) {
     }
   }
 
+  // A CODEX-REPORT.md left by a previous run makes `codex status` read its stale sentinel as
+  // this run's verdict (bit 2026-08-11: a relaunch polled "blocked" while the live run worked).
+  // The report is never committed, so the launching run owns the file: clear it.
+  const staleReport = join(worktree, 'CODEX-REPORT.md')
+  if (existsSync(staleReport)) {
+    rmSync(staleReport)
+    process.stderr.write('roadmap codex: cleared a stale CODEX-REPORT.md from the previous run\n')
+  }
+
   const promptPath = join(building, `codex-${ids.join('-')}-prompt.txt`)
   writeFileSync(promptPath, buildPrompt(root, ids))
   const logPath = join(building, `codex-${ids.join('-')}.log`)
@@ -157,11 +167,17 @@ function statusCodex(root, ids) {
   }
   const j = JSON.parse(readFileSync(jPath, 'utf8'))
   const reportPath = join(j.worktree, 'CODEX-REPORT.md')
-  const report = existsSync(reportPath) ? readFileSync(reportPath, 'utf8') : ''
+  // A report older than this run's launch is a PREVIOUS run's hand-off — reading its sentinel
+  // as the current verdict is the stale-sentinel bug (a live relaunch polled "blocked"). The
+  // launch path also clears it; the mtime guard covers journals written by older versions.
+  const reportExists = existsSync(reportPath)
+  const fresh = reportExists && (!j.startedAt || statSync(reportPath).mtimeMs >= Date.parse(j.startedAt))
+  const report = fresh ? readFileSync(reportPath, 'utf8') : ''
   const sentinel = report.match(SENTINEL_RE)?.[0] ?? null
   const alive = j.pgid ? groupAlive(j.pgid) : false
   const state = sentinel === 'CODEX-RUN-COMPLETE' ? 'complete' : sentinel === 'CODEX-RUN-BLOCKED' ? 'blocked' : alive ? 'running' : 'dead-no-report'
-  process.stdout.write(JSON.stringify({ state, alive, sentinel, report: existsSync(reportPath) ? reportPath : null, ...j }, null, 2) + '\n')
+  const staleReport = reportExists && !fresh ? reportPath : undefined
+  process.stdout.write(JSON.stringify({ state, alive, sentinel, report: fresh ? reportPath : null, ...(staleReport ? { staleReport } : {}), ...j }, null, 2) + '\n')
   return state === 'complete' ? 0 : state === 'running' ? 3 : 2
 }
 

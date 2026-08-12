@@ -179,3 +179,13 @@ done-flip, `--verify-complete`). The session owns the back half only: AUDIT the 
 claims against the plan (spot-check verifies; a false green is a bounce), then merge, push,
 backlog-groom, clean up the worktree. Codex never merges/pushes and never touches the primary
 checkout; for an arc, sweep/validate/land judgment stays with the session.
+
+**Integration routing (the session's merge, after CODEX-RUN-COMPLETE):** rebase `codex/<N>`
+onto develop inside the codex worktree, then run `git merge --ff-only codex/<N>` FROM THE
+PRIMARY checkout — run inside the codex worktree it merges the branch into itself and silently
+no-ops ("Already up to date" there is the tell; a compound command whose `cd` reset re-runs
+later steps in the wrong checkout is the usual cause). Then push, groom the backlog, and remove
+the worktree, the `codex/<N>` branch AND the `.building/codex-<N>.json` journal. **Cross-repo
+phases ride the lane normally** — the lane prompt carries the cross-repo instruction (product
+commits in the other checkout on its checked-out branch, roadmap-state commits in the
+worktree); integration then also pushes the product repo's branch.
