@@ -1,6 +1,6 @@
 {
   "name": "zeroh-roadmap",
-  "version": "0.29.1",
+  "version": "0.29.2",
   "description": "Phase-driven development with a design-first gate, validation gates, intent validation, review reports, and changelog generation",
   "author": {
     "name": "Blade Labs",

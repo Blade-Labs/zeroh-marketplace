@@ -51,10 +51,24 @@ import('file://' + process.argv[1])
 
 /**
  * Resolve the tsx invocation ONCE per consumer root (the npx-resolution tax is a large
- * share of the ~7s/read). A consumer-local node_modules/.bin/tsx is invoked directly
- * (no npx); absent, the `npx --no-install tsx` fallback is kept VERBATIM. Memoized in a
- * module Map keyed by the resolved root. Returns { file, prefix }.
+ * share of the ~7s/read). Three rungs:
+ *   1. consumer-local node_modules/.bin/tsx — the consumer's own toolchain wins;
+ *   2. the PLUGIN's own tsx (a declared devDependency) — the binary only runs the
+ *      script; the TARGET import still resolves zod from the imported file upward, so
+ *      the consumer's schema semantics are untouched. This rung is what lets the
+ *      fixture suites (tmp trees with no node_modules) and thin consumers validate at
+ *      all instead of failing open;
+ *   3. the `npx --no-install tsx` fallback, kept VERBATIM.
+ * Memoized in a module Map keyed by the resolved root. Returns { file, prefix }.
  */
+export const PLUGIN_TSX = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'node_modules',
+  '.bin',
+  'tsx',
+)
 const tsxInvocationCache = new Map()
 export function resolveTsxInvocation(consumerRoot) {
   const key = resolve(consumerRoot)
@@ -63,7 +77,9 @@ export function resolveTsxInvocation(consumerRoot) {
   const local = join(key, 'node_modules', '.bin', 'tsx')
   const inv = existsSync(local)
     ? { file: local, prefix: [] }
-    : { file: 'npx', prefix: ['--no-install', 'tsx'] }
+    : existsSync(PLUGIN_TSX)
+      ? { file: PLUGIN_TSX, prefix: [] }
+      : { file: 'npx', prefix: ['--no-install', 'tsx'] }
   tsxInvocationCache.set(key, inv)
   return inv
 }
@@ -155,8 +171,12 @@ export function bridgeEval(
       }
       return { ok: false, kind: 'zod', issues, stderr, exitCode: 3 }
     }
+    // "canceled due to missing packages" is modern npm's --no-install refusal wording —
+    // without it a tsx-less environment misreads as a load-error (exit 2, blocking edits)
+    // instead of failing OPEN as the toolchain-missing contract demands.
     const notFound =
-      err?.code === 'ENOENT' || /not found|could not determine executable|npx: command/i.test(stderr)
+      err?.code === 'ENOENT' ||
+      /not found|could not determine executable|npx: command|canceled due to missing packages/i.test(stderr)
     if (notFound) return { ok: false, kind: 'tsx-absent', stderr }
     if (err?.status === 4) return { ok: false, kind: 'load', stderr, exitCode: 4 }
     return { ok: false, kind: 'eval-error', stderr, exitCode: err?.status ?? 1 }

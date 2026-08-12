@@ -16,6 +16,7 @@ import {
   bridgeImport,
   bridgeImportMany,
   bridgeEval,
+  PLUGIN_TSX,
   resolveTsxInvocation,
   consumerSchemaPath,
   BridgeError,
@@ -113,7 +114,7 @@ const countingExec = (payload) => {
   return { exec, state }
 }
 
-test('resolveTsxInvocation — local node_modules/.bin/tsx wins with empty prefix; else npx; memoized', () => {
+test('resolveTsxInvocation — consumer tsx wins; else the plugin tsx; else npx; memoized', () => {
   const withLocal = bareRoot()
   mkdirSync(join(withLocal, 'node_modules', '.bin'), { recursive: true })
   writeFileSync(join(withLocal, 'node_modules', '.bin', 'tsx'), '#!/bin/sh\n')
@@ -122,14 +123,22 @@ test('resolveTsxInvocation — local node_modules/.bin/tsx wins with empty prefi
   assert.deepEqual(inv.prefix, [])
   assert.equal(resolveTsxInvocation(withLocal), inv, 'memoized — same object per resolved root')
 
+  // Without a consumer tsx, the second rung is the plugin's own devDependency tsx when
+  // this checkout has one installed; only a checkout with NO node_modules at all reaches
+  // the verbatim npx fallback. Environment-aware so the assertion is true in both.
   const without = bareRoot()
   const inv2 = resolveTsxInvocation(without)
-  assert.equal(inv2.file, 'npx')
-  assert.deepEqual(inv2.prefix, ['--no-install', 'tsx'])
+  if (existsSync(PLUGIN_TSX)) {
+    assert.equal(inv2.file, PLUGIN_TSX)
+    assert.deepEqual(inv2.prefix, [])
+  } else {
+    assert.equal(inv2.file, 'npx')
+    assert.deepEqual(inv2.prefix, ['--no-install', 'tsx'])
+  }
 })
 
 test('bridgeEval — composes the resolved invocation and passes -e + args through the injected exec', () => {
-  const root = bareRoot() // no local tsx → npx fallback
+  const root = bareRoot() // no local tsx → plugin tsx (or npx in a bare checkout)
   const calls = []
   const fakeExec = (file, args) => {
     calls.push({ file, args })
@@ -138,8 +147,9 @@ test('bridgeEval — composes the resolved invocation and passes -e + args throu
   const res = bridgeEval(root, 'SCRIPT_BODY', { args: ['ARG1'], exec: fakeExec })
   assert.equal(res.ok, true)
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].file, 'npx')
-  assert.deepEqual(calls[0].args, ['--no-install', 'tsx', '-e', 'SCRIPT_BODY', 'ARG1'])
+  const expected = resolveTsxInvocation(root)
+  assert.equal(calls[0].file, expected.file)
+  assert.deepEqual(calls[0].args, [...expected.prefix, '-e', 'SCRIPT_BODY', 'ARG1'])
 })
 
 test('bridgeImport — cache HIT: two calls on an unchanged file make ONE exec (+ a disk mirror written)', () => {
