@@ -62,8 +62,8 @@ status, via, date }`); an autonomous disposition writes the SAME entry, marking 
   never a merely-authored follow-up.
 - **PLAN-PHASE** — a real follow-up; **IN-ARC is the DEFAULT**:
   - **IN-ARC (default)** — author the phase NOW (`plan-phase`, stamp `arcId`, claim a number, append
-    to `planes`) → `{ status: 'planned', via: 'phase-<N>' }`. **do-arc loops back to Step 4 and
-    EXECUTES it before Step 7/8**; on completion the entry flips `'planned'` → `'fixed'`. Authoring
+    to `planes`) → `{ status: 'planned', via: 'phase-<N>' }`. **do-arc loops back into the phase loop and
+    EXECUTES it before the close-out sweep/validate**; on completion the entry flips `'planned'` → `'fixed'`. Authoring
     alone is NOT resolution.
   - **DESCOPE** — drop it. Requires **explicit user ratification EVEN in autonomous mode**. Record
     BOTH `{ status: "won't_fix", via: 'descope — ratified by <who> <when>' }` AND a typed
