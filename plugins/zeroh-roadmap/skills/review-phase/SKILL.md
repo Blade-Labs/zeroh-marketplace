@@ -148,4 +148,3 @@ files by full path.
 **What NOT to do:** Mode A fixes the PLAN, never source (→ `/do-phase`); Mode B stays report-only (a
 shipped-wrong finding goes through a phase). Don't run tests, review outside phase scope, or weaken
 findings — "probably fine" is not a verdict.
-</content>

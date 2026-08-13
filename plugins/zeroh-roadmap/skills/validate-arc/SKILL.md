@@ -17,8 +17,8 @@ a **fresh independent judge** (`intent-validator` — never the agent that built
 bounded corrective loop (Step 5) turns gaps into fixes via the normal gated `plan-phase` + `do-phase`
 pipeline (never a parallel executor).
 
-**Trigger:** `validate arc <id>`, `/validate-arc <id>`; also `do-arc`'s terminal Step 7 (after `arc-sweep`,
-before the merge-hold). `<id>` matches `Arc.id`.
+**Trigger:** `validate arc <id>`, `/validate-arc <id>`; also `do-arc`'s close-out validate step (after
+`arc-sweep`, before `arc land`). `<id>` matches `Arc.id`.
 
 ## Step 0: Resolve the arc + its criteria
 
@@ -92,8 +92,8 @@ omitted), and PASS/GAPS. **Stop on PASS** (merge-readiness is do-arc's call). On
 ## Step 5: Corrective loop (on GAPS) — bounded
 
 A GAPS result feeds a fix-and-re-check loop that **reuses `plan-phase` + `do-phase`** — a gap becomes a
-normal gated corrective phase. NO parallel executor, NO forked pipeline (the singleSeam). **From `do-arc`
-(Step 7), the consumer's `mergePolicy.gapsCorrection` decides:** `autonomous` → run this loop UNATTENDED
+normal gated corrective phase. NO parallel executor, NO forked pipeline (the singleSeam). **From `do-arc`'s
+close-out validate step, the consumer's `mergePolicy.gapsCorrection` decides:** `autonomous` → run this loop UNATTENDED
 (surface the gaps to chat as you go, but do not wait) until PASS or the bound trips — the judge's PASS is
 the approval (user ruling 2026-07-18); `hold` or absent → surface the GAPS + proposed corrective phase(s)
 and **PAUSE for the user's go** (the fail-safe default). Under EITHER mode, three stops survive: bound

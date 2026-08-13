@@ -101,7 +101,7 @@ implementation across the arc? **Spawn it with `model` per the `modelPolicy.judg
 judge whether the build implements each: a `reused` pattern genuinely followed (not re-invented), a
 `designed` pattern matching what was extended in the doc, a `ux` designRef's surface matching the
 confirmed preview — layout AND interactions/motion (hover/focus, transitions, animations: same or
-unambiguously better, never flattened — references/parity-rubric.md, Interaction & motion). **The design is
+unambiguously better, never flattened — skills/validate-arc/references/parity-rubric.md, Interaction & motion). **The design is
 the spec** — drift from a confirmed designRef is a finding, disposed like any other (RESOLVE-NOW if
 cheap, else PLAN-PHASE). No `designRefs` (mechanical arc) → skip explicitly, never silent.
 **Supersession:** the architect also asks whether this arc's build made a PRIOR arc's designRef

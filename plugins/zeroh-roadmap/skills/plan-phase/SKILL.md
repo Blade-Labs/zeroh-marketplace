@@ -82,8 +82,9 @@ legitimate for a pure-prose phase — say so.** They are for claims whose FALSIT
 (the RAGUNIFY 1343.6 miss) — not every `keyFiles` anchor.
 
 **Set `userFacing` + `flag`.** A phase adding user-visible behavior: `userFacing: true` plus `flag`
-= `{ id: 'FLAG_ID' }` (runtime kill-switch, default-OFF) or `{ bootWired: true, justification }`
-(joins the feature manifest; the justification is where a default-ON choice is ratified). Mode A
+= `{ id: 'FLAG_ID' }` (runtime-switchable, default ON — OFF is the kill-switch, and a deliberate
+OFF ships as a NAMED hold) or `{ bootWired: true, justification }`
+(joins the feature manifest; the justification is where boot-wiring is ratified). Mode A
 checks it; a non-user-facing phase omits both.
 
 **Standalone-phase interview.** An underspecified standalone request → INTERVIEW first (one question
