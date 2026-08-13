@@ -1,8 +1,10 @@
 # External-asset licensing
 
 The org's ratified policy for anything external a phase brings in — packages, fonts,
-icons, images, snippets, models. A task introducing one NAMES its license and placement
-before a byte lands; unknown fails closed.
+icons, images, snippets, models. The stakes: the product ships as PAID commercial SaaS
+with installable client artifacts, so an incompatible license is a legal defect, not a
+style issue. A task introducing one NAMES its license and placement before a byte lands;
+unknown fails closed.
 
 ## The tiers
 

@@ -28,6 +28,13 @@ when the decision is CRITICAL — one of:
 phase's `transparencyReport` and dies with the phase. An ordinary implementation
 choice never mints a doc.
 
+## Code comments are documentation too
+
+The same bar applies in source: a comment states a non-obvious WHY in one line, or it does
+not exist. Narration ("this loop now handles…"), process archaeology (phase numbers, dates,
+review rounds), and restating what the code visibly does are deleted on sight — the diff
+and the transparencyReport carry that story.
+
 ## Evidence is not documentation
 
 Verification records, audit sweeps, fix logs, screenshots, parity captures: gate-report
