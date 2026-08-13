@@ -65,7 +65,8 @@ Each item gets an operator decision; each choice appends ONE `debtResolutions[]`
 - **(f) Fix inline** — invoke `zeroh-roadmap:software-architect` for the proper-solution blueprint, apply,
   run the phase-`kind` gate, commit → `status: 'fixed', via: '<commitSHA>'`.
 - **(p) Plan a new phase** — `/plan-phase <debt>` (same version, or the next if the user prefers); after it
-  commits → `status: 'fixed', via: 'phase-<N>'`.
+  commits → `status: 'planned', via: 'phase-<N>'` (open until that phase is `done` — schema.ts's
+  planned-is-open rule; `'fixed'` only when the work exists).
 - **(w) Won't fix** — substantive reason ≥20 chars (schema rejects shorter) → `status: "won't_fix", via: '<reason>'`.
 - **(d) Dismiss** — never-was-debt → `status: 'dismissed', via: '<optional one-liner>'`. **Nudge:** if
   >half a phase's resolutions are `dismissed`, suggest tightening transparency-report field discipline.
@@ -89,7 +90,7 @@ done
 The skip-if-already-archived guard makes `--archive` **re-runnable** (a Ctrl-C'd partial archive resumes on
 re-invoke); a both-paths-exist conflict is **fatal** and demands manual investigation. Commit:
 `chore(roadmap): archive <version> — N phases moved`. After the move: `roadmap audit` covers archive
-integrity; `reviews/changelog.json` keeps archived phases with their `archivePath`; transparency reports +
+integrity (checks 12.3/12.4 join the archive census); transparency reports +
 `debtResolutions` are preserved on the archived files (`won't_fix`/`dismissed` stay visible to auditors).
 
 ## Edge cases + scope
