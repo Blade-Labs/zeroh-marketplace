@@ -23,6 +23,7 @@ import {
   deriveReviewScope,
   classifyBand,
   EXECUTABLE_EXTS,
+  isTestFile,
 } from '../lib/ladder.mjs'
 import { resolveSlot, resolveScopedOrFallback, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings } from '../lib/slots.mjs'
 import {
@@ -45,7 +46,6 @@ export class GateError extends Error {
 }
 
 const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8' }).trim()
-const isTestFile = (p) => /(?:\.|-)(?:test|itest|spec)\.[cm]?[jt]sx?$/.test(p)
 const isExecutable = (p) => EXECUTABLE_EXTS.some((e) => p.endsWith(e))
 
 /**

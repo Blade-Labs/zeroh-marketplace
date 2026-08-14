@@ -598,3 +598,31 @@ test('gate plan — an EMPTY scoped selection SKIPS the scoped slots with a name
     `the skip is NAMED in notes; got ${JSON.stringify(r.plan.notes)}`,
   )
 })
+
+test('gate plan — a -spec SOURCE module selects its colocated .test.ts, and never itself (the workflow-agent-spec class)', () => {
+  const repo = makeRepo()
+  // The sibling is seeded in a NON phase-tagged commit so it stays out of the phase-own
+  // set: the point is that the derivation FINDS it on disk, not that the phase touched it.
+  repo.commit('chore: seed the colocated sibling', {
+    'src/contracts/thing-spec.test.ts': "import { test } from 'node:test'\ntest('x', () => {})\n",
+  })
+  repo.writePhase(5006, phaseObj({ phase: 5006, testScope: 'scoped' }))
+  repo.commit('feat: phase 5006 — the contract module', { 'src/contracts/thing-spec.ts': 'export const t = 1\n' })
+  const r = planOf(repo.root, ['5006'])
+  assert.equal(r.code, 0, r.stderr)
+  for (const slot of ['unit-scoped', 'integration-scoped']) {
+    const s = r.plan.slots.find((x) => x.slot === slot)
+    assert.ok(s, `${slot} must run; got ${r.plan.slots.map((x) => x.slot)}`)
+    assert.ok(
+      s.files.includes('src/contracts/thing-spec.test.ts'),
+      `${slot} must select the colocated TEST; got ${JSON.stringify(s.files)}`,
+    )
+    // The source module reaching a tier is the defect: node --test accepts any path and
+    // executes it as a test file registering zero tests, which under the integration
+    // lane's --test-force-exit hangs the child until the heap ceiling aborts it.
+    assert.ok(
+      !s.files.includes('src/contracts/thing-spec.ts'),
+      `${slot} must NOT hand the SOURCE module to the runner; got ${JSON.stringify(s.files)}`,
+    )
+  }
+})

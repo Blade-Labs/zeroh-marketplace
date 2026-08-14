@@ -82,7 +82,12 @@ export function matchGlobPath(glob, path) {
   return false
 }
 
-const isTestFile = (p) => /(?:\.|-)(?:test|itest|spec)\.[cm]?[jt]sx?$/.test(p)
+/** A path is a TEST FILE iff a DOT separates its test-kind token from the extension
+ *  (`foo.test.ts`, `foo.itest.ts`, `foo.spec.tsx`). A HYPHEN form is deliberately NOT one:
+ *  `src/contracts/workflow-agent-spec.ts` is a domain module whose name ends in `-spec`, and
+ *  reading it as a test both fed the source module straight to the tier runners and skipped
+ *  the colocated-sibling lookup, so its real `.test.ts` was never selected by any gate. */
+export const isTestFile = (p) => /\.(?:test|itest|spec)\.[cm]?[jt]sx?$/.test(p)
 const isExecutable = (p) => EXECUTABLE_EXTS.some((ext) => p.endsWith(ext))
 
 // ── gateCell(kind, mode, cfg) — the kind × mode mechanical slot cell ───────────────

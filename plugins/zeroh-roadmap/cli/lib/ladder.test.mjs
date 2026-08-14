@@ -19,6 +19,7 @@ import {
   matchGlob,
   EXECUTABLE_EXTS,
   REVIEW_LIGHT_MAX_LINES,
+  isTestFile,
 } from './ladder.mjs'
 
 // A frozen consumer config — Object.freeze at every level proves ladder.mjs mutates nothing.
@@ -255,4 +256,42 @@ test('classifyBand — the light-gated 4-task branch, TRIVIAL before MID (do-arc
   // the SAME 4-task phase WITHOUT the light declaration → mid (TRIVIAL rule doesn't catch it)
   const noDecl = bandPhase({ tasks: tasksOf(4) })
   assert.equal(classifyBand(noDecl, CFG).band, 'mid')
+})
+
+// ── isTestFile — the DOT anchor, and the scope-tightening it feeds ──────────────────
+// A hyphen form is a DOMAIN MODULE, not a test. `src/contracts/workflow-agent-spec.ts`
+// matched the old `(?:\.|-)` alternation, so the gate fed the source module straight to
+// the tier runners AND skipped the colocated lookup that finds its real `.test.ts`.
+test('isTestFile — a DOT separates a test from a module whose name ends in -spec', () => {
+  for (const p of [
+    'a/b.test.ts',
+    'a/b.test.tsx',
+    'a/b.itest.ts',
+    'a/b.spec.ts',
+    'a/b.spec.tsx',
+    'a/b.test.mjs',
+    'a/b.test.cjs',
+  ]) {
+    assert.equal(isTestFile(p), true, `${p} must be a test file`)
+  }
+  for (const p of [
+    'src/contracts/workflow-agent-spec.ts',
+    'src/contracts/roster-spec.ts',
+    'a/b-test.ts',
+    'a/b-itest.ts',
+    'a/b.ts',
+  ]) {
+    assert.equal(isTestFile(p), false, `${p} must NOT be a test file`)
+  }
+})
+
+test('deriveTestScope — a -spec module with no colocated sibling derives relevant, never scoped', () => {
+  // The ladder-side half of the same defect: scopedProvable used to accept `-spec.ts` as
+  // its OWN proof, so a module with no test on disk claimed the scoped rung.
+  // Restoring the alternation in ladder.mjs alone would ship that loosening silently green.
+  // The path must sit OUTSIDE every gateSpecialists glob: a `src/contracts/**` path floors
+  // to `relevant` on the specialist rule alone, which would pass under either regex and
+  // make this a vacuous tripwire (verified by running it both directions).
+  const r = deriveTestScope({ paths: ['lib/roster-spec.ts'], colocatedTest: new Set() }, { kind: 'logic' }, CFG)
+  assert.equal(r.derived, 'relevant')
 })
