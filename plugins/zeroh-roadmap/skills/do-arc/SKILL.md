@@ -137,5 +137,7 @@ re-enter the loop. `roadmap arc next` fast-forwards from disk. A
 
 ## Execution-prompt doc
 
-`roadmap/arc-prompts/arc-<id>-execution-prompt.md` is authored at arc-planning time, not here — read
-it for the arc's bar, honesty rails, and design refs before driving.
+`roadmap/arc-prompts/<id>-execution-prompt.md` is authored at arc-planning time, not here — read
+it for the arc's bar, honesty rails, and design refs before driving. Filename drift: glob
+`roadmap/arc-prompts/*<id>*` before concluding it is missing; truly absent, drive from the Arc
+entity's `honestyRails` / `designRefs` / `acceptanceCriteria` instead.

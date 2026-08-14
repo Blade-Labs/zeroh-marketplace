@@ -1,4 +1,4 @@
-# UX craft bar — what a design-gate artifact must reach
+# UX craft bar - what a design-gate artifact must reach
 
 The reference standard for every artifact the `ux-designer` agent produces (prose note or
 preview). Written 2026-07-03 after two gate artifacts diverged sharply in quality: one
@@ -10,20 +10,22 @@ of checkable habits. This file makes them the bar.
 The identity itself is always the CONSUMER's (bound via its `CLAUDE.md` "## Design
 homes"); this file is about the CRAFT applied to that identity.
 
-## 0. Before designing — enumerate what already exists
+## 0. Before designing - enumerate what already exists
 
 List the consumer's preview/design directories for EXISTING artifacts of the target
-surface, including variants (`-dark`, `-v2`, sibling names) — an `ls`, not a grep for one
-filename. If more than one artifact exists, ASK the user which is canonical before
-evolving any of them. The field failure this prevents: a session iterated a stale sibling
+surface, including variants (`-dark`, `-v2`, sibling names) - an `ls`, not a grep for one
+filename. If more than one artifact exists, list EVERY sibling by name in the ask and put
+the canonical-naming question to the user explicitly ("which of these is canon?") before
+evolving any of them - never infer canon from mtime or polish. The field failure this
+prevents: a session iterated a stale sibling
 through four polish passes while the design the user loved sat one directory entry away.
-The same check applies to code: a "missing" component may exist unmounted — search before
+The same check applies to code: a "missing" component may exist unmounted - search before
 building.
 
-## 1. Identity fidelity — the consumer's brand, actually rendered
+## 1. Identity fidelity - the consumer's brand, actually rendered
 
 - **Load the real webfonts.** A preview that names the canon's typefaces in CSS but ships
-  no `<link>`/`@font-face` renders in system fallbacks — the single most common reason a
+  no `<link>`/`@font-face` renders in system fallbacks - the single most common reason a
   preview reads "generic AI SaaS". If the canon names the families, load them (Google
   Fonts link or repo assets) and confirm the display face is visibly NOT a fallback.
 - **Use the real brand assets.** Search the consumer's repos for the actual logo/wordmark
@@ -32,13 +34,13 @@ building.
   decision-grade design. Recolor per the consumer's lockup rules when the surface's
   sub-brand differs from the asset's origin.
 - **Type has roles, not sizes.** Apply the canon's role split (display / UI body / the
-  record voice — e.g. mono for identifiers, amounts, anything ledger-grade). If the canon
+  record voice - e.g. mono for identifiers, amounts, anything ledger-grade). If the canon
   has a record voice, machine facts NEVER render in the body face.
 - **Tokens, not approximations.** Copy the consumer's color/radius/shadow/spacing tokens
   verbatim into the preview's `:root`. Eyeballed hexes drift; drifted previews teach the
   build phases the wrong values.
 
-## 2. Form — prototype over screen sheet
+## 2. Form - prototype over screen sheet
 
 - **A flow is a prototype, not a stack of screenshots.** If the surface has 2+ sequential
   states (funnel, wizard, stepper), build ONE interactive page: click-through with real
@@ -48,12 +50,12 @@ building.
   surfaces.
 - **Motion is specified, not sprinkled.** A staged reveal per view (staggered rise),
   state-transition durations named in the CSS, one signature moment maximum (a stepper
-  fill, a stamp) — and ALL of it collapsing under `prefers-reduced-motion`.
+  fill, a stamp) - and ALL of it collapsing under `prefers-reduced-motion`.
 - **Real interaction affordances.** Buttons are `<button>`, tooltips open on
   hover AND `:focus-within`, live regions carry `role="status"`/`role="alert"`, focus
   rings visible. The preview demonstrates the accessibility bar, not just claims it.
 
-## 3. Restraint — the say-it-once doctrine
+## 3. Restraint - the say-it-once doctrine
 
 The reviewed-to-sign-off preview lost something in EVERY round: kickers, fine print,
 duplicate completion signals, a paragraph "no one will read". Design for that ending:
@@ -65,41 +67,41 @@ duplicate completion signals, a paragraph "no one will read". Design for that en
   secondary offers belong in the footer or nowhere. If a sentence exists "just in case",
   cut it.
 - **Labels the chrome already provides are clutter.** A "STEP 2 OF 3" kicker under a
-  stepper, a "marketplace" badge under a hero that says Microsoft sent you — delete.
+  stepper, a "marketplace" badge under a hero that says Microsoft sent you - delete.
 - **Run an explicit declutter pass before returning.** Re-read every view asking "what
   would a reviewer cut?" and cut it first.
 
-## 4. Copy — the consumer's voice, human-sounding
+## 4. Copy - the consumer's voice, human-sounding
 
 - If the consumer binds copy rules (banned AI-tell vocabulary, no filler phrases, no
   em-dash sentence connectors, lead with a specific fact), every string in the artifact
-  follows them — headings, microcopy, empty states, error text.
+  follows them - headings, microcopy, empty states, error text.
 - **No cleverness that pattern-matches to AI.** "One thing left, and it's a click" died
   in review; "You're in." survived. Short declaratives beat winks.
 - **Money and promises are exact.** Pricing copy states what is billed and what is not,
   in the buyer's terms, without mechanism jargon in the headline layer (unit prices are
   receipt-level detail, not hero copy).
 
-## 5. Honesty — in the artifact itself
+## 5. Honesty - in the artifact itself
 
 - **Never fake a screenshot.** If the artifact wants "the product in action" and no real
   capture exists, draw a clearly stylized vignette in the design language and record
   "replace with real e2e captures" as a build-phase task. A mocked image posing as the
   product is a lie the marketing team will ship.
-- **Design the honest states.** Empty, loading, refused, not-yet-measured — with the
+- **Design the honest states.** Empty, loading, refused, not-yet-measured - with the
   consumer's semantic state vocabulary used as facts (a "granted" color appears only
   after the granting act), never as decoration.
 - **No duplicated/placeholder blocks.** A copy-pasted card left twice in the artifact, or
   lorem-grade filler, fails the gate. Every block in the preview is intentional.
 
-## 5b. Handover — a design is delivered as a LINK, not a path
+## 5b. Handover - a design is delivered as a LINK, not a path
 
 A handed-over artifact the reviewer cannot open in one click is not handed over. Before
 returning, make the artifact viewable and put the URL in your return message:
 - If the consumer already serves its previews directory (a running static server, a docs
   site), use that URL.
 - Otherwise start one per the consumer's own environment conventions (its CLAUDE.md /
-  host rules — e.g. a memory-capped static server on a shared box) and hand back the
+  host rules - e.g. a memory-capped static server on a shared box) and hand back the
   REACHABLE address those rules prescribe (never localhost when the reviewer is on
   another machine).
 - The file path is still reported (it is the designRef); the link is how the human

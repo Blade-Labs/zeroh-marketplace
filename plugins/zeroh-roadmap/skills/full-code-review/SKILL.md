@@ -1,360 +1,181 @@
 ---
 name: full-code-review
-description: Comprehensive codebase audit using 8 parallel specialist agents. Covers security, dead code, DRY violations, performance, architecture, edge cases, data flow, and financial correctness. Required before every release to production.
-argument-hint: "[path or scope]"
+description: Whole-codebase pre-release audit. Parallel agents cover security, dead code, duplication, performance, architecture, edge cases, data flow, and domain-critical calculations; findings become a release verdict (any critical blocks), a remediation phase, and a review-record round. Use for "full code review", "pre-release audit", a pre-prod checkup on worry areas, or before merge-to-main/prod deploy. Not this skill: diff/phase review (code-review); a consumer's own release-review supersedes this.
+argument-hint: "[path or scope] [focus notes]"
 ---
 
 # Full Code Review (Pre-Release Gate)
 
-Comprehensive local code audit using parallel specialist agents. **Required before every merge to main / deploy to production.** Covers security, dead code, DRY, optimization, architecture, edge cases, data flow, and financial calculation correctness.
+Audit the codebase, end in an explicit release verdict, a committed remediation
+phase, and a merged round in the release's review record. Nothing found is ever
+silently dropped.
 
-**Consumer override rule:** if the consumer repo ships its own tailored release-review skill
-(e.g. a `release-review` with agents tuned to its domain invariants), **that skill supersedes
-this generic one** — say so and run the consumer's instead. This generic review is the
-fallback for consumers without one.
+**Not this skill:** diff-scoped or per-phase review is the sibling
+`code-review` (`../code-review/SKILL.md`); debt disposition at a release is
+`release-sweep`; whole-arc seam review is `arc-sweep`; roadmap structure audit
+is `audit-roadmap`.
+
+**Consumer override — check FIRST:** if the consumer repo ships its own
+tailored release-review skill (`ls .claude/skills/`), that skill supersedes
+this one (honor-system — no hook blocks it). Open your response with a
+**Skill routing note** that: (a) names this consumer-override rule, (b) names
+the tailored skill's path, (c) contrasts its tailored missions with this
+skill's generic dimensions, and (d) states plainly the generic audit is NOT
+running. Then execute the tailored skill at FULL depth — its regression check
+above all: verify each prior finding by re-reading the current source at the
+cited site; a remediation record or `resolution` field marked "fixed" is a
+claim to verify, never evidence. Breadth of re-check is where new findings
+surface — recheck the whole prior list when feasible, never a token sample,
+and report coverage as X/Y.
+
+Evidence of use: `reviews/2026-06-30-FULL-CODE-REVIEW.md` in the primary
+consumer (azure_private_agent) is a produced artifact of this workflow;
+`reviews/releases/v0.49.0-review.json` there shows the record shape rounds
+merge into.
 
 ## Arguments
 
 User instructions: $ARGUMENTS
 
-Parse arguments to determine:
-- **Scope**: Specific path/directory/file, or entire project if omitted
-- **Focus**: If specific concerns mentioned, narrow the review. Otherwise run all 8 agents.
-
-## Phase 1: Discovery
-
-Before dispatching review agents, build a codebase map:
-
-1. Identify project type, language(s), framework(s), build system from config files
-2. Find entry points: main files, index files, route definitions, top-level exports
-3. Read CLAUDE.md for project-specific conventions
-4. Read the consumer's prior review reports if present (`reviews/releases/*.json` + any audit reports in `reviews/`) — agents must check for REGRESSIONS against previously fixed findings
-5. Map directory structure and key modules
-6. Note the tech stack version — agents need this to check against current best practices
-
-Output a brief codebase summary, then proceed to Phase 2.
-
-## Phase 2: Dispatch 8 Parallel Agents
-
-Launch all 8 agents in a single message using the Agent tool. Pass each agent:
-- The codebase summary from Phase 1
-- The target scope (path or full project)
-- Its specific mission below
-- Reference to prior security audit findings for regression checking
-
-Every agent must:
-- Read actual source files thoroughly — not just list them
-- Trace through code paths to understand behavior
-- Return findings as structured list: `[severity: critical|high|medium|low] file:line — description`
-- Include the relevant code snippet for each finding
-- Only report findings with >=80% confidence (raised from 70% based on experience — reduces noise)
-- Be thorough — prioritize correctness over speed
-
----
-
-### Agent 1: Security & Auth (`code-reviewer`)
-
-**OWASP Top 10 + project-specific security audit.** This agent catches vulnerabilities that block production release.
-
-Check every auth route, middleware, and session handler for:
-- **Authentication bypass**: public paths that should require auth, `startsWith` prefix matching on paths (allows `/api/mat/auth/login-anything` to bypass)
-- **Authorization gaps**: missing cycle membership checks, IDOR via leaked UUIDs, indirect table access without parent verification
-- **Token security**: plaintext tokens in DB (must use sha256 hash), replayable tokens (must be single-use), token expiry enforcement
-- **Rate limiting**: every public endpoint must call both `isLimited()` AND `record()` — check for the common bug of calling `isLimited` without `record`
-- **Input validation**: Zod schemas on all API route inputs (not raw `as` casts), email format validation, max length on strings
-- **Account enumeration**: auth endpoints must not reveal whether an account exists (use generic responses)
-- **Session management**: sessions invalidated on password change, cookie flags (HttpOnly, Secure, SameSite), session TTL
-- **XSS vectors**: user input interpolated into HTML emails must use `escapeHtml()`, no `dangerouslySetInnerHTML`, no `eval()`
-- **Exposed secrets**: credentials in client bundle (`NEXT_PUBLIC_*` with secrets), hardcoded API keys, credentials in git
-- **Security headers**: CSP, HSTS, X-Frame-Options, X-Content-Type-Options in next.config or middleware
-- **File upload/download**: path traversal protection, MIME validation, cycle-scoped authorization on both upload AND download
-- **Environment variable consistency**: server-only vars not accidentally exposed as `NEXT_PUBLIC_*`, client and server reading different env var names for the same config
-
-Cross-reference with the consumer's prior security-audit reports under `reviews/` (when present) — flag any REGRESSIONS from previously fixed findings.
-
----
-
-### Agent 2: Dead Code & Dead References (`code-reviewer`)
-
-Identify all dead code in the codebase:
-- Unused exports, functions, classes, variables, and type definitions
-- Unreachable code branches (after early returns, impossible conditions)
-- **Orphaned modules** — fully implemented files not imported by any production code (business-rules that are tested but never wired). This is a critical pattern in this codebase.
-- Unused imports and dependencies (check package.json too)
-- Commented-out code blocks (flag for removal)
-- Stale references to renamed or removed code
-- **Deprecated shims** — re-export files left after refactoring
-
-Method: Trace the module/import graph from entry points outward. For each export in `lib/business-rules/`, `lib/services/`, verify at least one PRODUCTION import exists (not just tests).
-
----
-
-### Agent 3: DRY Violations & Duplication (`code-reviewer`)
-
-Find duplicated logic that hurts maintainability:
-- Copy-pasted code blocks (3+ lines substantially similar)
-- Near-identical functions or components that differ only in small details
-- Repeated constants, magic numbers, or config values that should be centralized
-- Duplicated error handling, validation, or transformation patterns
-- **Duplicated security logic** — especially authorization checks that should use shared services (e.g., `authorizeFileAccess`)
-- **Weaker copies** of shared utilities (e.g., local `escapeHtml` missing single-quote escape vs shared version)
-- Similar API call patterns that should share a utility
-
-For each finding, suggest the specific abstraction or refactor. Only flag duplication where an abstraction genuinely improves maintainability.
-
----
-
-### Agent 4: Performance & Optimization (`code-reviewer`)
-
-Identify performance issues with measurable impact:
-- Algorithmic inefficiency (O(n^2) where O(n) is possible, multi-pass where single-pass works)
-- Unnecessary React re-renders (missing `useMemo`, unstable references in deps arrays)
-- **`useEffect` + `db.from()` bypassing React Query** — this is a common anti-pattern in this codebase. Data should go through `useQuery` for caching/dedup, or filter from existing context data
-- N+1 query patterns in database access
-- Missing memoization where computation is expensive and inputs repeat
-- Large dependency imports that could be lazy-loaded
-- Memory leaks (event listeners not cleaned up, subscriptions not unsubscribed)
-- Redundant network calls or computations
-- **CPU-bound work inside DB transactions** (e.g., password hashing holding a connection)
-
-Skip micro-optimizations. Focus on changes that would noticeably improve UX or resource usage.
-
----
-
-### Agent 5: Architecture & Best Practices (`code-reviewer`)
-
-Evaluate architecture against best practices for the specific tech stack:
-- **Business logic layer purity**: `lib/business-rules/` must be pure functions (no DB imports, no side effects). Flag any DB calls in this directory.
-- **Testability**: business-rule functions must accept injectable `now` parameter (not inline `Date.now()`). Flag any that don't.
-- Separation of concerns: business logic mixed with UI? Data access in components?
-- Dependency direction: do lower layers depend on higher layers?
-- Framework-specific patterns: proper use of hooks, middleware, routing, state management
-- Error handling strategy: consistent? Complete? Proper use of error boundaries?
-- Type safety: `any` usage, loose types where strict would prevent bugs, unsafe casts (e.g., `as UserRole` on unvalidated input)
-- **Single source of truth violations**: duplicate env var names for client/server, hardcoded role lists instead of importing `ALL_USER_ROLES`, financial constants defined in multiple places
-- API design: consistent naming, proper status codes, canonical error utility with structured context
-
-Reference CLAUDE.md conventions. Check against PRIME DIRECTIVE (errors must surface with context — no fallbacks, no swallowed errors, no null returns).
-
----
-
-### Agent 6: Edge Cases & Potential Bugs (`code-reviewer`)
-
-Trace every data flow path and look for:
-- Unhandled null/undefined access
-- Missing error boundaries or try/catch where external calls can fail
-- Race conditions in async code (stale closures, concurrent state mutations)
-- **Transaction gaps**: multi-step DB operations not wrapped in `db.transaction()` (token mark + user create + membership assign should be atomic)
-- Type coercion bugs
-- Off-by-one errors in loops, slicing, pagination
-- Missing input validation at system boundaries (user input, API params, env vars)
-- State inconsistencies (optimistic updates without rollback, partial failure states)
-- **Orphaned DB records**: operations that persist data before a subsequent step that can fail (e.g., token created before email sent — if email fails, token is orphaned)
-
-For each finding, describe the specific scenario that triggers the bug.
-
----
-
-### Agent 7: Data Flow & Integration Integrity (`code-reviewer`)
-
-Trace the complete data lifecycle:
-- Map external inputs: APIs, user input, env vars, file reads, DB queries
-- Follow data through processing layers to outputs: responses, DB writes, side effects
-- Verify data transformations are correct at each step (especially cents/dollars conversions)
-- Check type consistency across module/function boundaries
-- Verify error propagation is complete — no swallowed errors, no silent failures
-- Confirm API contracts match between caller and callee (request/response shapes)
-- **Environment variable audit**: every env var referenced in code must be set in deploy config (`service-template.yaml` or workflow env block). Flag any referenced but unconfigured vars.
-- Verify third-party integrations handle failure modes (SendGrid email, GCS storage, pg connection)
-- **URL construction**: all action links in emails must use centralized `APP_BASE_URL`, not inline `process.env.APP_URL`
-
----
-
-### Agent 8: Financial Calculation Correctness (`code-reviewer`)
-
-**Critical for a financial platform.** Verify all monetary calculations are correct and consistent:
-
-- **Cents/Dollars consistency**: all monetary storage in integer cents (`_cents` fields), display via `formatCurrencyCents()`, no inline `/ 100` or `* 100`
-- **Calculation consistency**: every location that computes the same value must include the same inputs (check for divergent calculation paths)
-- **Profit split correctness**: `calculateProfitSplit` handles edge cases (no profit → mudarib gets 0 per Cl. 8.3, losses borne by investor per Cl. 8.4)
-- **Financial event type coverage**: `AMOUNT_FIELDS`, `DEBIT_EVENT_TYPES`, `CREDIT_EVENT_TYPES`, `REVENUE_EVENT_TYPES`, `TOTAL_INCOME_EVENT_TYPES` — verify they contain the right event types and are used in the right contexts
-- **Rounding**: financial assertions use exact integers (`toBe`), not `toBeCloseTo`
-- **Trial balance**: debits = credits (double-entry accounting invariant)
-- **Settlement calculation**: matches what dashboards show — no discrepancy between unrealized P&L and final settlement
-
----
-
-## Phase 3: Consolidate & Triage
-
-After all agents return:
-
-1. **Deduplicate** — merge overlapping findings from different agents
-2. **Cross-reference** — if Agent 6 found a bug in code Agent 2 flagged as dead, drop the bug
-3. **Regression check** — compare Agent 1 (security) findings against prior security audit. Flag any previously-fixed issues that reappeared.
-4. **Triage by severity:**
-   - **Critical**: Security vulnerabilities, financial calculation errors, data corruption, runtime crashes. **BLOCKS RELEASE.**
-   - **High**: Architectural issues, significant DRY violations, meaningful perf problems, orphaned business rules
-   - **Medium**: Code quality issues, minor optimization opportunities, non-critical edge cases
-   - **Low**: Style inconsistencies, minor dead code, improvement suggestions
-
-## Phase 4: Report + Consolidated Issue List
-
-Present findings as a **single numbered master list** grouped by severity. Every finding gets an ID (e.g., `FCR-1`, `FCR-2`, ...) that carries through to the phase file.
-
-```markdown
-# Full Code Review — [date]
-
-## Master Issue List
-
-### Critical (X findings) — RELEASE BLOCKERS
-
-**FCR-1** · `file.ts:42` · [Agent 1: Security] · **Token stored in plaintext**
-> Regression from security audit A-5
-\`\`\`typescript
-// code snippet showing the problem
-\`\`\`
-- **Problem**: What goes wrong, when, and what breaks
-- **Fix**: Specific remediation steps
-- **Regression**: Yes/No
-
-**FCR-2** · `file.ts:88` · [Agent 8: Financial] · **Cents displayed as dollars**
-...
-
-### High (X findings)
-
-**FCR-3** · ...
-
-### Medium (X findings)
-
-**FCR-N** · ...
-
-### Low (X findings)
-
-**FCR-N** · ...
-
----
-
-## Security Regression Check
-- Previously fixed items verified: X/Y
-- Regressions found: [list or "none"]
-
-## Summary
-- X critical, Y high, Z medium, W low findings
-- Release decision: BLOCKED (if critical > 0) or CLEAR
-- Top 3 areas needing attention
-- Overall code health assessment
-```
-
-## Phase 5: Create Remediation Phase File
-
-After presenting the report, **automatically create a new phase file** in `roadmap/phases/`. This is mandatory — do not ask, just create it.
-
-### Step 1: Determine the next phase number
-`roadmap claim` reserves the next monotonic number (never reuse a historical one, even a vacant slot).
-
-### Step 2: Write the phase file
-
-Create `roadmap/phases/phase-{N}.phase.ts` via `definePhase()`. Map every finding from the master list into
-a task; group related findings sharing a fix into the same task (e.g. multiple auth findings in one file).
-
-```typescript
-import { definePhase } from '../../lib/roadmap/schema'
-
-export default definePhase({
-  phase: {N},
-  name: 'Code Review Remediation',
-  status: 'backlog',
-  category: 'fix',
-  source: 'Full code review ({date})',
-  priority: '{BLOCKER if any critical, HIGH if only high, MEDIUM otherwise}',
-  dependsOn: [],
-  conflictsWith: [],
-  keyFiles: [/* list top files from findings */],
-  stakeholderDemo:
-    'All code review findings from the {date} audit are resolved — security, financial correctness, and code quality verified.',
-
-  tasks: [
-    {
-      id: '{N}.1',
-      title: '{Group label: e.g., "Fix critical security findings"}',
-      problem: '{Problem context — why these matter, what breaks}',
-      steps: [
-        { file: 'path/to/file.ts', description: 'FCR-1: {description}' },
-        { file: 'path/to/file.ts', description: 'FCR-2: {description}' },
-      ],
-      acceptanceCriteria: ['{Observable outcome}', '{Observable outcome}'],
-      files: ['path/to/file1.ts', 'path/to/file2.ts'],
-      done: false,
-    },
-    // ... more tasks ...
-    {
-      id: '{N}.{last}',
-      title: 'Run validation gate on all fixes',
-      problem:
-        'Gate must pass after all findings are resolved to confirm no regressions.',
-      steps: [
-        { file: 'package.json', description: 'Run the lint, types, unit, and build slots (`gateCommands` config)' },
-        { file: 'CLAUDE.md', description: 'Re-run /full-code-review — zero critical/high findings' },
-      ],
-      acceptanceCriteria: ['All gate steps pass', 'Zero critical/high findings on re-run'],
-      files: ['package.json'],
-      done: false,
-    },
-  ],
-})
-```
-
-**Grouping rules for tasks:**
-- All **critical** findings → first task(s), one task per security domain (auth, storage, financial)
-- All **high** findings → next tasks, grouped by domain (dead code, architecture, performance)
-- All **medium** findings → grouped loosely by file/area, max 5 items per task
-- **Low** findings → single task "Low-priority cleanup" with all items listed
-
-Each task must follow the `PhaseTaskShape` from `lib/roadmap/schema.ts`: `problem` field, `steps` with file paths, `acceptanceCriteria`, `files` list.
-
-### Step 3: Commit the phase file
-
-```bash
-git add roadmap/phases/phase-{N}.phase.ts
-git commit -m "docs(roadmap): phase {N} — code review remediation from {date} audit"
-```
-
-After committing, run the `emit` slot to regenerate `reviews/changelog.json`.
-
-### Step 4: Save review to `reviews/`
-
-Also save the full report as `reviews/{date}-FULL-CODE-REVIEW.md` for historical reference. Commit alongside the phase file.
-
-### Step 5: Serialize findings to JSON + append to the release review report
-
-Serialize the consolidated results to `reviews/releases/v{version}-review.json` (version from
-`package.json`). If the file exists, MERGE this run as additional rounds (append to `rounds[]` +
-`findings[]`); else create it from the schema of the existing `reviews/releases/` files. Each `rounds[]`
-entry: `{ round, agents:[{name, findings}], verdict }`; each `findings[]` entry: `{ severity, description,
-resolution|null, round, agent }`; top-level `{ version, date, verdict }`. Validate the `gate` section
-against `GateResultShape` (`lib/roadmap/schema.ts` — lint/typeCheck/build + test counts present +
-well-formed). Then rebuild the dashboard (`bash scripts/build-dashboard.sh`) and commit both files
-(`docs(reviews): v{version} — code review round {N}, {X} findings`).
-
-### Step 6: Update gate test counts
-Run the consumer's `unit`/`integration`/`e2e` slots, capture the pass counts, and update the review JSON
-`gate` section (`unitTests: {passed, total}`, etc.).
-
-### Step 7: Present next steps
-Tell the user: the phase file path + number, task count, whether it's release-blocking (any critical
-finding), the review JSON path, and "Run `do phase {N}` to start remediation".
-
----
-
-## Phase 6: Post-Remediation Update (after fixing findings)
-
-After the remediation phase completes (all tasks done, gate passed), update
-`reviews/releases/v{version}-review.json`:
-1. **Finding resolutions** — each fixed → `"resolution": "Fixed in phase {N}.{X} — …"`; each deferred →
-   `"Deferred to Phase {M} — {reason}"`; no unexplained `null`.
-2. **Verdict** — all critical+high resolved → `"RELEASED"`; any critical unresolved → `"BLOCKED"`.
-3. **Gate counts** — re-run tests, update the `gate` section (as Step 6).
-4. **Deferred list** — if any deferred, add `"deferredToBacklog": ["FCR-1: … (Phase N)", …]`.
-5. **Rebuild + commit** — `bash scripts/build-dashboard.sh`; commit both files (`docs(reviews): v{version}
-   — remediation complete, verdict updated`). The dashboard always reflects current state (found, resolved,
-   counts, verdict).
+- A path narrows scope to it plus its direct importers; omitted = whole project.
+- Focus notes narrow the dimension set; otherwise cover all eight dimensions in
+  `references/audit-dimensions.md`.
+
+**Deadline mode.** When the user names worry areas AND an imminent release
+("prod tomorrow", a cut date), add two steps before dispatch:
+1. Diff-prove stability of each worry area: find the ref the last clean review
+   examined (its report header or the round entry in
+   `reviews/releases/v*-review.json`) and run
+   `git diff <thatRef>..HEAD -- <worry paths>`. Byte-unchanged since a review
+   that cleared it is the strongest stability evidence — state it, then still
+   re-read the core (the diff proves the code did not move, not that the prior
+   review was right).
+2. Rank the hunt by consequence at the deploy moment, not in the abstract:
+   stricter validation loading state persisted by older code, boot-time
+   fail-loud paths against live data, config/flag defaults differing from the
+   running fleet. Pair the top risk with a concrete pre-deploy operator action
+   (a specific command against the live state), not only a code fix.
+
+## Phase 1 — Discovery
+
+1. Run the consumer-override check above. Then confirm roadmap infrastructure:
+   `roadmap status` and `roadmap/roadmap.config.json`. If there is no `roadmap/`
+   directory, still audit and report, but skip Phase 5 and name that gap to the
+   user — never invent a phase number (honor-system).
+2. Read the consumer's CLAUDE.md conventions and the `reviewFocus` classes in
+   `roadmap/roadmap.config.json`. Those repo-specific finding classes PREPEND
+   every agent mission and outrank generic checks (rule owned by
+   `../code-review/SKILL.md`).
+3. Read prior records: `reviews/*.md` reports and `reviews/releases/v*-review.json`.
+   When any exist, the regression check is MANDATORY (honor-system): build a
+   recheck list of previously fixed findings — every critical and high, every
+   item touching a user-named focus area, plus a broad sample of the rest.
+   Verification = re-reading the cited source at current HEAD; a `resolution`
+   field is a claim, not evidence. Report coverage as X/Y rechecked. No prior
+   records: state that in the report; never skip the check silently.
+4. Write a codebase summary (stack, entry points, key modules) under 20 lines
+   for the agent prompts.
+
+## Phase 2 — Dispatch parallel audit agents
+
+Launch one agent per dimension in `references/audit-dimensions.md` — all in a
+SINGLE message, subagent type `code-reviewer` (`../../agents/code-reviewer.md`).
+Pass each: the codebase summary, the scope, its mission, the `reviewFocus`
+classes, and the regression recheck list.
+
+Every agent must read actual source and trace code paths — findings based on
+file listings or names alone are void (contract rule, honor-system) — and
+return `[severity: critical|high|medium|low] file:line — description` plus the
+offending snippet. Report only findings at or above the 80% confidence bar
+(single home: `../code-review/SKILL.md`; raised from 70% in consumer use to cut
+noise). Thoroughness outranks speed.
+
+## Phase 3 — Consolidate and triage
+
+1. Deduplicate by merging overlapping findings WITHOUT dropping substance; a
+   finding that disappears between agent output and report is a failure
+   (honor-system).
+2. Cross-drop: a bug located in code independently flagged dead is not a live
+   defect — keep the dead-code finding, drop the bug.
+3. Label every recheck-list item that reappeared `Regression: yes`; count the
+   verified-still-fixed items for the report.
+4. Grade severity with the rubric in `../code-review/SKILL.md` (the plugin's
+   single severity home). Release rule owned here: any critical finding
+   (security vulnerability, domain-calculation error, data corruption, runtime
+   crash) → verdict BLOCKED; zero criticals → CLEAR. Never declare CLEAR while
+   an unresolved critical exists (honor-system; the verdict field is the record).
+5. A finding missing its file:line anchor or snippet: verify it yourself by
+   reading the file; if you cannot evidence it, it is below the bar — drop it.
+
+## Phase 4 — Report
+
+Assign stable ids `FCR-1..n`; they carry unchanged into the phase file and the
+review record. Render the master list grouped by severity using the template in
+`references/report-and-record.md`, ending with `Release decision: BLOCKED|CLEAR`,
+the regression counts, top-3 attention areas, and a code-health assessment.
+
+Include the template's `Chased and cleared` section: every suspicion you traced
+to a negative, with the evidence that closed it — traced negatives are audit
+substance; methodology caveats are not, so cap them at one short block. The
+verdict reasons ONLY from evidence this run produced: never lean it on gates
+you did not run — record those as `not-run`, name the pipeline that owns them
+(e.g. the release PR's CI), and keep them out of the verdict's rationale
+(honor-system).
+
+## Phase 5 — Remediation phase (automatic — do not ask)
+
+Creating the phase is mandatory and needs no permission (honor-system). Skip
+only when Phase 1 found no `roadmap/`, and say so.
+
+1. `roadmap claim` reserves the phase number — CLI-enforced atomic monotonic
+   reservation. Never reuse a historical number and never compute max+1 by hand.
+2. Write `roadmap/phases/phase-<N>.phase.ts` per
+   `references/remediation-phase.md`. `definePhase` `.parse()`s at import, so a
+   malformed task fails loudly; check with `roadmap phase validate <N>`.
+3. Commit (explicit paths only — shared trees):
+   `git add roadmap/phases/phase-<N>.phase.ts && git commit -m "docs(roadmap): phase <N> — code review remediation from <date> audit"`
+
+## Phase 6 — Persist the run
+
+1. Save the report as `reviews/<YYYY-MM-DD>-FULL-CODE-REVIEW.md`.
+2. Merge the findings into `reviews/releases/v<version>-review.json` as an
+   ADDITIONAL round per `references/report-and-record.md`. Prior rounds are
+   never overwritten (honor-system; derived views render every round).
+3. Record gate counts by actually running the consumer's `gateCommands` slots
+   from `roadmap/roadmap.config.json` (`unit` and `integration` at minimum) and
+   taking counts from the runner's own output artifacts. A slot that is absent
+   or will not run is a named gap in the record (`"status": "not-run"` + note),
+   never an invented number (honor-system).
+4. Rebuild derived views in the same operation: run the `gateCommands.emit`
+   slot (regenerates `reviews/changelog.json`, so the new phase appears) and
+   any dashboard builder over `reviews/releases/` — check `scripts/` and
+   `reviews/` for one, e.g. `scripts/build-dashboard.sh`. If emit aborts on
+   pre-existing broken phase files that are not yours, validate only your file
+   (`roadmap phase validate <N>`) and name the skipped regen in the report.
+5. Commit report + JSON + regenerated views together:
+   `git commit -m "docs(reviews): v<version> — full code review round <R>, <X> findings"`.
+   If `git add` reports a review path ignored, stage it with `git add -f`.
+
+## Phase 7 — Post-remediation update
+
+After the remediation phase lands with its gate passed, update the same review
+JSON:
+
+1. Every finding gets a `resolution`: `"Fixed in phase <N>.<X> — <how>"` or
+   `"Deferred to phase <M> — <reason>"`. An unexplained blank is a failure
+   (honor-system).
+2. Verdict: all critical and high findings resolved → `RELEASED`; any critical
+   unresolved stays `BLOCKED`. Never flip early.
+3. Move deferred items into the `deferredToBacklog` array. A finding deferred
+   in more than one round is itself a finding: flag it against the consumer's
+   own deferral discipline (backlog/hold rules), never silently re-defer.
+   Re-run the gate slots for fresh counts; rebuild the same derived views as
+   Phase 6 step 4; commit
+   `docs(reviews): v<version> — remediation complete, verdict updated`.
+
+## Done — tell the user
+
+Report: the phase file path, number, and task count; the verdict (BLOCKED if
+any critical); the report and review-JSON paths; and that `do phase <N>` starts
+remediation. Remediation is complete only when the consumer's gate passes AND a
+re-run of this review reports zero critical or high findings.

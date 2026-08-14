@@ -32,10 +32,14 @@ here and do not improvise a variant: one ritual, one home, so a fix to it reache
   whether the sweep report, the verdicts file and the escape scan are present. Absences are
   honest sentinels in the report, not errors, but they tell you in advance which dimensions will
   come back unscored — and a judge pass is wasted effort on a trace with no diff to read.
+- A same-day re-run refuses (exit 2) without `--force`; a later day writes a new dated report file.
 
 **The judge's inputs are yours to hand over.** do-arc has them in context; you do not. Give
 `arc-eval-judge` the arc id, the collected trace, the skeleton report path
-(`roadmap/arc-evals/<ID>-<date>.json`) and the arc's commit range.
+(`roadmap/arc-evals/<ID>-<date>.json`) and the arc's commit range. The judge model is pinned in
+the agent's frontmatter, cross-checked against `PINNED_JUDGE_MODEL` (`claude-sonnet-5`) in
+`cli/commands/eval.mjs`; never spawn it as another model. A mis-shaped verdict is re-spawned
+once; a second failure leaves the dimensions honestly `pending-judge`, never fabricated.
 
 **Historical arcs.** A landed arc whose judge pass will never be run honestly — the diff is gone,
 the standards of the day differed, or you are seeding a baseline in bulk — takes the

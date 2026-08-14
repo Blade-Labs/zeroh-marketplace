@@ -1,193 +1,207 @@
 ---
 name: "Plan Phase"
-description: "Create a new roadmap phase. Use when user says: create phase, plan phase, add to roadmap, new phase, add feature, create task. Reads the code first, identifies specific file paths, then writes a .phase.ts file."
+description: "Create a new roadmap phase. Use when user says: create phase, plan phase, add to roadmap, new phase, add feature, create task. Reads the code first, pre-makes every decision, rehearses verifies in both directions, then writes and commits a .phase.ts file. Not this skill: planning a multi-phase arc (plan-arc, which loops plan-phase per member) or queueing/auditing an existing phase (review-phase owns the queue)."
 user-invocable: true
 metadata:
   keywords: plan, phase, create, new, roadmap, backlog, feature, add, task, implement
   aliases: create-phase, new-phase
 ---
 
-# Plan Phase — High-Confidence Task Design
+# Plan Phase: Author a Known Diff
 
-**Trigger:** `plan phase for X`, `/plan-phase`, `/create-phase`, `/new-phase`. Input can be a bug
-report, feature request, review finding, broad goal, or a `roadmap/followups/<arcId>.md item K`
-reference (arc-sweep's deferred blueprints — read the item, it IS the plan input).
-**Flag:** `--skip-review` skips the Step-7 review pass (a WIP plan you know is unfinished).
+**Trigger:** `plan phase for X`, `/plan-phase`, `/create-phase`, `/new-phase`. Input: a bug report,
+feature request, review finding, broad goal, or a `roadmap/followups/<arcId>.md item K` reference
+(arc-sweep's deferred blueprint: read the item, it IS the plan input).
+**Flag:** `--skip-review` skips Step 7 for a WIP plan you know is unfinished; the report must then
+say "plan unverified, not queued".
+**Not this skill:** a whole arc is `plan-arc` (it runs the design-first gate, then loops plan-phase
+per member); queueing, auditing, or re-reviewing an existing phase is `review-phase` (queueing is
+its Mode A Step 8 act, never this skill's).
 
 ## PRIME RULE 1: KNOW THE DIFF BEFORE WRITING THE TASK
 
-Every task is planned to the point where you know the **exact diff** before any code. If you cannot
-name the specific files, functions, and nature of the change, you haven't planned enough — go read
-the code. "Rework calculations" is a non-plan; "add the missing deduction to
-`settlement.ts:calculateTotal` (~line 142)" is a plan.
+Every task is planned to the point where you know the exact diff before any code. If you cannot
+name the specific files, functions, and nature of the change, you have not planned enough: go read
+the code. "Rework masking" is a non-plan; "add the missing fail-closed category arm to
+`maskPrompt` in `src/masking.ts`" is a plan. Work that cannot reach this precision becomes an
+explicit *investigation task*, never a vague one.
 
 ## PRIME RULE 2: ESCALATE TO ARCHITECT BEFORE GIVING UP
 
 Tokens are not the constraint; hallucinations and shortcuts are. Whenever you would otherwise
 (a) write a vague low-confidence task, (b) drop a `[NEEDS CLARIFICATION]` marker, (c) split into
-"investigate-first" sub-phases, or (d) STOP and ask the user a planning question — **first** invoke
+"investigate-first" sub-phases, or (d) STOP and ask the user a planning question, **first** invoke
 `zeroh-roadmap:software-architect` (foreground, synchronous, single hop) per its **Decision
 Contract** in `agents/software-architect.md`, passing the request, the files you read (brief
 findings), where you got stuck, and the convenient-vs-proper paths. It returns `PROCEED_WITH_TASK`
-(write the high-confidence task — no marker) or `ESCALATE_TO_USER` (the ONLY verdict that justifies
-stopping, or a marker whose text IS the architect's question). Task-authoring only (Steps 2/2b/3);
-one ambiguity = one call. **Three+ escalations = the phase is too broad** — STOP, surface, ask to split.
+(write the high-confidence task, no marker) or `ESCALATE_TO_USER` (the ONLY verdict that justifies
+stopping, or a marker whose text IS the architect's question). Task-authoring only (Steps 2/3);
+one ambiguity = one call. **Three or more escalations = the phase is too broad**: STOP, surface
+it, propose a split. EVALCORE escalated the same unmade decision twice mid-execution; a decision
+you can name at plan time and did not make is this skill's failure, so make it or escalate it NOW.
 
-## Protocol
+## PRIME RULE 3: PLANNING NEVER MUTATES THE SHARED TREE BEYOND ITS OWN ARTIFACT
 
-### Step 1 — Reserve the number
-`roadmap claim` atomically reserves the next monotonic number across active+archive (the claim is
-the lock — sessions never collide). Never hand-compute max+1.
+The planning act edits exactly its roadmap artifact: the new phase file (or, when Step 0 routes
+there, an existing `roadmap/phases/` file). It NEVER edits `roadmap/backlog.ts` (honor-system;
+queueing is review-phase's act), never applies the diff-to-be to the shared checkout, never
+`git reset`/`git stash`/`git clean` sibling state, never `git add -A`. Probe experiments that need
+a mutated file run against scratch copies in the session scratchpad or a throwaway
+`git worktree add <scratchdir> HEAD` removed afterward (protocol in
+`references/verify-rehearsal.md`). Commit explicit paths only: `git commit <path>`.
 
-### Step 2 — Investigate the code FIRST (the most important step)
-For each area: read the call chain; trace the symbol with Grep (imports, call sites, registry/
-string-literal refs); identify the exact functions and lines that change ("~line 142" ok,
-"somewhere in the file" not); check downstream consumers; check for an existing utility/pattern to
-reuse. **If you can't do this for a piece of work, it isn't a task yet** — make it an investigation task.
+## Step 0: Interview + duplicate probe
 
-### Step 2b — `[NEEDS CLARIFICATION]` markers (only after an ESCALATE_TO_USER verdict)
-Precondition: you invoked the architect and got `ESCALATE_TO_USER`. Markers are for genuine
-ambiguity source cannot answer (an unexpressed business rule, a two-way product decision, an
-environment constraint outside the repo). Embed one in the task's `problem`/`acceptanceCriteria`
-naming a SPECIFIC question (never "TBD"). A marked task is NOT executable: the phase may commit on
-disk but must NOT be queued until every marker resolves (`do-phase`/`review-phase` refuse a marked
-phase). Never guess and leave a silent assumption — the marker is the honest answer.
+An underspecified standalone request gets an INTERVIEW before any code investigation: one question
+at a time, scope first, exactly as plan-arc interviews (user intent and scope at request time;
+Prime Rule 2's architect owns TECHNICAL decisions during authoring: two different stops).
+Genuinely user-owned forks are asked as AskUserQuestion options, never open-ended.
+**Duplicate probe, every request, before claiming:** run
+`grep -rln -F '<central symbol or topic>' roadmap/phases roadmap/backlog.ts` (fixed strings,
+bounded paths) and skim `roadmap status`. Existing coverage found: do NOT author a duplicate and
+do NOT queue anything; hand the queue/priority ruling to the user with options. If the tracked
+artifact IS the right home, improve IT instead of planning anew: re-run its `assumptions[].verify`
+against the current tree, re-check every anchor, hunt contradictions between carried-forward notes
+and task text (a note steering the executor to the wrong seam is a real executability defect:
+find and fix it), true stale counts, commit `plan(roadmap): phase N — <desc>` (the plan-edit
+grammar review-phase also commits under), and re-run `roadmap phase validate <N>`.
 
-### Step 3 — Write the phase file
+## Step 1: Reserve the number
 
-**Pick `kind` first** (drives gate selection): `mockup` (screen/layout/copy/branding/dark-mode) ·
-`logic` (algorithm/business-rule/new behavior) · `hardening` (bug fix, persistence/event/
-marshal-chain fix, refactor, perf) · `release` (version cut/changelog/infra/deploy). Torn between
-`logic` and `hardening` → `hardening` (an extra integration rerun ≪ an unverified persistence fix).
-`kind` is independent of `category`.
+`roadmap claim` atomically reserves the next monotonic number across active+archive (file creation
+with `wx` noclobber IS the lock; a concurrent loser gets EEXIST and retries, so sessions never
+collide). Never hand-compute max+1. The committed phase file supersedes the claim; there is no
+manual release step.
 
-**Phase granularity — gate cost is per-phase, so don't shard.** Every phase pays a fixed overhead
-(gate chain, executor spawn, serialization tail). **Target 5–8 tasks.** Split below ~4 only for a
-nameable reason: risk isolation (a prod-touching change landing alone), a hard dependency boundary,
-or a distinct `kind`. "Felt like a separate topic" is not one. Past ~10 tasks → do-arc's HEAVY band.
+## Step 2: Investigate the code FIRST (the most important step)
 
-**Cite the recorded reference class, never clock-feel.** When the consumer has
-`roadmap/arc-evals/timing-stats.json`, read it and annotate the phase docblock with the cohort this
-phase falls in — task-count band × surface-or-not, where surface means any `keyFiles` path matching
-`web/`, `office/` or `spa/` (the table's own heuristic — name it as one). ALWAYS give the class AND
-its N beside the numbers: `timing: band 4-6 × surface:false, N=8, median 60.8 min, p80 83.3 min`.
-No matching cohort, `samples: 0`, or no stats file at all → write the literal honest-absent form
-`timing: no reference data for <band>×<surface>`. Never an invented range, and never a bare number
-without its class and N — a range whose sample size nobody can see is clock-feel wearing a citation.
+For each area: read the call chain; trace the symbol with Grep (imports, call sites,
+registry/string-literal refs); identify the exact functions that change (named symbol, not
+"somewhere in the file"); check downstream consumers; check for an existing utility or pattern to
+reuse. Copy-paste symbol names from the file, never retype them (a FLUENTFRONT tripwire went
+false-negative on a case-variant symbol). If you cannot do this for a piece of work, it is not a
+task yet: make it an investigation task.
 
-**Author the `assumptions` tripwires.** Every load-bearing claim about the CURRENT territory a task
-depends on — a file's behavior, a test's status, a caller count, a seam's existence — becomes an
-`{ claim, verify: '<one runnable grep/test/ls>', onFalse: 'ESCALATE' }`. 2–6 typical; **zero is
-legitimate for a pure-prose phase — say so.** They are for claims whose FALSITY CHANGES THE PLAN
-(the RAGUNIFY 1343.6 miss) — not every `keyFiles` anchor.
+## Step 3: Write the phase file
 
-**Set `userFacing` + `flag`.** A phase adding user-visible behavior: `userFacing: true` plus `flag`
-= `{ id: 'FLAG_ID' }` (runtime-switchable, default ON — OFF is the kill-switch, and a deliberate
-OFF ships as a NAMED hold) or `{ bootWired: true, justification }`
-(joins the feature manifest; the justification is where boot-wiring is ratified). Mode A
-checks it; a non-user-facing phase omits both.
+Full field shapes, marker syntax, task design rules, testMode/standards citations, and
+anti-patterns: `references/phase-file-contract.md`. The authoring decisions, in order:
 
-**Standalone-phase interview.** An underspecified standalone request → INTERVIEW first (one question
-at a time, scope-first, like plan-arc) BEFORE Step 2. It extracts USER INTENT/SCOPE at request time;
-Prime Rule 2's architect owns TECHNICAL decisions — two different stops.
+**Pick `kind` first** (it drives gate selection, so it is a deliberate act, never a default):
+`mockup` (screen/layout/copy/branding/dark-mode) · `logic` (algorithm/business-rule/new behavior) ·
+`hardening` (bug fix, persistence/event/marshal-chain fix, refactor, perf) · `release` (version
+cut/changelog/infra/deploy). Torn between `logic` and `hardening`: choose `hardening` (an extra
+integration rerun costs far less than an unverified persistence fix). `kind` is independent of `category`.
 
-**`testScope`** (optional; only when the config sets `testCadence`): scopes the gate's test slots
-independently of `kind` — `static`/`scoped` (list `scopedTests`)/
-`relevant`/`full`. A declared value may only RAISE the diff-derived floor (a `gateSpecialists` path
-floors to `relevant`). Declare it for a known data/docs-shaped phase — never to sneak under the floor.
+**Phase granularity: target 5-8 tasks** (gate cost is per-phase: gate chain, executor spawn,
+serialization tail, so don't shard). Split below ~4 only for a nameable reason: risk isolation, a
+hard dependency boundary, or a distinct `kind`. "Felt like a separate topic" is not one. Past ~10
+tasks you are in do-arc's HEAVY band. One task = one focused change; "and also..." is two tasks.
+Order foundation → consumers → validation last; N.3 may depend on N.2, never N.4.
 
-**`reviewScope`** (optional; the agent-chain ladder — a plan-time judgment: *what review is
-high-value here?*): `none` (docs/data) · `light` (small/mechanical: ONE reviewer, no quality pass)
-· `full` (new seams, subtle logic, governed). A declared value may LOWER the rung — Mode A ratifies
-it (unjustified low = NEEDS WORK) — with one hard floor: a `gateSpecialists` path always runs
-`full`. Declaring below `full`? Say in the notes WHY the skipped stages are low-value — Mode A judges that.
+**Cite the recorded timing reference class, never clock-feel.** Read
+`roadmap/arc-evals/timing-stats.json` and annotate the docblock with the cohort (task-count band ×
+surface, where surface = any `keyFiles` path matching `web/`, `office/` or `spa/`, the table's own
+heuristic; name it as one). Always the class AND its N:
+`timing: band 4-6 × surface:false, N=8, median 60.8 min, p80 83.3 min`. No matching cohort,
+`samples: 0`, or no stats file: write the literal `timing: no reference data for <band>×<surface>`.
+Never an invented range or a bare number without class and N.
+
+**Author the `assumptions` tripwires.** Every load-bearing claim about the CURRENT territory whose
+FALSITY WOULD CHANGE THE PLAN (the RAGUNIFY 1343.6 miss) becomes
+`{ claim, verify: '<one runnable command>', onFalse: 'ESCALATE' }`. 2-6 typical (beyond ~6 you are
+re-testing the tree instead of the load-bearing claims); **zero is legitimate for a pure-prose
+phase, and you say so in the notes**. Not every `keyFiles` anchor is an assumption.
+
+**Run every plan-time-runnable probe NOW and encode the observed result.** A command the planner
+can run today (a grep, an exit-code probe, a slot's own gate command) never becomes execution-time
+homework: run it, write what it yielded into the plan. When a task enumerates per-item verdicts
+(per-slot sweeps, per-connector states), the vocabulary MUST be able to express every outcome its
+probe can yield; include the honest escape member (`observed: <result>`) rather than a closed enum
+that dead-ends the executor on a foreseeable outcome.
+
+**Rehearse verifies BOTH DIRECTIONS before writing them** (the single most repeated authoring
+defect: SEODESKFIX shipped four backward verifies across three phases; UCAUDIT, 8 of 20 member
+phases carried one that could not fail). The protocol, the direction table, the four backward
+shapes, the scratch-copy discipline, and the time-boxed mandatory core:
+`references/verify-rehearsal.md`. Enforcement: `roadmap phase validate` carries a WARN-level
+polarity+grammar lint (new-to-git phase files only); review-phase Mode A is the gate.
 
 **The `step → verify:` grammar (REQUIRED).** Every `steps[].description` ends with
-`" → verify: <one command or observable>"` naming how the executor PROVES the step landed — each
-step becomes its own checkable claim. Example: `description: "route the model write through
-runGovernedToolCall → verify: node --test src/agui.test.ts"` (or `… → verify: dashboard shows $48`).
-**Grandfather rule:** the ~1,100 already-committed phase files are exempt forever; the write-hook
-lint warns on a phase file NEW to git only, and review-phase Mode A is the actual enforcement — the
-lint is the reminder, not the gate.
+`" → verify: <one command or observable>"` naming how the executor PROVES the step landed. Example:
+`"route the model write through runGovernedToolCall → verify: node --import tsx --test src/office/agui.test.ts"`
+(or `… → verify: dashboard shows $48`). Grandfather rule: phase files already committed to git are
+exempt (the lint checks for a HEAD blob); it warns on files NEW to git only.
 
-**A verify must fail ONLY when its claim is false — RUN IT BOTH DIRECTIONS before writing it.**
-This applies to `assumptions[].verify` and every `→ verify:` clause, and it is the single most
-repeated authoring defect (one arc produced four instances across three phases, by four different
-authors). A verify that fires backwards is worse than none: a red one sends the executor to
-"escalate" and a green one certifies work nobody did. Four shapes, the first three lint-warned:
-- **Inverted** — a bare `grep -c` asserting ABSENCE exits 1 on a count of 0, so it reds exactly when
-  the thing you wanted gone is gone. Compare explicitly: `test "$(grep -c x f)" = "0"`.
-- **Piped judgement** — `npm run type-check | head -5` reports *head's* exit code, so a red compile
-  reads green. Redirect to a file and read `$?`. (This one shipped a real typecheck failure.)
-- **Wrong invocation** — `node --test foo.ts` cannot run TypeScript without a loader, so it fails
-  identically whether the work succeeded or not. Use the CONSUMER's own test script form.
-- **Self-colliding or vacuous** (a regex cannot catch these, you must): a negative grep that matches
-  the very line the task tells the executor to WRITE, or a check that passes because the target file
-  does not exist yet. Anchor a negative grep on something unique to the code being REMOVED, and
-  assert the positive half too. Test against a scratch copy carrying the line the task will add.
+**Declare `userFacing` IN THE FILE.** User-visible behavior: `userFacing: true` plus a `flag` in
+one of the two shapes in `references/phase-file-contract.md`; the posture is the consumer CLAUDE.md
+rule "Flag-first delivery" (cite the rule in the plan, never restate it: a restated paraphrase is
+exactly how a default-polarity drift once shipped). Not user-facing: `userFacing: false` plus one
+notes line saying why no flag applies. Either way the claim lives in the artifact the executor and
+reviewer read, never only in the chat report. `roadmap phase validate` reds `userFacing: true`
+with no `flag` (rule `userFacing-without-flag`).
 
-Author with `definePhase({ phase, name, plannedBy:{ model: your own model id }, status:'backlog',
-category, kind, source, priority,
-dependsOn, conflictsWith, keyFiles, stakeholderDemo, tasks:[…] })`; each task `{ id, title, problem,
-steps:[{file, description, line?}], acceptanceCriteria, files, done:false }`. `stakeholderDemo` = the
-changelog line. `batchMode: true` ONLY for mechanical multi-commit work (rename across >10 files).
+**`testScope` / `reviewScope`** (optional; shapes and ladder in
+`references/phase-file-contract.md`): a declared `testScope` may only RAISE the diff-derived floor;
+a declared `reviewScope` below `full` requires a one-line note WHY the skipped stages are low-value
+(Mode A ratifies or reds it); a `gateSpecialists` path always gets `full` review and the
+`relevant`-tests floor. Never declare either to sneak under the floor the diff warrants.
 
-### Step 4 — Validate: `roadmap phase validate <N>` (write engine + emit); fix any failure.
+**Release-coupled steps and removals.** A step whose completion rides a release act (a tag
+re-vendor into the sibling repo, a prod app-setting arm, a catalog publish) gets a task appending
+a `hold[]` entry to `release/activation.json`, the file the release lane actually reads (consumer
+CLAUDE.md: a pending release-coupled step goes in `hold[]`, not prose or a guard left to red the
+next tag). A removal task sweeps what DESCRIBES the removed behavior, not only what implements it:
+de-stale test titles naming it (keep the assertions that remain the regression pin), and true
+every doc and backlog anchor that names it.
 
-### Step 5 — Self-verify (JUDGMENT checklist)
-The mechanical members — **paths resolve**, **size lint** (`files ≤10`/`steps ≤6` or `batchMode`),
-**no unresolved markers**, **emit/parse** — are enforced by `roadmap phase validate`; run it and
-trust it. Apply JUDGMENT to the rest, re-reading the code NOW (not Step-2 memory):
-1. **Source confirms** — open each function a task modifies; does `problem` actually exist there? (BLOCKER.)
-2. **Blast radius** — grep each changed pattern/symbol repo-wide; every other occurrence is covered
-   by a task here or documented out-of-scope. (NEEDS WORK.)
-3. **Criteria verifiable** — each names a command or observable (a lane command or a grep counts;
-   verifiable does NOT mean a test); reject "works correctly"/"verified". (NEEDS WORK.)
-4. **Data flow** — no task depends on a later task's output or assumes a file an earlier task changes. (BLOCKER.)
-5. **Hypotheses refuted** (only `category:'fix'`/`kind:'hardening'`) — `notes` has a `## Hypotheses`
-   block: ≥2 ranked causes, a one-line refutation/evidence each, exactly ONE `CONFIRMED` with
-   evidence (file:line/test/repro SHA), others `REFUTED`/`NOT TESTED`. (NEEDS WORK.)
-6. **`step → verify:`** — every step carries its verify clause (the lint reminds; you own it).
-Fix, re-run `roadmap phase validate`. Commit with unresolved markers ONLY if not queued; else clear all.
+**`[NEEDS CLARIFICATION]` markers** (only after an `ESCALATE_TO_USER` verdict; enforced:
+`do-phase`/`review-phase` refuse a marked phase). Embed a SPECIFIC named question in the task's
+`problem`/`acceptanceCriteria`, never "TBD". A marked phase may commit on disk but must never be
+queued until every marker resolves. Never guess and leave a silent assumption: the marker is the
+honest answer.
 
-### Step 6 — Commit `docs(roadmap): phase N — <desc>`; `roadmap claim` frees the reservation.
+## Step 4: Validate
 
-### Step 7 — Auto-invoke `/review-phase N` (MANDATORY unless `--skip-review`)
+`roadmap phase validate <N>` (write engine + emit): Zod parse via the tsx bridge, structural
+checks (duplicate top-level keys, `userFacing-without-flag`, duplicate phase number,
+claim-before-start), and the WARN polarity+grammar lint on new-to-git files. Fix every failure;
+failures are never waived. What validate does NOT check: task size. `files ≤10` / `steps ≤6`
+unless that TASK sets `batchMode: true` is this skill's own plan-time refusal (the `PhaseTaskShape`
+docblock in `templates/schema.ts` names plan-phase/review-phase as the size lint's owners;
+honor-system here, review-phase re-checks, and `roadmap audit` check 11 reds escapes at HIGH).
+When in doubt, split the task instead of reaching for `batchMode`.
+
+## Step 5: Self-verify (judgment checklist, re-reading the code NOW)
+
+The judgment members live in `references/closure-checklist.md`; run them against the CURRENT tree,
+not Step-2 memory, in the checklist's listed order (BLOCKER-yield members lead) so a time-boxed
+pass still catches the worst defects; report any unrun member as unrun, never silently skip.
+Three members exist because real arcs shipped without them (FLUENTFRONT, BRAINVIEW, EVALCORE;
+provenance in the checklist). Fix everything found, re-run `roadmap phase validate <N>`.
+
+## Step 6: Commit
+
+`docs(roadmap): phase N — <desc>` (the consumer's roadmap commit grammar, em-dash included),
+staging the phase file path explicitly. Commit with unresolved markers ONLY if the phase is not
+being queued; otherwise clear them all first.
+
+## Step 7: Auto-invoke `/review-phase N` (MANDATORY unless `--skip-review`; honor-system)
+
 Immediately run `/review-phase N` against the committed phase (Mode A, since status `backlog`).
-**This pass is EXECUTED, never "reviewed inline"** — Step 5 is lazy self-review; an independent pass
-consistently finds hallucinated paths, stale problem statements, and blast-radius gaps the author
-missed (standing user ruling). READY → Mode A Step 8 queues the phase in `roadmap/backlog.ts` at the
-position reasoned from `priority` + `dependsOn` + `conflictsWith`; report "queued at index K".
-NEEDS WORK/BLOCKER → fix each, commit `docs(roadmap): phase N — address review findings`; do NOT
-loop; the phase is NOT queued until a clean re-review. `--skip-review` → say so: plan unverified,
-not queued.
+**This pass is EXECUTED, never "reviewed inline"** (standing user ruling: every authored phase
+gets an explicit review pass); make its evidence git-visible: fix each finding and commit the
+repairs SEPARATELY as `docs(roadmap): phase N — address review findings`, so anyone can
+corroborate the pass from history. READY → Mode A Step 8 queues the phase in `roadmap/backlog.ts`
+at the position reasoned from `priority` + `dependsOn` + `conflictsWith`; report "queued at index
+K". NEEDS WORK/BLOCKER → fix, commit, do NOT loop; the phase is NOT queued until a clean
+re-review. A duplicate collision surfacing here (Step 0's probe re-run against the moved tree) is
+never resolved by queueing anyway: report it, hand the ruling to the user.
 
-## Task Design Rules
-- **Every task:** real `steps[].file` paths; a concrete `steps[].description` with its `→ verify:`
-  clause; 1–4 observable `acceptanceCriteria` (slot command or UI/API observable, never
-  "implementation verified"); complete `files[]`. One task = one focused change in one pass;
-  "and also…" is two tasks. A task producing or touching a doc names
-  `skills/using-zeroh-roadmap/references/documentation-rules.md` as its standard; a UI task NAMES
-  its component placement (shared home vs own folder) per
-  `skills/using-zeroh-roadmap/references/component-structure.md`; a task introducing an external
-  dependency/asset names its license + placement tier per
-  `skills/using-zeroh-roadmap/references/external-assets-licensing.md` (unknown = not plannable).
-- **Ordering:** foundation (schema/utils/types) → consumers → validation-gate task last; deps flow
-  downward (N.3 may depend on N.2, never N.4).
-- **`testMode`:** assigned per `skills/using-zeroh-roadmap/references/test-worthiness.md` — `tdd`
-  where it earns its keep (pure logic/contracts/error paths), `e2e` for real-boundary user flows,
-  `none` for everything else incl. the NEVER classes (declarative artifacts, UI presentation,
-  process guards — an owed guard goes to the consumer's ratchets/lint/emit lane, named in the
-  step, its `→ verify:` that lane's command). **Default `none` when unsure** (TDD costs ~5
-  min/task). A testMode contradicting the rule is plannable ONLY with a recorded
-  software-architect Decision Contract verdict in the phase notes.
-- **Anti-patterns (all fail Prime Rule 1):** `description:'Implement task N.1'`,
-  `acceptanceCriteria:['Task N.1 verified']`, `problem:'This needs to be done'`, `title:'Fix things'`.
-- **Special:** an *investigation task* when root cause is unknown; a *gate task* last.
+## Report
 
-## After creating the phase
-Report: phase number + file + task count; ready-or-needs-investigation; key risks / cross-phase
-deps; backlog placement ("queued at index K" / "not queued — NEEDS WORK" / "--skip-review"); each
-marker with its task id; the review outcome. `plan-phase` never edits `roadmap/backlog.ts` —
-queuing is review-phase Mode A Step 8's act.
-</content>
+State exactly: phase number + file + task count; ready-or-needs-investigation; key risks and
+cross-phase deps; probes run at plan time with observed results; backlog placement ("queued at
+index K" / "not queued — NEEDS WORK" / "--skip-review: plan unverified, not queued" / "collision:
+ruling handed to user"); each `[NEEDS CLARIFICATION]` marker with its task id; any checklist
+member left unrun; the review outcome.

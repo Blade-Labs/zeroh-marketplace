@@ -63,7 +63,8 @@ For each task in order:
    test file IS part of the task's diff; if the plan omitted it from `files[]`, note the
    addition in `limitations`.
 2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; scope touched tests via
-   the scoped slot (never a hand-built filter); a UI change runs `build`. **Any run expected
+   the scoped slot (never a hand-built filter); a run that executed ZERO tests still exits green,
+   so confirm a nonzero executed-test count before trusting a pass. A UI change runs `build`. **Any run expected
    under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (a session
    event kills the Monitor's wake silently; the long-run protocol covers genuinely long runs).
 3. **Commit** — `<type>(<scope>): phase N — <task title>`. First, when the consumer binds a
@@ -87,6 +88,8 @@ N]`. EVENT-triggered, never on an interval.
 Persist all six fields — `whatWasDone`, `how` (real content), and
 `compromises`/`skipped`/`hardcoded`/`limitations` (the literal `"None"`, or ≥10 chars of substance
 — `"n/a"`/`"tbd"` fail parse). Echo the four debt lines ONLY when not `"None"`.
+A non-`"None"` `compromises` or `skipped` also requires `decisionRef` (the architect verdict or
+user-ratification ref that authorized it): validate-roadmap-file v2 REDS the phase without it.
 
 ## Commit grammar (BINDING — the CLI parses these subjects)
 

@@ -1,197 +1,203 @@
 ---
 name: "Plan Arc"
-description: "Plan a whole arc (a named, contiguous block of phases shipped as one unit): author the Arc entity, run the design-first gate (reuse-or-design the architecture & UX, confirmed) at its head, plan every member phase against the confirmed design, and review them in parallel — then queue them as one arc tier."
+description: "Plan a whole arc (a named, contiguous block of phases shipped as one unit): author the Arc entity, resolve the design-first gate WITH the user (reuse / new design / inherited ratified prototype / recorded skip), plan every member phase against that design, review each independently, queue one arc tier. Triggers: 'plan arc', '/plan-arc', 'create arc', 'new arc'. Not this skill: one standalone phase (plan-phase) or executing an existing arc (do-arc)."
 user-invocable: true
 metadata:
   keywords: plan arc, create arc, new arc, arc
   aliases: new-arc
 ---
 
-# Plan Arc — Arc Planning Protocol
+# Plan Arc - Arc Planning Protocol
 
-`plan-arc` is the front door to an Arc: it writes the `Arc` entity, runs the **design-first gate**
-(Step 1b — classify, then reuse-or-design the architecture and, for a surface, the UX, user-confirmed
-and recorded as `designRefs`), plans each member phase (looping `plan-phase`) **against that design**,
-fans out plan-quality review, and queues the set as one tier. Then build with `/do-arc <id>`.
+Turn "plan arc X" into a queued, executor-ready arc: write the `Arc` entity, resolve the
+design-first gate with the user, sweep decisions complete, plan every phase against the
+confirmed design, map each arc promise to a fulfilling task, fan out review, validate
+with the consumer's own tooling, queue one arc tier, hand off with `/do-arc <id>`.
 
 ## Trigger
 
 User says: `plan arc`, `/plan-arc`, `create arc`, `new arc`.
+**Not this skill:** one standalone phase -> `plan-phase`; building / sweeping / validating
+an existing arc -> `do-arc` / `arc-sweep` / `validate-arc`. An arc is a named block of
+phases shipped as one unit; work one small phase can carry routes to `plan-phase` - say
+so and route it, never inflate it into an arc.
 
 ## Arguments
 
-- **`<id>`** (optional) — the Arc id to author (`Arc.id`, a number or short string, e.g. `B`). If omitted, propose one and confirm with the user.
+- **`<id>`** (optional): the Arc id (`Arc.id`, number or short string, e.g. `B`); if
+  omitted, propose one and confirm it with the user.
+
+## Evidence discipline (binds every step)
+
+Plan facts read COMMITTED state at a named ref (normally the arc's `baseRef`): never
+build on uncommitted sibling dirt, and call work "committed" vs "uncommitted" only after
+`git log --oneline -- <path>` / `git status --porcelain <path>` on that exact path. Every
+count and every "the validator accepted it" claim is pasted command output, never memory.
+A littered sandbox: preserve it on a branch, `roadmap worktree reset --base <ref>`, replan.
 
 ## Step 1: Author the Arc entity
 
-Before any phase is planned, write `roadmap/arcs/<id>.arc.ts` using `defineArc` — capture the arc's
-shape up front so phases plan against a fixed frame:
+Write `roadmap/arcs/<id>.arc.ts` with `defineArc` BEFORE any phase is planned, so phases
+plan against a fixed frame (template verbatim: arc-integrity.md §0). `defineArc`'s zod
+`.parse()` enforces the shape at import and `crossValidate` (both in
+`lib/roadmap/schema.ts`) rejects planes/phases drift. Decide WITH the user: `planes`, `singleSeams`, `honestyRails`, `acceptanceCriteria`,
+`baseRef`; fill `planes[].phases` in Step 2a once numbers are reserved.
 
-```ts
-import { defineArc } from '@/lib/roadmap/schema'
+**Interview first (before criteria or the gate).** Interview one question at a time,
+prioritizing questions whose answers change architecture or scope; record the answers as
+the arc's **LOCKED DECISIONS** comment block (convention: `roadmap/arcs/VOICE.arc.ts`) so
+they bind every phase (user intent here; the Step-1b architect owns TECHNICAL decisions).
+Skip ONLY by recording `interview: skipped - <why>` (design pre-ratified / mechanical).
 
-export default defineArc({
-  id: '<id>',
-  name: '<arc name — the why, one line>',
-  baseRef: '<git ref the arc branches from / merges into>',
-  planes: [{ name: '<plane name>', phases: [/* filled in Step 2a */] }], // ordered, sequential-within
-  singleSeams: ['<a config/factory/shared type that must stay a single impl across the arc>'], // arc-sweep judges these
-  honestyRails: ['<honesty constraint the whole arc upholds>'],
-  acceptanceCriteria: [
-    // experience-level Definition of Done — validate-arc drives the real flow, an independent judge scores each
-    {
-      id: '<short-handle>',
-      job: '<the job a user came to do, in user terms>',
-      surfaces: ['<surface id, e.g. console | office-pane | chat>'],
-      signal: '<the observable proof the job is fulfilled — what the judge looks for>',
-      tier: 'wired', // wired = in-process logic · live-ui = rendered UX (screenshot) · live-host = real model/masking
-      bar: '<the quality bar beyond "it works">',
-    },
-  ],
-})
-```
+**A user ruling is law.** When the user waives an artifact or makes a scope call ("no
+acceptance criteria", "skip the interview"), record the ruling verbatim in the `.arc.ts`
+and COMPLY - never author the waived artifact; at most one recorded line names the
+consequence (e.g. `acceptanceCriteria: [] // user ruling: none - validate-arc is a
+deliberate no-op`). Overriding a legal call "for quality" is the violation, not a favor.
 
-Decide WITH the user: `planes`, `singleSeams`, `honestyRails`, `acceptanceCriteria`, `baseRef`.
-`planes[].phases` fills in Step 2a once numbers are reserved.
+**Size the phase count** (plan-phase "Phase granularity"): gate + executor cost is
+per-phase and v1 arcs run sequentially, so phase count tracks wall-clock and token cost;
+target 5-8 tasks/phase, consolidating 2-3-task phases before reserving numbers, sized
+against `roadmap/arc-evals/timing-stats.json` medians.
 
-**Size the phase count against the granularity rule** (plan-phase "Phase granularity"): gate +
-executor cost is per-phase and v1 arcs run sequentially, so phase count ≈ wall-clock ≈ token cost.
-Target 5–8 tasks/phase; a plane of 2–3-task phases → consolidate before reserving numbers. Consult
-`roadmap/arc-evals/timing-stats.json` while sizing planes — the recorded per-cohort medians are the
-only non-clock-feel input available for that ≈. Each member phase's own annotation then lands via
-the Step 2b plan-phase loop, so there is one annotation grammar, not a second one here.
+**Elicit `acceptanceCriteria` - never invent, never dilute.** Author them WITH the user
+in user-outcome terms, before the build (grading against planner-invented criteria is
+circular). **The user's outcome language is BINDING:** quote the request's stated signal
+verbatim into a criterion (and its Step 2c ledger row); a plan delivering a cheaper proxy
+- the stated signal deferred to a follow-up, reworded weaker, or shown only when
+something else happens to fire - is an escalation the user must approve, never a silent
+substitution. Each criterion names the `job` (the JTBD), `signal`, `bar`, `surfaces`, and
+the cheapest `tier` that honestly judges it; one or two sharp beat ten vague.
+**Judge-state rule (arc-integrity.md §1):** every `signal` names the STATE it is judged
+under - realistic density (name the number), a second visit, post-churn - never cold-only.
 
-**The interview (before authoring criteria).** Before writing `acceptanceCriteria` or running the
-design gate, INTERVIEW the user — one question at a time, **prioritizing questions whose answers
-change architecture or scope**. Record the answers as the arc's **LOCKED DECISIONS** (the
-comment-block convention, e.g. `VOICE.arc.ts`) so they bind every downstream phase (Step 2b passes
-them to each `plan-phase`). Skippable ONLY by recording `interview: skipped — <why>` (design
-pre-ratified, or a mechanical arc). The interview extracts USER INTENT/SCOPE at request time; the
-Step-1b architect owns TECHNICAL decisions during planning — two different stops.
+## Step 1b: Design-first gate (classify -> architecture + UX reuse-or-design -> confirm)
 
-**Authoring `acceptanceCriteria` — elicit, don't invent.** The experience-level Definition of Done
-`validate-arc` checks; author them WITH the user in user-outcome terms, NOT after the fact (grading
-against validate-time-invented criteria is circular). For each: the `job` (the JTBD — "draft a reply
-a rep can send unedited", not "the endpoint returns 200"), the `signal` (the observable proof), the
-`bar` (what "good" feels like beyond "it works"), the `surfaces`, and the **cheapest `tier` that can
-honestly judge it**. Prefer **one or two sharp criteria over ten vague ones**. Optional (defaults
-`[]`), but an arc with none makes its validate stage a no-op — say so deliberately.
+Run before Step 1c - the front-gate mirror of `validate-arc`; contracts:
+`references/design-gate.md`.
 
-## Step 1b: Design-first gate (classify → architecture + UX reuse-or-design → confirm)
+**Gate conduct - the user IS the gate (full contract: design-gate.md §0).** Every PAUSE
+is arm-preserving: present EVERY viable option, including ones you recommend against,
+each priced with fresh verified evidence (command + pasted output); until the user rules,
+evidence-gathering is READ-ONLY - no commit may remove or foreclose an option. User
+unreachable (batch run) -> record `UNRATIFIED - user go pending` instead of skipping the
+sub-gate; an UNRATIFIED ref blocks Step 4 queueing of every dependent phase.
 
-The Arc entity exists but NO phase is planned yet. Before reserving numbers (Step 2a), run the
-**design-first gate** — the front-gate mirror of `validate-arc`: it asks "was it DESIGNED right — the
-best long-term architecture (and UX, where there's a surface) — before a line was written?". The gate
-is **proportionate**: triggered by what the arc introduces and honestly **skipped (and recorded)** for
-a mechanical arc — never ceremony by default, never a silent bypass. The classifier criteria + the
-architecture and UX reuse-or-design contracts live in **`references/design-gate.md`**.
+**(1) Classify** (criteria: design-gate.md §1): **New pattern?** · **UX surface?** If
+NEITHER fires, record the skip in the `.arc.ts` (`design gate: skipped - no new pattern /
+no surface`) and go to Step 1c. **Inherited design:** an arc implementing an already
+user-RATIFIED design-locked prototype cites the ratification + the prototype directory as
+its designRef and runs NO fresh UX sub-gate; plan mechanically per design-gate.md §5.
 
-**(1) Classify the arc** (criteria in `references/design-gate.md`): **New pattern?** (a new tool /
-architectural pattern / cross-module seam vs mechanically extending one) · **UX surface?** (adds or
-materially changes a user-facing surface). If **NEITHER**, record an explicit skip in the `.arc.ts`
-(`design gate: skipped — no new pattern / no surface`) and proceed to Step 2a — no ceremony for a
-mechanical change.
+**(2) Architecture sub-gate** - fires on a new pattern/tool/seam. Read the doc home from
+the `designHomes` key in the consumer's `roadmap.config.json` (`roadmap config check`
+prints resolved bindings); **absent key -> surface it and STOP the gate** (honor-system
+stop). Then per design-gate.md §2: spawn the `software-architect` agent to search the doc
+home AND the prior-arc record and recommend reuse-or-design with a named "prior art:"
+line (`none found` is legal; silence is not a search). The orchestrator owns every write
+(§2): record `{ kind: 'architecture', ref, status: 'reused' | 'designed', summary }` onto
+`designRefs`; a `designed` pattern extends the doc set via the consumer's doc governance,
+carries the generalize-forward verdict, and stamps any superseded designRef in the same
+commit. **PAUSE for the user's explicit go.**
 
-**(2) Architecture sub-gate** — when the arc introduces a new pattern / tool / seam. The architecture
-design **home is the consumer's** canonical doc set; read it from the `designHomes` key in the
-consumer's `roadmap.config.json` (the consumer-agnostic seam). **If `designHomes` is absent, surface
-that and STOP the gate** — no doc home to search, and guessing a path defeats the seam; the consumer
-configures its design homes first. With the home bound:
-1. Spawn the **`software-architect`** agent to **search** that doc set AND the prior-arc record
-   (design-gate.md §2) and **recommend** reuse-or-design — returning the recommendation + the `ref` +
-   `summary` + the "prior art:" line. Advisory: the orchestrator, not the architect, makes the file
-   writes and owns the record.
-2. **Reuse-first:** an existing pattern fits → the orchestrator records `{ kind: 'architecture', ref,
-   status: 'reused', summary }`. No new pattern when one exists (the reuse-first honesty rail).
-3. **Design-when-needed:** none fits → the architect designs the long-term-correct pattern; the
-   orchestrator extends the arch doc set through the consumer's own doc governance and records
-   `{ …, status: 'designed', summary }` with the justification.
-3b. **Generalize-forward** (every `designed` pattern; contract in `references/design-gate.md` §2):
-   "is this a special case of a capability others should have?" **Rule of three: generalize ONLY with
-   ≥2 concrete named consumers** (else build the vertical + a named follow-up — never speculative
-   abstraction). When earned, design the GENERAL seam; the arc's `singleSeams` widen accordingly.
-4. **Confirm.** PAUSE for the user's explicit go — the user is the design gate. Don't plan against an
-   unconfirmed design (the generalize-forward verdict is part of this confirm). The orchestrator writes
-   the designRef(s) onto the Arc (`designRefs`, `DesignRefShape`) — the spec Step 2b plans against.
+**(3) UX sub-gate** - fires on a surface; run after the architecture sub-gate.
+1. **Enumerate existing artifacts FIRST** (`references/ux-craft.md` §0): `ls` the
+   consumer's preview/design directories for the target surface including variants
+   (`-dark`, `-v2`, siblings). More than one exists -> list EVERY sibling by name in the
+   ask and put the canonical-naming question to the user explicitly before any is evolved.
+2. Spawn the `ux-designer` agent (an advisor, like the architect): it designs inside the
+   consumer's UX canon, picks the form from design-gate.md §3's table (**design-locked
+   prototype is the DEFAULT for a net-new or regrouped app surface**), and meets
+   `references/ux-craft.md`; pass that file's absolute path (its §3b requires it) plus
+   the quality-exemplar path when `designHomes` names one.
+3. Record `{ kind: 'ux', ref, status: 'reused' | 'designed', summary }` onto `designRefs`;
+   **PAUSE for the user's explicit go.** A no-surface arc records the sub-gate skip.
+4. **Mint the paired conformance criterion (MANDATORY; templates verbatim in
+   design-gate.md §3b):** design-locked prototype -> objective visual-diff acceptance on
+   every implementing phase, NEVER a subjective "matches the design" criterion; any other
+   confirmed UX design -> the `ux-parity:<slug>` 1:1 criterion.
 
-**(3) UX sub-gate** — when the classifier found a **surface** (run after the architecture sub-gate).
-The UX standards are the consumer's, bound the same way: the `designHomes` config key (an absent key
-fails loud — surface + STOP, don't guess — exactly as above). Then:
-1. Spawn the **`ux-designer`** agent (an advisor, like the architect). It reads the consumer's UX
-   canon, designs the surface's layout within it (component placement per
-   `skills/using-zeroh-roadmap/references/component-structure.md`), and **decides per arc** whether a prose layout note
-   or a static HTML preview is warranted (preview for a net-new surface, prose for a tweak), producing
-   that artifact + a recommended UX designRef.
-2. The **orchestrator** records `{ kind: 'ux', ref, status: 'reused' | 'designed', summary }` onto
-   `designRefs` (`reused` = follows a canonical pattern, `designed` = a new layout).
-3. **Confirm.** PAUSE for the user's explicit go — the user is the design gate. A no-surface arc skips
-   this sub-gate (record the skip; never silent).
-4. **Mint the paired design-parity criterion (MANDATORY).** A confirmed `ux` designRef is a CONTRACT:
-   the shipped surface must match it 1:1, not "take inspiration from it". For EVERY `kind: 'ux'`
-   designRef, the orchestrator adds a matching `acceptanceCriteria` entry:
-   ```typescript
-   {
-     id: 'ux-parity:<short-ref-slug>',
-     job: 'The shipped <surface> matches the confirmed design (<ref>) 1:1 — the design the user signed off is what ships.',
-     surfaces: [<the surface>],
-     signal: 'Side-by-side comparison (shipped surface vs the rendered design artifact — every state the design shows AND every interaction it defines, driven live: hover/focus effects, transitions, animations) judged against skills/validate-arc/references/parity-rubric.md with no material deviation.',
-     tier: 'live-ui',
-     bar: 'Layout structure, component presence/hierarchy, states, interaction & motion (hover/focus effects, transitions/animations — same or unambiguously better, never flattened or inert), copy, and visual tokens all match; judged-equivalent allowed, missing/moved/renamed/degraded is a deviation. Ratified descopes are the only exemption.',
-   }
-   ```
-   An arc with `ux` designRefs but no `ux-parity:*` criteria is malformed — validate-arc DERIVES the
-   criterion anyway (its fail-safe), but minting it here is what lets member phases carry the
-   per-phase design-parity gate stage (the thin do-phase gate section) instead of discovering drift
-   only at arc end.
+Treat the confirmed `designRefs` as the spec: Step 2b plans against them, validate-arc
+judges the paired criteria, arc-sweep audits per ref.
 
-The confirmed `designRefs` are the design spec the rest of plan-arc builds on: Step 2b plans each
-phase against them (a `ux`-citing phase inherits the design-parity gate stage), `validate-arc` judges
-the paired `ux-parity:*` criteria at arc end, `arc-sweep` judges conformance.
+## Step 1c: Decision-completeness sweep (before any number is claimed)
 
-## Step 2a: Reserve a contiguous phase-number block FIRST
+Walk each planned plane and list every choice a phase author or executor will need -
+naming, storage, contract shapes, UI placement, flag posture, ordering (checklist:
+arc-integrity.md §2). Sort every row into exactly one bucket: **LOCKED DECISIONS** ·
+**designRefs** · **DEFERRED - named owner + escalation point**. A load-bearing choice
+(two reasonable executors would build it differently) in no bucket -> back to the
+interview; EVALCORE escalated one unmade decision twice inside a single task.
 
-Recomputing "next number" per iteration collides (each new phase file shifts the max, and across
-concurrent sessions). Reserve the block ONCE, up front, via the same atomic claim `plan-phase` uses:
+## Step 2a: Reserve the phase-number block FIRST
 
-1. `roadmap claim` once per member phase (sum across `arc.planes`). Each call atomically locks a
-   number in the shared git-common-dir claims store (creation is the lock), collision-free across
-   worktrees; the arc's phases need uniqueness, not contiguity.
-2. Write the claimed numbers into `arc.planes[].phases` (plane order) and re-save the `.arc.ts`, so
-   `crossValidate` (planes↔phases) is correct and the phase-range label is stable.
-3. Each claim frees when its `phase-N.phase.ts` commits.
-
-Pass each explicit number into the loop so `plan-phase` never recomputes it.
+Reserve ONCE, up front, via the atomic claims store: `roadmap claim --count <N>` (N =
+member phases across `arc.planes`) locks the numbers collision-free across worktrees
+(creation is the lock; numbers need uniqueness, NOT contiguity). Write the claimed
+numbers into `arc.planes[].phases` (plane order) and re-save the `.arc.ts` so
+`crossValidate` passes. Pass each explicit number into the Step 2b loop so `plan-phase`
+never recomputes one - per-iteration recompute collides across concurrent sessions.
 
 ## Step 2b: Plan each member phase (plan-phase --skip-review)
 
-Loop `plan-phase` over the reserved numbers, in **dependency / plane order**:
-- Pass the **explicit phase number** (Step 2a) so no recompute happens.
-- Pass **`--skip-review`** — reviews are batched in Step 3, not per-phase.
-- Set each phase's **`arcId`** to the arc id (accepts the same `number | string` union), always, and
-  its **`plannedBy: { model: your own model id }`** — the planner is an actor too.
-- **Plan AGAINST the confirmed design.** Each phase's tasks cite the architecture pattern / UX spec
-  they implement (the `ref` + `summary`) so the implementation traces to the design. A phase that
-  would deviate from a confirmed designRef must **re-open the design gate** (Step 1b), never silently
-  diverge. A design-gate skip (mechanical arc, no `designRefs`) → this is a no-op.
+Loop `plan-phase` over the reserved numbers in dependency / plane order:
+- Pass the explicit phase number; pass **`--skip-review`** (reviews batch in Step 3). Set
+  each phase's **`arcId`** and **`plannedBy: { model: <your own model id> }`**.
+- **Copy vocabulary, never coin it:** every enum-valued field (phase status, task status,
+  gate results) takes a value from the `z.enum` unions in `lib/roadmap/schema.ts` or from
+  a schema-valid queued phase at HEAD; a guessed word ("planned", "pending") fails
+  `roadmap phase validate` and ships an unexecutable queue.
+- **Plan AGAINST the confirmed design.** Each task cites the designRef `ref` + `summary`
+  it implements; a phase that would deviate must **reopen Step 1b**, never diverge.
+- **Anchor by symbol, never by line:** cite `steps[].file` paths plus exported symbols an
+  exact `grep -F` finds at HEAD - a `file.ts:123` anchor is stale by execution time.
+- **Escalate, never guess:** a choice outside the three buckets stops the loop.
 
-Each phase is a normal `.phase.ts` (`status: 'backlog'`); the arc binds them via `planes[].phases`
-(forward) + each phase's `arcId` (back). `crossValidate` keeps them consistent.
+## Step 2c: Promise ledger - every arc promise names its fulfilling task
 
-## Step 3: Fan out plan-quality review (parallel, read-mostly)
+Before review, build the coverage table (template + row sources: arc-integrity.md §3):
+one row per `acceptanceCriteria[].id`, per `designRefs[].ref`, per honesty rail, per
+single seam, per build-implying LOCKED DECISION, **and per item/outcome the user's
+request states, quoted verbatim** -> the `phase.task` that fulfills it. An item
+unfulfillable as written is REFRAMED to its nearest real mechanism (name the real file,
+command, or store) with the mapping recorded in its row - never dropped, never silently
+swapped. Write the ledger as a comment block in the `.arc.ts`. An UNMAPPED row is a
+promise no phase keeps: add the task or delete the promise WITH the user - FLUENTFRONT
+shipped a set every phase docblock claimed to append to EMPTY (arc-integrity.md §3).
 
-Review all member phases in parallel — one agent per phase running `review-phase` Mode A, each with
-**`--no-queue`** — the same safe fan-out `do-arc` uses. It exists for one reason: Mode A's queue step
-WRITES the shared `roadmap/backlog.ts`, so N concurrent reviews would race it. **Pass `model` per the
-`modelPolicy.judgeModel` home statement (review-phase SKILL.md)** — these reviewers are judges.
+## Step 3: Fan out plan-quality review (two lanes per phase, parallel, read-mostly)
 
-**Edit-confinement invariant:** `--no-queue` skips ONLY the queue write. Each review agent edits ONLY
-its own `roadmap/phases/phase-{N}.phase.ts` and **MUST NOT touch `roadmap/backlog.ts`** or another
-phase's file. Collect each verdict (READY / NEEDS WORK / BLOCKER); only READY phases queue.
+Review all member phases in parallel - one agent per phase, each given the reviewer
+packet from arc-integrity.md §4, each returning one READY / NEEDS WORK / BLOCKER verdict:
+- **Lane A - spec compliance (mechanical; full checklist §4):** ledger-row coverage;
+  every `steps[].file` + cited symbol hits case-sensitive `grep -F` at HEAD; every verify
+  EXECUTED in both directions - green as written, red under its falsification probe. No
+  achievable red = NEEDS WORK: UCAUDIT queued 8 of 20 phases carrying one.
+- **Lane B - plan quality (judgment):** `review-phase` Mode A with **`--no-queue`**,
+  model per `modelPolicy.judgeModel` in `roadmap.config.json`.
 
-## Step 4: Place the queue entries serially (single writer, one arc tier)
+**Edit confinement (honor-system, checked after the fact):** each reviewer edits ONLY its
+own `roadmap/phases/phase-<N>.phase.ts` - never `roadmap/backlog.ts`, never a sibling.
+After the fan-out run `git status --porcelain roadmap/backlog.ts roadmap/phases/`; revert
+any out-of-scope touch and redo that phase's review serially.
 
-After ALL reviews return, the orchestrator ALONE places the READY phases into `roadmap/backlog.ts`
-— **serially, one pass** — as a single arc tier labeled with the arc + its phase range, respecting the
-dependency floor + priority (review-phase Mode A Step 8 rules). **`backlog.ts` has exactly one writer:
-this serial step.** A NEEDS WORK / BLOCKER phase is NOT queued — surface its findings; the user fixes
-and re-reviews before it joins the tier.
+## Step 4: Validate with the consumer's own tooling, then queue serially
+
+**First act:** run `roadmap phase validate <N|file>` on every member phase file AND the
+`.arc.ts`; paste each verbatim result (exit code + output line) into the closing report
+(contract: arc-integrity.md §5). Claim ONLY what the tool printed - "the validator
+accepted it" without a pasted run is fabricated evidence. Any exit 2 -> fix, re-review
+that phase, re-validate; never queue around it.
+
+After ALL reviews return, you ALONE write `roadmap/backlog.ts` - serially, one pass -
+placing READY phases as a single arc tier, respecting the dependency floor + priority
+(review-phase Mode A Step 8). **Label the tier with the arc + its EXACT claimed
+numbers**; use an `N-M` range only when every number in the span belongs to THIS arc -
+claims are unique, not contiguous, and a spanning label annexes other arcs' phases. Do
+NOT queue a NEEDS WORK / BLOCKER phase - surface its findings; the user fixes and
+re-reviews first. **Lane B could not run** (judge model unreachable, fan-out impossible,
+budget exhausted) -> REFUSE to queue: close with "planned, NOT queued - review pending"
+plus the reason; self-review never substitutes for the independent lane. **Done is an
+artifact pair:** the queued tier (or the recorded refusal) plus the closing report, in
+which every "done" claim carries the command that would have failed it. Then hand off:
+`/do-arc <id>`.

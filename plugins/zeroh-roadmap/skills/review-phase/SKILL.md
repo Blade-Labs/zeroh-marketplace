@@ -1,150 +1,208 @@
 ---
 name: "Review Phase"
-description: "Verify a phase's claimed work actually happened correctly — task completeness, code accuracy, blast radius, architecture compliance. Works on done phases (post-execution audit) and backlog phases (plan quality review)."
+description: "Independently verify a roadmap phase or whole arc against the real code: backlog phases get a plan-quality review that repairs the plan and queues it; done/in-progress phases get a report-only post-execution audit. Trigger: 'review phase N', '/review-phase N', 'verify/audit phase N', 'review arc <ID>'; also the mandatory pre-queue pass after plan-phase and the spawned judge step in plan-arc. Not for general diff/PR review or bug hunting - that is code-review."
 user-invocable: true
 metadata:
   keywords: review, phase, verify, audit, check, validate
   aliases: verify-phase, audit-phase
 ---
 
-# Review Phase — Verification Protocol
+# Review Phase - Verification Protocol
 
-**Trigger:** `review phase N`, `/review-phase N`, `review arc <ID>` (arc entity + every member; Step
-H runs ONCE at arc level). A trailing prompt = extra checks appended after the protocol.
+**Trigger:** `review phase N`, `/review-phase N`, `review arc <ID>` (arc entity + every member;
+Step H runs ONCE at arc level). A trailing prompt = extra checks AFTER the protocol, EXCEPT a
+placement-only ask, which NARROWS scope (Step 8). Cross-repo: read the other repo by full path.
 
-**This IS** two questions: (1) **Fitness** — right feature, right shape, whole, lean? (2)
-**Verification** — did/will the claimed work match reality (task said "add X at line 42" → is X
-there)? **NOT** `/code-review` (new bugs) nor a re-run of the design gate (ratified decisions checked
-for drift, never relitigated).
+**This IS** two questions: (1) **Fitness** - right feature, right shape, whole, lean?
+(2) **Verification** - does/will the claimed work match reality? Treat the plan as possibly
+hallucinated and the executor's self-verification as lazy; every grade needs source evidence.
+Never execute test suites in either mode - reason from code + existing evidence (honor-system;
+standing ruling: plan-time never runs suites, verifies are executor tripwires). **Not this
+skill:** `code-review` owns diff quality and new-bug hunting, even on a diff a phase produced -
+this skill never hunts bugs outside the phase's claims. `audit-roadmap` owns roadmap-wide
+structure (never reads source; this skill always does). The design gate is never re-run:
+ratified/user-locked decisions are checked for DRIFT only, never relitigated (honor-system).
 
-**Step 0 — read the phase file; mode by `status`:** `backlog` → Mode A (plan quality);
-`done`/`in-progress` → Mode B (in-progress = verify done tasks, flag the rest); `historical`/
-`cancelled` → terminal, not reviewable (historical predates gate discipline — say so and stop).
+## Evidence rules (both modes)
 
----
+- **Closure claims**: one literal grep for one phrasing structurally cannot find a
+  differently-phrased sibling (a comment, a bind-site note, a console label). Key the search to
+  the durable code token (`grep -F` on the symbol/status code/config key, bounded dirs) PLUS
+  one alternate phrasing for prose carriers; only then declare closed, probes recorded.
+- **Negative claims** ("nothing queued", "no other caller"): assertable only with the executed
+  probe list naming every searched location - queue negatives search `roadmap/backlog.ts`,
+  `release/activation.json`, AND `roadmap/followups/`. An unprobed negative is a CONCERN.
+- **Line cites**: re-verify every `file:line` in the report against HEAD immediately before
+  emitting (re-open the file at that offset); one stale cite discredits the rest.
+- **Gap calibration**: probe whether CURRENT data/state can trigger each same-pattern gap
+  (scan the existing rows/markers for the offending shape); label it LIVE or LATENT.
 
-## Mode A — Plan Quality Review (backlog phases)
+Evidence of use: commits `48c726155`/`dd5a17218` (`plan(roadmap): phase N review fixes`) and
+`11ce678f9` (`docs(roadmap): queue phase 2126`); failure themes mined 2026-08-13.
 
-Review as a **senior software architect** — don't trust the plan; verify it against the code (the
-planner may have hallucinated paths/functions/lines).
+## Step 0 - Mode by `status`
 
-**Model policy (the HOME statement — stated ONCE here; the other judge seams reference it).** A
-spawner running Mode A *via an agent* reads `modelPolicy.judgeModel` from `roadmap.config.json`:
-when set, pass `model: <that>` to the spawned reviewer; **absent key = the agent's frontmatter
-default** (fail-safe). JUDGE seams ONLY — Mode A plan reviewers, arc-sweep's whole-arc
-software-architect, validate-arc's intent-validator panel; NOT `phase-executor`/`software-developer`/
-`test-engineer`. Judge independence is fresh read-only context + evidence-or-downgrade, not a
-different model. Mode A invoked STANDALONE runs INLINE (no spawn); the SPAWN site is plan-arc Step 3.
+Read `roadmap/phases/phase-N.phase.ts`. `backlog` → Mode A. `done`/`in-progress` → Mode B
+(in-progress = audit the `done:true` tasks; the rest flagged unaudited, NO grade token).
+`historical`/`cancelled` → terminal, NOT reviewable (predates gate discipline) - say so, STOP.
 
-**UNAVAILABLE judgeModel = fall back, never skip the judge.** A configured `judgeModel` can be set
-yet unusable at spawn time — quota exhausted, plan gating, the model withdrawn. The judge stage is
-NOT optional, so a spawner whose reviewer dies on a model-availability error (e.g. "You've reached
-your <model> limit", an access/permission refusal, or an unknown-model error) RE-SPAWNS the SAME
-reviewer on the fallback chain — the caller's explicitly requested model if it named one, else the
-agent's frontmatter default — and does NOT downgrade the review's rigor to compensate.
+## Mode A - Plan Quality Review (backlog phases)
 
-The fallback is **recorded, never silent**: the report names the model that actually judged and why
-it differs from the configured one, because "which model graded this" is part of the evidence a
-later reader needs. Distinguish this from a CONTENT failure — a reviewer that ran and returned
-NEEDS WORK/BLOCKER has judged; only an availability error triggers the swap. If the fallback also
-fails, surface the stage as UNJUDGED and STOP; never queue a phase on an unrun review.
+Review as a senior software architect reading the code fresh - verify every claim against source.
 
-### Step H — Holistic feature review (issued FIRST in the report, finalized after the per-task pass)
-Before grading tasks, judge the FEATURE — a plan can be flawless and still be the wrong thing, half
-a thing, or too much. Four questions, each answered with EVIDENCE:
-- **H1 Right problem, still true, worth doing now?** Did landed work / a shipped arc / a live-state
-  change supersede it (the "stale OPERATOR-PENDING actually live" class)? Worth its slot?
-- **H2 Right shape?** Against CONFIRMED designRefs + locked decisions (drift is a finding;
-  relitigating a ratified decision is not). EXTEND a seam or quietly fork one (`singleSeams`)? Right
-  altitude (vertical → generalization as a named follow-up)? A simpler mechanism?
-- **H3 Anything missing that makes it whole?** Fail-closed arms on every new decision point, audit/
-  receipt for every governed effect, the kill-switch flag + OFF-path proof, the wired test per new
-  surface, canon/docs, the adjacent gap that leaves it half-useful.
-- **H4 Anything to remove?** A task duplicating shipped capability (→ the problem doesn't exist),
-  speculative abstraction with one consumer, gold-plating past the acceptance bar.
+**Model policy (the HOME statement - stated ONCE here; arc-sweep's architect and validate-arc's
+panel reference it, never restate it).** A spawner running Mode A *via an agent* reads
+`modelPolicy.judgeModel` from `roadmap.config.json`: when set, pass `model: <that>` to the
+spawned reviewer; absent key = the agent's frontmatter default (fail-safe). JUDGE seams ONLY -
+Mode A plan reviewers, arc-sweep's architect, validate-arc's panel; never
+`phase-executor`/`software-developer`/`test-engineer`. Judge independence is fresh read-only
+context + evidence-or-downgrade, not a different model. Mode A invoked STANDALONE runs INLINE
+(no spawn); the spawn site is plan-arc Step 3.
 
-Disposition rides Step 7b: a missing-but-mechanical piece is ADDED as auto-repair; RESHAPE/CUT/
-new-scope are report-only. Verdict: `SOUND | RESHAPE (what+why) | QUESTION (ruling needed)`. An ARC
-review runs Step H once against the arc entity (planes, singleSeams, honestyRails, criteria vs the
-JTBD); per-phase passes inherit it. Mode B skips Step H.
+**UNAVAILABLE judgeModel = fall back, never skip.** Symptom: a model-availability error
+("You've reached your <model> limit", an access refusal, an unknown-model error). Response:
+RE-SPAWN the SAME reviewer at UNREDUCED rigor on the fallback chain - the caller's explicitly
+requested model if named, else the agent's frontmatter default - and record which model judged
+and why (the judging model is evidence). A reviewer that RAN and returned NEEDS WORK/BLOCKER
+has judged - an adverse verdict never triggers a swap. Fallback also fails → report the stage
+UNJUDGED and STOP; never queue on an unrun review (honor-system; `audit-roadmap` flags queue anomalies after the fact).
 
-### Per-task verification — apply plan-phase's self-verify list ADVERSARIALLY
-The check catalogue is not restated here: run **plan-phase Step 5's self-verify list** against each
-task as an independent adversary (the codebase may have changed; self-verification is lazy). Its
-mechanical members (paths, size lint, markers, emit/parse) are `roadmap phase validate`'s job. Bring
-JUDGMENT to: **source confirms** (open the function — does `problem` exist there? BLOCKER if not),
-**blast radius** (grep the pattern/symbol repo-wide; uncovered = NEEDS WORK — the commonest failure),
-**criteria verifiable**, **data-flow order**, **hypotheses refuted** (fix/hardening), the **`step →
-verify:` grammar** (this review is the enforcement the grandfathered lint defers to).
+### Step H - Holistic feature review (leads the report; finalized after Step V)
 
-Bonus ratifications Mode A owns (a "specialist path" = a `gateSpecialists` path in `roadmap.config.json`):
-- **`testScope` sanity** (when declared): a specialist / cross-module `src/` path is incompatible
-  with `static`/`scoped`; `scopedTests` globs resolve → else NEEDS WORK.
-- **Test shape:** every task's `testMode` is ratified against
-  `skills/using-zeroh-roadmap/references/test-worthiness.md` — a violation (a NEVER-class spec, a
-  skipped tdd on pure logic) without a recorded architect verdict in the notes = NEEDS WORK; a task
-  whose diff is declarative planning a NEW test file, absent that verdict, = NEEDS WORK (point it
-  at the consumer's ratchets/lint lane); a byte-for-byte content assertion over a data file = NEEDS WORK.
-- **License check:** a task introducing an external dep/asset names its license + placement tier
-  per `skills/using-zeroh-roadmap/references/external-assets-licensing.md`; missing, banned-tier,
-  or a server-side-only license placed in a shipped client artifact = NEEDS WORK.
-- **`reviewScope` ratification** (declared below `full`): THIS review IS the ratification the gate
-  trusts. Verify no `keyFiles`/`files[]` path is a specialist path, the rung fits the diff (`none`
-  docs/data only; `light` only small/mechanical — no new governed surface/contract/ledger-kind/subtle
-  logic), the planner stated WHY. Unjustified low rung = NEEDS WORK.
-- **`userFacing` + `flag`:** a user-visible phase carries `userFacing: true` + `{ id }` or a
-  justified `{ bootWired, justification }`; missing = NEEDS WORK.
+A plan can be flawless per-task and still be the wrong, half, or too-much thing. Answer four questions WITH EVIDENCE:
 
-Output per task: `READY|NEEDS WORK|BLOCKER` + source-confirmed / blast radius / issues.
+- **H1 Right problem, worth doing now?** Superseded by landed work or a live-state change
+  (the "stale OPERATOR-PENDING actually live" class)? Check `git log` since authoring +
+  `roadmap status` before trusting the phase's framing.
+- **H2 Right shape?** Against CONFIRMED `designRefs` + locked decisions (drift = finding). Does
+  it EXTEND a declared seam or quietly fork one (`singleSeams`)? Right altitude - vertical now,
+  generalization as a named follow-up (consumer CLAUDE.md §Generalize-forward)?
+- **H3 Whole?** Build the **promise ledger** per `references/plan-adversary.md` §D: every docblock/
+  overview commitment mapped to the task.step fulfilling it - an unmapped promise is the FLUENTFRONT
+  failure (a promised artifact shipped empty). Then check the consumer repo's wholeness bars by
+  READING CLAUDE.md §Conventions at review time (flag-first ON, fail-closed, audit rule, wired-itest
+  rule) - never from a restated list here.
+- **H4 Anything to cut?** A task duplicating shipped capability, a speculative abstraction with
+  one consumer, gold-plating past the acceptance bar.
 
-### Step 7b — Apply plan repairs (auto-fix, then re-verify)
-A plan review's point is a phase **fixed and queued**, not a findings list. APPLY every repair to the
-PLAN in the `.phase.ts`, re-run the affected checks; the verdict issues on the POST-fix plan.
-- **Auto-repair (default — knowable from the code you read):** a wrong file/line anchor; blast-radius
-  gaps (add the paths); an unverifiable criterion (reword to the command/observable); a malformed
-  `dependsOn`/stale name/mechanical `batchMode` split; an either/or the code resolves. Tag `[FIXED]`.
-- **Report-only (changes INTENT / needs an owner):** `problem` doesn't exist in source; a missing
-  dependency phase or new scope; a user-LOCKED contradiction or product choice; unresolved markers.
-Commit plan edits (explicit paths) `plan(roadmap): phase N review fixes`, `emit` first if phase files
-feed generated views.
+Verdict: `SOUND | RESHAPE (what+why) | QUESTION (ruling needed)`. Disposition rides Step F: a
+missing-but-mechanical wholeness piece is ADDED as auto-repair; RESHAPE/CUT/new-scope stay
+report-only. An ARC review runs Step H once against the arc entity (`planes`, `singleSeams`,
+`honestyRails`, criteria vs the arc's stated job); member reviews inherit it. Mode B skips Step H.
 
-### Step 8 — Backlog placement (runs when the POST-fix verdict is READY)
-Auto-repaired findings don't block queueing; open REPORT-ONLY findings do (surface, re-review, queue).
-Position, in order:
-1. **Dependency floor** — AFTER every `dependsOn` phase (lowest index = `max(depIndex)+1`); a dep
-   done/historical satisfies it; a dep in neither backlog nor completed = BLOCKER.
-2. **Conflict spacing** — `conflictsWith` phases never adjacent (≥1 between, else NEEDS WORK).
-3. **Priority sort** in the eligible range: BLOCKER>HIGH>MEDIUM>LOW; equal = FIFO.
-4. **Already listed?** Validate against 1–3; propose + apply a move, never silently reorder.
-Insert `{ phase: N, name }` at the index (or move); commit with the fix commit or
-`docs(roadmap): queue phase N`. Output `QUEUED at K | ALREADY at K | MOVED K1→K2 | NOT QUEUED` +
-reasoning. **`--no-queue`:** validate 1–3 but do NOT edit `backlog.ts` — just output the position.
+### Step V - Per-task adversarial verification
 
----
+Run **plan-phase Step 5's self-verify list** against each task as an independent adversary
+(catalogue not restated here). Its mechanical members (paths, size lint, markers, emit/parse)
+are `roadmap phase validate <N>`'s job: run it, trust it, never hand-simulate it. Bring JUDGMENT
+to the rest via `references/plan-adversary.md` (§A verify-clause falsifiability, §B anchor
+freshness, §C criterion state-coverage, §E decision deferrals, §F prose-mechanism drift) - plus:
 
-## Mode B — Post-Execution Audit (done / in-progress phases)
-Verify the CLAIMED work happened, COMPLETELY. `git log --grep="phase N"`; read each diff. Per task:
-- **Claimed changes exist** — every `steps[].file` actually modified; read the code, not the commit message.
-- **Bug actually fixed (not papered over)** — trace the root cause. **`kind: hardening` + any
-  persistence/event/marshal-chain task: unit-pass is NOT closure — the integration-suite RERUN is.**
-  Find evidence the itest was rerun post-fix and the symptom resolved (diff in `compromises` or the
-  completion commit); no rerun or symptom persists → FAIL regardless of unit status.
-- **Pattern caught EVERYWHERE (the "elsewhere?" check — the most important)** — grep the OLD pattern
-  + every changed symbol (imports AND string-literals) repo-wide; a renamed field → check catalog,
-  disclosure matrix, E2E, seed data, routes, rules. Uncovered → FAIL.
-- **Line numbers accurate**, **architecture compliance** (logic in `lib/`, no side effects in pure
-  functions, SSOT, canonical errors, integer-cents finance), **criteria met**, **test coverage**
-  (executable logic; a declarative artifact's guard is its lane, not a bespoke test).
-Output per task: `PASS|CONCERN|FAIL`, bug-confirmed, pattern-elsewhere.
+- **Source confirms** - open the function each task claims to modify; does `problem` exist there
+  NOW? Absent everywhere = BLOCKER.
+- **Blast radius** (the commonest real failure) - per Evidence rules: grep each changed
+  pattern/symbol repo-wide keyed to the code token, plus alternate phrasings for prose carriers
+  (comments, labels, docs drift in different words); every uncovered occurrence = NEEDS WORK.
+- **Plan prose accuracy** - the plan's characterization of the existing mechanism (what keys a
+  tolerance, what a route returns, what a flag gates) is verified against code like any anchor;
+  a mischaracterization ships a wrong description downstream → auto-repair per §F.
+- **Data-flow order** - no step depends on a later step's output. BLOCKER.
+- **Hypotheses refuted** (`category:'fix'` / `kind:'hardening'`) - `notes` carries the
+  `## Hypotheses` block the house plan grammar REQUIRES for these, with exactly one CONFIRMED
+  cause + evidence; an unrefuted rival = NEEDS WORK; a MISSING block routes to Step F.
+- **`step → verify:` grammar** - every step carries a verify clause AND the clause passes §A
+  falsifiability. This review IS the enforcement the grandfathered lint defers to.
 
----
+**Metadata ratifications Mode A owns** (nothing downstream re-checks these): ratify `testScope`,
+per-task `testMode`, licensing, `reviewScope` relaxations, and `userFacing`/flag pairing per
+`references/metadata-ratifications.md`; unjustified/violating declaration = NEEDS WORK. Record
+each ratification IN the phase artifact (`notes`), not only the report - downstream reads the artifact.
+
+Grade per task: `READY | NEEDS WORK | BLOCKER` + the evidence that produced it.
+
+### Step F - Apply plan repairs, then re-verify
+
+The product is a phase FIXED and queued, not a findings list. Repairs touch ONLY plan artifacts
+(`.phase.ts` + `backlog.ts`), NEVER source code - a source fix routes to `/do-phase` (honor-system).
+Re-run `roadmap phase validate <N>` + `roadmap status`; the verdict issues on the POST-fix plan.
+- **Auto-repair** (knowable from code already read): wrong file/line anchor; blast-radius gaps
+  (add the paths); an unfalsifiable verify clause or initial-state-only criterion (reword per
+  `references/plan-adversary.md`); a prose-mechanism mischaracterization (§F, cite the deciding
+  file); a missing `## Hypotheses` block whose confirmed cause the read code establishes (author
+  it, cite the evidence); malformed `dependsOn`/stale name/mechanical `batchMode` split; an
+  either/or the code resolves; a missing-but-mechanical H3 element. Tag each `[FIXED]`.
+- **Report-only** (alters intent/scope/ownership - needs an owner, blocks queueing): `problem`
+  absent from source; missing dependency phase or new scope; contradiction with a user-LOCKED
+  decision (a repair may never override one - honor-system); unresolved `[NEEDS CLARIFICATION]`
+  markers; an unresolvable §E deferral (QUESTION); a rival hypothesis the read code cannot refute.
+Commit plan edits with EXPLICIT paths only (shared checkout - `git add -A` is hook-blocked):
+`plan(roadmap): phase N review fixes`; run `npm run emit:phases` (`gateCommands.emit`) first when phase files feed generated views.
+
+### Step 8 - Backlog placement (name kept: plan-arc/plan-phase cite "Mode A Step 8"; runs only on a POST-fix READY verdict)
+
+Auto-repaired findings never block queueing; open report-only findings do (surface → owner →
+re-review → queue). Derive EVERY cited index per `references/queue-placement.md`: positions
+count ONLY exported-array entries in `roadmap/backlog.ts` (docblock example rows are NOT rows -
+miscounting is a disqualifier class); two independent probes + a `K of TOTAL` checksum. Apply
+the rules in this exact order, naming each in the report:
+1. **Dependency floor** - after every `dependsOn` phase: lowest index = `max(depIndex)+1`; a dep
+   that is done/historical satisfies it; a dep in neither backlog nor completed record = BLOCKER.
+2. **Conflict spacing** - `conflictsWith` phases never adjacent (≥1 entry between, else move).
+3. **Priority sort** within the eligible range: BLOCKER > HIGH > MEDIUM > LOW; **equal =
+   strict FIFO**: insert AFTER the LAST existing equal-tier entry. Placing ahead of ANY older
+   equal-tier entry is a violation unless rule 1 or 2 forces it (name the forcing rule + entries).
+4. **Already listed?** Validate against 1-3; propose + apply any move EXPLICITLY in the report -
+   never silently reorder (honor-system; the backlog docblock names this skill as the only queue writer).
+Commit with the fix commit or `docs(roadmap): queue phase N`. Output
+`QUEUED at K | ALREADY at K | MOVED K1→K2 | NOT QUEUED` + reasoning, positions as `K of TOTAL`.
+**Placement-only / `--no-queue`:** validate 1-3, report the correct position WITHOUT editing
+`backlog.ts`; confine output per `references/queue-placement.md` (no holistic/phase-verdict tokens; every proposal UNAPPLIED).
+
+## Mode B - Post-Execution Audit (done / in-progress phases)
+
+Strictly report-only: a shipped-wrong finding becomes new planned work via `plan-phase`, never an
+inline fix (honor-system). `git log --grep="phase N"`, read each diff, then read the files at
+HEAD (a diff can be reverted or mergeback-clobbered; HEAD is the truth). Two stages per task:
+
+**B1 - Spec compliance (did the claimed work happen?)**
+- Every `steps[].file` actually modified and present at HEAD; claimed anchors accurate; each
+  acceptance criterion probed against the code, not the commit message.
+- `category:'fix'`: trace the mechanism to the root cause - a guard at the symptom site with the
+  cause untouched = papered over → FAIL.
+- **Blast radius repo-wide** (the most important check): per Evidence rules - the OLD pattern +
+  every renamed symbol chased through imports, string literals, label catalogs, seed data, routes,
+  tests, E2E; token-keyed + alternate phrasings. Uncovered occurrence → FAIL, labeled LIVE/LATENT.
+- **Hardening / persistence / event-chain tasks: a unit pass is NOT closure.** Demand evidence
+  the integration-level verification was re-run POST-fix and the original symptom resolved
+  (task `compromises`/`notes` or the completion commit). Absent → FAIL regardless of unit status.
+
+**B2 - Quality bars (is what happened acceptable?)**
+- Architecture floor: business logic in library modules, no side effects in pure functions,
+  SSOT, canonical error shapes, integer-cents finance - plus the consumer's own bars read at
+  audit time (CLAUDE.md §Conventions, `docs/CODE-STYLE.md`).
+- Test coverage on executable logic; a declarative artifact's guard is its ratchet/lint lane, not a bespoke test.
+
+**Every PASS carries its probe**: record beside each PASS the exact command or file read that
+would have failed had the claim been false; every NEGATIVE claim carries its probe + searched
+locations (Evidence rules). A PASS or negative with no attachable probe is a CONCERN.
+Grade per task: `PASS | CONCERN | FAIL` + probe + pattern-elsewhere result.
 
 ## Phase-level verdict + close
-`## Phase N Review`: mode; (Mode A) the Step H block first; task tallies; findings (auto-repairs
-`[FIXED]`); **Verdict: CLEAN** (all pass, Step H SOUND) **| HAS CONCERNS** (minor, or RESHAPE/
-QUESTION) **| BLOCKED** (must-fix). User-appended checks run last; cross-repo phases read other-repo
-files by full path.
 
-**What NOT to do:** Mode A fixes the PLAN, never source (→ `/do-phase`); Mode B stays report-only (a
-shipped-wrong finding goes through a phase). Don't run tests, review outside phase scope, or weaken
-findings — "probably fine" is not a verdict.
+Emit exactly this structure (downstream parsers consume the enums verbatim):
+
+```
+## Phase N Review
+Mode: A|B - judged by: <model> (+ fallback reason if substituted)
+Holistic: SOUND | RESHAPE (what+why) | QUESTION (ruling needed)   [Mode A only]
+Tasks: N.1 <grade> - <evidence/probe> ...
+Findings: [FIXED] <auto-repairs> | OPEN <report-only, owner needed>
+Placement: QUEUED at K | ALREADY at K | MOVED K1→K2 | NOT QUEUED - <reasoning>   [Mode A only]
+Verdict: CLEAN | HAS CONCERNS | BLOCKED
+```
+
+`CLEAN` = all tasks pass + Step H SOUND. `HAS CONCERNS` = minor findings, or RESHAPE/QUESTION.
+`BLOCKED` = any must-fix. Never soften a finding or let missing evidence default favorable -
+"probably fine" is not a verdict (honor-system). When the invoker asked a concrete decision question
+("safe to stack?", "trust this?"), close with ONE decision-shaped line answering it ("safe to
+stack, with these caveats: ...") after the verdict block. User-appended checks run last.

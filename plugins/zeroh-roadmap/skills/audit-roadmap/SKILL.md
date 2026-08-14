@@ -1,6 +1,6 @@
 ---
 name: "Audit Roadmap"
-description: "Read-only structural audit across the roadmap (12 checks). Never reads source code. Reports findings only — never fixes."
+description: "Read-only structural audit across the roadmap (13 checks). Never reads source code. Reports findings only — never fixes."
 user-invocable: true
 metadata:
   keywords: audit, roadmap, consistency, check, health, drift
@@ -10,7 +10,7 @@ metadata:
 
 **Trigger:** `audit roadmap`, `/audit-roadmap`, `check roadmap consistency`, `roadmap health check`.
 
-The 12 structural checks are CODE. Run them:
+The 13 structural checks are CODE. Run them:
 
 ```bash
 roadmap audit          # human report grouped by severity
@@ -22,7 +22,7 @@ Checks (all mechanical, over phase files + backlog + archive, never source):
 (CRITICAL if the phase is queued) · 5 done phase with an undone task · 6 bad task deps ·
 7 stale in-progress (>30d) · 8 duplicate numbers (active+archive) · 9 missing `kind` ·
 10 stale/archived backlog entries · 11 oversized tasks sans `batchMode` · 12 archive
-integrity (status/version/debt). Plus arc↔phase consistency.
+integrity (status/version/debt) · 13 limitations disposed pre-archive. Plus arc↔phase consistency.
 
 **Verdict + exit:** `BROKEN` (exit 2) = any CRITICAL/HIGH — do NOT run `/do-phase` or cut a
 release until they clear. `HAS ISSUES` (exit 0) = MEDIUM/LOW only. `CLEAN` (exit 0) = none.
