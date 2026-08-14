@@ -27,7 +27,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | arc landed / eval the arc | **eval-arc** (do-arc Step 9 auto-runs it) |
 | show roadmap, backlog | `roadmap status` + `roadmap/ROADMAP.md` |
 | what's next, next phase | `roadmap status` → **do-phase** |
-| code review | **code-review** |
+| code review (a diff) | the `code-reviewer` agent / the built-in review command (skill retired 2026-08-14, no outcome delta) |
 | full code review, pre-release review | **full-code-review** |
 | audit roadmap, roadmap health check | **audit-roadmap** |
 | pause the arc | stop anywhere; resume = relaunch the plane workflow |

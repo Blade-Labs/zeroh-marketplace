@@ -30,7 +30,7 @@ release until they clear. `HAS ISSUES` (exit 0) = MEDIUM/LOW only. `CLEAN` (exit
 **Report-only.** Never edits files — the user runs `/plan-phase` or hand-fixes. Report
 literally; don't infer intent.
 
-**Not this skill:** `code-review` (bugs) · `review-phase` (ONE phase, reads source) ·
+**Not this skill:** a plain diff review (the `code-reviewer` agent) · `review-phase` (ONE phase, reads source) ·
 `full-code-review` (app code). `audit` is the cross-phase STRUCTURAL auditor — shallow
 across all phases, never deep into one.
 </content>

@@ -1,6 +1,6 @@
 ---
 name: "Review Phase"
-description: "Independently verify a roadmap phase or whole arc against the real code: backlog phases get a plan-quality review that repairs the plan and queues it; done/in-progress phases get a report-only post-execution audit. Trigger: 'review phase N', '/review-phase N', 'verify/audit phase N', 'review arc <ID>'; also the mandatory pre-queue pass after plan-phase and the spawned judge step in plan-arc. Not for general diff/PR review or bug hunting - that is code-review."
+description: "Independently verify a roadmap phase or whole arc against the real code: backlog phases get a plan-quality review that repairs the plan and queues it; done/in-progress phases get a report-only post-execution audit. Trigger: 'review phase N', '/review-phase N', 'verify/audit phase N', 'review arc <ID>'; also the mandatory pre-queue pass after plan-phase and the spawned judge step in plan-arc. Not for general diff/PR review or bug hunting - that is a plain diff review (the code-reviewer agent)."
 user-invocable: true
 metadata:
   keywords: review, phase, verify, audit, check, validate
@@ -18,7 +18,7 @@ placement-only ask, which NARROWS scope (Step 8). Cross-repo: read the other rep
 hallucinated and the executor's self-verification as lazy; every grade needs source evidence.
 Never execute test suites in either mode - reason from code + existing evidence (honor-system;
 standing ruling: plan-time never runs suites, verifies are executor tripwires). **Not this
-skill:** `code-review` owns diff quality and new-bug hunting, even on a diff a phase produced -
+skill:** a plain diff review (the `code-reviewer` agent) owns diff quality and new-bug hunting, even on a diff a phase produced -
 this skill never hunts bugs outside the phase's claims. `audit-roadmap` owns roadmap-wide
 structure (never reads source; this skill always does). The design gate is never re-run:
 ratified/user-locked decisions are checked for DRIFT only, never relitigated (honor-system).
