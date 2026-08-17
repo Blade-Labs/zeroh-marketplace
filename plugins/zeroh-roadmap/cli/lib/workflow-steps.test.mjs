@@ -225,8 +225,12 @@ test('workflow — every halt is built by buildHaltPayload (no ad-hoc { halt: �
 test('workflow — never kills a process (STALLED with a live background-run keeps waiting)', () => {
   assert.doesNotMatch(WORKFLOW, /\bprocess\.kill\b|SIGKILL|SIGTERM/)
 })
-test('workflow — arms the Stop-hook guard (ROADMAP_EXECUTOR_PHASE + arm file) and generates the schema (seam 3)', () => {
+test('workflow — arms the Stop-hook guard (ROADMAP_EXECUTOR_PHASE + the ONE arm lib) and generates the schema (seam 3)', () => {
   assert.match(WORKFLOW, /ROADMAP_EXECUTOR_PHASE/)
-  assert.match(WORKFLOW, /-executor\.armed/)
+  // The arm FILE belongs to cli/lib/executor-arm.mjs (2376): the workflow routes through it and
+  // keeps NO private copy, because a private copy is exactly what bypassed both 2375 guards.
+  assert.match(WORKFLOW, /from '\.\.\/cli\/lib\/executor-arm\.mjs'/)
+  assert.match(WORKFLOW, /armExecutor\(worktree, phase, sessionId/)
+  assert.doesNotMatch(WORKFLOW, /-executor\.armed/)
   assert.match(WORKFLOW, /contract show --json-schema/)
 })

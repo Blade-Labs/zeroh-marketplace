@@ -22,7 +22,8 @@
  * the harness `agent()` must be provided by the caller.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -37,7 +38,8 @@ import { gitToplevel } from '../cli/lib/gitroot.mjs'
 import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
 import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
-import { readBeaconLine } from '../cli/lib/beacon.mjs'
+import { readBeaconLine, appendExecutorEvent } from '../cli/lib/beacon.mjs'
+import { armExecutor, disarmExecutor } from '../cli/lib/executor-arm.mjs'
 import { pidAlive } from '../cli/lib/sidecar.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
@@ -68,21 +70,6 @@ function defaultAgent() {
 }
 
 const jsonOf = (r) => JSON.parse(r.stdout)
-
-/** Write the arm FILE the executor-result-guard hook reads (the env-propagation-INDEPENDENT
- *  channel 1656 added — the reliable primary). Written PRE-SPAWN, removed after result-check.
- *  Content = the arming SESSION's id (sessionId dep): the guard arms only for that session's
- *  agents — an unbound file is inert (2026-07-17: a session-blind arm made a FOREIGN session's
- *  subagent fabricate executor JSON + forge a beacon entry). */
-function armExecutor(worktree, phase, sessionId = '') {
-  const dir = join(worktree, '.building')
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, `${phase}-executor.armed`), String(sessionId))
-}
-function disarmExecutor(worktree, phase) {
-  const f = join(worktree, '.building', `${phase}-executor.armed`)
-  if (existsSync(f)) rmSync(f)
-}
 
 /** The latest beacon event for the phase, or null. A fresh `background-run` with a live `log`
  *  means a detached run is alive — the STALLED probe uses this to KEEP WAITING, never halt. */
@@ -210,7 +197,22 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     })
     const schema = jsonOf(run('roadmap contract show --json-schema', { cwd })) // seam 3 — GENERATED, never restated
 
-    armExecutor(worktree, phase, deps.sessionId ?? input.sessionId ?? '') // arm the guard SESSION-BOUND, BEFORE the spawn
+    // Arm the guard BEFORE the spawn, through the ONE lifecycle lib both lanes share. The id is
+    // minted per SPAWN, not per session: one session spawns many executors, and the 2026-08-17
+    // double-spawn is exactly the case a session-bound arm cannot tell apart (executor-arm.mjs).
+    // No session id ⇒ arm NOTHING: the guard treats an unbound arm as inert, so writing one only
+    // litters .building, and the lib refuses to write one at all (the 2026-07-17 hazard).
+    const sessionId = deps.sessionId ?? input.sessionId ?? null
+    const executorId = randomUUID()
+    if (sessionId) {
+      try {
+        armExecutor(worktree, phase, sessionId, { executorId })
+      } catch (e) {
+        // An incumbent executor still owns this phase. Refuse to spawn a second one over its
+        // working tree and branch — the workflow-lane equivalent of the CLI's exit 2.
+        return buildHaltPayload('blocked', { phase, evidence: { executorArm: e.message } })
+      }
+    }
 
     let spawn
     try {
@@ -244,10 +246,21 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
 
     // ── the result tail (§4 order) ──
     var rc = run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(spawn.result) }) // parse or die
+    // A green result check IS the mechanical proof that this executor handed something back —
+    // the same proof the Stop hook stamps in the Claude lane, which this harness may not run.
+    // Stamping it here is what lets the disarm below pass UNFORCED (the closed allow-set is
+    // phase-complete/result-returned). A double stamp is harmless: append-only, same event.
+    if (rc.exitCode === 0) appendExecutorEvent(worktree, phase, 'result-returned')
     } finally {
-      // EVERY exit from the spawn→result-check region disarms — a throw (e.g. from run())
-      // must never leave a stale .armed file to false-arm the next SubagentStop (§8 risk 2).
-      disarmExecutor(worktree, phase)
+      // EVERY exit from the spawn→result-check region TRIES to disarm, and never forces. When
+      // the executor never returned, the beacon still reads a work event, the lib refuses, and
+      // the arm DELIBERATELY stays: that standing arm is what blocks the next spawn. A
+      // live-beacon arm is not stale, it is load-bearing; genuinely stale arms are `--sweep`'s.
+      try {
+        disarmExecutor(worktree, phase)
+      } catch (e) {
+        process.stderr.write(`arc-plane: phase ${phase} arm left standing — ${e.message}\n`)
+      }
     }
     if (rc.exitCode !== 0) return buildHaltPayload('failed', { phase, evidence: { resultCheck: rc.stderr || 'invalid PhaseExecutionResult' } })
     const result = jsonOf(rc)
