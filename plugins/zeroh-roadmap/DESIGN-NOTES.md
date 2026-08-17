@@ -203,11 +203,18 @@ the drift lanes:
   different `executorId`. Age is never a rule input — a 93-minute-quiet beacon belonged to a
   healthy cross-repo executor — and a MISSING beacon still disarms, because no evidence is not
   proof. `--force` is the deliberate override, and `--sweep` passes it because `staleArms` has
-  already made the judgement.
+  already made the judgement. BOTH doors route through `cli/lib/executor-arm.mjs` — the CLI verbs
+  and `workflows/arc-plane.workflow.mjs`, which until 2376 kept private copies that wrote an
+  unbound body and rmSynced it unconditionally, so the contract held for one lane only. The
+  workflow mints one `executorId` per spawn, returns a typed `blocked` halt when the lib refuses
+  over an incumbent, and stamps `result-returned` ITSELF once `roadmap result check` exits 0,
+  because its harness may run no hooks and a green result check is the same proof the hook
+  encodes. Its `finally` disarm swallows a refusal to stderr rather than forcing: on a halt path
+  the arm STAYS on purpose, since that standing arm is what blocks the next spawn.
 - **Arm files are CLI-owned and session-bound**: `roadmap executor-arm <N> --session <id>
   [--executor-id <id>]` writes JSON `{ sessionId, executorId?, armedAt }` (an unbound arm is
   REFUSED — the 2026-07-17 fabrication hazard); `roadmap executor-disarm <N> [--force]` removes it
-  (always, even on a halt);
+  under the allow-set above (a live beacon refuses; `--force` is the override);
   `--sweep` removes exactly the STALE set. Staleness classes: terminal phase status, terminal
   beacon, or an UNBOUND body (empty / phase-number fossil / JSON without sessionId). A raw
   session-id string is the old BOUND prose format the guard honors — never swept on a live
