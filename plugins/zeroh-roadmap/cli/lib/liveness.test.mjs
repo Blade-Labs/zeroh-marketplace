@@ -396,3 +396,163 @@ test('24) SHARED worktree: this arc\'s own commit is found behind a burst of sib
   assert.equal(r.verdict, 'ALIVE')
   assert.match(r.evidence.activity, /naming one of this arc's phases/)
 })
+
+// ── 2375.3 — CROSS-REPO activity. The 2026-08-17 incident: an executor whose bookkeeping lived
+// in the arc worktree and whose product code lived in a sibling REPOSITORY read STALLED while it
+// was committing normally, because no row looked anywhere but the worktree. A second executor was
+// then spawned onto the live phase. Only the ACTIVITY row is widened; every row above it is
+// untouched, and cases 1-24 above stand unedited as the proof of that.
+//
+// realpathSync is imported HERE rather than added to the header import, so the pre-existing region
+// of this file stays byte-identical and the no-regression claim is checkable by `git diff` alone.
+const { realpathSync } = await import('node:fs')
+
+const gitIn = (dir, ...a) =>
+  execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { stdio: ['ignore', 'pipe', 'ignore'] })
+
+/** A real, separate repository standing in for /home/patrik/zeroh — never that path itself (D8). */
+function makeProductRepo() {
+  const p = realpathSync(newTmp())
+  gitIn(p, 'init', '-q', '-b', 'main')
+  writeFileSync(join(p, 'seed.txt'), 'seed\n')
+  gitIn(p, 'add', 'seed.txt')
+  gitIn(p, 'commit', '-qm', 'seed: names no phase at all')
+  return p
+}
+
+/** A phase file DECLARING keyFiles, aged out of the worktree activity row like writePhaseFile. */
+function writePhaseFileWithKeyFiles(dir, phase, arcId, keyFiles, status = 'in-progress') {
+  const pdir = join(dir, 'roadmap', 'phases')
+  mkdirSync(pdir, { recursive: true })
+  const p = join(pdir, `phase-${phase}.phase.ts`)
+  const body = keyFiles.map((k) => `    '${k}',`).join('\n')
+  writeFileSync(p, `export default definePhase({\n  phase: ${phase},\n  status: '${status}',\n  arcId: '${arcId}',\n  keyFiles: [\n${body}\n  ],\n})\n`)
+  const old = new Date(Date.now() - 6 * 3600_000)
+  utimesSync(p, old, old)
+  return p
+}
+
+/** Push a file's mtime back so it cannot answer the keyFile-mtime arm — used to ISOLATE the arm
+ *  each case is actually about, so an ALIVE never passes for the wrong reason. */
+function age(path, min) {
+  const t = new Date(Date.now() - min * 60_000)
+  utimesSync(path, t, t)
+}
+
+/** The arc worktree must itself be a repository: the derivation excludes foreign repos by
+ *  comparing git-common-dir against the worktree's own. */
+function makeArcRepo() {
+  const d = newTmp()
+  gitIn(d, 'init', '-q', '-b', 'main')
+  return d
+}
+
+test('25) CROSS-REPO: a stale beacon plus an attributed commit in the PRODUCT repo reads ALIVE', () => {
+  const d = makeArcRepo()
+  const product = makeProductRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 700, event: 'task-start', detail: '700.4 the incident shape' }])
+  const kf = join(product, 'src', 'relay', 'governed-turn.ts')
+  writePhaseFileWithKeyFiles(d, 700, 'MINE', [kf])
+  mkdirSync(dirname(kf), { recursive: true })
+  writeFileSync(kf, 'export {}\n')
+  gitIn(product, 'add', 'src/relay/governed-turn.ts')
+  gitIn(product, 'commit', '-qm', 'feat(relay): phase 700 — 700.4 the executor is very much alive')
+  // Age the declared file so ONLY the product-commit arm can answer: an ALIVE here must be the
+  // commit signal, not the keyFile mtime arm case 27 exists to pin.
+  age(kf, 90)
+
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'ALIVE', 'the executor was committing normally — this is the false STALLED that spawned a second executor')
+  assert.match(r.evidence.activity, /product repo/, `activity should name the product-repo signal; got ${r.evidence.activity}`)
+  assert.ok(r.evidence.crossRepo.includes(product), `evidence must NAME the repository: ${r.evidence.crossRepo}`)
+})
+
+test('26) CROSS-REPO: a product-repo commit naming a SIBLING arc\'s phase does not vouch for this arc', () => {
+  const d = makeArcRepo()
+  const product = makeProductRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 701, event: 'task-start' }])
+  const kf = join(product, 'src', 'thing.ts')
+  writePhaseFileWithKeyFiles(d, 701, 'MINE', [kf])
+  writePhaseFile(d, 801, 'SIBLING')
+  mkdirSync(dirname(kf), { recursive: true })
+  writeFileSync(kf, 'export {}\n')
+  gitIn(product, 'add', 'src/thing.ts')
+  gitIn(product, 'commit', '-qm', 'feat(x): phase 801 — 801.1 a different arc entirely')
+  age(kf, 90)
+
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED', 'a product repo is shared with the whole world, so attribution is mandatory (D3)')
+  assert.ok(r.evidence.crossRepo.includes(product), 'the repo is still reported — "no attributable commit" is a different diagnosis from "no product repo"')
+})
+
+test('27) CROSS-REPO: a freshly touched declared keyFile reads ALIVE through the mtime signal', () => {
+  const d = makeArcRepo()
+  const product = makeProductRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 702, event: 'task-start' }])
+  const kf = join(product, 'src', 'in-flight.ts')
+  writePhaseFileWithKeyFiles(d, 702, 'MINE', [kf])
+  mkdirSync(dirname(kf), { recursive: true })
+  writeFileSync(kf, 'export {}\n') // written moments ago, not yet committed — mid-task is the norm
+
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'ALIVE', 'an executor between commits is still working')
+  assert.match(r.evidence.activity, /keyFile/, `activity should name the keyFile signal; got ${r.evidence.activity}`)
+})
+
+test('27b) CROSS-REPO: the keyFile signal survives a SHARED worktree, because it is phase-scoped', () => {
+  // The worktree-wide newest-file row is disabled on a shared checkout (it cannot attribute a
+  // lane). The keyFile row is derived from THIS arc's own in-progress phases, so it is
+  // attributable by construction and must keep deciding (D4).
+  const d = makeArcRepo()
+  const product = makeProductRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 703, event: 'task-start' }])
+  const kf = join(product, 'src', 'shared-lane.ts')
+  writePhaseFileWithKeyFiles(d, 703, 'MINE', [kf])
+  writePhaseFile(d, 803, 'SIBLING')
+  armSibling(d, 'SIBLING', d)
+  mkdirSync(dirname(kf), { recursive: true })
+  writeFileSync(kf, 'export {}\n')
+
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'ALIVE')
+  assert.match(r.evidence.shared, /shared with 1 other armed arc/, 'the shared-worktree path is genuinely exercised')
+  assert.match(r.evidence.activity, /keyFile/)
+})
+
+test('27c) CROSS-REPO: a keyFile in a LINKED WORKTREE of this repo is not a product repo', () => {
+  // The phase 2333 shape: keyFiles named paths in BOTH the sibling product repo and the consumer
+  // repo the arc worktree is a linked worktree of. Only the first is foreign.
+  const d = makeArcRepo()
+  writeFileSync(join(d, 'seed.txt'), 'seed\n')
+  gitIn(d, 'add', 'seed.txt')
+  gitIn(d, 'commit', '-qm', 'seed: names no phase')
+  const linked = join(realpathSync(newTmp()), 'linked-wt')
+  gitIn(d, 'worktree', 'add', '-q', '-b', 'wt2', linked)
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 704, event: 'task-start' }])
+  const sibling = join(linked, 'roadmap', 'backlog.ts')
+  writePhaseFileWithKeyFiles(d, 704, 'MINE', [sibling])
+  mkdirSync(dirname(sibling), { recursive: true })
+  writeFileSync(sibling, 'export {}\n') // fresh, but it is OUR repo, not a product repo
+
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.ok(!r.evidence.crossRepo.includes(linked), `a linked worktree of our own repo is not foreign: ${r.evidence.crossRepo}`)
+})
+
+test('28) a phase with NO keyFiles behaves exactly as before, and says so explicitly', () => {
+  const d = makeArcRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 705, event: 'task-start' }])
+  writePhaseFile(d, 705, 'MINE') // no keyFiles field at all
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED', 'nothing about the single-repo verdict changes')
+  assert.match(r.evidence.crossRepo, /none/, 'an explicit none, so the reader knows the row ran and found nothing')
+})
+
+test('28b) evidence.crossRepo is present on the FAST paths too, not only when the activity row runs', () => {
+  // A fresh beacon short-circuits long before the activity branch. The reader still needs to know
+  // whether this is a cross-repo arc, for the same reason the skipped-beacon count is reported.
+  const d = makeArcRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(2), phase: 706, event: 'task-start' }])
+  const r = run(sc)
+  assert.equal(r.verdict, 'ALIVE')
+  assert.ok(typeof r.evidence.crossRepo === 'string' && r.evidence.crossRepo.length > 0, 'crossRepo is always reported')
+})

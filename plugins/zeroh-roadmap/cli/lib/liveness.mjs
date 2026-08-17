@@ -9,8 +9,19 @@
  * Verdict table (top row wins): final transcript record = assistant end_turn ≥3min →
  * EXITED · beacon age <20min → ALIVE · gate-stage-start & <45min → QUIET · background-run
  * & its log grew → ALIVE · transcript grew OR pgrep hits → QUIET · last commit <15min OR
- * newest file <10min → ALIVE · no beacon & sidecar within grace → QUIET · else STALLED.
- * A MISSING beacon prefixes the verdict `pre-beacon`.
+ * an ATTRIBUTED commit <15min in a PRODUCT repo derived from the phase keyFiles OR newest
+ * declared keyFile <10min OR newest worktree file <10min → ALIVE · no beacon & sidecar
+ * within grace → QUIET · else STALLED. A MISSING beacon prefixes the verdict `pre-beacon`.
+ *
+ * 2026-08-17 scar (the cross-repo false STALLED): a phase whose bookkeeping lived in the arc
+ * worktree and whose product code lived in a SIBLING REPOSITORY had no signal at all — the
+ * activity row scanned the worktree alone, so an executor committing normally read STALLED and a
+ * second executor was spawned onto the live phase. The row now also reads the repositories the
+ * phase's own keyFiles point into. Those two arms are the ONLY widening: a product repo is shared
+ * with the whole world, so its commits count only when the subject names a phase this arc owns,
+ * and the keyFile mtime arm is phase-scoped (hence attributable even on a shared checkout).
+ * The derivation is always reported as evidence.crossRepo, on every path — "no product repo" and
+ * "a product repo with no attributable commit" are different diagnoses and the reader needs both.
  *
  * Injectable env seams (hermetic tests): LIVENESS_PGREP_CMD, LIVENESS_PROBE_MS (10000),
  * LIVENESS_EXITED_MIN_AGE_MIN (3), LIVENESS_PREBEACON_GRACE_MIN (15).
@@ -20,6 +31,7 @@ import { execSync, execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { readBeaconLine, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
+import { productRepos, newestKeyFileAgeMin } from './product-repos.mjs'
 
 const ACTIVITY_COMMIT_MAX_MIN = 15
 const ACTIVITY_FILE_MAX_MIN = 10
@@ -104,14 +116,15 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   const sharedWith = otherArcsSharingWorktree()
   const sharedWorktree = sharedWith > 0
 
-  /** Age of the newest commit whose subject names a phase THIS arc owns. The task-commit grammar
+  /** Age of the newest commit in `repoDir` whose subject names a phase THIS arc owns. The
+   *  task-commit grammar
    *  ("phase N — ...") is binding, so attribution is a read rather than a guess. Bounded by TIME
    *  rather than by a commit COUNT: the row it feeds asks "did this arc commit inside the window",
    *  and on a shared tree several lanes can push past any count cap well inside that window, which
    *  would drop this arc's own commit and report a false stall. */
-  function ourCommitAgeMin() {
+  function ourCommitAgeMin(repoDir = worktree) {
     try {
-      const out = execSync(`git -C ${JSON.stringify(worktree)} log --since="${ACTIVITY_COMMIT_MAX_MIN} minutes ago" --format=%ct%x09%s`, {
+      const out = execSync(`git -C ${JSON.stringify(repoDir)} log --since="${ACTIVITY_COMMIT_MAX_MIN} minutes ago" --format=%ct%x09%s`, {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       }).trim()
@@ -129,6 +142,10 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   }
 
   let foreignBeacons = 0
+  // The phase number behind the ADOPTED beacon, when the beacon is phase-keyed. It is one half of
+  // "which phases is this arc actually executing" (D2), and discoverBeacon is the only place that
+  // knows it — the arc-keyed naming carries no phase at all.
+  let beaconPhase = null
   function discoverBeacon() {
     const dirs = [...new Set([registryDir, join(worktree, '.building')])]
     let best = null
@@ -153,15 +170,60 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
         const p = join(d, name)
         try {
           const st = statSync(p)
-          if (!best || st.mtimeMs > best.mtimeMs) best = { path: p, mtimeMs: st.mtimeMs }
+          if (!best || st.mtimeMs > best.mtimeMs) best = { path: p, mtimeMs: st.mtimeMs, phase: isPhaseKeyed ? owner : null }
         } catch {
           /* unreadable — skip */
         }
       }
     }
+    beaconPhase = best?.phase ?? null
     return best?.path ?? null
   }
   const beaconPath = discoverBeacon()
+
+  /**
+   * The absolute keyFiles this arc's live work declares (D2): the union of the adopted beacon's
+   * phase and every in-progress phase carrying this arcId. Read through scanPhaseFile per file
+   * rather than scanProgress, because scanProgress memoizes per directory for the whole process
+   * lifetime and `roadmap watch` loop mode calls readLiveness repeatedly in ONE process — a memo
+   * would freeze the phase set at whatever it was when the loop started.
+   *
+   * Memoized only within THIS invocation, which is one verdict.
+   */
+  let keyFilesMemo = null
+  function ourKeyFiles() {
+    if (keyFilesMemo) return keyFilesMemo
+    const out = []
+    const seen = new Set()
+    for (const dir of phasesDirs) {
+      let entries = []
+      try {
+        entries = readdirSync(dir)
+      } catch {
+        continue // no phases dir here — not an error, the layout varies
+      }
+      for (const name of entries) {
+        if (!name.endsWith('.phase.ts')) continue
+        let scanned = null
+        try {
+          scanned = scanPhaseFile(join(dir, name))
+        } catch {
+          continue
+        }
+        if (!scanned) continue
+        const isBeaconPhase = beaconPhase != null && String(scanned.phase) === String(beaconPhase)
+        const isOurLivePhase = scanned.status === 'in-progress' && scanned.arcId === arcId
+        if (!isBeaconPhase && !isOurLivePhase) continue
+        for (const keyFile of scanned.keyFiles ?? []) {
+          if (seen.has(keyFile)) continue
+          seen.add(keyFile)
+          out.push(keyFile)
+        }
+      }
+    }
+    keyFilesMemo = out
+    return out
+  }
 
   function newestWorktreeFileAgeMin() {
     let newest = 0
@@ -383,6 +445,17 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
         ? 'present but unparseable last line (treated as pre-beacon)'
         : 'absent in both beacon dirs (pre-beacon executor)') + foreignNote
 
+  // Reported on EVERY path, not only when the activity row runs, for the same reason the skipped-
+  // beacon count is: on a cross-repo arc the difference between "no product repo" and "a product
+  // repo with no attributable commit" is the whole diagnosis, and in the incident it was invisible.
+  const ourKeys = ourKeyFiles()
+  const derivedRepos = productRepos(ourKeys, { worktree })
+  const keyFileAgeMin = newestKeyFileAgeMin(ourKeys, now)
+  evidence.crossRepo = derivedRepos.length
+    ? `${derivedRepos.length} product repo(s) from keyFiles: ${derivedRepos.join(', ')}; newest declared keyFile `
+      + `${keyFileAgeMin == null ? 'not written yet' : `${keyFileAgeMin.toFixed(1)}min old`}`
+    : `none (${ourKeys.length ? `${ourKeys.length} keyFile(s) declared, all in this worktree's own repository` : 'no keyFiles declared by this arc\'s live phases'})`
+
   let verdict = null
 
   const exited = exitState(td)
@@ -421,6 +494,20 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
       evidence.pgrep += ' (not lane-attributable, evidence only)'
     }
 
+    // A product repo is shared with the whole world by definition — other arcs, other branches, the
+    // human — so attribution is unconditional there (D3). That adds no new false-ALIVE direction,
+    // which is the one direction this verdict must never fail in.
+    let productCommit = null
+    for (const repo of derivedRepos) {
+      const age = ourCommitAgeMin(repo)
+      if (age != null && (productCommit == null || age < productCommit.ageMin)) productCommit = { repo, ageMin: age }
+    }
+    if (derivedRepos.length) {
+      evidence.crossRepo += productCommit
+        ? `; attributed commit in ${productCommit.repo} ${productCommit.ageMin.toFixed(1)}min ago`
+        : '; no commit naming one of this arc\'s phases in any of them'
+    }
+
     if (beacon.exists && beacon.lastEvent === 'background-run' && logGrew) verdict = 'ALIVE'
     else if (transcriptGrew || (hits > 0 && !sharedWorktree)) verdict = 'QUIET'
     else if (commitAgeMin != null && commitAgeMin < ACTIVITY_COMMIT_MAX_MIN) {
@@ -428,6 +515,16 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
       evidence.activity = sharedWorktree
         ? `last commit naming one of this arc's phases ${commitAgeMin.toFixed(1)}min ago (< ${ACTIVITY_COMMIT_MAX_MIN}min)`
         : `last commit ${commitAgeMin.toFixed(1)}min ago (< ${ACTIVITY_COMMIT_MAX_MIN}min)`
+    } else if (productCommit != null && productCommit.ageMin < ACTIVITY_COMMIT_MAX_MIN) {
+      verdict = 'ALIVE'
+      evidence.activity =
+        `last commit naming one of this arc's phases in the product repo ${productCommit.repo} `
+        + `${productCommit.ageMin.toFixed(1)}min ago (< ${ACTIVITY_COMMIT_MAX_MIN}min)`
+    } else if (keyFileAgeMin != null && keyFileAgeMin < ACTIVITY_FILE_MAX_MIN) {
+      // Unlike the worktree-wide row below, this one survives a shared checkout: the paths come
+      // from THIS arc's own phases, so the signal is attributable by construction (D4).
+      verdict = 'ALIVE'
+      evidence.activity = `newest declared keyFile touched ${keyFileAgeMin.toFixed(1)}min ago (< ${ACTIVITY_FILE_MAX_MIN}min)`
     } else if (!sharedWorktree && fileAgeMin != null && fileAgeMin < ACTIVITY_FILE_MAX_MIN) {
       verdict = 'ALIVE'
       evidence.activity = `newest worktree file touched ${fileAgeMin.toFixed(1)}min ago (< ${ACTIVITY_FILE_MAX_MIN}min)`
