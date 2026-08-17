@@ -250,6 +250,83 @@ test('7f) maxRemotePhase — the injected exec receives the UPSTREAM REF and the
   )
 })
 
+// ── 2375.1 — keyFiles exposure (the only place absolute product paths live) ────────────
+
+test('8) matchKeyFilesField — a multi-line array of absolute quoted paths yields them IN ORDER', async () => {
+  const { matchKeyFilesField } = await import(MOD)
+  const src = [
+    'export default definePhase({',
+    '  phase: 2375,',
+    "  status: 'in-progress',",
+    '  keyFiles: [',
+    "    '/home/patrik/zeroh-marketplace/plugins/zeroh-roadmap/cli/lib/liveness.mjs',",
+    "    '/home/patrik/zeroh-marketplace/plugins/zeroh-roadmap/cli/lib/phasescan.mjs',",
+    "    '/home/patrik/azure_private_agent/roadmap/backlog.ts',",
+    '  ],',
+    '})',
+  ].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), [
+    '/home/patrik/zeroh-marketplace/plugins/zeroh-roadmap/cli/lib/liveness.mjs',
+    '/home/patrik/zeroh-marketplace/plugins/zeroh-roadmap/cli/lib/phasescan.mjs',
+    '/home/patrik/azure_private_agent/roadmap/backlog.ts',
+  ])
+})
+
+test('8b) matchKeyFilesField — an absent field is an EMPTY array, never undefined', async () => {
+  const { matchKeyFilesField } = await import(MOD)
+  const src = ["export default definePhase({ phase: 1, status: 'backlog' })"].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), [], 'callers iterate the result; undefined would throw')
+  // an EMPTY declared array is also [] — same shape, no special case
+  assert.deepEqual(matchKeyFilesField("definePhase({ status: 'backlog', keyFiles: [] })"), [])
+})
+
+test('8c) matchKeyFilesField — doc-comment prose naming keyFiles never wins over the real field', async () => {
+  const { matchKeyFilesField } = await import(MOD)
+  const src = [
+    '/**',
+    " * Supersedes the old plan whose keyFiles: [ '/prose/decoy.mjs' ] listing is quoted here.",
+    ' */',
+    'export default definePhase({',
+    '  phase: 7,',
+    "  status: 'backlog',",
+    '  keyFiles: [',
+    "    '/real/field.mjs',",
+    '  ],',
+    '})',
+  ].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), ['/real/field.mjs'], 'the field after the definePhase anchor supplies the value')
+})
+
+test('8d) scanPhaseFile — keyFiles ride alongside the UNCHANGED phase/status/arcId values', () => {
+  const dir = newTmp()
+  const src = [
+    'export default definePhase({',
+    '  phase: 2375,',
+    "  status: 'in-progress',",
+    "  arcId: 'ARCX',",
+    '  keyFiles: [',
+    "    '/product/repo/src/a.mjs',",
+    "    '/product/repo/src/b.mjs',",
+    '  ],',
+    '})',
+  ].join('\n')
+  const path = join(dir, 'phase-2375.phase.ts')
+  writeFileSync(path, src + '\n')
+  const r = scanPhaseFile(path)
+  assert.equal(r.phase, '2375')
+  assert.equal(r.status, 'in-progress')
+  assert.equal(r.arcId, 'ARCX')
+  assert.deepEqual(r.keyFiles, ['/product/repo/src/a.mjs', '/product/repo/src/b.mjs'])
+})
+
+test('8e) scanPhaseFile — a phase file with no keyFiles field still yields an array', () => {
+  const dir = newTmp()
+  const p = writePhase(dir, 'phase-31.phase.ts', { phase: 31, status: 'done', arcId: 'X' })
+  const r = scanPhaseFile(p)
+  assert.deepEqual(r.keyFiles, [], 'the widening never hands back undefined')
+  assert.equal(r.status, 'done', 'the pre-existing fields are untouched by the widening')
+})
+
 test('6) scanProgress — a statusless / unparseable phase file is skipped, never crashes', () => {
   const phases = join(newTmp(), 'phases')
   writePhase(phases, 'phase-1.phase.ts', { phase: 1, status: 'done', arcId: 'X' })

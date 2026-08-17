@@ -11,6 +11,8 @@ import { defaultExec } from './exec.mjs'
 const STATUS_RE = /status:\s*'([a-z-]+)'/
 const DECLARED_RE = /(?:^|[{,])\s*phase:\s*(\d+)\s*,/m
 const ARCID_RE = /arcId:\s*'([^']+)'/
+const KEYFILES_RE = /keyFiles:\s*\[([^\]]*)\]/
+const QUOTED_RE = /'([^']*)'/g
 const FILENAME_RE = /phase-(\d+)/
 
 /**
@@ -40,6 +42,26 @@ export function matchArcIdField(src) {
 }
 
 /**
+ * Match the keyFiles FIELD — the only place a phase declares the ABSOLUTE paths it
+ * writes, so it is the only way the CLI can learn which repository a cross-repo phase
+ * actually commits into. Same `definePhase(` anchor as the two matchers above, for the
+ * same reason: a docstring quoting an older plan's keyFiles listing sits above the real
+ * field. Always an array — callers iterate it, so absent is `[]`, never undefined.
+ *
+ * LIMITATION, deliberately unsolved: entries are read as single-quoted literals, so a
+ * path containing an escaped apostrophe truncates at the escape. No path in this estate
+ * has one, and growing the regex to cover a case that does not exist costs more than it
+ * buys — a truncated path simply resolves to no repository (best-effort by design).
+ */
+export function matchKeyFilesField(src) {
+  const anchor = src.indexOf('definePhase(')
+  const scanFrom = anchor >= 0 ? anchor : 0
+  const body = src.slice(scanFrom).match(KEYFILES_RE)?.[1]
+  if (!body) return []
+  return [...body.matchAll(QUOTED_RE)].map((m) => m[1])
+}
+
+/**
  * Read one phase file. The DECLARED `phase: N` value wins over the filename.
  * Returns null when the file has no `status:` (arc-status's `continue`).
  */
@@ -55,7 +77,8 @@ export function scanPhaseFile(absPath) {
   const declared = src.match(DECLARED_RE)?.[1]
   const phase = declared ?? absPath.match(FILENAME_RE)?.[1]
   const arcId = matchArcIdField(src)
-  return { phase, status, arcId }
+  const keyFiles = matchKeyFilesField(src)
+  return { phase, status, arcId, keyFiles }
 }
 
 // Per-dir memo — the single source for "how far along is arc X", never hand-written.
