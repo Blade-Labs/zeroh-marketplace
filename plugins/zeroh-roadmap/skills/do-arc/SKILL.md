@@ -38,14 +38,24 @@ workflow engine cannot host its imports).
       ONE `phase-executor` subagent: prompt = the phase file + the gate plan + the arc's
       execution-prompt doc; result schema from `roadmap contract show --json-schema`. BEFORE
       the spawn, arm the Stop-hook guard: `roadmap executor-arm <phase> --session <YOUR
-      SESSION ID>` (the session-scoped dir name in your transcript/scratchpad paths) — the
-      CLI refuses an unbound arm, and a foreign session is never guarded. Liveness =
+      SESSION ID> --executor-id <the id of the subagent you are about to spawn>` (the
+      session-scoped dir name in your transcript/scratchpad paths) — the CLI refuses an
+      unbound arm, and a foreign session is never guarded. `--executor-id` is what makes the
+      arm EXCLUSIVE: one session spawns many executors, so a session id alone cannot tell a
+      respawn from a second executor onto a live phase. READ the cross-repo preflight line the
+      arm prints (the product repos this phase's keyFiles point into, and the newest declared
+      keyFile age) before spawning: a keyFile fresher than a few minutes means someone is
+      already writing there. Liveness =
       `roadmap watch <id> --once --json` SPOT-CHECKS on each executor notification and before
       every resume decision — never a long-lived background `watch` daemon (every daemon
       instance to date was reaped by a session event before its arc finished).
    4. On return: `roadmap result check --phase <phase>` over the returned JSON (parse or
       die — never trust prose), then `roadmap executor-disarm <phase>` (always, even on a
-      halt; `roadmap executor-disarm --sweep` at arc start clears stale leftovers).
+      halt; `roadmap executor-disarm --sweep` at arc start clears stale leftovers). When NO
+      result came back the disarm now REFUSES (exit 2) and prints the beacon evidence.
+      `--force` is a deliberate act taken only after READING that evidence, never on a
+      STALLED verdict alone: on 2026-08-17 a STALLED verdict on a healthy cross-repo executor
+      is exactly what put two executors on one working tree and one branch.
       `status` ≠ `done` → the halt branch below. Criterion-narrowing compromise → the
       self-descope branch. Else `roadmap gate run <phase> --verify-complete`, groom the
       backlog entry, run the `emit` slot, and loop.

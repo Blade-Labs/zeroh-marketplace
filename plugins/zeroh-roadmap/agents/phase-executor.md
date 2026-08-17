@@ -34,7 +34,12 @@ long-run + foreign-red: `agents/references/executor-reference.md`.
 
 **Step 0:** run the `assumptions[]` tripwires — a failed `verify` escalates BEFORE any code; then
 `roadmap phase start <N>` (the atomic backlog→in-progress flip + move-commit + executor-start
-beacon — never a hand edit). Then, one task = one commit:
+beacon — never a hand edit). **CROSS-REPO BELT:** when `keyFiles` name a repository other than
+your worktree, `stat` those files before your first write. Anything newer than your own spawn is
+another executor already at work — do NOT write, return `status: "escalated"` with the mtimes.
+The tell on 2026-08-17 was a stale line number in a test failure not matching the file on disk,
+and half that session went into re-deriving a fix already sitting in the tree. Then, one task =
+one commit:
 1. `roadmap beacon task-start --phase <N>` (the typed writer — never a hand-appended JSONL line).
 2. Implement `steps` (TDD via `test-engineer` for `testMode` tdd/e2e).
 3. Verify — `roadmap gate run <N> --slots types` + the phase-relevant scoped tests.

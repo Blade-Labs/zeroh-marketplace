@@ -186,9 +186,28 @@ the drift lanes:
   names (phase-done / executor-complete / executor-done) normalize to `phase-complete` at READ
   time in `readBeaconLine`, so consumers (status, watch, liveness, SEATS) must read through it,
   never raw-match event strings.
-- **Arm files are CLI-owned and session-bound**: `roadmap executor-arm <N> --session <id>`
-  writes JSON `{ sessionId, armedAt }` (an unbound arm is REFUSED — the 2026-07-17 fabrication
-  hazard); `roadmap executor-disarm <N>` removes it (always, even on a halt);
+- **The liveness ACTIVITY row reads the PRODUCT repositories too** (`cli/lib/product-repos.mjs`,
+  derived from the phase's own `keyFiles`): a phase whose bookkeeping and product code live in
+  different repositories had no signal at all, so a working executor read STALLED. Foreignness is
+  git-COMMON-DIR, not toplevel — a linked worktree of the same repo shares the common dir and is
+  ours. A product repo is shared with the whole world, so its commits count only when the subject
+  names a phase this arc owns (the task-commit grammar); the keyFile-mtime arm is phase-scoped and
+  therefore survives a shared checkout. No other verdict row widened, and the derivation is always
+  reported as `evidence.crossRepo` because "no product repo" and "a product repo with no
+  attributable commit" are different diagnoses.
+- **The unit of exclusivity is the EXECUTOR, not the session**: one session spawns many
+  executors, so a session-bound arm cannot tell a respawn from a second executor onto a live
+  phase. `disarmExecutor` REFUSES unless the phase beacon's last event is `phase-complete` or
+  `result-returned` (the allow-set = "this executor handed something back", the latter stamped by
+  the result-guard hook only on a valid typed result); `armExecutor` REFUSES over an arm naming a
+  different `executorId`. Age is never a rule input — a 93-minute-quiet beacon belonged to a
+  healthy cross-repo executor — and a MISSING beacon still disarms, because no evidence is not
+  proof. `--force` is the deliberate override, and `--sweep` passes it because `staleArms` has
+  already made the judgement.
+- **Arm files are CLI-owned and session-bound**: `roadmap executor-arm <N> --session <id>
+  [--executor-id <id>]` writes JSON `{ sessionId, executorId?, armedAt }` (an unbound arm is
+  REFUSED — the 2026-07-17 fabrication hazard); `roadmap executor-disarm <N> [--force]` removes it
+  (always, even on a halt);
   `--sweep` removes exactly the STALE set. Staleness classes: terminal phase status, terminal
   beacon, or an UNBOUND body (empty / phase-number fossil / JSON without sessionId). A raw
   session-id string is the old BOUND prose format the guard honors — never swept on a live
