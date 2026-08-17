@@ -18,7 +18,10 @@ export default async function run(argv) {
       return 0
     }
     for (const s of stale) {
-      disarmExecutor(worktree, s.phase)
+      // force: staleArms has ALREADY applied the definition of stale, so the live-arm guard would
+      // only re-litigate a judgement that is made. Without this the sweep would block on its own
+      // guard for the stale classes whose last beacon event happens to be a work event.
+      disarmExecutor(worktree, s.phase, { force: true })
       process.stderr.write(`roadmap executor-disarm: swept phase ${s.phase} — ${s.reason} (${s.file})\n`)
     }
     return 0

@@ -294,3 +294,164 @@ test('13) staleArms — an empty .building (no arms) returns []', () => {
   mkdirSync(join(worktree, '.building'), { recursive: true })
   assert.deepEqual(staleArms(worktree, phasesDir), [], 'no arm files ⇒ no stale entries')
 })
+
+// ── 2375.4 — EXECUTOR-SCOPED exclusivity (D5). The 2026-08-17 incident: two phase-executors were
+// spawned by the SAME session onto the same phase, so the session-bound arm could not tell them
+// apart and the disarm-then-rearm that handed a live phase to the second one looked entirely
+// legitimate. Both executors then shared one working tree and one branch. The unit of exclusivity
+// has to identify the EXECUTOR, and the disarm has to stop being silent.
+//
+// Age is deliberately NOT part of any rule below: age is exactly what lied in the incident (93
+// minutes of silence was what a healthy cross-repo executor looked like).
+
+test('14) disarmExecutor — a beacon whose last event is WORK refuses, and leaves the arm in place', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 2333, 'sess-abc')
+  writeBeacon(worktree, 2333, [
+    { ts: isoAgo(120), event: 'executor-start', phase: 2333 },
+    { ts: isoAgo(93), event: 'task-start', phase: 2333, detail: '2333.4 dual-lane parity proof, then the deletion' },
+  ])
+  assert.throws(() => disarmExecutor(worktree, 2333), /task-start/, 'the refusal must name the beacon event so the caller can judge')
+  assert.ok(existsSync(armPath(worktree, 2333)), 'a REFUSED disarm must not remove the arm it refused to clear')
+})
+
+test('14b) disarmExecutor — the refusal points at force and reports the beacon AGE as evidence', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 2333, 'sess-abc')
+  writeBeacon(worktree, 2333, [{ ts: isoAgo(93), event: 'task-start', phase: 2333 }])
+  let err = null
+  try {
+    disarmExecutor(worktree, 2333)
+  } catch (e) {
+    err = e
+  }
+  assert.ok(err, 'refusal expected')
+  assert.match(err.message, /force/, 'the message must name the deliberate override')
+  assert.match(err.message, /93/, 'the age is EVIDENCE for the human, never a rule input')
+})
+
+test('15) disarmExecutor — force clears the same live arm (the deliberate override)', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 2333, 'sess-abc')
+  writeBeacon(worktree, 2333, [{ ts: isoAgo(93), event: 'task-start', phase: 2333 }])
+  assert.doesNotThrow(() => disarmExecutor(worktree, 2333, { force: true }))
+  assert.equal(existsSync(armPath(worktree, 2333)), false, 'forced disarm removes the arm')
+})
+
+test('16) disarmExecutor — phase-complete and result-returned both disarm with NO flag', () => {
+  for (const event of ['phase-complete', 'result-returned', 'executor-done']) {
+    const worktree = newTmp()
+    armExecutor(worktree, 1727, 'sess-abc')
+    writeBeacon(worktree, 1727, [
+      { ts: isoAgo(30), event: 'task-start', phase: 1727 },
+      { ts: isoAgo(2), event, phase: 1727 },
+    ])
+    assert.doesNotThrow(() => disarmExecutor(worktree, 1727), `${event} means this executor handed something back`)
+    assert.equal(existsSync(armPath(worktree, 1727)), false, `${event} disarms silently`)
+  }
+})
+
+test('17) disarmExecutor — NO beacon at all still disarms: no evidence is not proof', () => {
+  // The engine's own unknown-is-not-proof idiom, and what keeps case 6 green.
+  const worktree = newTmp()
+  armExecutor(worktree, 1727, 'sess-abc')
+  assert.doesNotThrow(() => disarmExecutor(worktree, 1727))
+  assert.equal(existsSync(armPath(worktree, 1727)), false)
+})
+
+test('17b) disarmExecutor — a live beacon but NO arm file is still a silent no-op', () => {
+  const worktree = newTmp()
+  writeBeacon(worktree, 1727, [{ ts: isoAgo(5), event: 'task-start', phase: 1727 }])
+  assert.doesNotThrow(() => disarmExecutor(worktree, 1727), 'there is no arm to protect, so there is nothing to refuse')
+})
+
+test('18) armExecutor — records the executorId alongside the session, and omits it when absent', () => {
+  const worktree = newTmp()
+  const withId = JSON.parse(readFileSync(armExecutor(worktree, 1727, 'sess-abc', { executorId: 'exec-1' }), 'utf8'))
+  assert.equal(withId.sessionId, 'sess-abc')
+  assert.equal(withId.executorId, 'exec-1')
+  assert.ok(!Number.isNaN(Date.parse(withId.armedAt)))
+
+  const worktree2 = newTmp()
+  const withoutId = JSON.parse(readFileSync(armExecutor(worktree2, 1727, 'sess-abc'), 'utf8'))
+  assert.equal('executorId' in withoutId, false, 'absent means absent — never an explicit null a reader must special-case')
+  assert.equal(withoutId.sessionId, 'sess-abc')
+})
+
+test('19) armExecutor — arming over an arm naming a DIFFERENT executorId refuses, naming BOTH ids', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 2333, 'sess-shared', { executorId: 'exec-first' })
+  let err = null
+  try {
+    armExecutor(worktree, 2333, 'sess-shared', { executorId: 'exec-second' })
+  } catch (e) {
+    err = e
+  }
+  assert.ok(err, 'the SAME session spawning a second executor is exactly the incident — it must refuse')
+  assert.match(err.message, /exec-first/, 'names the incumbent')
+  assert.match(err.message, /exec-second/, 'names the challenger')
+  assert.match(err.message, /force/, 'names the deliberate override')
+  assert.equal(JSON.parse(readFileSync(armPath(worktree, 2333), 'utf8')).executorId, 'exec-first', 'the incumbent arm is untouched')
+})
+
+test('19b) armExecutor — re-arming with the SAME executorId is fine (the legitimate resume path)', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 2333, 'sess-shared', { executorId: 'exec-first' })
+  assert.doesNotThrow(() => armExecutor(worktree, 2333, 'sess-shared', { executorId: 'exec-first' }))
+  assert.equal(JSON.parse(readFileSync(armPath(worktree, 2333), 'utf8')).executorId, 'exec-first')
+})
+
+test('19c) armExecutor — an INCOMING arm with no executorId over an identified arm also refuses', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 2333, 'sess-shared', { executorId: 'exec-first' })
+  assert.throws(() => armExecutor(worktree, 2333, 'sess-shared'), /exec-first/, 'an anonymous challenger cannot prove it is the incumbent')
+})
+
+test('19d) armExecutor — force wins over a conflicting arm', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 2333, 'sess-shared', { executorId: 'exec-first' })
+  assert.doesNotThrow(() => armExecutor(worktree, 2333, 'sess-shared', { executorId: 'exec-second', force: true }))
+  assert.equal(JSON.parse(readFileSync(armPath(worktree, 2333), 'utf8')).executorId, 'exec-second')
+})
+
+test('20) armExecutor — a LEGACY arm carrying no executorId never refuses (nothing on disk breaks)', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 2333, 'sess-old') // the shape written before this change
+  assert.doesNotThrow(() => armExecutor(worktree, 2333, 'sess-new', { executorId: 'exec-second' }))
+  assert.equal(JSON.parse(readFileSync(armPath(worktree, 2333), 'utf8')).executorId, 'exec-second')
+
+  // ...and neither does the raw prose format the guard still honors.
+  const worktree2 = newTmp()
+  writeRawArm(worktree2, 2333, 'ed737add-1b2c-4d5e-8f90-a1b2c3d4e5f6')
+  assert.doesNotThrow(() => armExecutor(worktree2, 2333, 'sess-new', { executorId: 'exec-second' }))
+})
+
+test('21) armExecutor — the unbound-session throw is UNCHANGED by the opts widening', () => {
+  const worktree = newTmp()
+  assert.throws(() => armExecutor(worktree, 1727, undefined, { executorId: 'exec-1' }), /session/i)
+  assert.throws(() => armExecutor(worktree, 1727, '', { executorId: 'exec-1' }), /session/i)
+  assert.throws(() => armExecutor(worktree, 1727, '   ', { executorId: 'exec-1' }), /session/i)
+  assert.equal(existsSync(armPath(worktree, 1727)), false, 'still nothing written')
+})
+
+test('22) THE REAL INCIDENT SHAPE — the 2026-08-17 arm + beacon bodies verbatim: the disarm REFUSES', () => {
+  // Reproduced from the two files read at plan time:
+  //   .building/2333-executor.armed  {"sessionId":"ea584379-...","armedAt":"2026-08-17T08:52:04.486Z"}
+  //   .building/2333-executor.jsonl  last line event "task-start", detail "2333.4 ..."
+  // One session id for what became two executors, and a WORK event as the last word. Under the
+  // rule above the disarm that handed the phase to the second executor would not have happened.
+  const worktree = newTmp()
+  writeRawArm(worktree, 2333, JSON.stringify({ sessionId: 'ea584379-4810-40b6-bb67-20906c8bf6d3', armedAt: isoAgo(120) }) + '\n')
+  writeBeacon(worktree, 2333, [
+    { ts: isoAgo(120), event: 'executor-start', phase: 2333 },
+    { ts: isoAgo(93), event: 'task-start', phase: 2333, detail: '2333.4 dual-lane parity proof, then the deletion' },
+  ])
+  assert.throws(() => disarmExecutor(worktree, 2333), /task-start/)
+  assert.ok(existsSync(armPath(worktree, 2333)), 'the live arm survives — no second executor gets armed onto this phase')
+
+  // And the sweep lane is unaffected: staleArms never judged this arm stale in the first place,
+  // so the guard is not duplicating a judgement the sweep already makes.
+  const phasesDir = join(newTmp(), 'phases')
+  writePhaseFile(phasesDir, 2333, 'in-progress')
+  assert.deepEqual(staleArms(worktree, phasesDir), [], 'a live arm was never in the stale set')
+})
