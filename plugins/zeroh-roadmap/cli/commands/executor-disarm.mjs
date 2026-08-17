@@ -1,7 +1,12 @@
 /**
- * roadmap executor-disarm <N> | --sweep — remove one executor arm file, or sweep
+ * roadmap executor-disarm <N> [--force] | --sweep — remove one executor arm file, or sweep
  * exactly the STALE set (terminal phase / terminal beacon / bare-legacy format),
  * naming each removal's reason. A live in-flight arm is NEVER swept (1737.2).
+ *
+ * Disarming a phase whose executor never returned a result is REFUSED with exit 2 and the beacon
+ * evidence on stderr: clearing a live arm is what let a second executor be spawned onto a phase
+ * the first still owned (2026-08-17). --force is the deliberate override, taken after reading that
+ * evidence rather than instead of reading it.
  *
  * Returns its exit code to the dispatcher — never hard-exits the process.
  */
@@ -28,10 +33,15 @@ export default async function run(argv) {
   }
   const phase = argv.find((a) => /^\d+$/.test(a))
   if (!phase) {
-    process.stderr.write('roadmap executor-disarm: usage: roadmap executor-disarm <N> | --sweep\n')
+    process.stderr.write('roadmap executor-disarm: usage: roadmap executor-disarm <N> [--force] | --sweep\n')
     return 1
   }
-  disarmExecutor(worktree, phase)
+  try {
+    disarmExecutor(worktree, phase, { force: argv.includes('--force') })
+  } catch (err) {
+    process.stderr.write(`roadmap executor-disarm: ${err.message}\n`)
+    return 2
+  }
   process.stderr.write(`roadmap executor-disarm: phase ${phase} disarmed\n`)
   return 0
 }
