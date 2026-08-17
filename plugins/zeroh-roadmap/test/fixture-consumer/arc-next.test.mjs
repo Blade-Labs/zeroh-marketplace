@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   makeFixtureRepo, runCli, writePhaseFile, writeArcFile, writePhaseRaw, commitAll, git,
@@ -142,15 +142,21 @@ test('N7 — blocked: unmet dep, foreign lane, and a malformed member file', () 
 // ── N8/N9 — the stalled-watch-wake fork (the workflow LOOP's reaction is under test) ─────
 /** Build a real fixture repo for a mid-band member + drive arcPlaneWorkflow with a canned
  *  `run` (the CLI decisions) and a two-step `agent` (the watch wake, then a terminal). */
-function driveWorkflow(root, phase, { agentReturns }) {
-  const fakeRun = (cmd) => {
+function driveWorkflow(root, phase, { agentReturns, deps = {} }) {
+  let laps = 0
+  const fakeRun = (cmd, opts = {}) => {
+    // ONE phase per drive: a second lap means the first finished, so the arc reads complete.
+    // (A canned run-phase payload would otherwise re-spawn forever on the success path.)
+    if (cmd.includes('arc next') && laps++ > 0) return { stdout: JSON.stringify({ arc: 'FX', action: 'complete', done: [phase], remaining: [] }), stderr: '', exitCode: 0 }
     if (cmd.includes('arc next')) return { stdout: JSON.stringify({ arc: 'FX', action: 'run-phase', phase, band: 'mid', plane: 'P', done: [], remaining: [], gates: {} }), stderr: '', exitCode: 0 }
     if (cmd.includes('gate plan')) return { stdout: JSON.stringify({ phase, slots: [], testScope: { effective: 'relevant' }, reviewScope: { effective: 'full' }, agents: {} }), stderr: '', exitCode: 0 }
-    return { stdout: '{}', stderr: '', exitCode: 0 } // config check, arm, contract show
+    // `result check` parses-or-dies then re-emits the executor's own JSON — the fake echoes it.
+    if (cmd.includes('result check')) return { stdout: opts.input ?? '{}', stderr: '', exitCode: 0 }
+    return { stdout: '{}', stderr: '', exitCode: 0 } // config check, arm, contract show, verify-complete
   }
   let calls = 0
   const fakeAgent = async () => agentReturns[Math.min(calls++, agentReturns.length - 1)]
-  return { promise: arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, { run: fakeRun, agent: fakeAgent, cwd: root }), calls: () => calls }
+  return { promise: arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, { run: fakeRun, agent: fakeAgent, cwd: root, ...deps }), calls: () => calls }
 }
 function beacon(root, phase, event) {
   mkdirSync(join(root, '.building'), { recursive: true })
@@ -185,4 +191,90 @@ test('N9 — a stale or absent beacon on a watch exit 3 → the TYPED stalled ha
   result = await d.promise
   assert.equal(result.halt, 'stalled', 'a >10-min beacon is not proof of life ⇒ stalled halt')
   assert.equal(d.calls(), 1, 'no keep-waiting on a stale beacon')
+})
+
+// ── N10-N13 — the workflow lane's half of the executor-arm exclusivity contract (2376) ───
+// The unit of exclusivity is the EXECUTOR (cli/lib/executor-arm.mjs): the workflow arms
+// pre-spawn with a minted executor id, refuses to spawn over an incumbent, and disarms only
+// once the executor has demonstrably handed something back.
+const armFile = (root, phase) => join(root, '.building', `${phase}-executor.armed`)
+const readArm = (root, phase) => JSON.parse(readFileSync(armFile(root, phase), 'utf8'))
+const lastBeacon = (root, phase) =>
+  JSON.parse(readFileSync(join(root, '.building', `${phase}-executor.jsonl`), 'utf8').trim().split('\n').pop())
+const memberRepo = (phase) => arcRepo([{ phase, status: 'in-progress', arcId: 'FX', tasks: [{ id: `${phase}.1`, done: false }] }])
+const typedResult = (phase, status) => ({
+  phase, status, compromises: [], skipped: [], hardcoded: [], surfaced: [], hardStops: [], gateRounds: 1,
+  ...(status === 'escalated' ? { escalation: { question: 'which lane owns this?', options: ['a', 'b'] } } : {}),
+})
+
+test('N10 — no sessionId ⇒ NO arm file is ever written (an unbound arm is inert noise, never a lock)', async () => {
+  const root = memberRepo(9801)
+  let armedAtSpawn = null
+  const result = await driveWorkflow(root, 9801, {
+    agentReturns: [],
+    // The arm is written PRE-spawn, so the spawn itself is the only place to observe it.
+    deps: {
+      sessionId: null,
+      agent: async () => {
+        armedAtSpawn = existsSync(armFile(root, 9801))
+        return { result: typedResult(9801, 'done') }
+      },
+    },
+  }).promise
+  assert.equal(result.done, true, 'the drive ran the phase and completed the arc')
+  assert.equal(armedAtSpawn, false, 'without a session id the workflow arms NOTHING')
+  assert.equal(existsSync(armFile(root, 9801)), false, 'and leaves no arm behind either')
+})
+
+test('N11 — a returned-and-checked result stamps result-returned itself and clears the arm (done AND escalated)', async () => {
+  for (const status of ['done', 'escalated']) {
+    const root = memberRepo(9801)
+    const result = await driveWorkflow(root, 9801, {
+      agentReturns: [{ result: typedResult(9801, status) }],
+      deps: { sessionId: `sess-11-${status}` },
+    }).promise
+    // The Claude lane gets result-returned from the Stop hook; this harness may run no hooks,
+    // so the workflow stamps the same proof itself — otherwise its own disarm would refuse.
+    assert.equal(lastBeacon(root, 9801).event, 'result-returned', `${status}: the returned-result proof is stamped`)
+    assert.equal(existsSync(armFile(root, 9801)), false, `${status}: a returned result clears the arm`)
+    if (status === 'done') assert.equal(result.done, true)
+    else assert.equal(result.halt, 'escalated', 'an escalated result still ENDS the workflow')
+  }
+})
+
+test('N12 — an executor that never returns leaves the arm STANDING, bound to the minted executor id', async () => {
+  const root = memberRepo(9801)
+  beacon(root, 9801, { ts: new Date().toISOString(), phase: 9801, event: 'task-start', task: '9801.1' })
+  const result = await driveWorkflow(root, 9801, {
+    agentReturns: [{ watchExit: 4, watchVerdict: { verdict: 'EXITED' } }],
+    deps: { sessionId: 'sess-12' },
+  }).promise
+  assert.equal(result.halt, 'exited', 'the watchdog terminal is still the typed halt')
+  assert.ok(existsSync(armFile(root, 9801)), 'a live-beacon arm is load-bearing, not stale — the disarm refuses it')
+  const body = readArm(root, 9801)
+  assert.equal(body.sessionId, 'sess-12', 'the arm is session-bound (the JSON body the guard parses)')
+  assert.match(body.executorId, /^[0-9a-f-]{36}$/, 'and names the executor minted for THIS spawn')
+})
+
+test('N13 — a second launch over a standing arm halts blocked, naming the incumbent, and spawns nothing', async () => {
+  const root = memberRepo(9801)
+  beacon(root, 9801, { ts: new Date().toISOString(), phase: 9801, event: 'task-start', task: '9801.1' })
+  await driveWorkflow(root, 9801, {
+    agentReturns: [{ watchExit: 4, watchVerdict: { verdict: 'EXITED' } }],
+    deps: { sessionId: 'sess-13' },
+  }).promise
+  const incumbent = readArm(root, 9801).executorId
+
+  let spawned = 0
+  const second = await driveWorkflow(root, 9801, {
+    agentReturns: [],
+    deps: { sessionId: 'sess-13', agent: async () => { spawned++; return { watchExit: 4, watchVerdict: {} } } },
+  }).promise
+  assert.equal(second.halt, 'blocked', 'the second launch refuses the phase instead of rewriting the arm')
+  assert.ok(
+    second.evidence?.executorArm?.includes(incumbent),
+    `the halt names the incumbent executor: ${JSON.stringify(second.evidence)}`,
+  )
+  assert.equal(spawned, 0, 'no second executor was spawned onto the first one\'s working tree')
+  assert.equal(readArm(root, 9801).executorId, incumbent, 'the incumbent arm is left untouched')
 })
