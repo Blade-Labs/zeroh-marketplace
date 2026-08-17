@@ -39,7 +39,7 @@ import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
 import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine, appendExecutorEvent } from '../cli/lib/beacon.mjs'
-import { armExecutor, disarmExecutor } from '../cli/lib/executor-arm.mjs'
+import { armExecutor, disarmExecutor, armedExecutorId } from '../cli/lib/executor-arm.mjs'
 import { pidAlive } from '../cli/lib/sidecar.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
@@ -60,7 +60,12 @@ function defaultRun(cmd, { input, cwd } = {}) {
 /** The default `agent()` is provided by the workflow harness (Claude Agent SDK / the session):
  *  it runs the phase-executor AND the backgrounded `roadmap watch` watchdog concurrently and
  *  resolves to { result } (executor returned) OR { watchExit, watchVerdict } (watchdog woke
- *  first). Without a harness there is nothing to run — fail loud, never fabricate a result. */
+ *  first). Without a harness there is nothing to run — fail loud, never fabricate a result.
+ *
+ *  CONTRACT the harness must honour: a repeat call for a phase already in flight (the
+ *  keep-waiting branch below) MUST re-await the SAME executor, never spawn a second one. The
+ *  workflow arms once, pre-spawn, so a re-spawning harness reproduces the exact double-spawn
+ *  the arm exists to prevent, and the arm on disk cannot see it. */
 function defaultAgent() {
   throw new Error(
     'arc-plane.workflow: no agent() runner injected — the harness (Claude Agent SDK / the do-arc '
@@ -204,17 +209,34 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     // litters .building, and the lib refuses to write one at all (the 2026-07-17 hazard).
     const sessionId = deps.sessionId ?? input.sessionId ?? null
     const executorId = randomUUID()
-    if (sessionId) {
+    // The incumbent CHECK is UNCONDITIONAL. D1 governs only the WRITE, but refusing to spawn onto
+    // a phase another executor still owns must not depend on whether this lane happens to know its
+    // own session id — a caller without one is precisely the lane that walked into the 2026-08-17
+    // double-spawn. armedExecutorId is the lib's own reader, so both doors judge identically.
+    const incumbent = armedExecutorId(worktree, phase)
+    if (incumbent && incumbent !== executorId) {
+      return buildHaltPayload('blocked', {
+        phase,
+        evidence: {
+          executorArm:
+            `arc-plane: phase ${phase} is already armed to executor '${incumbent}' — refusing to spawn a second`
+            + ' executor onto its working tree and branch (2026-08-17). Read the beacon, then'
+            + ` \`roadmap executor-disarm ${phase} --force\` only once the incumbent is genuinely gone.`,
+        },
+      })
+    }
+    const armed = Boolean(sessionId)
+    if (armed) {
       try {
         armExecutor(worktree, phase, sessionId, { executorId })
       } catch (e) {
-        // An incumbent executor still owns this phase. Refuse to spawn a second one over its
-        // working tree and branch — the workflow-lane equivalent of the CLI's exit 2.
+        // The belt for a race between the read above and this write (the lib is the same rule).
         return buildHaltPayload('blocked', { phase, evidence: { executorArm: e.message } })
       }
     }
 
     let spawn
+    let rc
     try {
     while (true) {
       // agent() resolves on executor return OR on the backgrounded `roadmap watch` watchdog
@@ -245,21 +267,33 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     }
 
     // ── the result tail (§4 order) ──
-    var rc = run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(spawn.result) }) // parse or die
+    rc = run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(spawn.result) }) // parse or die
     // A green result check IS the mechanical proof that this executor handed something back —
     // the same proof the Stop hook stamps in the Claude lane, which this harness may not run.
-    // Stamping it here is what lets the disarm below pass UNFORCED (the closed allow-set is
-    // phase-complete/result-returned). A double stamp is harmless: append-only, same event.
-    if (rc.exitCode === 0) appendExecutorEvent(worktree, phase, 'result-returned')
-    } finally {
-      // EVERY exit from the spawn→result-check region TRIES to disarm, and never forces. When
-      // the executor never returned, the beacon still reads a work event, the lib refuses, and
-      // the arm DELIBERATELY stays: that standing arm is what blocks the next spawn. A
-      // live-beacon arm is not stale, it is load-bearing; genuinely stale arms are `--sweep`'s.
+    // Advisory (the disarm below trusts its own facts, not this line), and best-effort like its
+    // hook twin: a failed journal write must never break the typed contract. A double stamp when
+    // the hook DID run is harmless: append-only, closed vocabulary, same event.
+    if (rc.exitCode === 0) {
       try {
-        disarmExecutor(worktree, phase)
+        appendExecutorEvent(worktree, phase, 'result-returned')
       } catch (e) {
-        process.stderr.write(`arc-plane: phase ${phase} arm left standing — ${e.message}\n`)
+        process.stderr.write(`arc-plane: phase ${phase} result-returned not stamped — ${e.message}\n`)
+      }
+    }
+    } finally {
+      // Disarm ONLY the arm THIS workflow wrote, and ONLY once the result check proved the
+      // executor handed something back. Both are first-hand facts; the beacon is inference, and
+      // disarmExecutor lets a MISSING beacon through (no evidence is not proof), so an executor
+      // that died before its first beacon would otherwise have its live arm cleared here. Every
+      // other exit leaves the arm STANDING on purpose: that standing arm is what blocks the next
+      // spawn until a human or staleArms judges it. The lib call stays as the belt (a work-event
+      // beacon still refuses) and its refusal is RECORDED, never forced away.
+      if (armed && rc?.exitCode === 0) {
+        try {
+          disarmExecutor(worktree, phase)
+        } catch (e) {
+          process.stderr.write(`arc-plane: phase ${phase} arm left standing — ${e.message}\n`)
+        }
       }
     }
     if (rc.exitCode !== 0) return buildHaltPayload('failed', { phase, evidence: { resultCheck: rc.stderr || 'invalid PhaseExecutionResult' } })

@@ -45,8 +45,13 @@ function armPath(worktree, phase) {
  *  which an arm may be cleared silently. Closed on purpose: anything else is work in flight. */
 const DISARM_ALLOWED = new Set(['phase-complete', 'result-returned'])
 
-/** The executorId recorded in an existing arm, or null for a missing / legacy / non-JSON body. */
-function armedExecutorId(worktree, phase) {
+/**
+ * The executorId recorded in an existing arm, or null for a missing / legacy / non-JSON body.
+ * Exported because the incumbent CHECK and the arm WRITE are separate acts for a caller that
+ * cannot write (arc-plane with no session id must still refuse to spawn over a live executor):
+ * both doors judge an incumbent through this one reader, never a second parse.
+ */
+export function armedExecutorId(worktree, phase) {
   try {
     const raw = readFileSync(armPath(worktree, phase), 'utf8').trim()
     if (!raw.startsWith('{')) return null // the raw prose format predates executor ids

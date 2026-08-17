@@ -50,9 +50,9 @@ workflow engine cannot host its imports).
       every resume decision — never a long-lived background `watch` daemon (every daemon
       instance to date was reaped by a session event before its arc finished).
    4. On return: `roadmap result check --phase <phase>` over the returned JSON (parse or
-      die — never trust prose), then `roadmap executor-disarm <phase>` (always, even on a
-      halt; `roadmap executor-disarm --sweep` at arc start clears stale leftovers). When NO
-      result came back the disarm now REFUSES (exit 2) and prints the beacon evidence.
+      die — never trust prose), then `roadmap executor-disarm <phase>` (`roadmap
+      executor-disarm --sweep` at arc start clears stale leftovers). When NO
+      result came back the disarm REFUSES (exit 2) and prints the beacon evidence.
       `--force` is a deliberate act taken only after READING that evidence, never on a
       STALLED verdict alone: on 2026-08-17 a STALLED verdict on a healthy cross-repo executor
       is exactly what put two executors on one working tree and one branch.

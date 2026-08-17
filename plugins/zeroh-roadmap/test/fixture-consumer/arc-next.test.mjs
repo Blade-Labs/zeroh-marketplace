@@ -278,3 +278,21 @@ test('N13 — a second launch over a standing arm halts blocked, naming the incu
   assert.equal(spawned, 0, 'no second executor was spawned onto the first one\'s working tree')
   assert.equal(readArm(root, 9801).executorId, incumbent, 'the incumbent arm is left untouched')
 })
+
+test('N14 — an incumbent arm blocks the spawn even with NO sessionId (the check never depends on the write)', async () => {
+  // The lane that cannot write an arm is exactly the lane that used to spawn straight over one.
+  const root = memberRepo(9801)
+  mkdirSync(join(root, '.building'), { recursive: true })
+  writeFileSync(armFile(root, 9801), JSON.stringify({ sessionId: 'sess-other', executorId: 'incumbent-E1', armedAt: new Date().toISOString() }) + '\n')
+  beacon(root, 9801, { ts: new Date().toISOString(), phase: 9801, event: 'task-start', task: '9801.1' })
+  let spawned = 0
+  const result = await driveWorkflow(root, 9801, {
+    agentReturns: [],
+    deps: { sessionId: null, agent: async () => { spawned++; return { result: typedResult(9801, 'done') } } },
+  }).promise
+  assert.equal(result.halt, 'blocked', 'no session id is not a licence to spawn over a live executor')
+  assert.ok(result.evidence?.executorArm?.includes('incumbent-E1'), `the halt names the incumbent: ${JSON.stringify(result.evidence)}`)
+  assert.equal(spawned, 0, 'nothing was spawned')
+  assert.equal(readArm(root, 9801).executorId, 'incumbent-E1', 'the foreign arm is untouched')
+  assert.equal(lastBeacon(root, 9801).event, 'task-start', 'and no result-returned was stamped onto its beacon')
+})

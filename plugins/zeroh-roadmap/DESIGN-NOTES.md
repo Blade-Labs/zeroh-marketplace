@@ -206,11 +206,15 @@ the drift lanes:
   already made the judgement. BOTH doors route through `cli/lib/executor-arm.mjs` — the CLI verbs
   and `workflows/arc-plane.workflow.mjs`, which until 2376 kept private copies that wrote an
   unbound body and rmSynced it unconditionally, so the contract held for one lane only. The
-  workflow mints one `executorId` per spawn, returns a typed `blocked` halt when the lib refuses
-  over an incumbent, and stamps `result-returned` ITSELF once `roadmap result check` exits 0,
-  because its harness may run no hooks and a green result check is the same proof the hook
-  encodes. Its `finally` disarm swallows a refusal to stderr rather than forcing: on a halt path
-  the arm STAYS on purpose, since that standing arm is what blocks the next spawn.
+  workflow mints one `executorId` per spawn and reads `armedExecutorId` UNCONDITIONALLY before
+  spawning (a lane with no session id may not write an arm, but it may never spawn over an
+  incumbent either), returning a typed `blocked` halt naming that incumbent. It stamps
+  `result-returned` ITSELF once `roadmap result check` exits 0, because its harness may run no
+  hooks and a green result check is the same proof the hook encodes. It disarms only the arm it
+  wrote and only on that proven-returned path, swallowing a refusal to stderr rather than forcing:
+  every other exit leaves the arm STANDING on purpose, since that standing arm is what blocks the
+  next spawn. A missing beacon is not used as permission there — `disarmExecutor` lets one through
+  (no evidence is not proof), which would clear the arm of an executor that died before beaconing.
 - **Arm files are CLI-owned and session-bound**: `roadmap executor-arm <N> --session <id>
   [--executor-id <id>]` writes JSON `{ sessionId, executorId?, armedAt }` (an unbound arm is
   REFUSED — the 2026-07-17 fabrication hazard); `roadmap executor-disarm <N> [--force]` removes it
