@@ -254,8 +254,13 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
             if (seen.has(keyFile)) continue
             seen.add(keyFile)
             ours.push(keyFile)
-          } else if (scanned.arcId !== arcId) {
-            // An arcless phase counts as another lane too: it is a standalone do-phase run.
+          } else if (scanned.arcId !== arcId && scanned.status === 'in-progress') {
+            // Only a LIVE competing lane can be touching this file right now, so only a live one
+            // disqualifies it. An arcless in-progress phase counts too — a standalone do-phase run
+            // is another lane. Counting CLOSED phases here would let a phase finished months ago
+            // permanently poison every path it named: measured on this estate that emptied one
+            // arc's exclusive set entirely, disabling the arm and pushing toward false STALLED,
+            // which is the direction that spawned two executors onto one phase in the first place.
             coDeclared.add(keyFile)
           }
         }

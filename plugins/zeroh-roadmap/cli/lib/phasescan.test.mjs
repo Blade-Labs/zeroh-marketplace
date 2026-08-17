@@ -390,6 +390,38 @@ test('8i) matchKeyFilesField — the array stops at ITS OWN closing bracket, not
   assert.deepEqual(matchKeyFilesField(src), ['/repo/src/a.mjs'], 'a later array must not leak into keyFiles')
 })
 
+test('8j) matchKeyFilesField — prose saying "keyFiles:" INSIDE definePhase does not hijack the field', async () => {
+  // The gate-round-2 regression: prose lives INSIDE definePhase too (the notes string routinely
+  // mentions keyFiles), so anchoring on definePhase( and then taking the next `[` downstream
+  // walked into whatever array came next and silently returned ITS contents — or nothing. On the
+  // live corpus one phase lost all fifteen declared paths that way: the same silent loss the
+  // scanner was written to kill, through a different door.
+  const { matchKeyFilesField } = await import(MOD)
+  const src = [
+    'export default definePhase({',
+    "  status: 'in-progress',",
+    "  notes: 'reworks the harness (keyFiles: e2e/playwright.config.ts + NEW spec) — see below',",
+    '  dependsOn: [1323],',
+    '  keyFiles: [',
+    "    '/repo/src/real.mjs',",
+    '  ],',
+    '})',
+  ].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), ['/repo/src/real.mjs'], 'the real field wins over prose that merely names it')
+})
+
+test('8k) matchKeyFilesField — prose naming keyFiles with NO real field yields [], never a neighbour\'s array', async () => {
+  const { matchKeyFilesField } = await import(MOD)
+  const src = [
+    'export default definePhase({',
+    "  status: 'in-progress',",
+    "  notes: 'the keyFiles: list is deliberately omitted here',",
+    "  verify: ['/usr/bin/env node --test', 'npm run lint'],",
+    '})',
+  ].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), [], 'a neighbouring array must never be mistaken for keyFiles')
+})
+
 test('6) scanProgress — a statusless / unparseable phase file is skipped, never crashes', () => {
   const phases = join(newTmp(), 'phases')
   writePhase(phases, 'phase-1.phase.ts', { phase: 1, status: 'done', arcId: 'X' })

@@ -98,13 +98,24 @@ function scanArrayEntries(src, start) {
  * actually commits into. Same `definePhase(` anchor as the two matchers above, for the
  * same reason: a docstring quoting an older plan's keyFiles listing sits above the real
  * field. Always an array — callers iterate it, so absent is `[]`, never undefined.
+ *
+ * The anchor alone is not enough, because prose ALSO lives INSIDE definePhase: the `notes` string
+ * routinely says things like "(keyFiles: e2e/playwright.config.ts + …)". Accepting the first
+ * `keyFiles:` and then hunting for the next `[` downstream would walk straight into whatever array
+ * came next — `dependsOn: [...]`, a `verify` list — and hand back its contents, or nothing at all.
+ * So the name only counts when its array follows IMMEDIATELY; anything else is prose and the
+ * search continues.
  */
 export function matchKeyFilesField(src) {
   const anchor = src.indexOf('definePhase(')
-  const scanFrom = anchor >= 0 ? anchor : 0
-  const at = src.indexOf('keyFiles:', scanFrom)
-  if (at < 0) return []
-  return scanArrayEntries(src, at + 'keyFiles:'.length)
+  const NEEDLE = 'keyFiles:'
+  let at = src.indexOf(NEEDLE, anchor >= 0 ? anchor : 0)
+  while (at >= 0) {
+    const after = at + NEEDLE.length
+    if (/^\s*\[/.test(src.slice(after, after + 40))) return scanArrayEntries(src, after)
+    at = src.indexOf(NEEDLE, after)
+  }
+  return []
 }
 
 /**

@@ -624,3 +624,22 @@ test('30) a phase-file EDIT between polls is seen — the scan cache is SIGNED, 
   assert.equal(after.verdict, 'ALIVE', 'an unconditional memo would still report STALLED here')
   assert.ok(after.evidence.crossRepo.includes(product))
 })
+
+test('29c) a keyFile co-declared only by a CLOSED phase of another arc still answers', () => {
+  // Only a LIVE competing lane can be touching the file right now. Counting closed phases would
+  // let one finished months ago permanently poison every path it named — measured on the real
+  // estate that emptied an arc's exclusive set outright, disabling the arm and pushing toward
+  // false STALLED, which is the direction that put two executors on one phase to begin with.
+  const d = makeArcRepo()
+  const product = makeProductRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 710, event: 'task-start' }])
+  const kf = join(product, 'src', 'once-shared.ts')
+  writePhaseFileWithKeyFiles(d, 710, 'MINE', [kf])
+  writePhaseFileWithKeyFiles(d, 810, 'SIBLING', [kf], 'done') // that arc finished with this file
+  mkdirSync(dirname(kf), { recursive: true })
+  writeFileSync(kf, 'export {}\n')
+
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'ALIVE', 'a closed phase is not a competing lane')
+  assert.match(r.evidence.activity, /exclusively-declared keyFile/)
+})
