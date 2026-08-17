@@ -327,6 +327,69 @@ test('8e) scanPhaseFile — a phase file with no keyFiles field still yields an 
   assert.equal(r.status, 'done', 'the pre-existing fields are untouched by the widening')
 })
 
+test('8f) matchKeyFilesField — a `//` COMMENT containing an apostrophe does not swallow the real paths', async () => {
+  // The gate-round-1 defect, lifted from the shape of a real phase file: a trailing comment
+  // carrying an apostrophe made a quote-pairing regex shift every subsequent pairing by one, so
+  // ten declared absolute paths vanished SILENTLY. Silent is the whole problem — the phase then
+  // derives no product repo and the false STALLED it exists to prevent comes back with no tell.
+  const { matchKeyFilesField } = await import(MOD)
+  const src = [
+    'export default definePhase({',
+    "  status: 'in-progress',",
+    '  keyFiles: [',
+    "    '/repo/src/a.mjs', // NEW — the ledger (the review's subject)",
+    "    '/repo/src/b.mjs', // kept because it's load-bearing",
+    "    '/repo/src/c.mjs',",
+    '  ],',
+    '})',
+  ].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), ['/repo/src/a.mjs', '/repo/src/b.mjs', '/repo/src/c.mjs'])
+})
+
+test('8g) matchKeyFilesField — block comments and an ESCAPED apostrophe inside a path both read correctly', async () => {
+  const { matchKeyFilesField } = await import(MOD)
+  const src = [
+    'export default definePhase({',
+    "  status: 'in-progress',",
+    '  keyFiles: [',
+    "    /* the operator's console */ '/repo/src/a.mjs',",
+    "    '/repo/src/it\\'s-here.mjs',",
+    '  ],',
+    '})',
+  ].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), ['/repo/src/a.mjs', "/repo/src/it's-here.mjs"])
+})
+
+test('8h) matchKeyFilesField — a comment mentioning a bracket does not truncate the array', async () => {
+  const { matchKeyFilesField } = await import(MOD)
+  const src = [
+    'export default definePhase({',
+    "  status: 'in-progress',",
+    '  keyFiles: [',
+    "    '/repo/src/a.mjs', // see note [1] below",
+    "    '/repo/src/b.mjs',",
+    '  ],',
+    '})',
+  ].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), ['/repo/src/a.mjs', '/repo/src/b.mjs'])
+})
+
+test('8i) matchKeyFilesField — the array stops at ITS OWN closing bracket, not a later field\'s', async () => {
+  const { matchKeyFilesField } = await import(MOD)
+  const src = [
+    'export default definePhase({',
+    "  status: 'in-progress',",
+    '  keyFiles: [',
+    "    '/repo/src/a.mjs',",
+    '  ],',
+    '  tasks: [',
+    "    { id: '2375.1', files: ['/repo/src/NOT-a-keyfile.mjs'] },",
+    '  ],',
+    '})',
+  ].join('\n')
+  assert.deepEqual(matchKeyFilesField(src), ['/repo/src/a.mjs'], 'a later array must not leak into keyFiles')
+})
+
 test('6) scanProgress — a statusless / unparseable phase file is skipped, never crashes', () => {
   const phases = join(newTmp(), 'phases')
   writePhase(phases, 'phase-1.phase.ts', { phase: 1, status: 'done', arcId: 'X' })

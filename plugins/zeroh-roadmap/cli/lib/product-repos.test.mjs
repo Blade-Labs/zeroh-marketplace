@@ -146,6 +146,19 @@ test('5) duplicates collapse: many keyFiles in one repository yield ONE root', (
   assert.deepEqual(productRepos(kfs, { worktree: arc }), [product])
 })
 
+test('5b) a large single-directory declaration still yields ONE root (the dedupe that bounds the git calls)', () => {
+  // PRODUCT_REPO_CAP bounds the OUTPUT; deduping on the resolved directory before spawning git is
+  // what bounds the WORK, and this runs on every liveness poll. The call count itself is not
+  // pinned here — there is no injection seam for the git spawn and a timing assertion would be
+  // flaky on a shared box — but the behaviour that depends on it is.
+  const estate = newTmp()
+  const arc = initRepo(join(estate, 'arc'))
+  const product = initRepo(join(estate, 'product'))
+  const many = []
+  for (let i = 0; i < 30; i++) many.push(writeAt(join(product, 'src', `f${i}.mjs`)))
+  assert.deepEqual(productRepos(many, { worktree: arc }), [product])
+})
+
 test('6) more than PRODUCT_REPO_CAP distinct repositories are capped', () => {
   assert.equal(PRODUCT_REPO_CAP, 4, 'the cap is a named constant, not a magic number at the call site')
   const estate = newTmp()

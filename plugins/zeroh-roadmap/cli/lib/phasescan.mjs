@@ -11,8 +11,6 @@ import { defaultExec } from './exec.mjs'
 const STATUS_RE = /status:\s*'([a-z-]+)'/
 const DECLARED_RE = /(?:^|[{,])\s*phase:\s*(\d+)\s*,/m
 const ARCID_RE = /arcId:\s*'([^']+)'/
-const KEYFILES_RE = /keyFiles:\s*\[([^\]]*)\]/
-const QUOTED_RE = /'([^']*)'/g
 const FILENAME_RE = /phase-(\d+)/
 
 /**
@@ -42,23 +40,71 @@ export function matchArcIdField(src) {
 }
 
 /**
+ * The string entries of the bracketed array beginning at the next `[` after `start`.
+ *
+ * A hand-rolled scanner rather than a quote-pairing regex, because a phase file's keyFiles array
+ * is ordinary source: it carries `//` comments, and those comments carry APOSTROPHES. A regex
+ * reads such an apostrophe as the start of a literal, every subsequent pairing shifts by one, and
+ * real declared paths vanish SILENTLY — on this corpus that dropped all ten absolute paths of one
+ * cross-repo phase, precisely the class this field exists to serve. Reading source correctly means
+ * tracking quote and comment state, and it costs one linear pass with no backtracking.
+ *
+ * Escapes inside a literal are honored too, so a path containing an escaped apostrophe reads back
+ * whole rather than truncating at the escape.
+ */
+function scanArrayEntries(src, start) {
+  const open = src.indexOf('[', start)
+  if (open < 0) return []
+  const entries = []
+  let depth = 0
+  for (let i = open; i < src.length; i++) {
+    const c = src[i]
+    if (c === '/' && src[i + 1] === '/') {
+      const nl = src.indexOf('\n', i)
+      if (nl < 0) break
+      i = nl
+    } else if (c === '/' && src[i + 1] === '*') {
+      const close = src.indexOf('*/', i + 2)
+      if (close < 0) break
+      i = close + 1
+    } else if (c === "'" || c === '"' || c === '`') {
+      let value = ''
+      let j = i + 1
+      let closed = false
+      for (; j < src.length; j++) {
+        if (src[j] === '\\') {
+          value += src[j + 1] ?? ''
+          j++
+        } else if (src[j] === c) {
+          closed = true
+          break
+        } else value += src[j]
+      }
+      if (!closed) break
+      entries.push(value)
+      i = j
+    } else if (c === '[') depth++
+    else if (c === ']') {
+      depth--
+      if (depth === 0) break
+    }
+  }
+  return entries
+}
+
+/**
  * Match the keyFiles FIELD — the only place a phase declares the ABSOLUTE paths it
  * writes, so it is the only way the CLI can learn which repository a cross-repo phase
  * actually commits into. Same `definePhase(` anchor as the two matchers above, for the
  * same reason: a docstring quoting an older plan's keyFiles listing sits above the real
  * field. Always an array — callers iterate it, so absent is `[]`, never undefined.
- *
- * LIMITATION, deliberately unsolved: entries are read as single-quoted literals, so a
- * path containing an escaped apostrophe truncates at the escape. No path in this estate
- * has one, and growing the regex to cover a case that does not exist costs more than it
- * buys — a truncated path simply resolves to no repository (best-effort by design).
  */
 export function matchKeyFilesField(src) {
   const anchor = src.indexOf('definePhase(')
   const scanFrom = anchor >= 0 ? anchor : 0
-  const body = src.slice(scanFrom).match(KEYFILES_RE)?.[1]
-  if (!body) return []
-  return [...body.matchAll(QUOTED_RE)].map((m) => m[1])
+  const at = src.indexOf('keyFiles:', scanFrom)
+  if (at < 0) return []
+  return scanArrayEntries(src, at + 'keyFiles:'.length)
 }
 
 /**

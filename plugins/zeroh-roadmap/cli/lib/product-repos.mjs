@@ -21,8 +21,9 @@ import { existsSync, statSync } from 'node:fs'
 import { dirname, isAbsolute } from 'node:path'
 import { gitToplevel, gitCommonDir } from './gitroot.mjs'
 
-/** Ceiling on derived repositories, so one over-broad keyFiles list can never fan the liveness
- *  row out into a dozen git calls on every poll. */
+/** Ceiling on derived repositories. The git calls are bounded separately, by deduping on the
+ *  resolved DIRECTORY before spawning anything: a phase declaring forty files in one repo asks git
+ *  once, not forty times, and this row runs on every liveness poll. */
 export const PRODUCT_REPO_CAP = 4
 
 /**
@@ -62,16 +63,20 @@ export function productRepos(keyFiles, { worktree } = {}) {
     return []
   }
   const out = []
-  const seen = new Set()
+  const seenDirs = new Set()
+  const seenRoots = new Set()
   for (const keyFile of keyFiles ?? []) {
     if (out.length >= PRODUCT_REPO_CAP) break
     if (typeof keyFile !== 'string' || !isAbsolute(keyFile)) continue
     const dir = nearestExistingDir(keyFile)
-    if (!dir) continue
+    // Dedupe BEFORE git, not after: most phases declare many files under a handful of
+    // directories, and git is the only expensive part of this loop.
+    if (!dir || seenDirs.has(dir)) continue
+    seenDirs.add(dir)
     try {
       const top = gitToplevel(dir)
-      if (seen.has(top)) continue
-      seen.add(top) // memoized whether foreign or ours — the git calls are the expensive part
+      if (seenRoots.has(top)) continue
+      seenRoots.add(top)
       if (gitCommonDir(dir) !== ourCommon) out.push(top)
     } catch {
       /* not a repo, or git refused — simply not a product repo */
