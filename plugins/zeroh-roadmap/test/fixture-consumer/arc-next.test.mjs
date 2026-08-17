@@ -142,7 +142,7 @@ test('N7 — blocked: unmet dep, foreign lane, and a malformed member file', () 
 // ── N8/N9 — the stalled-watch-wake fork (the workflow LOOP's reaction is under test) ─────
 /** Build a real fixture repo for a mid-band member + drive arcPlaneWorkflow with a canned
  *  `run` (the CLI decisions) and a two-step `agent` (the watch wake, then a terminal). */
-function driveWorkflow(root, phase, { agentReturns, deps = {} }) {
+function driveWorkflow(root, phase, { agentReturns, deps = {}, resultCheckExit = 0 }) {
   let laps = 0
   const fakeRun = (cmd, opts = {}) => {
     // ONE phase per drive: a second lap means the first finished, so the arc reads complete.
@@ -151,7 +151,7 @@ function driveWorkflow(root, phase, { agentReturns, deps = {} }) {
     if (cmd.includes('arc next')) return { stdout: JSON.stringify({ arc: 'FX', action: 'run-phase', phase, band: 'mid', plane: 'P', done: [], remaining: [], gates: {} }), stderr: '', exitCode: 0 }
     if (cmd.includes('gate plan')) return { stdout: JSON.stringify({ phase, slots: [], testScope: { effective: 'relevant' }, reviewScope: { effective: 'full' }, agents: {} }), stderr: '', exitCode: 0 }
     // `result check` parses-or-dies then re-emits the executor's own JSON — the fake echoes it.
-    if (cmd.includes('result check')) return { stdout: opts.input ?? '{}', stderr: '', exitCode: 0 }
+    if (cmd.includes('result check')) return { stdout: opts.input ?? '{}', stderr: resultCheckExit === 0 ? '' : 'invalid PhaseExecutionResult', exitCode: resultCheckExit }
     return { stdout: '{}', stderr: '', exitCode: 0 } // config check, arm, contract show, verify-complete
   }
   let calls = 0
@@ -295,4 +295,51 @@ test('N14 — an incumbent arm blocks the spawn even with NO sessionId (the chec
   assert.equal(spawned, 0, 'nothing was spawned')
   assert.equal(readArm(root, 9801).executorId, 'incumbent-E1', 'the foreign arm is untouched')
   assert.equal(lastBeacon(root, 9801).event, 'task-start', 'and no result-returned was stamped onto its beacon')
+})
+
+test('N15 — a watchdog exit with NO beacon at all still leaves the arm standing (the gate, not the lib)', async () => {
+  // N12's task-start beacon lets the LIB's refusal do the work. Here there is no beacon, so
+  // disarmExecutor would happily clear (no evidence is not proof) — only the workflow's own
+  // "did OUR executor hand anything back" gate keeps a genuinely live executor's arm on disk.
+  const root = memberRepo(9801)
+  const result = await driveWorkflow(root, 9801, {
+    agentReturns: [{ watchExit: 4, watchVerdict: { verdict: 'EXITED' } }],
+    deps: { sessionId: 'sess-15' },
+  }).promise
+  assert.equal(result.halt, 'exited')
+  assert.equal(existsSync(join(root, '.building', '9801-executor.jsonl')), false, 'no beacon was ever written')
+  assert.ok(existsSync(armFile(root, 9801)), 'and the arm still stands')
+  assert.match(readArm(root, 9801).executorId, /^[0-9a-f-]{36}$/)
+})
+
+test('N16 — an arm that names NO executor still blocks while its beacon reads work in flight', async () => {
+  // --executor-id is optional, so --session-only arms exist in the wild (the 2026-08-17 body).
+  const root = memberRepo(9801)
+  mkdirSync(join(root, '.building'), { recursive: true })
+  writeFileSync(armFile(root, 9801), JSON.stringify({ sessionId: 'sess-other', armedAt: new Date().toISOString() }) + '\n')
+  beacon(root, 9801, { ts: new Date().toISOString(), phase: 9801, event: 'task-start', task: '9801.1' })
+  let spawned = 0
+  const result = await driveWorkflow(root, 9801, {
+    agentReturns: [],
+    deps: { sessionId: 'sess-16', agent: async () => { spawned++; return { result: typedResult(9801, 'done') } } },
+  }).promise
+  assert.equal(result.halt, 'blocked', 'an unnamed incumbent is still an incumbent')
+  assert.ok(result.evidence?.executorArm?.includes('task-start'), `the halt cites the beacon it judged on: ${JSON.stringify(result.evidence)}`)
+  assert.equal(spawned, 0)
+  assert.equal(readArm(root, 9801).sessionId, 'sess-other', 'the incumbent arm is not rewritten')
+})
+
+test('N17 — an executor that RETURNED garbage still clears its own arm (it is gone, not in flight)', async () => {
+  // The failed-result-check path: the result check refuses the payload, but the executor did hand
+  // something back, so leaving the arm would strand it where staleArms cannot reach (bound body,
+  // live phase, no terminal beacon). Lane parity with the CLI, and R1 stays closed because the
+  // gate is still "we armed it AND our own executor returned".
+  const root = memberRepo(9801)
+  const result = await driveWorkflow(root, 9801, {
+    agentReturns: [{ result: { phase: 9801, status: 'done' } }],
+    deps: { sessionId: 'sess-17' },
+    resultCheckExit: 2,
+  }).promise
+  assert.equal(result.halt, 'failed', 'a red result check is still the typed failed halt')
+  assert.equal(existsSync(armFile(root, 9801)), false, 'and the returned executor left no arm behind')
 })

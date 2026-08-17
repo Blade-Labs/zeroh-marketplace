@@ -45,13 +45,8 @@ function armPath(worktree, phase) {
  *  which an arm may be cleared silently. Closed on purpose: anything else is work in flight. */
 const DISARM_ALLOWED = new Set(['phase-complete', 'result-returned'])
 
-/**
- * The executorId recorded in an existing arm, or null for a missing / legacy / non-JSON body.
- * Exported because the incumbent CHECK and the arm WRITE are separate acts for a caller that
- * cannot write (arc-plane with no session id must still refuse to spawn over a live executor):
- * both doors judge an incumbent through this one reader, never a second parse.
- */
-export function armedExecutorId(worktree, phase) {
+/** The executorId recorded in an existing arm, or null for a missing / legacy / non-JSON body. */
+function armedExecutorId(worktree, phase) {
   try {
     const raw = readFileSync(armPath(worktree, phase), 'utf8').trim()
     if (!raw.startsWith('{')) return null // the raw prose format predates executor ids
@@ -60,6 +55,24 @@ export function armedExecutorId(worktree, phase) {
   } catch {
     return null // absent or unreadable — nothing to defend
   }
+}
+
+/**
+ * The arm a NEW executor must not be spawned over → { executorId, beaconEvent }, or null when the
+ * phase is free. The CHECK door cannot afford the WRITE door's leniency: armExecutor overwrites an
+ * arm carrying no executorId so nothing already on disk breaks, but SPAWNING over one puts two
+ * executors on one working tree and one branch (2026-08-17). So an arm is live when it names an
+ * executor OR when the beacon says its work is still in flight — the same allow-set disarm uses,
+ * read through beacon.mjs so legacy terminal aliases count. An id-less, beacon-QUIET arm is
+ * deliberately not live: that is a fossil, and judging fossils is staleArms' job, not this one's.
+ */
+export function liveArm(worktree, phase) {
+  if (!existsSync(armPath(worktree, phase))) return null
+  const executorId = armedExecutorId(worktree, phase)
+  const beacon = readBeaconLine(join(worktree, '.building', `${phase}-executor.jsonl`))
+  const working = Boolean(beacon) && !DISARM_ALLOWED.has(beacon.event)
+  if (!executorId && !working) return null
+  return { executorId, beaconEvent: beacon?.event ?? null }
 }
 
 /**

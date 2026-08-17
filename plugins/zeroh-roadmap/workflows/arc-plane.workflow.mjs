@@ -39,7 +39,7 @@ import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
 import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine, appendExecutorEvent } from '../cli/lib/beacon.mjs'
-import { armExecutor, disarmExecutor, armedExecutorId } from '../cli/lib/executor-arm.mjs'
+import { armExecutor, disarmExecutor, liveArm } from '../cli/lib/executor-arm.mjs'
 import { pidAlive } from '../cli/lib/sidecar.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
@@ -212,14 +212,18 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     // The incumbent CHECK is UNCONDITIONAL. D1 governs only the WRITE, but refusing to spawn onto
     // a phase another executor still owns must not depend on whether this lane happens to know its
     // own session id — a caller without one is precisely the lane that walked into the 2026-08-17
-    // double-spawn. armedExecutorId is the lib's own reader, so both doors judge identically.
-    const incumbent = armedExecutorId(worktree, phase)
-    if (incumbent && incumbent !== executorId) {
+    // double-spawn. liveArm is the lib's own judgement (an arm naming an executor, or one whose
+    // beacon still reads work in flight), so the CHECK door is never laxer than the disarm door.
+    const incumbent = liveArm(worktree, phase)
+    if (incumbent) {
+      const who = incumbent.executorId
+        ? `executor '${incumbent.executorId}'`
+        : `an executor it does not name (beacon '${incumbent.beaconEvent}')`
       return buildHaltPayload('blocked', {
         phase,
         evidence: {
           executorArm:
-            `arc-plane: phase ${phase} is already armed to executor '${incumbent}' — refusing to spawn a second`
+            `arc-plane: phase ${phase} is already armed to ${who} — refusing to spawn a second`
             + ' executor onto its working tree and branch (2026-08-17). Read the beacon, then'
             + ` \`roadmap executor-disarm ${phase} --force\` only once the incumbent is genuinely gone.`,
         },
@@ -281,14 +285,15 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
       }
     }
     } finally {
-      // Disarm ONLY the arm THIS workflow wrote, and ONLY once the result check proved the
-      // executor handed something back. Both are first-hand facts; the beacon is inference, and
-      // disarmExecutor lets a MISSING beacon through (no evidence is not proof), so an executor
-      // that died before its first beacon would otherwise have its live arm cleared here. Every
-      // other exit leaves the arm STANDING on purpose: that standing arm is what blocks the next
-      // spawn until a human or staleArms judges it. The lib call stays as the belt (a work-event
-      // beacon still refuses) and its refusal is RECORDED, never forced away.
-      if (armed && rc?.exitCode === 0) {
+      // Disarm ONLY the arm THIS workflow wrote, and ONLY once OUR executor handed something back
+      // (spawn.result present — even an unparseable one: it returned, so it is gone, and its arm
+      // would otherwise strand where staleArms cannot reach it). Both are first-hand facts; the
+      // beacon is inference, and disarmExecutor lets a MISSING beacon through (no evidence is not
+      // proof), so an executor that died before its first beacon would have had its LIVE arm
+      // cleared here. Every watchdog exit therefore leaves the arm STANDING on purpose: that
+      // standing arm is what blocks the next spawn until a human or staleArms judges it. The lib
+      // call stays as the belt (a work-event beacon still refuses) and its refusal is RECORDED.
+      if (armed && spawn?.result !== undefined) {
         try {
           disarmExecutor(worktree, phase)
         } catch (e) {

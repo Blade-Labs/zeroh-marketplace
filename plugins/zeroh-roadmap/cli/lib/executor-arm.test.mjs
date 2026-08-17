@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MOD = join(HERE, 'executor-arm.mjs')
-const { armExecutor, disarmExecutor, staleArms } = await import(MOD)
+const { armExecutor, disarmExecutor, staleArms, liveArm } = await import(MOD)
 
 const tmps = []
 function newTmp(prefix = 'zr-exec-arm-') {
@@ -454,4 +454,39 @@ test('22) THE REAL INCIDENT SHAPE — the 2026-08-17 arm + beacon bodies verbati
   const phasesDir = join(newTmp(), 'phases')
   writePhaseFile(phasesDir, 2333, 'in-progress')
   assert.deepEqual(staleArms(worktree, phasesDir), [], 'a live arm was never in the stale set')
+})
+
+// ── liveArm — the CHECK door: what a NEW executor may not be spawned over ────────────────
+test('23) liveArm — an arm naming an executor is live even with no beacon at all', () => {
+  const worktree = newTmp()
+  assert.equal(liveArm(worktree, 1727), null, 'no arm file ⇒ the phase is free')
+  armExecutor(worktree, 1727, 'sess-1', { executorId: 'exec-1' })
+  assert.deepEqual(liveArm(worktree, 1727), { executorId: 'exec-1', beaconEvent: null },
+    'a named executor needs no beacon to prove it owns the phase')
+})
+
+test('24) liveArm — an arm with NO executorId is live while its beacon reads work in flight', () => {
+  // The 2026-08-17 body shape exactly: --executor-id is optional, so a --session-only arm exists
+  // in the wild. armExecutor OVERWRITES it (nothing on disk breaks), but nothing may SPAWN over it.
+  const worktree = newTmp()
+  writeRawArm(worktree, 2333, JSON.stringify({ sessionId: 'ea584379-4810-40b6-bb67-20906c8bf6d3', armedAt: isoAgo(120) }) + '\n')
+  writeBeacon(worktree, 2333, [{ ts: isoAgo(93), event: 'task-start', phase: 2333 }])
+  assert.deepEqual(liveArm(worktree, 2333), { executorId: null, beaconEvent: 'task-start' })
+})
+
+test('25) liveArm — a beacon-quiet arm with no executorId is a FOSSIL, not a live arm', () => {
+  // Deliberate leniency, and the only one: judging fossils belongs to staleArms, which applies
+  // its own definition. Blocking on any-arm-at-all would strand every legacy file on disk.
+  const worktree = newTmp()
+  writeRawArm(worktree, 1727, JSON.stringify({ sessionId: 'sess-old', armedAt: isoAgo(4000) }) + '\n')
+  assert.equal(liveArm(worktree, 1727), null, 'no beacon, no name ⇒ no evidence of an owner')
+
+  // A terminal beacon says the executor handed back — same allow-set the disarm door uses.
+  writeBeacon(worktree, 1727, [{ ts: isoAgo(5), event: 'phase-complete', phase: 1727 }])
+  assert.equal(liveArm(worktree, 1727), null, 'phase-complete is not work in flight')
+  writeBeacon(worktree, 1727, [{ ts: isoAgo(5), event: 'result-returned', phase: 1727 }])
+  assert.equal(liveArm(worktree, 1727), null, 'neither is result-returned')
+  writeBeacon(worktree, 1727, [{ ts: isoAgo(5), event: 'commit', phase: 1727 }])
+  assert.deepEqual(liveArm(worktree, 1727), { executorId: null, beaconEvent: 'commit' },
+    'anything outside that allow-set IS work in flight')
 })

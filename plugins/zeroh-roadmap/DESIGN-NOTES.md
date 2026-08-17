@@ -206,15 +206,20 @@ the drift lanes:
   already made the judgement. BOTH doors route through `cli/lib/executor-arm.mjs` — the CLI verbs
   and `workflows/arc-plane.workflow.mjs`, which until 2376 kept private copies that wrote an
   unbound body and rmSynced it unconditionally, so the contract held for one lane only. The
-  workflow mints one `executorId` per spawn and reads `armedExecutorId` UNCONDITIONALLY before
-  spawning (a lane with no session id may not write an arm, but it may never spawn over an
-  incumbent either), returning a typed `blocked` halt naming that incumbent. It stamps
+  workflow mints one `executorId` per spawn and calls `liveArm` UNCONDITIONALLY before spawning (a
+  lane with no session id may not WRITE an arm, but it may never spawn over an incumbent either),
+  returning a typed `blocked` halt. The CHECK door is deliberately stricter than the WRITE door:
+  `armExecutor` overwrites an arm carrying no `executorId` so nothing on disk breaks, while
+  `liveArm` counts that same arm as live whenever the beacon says work is in flight — only a
+  beacon-QUIET unnamed arm is a fossil, and fossils are `staleArms`' call. The workflow stamps
   `result-returned` ITSELF once `roadmap result check` exits 0, because its harness may run no
   hooks and a green result check is the same proof the hook encodes. It disarms only the arm it
-  wrote and only on that proven-returned path, swallowing a refusal to stderr rather than forcing:
-  every other exit leaves the arm STANDING on purpose, since that standing arm is what blocks the
-  next spawn. A missing beacon is not used as permission there — `disarmExecutor` lets one through
-  (no evidence is not proof), which would clear the arm of an executor that died before beaconing.
+  wrote, and only once its own executor handed something back (even an unparseable result: it
+  returned, so it is gone, and its arm would otherwise strand where `staleArms` cannot reach it),
+  swallowing a refusal to stderr rather than forcing. Every watchdog exit therefore leaves the arm
+  STANDING on purpose, since that standing arm is what blocks the next spawn. A missing beacon is
+  never read as permission there — `disarmExecutor` lets one through (no evidence is not proof),
+  which would clear the arm of an executor that died before writing its first beacon.
 - **Arm files are CLI-owned and session-bound**: `roadmap executor-arm <N> --session <id>
   [--executor-id <id>]` writes JSON `{ sessionId, executorId?, armedAt }` (an unbound arm is
   REFUSED — the 2026-07-17 fabrication hazard); `roadmap executor-disarm <N> [--force]` removes it
