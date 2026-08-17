@@ -39,6 +39,52 @@ const ACTIVITY_SKIP_DIRS = new Set(['.git', 'node_modules', '.building', 'transc
 const ACTIVITY_SCAN_CAP = 50_000
 
 /**
+ * Per-directory cache of parsed phase records, keyed on a CONTENT SIGNATURE (file count + newest
+ * mtime) rather than on the directory alone.
+ *
+ * The distinction is the whole point. `scanProgress` memoizes unconditionally for the process
+ * lifetime, which is why D2 forbade it: `roadmap watch` loop mode calls readLiveness repeatedly in
+ * ONE process, and a status flip mid-loop would never be seen. Re-reading instead means parsing
+ * every phase file on every poll — on this estate 4282 files and ~130MB per verdict, on a spot
+ * check that runs at every executor notification. Signing the directory with a stat sweep costs
+ * one cheap syscall per file and invalidates on any edit, so the scan stays as fresh as a full
+ * re-read while doing the work only when something actually changed.
+ */
+const phaseRecordCache = new Map()
+
+function scanPhasesDir(dir) {
+  let names = []
+  try {
+    names = readdirSync(dir).filter((n) => n.endsWith('.phase.ts'))
+  } catch {
+    return [] // no phases dir here — not an error, the layout varies
+  }
+  let newest = 0
+  for (const name of names) {
+    try {
+      const m = statSync(join(dir, name)).mtimeMs
+      if (m > newest) newest = m
+    } catch {
+      /* raced away — the signature simply omits it */
+    }
+  }
+  const signature = `${names.length}:${newest}`
+  const hit = phaseRecordCache.get(dir)
+  if (hit && hit.signature === signature) return hit.records
+  const records = []
+  for (const name of names) {
+    try {
+      const scanned = scanPhaseFile(join(dir, name))
+      if (scanned) records.push(scanned)
+    } catch {
+      /* unreadable — skipped, never a crash */
+    }
+  }
+  phaseRecordCache.set(dir, { signature, records })
+  return records
+}
+
+/**
  * Read one liveness verdict for a sidecar. Returns { verdict, arcId, worktree, preBeacon,
  * evidence } — the same object executor-liveness.mjs printed. Async: the growth-based rows
  * need a second probe (LIVENESS_PROBE_MS apart).
@@ -193,36 +239,30 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   let keyFilesMemo = null
   function ourKeyFiles() {
     if (keyFilesMemo) return keyFilesMemo
-    const out = []
+    const ours = []
     const seen = new Set()
+    // Every path declared by a phase belonging to some OTHER lane. A keyFile is only evidence of
+    // THIS arc moving if this arc is the only one that declares it — see the mtime arm below.
+    const coDeclared = new Set()
     for (const dir of phasesDirs) {
-      let entries = []
-      try {
-        entries = readdirSync(dir)
-      } catch {
-        continue // no phases dir here — not an error, the layout varies
-      }
-      for (const name of entries) {
-        if (!name.endsWith('.phase.ts')) continue
-        let scanned = null
-        try {
-          scanned = scanPhaseFile(join(dir, name))
-        } catch {
-          continue
-        }
-        if (!scanned) continue
+      for (const scanned of scanPhasesDir(dir)) {
         const isBeaconPhase = beaconPhase != null && String(scanned.phase) === String(beaconPhase)
         const isOurLivePhase = scanned.status === 'in-progress' && scanned.arcId === arcId
-        if (!isBeaconPhase && !isOurLivePhase) continue
+        const isOurs = isBeaconPhase || isOurLivePhase
         for (const keyFile of scanned.keyFiles ?? []) {
-          if (seen.has(keyFile)) continue
-          seen.add(keyFile)
-          out.push(keyFile)
+          if (isOurs) {
+            if (seen.has(keyFile)) continue
+            seen.add(keyFile)
+            ours.push(keyFile)
+          } else if (scanned.arcId !== arcId) {
+            // An arcless phase counts as another lane too: it is a standalone do-phase run.
+            coDeclared.add(keyFile)
+          }
         }
       }
     }
-    keyFilesMemo = out
-    return out
+    keyFilesMemo = { ours, exclusive: ours.filter((k) => !coDeclared.has(k)) }
+    return keyFilesMemo
   }
 
   function newestWorktreeFileAgeMin() {
@@ -448,13 +488,18 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   // Reported on EVERY path, not only when the activity row runs, for the same reason the skipped-
   // beacon count is: on a cross-repo arc the difference between "no product repo" and "a product
   // repo with no attributable commit" is the whole diagnosis, and in the incident it was invisible.
-  const ourKeys = ourKeyFiles()
+  const { ours: ourKeys, exclusive: exclusiveKeys } = ourKeyFiles()
   const derivedRepos = productRepos(ourKeys, { worktree })
-  const keyFileAgeMin = newestKeyFileAgeMin(ourKeys, now)
-  evidence.crossRepo = derivedRepos.length
-    ? `${derivedRepos.length} product repo(s) from keyFiles: ${derivedRepos.join(', ')}; newest declared keyFile `
+  // The mtime arm reads only the EXCLUSIVELY-declared paths (see the arm itself for why).
+  const keyFileAgeMin = newestKeyFileAgeMin(exclusiveKeys, now)
+  const sharedNote = ourKeys.length > exclusiveKeys.length
+    ? ` [${ourKeys.length - exclusiveKeys.length} keyFile(s) also declared by another lane — evidence only]`
+    : ''
+  evidence.crossRepo = (derivedRepos.length
+    ? `${derivedRepos.length} product repo(s) from keyFiles: ${derivedRepos.join(', ')}; newest exclusively-declared keyFile `
       + `${keyFileAgeMin == null ? 'not written yet' : `${keyFileAgeMin.toFixed(1)}min old`}`
-    : `none (${ourKeys.length ? `${ourKeys.length} keyFile(s) declared, all in this worktree's own repository` : 'no keyFiles declared by this arc\'s live phases'})`
+    : `none (${ourKeys.length ? `${ourKeys.length} keyFile(s) declared, all in this worktree's own repository` : 'no keyFiles declared by this arc\'s live phases'})`)
+    + sharedNote
 
   let verdict = null
 
@@ -521,10 +566,14 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
         `last commit naming one of this arc's phases in the product repo ${productCommit.repo} `
         + `${productCommit.ageMin.toFixed(1)}min ago (< ${ACTIVITY_COMMIT_MAX_MIN}min)`
     } else if (keyFileAgeMin != null && keyFileAgeMin < ACTIVITY_FILE_MAX_MIN) {
-      // Unlike the worktree-wide row below, this one survives a shared checkout: the paths come
-      // from THIS arc's own phases, so the signal is attributable by construction (D4).
+      // Unlike the worktree-wide row below, this one survives a shared checkout — but only for
+      // paths THIS arc alone declares. A path is scoped to a FILE, not to a lane, and popular
+      // spine files are declared by many arcs at once; a sibling lane (or an editor save, or a
+      // checkout) touching a co-declared file would otherwise hold a dead executor at ALIVE for
+      // ten minutes. Excluding co-declared paths is what makes "attributable by construction"
+      // actually true rather than merely intended.
       verdict = 'ALIVE'
-      evidence.activity = `newest declared keyFile touched ${keyFileAgeMin.toFixed(1)}min ago (< ${ACTIVITY_FILE_MAX_MIN}min)`
+      evidence.activity = `newest exclusively-declared keyFile touched ${keyFileAgeMin.toFixed(1)}min ago (< ${ACTIVITY_FILE_MAX_MIN}min)`
     } else if (!sharedWorktree && fileAgeMin != null && fileAgeMin < ACTIVITY_FILE_MAX_MIN) {
       verdict = 'ALIVE'
       evidence.activity = `newest worktree file touched ${fileAgeMin.toFixed(1)}min ago (< ${ACTIVITY_FILE_MAX_MIN}min)`

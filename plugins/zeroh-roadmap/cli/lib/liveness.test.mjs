@@ -556,3 +556,71 @@ test('28b) evidence.crossRepo is present on the FAST paths too, not only when th
   assert.equal(r.verdict, 'ALIVE')
   assert.ok(typeof r.evidence.crossRepo === 'string' && r.evidence.crossRepo.length > 0, 'crossRepo is always reported')
 })
+
+// ── gate R1/R2 — review findings against the arms added above.
+
+test('29) a keyFile ALSO declared by another arc does NOT hold this arc at ALIVE', () => {
+  // A path is scoped to a FILE, not to a lane. Popular spine files are declared by many arcs at
+  // once, so a sibling lane (or an editor save, or a checkout) touching a co-declared file would
+  // vouch for an executor that died hours ago — the false-ALIVE direction this engine must never
+  // fail in. Only paths THIS arc alone declares can answer the mtime arm.
+  const d = makeArcRepo()
+  const product = makeProductRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 707, event: 'task-start' }])
+  const shared = join(product, 'src', 'tools', 'registry.ts')
+  writePhaseFileWithKeyFiles(d, 707, 'MINE', [shared])
+  writePhaseFileWithKeyFiles(d, 807, 'SIBLING', [shared]) // the same path, another arc
+  mkdirSync(dirname(shared), { recursive: true })
+  writeFileSync(shared, 'export {}\n') // touched moments ago, by whoever
+
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED', 'a co-declared file is not proof that THIS arc moved')
+  assert.match(r.evidence.crossRepo, /also declared by another lane/, 'and the reader is told why it did not count')
+})
+
+test('29b) an EXCLUSIVE keyFile still answers, even when a co-declared one sits beside it', () => {
+  const d = makeArcRepo()
+  const product = makeProductRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 708, event: 'task-start' }])
+  const shared = join(product, 'src', 'shared.ts')
+  const mine = join(product, 'src', 'mine-alone.ts')
+  writePhaseFileWithKeyFiles(d, 708, 'MINE', [shared, mine])
+  writePhaseFileWithKeyFiles(d, 808, 'SIBLING', [shared])
+  mkdirSync(dirname(mine), { recursive: true })
+  writeFileSync(shared, 'export {}\n')
+  writeFileSync(mine, 'export {}\n')
+
+  const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'ALIVE', 'the exclusion must not disable the arm wholesale')
+  assert.match(r.evidence.activity, /exclusively-declared keyFile/)
+})
+
+test('30) a phase-file EDIT between polls is seen — the scan cache is SIGNED, not merely memoized', async () => {
+  // scanProgress memoizes per directory for the process lifetime, which is why D2 forbade it: in
+  // watch loop mode the phase set would freeze at whatever it was when the loop started. So this
+  // case must call readLiveness TWICE IN ONE PROCESS — driving the CLI subprocess twice would get
+  // a fresh cache each time and would pass even against a permanently frozen memo.
+  const { readLiveness } = await import(join(HERE, 'liveness.mjs'))
+  const d = makeArcRepo()
+  const product = makeProductRepo()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 709, event: 'task-start' }])
+  const kf = join(product, 'src', 'late.ts')
+  mkdirSync(dirname(kf), { recursive: true })
+  writeFileSync(kf, 'export {}\n')
+  const env = { ...process.env, LIVENESS_PGREP_CMD: 'true', LIVENESS_PROBE_MS: '1', LIVENESS_PREBEACON_GRACE_MIN: '0' }
+
+  // First poll: the phase declares NO keyFiles, so nothing can vouch for it.
+  writePhaseFile(d, 709, 'MINE')
+  const before = await readLiveness({ sidecarPath: sc, env })
+  assert.equal(before.verdict, 'STALLED')
+
+  // Now the phase file gains the declaration, exactly as a mid-loop edit would. The mtime is set
+  // explicitly so the signature provably differs rather than resting on clock granularity.
+  writePhaseFileWithKeyFiles(d, 709, 'MINE', [kf])
+  const bumped = new Date(Date.now() - 60_000)
+  utimesSync(join(d, 'roadmap', 'phases', `phase-709.phase.ts`), bumped, bumped)
+
+  const after = await readLiveness({ sidecarPath: sc, env })
+  assert.equal(after.verdict, 'ALIVE', 'an unconditional memo would still report STALLED here')
+  assert.ok(after.evidence.crossRepo.includes(product))
+})

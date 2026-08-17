@@ -43,7 +43,10 @@ export default async function run(argv) {
   const si = argv.indexOf('--session')
   const session = si >= 0 ? argv[si + 1] : undefined
   const ei = argv.indexOf('--executor-id')
-  const executorId = ei >= 0 ? argv[ei + 1] : undefined
+  const rawExecutorId = ei >= 0 ? argv[ei + 1] : undefined
+  // `--executor-id --force` means the id was OMITTED, not that the id is literally "--force".
+  // Resolved once, so the arm and the line reporting it can never disagree.
+  const executorId = rawExecutorId?.startsWith('--') ? undefined : rawExecutorId
   const force = argv.includes('--force')
   if (!phase || !session || session.startsWith('--')) {
     process.stderr.write(
@@ -55,7 +58,7 @@ export default async function run(argv) {
   const worktree = gitToplevel(process.cwd())
   let p
   try {
-    p = armExecutor(worktree, phase, session, { executorId: executorId?.startsWith('--') ? undefined : executorId, force })
+    p = armExecutor(worktree, phase, session, { executorId, force })
   } catch (err) {
     process.stderr.write(`roadmap executor-arm: ${err.message}\n`)
     return 2
