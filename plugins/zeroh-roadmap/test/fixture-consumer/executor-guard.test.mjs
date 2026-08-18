@@ -42,7 +42,10 @@ function guardRepo({ phase = 9500, status = 'in-progress', tasksDone = [true, fa
 function transcript(root, finalText) {
   const p = join(root, 'transcript.jsonl')
   writeFileSync(p, [
-    JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'do phase' }] } }),
+    // The spawn prompt names the phase FILE — the contract both spawn lanes satisfy, and what the
+    // arm-file/beacon channels match the stopping agent on since 2384.4 (before that, any arm in
+    // the session armed any agent, which woke one executor with another's arm).
+    JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'do phase 9500 — roadmap/phases/phase-9500.phase.ts' }] } }),
     JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: finalText }] } }),
   ].join('\n') + '\n')
   return p

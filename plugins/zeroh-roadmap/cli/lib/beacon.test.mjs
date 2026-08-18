@@ -157,6 +157,9 @@ test('8) EXECUTOR_EVENTS is the exact closed vocabulary', () => {
     'resume',
     'result-returned',
     'phase-complete',
+    // 2384.5 — the throttled PostToolUse heartbeat, so one long task stays legible to liveness.
+    // A WORK event by meaning: it says the executor is still running, never that it finished.
+    'heartbeat',
   ]
   assert.equal(EXECUTOR_EVENTS.size, expected.length, 'no extra members')
   for (const e of expected) assert.ok(EXECUTOR_EVENTS.has(e), `EXECUTOR_EVENTS must contain ${e}`)

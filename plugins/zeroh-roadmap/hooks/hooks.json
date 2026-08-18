@@ -55,6 +55,15 @@
             "statusMessage": "Stamping executor beacon..."
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/fail-soft.mjs\" \"${CLAUDE_PLUGIN_ROOT}/hooks/heartbeat-stamp.mjs\"",
+            "statusMessage": "Keeping the executor beacon truthful..."
+          }
+        ]
       }
     ],
     "SessionStart": [

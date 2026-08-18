@@ -490,3 +490,18 @@ test('25) liveArm — a beacon-quiet arm with no executorId is a FOSSIL, not a l
   assert.deepEqual(liveArm(worktree, 1727), { executorId: null, beaconEvent: 'commit' },
     'anything outside that allow-set IS work in flight')
 })
+
+test('14c) disarmExecutor — a HEARTBEAT last event refuses too: a heartbeating executor is working', () => {
+  // 2384.5 put `heartbeat` in the closed vocabulary. It must land on the WORK side of the disarm
+  // rule by construction (DISARM_ALLOWED is the allow-list, so anything new is refused), because
+  // the whole point of the event is "still running" — clearing a live arm on it would re-open the
+  // two-executors-one-phase class the arm exists to close.
+  const worktree = newTmp()
+  armExecutor(worktree, 2384, 'sess-abc')
+  writeBeacon(worktree, 2384, [
+    { ts: isoAgo(120), event: 'executor-start', phase: 2384 },
+    { ts: isoAgo(4), event: 'heartbeat', phase: 2384 },
+  ])
+  assert.throws(() => disarmExecutor(worktree, 2384), /heartbeat/, 'the refusal must name the beacon event so the caller can judge')
+  assert.ok(existsSync(armPath(worktree, 2384)), 'a REFUSED disarm must not remove the arm it refused to clear')
+})

@@ -31,6 +31,12 @@ export const EXECUTOR_EVENTS = new Set([
   'escalated',
   'resume',
   'result-returned',
+  // The throttled PostToolUse heartbeat (2384.5): beacons are otherwise emitted only at task and
+  // gate-stage boundaries, so ONE long task is beacon-silent for hours and indistinguishable, by
+  // the primary signal, from a dead executor. A WORK event by meaning — it says "still running",
+  // never "finished" — which is why it stays OUT of executor-arm's DISARM_ALLOWED allow-list: a
+  // heartbeating executor must refuse disarm.
+  'heartbeat',
   'phase-complete',
 ])
 

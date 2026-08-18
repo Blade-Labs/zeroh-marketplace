@@ -274,3 +274,49 @@ the drift lanes:
   finding, a present proof is audited by re-running exactly ONE mutation of the reviewer's choosing.
 - **Rounds are deliberately NOT capped.** Round 1 in both azure phases found real product bugs. The
   fix moves guard-debugging into the build window; it does not buy latency back by cutting review.
+
+## Liveness observes the EXECUTOR, not the arm-time pointers (2026-08-18 incident)
+
+**Provenance.** During arc PUCKCANVAS phase 2335, `roadmap watch` returned STALLED on the evidence
+"beacon: last event task-start, age 135.9min" while the executor was ALIVE mid-task — 18 transcript
+entries in the minute the verdict was read; task 2335.4 was one long live-estate drive that
+legitimately emits no beacon for hours. The orchestrator was one step from respawning a second
+executor onto a live phase during an authorized production deploy on a shared branch, and only a
+manual forensic check stopped it. The same run exposed a second defect: with TWO phases armed in one
+session, the Stop guard woke executor pe-2335 with the 2164 arm and demanded work on a phase that
+was not its own; the agent refused correctly and burned two ~500k-token turns doing it.
+
+Four contracts came out of it, and they hold together — each closes one link of that chain.
+
+- **Liveness DISCOVERS the executor's transcript by phase, never by an arm-time pointer**
+  (`cli/lib/liveness.mjs`). The growth row existed but its only input was `sidecar.transcriptDir`,
+  which nothing in the plugin has ever written, so it was dormant in every call that did not pass
+  `--transcript-dir`. The engine now derives the harness tasks root from the PRIMARY checkout and
+  attributes a transcript by the `phase-<N>.phase.ts` its spawn prompt names. An arm-time stamp was
+  rejected outright: it goes stale the moment an arc is re-driven by a new session, which is the
+  vintage-pointer class the estate has already paid for once.
+- **STALLED requires a PROBED-negative signal; anything else is UNOBSERVED.** The transcript is the
+  only true liveness probe — it grows continuously while an agent runs, so measuring it flat is
+  evidence of death. Every other row is evidence of LIFE whose absence proves nothing: a long task
+  legitimately produces no commit and no keyFile write, and pgrep is structurally blind to a
+  subagent executor. UNOBSERVED never claims life; it refuses to claim death. `watch` exits 5 on it
+  (same 2-consecutive debounce as STALLED's 3), `HALT_KINDS` carries `unobserved`, and arc-plane maps
+  the exit to that typed halt rather than letting `stalled` absorb it.
+- **The beacon stays truthful through a long task via a THROTTLED heartbeat**
+  (`hooks/heartbeat-stamp.mjs`, matcher-less PostToolUse — the incident executor drove a browser for
+  hours, so a Bash-only hook would have missed exactly that shape). One `heartbeat` per armed phase
+  per 10 quiet minutes, this session's arms only, never over a terminal event, always exit 0. It is
+  a WORK event: liveness reads it like any fresh beacon, and disarm correctly refuses on it.
+- **The Stop guard is EXECUTOR-MATCHED by the spawn-prompt phase**
+  (`hooks/executor-result-guard.mjs`). Channels (b)/(c) now arm only for the phase the stopping agent
+  was itself spawned for, read from its own transcript head; the env channel keeps absolute
+  precedence, and an agent that names no phase is SILENT — which retires the standing
+  misfires-on-unrelated-subagents class and the per-arc armor prompt with it. Residual, accepted and
+  named: a non-executor agent whose prompt quotes an armed phase's file path and which ends on bare
+  prose gets one demand, then fails open on `stop_hook_active`.
+
+**Deliberately not done.** No beacon-age threshold tuning — age stays evidence, never permission
+(the 2375 scar line). No orchestrator-side scheduling inside the plugin: an executor expected past
+~30min gets periodic `roadmap watch --once` spot-checks, and that is one documented line in do-arc,
+not machinery. STALLED itself was not renamed; consumers keep their meaning and the new member
+carries the new one.
