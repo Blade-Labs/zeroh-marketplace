@@ -752,7 +752,7 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
       // executor (same process tree, own-ancestry filtered). Saying STALLED here was over-claiming.
       verdict = 'UNOBSERVED'
       evidence.unobserved =
-        `no independent life signal could be probed: transcript ${td != null ? 'supplied but empty' : 'not discoverable'}; `
+        `no independent life signal could be probed: transcript ${td != null ? 'supplied but not measurable' : 'not discoverable'}; `
         + 'pgrep is structurally blind to a subagent executor; a long single task legitimately produces no commit '
         + 'and no keyFile write. UNOBSERVED is not death — pass --transcript-dir <dir> to point the engine at this '
         + "executor's transcript, or read the executor's own task-notification channel."

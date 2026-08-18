@@ -26,6 +26,7 @@ import { existsSync, readFileSync, readdirSync, statSync, realpathSync } from 'n
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { appendExecutorEvent, readBeaconLine } from '../cli/lib/beacon.mjs'
+import { actingPhase } from './spawn-phase.mjs'
 
 /** Quiet minutes before a heartbeat is due. Ten is well inside liveness's ALIVE_MAX_MIN (20), so a
  *  heartbeating executor never falls out of ALIVE between stamps. */
@@ -105,8 +106,8 @@ function armSession(path) {
  * `executor-start`, and a beacon whose first line was a heartbeat would misreport the diagnosis
  * liveness's pre-beacon grace exists to give.
  */
-export function heartbeatsDue(worktrees, sessionId, { now = Date.now(), minMin = HEARTBEAT_MIN_MIN } = {}) {
-  if (!sessionId) return []
+export function heartbeatsDue(worktrees, sessionId, { now = Date.now(), minMin = HEARTBEAT_MIN_MIN, phase = null } = {}) {
+  if (!sessionId || phase == null) return []
   const due = []
   for (const worktree of worktrees ?? []) {
     const buildingDir = join(worktree, '.building')
@@ -119,6 +120,13 @@ export function heartbeatsDue(worktrees, sessionId, { now = Date.now(), minMin =
     for (const f of entries) {
       const m = f.match(/^(\d+)-executor\.armed$/)
       if (!m) continue
+      // The ACTING agent's own phase, never just "an arm in this session": the arm carries the
+      // ORCHESTRATING session's id and every subagent shares it, so a session-only match let any
+      // orchestrator tool call refresh a quiet executor's beacon — and since do-arc now spot-checks
+      // long executors with `watch --once`, the act of polling would have manufactured the life
+      // signal the poll then read. A self-fulfilling ALIVE is the one direction this must never
+      // fail in (gate R1, found by the round-0 quality pass).
+      if (Number(m[1]) !== phase) continue
       if (armSession(join(buildingDir, f)) !== sessionId) continue
       const beacon = readBeaconLine(join(buildingDir, `${m[1]}-executor.jsonl`))
       if (!beacon || !Number.isFinite(beacon.ts)) continue
@@ -147,9 +155,15 @@ function main() {
     return 0
   }
   if (!payload.session_id) return 0
+  // Identity FIRST, before any filesystem or git work: only an EXECUTOR's own tool call may stamp
+  // its beacon, and that question is answered by a free env read or one bounded head-read. It also
+  // makes the hook free for the overwhelming majority of tool calls on this box — every main-session
+  // call returns here, having spawned nothing.
+  const phase = actingPhase(payload)
+  if (phase == null) return 0
   const cwd = payload.cwd && existsSync(payload.cwd) ? payload.cwd : process.cwd()
   const toplevel = gitToplevelSafe(cwd) ?? cwd
-  for (const { worktree, phase } of heartbeatsDue(armDirs(toplevel), payload.session_id)) {
+  for (const { worktree } of heartbeatsDue(armDirs(toplevel), payload.session_id, { phase })) {
     try {
       appendExecutorEvent(worktree, phase, 'heartbeat')
     } catch {

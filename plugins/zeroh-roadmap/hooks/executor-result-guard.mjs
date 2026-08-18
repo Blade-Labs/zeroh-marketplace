@@ -31,10 +31,11 @@
  * the JSON `{"decision":"block","reason":…}` channel; exit code stays 0.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { appendExecutorEvent } from '../cli/lib/beacon.mjs'
+import { ownPhaseFromTranscript } from './spawn-phase.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
 
@@ -74,32 +75,6 @@ function lastBeaconEvent(path) {
     return JSON.parse(lines[lines.length - 1])
   } catch {
     return null
-  }
-}
-
-/**
- * The phase THIS agent was spawned for: the first `phase-<N>.phase.ts` named in the head of its own
- * transcript. Both spawn lanes put that path in the prompt, and the prompt is the transcript's first
- * record, so a bounded 64KB head-read answers it exactly. Null when unreadable or when the agent
- * names no phase — and null is SILENCE, never a fallback to somebody else's arm.
- */
-function ownPhaseFromTranscript(path) {
-  if (!path || !existsSync(path)) return null
-  try {
-    const size = statSync(path).size
-    const span = Math.min(size, 64 * 1024)
-    if (span <= 0) return null
-    const buf = Buffer.alloc(span)
-    const fd = openSync(path, 'r')
-    try {
-      readSync(fd, buf, 0, span, 0)
-    } finally {
-      closeSync(fd)
-    }
-    const m = buf.toString('utf8').match(/phase-(\d+)\.phase\.ts/)
-    return m ? Number(m[1]) : null
-  } catch {
-    return null // unreadable is no-phase, which is silence — the fail-open direction
   }
 }
 

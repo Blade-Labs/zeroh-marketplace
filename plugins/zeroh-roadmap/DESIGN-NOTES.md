@@ -305,8 +305,17 @@ Four contracts came out of it, and they hold together — each closes one link o
 - **The beacon stays truthful through a long task via a THROTTLED heartbeat**
   (`hooks/heartbeat-stamp.mjs`, matcher-less PostToolUse — the incident executor drove a browser for
   hours, so a Bash-only hook would have missed exactly that shape). One `heartbeat` per armed phase
-  per 10 quiet minutes, this session's arms only, never over a terminal event, always exit 0. It is
-  a WORK event: liveness reads it like any fresh beacon, and disarm correctly refuses on it.
+  per 10 quiet minutes, never over a terminal event, always exit 0. It is a WORK event: liveness
+  reads it like any fresh beacon, and disarm correctly refuses on it.
+  **Only the EXECUTOR's own tool calls stamp it** (`hooks/spawn-phase.mjs`, shared with the Stop
+  guard, gate R1). Session id cannot carry that: an arm records the ORCHESTRATING session and every
+  subagent of that session reports the same id, so a session-only match let any orchestrator tool
+  call refresh a quiet executor's beacon — and since the orchestrator is now told to spot-check long
+  executors with `watch --once`, polling would have manufactured the life signal the poll then read.
+  A self-fulfilling ALIVE is the one direction the verdict must never fail in, so identity uses the
+  same two channels the guard does: `ROADMAP_EXECUTOR_PHASE`, else the phase named in the AGENT's
+  own transcript head. Neither resolving means no stamp — and it makes the hook free (no git spawn,
+  no readdir) for every main-session tool call on the box.
 - **The Stop guard is EXECUTOR-MATCHED by the spawn-prompt phase**
   (`hooks/executor-result-guard.mjs`). Channels (b)/(c) now arm only for the phase the stopping agent
   was itself spawned for, read from its own transcript head; the env channel keeps absolute

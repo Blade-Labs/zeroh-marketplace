@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const HOOK = join(HERE, 'heartbeat-stamp.mjs')
 const { HEARTBEAT_MIN_MIN, armDirs, heartbeatsDue } = await import(HOOK)
+const { actingPhase } = await import(join(HERE, 'spawn-phase.mjs'))
 
 const tmps = []
 function newTmp() {
@@ -61,23 +62,23 @@ const beaconLines = (root, phase) =>
 
 test('1) DUE: an arm for this session whose beacon went quiet past the throttle window', () => {
   const root = makeEstate({ beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
-  const due = heartbeatsDue([root], 's1')
+  const due = heartbeatsDue([root], 's1', { phase: 2384 })
   assert.deepEqual(due, [{ worktree: root, phase: 2384 }])
 })
 
 test('2) FRESH: a beacon inside the window is not stamped — the throttle IS the design', () => {
   const root = makeEstate({ beaconEvents: [{ ts: isoAgo(HEARTBEAT_MIN_MIN - 1), phase: 2384, event: 'task-start' }] })
-  assert.deepEqual(heartbeatsDue([root], 's1'), [], 'at most one heartbeat per phase per window')
+  assert.deepEqual(heartbeatsDue([root], 's1', { phase: 2384 }), [], 'at most one heartbeat per phase per window')
 })
 
 test('3) FOREIGN SESSION: another session\'s arm is never touched', () => {
   const root = makeEstate({ session: 'other-session', beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
-  assert.deepEqual(heartbeatsDue([root], 's1'), [], 'the 2026-07-17 cross-session class stays closed')
+  assert.deepEqual(heartbeatsDue([root], 's1', { phase: 2384 }), [], 'the 2026-07-17 cross-session class stays closed')
 })
 
 test('4) UNBOUND arm (bare/legacy body, no session) is never touched either', () => {
   const root = makeEstate({ armBody: '', beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
-  assert.deepEqual(heartbeatsDue([root], 's1'), [])
+  assert.deepEqual(heartbeatsDue([root], 's1', { phase: 2384 }), [])
 })
 
 test('5) TERMINAL last event → never stamped: a heartbeat would resurrect a finished executor', () => {
@@ -85,19 +86,19 @@ test('5) TERMINAL last event → never stamped: a heartbeat would resurrect a fi
   // make disarm refuse forever — an arm nobody can clear.
   for (const event of ['phase-complete', 'result-returned']) {
     const root = makeEstate({ beaconEvents: [{ ts: isoAgo(140), phase: 2384, event }] })
-    assert.deepEqual(heartbeatsDue([root], 's1'), [], `${event} means it handed something back`)
+    assert.deepEqual(heartbeatsDue([root], 's1', { phase: 2384 }), [], `${event} means it handed something back`)
   }
 })
 
 test('6) NO BEACON at all → not stamped (the pre-beacon window belongs to executor-start)', () => {
   const root = makeEstate({ beaconEvents: null })
-  assert.deepEqual(heartbeatsDue([root], 's1'), [])
+  assert.deepEqual(heartbeatsDue([root], 's1', { phase: 2384 }), [])
 })
 
 test('7) UNREADABLE estate → silent empty, never a throw', () => {
-  assert.deepEqual(heartbeatsDue([join(newTmp(), 'does-not-exist')], 's1'), [])
-  assert.deepEqual(heartbeatsDue([], 's1'), [])
-  assert.deepEqual(heartbeatsDue([newTmp()], null), [], 'no session id ⇒ nothing is attributable')
+  assert.deepEqual(heartbeatsDue([join(newTmp(), 'does-not-exist')], 's1', { phase: 2384 }), [])
+  assert.deepEqual(heartbeatsDue([], 's1', { phase: 2384 }), [])
+  assert.deepEqual(heartbeatsDue([newTmp()], null, { phase: 2384 }), [], 'no session id ⇒ nothing is attributable')
 })
 
 test('8) armDirs finds a LINKED WORKTREE from the main checkout, with no git spawn', () => {
@@ -119,14 +120,33 @@ test('9) armDirs on a LINKED worktree (.git is a file) yields just itself', () =
 })
 
 // ── the hook binary end-to-end ────────────────────────────────────────────────────────────
-function runHook(cwd, payload) {
-  const r = spawnSync('node', [HOOK], { cwd, input: JSON.stringify(payload), encoding: 'utf8', timeout: 60_000 })
+function runHook(cwd, payload, env = {}) {
+  const r = spawnSync('node', [HOOK], { cwd, input: JSON.stringify(payload), encoding: 'utf8', timeout: 60_000, env: { ...process.env, ...env } })
   return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+}
+
+/** An agent transcript whose spawn prompt names `phase`'s file — how a subagent self-identifies. */
+function agentTranscript(root, phase, tag = String(phase)) {
+  const p = join(root, `agent-${tag}.jsonl`)
+  writeFileSync(
+    p,
+    JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: `Run do-phase for phase ${phase}. Read roadmap/phases/phase-${phase}.phase.ts FIRST.` },
+    }) + '\n',
+  )
+  return p
 }
 
 test('10) END TO END: a due phase gets exactly ONE heartbeat, and the next call adds none', () => {
   const root = makeEstate({ beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
-  const payload = { session_id: 's1', cwd: root, hook_event_name: 'PostToolUse', tool_name: 'Read' }
+  const payload = {
+    session_id: 's1',
+    cwd: root,
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Read',
+    agent_transcript_path: agentTranscript(root, 2384),
+  }
   const first = runHook(root, payload)
   assert.equal(first.code, 0)
   const after = beaconLines(root, 2384)
@@ -147,4 +167,48 @@ test('11) END TO END: garbage stdin, no stdin, and a non-repo cwd all exit 0 and
   assert.equal(empty.status, 0)
   assert.equal(beaconLines(root, 2384).length, 1, 'nothing was written on either error path')
   assert.ok(existsSync(join(root, '.building', '2384-executor.armed')))
+})
+
+// ── gate R1 — the acting agent must BE the executor ───────────────────────────────────────
+// Found by the round-0 quality pass: an arm carries the ORCHESTRATING session's id, and every
+// subagent of that session carries the same one, so a session-only match let ANY orchestrator tool
+// call refresh a quiet executor's beacon. do-arc now tells the orchestrator to spot-check long
+// executors with `roadmap watch --once` — so the act of polling would have manufactured the life
+// signal the poll then read. A self-fulfilling ALIVE is the one direction the verdict must never
+// fail in, and it was a NEW one this phase would have introduced.
+
+test('12) R1 — an ORCHESTRATOR tool call stamps NOTHING, however due the arm is', () => {
+  const root = makeEstate({ beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
+  // The main session: same session_id as the arm, but no ROADMAP_EXECUTOR_PHASE and no agent
+  // transcript — it is not executing a phase, it is watching one.
+  const r = runHook(root, { session_id: 's1', cwd: root, hook_event_name: 'PostToolUse', tool_name: 'Bash' })
+  assert.equal(r.code, 0)
+  assert.equal(beaconLines(root, 2384).length, 1, 'polling an executor must never vouch for it')
+})
+
+test('13) R1 — with TWO due arms in one session, an executor stamps ONLY its own phase', () => {
+  const root = makeEstate({ phase: 2384, beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
+  writeFileSync(join(root, '.building', '2164-executor.armed'), JSON.stringify({ sessionId: 's1', executorId: 'exec-2' }))
+  writeFileSync(join(root, '.building', '2164-executor.jsonl'), JSON.stringify({ ts: isoAgo(140), phase: 2164, event: 'task-start' }) + '\n')
+  const r = runHook(root, {
+    session_id: 's1',
+    cwd: root,
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Read',
+    agent_transcript_path: agentTranscript(root, 2384),
+  })
+  assert.equal(r.code, 0)
+  assert.equal(beaconLines(root, 2384).length, 2, 'its own phase is stamped')
+  assert.equal(beaconLines(root, 2164).length, 1, 'the sibling lane is never touched — the 2384.4 rule, one hook over')
+})
+
+test('14) R1 — actingPhase: env wins, the AGENT transcript answers second, the session log is never read', () => {
+  const root = makeEstate()
+  const agent = agentTranscript(root, 2384)
+  const session = agentTranscript(root, 9999, 'session')
+  assert.equal(actingPhase({ agent_transcript_path: agent }, { ROADMAP_EXECUTOR_PHASE: '2164' }), 2164, 'the workflow lane sets env explicitly')
+  assert.equal(actingPhase({ agent_transcript_path: agent }, {}), 2384)
+  assert.equal(actingPhase({ transcript_path: session }, {}), null, 'the SESSION transcript is the orchestrator\'s, never the agent\'s identity')
+  assert.equal(actingPhase({}, {}), null)
+  assert.equal(actingPhase({ agent_transcript_path: join(root, 'gone.jsonl') }, {}), null, 'unreadable is no-phase')
 })
