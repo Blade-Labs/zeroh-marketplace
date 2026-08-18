@@ -422,12 +422,12 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     }
   }
 
-  /** The first `span` bytes of `path` as text. Bounded by construction: a live transcript is
-   *  megabytes and grows while it is read, and only its opening spawn prompt is being asked about. */
-  function readHead(path, span = DISCOVERY_HEAD_BYTES) {
+  /** The head of `path` as text. Bounded by construction: a live transcript is megabytes and grows
+   *  while it is read, and only its opening spawn prompt is being asked about. */
+  function readHead(path) {
     try {
       const size = statSync(path).size
-      const n = Math.min(size, span)
+      const n = Math.min(size, DISCOVERY_HEAD_BYTES)
       if (n <= 0) return ''
       const buf = Buffer.alloc(n)
       const fd = openSync(path, 'r')
@@ -606,7 +606,8 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     }
   }
 
-  const td = transcriptDir ?? sidecar.transcriptDir ?? null
+  // `--transcript-dir` is the ONLY supplied input (the scar above); discovery fills the rest.
+  const td = transcriptDir
   const t1 = transcriptSize(td)
   const logPath = beacon.exists ? beacon.log : null
   const log1 = logPath ? realSize(logPath) : null

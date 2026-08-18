@@ -16,7 +16,7 @@ dispositions point here.
 ## do-arc — watchdog & recovery-ladder incidents
 
 The mechanics these stories taught are now enforced by `roadmap watch` (exit 3 STALLED / 4
-EXITED) and `hooks/executor-result-guard.mjs` (Stop/SubagentStop). The narrations:
+EXITED / 5 UNOBSERVED) and `hooks/executor-result-guard.mjs` (Stop/SubagentStop). The narrations:
 
 - **2026-07-05 — the mid-build pause (backgrounded run, no resume).** An executor backgrounded
   a long gate run, its turn ended, the run finished or died, and it never resumed — the arc
