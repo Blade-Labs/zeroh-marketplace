@@ -32,6 +32,16 @@ not counts) · contract/boundary discipline (shapes `.parse()`'d at the seam, ne
 consumer of a changed contract updated — grep the old shape) · convention adherence (the consumer's
 CLAUDE.md Conventions/Don't).
 
+**New guards — audit the evidence, never re-derive it.** A NEW guard in the diff (a check whose subject
+is the tree's SHAPE: ratchet, conformance/lockstep assertion, scan- or grep-shaped tripwire, lint rule,
+schema gate — NOT an ordinary TDD behavior test, which carries its proof by construction) owed a quoted
+three-mutation proof in the task's `transparencyReport`
+(`skills/do-phase/references/guard-mutation-proof.md`). A **MISSING** proof is itself a finding: name the
+guard and demand the three quotes — do NOT spend the round deriving the mutations the executor owed, which
+is exactly the trade that made review the expensive place to discover a vacuous guard. A **PRESENT** proof
+is AUDITED, not repeated: re-run exactly ONE of the three mutations, your choice, and confirm it reproduces
+the quoted result; a quote that does not reproduce is a finding about the guard AND the report.
+
 **Verify-then-report (mandatory).** Before reporting ANY finding, re-`Read` the flagged lines and confirm
 it exists in the CURRENT file state (the diff may be stale relative to later gate fixes). **A finding you
 cannot re-locate is not reported.** Include the re-read line range as evidence.

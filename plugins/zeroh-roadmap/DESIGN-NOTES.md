@@ -234,3 +234,37 @@ the drift lanes:
   newest-move-commit base preference), executor-start beacon. `roadmap status` flags the
   divergence class (`DIVERGED?` — done tasks under status backlog) and leaked arms
   (`STALE-ARM`) as advisory row flags, typed in `--json` (`row.diverged` / `row.staleArms`).
+
+## The guard mutation proof — falsifiability moves from review time to authoring time
+
+- **The rule bound the wrong artifact.** `skills/plan-phase/references/verify-rehearsal.md` makes a
+  PLANNER rehearse every verify clause both directions. Nothing bound the guards an EXECUTOR writes
+  mid-build (ratchets, tripwires, scan assertions), so reviewers carried them to falsifiability one
+  serial round at a time. Cost on record: azure_private_agent phase 2374 built 5 tasks in 38 minutes
+  and then spent a 3h39m gate in which 8 of 9 rounds debugged the executor's OWN ratchet (vacuous,
+  then crying wolf at R2/R6/R7) rather than product code; phase 2334 repeats the shape. The
+  PAYLOADCMS arc eval independently found "reviewer mutation-testing across four gate rounds carried
+  the guards to falsifiability rather than the initial design arriving there", and mudarabah2 phase
+  703 shows the correct practice ("every new guard falsified by reintroducing its defect") happening
+  at review time, after every task was already committed. Three executors, two consumer repos, one
+  undeclared obligation — not carelessness.
+- **The contract**: a NEW guard is driven through three mutations before its commit —
+  planted violation RED, anchor drift RED-or-loud, decoy GREEN — and the three one-line results
+  land in the task's `transparencyReport`. Scratch mutations, always reverted, never committed.
+  The body lives in `skills/do-phase/references/guard-mutation-proof.md`, deliberately OUTSIDE
+  `cli/measure-manifest.json`: it is loaded on demand, so it costs the protocol-load budget nothing,
+  and the two measured docs carry pointer lines only.
+- **Guard, not every test.** A TDD behavior test proven red against its own missing implementation
+  already carries its proof by construction. The obligation binds checks whose subject is the TREE'S
+  SHAPE, where red-first-against-implementation has no meaning.
+- **The carrier is one UNCONDITIONAL gate-plan notes row** (`cli/commands/gate.mjs`, beside the
+  standing decision-2b row), pinned by a test in `cli/commands/gate.test.mjs`. Both lanes already
+  read the plan (do-arc echoes it, `renderGatePlan` puts it in the executor prompt), so one row
+  propagates the obligation with no prompt-assembly change. Keying it to `kind` or `reviewScope` was
+  rejected: guards get authored under any kind, and the row is a harmless no-op for a phase that
+  authors none.
+- **The reviewer flips from discoverer to auditor** (`agents/code-reviewer.md`, and one stage
+  earlier in `agents/quality-pass.md` as a round-0 fix-now item): a missing proof is itself a
+  finding, a present proof is audited by re-running exactly ONE mutation of the reviewer's choosing.
+- **Rounds are deliberately NOT capped.** Round 1 in both azure phases found real product bugs. The
+  fix moves guard-debugging into the build window; it does not buy latency back by cutting review.

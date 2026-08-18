@@ -17,6 +17,11 @@ after you and owns bugs/logic/business-rules); a bug you notice goes under BUGS 
    the same thing → one shared utility (the per-task gate can't see across tasks; you see the whole diff).
 3. **Gate bypass** — each non-`"None"` `transparencyReport.compromises`/`.hardcoded`/`.skipped` is a fix
    candidate; fix cleanly if you can.
+4. **Unproven new guard** — a NEW guard in the diff (ratchet, tripwire, scan/lint/schema assertion; NOT an
+   ordinary TDD behavior test) whose quoted three-mutation proof is absent from the task's
+   `transparencyReport` is a FIX-NOW item: run the drive per
+   `skills/do-phase/references/guard-mutation-proof.md` and quote the three results in your report. Catching
+   it here is a round-0 fix; letting it reach the reviewer costs a whole correctness round.
 
 **AUTO-FIX** all three + same-repo breaking-contract updates (rename every caller) + DB/schema migrations
 (apply + `SURFACED`). **HARD-STOP (escalate, tagged):** `[MULTI-REPO]` (caller in another repo) ·
