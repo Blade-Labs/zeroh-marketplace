@@ -30,9 +30,11 @@ scratch mutation, one run, one line quoted, then reverted.
    the crying-wolf class: a guard that reds on lawful code gets weakened or deleted by the next
    person, taking the real coverage with it.
 
-**Mutations are NEVER committed.** Mutate, run, quote, revert. Verify the revert (`git diff` on the
-touched path is empty) before the task commit. On a shared checkout, mutate only files your own task
-owns, and never `git stash`/`git checkout` a sibling session's work to get a clean run.
+**Mutations are NEVER committed.** Mutate, run, quote, revert. Restore from a pristine copy taken
+before the first drive, not by `git checkout` — the file usually carries your own uncommitted task
+work too, so verify the revert by confirming `git diff` on that path shows your intended change and
+NOTHING else. On a shared checkout, mutate only files your own task owns, and never
+`git stash`/`git checkout` a sibling session's work to get a clean run.
 
 ## The quoting contract
 
