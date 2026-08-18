@@ -331,6 +331,9 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
     ...reviewScope.notes,
     ...emptyScopeSkip,
     'reviewScope: the "adds no new governed surface / contract / ledger event kind" light-exclusion is plan-time judgment (review-phase Mode A), not machine-decided (pre-made decision 2b)',
+    // Unconditional: guards get authored under any kind, so keying this to kind/reviewScope would
+    // drop the obligation exactly where it is least expected. A no-op row for a phase authoring none.
+    'a NEW guard (ratchet/tripwire/scan assertion) must carry its quoted mutation proof — planted violation RED, anchor drift loud, decoy GREEN — in the task transparencyReport before review (skills/do-phase/references/guard-mutation-proof.md)',
   ]
   if (cell.closureItest) notes.push('hardening closure integration test required — never defers (both modes)')
   if (cell.e2e === 'deferred') notes.push('e2e defers to the arc end (do-arc Step 8)')

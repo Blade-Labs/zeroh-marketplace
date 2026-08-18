@@ -626,3 +626,26 @@ test('gate plan — a -spec SOURCE module selects its colocated .test.ts, and ne
     )
   }
 })
+
+test('gate plan — the guard-mutation-proof obligation rides notes on EVERY plan, whatever the kind', () => {
+  // The plan is the one artifact both execution lanes provably read (the arc skill echoes it,
+  // the workflow renders it into the executor prompt), so a standing executor obligation only
+  // reaches the executor if it is a notes row — and only stays there if a test pins it.
+  const guardRows = (plan) => plan.notes.filter((n) => n.includes('guard-mutation-proof'))
+  for (const [phaseNum, kind] of [
+    [5007, 'logic'],
+    [5008, 'hardening'],
+  ]) {
+    const repo = makeRepo()
+    repo.writePhase(phaseNum, phaseObj({ phase: phaseNum, kind }))
+    repo.commit(`feat: phase ${phaseNum} — code`, { 'lib/guard.ts': 'export const g = 1\n' })
+    const r = planOf(repo.root, [String(phaseNum)])
+    assert.equal(r.code, 0, r.stderr)
+    assert.equal(r.plan.kind, kind, 'the fixture kind reaches the plan')
+    assert.equal(
+      guardRows(r.plan).length,
+      1,
+      `kind ${kind}: exactly one guard-mutation-proof note; got ${JSON.stringify(r.plan.notes)}`,
+    )
+  }
+})
