@@ -67,6 +67,8 @@ For each task in order:
    so confirm a nonzero executed-test count before trusting a pass. A UI change runs `build`. **Any run expected
    under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (a session
    event kills the Monitor's wake silently; the long-run protocol covers genuinely long runs).
+   A NEW guard (a check that reds when a claim about the TREE goes false) is mutation-proven per
+   `references/guard-mutation-proof.md` before its commit, three results quoted; unproven = undone.
 3. **Commit** — `<type>(<scope>): phase N — <task title>`. First, when the consumer binds a
    formatter (the `lint-diff` binding's `--write` twin, e.g. biome), run it on the task's
    touched files. A doc-touching task follows
