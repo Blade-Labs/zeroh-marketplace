@@ -40,7 +40,9 @@ three-mutation proof in the task's `transparencyReport`
 guard and demand the three quotes — do NOT spend the round deriving the mutations the executor owed, which
 is exactly the trade that made review the expensive place to discover a vacuous guard. A **PRESENT** proof
 is AUDITED, not repeated: re-run exactly ONE of the three mutations, your choice, and confirm it reproduces
-the quoted result; a quote that does not reproduce is a finding about the guard AND the report.
+the quoted result; a quote that does not reproduce is a finding about the guard AND the report. Your sample
+mutation is a SCRATCH edit on a shared checkout — revert it and verify the revert before you report, or it
+becomes the next round's phantom finding.
 
 **Verify-then-report (mandatory).** Before reporting ANY finding, re-`Read` the flagged lines and confirm
 it exists in the CURRENT file state (the diff may be stale relative to later gate fixes). **A finding you

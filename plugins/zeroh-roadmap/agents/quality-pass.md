@@ -23,7 +23,7 @@ after you and owns bugs/logic/business-rules); a bug you notice goes under BUGS 
    `skills/do-phase/references/guard-mutation-proof.md` and quote the three results in your report. Catching
    it here is a round-0 fix; letting it reach the reviewer costs a whole correctness round.
 
-**AUTO-FIX** all three + same-repo breaking-contract updates (rename every caller) + DB/schema migrations
+**AUTO-FIX** all four + same-repo breaking-contract updates (rename every caller) + DB/schema migrations
 (apply + `SURFACED`). **HARD-STOP (escalate, tagged):** `[MULTI-REPO]` (caller in another repo) ·
 `[SCOPED-OUT]` (fix needs a service/module this phase scoped out) · `[PRODUCT]` (needs a product/UX
 decision) · `[SPECULATIVE]` (multiple valid approaches). **In doubt → `[SPECULATIVE]`** (a wrong auto-fix

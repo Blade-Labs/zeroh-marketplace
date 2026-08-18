@@ -258,11 +258,17 @@ the drift lanes:
   already carries its proof by construction. The obligation binds checks whose subject is the TREE'S
   SHAPE, where red-first-against-implementation has no meaning.
 - **The carrier is one UNCONDITIONAL gate-plan notes row** (`cli/commands/gate.mjs`, beside the
-  standing decision-2b row), pinned by a test in `cli/commands/gate.test.mjs`. Both lanes already
-  read the plan (do-arc echoes it, `renderGatePlan` puts it in the executor prompt), so one row
-  propagates the obligation with no prompt-assembly change. Keying it to `kind` or `reviewScope` was
-  rejected: guards get authored under any kind, and the row is a harmless no-op for a phase that
-  authors none.
+  standing decision-2b row), pinned by a test in `cli/commands/gate.test.mjs`. Keying it to `kind`
+  or `reviewScope` was rejected: guards get authored under any kind, and the row is a harmless no-op
+  for a phase that authors none.
+  **Reach, stated exactly** (the plan's own claim that "both lanes read the notes" was FALSE and the
+  gate caught it): the row reaches the do-arc session, which echoes the plan verbatim. It does NOT
+  reach the workflow-lane executor prompt — `renderGatePlan` (`cli/lib/workflow-steps.mjs`) renders
+  slots, scopes, floors and agents, never `plan.notes`. What carries the obligation into BOTH lanes
+  is `agents/phase-executor.md` + `skills/do-phase/SKILL.md`, which every executor loads whatever the
+  lane; the notes row is the supplementary carrier, not the only one. Whether `renderGatePlan` should
+  render notes at all is a SEPARATE decision (it would add every note to every executor prompt, on a
+  protocol-load budget already red) and is deliberately not taken here.
 - **The reviewer flips from discoverer to auditor** (`agents/code-reviewer.md`, and one stage
   earlier in `agents/quality-pass.md` as a round-0 fix-now item): a missing proof is itself a
   finding, a present proof is audited by re-running exactly ONE mutation of the reviewer's choosing.

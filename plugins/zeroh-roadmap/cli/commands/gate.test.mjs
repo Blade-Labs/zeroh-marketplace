@@ -628,9 +628,15 @@ test('gate plan — a -spec SOURCE module selects its colocated .test.ts, and ne
 })
 
 test('gate plan — the guard-mutation-proof obligation rides notes on EVERY plan, whatever the kind', () => {
-  // The plan is the one artifact both execution lanes provably read (the arc skill echoes it,
-  // the workflow renders it into the executor prompt), so a standing executor obligation only
-  // reaches the executor if it is a notes row — and only stays there if a test pins it.
+  // The plan is what the do-arc session echoes verbatim, so an obligation put here reaches that
+  // lane and stays only while a test pins it. (renderGatePlan does NOT render notes into the
+  // workflow-lane prompt — the executor card carries the obligation there; see DESIGN-NOTES.)
+  // The row cites a reference file, and the substring assertion below lives inside gate.mjs's own
+  // string: it would stay green while that citation dangled, so pin the file's existence too.
+  assert.ok(
+    existsSync(join(HERE, '..', '..', 'skills', 'do-phase', 'references', 'guard-mutation-proof.md')),
+    'the cited reference file exists',
+  )
   const guardRows = (plan) => plan.notes.filter((n) => n.includes('guard-mutation-proof'))
   for (const [phaseNum, kind] of [
     [5007, 'logic'],
