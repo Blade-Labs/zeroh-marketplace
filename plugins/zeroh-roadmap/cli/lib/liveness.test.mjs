@@ -643,3 +643,135 @@ test('29c) a keyFile co-declared only by a CLOSED phase of another arc still ans
   assert.equal(r.verdict, 'ALIVE', 'a closed phase is not a competing lane')
   assert.match(r.evidence.activity, /exclusively-declared keyFile/)
 })
+
+// ── 2384.1 — PHASE-KEYED TRANSCRIPT DISCOVERY. The 2026-08-18 incident: a subagent executor two
+// hours into one long live-estate task read STALLED on beacon age alone, because the transcript
+// row's only input was `sidecar.transcriptDir` and NOTHING in the plugin ever writes that field.
+// The engine now finds the transcript itself, by the phase the agent was spawned for.
+
+/**
+ * A hermetic stand-in for the harness tasks root (<root>/<session>/tasks/<id>.output → an
+ * agent-<id>.jsonl). `spec` is { session: { id: body|null } }; a null body plants a DANGLING
+ * symlink, which is what a reaped session leaves behind.
+ */
+function makeTasksRoot(spec) {
+  const root = newTmp()
+  const targets = {}
+  for (const [session, files] of Object.entries(spec)) {
+    const tdir = join(root, session, 'tasks')
+    mkdirSync(tdir, { recursive: true })
+    for (const [id, body] of Object.entries(files)) {
+      const target = join(tdir, `agent-${id}.jsonl`)
+      if (body !== null) {
+        writeFileSync(target, body)
+        targets[id] = target
+      }
+      symlinkSync(target, join(tdir, `${id}.output`))
+    }
+  }
+  return { root, targets }
+}
+
+/** The head of a real executor transcript: the spawn prompt naming the phase file it was given. */
+const spawnPrompt = (phase) =>
+  JSON.stringify({
+    type: 'user',
+    timestamp: isoAgo(120),
+    message: { role: 'user', content: `Run do-phase for phase ${phase}. Read roadmap/phases/phase-${phase}.phase.ts FIRST.` },
+  }) + '\n'
+
+test('31) DISCOVERY: a subagent transcript attributed by its spawn-prompt phase vouches for the arc', () => {
+  // The incident shape exactly: a 135-minute-cold beacon, no commits, no keyFile writes — and a
+  // transcript growing continuously the whole time, which nothing could see.
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 700, event: 'task-start', detail: '700.4 one long live-estate drive' }])
+  writePhaseFile(d, 700, 'MINE')
+  writePhaseFile(d, 900, 'SIBLING')
+  const { root, targets } = makeTasksRoot({
+    'sess-a': { aaa111: spawnPrompt(900) }, // another lane's executor
+    'sess-b': { bbb222: spawnPrompt(700) }, // ours
+  })
+  const stop = startAppender(targets.bbb222)
+  try {
+    const r = run(sc, [], { LIVENESS_TASKS_ROOT: root, LIVENESS_PROBE_MS: '400', LIVENESS_PREBEACON_GRACE_MIN: '0' })
+    assert.equal(r.verdict, 'QUIET', 'a growing transcript is a live executor, whatever the beacon age says')
+    assert.match(r.evidence.transcript, /grew: true/)
+    assert.ok(r.evidence.transcript.includes(targets.bbb222), `evidence must name the RESOLVED target: ${r.evidence.transcript}`)
+    assert.match(r.evidence.transcript, /target mtime/, 'the forensic reader must not need the stat -L trap')
+  } finally {
+    stop()
+  }
+})
+
+test('32) DISCOVERY: a FOREIGN phase\'s transcript never vouches for this arc', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 701, event: 'task-start' }])
+  writePhaseFile(d, 701, 'MINE')
+  writePhaseFile(d, 901, 'SIBLING')
+  const { root, targets } = makeTasksRoot({ 'sess-a': { ccc333: spawnPrompt(901) } })
+  const stop = startAppender(targets.ccc333)
+  try {
+    const r = run(sc, [], { LIVENESS_TASKS_ROOT: root, LIVENESS_PROBE_MS: '400', LIVENESS_PREBEACON_GRACE_MIN: '0' })
+    assert.ok(!['ALIVE', 'QUIET'].includes(r.verdict), `a sibling lane's agent must not vouch for this arc; got ${r.verdict}`)
+    assert.match(r.evidence.transcript, /no transcript attributable/, `and the reader is told the scan RAN: ${r.evidence.transcript}`)
+  } finally {
+    stop()
+  }
+})
+
+test('32b) DISCOVERY: a phase number our own merely PREFIXES is not ours', () => {
+  // Ours is phase 70; the transcript belongs to phase 700. A substring probe for "phase-70" hits
+  // "phase-700.phase.ts" and adopts a stranger — the false-ALIVE direction this engine must never
+  // fail in. Only the full `phase-<N>.phase.ts` token can decide it.
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 70, event: 'task-start' }])
+  writePhaseFile(d, 70, 'MINE')
+  const { root, targets } = makeTasksRoot({ 'sess-a': { ddd444: spawnPrompt(700) } })
+  const stop = startAppender(targets.ddd444)
+  try {
+    const r = run(sc, [], { LIVENESS_TASKS_ROOT: root, LIVENESS_PROBE_MS: '400', LIVENESS_PREBEACON_GRACE_MIN: '0' })
+    assert.ok(!['ALIVE', 'QUIET'].includes(r.verdict), `phase-70.phase.ts is not phase-700.phase.ts; got ${r.verdict}`)
+    assert.match(r.evidence.transcript, /no transcript attributable/, `the scan must RUN and reject it: ${r.evidence.transcript}`)
+  } finally {
+    stop()
+  }
+})
+
+test('33) DISCOVERY: an explicit --transcript-dir skips discovery entirely', () => {
+  // The override is the escape hatch, so it must win outright — a discovered transcript quietly
+  // overruling the dir the operator supplied would make the flag unusable for forensics.
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 702, event: 'task-start' }])
+  writePhaseFile(d, 702, 'MINE')
+  const { root, targets } = makeTasksRoot({ 'sess-a': { eee555: spawnPrompt(702) } })
+  const stop = startAppender(targets.eee555)
+  // OUTSIDE the worktree: a freshly written file inside it would answer the newest-worktree-file
+  // activity row and this case would pass for a reason that has nothing to do with discovery.
+  const supplied = join(newTmp(), 'supplied')
+  mkdirSync(supplied, { recursive: true })
+  const flat = join(supplied, 'flat.jsonl')
+  writeFileSync(flat, 'x'.repeat(5000))
+  symlinkSync(flat, join(supplied, 'agent.output'))
+  try {
+    const r = run(sc, ['--transcript-dir', supplied], { LIVENESS_TASKS_ROOT: root, LIVENESS_PROBE_MS: '400', LIVENESS_PREBEACON_GRACE_MIN: '0' })
+    assert.equal(r.verdict, 'STALLED', 'the supplied dir is flat, and it is the only thing that was measured')
+    assert.match(r.evidence.transcript, /5000B/)
+    assert.ok(!r.evidence.transcript.includes(root), `discovery must not run at all: ${r.evidence.transcript}`)
+  } finally {
+    stop()
+  }
+})
+
+test('34) DISCOVERY: a DANGLING .output symlink is skipped without a throw', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 703, event: 'task-start' }])
+  writePhaseFile(d, 703, 'MINE')
+  const { root, targets } = makeTasksRoot({ 'sess-a': { fff666: null, ggg777: spawnPrompt(703) } })
+  const stop = startAppender(targets.ggg777)
+  try {
+    const r = run(sc, [], { LIVENESS_TASKS_ROOT: root, LIVENESS_PROBE_MS: '400', LIVENESS_PREBEACON_GRACE_MIN: '0' })
+    assert.equal(r.verdict, 'QUIET', 'a reaped session\'s leftover symlink must not blind the scan beside it')
+  } finally {
+    stop()
+  }
+})

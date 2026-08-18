@@ -23,8 +23,16 @@
  * The derivation is always reported as evidence.crossRepo, on every path — "no product repo" and
  * "a product repo with no attributable commit" are different diagnoses and the reader needs both.
  *
+ * 2026-08-18 scar (the false STALLED on a LIVE executor): the transcript row's only input was
+ * `sidecar.transcriptDir`, which nothing in the plugin has ever written, so the one signal that can
+ * vouch for a subagent executor mid-task was dormant in every call that did not pass
+ * --transcript-dir, and beacon age decided alone. The engine now DISCOVERS the transcript by the
+ * phase the agent was spawned for (see discoverTranscript). Attribution is by spawn prompt rather
+ * than an arm-time pointer on purpose: a pointer stamped at arm time goes stale the moment the arc
+ * is re-driven by a new session.
+ *
  * Injectable env seams (hermetic tests): LIVENESS_PGREP_CMD, LIVENESS_PROBE_MS (10000),
- * LIVENESS_EXITED_MIN_AGE_MIN (3), LIVENESS_PREBEACON_GRACE_MIN (15).
+ * LIVENESS_EXITED_MIN_AGE_MIN (3), LIVENESS_PREBEACON_GRACE_MIN (15), LIVENESS_TASKS_ROOT.
  */
 import { readFileSync, statSync, realpathSync, readdirSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
 import { execSync, execFileSync } from 'node:child_process'
@@ -32,9 +40,17 @@ import { join, dirname } from 'node:path'
 import { readBeaconLine, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
 import { productRepos, newestKeyFileAgeMin } from './product-repos.mjs'
+import { mainCheckout } from './gitroot.mjs'
 
 const ACTIVITY_COMMIT_MAX_MIN = 15
 const ACTIVITY_FILE_MAX_MIN = 10
+/** Head bytes read from a candidate transcript to attribute it. The spawn prompt is the FIRST
+ *  record, so a bounded head is the whole question — never a scan of a multi-megabyte file. */
+const DISCOVERY_HEAD_BYTES = 64 * 1024
+/** Ceiling on head-reads per discovery pass. Candidates are examined NEWEST FIRST and the first
+ *  attributed one wins, so the cap can only ever drop a transcript that is already hundreds of
+ *  agents stale — which is not the live executor this row exists to find. */
+const DISCOVERY_HEAD_CAP = 200
 const ACTIVITY_SKIP_DIRS = new Set(['.git', 'node_modules', '.building', 'transcripts', 'dist', 'build', '.next', '.turbo', 'coverage'])
 const ACTIVITY_SCAN_CAP = 50_000
 
@@ -270,6 +286,26 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     return keyFilesMemo
   }
 
+  /**
+   * The phase numbers this arc is actually executing — the same membership rule ourKeyFiles uses
+   * (the adopted beacon's phase, plus every in-progress phase carrying this arcId), as a set of
+   * strings. Transcript attribution reads it: an agent belongs to this arc iff its spawn prompt
+   * names one of these phases' files. Memoized within the one verdict, over the SIGNED scan cache.
+   */
+  let phaseNumbersMemo = null
+  function ourPhaseNumbers() {
+    if (phaseNumbersMemo) return phaseNumbersMemo
+    const nums = new Set()
+    if (beaconPhase != null) nums.add(String(beaconPhase))
+    for (const dir of phasesDirs) {
+      for (const scanned of scanPhasesDir(dir)) {
+        if (scanned.status === 'in-progress' && scanned.arcId === arcId && scanned.phase != null) nums.add(String(scanned.phase))
+      }
+    }
+    phaseNumbersMemo = nums
+    return nums
+  }
+
   function newestWorktreeFileAgeMin() {
     let newest = 0
     let visited = 0
@@ -380,6 +416,99 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     } catch {
       return null
     }
+  }
+
+  /** The first `span` bytes of `path` as text. Bounded by construction: a live transcript is
+   *  megabytes and grows while it is read, and only its opening spawn prompt is being asked about. */
+  function readHead(path, span = DISCOVERY_HEAD_BYTES) {
+    try {
+      const size = statSync(path).size
+      const n = Math.min(size, span)
+      if (n <= 0) return ''
+      const buf = Buffer.alloc(n)
+      const fd = openSync(path, 'r')
+      try {
+        readSync(fd, buf, 0, n, 0)
+      } finally {
+        closeSync(fd)
+      }
+      return buf.toString('utf8')
+    } catch {
+      return ''
+    }
+  }
+
+  /**
+   * The harness tasks root for THIS estate: /tmp/claude-<uid>/<project-slug>, where the slug is the
+   * PRIMARY checkout's absolute path with every non-alphanumeric character replaced by a dash.
+   *
+   * The primary rather than the worktree, deliberately: a subagent executor working in a linked
+   * worktree still belongs to the session that spawned it, and the harness files that session under
+   * its own project directory. Overridable via LIVENESS_TASKS_ROOT (hermetic tests, the same env
+   * seam idiom LIVENESS_PGREP_CMD uses). Null when the layout cannot be resolved — never a guess.
+   */
+  function tasksRoot() {
+    if (env.LIVENESS_TASKS_ROOT) return env.LIVENESS_TASKS_ROOT
+    try {
+      const slug = mainCheckout(worktree).replace(/[^A-Za-z0-9-]/g, '-')
+      return join('/tmp', `claude-${process.getuid()}`, slug)
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Find the live executor's transcript by the PHASE it was spawned for (2384.1).
+   *
+   * Attribution is by spawn PROMPT, not by an arm-time pointer: an arm-time transcriptDir stamp
+   * goes stale the moment an arc is re-driven by a new session, which is the vintage-pointer class
+   * this plugin has already paid for once. Both spawn lanes put the phase FILE PATH in the prompt,
+   * and the prompt is the transcript's first record, so a 64KB head-read answers it exactly.
+   *
+   * Candidates are examined newest-first and the first attributed one wins — identical to scanning
+   * everything and taking the newest, at a fraction of the reads. Returns { output, real, mtimeMs }
+   * or null, plus a `scanned` count for the evidence line (a scan that RAN and found nothing is a
+   * different diagnosis from a scan that could not run at all).
+   */
+  function discoverTranscript() {
+    const root = tasksRoot()
+    if (!root) return { transcript: null, root: null, scanned: 0 }
+    const phases = ourPhaseNumbers()
+    const needles = [...phases].map((n) => `phase-${n}.phase.ts`)
+    const candidates = []
+    const readdirSafe = (d) => {
+      try {
+        return readdirSync(d)
+      } catch {
+        return []
+      }
+    }
+    for (const session of readdirSafe(root)) {
+      const tdir = join(root, session, 'tasks')
+      for (const name of readdirSafe(tdir)) {
+        if (!name.endsWith('.output')) continue
+        const p = join(tdir, name)
+        try {
+          const real = realpathSync(p) // a dangling symlink throws here and is simply skipped
+          if (!/agent-.*\.jsonl$/.test(real)) continue
+          candidates.push({ output: p, real, mtimeMs: statSync(real).mtimeMs })
+        } catch {
+          /* reaped between readdir and stat, or a dangling leftover — not evidence either way */
+        }
+      }
+    }
+    candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)
+    let read = 0
+    for (const c of candidates) {
+      if (read >= DISCOVERY_HEAD_CAP) break
+      read++
+      const head = readHead(c.real)
+      // The FULL `phase-<N>.phase.ts` token, never a bare number: `phase-70` prefixes `phase-700`,
+      // and adopting a sibling's transcript is the false-ALIVE direction this engine must never
+      // fail in.
+      if (needles.some((needle) => head.includes(needle))) return { transcript: c, root, scanned: candidates.length }
+    }
+    return { transcript: null, root, scanned: candidates.length }
   }
 
   function exitState(dir) {
@@ -522,14 +651,34 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
 
   const git = gitInfo()
   if (verdict === null) {
+    // Discovery runs ONLY here: every row above has already declined to decide, and this is the one
+    // probe that costs a directory sweep. An explicit transcriptDir skips it outright — the flag is
+    // the operator's escape hatch and must not be quietly overruled by a file the engine picked.
+    const discovery = td == null ? discoverTranscript() : null
+    const found = discovery?.transcript ?? null
+    const d1 = found ? realSize(found.real) : null
     await new Promise((r) => setTimeout(r, PROBE_MS))
     const t2 = transcriptSize(td)
+    const d2 = found ? realSize(found.real) : null
     const log2 = logPath ? realSize(logPath) : null
-    const transcriptGrew = t1 != null && t2 != null && t2 > t1
+    const transcriptGrew = (t1 != null && t2 != null && t2 > t1) || (d1 != null && d2 != null && d2 > d1)
     const logGrew = log1 != null && log2 != null && log2 > log1
     const hits = pgrepHits()
 
-    evidence.transcript = td == null ? 'not recorded' : t1 == null ? `no *.output under ${td}` : `${t1}B → ${t2}B (grew: ${transcriptGrew})`
+    evidence.transcript =
+      td != null
+        ? t1 == null
+          ? `no *.output under ${td}`
+          : `${t1}B → ${t2}B (grew: ${transcriptGrew})`
+        : found
+          // The RESOLVED target and its own mtime, so forensics never need `stat -L` on a symlink —
+          // reading the link's own mtime is what misread a live executor as dead in the incident.
+          ? `discovered ${found.real} (target mtime ${((now - found.mtimeMs) / 60000).toFixed(1)}min old): `
+            + `${d1}B → ${d2}B (grew: ${transcriptGrew})`
+          : discovery.root == null
+            ? 'no harness tasks root resolved — pass --transcript-dir to supply one'
+            : `no transcript attributable to this arc's phases among ${discovery.scanned} candidate(s) under `
+              + `${discovery.root} — pass --transcript-dir to supply one`
     if (logPath) evidence.log = `${logPath}: ${log1}B → ${log2}B (grew: ${logGrew})`
     evidence.pgrep = `${hits} process(es) match the worktree`
 
