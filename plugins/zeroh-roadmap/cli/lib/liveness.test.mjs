@@ -673,10 +673,11 @@ function makeTasksRoot(spec) {
 }
 
 /** The head of a real executor transcript: the spawn prompt naming the phase file it was given. */
-const spawnPrompt = (phase) =>
+const spawnPrompt = (phase, agent = 'zeroh-roadmap:phase-executor') =>
   JSON.stringify({
     type: 'user',
     timestamp: isoAgo(120),
+    attributionAgent: agent,
     message: { role: 'user', content: `Run do-phase for phase ${phase}. Read roadmap/phases/phase-${phase}.phase.ts FIRST.` },
   }) + '\n'
 
@@ -821,4 +822,46 @@ test('37) UNOBSERVED never outranks a life signal that DID fire', () => {
   const r = run(sc, [], { LIVENESS_TASKS_ROOT: emptyRoot })
   assert.equal(r.verdict, 'ALIVE', 'a fresh beacon decides long before the probe block is reached')
   assert.equal(r.evidence.unobserved, undefined)
+})
+
+// ── 2384 gate R2 — naming the phase file is NOT identity. The gate's own reviewers are spawned
+// WITH the phase file path in their prompt, so on the live estate three transcripts named
+// phase-2384.phase.ts and none of them was the executor. A running reviewer would have vouched
+// QUIET for a dead executor, and a finished flat one would have "corroborated" its STALLED —
+// evidence about the wrong agent either way.
+
+test('38) R2: a REVIEWER transcript naming this arc phase never vouches, however fast it grows', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 708, event: 'task-start' }])
+  writePhaseFile(d, 708, 'MINE')
+  const { root, targets } = makeTasksRoot({
+    'sess-a': { rev111: spawnPrompt(708, 'zeroh-roadmap:code-reviewer') },
+  })
+  const stop = startAppender(targets.rev111)
+  try {
+    const r = run(sc, [], { LIVENESS_TASKS_ROOT: root, LIVENESS_PROBE_MS: '400', LIVENESS_PREBEACON_GRACE_MIN: '0' })
+    assert.ok(!['ALIVE', 'QUIET'].includes(r.verdict), `a reviewer is not the executor; got ${r.verdict}`)
+    assert.match(r.evidence.transcript, /no transcript attributable/)
+  } finally {
+    stop()
+  }
+})
+
+test('38b) R2: an UNATTRIBUTED transcript is refused too — vouching needs the agent type proven', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 709, event: 'task-start' }])
+  writePhaseFile(d, 709, 'MINE')
+  const root = newTmp()
+  const tdir = join(root, 'sess-a', 'tasks')
+  mkdirSync(tdir, { recursive: true })
+  const target = join(tdir, 'agent-plain.jsonl')
+  writeFileSync(target, JSON.stringify({ type: 'user', message: { role: 'user', content: 'roadmap/phases/phase-709.phase.ts' } }) + '\n')
+  symlinkSync(target, join(tdir, 'plain.output'))
+  const stop = startAppender(target)
+  try {
+    const r = run(sc, [], { LIVENESS_TASKS_ROOT: root, LIVENESS_PROBE_MS: '400', LIVENESS_PREBEACON_GRACE_MIN: '0' })
+    assert.ok(!['ALIVE', 'QUIET'].includes(r.verdict), `unattributed must not vouch; got ${r.verdict}`)
+  } finally {
+    stop()
+  }
 })

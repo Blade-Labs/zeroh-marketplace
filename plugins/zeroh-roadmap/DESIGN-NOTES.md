@@ -292,9 +292,18 @@ Four contracts came out of it, and they hold together — each closes one link o
   (`cli/lib/liveness.mjs`). The growth row existed but its only input was `sidecar.transcriptDir`,
   which nothing in the plugin has ever written, so it was dormant in every call that did not pass
   `--transcript-dir`. The engine now derives the harness tasks root from the PRIMARY checkout and
-  attributes a transcript by the `phase-<N>.phase.ts` its spawn prompt names. An arm-time stamp was
-  rejected outright: it goes stale the moment an arc is re-driven by a new session, which is the
-  vintage-pointer class the estate has already paid for once.
+  attributes a transcript by the `phase-<N>.phase.ts` its spawn prompt names AND the
+  `attributionAgent` that says it is the executor's. An arm-time stamp was rejected outright: it
+  goes stale the moment an arc is re-driven by a new session, which is the vintage-pointer class the
+  estate has already paid for once.
+  **Naming the phase file is not identity** (gate R2, found by the round-1 review with live
+  evidence): the gate's own reviewers are spawned WITH the phase file path in their prompt, so three
+  live transcripts named `phase-2384.phase.ts` and not one was the executor. The needle alone let a
+  running reviewer vouch QUIET for a dead executor, and a finished flat one "corroborate" its
+  STALLED. `cli/lib/agent-transcript.mjs` is now the one reader for both questions, and the two
+  consumer classes take OPPOSITE defaults on a missing attribution: a signal that VOUCHES FOR LIFE
+  (liveness discovery, the heartbeat) refuses an unattributed transcript, while the Stop guard,
+  which demands work rather than vouching for it, keeps treating one as before.
 - **STALLED requires a PROBED-negative signal; anything else is UNOBSERVED.** The transcript is the
   only true liveness probe — it grows continuously while an agent runs, so measuring it flat is
   evidence of death. Every other row is evidence of LIFE whose absence proves nothing: a long task

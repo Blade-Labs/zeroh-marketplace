@@ -58,7 +58,7 @@ const fence = (obj) => 'Here is my result:\n```json\n' + JSON.stringify(obj, nul
 test('H1 — an armed executor ending in bare prose → block with the exact §3 reason', () => {
   const root = guardRepo()
   const t = transcript(root, 'Committed 9500.1, prepping 9500.2. Standing by.')
-  const r = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
+  const r = runGuard(root, { session_id: 's1', transcript_path: t, agent_transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
   assert.equal(r.code, 0)
   const decision = JSON.parse(r.stdout)
   assert.equal(decision.decision, 'block')
@@ -74,7 +74,7 @@ test('H1 — an armed executor ending in bare prose → block with the exact §3
 test('H2 — a final message carrying a valid typed PhaseExecutionResult → allow + result-returned beacon', () => {
   const root = guardRepo()
   const t = transcript(root, fence(validResult))
-  const r = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
+  const r = runGuard(root, { session_id: 's1', transcript_path: t, agent_transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
   assert.equal(r.stdout.trim(), '', `no block; got: ${r.stdout}`)
   const b = readFileSync(join(root, '.building', '9500-executor.jsonl'), 'utf8')
   assert.match(b, /"event":"result-returned"/, 'the result-returned beacon event is stamped')
@@ -84,7 +84,7 @@ test('H2 — a final message carrying a valid typed PhaseExecutionResult → all
 test('H3 — phase already done with executionResult persisted, prose ending → allow', () => {
   const root = guardRepo({ status: 'done', tasksDone: [true, true], executionResult: true })
   const t = transcript(root, 'All done here.')
-  const r = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
+  const r = runGuard(root, { session_id: 's1', transcript_path: t, agent_transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
   assert.equal(r.stdout.trim(), '', 'a durable persisted result allows a prose ending')
 })
 
@@ -115,11 +115,11 @@ test('H5 — fail-open: an unarmed agent AND a broken-config path both stay unto
   const root = guardRepo()
   const t = transcript(root, 'Standing by, prose ending.')
   // (a) no arm channel at all
-  const unarmed = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' })
+  const unarmed = runGuard(root, { session_id: 's1', transcript_path: t, agent_transcript_path: t, hook_event_name: 'SubagentStop' })
   assert.equal(unarmed.code, 0)
   assert.equal(unarmed.stdout.trim(), '', 'unarmed → untouched')
   // (b) config load failure (ROADMAP_CONFIG → nonexistent) even WITH arming env → still fail-open
-  const broken = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_CONFIG: join(root, 'roadmap', 'does-not-exist.json'), ROADMAP_EXECUTOR_PHASE: '9500' })
+  const broken = runGuard(root, { session_id: 's1', transcript_path: t, agent_transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_CONFIG: join(root, 'roadmap', 'does-not-exist.json'), ROADMAP_EXECUTOR_PHASE: '9500' })
   assert.equal(broken.code, 0)
   assert.equal(broken.stdout.trim(), '', 'a config load failure fail-opens — the hook never bricks an unrelated agent')
 })
@@ -129,7 +129,7 @@ test('H6 — a main-session Stop with roadmap/.arc-mode + a member in-progress �
   const root = guardRepo({ arcMode: true })
   writeFileSync(join(root, '.building', 'FX-executor.jsonl'), JSON.stringify({ ts: new Date().toISOString(), event: 'task-start' }) + '\n')
   const t = transcript(root, 'Interrupting my own session.')
-  const r = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'Stop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
+  const r = runGuard(root, { session_id: 's1', transcript_path: t, agent_transcript_path: t, hook_event_name: 'Stop' }, { ROADMAP_EXECUTOR_PHASE: '9500' })
   assert.equal(r.stdout.trim(), '', 'a Stop with .arc-mode must NOT block')
   assert.match(r.stderr, /roadmap arc next/, 'the warning names the re-entry')
 })
@@ -139,7 +139,7 @@ test('H7 — the arm-FILE channel (.building/<N>-executor.armed) blocks a prose 
   const root = guardRepo()
   writeFileSync(join(root, '.building', '9500-executor.armed'), 's1') // session-bound to the payload session
   const t = transcript(root, 'Prose ending, no result.')
-  const r = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }) // NO env
+  const r = runGuard(root, { session_id: 's1', transcript_path: t, agent_transcript_path: t, hook_event_name: 'SubagentStop' }) // NO env
   assert.equal(JSON.parse(r.stdout).decision, 'block', 'file arming ≡ env arming')
   assert.equal(JSON.parse(r.stdout).reason, REASON(9500, '9500.2'))
 })
@@ -149,7 +149,7 @@ test('H8 — the arm file removed after the result-check (disarm) → fail-open 
   // No arm file present (the disarm removed it), no env → a disarmed lane never blocks a later turn.
   assert.ok(!existsSync(join(root, '.building', '9500-executor.armed')))
   const t = transcript(root, 'A later prose turn after disarm.')
-  const r = runGuard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' })
+  const r = runGuard(root, { session_id: 's1', transcript_path: t, agent_transcript_path: t, hook_event_name: 'SubagentStop' })
   assert.equal(r.code, 0)
   assert.equal(r.stdout.trim(), '', 'a disarmed lane fail-opens')
 })

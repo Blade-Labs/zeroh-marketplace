@@ -40,7 +40,7 @@ outputs. The measured do-arc protocol load vs the ~49k baseline is recorded here
 | :52-79 execution-band thresholds (10/4/3/2) + per-phase classification | enforced-by-code(`roadmap arc next` band + `roadmap gate plan`; classifyBand in cli/lib/ladder.mjs) | thresholds are named constants in ladder.mjs; the workflow's classifyBandRoute routes the band |
 | :81-89 arc-level task checklist prose | obsolete-with-evidence(per-plane workflows own phase sequencing — the arc/task-tier ritual is gone) | workflows/arc-plane.workflow.mjs |
 | :91-99 build-sidecar registration shape | enforced-by-code(`roadmap arm`/`roadmap disarm`; cli/lib/sidecar.mjs) | arm writes the sidecar + refuses a taken lane |
-| :107-209 watchdog liveness verdicts (stalled/exited reads) | enforced-by-code(`roadmap watch` exit 3/4 + hooks/executor-result-guard.mjs) | cli/commands/watch.mjs |
+| :107-209 watchdog liveness verdicts (stalled/exited reads) | enforced-by-code(`roadmap watch` exit 3/4/5 + hooks/executor-result-guard.mjs) | cli/commands/watch.mjs |
 | :107-209 SendMessage resume-from-transcript protocol | obsolete-with-evidence(one-task-one-commit + `roadmap arc next` re-derivation bound the loss to the in-flight task; a relaunch fast-forwards) | cli/lib/derive.mjs deriveResume |
 | :107-209 nudge → relaunch → escalate residue | enforced-by-code(thin do-arc's ~4-line reaction over `roadmap watch` verdicts) | skills/do-arc/SKILL.md |
 | :107-209 dated incidents 2026-07-03/05/09/11/12 + beacon-sentinel narrative | relocated | DESIGN-NOTES.md §do-arc — watchdog & recovery-ladder incidents |

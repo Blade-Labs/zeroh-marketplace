@@ -1,55 +1,45 @@
 /**
- * spawn-phase — the ONE answer to "which phase is the agent making this call?" (2384 gate R1).
+ * spawn-phase — the hook-side answer to "which phase is the agent making this call executing?"
+ * (2384 gate R1, narrowed by R2).
  *
  * Both executor hooks need it and must agree: the Stop guard uses it to demand a typed result from
  * the executor whose phase is armed, and the heartbeat uses it to stamp only that executor's
- * beacon. Session id cannot answer the question — an arm carries the ORCHESTRATING session's id and
- * every subagent of that session carries the same one, which is exactly why the guard stopped
- * trusting session-matching alone.
+ * beacon. Session id cannot carry the question — an arm records the ORCHESTRATING session's id and
+ * every subagent of that session reports the same one, which is why the guard stopped trusting
+ * session-matching alone.
  *
  * Two channels, in order:
  *   (a) ROADMAP_EXECUTOR_PHASE in the environment — the workflow lane sets it explicitly on the
  *       executor spawn, so it is one phase by construction and needs no parsing.
- *   (b) the FIRST `phase-<N>.phase.ts` in the head of the agent's OWN transcript: both spawn lanes
- *       put the phase file PATH in the prompt, and the prompt is the transcript's first record.
+ *   (b) the agent's OWN transcript head: the phase file its spawn prompt names, AND (for the
+ *       vouching consumer) the `attributionAgent` that says it is the executor. The phase needle
+ *       alone is NOT identity — the gate's reviewers are spawned with the phase file path in their
+ *       prompt too, and one of them stamping a heartbeat would manufacture a false ALIVE.
  *
  * Neither resolving means "not an executor's call", and that is SILENCE — never a fallback to
- * whichever arm a readdir happened to yield first. The agent transcript is used and the SESSION
+ * whichever arm a readdir happened to yield first. The AGENT transcript is read and the SESSION
  * transcript deliberately is not: under a subagent event `transcript_path` is the main session's
  * log, so reading it would attribute the orchestrator's phase to every agent in the session.
  */
-import { existsSync, statSync, openSync, readSync, closeSync } from 'node:fs'
+import { readTranscriptHead, phaseFromHead, isExecutorHead } from '../cli/lib/agent-transcript.mjs'
 
-/** The spawn prompt is the first record; a bounded head is the whole question. */
-const HEAD_BYTES = 64 * 1024
-
-/** The first `phase-<N>.phase.ts` named in `path`'s head, or null (unreadable included). */
+/**
+ * The phase named in `path`'s spawn prompt, whoever wrote it. Used where the caller has ALREADY
+ * established that it is dealing with an executor (the Stop guard applies its own agent-type
+ * exemption downstream) and only needs to know WHICH phase.
+ */
 export function ownPhaseFromTranscript(path) {
-  if (!path || !existsSync(path)) return null
-  try {
-    const size = statSync(path).size
-    const span = Math.min(size, HEAD_BYTES)
-    if (span <= 0) return null
-    const buf = Buffer.alloc(span)
-    const fd = openSync(path, 'r')
-    try {
-      readSync(fd, buf, 0, span, 0)
-    } finally {
-      closeSync(fd)
-    }
-    const m = buf.toString('utf8').match(/phase-(\d+)\.phase\.ts/)
-    return m ? Number(m[1]) : null
-  } catch {
-    return null // unreadable is no-phase, which is silence — the fail-open direction
-  }
+  return phaseFromHead(readTranscriptHead(path))
 }
 
 /**
- * The phase the agent behind this hook payload is executing, or null when the caller is not an
- * executor (the main session, a reviewer, an architect — none of them name a phase file).
+ * The phase this payload's agent is EXECUTING, or null when the caller is not an executor — the
+ * main session, a reviewer, an architect. Used by signals that vouch for life, so the agent type
+ * must be proven, not assumed.
  */
 export function actingPhase(payload = {}, env = process.env) {
   const envN = env.ROADMAP_EXECUTOR_PHASE
   if (envN && /^\d+$/.test(envN)) return Number(envN)
-  return ownPhaseFromTranscript(payload.agent_transcript_path)
+  const head = readTranscriptHead(payload.agent_transcript_path)
+  return isExecutorHead(head) ? phaseFromHead(head) : null
 }

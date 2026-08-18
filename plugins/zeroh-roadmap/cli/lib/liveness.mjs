@@ -33,7 +33,9 @@
  * is re-driven by a new session. The same scar split the fall-through: STALLED now requires that
  * the transcript row was actually PROBED, because callers act on that word by respawning, and an
  * estate where no life signal could be measured is UNOBSERVED — which never claims life either, it
- * only refuses to claim death.
+ * only refuses to claim death. Attribution requires BOTH the phase needle and the executor agent
+ * type (cli/lib/agent-transcript.mjs): the gate's own reviewers are spawned with the phase file
+ * path in their prompt, so the needle alone let a running code-reviewer vouch for a dead executor.
  *
  * Injectable env seams (hermetic tests): LIVENESS_PGREP_CMD, LIVENESS_PROBE_MS (10000),
  * LIVENESS_EXITED_MIN_AGE_MIN (3), LIVENESS_PREBEACON_GRACE_MIN (15), LIVENESS_TASKS_ROOT.
@@ -45,12 +47,10 @@ import { readBeaconLine, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
 import { productRepos, newestKeyFileAgeMin } from './product-repos.mjs'
 import { mainCheckout } from './gitroot.mjs'
+import { readTranscriptHead, isExecutorHead } from './agent-transcript.mjs'
 
 const ACTIVITY_COMMIT_MAX_MIN = 15
 const ACTIVITY_FILE_MAX_MIN = 10
-/** Head bytes read from a candidate transcript to attribute it. The spawn prompt is the FIRST
- *  record, so a bounded head is the whole question — never a scan of a multi-megabyte file. */
-const DISCOVERY_HEAD_BYTES = 64 * 1024
 /** Ceiling on head-reads per discovery pass. Candidates are examined NEWEST FIRST and the first
  *  attributed one wins, so the cap can only ever drop a transcript that is already hundreds of
  *  agents stale — which is not the live executor this row exists to find. */
@@ -422,26 +422,6 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     }
   }
 
-  /** The head of `path` as text. Bounded by construction: a live transcript is megabytes and grows
-   *  while it is read, and only its opening spawn prompt is being asked about. */
-  function readHead(path) {
-    try {
-      const size = statSync(path).size
-      const n = Math.min(size, DISCOVERY_HEAD_BYTES)
-      if (n <= 0) return ''
-      const buf = Buffer.alloc(n)
-      const fd = openSync(path, 'r')
-      try {
-        readSync(fd, buf, 0, n, 0)
-      } finally {
-        closeSync(fd)
-      }
-      return buf.toString('utf8')
-    } catch {
-      return ''
-    }
-  }
-
   /**
    * The harness tasks root for THIS estate: /tmp/claude-<uid>/<project-slug>, where the slug is the
    * PRIMARY checkout's absolute path with every non-alphanumeric character replaced by a dash.
@@ -506,7 +486,13 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     for (const c of candidates) {
       if (read >= DISCOVERY_HEAD_CAP) break
       read++
-      const head = readHead(c.real)
+      const head = readTranscriptHead(c.real)
+      // TWO conditions, and the agent one is not optional (gate R2). The gate's own reviewers are
+      // spawned WITH the phase file path in their prompt, so the phase needle alone matched a
+      // code-reviewer's transcript exactly like the executor's — and a running reviewer would then
+      // have vouched QUIET for a dead executor. Only a transcript that SAYS it is the executor's
+      // can speak for the executor.
+      if (!isExecutorHead(head)) continue
       // The FULL `phase-<N>.phase.ts` token, never a bare number: `phase-70` prefixes `phase-700`,
       // and adopting a sibling's transcript is the false-ALIVE direction this engine must never
       // fail in.

@@ -87,7 +87,13 @@ function detectArm(worktree, payload, cfgOk) {
   if (envN && /^\d+$/.test(envN)) return { phase: Number(envN), channel: 'env' }
   // Channels (b)/(c) are executor-MATCHED: without the agent's own phase there is nothing to match
   // against, and guessing from readdir order is the wrong-wake defect itself.
-  const ownPhase = ownPhaseFromTranscript(payload.agent_transcript_path ?? payload.transcript_path)
+  // WHOSE transcript is the actor's own? Under SubagentStop that is `agent_transcript_path` and
+  // ONLY that: `transcript_path` is the MAIN SESSION log, so falling back to it there would
+  // attribute the ORCHESTRATOR's phase to every stopping subagent — the wrong-wake class this
+  // matching exists to close, re-opened one line lower (gate R2). Under a main-session Stop the
+  // session log IS the actor's own, and that path only ever warns, so the fallback is correct there.
+  const ownTranscript = payload.agent_transcript_path ?? (payload.hook_event_name === 'Stop' ? payload.transcript_path : null)
+  const ownPhase = ownPhaseFromTranscript(ownTranscript)
   if (ownPhase == null) return null
   let entries = []
   try {

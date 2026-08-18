@@ -125,13 +125,15 @@ function runHook(cwd, payload, env = {}) {
   return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
 }
 
-/** An agent transcript whose spawn prompt names `phase`'s file — how a subagent self-identifies. */
-function agentTranscript(root, phase, tag = String(phase)) {
+/** An agent transcript as the harness really writes one: the spawn prompt naming `phase`'s file,
+ *  AND the `attributionAgent` that says which agent type it belongs to. Both are in record 1. */
+function agentTranscript(root, phase, tag = String(phase), agent = 'zeroh-roadmap:phase-executor') {
   const p = join(root, `agent-${tag}.jsonl`)
   writeFileSync(
     p,
     JSON.stringify({
       type: 'user',
+      attributionAgent: agent,
       message: { role: 'user', content: `Run do-phase for phase ${phase}. Read roadmap/phases/phase-${phase}.phase.ts FIRST.` },
     }) + '\n',
   )
@@ -211,4 +213,40 @@ test('14) R1 — actingPhase: env wins, the AGENT transcript answers second, the
   assert.equal(actingPhase({ transcript_path: session }, {}), null, 'the SESSION transcript is the orchestrator\'s, never the agent\'s identity')
   assert.equal(actingPhase({}, {}), null)
   assert.equal(actingPhase({ agent_transcript_path: join(root, 'gone.jsonl') }, {}), null, 'unreadable is no-phase')
+})
+
+// ── gate R2 — naming the phase file is NOT identity ───────────────────────────────────────
+// Found by the round-1 code review, with live evidence: the gate's own reviewers are spawned WITH
+// the phase file path in their prompt, so on the real estate THREE transcripts named
+// phase-2384.phase.ts and not one of them was the executor (two code-reviewers and a quality-pass).
+// A reviewer stamping a heartbeat is a false ALIVE, and one that lands after phase-complete leaves
+// an arm no disarm can clear.
+
+test('15) R2 — a REVIEWER subagent naming the phase file stamps nothing', () => {
+  const root = makeEstate({ beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
+  const r = runHook(root, {
+    session_id: 's1',
+    cwd: root,
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Grep',
+    agent_transcript_path: agentTranscript(root, 2384, 'reviewer', 'zeroh-roadmap:code-reviewer'),
+  })
+  assert.equal(r.code, 0)
+  assert.equal(beaconLines(root, 2384).length, 1, 'the reviewer reads the phase; it does not execute it')
+})
+
+test('16) R2 — an UNATTRIBUTED transcript stamps nothing either (proof, not assumption)', () => {
+  const root = makeEstate({ beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
+  const p = join(root, 'agent-unattributed.jsonl')
+  writeFileSync(p, JSON.stringify({ type: 'user', message: { role: 'user', content: 'roadmap/phases/phase-2384.phase.ts' } }) + '\n')
+  const r = runHook(root, { session_id: 's1', cwd: root, hook_event_name: 'PostToolUse', tool_name: 'Read', agent_transcript_path: p })
+  assert.equal(r.code, 0)
+  assert.equal(beaconLines(root, 2384).length, 1, 'a signal that VOUCHES FOR LIFE needs the agent type proven')
+})
+
+test('17) R2 — the env channel still identifies the workflow-lane executor with no transcript at all', () => {
+  const root = makeEstate({ beaconEvents: [{ ts: isoAgo(140), phase: 2384, event: 'task-start' }] })
+  const r = runHook(root, { session_id: 's1', cwd: root, hook_event_name: 'PostToolUse', tool_name: 'Bash' }, { ROADMAP_EXECUTOR_PHASE: '2384' })
+  assert.equal(r.code, 0)
+  assert.equal(beaconLines(root, 2384).length, 2, 'the workflow lane sets the env explicitly on the executor spawn')
 })
