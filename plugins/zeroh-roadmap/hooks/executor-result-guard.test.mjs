@@ -65,7 +65,10 @@ ${tasks}
 function writeTranscript(root, finalAssistantText) {
   const p = join(root, 'transcript.jsonl')
   const lines = [
-    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'do phase 1670' }] } },
+    // The spawn prompt names the phase FILE — the contract both spawn lanes satisfy, and what arm
+    // channels (b)/(c) match the stopping agent on since 2384.4. 'do phase 1670' alone was never a
+    // real spawn prompt; the fixture now carries the shape the guard reads.
+    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'do phase 1670 — roadmap/phases/phase-1670.phase.ts' }] } },
     { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: finalAssistantText }] } },
   ]
   writeFileSync(p, lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
@@ -86,7 +89,10 @@ function writeTranscript(root, finalAssistantText) {
 function writeTranscriptEndingOnToolUse(root, finalAssistantText) {
   const p = join(root, 'transcript.jsonl')
   const lines = [
-    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'do phase 1670' }] } },
+    // The spawn prompt names the phase FILE — the contract both spawn lanes satisfy, and what arm
+    // channels (b)/(c) match the stopping agent on since 2384.4. 'do phase 1670' alone was never a
+    // real spawn prompt; the fixture now carries the shape the guard reads.
+    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'do phase 1670 — roadmap/phases/phase-1670.phase.ts' }] } },
     { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: finalAssistantText }] } },
     { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu_1', name: 'Bash', input: { command: 'git log -1' } }] } },
   ]
@@ -393,4 +399,96 @@ test('REGRESSION: a result ONLY in the session transcript does NOT license a sub
   const sessionT = writeTranscript(root, fence(validResult))
   const r = guard(root, { session_id: 's1', transcript_path: sessionT, agent_transcript_path: agentT, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
   assert.equal(JSON.parse(r.stdout).decision, 'block', 'the orchestrator’s prose must never license a subagent’s stop — that is the widening the first fix introduced')
+})
+
+// ── 2384.4: the guard wakes ONLY the executor whose phase is armed ─────────────────────────
+// The 2026-08-18 incident: with 2164 and 2335 both armed by ONE session, detectArm channel (b)
+// returned the FIRST arm file whose sessionId matched — readdir order — and woke executor pe-2335
+// with the 2164 arm, demanding work on a phase that was not its own. The agent correctly refused
+// and burned two ~500k-token turns doing it. The durable identity is the phase named in the
+// agent's own spawn prompt, which the hook already reads the transcript for.
+
+/** A second (or third) phase file in an existing worktree, so one root can hold two armed lanes. */
+function addPhaseFile(root, phase, tasksDone = [true, false]) {
+  const tasks = tasksDone.map((d, i) => `    { id: '${phase}.${i + 1}', done: ${d} }`).join(',\n')
+  writeFileSync(
+    join(root, 'roadmap', 'phases', `phase-${phase}.phase.ts`),
+    `export default {\n  phase: ${phase},\n  status: 'in-progress',\n  tasks: [\n${tasks}\n  ],\n}\n`,
+  )
+}
+
+/** A transcript whose spawn prompt names `phase`'s file — the contract both spawn lanes satisfy
+ *  (do-arc's prompt and buildExecutorPrompt both carry the phase file PATH). `phase: null` writes
+ *  a prompt that names no phase at all: an unrelated subagent. */
+function writeSpawnedTranscript(root, phase, finalAssistantText, tag = String(phase)) {
+  const p = join(root, `transcript-spawn-${tag}.jsonl`)
+  const prompt = phase == null
+    ? 'Review the diff on this branch and report findings.'
+    : `Run do-phase for phase ${phase} end to end. Read roadmap/phases/phase-${phase}.phase.ts FIRST.`
+  const lines = [
+    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: prompt }] } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: finalAssistantText }] } },
+  ]
+  writeFileSync(p, lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
+  return p
+}
+
+test('2384.4a — TWO arms in one session: the stopping agent is matched to ITS OWN phase, never the sibling', () => {
+  const root = makeWorktree() // phase 1670
+  addPhaseFile(root, 1671)
+  // Both armed by the same session. 1670 sorts first in readdir order, which is exactly how the
+  // incident handed a 2335 executor the 2164 arm.
+  writeFileSync(join(root, '.building', '1670-executor.armed'), 's1')
+  writeFileSync(join(root, '.building', '1671-executor.armed'), 's1')
+  const t = writeSpawnedTranscript(root, 1671, 'Prose ending mid-phase, no typed result.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' })
+  const decision = JSON.parse(r.stdout)
+  assert.equal(decision.decision, 'block')
+  assert.equal(decision.reason, REASON(1671, '1671.2'), 'the demand must name the agent\'s OWN phase')
+  assert.ok(!decision.reason.includes('1670'), `never the sibling's arm: ${decision.reason}`)
+})
+
+test('2384.4b — the agent names a phase with NO arm → SILENT (its arm is already cleared)', () => {
+  const root = makeWorktree()
+  addPhaseFile(root, 1671)
+  writeFileSync(join(root, '.building', '1670-executor.armed'), 's1') // only 1670 is armed
+  const t = writeSpawnedTranscript(root, 1671, 'Prose ending, no result.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' })
+  assert.equal(r.code, 0)
+  assert.equal(r.stdout.trim(), '', 'an unarmed phase owes nothing — and the sibling arm is not a substitute')
+})
+
+test('2384.4c — the agent names NO phase → SILENT even with arms present (the misfire class, retired)', () => {
+  const root = makeWorktree()
+  writeFileSync(join(root, '.building', '1670-executor.armed'), 's1')
+  const t = writeSpawnedTranscript(root, null, 'Verdict: clean, no findings.', 'noph')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' })
+  assert.equal(r.code, 0)
+  assert.equal(r.stdout.trim(), '', 'reviewers and test-engineers name no phase file — the armor-prompt workaround retires here')
+})
+
+test('2384.4d — ROADMAP_EXECUTOR_PHASE still wins outright, whatever the transcript names', () => {
+  const root = makeWorktree()
+  addPhaseFile(root, 1671)
+  const t = writeSpawnedTranscript(root, 1671, 'Prose ending, no result.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' }, { ROADMAP_EXECUTOR_PHASE: '1670' })
+  const decision = JSON.parse(r.stdout)
+  assert.equal(decision.decision, 'block')
+  assert.equal(decision.reason, REASON(1670, '1670.2'), 'the workflow lane sets the env explicitly — one phase by construction')
+})
+
+test('2384.4e — the SINGLE-arm executor with a matching transcript behaves exactly as today', () => {
+  const root = makeWorktree()
+  writeFileSync(join(root, '.building', '1670-executor.armed'), 's1')
+  const t = writeSpawnedTranscript(root, 1670, 'Prose ending, no result.')
+  const r = guard(root, { session_id: 's1', transcript_path: t, hook_event_name: 'SubagentStop' })
+  assert.equal(JSON.parse(r.stdout).reason, REASON(1670, '1670.2'))
+})
+
+test('2384.4f — an UNREADABLE transcript is no-phase, so the arm-file channel stays silent (fail-open)', () => {
+  const root = makeWorktree()
+  writeFileSync(join(root, '.building', '1670-executor.armed'), 's1')
+  const r = guard(root, { session_id: 's1', transcript_path: join(root, 'gone.jsonl'), hook_event_name: 'SubagentStop' })
+  assert.equal(r.code, 0)
+  assert.equal(r.stdout.trim(), '', 'never block on a payload we could not inspect')
 })

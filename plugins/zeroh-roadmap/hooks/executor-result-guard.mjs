@@ -7,19 +7,31 @@
  *
  * ARM narrowly, FAIL OPEN outside the arm condition and on ANY internal error — the hook
  * must never brick an unrelated subagent. Arm channels (pre-made decision 6, S18 repair):
- *   (a) ROADMAP_EXECUTOR_PHASE=<N> in the environment, OR
+ *   (a) ROADMAP_EXECUTOR_PHASE=<N> in the environment — absolute precedence, because the
+ *       workflow lane sets it explicitly and is one phase by construction, OR
  *   (b) an arm FILE <worktree>/.building/<N>-executor.armed (written PRE-SPAWN — the
  *       env-propagation-INDEPENDENT second channel; the reliable primary), OR
  *   (c) a <worktree>/.building/<N>-executor.jsonl beacon whose session id matches the
  *       payload session_id (DORMANT until a session-id-carrying beacon writer exists —
  *       today's beacon-stamp.sh writes no session id; driven here by synthetic beacons).
  *
+ * Channels (b) and (c) are EXECUTOR-MATCHED (2384.4): they arm only for the phase the stopping
+ * agent was itself spawned for, read from the FIRST phase-<N>.phase.ts named in its own transcript
+ * head. Session-matching alone returned whichever arm readdir yielded first, so a session running
+ * two executors woke one with the other's arm and demanded work on a phase that was not its own
+ * (2026-08-18: pe-2335 handed the 2164 arm, two ~500k-token turns burned on the refusal). An agent
+ * that names no phase is SILENT always — reviewers, architects and test-engineers name none, which
+ * retires the standing misfires-on-unrelated-subagents class and the armor-prompt workaround with
+ * it. Residual, accepted and named: a NON-executor agent whose prompt happens to quote an armed
+ * phase's file path and which ends on bare prose gets one guard demand — far narrower than the
+ * previous any-subagent exposure, and fail-open on the second stop (stop_hook_active).
+ *
  * Enforcement is hard under SubagentStop (phase executors) and advisory under Stop
  * (a human may interrupt their own inline arc-mode session). The block decision rides
  * the JSON `{"decision":"block","reason":…}` channel; exit code stays 0.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { appendExecutorEvent } from '../cli/lib/beacon.mjs'
@@ -65,6 +77,32 @@ function lastBeaconEvent(path) {
   }
 }
 
+/**
+ * The phase THIS agent was spawned for: the first `phase-<N>.phase.ts` named in the head of its own
+ * transcript. Both spawn lanes put that path in the prompt, and the prompt is the transcript's first
+ * record, so a bounded 64KB head-read answers it exactly. Null when unreadable or when the agent
+ * names no phase — and null is SILENCE, never a fallback to somebody else's arm.
+ */
+function ownPhaseFromTranscript(path) {
+  if (!path || !existsSync(path)) return null
+  try {
+    const size = statSync(path).size
+    const span = Math.min(size, 64 * 1024)
+    if (span <= 0) return null
+    const buf = Buffer.alloc(span)
+    const fd = openSync(path, 'r')
+    try {
+      readSync(fd, buf, 0, span, 0)
+    } finally {
+      closeSync(fd)
+    }
+    const m = buf.toString('utf8').match(/phase-(\d+)\.phase\.ts/)
+    return m ? Number(m[1]) : null
+  } catch {
+    return null // unreadable is no-phase, which is silence — the fail-open direction
+  }
+}
+
 /** Resolve the armed phase + channel, or null (unarmed). */
 function detectArm(worktree, payload, cfgOk) {
   if (!cfgOk) return null
@@ -72,6 +110,10 @@ function detectArm(worktree, payload, cfgOk) {
   // (a) env
   const envN = process.env.ROADMAP_EXECUTOR_PHASE
   if (envN && /^\d+$/.test(envN)) return { phase: Number(envN), channel: 'env' }
+  // Channels (b)/(c) are executor-MATCHED: without the agent's own phase there is nothing to match
+  // against, and guessing from readdir order is the wrong-wake defect itself.
+  const ownPhase = ownPhaseFromTranscript(payload.agent_transcript_path ?? payload.transcript_path)
+  if (ownPhase == null) return null
   let entries = []
   try {
     entries = readdirSync(buildingDir)
@@ -86,6 +128,7 @@ function detectArm(worktree, payload, cfgOk) {
   for (const f of entries) {
     const m = f.match(/^(\d+)-executor\.armed$/)
     if (!m) continue
+    if (Number(m[1]) !== ownPhase) continue // another lane's arm — never this agent's business
     let armedSession = null
     try {
       const raw = readFileSync(join(buildingDir, f), 'utf8').trim()
@@ -102,6 +145,7 @@ function detectArm(worktree, payload, cfgOk) {
   for (const f of entries) {
     const m = f.match(/^(\d+)-executor\.jsonl$/)
     if (!m) continue
+    if (Number(m[1]) !== ownPhase) continue
     const last = lastBeaconEvent(join(buildingDir, f))
     if (last && payload.session_id && last.session_id === payload.session_id) {
       return { phase: Number(m[1]), channel: 'beacon' }
