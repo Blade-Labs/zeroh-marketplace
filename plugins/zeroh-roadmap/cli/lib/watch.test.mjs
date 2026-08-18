@@ -59,12 +59,29 @@ test('sidecar gone → exit 0 immediately', () => {
   assert.match(r.stdout, /sidecar gone/)
 })
 
-test('stale beacon, dead worktree → exit 3 with the STALLED verdict JSON', () => {
+test('stale beacon + a transcript measured FLAT → exit 3 with the STALLED verdict JSON', () => {
+  // 2384.2: STALLED now demands corroboration, so the fixture supplies the life probe that comes
+  // back negative — which is what the production estate looks like for a genuinely dead executor
+  // (its transcript is still on disk; it simply stopped growing).
   const d = newTmp()
   const sc = makeArc(d, 'W1', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
-  const r = runWatch(sc)
+  const tdir = join(d, 'transcripts')
+  mkdirSync(tdir, { recursive: true })
+  const target = join(tdir, 'agent-w1.jsonl')
+  writeFileSync(target, 'x'.repeat(4096))
+  symlinkSync(target, join(tdir, 'aw1.output'))
+  const r = runWatch(sc, ['--transcript-dir', tdir])
   assert.equal(r.status, 3)
   assert.match(r.stdout, /"verdict": "STALLED"/)
+})
+
+test('stale beacon, NOTHING probeable → exit 5 with the UNOBSERVED verdict JSON, never 3', () => {
+  // The whole point of the split: a caller that respawns on 3 must not respawn on this.
+  const d = newTmp()
+  const sc = makeArc(d, 'W1b', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
+  const r = runWatch(sc)
+  assert.equal(r.status, 5)
+  assert.match(r.stdout, /"verdict": "UNOBSERVED"/)
 })
 
 test('completed final assistant turn → exit 4 with the EXITED verdict JSON', () => {

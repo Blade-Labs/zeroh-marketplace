@@ -7,7 +7,13 @@
  * an arcId resolved to <roadmap>/arcs/.building/<arcId>.json. `--once` = one readLiveness
  * → JSON → exit 0 (the liveness contract). Loop mode ports executor-watch: a 2-consecutive-
  * STALLED debounce, and the exit vocabulary 0 (sidecar gone / max-hours) · 3 STALLED · 4
- * EXITED · 2 usage. Every LIVENESS_* env seam passes through so the ported tests stay hermetic.
+ * EXITED · 5 UNOBSERVED · 2 usage. Every LIVENESS_* env seam passes through so the ported tests
+ * stay hermetic.
+ *
+ * 5 is its own exit rather than a 3 (2384.2): the two verdicts demand OPPOSITE reactions. A 3 says
+ * an independent life probe came back negative, so respawning is defensible; a 5 says nothing could
+ * be probed, and respawning on it is how two executors land on one live phase. Same 2-consecutive
+ * debounce, because one poll of either is still a boundary artifact.
  */
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -61,6 +67,7 @@ export default async function run(argv) {
   const maxMs = Number(flagVal(argv, '--max-hours') ?? 6) * 3_600_000
   const started = Date.now()
   let consecutiveStalled = 0
+  let consecutiveUnobserved = 0
 
   while (true) {
     if (!existsSync(sidecarPath)) {
@@ -83,6 +90,15 @@ export default async function run(argv) {
         }
       } else {
         consecutiveStalled = 0
+      }
+      if (result.verdict.endsWith('UNOBSERVED')) {
+        consecutiveUnobserved += 1
+        if (consecutiveUnobserved >= 2) {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+          return 5
+        }
+      } else {
+        consecutiveUnobserved = 0
       }
       if (result.verdict.endsWith('EXITED')) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n')

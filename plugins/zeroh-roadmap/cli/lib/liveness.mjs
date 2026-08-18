@@ -11,7 +11,8 @@
  * & its log grew → ALIVE · transcript grew OR pgrep hits → QUIET · last commit <15min OR
  * an ATTRIBUTED commit <15min in a PRODUCT repo derived from the phase keyFiles OR newest
  * declared keyFile <10min OR newest worktree file <10min → ALIVE · no beacon & sidecar
- * within grace → QUIET · else STALLED. A MISSING beacon prefixes the verdict `pre-beacon`.
+ * within grace → QUIET · a PROBED transcript measured flat → STALLED · nothing probeable at all →
+ * UNOBSERVED. A MISSING beacon prefixes the verdict `pre-beacon`.
  *
  * 2026-08-17 scar (the cross-repo false STALLED): a phase whose bookkeeping lived in the arc
  * worktree and whose product code lived in a SIBLING REPOSITORY had no signal at all — the
@@ -29,7 +30,10 @@
  * --transcript-dir, and beacon age decided alone. The engine now DISCOVERS the transcript by the
  * phase the agent was spawned for (see discoverTranscript). Attribution is by spawn prompt rather
  * than an arm-time pointer on purpose: a pointer stamped at arm time goes stale the moment the arc
- * is re-driven by a new session.
+ * is re-driven by a new session. The same scar split the fall-through: STALLED now requires that
+ * the transcript row was actually PROBED, because callers act on that word by respawning, and an
+ * estate where no life signal could be measured is UNOBSERVED — which never claims life either, it
+ * only refuses to claim death.
  *
  * Injectable env seams (hermetic tests): LIVENESS_PGREP_CMD, LIVENESS_PROBE_MS (10000),
  * LIVENESS_EXITED_MIN_AGE_MIN (3), LIVENESS_PREBEACON_GRACE_MIN (15), LIVENESS_TASKS_ROOT.
@@ -662,6 +666,9 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     const d2 = found ? realSize(found.real) : null
     const log2 = logPath ? realSize(logPath) : null
     const transcriptGrew = (t1 != null && t2 != null && t2 > t1) || (d1 != null && d2 != null && d2 > d1)
+    // Was the transcript row ACTUALLY probed — a transcript found or supplied and measured across
+    // the window? This is what separates STALLED from UNOBSERVED at the fall-through (2384.2).
+    const transcriptProbed = (td != null && t1 != null && t2 != null) || (d1 != null && d2 != null)
     const logGrew = log1 != null && log2 != null && log2 > log1
     const hits = pgrepHits()
 
@@ -734,7 +741,21 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
     } else if (!beacon.exists && sidecarAgeMin() < PREBEACON_GRACE_MIN) {
       verdict = 'QUIET'
       evidence.grace = `sidecar ${sidecarAgeMin().toFixed(1)}min old, within the ${PREBEACON_GRACE_MIN}min pre-beacon grace window`
-    } else verdict = 'STALLED'
+    } else if (transcriptProbed) verdict = 'STALLED'
+    else {
+      // NOTHING could vouch either way, and the CLI's callers act on STALLED by respawning. The
+      // transcript is the only true LIVENESS probe here: it grows continuously while an agent is
+      // running, so measuring it flat is evidence of death. Every other row is evidence of LIFE
+      // whose absence proves nothing — a long single task legitimately produces no commit, no
+      // keyFile write and no beacon for hours, and pgrep is structurally blind to a subagent
+      // executor (same process tree, own-ancestry filtered). Saying STALLED here was over-claiming.
+      verdict = 'UNOBSERVED'
+      evidence.unobserved =
+        `no independent life signal could be probed: transcript ${td != null ? 'supplied but empty' : 'not discoverable'}; `
+        + 'pgrep is structurally blind to a subagent executor; a long single task legitimately produces no commit '
+        + 'and no keyFile write. UNOBSERVED is not death — pass --transcript-dir <dir> to point the engine at this '
+        + "executor's transcript, or read the executor's own task-notification channel."
+    }
   } else {
     evidence.transcript = td == null ? 'not recorded' : t1 == null ? `no *.output under ${td}` : `${t1}B`
     if (logPath) evidence.log = `${logPath}: ${log1}B`

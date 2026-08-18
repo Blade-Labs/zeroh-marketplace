@@ -123,7 +123,7 @@ test('6) DEFAULT pgrep path must not self-match its own invocation', () => {
   const d = newTmp()
   const sc = makeArc(d, 'A6', [{ ts: isoAgo(90), phase: 100, event: 'commit', detail: 'abc123 feat: x' }])
   const r = run(sc, [], { LIVENESS_PGREP_CMD: undefined })
-  assert.equal(r.verdict, 'STALLED')
+  assert.equal(r.verdict, 'UNOBSERVED', 'nothing was probeable here — a self-match would have read QUIET (2384.2)')
   assert.match(r.evidence.pgrep, /^0 process/)
 })
 
@@ -220,10 +220,10 @@ test('13) no beacon, nothing else, sidecar just written → pre-beacon QUIET (gr
   assert.match(r.evidence.grace, /grace window/)
 })
 
-test('14) no beacon, grace expired, no activity → pre-beacon STALLED', () => {
+test('14) no beacon, grace expired, no activity → pre-beacon UNOBSERVED', () => {
   const d = newTmp()
   const r = run(makeArc(d, 'A14', null), [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'pre-beacon STALLED')
+  assert.equal(r.verdict, 'pre-beacon UNOBSERVED')
   assert.equal(r.evidence.grace, undefined)
 })
 
@@ -240,7 +240,7 @@ function writePhaseFile(dir, phase, arcId) {
   utimesSync(p, old, old)
 }
 
-test('15) a SIBLING arc\'s fresh phase beacon is not adopted — the stalled arc reads STALLED, not ALIVE', () => {
+test('15) a SIBLING arc\'s fresh phase beacon is not adopted — the stalled arc never reads ALIVE', () => {
   const d = newTmp()
   // This arc's own beacon is 90 minutes cold; the sibling's is seconds old and would win on mtime.
   const sc = makeArc(d, 'MINE', [{ ts: isoAgo(90), phase: 500, event: 'task-start' }])
@@ -251,7 +251,7 @@ test('15) a SIBLING arc\'s fresh phase beacon is not adopted — the stalled arc
     JSON.stringify({ ts: isoAgo(0), phase: 900, event: 'task-start' }) + '\n',
   )
   const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'STALLED', 'a sibling lane must not vouch for this arc')
+  assert.equal(r.verdict, 'UNOBSERVED', 'a sibling lane must not vouch for this arc')
   assert.match(r.evidence.beacon, /age 9\d\.\dmin/, 'the verdict rests on THIS arc\'s own cold beacon')
   assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
 })
@@ -289,7 +289,7 @@ test('18) another ARC-keyed beacon in the shared registry is proof by name alone
     JSON.stringify({ ts: isoAgo(0), phase: 999, event: 'task-start' }) + '\n',
   )
   const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'STALLED')
+  assert.equal(r.verdict, 'UNOBSERVED')
   assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
 })
 
@@ -312,7 +312,7 @@ test('19) a DOCSTRING naming another arc does not hand this arc a sibling beacon
   utimesSync(p, old, old)
   writeFileSync(join(d, '.building', '901-executor.jsonl'), JSON.stringify({ ts: isoAgo(0), phase: 901, event: 'task-start' }) + '\n')
   const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'STALLED', 'the arcId FIELD decides ownership, never the prose above it')
+  assert.equal(r.verdict, 'UNOBSERVED', 'the arcId FIELD decides ownership, never the prose above it')
   assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
 })
 
@@ -326,7 +326,7 @@ test('20) an ARCLESS phase beacon is not adopted — a standalone run is nobody\
   utimesSync(p, old, old)
   writeFileSync(join(d, '.building', '902-executor.jsonl'), JSON.stringify({ ts: isoAgo(0), phase: 902, event: 'task-start' }) + '\n')
   const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'STALLED')
+  assert.equal(r.verdict, 'UNOBSERVED')
   assert.match(r.evidence.beacon, /1 beacon\(s\) skipped: not this arc/)
 })
 
@@ -342,7 +342,7 @@ test('21) SHARED worktree: a sibling lane\'s commit no longer vouches for a stal
   g('add', 'work.txt')
   g('commit', '-qm', 'feat(x): phase 800 — 800.1 the sibling lane moves')
   const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'STALLED', 'a sibling commit is not this arc moving')
+  assert.equal(r.verdict, 'UNOBSERVED', 'a sibling commit is not this arc moving')
   assert.match(r.evidence.shared, /shared with 1 other armed arc/)
 })
 
@@ -481,7 +481,7 @@ test('26) CROSS-REPO: a product-repo commit naming a SIBLING arc\'s phase does n
   age(kf, 90)
 
   const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'STALLED', 'a product repo is shared with the whole world, so attribution is mandatory (D3)')
+  assert.equal(r.verdict, 'UNOBSERVED', 'a product repo is shared with the whole world, so attribution is mandatory (D3)')
   assert.ok(r.evidence.crossRepo.includes(product), 'the repo is still reported — "no attributable commit" is a different diagnosis from "no product repo"')
 })
 
@@ -543,7 +543,7 @@ test('28) a phase with NO keyFiles behaves exactly as before, and says so explic
   const sc = makeArc(d, 'MINE', [{ ts: isoAgo(93), phase: 705, event: 'task-start' }])
   writePhaseFile(d, 705, 'MINE') // no keyFiles field at all
   const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'STALLED', 'nothing about the single-repo verdict changes')
+  assert.equal(r.verdict, 'UNOBSERVED', 'nothing about the single-repo verdict changes')
   assert.match(r.evidence.crossRepo, /none/, 'an explicit none, so the reader knows the row ran and found nothing')
 })
 
@@ -574,7 +574,7 @@ test('29) a keyFile ALSO declared by another arc does NOT hold this arc at ALIVE
   writeFileSync(shared, 'export {}\n') // touched moments ago, by whoever
 
   const r = run(sc, [], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
-  assert.equal(r.verdict, 'STALLED', 'a co-declared file is not proof that THIS arc moved')
+  assert.equal(r.verdict, 'UNOBSERVED', 'a co-declared file is not proof that THIS arc moved')
   assert.match(r.evidence.crossRepo, /also declared by another lane/, 'and the reader is told why it did not count')
 })
 
@@ -612,7 +612,7 @@ test('30) a phase-file EDIT between polls is seen — the scan cache is SIGNED, 
   // First poll: the phase declares NO keyFiles, so nothing can vouch for it.
   writePhaseFile(d, 709, 'MINE')
   const before = await readLiveness({ sidecarPath: sc, env })
-  assert.equal(before.verdict, 'STALLED')
+  assert.equal(before.verdict, 'UNOBSERVED')
 
   // Now the phase file gains the declaration, exactly as a mid-loop edit would. The mtime is set
   // explicitly so the signature provably differs rather than resting on clock granularity.
@@ -774,4 +774,51 @@ test('34) DISCOVERY: a DANGLING .output symlink is skipped without a throw', () 
   } finally {
     stop()
   }
+})
+
+// ── 2384.2 — STALLED DEMANDS CORROBORATION. The fall-through was a bare `else STALLED`, so an
+// estate where no life signal could be probed produced the same word as a transcript measured flat
+// across the probe window. The orchestrator acts on that word (respawn), and the near-miss in the
+// 2026-08-18 incident rode it. UNOBSERVED refuses to claim death; it never claims life.
+
+test('35) UNOBSERVED: an old work beacon with nothing probeable is not a stall', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 704, event: 'task-start' }])
+  const emptyRoot = newTmp() // discovery RUNS and finds nothing — /tmp is cleaned on reboot
+  const r = run(sc, [], { LIVENESS_TASKS_ROOT: emptyRoot, LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'UNOBSERVED', 'absence of a probe is not evidence of death')
+  assert.match(r.evidence.unobserved, /--transcript-dir/, 'the evidence must name the escape hatch')
+  assert.match(r.evidence.unobserved, /pgrep/, 'and name the probes that could not run')
+})
+
+test('36) an old work beacon with a SUPPLIED transcript measured flat is still STALLED', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 705, event: 'task-start' }])
+  const supplied = join(newTmp(), 'supplied')
+  mkdirSync(supplied, { recursive: true })
+  const flat = join(supplied, 'agent-flat.jsonl')
+  writeFileSync(flat, 'x'.repeat(4096))
+  symlinkSync(flat, join(supplied, 'aflat.output'))
+  const r = run(sc, ['--transcript-dir', supplied], { LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED', 'a probed-negative life signal is exactly what STALLED means')
+  assert.equal(r.evidence.unobserved, undefined, 'and the unobserved evidence must not appear beside it')
+})
+
+test('36b) a DISCOVERED transcript measured flat is corroboration too — STALLED, not UNOBSERVED', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(135), phase: 706, event: 'task-start' }])
+  writePhaseFile(d, 706, 'MINE')
+  const { root } = makeTasksRoot({ 'sess-a': { hhh888: spawnPrompt(706) } }) // written once, never grows
+  const r = run(sc, [], { LIVENESS_TASKS_ROOT: root, LIVENESS_PREBEACON_GRACE_MIN: '0' })
+  assert.equal(r.verdict, 'STALLED', 'discovery is a probe: finding the transcript and measuring it flat corroborates')
+  assert.match(r.evidence.transcript, /grew: false/)
+})
+
+test('37) UNOBSERVED never outranks a life signal that DID fire', () => {
+  const d = newTmp()
+  const sc = makeArc(d, 'MINE', [{ ts: isoAgo(2), phase: 707, event: 'task-start' }])
+  const emptyRoot = newTmp()
+  const r = run(sc, [], { LIVENESS_TASKS_ROOT: emptyRoot })
+  assert.equal(r.verdict, 'ALIVE', 'a fresh beacon decides long before the probe block is reached')
+  assert.equal(r.evidence.unobserved, undefined)
 })
