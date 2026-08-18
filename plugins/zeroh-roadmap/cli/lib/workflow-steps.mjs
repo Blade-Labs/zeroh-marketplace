@@ -10,9 +10,12 @@
  * workflows/) does the impure CLI/fs work and feeds these already-fetched values in.
  */
 
-/** The §4 typed-halt kinds. `stalled`/`exited` carry the `roadmap watch` verdict JSON as
- *  evidence verbatim; every kind ends the workflow and hands the session the conversation. */
-export const HALT_KINDS = ['blocked', 'escalated', 'failed', 'self-descope', 'stalled', 'exited']
+/** The §4 typed-halt kinds. `stalled`/`exited`/`unobserved` carry the `roadmap watch` verdict JSON
+ *  as evidence verbatim; every kind ends the workflow and hands the session the conversation.
+ *  `unobserved` (2384.3) is behaviourally a halt like `stalled` but honestly labelled: no life
+ *  signal could be probed, which is not evidence of death — the session judges with the evidence in
+ *  hand rather than being told a stall it can act on by respawning. */
+export const HALT_KINDS = ['blocked', 'escalated', 'failed', 'self-descope', 'stalled', 'exited', 'unobserved']
 
 /** The FIXED resume line every halt carries (locked decision 3: files are the only truth —
  *  resume after ANY halt/kill is always the same act; `arc next` re-derives from disk). */

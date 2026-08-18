@@ -343,3 +343,23 @@ test('N17 — an executor that RETURNED garbage still clears its own arm (it is 
   assert.equal(result.halt, 'failed', 'a red result check is still the typed failed halt')
   assert.equal(existsSync(armFile(root, 9801)), false, 'and the returned executor left no arm behind')
 })
+
+// ── 2384.3 — the workflow lane speaks the new verdict. Before this, ANY unrecognized watchdog wake
+// fell through to a `stalled` halt, so a watch exit 5 would be relabelled with the exact word the
+// UNOBSERVED verdict exists to stop over-claiming — and the session would judge a respawn on it.
+
+test('N23 — a watch exit 5 → the TYPED unobserved halt, never relabelled stalled', async () => {
+  const root = arcRepo([{ phase: 9801, status: 'in-progress', arcId: 'FX', tasks: [{ id: '9801.1', done: false }] }])
+  const verdict = { verdict: 'UNOBSERVED', evidence: { unobserved: 'no independent life signal could be probed — pass --transcript-dir' } }
+  const result = await driveWorkflow(root, 9801, { agentReturns: [{ watchExit: 5, watchVerdict: verdict }] }).promise
+  assert.equal(result.halt, 'unobserved', 'the closed halt vocabulary carries the new member')
+  assert.notEqual(result.halt, 'stalled', 'the stalled halt no longer absorbs it')
+  assert.equal(result.phase, 9801)
+  assert.deepEqual(result.evidence, verdict, 'the watch verdict rides verbatim, never re-narrated')
+})
+
+test('N24 — an unrecognized wake STILL falls through to stalled (the fall-through is not widened)', async () => {
+  const root = arcRepo([{ phase: 9801, status: 'in-progress', arcId: 'FX', tasks: [{ id: '9801.1', done: false }] }])
+  const result = await driveWorkflow(root, 9801, { agentReturns: [{ watchExit: 99, watchVerdict: { verdict: 'WAT' } }] }).promise
+  assert.equal(result.halt, 'stalled', 'only exit 5 maps to unobserved — an unknown wake keeps its old handling')
+})

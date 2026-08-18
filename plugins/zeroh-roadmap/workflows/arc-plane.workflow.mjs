@@ -244,7 +244,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     try {
     while (true) {
       // agent() resolves on executor return OR on the backgrounded `roadmap watch` watchdog
-      // exit (3 STALLED / 4 EXITED). The workflow NEVER kills a process.
+      // exit (3 STALLED / 4 EXITED / 5 UNOBSERVED). The workflow NEVER kills a process.
       spawn = await agent('phase-executor', {
         env: { ROADMAP_EXECUTOR_PHASE: String(phase) }, // arms the 1656 Stop-hook guard (env channel)
         prompt,
@@ -265,6 +265,12 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
       }
       if (spawn.watchExit === 4) {
         return buildHaltPayload('exited', { phase, evidence: spawn.watchVerdict })
+      }
+      if (spawn.watchExit === 5) {
+        // UNOBSERVED — no life signal could be probed. Behaviourally a halt like stalled, but the
+        // session must judge it with the evidence in hand: relabelling it `stalled` is exactly the
+        // over-claim that nearly put a second executor on a live phase (2026-08-18).
+        return buildHaltPayload('unobserved', { phase, evidence: spawn.watchVerdict })
       }
       // an unrecognized wake with no result — treat as a stall, evidence in hand
       return buildHaltPayload('stalled', { phase, evidence: spawn })

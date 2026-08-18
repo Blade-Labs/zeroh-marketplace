@@ -91,6 +91,11 @@ workflow engine cannot host its imports).
     is addressable, `SendMessage` it once with that evidence; otherwise respawn it mid-phase
     (resume is free — re-derivation from disk makes a respawn lossless). Still stuck after a
     bounded wait → escalate to the user. Never restart committed work.
+  - `unobserved` (watch exit 5, verdict UNOBSERVED) → no life signal could be PROBED, which is not
+    death: never respawn on it — supply `--transcript-dir` or check the executor's own
+    task-notification channel first. An executor
+    expected to run past ~30min gets periodic `roadmap watch --once` spot-checks, and forensics read
+    that verdict evidence, never `ls` on a tasks symlink (whose own mtime is not the transcript's).
 
 ## Terminal handoffs (in-session)
 
