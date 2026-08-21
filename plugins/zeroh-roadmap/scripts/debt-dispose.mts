@@ -103,7 +103,12 @@ for (const [phase, items] of [...byPhase.entries()].sort((a, b) => a[0] - b[0]))
       console.error(`  ⚠ phase ${phase}: could not find definePhase close — skipped`)
       continue
     }
-    src = `${src.slice(0, closeIdx)}\n  debtResolutions: [\n${entries}\n  ],${src.slice(closeIdx)}`
+    // The preceding field may end WITHOUT a trailing comma (e.g. a template-
+    // literal notes field) — appending a new field after it then quarantines
+    // the file. Ensure a comma terminates whatever precedes the insertion.
+    const head = src.slice(0, closeIdx)
+    const needsComma = !/[,{[]\s*$/.test(head.trimEnd())
+    src = `${head}${needsComma ? ',' : ''}\n  debtResolutions: [\n${entries}\n  ],${src.slice(closeIdx)}`
   }
   writeFileSync(file, src)
   modified.push(`roadmap/phases/phase-${phase}.phase.ts`)
