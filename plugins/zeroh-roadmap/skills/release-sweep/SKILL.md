@@ -30,7 +30,8 @@ release-sweep [<version> | --arc <id> | --all-done] [--archive]
 ## PRIME RULE: ARCHIVE GATES ON CLEAN DEBTS
 
 **Release does NOT gate on debts** — a phase can ship with open debts on any release if the operator
-chooses; release-sweep blocks no release. **Archive DOES gate.** Once a phase is in
+chooses; release-sweep blocks no release ON DEBTS (its ONE release gate is Step 2.5's followup
+dispositions, minor/major only). **Archive DOES gate.** Once a phase is in
 `roadmap/archive/<version>/` the operator commits to never revisiting its open debts, so archive requires
 every candidate debt (a non-`"None"` transparency-report entry) to have a matching `debtResolutions[].ref`
 with a CLOSING status. "Open" = no matching ref, **OR** a matching entry still open (the 1371 contract):
@@ -60,8 +61,9 @@ a "compromise-disguised-as-limitation — consider re-classifying" note. A `debt
 Run `roadmap followups census`. For every fired trigger, UNTRIAGED orphan, spent file, or past
 `review-by`, record ONE disposition from
 `skills/release-sweep/references/followup-contract.md`: **promote** with (p) `plan-phase` into a queued
-phase built later in the NORMAL lane; **delete** with (f)/(s) `git rm`; or **park** with (d)/(k) by
-stamping/refreshing a dated header. A minor/major release requires zero flagged files
+phase built later in the NORMAL lane; **delete** with (f) `git rm`; or **park** with (d)/(k) by
+stamping/refreshing a dated header. (s) Skip is NOT a disposition — it leaves the file flagged. A
+minor/major release requires zero flagged files
 **UNDISPOSITIONED**; patches are exempt. This gates disposition only, never completion of promoted work.
 
 ### Step 3 — Resolve each open debt (interactive; do NOT auto-resolve)

@@ -13,7 +13,7 @@ metadata:
 
 After `do-arc` builds every phase, `arc-sweep` disposes debt, runs ONE whole-arc architect, and
 **reports merge-readiness — it never lands the merge.** Under `do-arc`, Step 8 owns integration after
-validate-arc PASS + clean sweep + green suite; standalone `/arc-sweep` holds for the user's go.
+validate-arc PASS + clean sweep + green suite + no blocker; standalone `/arc-sweep` holds for the user's go.
 
 **Read `skills/release-sweep/SKILL.md` FIRST.** arc-sweep reuses release-sweep's debt-disposition
 vocabulary and `debtResolutions[]` persistence verbatim — never a parallel taxonomy.

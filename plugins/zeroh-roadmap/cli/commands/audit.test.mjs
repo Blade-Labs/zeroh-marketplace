@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Fixtures for `roadmap audit` — the 12 structural checks over a roadmap — driven
+ * Fixtures for `roadmap audit` — the 14 structural checks over a roadmap — driven
  * through the REAL bin/roadmap.mjs against tmp fixture repos. Observable behavior
  * ONLY: exit codes + --json output (this suite never imports the command source).
  *

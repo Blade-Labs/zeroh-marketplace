@@ -31,9 +31,12 @@ decision vocabulary:
 
 - **Promote — (p) Plan a new phase:** run `plan-phase`, leave the phase queued, and build it later in
   the normal lane.
-- **Delete — (f) Fix inline or (s) Skip:** `git rm` the followup when its action is complete or no
-  longer applies. Git history is the archive.
+- **Delete — (f) Fix inline:** `git rm` the followup when its action is complete or no longer
+  applies. Git history is the archive.
 - **Park — (d) Dismiss or (k) Keep open:** stamp or refresh the frontmatter with a dated lifecycle
   state, including `trigger` for `parked` and `review-by` when a review date is known.
+
+`(s) Skip` ("decide later") is deliberately NOT in this mapping: a skipped file stays UNDISPOSITIONED
+and holds the minor/major gate.
 
 Disposition completes triage; it does not require building a promoted phase during release-sweep.

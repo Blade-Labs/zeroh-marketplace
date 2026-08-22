@@ -48,6 +48,35 @@ test('followups census human table reports the summary and remains a report tool
   assert.match(result.stdout, /1 total.*1 UNTRIAGED.*1 orphan/i)
 })
 
+test('followups census rejects every grammar violation to UNTRIAGED and fails ageDays open', () => {
+  const root = makeFixtureRepo()
+  writeFollowup(root, 'bad-date.md', '---\nstatus: live\nreview-by: soon\n---\nMalformed review date\n')
+  writeFollowup(root, 'bad-status.md', '---\nstatus: retired\n---\nStatus outside the enum\n')
+  writeFollowup(root, 'parked-no-trigger.md', '---\nstatus: parked\n---\nNo promoting event\n')
+  const result = runCli(root, ['followups', 'census', '--json'])
+  assert.equal(result.code, 0, result.stderr)
+  assert.deepEqual(result.json.rows.map((row) => [row.file, row.status]), [
+    ['bad-date.md', 'UNTRIAGED'],
+    ['bad-status.md', 'UNTRIAGED'],
+    ['parked-no-trigger.md', 'UNTRIAGED'],
+  ])
+  // Never committed → `git log -1` is empty: ageDays fails OPEN (null), never throws.
+  assert.ok(result.json.rows.every((row) => row.ageDays === null))
+})
+
+test('followups census matches inbound references by exact basename, never substring', () => {
+  const root = makeFixtureRepo()
+  writeFollowup(root, 'WORKFORCE.md', '---\nstatus: live\n---\nShort name\n')
+  writeFollowup(root, 'HQWORKFORCE.md', '---\nstatus: live\n---\nLonger name that contains the short one\n')
+  writeFileSync(join(root, 'roadmap', 'backlog.ts'), "export default { note: 'roadmap/followups/HQWORKFORCE.md' }\n")
+  const result = runCli(root, ['followups', 'census', '--json'])
+  assert.equal(result.code, 0, result.stderr)
+  assert.deepEqual(result.json.rows.map((row) => [row.file, row.orphan]), [
+    ['HQWORKFORCE.md', false],
+    ['WORKFORCE.md', true],
+  ])
+})
+
 test('followups census returns an empty report when the directory is absent', () => {
   const root = makeFixtureRepo()
   const result = runCli(root, ['followups', 'census', '--json'])

@@ -45,8 +45,27 @@ function filesUnder(path) {
   return found
 }
 
-function containsFilename(path, filename) {
-  return filesUnder(path).some((file) => readFileSync(file, 'utf8').includes(filename))
+const MD_REFERENCE = /[A-Za-z0-9._/\\-]+\.md/g
+
+/**
+ * The `*.md` basenames a text references. Basename-exact, never substring: `WORKFORCE.md`
+ * is a substring of a reference to `HQWORKFORCE.md`, and a substring hit would report the
+ * shorter file as referenced — an orphan silently under-counted is the one failure this
+ * census exists to prevent.
+ */
+function basenamesIn(source) {
+  const names = new Set()
+  for (const token of source.match(MD_REFERENCE) ?? []) names.add(token.split(/[\\/]/).pop())
+  return names
+}
+
+/** ONE pass over the corpus; a per-followup scan re-read the whole tree per file. */
+function referencedBasenames(path) {
+  const names = new Set()
+  for (const file of filesUnder(path)) {
+    for (const name of basenamesIn(readFileSync(file, 'utf8'))) names.add(name)
+  }
+  return names
 }
 
 function ageDays(repo, absoluteFile) {
@@ -69,14 +88,20 @@ export function censusFollowups(repo = process.cwd()) {
   const followupFiles = existsSync(dir)
     ? readdirSync(dir).filter((name) => name.endsWith('.md') && statSync(join(dir, name)).isFile()).sort()
     : []
+  if (followupFiles.length === 0) return { rows: [], summary: emptySummary() }
   const backlog = join(roadmap, 'backlog.ts')
+  const referenced = {
+    backlog: existsSync(backlog) ? basenamesIn(readFileSync(backlog, 'utf8')) : new Set(),
+    phases: referencedBasenames(join(roadmap, 'phases')),
+    arcs: referencedBasenames(join(roadmap, 'arcs')),
+  }
   const rows = followupFiles.map((file) => {
     const absolute = join(dir, file)
     const header = parseHeader(readFileSync(absolute, 'utf8'))
     const refs = {
-      backlog: existsSync(backlog) && readFileSync(backlog, 'utf8').includes(file),
-      phases: containsFilename(join(roadmap, 'phases'), file),
-      arcs: containsFilename(join(roadmap, 'arcs'), file),
+      backlog: referenced.backlog.has(file),
+      phases: referenced.phases.has(file),
+      arcs: referenced.arcs.has(file),
     }
     return {
       file, status: header.status, trigger: header.trigger, reviewBy: header.reviewBy,
@@ -94,9 +119,11 @@ export function censusFollowups(repo = process.cwd()) {
 }
 
 function printHuman(report) {
-  process.stdout.write('FILE\tSTATUS\tTRIGGER\tAGE\tORPHAN\n')
+  // REVIEW-BY is a column, not JSON-only: release-sweep's triage gate flags a past review-by,
+  // and the human table is what that step reads.
+  process.stdout.write('FILE\tSTATUS\tTRIGGER\tREVIEW-BY\tAGE\tORPHAN\n')
   for (const row of report.rows) {
-    process.stdout.write(`${row.file}\t${row.status}\t${row.trigger ?? '-'}\t${row.ageDays ?? '-'}\t${row.orphan ? 'yes' : 'no'}\n`)
+    process.stdout.write(`${row.file}\t${row.status}\t${row.trigger ?? '-'}\t${row.reviewBy ?? '-'}\t${row.ageDays ?? '-'}\t${row.orphan ? 'yes' : 'no'}\n`)
   }
   const s = report.summary
   process.stdout.write(`${s.total} total · ${s.untriaged} UNTRIAGED · ${s.orphaned} orphaned · ${s.live} live · ${s.parked} parked · ${s.superseded} superseded · ${s.spent} spent\n`)

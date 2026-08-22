@@ -22,7 +22,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | plan / create / new arc | **plan-arc** |
 | do / execute / run arc | **do-arc** |
 | arc sweep, pre-merge sweep | **arc-sweep** |
-| release sweep, resolve release debts | **release-sweep** |
+| release sweep, resolve release debts | **release-sweep** — manual-only; ask the user to run `/release-sweep` |
 | validate arc, intent validation | **validate-arc** |
 | arc landed / eval the arc | **eval-arc** (do-arc Step 9 auto-runs it) |
 | show roadmap, backlog | `roadmap status` + `roadmap/ROADMAP.md` |
