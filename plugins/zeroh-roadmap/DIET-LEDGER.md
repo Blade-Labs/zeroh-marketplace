@@ -301,3 +301,33 @@ after the addition + both trims stays within the enforced budget (`roadmap measu
 |---|---|---|
 | `// @zeroh-roadmap-schema v10` + its four-line bump-discipline comment ("bump this marker whenever the canonical schema gains a feature… the SessionStart drift check greps for this exact line") | obsolete-with-evidence(the named reader is retired — §using-zeroh-roadmap/SKILL.md already records "no SessionStart hook exists to replace the grep", and a repo-wide grep for a marker reader across cli/, hooks/, skills/ and scripts/schema.test.ts returns zero; the line asserted an enforcement that no longer exists, which is the one thing a marker must never do) | deleted in BOTH homes (plugin templates/schema.ts + consumer lib/roadmap/schema.ts) so the vendor pair stays byte-comparable; the v10 migration notes it introduced are untouched, and the whitespace-normalized vendor diff after the deletion is documented-deltas-only (the `governed-spine-reviewer` enum member, the home-specific doc comments, formatter line wrapping) |
 </content>
+
+## plan-phase/SKILL.md + plan-arc/SKILL.md — phase 2420 (diet-funded)
+
+The step-contract rule + interfaces pointer (plan-phase), the Lane B band + band-skipped report
+grammar (plan-arc Step 3/4 + arc-integrity §4/§5), and the one-home rationale + execution-prompt
+authoring restoration (plan-arc Step 1/2b/4) were funded byte-for-byte in their own files.
+**Measured (`wc -c`):** plan-phase/SKILL.md **14,491 → 14,447 B**; plan-arc/SKILL.md
+**13,561 → 13,529 B** (net negative after ~1,000 B of additions); arc-integrity.md 9,636 → 9,919 B
+(a reference file, loaded on demand — outside the measured flow set). The plan-arc flow re-measure
+is recorded below.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| plan-phase Step 1 — wx/EEXIST claim-lock mechanics | enforced-by-code(cli/commands/claim.mjs owns the atomic claim) | the skill keeps intent + never-hand-compute |
+| plan-phase PRIME RULE 2 tail + Step 0 wrong-seam parenthetical + probe-vocabulary tail + timing tail + granularity/kind/assumptions wording | obsolete-with-evidence(pure wording compression — every named rule, threshold, and example survives) | the operative rules are untouched |
+| plan-phase Step 3 — userFacing paraphrase-drift story | relocated | compressed to "a paraphrase once shipped a polarity drift" — the rule (cite, never restate) survives verbatim |
+| plan-phase Step 3 — the second verify example "(or … dashboard shows $48)" | obsolete-with-evidence(the grammar sentence already names "command or observable"; one example carries the format) | the primary example survives |
+| plan-phase Step 4 — size-lint ownership provenance + "When in doubt, split the task instead of reaching for batchMode" | relocated | the sentence lives verbatim in the PhaseTaskShape docblock (templates/schema.ts), which the passage itself cites |
+| plan-phase Release-coupled — hold[] rationale long form | relocated | compressed; the hold[]-not-prose rule + never-a-guard clause survive |
+| plan-arc intro + Trigger + Step 1 opener + Step 1b mirror clause + ux sub-gate + binding-language + validate-paste + reframe + Step 1c/2a/2b compressions | obsolete-with-evidence(wording compression funding the band + one-home additions — every gate, pause, floor, and refusal survives; the schema-enforcement citation compressed to its mechanism) | plan-arc SKILL.md at 13,529 B carries all operative rules |
+| plan-arc Step 1 — LOCKED DECISIONS convention example (VOICE.arc.ts) + rationale-in-comment posture | relocated | superseded by the one-home rule: rulings are one-line + dated in the comment; narrative rationale lives in roadmap/arc-prompts/<id>-execution-prompt.md (authored at Step 4, read by do-arc:155) |
+| plan-arc Step 1 — user-ruling consequence example | obsolete-with-evidence(the rule + one-recorded-line clause survive; the example restated them) | Step 1 "A user ruling is law" |
+
+**Phase 2420 measured close-out (2026-08-22):** `roadmap measure --flow plan-arc` **16,154 tokens
+/ 64,619 B** vs the 16,173 plan-time baseline (net shrink after all additions). HONEST FLAG: the
+do-arc flow measures **14,535 tokens against the enforced 12,500** — a standing overage from the
+gauntlet v0.30.0 installs (the blind-trial winners for do-arc/do-phase/using-zeroh-roadmap replaced
+smaller dieted texts; measure.test.mjs deliberately carries no real-tree assertion). Pre-existing,
+untouched by 2420 (which only shrank its two files); surfaced for the next diet lane / re-ratchet
+ruling rather than papered over.
