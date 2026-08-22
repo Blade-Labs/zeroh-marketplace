@@ -330,7 +330,7 @@ is recorded below.
 / 64,611 B** vs the 16,173 plan-time baseline (net shrink after all additions). HONEST FLAG: the
 do-arc flow measures **14,535 tokens against the enforced 12,500** — a standing overage from the
 gauntlet v0.30.0 installs (the blind-trial winners for do-arc/do-phase/using-zeroh-roadmap replaced
-smaller dieted texts; measure.test.mjs deliberately carries no real-tree assertion). Pre-existing,
+smaller dieted texts; measure.test.mjs deliberately carries no real-tree assertion [CORRECTED 2026-08-22, see the phase-2422 gate R1 metering paragraph below: the assertion exists at measure.test.mjs:146]). Pre-existing,
 untouched by 2420 (which only shrank its two files); surfaced for the next diet lane / re-ratchet
 ruling rather than papered over.
 
@@ -351,5 +351,4 @@ it) and was missing from the manifest — the no-growth assert was passing over 
 Row added; the flow now measures honestly at **14,917 tokens / 59,656 B** (skill BODIES stayed
 net-negative under 2422's diet; the +433-token reference is named growth, never hidden). The
 whole 12,500 recovery remains the diet lane's, per the phase-2420 flag. Correction of a 2420
-close-out line: measure.test.mjs DOES carry the real-tree 12,500 assertion (test 251) — it is the
-standing red, not an absent test.
+close-out line: measure.test.mjs DOES carry the real-tree 12,500 assertion (cli/commands/measure.test.mjs:146, the PROTOCOL_LOAD_BUDGET_TOKENS assert) — it is the standing red, not an absent test.

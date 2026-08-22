@@ -1,83 +1,35 @@
 {
-  "$comment": "Per-flow protocol-load manifest for `roadmap measure` (ROADCODE 1659.3). Each entry lists a file the model LOADS into that flow's driving context, with a `why` naming the instruction site (skill:line) that causes the load \u2014 DERIVED from the post-1658 skills, never asserted. A renamed skill must break the meter (missing-path exit 1), never silently shrink it. Scoping rationale: DESIGN-NOTES.md \u00a7Measure scoping.",
+  "$comment": "Per-flow protocol-load manifest for `roadmap measure` (ROADCODE 1659.3). Each entry lists a file the model LOADS into that flow's driving context, with a `why` naming the instruction site (skill:line) that causes the load — DERIVED from the post-1658 skills, never asserted. A renamed skill must break the meter (missing-path exit 1), never silently shrink it. Scoping rationale: DESIGN-NOTES.md §Measure scoping.",
   "flows": {
     "do-arc": {
-      "note": "The ORCHESTRATING session's loaded set. Subagent cards (phase-executor, reviewers, judges) load in FRESH subagent contexts and are excluded \u2014 covered by --flow do-phase. This is the \u226412k-token budget the arc's protocol-load-cut criterion measures against the ~49k baseline.",
+      "note": "The ORCHESTRATING session's loaded set. Subagent cards (phase-executor, reviewers, judges) load in FRESH subagent contexts and are excluded — covered by --flow do-phase. This is the ≤12k-token budget the arc's protocol-load-cut criterion measures against the ~49k baseline.",
       "files": [
-        {
-          "path": "skills/using-zeroh-roadmap/SKILL.md",
-          "why": "using-zeroh-roadmap:3 \u2014 ALWAYS ACTIVE router, loaded every session"
-        },
-        {
-          "path": "skills/do-arc/SKILL.md",
-          "why": "the orchestration skill invoked by /do-arc <id>"
-        },
-        {
-          "path": "skills/do-phase/SKILL.md",
-          "why": "do-arc:40 \u2014 inline / inline-supervised bands run do-phase in the main session (arc-mode worst case)"
-        },
-        {
-          "path": "skills/arc-sweep/SKILL.md",
-          "why": "do-arc:60 \u2014 sweep \u2192 run the arc-sweep skill in-session"
-        },
-        {
-          "path": "skills/release-sweep/SKILL.md",
-          "why": "arc-sweep:18 \u2014 'Read skills/release-sweep/SKILL.md FIRST' (the debt vocabulary) \u2014 a genuine in-session load on the sweep leg"
-        },
-        {
-          "path": "skills/validate-arc/SKILL.md",
-          "why": "do-arc:65 \u2014 validate \u2192 run validate-arc <id> in-session"
-        },
-        {
-          "path": "skills/validate-arc/references/driving-tiers.md",
-          "why": "validate-arc:47 \u2014 read references/driving-tiers.md for the tier vocabulary"
-        },
-        {
-          "path": "skills/release-sweep/references/followup-contract.md",
-          "why": "arc-sweep:44 + release-sweep Step 2.5 \u2014 the frontmatter grammar read when a sweep births or dispositions a followup (conditional load, same basis as driving-tiers.md)"
-        }
+        { "path": "skills/using-zeroh-roadmap/SKILL.md", "why": "using-zeroh-roadmap:3 — ALWAYS ACTIVE router, loaded every session" },
+        { "path": "skills/do-arc/SKILL.md", "why": "the orchestration skill invoked by /do-arc <id>" },
+        { "path": "skills/do-phase/SKILL.md", "why": "do-arc:40 — inline / inline-supervised bands run do-phase in the main session (arc-mode worst case)" },
+        { "path": "skills/arc-sweep/SKILL.md", "why": "do-arc:60 — sweep → run the arc-sweep skill in-session" },
+        { "path": "skills/release-sweep/SKILL.md", "why": "arc-sweep:18 — 'Read skills/release-sweep/SKILL.md FIRST' (the debt vocabulary) — a genuine in-session load on the sweep leg" },
+        { "path": "skills/validate-arc/SKILL.md", "why": "do-arc:65 — validate → run validate-arc <id> in-session" },
+        { "path": "skills/validate-arc/references/driving-tiers.md", "why": "validate-arc:47 — read references/driving-tiers.md for the tier vocabulary" },
+        { "path": "skills/release-sweep/references/followup-contract.md", "why": "arc-sweep:44 + release-sweep Step 2.5 — the frontmatter grammar read when a sweep births or dispositions a followup (conditional load, the driving-tiers.md basis)" }
       ]
     },
     "do-phase": {
       "note": "The phase-executor SUBAGENT's own context (spawned fresh per phase). do-phase drives the loop; the executor card + its long-run reference load with it.",
       "files": [
-        {
-          "path": "skills/do-phase/SKILL.md",
-          "why": "the executor's driving skill (do-phase for one phase)"
-        },
-        {
-          "path": "agents/phase-executor.md",
-          "why": "the phase-executor agent card \u2014 the subagent's own instruction set"
-        },
-        {
-          "path": "agents/references/executor-reference.md",
-          "why": "phase-executor:11 \u2014 long-run + foreign-red: references/executor-reference.md"
-        }
+        { "path": "skills/do-phase/SKILL.md", "why": "the executor's driving skill (do-phase for one phase)" },
+        { "path": "agents/phase-executor.md", "why": "the phase-executor agent card — the subagent's own instruction set" },
+        { "path": "agents/references/executor-reference.md", "why": "phase-executor:11 — long-run + foreign-red: references/executor-reference.md" }
       ]
     },
     "plan-arc": {
       "note": "The planning session's loaded set: the design-first gate + the per-phase plan/review loop.",
       "files": [
-        {
-          "path": "skills/plan-arc/SKILL.md",
-          "why": "the planning skill invoked by /plan-arc"
-        },
-        {
-          "path": "skills/plan-arc/references/design-gate.md",
-          "why": "plan-arc:69 \u2014 the design-first gate contracts live in references/design-gate.md"
-        },
-        {
-          "path": "skills/plan-arc/references/ux-craft.md",
-          "why": "design-gate:59 \u2014 the craft bar names references/ux-craft.md for a surface arc"
-        },
-        {
-          "path": "skills/plan-phase/SKILL.md",
-          "why": "plan-arc:12,59 \u2014 plans each member phase by looping plan-phase"
-        },
-        {
-          "path": "skills/review-phase/SKILL.md",
-          "why": "plan-arc:12 \u2014 fans out plan-quality review (review-phase Mode A) across members"
-        }
+        { "path": "skills/plan-arc/SKILL.md", "why": "the planning skill invoked by /plan-arc" },
+        { "path": "skills/plan-arc/references/design-gate.md", "why": "plan-arc:69 — the design-first gate contracts live in references/design-gate.md" },
+        { "path": "skills/plan-arc/references/ux-craft.md", "why": "design-gate:59 — the craft bar names references/ux-craft.md for a surface arc" },
+        { "path": "skills/plan-phase/SKILL.md", "why": "plan-arc:12,59 — plans each member phase by looping plan-phase" },
+        { "path": "skills/review-phase/SKILL.md", "why": "plan-arc:12 — fans out plan-quality review (review-phase Mode A) across members" }
       ]
     }
   }

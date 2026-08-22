@@ -45,6 +45,7 @@ test('followups census human table reports the summary and remains a report tool
   const result = runCli(root, ['followups', 'census'])
   assert.equal(result.code, 0, result.stderr)
   assert.match(result.stdout, /orphan\.md\s+UNTRIAGED/)
+  assert.match(result.stdout, /REVIEW-BY/, 'the human table carries the review-by column release-sweep Step 2.5 reads')
   assert.match(result.stdout, /1 total.*1 UNTRIAGED.*1 orphan/i)
 })
 
