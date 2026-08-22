@@ -9,11 +9,9 @@ metadata:
 
 # Arc Sweep — Pre-Merge Debt + Whole-Arc Review
 
-`arc-sweep` is the closing ritual of `do-arc`: after an arc's phases are built but before merge, it
-(1) disposes every accumulated debt item, (2) runs ONE architect over the whole-arc diff as a single
-system, and (3) **reports merge-readiness — it never lands the merge.** Landing authority: **under
-`do-arc`**, do-arc Step 8 owns it (auto-integrate on validate-arc PASS + sweep clean + arc-end suite
-green + no blocker); **standalone** (`/arc-sweep`), hold for the user's go.
+After `do-arc` builds every phase, `arc-sweep` disposes debt, runs ONE whole-arc architect, and
+**reports merge-readiness — it never lands the merge.** Under `do-arc`, Step 8 owns integration after
+validate-arc PASS + clean sweep + green suite; standalone `/arc-sweep` holds for the user's go.
 
 **Read `skills/release-sweep/SKILL.md` FIRST.** arc-sweep reuses release-sweep's debt-disposition
 vocabulary and `debtResolutions[]` persistence verbatim — never a parallel taxonomy.
@@ -24,11 +22,9 @@ seam-specific architect pass.
 
 ## Step 1: Consolidated debt sweep
 
-**Hand-in (the inputs).** The `PhaseExecutionResult` roll-up arrives two ways: (1) the in-context array
-`do-arc` hands in (fast path, use when complete); (2) `discoverResults()` re-reads `phase.executionResult`
-from disk (the system of record) — use it when the array is missing or short (a resumed / compacted
-arc), never dispose a truncated set. `roadmap debt census` surfaces the same estate slice. The
-free-text `compromises` strings are also re-read from the phase files. Aggregate all of it.
+Use `do-arc`'s complete `PhaseExecutionResult[]`; if missing/short, call `discoverResults()` to re-read
+`phase.executionResult`. Also run `roadmap debt census` and re-read free-text compromises. Never
+dispose a truncated set.
 
 **Disposition → persistence (mechanical — read the row):**
 
@@ -42,6 +38,10 @@ free-text `compromises` strings are also re-read from the phase files. Aggregate
 | OPERATOR-PENDING | deploy/operator action, not code | ONE entry (+ `roadmap/followups/<arcId>.md`) | `'operator-pending'` | runbook / DEPLOY.md anchor |
 
 (`limitations` never enter this table — see below.)
+
+Whenever OPERATOR-PENDING creates a NEW `roadmap/followups/<arcId>.md`, prepend the `status` + `trigger`
+frontmatter from `skills/release-sweep/references/followup-contract.md`; a headerless birth violates
+this rule. The same header rule covers every followup write named below.
 
 **Disposition mode — read `mergePolicy` from `roadmap.config.json` first.** Under do-arc AND
 `mergePolicy.arcIntegration: 'autonomous'`, dispose each item YOURSELF by the table — no per-item
@@ -83,9 +83,8 @@ release-sweep's — do not redefine them.
 disposes those pre-archive. To avoid a silent hole, arc-sweep re-reads each phase's `limitations` and
 LISTS any present in the Step-3 report under "deferred to release-sweep".
 
-**No summary file.** arc-sweep NEVER writes a persisted summary — `debtResolutions[]`
-+ the transparency reports ARE the audit trail; the merge-readiness report is EPHEMERAL chat only.
-`roadmap/followups/<arcId>.md` holds ONLY OPERATOR-PENDING detail + ratified-descope rationale.
+**No summary file.** Keep the audit trail in `debtResolutions[]` + transparency reports and the chat
+report ephemeral. `roadmap/followups/<arcId>.md` holds only OPERATOR-PENDING detail + ratified-descope rationale.
 
 ## Step 2: Whole-arc cross-phase review (against singleSeams + designRefs)
 

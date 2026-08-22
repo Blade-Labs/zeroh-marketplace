@@ -343,3 +343,4 @@ do-arc measurement after arc-sweep also lands.
 |---|---|---|
 | selector explanations and estate-scale narration | obsolete-with-evidence(pure wording compression; every selector, archive destination, prompt rule, bulk command, and ratchet survives) | release-sweep invocation list + estate-scale callout |
 | Edge cases + scope narration | obsolete-with-evidence(pure wording compression; every operative edge case and exclusion survives) | release-sweep §Edge cases + scope |
+| arc-sweep intro, hand-in, and no-summary narration | obsolete-with-evidence(pure wording compression funding the followup birth contract; integration authority, fallback inputs, truncation refusal, persistence homes, and content boundary survive) | arc-sweep intro + Step 1 hand-in + No summary file |
