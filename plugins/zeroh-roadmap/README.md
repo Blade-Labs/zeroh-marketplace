@@ -8,6 +8,8 @@ Phase-driven development for AI-assisted teams. Break work into phases, execute 
 
 Long-context LLM sessions degrade. Decisions get forgotten, work gets re-done, Claude declares "all done!" after 3 of 5 tasks. This plugin solves it by giving every session a phase file that says exactly what to do, in what order, with what acceptance criteria. Two review agents validate the result. Zero findings to pass.
 
+New here? Read [docs/orientation.html](docs/orientation.html) — a ten-minute engineer's orientation explaining what this is, how the lifecycle works, and how it compares to prompt-discipline frameworks like superpowers.
+
 ## Install
 
 ```bash

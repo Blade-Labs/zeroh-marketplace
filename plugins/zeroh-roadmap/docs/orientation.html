@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zeroh-roadmap in One Sitting</title>
+<style>
+  :root{
+    --bg:#fbfaf7; --raised:#ffffff; --sunken:#f5f1e8; --rule:#d9d4c7; --rule-soft:#e6e1d5;
+    --brand:#00a99d; --brand-lit:#0c7a72;
+    --ink:#1a1a1a; --ink2:#4a4a4a; --ink3:#888888;
+    --ok:#0f8a52; --ok-bg:rgba(15,138,82,.08); --ok-bd:rgba(15,138,82,.25);
+    --warn:#b8761b; --warn-bg:rgba(184,118,27,.08); --warn-bd:rgba(184,118,27,.25);
+    --plan:#4856c7; --plan-bg:rgba(72,86,199,.08); --plan-bd:rgba(72,86,199,.25);
+    --code-bg:#0b201b; --code-ink:#cfe6df;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0a1512; --raised:#12231d; --sunken:#0c1813; --rule:#1f3a32; --rule-soft:#193029;
+      --brand:#00a99d; --brand-lit:#3fded0;
+      --ink:#e9f2ef; --ink2:#a6bdb6; --ink3:#6f857e;
+      --ok:#34d399; --ok-bg:rgba(52,211,153,.10); --ok-bd:rgba(52,211,153,.30);
+      --warn:#f5b96b; --warn-bg:rgba(245,185,107,.10); --warn-bd:rgba(245,185,107,.28);
+      --plan:#9aa6ff; --plan-bg:rgba(154,166,255,.10); --plan-bd:rgba(154,166,255,.28);
+      --code-bg:#06100d; --code-ink:#cfe6df;
+    }
+  }
+  [data-theme="dark"]{
+    --bg:#0a1512; --raised:#12231d; --sunken:#0c1813; --rule:#1f3a32; --rule-soft:#193029;
+    --brand:#00a99d; --brand-lit:#3fded0;
+    --ink:#e9f2ef; --ink2:#a6bdb6; --ink3:#6f857e;
+    --ok:#34d399; --ok-bg:rgba(52,211,153,.10); --ok-bd:rgba(52,211,153,.30);
+    --warn:#f5b96b; --warn-bg:rgba(245,185,107,.10); --warn-bd:rgba(245,185,107,.28);
+    --plan:#9aa6ff; --plan-bg:rgba(154,166,255,.10); --plan-bd:rgba(154,166,255,.28);
+    --code-bg:#06100d; --code-ink:#cfe6df;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.65;
+    font-family:"Space Grotesk","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
+  .page{max-width:820px;margin:0 auto;padding:48px 24px 90px;}
+  h1{font-size:30px;letter-spacing:-.02em;margin:0 0 6px;text-wrap:balance;}
+  h1 .z{color:var(--brand-lit);}
+  .sub{color:var(--ink2);font-size:14px;margin:0 0 34px;max-width:62ch;}
+  h2{font-size:19px;letter-spacing:-.01em;margin:42px 0 10px;}
+  h3{font-size:15px;margin:24px 0 6px;}
+  p{margin:0 0 14px;max-width:70ch;}
+  p,li{color:var(--ink2);}
+  b,strong{color:var(--ink);}
+  code{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:.88em;background:var(--sunken);
+    border:1px solid var(--rule-soft);border-radius:5px;padding:0 4px;color:var(--ink);}
+  pre{background:var(--code-bg);color:var(--code-ink);border:1px solid var(--rule);border-radius:10px;
+    padding:14px 18px;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.6;
+    overflow-x:auto;margin:0 0 14px;}
+  pre b{color:#5fe3c0;font-weight:600;} pre i{color:#5b7a73;font-style:normal;}
+  ul{padding-left:22px;margin:0 0 14px;} li{margin-bottom:6px;max-width:66ch;}
+  .tldr{border:1px solid var(--rule);border-left:3px solid var(--brand);background:var(--raised);
+    border-radius:10px;padding:16px 18px;margin:0 0 8px;}
+  .tldr p{margin:0;}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin:0 0 14px;}
+  .tablewrap{overflow-x:auto;margin:0 0 14px;}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);
+    border-bottom:1px solid var(--rule);padding:6px 10px 6px 0;}
+  td{border-bottom:1px solid var(--rule-soft);padding:8px 10px 8px 0;vertical-align:top;color:var(--ink2);}
+  td:first-child{white-space:nowrap;color:var(--ink);font-weight:600;}
+  .pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;border-radius:999px;
+    padding:2px 10px;border:1px solid;}
+  .pill.rm{color:var(--brand-lit);border-color:var(--brand);background:var(--ok-bg);}
+  .pill.sp{color:var(--plan);border-color:var(--plan-bd);background:var(--plan-bg);}
+  .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px;}
+  .flow span{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;font-weight:600;
+    background:var(--raised);border:1px solid var(--rule);border-radius:8px;padding:5px 11px;color:var(--ink);}
+  .flow span.gate{border-color:var(--warn-bd);background:var(--warn-bg);color:var(--warn);}
+  .flow span.land{border-color:var(--ok-bd);background:var(--ok-bg);color:var(--ok);}
+  .flow i{color:var(--ink3);font-style:normal;}
+  .foot{margin-top:48px;border-top:1px solid var(--rule);padding-top:14px;font-size:12px;color:var(--ink3);}
+  a{color:var(--brand-lit);}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1><span class="z">zeroh-roadmap</span> in one sitting</h1>
+<p class="sub">An orientation for engineers, written against the framework you probably already know
+(obra's <b>superpowers</b>). Ten minutes, no marketing. Sources: the skills and CLI in this repo,
+the 2026-08 skill gauntlet, and a superpowers v6.3.0 comparison.</p>
+
+<div class="tldr"><p><b>TL;DR:</b> superpowers is a <b>methodology in prompts</b> — composable skills that teach an
+agent a good process and trust it to comply. zeroh-roadmap is a <b>delivery machine</b> — typed plans on disk,
+a CLI that owns the mechanics, refusal-based enforcement where superpowers has persuasion, and an
+independent judging + eval layer superpowers doesn't attempt. Superpowers optimizes a session;
+this plugin optimizes a program of work across many sessions, models, and weeks — including ones
+where nobody is watching.</p></div>
+
+<h2>The one distinction that generates the rest</h2>
+<p>Both systems answer the same question — <i>how do you stop an LLM agent from confidently shipping
+garbage?</i> — with opposite bets:</p>
+<ul>
+  <li><span class="pill sp">SUPERPOWERS</span>&nbsp; The agent will comply if you tell it clearly. So: write excellent
+  instructions (brainstorm → plan → TDD → review), inject them at session start, and phrase them as
+  "mandatory workflows, not suggestions". Enforcement is rhetorical.</li>
+  <li><span class="pill rm">ROADMAP</span>&nbsp; The agent will eventually fail — degrade, hallucinate a "done", skip a
+  gate — so make the failure modes <b>structurally hard</b>. Enforcement is mechanical: a CLI that refuses,
+  hooks that block, schemas that reject.</li>
+</ul>
+<p>Concretely, in this plugin: <code>roadmap gate run --verify-complete</code> refuses a done-flip whose gate report
+carries no recorded review rounds. <code>roadmap result check</code> parses an executor's return against a typed
+contract — prose is never trusted. A Stop-hook blocks a phase-executor from ending its turn with anything
+except tool calls or the typed result. Policy writes 409 on version races. <code>executor-arm</code> makes
+two executors on one phase structurally difficult. None of these can be talked out of the way, which is
+the point: the model's eloquence is exactly what you can't trust when it's wrong.</p>
+
+<h2>What it is, mechanically</h2>
+<p>Three typed artifacts and one loop.</p>
+<pre><b>roadmap/</b>
+├─ backlog.ts              <i>the active queue (a TypeScript module, parsed + validated)</i>
+├─ arcs/&lt;ID&gt;.arc.ts        <i>an ARC — a contract: planes, acceptanceCriteria, honestyRails, singleSeams, designRefs</i>
+├─ phases/phase-N.phase.ts <i>a PHASE — a KNOWN DIFF: tasks with file-level steps, runnable assumption tripwires,</i>
+│                          <i>per-task acceptance criteria, testMode; decisions pre-made at plan time</i>
+└─ roadmap.config.json     <i>the consumer bindings: gate commands, validation tiers, judge model, merge policy</i></pre>
+<div class="flow">
+  <span>plan-arc</span><i>→</i><span>queue</span><i>→</i><span>do-arc</span><i>→</i>
+  <span class="gate">arc-sweep</span><i>→</i><span class="gate">validate-arc</span><i>→</i>
+  <span class="land">land</span><i>→</i><span>eval</span>
+</div>
+<ul>
+  <li><b>plan-arc</b> settles the design <em>before</em> any phase exists (architect ∥ UX designer search the
+  consumer's canon, the human confirms; the confirmed design becomes a contract). Each member phase is then
+  authored to the known-diff bar and independently reviewed until READY.</li>
+  <li><b>do-arc</b> drives one deterministic loop: <code>roadmap arc next</code> hands back exactly one action,
+  re-derived from git + the phase files every time — so a dead session resumes by just re-entering the loop.
+  Mid-size phases delegate to a <code>phase-executor</code> subagent (armed, watched); every non-done exit is a
+  <b>typed halt</b> (escalated, self-descope, checkpoint, blocked, stalled, unobserved) with an owner, never a shrug.</li>
+  <li><b>do-phase</b> is the unit underneath: one task = one commit, TDD with a test-engineer that never sees the
+  implementation steps, an architect Decision Contract at every convenient-vs-proper fork
+  (<code>PROCEED_WITH_FIX</code> or <code>ESCALATE_TO_USER</code> — no third path), then a gate: quality-pass
+  sweep, code-reviewer rounds capped at 5, design-parity when a UX contract is in play.</li>
+  <li><b>validate-arc</b> is the layer superpowers doesn't have an analogue for: one independent
+  <code>intent-validator</code> judge per acceptance criterion, forbidden from reading the diffs, driving the
+  <em>real shipped flow</em> and returning evidence-backed verdicts. PASS lands (autonomously, per merge policy);
+  GAPS triggers a bounded corrective loop.</li>
+  <li><b>eval</b> closes the flywheel: a pinned judge model scores every landed arc against a rolling baseline;
+  lessons are captured at the moment they happen; the skills themselves were competitively regression-tested
+  (the 2026-08 gauntlet: blind trials, sealed held-out sets — ~40% of nice-looking rewrites turned out to be
+  regressions only blind trials caught).</li>
+</ul>
+
+<h2>Honest trade-offs</h2>
+<div class="tablewrap"><table>
+  <tr><th></th><th>superpowers</th><th>zeroh-roadmap</th></tr>
+  <tr><td>Adoption cost</td><td>One install, works in any repo/language, value in minutes</td>
+      <td>TS + zod consumer, <code>roadmap/</code> scaffold, config bindings, a real learning curve</td></tr>
+  <tr><td>Enforcement</td><td>Prompt discipline + session hook; a lazy model can skip any step</td>
+      <td>CLI refusals, typed contracts, Stop-hooks, 409s — misbehavior is structurally hard</td></tr>
+  <tr><td>Plan artifact</td><td>Markdown checklist, actual test+impl code written at plan time (unrun — rots fast, and pre-written tests break test independence)</td>
+      <td>Typed known-diff: decisions + anchors + runnable tripwires; code is written at execution, against red tests</td></tr>
+  <tr><td>Plan QA</td><td>Self-review checklist</td>
+      <td>Independent two-lane review (mechanical rehearsal + a judge-model reviewer), banded by phase risk</td></tr>
+  <tr><td>Verification</td><td>"Is this code good?" — reviewer per task</td>
+      <td>"Does the shipped product do the job, at the bar set?" — independent judge per criterion, evidence required</td></tr>
+  <tr><td>Sessions</td><td>One developer, one session, human checkpoints</td>
+      <td>Fleet-aware: lanes, claims, cross-repo collision preflight, liveness verdicts, lossless resume</td></tr>
+  <tr><td>Token cost</td><td>Low — aggressively compressed skills</td>
+      <td>Planning is genuinely expensive; it buys unattended execution (and is being leaned further — phase 2420)</td></tr>
+  <tr><td>Portability</td><td>8+ harnesses (Claude Code, Cursor, Codex, Devin…)</td>
+      <td>Claude-Code-native (hooks, subagent types, typed tool results)</td></tr>
+  <tr><td>Maintenance</td><td>Active OSS community, MIT</td>
+      <td>One team; survives model drift via its own measured eval loop, not via crowd testing</td></tr>
+</table></div>
+<p>Two genuine gaps this plugin has that superpowers covers: a <b>brainstorming</b> protocol (Socratic idea
+refinement before anything is planned) and a <b>systematic-debugging</b> skill (structured root-cause when an
+executor hits a gnarly bug). Interesting convergence signal: superpowers' 2026 releases are independently
+rediscovering this plugin's decisions — scaled ceremony by task complexity (≈ execution bands), plan-scoped
+workspaces (≈ the worktree lane), review-fix loops that resume the implementer (≈ gate rounds).</p>
+
+<h2>When to reach for which</h2>
+<ul>
+  <li><b>Use superpowers</b> for a fresh repo, a non-TS stack, a quick project, or any environment where you'll
+  be watching the agent work. It's a very good floor, cheap to adopt.</li>
+  <li><b>Use zeroh-roadmap</b> when the work is a program, not a task: multi-week arcs, multiple concurrent
+  sessions on shared checkouts, autonomous overnight execution, and any codebase where a plausible-but-wrong
+  "done" is expensive. The planning tax is the price of not supervising.</li>
+</ul>
+
+<h2>Where to go next</h2>
+<ul>
+  <li><code>README.md</code> — install, first phase, the skills reference table</li>
+  <li><code>skills/using-zeroh-roadmap/SKILL.md</code> — the always-active router (start here to see what a session sees)</li>
+  <li><code>skills/plan-phase/SKILL.md</code> — the known-diff authoring bar (Prime Rule 1 is the plugin in one sentence)</li>
+  <li><code>skills/do-arc/SKILL.md</code> — the orchestration loop + the typed halts</li>
+  <li><code>DESIGN-NOTES.md</code> · <code>DIET-LEDGER.md</code> — why the skills are this thin (every deleted passage has a disposition row)</li>
+  <li><code>GAUNTLET-2026-08.md</code> — how the skills are regression-tested; read the six lessons before editing any skill</li>
+</ul>
+
+<div class="foot">Written 2026-08-22 against plugin v0.30.0 and superpowers v6.3.0. If the lifecycle or gate
+chain changes, this page is documentation debt — redraw it.</div>
+
+</div>
+</body>
+</html>
