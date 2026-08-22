@@ -13,6 +13,11 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
+// v11 migration notes (consumers syncing from v10 — additive/optional, historical
+// files keep parsing unmodified):
+// - PhaseTask gains optional `interfaces` ({consumes[], produces[]} — exact symbol/
+//   contract names for cross-task dependencies; review-phase greps the declared names).
+//
 // v10 migration notes (consumers syncing from v9 — all additive/optional, so
 // historical files keep parsing unmodified):
 // - TransparencyReport gains `decisionRef` (provenance for a non-"None"
@@ -433,6 +438,17 @@ export const PhaseTaskShape = z.object({
    *  Use an explicit list when a task can start earlier than its position suggests
    *  or has a non-obvious dependency. Cross-phase deps go on the Phase, not the Task. */
   dependsOn: z.array(z.string().regex(/^\d+\.\d+$/)).default([]),
+  /** Cross-task contract, filled ONLY when this task consumes a sibling task's
+   *  output or produces one a later task relies on. Entries are exact symbol/
+   *  contract names ("makeWorkIqClient(fetch?) from N.1"), never prose —
+   *  review-phase Mode A checks declared names against steps with grep -F.
+   *  Omit entirely for self-contained tasks. */
+  interfaces: z
+    .object({
+      consumes: z.array(z.string().min(1)).default([]),
+      produces: z.array(z.string().min(1)).default([]),
+    })
+    .optional(),
   /** Opt into batch execution. Defaults false.
    *
    *  Set to true ONLY for genuinely mechanical multi-commit work where the
