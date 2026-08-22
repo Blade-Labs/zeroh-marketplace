@@ -144,6 +144,33 @@ the point: the model's eloquence is exactly what you can't trust when it's wrong
   regressions only blind trials caught).</li>
 </ul>
 
+<h2>The cast — who does what, on which model</h2>
+<p>The plugin is multi-agent AND multi-vendor. Nine specialist agents carry the judgment seams;
+a governed Codex delegation lane carries whole phases on a second vendor. Frontmatter models are
+defaults — the consumer's <code>modelPolicy.judgeModel</code> upgrades every judge seam at spawn time
+(this fleet runs judges on <b>fable</b>).</p>
+<div class="tablewrap"><table>
+  <tr><th>Agent</th><th>Model</th><th>Seam</th></tr>
+  <tr><td>software-architect</td><td>opus · fable as judge</td><td>Decision Contract at every convenient-vs-proper fork; design-first advisor; arc-sweep's whole-arc judge</td></tr>
+  <tr><td>ux-designer</td><td>opus</td><td>designs a surface inside the consumer's UX canon before it is built; the confirmed design is a contract</td></tr>
+  <tr><td>phase-executor</td><td>opus</td><td>runs ONE phase end to end, returns a typed PhaseExecutionResult; armed and watched</td></tr>
+  <tr><td>software-developer</td><td>opus</td><td>implements tasks in the project's idiom, after tests are red</td></tr>
+  <tr><td>test-engineer</td><td>opus</td><td>writes RED-first tests from criteria alone — never sees the implementation steps</td></tr>
+  <tr><td>quality-pass</td><td>opus</td><td>gate Round 0: fix shortcuts + hardcodes, delete dead scaffolding, one shot per phase</td></tr>
+  <tr><td>code-reviewer</td><td>opus</td><td>correctness rounds 1..N (cap 5), confidence-filtered findings</td></tr>
+  <tr><td>intent-validator</td><td>judgeModel (fable here)</td><td>one independent judge per acceptance criterion, drives the real flow, evidence or downgrade</td></tr>
+  <tr><td>arc-eval-judge</td><td>sonnet (pinned)</td><td>scores landed arcs vs a rolling baseline — pinned so the baseline stays comparable</td></tr>
+  <tr><td>Codex lane</td><td>gpt-5</td><td><code>roadmap codex run</code> — plans and executes whole phases in its own worktree; never merges, never pushes, never touches the primary checkout</td></tr>
+  <tr><td>Grok</td><td>—</td><td>today a governed generative connector only (workflow b-roll); a Grok coding-agent lane is planned once its CLI is agent-mature</td></tr>
+</table></div>
+<p><b>Why the model column matters:</b> every artifact records who produced it —
+<code>plannedBy.model</code> on the phase, a <code>model</code> stamp on every recorded gate round, the
+executor's <code>driver</code> (model + lane) in its typed result, the validate panel's actual
+<code>judgeModel</code>, and the eval judge's pin. The arc-evals slice on exactly these stamps, so
+"which LLM is good at which seam" is a measured question here, not a vibe: a phase planned by fable,
+built by opus, delegated to gpt-5, and judged on the pin all leave attributable evidence, and a model
+swap shows up in the baseline instead of being argued about.</p>
+
 <h2>Honest trade-offs</h2>
 <div class="tablewrap"><table>
   <tr><th></th><th>superpowers</th><th>zeroh-roadmap</th></tr>
@@ -162,13 +189,18 @@ the point: the model's eloquence is exactly what you can't trust when it's wrong
   <tr><td>Token cost</td><td>Low — aggressively compressed skills</td>
       <td>Planning is genuinely expensive; it buys unattended execution (and is being leaned further — phase 2420)</td></tr>
   <tr><td>Portability</td><td>8+ harnesses (Claude Code, Cursor, Codex, Devin…)</td>
-      <td>Claude-Code-native (hooks, subagent types, typed tool results)</td></tr>
+      <td>Orchestration is Claude-Code-native; <b>execution is already multi-vendor</b> — the governed Codex
+      lane runs (and plans) whole phases on gpt-5, and every artifact records which model did what (see
+      "The cast" below)</td></tr>
   <tr><td>Maintenance</td><td>Active OSS community, MIT</td>
       <td>One team; survives model drift via its own measured eval loop, not via crowd testing</td></tr>
 </table></div>
 <p>Two genuine gaps this plugin has that superpowers covers: a <b>brainstorming</b> protocol (Socratic idea
 refinement before anything is planned) and a <b>systematic-debugging</b> skill (structured root-cause when an
-executor hits a gnarly bug). Interesting convergence signal: superpowers' 2026 releases are independently
+executor hits a gnarly bug). Both are a recorded evaluation — <code>roadmap/followups/DEBUGSKILL.md</code> in the
+flagship consumer names the candidate plug-in seams, an extent ladder, and the evidence bar (adopt only where
+the model demonstrably fails without it; the gauntlet showed commodity methodology is deletion fodder).
+Interesting convergence signal: superpowers' 2026 releases are independently
 rediscovering this plugin's decisions — scaled ceremony by task complexity (≈ execution bands), plan-scoped
 workspaces (≈ the worktree lane), review-fix loops that resume the implementer (≈ gate rounds).</p>
 
