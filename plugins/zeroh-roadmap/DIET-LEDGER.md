@@ -344,3 +344,12 @@ do-arc measurement after arc-sweep also lands.
 | selector explanations and estate-scale narration | obsolete-with-evidence(pure wording compression; every selector, archive destination, prompt rule, bulk command, and ratchet survives) | release-sweep invocation list + estate-scale callout |
 | Edge cases + scope narration | obsolete-with-evidence(pure wording compression; every operative edge case and exclusion survives) | release-sweep §Edge cases + scope |
 | arc-sweep intro, hand-in, and no-summary narration | obsolete-with-evidence(pure wording compression funding the followup birth contract; integration authority, fallback inputs, truncation refusal, persistence homes, and content boundary survive) | arc-sweep intro + Step 1 hand-in + No summary file |
+
+**Phase 2422 gate R1 metering correction (2026-08-22):** the followup-contract.md reference is a
+genuinely NEW conditional load in the do-arc flow (arc-sweep births + release-sweep Step 2.5 read
+it) and was missing from the manifest — the no-growth assert was passing over unmetered load.
+Row added; the flow now measures honestly at **14,917 tokens / 59,656 B** (skill BODIES stayed
+net-negative under 2422's diet; the +433-token reference is named growth, never hidden). The
+whole 12,500 recovery remains the diet lane's, per the phase-2420 flag. Correction of a 2420
+close-out line: measure.test.mjs DOES carry the real-tree 12,500 assertion (test 251) — it is the
+standing red, not an absent test.
