@@ -363,6 +363,10 @@ export default async function run(argv) {
   if (opts.json) {
     process.stdout.write(JSON.stringify(result) + '\n')
   } else {
+    // WARN-level authoring lints print on BOTH faces of the one engine (the write-hook bin
+    // does the same) and never change the exit code. A lint only this face swallows is a lint
+    // nobody reads: plan-phase Step 4 mandates exactly this command.
+    for (const w of result.warnings ?? []) process.stderr.write(w + '\n')
     if (result.kind === 'toolchain-missing') process.stderr.write(TSX_ABSENT_HINT + '\n')
     else if (result.kind === 'load-error') {
       process.stderr.write(`[zeroh-roadmap] roadmap file failed to load:\n${result.loadError}\n`)

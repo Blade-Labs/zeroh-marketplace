@@ -348,3 +348,20 @@ test('stepDescriptionLength lint is SILENT on a COMMITTED (grandfathered) long s
   assert.equal(r.code, 0)
   assert.doesNotMatch(r.stderr, /WARN phase 9008/, 'a committed file is exempt forever')
 })
+
+// ── both faces of the ONE engine surface the WARNs ────────────────────────────────
+// plan-phase Step 4 mandates `roadmap phase validate <N|file>`, so that face swallowing
+// the warnings makes every WARN lint unreadable to the planner it exists for.
+const ROADMAP_BIN = join(HERE, 'roadmap.mjs')
+
+test('`roadmap phase validate` surfaces the WARN lints on stderr (exit still 0)', () => {
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(OVER_700))
+  const r = spawnSync('node', [ROADMAP_BIN, 'phase', 'validate', f.path], { encoding: 'utf8', timeout: 120_000 })
+  assert.equal(r.status, 0, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+  assert.match(
+    r.stderr,
+    /WARN phase 9008 task 9008\.1 step 1: description exceeds 700 chars/,
+    'the CLI face prints the same WARN the write-hook face does',
+  )
+  assert.match(r.stdout, /phase validate: .* — OK/, 'and still reports the OK verdict')
+})

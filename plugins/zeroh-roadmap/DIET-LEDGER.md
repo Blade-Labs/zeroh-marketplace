@@ -318,14 +318,15 @@ is recorded below.
 | plan-phase PRIME RULE 2 tail + Step 0 wrong-seam parenthetical + probe-vocabulary tail + timing tail + granularity/kind/assumptions wording | obsolete-with-evidence(pure wording compression — every named rule, threshold, and example survives) | the operative rules are untouched |
 | plan-phase Step 3 — userFacing paraphrase-drift story | relocated | compressed to "a paraphrase once shipped a polarity drift" — the rule (cite, never restate) survives verbatim |
 | plan-phase Step 3 — the second verify example "(or … dashboard shows $48)" | obsolete-with-evidence(the grammar sentence already names "command or observable"; one example carries the format) | the primary example survives |
-| plan-phase Step 4 — size-lint ownership provenance + "When in doubt, split the task instead of reaching for batchMode" | relocated | the sentence lives verbatim in the PhaseTaskShape docblock (templates/schema.ts), which the passage itself cites |
+| plan-phase Step 4 — size-lint ownership provenance + "When in doubt, split the task instead of reaching for batchMode" | relocated | the rule lives in the PhaseTaskShape docblock the passage itself cites (templates/schema.ts: "When in doubt, split the task instead.") |
 | plan-phase Release-coupled — hold[] rationale long form | relocated | compressed; the hold[]-not-prose rule + never-a-guard clause survive |
 | plan-arc intro + Trigger + Step 1 opener + Step 1b mirror clause + ux sub-gate + binding-language + validate-paste + reframe + Step 1c/2a/2b compressions | obsolete-with-evidence(wording compression funding the band + one-home additions — every gate, pause, floor, and refusal survives; the schema-enforcement citation compressed to its mechanism) | plan-arc SKILL.md at 13,529 B carries all operative rules |
+| plan-arc Step 1 — "Size the phase count" rationale (v1 arcs run sequentially; the 5-8 tasks/phase target restated) | relocated | the compressed sentence cites plan-phase "Phase granularity" by name, which carries `target 5-8 tasks` verbatim |
 | plan-arc Step 1 — LOCKED DECISIONS convention example (VOICE.arc.ts) + rationale-in-comment posture | relocated | superseded by the one-home rule: rulings are one-line + dated in the comment; narrative rationale lives in roadmap/arc-prompts/<id>-execution-prompt.md (authored at Step 4, read by do-arc:155) |
 | plan-arc Step 1 — user-ruling consequence example | obsolete-with-evidence(the rule + one-recorded-line clause survive; the example restated them) | Step 1 "A user ruling is law" |
 
 **Phase 2420 measured close-out (2026-08-22):** `roadmap measure --flow plan-arc` **16,154 tokens
-/ 64,619 B** vs the 16,173 plan-time baseline (net shrink after all additions). HONEST FLAG: the
+/ 64,611 B** vs the 16,173 plan-time baseline (net shrink after all additions). HONEST FLAG: the
 do-arc flow measures **14,535 tokens against the enforced 12,500** — a standing overage from the
 gauntlet v0.30.0 installs (the blind-trial winners for do-arc/do-phase/using-zeroh-roadmap replaced
 smaller dieted texts; measure.test.mjs deliberately carries no real-tree assertion). Pre-existing,
