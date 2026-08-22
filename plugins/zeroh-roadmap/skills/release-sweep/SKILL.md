@@ -2,12 +2,15 @@
 name: "Release Sweep"
 description: "Review and resolve outstanding debts for a release version, then optionally archive the version's done phases. Run before every minor/major; optional before patches. Patch releases are never blocked on debts; archive is."
 user-invocable: true
+disable-model-invocation: true
 metadata:
   keywords: release, sweep, archive, debt, version, cleanup, ship
   aliases: archive-version, debt-sweep
 ---
 
 # Release Sweep — Resolve Debts and Archive a Version
+
+**Not this skill:** `arc-sweep` owns pre-merge arc debt; release-sweep owns pre-release triage and archive.
 
 **Trigger:** `release-sweep`, `release-sweep 0.7.0 [--archive]`, `archive 0.7.0`, `sweep debts`.
 

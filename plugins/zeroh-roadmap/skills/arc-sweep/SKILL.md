@@ -9,6 +9,8 @@ metadata:
 
 # Arc Sweep — Pre-Merge Debt + Whole-Arc Review
 
+**Not this skill:** `release-sweep` owns pre-release followup triage and archive; arc-sweep owns pre-merge arc debt.
+
 After `do-arc` builds every phase, `arc-sweep` disposes debt, runs ONE whole-arc architect, and
 **reports merge-readiness — it never lands the merge.** Under `do-arc`, Step 8 owns integration after
 validate-arc PASS + clean sweep + green suite; standalone `/arc-sweep` holds for the user's go.
