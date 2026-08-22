@@ -37,8 +37,8 @@ findings), where you got stuck, and the convenient-vs-proper paths. It returns `
 (write the high-confidence task, no marker) or `ESCALATE_TO_USER` (the ONLY verdict that justifies
 stopping, or a marker whose text IS the architect's question). Task-authoring only (Steps 2/3);
 one ambiguity = one call. **Three or more escalations = the phase is too broad**: STOP, surface
-it, propose a split. EVALCORE escalated the same unmade decision twice mid-execution; a decision
-you can name at plan time and did not make is this skill's failure, so make it or escalate it NOW.
+it, propose a split. EVALCORE escalated the same unmade decision twice
+mid-execution — a nameable unmade decision is this skill's failure: make it or escalate NOW.
 
 ## PRIME RULE 3: PLANNING NEVER MUTATES THE SHARED TREE BEYOND ITS OWN ARTIFACT
 
@@ -62,15 +62,13 @@ bounded paths) and skim `roadmap status`. Existing coverage found: do NOT author
 do NOT queue anything; hand the queue/priority ruling to the user with options. If the tracked
 artifact IS the right home, improve IT instead of planning anew: re-run its `assumptions[].verify`
 against the current tree, re-check every anchor, hunt contradictions between carried-forward notes
-and task text (a note steering the executor to the wrong seam is a real executability defect:
-find and fix it), true stale counts, commit `plan(roadmap): phase N — <desc>` (the plan-edit
+and task text (a wrong-seam note is a real executability defect), true stale counts, commit `plan(roadmap): phase N — <desc>` (the plan-edit
 grammar review-phase also commits under), and re-run `roadmap phase validate <N>`.
 
 ## Step 1: Reserve the number
 
-`roadmap claim` atomically reserves the next monotonic number across active+archive (file creation
-with `wx` noclobber IS the lock; a concurrent loser gets EEXIST and retries, so sessions never
-collide). Never hand-compute max+1. The committed phase file supersedes the claim; there is no
+`roadmap claim` atomically reserves the next monotonic number across active+archive (wx-noclobber
+lock — cli/commands/claim.mjs owns the mechanics). Never hand-compute max+1. The committed phase file supersedes the claim; there is no
 manual release step.
 
 ## Step 2: Investigate the code FIRST (the most important step)
@@ -87,15 +85,15 @@ task yet: make it an investigation task.
 Full field shapes, marker syntax, task design rules, testMode/standards citations, and
 anti-patterns: `references/phase-file-contract.md`. The authoring decisions, in order:
 
-**Pick `kind` first** (it drives gate selection, so it is a deliberate act, never a default):
+**Pick `kind` first** (it drives gate selection — a deliberate act, never a default):
 `mockup` (screen/layout/copy/branding/dark-mode) · `logic` (algorithm/business-rule/new behavior) ·
 `hardening` (bug fix, persistence/event/marshal-chain fix, refactor, perf) · `release` (version
 cut/changelog/infra/deploy). Torn between `logic` and `hardening`: choose `hardening` (an extra
 integration rerun costs far less than an unverified persistence fix). `kind` is independent of `category`.
 
 **Phase granularity: target 5-8 tasks** (gate cost is per-phase: gate chain, executor spawn,
-serialization tail, so don't shard). Split below ~4 only for a nameable reason: risk isolation, a
-hard dependency boundary, or a distinct `kind`. "Felt like a separate topic" is not one. Past ~10
+serialization tail, so don't shard). Split below ~4 only for a nameable reason (risk isolation, a hard
+dependency boundary, a distinct `kind`) — "felt like a separate topic" is not one. Past ~10
 tasks you are in do-arc's HEAVY band. One task = one focused change; "and also..." is two tasks.
 Order foundation → consumers → validation last; N.3 may depend on N.2, never N.4.
 
@@ -105,20 +103,20 @@ surface, where surface = any `keyFiles` path matching `web/`, `office/` or `spa/
 heuristic; name it as one). Always the class AND its N:
 `timing: band 4-6 × surface:false, N=8, median 60.8 min, p80 83.3 min`. No matching cohort,
 `samples: 0`, or no stats file: write the literal `timing: no reference data for <band>×<surface>`.
-Never an invented range or a bare number without class and N.
+Never an invented range or a classless number.
 
-**Author the `assumptions` tripwires.** Every load-bearing claim about the CURRENT territory whose
-FALSITY WOULD CHANGE THE PLAN (the RAGUNIFY 1343.6 miss) becomes
+**Author the `assumptions` tripwires.** Every load-bearing claim about the current territory
+whose FALSITY WOULD CHANGE THE PLAN (the RAGUNIFY 1343.6 miss) becomes
 `{ claim, verify: '<one runnable command>', onFalse: 'ESCALATE' }`. 2-6 typical (beyond ~6 you are
-re-testing the tree instead of the load-bearing claims); **zero is legitimate for a pure-prose
-phase, and you say so in the notes**. Not every `keyFiles` anchor is an assumption.
+re-testing the tree instead of the load-bearing claims); **zero is legitimate for a pure-prose phase — say so
+in the notes**. Not every `keyFiles` anchor is an assumption.
 
-**Run every plan-time-runnable probe NOW and encode the observed result.** A command the planner
-can run today (a grep, an exit-code probe, a slot's own gate command) never becomes execution-time
-homework: run it, write what it yielded into the plan. When a task enumerates per-item verdicts
+**Run every plan-time-runnable probe NOW and encode the observed result.** A command runnable
+today (a grep, an exit-code probe, a gate slot) never becomes execution-time homework: run it,
+write what it yielded into the plan. When a task enumerates per-item verdicts
 (per-slot sweeps, per-connector states), the vocabulary MUST be able to express every outcome its
-probe can yield; include the honest escape member (`observed: <result>`) rather than a closed enum
-that dead-ends the executor on a foreseeable outcome.
+probe can yield; include the honest escape member (`observed: <result>`) — a closed
+enum dead-ends the executor.
 
 **Rehearse verifies BOTH DIRECTIONS before writing them** (the single most repeated authoring
 defect: SEODESKFIX shipped four backward verifies across three phases; UCAUDIT, 8 of 20 member
@@ -127,16 +125,21 @@ shapes, the scratch-copy discipline, and the time-boxed mandatory core:
 `references/verify-rehearsal.md`. Enforcement: `roadmap phase validate` carries a WARN-level
 polarity+grammar lint (new-to-git phase files only); review-phase Mode A is the gate.
 
+**Steps are contracts, not essays.** A description states the DECISION — names, signatures, the
+non-obvious constraint — plus its anchor; rationale lives in the designRef/execution prompt, cited
+never restated (`roadmap phase validate` WARNs past 700 chars, new-to-git files). A task consuming
+a sibling's output declares the optional `interfaces: {consumes, produces}` field — exact symbol
+names; shape + example: `references/phase-file-contract.md`.
+
 **The `step → verify:` grammar (REQUIRED).** Every `steps[].description` ends with
 `" → verify: <one command or observable>"` naming how the executor PROVES the step landed. Example:
 `"route the model write through runGovernedToolCall → verify: node --import tsx --test src/office/agui.test.ts"`
-(or `… → verify: dashboard shows $48`). Grandfather rule: phase files already committed to git are
+Grandfather rule: phase files already committed to git are
 exempt (the lint checks for a HEAD blob); it warns on files NEW to git only.
 
 **Declare `userFacing` IN THE FILE.** User-visible behavior: `userFacing: true` plus a `flag` in
-one of the two shapes in `references/phase-file-contract.md`; the posture is the consumer CLAUDE.md
-rule "Flag-first delivery" (cite the rule in the plan, never restate it: a restated paraphrase is
-exactly how a default-polarity drift once shipped). Not user-facing: `userFacing: false` plus one
+one of the two shapes in `references/phase-file-contract.md`; cite the consumer CLAUDE.md "Flag-first
+delivery" rule, never restate it — a paraphrase once shipped a polarity drift. Not user-facing: `userFacing: false` plus one
 notes line saying why no flag applies. Either way the claim lives in the artifact the executor and
 reviewer read, never only in the chat report. `roadmap phase validate` reds `userFacing: true`
 with no `flag` (rule `userFacing-without-flag`).
@@ -149,9 +152,8 @@ a declared `reviewScope` below `full` requires a one-line note WHY the skipped s
 
 **Release-coupled steps and removals.** A step whose completion rides a release act (a tag
 re-vendor into the sibling repo, a prod app-setting arm, a catalog publish) gets a task appending
-a `hold[]` entry to `release/activation.json`, the file the release lane actually reads (consumer
-CLAUDE.md: a pending release-coupled step goes in `hold[]`, not prose or a guard left to red the
-next tag). A removal task sweeps what DESCRIBES the removed behavior, not only what implements it:
+a `hold[]` entry to `release/activation.json` — the file the release lane reads (the consumer
+CLAUDE.md `hold[]` rule; never prose, never a guard left to red the next tag). A removal task sweeps what DESCRIBES the removed behavior, not only what implements it:
 de-stale test titles naming it (keep the assertions that remain the regression pin), and true
 every doc and backlog anchor that names it.
 
@@ -167,10 +169,8 @@ honest answer.
 checks (duplicate top-level keys, `userFacing-without-flag`, duplicate phase number,
 claim-before-start), and the WARN polarity+grammar lint on new-to-git files. Fix every failure;
 failures are never waived. What validate does NOT check: task size. `files ≤10` / `steps ≤6`
-unless that TASK sets `batchMode: true` is this skill's own plan-time refusal (the `PhaseTaskShape`
-docblock in `templates/schema.ts` names plan-phase/review-phase as the size lint's owners;
-honor-system here, review-phase re-checks, and `roadmap audit` check 11 reds escapes at HIGH).
-When in doubt, split the task instead of reaching for `batchMode`.
+unless that TASK sets `batchMode: true` is this skill's own plan-time refusal (the size lint's owners per the
+`PhaseTaskShape` docblock; review-phase re-checks, `roadmap audit` check 11 reds escapes at HIGH).
 
 ## Step 5: Self-verify (judgment checklist, re-reading the code NOW)
 
