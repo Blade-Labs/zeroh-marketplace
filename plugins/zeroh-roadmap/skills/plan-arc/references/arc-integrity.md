@@ -124,7 +124,9 @@ LANE A - spec compliance (mechanical; any miss = NEEDS WORK, fabricated evidence
     Record both commands + exit codes in your review notes. No achievable red = the verify
     cannot fail = NEEDS WORK (rewrite it); an exit-0-always pipeline = BLOCKER.
  LANE B - plan quality: run review-phase Mode A with --no-queue, model per
-    modelPolicy.judgeModel in roadmap.config.json.
+    modelPolicy.judgeModel in roadmap.config.json. ELIGIBILITY (plan-arc Step 3 band):
+    skipped only for kind:mockup / docs-only / all-tasks-batchMode phases with no
+    gateSpecialists keyFile and not the arc keystone; a skip is recorded, never silent.
 
 RETURN: verdict READY | NEEDS WORK | BLOCKER, findings, and the Lane A command log.
 NEVER touch roadmap/backlog.ts or another phase's file - the orchestrator's git-status
@@ -159,6 +161,7 @@ count and every tool verdict in it is pasted command output (Evidence discipline
   Would have failed on: any exit 2, or a validation claim with no pasted run.
 - Reviews: <k> READY (queued), <m> NEEDS WORK / BLOCKER (NOT queued - findings above).
   Lane A ran <j> verify falsification probes; every one produced its red.
+  Lane B: <ran on p phases | band-skipped (<reason>) per phase - list each>.
 - Queued: one arc tier "<arc> (phases <exact claimed numbers>)" in roadmap/backlog.ts -
   OR: NOT queued - review pending (<reason Lane B could not run>).
   Would have failed on: crossValidate rejecting planes↔phases drift at import, or a

@@ -24,14 +24,13 @@ so and route it, never inflate it into an arc.
 
 ## Arguments
 
-- **`<id>`** (optional): the Arc id (`Arc.id`, number or short string, e.g. `B`); if
-  omitted, propose one and confirm it with the user.
+- **`<id>`** (optional): the Arc id; if omitted, propose one and confirm with the user.
 
 ## Evidence discipline (binds every step)
 
 Plan facts read COMMITTED state at a named ref (normally the arc's `baseRef`): never
-build on uncommitted sibling dirt, and call work "committed" vs "uncommitted" only after
-`git log --oneline -- <path>` / `git status --porcelain <path>` on that exact path. Every
+build on uncommitted sibling dirt, and call work committed only after
+`git log` / `git status --porcelain` on that exact path. Every
 count and every "the validator accepted it" claim is pasted command output, never memory.
 A littered sandbox: preserve it on a branch, `roadmap worktree reset --base <ref>`, replan.
 
@@ -52,13 +51,11 @@ Skip ONLY by recording `interview: skipped - <why>` (design pre-ratified / mecha
 **A user ruling is law.** When the user waives an artifact or makes a scope call ("no
 acceptance criteria", "skip the interview"), record the ruling verbatim in the `.arc.ts`
 and COMPLY - never author the waived artifact; at most one recorded line names the
-consequence (e.g. `acceptanceCriteria: [] // user ruling: none - validate-arc is a
-deliberate no-op`). Overriding a legal call "for quality" is the violation, not a favor.
+consequence. Overriding a legal call "for quality" is the violation, not a favor.
 
-**Size the phase count** (plan-phase "Phase granularity"): gate + executor cost is
-per-phase and v1 arcs run sequentially, so phase count tracks wall-clock and token cost;
-target 5-8 tasks/phase, consolidating 2-3-task phases before reserving numbers, sized
-against `roadmap/arc-evals/timing-stats.json` medians.
+**Size the phase count** per plan-phase "Phase granularity" (gate + executor cost is
+per-phase; consolidate 2-3-task phases before reserving; size against
+`roadmap/arc-evals/timing-stats.json` medians).
 
 **Elicit `acceptanceCriteria` - never invent, never dilute.** Author them WITH the user
 in user-outcome terms, before the build (grading against planner-invented criteria is
@@ -103,8 +100,8 @@ commit. **PAUSE for the user's explicit go.**
 **(3) UX sub-gate** - fires on a surface; run after the architecture sub-gate.
 1. **Enumerate existing artifacts FIRST** (`references/ux-craft.md` §0): `ls` the
    consumer's preview/design directories for the target surface including variants
-   (`-dark`, `-v2`, siblings). More than one exists -> list EVERY sibling by name in the
-   ask and put the canonical-naming question to the user explicitly before any is evolved.
+   (`-dark`, `-v2`, siblings). More than one -> list every sibling and put the
+   canonical-naming question to the user before any is evolved.
 2. Spawn the `ux-designer` agent (an advisor, like the architect): it designs inside the
    consumer's UX canon, picks the form from design-gate.md §3's table (**design-locked
    prototype is the DEFAULT for a net-new or regrouped app surface**), and meets
@@ -125,18 +122,17 @@ judges the paired criteria, arc-sweep audits per ref.
 Walk each planned plane and list every choice a phase author or executor will need -
 naming, storage, contract shapes, UI placement, flag posture, ordering (checklist:
 arc-integrity.md §2). Sort every row into exactly one bucket: **LOCKED DECISIONS** ·
-**designRefs** · **DEFERRED - named owner + escalation point**. A load-bearing choice
-(two reasonable executors would build it differently) in no bucket -> back to the
-interview; EVALCORE escalated one unmade decision twice inside a single task.
+**designRefs** · **DEFERRED - named owner + escalation point**. A load-bearing choice (two reasonable
+executors would build it differently) in no bucket -> back to the interview (EVALCORE
+escalated one unmade decision twice in a task).
 
 ## Step 2a: Reserve the phase-number block FIRST
 
-Reserve ONCE, up front, via the atomic claims store: `roadmap claim --count <N>` (N =
-member phases across `arc.planes`) locks the numbers collision-free across worktrees
-(creation is the lock; numbers need uniqueness, NOT contiguity). Write the claimed
+Reserve ONCE, up front: `roadmap claim --count <N>` (N = member phases across
+`arc.planes`; the CLI owns the lock; numbers need uniqueness, NOT contiguity). Write the claimed
 numbers into `arc.planes[].phases` (plane order) and re-save the `.arc.ts` so
-`crossValidate` passes. Pass each explicit number into the Step 2b loop so `plan-phase`
-never recomputes one - per-iteration recompute collides across concurrent sessions.
+`crossValidate` passes. Pass each explicit number into the Step 2b loop - a
+per-iteration recompute collides across sessions.
 
 ## Step 2b: Plan each member phase (plan-phase --skip-review)
 
@@ -145,8 +141,8 @@ Loop `plan-phase` over the reserved numbers in dependency / plane order:
   each phase's **`arcId`** and **`plannedBy: { model: <your own model id> }`**.
 - **Copy vocabulary, never coin it:** every enum-valued field (phase status, task status,
   gate results) takes a value from the `z.enum` unions in `lib/roadmap/schema.ts` or from
-  a schema-valid queued phase at HEAD; a guessed word ("planned", "pending") fails
-  `roadmap phase validate` and ships an unexecutable queue.
+  a schema-valid queued phase at HEAD; a guessed word fails `roadmap phase validate`
+  and ships an unexecutable queue.
 - **Plan AGAINST the confirmed design.** Each task cites the designRef `ref` + `summary`
   it implements; a phase that would deviate must **reopen Step 1b**, never diverge.
 - **Anchor by symbol, never by line:** cite `steps[].file` paths plus exported symbols an
@@ -161,9 +157,9 @@ single seam, per build-implying LOCKED DECISION, **and per item/outcome the user
 request states, quoted verbatim** -> the `phase.task` that fulfills it. An item
 unfulfillable as written is REFRAMED to its nearest real mechanism (name the real file,
 command, or store) with the mapping recorded in its row - never dropped, never silently
-swapped. Write the ledger as a comment block in the `.arc.ts`. An UNMAPPED row is a
-promise no phase keeps: add the task or delete the promise WITH the user - FLUENTFRONT
-shipped a set every phase docblock claimed to append to EMPTY (arc-integrity.md §3).
+swapped. Write the ledger as a comment block in the `.arc.ts`. An UNMAPPED row is a promise no
+phase keeps: add the task or delete the promise WITH the user (the FLUENTFRONT
+empty-set failure, arc-integrity.md §3).
 
 ## Step 3: Fan out plan-quality review (two lanes per phase, parallel, read-mostly)
 
@@ -174,7 +170,13 @@ packet from arc-integrity.md §4, each returning one READY / NEEDS WORK / BLOCKE
   EXECUTED in both directions - green as written, red under its falsification probe. No
   achievable red = NEEDS WORK: UCAUDIT queued 8 of 20 phases carrying one.
 - **Lane B - plan quality (judgment):** `review-phase` Mode A with **`--no-queue`**,
-  model per `modelPolicy.judgeModel` in `roadmap.config.json`.
+  model per `modelPolicy.judgeModel` in `roadmap.config.json`. **Band-scoped:** Lane B
+  defaults ON and is SKIPPED only when a phase is kind:mockup, docs-only (every keyFiles
+  path *.md/*.html), or all-tasks-batchMode, AND no keyFiles path matches a
+  `gateSpecialists` path (roadmap.config.json - the hard floor), AND the phase is not the
+  arc's keystone (last phase of the last plane). A skipped Lane B is recorded per phase in
+  the closing report as "Lane B: band-skipped (<reason>)" - a recorded decision, never a
+  refusal condition.
 
 **Edit confinement (honor-system, checked after the fact):** each reviewer edits ONLY its
 own `roadmap/phases/phase-<N>.phase.ts` - never `roadmap/backlog.ts`, never a sibling.
@@ -195,8 +197,8 @@ placing READY phases as a single arc tier, respecting the dependency floor + pri
 numbers**; use an `N-M` range only when every number in the span belongs to THIS arc -
 claims are unique, not contiguous, and a spanning label annexes other arcs' phases. Do
 NOT queue a NEEDS WORK / BLOCKER phase - surface its findings; the user fixes and
-re-reviews first. **Lane B could not run** (judge model unreachable, fan-out impossible,
-budget exhausted) -> REFUSE to queue: close with "planned, NOT queued - review pending"
+re-reviews first. **Lane B could not run** on an ELIGIBLE phase (judge model unreachable,
+fan-out impossible, budget exhausted; a band-skip is not this) -> REFUSE to queue: close with "planned, NOT queued - review pending"
 plus the reason; self-review never substitutes for the independent lane. **Done is an
 artifact pair:** the queued tier (or the recorded refusal) plus the closing report, in
 which every "done" claim carries the command that would have failed it. Then hand off:
