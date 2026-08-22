@@ -9,18 +9,17 @@ metadata:
 
 # Plan Arc - Arc Planning Protocol
 
-Turn "plan arc X" into a queued, executor-ready arc: write the `Arc` entity, resolve the
-design-first gate with the user, sweep decisions complete, plan every phase against the
-confirmed design, map each arc promise to a fulfilling task, fan out review, validate
-with the consumer's own tooling, queue one arc tier, hand off with `/do-arc <id>`.
+Turn "plan arc X" into a queued, executor-ready arc: the `Arc` entity, the design-first
+gate with the user, decisions complete, every phase planned against the confirmed design,
+every promise mapped to a task, review fanned out, validated, queued as one arc tier,
+handed off with `/do-arc <id>`.
 
 ## Trigger
 
 User says: `plan arc`, `/plan-arc`, `create arc`, `new arc`.
 **Not this skill:** one standalone phase -> `plan-phase`; building / sweeping / validating
-an existing arc -> `do-arc` / `arc-sweep` / `validate-arc`. An arc is a named block of
-phases shipped as one unit; work one small phase can carry routes to `plan-phase` - say
-so and route it, never inflate it into an arc.
+an existing arc -> `do-arc` / `arc-sweep` / `validate-arc`. An arc is a named block of phases
+shipped as one unit; work one phase can carry routes to `plan-phase` - never inflate it.
 
 ## Arguments
 
@@ -36,17 +35,18 @@ A littered sandbox: preserve it on a branch, `roadmap worktree reset --base <ref
 
 ## Step 1: Author the Arc entity
 
-Write `roadmap/arcs/<id>.arc.ts` with `defineArc` BEFORE any phase is planned, so phases
-plan against a fixed frame (template verbatim: arc-integrity.md §0). `defineArc`'s zod
-`.parse()` enforces the shape at import and `crossValidate` (both in
-`lib/roadmap/schema.ts`) rejects planes/phases drift. Decide WITH the user: `planes`, `singleSeams`, `honestyRails`, `acceptanceCriteria`,
-`baseRef`; fill `planes[].phases` in Step 2a once numbers are reserved.
+Write `roadmap/arcs/<id>.arc.ts` with `defineArc` BEFORE any phase is planned (template:
+arc-integrity.md §0; zod `.parse()` + `crossValidate` enforce the shape and planes/phases
+drift). Decide WITH the user: `planes`, `singleSeams`, `honestyRails`,
+`acceptanceCriteria`, `baseRef`; fill `planes[].phases` in Step 2a.
 
-**Interview first (before criteria or the gate).** Interview one question at a time,
-prioritizing questions whose answers change architecture or scope; record the answers as
-the arc's **LOCKED DECISIONS** comment block (convention: `roadmap/arcs/VOICE.arc.ts`) so
-they bind every phase (user intent here; the Step-1b architect owns TECHNICAL decisions).
-Skip ONLY by recording `interview: skipped - <why>` (design pre-ratified / mechanical).
+**Interview first (before criteria or the gate).** One question at a time, prioritizing
+answers that change architecture or scope; record each as a ONE-LINE dated ruling in the
+arc's **LOCKED DECISIONS** comment block (user intent here; the Step-1b architect owns
+TECHNICAL decisions). Narrative rationale - research digests, coverage/pricing findings -
+lives ONLY in the execution prompt (Step 4); the arc header comment, phase `source`
+fields, and designRef summaries CITE it, never restate it. Skip ONLY by recording
+`interview: skipped - <why>` (design pre-ratified / mechanical).
 
 **A user ruling is law.** When the user waives an artifact or makes a scope call ("no
 acceptance criteria", "skip the interview"), record the ruling verbatim in the `.arc.ts`
@@ -59,19 +59,16 @@ per-phase; consolidate 2-3-task phases before reserving; size against
 
 **Elicit `acceptanceCriteria` - never invent, never dilute.** Author them WITH the user
 in user-outcome terms, before the build (grading against planner-invented criteria is
-circular). **The user's outcome language is BINDING:** quote the request's stated signal
-verbatim into a criterion (and its Step 2c ledger row); a plan delivering a cheaper proxy
-- the stated signal deferred to a follow-up, reworded weaker, or shown only when
-something else happens to fire - is an escalation the user must approve, never a silent
-substitution. Each criterion names the `job` (the JTBD), `signal`, `bar`, `surfaces`, and
+circular). **The user's outcome language is BINDING:** quote the stated signal verbatim into a
+criterion (+ its Step 2c row); a cheaper proxy (deferred, reworded weaker, or fired only
+incidentally) is an escalation the user must approve, never a silent substitution. Each criterion names the `job` (the JTBD), `signal`, `bar`, `surfaces`, and
 the cheapest `tier` that honestly judges it; one or two sharp beat ten vague.
 **Judge-state rule (arc-integrity.md §1):** every `signal` names the STATE it is judged
 under - realistic density (name the number), a second visit, post-churn - never cold-only.
 
 ## Step 1b: Design-first gate (classify -> architecture + UX reuse-or-design -> confirm)
 
-Run before Step 1c - the front-gate mirror of `validate-arc`; contracts:
-`references/design-gate.md`.
+Run before Step 1c; contracts: `references/design-gate.md`.
 
 **Gate conduct - the user IS the gate (full contract: design-gate.md §0).** Every PAUSE
 is arm-preserving: present EVERY viable option, including ones you recommend against,
@@ -102,11 +99,10 @@ commit. **PAUSE for the user's explicit go.**
    consumer's preview/design directories for the target surface including variants
    (`-dark`, `-v2`, siblings). More than one -> list every sibling and put the
    canonical-naming question to the user before any is evolved.
-2. Spawn the `ux-designer` agent (an advisor, like the architect): it designs inside the
-   consumer's UX canon, picks the form from design-gate.md §3's table (**design-locked
-   prototype is the DEFAULT for a net-new or regrouped app surface**), and meets
-   `references/ux-craft.md`; pass that file's absolute path (its §3b requires it) plus
-   the quality-exemplar path when `designHomes` names one.
+2. Spawn the `ux-designer` agent (an advisor, like the architect): it designs inside the consumer's
+   UX canon, picks the form from design-gate.md §3 (**design-locked prototype = the
+   DEFAULT for a net-new/regrouped surface**), meets `references/ux-craft.md` (pass its
+   absolute path + the quality exemplar when `designHomes` names one).
 3. Record `{ kind: 'ux', ref, status: 'reused' | 'designed', summary }` onto `designRefs`;
    **PAUSE for the user's explicit go.** A no-surface arc records the sub-gate skip.
 4. **Mint the paired conformance criterion (MANDATORY; templates verbatim in
@@ -145,6 +141,8 @@ Loop `plan-phase` over the reserved numbers in dependency / plane order:
   and ships an unexecutable queue.
 - **Plan AGAINST the confirmed design.** Each task cites the designRef `ref` + `summary`
   it implements; a phase that would deviate must **reopen Step 1b**, never diverge.
+- **`source` cites, never narrates:** <=2 lines - arc + plane + the designRef pointer;
+  rationale stays in the execution prompt.
 - **Anchor by symbol, never by line:** cite `steps[].file` paths plus exported symbols an
   exact `grep -F` finds at HEAD - a `file.ts:123` anchor is stale by execution time.
 - **Escalate, never guess:** a choice outside the three buckets stops the loop.
@@ -154,10 +152,9 @@ Loop `plan-phase` over the reserved numbers in dependency / plane order:
 Before review, build the coverage table (template + row sources: arc-integrity.md §3):
 one row per `acceptanceCriteria[].id`, per `designRefs[].ref`, per honesty rail, per
 single seam, per build-implying LOCKED DECISION, **and per item/outcome the user's
-request states, quoted verbatim** -> the `phase.task` that fulfills it. An item
-unfulfillable as written is REFRAMED to its nearest real mechanism (name the real file,
-command, or store) with the mapping recorded in its row - never dropped, never silently
-swapped. Write the ledger as a comment block in the `.arc.ts`. An UNMAPPED row is a promise no
+request states, quoted verbatim** -> the `phase.task` that fulfills it. An item unfulfillable
+as written is REFRAMED to its nearest real mechanism (named file/command/store), the
+mapping recorded in its row - never dropped or silently swapped. Write the ledger as a comment block in the `.arc.ts`. An UNMAPPED row is a promise no
 phase keeps: add the task or delete the promise WITH the user (the FLUENTFRONT
 empty-set failure, arc-integrity.md §3).
 
@@ -186,10 +183,13 @@ any out-of-scope touch and redo that phase's review serially.
 ## Step 4: Validate with the consumer's own tooling, then queue serially
 
 **First act:** run `roadmap phase validate <N|file>` on every member phase file AND the
-`.arc.ts`; paste each verbatim result (exit code + output line) into the closing report
-(contract: arc-integrity.md §5). Claim ONLY what the tool printed - "the validator
-accepted it" without a pasted run is fabricated evidence. Any exit 2 -> fix, re-review
+`.arc.ts`; paste each verbatim result into the closing report (arc-integrity.md §5) - an
+unpasted "the validator accepted it" is fabricated evidence. Any exit 2 -> fix, re-review
 that phase, re-validate; never queue around it.
+
+**Author the execution prompt** (pre-queue): `roadmap/arc-prompts/<id>-execution-prompt.md`
+- the arc's bar, honesty rails, design refs, research basis; the ONE home of arc
+rationale and the file do-arc reads before driving.
 
 After ALL reviews return, you ALONE write `roadmap/backlog.ts` - serially, one pass -
 placing READY phases as a single arc tier, respecting the dependency floor + priority
