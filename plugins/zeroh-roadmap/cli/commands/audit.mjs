@@ -1,5 +1,5 @@
 /**
- * roadmap audit [repo-root] [--json] — audit-roadmap's 13 structural checks, mechanized
+ * roadmap audit [repo-root] [--json] — audit-roadmap's 14 structural checks, mechanized
  * (ROADCODE 1659.2, replacing skills/audit-roadmap's hand-run prose). Read-only: never
  * opens source code, never fixes — reports findings + a verdict.
  *
@@ -12,6 +12,7 @@
  *   7  stale in-progress phases (git log staleness > 30 days)
  *   12.3 archived phase with unresolved/planned-not-done/operator-pending debt (HIGH)
  *   12.4 dangling debtResolution on an archived phase (MEDIUM)
+ *   14 followup hygiene: untriaged orphans (MEDIUM), spent/past-review files (LOW)
  *
  * Exit contract (design §2): 0 = CLEAN or HAS ISSUES (MEDIUM/LOW only) · 2 = BROKEN (any
  * CRITICAL/HIGH) · 1 = usage / tsx-absent in this strict context.
@@ -22,6 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { debtCensusJson } from '../lib/derive.mjs'
 import { TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
+import { censusFollowups } from './followups.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -110,6 +112,20 @@ export default async function run(argv) {
       for (const d of census.archive.dangling ?? []) {
         findings.push({ check: 12, severity: 'MEDIUM', phase: null, message: `Archive dangling debtResolution — ${d}` })
       }
+    }
+  }
+
+  // ── Check 14: followup hygiene (reuse the command's one census) ──────────
+  const today = new Date().toISOString().slice(0, 10)
+  for (const row of censusFollowups(repo).rows) {
+    if (row.status === 'UNTRIAGED' && row.orphan) {
+      findings.push({ check: 14, severity: 'MEDIUM', phase: null, message: `Followup ${row.file} is UNTRIAGED and orphaned; disposition it or add an inbound roadmap reference.` })
+    }
+    if (row.status === 'spent') {
+      findings.push({ check: 14, severity: 'LOW', phase: null, message: `Followup ${row.file} is status: spent but still present; delete it (git history is the archive).` })
+    }
+    if (row.reviewBy && row.reviewBy < today) {
+      findings.push({ check: 14, severity: 'LOW', phase: null, message: `Followup ${row.file} passed review-by ${row.reviewBy}; refresh or disposition it.` })
     }
   }
 

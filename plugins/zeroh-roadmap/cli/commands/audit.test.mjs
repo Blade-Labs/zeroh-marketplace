@@ -80,6 +80,10 @@ const writeBacklog = (root, items) =>
     join(root, 'roadmap', 'backlog.ts'),
     `export default { tiers: [{ tier: 0, label: 'Default queue', items: ${js(items)} }] }\n`,
   )
+const writeFollowup = (root, name, source) => {
+  mkdirSync(join(root, 'roadmap', 'followups'), { recursive: true })
+  writeFileSync(join(root, 'roadmap', 'followups', name), source)
+}
 
 /** A git repo with one commit whose subject names `phase <n>` (age ≈ 0 → not stale). */
 function gitCommitPhase(root, n) {
@@ -520,6 +524,61 @@ test("check 13 GREEN archived — an ARCHIVED phase disposing .limitations as fi
   }))
   const { report } = audit(root)
   assert.ok(!has(report, 13, 'MEDIUM'), "an archived phase's limitations disposal is release-sweep's legitimate walk")
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// Check 14 — followup hygiene (report-only)
+// ════════════════════════════════════════════════════════════════════════════
+test('check 14 RED — an UNTRIAGED orphan followup → MEDIUM', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100))
+  writeFollowup(root, 'orphan.md', 'No lifecycle header\n')
+  const { code, report } = audit(root)
+  assert.equal(code, 0)
+  assert.ok(has(report, 14, 'MEDIUM'))
+})
+
+test('check 14 GREEN — a referenced UNTRIAGED followup is not an orphan finding', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, { notes: 'followups/referenced.md' }))
+  writeFollowup(root, 'referenced.md', 'No lifecycle header\n')
+  const { report } = audit(root)
+  assert.ok(!has(report, 14, 'MEDIUM'))
+})
+
+test('check 14 RED — a spent followup still present → LOW', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100))
+  writeFollowup(root, 'spent.md', '---\nstatus: spent\n---\nDone\n')
+  const { report } = audit(root)
+  assert.ok(has(report, 14, 'LOW'))
+})
+
+test('check 14 GREEN — a live followup is not a spent finding', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100))
+  writeFollowup(root, 'live.md', '---\nstatus: live\n---\nActive\n')
+  const { report } = audit(root)
+  assert.ok(!has(report, 14, 'LOW'))
+})
+
+test('check 14 RED — review-by in the past → LOW', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100))
+  writeFollowup(root, 'review.md', '---\nstatus: parked\ntrigger: named event\nreview-by: 2000-01-01\n---\nParked\n')
+  const { report } = audit(root)
+  assert.ok(has(report, 14, 'LOW'))
+})
+
+test('check 14 GREEN — future review-by and no followups directory are silent', () => {
+  const futureRoot = makeRepo()
+  writePhase(futureRoot, 100, basePhase(100))
+  writeFollowup(futureRoot, 'review.md', '---\nstatus: parked\ntrigger: named event\nreview-by: 2099-01-01\n---\nParked\n')
+  assert.ok(!has(audit(futureRoot).report, 14, 'LOW'))
+
+  const emptyRoot = makeRepo()
+  writePhase(emptyRoot, 100, basePhase(100))
+  assert.ok(!audit(emptyRoot).report.findings.some((finding) => finding.check === 14))
 })
 
 // ════════════════════════════════════════════════════════════════════════════
