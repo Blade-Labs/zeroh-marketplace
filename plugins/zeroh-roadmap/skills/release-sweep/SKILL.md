@@ -15,20 +15,14 @@ metadata:
 release-sweep [<version> | --arc <id> | --all-done] [--archive]
 ```
 
-- `<version>` — bare semver `^\d+\.\d+\.\d+$` (no `v` prefix; the archive dir mirrors it:
-  `roadmap/archive/0.7.0/`). Omitted with no other selector → prompt (never guess from `package.json`).
-- `--arc <id>` — ALTERNATIVE SELECTOR: sweep done phases whose `arcId` matches, regardless of version.
-  Exists because most consumers don't version-stamp phases (one estate: 23 tagged of 1,445); the arc is
-  their natural debt unit. Archive → `roadmap/archive/arc-<id>/`.
-- `--all-done` — ALTERNATIVE SELECTOR: sweep EVERY done/historical phase (the estate sweep). Pair with
-  the CLI: **`roadmap debt census`** derives the joined open-debt ledger first, **`roadmap debt dispose`**
-  lands decided resolutions in bulk — so the per-phase protocol below is reserved for entries a human
-  actually reasons about. Archive groups by version when tagged, else `roadmap/archive/untagged/`.
+- `<version>` — bare semver (no `v` prefix); omitted with no selector → prompt, never infer it.
+- `--arc <id>` — sweep done phases matching `arcId`; archive under `roadmap/archive/arc-<id>/`.
+- `--all-done` — sweep all done/historical phases. Use `roadmap debt census` + `dispose` for bulk;
+  archive by version, or under `roadmap/archive/untagged/`.
 - `--archive` — after resolution, `git mv` the selected `done` phases into their archive dir. Refuses if
   any open debt remains. Without it, review-only.
 
-> **Estate scale:** run `roadmap debt census` first and work from its ledger; **`roadmap debt check`** is
-> a CI ratchet against a committed ceiling. See the `roadmap debt` help for contracts.
+> **Estate scale:** start with `roadmap debt census`; `roadmap debt check` is the CI ceiling ratchet.
 
 ## PRIME RULE: ARCHIVE GATES ON CLEAN DEBTS
 
@@ -58,6 +52,14 @@ phase, ordered by number; the `ref` IS the synthetic id, used verbatim in prompt
 debt on `limitations` matching a deferred-work pattern (per `schema.ts` `TransparencyReportShape` doc) gets
 a "compromise-disguised-as-limitation — consider re-classifying" note. A `debtResolutions` ref pointing at a
 `"None"`/absent entry is a schema-drift warning (flag, never auto-repair).
+
+### Step 2.5 — Triage followup files (minor/major; patches exempt)
+Run `roadmap followups census`. For every fired trigger, UNTRIAGED orphan, spent file, or past
+`review-by`, record ONE disposition from
+`skills/release-sweep/references/followup-contract.md`: **promote** with (p) `plan-phase` into a queued
+phase built later in the NORMAL lane; **delete** with (f)/(s) `git rm`; or **park** with (d)/(k) by
+stamping/refreshing a dated header. A minor/major release requires zero flagged files
+**UNDISPOSITIONED**; patches are exempt. This gates disposition only, never completion of promoted work.
 
 ### Step 3 — Resolve each open debt (interactive; do NOT auto-resolve)
 Each item gets an operator decision; each choice appends ONE `debtResolutions[]` entry
@@ -94,13 +96,9 @@ integrity (checks 12.3/12.4 join the archive census); transparency reports +
 `debtResolutions` are preserved on the archived files (`won't_fix`/`dismissed` stay visible to auditors).
 
 ## Edge cases + scope
-- No non-`"None"` entries → zero debts, archive-eligible immediately. `version: undefined` → skipped
-  (version is the partition key); warn. A version match that isn't `done` → excluded (Step 1). A
-  `debtResolutions` ref matching no entry → schema-drift warning (no auto-repair). An inline fix that forces
-  its own trade-off → the new compromise lands on the FIX's phase, never reopening this closed debt. User
-  aborts → per-resolution commits are independent; re-run resumes; `--archive` is idempotent (Step 5 guards).
-- **Does NOT:** change a phase's version (that's plan/review-phase); run gates on archived phases (archive is
-  a move, not re-validation); enforce release timing; cancel/remove phases.
+Zero debts is archive-eligible. Skip/warn `version: undefined`; Step 1 excludes non-done matches. A
+dangling resolution warns without repair. New debt from an inline fix belongs to that fix's phase.
+Per-resolution commits and archive are resumable. Never change versions, gate archived work, or cancel phases.
 
 **No summary file.** The phase files ARE the audit trail — `debtResolutions[]` + the transparency reports it
 points to carry everything an auditor needs; a separate `reviews/<version>-debt-sweep.md` drifts. Don't write one.

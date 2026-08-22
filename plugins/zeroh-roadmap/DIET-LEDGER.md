@@ -333,3 +333,13 @@ gauntlet v0.30.0 installs (the blind-trial winners for do-arc/do-phase/using-zer
 smaller dieted texts; measure.test.mjs deliberately carries no real-tree assertion). Pre-existing,
 untouched by 2420 (which only shrank its two files); surfaced for the next diet lane / re-ratchet
 ruling rather than papered over.
+
+## release-sweep/SKILL.md — phase 2422 (diet-funded)
+
+The followup triage gate was funded by same-file compression; the phase close-out records the final
+do-arc measurement after arc-sweep also lands.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| selector explanations and estate-scale narration | obsolete-with-evidence(pure wording compression; every selector, archive destination, prompt rule, bulk command, and ratchet survives) | release-sweep invocation list + estate-scale callout |
+| Edge cases + scope narration | obsolete-with-evidence(pure wording compression; every operative edge case and exclusion survives) | release-sweep §Edge cases + scope |
