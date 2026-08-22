@@ -16,7 +16,8 @@
 // v11 migration notes (consumers syncing from v10 — additive/optional, historical
 // files keep parsing unmodified):
 // - PhaseTask gains optional `interfaces` ({consumes[], produces[]} — exact symbol/
-//   contract names for cross-task dependencies; review-phase greps the declared names).
+//   contract names for cross-task dependencies, precise enough for a reviewer to
+//   grep -F them against the steps).
 //
 // v10 migration notes (consumers syncing from v9 — all additive/optional, so
 // historical files keep parsing unmodified):
@@ -440,8 +441,8 @@ export const PhaseTaskShape = z.object({
   dependsOn: z.array(z.string().regex(/^\d+\.\d+$/)).default([]),
   /** Cross-task contract, filled ONLY when this task consumes a sibling task's
    *  output or produces one a later task relies on. Entries are exact symbol/
-   *  contract names ("makeWorkIqClient(fetch?) from N.1"), never prose —
-   *  review-phase Mode A checks declared names against steps with grep -F.
+   *  contract names ("makeWorkIqClient(fetch?) from N.1"), never prose, so a
+   *  reviewer can grep -F a declared name against the steps that owe it.
    *  Omit entirely for self-contained tasks. */
   interfaces: z
     .object({

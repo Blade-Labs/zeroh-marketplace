@@ -69,17 +69,15 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
     if (phaseMatch) errors.push(...runPhaseNumberAndClaimChecks(normalized, phaseMatch))
   }
 
-  // ── WARN-level `step → verify:` grammar lint (NEW-to-git phase files only) ─────────
-  // Never a non-zero exit — a reminder of plan-phase's authoring grammar, not enforcement
+  // ── WARN-level authoring lints (NEW-to-git phase files only) ──────────────────────
+  // Never a non-zero exit — reminders of plan-phase's authoring rules, not enforcement
   // (review-phase Mode A is the enforcement). The ~1,100 already-committed phase files are
-  // grandfathered: the file must be new to git (no HEAD blob) for the lint to fire.
-  const warnings = isPhase && parsed
-    ? [
-        ...stepVerifyGrammarWarnings(parsed, normalized),
-        ...verifyPolarityWarnings(parsed, normalized),
-        ...stepDescriptionLengthWarnings(parsed, normalized),
-      ]
-    : []
+  // grandfathered: the file must be new to git (no HEAD blob) for any of them to fire, so
+  // the gate is resolved ONCE here (it shells out to git) rather than per lint.
+  const warnings =
+    isPhase && parsed && isNewToGit(normalized)
+      ? [...stepVerifyGrammarWarnings(parsed), ...verifyPolarityWarnings(parsed), ...stepDescriptionLengthWarnings(parsed)]
+      : []
 
   if (errors.length > 0) return { kind: 'errors', ok: false, errors, warnings }
   return { kind: 'ok', ok: true, warnings }
@@ -93,50 +91,46 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
  */
 const STEP_DESCRIPTION_WARN_CHARS = 700
 
-/**
- * One WARN per steps[].description longer than STEP_DESCRIPTION_WARN_CHARS — NEW-to-git
- * phase files only (same grandfather rule as the grammar lint); never changes the exit.
- */
-function stepDescriptionLengthWarnings(phase, normalizedPath) {
-  if (!isNewToGit(normalizedPath)) return []
-  const num = phase?.phase ?? '?'
-  const out = []
+/** Every step description with the `task N.M step K` label all three lints name it by. */
+function* stepDescriptions(phase) {
   for (const t of Array.isArray(phase?.tasks) ? phase.tasks : []) {
     const steps = Array.isArray(t?.steps) ? t.steps : []
-    steps.forEach((s, i) => {
-      const d = typeof s?.description === 'string' ? s.description : ''
-      if (d.length > STEP_DESCRIPTION_WARN_CHARS) {
-        out.push(
-          `[zeroh-roadmap] WARN phase ${num} task ${t?.id ?? '?'} step ${i + 1}: description ` +
-            `exceeds ${STEP_DESCRIPTION_WARN_CHARS} chars (${d.length}) — state decisions, not ` +
-            `narration; rationale lives in the designRef/execution prompt (plan-phase step contract)`,
-        )
+    for (const [i, s] of steps.entries()) {
+      yield {
+        where: `task ${t?.id ?? '?'} step ${i + 1}`,
+        description: typeof s?.description === 'string' ? s.description : '',
       }
-    })
+    }
+  }
+}
+
+/** One WARN per steps[].description longer than STEP_DESCRIPTION_WARN_CHARS. */
+function stepDescriptionLengthWarnings(phase) {
+  const num = phase?.phase ?? '?'
+  const out = []
+  for (const { where, description } of stepDescriptions(phase)) {
+    if (description.length > STEP_DESCRIPTION_WARN_CHARS) {
+      out.push(
+        `[zeroh-roadmap] WARN phase ${num} ${where}: description ` +
+          `exceeds ${STEP_DESCRIPTION_WARN_CHARS} chars (${description.length}) — state decisions, not ` +
+          `narration; rationale lives in the designRef/execution prompt (plan-phase step contract)`,
+      )
+    }
   }
   return out
 }
 
-/**
- * One WARN string per steps[].description missing " → verify:" — but ONLY for a phase file
- * that is NEW to git (no HEAD blob). Returns [] for a committed (grandfathered) file, a
- * git-absent context (fail open), or a phase whose steps all carry the clause.
- */
-function stepVerifyGrammarWarnings(phase, normalizedPath) {
-  if (!isNewToGit(normalizedPath)) return []
+/** One WARN string per steps[].description missing " → verify:". */
+function stepVerifyGrammarWarnings(phase) {
   const num = phase?.phase ?? '?'
   const out = []
-  for (const t of Array.isArray(phase?.tasks) ? phase.tasks : []) {
-    const steps = Array.isArray(t?.steps) ? t.steps : []
-    steps.forEach((s, i) => {
-      const d = typeof s?.description === 'string' ? s.description : ''
-      if (!/→\s*verify:/.test(d)) {
-        out.push(
-          `[zeroh-roadmap] WARN phase ${num} task ${t?.id ?? '?'} step ${i + 1}: description missing ` +
-            `" → verify: <command|observable>" (plan-phase authoring grammar; new phase files only)`,
-        )
-      }
-    })
+  for (const { where, description } of stepDescriptions(phase)) {
+    if (!/→\s*verify:/.test(description)) {
+      out.push(
+        `[zeroh-roadmap] WARN phase ${num} ${where}: description missing ` +
+          `" → verify: <command|observable>" (plan-phase authoring grammar; new phase files only)`,
+      )
+    }
   }
   return out
 }
@@ -161,8 +155,7 @@ function stepVerifyGrammarWarnings(phase, normalizedPath) {
  * see the things a regex cannot (a grep that matches the very line the task tells the executor to
  * write, or one that passes vacuously because the file does not exist yet).
  */
-function verifyPolarityWarnings(phase, normalizedPath) {
-  if (!isNewToGit(normalizedPath)) return []
+function verifyPolarityWarnings(phase) {
   const num = phase?.phase ?? '?'
   const out = []
   const flag = (where, cmd) => {
@@ -191,13 +184,9 @@ function verifyPolarityWarnings(phase, normalizedPath) {
   for (const a of Array.isArray(phase?.assumptions) ? phase.assumptions : []) {
     if (typeof a?.verify === 'string') flag(`assumption "${String(a.claim ?? '').slice(0, 40)}"`, a.verify)
   }
-  for (const t of Array.isArray(phase?.tasks) ? phase.tasks : []) {
-    const steps = Array.isArray(t?.steps) ? t.steps : []
-    steps.forEach((s, i) => {
-      const d = typeof s?.description === 'string' ? s.description : ''
-      const m = d.split(/→\s*verify:/)[1]
-      if (m) flag(`task ${t?.id ?? '?'} step ${i + 1}`, m)
-    })
+  for (const { where, description } of stepDescriptions(phase)) {
+    const m = description.split(/→\s*verify:/)[1]
+    if (m) flag(where, m)
   }
   return out
 }
