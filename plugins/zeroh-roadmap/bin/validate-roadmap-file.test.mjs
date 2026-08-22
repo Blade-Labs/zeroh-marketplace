@@ -317,3 +317,34 @@ test('grammar lint is SILENT on a NEW-to-git phase whose step carries → verify
   assert.equal(r.code, 0)
   assert.doesNotMatch(r.stderr, /WARN phase 9008/, 'a compliant new file draws no warning')
 })
+
+// ── stepDescriptionLength lint — WARN-level, NEW-to-git phase files only ──────────
+// Decisions-not-narration (phase 2420): a step description over 700 chars is narration
+// creep (the gauntlet's "diff-re-narrating" theme); the cap is inclusive and advisory.
+const pad = (n) => 'd'.repeat(n)
+const V = ' → verify: grep -n thing x' // keeps the grammar lint silent
+const OVER_700 = pad(700) + V
+const EXACTLY_700 = pad(700 - V.length) + V
+
+test('stepDescriptionLength lint WARNS on a NEW-to-git step over 700 chars (exit still 0)', () => {
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(OVER_700))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, 'the length lint NEVER blocks — exit stays 0')
+  assert.match(r.stderr, /WARN phase 9008 task 9008\.1 step 1/, 'names the offending step')
+  assert.match(r.stderr, /700/, 'the WARN names the cap')
+  assert.match(r.stderr, /decision/i, 'the WARN states the decisions-not-narration rule')
+})
+
+test('stepDescriptionLength lint is SILENT at exactly 700 chars (inclusive cap)', () => {
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(EXACTLY_700))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0)
+  assert.doesNotMatch(r.stderr, /exceeds 700/, 'sitting exactly on the cap is within it')
+})
+
+test('stepDescriptionLength lint is SILENT on a COMMITTED (grandfathered) long step', () => {
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(OVER_700), { commit: true })
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0)
+  assert.doesNotMatch(r.stderr, /WARN phase 9008/, 'a committed file is exempt forever')
+})

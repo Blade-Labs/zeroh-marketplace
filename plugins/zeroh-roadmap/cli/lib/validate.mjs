@@ -74,11 +74,47 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
   // (review-phase Mode A is the enforcement). The ~1,100 already-committed phase files are
   // grandfathered: the file must be new to git (no HEAD blob) for the lint to fire.
   const warnings = isPhase && parsed
-    ? [...stepVerifyGrammarWarnings(parsed, normalized), ...verifyPolarityWarnings(parsed, normalized)]
+    ? [
+        ...stepVerifyGrammarWarnings(parsed, normalized),
+        ...verifyPolarityWarnings(parsed, normalized),
+        ...stepDescriptionLengthWarnings(parsed, normalized),
+      ]
     : []
 
   if (errors.length > 0) return { kind: 'errors', ok: false, errors, warnings }
   return { kind: 'ok', ok: true, warnings }
+}
+
+/**
+ * A step description states the DECISION (names, signatures, the non-obvious constraint)
+ * and its anchor; rationale lives in the designRef/execution prompt, cited not restated.
+ * Over this many chars is narration creep — the gauntlet 2026-08 "diff-re-narrating"
+ * failure theme, made a floor by phase 2420. Inclusive: sitting exactly on it is within.
+ */
+const STEP_DESCRIPTION_WARN_CHARS = 700
+
+/**
+ * One WARN per steps[].description longer than STEP_DESCRIPTION_WARN_CHARS — NEW-to-git
+ * phase files only (same grandfather rule as the grammar lint); never changes the exit.
+ */
+function stepDescriptionLengthWarnings(phase, normalizedPath) {
+  if (!isNewToGit(normalizedPath)) return []
+  const num = phase?.phase ?? '?'
+  const out = []
+  for (const t of Array.isArray(phase?.tasks) ? phase.tasks : []) {
+    const steps = Array.isArray(t?.steps) ? t.steps : []
+    steps.forEach((s, i) => {
+      const d = typeof s?.description === 'string' ? s.description : ''
+      if (d.length > STEP_DESCRIPTION_WARN_CHARS) {
+        out.push(
+          `[zeroh-roadmap] WARN phase ${num} task ${t?.id ?? '?'} step ${i + 1}: description ` +
+            `exceeds ${STEP_DESCRIPTION_WARN_CHARS} chars (${d.length}) — state decisions, not ` +
+            `narration; rationale lives in the designRef/execution prompt (plan-phase step contract)`,
+        )
+      }
+    })
+  }
+  return out
 }
 
 /**
