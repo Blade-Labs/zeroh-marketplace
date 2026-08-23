@@ -174,6 +174,69 @@ export function newestArtifactDated(dir, arcId, suffix) {
   return best
 }
 
+// ── Per-phase eval records (arc POLYSEAT plane 1) ────────────────────────────────────
+
+/**
+ * The per-phase record's filename class: `phase-<N>.peval.json`, DATE-FREE by design.
+ *
+ * Every arc-side scan of roadmap/arc-evals/ is anchored on a trailing `-YYYY-MM-DD` before
+ * `.json` (`newestArtifactDated` here; REPORT_NAME_RE and arcsWithReports in
+ * commands/eval.mjs), and this pattern requires a `.peval.json` tail no dated artifact
+ * carries. The two name classes are therefore DISJOINT BY CONSTRUCTION, not by convention —
+ * a record must never be read as an arc report, and an arc report must never be read as a
+ * record. eval-collect.test.mjs falsifies that in BOTH directions.
+ */
+export const PEVAL_NAME_RE = /^phase-(\d+)\.peval\.json$/
+
+/** Where one phase's record lives. ONE home for the convention, so the gate writer and the
+ *  scorecard reader cannot drift into two spellings of the same path. */
+export const phaseEvalRecordPath = (repoRoot, phase) =>
+  join(repoRoot, 'roadmap', 'arc-evals', `phase-${phase}.peval.json`)
+
+/**
+ * Assemble a per-phase eval record from what a gate run already holds. PURE: `date` and
+ * `fingerprint` are passed IN, never derived here — the SweepReportShape discipline (a
+ * recorder that reads its own wall clock makes a silent re-record indistinguishable from the
+ * original). The gate passes the run report's own `startedAt`, so the date is a recorded
+ * fact about the run rather than a fresh reading.
+ *
+ * `taskCount` and `keyFiles` are the COHORT KEYS computeScorecard slices on
+ * (bandFor x surfaceOf), which is why they are lifted from the phase file rather than left
+ * to the reader: a record without them does not lose detail, it MIS-COHORTS.
+ *
+ * Attribution is copied FIELD BY FIELD, never spread: PhaseEvalRecordShape is strict, and a
+ * consumer phase file carrying an extra key under executionResult.driver would otherwise
+ * turn a measurement write into a refusal.
+ */
+export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerprint, date }) {
+  const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : []
+  const record = {
+    phase,
+    date,
+    consumerFingerprint: fingerprint,
+    taskCount: tasks.length,
+    keyFiles: Array.isArray(parsed?.keyFiles) ? parsed.keyFiles : [],
+    gate: {
+      green: green === true,
+      slots: (slots ?? []).map((s) => ({
+        slot: s.slot,
+        // An absent exitCode means the slot did not RUN (declared-absent / skipped). A 0
+        // here would invent a pass, which is the one direction that flatters the record.
+        ...(typeof s.exitCode === 'number' ? { exitCode: s.exitCode } : {}),
+        ...(typeof s.durationMs === 'number' ? { durationMs: s.durationMs } : {}),
+        ...(s.declaredAbsent === true ? { declaredAbsent: true } : {}),
+      })),
+    },
+  }
+  if (parsed?.metrics) record.metrics = parsed.metrics
+  const attribution = {}
+  if (parsed?.plannedBy?.model) attribution.plannedBy = { model: parsed.plannedBy.model }
+  const driver = parsed?.executionResult?.driver
+  if (driver?.model && driver?.lane) attribution.driver = { model: driver.model, lane: driver.lane }
+  if (Object.keys(attribution).length > 0) record.attribution = attribution
+  return record
+}
+
 /** Read + JSON.parse an artifact. Returns { value } or { error } — never throws. */
 function readJson(path) {
   try {

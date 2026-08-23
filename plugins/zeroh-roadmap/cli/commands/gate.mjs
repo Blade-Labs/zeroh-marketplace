@@ -11,11 +11,16 @@
  * refused (floor violation / missing slot binding).
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { derivePhaseStartSha, GitScanError } from '../lib/gitscan.mjs'
-import { bridgeImport, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
+import { bridgeImport, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
+import {
+  assembleConsumerFingerprint,
+  assemblePhaseEvalRecord,
+  phaseEvalRecordPath,
+} from '../lib/eval-collect.mjs'
 import {
   gateCell,
   specialistFloor,
@@ -34,6 +39,56 @@ import {
   gateDir,
   AgentRoundInputShape,
 } from '../lib/gate-report.mjs'
+
+/**
+ * Leave the per-phase eval record beside the gate's own artifacts — the measurement pipe's
+ * inlet (arc POLYSEAT plane 1). Called at BOTH completions where slot results exist: the
+ * execute path (which captures plannedBy) and --verify-complete (the refresh that captures
+ * executionResult.driver and metrics, neither of which exists yet at execute time).
+ * Latest-run-wins: one file per phase, history lives in git if the consumer commits it.
+ *
+ * NEVER THROWS AND NEVER CHANGES AN EXIT CODE. Every failure mode — no consumer schema, no
+ * tsx, an unwritable directory, a shape refusal — prints one loud stderr line and returns
+ * null. Measurement that can fail a gate is measurement that gets deleted the first time it
+ * blocks a release; the gate's verdict belongs to the slots alone.
+ *
+ * `date` comes from the run report's own `startedAt`, never a fresh clock read: the record
+ * dates the RUN it describes, which is a fact already on disk.
+ */
+export function emitPhaseEvalRecord(toplevel, phaseNum, { parsed, report }) {
+  const path = phaseEvalRecordPath(toplevel, phaseNum)
+  try {
+    const schemaPath = consumerSchemaPath(toplevel)
+    const record = assemblePhaseEvalRecord({
+      phase: phaseNum,
+      parsed,
+      green: report.green,
+      slots: report.slots,
+      fingerprint: assembleConsumerFingerprint(toplevel),
+      date: String(report.startedAt).slice(0, 10),
+    })
+    const validated = bridgeParseShape(toplevel, schemaPath, 'PhaseEvalRecordShape', record)
+    if (!validated.ok) {
+      const { res } = validated
+      const detail =
+        res.kind === 'zod'
+          ? res.issues.map((i) => `${(i.path ?? []).join('.') || '(root)'}: ${i.message}`).join('; ')
+          : (res.stderr || '').trim() || res.kind
+      throw new Error(`${res.kind}: ${detail}`)
+    }
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify(validated.parsed, null, 2) + '\n')
+    return path
+  } catch (e) {
+    // Names the ARTIFACT, not just the phase: the reader's next question is always "where
+    // was it supposed to land", and a diagnostic that omits the path costs a grep.
+    process.stderr.write(
+      `gate run: the per-phase eval record ${path} was NOT written (${e.message}) — the gate ` +
+        `verdict is unaffected, but the eval scorecard gets no sample for phase ${phaseNum}\n`,
+    )
+    return null
+  }
+}
 
 /** A typed gate failure carrying its exit code + stderr lines. */
 export class GateError extends Error {
@@ -366,7 +421,10 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
     ...(foreign.length > 0 ? { foreignCommitsInRange: foreign } : {}),
     notes,
   }
-  return { plan, refused }
+  // `parsed` rides back beside the plan because the caller needs the phase's OWN fields
+  // (plannedBy, executionResult, metrics, tasks, keyFiles) for the per-phase eval record, and
+  // re-importing the file would pay the tsx bridge a second time for bytes already in hand.
+  return { plan, refused, parsed: phase }
 }
 
 function pickScope(s) {
@@ -514,6 +572,11 @@ export async function runGate(phaseNum, opts) {
       process.stdout.write(
         'warning: executionResult.driver absent: this completion will attribute to the unrecorded cohort in the eval scorecard (record { model, lane } in executionResult)\n',
       )
+    // The REFRESH: by now the phase file carries executionResult.driver and metrics, which did
+    // not exist when the execute path wrote this record. Emitted before the verdict returns so
+    // an INCONSISTENT completion is sampled too — excluding it would quietly drop the runs
+    // most worth measuring.
+    emitPhaseEvalRecord(toplevel, phaseNum, { parsed: imp.parsed, report: latest.report })
     const result = checkPhaseConsistency(imp.parsed, latest.report)
     if (!result.ok) {
       process.stderr.write(`gate run --verify-complete: phase ${phaseNum} inconsistent with ${latest.path}:\n`)
@@ -663,6 +726,8 @@ export async function runGate(phaseNum, opts) {
     process.stderr.write(`gate run: failed to write report: ${e.message}\n`)
     return 1
   }
+
+  emitPhaseEvalRecord(toplevel, phaseNum, { parsed: built.parsed, report: written.report })
 
   if (opts.json) process.stdout.write(JSON.stringify(written.report) + '\n')
   else {

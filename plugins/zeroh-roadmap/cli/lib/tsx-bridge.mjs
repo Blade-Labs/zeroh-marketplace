@@ -196,6 +196,49 @@ export function bridgeEval(
   }
 }
 
+// ── Named-shape validation ───────────────────────────────────────────────────────────
+
+// Parse a document against a NAMED consumer shape. argv[1] = schema path, argv[2] = shape
+// name, argv[3] = the input JSON or '-' to read it from STDIN.
+//
+// Use '-' for anything document-sized: one argv entry caps at 128KB (MAX_ARG_STRLEN), and a
+// bigger doc fails the spawn with E2BIG and an EMPTY stderr — which reads as a schema
+// mismatch it is not.
+const SHAPE_PARSE_SCRIPT = `
+const schemaPath = process.argv[1]
+const shapeName = process.argv[2]
+const inputArg = process.argv[3]
+Promise.all([import('file://' + schemaPath), import('node:fs')]).then(([m, fs]) => {
+  const shape = m[shapeName] || (m.default && m.default[shapeName])
+  if (!shape) { process.stderr.write(shapeName + ' not exported from ' + schemaPath + ' — the consumer schema predates this shape; re-sync lib/roadmap/schema.ts'); process.exit(4) }
+  const inputJson = inputArg === '-' ? fs.readFileSync(0, 'utf8') : inputArg
+  let input
+  try { input = JSON.parse(inputJson) } catch (e) { process.stderr.write('input is not valid JSON: ' + e.message); process.exit(4) }
+  const r = shape.safeParse(input)
+  if (r.success) { process.stdout.write('PARSED:' + JSON.stringify(r.data)) }
+  else { process.stderr.write('ZODISSUES:' + JSON.stringify(r.error.issues)); process.exit(3) }
+}).catch((e) => { process.stderr.write(String((e && e.stack) || e)); process.exit(4) })
+`
+
+/**
+ * Validate `doc` against the CONSUMER's `shapeName` through the bridge. Returns
+ * `{ ok: true, parsed }` or `{ ok: false, res }`, where `res` is the bridgeEval failure —
+ * `kind: 'zod'` carries `.issues`, `'tsx-absent'` the toolchain gap, `'load'` a broken schema.
+ *
+ * ONE home for the idiom every consumer-contract writer needs (the eval recorders, the
+ * scorecard projection, the gate's per-phase eval record). Seam 3 holds: the plugin still
+ * carries no second copy of any consumer contract — this only moves the SPAWN, never the shape.
+ */
+export function bridgeParseShape(consumerRoot, schemaPath, shapeName, doc, opts = {}) {
+  const res = bridgeEval(consumerRoot, SHAPE_PARSE_SCRIPT, {
+    ...opts,
+    args: [schemaPath, shapeName, '-'],
+    input: JSON.stringify(doc),
+  })
+  if (!res.ok) return { ok: false, res }
+  return { ok: true, parsed: JSON.parse(res.stdout.slice(res.stdout.indexOf('PARSED:') + 'PARSED:'.length)) }
+}
+
 // ── Content-keyed parse cache ─────────────────────────────────────────────────────────
 // key = absolute path + sha256(schema-signature + file bytes) — NEVER mtime. A change to
 // either the file OR the schema it parses through (definePhase/defineArc apply defaults at

@@ -11,15 +11,26 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  existsSync,
+  symlinkSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { untestedGateFixFindings, deviantGrammarFindings } from './gate.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
+const PLUGIN_ROOT = join(HERE, '..', '..')
+const BIN = join(PLUGIN_ROOT, 'bin', 'roadmap.mjs')
 
 const bases = []
 process.on('exit', () => bases.forEach((b) => rmSync(b, { recursive: true, force: true })))
@@ -41,12 +52,30 @@ const CONFIG = {
   gateSpecialists: [{ paths: ['src/relay/**', 'src/masking*'], agent: '.claude/agents/governed-spine-reviewer.md' }],
 }
 
-/** A git repo with a mini roadmap. Returns { root, git, writePhase, commit }. */
-function makeRepo(configOverride) {
+/**
+ * Seed the seam-3 toolchain a bridge-validated write needs: lib/roadmap/schema.ts re-exporting
+ * the plugin's templates/schema.ts plus a node_modules/zod symlink so the consumer resolves its
+ * own zod (the eval.test.mjs makeConsumer pattern). package.json fixes the fingerprint language
+ * to a known value instead of 'unknown'.
+ */
+function seedConsumerSchema(root) {
+  mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
+  writeFileSync(join(root, 'lib', 'roadmap', 'schema.ts'), `export * from '${join(PLUGIN_ROOT, 'templates', 'schema.ts')}'\n`)
+  mkdirSync(join(root, 'node_modules'), { recursive: true })
+  symlinkSync(realpathSync(join(PLUGIN_ROOT, 'node_modules', 'zod')), join(root, 'node_modules', 'zod'), 'dir')
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: basename(root), private: true }))
+  writeFileSync(join(root, '.gitignore'), 'node_modules\n')
+}
+
+/** A git repo with a mini roadmap. Returns { root, git, writePhase, commit }.
+ *  opts.consumerSchema seeds the schema + zod seam (off by default: the plan fixtures never
+ *  validate a document through the consumer). */
+function makeRepo(configOverride, opts = {}) {
   const root = mkdtempSync(join(tmpdir(), 'zr-gate-'))
   bases.push(root)
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
   writeFileSync(join(root, 'roadmap', 'roadmap.config.json'), JSON.stringify(configOverride ?? CONFIG))
+  if (opts.consumerSchema) seedConsumerSchema(root)
   const git = (...a) =>
     execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], {
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -404,16 +433,16 @@ const RUN_CFG = (over = {}) => ({
   ...over,
 })
 
+// spawnSync, not execFileSync: the exec form only surfaces stderr through the THROWN error,
+// so a successful (exit 0) run returned an empty stderr and any warning printed beside a green
+// verdict was invisible to every assertion here — the fail-soft eval-record emit is exactly
+// that shape.
 function runGateCmd(root, args) {
-  try {
-    const stdout = execFileSync('node', [BIN, 'gate', 'run', ...args], {
-      cwd: root, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, ROADMAP_CONFIG: join(root, 'roadmap', 'roadmap.config.json') },
-    })
-    return { code: 0, stdout, stderr: '' }
-  } catch (err) {
-    return { code: err.status ?? 1, stdout: (err.stdout ?? '').toString(), stderr: (err.stderr ?? '').toString() }
-  }
+  const r = spawnSync('node', [BIN, 'gate', 'run', ...args], {
+    cwd: root, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ROADMAP_CONFIG: join(root, 'roadmap', 'roadmap.config.json') },
+  })
+  return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
 }
 const latestReportOf = (root, phase) => {
   const dir = join(root, 'roadmap', '.gate', String(phase))
@@ -654,4 +683,190 @@ test('gate plan — the guard-mutation-proof obligation rides notes on EVERY pla
       `kind ${kind}: exactly one guard-mutation-proof note; got ${JSON.stringify(r.plan.notes)}`,
     )
   }
+})
+
+// ── the per-phase eval record — roadmap/arc-evals/phase-<N>.peval.json ────────────────
+// The measurement inlet the gate run mints from what it already holds (slot results + the
+// parsed phase). Two invariants dominate: the record's ATTRIBUTION must match the phase file
+// it was read from (a wrong value mis-cohorts a scorecard cell that never saw the work), and
+// the emit is fail-soft — it may never move an exit code the slots already decided.
+const RECORD_DIR = (root) => join(root, 'roadmap', 'arc-evals')
+const recordPath = (root, phase) => join(RECORD_DIR(root), `phase-${phase}.peval.json`)
+const readRecord = (root, phase) => JSON.parse(readFileSync(recordPath(root, phase), 'utf8'))
+const recordFilesIn = (root) => (existsSync(RECORD_DIR(root)) ? readdirSync(RECORD_DIR(root)) : [])
+/** Lines naming the record artifact — the loud emit-failure lane. */
+const emitFailureLines = (stderr) => stderr.split('\n').filter((l) => /peval|arc-evals/.test(l))
+
+const PLANNER = { model: 'planner-model-x' }
+const DRIVER = { model: 'driver-model-y', lane: 'codex' }
+const METRICS = {
+  commits: 3,
+  linesAdded: 128,
+  linesRemoved: 12,
+  filesChanged: 4,
+  testsAtStart: 100,
+  testsAtEnd: 107,
+  testsAdded: 7,
+}
+
+test('gate run — a green run leaves a phase-<N>.peval.json whose attribution + cohort keys are the PHASE FILE\'s own values', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  repo.writePhase(
+    1700,
+    phaseObj({
+      phase: 1700,
+      plannedBy: PLANNER,
+      tasks: [{ id: '1700.1' }, { id: '1700.2' }, { id: '1700.3' }],
+      keyFiles: ['lib/a.ts', 'lib/b.ts'],
+    }),
+  )
+  repo.commit('feat: phase 1700 — code', { 'lib/a.ts': 'export const a = 1\n' })
+
+  const r = runGateCmd(repo.root, ['1700'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.ok(existsSync(recordPath(repo.root, 1700)), `no record at ${recordPath(repo.root, 1700)}; stderr: ${r.stderr}`)
+  const rec = readRecord(repo.root, 1700)
+
+  assert.equal(rec.phase, 1700)
+  assert.match(rec.date, /^\d{4}-\d{2}-\d{2}$/, `date is a YYYY-MM-DD day, got ${rec.date}`)
+  // attribution is READ OFF the phase file — at execute time only the planner exists
+  assert.equal(rec.attribution.plannedBy.model, PLANNER.model)
+  assert.equal(rec.attribution.driver, undefined, 'no driver exists yet at execute time — absent, never guessed')
+  // cohort keys: taskCount x keyFiles decide which scorecard cell this lands in
+  assert.equal(rec.taskCount, 3, 'taskCount = the phase file task count, not 0')
+  assert.deepEqual(rec.keyFiles, ['lib/a.ts', 'lib/b.ts'])
+  assert.equal(rec.consumerFingerprint.repo, basename(repo.root))
+  assert.equal(rec.consumerFingerprint.language, 'javascript', 'derived offline from the checkout (package.json, no tsconfig)')
+  assert.equal(rec.consumerFingerprint.corpusSize, 1, 'the fixture corpus is the single seeded phase file')
+
+  assert.equal(rec.gate.green, true)
+  assert.ok(rec.gate.slots.length > 0, 'the fixture ran slots — an empty slot list would make every assertion below vacuous')
+  const types = rec.gate.slots.find((s) => s.slot === 'types')
+  assert.ok(types, `the types slot is recorded; got ${rec.gate.slots.map((s) => s.slot).join(', ')}`)
+  assert.equal(types.exitCode, 0)
+  assert.ok(types.durationMs >= 0, `durationMs is a measurement, got ${types.durationMs}`)
+  // the projection DROPS the report row fields no measurement reads (command/files/logPath/note)
+  assert.deepEqual(Object.keys(types).sort(), ['durationMs', 'exitCode', 'slot'])
+})
+
+test('gate run — a RED run is a sample too: the record is written with green:false and the failing slot exitCode', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG({ gateCommands: { ...RUN_CFG().gateCommands, types: 'exit 1' } }), { consumerSchema: true })
+  repo.writePhase(1702, phaseObj({ phase: 1702, plannedBy: PLANNER, tasks: [{ id: '1702.1' }] }))
+  repo.commit('feat: phase 1702 — code', { 'lib/b.ts': 'export const b = 1\n' })
+
+  const r = runGateCmd(repo.root, ['1702'])
+  assert.equal(r.code, 2, 'the red slot still decides the exit code')
+  assert.ok(existsSync(recordPath(repo.root, 1702)), `a RED run must still emit a record; stderr: ${r.stderr}`)
+  const rec = readRecord(repo.root, 1702)
+  assert.equal(rec.gate.green, false)
+  assert.equal(rec.taskCount, 1)
+  assert.ok(rec.gate.slots.length > 0, 'the fixture ran slots')
+  const types = rec.gate.slots.find((s) => s.slot === 'types')
+  assert.ok(types, `the types slot is recorded; got ${rec.gate.slots.map((s) => s.slot).join(', ')}`)
+  assert.equal(types.exitCode, 1, 'the failing exit code is the sample — never normalised to 0')
+})
+
+test('gate run --verify-complete — the refresh adds executionResult.driver + metrics to the SAME record file', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  // execute time: a phase in flight — a planner, no completion yet
+  repo.writePhase(1701, phaseObj({ phase: 1701, status: 'in-progress', plannedBy: PLANNER, tasks: [{ id: '1701.1' }, { id: '1701.2' }] }))
+  repo.commit('feat: phase 1701 — code', { 'lib/c.ts': 'export const c = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1701']).code, 0)
+  const atExecute = readRecord(repo.root, 1701)
+  assert.equal(atExecute.attribution.plannedBy.model, PLANNER.model)
+  assert.equal(atExecute.attribution.driver, undefined, 'precondition: the driver is genuinely absent before the completion')
+  assert.equal(atExecute.metrics, undefined, 'precondition: metrics are genuinely absent before the completion')
+
+  // completion is written to the phase file, then the gate verifies it
+  repo.writePhase(
+    1701,
+    phaseObj({
+      phase: 1701,
+      status: 'done',
+      plannedBy: PLANNER,
+      tasks: [{ id: '1701.1' }, { id: '1701.2' }],
+      keyFiles: ['lib/c.ts'],
+      executionResult: { phase: 1701, status: 'done', driver: DRIVER },
+      metrics: METRICS,
+    }),
+  )
+  const r = runGateCmd(repo.root, ['1701', '--verify-complete'])
+  assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `consistency alone decides the exit code; stderr: ${r.stderr}`)
+
+  const rec = readRecord(repo.root, 1701)
+  assert.deepEqual(rec.attribution.driver, DRIVER, 'the refresh captures WHO drove it, model + lane')
+  assert.equal(rec.attribution.plannedBy.model, PLANNER.model, 'the planner survives the refresh')
+  assert.deepEqual(rec.metrics, METRICS, 'the refresh captures the completion metrics verbatim')
+  assert.equal(rec.taskCount, 2)
+  assert.deepEqual(rec.keyFiles, ['lib/c.ts'])
+  assert.equal(rec.gate.green, true, 'the refresh carries the latest report verdict')
+  assert.ok(rec.gate.slots.length > 0, 'the refreshed record keeps the slot results')
+  assert.deepEqual(recordFilesIn(repo.root), ['phase-1701.peval.json'], 'the refresh REWRITES the one record, it does not add a second')
+})
+
+test('gate run — an unwritable arc-evals path cannot change a GREEN verdict, and the failure is named on stderr', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  repo.writePhase(1703, phaseObj({ phase: 1703, plannedBy: PLANNER, tasks: [{ id: '1703.1' }] }))
+  repo.commit('feat: phase 1703 — code', { 'lib/d.ts': 'export const d = 1\n' })
+  // arc-evals as a FILE — mkdir/write throws and the emitter cannot route around it
+  const sabotage = 'not a directory\n'
+  writeFileSync(RECORD_DIR(repo.root), sabotage)
+
+  const r = runGateCmd(repo.root, ['1703'])
+  assert.equal(r.code, 0, `a green gate stays green when the emit fails; stderr: ${r.stderr}`)
+  assert.match(r.stdout, /gate run phase 1703 — GREEN/, 'the gate verdict is still reported')
+  const hits = emitFailureLines(r.stderr)
+  assert.ok(hits.length > 0, `the emit failure is LOUD and names the record artifact; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.equal(readFileSync(RECORD_DIR(repo.root), 'utf8'), sabotage, 'the emitter clobbered nothing on its way out')
+})
+
+test('gate run — an unwritable arc-evals path cannot rescue a RED verdict either', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG({ gateCommands: { ...RUN_CFG().gateCommands, types: 'exit 1' } }), { consumerSchema: true })
+  repo.writePhase(1704, phaseObj({ phase: 1704, plannedBy: PLANNER, tasks: [{ id: '1704.1' }] }))
+  repo.commit('feat: phase 1704 — code', { 'lib/e.ts': 'export const e = 1\n' })
+  writeFileSync(RECORD_DIR(repo.root), 'not a directory\n')
+
+  const r = runGateCmd(repo.root, ['1704'])
+  assert.equal(r.code, 2, 'the red slot still decides the exit code — the emit failure neither rescues nor worsens it')
+  const hits = emitFailureLines(r.stderr)
+  assert.ok(hits.length > 0, `the emit failure is named; stderr: ${JSON.stringify(r.stderr)}`)
+})
+
+test('gate run — a re-run OVERWRITES the record (latest-run-wins), never an accumulating archive', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  repo.writePhase(1705, phaseObj({ phase: 1705, plannedBy: PLANNER, tasks: [{ id: '1705.1' }] }))
+  repo.commit('feat: phase 1705 — code', { 'lib/f.ts': 'export const f = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1705']).code, 0)
+  assert.equal(readRecord(repo.root, 1705).gate.green, true, 'precondition: the first run is the green sample')
+
+  // flip the same phase RED and re-run — the record must carry the LATEST run, not the first
+  writeFileSync(
+    join(repo.root, 'roadmap', 'roadmap.config.json'),
+    JSON.stringify(RUN_CFG({ gateCommands: { ...RUN_CFG().gateCommands, types: 'exit 1' } })),
+  )
+  assert.equal(runGateCmd(repo.root, ['1705']).code, 2)
+
+  assert.deepEqual(recordFilesIn(repo.root), ['phase-1705.peval.json'], 'one record file per phase — a second run adds no file')
+  const rec = readRecord(repo.root, 1705)
+  assert.equal(rec.gate.green, false, 'latest-run-wins: the re-run replaced the green sample')
+  const types = rec.gate.slots.find((s) => s.slot === 'types')
+  assert.ok(types, `the types slot is recorded; got ${rec.gate.slots.map((s) => s.slot).join(', ')}`)
+  assert.equal(types.exitCode, 1)
+})
+
+test('gate run --record-round — records no eval record (it changes only agent rounds, which the record does not carry)', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  repo.writePhase(1706, phaseObj({ phase: 1706, plannedBy: PLANNER, tasks: [{ id: '1706.1' }] }))
+  repo.commit('feat: phase 1706 — code', { 'lib/g.ts': 'export const g = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1706']).code, 0)
+  assert.ok(existsSync(recordPath(repo.root, 1706)), 'precondition: the execute path emitted a record')
+  rmSync(recordPath(repo.root, 1706))
+
+  const r = runGateCmd(repo.root, [
+    '1706',
+    '--record-round',
+    JSON.stringify({ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: '0 findings' }),
+  ])
+  assert.equal(r.code, 0, r.stderr)
+  assert.equal(existsSync(recordPath(repo.root, 1706)), false, 'the round-append lane holds no slot results — it must not mint a record')
 })

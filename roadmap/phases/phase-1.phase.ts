@@ -130,7 +130,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-23',
+      transparencyReport: {
+        whatWasDone:
+          'runGate now emits roadmap/arc-evals/phase-<N>.peval.json at both completions that hold slot results: the default execute path (after the GateRunReport write) and --verify-complete (the refresh that captures executionResult.driver + metrics). buildPlan additionally returns the phase it already parsed, so the attribution/cohort snapshot costs no second tsx bridge read. --record-round emits nothing. Emission is fail-soft by construction: every failure mode prints one stderr line naming the record path and returns null, and the exit code stays the slots\' (or the consistency check\'s).',
+        how:
+          'TDD: test-engineer wrote 7 hermetic tmp-repo tests blind to the implementation and ran them RED (35 pre-existing pass, 7 new fail), then the emitter landed and the file went 42/42 GREEN. Naming + assembly live in cli/lib/eval-collect.mjs (PEVAL_NAME_RE, phaseEvalRecordPath, assemblePhaseEvalRecord) rather than in gate.mjs, because that module already owns the arc-evals filename axis the record must stay disjoint from — one home, so the writer and the plane-1.3 reader cannot drift into two spellings. Validation routes through the CONSUMER schema over the tsx bridge via a new shared cli/lib/tsx-bridge.mjs bridgeParseShape(), hoisted from the copy eval.mjs carried; seam 3 holds (the plugin still carries no second copy of a consumer contract, only the spawn moved). The record\'s date is the run report\'s own startedAt, never a fresh clock read. The RED round exposed a PRE-EXISTING fixture bug: runGateCmd used execFileSync, which surfaces stderr only through the thrown error, so a green run reported stderr as the empty string and any warning printed beside a green verdict was invisible to every assertion in the file. Switched to spawnSync — a strengthening, no assertion weakened.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Two files outside this task\'s planned files[] were touched, both to avoid duplicating something: cli/lib/eval-collect.mjs (the record naming + pure assembler, so the arc-evals name classes have ONE home) and cli/lib/tsx-bridge.mjs (bridgeParseShape). cli/commands/result.mjs still carries its own specialised two-argument PARSE_SCRIPT hardcoded to PhaseExecutionResultShape; it was left alone because its argv contract is pinned by its own tests and it is outside this arc — a named residual, not a silent one. The emit adds one tsx spawn (~2s) to every gate run, including scoped per-task runs; latest-run-wins means a narrow --slots run overwrites a fuller one, which the --verify-complete refresh at phase end corrects.',
+      },
     },
     {
       id: '1.3',
