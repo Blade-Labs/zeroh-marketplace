@@ -1,0 +1,180 @@
+import { definePhase } from '@/lib/roadmap/schema'
+
+/**
+ * Worktree disposal moves into the lifecycle verbs that already own the
+ * done-moment. Operator ruling 2026-08-23: NOT "another command to clean
+ * worktrees", NOT a timer reaper — "worktrees are getting created as part of
+ * following the roadmap plugin, they should always get cleaned once they are
+ * done."
+ *
+ * Evidence (2026-08-23 manual audit that triggered this): 10 stale worktrees
+ * across two consumers — two exec-lane worktrees squatting slot dirs with
+ * FULLY MERGED branches (wt-4/exec-2275, wt-5/exec-2370), seven dead-session
+ * scratchpad worktrees, one 5-week-idle rebuild lane. Every one was created
+ * by a plugin flow whose skill prose PROMISES cleanup (do-phase SKILL.md:
+ * "backlog-groom, clean up the worktree") — the honor system accumulates;
+ * the done-verbs must own it.
+ */
+export default definePhase({
+  phase: 6,
+  name: 'Worktree disposal owned by the done-verbs — land cleans, review-complete archives',
+  status: 'backlog',
+  plannedBy: { model: 'claude-opus-5[1m]' },
+  category: 'fix',
+  kind: 'hardening',
+  source:
+    'Operator ruling 2026-08-23 after the manual 10-worktree cleanup: lifecycle-owned disposal at completion, explicitly rejecting a standalone sweep command and any timer reaper.',
+  priority: 'MEDIUM',
+  dependsOn: [3],
+  conflictsWith: [],
+  keyFiles: [
+    'plugins/zeroh-roadmap/cli/lib/landing.mjs',
+    'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
+    'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+    'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+    'plugins/zeroh-roadmap/skills/do-phase/SKILL.md',
+  ],
+  stakeholderDemo:
+    'Landing a phase or arc leaves no orphan worktree behind, and a finished delegated review packs its verdict into the primary checkout and removes its own worktree — the machinery that opened each workspace closes it.',
+  assumptions: [
+    {
+      claim:
+        'The landing engines are where the done-moment lives: landPhase in cli/lib/worktree.mjs and landArc/landCommand in cli/lib/landing.mjs.',
+      verify:
+        "bash -c \"grep -qF 'export function landPhase' plugins/zeroh-roadmap/cli/lib/worktree.mjs && grep -qF 'export function landArc' plugins/zeroh-roadmap/cli/lib/landing.mjs\"",
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim:
+        "do-phase's codex-delegation section still carries the honor-system cleanup prose this phase mechanizes.",
+      verify: "grep -qF 'clean up the worktree' plugins/zeroh-roadmap/skills/do-phase/SKILL.md",
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim:
+        'findJournal is exported from the codex command (POLYSEAT phase 3 extraction) so disposal can locate lane journals without duplicating the scan.',
+      verify: "grep -qF 'export function findJournal' plugins/zeroh-roadmap/cli/commands/codex.mjs",
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim: 'No timer/interval machinery exists in the CLI for this phase to accidentally extend.',
+      verify:
+        'bash -c "! grep -rqE \\"setInterval|setTimeout\\\\(.*[0-9]{4}\\" plugins/zeroh-roadmap/cli/commands/ plugins/zeroh-roadmap/cli/lib/landing.mjs"',
+      onFalse: 'ESCALATE',
+    },
+  ],
+  notes:
+    "LOCKED (operator ruling 2026-08-23, verbatim intent): no standalone sweep/clean command — disposal has NO verb of its own; no timer reaper of any period. Disposal fires ONLY inside verbs that already exist, at their success moments. A lane that never reaches its done-verb keeps its worktree — that is correct (in-flight work is sacred); the accumulation class this kills is DONE work whose cleanup was honor-system prose.\n\nTHE DISPOSAL RAIL (shared helper, one home — cli/lib/worktree.mjs beside landPhase): disposeWorktree(repoRoot, dir, { expectBranchMerged, allowUntracked }) refuses with NAMED reasons — dirty tree (untracked .building/ excepted, matching the audit protocol, PLUS caller-named lane artifacts via allowUntracked: the run lane's CODEX-REPORT.md is never committed by contract (codex.mjs header), so without the exception EVERY codex-lane disposal refuses on its own report; review lanes dispose untracked-tolerant — the detached read-only lane never commits and its --doc file is a copy from the primary (reviewCodex docblock) — so only MODIFIED TRACKED files refuse there), unpushed commits (log @{u}.. or --not --remotes), live pgid in a lane journal — and on refusal KEEPS the worktree and prints why; on pass: git worktree remove, delete the branch ONLY when fully merged into the integration ref, git worktree prune ride-along. Every git call anchors at repoRoot, never the disposed dir — phase land runs INSIDE the worktree it disposes (the landing.mjs METERTENANT rule: post-merge acts anchor on the PRIMARY checkout). Refusal is stderr + nonzero detail in the land report, never a land failure — landing succeeded; disposal reports honestly.\n\nDONE-MOMENTS AND THEIR OWNERS (the whole design):\n(1) PHASE LAND (runLandCli path in cli/commands/phase.mjs → landPhase in cli/lib/worktree.mjs): slot-lane landing keeps the slot (its lifecycle is reuse-via-reset) but prunes metadata; a land whose source is a codex lane worktree ({root}-codex-<ids>, journal via findJournal ROOTED AT mainCheckout(cwd) — journals live under the PRIMARY .building/ while phase land runs inside the worktree, the phase-3 anchor) disposes worktree + merged codex/* branch + archives the journal (renamed .closed.json so status reads a closed lane honestly, never dead-no-report — the statusCodex closed-read in (3) is that promise's mechanism). REACHABILITY (review finding 2026-08-23): today the codex lane NEVER reaches this seam — do-phase's Integration-routing paragraph lands codex work by MANUAL rebase + ff-only merge from the primary, and runLand refuses under executionIsolation 'primary' (executionIsolationOf defaults to 'primary'; this consumer's roadmap.config.json sets no override). So (1) also makes phase land the codex lane's landing verb: accept a JOURNAL-CONFIRMED codex-lane source regardless of executionIsolation — source-keyed safety, the land rebases the codex worktree and moves the integration ref while the primary tree stays untouched, exactly the guarantee the manual routing gave; the isolation refusal stays for every non-codex source. landPhase's rebase+guarded-ff IS the documented manual sequence mechanized; 6.4 reroutes the skill prose to match.\n(2) ARC LAND (landArc in cli/lib/landing.mjs — do-arc SKILL already names it the cleanup owner: 'arc land completes the BOOKKEEPING only (cleanup, RunnerSummary, push)'): extend its existing cleanup to dispose every landed member's codex-lane worktree via the same rail; probe at execution what its cleanup ALREADY covers and extend, never fork (the plan-arc reuse rule).\n(3) REVIEW COMPLETE (statusCodex in cli/commands/codex.mjs): when state=complete on a review-lane journal, ARCHIVE the lane — copy CODEX-REVIEW.md to the primary's .building/codex-review-<ids>-REPORT.md, remove the detached worktree (no branch exists — review lanes add --detach), stamp the journal archived; idempotent (a second status on an archived lane reports state=complete from the relocated report). The stale-sentinel mtime guard semantics MUST survive unchanged — the archived-journal read path bypasses the worktree report entirely. statusCodex also RESOLVES archived RUN-lane journals: probe codex-<ids>.closed.json + a closed-journal scan, reporting an honest closed state (exit 0) — the live journalRe class [\\d-] excludes '.', so .closed.json escapes both lane scans today and a landed lane would otherwise read 'no journal covers phase(s)'. Status gains a completion SIDE EFFECT deliberately: consuming the verdict IS the review lane's done-moment, and the alternative is a new close verb the ruling forbids.\n(4) SKILL PROSE → MECHANISM: do-phase's codex-delegation 'clean up the worktree' line becomes a pointer to (1)'s mechanics (one line, DIET-LEDGER row for the trim); plan-phase's verify-rehearsal scratch-worktree protocol already instructs removal — verify at execution it names `git worktree remove` explicitly, tighten only if not.\n\nOUT OF SCOPE, honestly: harness-created worktrees (EnterWorktree isolation, ad-hoc session scratchpads like the seven /tmp ones from the audit) are not plugin flows — the plugin cannot own their lifecycle; the prune ride-alongs in (1)/(2) at least clear their dead REPO METADATA when /tmp dies. Slot worktree retirement (a slot dir no session will ever reclaim) stays manual — slots are persistent by design and npm-ci-expensive to recreate.\n\nWHY dependsOn [3]: phase 3 lands findJournal (the shared journal scan this reuses) and the journal driver key; both phases edit codex.mjs journal/status seams — strict ordering beats a conflict fence.\n\n## Hypotheses\n1. CONFIRMED — cleanup exists only as honor-system skill prose at TWO do-phase SKILL.md sites ('clean up the worktree' in the delegation paragraph; 'remove the worktree, the `codex/<N>` branch AND the `.building/codex-<N>.json` journal' in Integration routing) with NO code path disposing codex/review worktrees: the only programmatic remove in the CLI is landArc's own sidecar cleanup (landing.mjs worktree-remove step). Evidence: grep for worktree remove/worktreeRemove across cli/ hits landing.mjs alone; the 2026-08-23 audit found two FULLY MERGED exec lanes still squatting.\n2. REFUTED — 'leaks are crash-orphans, so done-verb hooks would not have fired anyway': the audit's exec-lane worktrees had fully merged branches — their done-verbs ran to completion; only the cleanup was prose. (True crash-orphans are the in-flight class the ruling deliberately keeps sacred.)\n3. NOT TESTED — 'operators skip the prose because manual disposal feels unsafe without checks': plausible contributor; the refusal-first rail removes the risk either way.\n\nREVIEW RATIFICATIONS (Mode A, 2026-08-23): testMode tdd ratified on 6.1–6.3 (each step's verify is the test tripwire the task itself authors); 6.4 testMode none ratified — declarative markdown/ledger artifacts guarded by the step-level grep verify plus the designHomes DIET-LEDGER protocol (declarative-artifact rule). No testScope/reviewScope relaxations declared; userFacing n/a (CLI + skill prose). Assumption 3 fails at plan time BY DESIGN: it is the execution-time tripwire proving dependsOn [3] actually delivered the exported findJournal before this phase leans on it (the phase-5 assumption-2 precedent).",
+  tasks: [
+    {
+      id: '6.1',
+      title: 'The disposal rail — one refusal-first helper beside the landing engine',
+      problem:
+        'Disposal safety (dirty/unpushed/live checks with named refusals) must exist exactly once, or three done-verbs grow three slightly different unsafe copies — the hand-list drift class again, in rm form.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
+          description:
+            'Author disposeWorktree per the notes rail: refusal checks (dirty excepting untracked .building/ and caller-named allowUntracked artifacts, with an untracked-tolerant mode for read-only review lanes; unpushed; live journal pgid) each returning a named reason; every git call anchored at repoRoot, never the disposed dir (callers dispose the worktree they stand in); pass path removes worktree, deletes only-if-merged branch, prunes. worktree.test.mjs EXISTS (the slot-registry suite) — extend it, do not recreate → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
+          description:
+            'Hermetic fixtures proving every refusal names its reason and keeps the tree: dirty file → refused; unpushed commit → refused; live pgid journal → refused; clean+merged → removed with branch gone and metadata pruned; untracked .building/ alone → NOT a refusal; an untracked allowUntracked-named report alone → NOT a refusal; a modified TRACKED file under untracked-tolerant mode → still refused → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'All four refusal classes red with named reasons and leave the worktree intact, asserted per class',
+        'The pass path removes worktree + merged branch + prunes, and an unmerged branch survives its worktree removal',
+        'The untracked exceptions (allowUntracked, untracked-tolerant mode) never mask a modified tracked file',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
+        'plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: false,
+    },
+    {
+      id: '6.2',
+      title: 'Phase land and arc land dispose what they landed',
+      problem:
+        "Landing is the done-moment for work-producing worktrees, but today it walks away: the audit's two merged exec lanes sat for weeks because nothing at land time owned closure. do-arc's own SKILL names arc land the cleanup owner — the claim must become true.",
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          description:
+            "In the runLand success path: codex-lane source (findJournal rooted at mainCheckout(cwd) — journals live in the PRIMARY .building/) → disposeWorktree (allowUntracked: CODEX-REPORT.md, git anchored at the primary) + archive the journal to .closed.json; accept a journal-confirmed codex-lane source even under executionIsolation 'primary' (notes REACHABILITY design); slot-lane sources get prune ride-along only. Disposal refusal reports on stderr, never fails the land → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/phase.test.mjs",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
+          description:
+            "Probe landArc's existing cleanup scope first (today: sidecar worktree remove + sidecar/RESUME.md/claims, best-effort by law — extend that block, never fork); add per-landed-member codex-lane disposal through the same rail anchored at home (an arc delegated as ONE codex run shares one multi-phase journal + worktree — dedupe; an already-removed worktree reports already-disposed, never an error), with the arc land report listing each disposed/refused worktree by name → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/landing.test.mjs",
+        },
+      ],
+      acceptanceCriteria: [
+        'A landed codex-lane phase leaves no worktree, no merged codex/* branch, and a .closed.json journal; a refused disposal leaves the land GREEN with the named reason in the report',
+        'Arc land disposes every landed member lane and its report names each disposal outcome',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+        'plugins/zeroh-roadmap/cli/lib/landing.mjs',
+        'plugins/zeroh-roadmap/cli/commands/phase.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: false,
+    },
+    {
+      id: '6.3',
+      title: 'A complete review archives itself at the status read',
+      problem:
+        'Review lanes are detached read-only worktrees whose done-moment is the verdict being consumed — today the worktree outlives the verdict indefinitely, and the ruling forbids a close verb.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+          description:
+            "statusCodex on a review-lane journal at state=complete: copy the report to .building/codex-review-<ids>-REPORT.md in the primary, disposeWorktree untracked-tolerant (detached read-only lane, no branch — only modified tracked files refuse), stamp the journal archived; archived lanes report complete from the relocated report (idempotent). Also resolve archived RUN-lane journals (codex-<ids>.closed.json probe + closed-journal scan) to an honest closed state, exit 0, instead of 'no journal covers'. Stale-sentinel mtime semantics unchanged on live lanes → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/codex.test.mjs",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
+          description:
+            'Pin: complete → archived (report relocated, worktree gone, second status still complete); running lane untouched; stale-report lane untouched (mtime guard intact); review worktree with a MODIFIED TRACKED file → disposal refused with name, report still relocated; a .closed.json run journal resolves to closed with exit 0 → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'A complete review lane self-archives on first status read and stays readable forever after; all pre-existing codex tests stay green',
+        'The mtime stale-sentinel behaviour is byte-identical on non-archived lanes, asserted by the existing tests unmodified',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+        'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: false,
+    },
+    {
+      id: '6.4',
+      title: 'The skill prose stops promising what the verbs now do',
+      problem:
+        "do-phase's 'clean up the worktree' is the honor-system line the audit falsified; leaving it beside the mechanized path would be two owners for one fact.",
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/skills/do-phase/SKILL.md',
+          description:
+            "Replace BOTH cleanup carriers in do-phase SKILL.md — the delegation 'clean up the worktree' line AND Integration routing's manual rebase/ff-merge + 'remove the worktree...' sentence — with the land verb: integration + disposal = `roadmap phase land <N>` inside the codex worktree, refusals in the land report; DIET-LEDGER.md row, same commit; verify-rehearsal already names `git worktree remove`, tighten if drifted → verify: bash -c \"! grep -qF 'clean up the worktree' plugins/zeroh-roadmap/skills/do-phase/SKILL.md && ! grep -qF 'branch AND the' plugins/zeroh-roadmap/skills/do-phase/SKILL.md && grep -qF 'worktree remove' plugins/zeroh-roadmap/skills/plan-phase/references/verify-rehearsal.md\"",
+        },
+      ],
+      acceptanceCriteria: [
+        'Both do-phase cleanup carriers (the delegation prose AND the Integration-routing manual-merge sentence) are gone with their DIET-LEDGER row landed; codex integration routes through roadmap phase land; plan-phase verify-rehearsal still names git worktree remove',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/skills/do-phase/SKILL.md',
+        'plugins/zeroh-roadmap/skills/plan-phase/references/verify-rehearsal.md',
+        'plugins/zeroh-roadmap/DIET-LEDGER.md',
+      ],
+      testMode: 'none',
+      done: false,
+    },
+  ],
+})
