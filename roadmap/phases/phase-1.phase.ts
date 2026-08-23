@@ -89,7 +89,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/scripts/schema.test.ts',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-23',
+      transparencyReport: {
+        whatWasDone:
+          'PhaseEvalRecordShape + PhaseEvalRecordListShape landed in plugins/zeroh-roadmap/templates/schema.ts and were copied byte-identical into lib/roadmap/schema.ts (cmp clean). scripts/schema.test.ts gained a PhaseEvalRecordShape section: 8 check() cases covering a full round-trip, a minimal record with defaults, root and NESTED unknown-key rejection, the date/phase/taskCount floors, the closed driver.lane vocabulary, and index-named element failures under the list shape.',
+        how:
+          'TDD: test-engineer wrote the 8 cases blind to the implementation and ran them RED (all 8 failed with "PhaseEvalRecordShape is not exported from templates/schema.ts"), then the shape landed and they went GREEN (capbuild npx tsx scripts/schema.test.ts — PASS, 0 failures). The RED round found a real gap the plan did not name: with driver reusing the shared shape as a plain z.object, an unknown key inside attribution.driver was SILENTLY STRIPPED rather than rejected, so strictness was root-only. Fixed with DriverShape.strict() at the record use site — a strict CLONE, verified empirically (base shape still strips, clone rejects with code unrecognized_keys) — because making the SHARED DriverShape strict would retroactively reject any consumer phase file whose executionResult.driver carries an extra key that parses today, a cross-consumer tightening this phase cannot verify. DriverShape itself was hoisted out of PhaseExecutionResultShape so the record and the execution result cannot drift into two spellings of an actor id (and so plane 2 lane widening is a one-line edit, not two).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The record shape carries an optional attribution.roles snapshot that nothing populates yet — the role resolver that fills it lands in POLYSEAT plane 4. It is in the shape because the arc locked the record layout, not because plane 1 can exercise it; today every emitted record omits the key. The gate slot projection deliberately drops the GateRunReport row fields no measurement reads (command, files, logPath, note): the record keeps slot / exitCode / durationMs / declaredAbsent only.',
+      },
     },
     {
       id: '1.2',

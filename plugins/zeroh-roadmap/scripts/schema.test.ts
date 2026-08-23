@@ -46,6 +46,8 @@ import {
   IntentVerdictShape,
   PhaseExecutionResultShape,
   PhaseMetricsShape,
+  PhaseEvalRecordShape,
+  PhaseEvalRecordListShape,
   RunnerSummaryShape,
   SweepReportShape,
   StructuredGateRoundShape,
@@ -2405,6 +2407,249 @@ check('Proposal: title and rationale carry a >=10-char floor, and supersededBy i
   const superseded = ProposalShape.parse(makeProposal({ supersededBy: 'recurring-regression-v2' }))
   assertEq(superseded.supersededBy, 'recurring-regression-v2', 'the supersession pointer round-trips')
   assertEq(ProposalShape.parse(makeProposal()).supersededBy, undefined, 'absent stays absent, never invented')
+})
+
+console.log('\nPhaseEvalRecordShape')
+
+// Unknown-key rejection is the WHOLE point of this shape: the three ad-hoc JSON
+// layouts it replaces silently strip fields, so a producer that renames a key
+// keeps "parsing" while the consumer reads undefined. assertIssuePath alone is
+// not enough — it would also pass if the level rejected for some UNRELATED
+// reason at the same path. Assert the issue CODE and the named key too.
+function assertUnknownKeyRejected(
+  shape: unknown,
+  input: unknown,
+  expectedPath: (string | number)[],
+  expectedKey: string,
+  where: string,
+): void {
+  const s = shape as {
+    safeParse: (v: unknown) => {
+      success: boolean
+      error?: { issues: Array<{ code: string; path: PropertyKey[]; keys?: string[] }> }
+    }
+  }
+  const r = s.safeParse(input)
+  if (r.success) throw new Error(`${where}: expected to reject, parsed clean (key was STRIPPED)`)
+  const want = expectedPath.map(String).join('.')
+  const hit = (r.error?.issues ?? []).find(
+    (i) => i.code === 'unrecognized_keys' && i.path.map(String).join('.') === want,
+  )
+  if (!hit) {
+    const seen = (r.error?.issues ?? [])
+      .map((i) => `${i.code}@[${i.path.map(String).join('.')}]`)
+      .join(' | ')
+    throw new Error(`${where}: expected unrecognized_keys at [${want}], got [${seen}]`)
+  }
+  if (!(hit.keys ?? []).includes(expectedKey)) {
+    throw new Error(
+      `${where}: issue at [${want}] did not name the key "${expectedKey}", named [${(hit.keys ?? []).join(', ')}]`,
+    )
+  }
+}
+
+// MINIMAL fixture — exactly the required fields and nothing else. Every negative
+// below starts from a record that is already legal and breaks exactly one thing.
+function makeEvalRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    phase: 725,
+    date: '2026-08-23',
+    consumerFingerprint: { repo: 'mudarabah2', language: 'typescript', corpusSize: 1840 },
+    taskCount: 4,
+    keyFiles: ['lib/roadmap/schema.ts', 'scripts/emit-phases.ts'],
+    gate: {
+      green: true,
+      slots: [
+        { slot: 'lint', exitCode: 0, durationMs: 4200 },
+        { slot: 'e2e', declaredAbsent: true },
+      ],
+    },
+    ...overrides,
+  }
+}
+
+// The seven-field historical metrics fixture is reused verbatim: the eval record
+// embeds the EXISTING PhaseMetricsShape, it does not fork a parallel one.
+const fullEvalRecord = {
+  ...makeEvalRecord(),
+  metrics: { ...historicalMetrics, haltCount: 2 },
+  attribution: {
+    plannedBy: { model: 'claude-opus-5' },
+    driver: { model: 'claude-sonnet-4-6', lane: 'codex' },
+    roles: {
+      'test-writer': { model: 'claude-opus-5' },
+      reviewer: { model: 'claude-haiku-4-5' },
+    },
+  },
+}
+
+check('PhaseEvalRecord: a FULL record round-trips every field and optional with values intact', () => {
+  requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
+  const r = PhaseEvalRecordShape.parse(fullEvalRecord)
+  assertEq(r.phase, 725, 'phase preserved')
+  assertEq(r.date, '2026-08-23', 'the CALLER-supplied date is preserved, never re-minted')
+  assertEq(r.consumerFingerprint.repo, 'mudarabah2', 'fingerprint repo preserved')
+  assertEq(r.consumerFingerprint.language, 'typescript', 'fingerprint language preserved')
+  assertEq(r.consumerFingerprint.corpusSize, 1840, 'fingerprint corpusSize preserved')
+  assertEq(r.taskCount, 4, 'taskCount preserved — it is the bandFor cohort key')
+  assertEq(r.keyFiles, ['lib/roadmap/schema.ts', 'scripts/emit-phases.ts'], 'keyFiles preserved in order')
+  assertEq(r.gate.green, true, 'gate.green preserved')
+  assertEq(r.gate.slots.length, 2, 'both slots preserved')
+  assertEq(r.gate.slots[0].slot, 'lint', 'slot name preserved')
+  assertEq(r.gate.slots[0].exitCode, 0, 'an exit code of 0 survives — it is a real value, not absent')
+  assertEq(r.gate.slots[0].durationMs, 4200, 'durationMs preserved')
+  assertEq(r.gate.slots[0].declaredAbsent, undefined, 'a ran slot declares no absence')
+  assertEq(r.gate.slots[1].declaredAbsent, true, 'declaredAbsent preserved on the absent slot')
+  assertEq(r.gate.slots[1].exitCode, undefined, 'an absent slot has no exit code, not a zero')
+  assertEq(r.metrics?.commits, 4, 'the embedded PhaseMetrics is the EXISTING shape, values intact')
+  assertEq(r.metrics?.haltCount, 2, 'the metrics time-axis widening survives the embed')
+  assertEq(r.attribution?.plannedBy?.model, 'claude-opus-5', 'plannedBy model preserved')
+  assertEq(r.attribution?.driver?.model, 'claude-sonnet-4-6', 'driver model preserved')
+  assertEq(r.attribution?.driver?.lane, 'codex', 'driver lane preserved')
+  assertEq(r.attribution?.roles?.['test-writer'].model, 'claude-opus-5', 'a hyphenated role key preserved')
+  assertEq(r.attribution?.roles?.reviewer.model, 'claude-haiku-4-5', 'a second role entry preserved')
+})
+
+check('PhaseEvalRecord: a MINIMAL record parses — keyFiles and gate.slots default to [], metrics/attribution stay ABSENT', () => {
+  requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
+  const r = PhaseEvalRecordShape.parse({
+    phase: 1,
+    date: '2026-01-01',
+    consumerFingerprint: { repo: 'zeroh-marketplace', language: 'typescript', corpusSize: 0 },
+    taskCount: 0,
+    gate: { green: false },
+  })
+  assertEq(r.keyFiles, [], 'keyFiles defaults to the empty cohort, not undefined')
+  assertEq(r.gate.slots, [], 'gate.slots defaults to empty, not undefined')
+  assertEq(r.gate.green, false, 'a red gate is a recorded value, not a missing one')
+  assertEq(r.taskCount, 0, 'taskCount 0 is legal — the floor, not a rejection')
+  assertEq(r.consumerFingerprint.corpusSize, 0, 'corpusSize 0 is legal')
+  assertEq(r.metrics, undefined, 'metrics absent, not zero-filled')
+  assertEq(r.attribution, undefined, 'attribution absent, never invented')
+})
+
+check('PhaseEvalRecord: an unknown key at the ROOT is REJECTED, never silently stripped', () => {
+  requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
+  assertUnknownKeyRejected(
+    PhaseEvalRecordShape,
+    { ...makeEvalRecord(), phaseNumber: 725 },
+    [],
+    'phaseNumber',
+    'a near-miss root key (phaseNumber vs phase)',
+  )
+  assertUnknownKeyRejected(
+    PhaseEvalRecordShape,
+    { ...makeEvalRecord(), scorecard: { verdict: 'PASS' } },
+    [],
+    'scorecard',
+    'an extra root object',
+  )
+})
+
+check('PhaseEvalRecord: strictness is NOT root-only — an unknown key inside attribution.driver, a gate.slots row, or consumerFingerprint each REJECT at their own path', () => {
+  requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
+  assertUnknownKeyRejected(
+    PhaseEvalRecordShape,
+    {
+      ...makeEvalRecord(),
+      attribution: { driver: { model: 'claude-sonnet-4-6', lane: 'session', temperature: 0.2 } },
+    },
+    ['attribution', 'driver'],
+    'temperature',
+    'an unknown key nested two levels deep in attribution.driver',
+  )
+  assertUnknownKeyRejected(
+    PhaseEvalRecordShape,
+    makeEvalRecord({
+      gate: { green: true, slots: [{ slot: 'lint', exitCode: 0 }, { slot: 'e2e', skipped: true }] },
+    }),
+    ['gate', 'slots', 1],
+    'skipped',
+    'an unknown key in the SECOND gate.slots row (index must be named)',
+  )
+  assertUnknownKeyRejected(
+    PhaseEvalRecordShape,
+    makeEvalRecord({
+      consumerFingerprint: { repo: 'mudarabah2', language: 'typescript', corpusSize: 1840, loc: 90210 },
+    }),
+    ['consumerFingerprint'],
+    'loc',
+    'an unknown key in consumerFingerprint',
+  )
+  assertUnknownKeyRejected(
+    PhaseEvalRecordShape,
+    { ...makeEvalRecord(), attribution: { roles: { reviewer: { model: 'claude-opus-5', cost: 3 } } } },
+    ['attribution', 'roles', 'reviewer'],
+    'cost',
+    'an unknown key inside a roles map VALUE',
+  )
+})
+
+check('PhaseEvalRecord: date must be a full ISO date — 9 chars rejects, exactly 10 is the floor', () => {
+  requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
+  assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ date: '2026-08-2' }), ['date'], 'a 9-char date')
+  assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ date: '' }), ['date'], 'an empty date')
+  assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ date: '2026' }), ['date'], 'a bare year')
+  const atBound = PhaseEvalRecordShape.parse(makeEvalRecord({ date: '2026-08-23' }))
+  assertEq(atBound.date, '2026-08-23', 'exactly 10 chars is the floor')
+  const stamped = PhaseEvalRecordShape.parse(makeEvalRecord({ date: '2026-08-23T09:15:00.000Z' }))
+  assertEq(stamped.date, '2026-08-23T09:15:00.000Z', 'a longer ISO stamp is still accepted verbatim')
+})
+
+check('PhaseEvalRecord: phase must be a POSITIVE integer — 0, -1 and 1.5 all reject; 1 is the floor', () => {
+  requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
+  assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ phase: 0 }), ['phase'], 'phase 0')
+  assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ phase: -1 }), ['phase'], 'a negative phase')
+  assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ phase: 1.5 }), ['phase'], 'a fractional phase')
+  assertEq(PhaseEvalRecordShape.parse(makeEvalRecord({ phase: 1 })).phase, 1, 'phase 1 is the floor')
+})
+
+check('PhaseEvalRecord: taskCount is non-negative and driver.lane is a CLOSED vocabulary', () => {
+  requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
+  assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ taskCount: -1 }), ['taskCount'], 'a negative taskCount')
+  assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ taskCount: 2.5 }), ['taskCount'], 'a fractional taskCount')
+  for (const lane of ['session', 'codex']) {
+    const ok = PhaseEvalRecordShape.parse({
+      ...makeEvalRecord(),
+      attribution: { driver: { model: 'claude-sonnet-4-6', lane } },
+    })
+    assertEq(ok.attribution?.driver?.lane, lane, `lane ${lane} round-trips`)
+  }
+  assertIssuePath(
+    PhaseEvalRecordShape,
+    { ...makeEvalRecord(), attribution: { driver: { model: 'claude-sonnet-4-6', lane: 'subagent' } } },
+    ['attribution', 'driver', 'lane'],
+    'an invented driver lane',
+  )
+})
+
+check('PhaseEvalRecordList: parses an array of two records and names the offending INDEX on a bad element', () => {
+  requireShape(PhaseEvalRecordListShape, 'PhaseEvalRecordListShape')
+  const list = PhaseEvalRecordListShape.parse([makeEvalRecord({ phase: 724 }), fullEvalRecord])
+  assertEq(list.length, 2, 'both records parsed')
+  assertEq(list[0].phase, 724, 'first element preserved')
+  assertEq(list[1].phase, 725, 'second element preserved')
+  assertEq(list[1].attribution?.driver?.lane, 'codex', 'the second element keeps its attribution')
+  assertEq(PhaseEvalRecordListShape.parse([]).length, 0, 'an empty batch is legal')
+  assertIssuePath(
+    PhaseEvalRecordListShape,
+    [makeEvalRecord({ phase: 724 }), makeEvalRecord({ phase: 0 })],
+    [1, 'phase'],
+    'a bad phase in the SECOND element',
+  )
+  assertIssuePath(
+    PhaseEvalRecordListShape,
+    [makeEvalRecord({ date: '2026' }), makeEvalRecord()],
+    [0, 'date'],
+    'a bad date in the FIRST element',
+  )
+  assertUnknownKeyRejected(
+    PhaseEvalRecordListShape,
+    [makeEvalRecord(), { ...makeEvalRecord(), phaseNumber: 725 }],
+    [1],
+    'phaseNumber',
+    'an unknown root key in the second element of a batch',
+  )
 })
 
 // discoverArcs is async — run it and the final summary inside an async tail so

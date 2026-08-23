@@ -256,6 +256,16 @@ export type TransparencyReport = z.output<typeof TransparencyReportShape>
  *  - `hardStops`: architect-critique HARD-STOP entries by tag — `do-arc` keys its
  *    pre-merge decision on `[MULTI-REPO]` in particular.
  *  - `gateRounds`: how many correctness rounds the gate took (0 for mockup). */
+/** WHO acted and how it was launched. Defined ONCE and referenced by both writers —
+ *  PhaseExecutionResult stamps it at completion, PhaseEvalRecord snapshots it into the
+ *  measurement record — so the two can never disagree about what an actor id is. */
+export const DriverShape = z.object({
+  model: z.string().min(1),
+  lane: z.enum(['session', 'codex']),
+})
+
+export type Driver = z.output<typeof DriverShape>
+
 export const PhaseExecutionResultShape = z.object({
   phase: z.number().int().positive(),
   status: z.enum(['done', 'escalated', 'failed', 'checkpoint']),
@@ -267,12 +277,7 @@ export const PhaseExecutionResultShape = z.object({
    *  historical results keep parsing — an absent driver on a NEW result is a gap the
    *  collector can SEE, never a silent zero. Capture only in this arc; the cross-actor
    *  comparisons are EVALLOOP's job. */
-  driver: z
-    .object({
-      model: z.string().min(1),
-      lane: z.enum(['session', 'codex']),
-    })
-    .optional(),
+  driver: DriverShape.optional(),
   /** The honest unbounded-work hand-off (two-exit turn contract): committed state + what to
    *  watch + the exact next step. do-arc respawns on a checkpoint UNCONDITIONALLY — the wake is
    *  owned by contract. committedSha proves the lossless-respawn precondition. REQUIRED when
@@ -401,6 +406,96 @@ export const SweepReportShape = z.object({
 })
 
 export type SweepReport = z.output<typeof SweepReportShape>
+
+// ── Per-phase eval record (arc POLYSEAT plane 1) ─────────────────────────────
+
+/**
+ * PhaseEvalRecordShape — what `roadmap gate run` leaves at
+ * roadmap/arc-evals/phase-<N>.peval.json on EVERY run, and what `roadmap eval scorecard`
+ * ingests beside the arc traces.
+ *
+ * The scorecard's driver/planner cells are fed by ARC traces alone, so a consumer that
+ * executes ordinary phases without arcs renders zero cells however much work it does
+ * (measured in mudarabah2, 2026-08-23: 0 records, every family under the N-floor). This
+ * record is the per-phase inlet that fills them.
+ *
+ * DETERMINISTIC + ATTRIBUTION ONLY (ruling 2026-08-23): gate slot results, metrics, and an
+ * attribution snapshot — zero judge tokens per phase. Judge-scored dimensions stay arc-level
+ * in ArcEvalReportShape; a field here that needed a judge call would put a model call on the
+ * critical path of every gate run, which is the cost this record exists to avoid.
+ *
+ * `taskCount` and `keyFiles` are COHORT KEYS, not description: computeScorecard keys every
+ * cell on bandFor(taskCount) x surfaceOf(keyFiles). A record omitting them does not lose
+ * detail, it MIS-COHORTS into the smallest band and the non-surface cell — contaminating two
+ * cells that never saw the work.
+ *
+ * `date` is CALLER-SUPPLIED, the SweepReportShape discipline: a recorder that mints its own
+ * wall clock makes a silent re-record indistinguishable from the original.
+ *
+ * Every level is a strictObject. An unknown key is a parse ERROR, never a silent strip: a
+ * dropped key in a measurement record is a number no later reader can even discover is
+ * missing.
+ */
+export const PhaseEvalRecordShape = z.strictObject({
+  phase: z.number().int().positive(),
+  /** ISO date the gate run that produced this record happened — supplied by the caller. */
+  date: z.string().min(10),
+  /** Which consumer produced it, so cross-consumer cells stay comparable. Same three
+   *  components ArcEvalReportShape.fingerprint carries, derived offline by
+   *  assembleConsumerFingerprint. */
+  consumerFingerprint: z.strictObject({
+    repo: z.string().min(1),
+    language: z.string().min(1),
+    corpusSize: z.number().int().nonnegative(),
+  }),
+  taskCount: z.number().int().nonnegative(),
+  keyFiles: z.array(z.string()).default([]),
+  /** The slot results AS RUN. A projection of the GateRunReport's rows, not the report: the
+   *  plugin-side report shape is not a consumer contract, and the eval reads only these
+   *  fields. `exitCode` absent means the slot did not RUN (declared-absent / skipped) — a
+   *  zero there would invent a pass. */
+  gate: z.strictObject({
+    green: z.boolean(),
+    slots: z
+      .array(
+        z.strictObject({
+          slot: z.string().min(1),
+          exitCode: z.number().int().optional(),
+          durationMs: z.number().nonnegative().optional(),
+          declaredAbsent: z.boolean().optional(),
+        }),
+      )
+      .default([]),
+  }),
+  metrics: PhaseMetricsShape.optional(),
+  /** WHO planned, drove and filled each role. Read off the phase file at emit time, so it is
+   *  as complete as the file is: at execute time usually only `plannedBy` exists, and the
+   *  --verify-complete refresh is what adds `driver` once the completion is written. Absent
+   *  stays absent — the scorecard maps that to its `unrecorded` cohort, never a guess.
+   *  `roles` is the POLYSEAT role-binding snapshot; the role resolver that fills it lands in
+   *  plane 4, and until then an emitter that has no bindings writes no key. */
+  attribution: z
+    .strictObject({
+      plannedBy: z.strictObject({ model: z.string().min(1) }).optional(),
+      /** `.strict()` CLONES DriverShape strict for this record only. Making the shared
+       *  definition strict would retroactively REJECT any consumer phase file whose
+       *  executionResult.driver carries an extra key that parses (and is dropped) today —
+       *  a contract tightening this phase did not plan and cannot verify across consumers. */
+      driver: DriverShape.strict().optional(),
+      roles: z.record(z.string().min(1), z.strictObject({ model: z.string().min(1) })).optional(),
+    })
+    .optional(),
+})
+
+export type PhaseEvalRecord = z.output<typeof PhaseEvalRecordShape>
+
+/** The BATCH read shape. The archive is validated through the consumer schema over the tsx
+ *  bridge (the plugin carries no second copy of a consumer contract), and a spawn per file
+ *  would make reading the archive cost more than producing it — so the whole directory rides
+ *  one parse and a bad element is named by its ARRAY INDEX in the issue path. */
+export const PhaseEvalRecordListShape = z.array(PhaseEvalRecordShape)
+
+export type PhaseEvalRecordList = z.output<typeof PhaseEvalRecordListShape>
 
 // ── Phase Task ──────────────────────────────────────────────────────────────
 
