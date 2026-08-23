@@ -67,10 +67,10 @@
  * | designRef §2 Driver registry | 2.1–2.3 (module, consumption, verify/register) + MULTI-DRIVER.md §2 in 4.1 |
  * | singleSeam 1 (one protocol body) | 4.2 (run lane pays the debt; review lane already conforms) |
  * | singleSeam 2 (one registry, no stray argv) | 2.2 (ratchet) |
- * | singleSeam 3 (one attribution write path) | 3.1 (journal + reconcile) + 3.2 (warning catch) |
+ * | singleSeam 3 (one attribution write path) | 3.1 (journal + reconcile) + 3.2 (warning catch) + 3.4 (session-lane arm-alias reconcile; ruling 2026-08-23) |
  * | singleSeam 4 (lane mechanics stay single) | 2.2 (LANES untouched, pinned by existing tests) |
  * | honesty rail 1 (declared AND verified capabilities) | 2.3 (verify/register refuses unverified) |
- * | honesty rail 2 (unrecorded named, deciding model recorded) | 3.2 (warnings) + 4.1 (substitution records) |
+ * | honesty rail 2 (unrecorded named, deciding model recorded) | 3.2 (warnings) + 3.4 (spawner never asserts identity) + 4.1 (substitution records) |
  * | honesty rail 3 (fallback never reduces rigor) | 4.1 (forced-unavailability falsification) |
  * | honesty rail 4 (parity measured never asserted) | 4.4 |
  * | LOCKED: tier order Fable→Sol→Opus verbatim | 4.1 (tierChain literal + test) |

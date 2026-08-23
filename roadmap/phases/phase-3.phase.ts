@@ -33,6 +33,9 @@ export default definePhase({
     'plugins/zeroh-roadmap/cli/lib/validate.mjs',
     'plugins/zeroh-roadmap/templates/schema.ts',
     'lib/roadmap/schema.ts',
+    'plugins/zeroh-roadmap/cli/lib/executor-arm.mjs',
+    'plugins/zeroh-roadmap/cli/commands/result.mjs',
+    'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
   ],
   stakeholderDemo:
     'Who planned and who executed every phase is recorded by the machinery that launched the work — a missing attribution is a named warning at validate time instead of a silent hole in the model comparison.',
@@ -52,7 +55,7 @@ export default definePhase({
     },
   ],
   notes:
-    "DESIGN (locked): stamping is mechanical WHERE A LAUNCHER EXISTS, a named warning where not. (a) Codex lanes: launch() adds driver { model, lane } from the phase-2 registry entry to the journal it already writes; statusCodex SURFACES it for free (its JSON spreads the journal); the `gate run --verify-complete` path RECONCILES, resolving the primary checkout via mainCheckout() because it runs inside the codex worktree — a landed phase file whose executionResult.driver is absent or disagrees while a run-lane journal exists is an ERROR naming both values (the journal is launcher truth; the file is model self-report; disagreement means one of them lies). (b) Claude-inline sessions have no launcher chokepoint — plan-phase/do-phase skills already instruct plannedBy/driver; the validator warning (3.2) is the mechanical catch for forgotten stamps, which is exactly how 715–719 would have been caught. (c) executionResult.roles?: [{ role, model, via: 'native'|'child-cli'|'inline', substituted?: { from, to, reason } }] lands ADDITIVE in templates/schema.ts now so phase 4's resolver has a recording target and the schema ships once — the same land-the-shape-early pattern the assumptions field used (its docblock records phase 1372 authored the behaviour later).\n\nWARNING SEVERITIES (never RED): backlog phase missing plannedBy → warn naming the file and the one-line fix; done phase missing executionResult.driver → warn; done phase whose driver.lane is unknown to the registry → the phase-2 warning already covers it. Warnings ride the existing result.warnings channel — COMPUTED in cli/lib/validate.mjs (the engine; bin/validate-roadmap-file.mjs and the `roadmap phase validate` face both already print result.warnings), placed OUTSIDE the isNewToGit authoring-lint gate so a done-flip of an existing file still warns — exit codes unchanged, honoring the 700-historical-files reality.\n\nREVIEW RATIFICATIONS (Mode A, 2026-08-23): testMode tdd ratified on all three tasks (each step's verify is a test-file tripwire the task itself authors); no testScope/reviewScope relaxations declared; userFacing n/a (CLI + schema only).",
+    "DESIGN (locked): stamping is mechanical WHERE A LAUNCHER EXISTS, a named warning where not. (a) Codex lanes: launch() adds driver { model, lane } from the phase-2 registry entry to the journal it already writes; statusCodex SURFACES it for free (its JSON spreads the journal); the `gate run --verify-complete` path RECONCILES, resolving the primary checkout via mainCheckout() because it runs inside the codex worktree — a landed phase file whose executionResult.driver is absent or disagrees while a run-lane journal exists is an ERROR naming both values (the journal is launcher truth; the file is model self-report; disagreement means one of them lies). (b) Claude-inline sessions have no launcher chokepoint — plan-phase/do-phase skills already instruct plannedBy/driver; the validator warning (3.2) is the mechanical catch for forgotten stamps, which is exactly how 715–719 would have been caught. (c) executionResult.roles?: [{ role, model, via: 'native'|'child-cli'|'inline', substituted?: { from, to, reason } }] lands ADDITIVE in templates/schema.ts now so phase 4's resolver has a recording target and the schema ships once — the same land-the-shape-early pattern the assumptions field used (its docblock records phase 1372 authored the behaviour later).\n\nWARNING SEVERITIES (never RED): backlog phase missing plannedBy → warn naming the file and the one-line fix; done phase missing executionResult.driver → warn; done phase whose driver.lane is unknown to the registry → the phase-2 warning already covers it. Warnings ride the existing result.warnings channel — COMPUTED in cli/lib/validate.mjs (the engine; bin/validate-roadmap-file.mjs and the `roadmap phase validate` face both already print result.warnings), placed OUTSIDE the isNewToGit authoring-lint gate so a done-flip of an existing file still warns — exit codes unchanged, honoring the 700-historical-files reality.\n\nREVIEW RATIFICATIONS (Mode A, 2026-08-23): testMode tdd ratified on all three tasks (each step's verify is a test-file tripwire the task itself authors); no testScope/reviewScope relaxations declared; userFacing n/a (CLI + schema only).\n\nSESSION-LANE RECONCILE (task 3.4 — operator ruling 2026-08-23, root-caused LIVE during this arc's own phase-1 spawn): the do-arc orchestrator wrote driver.model claude-fable-5 into an opus-card executor's spawn prompt — a spawner-asserted identity overrides the executor's self-knowledge, and NO planned gate catches a session-lane WRONG stamp (result check is shape-only with driver optional; 3.1 is journal-gated; 3.2 catches absence only). Fix shape = 3.1 repeated on the session lane: the arm file (the session lane's launch journal, already written pre-spawn at the chokepoint) records the REQUESTED alias read from the agent card; result check reconciles the executor's self-stamp against it by family prefix. The spawner NEVER asserts a model id — singleSeam 3's carve-out ('a model self-reports only what the launcher cannot know') applies because the harness resolves the card alias silently: the executor's own context is the only exact-id evidence.",
   tasks: [
     {
       id: '3.1',
@@ -147,6 +150,47 @@ export default definePhase({
         'plugins/zeroh-roadmap/templates/schema.ts',
         'lib/roadmap/schema.ts',
         'plugins/zeroh-roadmap/scripts/schema.test.ts',
+      ],
+      testMode: 'tdd',
+      done: false,
+    },
+    {
+      id: '3.4',
+      title: 'The session lane reconciles the executor stamp against the armed card alias',
+      problem:
+        "A spawner-asserted model id in a spawn prompt overrides the executor's self-knowledge unchecked: on 2026-08-23 the POLYSEAT orchestrator instructed an opus-card phase-executor to stamp driver.model claude-fable-5, and nothing would have caught it — result check validates shape only, 3.1's reconcile is journal-gated (codex lane), 3.2 warns only on ABSENT attribution. The arm file is the session lane's launch journal; it must carry what the launcher requested so the return can be reconciled.",
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/executor-arm.mjs',
+          description:
+            "armExecutor gains optional expectedModelAlias, recorded additively in the arm JSON ({ sessionId, executorId, expectedModelAlias, armedAt }); the executor-arm command reads the alias MECHANICALLY from the phase-executor agent card's frontmatter model: line (default: agents/phase-executor.md resolved beside the plugin CLI; --agent-card <path> overrides; no card / no model line = field absent, never guessed) and prints what it recorded. detectArm/staleArms/liveArm semantics untouched \u2192 verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/executor-arm.test.mjs",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/result.mjs',
+          description:
+            "After a valid parse with --phase N: read .building/<N>-executor.armed; a recorded expectedModelAlias reconciles against parsed driver.model via the family map { fable: 'claude-fable', opus: 'claude-opus', sonnet: 'claude-sonnet', haiku: 'claude-haiku' } (prefix match). Mismatch \u2192 exit 2 naming armed alias (launcher truth of the request) vs driver.model (executor self-report) plus the arm path; driver ABSENT under a recorded alias \u2192 exit 2 (the session-lane analog of 3.1's journal-present-absent-driver error); alias 'inherit' or outside the map \u2192 a NAMED skip line on stderr, exit unchanged (loud, never red on an unmappable alias); no arm / no recorded alias \u2192 behavior byte-identical to today \u2192 verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/result.test.mjs",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
+          description:
+            "The mid-band spawn step gains the prohibition + mechanism in two sentences: the spawn prompt NEVER asserts the executor's model id (the executor stamps its own exact id from its harness context; the launcher records lane and the requested card alias via executor-arm), and result check reconciles the two \u2014 cite the 2026-08-23 fable-for-opus near-miss \u2192 verify: bash -c \"grep -qF 'NEVER asserts the executor' plugins/zeroh-roadmap/skills/do-arc/SKILL.md\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/result.test.mjs',
+          description:
+            "Fixtures: the PLANTED 2026-08-23 defect (armed alias opus, returned driver.model claude-fable-5) reds naming both values; agreement (opus / claude-opus-5) passes; driver absent under a recorded alias reds; alias 'inherit' prints the named skip and passes; no arm passes byte-identical; arm-alias recording pinned in executor-arm.test.mjs (card parsed; missing card = absent field). Guard-mutation-proof: the planted-defect fixture IS the quoted RED \u2192 verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/result.test.mjs",
+        },
+      ],
+      acceptanceCriteria: [
+        'The arm records the requested model alias read from the agent card, and result check reds a family mismatch AND a driver absent under a recorded alias, naming armed alias vs returned driver.model plus the arm path; agreement, inherit, and no-arm paths stay green',
+        "The planted 2026-08-23 defect (armed 'opus', returned 'claude-fable-5') is RED in the fixture suite, quoted in the transparencyReport; do-arc SKILL.md forbids spawner-asserted model ids",
+      ],
+      files: [
+        'plugins/zeroh-roadmap/cli/lib/executor-arm.mjs',
+        'plugins/zeroh-roadmap/cli/lib/executor-arm.test.mjs',
+        'plugins/zeroh-roadmap/cli/commands/result.mjs',
+        'plugins/zeroh-roadmap/cli/commands/result.test.mjs',
+        'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
       ],
       testMode: 'tdd',
       done: false,
