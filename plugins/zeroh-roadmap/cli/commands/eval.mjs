@@ -24,11 +24,12 @@
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
-import { bridgeEval, consumerSchemaPath, BridgeError, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
+import { bridgeParseShape, bridgeParseShapeJson, consumerSchemaPath, BridgeError, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
   collectArcTrace,
   assembleWorkflowStamp,
   assembleConsumerFingerprint,
+  readPhaseEvalSamples,
   WORKFLOW_PROFILE,
   CollectError,
 } from '../lib/eval-collect.mjs'
@@ -53,29 +54,6 @@ const RECORDERS = {
 
 /** The archive home — committed by design (see the module docblock). */
 export const ARC_EVALS_DIR = ['roadmap', 'arc-evals']
-
-// Parse a document against the named consumer shape. argv[1] = schema path, argv[2] = shape name,
-// argv[3] = the input JSON, or '-' to read it from STDIN. Mirrors result.mjs's PARSE_SCRIPT so
-// there is one bridge idiom, not two.
-//
-// Use '-' for anything document-sized: a single argv entry is capped at 128KB by MAX_ARG_STRLEN,
-// so a big arc's trace fails the spawn with E2BIG and an EMPTY stderr — which reads as a schema
-// mismatch it is not. Arc UCAUDIT (20 members, ~520KB of transparency reports) hit it first.
-const PARSE_SCRIPT = `
-const schemaPath = process.argv[1]
-const shapeName = process.argv[2]
-const inputArg = process.argv[3]
-Promise.all([import('file://' + schemaPath), import('node:fs')]).then(([m, fs]) => {
-  const shape = m[shapeName] || (m.default && m.default[shapeName])
-  if (!shape) { process.stderr.write(shapeName + ' not exported from ' + schemaPath + ' — the consumer schema predates arc EVALCORE; re-sync lib/roadmap/schema.ts'); process.exit(4) }
-  const inputJson = inputArg === '-' ? fs.readFileSync(0, 'utf8') : inputArg
-  let input
-  try { input = JSON.parse(inputJson) } catch (e) { process.stderr.write('input is not valid JSON: ' + e.message); process.exit(4) }
-  const r = shape.safeParse(input)
-  if (r.success) { process.stdout.write('PARSED:' + JSON.stringify(r.data)) }
-  else { process.stderr.write('ZODISSUES:' + JSON.stringify(r.error.issues)); process.exit(3) }
-}).catch((e) => { process.stderr.write(String((e && e.stack) || e)); process.exit(4) })
-`
 
 function printZodIssues(issues) {
   for (const iss of issues ?? []) {
@@ -174,8 +152,9 @@ export default async function run(argv) {
     return 1
   }
 
-  const res = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, recorder.shape, '-'], input: inputJson })
-  if (!res.ok) {
+  const validated = bridgeParseShapeJson(toplevel, schemaPath, recorder.shape, inputJson)
+  if (!validated.ok) {
+    const res = validated.res
     if (res.kind === 'tsx-absent') {
       process.stderr.write(TSX_ABSENT_HINT + '\n')
       return 1
@@ -191,7 +170,7 @@ export default async function run(argv) {
     return 1
   }
 
-  const parsed = JSON.parse(res.stdout.slice(res.stdout.indexOf('PARSED:') + 'PARSED:'.length))
+  const parsed = validated.parsed
   // The arcId travels INSIDE the document too; a --arc that disagrees would silently file the
   // record under the wrong arc, so the mismatch is a refusal rather than a preference.
   if (String(parsed.arcId) !== String(opts.arc)) {
@@ -681,23 +660,24 @@ async function runMergeJudge(opts) {
     return 1
   }
 
-  const parsedVerdict = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, 'ArcEvalJudgeVerdictShape', '-'], input: inputJson })
+  const parsedVerdict = bridgeParseShapeJson(toplevel, schemaPath, 'ArcEvalJudgeVerdictShape', inputJson)
   if (!parsedVerdict.ok) {
-    if (parsedVerdict.kind === 'tsx-absent') {
+    const res = parsedVerdict.res
+    if (res.kind === 'tsx-absent') {
       process.stderr.write(TSX_ABSENT_HINT + '\n')
       return 1
     }
-    if (parsedVerdict.kind === 'zod') {
+    if (res.kind === 'zod') {
       // The judge is an LLM; a mis-shaped verdict is an EXPECTED outcome, not an exception. It
       // is refused here so the report stays honestly unjudged rather than half-filled.
       process.stderr.write('roadmap eval merge-judge: refused — the verdict does not match ArcEvalJudgeVerdictShape:\n')
-      printZodIssues(parsedVerdict.issues)
+      printZodIssues(res.issues)
       return 2
     }
-    process.stderr.write((parsedVerdict.stderr || 'roadmap eval merge-judge: bridge failure') + '\n')
+    process.stderr.write((res.stderr || 'roadmap eval merge-judge: bridge failure') + '\n')
     return 1
   }
-  const verdict = JSON.parse(parsedVerdict.stdout.slice(parsedVerdict.stdout.indexOf('PARSED:') + 'PARSED:'.length))
+  const verdict = parsedVerdict.parsed
 
   if (String(verdict.arcId) !== String(opts.arc)) {
     process.stderr.write(
@@ -952,12 +932,23 @@ async function runScorecard(opts) {
     }
   }
 
+  // The per-phase inlet, read BESIDE the arc-trace loop: without this the reader is dead code
+  // and `roadmap eval scorecard` never ingests a single record.
+  const { samples: phaseSamples, warnings: phaseWarnings } = readPhaseEvalSamples(toplevel)
+  for (const w of phaseWarnings) say(`WARN: ${w}`)
+
+  // Gate-fix correlation is computed over the ARC phases only: it feeds reviewer metrics, and
+  // phase records seat no reviewer, so widening the scan to them would buy one `git log` per
+  // record and change no cell.
   const phaseNums = [...new Set(traces.flatMap((t) => (t.phases ?? []).map((p) => p.phase)))].sort((a, b) => a - b)
   const gateFixes = findGateFixCommits(toplevel, phaseNums)
 
   // Midnight of the date, never `new Date()`: a committed projection that mints its own wall
   // clock shows a spurious diff in the archive on every regeneration over identical inputs.
-  const scorecard = computeScorecard(traces, gateFixes, { generatedAt: `${date}T00:00:00.000Z` })
+  const scorecard = computeScorecard(traces, gateFixes, {
+    generatedAt: `${date}T00:00:00.000Z`,
+    phaseSamples,
+  })
 
   const validated = bridgeValidate(toplevel, schemaPath, 'ScorecardShape', scorecard)
   if (!validated.ok) {
@@ -1235,12 +1226,10 @@ export function readPriorReports(dir, { excludePath, onWarn } = {}) {
   return out
 }
 
-/** Validate a document against a CONSUMER shape through the bridge (the record-sweep idiom). */
-function bridgeValidate(toplevel, schemaPath, shapeName, doc) {
-  const res = bridgeEval(toplevel, PARSE_SCRIPT, { args: [schemaPath, shapeName, '-'], input: JSON.stringify(doc) })
-  if (res.ok) return { ok: true, parsed: JSON.parse(res.stdout.slice(res.stdout.indexOf('PARSED:') + 'PARSED:'.length)) }
-  return { ok: false, res }
-}
+/** Validate a document against a CONSUMER shape through the bridge. Delegates to the shared
+ *  tsx-bridge helper so the spawn idiom has ONE home rather than a copy per command. */
+const bridgeValidate = (toplevel, schemaPath, shapeName, doc) =>
+  bridgeParseShape(toplevel, schemaPath, shapeName, doc)
 
 /** Which other arcs already have a dated report — the timing table pools across all of them. */
 function arcsWithReports(dir) {

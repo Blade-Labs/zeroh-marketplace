@@ -184,7 +184,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/eval.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-23',
+      transparencyReport: {
+        whatWasDone:
+          "eval-collect gained readPhaseEvalSamples + phaseEvalValidator: it reads roadmap/arc-evals/*.peval.json in phase-number order and lifts each record into the same per-phase entry shape collectArcTrace produces. computeScorecard takes a phaseSamples option, wraps those samples as a DEGRADED source (escapeScan 'unavailable') so every cell they touch reads escapeFixesPerPhase 'scan-unavailable' and never a minted 0, reads the driver from the flat sample field beside executionResult, and names BOTH source counts in notes. runScorecard calls the reader beside its arc-trace loop and surfaces every reader warning on the say channel.",
+        how:
+          "TDD: test-engineer wrote 16 tests across the three suites blind to the implementation (RED: 12 failures, plus an ESM link-time refusal proving the exports were genuinely absent), then the implementation landed. Final: eval-collect + eval-scorecard 75/75, eval.test.mjs 94/95 (the single failure is the KNOWN pre-existing environmental one — 'eval propose — an UNRESOLVABLE tsx bridge', which scrubs PATH so this host's node cannot be found; the test-engineer independently reproduced it on the HEAD copy of the file). The RED round caught one real defect: the reader sorted by FILENAME, which is lexical, so phase 8801 came before phase 99 — fixed to sort on the phase number captured by PEVAL_NAME_RE. Two test-side errors were repaired without weakening intent: a notes assertion whose PROXY (note-count + 1) presumed the source line was conditional, rewritten to compare against the standing rails so the unconditional line still proves 'added, not swapped in'; and a control fixture built from 3 arc phases against an N-floor of 5, so the control cell abstained and asserted nothing — widened to 5 phases (rate 1/5). GUARD MUTATION PROOF for the peval/dated-artifact collision guard: planted violation — widened PEVAL_NAME_RE to /^phase-(\\d+)[-.].*\\.json$/ so the two name classes collide → RED ('the renamed file has left the record class', true !== false, test 28). Anchor drift — renamed the export PEVAL_NAME_RE to PEVAL_NAME_RX → LOUD link-time failure ('SyntaxError: The requested module ./eval-collect.mjs does not provide an export named PEVAL_NAME_RE', 0 of 30 tests able to run). Decoy — phase-880.peval.json (a strict phase-number PREFIX of phase-8801.peval.json, the nearest legal neighbour to the falsification's phase-8801-2026-08-23.json) beside real dated arc artifacts and both undated projections → GREEN, both records loaded in phase order, zero warnings, and the real sweep still resolved. All three mutations reverted from a pristine copy; the suite is 75/75 after restore and git diff on that path shows only the intended change.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "Reviewer cells stay arc-fed: a phase record carries slot results, not agent rounds, so records seat no reviewer. That is the plan's v1 ruling, and the follow-up (parsing gateRounds into records) is named here rather than half-built. Validating the archive costs ONE tsx spawn for the whole directory (PhaseEvalRecordListShape) rather than one per file; on the error path a second spawn re-validates the survivors after the offenders are named and dropped. cli/commands/eval.mjs's local PARSE_SCRIPT was deleted and its three call sites routed through the shared tsx-bridge helper (a bridgeParseShapeJson form was added for the stdin lanes), so the plugin no longer carries three copies of one idiom — cli/commands/result.mjs still has its own two-argument variant hardcoded to PhaseExecutionResultShape, left alone as a named residual outside this arc.",
+      },
     },
   ],
 })

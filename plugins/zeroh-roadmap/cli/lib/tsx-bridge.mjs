@@ -230,10 +230,20 @@ Promise.all([import('file://' + schemaPath), import('node:fs')]).then(([m, fs]) 
  * carries no second copy of any consumer contract — this only moves the SPAWN, never the shape.
  */
 export function bridgeParseShape(consumerRoot, schemaPath, shapeName, doc, opts = {}) {
+  return bridgeParseShapeJson(consumerRoot, schemaPath, shapeName, JSON.stringify(doc), opts)
+}
+
+/**
+ * The same validation over an ALREADY-SERIALIZED document — the stdin lane, for input that
+ * arrived as text and must not round-trip through JSON.parse on the way in. Malformed JSON
+ * then fails INSIDE the script with its own named exit-4 message, exactly as it did before
+ * this helper existed, rather than throwing in the caller.
+ */
+export function bridgeParseShapeJson(consumerRoot, schemaPath, shapeName, inputJson, opts = {}) {
   const res = bridgeEval(consumerRoot, SHAPE_PARSE_SCRIPT, {
     ...opts,
     args: [schemaPath, shapeName, '-'],
-    input: JSON.stringify(doc),
+    input: inputJson,
   })
   if (!res.ok) return { ok: false, res }
   return { ok: true, parsed: JSON.parse(res.stdout.slice(res.stdout.indexOf('PARSED:') + 'PARSED:'.length)) }

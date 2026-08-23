@@ -127,13 +127,28 @@ const emit = (identity, samples, nFloor, metrics) => {
  * committed projection that mints its own wall clock shows a spurious diff on every re-run
  * over identical inputs.
  */
-export function computeScorecard(traces, gateFixes, { nFloor = SCORECARD_N_FLOOR, generatedAt } = {}) {
+export function computeScorecard(
+  traces,
+  gateFixes,
+  { nFloor = SCORECARD_N_FLOOR, generatedAt, phaseSamples = [] } = {},
+) {
   const drivers = new Map()
   const planners = new Map()
   const reviewers = new Map()
   const fixes = gateFixes ?? []
 
-  for (const trace of traces ?? []) {
+  const arcTraces = traces ?? []
+  // Per-phase eval records describe ONE GATE RUN, not a landed arc, so no post-land escape scan
+  // exists for them — they enter as a DEGRADED source and their cells read
+  // escapeFixesPerPhase: 'scan-unavailable'. A zero there would read as a spotless driver, which
+  // is a claim about the actor the data never made. Wrapping them HERE keeps the
+  // absence→degradation mapping at one application site instead of two.
+  const allTraces =
+    phaseSamples.length > 0
+      ? [...arcTraces, { phases: phaseSamples, git: { escapeScan: 'unavailable', escapeFixes: [] } }]
+      : arcTraces
+
+  for (const trace of allTraces) {
     const degraded = trace?.git?.escapeScan === 'unavailable'
     const escapeFixes = trace?.git?.escapeFixes ?? []
 
@@ -142,7 +157,10 @@ export function computeScorecard(traces, gateFixes, { nFloor = SCORECARD_N_FLOOR
       const surface = surfaceOf(phase)
       // An executor that did not self-report attributes to the literal `unrecorded`, never a
       // guess: a wrong attribution is worse than a named gap, because only the gap is visible.
-      const d = phase.executionResult?.driver ?? UNRECORDED_DRIVER
+      // An arc trace carries the driver inside the phase's executionResult; a per-phase eval
+      // record has no executionResult (it never had a status or a round count) and carries the
+      // attribution snapshot FLAT, beside plannedBy. One read, both sources.
+      const d = phase.executionResult?.driver ?? phase.driver ?? UNRECORDED_DRIVER
       const escapes = escapeFixes.filter((f) => namesPhase(f.subject, phase.phase)).length
 
       const driver = cellFor(drivers, [d.model, d.lane, band, surface].join(SEP), {
@@ -212,6 +230,11 @@ export function computeScorecard(traces, gateFixes, { nFloor = SCORECARD_N_FLOOR
       'planner cells measure the EXECUTION of phases that planner planned — plan quality shows through the executor, never directly',
       'the surface axis is the timing table\'s HEURISTIC over each phase keyFiles (web/, office/, spa/ paths), not a declared field',
       `cells under ${nFloor} samples ABSTAIN and carry no metrics — an abstained cell is not a zero score`,
+      // Both counts, always — a reader must be able to see WHAT fed a cell. Phase records feed
+      // driver and planner cells only; reviewer cells stay arc-fed (a record carries no rounds).
+      `sources: ${arcTraces.length} arc trace(s) and ${phaseSamples.length} phase record(s) fed these cells — ` +
+        `phase records carry no escape scan, so every cell they touch reads escapeFixesPerPhase '${SENTINEL.scanUnavailable}', never 0; ` +
+        'reviewer cells are fed by arc traces alone',
     ],
   }
 }

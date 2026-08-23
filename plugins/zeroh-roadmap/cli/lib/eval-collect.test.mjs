@@ -18,7 +18,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { defaultExec } from './exec.mjs'
@@ -33,9 +33,17 @@ import {
   newestArtifactDated,
   assembleWorkflowStamp,
   assembleConsumerFingerprint,
+  phaseEvalRecordPath,
+  phaseEvalValidator,
+  readPhaseEvalSamples,
+  PEVAL_NAME_RE,
   WORKFLOW_PROFILE,
   CollectError,
 } from './eval-collect.mjs'
+// The OTHER dated scan over the same directory. Imported here on purpose: the collision the
+// peval reader has to survive is a whole-DIRECTORY property, and pinning only the two scans
+// that happen to live in this module would leave the third free to claim a record.
+import { readPriorReports } from '../commands/eval.mjs'
 
 const scratch = []
 process.on('exit', () => scratch.forEach((d) => rmSync(d, { recursive: true, force: true })))
@@ -574,4 +582,276 @@ test('collectArcTrace — plannedBy travels from the phase file; an unrecorded o
   assert.equal(byNum(trace, 9002).plannedBy, undefined, 'no plannedBy on the file ⇒ no plannedBy on the trace')
   // Same rule one level down: the driver is self-reported or absent.
   assert.equal(byNum(trace, 9002).executionResult.driver, undefined, 'an unrecorded driver is never back-filled')
+})
+
+// ══ 11. the PER-PHASE eval record inlet (arc POLYSEAT plane 1) ═════════════════════════
+// `computeScorecard` only ever sees ARC traces, so a consumer that executes ordinary phases
+// without arcs renders zero driver and zero planner cells however much work it does (measured
+// in mudarabah2, 2026-08-23). `roadmap gate run` now leaves a record per phase at
+// roadmap/arc-evals/phase-<N>.peval.json; `readPhaseEvalSamples` is the reader that turns that
+// archive into scorecard samples.
+//
+// Two failure classes are pinned here, and only these two:
+//
+//   COLLISION. The records land in roadmap/arc-evals/, the SAME directory three dated scans
+//   already walk (`newestArtifactDated` / `newestArtifact` here, `readPriorReports` in
+//   commands/eval.mjs) and the same one two undated projections live in (scorecard.json,
+//   timing-stats.json). A record read as an arc report drags every future ratchet baseline
+//   toward a document that scores no dimension at all; an arc report read as a record invents
+//   phase samples out of a sweep. Both directions are asserted, and each carries a
+//   FALSIFICATION — the same fixture renamed the wrong way, so the boundary is proven to sit
+//   on the filename class rather than on some accident of the corpus.
+//
+//   THE SILENT SKIP. A record that will not read is missing MEASUREMENT. Dropping it quietly
+//   makes a shrinking corpus indistinguishable from a stable one, so every unreadable file is
+//   named in `warnings` and its siblings still load.
+
+/** A minimal-but-REAL PhaseEvalRecord. Validated against the consumer's PhaseEvalRecordShape
+ *  by the reader itself — every field here is the production spelling, not a test dialect. */
+const pevalRecord = (phase, o = {}) => ({
+  phase,
+  date: o.date ?? '2026-08-20',
+  consumerFingerprint: o.consumerFingerprint ?? { repo: 'zr-evalfix', language: 'typescript', corpusSize: 12 },
+  taskCount: o.taskCount ?? 3,
+  keyFiles: o.keyFiles ?? ['src/collector.ts'],
+  gate: o.gate ?? { green: true, slots: [{ slot: 'lint', exitCode: 0, durationMs: 1200 }] },
+  ...(o.metrics === null
+    ? {}
+    : {
+        metrics: o.metrics ?? {
+          commits: 3,
+          linesAdded: 120,
+          linesRemoved: 10,
+          filesChanged: 4,
+          testsAtStart: 100,
+          testsAtEnd: 108,
+          testsAdded: 8,
+          startedAt: '2026-08-20T10:00:00.000Z',
+          completedAt: '2026-08-20T10:30:00.000Z',
+          haltCount: 0,
+        },
+      }),
+  ...(o.attribution === null
+    ? {}
+    : {
+        attribution: o.attribution ?? {
+          plannedBy: { model: 'claude-fable-5' },
+          driver: { model: 'claude-opus-5', lane: 'session' },
+        },
+      }),
+})
+
+/** Write a record under its PRODUCTION path helper — a test that spelled the filename itself
+ *  would keep passing after the convention moved out from under the gate writer. */
+function plantPeval(root, phase, o = {}) {
+  const path = phaseEvalRecordPath(root, phase)
+  writeFileSync(path, JSON.stringify(pevalRecord(phase, o), null, 2) + '\n')
+  assert.match(basename(path), PEVAL_NAME_RE, `fixture precondition: ${basename(path)} must be in the record name class`)
+  return path
+}
+
+/** Write raw bytes into the arc-evals dir under an arbitrary name (the collision fixtures). */
+function plantRaw(root, name, body) {
+  const path = join(root, 'roadmap', 'arc-evals', name)
+  writeFileSync(path, typeof body === 'string' ? body : JSON.stringify(body, null, 2) + '\n')
+  return path
+}
+
+const evalsDirOf = (root) => join(root, 'roadmap', 'arc-evals')
+const pevalNames = (dir) => readdirSync(dir).filter((f) => PEVAL_NAME_RE.test(f)).sort()
+const phasesOf = (samples) => samples.map((s) => s.phase)
+
+/** A dated report the ratchet accepts: readPriorReports checks only for a `dimensions` record. */
+const datedReport = (arcId, date) => ({ arcId, date, dimensions: { 'code-confidence': { owner: 'deterministic', score: 60 } } })
+
+test('readPhaseEvalSamples — each record becomes a SAMPLE in the arc-trace entry shape, ascending by phase', { timeout: 120_000 }, () => {
+  const root = buildEvalFixture()
+  // 99 / 880 / 8801 sort LEXICALLY as 880, 8801, 99 — a reader that sorted filenames instead
+  // of phase numbers would hand the projection a different order on the same corpus, and the
+  // committed scorecard would churn on a re-run over unchanged inputs.
+  plantPeval(root, 880, { taskCount: 5, keyFiles: ['web/src/panels/eval-panel.tsx'] })
+  plantPeval(root, 8801)
+  plantPeval(root, 99, { attribution: { plannedBy: { model: 'gpt-5-codex' } } })
+
+  const { samples, warnings } = readPhaseEvalSamples(root)
+  assert.deepEqual(warnings, [], 'a corpus of valid records warns about nothing')
+  assert.deepEqual(phasesOf(samples), [99, 880, 8801], 'ascending by PHASE NUMBER, not by filename')
+
+  const byPhase = (n) => samples.find((s) => s.phase === n)
+
+  // The cohort keys travel verbatim: computeScorecard slices on bandFor(taskCount) ×
+  // surfaceOf(keyFiles), so a dropped keyFile does not lose detail, it MIS-COHORTS.
+  assert.equal(byPhase(880).taskCount, 5)
+  assert.deepEqual(byPhase(880).keyFiles, ['web/src/panels/eval-panel.tsx'])
+  assert.equal(byPhase(8801).taskCount, 3)
+  assert.deepEqual(byPhase(8801).keyFiles, ['src/collector.ts'])
+
+  // The arc-trace entry shape, so one slicer reads both sources without a per-source branch.
+  const s = byPhase(8801)
+  assert.deepEqual(s.transparency, [], 'a phase record carries no transparency reports — an EMPTY list, never absent')
+  assert.deepEqual(s.gateRuns, [], 'v1 does not lift gate rounds off the record; the list is empty, not invented')
+  assert.equal(s.metrics.startedAt, '2026-08-20T10:00:00.000Z')
+  assert.equal(s.metrics.completedAt, '2026-08-20T10:30:00.000Z')
+  assert.equal(s.metrics.haltCount, 0, 'a RECORDED zero is data — the scorer tells it apart from an absent one')
+
+  // `driver` sits FLAT on the sample: a phase record has no executionResult, because it never
+  // had a status or a round count to record. A nested one here would be a shape the record
+  // cannot evidence.
+  assert.deepEqual(s.driver, { model: 'claude-opus-5', lane: 'session' })
+  assert.equal('executionResult' in s, false, 'no executionResult is synthesized around the driver')
+  assert.deepEqual(s.plannedBy, { model: 'claude-fable-5' }, 'plannedBy keeps the arc-trace spelling')
+
+  // Absence stays absence: the record for 99 recorded a planner and no driver.
+  assert.deepEqual(byPhase(99).plannedBy, { model: 'gpt-5-codex' })
+  assert.equal(byPhase(99).driver, undefined, 'an unrecorded driver is never back-filled — the scorer owns the unrecorded cohort')
+
+  assert.deepEqual(readPhaseEvalSamples(buildEvalFixture()), { samples: [], warnings: [] }, 'no records ⇒ no samples and nothing to warn about')
+})
+
+test('readPhaseEvalSamples — the whole archive rides ONE validate call, never one per file', { timeout: 120_000 }, () => {
+  const root = buildEvalFixture()
+  for (const n of [8801, 8802, 8803, 8804]) plantPeval(root, n)
+
+  const calls = []
+  const validate = (docs) => {
+    calls.push(docs)
+    return { ok: true, parsed: docs }
+  }
+  const { samples } = readPhaseEvalSamples(root, { validate })
+
+  assert.equal(calls.length, 1, `the archive is validated as a BATCH — one tsx spawn per file makes reading it cost more than producing it; got ${calls.length} calls`)
+  assert.equal(calls[0].length, 4, 'every record is in that one batch')
+  assert.deepEqual(calls[0].map((d) => d.phase), [8801, 8802, 8803, 8804], 'the batch carries the PARSED documents, in the reader order')
+  assert.deepEqual(phasesOf(samples), [8801, 8802, 8803, 8804])
+})
+
+test('phaseEvalValidator — the real consumer shape, and a bad element is named by its ARRAY INDEX', { timeout: 120_000 }, () => {
+  const root = buildEvalFixture()
+  const validate = phaseEvalValidator(root)
+
+  const good = validate([pevalRecord(8801), pevalRecord(8802)])
+  assert.equal(good.ok, true, `two valid records must parse through the consumer's PhaseEvalRecordListShape; got ${JSON.stringify(good.res ?? {}).slice(0, 800)}`)
+  assert.deepEqual(good.parsed.map((d) => d.phase), [8801, 8802], 'the PARSED list comes back, in order')
+
+  // PhaseEvalRecordShape is a strictObject at every level: an unknown key is a parse ERROR,
+  // never a silent strip. A dropped key in a measurement record is a number no later reader
+  // could even discover was missing.
+  const bad = validate([pevalRecord(8801), { ...pevalRecord(8802), notAField: true }])
+  assert.equal(bad.ok, false, 'an unknown key must REFUSE the batch, not travel stripped')
+  assert.equal(bad.res.kind, 'zod', `a shape refusal is a zod refusal, not a toolchain failure; got ${JSON.stringify(bad.res).slice(0, 800)}`)
+  const indices = bad.res.issues.map((i) => (i.path ?? [])[0])
+  assert.ok(
+    indices.includes(1),
+    `the offending element must be named by its array index 1, or a batch refusal cannot be traced back to a file; issues were ${JSON.stringify(bad.res.issues)}`,
+  )
+  assert.equal(indices.includes(0), false, 'the VALID element at index 0 is not blamed for its neighbour')
+})
+
+// ── 11a. COLLISION, direction (a): the dated scans never claim a record ────────────────
+test('readPhaseEvalSamples — the DATED scans over the same directory claim NONE of the .peval.json files', { timeout: 120_000 }, () => {
+  const root = buildEvalFixture()
+  const dir = evalsDirOf(root)
+  for (const n of [8801, 8802, 8803, 8804, 8805]) plantPeval(root, n)
+  plantRaw(root, `${ARC_ID}-2026-07-22.json`, datedReport(ARC_ID, '2026-07-22'))
+
+  // Without this every assertion below is vacuous — an empty directory claims nothing either.
+  assert.equal(pevalNames(dir).length, 5, `fixture precondition: five records share the scans' directory; got ${JSON.stringify(readdirSync(dir))}`)
+
+  // (1) newestArtifactDated / newestArtifact — the arc artifact resolver.
+  assert.equal(newestArtifactDated(dir, 'phase-8801', null), null, 'a record is not a dated arc artifact for an arc named after it')
+  assert.equal(newestArtifactDated(dir, 'phase-8805', 'peval'), null, 'nor under any suffix')
+  assert.equal(
+    newestArtifact(dir, ARC_ID, 'sweep'),
+    join(dir, `${ARC_ID}-2026-07-20-sweep.json`),
+    'and the real arc artifacts still resolve unchanged beside them',
+  )
+
+  // (2) readPriorReports — the RATCHET's corpus. A record read as a prior would drag every
+  // future baseline toward a document that scores no dimension at all.
+  const warned = []
+  const priors = readPriorReports(dir, { onWarn: (l) => warned.push(l) })
+  assert.deepEqual(priors.map((d) => d.date), ['2026-07-22'], 'exactly the one dated report — no record enrolled itself as a prior')
+  assert.deepEqual(warned, [], 'and no record was even REACHED: a warning here would mean the scan opened one')
+
+  // FALSIFICATION — the same bytes under a name the dated scans DO claim. This is what proves
+  // the boundary sits on the filename class and not on some accident of this corpus.
+  const wrongWay = join(dir, 'phase-8801-2026-08-23.json')
+  renameSync(join(dir, 'phase-8801.peval.json'), wrongWay)
+  assert.equal(PEVAL_NAME_RE.test('phase-8801-2026-08-23.json'), false, 'the renamed file has left the record class')
+  assert.deepEqual(
+    newestArtifactDated(dir, 'phase-8801', null),
+    { path: wrongWay, date: '2026-08-23' },
+    'renamed the wrong way the artifact scan CLAIMS it — the date-free .peval.json tail is the only thing keeping it out',
+  )
+  const warnedAfter = []
+  readPriorReports(dir, { onWarn: (l) => warnedAfter.push(l) })
+  assert.ok(
+    warnedAfter.some((l) => l.includes('phase-8801-2026-08-23.json')),
+    `renamed the wrong way the ratchet scan reaches it too and refuses it by name; warnings were ${JSON.stringify(warnedAfter)}`,
+  )
+  assert.deepEqual(phasesOf(readPhaseEvalSamples(root).samples), [8802, 8803, 8804, 8805], 'and the reader has correspondingly LOST it — the two classes are disjoint in both directions')
+})
+
+// ── 11b. COLLISION, direction (b): the reader never claims an arc artifact ─────────────
+test('readPhaseEvalSamples — dated arc artifacts and the undated projections are NOT records', { timeout: 120_000 }, () => {
+  const root = buildEvalFixture()
+  const dir = evalsDirOf(root)
+  plantPeval(root, 8801)
+  // Every non-record filename class that really occurs in this directory. There is no
+  // `*.eval.json` class on disk — the arc form is `<ARCID>-<YYYY-MM-DD>[-sweep|-verdicts].json`
+  // (two of which the fixture already ships) and the projections are undated.
+  plantRaw(root, `${ARC_ID}-2026-07-20.json`, datedReport(ARC_ID, '2026-07-20'))
+  plantRaw(root, 'scorecard.json', { generatedAt: '2026-08-23T00:00:00.000Z', nFloor: 5, drivers: [], reviewers: [], notes: [] })
+  plantRaw(root, 'timing-stats.json', { generatedAt: '2026-08-23T00:00:00.000Z', cohorts: [] })
+
+  const nonRecords = readdirSync(dir).filter((f) => !PEVAL_NAME_RE.test(f)).sort()
+  assert.deepEqual(
+    nonRecords,
+    [
+      `${ARC_ID}-2026-07-10-sweep.json`,
+      `${ARC_ID}-2026-07-20-sweep.json`,
+      `${ARC_ID}-2026-07-20-verdicts.json`,
+      `${ARC_ID}-2026-07-20.json`,
+      'scorecard.json',
+      'timing-stats.json',
+    ],
+    'fixture precondition: every real non-record class is present to be ignored',
+  )
+
+  const { samples, warnings } = readPhaseEvalSamples(root)
+  assert.deepEqual(phasesOf(samples), [8801], 'exactly the one record; a sweep read as a record would invent a phase sample out of an arc aggregate')
+  assert.deepEqual(warnings, [], 'and an ignored file is not a DEGRADED one — it must not warn either')
+
+  // FALSIFICATION — the projection, byte-for-byte, under a record name. The reader claims it
+  // immediately, which is what proves the six files above were skipped on their NAME.
+  renameSync(join(dir, 'scorecard.json'), join(dir, 'phase-4242.peval.json'))
+  const after = readPhaseEvalSamples(root)
+  assert.deepEqual(phasesOf(after.samples), [8801], 'the projection still produces no sample — it is not a record whatever it is called')
+  assert.ok(
+    after.warnings.some((w) => w.includes('phase-4242.peval.json')),
+    `renamed into the record class the reader DOES claim it, and refuses it BY NAME; warnings were ${JSON.stringify(after.warnings)}`,
+  )
+})
+
+// ── 11c. an unreadable record is NAMED, never silently skipped ─────────────────────────
+test('readPhaseEvalSamples — an unparseable record is a WARNING naming the file, and its siblings still load', { timeout: 120_000 }, () => {
+  const root = buildEvalFixture()
+  const dir = evalsDirOf(root)
+  for (const n of [8801, 8802, 8803]) plantPeval(root, n)
+  plantRaw(root, 'phase-8899.peval.json', '{"phase": 8899, "date": "2026-08-20",')
+  // Not JSON-broken but SHAPE-broken: taskCount is a cohort key, and a record that lost it
+  // does not lose detail, it mis-cohorts. Both failures owe the same named warning.
+  plantRaw(root, 'phase-8898.peval.json', { ...pevalRecord(8898), taskCount: 'three' })
+
+  assert.equal(pevalNames(dir).length, 5, `fixture precondition: three good records and two broken ones; got ${JSON.stringify(pevalNames(dir))}`)
+
+  const { samples, warnings } = readPhaseEvalSamples(root)
+  assert.deepEqual(phasesOf(samples), [8801, 8802, 8803], 'a corrupt record is missing data, not a reason to refuse the archive')
+
+  for (const name of ['phase-8899.peval.json', 'phase-8898.peval.json'])
+    assert.ok(
+      warnings.some((w) => typeof w === 'string' && w.includes(name)),
+      `${name} must be NAMED in the warnings — a silent skip makes a shrinking corpus indistinguishable from a stable one; warnings were ${JSON.stringify(warnings)}`,
+    )
+  assert.equal(warnings.length, 2, `exactly one warning per unreadable record — no warning for the three that loaded; got ${JSON.stringify(warnings)}`)
 })

@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url'
 import { defaultExec } from './exec.mjs'
 import { GateRunReportShape } from './gate-report.mjs'
 import { flowTokens } from '../commands/measure.mjs'
-import { bridgeImport, bridgeImportMany } from './tsx-bridge.mjs'
+import { bridgeImport, bridgeImportMany, bridgeParseShape, consumerSchemaPath } from './tsx-bridge.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -114,6 +114,119 @@ export function assembleConsumerFingerprint(toplevel) {
     corpusSize = 0 // an absent phases dir is an empty corpus, not a failure
   }
   return { repo: basename(toplevel), language, corpusSize }
+}
+
+/**
+ * The REAL validator for the record archive: the WHOLE directory rides ONE tsx spawn through
+ * the consumer's PhaseEvalRecordListShape. Seam 3 forbids a plugin-side copy of a consumer
+ * contract, and a spawn per file would make reading the archive cost more than producing it
+ * (a 700-phase consumer is the target case) — so batching is the only affordable honest form.
+ */
+export const phaseEvalValidator = (repoRoot) => (docs) =>
+  bridgeParseShape(repoRoot, consumerSchemaPath(repoRoot), 'PhaseEvalRecordListShape', docs)
+
+/**
+ * Lift one validated record into the per-phase sample shape `collectArcTrace`'s `phases[]`
+ * uses, so the scorecard slices both sources through ONE code path rather than two.
+ *
+ * `gateRuns` stays EMPTY deliberately: a record carries slot results, not reviewer rounds, and
+ * a synthesized round would seat a reviewer in a cell it never sat in. Reviewer attribution
+ * stays arc-fed — parsing gateRounds into records is a NAMED follow-up, not a half-build.
+ *
+ * `driver` sits FLAT rather than under a synthesized `executionResult`: a record has no status
+ * and no round count, and inventing a PhaseExecutionResult to carry one field would be a
+ * fabricated document wearing a contract's name.
+ */
+function pevalSample(record) {
+  const sample = {
+    phase: record.phase,
+    keyFiles: record.keyFiles ?? [],
+    taskCount: record.taskCount ?? 0,
+    transparency: [],
+    gateRuns: [],
+  }
+  if (record.metrics) sample.metrics = record.metrics
+  if (record.attribution?.driver) sample.driver = record.attribution.driver
+  if (record.attribution?.plannedBy) sample.plannedBy = record.attribution.plannedBy
+  return sample
+}
+
+/**
+ * Read every `roadmap/arc-evals/*.peval.json` into per-phase samples. `validate` defaults to
+ * the real bridge validator; injection exists for tests, never to skip validation.
+ *
+ * TWO PASSES, on the ERROR path only. The batch is validated once; when zod names offending
+ * ELEMENTS by array index, those are warned about BY FILENAME, dropped, and the survivors are
+ * re-validated. Dropping WITHOUT the second pass would let unvalidated documents through under
+ * the cover of a batch that failed — they would carry no defaults and no guarantee, which is
+ * exactly the silent degradation this reader exists to make visible.
+ *
+ * A batch failure that names NO element is a toolchain or schema-load problem, not a bad
+ * record: nothing is safely droppable, so the whole class is reported ABSENT with the reason
+ * named. Absent is a claim the data supports; a partial read presented as complete is not.
+ */
+export function readPhaseEvalSamples(repoRoot, { validate = phaseEvalValidator(repoRoot) } = {}) {
+  const warnings = []
+  const dir = join(repoRoot, 'roadmap', 'arc-evals')
+  if (!existsSync(dir)) return { samples: [], warnings }
+  let entries
+  try {
+    entries = readdirSync(dir)
+  } catch (e) {
+    warnings.push(`${dir}: unreadable (${e.message}) — no per-phase eval samples`)
+    return { samples: [], warnings }
+  }
+  const docs = []
+  const paths = []
+  // Ordered by PHASE NUMBER, never by filename: a lexical sort puts phase 8801 before phase 99,
+  // so the sample list would not read in the order a human asks for it and two archives with the
+  // same records could serialize differently.
+  const named = []
+  for (const f of entries) {
+    const m = f.match(PEVAL_NAME_RE)
+    if (m) named.push({ f, n: Number(m[1]) })
+  }
+  for (const { f } of named.sort((a, b) => a.n - b.n)) {
+    const path = join(dir, f)
+    const read = readJson(path)
+    if (read.error) {
+      warnings.push(`${path}: unreadable (${read.error}) — excluded from the scorecard`)
+      continue
+    }
+    docs.push(read.value)
+    paths.push(path)
+  }
+  if (docs.length === 0) return { samples: [], warnings }
+
+  const reason = (res) => ((res?.stderr || res?.kind || 'unknown').toString().trim().split('\n')[0])
+  let res = validate(docs)
+  if (!res.ok) {
+    const bad = new Set()
+    for (const iss of res.res?.issues ?? []) {
+      const i = Array.isArray(iss.path) ? iss.path[0] : undefined
+      const where = (iss.path ?? []).slice(1).join('.') || '(root)'
+      if (typeof i === 'number') bad.add(i)
+      warnings.push(
+        `${(typeof i === 'number' ? paths[i] : undefined) ?? dir}: does not match PhaseEvalRecordShape (${where}: ${iss.message}) — excluded from the scorecard`,
+      )
+    }
+    if (bad.size === 0) {
+      warnings.push(
+        `${dir}: the per-phase eval records could not be validated (${reason(res.res)}) — NO phase-record samples fed the scorecard`,
+      )
+      return { samples: [], warnings }
+    }
+    const survivors = docs.filter((_, i) => !bad.has(i))
+    if (survivors.length === 0) return { samples: [], warnings }
+    res = validate(survivors)
+    if (!res.ok) {
+      warnings.push(
+        `${dir}: the surviving per-phase eval records still fail validation (${reason(res.res)}) — NO phase-record samples fed the scorecard`,
+      )
+      return { samples: [], warnings }
+    }
+  }
+  return { samples: res.parsed.map(pevalSample), warnings }
 }
 
 /** A typed collection failure. kind ∈ 'no-arc' | 'tsx-absent' | 'load'. */

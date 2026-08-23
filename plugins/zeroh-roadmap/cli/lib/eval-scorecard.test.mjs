@@ -946,3 +946,241 @@ test('computeScorecard — no traces yields empty tables, never a table of zeros
   assert.deepEqual(sc.reviewers, [], 'no rounds ⇒ no reviewer cells')
   assert.equal(sc.nFloor, SCORECARD_N_FLOOR)
 })
+
+// ══ 15. the PHASE-RECORD source (arc POLYSEAT plane 1) ═════════════════════════════════
+// Driver and planner cells are fed by ARC traces alone, so a consumer that executes ordinary
+// phases without arcs renders ZERO cells however much work it does (measured in mudarabah2,
+// 2026-08-23). `readPhaseEvalSamples` reads roadmap/arc-evals/phase-<N>.peval.json into the
+// same entry shape, and `computeScorecard`'s `phaseSamples` option is where they enter.
+//
+// A phase record is a DEGRADED source, and the degradation is precisely bounded:
+//   - NO ESCAPE SCAN. There is no arc, so there is no land boundary and no post-land window.
+//     `escapeFixesPerPhase` is therefore the NAMED sentinel on every cell a record feeds —
+//     including a cell it SHARES with a cleanly-scanned arc trace, because a rate computed
+//     over a denominator that was only half-scanned is a claim the data did not make.
+//   - NO ROUND COUNT. The record has no executionResult (it never had a status or a round
+//     count to record), so `gateRoundsMean` sentinels too.
+//   - NO REVIEWER ROUNDS. v1 does not parse gateRounds off the phase file, so the reviewer
+//     axis stays arc-fed and a record-only corpus produces NO reviewer cell at all — an
+//     empty table, never a table of zero-recall reviewers.
+// What a record DOES carry is real: the cohort keys, the metrics block, the driver and the
+// planner. Those cells score.
+
+/** A sample as `readPhaseEvalSamples` hands it over: the arc-trace entry shape, with `driver`
+ *  FLAT (a phase record has no executionResult) and `plannedBy` at the arc-trace spelling. */
+function mkSample(o = {}) {
+  const s = {
+    phase: o.phase ?? 8000 + ++seq,
+    taskCount: o.taskCount ?? 3,
+    keyFiles: o.keyFiles ?? [CLI_FILE],
+    transparency: [],
+    gateRuns: [],
+  }
+  if (o.driver !== null) s.driver = o.driver ?? DRIVER_A
+  if (o.plannedBy !== null) s.plannedBy = o.plannedBy ?? PLANNER_A
+  if (o.metrics !== null) {
+    const m = { startedAt: o.startedAt ?? T0 }
+    if (o.minutes !== null) m.completedAt = new Date(Date.parse(o.startedAt ?? T0) + (o.minutes ?? 30) * 60_000).toISOString()
+    if (o.haltCount !== null) m.haltCount = o.haltCount ?? 0
+    s.metrics = m
+  }
+  return s
+}
+
+const nSamples = (n, o = {}) => Array.from({ length: n }, (_, i) => mkSample(typeof o === 'function' ? o(i) : { ...o }))
+
+/**
+ * The one note that names BOTH source counts, or a named failure. Matched on the two NUMBERS
+ * rather than on wording: a note that says "5 phase records" and forgets the traces leaves a
+ * reader unable to tell a record-fed table from an arc-fed one, and wording is not the fact
+ * under test. The boundary excludes a neighbouring digit, `.` and `-` so a cohort label like
+ * `1-3` cannot satisfy "names 1".
+ */
+const printsNumber = (line, n) => new RegExp(`(?<![\\d.\\-])${n}(?![\\d.\\-])`).test(line)
+
+function sourceNote(sc, records, traces) {
+  assert.ok(Array.isArray(sc.notes), 'notes is always an array')
+  const hits = sc.notes.filter((n) => printsNumber(n, records) && printsNumber(n, traces))
+  assert.equal(
+    hits.length,
+    1,
+    `exactly ONE note must name both source counts (${records} phase records, ${traces} arc traces) on the SAME line —` +
+      ` a table whose provenance is split across two lines cannot be read at a glance; notes were ${JSON.stringify(sc.notes)}`,
+  )
+  return hits[0]
+}
+
+// ── 15a. the acceptance criterion: records alone fill a driver cell ───────────────────
+test('computeScorecard — 5 phase records and NO arc traces produce a SCORED driver cell', () => {
+  const samples = nSamples(SCORECARD_N_FLOOR, (i) => ({ phase: 8100 + i, taskCount: 3, minutes: 30, haltCount: 0 }))
+  const sc = computeScorecard([], [], { phaseSamples: samples })
+
+  const cell = driverCell(sc, { model: DRIVER_A.model })
+  assert.equal(samplesOf(cell, 'the record-fed driver'), SCORECARD_N_FLOOR, 'every record is a sample — this is the whole point of the inlet')
+  assert.equal(cell.abstained, false, 'EXACTLY at the floor, fed only by phase records, the cell scores')
+  assertMetricKeys(cell, DRIVER_METRIC_KEYS, 'a record-fed driver cell')
+
+  const m = cell.metrics
+  // THE ANTI-ZERO RAIL, on the one signal a record structurally cannot carry. A minted 0 here
+  // would read as a spotless driver, which is the single most flattering lie in this table.
+  assertSentinel(m.escapeFixesPerPhase, 'scan-unavailable', 'a phase record has no arc, no land boundary and no escape scan')
+  // Same rail one field over: the record has no executionResult, so it has no round count.
+  assertSentinel(m.gateRoundsMean, 'no-gate-rounds', 'a phase record never had a gate-round count to report')
+  // And what the record DOES evidence is a real number, not a sentinel: a degraded source is
+  // degraded field by field, never wholesale.
+  assert.equal(m.haltRate, 0, 'five records RECORDED haltCount 0 — a measured zero, unlike the two sentinels above')
+  assert.equal(m.minutesPerTask, 10, '30 recorded minutes over 3 recorded tasks')
+})
+
+test('computeScorecard — under the floor a record-fed cell abstains exactly like an arc-fed one', () => {
+  const below = computeScorecard([], [], { phaseSamples: nSamples(SCORECARD_N_FLOOR - 1, (i) => ({ phase: 8110 + i })) })
+  assertAbstains(driverCell(below, { model: DRIVER_A.model }), SCORECARD_N_FLOOR - 1, 'four records')
+  assert.equal(below.nFloor, SCORECARD_N_FLOOR, 'the floor the abstention was decided against rides the output')
+
+  // And the default is an empty option, not a required one: every existing caller is unchanged.
+  assert.deepEqual(computeScorecard([], []).drivers, [], 'no traces and no phaseSamples ⇒ no cells, never a table of zeros')
+})
+
+// ── 15b. the notes name BOTH source counts ────────────────────────────────────────────
+test('computeScorecard — the notes name both source counts, and the numbers are the REAL ones', () => {
+  const recordsOnly = computeScorecard([], [], { phaseSamples: nSamples(SCORECARD_N_FLOOR, (i) => ({ phase: 8120 + i })) })
+  sourceNote(recordsOnly, SCORECARD_N_FLOOR, 0)
+
+  // Falsification of a hard-coded line: DIFFERENT counts on both axes must move both numbers.
+  const mixed = computeScorecard([mkTrace(nPhases(2)), mkTrace(nPhases(2), { arcId: 'OTHERARC' })], [], {
+    phaseSamples: nSamples(3, (i) => ({ phase: 8130 + i })),
+  })
+  sourceNote(mixed, 3, 2)
+
+  // The source line is UNCONDITIONAL — an arc-only table must still say so, or a reader cannot
+  // tell "records were read and there were none" from "records were never read". So the
+  // comparison is against the standing rails, not against another table's note count.
+  const base = computeScorecard([mkTrace(nPhases(2))], [])
+  sourceNote(base, 0, 1)
+  const rails = (sc) => sc.notes.filter((n) => !/^sources:/.test(n))
+  assert.equal(
+    mixed.notes.length,
+    rails(base).length + 1,
+    `the source line is an ADDITIONAL note, never swapped in for a rail; got ${JSON.stringify(mixed.notes)} against rails ${JSON.stringify(rails(base))}`,
+  )
+  for (const n of rails(base)) assert.ok(mixed.notes.includes(n), `the pre-existing note must survive: ${n}`)
+})
+
+// ── 15c. a shared cell cannot claim an escape rate its evidence half-lacks ────────────
+test('computeScorecard — a cell fed by BOTH a clean arc trace and phase records sentinels its escape rate', () => {
+  // Three arc phases with a COMPLETE scan and one attributed escape, five records in the same
+  // cohort. A pooled 1/8 would be a rate over a denominator only three phases of which were
+  // ever scanned — the exact number a reader would take as "this driver escapes 12% of the time".
+  // FIVE arc phases, not three: the control below reads this trace ALONE, and under the floor
+  // it would abstain and carry no metrics at all — the control would then be asserting nothing.
+  const arcPhases = nPhases(5, (i) => ({ phase: 8140 + i, taskCount: 3, keyFiles: [CLI_FILE], gateRounds: 2, minutes: 30, haltCount: 0 }))
+  const trace = mkTrace(arcPhases, { escapeFixes: [escapeFix('fix(cli): phase 8141 gate R1 — an escape')] })
+  const samples = nSamples(5, (i) => ({ phase: 8150 + i, taskCount: 3, keyFiles: [CLI_FILE], minutes: 30, haltCount: 0 }))
+
+  const sc = computeScorecard([trace], [], { phaseSamples: samples })
+  const cell = driverCell(sc, { model: DRIVER_A.model })
+  assert.equal(samplesOf(cell, 'the mixed-source driver'), 10, 'one cohort, one cell: five arc phases and five records')
+  assertSentinel(
+    metricsOf(cell, 'the mixed-source driver').escapeFixesPerPhase,
+    'scan-unavailable',
+    'a cell whose evidence was only half-scanned cannot claim a rate — 1/10 would be a measurement of a denominator half of which was never scanned',
+  )
+  assert.equal(cell.metrics.gateRoundsMean, 2, 'the signals the arc trace DID record still average over the phases that recorded them')
+
+  // The control: the same arc trace ALONE keeps its real, scanned rate. Without this the
+  // sentinel above could be coming from the trace rather than from the records.
+  const arcOnly = computeScorecard([trace], [])
+  assert.equal(
+    metricsOf(driverCell(arcOnly, { model: DRIVER_A.model, band: '1-3' }), 'the arc-only driver').escapeFixesPerPhase,
+    1 / 5,
+    'the arc trace on its own has a complete scan and reports its measured rate',
+  )
+})
+
+// ── 15d. records respect the cohort axes ──────────────────────────────────────────────
+test('computeScorecard — phase records cohort on bandFor × surfaceOf exactly like arc phases', () => {
+  const cli = nSamples(5, (i) => ({ phase: 8160 + i, taskCount: 2, keyFiles: [CLI_FILE] }))
+  const surface = nSamples(5, (i) => ({ phase: 8170 + i, taskCount: 9, keyFiles: [SURFACE_FILE] }))
+  const sc = computeScorecard([], [], { phaseSamples: [...cli, ...surface] })
+
+  const mine = sc.drivers.filter((c) => c.model === DRIVER_A.model && c.lane === DRIVER_A.lane)
+  assert.equal(mine.length, 2, `one cell per cohort, never a pooled one; got ${JSON.stringify(mine)}`)
+  assert.equal(samplesOf(driverCell(sc, { model: DRIVER_A.model, band: '1-3', surface: false }), 'the CLI cohort'), 5)
+  assert.equal(samplesOf(driverCell(sc, { model: DRIVER_A.model, band: '7+', surface: true }), 'the surface cohort'), 5)
+  assertNoPooledCell(sc.drivers, 10, 'a record-fed table')
+
+  // A record with no driver lands in the literal `unrecorded` cohort, never folded into a real
+  // actor — the same honest-gap discipline the arc source follows.
+  const unrec = computeScorecard([], [], { phaseSamples: nSamples(5, (i) => ({ phase: 8180 + i, driver: null })) })
+  assert.equal(driverCell(unrec, { model: DRIVER_A.model }), undefined, 'no driver was recorded, so no real actor is credited')
+  assert.equal(
+    samplesOf(driverCell(unrec, UNRECORDED_DRIVER), 'the unrecorded driver'),
+    5,
+    'the work stays VISIBLE under the unrecorded literal rather than disappearing from the table',
+  )
+})
+
+// ── 15e. the planner axis fills from attribution.plannedBy ────────────────────────────
+test('computeScorecard — phase records fill PLANNER cells from plannedBy, on the planner axis only', () => {
+  const samples = nSamples(SCORECARD_N_FLOOR, (i) => ({ phase: 8190 + i, minutes: 30, haltCount: 0, taskCount: 3 }))
+  const sc = computeScorecard([], [], { phaseSamples: samples })
+
+  const cell = plannerCell(sc, { model: PLANNER_A.model })
+  assert.equal(samplesOf(cell, 'the record-fed planner'), SCORECARD_N_FLOOR)
+  assert.equal(cell.abstained, false)
+  assertMetricKeys(cell, DRIVER_METRIC_KEYS, 'a record-fed planner cell')
+  assertSentinel(cell.metrics.escapeFixesPerPhase, 'scan-unavailable', 'the planner axis inherits the same missing scan')
+  assert.equal(cell.metrics.minutesPerTask, 10, 'and the same recorded minutes')
+
+  // The two vocabularies are disjoint in the fixture, so an implementation that keyed the
+  // planner cell off `driver` would produce a cell named after the DRIVER — caught here.
+  assert.equal(plannerCell(sc, { model: DRIVER_A.model }), undefined, 'the planner axis is keyed on plannedBy, never on the driver')
+  assert.equal(
+    plannersOf(sc).every((c) => !('lane' in c)),
+    true,
+    `a planning turn has no lane to key on; got ${JSON.stringify(plannersOf(sc))}`,
+  )
+
+  // Two planners in one cohort split; an unrecorded one is the literal, never a guess.
+  const split = computeScorecard([], [], {
+    phaseSamples: [
+      ...nSamples(3, (i) => ({ phase: 8200 + i, plannedBy: PLANNER_B })),
+      ...nSamples(2, (i) => ({ phase: 8210 + i, plannedBy: null })),
+    ],
+  })
+  assert.equal(samplesOf(plannerCell(split, { model: PLANNER_B.model }), 'the second planner'), 3)
+  assert.equal(samplesOf(plannerCell(split, { model: 'unrecorded' }), 'the unrecorded planner'), 2)
+  assertNoPooledCell(plannersOf(split), 5, 'a record-fed planner table')
+})
+
+// ── 15f. the reviewer axis stays ARC-FED ──────────────────────────────────────────────
+test('computeScorecard — a corpus of phase records alone produces NO reviewer cell', () => {
+  const sc = computeScorecard([], [], { phaseSamples: nSamples(20, (i) => ({ phase: 8220 + i })) })
+  assert.deepEqual(
+    sc.reviewers,
+    [],
+    `v1 does not parse gateRounds off the phase record, so there is no reviewer evidence in it —` +
+      ` a cell minted here would rank reviewers on rounds nobody recorded; got ${JSON.stringify(sc.reviewers)}`,
+  )
+  assert.ok(sc.drivers.length > 0, 'fixture precondition: the same corpus DID fill the driver axis, so the empty reviewer table is a ruling and not an empty input')
+})
+
+test('computeScorecard — mixing records into an arc corpus leaves the reviewer table untouched', () => {
+  const arcPhases = nPhases(3, (i) => ({ phase: 8240 + i, taskCount: 3, keyFiles: [CLI_FILE] }))
+  const trace = mkTrace(arcPhases)
+  const samples = nSamples(5, (i) => ({ phase: 8250 + i, taskCount: 3, keyFiles: [CLI_FILE] }))
+
+  const arcOnly = computeScorecard([trace], [])
+  const mixed = computeScorecard([trace], [], { phaseSamples: samples })
+
+  const before = reviewerCell(arcOnly, { agent: 'code-reviewer' })
+  const after = reviewerCell(mixed, { agent: 'code-reviewer' })
+  assert.equal(samplesOf(before, 'the arc-only reviewer'), 3, 'fixture precondition: the arc trace really does sit three reviewer rounds')
+  assert.equal(
+    samplesOf(after, 'the mixed-corpus reviewer'),
+    3,
+    'the five records add NO rounds — a reviewer credited with rounds it never sat is the mirror image of a miss it never made',
+  )
+  assert.deepEqual(mixed.reviewers, arcOnly.reviewers, 'the whole reviewer table is byte-for-byte what the arc source alone produced')
+  assert.equal(samplesOf(driverCell(mixed, { model: DRIVER_A.model }), 'the mixed driver'), 8, 'while the driver axis DID take all eight')
+})
