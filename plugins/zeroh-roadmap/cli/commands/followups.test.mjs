@@ -21,16 +21,23 @@ test('followups census distinguishes lifecycle states, references, and orphans',
   writeFileSync(join(root, 'roadmap', 'backlog.ts'), "export default { note: 'followups/backlog-ref.md' }\n")
   mkdirSync(join(root, 'roadmap', 'arcs'), { recursive: true })
   writeFileSync(join(root, 'roadmap', 'arcs', 'A.arc.ts'), "export default { note: 'live.md' }\n")
-  writeFileSync(join(root, 'roadmap', 'phases', 'phase-9000.phase.ts'), "export default { note: 'parked.md' }\n")
-  commitPaths(root, 'seed followup census', ['roadmap/followups', 'roadmap/backlog.ts', 'roadmap/arcs', 'roadmap/phases/phase-9000.phase.ts'])
+  writeFileSync(join(root, 'roadmap', 'phases', 'phase-9000.phase.ts'), "export default { status: 'backlog', note: 'parked.md' }\n")
+  // A DONE phase's citation is history, not a live plan input: it must NOT keep a followup off the
+  // orphan list, or the remedy for a deletion becomes editing shipped history (phase 2423 gate R2).
+  writeFollowup(root, 'cited-by-done.md', '---\nstatus: spent\n---\nClaimed done\n')
+  writeFileSync(join(root, 'roadmap', 'phases', 'phase-9001.phase.ts'), "export default { status: 'done', note: 'cited-by-done.md' }\n")
+  // The directory index is not a followup and must not be counted.
+  writeFileSync(join(root, 'roadmap', 'followups', 'README.md'), '# index\n')
+  commitPaths(root, 'seed followup census', ['roadmap/followups', 'roadmap/backlog.ts', 'roadmap/arcs', 'roadmap/phases/phase-9000.phase.ts', 'roadmap/phases/phase-9001.phase.ts'])
 
   const result = runCli(root, ['followups', 'census', '--json'])
   assert.equal(result.code, 0, result.stderr)
   assert.deepEqual(result.json.summary, {
-    total: 5, untriaged: 1, orphaned: 2, live: 1, parked: 1, superseded: 1, spent: 1,
-  })
+    total: 6, untriaged: 1, orphaned: 3, live: 1, parked: 1, superseded: 1, spent: 2,
+  }, 'README.md is excluded from the census; the done-phase citation does not rescue cited-by-done.md from orphanhood')
   assert.deepEqual(result.json.rows.map(({ file, status, trigger, refs, orphan }) => ({ file, status, trigger, refs, orphan })), [
     { file: 'backlog-ref.md', status: 'superseded', trigger: null, refs: { backlog: true, phases: false, arcs: false }, orphan: false },
+    { file: 'cited-by-done.md', status: 'spent', trigger: null, refs: { backlog: false, phases: false, arcs: false }, orphan: true },
     { file: 'live.md', status: 'live', trigger: null, refs: { backlog: false, phases: false, arcs: true }, orphan: false },
     { file: 'orphan.md', status: 'UNTRIAGED', trigger: null, refs: { backlog: false, phases: false, arcs: false }, orphan: true },
     { file: 'parked.md', status: 'parked', trigger: 'phase 9000 done', refs: { backlog: false, phases: true, arcs: false }, orphan: false },
