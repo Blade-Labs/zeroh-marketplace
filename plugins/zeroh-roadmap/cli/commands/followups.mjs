@@ -60,10 +60,15 @@ function basenamesIn(source) {
 }
 
 /** ONE pass over the corpus; a per-followup scan re-read the whole tree per file. */
-function referencedBasenames(path) {
+function referencedBasenames(path, { liveOnly = false } = {}) {
   const names = new Set()
   for (const file of filesUnder(path)) {
-    for (const name of basenamesIn(readFileSync(file, 'utf8'))) names.add(name)
+    const text = readFileSync(file, 'utf8')
+    // A DONE phase's record cites its inputs historically — that citation must not block a
+    // deletion, or the remedy becomes editing shipped history. Only a phase that can still
+    // CONSUME the followup as a plan input counts as a live reference.
+    if (liveOnly && /status:\s*'(done|historical|cancelled)'/.test(text)) continue
+    for (const name of basenamesIn(text)) names.add(name)
   }
   return names
 }
@@ -86,13 +91,16 @@ export function censusFollowups(repo = process.cwd()) {
   const roadmap = join(repo, 'roadmap')
   const dir = join(roadmap, 'followups')
   const followupFiles = existsSync(dir)
-    ? readdirSync(dir).filter((name) => name.endsWith('.md') && statSync(join(dir, name)).isFile()).sort()
+    ? readdirSync(dir)
+        // README.md is the directory's own index, not a followup — counting it skews every figure.
+        .filter((name) => name.endsWith('.md') && name !== 'README.md' && statSync(join(dir, name)).isFile())
+        .sort()
     : []
   if (followupFiles.length === 0) return { rows: [], summary: emptySummary() }
   const backlog = join(roadmap, 'backlog.ts')
   const referenced = {
     backlog: existsSync(backlog) ? basenamesIn(readFileSync(backlog, 'utf8')) : new Set(),
-    phases: referencedBasenames(join(roadmap, 'phases')),
+    phases: referencedBasenames(join(roadmap, 'phases'), { liveOnly: true }),
     arcs: referencedBasenames(join(roadmap, 'arcs')),
   }
   const rows = followupFiles.map((file) => {

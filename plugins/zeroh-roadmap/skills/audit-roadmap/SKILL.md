@@ -27,8 +27,9 @@ Plus arc↔phase consistency.
 
 **Verdict + exit:** `BROKEN` (exit 2) = any CRITICAL/HIGH — do NOT run `/do-phase` or cut a
 release until they clear. `HAS ISSUES` (exit 0) = MEDIUM/LOW only. `CLEAN` (exit 0) = none.
-For check 14, an UNTRIAGED orphan is MEDIUM; spent-but-present and past `review-by` are LOW,
-so followup hygiene is visible but remains report-only and never changes the verdict rules.
+For check 14, a spent/superseded stamp on a STILL-REFERENCED followup is HIGH and BREAKS the
+audit (deleting it would break the referrer); an UNTRIAGED orphan is MEDIUM; a spent orphan and a
+past `review-by` are LOW. The check reports rather than fixes, but that one HIGH does set the verdict.
 
 **Report-only.** Never edits files — the user runs `/plan-phase` or hand-fixes. Report
 literally; don't infer intent.
