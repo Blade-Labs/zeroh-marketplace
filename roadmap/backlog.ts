@@ -68,6 +68,11 @@ export default defineBacklog([
     phase: 6,
     name: 'Worktree disposal owned by the done-verbs — land cleans, review-complete archives',
   },
+  // ── Post-arc spike (dependsOn 1: peval pipe; LOW — after the fenced 6) ────
+  {
+    phase: 7,
+    name: 'Graft measured trial — integration, footprint proof, before/after instrument',
+  },
   // Flat form (back-compat):
   // { phase: 1, name: 'Example phase name' },
   //
