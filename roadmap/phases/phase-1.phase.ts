@@ -1,0 +1,166 @@
+import { definePhase } from '@/lib/roadmap/schema'
+
+/**
+ * POLYSEAT plane 1 of 4 — fill the measurement pipe.
+ *
+ * The scorecard (cli/lib/eval-scorecard.mjs computeScorecard) renders driver /
+ * planner / reviewer cells ONLY from arc traces — re-collected per arc holding a
+ * dated report (`<ARCID>-<YYYY-MM-DD>.json`) in roadmap/arc-evals/.
+ * Ordinary phases executed outside eval-arc leave nothing — measured in the
+ * flagship-adjacent consumer mudarabah2 on 2026-08-23: ZERO eval records, so
+ * every scorecard family renders 0 cells against SCORECARD_N_FLOOR = 5, and the
+ * question "which model is best for planning vs executing" is unanswerable.
+ * Every phase executed before this lands is an unrecoverable lost sample.
+ *
+ * Ruling (2026-08-23): records are DETERMINISTIC + ATTRIBUTION ONLY — gate slot
+ * results, metrics, plannedBy/driver snapshot. Zero judge tokens per phase;
+ * judge-scored dimensions stay arc-level.
+ */
+export default definePhase({
+  phase: 1,
+  name: 'Per-phase eval records — the gate emits, the scorecard ingests',
+  status: 'backlog',
+  arcId: 'POLYSEAT',
+  plannedBy: { model: 'claude-opus-5[1m]' },
+  category: 'feature',
+  kind: 'logic',
+  source:
+    'Arc POLYSEAT plane 1 — designRef MULTI-DRIVER.md (measurement pipe); rationale in roadmap/arc-prompts/POLYSEAT-execution-prompt.md.',
+  priority: 'HIGH',
+  dependsOn: [],
+  conflictsWith: [],
+  keyFiles: [
+    'plugins/zeroh-roadmap/templates/schema.ts',
+    'plugins/zeroh-roadmap/cli/commands/gate.mjs',
+    'plugins/zeroh-roadmap/cli/lib/eval-collect.mjs',
+    'plugins/zeroh-roadmap/cli/lib/eval-scorecard.mjs',
+    'plugins/zeroh-roadmap/cli/commands/eval.mjs',
+    'lib/roadmap/schema.ts',
+  ],
+  stakeholderDemo:
+    'Running any phase gate now leaves a per-phase eval record on disk, and the model scorecard counts it — model comparison accumulates from ordinary work instead of only from full arcs.',
+  assumptions: [
+    {
+      claim:
+        'The scorecard still reads only arc-eval traces, so per-phase records are genuinely absent as an input class.',
+      verify:
+        "bash -c \"grep -qF 'arc-evals' plugins/zeroh-roadmap/cli/lib/eval-collect.mjs && ! grep -rqF 'peval' plugins/zeroh-roadmap/cli/lib/eval-collect.mjs\"",
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim:
+        "templates/schema.ts and this repo's lib/roadmap/schema.ts are currently byte-identical, so a shape addition is a two-file copy edit here. The sync is HAND discipline pinned by cmp — scripts/schema.test.ts deliberately cannot read a consumer tree (its MIRROR INVARIANT comments: 'trust the sync, rather than fake a cross-repo diff').",
+      verify: 'bash -c "cmp -s plugins/zeroh-roadmap/templates/schema.ts lib/roadmap/schema.ts"',
+      onFalse: 'ESCALATE',
+    },
+  ],
+  notes:
+    "DESIGN (locked): file class is `roadmap/arc-evals/phase-<N>.peval.json` — a DISTINCT, date-free name. There is no `*.eval.json` class on disk; every arc-side scan of that dir is anchored on `<ARCID>-<YYYY-MM-DD>[-sweep|-verdicts].json` (newestArtifact/newestArtifactDated in cli/lib/eval-collect.mjs; REPORT_NAME_RE + arcsWithReports in cli/commands/eval.mjs), so a date-free peval name can never be read as an arc report, and the peval reader matches only the `.peval.json` tail, which no dated artifact carries. The record shape (PhaseEvalRecordShape in templates/schema.ts) carries: phase number, consumer fingerprint (reuse assembleConsumerFingerprint), ISO date supplied by the caller (the recorder never mints wall-clock silently — same discipline as SweepReportShape's `date`), taskCount and keyFiles (the COHORT KEYS — computeScorecard cells key on bandFor(taskCount) and surfaceOf(keyFiles) from eval-score.mjs; omit them and every record mis-cohorts into the smallest band, non-surface cell), gate slot results as run, metrics if present on the phase file, and an attribution snapshot { plannedBy?, driver?, roles? } read from the parsed phase file at emit time. NO judge fields — the ruling is deterministic-only; a record requiring a judge call fails the arc's acceptance criterion per-phase-eval-records.\n\nEMIT SEAM: inside runGate (cli/commands/gate.mjs — `export default async function run(argv)` merely dispatches `run` to it), at the TWO completions where slot results exist: (a) the default execute path, after the GateRunReport write, before `return green ? 0 : 2` — fresh slot rows in hand; buildPlan parses the phase file but returns only { plan, refused }, so it must additionally surface the parsed phase (or the emitter re-imports) for the attribution/taskCount/keyFiles snapshot; (b) the --verify-complete path before its 0/2 returns — slot results from latestReport, attribution + metrics from imp.parsed, which by THEN carries executionResult.driver and metrics (this refresh is what fills driver cells; at execute time only plannedBy exists). --record-round does not emit: it changes only agent rounds, which the record does not carry. Latest-run-wins overwrite; history lives in git if the consumer commits them. The emitter mkdirs roadmap/arc-evals if absent. Emission must never FAIL a gate: a write error is reported loudly on stderr but the exit code stays the slots' (or consistency) verdict — measurement must not block delivery.\n\nINGESTION: eval-collect gains a reader for the .peval.json class; runScorecard (cli/commands/eval.mjs) calls it beside its arc-trace loop and hands computeScorecard the merged per-phase samples feeding the SAME drivers/planners cells (cohort keys unchanged — model, lane, taskCountBand, surface). Phase-record samples carry NO escape scan, so they enter their cells scanDegraded — escapeFixesPerPhase reads 'scan-unavailable', never a minted 0 (the anti-zero rail). Reviewer cells are NOT fed from phase records (no gateRounds parsing in v1 — arc traces keep owning reviewer attribution; recorded as a named follow-up rather than half-built). The scorecard's `notes` output names both source counts (arc traces vs phase records) so a reader can see what fed the cells — the no-silent-caps rule.\n\nCONSUMER SYNC OBLIGATION: templates/schema.ts edits are copied byte-identical into THIS repo's lib/roadmap/schema.ts in the same commit, pinned by cmp (scripts/schema.test.ts deliberately cannot read a consumer tree — its MIRROR INVARIANT comments say the sync is hand discipline); other consumers (azure_private_agent, mudarabah2, viki-agent) receive it at their next plugin bump — named here so the executor does not chase them now.\n\nREVIEW RATIFICATIONS (Mode A, 2026-08-23): testMode tdd on all three tasks ratified (plugin library logic under node:test; `capbuild node --test <file>` is the house scoped runner — phase 3 uses the same idiom, and the consumer's unit gateCommand is the same capbuild-wrapped suite). testScope/reviewScope derived, no relaxations. No user-facing surface (CLI + JSON artifacts) — the arc's recorded UX sub-gate skip applies.",
+  tasks: [
+    {
+      id: '1.1',
+      title: 'PhaseEvalRecordShape lands in the schema, byte-synced to the consumer copy',
+      problem:
+        'No typed shape exists for a per-phase eval record, and every downstream (emit, ingest, scorecard) needs one contract to parse against rather than three ad-hoc JSON layouts.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/templates/schema.ts',
+          description:
+            "Add PhaseEvalRecordShape (zod strictObject: phase, consumerFingerprint, date, taskCount, keyFiles — the cohort keys bandFor/surfaceOf read — gate: slot results as recorded, metrics optional, attribution { plannedBy?, driver?, roles? } optional-additive) beside SweepReportShape, mirroring its caller-supplied-date discipline; export the type → verify: grep -qF 'export const PhaseEvalRecordShape' plugins/zeroh-roadmap/templates/schema.ts",
+        },
+        {
+          file: 'lib/roadmap/schema.ts',
+          description:
+            'Copy the templates edit byte-identical into this consumer copy in the same commit (hand-sync discipline — the schema test cannot see this tree) → verify: cmp -s plugins/zeroh-roadmap/templates/schema.ts lib/roadmap/schema.ts',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/scripts/schema.test.ts',
+          description:
+            'Extend the plugin schema test: PhaseEvalRecordShape parses a full record fixture and rejects an unknown key (strictObject) → verify: cd plugins/zeroh-roadmap && capbuild npx tsx scripts/schema.test.ts',
+        },
+      ],
+      acceptanceCriteria: [
+        'PhaseEvalRecordShape parses a full record and rejects an unknown key (strictObject), asserted in scripts/schema.test.ts',
+        'templates/schema.ts and lib/roadmap/schema.ts are byte-identical (cmp) after the edit',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/templates/schema.ts',
+        'lib/roadmap/schema.ts',
+        'plugins/zeroh-roadmap/scripts/schema.test.ts',
+      ],
+      testMode: 'tdd',
+      done: false,
+    },
+    {
+      id: '1.2',
+      title: 'The gate emits the record on every run, and never fails a gate doing it',
+      problem:
+        "gate run completes with slot results in hand and phase metadata parsed, then discards everything measurement needs. The emit must ride that completion without ever changing a gate's verdict.",
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/gate.mjs',
+          description:
+            "Inside runGate, emit roadmap/arc-evals/phase-<N>.peval.json (PhaseEvalRecordShape-validated, mkdir if absent) at both completions where slot results exist: the default path after the GateRunReport write, before `return green ? 0 : 2` (surface the parsed phase from buildPlan — it returns only { plan, refused } today), and the --verify-complete path before its 0/2 returns (slots from latestReport, attribution + metrics from imp.parsed — the refresh that captures executionResult.driver). An emit failure prints a loud stderr line, never alters the exit code → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/gate.test.mjs",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
+          description:
+            "Hermetic tmp-repo tests: a green run writes a parseable record carrying the phase's plannedBy; --verify-complete over a done fixture refreshes the record with executionResult.driver + metrics; a run in a repo with an unwritable arc-evals dir still exits with the slots' verdict and prints the emit failure; a re-run overwrites (latest-run-wins) → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/gate.test.mjs",
+        },
+      ],
+      acceptanceCriteria: [
+        'A gate run in a fixture repo leaves phase-<N>.peval.json whose attribution matches the phase file',
+        'After --verify-complete on a done fixture, the record carries executionResult.driver and metrics',
+        "An emit failure never changes the gate's exit code, asserted by test",
+      ],
+      files: [
+        'plugins/zeroh-roadmap/cli/commands/gate.mjs',
+        'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: false,
+    },
+    {
+      id: '1.3',
+      title: 'The scorecard ingests phase records beside arc traces, naming both sources',
+      problem:
+        'computeScorecard only ever receives arc-eval traces, so driver/planner cells starve in consumers that execute phases without arcs — the measured 0-cell state.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/eval-collect.mjs',
+          description:
+            "Add a reader for roadmap/arc-evals/*.peval.json (validated via PhaseEvalRecordShape; unparseable file = named warning, never a silent skip) feeding the same per-phase sample shape collectArcTrace produces for the scorecard's driver/planner slicing; samples carry no escape scan and must enter their cells scanDegraded (escapeFixesPerPhase reads 'scan-unavailable', never a minted 0); reviewer cells stay arc-fed (named follow-up) → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/eval-collect.test.mjs",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/eval-scorecard.mjs',
+          description:
+            "Accept the merged sample set; add both source counts to the output `notes` (arc traces vs phase records) so no cell claims coverage it did not get; N-floor abstention unchanged → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/eval-scorecard.test.mjs",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/eval.mjs',
+          description:
+            "runScorecard wires the seam: call the peval reader beside its arc-trace loop and pass the merged samples + both source counts into computeScorecard — without this the reader is dead code and `roadmap eval scorecard` never ingests → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/eval.test.mjs",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/eval-collect.test.mjs',
+          description:
+            "Collision-proof BOTH directions against the real name classes (there is no `*.eval.json` class — arc artifacts are `<ARCID>-<YYYY-MM-DD>[-sweep|-verdicts].json`): the dated scans (newestArtifactDated) over a dir containing .peval.json files return none of them, and the peval reader ignores dated arc artifacts; falsify each by renaming a fixture the wrong way (e.g. `phase-3-2026-08-23.json`, which the dated scans WOULD claim) and asserting the named failure → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/eval-collect.test.mjs",
+        },
+      ],
+      acceptanceCriteria: [
+        "A fixture with 5 phase records and no arc traces produces a non-abstained driver cell (N-floor met), with notes naming 5 phase records and 0 arc traces, and its escapeFixesPerPhase reads 'scan-unavailable', never 0",
+        'Both collision tests red under their renamed-fixture falsification and green restored, recorded in the transparencyReport',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/cli/lib/eval-collect.mjs',
+        'plugins/zeroh-roadmap/cli/lib/eval-scorecard.mjs',
+        'plugins/zeroh-roadmap/cli/commands/eval.mjs',
+        'plugins/zeroh-roadmap/cli/lib/eval-collect.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/eval-scorecard.test.mjs',
+        'plugins/zeroh-roadmap/cli/commands/eval.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: false,
+    },
+  ],
+})

@@ -42,6 +42,23 @@
 import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
+  // ── ARC POLYSEAT tier — phases 1-4 exactly (claimed 2026-08-23), plane order =
+  // dependency order: 1 eval records (independent, fills the pipe first) → 2 driver
+  // registry → 3 attribution (dependsOn 2) → 4 roles+delivery+manifests (dependsOn 2,3).
+  // Queued after 4 Mode A reviews returned READY/CLEAN (2026-08-23). Execute: /do-arc POLYSEAT
+  { phase: 1, name: 'Per-phase eval records — the gate emits, the scorecard ingests' },
+  {
+    phase: 2,
+    name: 'Driver registry — one home for launch semantics, probed capabilities, open lane field',
+  },
+  {
+    phase: 3,
+    name: 'Mechanical attribution — launcher stamps, validator warns, roles shape lands',
+  },
+  {
+    phase: 4,
+    name: 'Role bindings + do-phase delivered by path + manifests generated from one source',
+  },
   // Flat form (back-compat):
   // { phase: 1, name: 'Example phase name' },
   //

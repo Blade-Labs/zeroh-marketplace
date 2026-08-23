@@ -1,10 +1,10 @@
 /**
- * POLYSEAT — one protocol, any model in any seat.
+ * POLYSEAT — one protocol, any model in any role.
  *
  * Generalize the zeroh-roadmap plugin from a Claude-native harness to a
  * multi-driver one: skills stay the single agent-agnostic protocol source
  * (superpowers-style native distribution per harness), protocol spawn points
- * become SEATS a driver fills per its declared capabilities, a driver registry
+ * become ROLES a driver fills per its declared capabilities, a driver registry
  * owns launch semantics, attribution is stamped mechanically by the launcher,
  * and the gate emits per-phase eval records so the scorecard's per-model cells
  * finally accumulate samples. Rationale, research digests (superpowers,
@@ -56,19 +56,46 @@
  * - gemini/cursor/copilot registry entries + reconciling their drifted manifests beyond the
  *   version/skill-list ratchet this arc adds.
  *
+ * PROMISE LEDGER (Step 2c — every promise names its fulfilling task):
+ * | Promise | Fulfilled by |
+ * |---|---|
+ * | AC any-model-full-protocol (plan+execute off same SKILL.md, no duplication) | 4.2 (delivery + guard) + 4.1 (roles) + validate-arc drives the real run |
+ * | AC measure-planner-vs-executor (cells from ≥2 families) | 1.2 (emit) + 1.3 (ingest) + 3.1/3.2 (attribution feeding cells) |
+ * | AC no-claude-privilege (measured parity + recorded cross-family firing) | 4.4 (parity instrument) + 4.1 (chain fires, recorded via 3.3 shape) |
+ * | AC per-phase-eval-records (deterministic record ingested) | 1.1 + 1.2 + 1.3 |
+ * | designRef §1 Role bindings | 4.1 (roles.mjs + MULTI-DRIVER.md §1 + pointer reduction) |
+ * | designRef §2 Driver registry | 2.1–2.3 (module, consumption, verify/register) + MULTI-DRIVER.md §2 in 4.1 |
+ * | singleSeam 1 (one protocol body) | 4.2 (run lane pays the debt; review lane already conforms) |
+ * | singleSeam 2 (one registry, no stray argv) | 2.2 (ratchet) |
+ * | singleSeam 3 (one attribution write path) | 3.1 (journal + reconcile) + 3.2 (warning catch) |
+ * | singleSeam 4 (lane mechanics stay single) | 2.2 (LANES untouched, pinned by existing tests) |
+ * | honesty rail 1 (declared AND verified capabilities) | 2.3 (verify/register refuses unverified) |
+ * | honesty rail 2 (unrecorded named, deciding model recorded) | 3.2 (warnings) + 4.1 (substitution records) |
+ * | honesty rail 3 (fallback never reduces rigor) | 4.1 (forced-unavailability falsification) |
+ * | honesty rail 4 (parity measured never asserted) | 4.4 |
+ * | LOCKED: tier order Fable→Sol→Opus verbatim | 4.1 (tierChain literal + test) |
+ * | LOCKED: manifests single-sourced + ratchet | 4.3 |
+ * | LOCKED: deterministic-only records | 1.1/1.2 (no judge fields; criterion bars them) |
+ * | LOCKED: role rename ratified ("seat" collision) | 4.1 (roles.mjs + glossary line in MULTI-DRIVER.md §1) |
+ * | User verbatim: "simply provide the prompts to those" (prompts-only harnesses first-class) | 4.1 (inline/prompts is a recorded resolver mode) + 2.1 (roleCapabilities) |
+ * | User verbatim: "never stuff on multiple places, always reusable, same with version" | 4.3 (generator + ratchet) |
+ *
  * DECISION-COMPLETENESS SWEEP (Step 1c — every load-bearing choice, bucketed):
  * LOCKED (above) or ruled here:
- * - Role-card set IS the seat inventory: seats map 1:1 to agents/*.md cards plus the
- *   spawn-site audit the architect enumerated; no invented seats.
+ * - Role-card set IS the role inventory: roles map 1:1 to agents/*.md cards plus the
+ *   spawn-site audit the architect enumerated; no invented roles.
  * - Registry lives in code (cli/lib/drivers.mjs) + gitignored per-host provenance
  *   (.building/driver-verify-<id>.json); NOT in roadmap.config.json (per-host facts must
  *   not be per-consumer claims — architect risk 8). Config gains at most ONE optional key
- *   (modelPolicy.seatDrivers).
- * - Seat table lives in cli/lib/seats.mjs; agent-card frontmatter stays the harness
- *   fail-safe ALIAS (cards cannot carry full model ids — architect risk 1).
+ *   (modelPolicy.roleModels).
+ * - Role table lives in cli/lib/roles.mjs (rename ratified 2026-08-23 — 'seat' collides
+ *   with the SEATS dispatcher); agent-card frontmatter stays the harness fail-safe ALIAS
+ *   (cards cannot carry full model ids — architect risk 1).
  * - attribution.lane semantics: 'how it was launched' stays; driver identity is the model
  *   field + registry id; widening templates/schema.ts lane enum to z.string().min(1) with
- *   a superRefine naming unknown ids (architect risk 6) — hand-synced to consumers by name.
+ *   an unknown-id WARNING in the validation engine (architect risk 6; phase 2's review
+ *   corrected the sweep's original superRefine wording — a refine FAILS the parse,
+ *   resurrecting the corruption bug) — hand-synced to consumers by name.
  * - Per-phase eval records: distinct filename class from arc evals so eval-collect's
  *   *.eval.json scan cannot misread one as the other; scorecard ingests both.
  * - Missing attribution = validate WARNING (never RED — 700 historical phases).
@@ -89,10 +116,10 @@ export default defineArc({
   designRefs: [
     {
       kind: 'architecture',
-      ref: 'plugins/zeroh-roadmap/MULTI-DRIVER.md §1 Seat bindings',
+      ref: 'plugins/zeroh-roadmap/MULTI-DRIVER.md §1 Role bindings',
       status: 'designed',
       summary:
-        'Seat = a protocol spawn point with a class (judge|builder), a model tier chain and a fulfillment mode (native|child-cli|inline); cli/lib/seats.mjs owns the table and resolveSeat(); generalizes the software-architect card + review-phase HOME statement, which reduce to pointers with DIET-LEDGER rows in the same commit. Architect chain claude-fable-5 → gpt-5.6-sol → claude-opus-5 (user ruling 2026-08-23). Inline fulfillment is a recorded mode, never indistinguishable from native.',
+        'Role = a protocol spawn point with a class (judge|builder), a model tier chain and a fulfillment mode (native|child-cli|inline); cli/lib/roles.mjs owns the table and resolveRole(); generalizes the software-architect card + review-phase HOME statement, which reduce to pointers with DIET-LEDGER rows in the same commit. Architect chain claude-fable-5 → gpt-5.6-sol → claude-opus-5 (user ruling 2026-08-23). Inline fulfillment is a recorded mode, never indistinguishable from native.',
     },
     {
       kind: 'architecture',
