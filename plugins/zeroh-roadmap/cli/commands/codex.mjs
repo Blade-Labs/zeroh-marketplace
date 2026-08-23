@@ -1,9 +1,28 @@
 /**
  * roadmap codex — the sanctioned Codex delegation lane: launch a detached Codex CLI run
- * that implements queued phase(s) in an isolated worktree, and read its typed status.
+ * against queued phase(s) in an isolated worktree, and read its typed status.
  *
  *   roadmap codex run <N> [<N2>…] [--worktree <path>] [--base <ref>]
- *   roadmap codex status <N>
+ *   roadmap codex review <N> [<N2>…] [--doc <path>] [--focus <text>]
+ *   roadmap codex status <N> [--review]
+ *
+ * TWO LANES, one set of launch mechanics. `run` IMPLEMENTS a plan (worktree on a branch,
+ * npm ci, per-task commits, its own gate). `review` runs review-phase against one, report-only,
+ * landing a CODEX-REVIEW.md and nothing else. The review lane exists because a
+ * plan authored and then reviewed by the same model has only ever been marked by its own
+ * author — and because `/codex:rescue`, the other route to an outside read, cannot run on this
+ * host at all (its runtime sandboxes every command through bubblewrap, which fails before
+ * argv: bwrap RTM_NEWADDR, AppArmor's apparmor_restrict_unprivileged_userns). Lanes never
+ * share a journal, a worktree, or a report name, so a review and an implementation of the same
+ * phase cannot read each other's verdict; they DO share the liveness guard, so neither
+ * launches over the other.
+ *
+ * A LANE DELIVERS A PROTOCOL, IT NEVER RESTATES ONE. `buildReviewPrompt` hands over the path to
+ * skills/review-phase/SKILL.md and overrides only disposition. This is load-bearing for
+ * cross-model comparison: the eval scorecard slices `drivers` / `planners` / `reviewers` by
+ * model, and those cells only mean something if every driver read the SAME protocol — a
+ * per-lane copy turns that into a comparison of briefings, silently, because the confound
+ * never reaches the output. `buildPrompt` still carries its own body: that debt is unpaid.
  *
  * The whole point of this being ONE committed entrypoint is classifier hygiene: the
  * shared-host hook and the orphan-reaper pattern-match the VISIBLE command line, so the
@@ -27,15 +46,21 @@
  * review agents, the done-flip, and --verify-complete stay with the supervising session.
  * This command never merges and never pushes.
  */
-import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
-function journalPath(root, ids) {
-  return join(root, '.building', `codex-${ids.join('-')}.json`)
+const LANES = {
+  run: { prefix: 'codex-', report: 'CODEX-REPORT.md', journalRe: /^codex-[\d-]+\.json$/ },
+  review: { prefix: 'codex-review-', report: 'CODEX-REVIEW.md', journalRe: /^codex-review-[\d-]+\.json$/ },
+}
+
+function journalPath(root, ids, lane = 'run') {
+  return join(root, '.building', `${LANES[lane].prefix}${ids.join('-')}.json`)
 }
 
 /** Process-group liveness without pgrep (pgrep -f self-matches its own probe argv). */
@@ -80,28 +105,67 @@ function buildPrompt(root, ids) {
   ].join('\n')
 }
 
-function runCodex(root, ids, argv) {
-  const wi = argv.indexOf('--worktree')
-  const bi = argv.indexOf('--base')
-  const base = bi >= 0 ? argv[bi + 1] : 'develop'
-  const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-${ids.join('-')}`
-  const building = join(root, '.building')
-  mkdirSync(building, { recursive: true })
-  const jPath = journalPath(root, ids)
+/** The review protocol is the review-phase SKILL, resolved from THIS file so a plugin move follows. */
+const REVIEW_SKILL = fileURLToPath(new URL('../../skills/review-phase/SKILL.md', import.meta.url))
 
+/**
+ * The review lane's envelope: which targets, what this lane overrides, where the verdict goes.
+ * The protocol body stays in the skill and is read at run time, so every driver reviews under
+ * the same one — a per-lane copy would leave the scorecard's per-model cells comparing
+ * briefings instead of models.
+ */
+function buildReviewPrompt(root, ids, { doc, focus } = {}) {
+  const phaseFiles = ids.map((n) => `roadmap/phases/phase-${n}.phase.ts`)
+  for (const f of phaseFiles) {
+    if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
+  }
+  if (doc && !existsSync(join(root, doc))) throw new Error(`context doc missing: ${doc}`)
+  if (!existsSync(REVIEW_SKILL)) throw new Error(`review protocol missing: ${REVIEW_SKILL}`)
+  return [
+    'You are running the roadmap REVIEW-PHASE protocol as an INDEPENDENT reviewer, in this git worktree.',
+    '',
+    `YOUR PROTOCOL IS A FILE — read it in full, first, before forming any opinion: ${REVIEW_SKILL}`,
+    `Its \`references/\` siblings (in ${dirname(REVIEW_SKILL)}/references/) are part of the protocol — read each one it sends you to, when it sends you there. Follow it as written. This envelope adds only the targets and the overrides below; where the two disagree about HOW to review, the protocol wins.`,
+    '',
+    `TARGETS — run the protocol once per phase, dispatching Mode A or Mode B from each phase's own status as it directs: ${phaseFiles.join(', ')}`,
+    ...(doc
+      ? ['', `CONTEXT DOC (read before the phase files — it states the release intent, the ordering tensions and the open questions these plans belong to): ${doc}`]
+      : []),
+    '',
+    'WHAT THIS LANE OVERRIDES — everything else in the protocol runs unchanged:',
+    `- REPORT-ONLY. Step F auto-repair and Step 8's queue mutation are DISABLED here. Never edit a phase file, never touch backlog.ts, never \`git add\`, commit, push, merge, or switch branches; the ONLY file you write is ${LANES.review.report}. Still DO the reasoning of both steps and report their outcome — a repair you would have applied belongs under \`Findings:\` as OPEN, and your placement ruling still goes on the \`Placement:\` line, phrased as a recommendation.`,
+    '- You have NO subagents. Wherever the protocol spawns an agent per phase or per criterion, run that step yourself, inline, once per target.',
+    '- `judged by:` in the verdict block is YOUR OWN model id. Never claim a review that did not run.',
+    '- INDEPENDENCE IS THE POINT: a plan and the review already recorded in it may share an author, so treat that recorded review as a HYPOTHESIS to re-test, never as evidence, and "already reviewed" as grounds for more suspicion rather than less. Re-derive every claim from the code at HEAD.',
+    '- Cross-repo targets: read the other checkout by full path (it is outside this worktree), and never write there either.',
+    ...(focus ? ['', `TRAILING PROMPT — the protocol\'s "extra checks AFTER the protocol"; it never displaces a step: ${focus}`] : []),
+    '',
+    'SHARED-HOST RULES (~5 concurrent AI sessions on 16 GB): reading is free, so read widely. The protocol already forbids executing test suites in either mode — honor that. No dev servers, no builds.',
+    '',
+    `WHEN FINISHED (or blocked): write ${LANES.review.report} in the worktree root (do NOT commit it). It contains one \`## Phase N Review\` block per target in EXACTLY the structure the protocol specifies — downstream parsers consume those enums verbatim — plus, where a claim could not be checked, an explicit "Could not verify" list (never let missing evidence default favorable). End the file with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED if you could not review).`,
+  ].join('\n')
+}
+
+/**
+ * Both lanes refuse to launch over live work: the same-lane journal first (an id set
+ * relaunching itself), then ANY journal of EITHER lane whose worktree is this one — a live
+ * review reading a worktree must not get an implementation run started underneath it.
+ */
+function refuseIfLive(root, ids, lane, worktree, jPath, relaunchNote) {
+  const building = join(root, '.building')
   if (existsSync(jPath)) {
     const j = JSON.parse(readFileSync(jPath, 'utf8'))
     if (j.pgid && groupAlive(j.pgid)) {
-      process.stderr.write(`roadmap codex: a run for ${ids.join(',')} is LIVE (pgid ${j.pgid}, log ${j.log}) — refusing a double-run\n`)
+      process.stderr.write(`roadmap codex: a ${lane} for ${ids.join(',')} is LIVE (pgid ${j.pgid}, log ${j.log}) — refusing a double-run\n`)
       return 2
     }
-    process.stderr.write(`roadmap codex: previous run (pgid ${j.pgid}) is dead — relaunching; the prompt's resume rule skips already-done tasks\n`)
+    process.stderr.write(`roadmap codex: previous run (pgid ${j.pgid}) is dead — relaunching${relaunchNote}\n`)
   }
 
   // The same-id check above cannot see a DIFFERENT id set living in the same worktree (an
   // arc journal codex-2101-2102.json vs `codex run 2101 --worktree <same>`), and launching
   // over a live run would disturb its files. Guard at the worktree level.
-  for (const f of readdirSync(building).filter((n) => /^codex-[\d-]+\.json$/.test(n))) {
+  for (const f of readdirSync(building).filter((n) => Object.values(LANES).some((l) => l.journalRe.test(n)))) {
     if (join(building, f) === jPath) continue
     try {
       const oj = JSON.parse(readFileSync(join(building, f), 'utf8'))
@@ -114,6 +178,65 @@ function runCodex(root, ids, argv) {
       /* an unreadable sibling journal cannot prove liveness */
     }
   }
+  return 0
+}
+
+/**
+ * A report left by a previous run makes `codex status` read its stale sentinel as this run's
+ * verdict (bit 2026-08-11: a relaunch polled "blocked" while the live run worked). The report
+ * is never committed, so the launching run owns the file — preserved as .prev, never deleted
+ * (the status mtime guard already keeps the verdict safe).
+ */
+function preserveStaleReport(worktree, reportName) {
+  const stale = join(worktree, reportName)
+  if (!existsSync(stale)) return
+  const prev = reportName.replace(/\.md$/, '.prev.md')
+  renameSync(stale, join(worktree, prev))
+  process.stderr.write(`roadmap codex: preserved the previous run's ${reportName} as ${prev}\n`)
+}
+
+/** The shared detached launch: prompt on STDIN, own process group, journal + log in .building/. */
+function launch(root, ids, lane, { worktree, base, prompt }) {
+  const building = join(root, '.building')
+  const stem = `${LANES[lane].prefix}${ids.join('-')}`
+  const promptPath = join(building, `${stem}-prompt.txt`)
+  writeFileSync(promptPath, prompt)
+  const logPath = join(building, `${stem}.log`)
+  const logFd = openSync(logPath, 'a')
+
+  // Prompt on STDIN (argv stays clean of test keywords), fully detached, own group.
+  const child = spawn(
+    'codex',
+    ['exec', '--dangerously-bypass-approvals-and-sandbox', '-C', worktree, '-'],
+    { detached: true, stdio: [openSync(promptPath, 'r'), logFd, logFd] },
+  )
+  child.unref()
+
+  const jPath = journalPath(root, ids, lane)
+  writeFileSync(
+    jPath,
+    JSON.stringify(
+      { phases: ids, lane, report: LANES[lane].report, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, startedAt: new Date().toISOString() },
+      null,
+      2,
+    ) + '\n',
+  )
+  const poll = lane === 'review' ? `roadmap codex status ${ids[0]} --review` : `roadmap codex status ${ids[0]}`
+  process.stderr.write(`roadmap codex: launched pgid ${child.pid} in ${worktree} — journal ${jPath}, log ${logPath}. Poll: ${poll}\n`)
+  return 0
+}
+
+function runCodex(root, ids, argv) {
+  const wi = argv.indexOf('--worktree')
+  const bi = argv.indexOf('--base')
+  const base = bi >= 0 ? argv[bi + 1] : 'develop'
+  const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-${ids.join('-')}`
+  const building = join(root, '.building')
+  mkdirSync(building, { recursive: true })
+  const jPath = journalPath(root, ids, 'run')
+
+  const refused = refuseIfLive(root, ids, 'run', worktree, jPath, "; the prompt's resume rule skips already-done tasks")
+  if (refused !== 0) return refused
 
   if (!existsSync(worktree)) {
     const wt = spawnSync('git', ['worktree', 'add', worktree, '-b', `codex/${ids.join('-')}`, base], { cwd: root, stdio: 'inherit' })
@@ -134,45 +257,54 @@ function runCodex(root, ids, argv) {
   // buildPrompt can still throw (a renamed/renumbered phase file) — resolve it BEFORE
   // touching the previous run's hand-off, so a failed relaunch destroys no evidence.
   const prompt = buildPrompt(root, ids)
-
-  // A CODEX-REPORT.md left by a previous run makes `codex status` read its stale sentinel as
-  // this run's verdict (bit 2026-08-11: a relaunch polled "blocked" while the live run worked).
-  // The report is never committed, so the launching run owns the file — preserved as .prev,
-  // never deleted (the status mtime guard already keeps the verdict safe).
-  const staleReport = join(worktree, 'CODEX-REPORT.md')
-  if (existsSync(staleReport)) {
-    renameSync(staleReport, join(worktree, 'CODEX-REPORT.prev.md'))
-    process.stderr.write("roadmap codex: preserved the previous run's CODEX-REPORT.md as CODEX-REPORT.prev.md\n")
-  }
-
-  const promptPath = join(building, `codex-${ids.join('-')}-prompt.txt`)
-  writeFileSync(promptPath, prompt)
-  const logPath = join(building, `codex-${ids.join('-')}.log`)
-  const logFd = openSync(logPath, 'a')
-
-  // Prompt on STDIN (argv stays clean of test keywords), fully detached, own group.
-  const child = spawn(
-    'codex',
-    ['exec', '--dangerously-bypass-approvals-and-sandbox', '-C', worktree, '-'],
-    { detached: true, stdio: [openSync(promptPath, 'r'), logFd, logFd] },
-  )
-  child.unref()
-
-  writeFileSync(
-    jPath,
-    JSON.stringify({ phases: ids, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, startedAt: new Date().toISOString() }, null, 2) + '\n',
-  )
-  process.stderr.write(`roadmap codex: launched pgid ${child.pid} in ${worktree} — journal ${jPath}, log ${logPath}. Poll: roadmap codex status ${ids[0]}\n`)
-  return 0
+  preserveStaleReport(worktree, LANES.run.report)
+  return launch(root, ids, 'run', { worktree, base, prompt })
 }
 
-function statusCodex(root, ids) {
-  let jPath = journalPath(root, ids)
+/**
+ * The review lane. No branch and no `npm ci`: the mission never builds and never commits, so
+ * the worktree is a detached read-only copy — isolation that costs a checkout, not an install.
+ */
+function reviewCodex(root, ids, argv) {
+  const wi = argv.indexOf('--worktree')
+  const bi = argv.indexOf('--base')
+  const di = argv.indexOf('--doc')
+  const fi = argv.indexOf('--focus')
+  const base = bi >= 0 ? argv[bi + 1] : 'HEAD'
+  const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-review-${ids.join('-')}`
+  mkdirSync(join(root, '.building'), { recursive: true })
+  const jPath = journalPath(root, ids, 'review')
+
+  const refused = refuseIfLive(root, ids, 'review', worktree, jPath, ' — a review re-reads from scratch')
+  if (refused !== 0) return refused
+
+  // Resolve the prompt against the PRIMARY checkout before any worktree work, so a bad --doc
+  // or a renumbered phase file fails loudly and destroys no previous hand-off.
+  const doc = di >= 0 ? argv[di + 1] : undefined
+  const focus = fi >= 0 ? argv[fi + 1] : undefined
+  const prompt = buildReviewPrompt(root, ids, { doc, focus })
+
+  if (!existsSync(worktree)) {
+    const wt = spawnSync('git', ['worktree', 'add', '--detach', worktree, base], { cwd: root, stdio: 'inherit' })
+    if (wt.status !== 0) return wt.status ?? 1
+  }
+  // A release plan usually lives in .building/, which is gitignored and therefore absent from
+  // a fresh worktree — copy it in, or the mission's first read fails on a path just validated.
+  if (doc && !existsSync(join(worktree, doc))) {
+    mkdirSync(dirname(join(worktree, doc)), { recursive: true })
+    copyFileSync(join(root, doc), join(worktree, doc))
+  }
+  preserveStaleReport(worktree, LANES.review.report)
+  return launch(root, ids, 'review', { worktree, base, prompt })
+}
+
+function statusCodex(root, ids, lane = 'run') {
+  let jPath = journalPath(root, ids, lane)
   if (!existsSync(jPath)) {
     // A single id may belong to a multi-phase journal — scan .building for one containing it.
     const dir = join(root, '.building')
     const hit = (existsSync(dir) ? readdirSync(dir) : [])
-      .filter((f) => /^codex-[\d-]+\.json$/.test(f))
+      .filter((f) => LANES[lane].journalRe.test(f))
       .find((f) => {
         try {
           const ph = JSON.parse(readFileSync(join(dir, f), 'utf8')).phases ?? []
@@ -182,13 +314,14 @@ function statusCodex(root, ids) {
         }
       })
     if (!hit) {
-      process.stderr.write(`roadmap codex: no journal covers phase(s) ${ids.join(',')} in ${dir}\n`)
+      process.stderr.write(`roadmap codex: no ${lane} journal covers phase(s) ${ids.join(',')} in ${dir}\n`)
       return 1
     }
     jPath = join(dir, hit)
   }
   const j = JSON.parse(readFileSync(jPath, 'utf8'))
-  const reportPath = join(j.worktree, 'CODEX-REPORT.md')
+  // Journals written before the review lane existed carry no `report` — they are all run-lane.
+  const reportPath = join(j.worktree, j.report ?? LANES.run.report)
   // A report older than this run's launch is a PREVIOUS run's hand-off — reading its sentinel
   // as the current verdict is the stale-sentinel bug (a live relaunch polled "blocked"). The
   // launch path also moves it aside; this mtime guard is the second, independent defense.
@@ -224,9 +357,17 @@ export default async function run(argv) {
     process.stderr.write(`roadmap codex: --arc needs a valid arc id (roadmap/arcs/<ID>.arc.ts not found for '${arcId ?? ''}')\n`)
     return 1
   }
-  const ids = arcId ? arcPhases(root, arcId) : argv.slice(1).filter((a) => /^\d+$/.test(a))
+  // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).
+  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--arc'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
+  const ids = arcId ? arcPhases(root, arcId) : argv.slice(1).filter((a, i) => /^\d+$/.test(a) && !flagValues.has(i + 1))
+  const lane = argv.includes('--review') ? 'review' : 'run'
   if (sub === 'run' && ids.length > 0) return runCodex(root, ids, argv)
-  if (sub === 'status' && ids.length > 0) return statusCodex(root, ids)
-  process.stderr.write('roadmap codex: usage: roadmap codex run <N> [<N2>…] | run --arc <ID> [--worktree <path>] [--base <ref>] | roadmap codex status <N> [<N2>…] | status --arc <ID>\n')
+  if (sub === 'review' && ids.length > 0) return reviewCodex(root, ids, argv)
+  if (sub === 'status' && ids.length > 0) return statusCodex(root, ids, lane)
+  process.stderr.write(
+    'roadmap codex: usage: roadmap codex run <N> [<N2>…] | run --arc <ID> [--worktree <path>] [--base <ref>]\n' +
+      '                     roadmap codex review <N> [<N2>…] [--doc <path>] [--focus <text>] [--worktree <path>] [--base <ref>]\n' +
+      '                     roadmap codex status <N> [<N2>…] [--review] | status --arc <ID>\n',
+  )
   return 1
 }

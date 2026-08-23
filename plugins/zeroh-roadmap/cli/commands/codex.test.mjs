@@ -10,15 +10,20 @@
  *   - `codex run` deletes any existing CODEX-REPORT.md before spawning (the report is never
  *     committed, so the launching run owns the file).
  *
- * Hermetic-tmp-git-repo pattern from cli/commands/claim.test.mjs; the run-path test puts a
- * fake `codex` executable on PATH so nothing real launches.
+ * The review-lane tests below pin the property that makes two lanes safe to share one
+ * command: separate journals, prompts and report names, so a review and an implementation of
+ * the same phase can never read each other's verdict — plus the read-only mission rules,
+ * which are the only thing standing between an unsandboxed Codex and the plans it reviews.
+ *
+ * Hermetic-tmp-git-repo pattern from cli/commands/claim.test.mjs; the launch-path tests put a
+ * fake `codex` executable on PATH and pre-make the worktree so nothing real launches.
  *
  * Run: node --test cli/commands/codex.test.mjs
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync, spawn } from 'node:child_process'
-import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, realpathSync, utimesSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -195,4 +200,158 @@ test('the lane prompt carries the cross-repo instruction', () => {
   const prompt = execFileSync('cat', [join(root, '.building', 'codex-46-prompt.txt')], { encoding: 'utf8' })
   assert.match(prompt, /CROSS-REPO PHASES/, 'the cross-repo rule ships in every lane prompt')
   assert.match(prompt, /roadmap-state commit .*stays in THIS worktree/i)
+})
+
+// ── review lane ────────────────────────────────────────────────────────────
+
+/** A premade worktree + fake `codex` on PATH: the launch path runs, nothing real spawns. */
+function fakeLaunchEnv(root, worktree) {
+  mkdirSync(worktree, { recursive: true })
+  const fakeBin = join(root, 'fakebin')
+  mkdirSync(fakeBin, { recursive: true })
+  writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nexit 0\n')
+  chmodSync(join(fakeBin, 'codex'), 0o755)
+  return { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` }
+}
+
+function writePhase(root, n) {
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  writeFileSync(join(root, 'roadmap', 'phases', `phase-${n}.phase.ts`), 'export default {}\n')
+}
+
+test('review: the mission DELIVERS review-phase rather than restating it', () => {
+  const root = tmpRepo()
+  writePhase(root, 60)
+  const worktree = join(root, 'wt-review-60')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'review', '60', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-review-60-prompt.txt'), 'utf8')
+
+  // The protocol is handed over as a readable path, never pasted in.
+  const skill = join(HERE, '..', '..', 'skills', 'review-phase', 'SKILL.md')
+  assert.ok(existsSync(skill), 'a lane that names a missing protocol would brief on nothing')
+  assert.match(prompt, /YOUR PROTOCOL IS A FILE/, 'the lane points at the protocol it runs')
+  assert.ok(prompt.includes(skill), `the prompt must name the real skill path (${skill})`)
+
+  // The duplication guard, and the reason this lane exists in this shape: the protocol BODY
+  // stays in the skill so every driver reads the SAME one. These strings are Mode A's own —
+  // finding them in the prompt means a second copy has been started.
+  const protocol = readFileSync(skill, 'utf8')
+  for (const owned of ['promise ledger', 'Step V', 'H4']) {
+    assert.ok(protocol.includes(owned), `precondition: the skill owns "${owned}"`)
+    assert.ok(!prompt.includes(owned), `"${owned}" belongs to the skill — the lane must not restate it`)
+  }
+
+  assert.match(prompt, /REPORT-ONLY/, 'a delegated review must not repair the plan it is judging')
+  assert.match(prompt, /judged by:` in the verdict block is YOUR OWN model id/, 'attribution is per-driver, not per-lane')
+  assert.match(prompt, /CODEX-REVIEW\.md/, "the review lane hands off its own report, never the run lane's")
+  assert.doesNotMatch(prompt, /one commit|transparencyReport|roadmap gate run/i, 'implementation grammar must not leak into a review')
+})
+
+test('review: journal, prompt and report are separate from the run lane', () => {
+  const root = tmpRepo()
+  writePhase(root, 61)
+  const worktree = join(root, 'wt-review-61')
+  const env = fakeLaunchEnv(root, worktree)
+  assert.equal(spawnSync('node', [BIN, 'codex', 'review', '61', '--worktree', worktree], { cwd: root, encoding: 'utf8', env }).status, 0)
+  const j = JSON.parse(readFileSync(join(root, '.building', 'codex-review-61.json'), 'utf8'))
+  assert.equal(j.lane, 'review')
+  assert.equal(j.report, 'CODEX-REVIEW.md')
+  assert.ok(!existsSync(join(root, '.building', 'codex-61.json')), 'a review must not write the run lane\'s journal')
+
+  // The run-lane status must not adopt a review journal as its own verdict.
+  const bare = spawnSync('node', [BIN, 'codex', 'status', '61'], { cwd: root, encoding: 'utf8' })
+  assert.equal(bare.status, 1, 'run-lane status must not see a review journal')
+  assert.match(bare.stderr, /no run journal covers/)
+
+  writeFileSync(join(worktree, 'CODEX-REVIEW.md'), 'findings\nCODEX-RUN-COMPLETE\n')
+  const reviewed = spawnSync('node', [BIN, 'codex', 'status', '61', '--review'], { cwd: root, encoding: 'utf8' })
+  assert.equal(reviewed.status, 0, reviewed.stderr)
+  assert.equal(JSON.parse(reviewed.stdout).state, 'complete')
+})
+
+test('review: a journal predating the lane still reads CODEX-REPORT.md', () => {
+  const root = tmpRepo()
+  // No `report` field — the pre-review-lane journal shape. startedAt is backdated for the same
+  // reason as the fresh-report test: a report written in the launch millisecond can stat below
+  // it, and this test is about the report NAME, not the freshness guard.
+  const j = writeJournal(root, [62], { startedAt: new Date(Date.now() - 60_000).toISOString() })
+  writeFileSync(join(j.worktree, 'CODEX-REPORT.md'), 'done\nCODEX-RUN-COMPLETE\n')
+  const { code, out } = status(root, 62)
+  assert.equal(out.state, 'complete', 'an old journal must not lose its verdict to the new report name')
+  assert.equal(code, 0)
+})
+
+test('review: a missing --doc fails loudly and destroys no previous review', () => {
+  const root = tmpRepo()
+  writePhase(root, 63)
+  const worktree = join(root, 'wt-review-63')
+  const env = fakeLaunchEnv(root, worktree)
+  const prior = join(worktree, 'CODEX-REVIEW.md')
+  writeFileSync(prior, 'previous findings\nCODEX-RUN-COMPLETE\n')
+  const r = spawnSync('node', [BIN, 'codex', 'review', '63', '--worktree', worktree, '--doc', '.building/nope.md'], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(r.status, 0)
+  assert.match(r.stderr, /context doc missing/)
+  assert.equal(readFileSync(prior, 'utf8'), 'previous findings\nCODEX-RUN-COMPLETE\n', 'a failed launch must leave the previous hand-off intact')
+})
+
+test('review: an untracked --doc is copied into the worktree it names', () => {
+  const root = tmpRepo()
+  writePhase(root, 64)
+  const worktree = join(root, 'wt-review-64')
+  const env = fakeLaunchEnv(root, worktree)
+  writeFileSync(join(root, '.building', 'PLAN.md'), '# the release plan\n')
+  const r = spawnSync('node', [BIN, 'codex', 'review', '64', '--worktree', worktree, '--doc', '.building/PLAN.md'], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(readFileSync(join(worktree, '.building', 'PLAN.md'), 'utf8'), '# the release plan\n', 'a gitignored plan is absent from a fresh worktree — the lane must carry it in')
+  assert.match(readFileSync(join(root, '.building', 'codex-review-64-prompt.txt'), 'utf8'), /CONTEXT DOC \(read before the phase files/)
+})
+
+test('review: --focus lands as the protocol\'s trailing prompt, not as a replacement step', () => {
+  const root = tmpRepo()
+  writePhase(root, 65)
+  const worktree = join(root, 'wt-review-65')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'review', '65', '--worktree', worktree, '--focus', 'weigh the shared policy release'], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-review-65-prompt.txt'), 'utf8')
+  assert.match(prompt, /weigh the shared policy release/)
+  // review-phase already defines what a trailing ask is ("extra checks AFTER the protocol");
+  // --focus rides that convention instead of inventing a second one.
+  assert.match(prompt, /TRAILING PROMPT/, 'a focus must enter through the protocol\'s own door')
+  assert.match(prompt, /never displaces a step/, 'a focus must not become the whole mission')
+})
+
+test('review: a live review refuses an implementation run into the same worktree', () => {
+  const root = tmpRepo()
+  const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
+  child.unref()
+  cleanups.push(() => {
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch {}
+  })
+  const worktree = join(root, 'wt-shared')
+  mkdirSync(worktree, { recursive: true })
+  writeFileSync(
+    join(root, '.building', 'codex-review-66.json'),
+    JSON.stringify({ phases: ['66'], lane: 'review', report: 'CODEX-REVIEW.md', worktree, pgid: child.pid, startedAt: new Date().toISOString() }) + '\n',
+  )
+  writePhase(root, 66)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '66', '--worktree', worktree], { cwd: root, encoding: 'utf8' })
+  assert.equal(r.status, 2, r.stderr)
+  assert.match(r.stderr, /LIVE run .* in this worktree — refusing/, 'the liveness guard must span both lanes')
+})
+
+test("review: a flag's value is never parsed as a phase id", () => {
+  const root = tmpRepo()
+  writePhase(root, 67)
+  const worktree = join(root, 'wt-review-67')
+  const env = fakeLaunchEnv(root, worktree)
+  // --base 719 is a ref; only 67 is a phase. A naive numeric filter would review both.
+  const r = spawnSync('node', [BIN, 'codex', 'review', '67', '--worktree', worktree, '--base', '719'], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  assert.ok(existsSync(join(root, '.building', 'codex-review-67.json')))
+  assert.ok(!existsSync(join(root, '.building', 'codex-review-67-719.json')), "a --base ref must not join the phase list")
 })
