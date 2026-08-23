@@ -59,6 +59,11 @@ export default defineBacklog([
     phase: 4,
     name: 'Role bindings + do-phase delivered by path + manifests generated from one source',
   },
+  // ── Standalone, post-arc (dependsOn 4: manifest generator + ratchet) ──────
+  {
+    phase: 5,
+    name: 'Handoff skill — route context into phases first, residue to .building/HANDOFF.md',
+  },
   // Flat form (back-compat):
   // { phase: 1, name: 'Example phase name' },
   //
