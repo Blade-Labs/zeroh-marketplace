@@ -1,0 +1,22 @@
+{
+  "$schema": "../plugins/zeroh-roadmap/cli/roadmap.config.schema.json",
+  "configVersion": 1,
+  "gateCommands": {
+    "lint": "none",
+    "types": "none",
+    "unit": "bash -c 'cd plugins/zeroh-roadmap && capbuild npm test'",
+    "integration": "none",
+    "build": "none",
+    "e2e": "none",
+    "emit": "none"
+  },
+  "modelPolicy": {
+    "judgeModel": "fable"
+  },
+  "designHomes": {
+    "architecture": {
+      "home": "plugins/zeroh-roadmap",
+      "extendProtocol": "Extend plugins/zeroh-roadmap/MULTI-DRIVER.md in place; every trim of a model-loaded skill or agent card takes a DIET-LEDGER.md disposition row in the same commit."
+    }
+  }
+}
