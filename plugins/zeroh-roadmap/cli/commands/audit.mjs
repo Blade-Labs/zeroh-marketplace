@@ -12,7 +12,8 @@
  *   7  stale in-progress phases (git log staleness > 30 days)
  *   12.3 archived phase with unresolved/planned-not-done/operator-pending debt (HIGH)
  *   12.4 dangling debtResolution on an archived phase (MEDIUM)
- *   14 followup hygiene: untriaged orphans (MEDIUM), spent/past-review files (LOW)
+ *   14 followup hygiene: untriaged orphans (MEDIUM), spent/superseded-but-REFERENCED (HIGH),
+ *      spent orphans + past-review files (LOW)
  *
  * Exit contract (design §2): 0 = CLEAN or HAS ISSUES (MEDIUM/LOW only) · 2 = BROKEN (any
  * CRITICAL/HIGH) · 1 = usage / tsx-absent in this strict context.
@@ -121,8 +122,19 @@ export default async function run(argv) {
     if (row.status === 'UNTRIAGED' && row.orphan) {
       findings.push({ check: 14, severity: 'MEDIUM', phase: null, message: `Followup ${row.file} is UNTRIAGED and orphaned; disposition it or add an inbound roadmap reference.` })
     }
-    if (row.status === 'spent') {
-      findings.push({ check: 14, severity: 'LOW', phase: null, message: `Followup ${row.file} is status: spent but still present; delete it (git history is the archive).` })
+    // A spent/superseded stamp on a file something still POINTS AT is the dangerous shape: the
+    // stamp authorizes deletion, and deleting it breaks the referrer (phase 2423 deleted the plan
+    // input of three QUEUED phases this way, one whose step-verify greps the file). Orphanhood is
+    // therefore a precondition of the deletion verdict, not a detail — HIGH, and it BREAKS the audit.
+    if ((row.status === 'spent' || row.status === 'superseded') && !row.orphan) {
+      const refs = Object.entries(row.refs ?? {})
+        .filter(([, v]) => v)
+        .map(([k]) => k)
+        .join(', ')
+      findings.push({ check: 14, severity: 'HIGH', phase: null, message: `Followup ${row.file} is status: ${row.status} but NOT orphaned (referenced from ${refs || 'the roadmap'}); deleting it breaks the referrer — re-verify the stamp or clear the references first.` })
+    }
+    if (row.status === 'spent' && row.orphan) {
+      findings.push({ check: 14, severity: 'LOW', phase: null, message: `Followup ${row.file} is status: spent, orphaned and still present; delete it (git history is the archive).` })
     }
     if (row.reviewBy && row.reviewBy < today) {
       findings.push({ check: 14, severity: 'LOW', phase: null, message: `Followup ${row.file} passed review-by ${row.reviewBy}; refresh or disposition it.` })

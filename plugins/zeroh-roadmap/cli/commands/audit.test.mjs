@@ -562,6 +562,32 @@ test('check 14 GREEN — a live followup is not a spent finding', () => {
   assert.ok(!has(report, 14, 'LOW'))
 })
 
+test('check 14 RED — a spent followup that is STILL REFERENCED → HIGH (deleting it breaks the referrer)', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, { notes: 'followups/still-cited.md' }))
+  writeFollowup(root, 'still-cited.md', '---\nstatus: spent\n---\nClaimed done\n')
+  const { code, report } = audit(root)
+  assert.ok(has(report, 14, 'HIGH'), 'a deletion-authorizing stamp on a referenced file is the dangerous shape')
+  assert.equal(code, 2, 'HIGH breaks the audit — this is the phase-2423 class, not a nit')
+})
+
+test('check 14 GREEN — a spent ORPHAN stays LOW, never HIGH (it is safe to delete)', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100))
+  writeFollowup(root, 'spent-orphan.md', '---\nstatus: spent\n---\nDone\n')
+  const { report } = audit(root)
+  assert.ok(has(report, 14, 'LOW'))
+  assert.ok(!has(report, 14, 'HIGH'), 'orphanhood is exactly what makes the deletion safe')
+})
+
+test('check 14 RED — superseded-but-referenced is the same HIGH shape as spent', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, { notes: 'followups/superseded-cited.md' }))
+  writeFollowup(root, 'superseded-cited.md', '---\nstatus: superseded\n---\nReplaced\n')
+  const { report } = audit(root)
+  assert.ok(has(report, 14, 'HIGH'))
+})
+
 test('check 14 RED — review-by in the past → LOW', () => {
   const root = makeRepo()
   writePhase(root, 100, basePhase(100))
