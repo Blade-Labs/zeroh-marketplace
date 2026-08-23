@@ -64,6 +64,10 @@ export default defineBacklog([
     phase: 5,
     name: 'Handoff skill — route context into phases first, residue to .building/HANDOFF.md',
   },
+  {
+    phase: 6,
+    name: 'Worktree disposal owned by the done-verbs — land cleans, review-complete archives',
+  },
   // Flat form (back-compat):
   // { phase: 1, name: 'Example phase name' },
   //
