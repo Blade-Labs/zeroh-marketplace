@@ -19,7 +19,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 1,
   name: 'Per-phase eval records — the gate emits, the scorecard ingests',
-  status: 'backlog',
+  status: 'in-progress',
   arcId: 'POLYSEAT',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'feature',
