@@ -42,11 +42,15 @@ test('followups census distinguishes lifecycle states, references, and orphans',
 test('followups census human table reports the summary and remains a report tool', () => {
   const root = makeFixtureRepo()
   writeFollowup(root, 'orphan.md', 'No frontmatter\n')
+  // A dated file pins the review-by VALUE, not just the header: release-sweep Step 2.5 flags a
+  // past review-by from this column, so dropping the cell must red even if the header survives.
+  writeFollowup(root, 'dated.md', '---\nstatus: parked\ntrigger: the second consumer appears\nreview-by: 2099-12-31\n---\nbody\n')
   const result = runCli(root, ['followups', 'census'])
   assert.equal(result.code, 0, result.stderr)
   assert.match(result.stdout, /orphan\.md\s+UNTRIAGED/)
   assert.match(result.stdout, /REVIEW-BY/, 'the human table carries the review-by column release-sweep Step 2.5 reads')
-  assert.match(result.stdout, /1 total.*1 UNTRIAGED.*1 orphan/i)
+  assert.match(result.stdout, /dated\.md[^\n]*2099-12-31/, 'the review-by VALUE reaches the row, not only the header')
+  assert.match(result.stdout, /2 total.*1 UNTRIAGED/i)
 })
 
 test('followups census rejects every grammar violation to UNTRIAGED and fails ageDays open', () => {
