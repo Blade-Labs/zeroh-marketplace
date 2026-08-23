@@ -37,8 +37,7 @@ ratified/user-locked decisions are checked for DRIFT only, never relitigated (ho
 - **Gap calibration**: probe whether CURRENT data/state can trigger each same-pattern gap
   (scan the existing rows/markers for the offending shape); label it LIVE or LATENT.
 
-Evidence of use: commits `48c726155`/`dd5a17218` (`plan(roadmap): phase N review fixes`) and
-`11ce678f9` (`docs(roadmap): queue phase 2126`); failure themes mined 2026-08-13.
+Evidence of use: commits `48c726155`/`dd5a17218`/`11ce678f9`; themes mined 2026-08-13.
 
 ## Step 0 - Mode by `status`
 
@@ -56,16 +55,18 @@ panel reference it, never restate it).** A spawner running Mode A *via an agent*
 spawned reviewer; absent key = the agent's frontmatter default (fail-safe). JUDGE seams ONLY -
 Mode A plan reviewers, arc-sweep's architect, validate-arc's panel; never
 `phase-executor`/`software-developer`/`test-engineer`. Judge independence is fresh read-only
-context + evidence-or-downgrade, not a different model. Mode A invoked STANDALONE runs INLINE
-(no spawn); the spawn site is plan-arc Step 3.
+context + evidence-or-downgrade, not a different model. Mode A invoked STANDALONE runs INLINE (no spawn);
+the spawn site is plan-arc Step 3.
 
 **UNAVAILABLE judgeModel = fall back, never skip.** Symptom: a model-availability error
 ("You've reached your <model> limit", an access refusal, an unknown-model error). Response:
 RE-SPAWN the SAME reviewer at UNREDUCED rigor on the fallback chain - the caller's explicitly
-requested model if named, else the agent's frontmatter default - and record which model judged
-and why (the judging model is evidence). A reviewer that RAN and returned NEEDS WORK/BLOCKER
-has judged - an adverse verdict never triggers a swap. Fallback also fails → report the stage
-UNJUDGED and STOP; never queue on an unrun review (honor-system; `audit-roadmap` flags queue anomalies after the fact).
+requested model if named, else the agent's frontmatter default, EXCEPT `software-architect`,
+whose frontmatter now equals the judge model and so names its own fallback in its card
+(`agents/software-architect.md` Model policy: fable, falling back to opus) - and record which model judged
+and why (the judging model is evidence). A reviewer that RAN and returned an adverse
+verdict has judged - that never triggers a swap. Fallback also fails → report the stage UNJUDGED and
+STOP; never queue on an unrun review (`audit-roadmap` flags queue anomalies after the fact).
 
 ### Step H - Holistic feature review (leads the report; finalized after Step V)
 
