@@ -745,13 +745,14 @@ const HARNESS_DELIVERY_PREFIX = 'agents/'
  * Envelope overhead ceiling: generated-prompt bytes ÷ delivered-protocol bytes.
  *
  * The envelope exists to DELIVER the protocol, never to BE it. The RED LINE is the pre-delivery
- * envelope — the one that PARAPHRASED do-phase instead of handing over its path — which measured
- * 3992 / 16693 = 0.2391; a bound above that would certify the very regression this instrument
- * exists to catch. The bound therefore sits just under it, and the lane's own overrides must fit:
- * measured 3676 / 16693 = 0.2202, leaving ~246 bytes. A ceiling with only a sentence of slack
- * stops discriminating and starts taxing — a genuine new override would red it, and the cheapest
- * green would be deleting a rule to buy bytes, which is why every lane override carries its own
- * assertion below.
+ * envelope — the one that PARAPHRASED do-phase instead of handing over its path, `git show
+ * e965f4f~1:cli/commands/codex.mjs` — which measured 3992 / 16693 = 0.2391; a bound above that
+ * would certify the very regression this instrument exists to catch. The bound therefore sits
+ * just under it, and the lane's own overrides must fit: measured 3744 / 16693 = 0.2243, leaving
+ * ~179 bytes. A ceiling with only a sentence of slack stops discriminating and starts taxing — a
+ * genuine new override would red it, and the cheapest green would be deleting a rule to buy
+ * bytes, which is why every lane override carries its own assertion below. Envelope bytes also
+ * scale with the install root, which the three interpolated absolute paths carry.
  */
 const MAX_ENVELOPE_PROTOCOL_RATIO = 0.235
 
