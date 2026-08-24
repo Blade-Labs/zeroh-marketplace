@@ -103,7 +103,7 @@
   "workflow": {
     "pluginVersion": "0.18.1",
     "pluginSha": "cccc11112222",
-    "protocolLoadTokens": 15000,
+    "protocolLoadTokens": 15764,
     "profile": "fast-lane"
   },
   "fingerprint": {

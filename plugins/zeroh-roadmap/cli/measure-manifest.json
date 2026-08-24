@@ -2,7 +2,7 @@
   "$comment": "Per-flow protocol-load manifest for `roadmap measure` (ROADCODE 1659.3). Each entry lists a file the model LOADS into that flow's driving context, with a `why` naming the instruction site (skill:line) that causes the load — DERIVED from the post-1658 skills, never asserted. A renamed skill must break the meter (missing-path exit 1), never silently shrink it. Scoping rationale: DESIGN-NOTES.md §Measure scoping.",
   "flows": {
     "do-arc": {
-      "note": "The ORCHESTRATING session's loaded set. Subagent cards (phase-executor, reviewers, judges) load in FRESH subagent contexts and are excluded — covered by --flow do-phase. This is the ≤12k-token budget the arc's protocol-load-cut criterion measures against the ~49k baseline.",
+      "note": "The ORCHESTRATING session's loaded set. Subagent cards (phase-executor, reviewers, judges) load in FRESH subagent contexts and are excluded — covered by --flow do-phase. This is the set the arc's protocol-load-cut criterion measures against the ~49k baseline; the budget itself is PROTOCOL_LOAD_BUDGET_TOKENS in cli/lib/measure-budget.mjs.",
       "files": [
         { "path": "skills/using-zeroh-roadmap/SKILL.md", "why": "using-zeroh-roadmap:3 — ALWAYS ACTIVE router, loaded every session" },
         { "path": "skills/do-arc/SKILL.md", "why": "the orchestration skill invoked by /do-arc <id>" },

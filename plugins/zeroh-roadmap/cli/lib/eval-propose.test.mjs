@@ -77,7 +77,7 @@ const EXPECTED_FINDINGS_PER_CLASS = {
   'recurring-sentinel': 3, // unjudged-backfill x2, no-verdicts-file x1; pending-judge x2 produce NOTHING
   'recurring-low-score': 3, // code-confidence x2, plan-quality x1; the two exactly-70 scores produce nothing
   'recurring-lesson-key': 9, // 2 + 2 + 2 + 2 + 1 across the sidecar's nine lines
-  'protocol-load-over-budget': 3, // 12501, 13200, 15000; the exactly-12500 report and the block-less report produce nothing
+  'protocol-load-over-budget': 3, // 13265, 13964, 15764; the exactly-at-budget report and the block-less report produce nothing
 }
 
 const NO_LANE_LESSON_KEY = 'capbuild'
@@ -365,7 +365,7 @@ test('extractFindings + clusterFindings — two independent runs over the same c
 // ── 8. the protocol-load budget boundary ──────────────────────────────────────────────
 
 test('extractFindings — protocolLoadTokens EXACTLY at the budget is within budget, and a report with no workflow block contributes nothing', () => {
-  assert.equal(PROTOCOL_LOAD_BUDGET_TOKENS, 12500, 'the budget cli/lib/measure-budget.mjs holds, which is the number the measure gate asserts')
+  assert.equal(PROTOCOL_LOAD_BUDGET_TOKENS, 13264, 'the budget cli/lib/measure-budget.mjs holds, which is the number the measure gate asserts')
 
   const wf = (protocolLoadTokens) => ({ pluginVersion: '0.18.0', pluginSha: 'eeee11112222', protocolLoadTokens, profile: 'prod-grade' })
   const atBudget = extractFindings(
@@ -693,30 +693,30 @@ test('computeOpportunity — a sentinel cluster measures COVERAGE: a dimension s
 // ── 16. the protocol-load class: budget over measured, clamped ────────────────────────
 
 test('computeOpportunity — protocol load satisfies 10 * budget / measured mean, over the CLUSTER\'S OWN cited values', () => {
-  // prod-grade over budget at 20000 and 30000 => mean 25000, satisfaction 10 * 12500/25000 = 5.
-  // The corpus also carries a prod-grade report UNDER budget (6000) and a fast-lane outlier
-  // (120000), neither of which the cluster cites: folding in the under-budget report gives a mean
-  // of 18666.67 (satisfaction 6.7, score 6), and averaging every report gives 53200 (satisfaction
-  // 2.35, score 9.65). Only the cited-values reading produces the 7 asserted below.
+  // The two cited prod-grade reports straddle 2x the budget, so their mean IS 2x the budget and
+  // satisfaction is 10 * budget / (2 * budget) = 5 at ANY ratification of the constant. The corpus
+  // also carries a prod-grade report UNDER budget and a fast-lane outlier, neither of which the
+  // cluster cites: folding in the under-budget report, or averaging every report, both pull the
+  // mean off 2x and produce a different score. Only the cited-values reading produces the 7.
+  const twiceBudget = 2 * PROTOCOL_LOAD_BUDGET_TOKENS
   const corpus = [
-    mkReport('PLA', '2026-07-10', { workflow: workflowBlock(20000, 'prod-grade') }),
-    mkReport('PLB', '2026-07-11', { workflow: workflowBlock(30000, 'prod-grade') }),
+    mkReport('PLA', '2026-07-10', { workflow: workflowBlock(twiceBudget - 5000, 'prod-grade') }),
+    mkReport('PLB', '2026-07-11', { workflow: workflowBlock(twiceBudget + 5000, 'prod-grade') }),
     mkReport('PLC', '2026-07-12', { workflow: workflowBlock(6000, 'prod-grade') }),
     mkReport('PLD', '2026-07-13', { workflow: workflowBlock(120000, 'fast-lane') }),
     mkReport('PLE', '2026-07-14', { workflow: workflowBlock(90000, 'fast-lane') }),
   ]
   const o = opportunityFrom(corpus, [], 'protocol-load-over-budget', 'prod-grade')
 
-  assert.equal(PROTOCOL_LOAD_BUDGET_TOKENS, 12500, 'the budget this arithmetic is written against')
   assert.equal(o.importance, EXPECTED_IMPORTANCE['protocol-load-over-budget'], 'the v1 ruling for an over-budget protocol load')
-  assert.equal(o.satisfaction, 5, '10 * 12500 / 25000: twice the budget is half satisfied')
+  assert.equal(o.satisfaction, 5, '10 * budget / (2 * budget): twice the budget is half satisfied')
   assert.equal(o.score, 7, '6 + max(6 - 5, 0)')
-  assert.match(o.satisfactionSource, /12500/, 'the source names the budget the ratio is against')
-  assert.match(o.satisfactionSource, /25000/, 'and the measured mean, so the ratio can be recomputed by hand')
+  assert.match(o.satisfactionSource, new RegExp(String(PROTOCOL_LOAD_BUDGET_TOKENS)), 'the source names the budget the ratio is against')
+  assert.match(o.satisfactionSource, new RegExp(String(twiceBudget)), 'and the measured mean, so the ratio can be recomputed by hand')
 
   // The clamp. A ratio above 1 must saturate at 10 rather than emit an 11 or a 12 that would
   // break the documented 0..10 satisfaction range and make one class's score incomparable with
-  // another's. Unclamped this would be 10 * 12500/10000 = 12.5.
+  // another's. Unclamped this would be 10 * budget / 10000, which is above 10.
   const underBudget = [
     mkReport('CLA', '2026-07-10', { workflow: workflowBlock(9000, 'prod-grade') }),
     mkReport('CLB', '2026-07-11', { workflow: workflowBlock(11000, 'prod-grade') }),
@@ -743,7 +743,11 @@ test('computeOpportunity — protocol load satisfies 10 * budget / measured mean
     underBudget,
   )
   assert.equal(clamped.satisfaction, 10, 'a mean under the budget is fully satisfied, and no more than fully')
-  assert.notEqual(clamped.satisfaction, 12.5, 'an unclamped ratio would leave the 0..10 range every other class is compared on')
+  assert.notEqual(
+    clamped.satisfaction,
+    (10 * PROTOCOL_LOAD_BUDGET_TOKENS) / 10000,
+    'an unclamped ratio would leave the 0..10 range every other class is compared on',
+  )
   assert.equal(clamped.score, 6, 'and the gap term stays floored at 0, so the score is the bare importance')
 })
 
