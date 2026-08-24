@@ -203,6 +203,176 @@ test('the lane prompt carries the cross-repo instruction', () => {
   assert.match(prompt, /roadmap-state commit .*stays in THIS worktree/i)
 })
 
+// ── run lane: the mission DELIVERS do-phase, it never restates it ─────────────
+// Mirrors the review lane below, and matters for the same reason: the eval scorecard slices
+// `drivers` by model, so a per-lane PARAPHRASE of do-phase turns those cells into a comparison of
+// BRIEFINGS rather than of models — silently, because the confound never reaches the output. A
+// delegated run must read the same protocol an inline one does, from the same file.
+
+/** The run lane's protocol, resolved the way codex.mjs must resolve it (plugin-move follows). */
+const DO_PHASE_SKILL = join(HERE, '..', '..', 'skills', 'do-phase', 'SKILL.md')
+
+/**
+ * Strings do-phase/SKILL.md OWNS — protocol BODY, never this lane's disposition:
+ *  - `PRIME RULE 1` / `PROCEED_WITH_FIX` / `ESCALATE_TO_USER` — the architect-escalation rails and
+ *    the Decision Contract verdict tokens: WHEN to escalate and what the verdicts mean is identical
+ *    for every driver, so a second copy is a second protocol.
+ *  - `transparencyReport` / `decisionRef` / `roadmap eval lesson` — the per-task transparency
+ *    contract, the ratification ref a non-"None" debt line requires, and the lesson flush.
+ *  - `Commit grammar (BINDING` — the CLI PARSES those subjects; the grammar belongs where the
+ *    parser's contract is documented, not in one launcher's briefing.
+ *  - `roadmap gate plan <N>` / `--record-round` — the gate protocol and its recorded rounds.
+ *  - `roadmap phase curate <N>` — the curate step and its foreign-commit fallback.
+ *  - `guard-mutation-proof.md` — the guard-mutation-proof rule (a references/ sibling).
+ *  - `codex-self-review` — the label is defined by the skill's OWN delegation section.
+ * Lane material by contrast (asserted present further down): worktree discipline, the resume rule,
+ * the cross-repo instruction, the shared-host capbuild rules, the CODEX-REPORT.md hand-off.
+ */
+const DO_PHASE_OWNED = [
+  'PRIME RULE 1',
+  'PROCEED_WITH_FIX',
+  'ESCALATE_TO_USER',
+  'transparencyReport',
+  'decisionRef',
+  'roadmap eval lesson',
+  'Commit grammar (BINDING',
+  'roadmap gate plan <N>',
+  '--record-round',
+  'roadmap phase curate <N>',
+  'guard-mutation-proof.md',
+  'codex-self-review',
+]
+
+test('run: the mission DELIVERS do-phase by path, references included', () => {
+  const root = tmpRepo()
+  writePhase(root, 80)
+  const worktree = join(root, 'wt-run-80')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '80', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-80-prompt.txt'), 'utf8')
+
+  assert.ok(existsSync(DO_PHASE_SKILL), `a lane naming a missing protocol briefs on nothing — no do-phase protocol at ${DO_PHASE_SKILL}`)
+  assert.ok(
+    prompt.includes(DO_PHASE_SKILL),
+    `the run prompt must NAME the resolved protocol path ${DO_PHASE_SKILL} — fix cli/commands/codex.mjs buildPrompt: hand the SKILL over as a file, the way buildReviewPrompt hands over review-phase`,
+  )
+  assert.match(prompt, /YOUR PROTOCOL IS A FILE/, 'the run lane must point at the protocol it runs, in the review lane\'s own words — cli/commands/codex.mjs buildPrompt')
+
+  const refs = join(dirname(DO_PHASE_SKILL), 'references')
+  assert.ok(existsSync(refs), `precondition: do-phase's references/ siblings must exist at ${refs} — an empty pointer would make the next assertion decorative`)
+  assert.ok(
+    prompt.includes(refs),
+    `the prompt must point at the protocol's references/ siblings (${refs}) — a driver that never reads guard-mutation-proof.md runs a thinner protocol; fix cli/commands/codex.mjs buildPrompt`,
+  )
+
+  assert.ok(
+    prompt.includes('roadmap/phases/phase-80.phase.ts'),
+    'the envelope must still carry its TARGETS — fix cli/commands/codex.mjs buildPrompt: delivering the protocol must not drop the phase files it runs against',
+  )
+})
+
+test('run: the do-phase protocol BODY stays in the skill — the lane restates none of it', () => {
+  const root = tmpRepo()
+  writePhase(root, 82)
+  const worktree = join(root, 'wt-run-82')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '82', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-82-prompt.txt'), 'utf8')
+  const protocol = readFileSync(DO_PHASE_SKILL, 'utf8')
+
+  for (const owned of DO_PHASE_OWNED) {
+    assert.ok(
+      protocol.includes(owned),
+      `precondition: skills/do-phase/SKILL.md must own "${owned}" — it was reworded or removed there, so this guard would pass on nothing; re-anchor DO_PHASE_OWNED to the skill's current text`,
+    )
+    assert.ok(
+      !prompt.includes(owned),
+      `"${owned}" belongs to skills/do-phase/SKILL.md — the run prompt restating it forks the protocol and makes the eval scorecard's per-model cells compare briefings; fix cli/commands/codex.mjs buildPrompt (deliver the skill, override only disposition)`,
+    )
+  }
+})
+
+test('run: the lane-only overrides SURVIVE the delivery', () => {
+  const root = tmpRepo()
+  writePhase(root, 83)
+  const worktree = join(root, 'wt-run-83')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '83', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-83-prompt.txt'), 'utf8')
+  const protocol = readFileSync(DO_PHASE_SKILL, 'utf8')
+
+  // Worktree discipline: an unsandboxed driver's only fence.
+  assert.match(prompt, /work only (here|in this worktree)/i, 'the delegated run must be fenced to its worktree — fix cli/commands/codex.mjs buildPrompt')
+  assert.match(prompt, /never push/i, 'a driver that may push can land unreviewed work on the integration branch — fix cli/commands/codex.mjs buildPrompt')
+  assert.ok(prompt.includes('stage explicit paths'), 'sibling sessions share this checkout; `git add -A` scoops their work — fix cli/commands/codex.mjs buildPrompt')
+  assert.ok(prompt.includes('git add -A'), 'the staging rule must NAME the forbidden command, not gesture at it — fix cli/commands/codex.mjs buildPrompt')
+
+  // The resume rule: a relaunch over a half-done worktree must not redo or amend landed tasks.
+  assert.match(
+    prompt,
+    /done: true[^\n]*git log|git log[^\n]*done: true/,
+    'the resume rule must survive: a task already done: true whose commit is in git log is FINISHED — without it a relaunch amends landed commits; fix cli/commands/codex.mjs buildPrompt',
+  )
+  assert.match(
+    prompt,
+    /never redo|never amend|redo or amend/i,
+    'the resume rule must forbid the harm, not just describe the state: redoing or amending a landed task commit rewrites history the supervising session already has — fix cli/commands/codex.mjs buildPrompt',
+  )
+
+  // Cross-repo: the existing test above pins CROSS-REPO PHASES + the roadmap-state commit. What it
+  // does not pin is the write discipline in the OTHER checkout, which the skill never states.
+  assert.match(prompt, /other checkout/i, 'the cross-repo instruction must still name the other checkout — fix cli/commands/codex.mjs buildPrompt')
+  assert.match(
+    prompt,
+    /never switch branches/i,
+    'the other checkout is a live sibling working tree — the branch-switch prohibition is lane material the skill never carries; fix cli/commands/codex.mjs buildPrompt',
+  )
+
+  // Shared-host rules are lane material precisely BECAUSE the protocol has none: proven, not assumed.
+  assert.ok(
+    !protocol.includes('capbuild'),
+    'precondition: skills/do-phase/SKILL.md must NOT carry the shared-host rules — if it now does, they stopped being lane material and belong in DO_PHASE_OWNED instead',
+  )
+  assert.ok(
+    prompt.includes('capbuild'),
+    'the shared-host memory cap is absent from the protocol, so only the lane can carry it — an unwrapped suite on this 16 GB box freezes ~5 sessions; fix cli/commands/codex.mjs buildPrompt',
+  )
+
+  // The hand-off contract `codex status` parses.
+  assert.ok(prompt.includes('CODEX-REPORT.md'), 'the report name is the lane\'s hand-off, read by codex status — fix cli/commands/codex.mjs buildPrompt')
+  assert.match(prompt, /do not commit|never commit/i, 'CODEX-REPORT.md is never committed — the launching run owns the file (stale-sentinel bug 2026-08-11); fix cli/commands/codex.mjs buildPrompt')
+  assert.ok(prompt.includes('CODEX-RUN-COMPLETE'), 'without the terminal sentinel every finished run polls as dead-no-report — fix cli/commands/codex.mjs buildPrompt')
+  assert.ok(prompt.includes('CODEX-RUN-BLOCKED'), 'a blocked run must be able to SAY so; missing, it is indistinguishable from a crash — fix cli/commands/codex.mjs buildPrompt')
+})
+
+test('run: the lane stamps driver attribution without restating the completion protocol', () => {
+  const root = tmpRepo()
+  writePhase(root, 84)
+  const worktree = join(root, 'wt-run-84')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '84', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-84-prompt.txt'), 'utf8')
+  const protocol = readFileSync(DO_PHASE_SKILL, 'utf8')
+
+  // The SKILL can only say "your own model id"; WHICH lane launched is knowledge only the launcher
+  // has, so the lane override names it. Absent, the phase scores as unrecorded in the scorecard.
+  assert.match(
+    prompt,
+    /executionResult\.driver[^\n]*lane[^\n]*codex/,
+    'the envelope must still stamp executionResult.driver with lane "codex" — an unattributed run scores as unrecorded on the eval scorecard; fix cli/commands/codex.mjs buildPrompt',
+  )
+
+  assert.ok(protocol.includes('--verify-complete'), 'precondition: the completion protocol (and its --verify-complete step) lives in skills/do-phase/SKILL.md')
+  assert.ok(
+    !prompt.includes('--verify-complete'),
+    'the completion protocol is the skill\'s — restating its steps beside the attribution override is how the two copies drift; fix cli/commands/codex.mjs buildPrompt',
+  )
+})
+
 // ── review lane ────────────────────────────────────────────────────────────
 
 /** A premade worktree + fake `codex` on PATH: the launch path runs, nothing real spawns. */

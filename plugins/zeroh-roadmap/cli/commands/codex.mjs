@@ -17,12 +17,13 @@
  * phase cannot read each other's verdict; they DO share the liveness guard, so neither
  * launches over the other.
  *
- * A LANE DELIVERS A PROTOCOL, IT NEVER RESTATES ONE. `buildReviewPrompt` hands over the path to
- * skills/review-phase/SKILL.md and overrides only disposition. This is load-bearing for
- * cross-model comparison: the eval scorecard slices `drivers` / `planners` / `reviewers` by
- * model, and those cells only mean something if every driver read the SAME protocol — a
- * per-lane copy turns that into a comparison of briefings, silently, because the confound
- * never reaches the output. `buildPrompt` still carries its own body: that debt is unpaid.
+ * A LANE DELIVERS A PROTOCOL, IT NEVER RESTATES ONE. Both envelopes hand over the path to their
+ * mission's SKILL.md — skills/do-phase for `run`, skills/review-phase for `review` — and override
+ * only disposition. This is load-bearing for cross-model comparison: the eval scorecard slices
+ * `drivers` / `planners` / `reviewers` by model, and those cells only mean something if every
+ * driver read the SAME protocol — a per-lane copy turns that into a comparison of briefings,
+ * silently, because the confound never reaches the output. codex.test.mjs greps each generated
+ * prompt for its mission's protocol-owned strings and reds when one reappears.
  *
  * The whole point of this being ONE committed entrypoint is classifier hygiene: the
  * shared-host hook and the orphan-reaper pattern-match the VISIBLE command line, so the
@@ -42,10 +43,10 @@
  *  - the hand-off contract: Codex ends by writing CODEX-REPORT.md (never committed) with
  *    per-task shas + verify outcomes and a terminal sentinel CODEX-RUN-COMPLETE|BLOCKED.
  *
- * Division of labor (doctrine, mirrored in do-phase SKILL.md): Codex implements tasks +
- * per-task commits + transparencyReports; the GATE never moves — gate plan/run, the
- * review agents, the done-flip, and --verify-complete stay with the supervising session.
- * This command never merges and never pushes.
+ * Division of labor (user ruling 2026-07-22, stated in do-phase SKILL.md): the delegated driver
+ * runs each phase FULLY — tasks, per-task commits, and its own gate to green. The supervising
+ * session owns the back half only: audit the commits and gate claims against the plan, then
+ * integrate and clean up. This command never merges and never pushes.
  */
 import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
@@ -140,35 +141,38 @@ function groupAlive(pgid) {
   }
 }
 
+/** The run protocol is the do-phase SKILL, resolved from THIS file so a plugin move follows. */
+const RUN_SKILL = fileURLToPath(new URL('../../skills/do-phase/SKILL.md', import.meta.url))
+
+/**
+ * The run lane's envelope: which phases, what this lane overrides, where the hand-off goes.
+ * The protocol body stays in the skill and is read at run time, so every driver implements under
+ * the same one — a per-lane copy would leave the scorecard's per-model cells comparing briefings
+ * instead of models.
+ */
 function buildPrompt(root, ids) {
   const phaseFiles = ids.map((n) => `roadmap/phases/phase-${n}.phase.ts`)
   for (const f of phaseFiles) {
     if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
   }
+  if (!existsSync(RUN_SKILL)) throw new Error(`run protocol missing: ${RUN_SKILL}`)
   return [
-    `You are implementing ${ids.length > 1 ? `${ids.length} roadmap phases` : 'ONE roadmap phase'} end-to-end in this git worktree. Work ONLY here. NEVER push. NEVER \`git add -A\` — stage explicit paths only.`,
+    `You are IMPLEMENTING ${ids.length > 1 ? `${ids.length} roadmap phases` : 'ONE roadmap phase'} end-to-end in this git worktree, as the driver of record. Work ONLY in this worktree.`,
     '',
-    `THE PLANS (read fully first; every decision is pre-made in their notes — implement, never re-decide; do them in this order): ${phaseFiles.join(', ')}`,
+    `YOUR PROTOCOL IS A FILE — read it in full, first, before touching anything: ${RUN_SKILL}`,
+    `Its \`references/\` siblings (in ${dirname(RUN_SKILL)}/references/) are part of the protocol — read each one it sends you to, when it sends you there. Follow it as written, end to end, including every part it hands to the driver rather than to a supervising session. This envelope adds only the targets and the overrides below; where the two disagree about HOW to implement, the protocol wins.`,
     '',
-    'PROTOCOL per phase:',
-    "1. Run the phase's assumptions[] verify commands first. Any failure = STOP and report in CODEX-REPORT.md; do not improvise.",
-    "   CROSS-REPO PHASES: a plan whose steps/files name paths in ANOTHER checkout (a different git toplevel than this worktree) is a cross-repo phase, and the plan's own paths ARE the instruction — implement and commit the PRODUCT work in that checkout on its currently checked-out branch (same per-task commit grammar), while every roadmap-state commit (the phase file, gate artifacts) stays in THIS worktree. The never-touch-the-primary rule protects this roadmap repo's primary checkout only. In the other checkout too: stage explicit paths, never push, never merge, never switch branches.",
-    '   RESUME RULE: a task already done: true in the phase file with its commit present in git log is FINISHED — skip it, never redo or amend it (a relaunch over a half-done worktree resumes from the first unfinished task).',
-    '2. Execute tasks IN ORDER. One task = ONE commit, message grammar (em-dash mandatory): "type(scope): phase <N> — <N>.<X> <short title>", ending with the trailer line: Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>',
-    "   In the SAME commit set that task's done: true + a transparencyReport (whatWasDone/how/compromises/skipped/hardcoded/limitations — honest and concrete) in the phase file.",
-    '3. Run every step\'s "→ verify:" command and make it pass before committing. TDD tasks: failing test RED first, then GREEN — note the RED evidence in the report.',
+    `TARGETS — run the protocol once per phase, in this order: ${phaseFiles.join(', ')}. Every decision is pre-made in their notes: implement, never re-decide.`,
     '',
-    'SHARED-HOST RULES (~5 concurrent AI sessions on 16 GB — violating these can freeze the box):',
-    '- Every test suite / type-check / build runs wrapped: `capbuild <cmd>`. Scoped tiers run EXACTLY `bash scripts/test/run-tier.sh <slot> <files…>` (self-wraps capbuild); NEVER pipe tier output through tail/head/grep.',
-    '- No dev servers; no full `npm test` — only the commands the verify clauses name.',
+    'WHAT THIS LANE OVERRIDES — everything else in the protocol runs unchanged:',
+    '- THIS WORKTREE ONLY. Never merge, never push, never switch branches, never touch the primary checkout or backlog.ts — the supervising session double-checks your work, integrates, and cleans up. stage explicit paths; never `git add -A` (sibling sessions share this checkout).',
+    "- CROSS-REPO PHASES: a plan whose steps/files name paths in ANOTHER checkout (a different git toplevel than this worktree) is a cross-repo phase, and the plan's own paths ARE the instruction — implement and commit the PRODUCT work in that checkout on its currently checked-out branch, while every roadmap-state commit (the phase file, gate artifacts) stays in THIS worktree. The never-touch-the-primary rule protects this roadmap repo's primary checkout only. In the other checkout too: stage explicit paths, never push, never merge, never switch branches.",
+    '- RESUME RULE: a task already `done: true` in the phase file whose commit is present in git log is FINISHED — skip it, never redo or amend it (a relaunch over a half-done worktree resumes from the first unfinished task).',
+    '- SHARED-HOST RULES (~5 concurrent AI sessions on 16 GB — violating these can freeze the box): every test suite / type-check / build runs wrapped as `capbuild <cmd>`; scoped tiers run EXACTLY `bash scripts/test/run-tier.sh <slot> <files…>` (self-wraps capbuild); NEVER pipe tier output through tail/head/grep; no dev servers.',
+    '- YOU HAVE NO SUBAGENTS in this lane. Wherever the protocol spawns an agent, run that step yourself, inline, once per target, and record it under your own name — never claim an agent review that did not run.',
+    '- ATTRIBUTION: this lane is `codex`, which only the launcher knows — `executionResult.driver` is `{ model: <your own model id>, lane: "codex" }`. The launcher wrote that same pair into its journal, and a disagreement fails the phase completion check.',
     '',
-    'THE GATE IS YOURS TOO (user ruling 2026-07-22 — you run the phase fully): after the last task of each phase, run `roadmap gate plan <N> --json` then `roadmap gate run <N>` and drive every slot to GREEN (fix commits: "fix(scope): phase <N> gate RX — <what>"). Perform your OWN adversarial review of the phase diff (bugs, convention drift, honesty rails) and record it honestly in the phase file gateRounds as reviewer "codex-self-review" — never claim an agent review that did not run. Then flip the phase to done (status/completedDate/gate/metrics/gateRounds/executionResult — mirror a recent done phase\'s shape, and set executionResult.driver = { model: your own model id, lane: "codex" } so the run stays attributable to this lane) and run `roadmap gate run <N> --verify-complete`.',
-    '',
-    'CURATE THE LANDED HISTORY — this comes BETWEEN the green gate and the done flip above: with every gate slot green, run `roadmap phase curate <N>` (dry run — read the plan), then `roadmap phase curate <N> --apply` so the phase lands as 1-3 logical commits, and only THEN flip the phase to done (the "mark phase N complete" commit carries no em-dash boundary, so it reads as foreign inside a curation range — it must land on top of the curated history, never inside it). A foreign-commit refusal is recorded in the phase\'s limitations and left alone, never forced.',
-    '',
-    'WHEN FINISHED (or blocked): write CODEX-REPORT.md in the worktree root (do NOT commit it) with per-task commit sha + verify commands run + outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).',
-    '',
-    'NEVER merge, NEVER push, NEVER touch the primary checkout or backlog.ts — the supervising session double-checks your work, merges, and cleans up.',
+    `WHEN FINISHED (or blocked): write ${LANES.run.report} in the worktree root (do NOT commit it) with per-task commit sha + verify commands run + outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
   ].join('\n')
 }
 
