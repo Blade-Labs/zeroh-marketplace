@@ -511,6 +511,17 @@ recorded here because the ledger's rail is about DELETED RULES, not about budget
 | review-phase Mode A — "**UNAVAILABLE judgeModel = fall back, never skip.** Symptom: … ("You've reached your <model> limit", an access refusal, an unknown-model error)" | relocated | MULTI-DRIVER.md §1 The resolver, bullet "A SPAWN that fails on model availability is the fourth trigger" — it carries the symptom list, the re-ask-at-unreduced-rigor response and the ran-but-adverse exclusion |
 | review-phase Mode A — the `software-architect` fallback EXCEPTION ("whose frontmatter now equals the judge model and so names its own fallback in its card") | obsolete-with-evidence(the exception existed because the chain lived in a card; every role now resolves through one table) | MULTI-DRIVER.md §1, cli/lib/roles.mjs |
 
+## Handoff routing boundary — phase 5 gate R2 (diet-funded)
+
+The `handoff` dispatch and do-arc boundary were funded inside the measured files: the do-arc
+flow moved from 13,256 tokens before phase 5 to 13,253 after the fix, below the 13,257 ceiling
+(`roadmap measure --flow do-arc --assert 13257`).
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| do-arc §Pause & resume — "Pause is free — stop anywhere; no state lives in the loop. Resume is always the same act: re-enter the loop." | superseded-with-equivalent(`Pause anywhere; roadmap arc next resumes from disk` preserves the stop/re-entry rule while the command remains the state authority) | do-arc §Pause & resume |
+| do-arc §Pause & resume — "optional human notes, never load-bearing" | superseded-with-equivalent(`optional arc-loop notes` plus the handoff boundary assigns both homes; `roadmap arc next resumes from disk` preserves non-load-bearing state) | do-arc §Pause & resume |
+
 ## using-zeroh-roadmap/SKILL.md — phase 4 task 4.3 (diet-funded)
 
 The `references/codex-tools.md` pointer (the per-harness tool mapping) was funded in its own file:

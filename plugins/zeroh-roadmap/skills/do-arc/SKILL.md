@@ -139,9 +139,8 @@ do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime.
 
 ## Pause & resume
 
-Pause is free — stop anywhere; no state lives in the loop. Resume is always the same act:
-re-enter the loop. `roadmap arc next` fast-forwards from disk. A
-`roadmap/arcs/<ID>-RESUME.md` is optional human notes, never load-bearing.
+Pause anywhere; `roadmap arc next` resumes from disk. Keep optional arc-loop notes in
+`roadmap/arcs/<ID>-RESUME.md`; route cross-session residue through `handoff`, never both.
 
 ## Execution-prompt doc
 
