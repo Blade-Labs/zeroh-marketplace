@@ -315,6 +315,11 @@ export const PEVAL_NAME_RE = /^phase-(\d+)\.peval\.json$/
 export const phaseEvalRecordPath = (repoRoot, phase) =>
   join(repoRoot, 'roadmap', 'arc-evals', `phase-${phase}.peval.json`)
 
+/** Did this gate row execute a command? The gate marks a declared-absent slot with a flag but a
+ *  SKIPPED one only by its synthetic `(skipped: …)` command string, so both spellings are read
+ *  here — one place, rather than each consumer rediscovering the convention. */
+const didNotRun = (s) => s.declaredAbsent === true || /^\(skipped:/.test(String(s.command ?? ''))
+
 /**
  * Assemble a per-phase eval record from what a gate run already holds. PURE: `date` and
  * `fingerprint` are passed IN, never derived here — the SweepReportShape discipline (a
@@ -330,11 +335,6 @@ export const phaseEvalRecordPath = (repoRoot, phase) =>
  * consumer phase file carrying an extra key under executionResult.driver would otherwise
  * turn a measurement write into a refusal.
  */
-/** Did this gate row execute a command? The gate marks a declared-absent slot with a flag but a
- *  SKIPPED one only by its synthetic `(skipped: …)` command string, so both spellings are read
- *  here — one place, rather than each consumer rediscovering the convention. */
-const didNotRun = (s) => s.declaredAbsent === true || /^\(skipped:/.test(String(s.command ?? ''))
-
 export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerprint, date }) {
   const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : []
   const record = {
