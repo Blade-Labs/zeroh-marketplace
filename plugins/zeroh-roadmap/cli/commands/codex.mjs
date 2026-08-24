@@ -28,8 +28,9 @@
  * shared-host hook and the orphan-reaper pattern-match the VISIBLE command line, so the
  * hand-rolled launch (setsid + sandbox bypass + stdin prompt) kept tripping them. Every
  * hard-won invariant lives here instead (session lessons 2026-07-15/22):
- *  - direct CLI with --dangerously-bypass-approvals-and-sandbox (the companion runtime's
- *    bubblewrap sandbox cannot create loopback on this host — bwrap RTM_NEWADDR);
+ *  - direct CLI, binary and argv sourced from cli/lib/drivers.mjs (the ONE registry; the
+ *    codex entry's bypass posture is there because the companion runtime's bubblewrap sandbox
+ *    cannot create loopback on this host — bwrap RTM_NEWADDR);
  *  - the mission prompt goes via STDIN, never argv (the test-orphan-reaper kills any
  *    detached PPID-1 process whose args mention vitest/--test — a long prompt naming the
  *    verify commands looks exactly like a leaked test worker);
@@ -51,6 +52,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
+import { launchArgv, resolveDriver } from '../lib/drivers.mjs'
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
@@ -206,8 +208,8 @@ function launch(root, ids, lane, { worktree, base, prompt }) {
 
   // Prompt on STDIN (argv stays clean of test keywords), fully detached, own group.
   const child = spawn(
-    'codex',
-    ['exec', '--dangerously-bypass-approvals-and-sandbox', '-C', worktree, '-'],
+    resolveDriver('codex').bin,
+    launchArgv('codex', { worktree }),
     { detached: true, stdio: [openSync(promptPath, 'r'), logFd, logFd] },
   )
   child.unref()

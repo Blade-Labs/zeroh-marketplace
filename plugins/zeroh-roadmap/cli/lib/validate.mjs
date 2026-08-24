@@ -15,6 +15,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { bridgeImport } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
+import { DRIVERS } from './drivers.mjs'
 import { gateDir, latestReport, checkPhaseConsistency } from './gate-report.mjs'
 
 /** Phases planned after arc ROADOPUS — below this floor the provenance rules (c)/(d) are exempt. */
@@ -74,13 +75,41 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
   // (review-phase Mode A is the enforcement). The ~1,100 already-committed phase files are
   // grandfathered: the file must be new to git (no HEAD blob) for any of them to fire, so
   // the gate is resolved ONCE here (it shells out to git) rather than per lint.
-  const warnings =
-    isPhase && parsed && isNewToGit(normalized)
-      ? [...stepVerifyGrammarWarnings(parsed), ...verifyPolarityWarnings(parsed), ...stepDescriptionLengthWarnings(parsed)]
-      : []
+  //
+  // The driver-lane lint below is DATA, not authoring, so it sits OUTSIDE that gate: the case
+  // it exists for is a done-flip, which edits a file git already has.
+  const warnings = isPhase && parsed
+    ? [
+        ...(isNewToGit(normalized)
+          ? [...stepVerifyGrammarWarnings(parsed), ...verifyPolarityWarnings(parsed), ...stepDescriptionLengthWarnings(parsed)]
+          : []),
+        ...driverLaneWarnings(parsed),
+      ]
+    : []
 
   if (errors.length > 0) return { kind: 'errors', ok: false, errors, warnings }
   return { kind: 'ok', ok: true, warnings }
+}
+
+/** Every lane the registry recognises: 'session' (an in-harness session) plus each driver id. */
+function knownLanes() {
+  return ['session', ...Object.keys(DRIVERS)]
+}
+
+/**
+ * WARN when executionResult.driver.lane names no known lane. A WARNING and never an error:
+ * the schema keeps `lane` open so any driver's phase file loads, and the registry is the only
+ * place that can say which lanes are real.
+ */
+function driverLaneWarnings(phase) {
+  const lane = phase?.executionResult?.driver?.lane
+  if (typeof lane !== 'string' || lane.length === 0) return []
+  const known = knownLanes()
+  if (known.includes(lane)) return []
+  return [
+    `WARN phase ${phase?.phase ?? '?'}: executionResult.driver.lane '${lane}' is not a known lane — known: ${known.join(', ')}. ` +
+      `If that driver is real, land its entry in cli/lib/drivers.mjs (prove it first: roadmap driver verify <id>). The file loads and validates either way.`,
+  ]
 }
 
 /**

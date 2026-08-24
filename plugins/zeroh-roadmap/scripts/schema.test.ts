@@ -764,16 +764,23 @@ check('driver: a HISTORICAL result without driver still parses, and driver stays
   assertEq(r.driver, undefined, 'absent driver is absent, never defaulted')
 })
 
-check('driver: an unlisted lane rejects until the enum widens deliberately', () => {
+check('driver: an UNKNOWN lane parses — a result must load whoever wrote it; only empty rejects', () => {
+  const r = PhaseExecutionResultShape.parse({
+    phase: 1995,
+    status: 'done',
+    gateRounds: 1,
+    driver: { model: 'grok-9', lane: 'grok-exec' },
+  })
+  assertEq(r.driver?.lane, 'grok-exec', 'an unregistered lane round-trips verbatim')
   assertThrows(
     () =>
       PhaseExecutionResultShape.parse({
         phase: 1995,
         status: 'done',
         gateRounds: 1,
-        driver: { model: 'grok-9', lane: 'grok' },
+        driver: { model: 'grok-9', lane: '' },
       }),
-    'lane grok',
+    'an empty lane',
   )
 })
 
@@ -2636,11 +2643,13 @@ check('PhaseEvalRecord: phase must be a POSITIVE integer — 0, -1 and 1.5 all r
   assertEq(PhaseEvalRecordShape.parse(makeEvalRecord({ phase: 1 })).phase, 1, 'phase 1 is the floor')
 })
 
-check('PhaseEvalRecord: taskCount is non-negative and driver.lane is a CLOSED vocabulary', () => {
+check('PhaseEvalRecord: taskCount is non-negative and driver.lane is OPEN but never blank', () => {
   requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
   assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ taskCount: -1 }), ['taskCount'], 'a negative taskCount')
   assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ taskCount: 2.5 }), ['taskCount'], 'a fractional taskCount')
-  for (const lane of ['session', 'codex']) {
+  // A record must be emittable for whichever driver ran the phase, or the very phases this
+  // measurement exists to compare are the ones it silently drops.
+  for (const lane of ['session', 'codex', 'grok-exec']) {
     const ok = PhaseEvalRecordShape.parse({
       ...makeEvalRecord(),
       attribution: { driver: { model: 'claude-sonnet-4-6', lane } },
@@ -2649,9 +2658,9 @@ check('PhaseEvalRecord: taskCount is non-negative and driver.lane is a CLOSED vo
   }
   assertIssuePath(
     PhaseEvalRecordShape,
-    { ...makeEvalRecord(), attribution: { driver: { model: 'claude-sonnet-4-6', lane: 'subagent' } } },
+    { ...makeEvalRecord(), attribution: { driver: { model: 'claude-sonnet-4-6', lane: '' } } },
     ['attribution', 'driver', 'lane'],
-    'an invented driver lane',
+    'a blank driver lane',
   )
 })
 

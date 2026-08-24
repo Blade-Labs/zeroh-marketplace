@@ -243,10 +243,15 @@ export type TransparencyReport = z.output<typeof TransparencyReportShape>
 
 /** WHO acted and how it was launched. Defined ONCE and referenced by both writers —
  *  PhaseExecutionResult stamps it at completion, PhaseEvalRecord snapshots it into the
- *  measurement record — so the two can never disagree about what an actor id is. */
+ *  measurement record — so the two can never disagree about what an actor id is.
+ *
+ *  `lane` is an OPEN string: a phase file must load whichever driver wrote it, and a closed
+ *  enum makes an unrecognised lane an import-time parse failure indistinguishable from a
+ *  corrupt file. Whether a lane is KNOWN is a validation question, answered by the engine at
+ *  cli/lib/validate.mjs, which reads the driver registry and WARNS by name. */
 export const DriverShape = z.object({
   model: z.string().min(1),
-  lane: z.enum(['session', 'codex']),
+  lane: z.string().min(1),
 })
 
 export type Driver = z.output<typeof DriverShape>

@@ -365,3 +365,65 @@ test('`roadmap phase validate` surfaces the WARN lints on stderr (exit still 0)'
   )
   assert.match(r.stdout, /phase validate: .* — OK/, 'and still reports the OK verdict')
 })
+
+// ── driver.lane registry lint — WARN-level, names the value + every known driver id ─
+// An unknown lane must LOAD and WARN, never fail import-time Zod. The known set is read
+// from the registry so this suite carries no second copy of it.
+import { DRIVERS } from '../cli/lib/drivers.mjs'
+
+const KNOWN_DRIVER_IDS = Object.keys(DRIVERS)
+const UNKNOWN_LANE = 'grok-exec'
+
+const lanePhase = (lane) => `${IMPORT}
+export default definePhase({
+  phase: 9009, name: 'fixture driver lane phase', status: 'in-progress',
+  category: 'infra', kind: 'logic', source: 'fixture source', priority: 'LOW',
+  dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',
+  executionResult: { phase: 9009, status: 'done', gateRounds: 1, driver: { model: 'fixture-model', lane: '${lane}' } },
+  tasks: [],
+})
+`
+const doneLanePhase = (lane) => `${IMPORT}
+export default definePhase({
+  phase: 9009, name: 'fixture done driver lane phase', status: 'done',
+  category: 'infra', kind: 'logic', source: 'fixture source', priority: 'LOW',
+  dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',${doneGate}
+  executionResult: { phase: 9009, status: 'done', gateRounds: 1, driver: { model: 'fixture-model', lane: '${lane}' } },
+  tasks: [],
+})
+`
+
+test('driver.lane lint: an unknown lane import-PARSES and WARNS naming the value + every known driver id', () => {
+  const f = writeGitPhase('phase-9009.phase.ts', lanePhase(UNKNOWN_LANE))
+  const r = runValidatorCaptured(f.path)
+  assert.doesNotMatch(r.stderr, /schema validation failed/, 'an unknown lane must load — the closed enum is dead')
+  assert.doesNotMatch(r.stderr, /failed to load/i, 'an unknown lane is not a corrupt file')
+  assert.match(r.stderr, /WARN phase 9009/, 'the lane lint names the offending phase')
+  assert.match(r.stderr, new RegExp(UNKNOWN_LANE), 'the WARN names the offending lane value')
+  for (const id of KNOWN_DRIVER_IDS) {
+    assert.match(r.stderr, new RegExp(`\\b${id}\\b`), `the WARN names known driver id '${id}'`)
+  }
+  assert.match(r.stderr, /\bsession\b/, "the WARN names 'session' — always a valid lane")
+})
+
+test('driver.lane lint: an unknown lane exits EXACTLY as its lane:session twin does', () => {
+  const unknown = runValidatorCaptured(writeGitPhase('phase-9009.phase.ts', lanePhase(UNKNOWN_LANE)).path)
+  const twin = runValidatorCaptured(writeGitPhase('phase-9009.phase.ts', lanePhase('session')).path)
+  assert.equal(unknown.code, twin.code, `a WARN never changes the exit code; stderr: ${unknown.stderr}`)
+})
+
+test('driver.lane lint: a KNOWN lane (session or a registry id) draws NO warning', () => {
+  for (const lane of ['session', ...KNOWN_DRIVER_IDS]) {
+    const f = writeGitPhase('phase-9009.phase.ts', lanePhase(lane))
+    const r = runValidatorCaptured(f.path)
+    assert.doesNotMatch(r.stderr, /WARN phase 9009/, `lane '${lane}' is known — the lint must stay quiet`)
+  }
+})
+
+test('driver.lane lint: the unknown-lane WARN also fires on a status:done phase file', () => {
+  const f = writeGitPhase('phase-9009.phase.ts', doneLanePhase(UNKNOWN_LANE), { commit: true })
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `a WARN never turns a passing file into a failing one; stderr: ${r.stderr}`)
+  assert.match(r.stderr, /WARN phase 9009/, 'a done-flip edits an existing file — the lint is not status-gated')
+  assert.match(r.stderr, new RegExp(UNKNOWN_LANE), 'the WARN names the offending lane value')
+})

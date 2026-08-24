@@ -18,8 +18,9 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ConfigError } from '../cli/lib/config.mjs'
 
-// The full §2 command tree. `phase` is the owning ROADCODE phase; `sub` lists
-// subcommands for --help. A command becomes MOUNTED the moment its module lands.
+// The full §2 command tree. `phase` is the owning phase and `arc` the arc that owns it
+// (default ROADCODE); `sub` lists subcommands for --help. A command becomes MOUNTED the
+// moment its module lands.
 const TREE = {
   config: { phase: 1655, sub: ['check'], desc: 'load + validate roadmap.config.json; print resolved bindings' },
   init: { phase: 1655, sub: ['--config', '--scaffold'], desc: 'scaffold roadmap/ + config.json' },
@@ -42,6 +43,7 @@ const TREE = {
   debt: { phase: 1658, sub: ['census', 'dispose', 'check'], desc: 'debt census/dispose wrappers' },
   measure: { phase: 1659, sub: ['--flow', '--assert'], desc: 'protocol-load meter (bytes/4 over the invocation path)' },
   codex: { phase: 1838, sub: ['run <N> [<N2>…] [--worktree] [--base]', 'review <N> [<N2>…] [--doc] [--focus]', 'status <N> [--review]'], desc: 'detached Codex delegation lane — run implements a plan, review adversarially reads one (worktree + stdin prompt + journal; gate stays with the session)' },
+  driver: { arc: 'POLYSEAT', phase: 2, sub: ['verify <id>', 'register <id>'], desc: "probe a driver's real capabilities (pasted provenance); register refuses an unverified id" },
   eval: { phase: 1996, sub: ['<ARCID> [--date] [--force] [--collect-only] [--json]', 'record-sweep --arc <ID>', 'record-verdicts --arc <ID>', 'merge-judge --arc <ID>', 'trend', 'restamp', 'lesson "<text>" [--phase N]', 'scorecard [--date] [--json]', 'propose [--json] [--dry-run]'], desc: 'arc eval: collect the trace, score the deterministic dimensions and ratchet, merge the judge verdict, record the land-time aggregates, capture a durable lesson to the committed sidecar, and cluster the corpus into ratify-only improvement proposals' },
 }
 
@@ -49,7 +51,7 @@ function printHelp() {
   const lines = ['roadmap — phase-driven development CLI', '', 'Commands:']
   for (const [name, meta] of Object.entries(TREE)) {
     const subs = meta.sub?.length ? `  ${meta.sub.join(' | ')}` : ''
-    lines.push(`  ${name.padEnd(9)}${subs.padEnd(38)} ${meta.desc}  [ROADCODE ${meta.phase}]`)
+    lines.push(`  ${name.padEnd(9)}${subs.padEnd(38)} ${meta.desc}  [${meta.arc ?? 'ROADCODE'} ${meta.phase}]`)
   }
   lines.push('', 'Exit codes: 0 clean · 1 usage/config · 2 check failed/refused · 3/4 watch verdicts')
   process.stdout.write(lines.join('\n') + '\n')
@@ -73,7 +75,7 @@ async function main() {
 
   if (command in TREE) {
     process.stderr.write(
-      `roadmap ${command}: not yet implemented (lands in ROADCODE ${TREE[command].phase})\n`,
+      `roadmap ${command}: not yet implemented (lands in ${TREE[command].arc ?? 'ROADCODE'} ${TREE[command].phase})\n`,
     )
     return 1
   }
