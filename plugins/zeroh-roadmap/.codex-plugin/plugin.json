@@ -1,0 +1,21 @@
+{
+  "name": "zeroh-roadmap",
+  "version": "0.32.0",
+  "description": "Phase-driven development with a design-first gate, validation gates, intent validation, review reports, and changelog generation",
+  "author": {
+    "name": "Blade Labs",
+    "url": "https://blade-labs.com"
+  },
+  "repository": "https://github.com/Blade-Labs/zeroh-roadmap",
+  "license": "SEE LICENSE",
+  "keywords": [
+    "roadmap",
+    "phases",
+    "tdd",
+    "review",
+    "gates",
+    "changelog"
+  ],
+  "skills": "./skills/",
+  "hooks": {}
+}

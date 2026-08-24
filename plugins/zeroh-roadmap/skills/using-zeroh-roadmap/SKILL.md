@@ -33,8 +33,8 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | resume / continue arc X | **do-arc** — `roadmap arc next` fast-forwards from disk |
 | migrate / upgrade roadmap | `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` |
 
-NEVER handle these yourself — the skills carry the full protocol; your job ends at
-correct dispatch plus the coordination steps below.
+NEVER handle these yourself — the skills carry the full protocol; your job is correct
+dispatch plus the coordination below.
 
 ## Multi-session coordination (shared repos)
 
@@ -51,10 +51,11 @@ correct dispatch plus the coordination steps below.
 
 ## Cross-cutting standards — load the reference when the work produces the artifact
 
-Downstream skills cite these same files at their own steps; load one yourself whenever
-routed-to work surfaces the artifact class and the target skill has not already:
+Load one yourself whenever routed-to work surfaces the artifact class and the target
+skill has not already:
 
 - Writing docs, code comments, or a decision record → `references/documentation-rules.md`
 - Assigning a task's `testMode` or refusing a test → `references/test-worthiness.md`
 - Splitting or placing a UI component (at planning time) → `references/component-structure.md`
 - Introducing any external package/font/icon/image/snippet/model → `references/external-assets-licensing.md`
+- Running this protocol on a non-Claude harness (Codex) → `references/codex-tools.md`

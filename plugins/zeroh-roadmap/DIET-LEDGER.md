@@ -510,3 +510,14 @@ recorded here because the ledger's rail is about DELETED RULES, not about budget
 | review-phase Mode A — "JUDGE seams ONLY - Mode A plan reviewers, arc-sweep's architect, validate-arc's panel; never `phase-executor`/`software-developer`/`test-engineer`" | enforced-by-code(`ROLES[*].class`; `resolveRole` applies `judgeModel` to judge-class only and ignores it for builder-class, asserted both directions) | cli/lib/roles.mjs, cli/lib/roles.test.mjs |
 | review-phase Mode A — "**UNAVAILABLE judgeModel = fall back, never skip.** Symptom: … ("You've reached your <model> limit", an access refusal, an unknown-model error)" | relocated | MULTI-DRIVER.md §1 The resolver (unavailability + the recorded walk); the symptom list is the operator's, not the protocol's |
 | review-phase Mode A — the `software-architect` fallback EXCEPTION ("whose frontmatter now equals the judge model and so names its own fallback in its card") | obsolete-with-evidence(the exception existed because the chain lived in a card; every role now resolves through one table) | MULTI-DRIVER.md §1, cli/lib/roles.mjs |
+
+## using-zeroh-roadmap/SKILL.md — phase 4 task 4.3 (diet-funded)
+
+The `references/codex-tools.md` pointer (the per-harness tool mapping) was funded in its own file:
+3,405 B → 3,422 B, flow total 13,252 → 13,256 tokens against the 13,257 ceiling
+(`roadmap measure --flow do-arc`). `measure` ceils per file, so the funding had to land here.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| §Cross-cutting standards — "Downstream skills cite these same files at their own steps" | obsolete-with-evidence(the instruction that follows — load it yourself when the target skill has not — is the whole rule; the observation about downstream skills changes no reader's action) | using-zeroh-roadmap §Cross-cutting standards |
+| §Routing — "your job ends at correct dispatch plus the coordination steps below" | obsolete-with-evidence(compressed to "your job is correct dispatch plus the coordination below"; both clauses survive) | using-zeroh-roadmap §Routing |

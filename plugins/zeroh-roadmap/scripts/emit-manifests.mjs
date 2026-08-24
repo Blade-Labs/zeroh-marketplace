@@ -1,0 +1,273 @@
+#!/usr/bin/env node
+/**
+ * emit-manifests — every harness manifest, regenerated from ONE source.
+ *
+ *   node scripts/emit-manifests.mjs [--check] [--root <dir>]
+ *
+ * The version comes from package.json, the skill list from the directories under `skills/`, the
+ * agent list from `agents/*.md`. Five manifests had drifted to four different versions before
+ * this existed, and .codex/INSTALL.md advertised a retired skill: version and skill list lived in
+ * six places and rotted independently.
+ *
+ * Two kinds of target. A VERSION target is PATCHED in place — the field is rewritten as text so
+ * indentation, key order and every other byte survive, which is what makes a release bump a
+ * one-line diff. A GENERATED target is written WHOLE from the source; hand edits to it are
+ * overwritten by design.
+ *
+ * `--check` writes nothing and exits 2 on any drift, naming the file and the field (or, for a
+ * generated file, what differs), so the plugin's own suite reds on a stale manifest.
+ *
+ * Exit: 0 clean · 1 usage error, or a source that cannot be read (a generator that loses its
+ * source must fail loudly, never publish an empty skill list) · 2 drift.
+ */
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+
+/** The `.version-bump.json` idiom: every file carrying the version, and the field holding it. */
+export const VERSION_TARGETS = Object.freeze([
+  Object.freeze({ path: '.claude-plugin/plugin.json', field: 'version' }),
+  Object.freeze({ path: '.cursor-plugin/plugin.json', field: 'version' }),
+  Object.freeze({ path: '.codex-plugin/plugin.json', field: 'version' }),
+  Object.freeze({ path: 'gemini-extension.json', field: 'version' }),
+  Object.freeze({ path: '.copilot/plugin.yaml', field: 'version' }),
+])
+
+/** Files written WHOLE from the source of truth. */
+export const GENERATED_TARGETS = Object.freeze([
+  Object.freeze({ path: '.codex-plugin/plugin.json' }),
+  Object.freeze({ path: '.codex/INSTALL.md' }),
+])
+
+const GENERATED_PATHS = new Set(GENERATED_TARGETS.map((t) => t.path))
+
+/** The always-active bootstrap skill, listed apart from the routed ones. */
+const BOOTSTRAP_SKILL = 'using-zeroh-roadmap'
+
+class SourceError extends Error {}
+
+/** version + skill list + agent list, or a SourceError naming exactly what is missing. */
+function readSource(root) {
+  const pkgPath = join(root, 'package.json')
+  if (!existsSync(pkgPath)) throw new SourceError(`no package.json at ${pkgPath} — the version has ONE source and it is not there`)
+  let pkg
+  try {
+    pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+  } catch (e) {
+    throw new SourceError(`package.json at ${pkgPath} will not parse: ${e.message}`)
+  }
+  if (!pkg.version) throw new SourceError(`package.json at ${pkgPath} carries no version field`)
+
+  const skillsDir = join(root, 'skills')
+  if (!existsSync(skillsDir)) throw new SourceError(`no skills directory at ${skillsDir} — refusing to emit an empty skill list`)
+  const skills = readdirSync(skillsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort()
+  if (skills.length === 0) throw new SourceError(`the skills directory at ${skillsDir} holds none — refusing to emit an empty skill list`)
+
+  const agentsDir = join(root, 'agents')
+  const agents = existsSync(agentsDir)
+    ? readdirSync(agentsDir, { withFileTypes: true })
+        .filter((f) => f.isFile() && f.name.endsWith('.md'))
+        .map((f) => f.name.replace(/\.md$/, ''))
+        .sort()
+    : []
+
+  return { name: pkg.name, description: pkg.description ?? '', version: pkg.version, skills, agents }
+}
+
+/** The marketplace metadata the codex manifest mirrors; .claude-plugin stays its hand-owned home. */
+function claudeMeta(root) {
+  const p = join(root, '.claude-plugin', 'plugin.json')
+  if (!existsSync(p)) return {}
+  try {
+    return JSON.parse(readFileSync(p, 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+function renderCodexPlugin(root, src) {
+  const meta = claudeMeta(root)
+  return `${JSON.stringify(
+    {
+      name: src.name,
+      version: src.version,
+      description: src.description,
+      ...(meta.author ? { author: meta.author } : {}),
+      ...(meta.repository ? { repository: meta.repository } : {}),
+      ...(meta.license ? { license: meta.license } : {}),
+      ...(meta.keywords ? { keywords: meta.keywords } : {}),
+      skills: './skills/',
+      // EMPTY ON PURPOSE: it suppresses Codex's auto-discovery of hooks/hooks.json, which is
+      // Claude-shaped. An absent key is not the same as an empty object.
+      hooks: {},
+    },
+    null,
+    2,
+  )}\n`
+}
+
+function renderInstall(root, src) {
+  const routed = src.skills.filter((s) => s !== BOOTSTRAP_SKILL)
+  const hasBootstrap = src.skills.includes(BOOTSTRAP_SKILL)
+  return [
+    '<!-- GENERATED by scripts/emit-manifests.mjs — run it, never hand-edit. -->',
+    `# ${src.name} — installation for Codex`,
+    '',
+    '## Install',
+    '',
+    'Codex discovers plugins through the marketplace index at `.agents/plugins/marketplace.json`',
+    'in the marketplace root (NOT the Claude-side `.claude-plugin/marketplace.json`), then reads',
+    "this plugin's `.codex-plugin/plugin.json`:",
+    '',
+    '```bash',
+    'codex plugin marketplace add <path-or-git-url-of-the-marketplace>',
+    `codex plugin add ${src.name}@<marketplace-name>`,
+    '```',
+    '',
+    'Verify with `codex debug prompt-input`: every skill below appears in the model-visible prompt',
+    'with its description and file path. An installed-plugin listing proves installation, not',
+    'surfacing.',
+    '',
+    `## What is surfaced (v${src.version})`,
+    '',
+    `**${routed.length} skills**${hasBootstrap ? ` + the always-active bootstrap \`${BOOTSTRAP_SKILL}\`` : ''}:`,
+    '',
+    ...routed.map((s) => `- ${s}`),
+    '',
+    `**${src.agents.length} agents** — the roles the skills spawn (see \`MULTI-DRIVER.md\` §1):`,
+    '',
+    ...src.agents.map((a) => `- ${a}`),
+    '',
+    '## Update',
+    '',
+    '```bash',
+    'codex plugin marketplace upgrade',
+    `codex plugin add ${src.name}@<marketplace-name>`,
+    '```',
+    '',
+  ].join('\n')
+}
+
+const RENDERERS = {
+  '.codex-plugin/plugin.json': renderCodexPlugin,
+  '.codex/INSTALL.md': renderInstall,
+}
+
+const isJson = (path) => path.endsWith('.json')
+
+/** The version currently in `text`, or undefined when the field is absent/unparseable. */
+function currentVersion(text, target) {
+  if (isJson(target.path)) {
+    try {
+      return JSON.parse(text)[target.field]
+    } catch {
+      return undefined
+    }
+  }
+  return text.match(new RegExp(`^${target.field}:[ \\t]*(\\S+)[ \\t]*$`, 'm'))?.[1]
+}
+
+/**
+ * `text` with the version field set. A TEXT patch, never a parse/serialize round trip: one
+ * manifest is 4-space indented and reserializing would reformat every line of it.
+ */
+function withVersion(text, target, version) {
+  const re = isJson(target.path)
+    ? new RegExp(`("${target.field}"[ \\t]*:[ \\t]*)"[^"]*"`)
+    : new RegExp(`^${target.field}:.*$`, 'm')
+  if (!re.test(text)) throw new SourceError(`${target.path} carries no ${target.field} field to patch`)
+  return text.replace(re, isJson(target.path) ? `$1"${version}"` : `${target.field}: ${version}`)
+}
+
+/** Up to `max` lines that `want` has and `have` lacks, and vice versa — what to name in a red. */
+function lineDelta(have, want, max = 3) {
+  const hl = new Set(have.split('\n'))
+  const wl = new Set(want.split('\n'))
+  const added = [...wl].filter((l) => l.trim().length > 0 && !hl.has(l)).slice(0, max)
+  const removed = [...hl].filter((l) => l.trim().length > 0 && !wl.has(l)).slice(0, max)
+  return [...added.map((l) => `+${l.trim()}`), ...removed.map((l) => `-${l.trim()}`)].join(' ')
+}
+
+export function run(argv) {
+  const ri = argv.indexOf('--root')
+  const known = new Set(['--check', '--root'])
+  const flagValue = ri >= 0 ? ri + 1 : -1
+  for (const [i, a] of argv.entries()) {
+    if (i === flagValue) continue
+    if (!known.has(a)) {
+      process.stderr.write(`emit-manifests: unknown argument '${a}' — usage: emit-manifests.mjs [--check] [--root <dir>]\n`)
+      return 1
+    }
+  }
+  if (ri >= 0 && !argv[ri + 1]) {
+    process.stderr.write('emit-manifests: --root needs a directory\n')
+    return 1
+  }
+  const check = argv.includes('--check')
+  const root = ri >= 0 ? resolve(argv[ri + 1]) : PLUGIN_ROOT
+
+  let src
+  try {
+    src = readSource(root)
+  } catch (e) {
+    if (!(e instanceof SourceError)) throw e
+    process.stderr.write(`emit-manifests: ${e.message}\n`)
+    return 1
+  }
+
+  const drift = []
+  const changed = []
+  const write = (rel, content) => {
+    const p = join(root, rel)
+    mkdirSync(dirname(p), { recursive: true })
+    writeFileSync(p, content)
+    changed.push(rel)
+  }
+
+  for (const target of GENERATED_TARGETS) {
+    const p = join(root, target.path)
+    const want = RENDERERS[target.path](root, src)
+    const have = existsSync(p) ? readFileSync(p, 'utf8') : null
+    if (have === want) continue
+    drift.push(
+      have === null
+        ? `${target.path}: generated file is missing`
+        : `${target.path}: generated content is stale — ${lineDelta(have, want)}`,
+    )
+    if (!check) write(target.path, want)
+  }
+
+  for (const target of VERSION_TARGETS) {
+    // A generated target's version comes from its own render; checking it twice would name the
+    // same file under two different reasons.
+    if (GENERATED_PATHS.has(target.path)) continue
+    const p = join(root, target.path)
+    if (!existsSync(p)) {
+      drift.push(`${target.path}: ${target.field} — file missing`)
+      continue
+    }
+    const text = readFileSync(p, 'utf8')
+    const have = currentVersion(text, target)
+    if (have === src.version) continue
+    drift.push(`${target.path}: ${target.field} is ${have ?? '(absent)'}, package.json says ${src.version}`)
+    if (!check) write(target.path, withVersion(text, target, src.version))
+  }
+
+  if (check) {
+    if (drift.length === 0) return 0
+    process.stderr.write(
+      `emit-manifests --check: ${drift.length} manifest(s) drifted from package.json ${src.version} + the live skills directory:\n`
+        + drift.map((d) => `  - ${d}`).join('\n')
+        + '\nFix: node scripts/emit-manifests.mjs — never hand-edit a generated manifest\n',
+    )
+    return 2
+  }
+  for (const c of changed) process.stdout.write(`emit-manifests: wrote ${c}\n`)
+  return 0
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exit(run(process.argv.slice(2)))
+}
