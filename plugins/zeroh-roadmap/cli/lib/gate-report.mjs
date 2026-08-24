@@ -74,7 +74,7 @@ export const GateRunReportShape = z.object({
    * Absent on a full run. Read by checkPhaseConsistency (a subset can never certify a done
    * flip) and by the --verify-complete eval refresh (a subset is not a sample).
    */
-  slotFilter: z.string().optional(),
+  slotFilter: z.string().min(1).optional(),
 })
 
 /** The record element gate run --record-round parses (without recordedAt — added on append). */

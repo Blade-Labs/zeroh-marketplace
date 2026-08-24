@@ -2103,7 +2103,9 @@ test('eval scorecard — nothing rendered or persisted claims a cross-cohort tot
   // The scan covers the RENDERED REPORT only. The trailing `wrote <path>` confirmation carries
   // the fixture's mkdtemp suffix — a random filesystem name, never a claim about the data — and
   // printsNumber's lookarounds exclude only [\d.-], so a suffix like `zr-evalfix-WiQ4p8` reads
-  // as "a line printing 8". That is what made this test fail on roughly one run in three.
+  // as "a line printing 8" and this test reds. It fires whenever mkdtemp's 6-char suffix happens
+  // to carry the total's digits with non-[\d.-] neighbours — measured at ~6% of runs over the
+  // 62-char alphabet, which is why it read as an intermittent flake rather than a defect.
   const rendered = r.stdout.split('\n').filter((l) => !l.startsWith('wrote '))
   assert.ok(
     rendered.length < r.stdout.split('\n').length,
