@@ -169,11 +169,18 @@ function currentVersion(text, target, path) {
  * manifest is 4-space indented and reserializing would reformat every line of it.
  */
 function withVersion(text, target, version) {
-  const re = isJson(target.path)
-    ? new RegExp(`("${target.field}"[ \\t]*:[ \\t]*)"[^"]*"`)
+  const json = isJson(target.path)
+  const re = json
+    ? new RegExp(`^(\\s*"${target.field}"[ \\t]*:[ \\t]*)"[^"]*"`, 'm')
     : new RegExp(`^${target.field}:.*$`, 'm')
   if (!re.test(text)) throw new SourceError(`${target.path} carries no ${target.field} field to patch`)
-  return text.replace(re, isJson(target.path) ? `$1"${version}"` : `${target.field}: ${version}`)
+  const patched = text.replace(re, json ? `$1"${version}"` : `${target.field}: ${version}`)
+  // A textual patch targets the FIRST matching line, so re-read the field the way a consumer
+  // will: a nested key patched instead of the top-level one would otherwise ship silently.
+  if (json && JSON.parse(patched)[target.field] !== version) {
+    throw new SourceError(`${target.path}: patching ${target.field} hit the wrong line — the top-level field still reads ${JSON.parse(patched)[target.field]}`)
+  }
+  return patched
 }
 
 /** Up to `max` lines that `want` has and `have` lacks, and vice versa — what to name in a red. */
