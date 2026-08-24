@@ -713,7 +713,7 @@ const MAX_ENVELOPE_PROTOCOL_RATIO = 0.22
 
 /** The one command a reader runs to re-derive both numbers without trusting this file. */
 const REDERIVE_CMD = [
-  `cd ${PLUGIN_ROOT} && node --input-type=module -e`,
+  `cd ${PLUGIN_ROOT} && node --input-type=module -e `,
   `"import{buildPrompt,RUN_SKILL}from'./cli/commands/codex.mjs';`,
   `import{mkdtempSync,mkdirSync,writeFileSync,statSync,readdirSync}from'node:fs';import{join,dirname}from'node:path';`,
   `import{tmpdir}from'node:os';const r=mkdtempSync(join(tmpdir(),'psr-'));mkdirSync(join(r,'roadmap','phases'),{recursive:true});`,
@@ -737,8 +737,13 @@ function protocolSetOf(skillRel) {
   return [...new Set([skillRel, ...refs])].sort()
 }
 
-/** What the run-lane ENVELOPE actually references — read back out of the generated prompt text. */
-const codexSide = (() => {
+/**
+ * What the run-lane ENVELOPE actually references — read back out of the generated prompt text.
+ * Computed on FIRST USE (and memoized), so a throw from cli/commands/codex.mjs reds this block
+ * alone instead of failing the whole file at import and taking blocks 1-7 down with it.
+ */
+let _codexSide
+const codexSide = () => (_codexSide ??= (() => {
   const root = mkdtempSync(join(tmpdir(), 'protocol-parity-'))
   try {
     mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
@@ -752,10 +757,11 @@ const codexSide = (() => {
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
-})()
+})())
 
 /** What a claude phase-executor LOADS, per the committed manifest — partitioned by the rule. */
-const claudeSide = (() => {
+let _claudeSide
+const claudeSide = () => (_claudeSide ??= (() => {
   const flow = JSON.parse(read('cli/measure-manifest.json')).flows['do-phase']
   const paths = (flow?.files ?? []).map((f) => f.path)
   const protocolEntries = paths.filter((p) => p.startsWith(PROTOCOL_PREFIX))
@@ -764,22 +770,22 @@ const claudeSide = (() => {
     excluded: paths.filter((p) => !p.startsWith(PROTOCOL_PREFIX)).sort(),
     set: [...new Set(protocolEntries.flatMap(protocolSetOf))].sort(),
   }
-})()
+})())
 
 test('codex and claude are handed the SAME protocol set — the identity is measured, file by file', () => {
   assert.ok(
-    claudeSide.paths.length > 0,
+    claudeSide().paths.length > 0,
     "cli/measure-manifest.json has no flows['do-phase'].files — with no claude-side manifest there is nothing to compare the codex envelope against, so the parity claim is unfalsifiable",
   )
   assert.ok(
-    codexSide.set.length > 0,
+    codexSide().set.length > 0,
     'the run-lane prompt names NO SKILL.md, so the codex driver is handed no protocol at all — fix cli/commands/codex.mjs buildPrompt (it must deliver skills/do-phase/SKILL.md by path, not paraphrase it)',
   )
-  const onlyCodex = codexSide.set.filter((p) => !claudeSide.set.includes(p))
-  const onlyClaude = claudeSide.set.filter((p) => !codexSide.set.includes(p))
+  const onlyCodex = codexSide().set.filter((p) => !claudeSide().set.includes(p))
+  const onlyClaude = claudeSide().set.filter((p) => !codexSide().set.includes(p))
   assert.deepEqual(
-    codexSide.set,
-    claudeSide.set,
+    codexSide().set,
+    claudeSide().set,
     'PROTOCOL PARITY BROKEN — the two drivers do not read the same bytes, so every per-model cell of the eval scorecard is comparing briefings, not models.\n'
       + `  only the CODEX envelope delivers: ${onlyCodex.length ? onlyCodex.join(', ') : '(none)'}\n`
       + `  only the CLAUDE manifest loads:   ${onlyClaude.length ? onlyClaude.join(', ') : '(none)'}\n`
@@ -793,14 +799,14 @@ test('the harness-delivery exclusions are PRINTED, and every one is an agents/ p
   console.log(
     '\n[protocol-set rule] agents/*.md cards are HARNESS-DELIVERY CONTEXT, not protocol — excluded from the parity set '
       + `(a Claude spawn's own instruction-set vehicle; Codex has no equivalent). Excluded from cli/measure-manifest.json flow do-phase:\n`
-      + claudeSide.excluded.map((p) => `  - ${p}`).join('\n'),
+      + claudeSide().excluded.map((p) => `  - ${p}`).join('\n'),
   )
   assert.ok(
-    claudeSide.excluded.length > 0,
+    claudeSide().excluded.length > 0,
     'the exclusion list is EMPTY, so this rule is currently deciding nothing and the parity assertion above is unguarded — '
       + 'if the agent cards really left cli/measure-manifest.json flow do-phase, delete the rule instead of leaving a no-op in place',
   )
-  for (const p of claudeSide.excluded) {
+  for (const p of claudeSide().excluded) {
     assert.ok(
       p.startsWith(HARNESS_DELIVERY_PREFIX),
       `'${p}' is being excluded from the protocol set but is not an ${HARNESS_DELIVERY_PREFIX} path — the rule excludes harness-delivery cards ONLY. `
@@ -811,20 +817,20 @@ test('the harness-delivery exclusions are PRINTED, and every one is an agents/ p
 
 test('the protocol set is non-trivial — one mission SKILL.md, at least one references/ file, all on disk', () => {
   assert.deepEqual(
-    codexSide.skills,
+    codexSide().skills,
     ['skills/do-phase/SKILL.md'],
-    `the run lane delivers exactly ONE mission protocol, do-phase — the prompt names ${codexSide.skills.join(', ') || '(nothing)'}; fix cli/commands/codex.mjs buildPrompt`,
+    `the run lane delivers exactly ONE mission protocol, do-phase — the prompt names ${codexSide().skills.join(', ') || '(nothing)'}; fix cli/commands/codex.mjs buildPrompt`,
   )
-  for (const skill of codexSide.skills) {
-    assert.ok(codexSide.set.includes(skill), `${skill} is named by the envelope but missing from its own protocol set — the rule's expansion dropped it`)
+  for (const skill of codexSide().skills) {
+    assert.ok(codexSide().set.includes(skill), `${skill} is named by the envelope but missing from its own protocol set — the rule's expansion dropped it`)
   }
   assert.ok(
-    codexSide.set.some((p) => p.includes('/references/')),
-    `the protocol set carries no references/ file (${codexSide.set.join(', ')}) — parity over a single SKILL.md proves nothing about the tree it sends the driver into; `
+    codexSide().set.some((p) => p.includes('/references/')),
+    `the protocol set carries no references/ file (${codexSide().set.join(', ')}) — parity over a single SKILL.md proves nothing about the tree it sends the driver into; `
       + "if skills/do-phase/references/ really emptied, this block's rule needs re-deciding, not relaxing",
   )
-  assert.ok(codexSide.set.length >= 2, `a ${codexSide.set.length}-file protocol set is too thin to certify parity over: ${codexSide.set.join(', ')}`)
-  for (const p of codexSide.set) {
+  assert.ok(codexSide().set.length >= 2, `a ${codexSide().set.length}-file protocol set is too thin to certify parity over: ${codexSide().set.join(', ')}`)
+  for (const p of codexSide().set) {
     assert.ok(
       existsSync(join(PLUGIN_ROOT, p)),
       `protocol member '${p}' does NOT exist under ${PLUGIN_ROOT} — the codex driver is being sent to a deleted or renamed file; fix cli/commands/codex.mjs buildPrompt (RUN_SKILL) or restore the file`,
@@ -833,12 +839,12 @@ test('the protocol set is non-trivial — one mission SKILL.md, at least one ref
 })
 
 test('envelope overhead is BOUNDED — the prompt delivers the protocol, it does not restate it', () => {
-  const protocolBytes = codexSide.set.reduce((sum, p) => sum + statSync(join(PLUGIN_ROOT, p)).size, 0)
-  const { envelopeBytes } = codexSide
+  const protocolBytes = codexSide().set.reduce((sum, p) => sum + statSync(join(PLUGIN_ROOT, p)).size, 0)
+  const { envelopeBytes } = codexSide()
   const ratio = envelopeBytes / protocolBytes
   console.log(
     `\n[envelope overhead] envelopeBytes=${envelopeBytes} protocolBytes=${protocolBytes} ratio=${ratio.toFixed(4)} (bound ${MAX_ENVELOPE_PROTOCOL_RATIO})\n`
-      + `  protocol set: ${codexSide.set.join(', ')}\n`
+      + `  protocol set: ${codexSide().set.join(', ')}\n`
       + `  re-derive it yourself: ${REDERIVE_CMD}`,
   )
   assert.ok(protocolBytes > 0, 'the protocol set measured 0 bytes — nothing is being delivered, so the ratio below would be meaningless')
