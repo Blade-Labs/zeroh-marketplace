@@ -239,6 +239,18 @@ export const TransparencyReportShape = z.object({
 
 export type TransparencyReport = z.output<typeof TransparencyReportShape>
 
+// ── Driver (WHO acted) ──────────────────────────────────────────────────────
+
+/** WHO acted and how it was launched. Defined ONCE and referenced by both writers —
+ *  PhaseExecutionResult stamps it at completion, PhaseEvalRecord snapshots it into the
+ *  measurement record — so the two can never disagree about what an actor id is. */
+export const DriverShape = z.object({
+  model: z.string().min(1),
+  lane: z.enum(['session', 'codex']),
+})
+
+export type Driver = z.output<typeof DriverShape>
+
 // ── Phase Execution Result ──────────────────────────────────────────────────
 
 /** Typed projection of do-phase Step-4b, returned by the phase-executor for one
@@ -256,16 +268,6 @@ export type TransparencyReport = z.output<typeof TransparencyReportShape>
  *  - `hardStops`: architect-critique HARD-STOP entries by tag — `do-arc` keys its
  *    pre-merge decision on `[MULTI-REPO]` in particular.
  *  - `gateRounds`: how many correctness rounds the gate took (0 for mockup). */
-/** WHO acted and how it was launched. Defined ONCE and referenced by both writers —
- *  PhaseExecutionResult stamps it at completion, PhaseEvalRecord snapshots it into the
- *  measurement record — so the two can never disagree about what an actor id is. */
-export const DriverShape = z.object({
-  model: z.string().min(1),
-  lane: z.enum(['session', 'codex']),
-})
-
-export type Driver = z.output<typeof DriverShape>
-
 export const PhaseExecutionResultShape = z.object({
   phase: z.number().int().positive(),
   status: z.enum(['done', 'escalated', 'failed', 'checkpoint']),
@@ -432,9 +434,16 @@ export type SweepReport = z.output<typeof SweepReportShape>
  * `date` is CALLER-SUPPLIED, the SweepReportShape discipline: a recorder that mints its own
  * wall clock makes a silent re-record indistinguishable from the original.
  *
- * Every level is a strictObject. An unknown key is a parse ERROR, never a silent strip: a
- * dropped key in a measurement record is a number no later reader can even discover is
- * missing.
+ * Every level DECLARED HERE is a strictObject: an unknown key is a parse ERROR, never a silent
+ * strip, because a dropped key in a measurement record is a number no later reader can even
+ * discover is missing.
+ *
+ * `metrics` is the ONE exception, and deliberately so: it REUSES PhaseMetricsShape rather than
+ * restating it, so a widening there reaches this record for free — and that shape is a plain
+ * object, so a key it does not know is stripped. Cloning it strict would make an emit REFUSE
+ * every record from a consumer whose plugin is one version ahead, trading a lost key for a lost
+ * record. The exception is named here and pinned by scripts/schema.test.ts rather than left for
+ * a reader to discover.
  */
 export const PhaseEvalRecordShape = z.strictObject({
   phase: z.number().int().positive(),

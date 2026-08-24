@@ -188,9 +188,16 @@ export function bridgeEval(
     // "canceled due to missing packages" is modern npm's --no-install refusal wording —
     // without it a tsx-less environment misreads as a load-error (exit 2, blocking edits)
     // instead of failing OPEN as the toolchain-missing contract demands.
+    // `env: 'node': No such file or directory` is the SHIM case: node_modules/.bin/tsx is a
+    // script whose shebang is `#!/usr/bin/env node`, so with PATH scrubbed the exec SUCCEEDS
+    // (/usr/bin/env exists) and `env` then exits 127 because it cannot resolve the interpreter.
+    // That is the toolchain-missing class by every meaning that matters — the tree cannot
+    // validate — but it reaches neither the ENOENT branch nor the "not found" wording, so it
+    // used to fall through to eval-error and turn a fail-OPEN contract into a blocking exit 2.
     const notFound =
       err?.code === 'ENOENT' ||
-      /not found|could not determine executable|npx: command|canceled due to missing packages/i.test(stderr)
+      /not found|could not determine executable|npx: command|canceled due to missing packages/i.test(stderr) ||
+      /env: .*: No such file or directory/i.test(stderr)
     if (notFound) return { ok: false, kind: 'tsx-absent', stderr }
     return { ok: false, kind: 'eval-error', stderr, exitCode: err?.status ?? 1 }
   }

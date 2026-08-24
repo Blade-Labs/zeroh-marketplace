@@ -1097,6 +1097,39 @@ test('computeScorecard — a cell fed by BOTH a clean arc trace and phase record
   )
 })
 
+// ── 15c-bis. the overlap: one phase in BOTH sources is ONE sample ─────────────────────
+test('computeScorecard — a phase present in an arc trace AND as a record contributes ONE sample', () => {
+  // The NORMAL case once this arc lands: the gate writes a record for every phase, and the
+  // scorecard re-collects the trace of every arc that has a dated report. Both describe the
+  // SAME work under the SAME cohort key, so an un-deduplicated merge doubles the cell — and
+  // three real phases would clear an N-floor of 5 on six phantom samples.
+  const nums = [8180, 8181, 8182]
+  const arcPhases = nums.map((n) => mkPhase({ phase: n, taskCount: 3, keyFiles: [CLI_FILE] }))
+  const dupes = nums.map((n) => mkSample({ phase: n, taskCount: 3, keyFiles: [CLI_FILE] }))
+
+  const sc = computeScorecard([mkTrace(arcPhases)], [], { phaseSamples: dupes })
+  const cell = driverCell(sc, { model: DRIVER_A.model })
+  assert.equal(samplesOf(cell, 'the overlapped driver'), 3, 'three phases, three samples — never six')
+  assert.equal(cell.abstained, true, `three samples is under the floor of ${SCORECARD_N_FLOOR} and must still abstain; got ${JSON.stringify(cell)}`)
+  assert.equal(
+    plannerCell(sc, { model: PLANNER_A.model })?.samples,
+    3,
+    'the planner axis de-duplicates on the same rule — one cell cannot be honest while its twin is not',
+  )
+  // The suppression is NAMED, not silently absorbed: a reader must be able to see that three
+  // records were read and dropped rather than never read at all.
+  const note = sourceNote(sc, 0, 1)
+  assert.match(note, /3 record\(s\) suppressed/, `the note names how many records the arc traces already covered; got ${note}`)
+
+  // Falsification: with the record phases DISJOINT from the arc's, nothing is suppressed and
+  // the same corpus reaches six samples — so the assertion above is about the overlap and not
+  // about some cap on cell size.
+  const disjoint = [8190, 8191, 8192].map((n) => mkSample({ phase: n, taskCount: 3, keyFiles: [CLI_FILE] }))
+  const wide = computeScorecard([mkTrace(arcPhases)], [], { phaseSamples: disjoint })
+  assert.equal(samplesOf(driverCell(wide, { model: DRIVER_A.model }), 'the disjoint driver'), 6, 'disjoint phases still accumulate')
+  assert.match(sourceNote(wide, 3, 1), /0 record\(s\) suppressed/, 'and nothing is suppressed when nothing overlaps')
+})
+
 // ── 15d. records respect the cohort axes ──────────────────────────────────────────────
 test('computeScorecard — phase records cohort on bandFor × surfaceOf exactly like arc phases', () => {
   const cli = nSamples(5, (i) => ({ phase: 8160 + i, taskCount: 2, keyFiles: [CLI_FILE] }))

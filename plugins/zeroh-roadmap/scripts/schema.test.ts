@@ -2585,6 +2585,38 @@ check('PhaseEvalRecord: strictness is NOT root-only — an unknown key inside at
   )
 })
 
+check('PhaseEvalRecord: metrics is the ONE deliberately-open level — it REUSES PhaseMetricsShape, and the doc says so', () => {
+  requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
+  // The record is strict everywhere it DECLARES a level, but `metrics` embeds the shared
+  // PhaseMetricsShape rather than restating it, and that shape is a plain object. Pinning the
+  // strip here is what keeps the exception a documented decision instead of a claim the
+  // strictness block silently fails to cover: without this case the shape's own JSDoc would be
+  // the only statement about metrics, and nothing would notice if it stopped being true.
+  const withExtra = PhaseEvalRecordShape.parse(
+    makeEvalRecord({
+      metrics: {
+        commits: 3, linesAdded: 10, linesRemoved: 1, filesChanged: 2,
+        testsAtStart: 100, testsAtEnd: 105, testsAdded: 5,
+        tokensBurned: 999999,
+      },
+    }),
+  )
+  assertEq(withExtra.metrics?.commits, 3, 'the known metrics survive')
+  assertEq(
+    (withExtra.metrics as Record<string, unknown>)?.tokensBurned,
+    undefined,
+    'an unknown metrics key is STRIPPED, not rejected — the reuse of PhaseMetricsShape is what makes a widening there reach this record for free',
+  )
+  // And the exception is exactly one level wide: its SIBLING under the same root is strict.
+  assertUnknownKeyRejected(
+    PhaseEvalRecordShape,
+    makeEvalRecord({ consumerFingerprint: { repo: 'r', language: 'typescript', corpusSize: 1, loc: 2 } }),
+    ['consumerFingerprint'],
+    'loc',
+    'the open level does not leak: consumerFingerprint still rejects',
+  )
+})
+
 check('PhaseEvalRecord: date must be a full ISO date — 9 chars rejects, exactly 10 is the floor', () => {
   requireShape(PhaseEvalRecordShape, 'PhaseEvalRecordShape')
   assertIssuePath(PhaseEvalRecordShape, makeEvalRecord({ date: '2026-08-2' }), ['date'], 'a 9-char date')

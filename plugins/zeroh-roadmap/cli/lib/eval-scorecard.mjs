@@ -138,14 +138,24 @@ export function computeScorecard(
   const fixes = gateFixes ?? []
 
   const arcTraces = traces ?? []
+  // DE-DUPLICATION FIRST. The gate writes a record for EVERY phase, and the scorecard re-collects
+  // the trace of every arc holding a dated report, so an arc member normally appears in both
+  // sources. Left alone it would contribute TWO samples to one cell — same model, same lane, same
+  // band, same surface — and phantom samples can carry a cell over the N-floor it should have
+  // abstained under, which is precisely the coverage a cell did not get. The ARC TRACE wins: it is
+  // strictly richer (escape scan, gate rounds, transparency), so the record is the copy to drop,
+  // and the number dropped is NAMED in the notes rather than quietly absorbed.
+  const coveredByArc = new Set(arcTraces.flatMap((t) => (t?.phases ?? []).map((p) => p.phase)))
+  const freshSamples = phaseSamples.filter((p) => !coveredByArc.has(p.phase))
+  const suppressed = phaseSamples.length - freshSamples.length
   // Per-phase eval records describe ONE GATE RUN, not a landed arc, so no post-land escape scan
   // exists for them — they enter as a DEGRADED source and their cells read
   // escapeFixesPerPhase: 'scan-unavailable'. A zero there would read as a spotless driver, which
   // is a claim about the actor the data never made. Wrapping them HERE keeps the
   // absence→degradation mapping at one application site instead of two.
   const allTraces =
-    phaseSamples.length > 0
-      ? [...arcTraces, { phases: phaseSamples, git: { escapeScan: 'unavailable', escapeFixes: [] } }]
+    freshSamples.length > 0
+      ? [...arcTraces, { phases: freshSamples, git: { escapeScan: 'unavailable', escapeFixes: [] } }]
       : arcTraces
 
   for (const trace of allTraces) {
@@ -232,7 +242,8 @@ export function computeScorecard(
       `cells under ${nFloor} samples ABSTAIN and carry no metrics — an abstained cell is not a zero score`,
       // Both counts, always — a reader must be able to see WHAT fed a cell. Phase records feed
       // driver and planner cells only; reviewer cells stay arc-fed (a record carries no rounds).
-      `sources: ${arcTraces.length} arc trace(s) and ${phaseSamples.length} phase record(s) fed these cells — ` +
+      `sources: ${arcTraces.length} arc trace(s) and ${freshSamples.length} phase record(s) fed these cells ` +
+        `(${suppressed} record(s) suppressed as already covered by an arc trace) — ` +
         `phase records carry no escape scan, so every cell they touch reads escapeFixesPerPhase '${SENTINEL.scanUnavailable}', never 0; ` +
         'reviewer cells are fed by arc traces alone',
     ],

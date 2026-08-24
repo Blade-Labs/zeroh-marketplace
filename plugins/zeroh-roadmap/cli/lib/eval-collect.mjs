@@ -201,15 +201,24 @@ export function readPhaseEvalSamples(repoRoot, { validate = phaseEvalValidator(r
   const reason = (res) => ((res?.stderr || res?.kind || 'unknown').toString().trim().split('\n')[0])
   let res = validate(docs)
   if (!res.ok) {
-    const bad = new Set()
+    // Grouped BY FILE, never per issue: one record with three broken fields is one dropped
+    // record, and three near-identical lines would make the operator's count of what was lost
+    // wrong in the direction of panic.
+    const bad = new Map()
+    const unattributed = []
     for (const iss of res.res?.issues ?? []) {
       const i = Array.isArray(iss.path) ? iss.path[0] : undefined
       const where = (iss.path ?? []).slice(1).join('.') || '(root)'
-      if (typeof i === 'number') bad.add(i)
-      warnings.push(
-        `${(typeof i === 'number' ? paths[i] : undefined) ?? dir}: does not match PhaseEvalRecordShape (${where}: ${iss.message}) — excluded from the scorecard`,
-      )
+      const reason = `${where}: ${iss.message}`
+      if (typeof i === 'number') {
+        if (!bad.has(i)) bad.set(i, [])
+        bad.get(i).push(reason)
+      } else unattributed.push(reason)
     }
+    for (const [i, reasons] of [...bad.entries()].sort((a, b) => a[0] - b[0]))
+      warnings.push(`${paths[i] ?? dir}: does not match PhaseEvalRecordShape (${reasons.join('; ')}) — excluded from the scorecard`)
+    for (const reason of unattributed)
+      warnings.push(`${dir}: does not match PhaseEvalRecordShape (${reason})`)
     if (bad.size === 0) {
       warnings.push(
         `${dir}: the per-phase eval records could not be validated (${reason(res.res)}) — NO phase-record samples fed the scorecard`,
@@ -321,6 +330,11 @@ export const phaseEvalRecordPath = (repoRoot, phase) =>
  * consumer phase file carrying an extra key under executionResult.driver would otherwise
  * turn a measurement write into a refusal.
  */
+/** Did this gate row execute a command? The gate marks a declared-absent slot with a flag but a
+ *  SKIPPED one only by its synthetic `(skipped: …)` command string, so both spellings are read
+ *  here — one place, rather than each consumer rediscovering the convention. */
+const didNotRun = (s) => s.declaredAbsent === true || /^\(skipped:/.test(String(s.command ?? ''))
+
 export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerprint, date }) {
   const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : []
   const record = {
@@ -331,14 +345,20 @@ export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerpri
     keyFiles: Array.isArray(parsed?.keyFiles) ? parsed.keyFiles : [],
     gate: {
       green: green === true,
-      slots: (slots ?? []).map((s) => ({
-        slot: s.slot,
-        // An absent exitCode means the slot did not RUN (declared-absent / skipped). A 0
-        // here would invent a pass, which is the one direction that flatters the record.
-        ...(typeof s.exitCode === 'number' ? { exitCode: s.exitCode } : {}),
-        ...(typeof s.durationMs === 'number' ? { durationMs: s.durationMs } : {}),
-        ...(s.declaredAbsent === true ? { declaredAbsent: true } : {}),
-      })),
+      slots: (slots ?? []).map((s) => {
+        // A slot that did not RUN carries NO exitCode. The gate stamps `exitCode: 0,
+        // durationMs: 0` on both declared-absent and skipped rows, so copying the number
+        // through would record a PASS for a command that never executed — the one direction
+        // that flatters the record, and the exact thing this shape's contract forbids. Only
+        // the declared-absent row is flagged as such; a skipped row is distinguished by
+        // carrying neither an exitCode nor the flag.
+        if (didNotRun(s)) return s.declaredAbsent === true ? { slot: s.slot, declaredAbsent: true } : { slot: s.slot }
+        return {
+          slot: s.slot,
+          ...(typeof s.exitCode === 'number' ? { exitCode: s.exitCode } : {}),
+          ...(typeof s.durationMs === 'number' ? { durationMs: s.durationMs } : {}),
+        }
+      }),
     },
   }
   if (parsed?.metrics) record.metrics = parsed.metrics
