@@ -46,10 +46,6 @@ export default defineBacklog([
   // dependency order: 1 eval records (independent, fills the pipe first) → 2 driver
   // registry → 3 attribution (dependsOn 2) → 4 roles+delivery+manifests (dependsOn 2,3).
   // Queued after 4 Mode A reviews returned READY/CLEAN (2026-08-23). Execute: /do-arc POLYSEAT
-  {
-    phase: 4,
-    name: 'Role bindings + do-phase delivered by path + manifests generated from one source',
-  },
   // ── Standalone, post-arc (dependsOn 4: manifest generator + ratchet) ──────
   {
     phase: 5,
