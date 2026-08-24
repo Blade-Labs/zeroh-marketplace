@@ -47,10 +47,6 @@ export default defineBacklog([
   // registry → 3 attribution (dependsOn 2) → 4 roles+delivery+manifests (dependsOn 2,3).
   // Queued after 4 Mode A reviews returned READY/CLEAN (2026-08-23). Execute: /do-arc POLYSEAT
   {
-    phase: 3,
-    name: 'Mechanical attribution — launcher stamps, validator warns, roles shape lands',
-  },
-  {
     phase: 4,
     name: 'Role bindings + do-phase delivered by path + manifests generated from one source',
   },
