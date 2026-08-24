@@ -1,0 +1,44 @@
+{
+  "arcId": "POLYSEAT",
+  "date": "2026-08-24",
+  "judgeModel": "claude-opus-5",
+  "verdicts": [
+    {
+      "criterionId": "any-model-full-protocol",
+      "status": "gap",
+      "tierUsed": "wired",
+      "evidence": "EXECUTE half MET: detached codex (gpt-5.6-sol) ran phase 5 reading skills/do-phase/SKILL.md by path (23x in log), gate green 1260/1260, phase validate OK, zero protocol duplication (12 DO_PHASE_OWNED strings 0 hits in shipped prompt; codex.test.mjs 27/27). PLAN half UNMET: lanes are run|review|status only; no plan-phase delivery path, no codex-planned phase file exists; planners cell claude-only.",
+      "gap": {
+        "whatsMissing": "No Codex driver has ever planned a real phase — no plan lane exists and skills/plan-phase/SKILL.md is delivered to no driver.",
+        "suggestedFix": "Add `roadmap codex plan <N>` lane in cli/commands/codex.mjs (LANES entry + PLAN_SKILL resolving skills/plan-phase/SKILL.md, reuse deliver-by-path envelope + duplication guards with PLAN_PHASE_OWNED set), drive it once on a real backlog phase so a file lands plannedBy gpt-5.6-sol and passes phase validate; document in MULTI-DRIVER.md. Also add validationTiers to roadmap.config.json."
+      },
+      "confidence": "high"
+    },
+    {
+      "criterionId": "measure-planner-vs-executor",
+      "status": "gap",
+      "tierUsed": "wired",
+      "evidence": "Drivers hold two families (claude-opus-5[1m] session n=4, gpt-5.6-sol codex n=1, both honestly ABSTAINED under floor 5); planners hold ONE family (claude-opus-5[1m] n=5) — all 5 peval records planned by claude; phase 5 crossed families on driver axis only. Abstention honest (no metrics key under floor).",
+      "gap": {
+        "whatsMissing": "The gpt family is EMPTY in planner cells — the bar's named unacceptable condition; planning comparison structurally unanswerable.",
+        "suggestedFix": "Plan one phase through the codex lane so plannedBy {model:'gpt-5.6-sol'} lands in a phase file and its peval record; ingest path already supports it (no code change). Add validationTiers binding to roadmap.config.json."
+      },
+      "confidence": "high"
+    },
+    {
+      "criterionId": "no-claude-privilege",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "Parity: roles.test.mjs 42/42 — envelope ratio 0.2243 (bound 0.235), test 39 deepEquals codex prompt protocol set vs claude measure-manifest set, exclusions printed+guarded; guard mutations red correctly (planted claude-only file reds test 39 naming files; padded envelope reds bound 0.2612>0.235). Seat firing: codex-5.log:63823 gpt-5.6-sol driver shells `claude -p --model claude-fable-5` for software-architect, VERDICT PROCEED_WITH_FIX acted on (:66778) and recorded (--record-round :67877); executionResult.roles 5 entries match the 5 log spawns and reproduce resolveRole('...','codex') exactly; forceUnavailable walk yields gpt-5.6-sol with substitution record at unreduced rigor. Non-blocking: assemblePhaseEvalRecord never copies executionResult.roles into peval attribution; resolveRole has no production caller (driver followed the table, corroborated).",
+      "confidence": "high"
+    },
+    {
+      "criterionId": "per-phase-eval-records",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "gate run 3 --verify-complete re-emits phase-3.peval.json byte-identical (md5 4ff20f57... unchanged) from real report run-000012; both emit sites unconditional on arcs; non-arc phase 5 emitted a full attributed record (gpt driver); scorecard sources '0 arc trace(s) and 5 phase record(s)'; judge-scored fields are parse ERRORS (strictObject); planted corrupt record excluded by name, count unmoved; emitter fail-soft prints artifact path, never changes exit codes. Observation: worktree splits consumerFingerprint.repo (zeroh-marketplace-codex-5).",
+      "confidence": "high"
+    }
+  ],
+  "ratifiedDescopes": []
+}
