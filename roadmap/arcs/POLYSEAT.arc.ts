@@ -112,7 +112,7 @@ export default defineArc({
   // Claimed numbers, dependency order: 1 = eval records (D), 2 = driver registry (B),
   // 3 = mechanical attribution (C), 4 = seat bindings + protocol delivery + native
   // distribution (A). C reads B's registry; A reads both.
-  phases: [1, 2, 3, 4],
+  phases: [1, 2, 3, 4, 8], // 8 = validate-arc round-1 corrective (plan lane), 2026-08-24
   designRefs: [
     {
       kind: 'architecture',
