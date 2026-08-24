@@ -252,5 +252,59 @@ export default definePhase({
           "Reviewer cells stay arc-fed: a phase record carries slot results, not agent rounds, so records seat no reviewer. That is the plan's v1 ruling, and the follow-up (parsing gateRounds into records) is named here rather than half-built. Validating the archive costs ONE tsx spawn for the whole directory (PhaseEvalRecordListShape) rather than one per file; on the error path a second spawn re-validates the survivors after the offenders are named and dropped. cli/commands/eval.mjs's local PARSE_SCRIPT was deleted and its three call sites routed through the shared tsx-bridge helper (a bridgeParseShapeJson form was added for the stdin lanes), so the plugin no longer carries three copies of one idiom — cli/commands/result.mjs still has its own two-argument variant hardcoded to PhaseExecutionResultShape, left alone as a named residual outside this arc.",
       },
     },
+    {
+      id: '1.4',
+      title: 'Protocol-load diet + measured rebaseline (operator ruling 2026-08-24)',
+      problem:
+        "The gate's one red is the measure ratchet: 14917 tokens over an aspirational 12500 budget. Operator ruling 2026-08-24: the budget number is not a target — protocol bodies carry OPERATIVE RULES ONLY (incident archeology and why-a-rule-exists live in git history; at most one clause of rationale where judgment genuinely depends on it; rarely-consulted detail decomposes into on-demand references), and the budget becomes the MEASURED load at last ratification with zero growth allowed.",
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/DIET-LEDGER.md',
+          description:
+            "Record the ruling in the header, one line: protocol bodies carry operative rules only — archeology/why lives in git (commit WHY: blocks), <=1 rationale clause where judgment depends on it, rare detail decomposes to references; budget = measured load at last ratification, zero growth → verify: bash -c \"grep -qF 'operative rules only' plugins/zeroh-roadmap/DIET-LEDGER.md\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
+          description:
+            'Diet pass over the 8 measured do-arc-flow files (6 SKILL bodies + 2 references, the roadmap measure --flow do-arc table): DELETION-FOCUSED — remove dated incident narratives, duplicated rule-restatement, and justification prose; NEVER reword an operative rule (gauntlet: rewrites degrade, deletions are auditable); a rare-but-needed detail moves into an existing reference file instead of dying; one DIET-LEDGER disposition row per file with before/after tokens → verify: roadmap measure --flow do-arc',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/measure-budget.mjs',
+          description:
+            "Set PROTOCOL_LOAD_BUDGET_TOKENS to the post-diet measured total (whatever it measures — no pre-committed target) and replace the docblock history with the one-line semantic: budget = measured load at last ratification (2026-08-24 operator ruling), moved only by a diet (down) or a dated ruling (up) → verify: bash -c 'cd plugins/zeroh-roadmap && capbuild npm test'",
+        },
+        {
+          file: 'roadmap/arcs/example.arc.ts',
+          description:
+            "Housekeeping A: the shipped scaffold's id 'A' claims phases [1], colliding with POLYSEAT plane 1 (roadmap audit reports BROKEN, pre-existing). Re-id it 'EXAMPLE' with an unclaimed phase number, or delete it if nothing references it (grep first) → verify: roadmap audit",
+        },
+        {
+          file: 'roadmap/arc-prompts/POLYSEAT-execution-prompt.md',
+          description:
+            'Housekeeping B: correct the Shared-host rules paragraph — 2 environmental failures existed and are fixed in-seam (tsx-bridge shebang contract, task 1.3); the measure ratchet was never environmental and is resolved by this task → verify: bash -c "! grep -qF \'3 KNOWN environmental failures\' roadmap/arc-prompts/POLYSEAT-execution-prompt.md"',
+        },
+      ],
+      acceptanceCriteria: [
+        'roadmap measure --flow do-arc total equals PROTOCOL_LOAD_BUDGET_TOKENS exactly (zero-growth baseline); full plugin suite green; one DIET-LEDGER row per dieted file; no operative rule reworded — diffs are deletions, moves, and the two housekeeping fixes',
+        'roadmap audit no longer reports the example-arc collision',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/DIET-LEDGER.md',
+        'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
+        'plugins/zeroh-roadmap/skills/do-phase/SKILL.md',
+        'plugins/zeroh-roadmap/skills/arc-sweep/SKILL.md',
+        'plugins/zeroh-roadmap/skills/release-sweep/SKILL.md',
+        'plugins/zeroh-roadmap/skills/validate-arc/SKILL.md',
+        'plugins/zeroh-roadmap/skills/using-zeroh-roadmap/SKILL.md',
+        'plugins/zeroh-roadmap/skills/validate-arc/references/driving-tiers.md',
+        'plugins/zeroh-roadmap/skills/release-sweep/references/followup-contract.md',
+        'plugins/zeroh-roadmap/cli/lib/measure-budget.mjs',
+        'roadmap/arcs/example.arc.ts',
+        'roadmap/arc-prompts/POLYSEAT-execution-prompt.md',
+      ],
+      batchMode: true,
+      testMode: 'none',
+      done: false,
+    },
   ],
 })
