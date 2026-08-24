@@ -180,7 +180,18 @@ export default definePhase({
         'plugins/zeroh-roadmap/scripts/schema.test.ts',
       ],
       testMode: 'tdd',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "PhaseExecutionResultShape gained roles?: Array<{ role, model, via: 'native'|'child-cli'|'inline', substituted?: { from, to, reason } }>, optional and additive, directly under driver. Its docblock states the operative rules only: plane 4's resolver is the writer, `via` records that resolver's `mode` return so an inline fulfillment is never indistinguishable from a native one, substituted names who was asked / who answered / why, and optional means absent is distinguishable from zero bindings recorded. lib/roadmap/schema.ts was byte-synced from templates/schema.ts (diff -q exit 0 both before and after).",
+        how:
+          "TDD: test-engineer wrote four checks in scripts/schema.test.ts blind to the implementation and ran them RED for the right reason — the sharpest being \"PhaseExecutionResultShape declares no `roles` key (declared: phase, status, driver, checkpoint, escalation, compromises, skipped, hardcoded, surfaced, hardStops, gateRounds) — an absent roles is then indistinguishable from a stripped unknown key and this case would pass vacuously\", which is the real hazard here: the shape is a plain z.object, so it STRIPS unknown keys and a naive absence assertion would have been green before the field existed. It then falsified all four against a throwaway copy of the schema (never the real file, deleted after): the field exactly as specified turns every check green, and five one-at-a-time mutations each red exactly one check — via: z.string() reds only the enum case, .default([]) instead of .optional() reds only the absent case, role made optional reds only the half-filled case, dropping substituted reds only the round-trip case, and replacing the enum with an anonymous refine reds the enum case specifically on its NAMING leg (\"the rejection must NAME the enum\"), which is what stops that case degenerating into 'any error will do'. Verified after landing: the four roles checks ok and the whole schema suite PASS — 0 failure(s); gate run 3 --slots types GREEN; result.test.mjs 9/9, which matters because `roadmap result check` parses through the CONSUMER's copy — proof the byte-sync is real and not just diff-clean.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "The shape is landed but nothing WRITES it yet, so nothing proves the field is the right shape for the resolver — only that it parses what plane 4 says it will produce. That is the deliberate cost of landing the schema early, and the risk is that plane 4 discovers it needs a fifth field and pays a second schema edit anyway. Consumers other than this repo (azure_private_agent, mudarabah2, viki-agent) pick the widened shape up at their next plugin bump; they are named here, not chased. The plan wrote the criterion as three cases; a fourth (a binding missing role/model/via rejects) was added because a recording target that accepts a half-filled binding records nothing — it widens coverage and narrows nothing.",
+      },
+      done: true,
     },
     {
       id: '3.4',

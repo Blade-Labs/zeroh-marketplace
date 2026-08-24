@@ -829,6 +829,216 @@ check('RunnerSummary openFollowups: accepted; absent still parses', () => {
   RunnerSummaryShape.parse(base)
 })
 
+console.log('\nRole bindings — PhaseExecutionResult.roles')
+
+/* The roles array is the RECORDING TARGET for the protocol-role resolver: which model filled
+ * each role and how it was fulfilled. Four invariants ride on it:
+ *   - every field of a binding SURVIVES the parse — a recording target that silently drops
+ *     what it was handed records nothing;
+ *   - `via` is a CLOSED vocabulary (native | child-cli | inline) and the rejection NAMES it —
+ *     an unrecognised fulfilment mode must not be written down as if it were understood;
+ *   - a binding is all-or-nothing — role/model/via are required, so a half-filled entry
+ *     cannot masquerade as a record;
+ *   - absence is NOT emptiness — a result without roles comes back undefined, keeping
+ *     "no bindings recorded" distinguishable from "the resolver ran and bound nothing".
+ */
+type RoleBinding = {
+  role: string
+  model: string
+  via: 'native' | 'child-cli' | 'inline'
+  substituted?: { from: string; to: string; reason: string }
+}
+
+const VIA_MODES = ['native', 'child-cli', 'inline'] as const
+
+const substitutionReason = 'the native lane was saturated, the child CLI answered the review role'
+
+const sampleRoles: RoleBinding[] = [
+  { role: 'implementer', model: 'claude-opus-5', via: 'native' },
+  {
+    role: 'reviewer',
+    model: 'gpt-5-codex',
+    via: 'child-cli',
+    substituted: { from: 'claude-opus-5', to: 'gpt-5-codex', reason: substitutionReason },
+  },
+]
+
+type ZodIssueLike = { path?: (string | number)[]; message?: string; values?: unknown }
+
+/** Assert `fn` rejected via Zod and hand back the issues. A parse that SUCCEEDS and a
+ *  runtime TypeError are both failures here — neither is a schema rejection, and an
+ *  assertThrows that cannot tell them apart certifies nothing. */
+function zodIssues(fn: () => unknown, where: string): ZodIssueLike[] {
+  let threw = false
+  let thrown: unknown
+  try {
+    fn()
+  } catch (err) {
+    threw = true
+    thrown = err
+  }
+  if (!threw) throw new Error(`${where}: expected a schema rejection, the parse SUCCEEDED`)
+  const issues = (thrown as { issues?: unknown }).issues
+  if (!Array.isArray(issues)) {
+    const message = thrown instanceof Error ? thrown.message : String(thrown)
+    throw new Error(`${where}: threw a NON-Zod error (${message}) — a runtime error is not a schema rejection`)
+  }
+  return issues as ZodIssueLike[]
+}
+
+function issueAtPath(issues: ZodIssueLike[], path: (string | number)[], where: string): ZodIssueLike {
+  const hit = issues.find((i) => JSON.stringify(i.path) === JSON.stringify(path))
+  if (!hit) {
+    throw new Error(
+      `${where}: no issue at path ${JSON.stringify(path)} — the rejection must point at the offending binding; issues were ${JSON.stringify(issues)}`,
+    )
+  }
+  return hit
+}
+
+function assertNamesViaEnum(issue: ZodIssueLike, where: string): void {
+  const rendered = `${issue.message ?? ''} ${JSON.stringify(issue.values ?? null)}`
+  for (const mode of VIA_MODES) {
+    if (!rendered.includes(mode)) {
+      throw new Error(`${where}: the rejection must NAME the enum — "${mode}" is missing from ${JSON.stringify(rendered)}`)
+    }
+  }
+}
+
+check('roles: a two-entry roles array round-trips every field, through the shape AND through a phase file', () => {
+  const parsed = PhaseExecutionResultShape.parse({
+    phase: 1996,
+    status: 'done',
+    gateRounds: 1,
+    roles: sampleRoles,
+  }) as { roles?: RoleBinding[] }
+  const roles = parsed.roles
+  if (!roles) {
+    throw new Error(
+      'roles came back undefined — PhaseExecutionResultShape does not carry the field, so the binding record was stripped (a plain z.object drops unknown keys)',
+    )
+  }
+  assertEq(roles.length, 2, 'both bindings carried')
+  assertEq(roles[0].role, 'implementer', 'roles[0].role')
+  assertEq(roles[0].model, 'claude-opus-5', 'roles[0].model')
+  assertEq(roles[0].via, 'native', 'roles[0].via')
+  assertEq(roles[0].substituted, undefined, 'roles[0].substituted stays absent — never an invented empty object')
+  assertEq(roles[1].role, 'reviewer', 'roles[1].role')
+  assertEq(roles[1].model, 'gpt-5-codex', 'roles[1].model')
+  assertEq(roles[1].via, 'child-cli', 'roles[1].via')
+  assertEq(roles[1].substituted?.from, 'claude-opus-5', 'roles[1].substituted.from — who was asked')
+  assertEq(roles[1].substituted?.to, 'gpt-5-codex', 'roles[1].substituted.to — who answered')
+  assertEq(roles[1].substituted?.reason, substitutionReason, 'roles[1].substituted.reason — why the swap happened')
+
+  const p = definePhase({
+    ...basePhase,
+    status: 'backlog',
+    category: 'feature',
+    executionResult: { phase: 1, status: 'done', gateRounds: 1, roles: sampleRoles },
+  } as never)
+  const persisted = (p as { executionResult?: { roles?: RoleBinding[] } }).executionResult?.roles
+  assertEq(persisted?.length, 2, 'a phase FILE persists both bindings')
+  assertEq(persisted?.[1].substituted?.reason, substitutionReason, 'the substitution survives the phase-file parse')
+})
+
+check('roles: all three via modes parse, and a fourth REJECTS with the enum error at the binding path', () => {
+  for (const via of VIA_MODES) {
+    const parsed = PhaseExecutionResultShape.parse({
+      phase: 1996,
+      status: 'done',
+      gateRounds: 1,
+      roles: [{ role: 'implementer', model: 'claude-opus-5', via }],
+    }) as { roles?: RoleBinding[] }
+    assertEq(parsed.roles?.[0].via, via, `legal mode "${via}" round-trips`)
+  }
+
+  const shapeIssues = zodIssues(
+    () =>
+      PhaseExecutionResultShape.parse({
+        phase: 1996,
+        status: 'done',
+        gateRounds: 1,
+        roles: [{ role: 'implementer', model: 'claude-opus-5', via: 'subagent' }],
+      }),
+    'via "subagent" on PhaseExecutionResultShape',
+  )
+  assertNamesViaEnum(
+    issueAtPath(shapeIssues, ['roles', 0, 'via'], 'via "subagent" on PhaseExecutionResultShape'),
+    'via "subagent" on PhaseExecutionResultShape',
+  )
+
+  const phaseIssues = zodIssues(
+    () =>
+      definePhase({
+        ...basePhase,
+        status: 'backlog',
+        category: 'feature',
+        executionResult: {
+          phase: 1,
+          status: 'done',
+          gateRounds: 1,
+          roles: [{ role: 'implementer', model: 'claude-opus-5', via: 'subagent' }],
+        },
+      } as never),
+    'via "subagent" in a phase file',
+  )
+  assertNamesViaEnum(
+    issueAtPath(phaseIssues, ['executionResult', 'roles', 0, 'via'], 'via "subagent" in a phase file'),
+    'via "subagent" in a phase file',
+  )
+})
+
+check('roles: a result WITHOUT roles parses unchanged — roles stays undefined, never defaulted to []', () => {
+  const declared = Object.keys(
+    (PhaseExecutionResultShape as unknown as { shape?: Record<string, unknown> }).shape ?? {},
+  )
+  if (!declared.includes('roles')) {
+    throw new Error(
+      `PhaseExecutionResultShape declares no \`roles\` key (declared: ${declared.join(', ')}) — an absent roles is then indistinguishable from a stripped unknown key and this case would pass vacuously`,
+    )
+  }
+  const r = PhaseExecutionResultShape.parse({ phase: 855, status: 'done', gateRounds: 1 }) as {
+    roles?: RoleBinding[]
+    compromises: string[]
+  }
+  assertEq(r.roles, undefined, 'absent roles stays absent — [] would read as "the resolver ran and bound nothing"')
+  assertEq(r.compromises, [], 'the rest of the result is untouched by the widening')
+
+  const p = definePhase({
+    ...basePhase,
+    status: 'backlog',
+    category: 'feature',
+    executionResult: { phase: 1, status: 'done', gateRounds: 2 },
+  } as never)
+  assertEq(
+    (p as { executionResult?: { roles?: unknown } }).executionResult?.roles,
+    undefined,
+    'every already-committed phase file keeps parsing with roles absent',
+  )
+})
+
+check('roles: a binding missing role, model, or via REJECTS — a half-filled binding records nothing', () => {
+  const full = { role: 'implementer', model: 'claude-opus-5', via: 'native' as const }
+  for (const key of ['role', 'model', 'via'] as const) {
+    const { [key]: _dropped, ...partial } = full
+    const where = `a binding missing \`${key}\``
+    issueAtPath(
+      zodIssues(
+        () =>
+          PhaseExecutionResultShape.parse({
+            phase: 1996,
+            status: 'done',
+            gateRounds: 1,
+            roles: [partial],
+          }),
+        where,
+      ),
+      ['roles', 0, key],
+      where,
+    )
+  }
+})
+
 console.log('\nSweepReportShape — the arc-sweep record')
 
 const sampleSweepReport = {
