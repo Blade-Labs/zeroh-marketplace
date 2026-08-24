@@ -71,7 +71,7 @@ function journalPath(root, ids, lane = 'run') {
 export class JournalUnreadableError extends Error {
   constructor(failures) {
     super(
-      `roadmap codex: ${failures.length} journal file(s) under .building could not be parsed, so no lane journal `
+      `roadmap codex: ${failures.length} journal file(s) NAMING these phase(s) could not be parsed, so no lane journal `
         + 'could be resolved \u2014 this is NOT the same as an inline session with no journal:\n'
         + failures.map(({ path, message }) => `  - ${path}: ${message}`).join('\n')
         + '\nRead the file: a truncated journal is a launch that died mid-write \u2014 delete it if that run is gone, '
@@ -92,23 +92,28 @@ export class JournalUnreadableError extends Error {
  * Shared rather than private because the reconcile at landing (gate --verify-complete) must
  * find the same journal `codex status` does; two lookups would drift.
  *
- * THROWS JournalUnreadableError when nothing matched but a candidate file failed to parse: a
- * null there would report "no journal" over a journal that is sitting right on disk.
+ * THROWS JournalUnreadableError when nothing matched but a candidate file that COULD have covered
+ * these ids failed to parse: a null there would report "no journal" over a journal that is sitting
+ * right on disk. Candidacy is read off the FILENAME, which launch() builds from the very ids it
+ * writes into `phases` — so a corrupt journal belonging to other phases is not this lookup's
+ * business, and nothing is skipped in silence: that file still throws for the ids it names.
+ * Scoping matters because nothing prunes .building, so one truncated journal would otherwise
+ * block the reconcile for every phase in the checkout, including inline ones.
  */
 export function findJournal(root, ids, lane = 'run') {
   const wanted = ids.map(String)
   const failures = []
-  const read = (p) => {
+  const read = (p, candidate) => {
     try {
       return JSON.parse(readFileSync(p, 'utf8'))
     } catch (e) {
-      failures.push({ path: p, message: e.message })
+      if (candidate) failures.push({ path: p, message: e.message })
       return null
     }
   }
   const exact = journalPath(root, ids, lane)
   if (existsSync(exact)) {
-    const journal = read(exact)
+    const journal = read(exact, true)
     if (journal) return { path: exact, journal }
   }
   const dir = join(root, '.building')
@@ -116,7 +121,8 @@ export function findJournal(root, ids, lane = 'run') {
     if (!LANES[lane].journalRe.test(f)) continue
     const path = join(dir, f)
     if (path === exact && failures.some((x) => x.path === exact)) continue
-    const journal = read(path)
+    const named = f.match(/\d+/g) ?? []
+    const journal = read(path, wanted.every((n) => named.includes(n)))
     const phases = (journal?.phases ?? []).map(String)
     if (journal && wanted.every((n) => phases.includes(n))) return { path, journal }
   }

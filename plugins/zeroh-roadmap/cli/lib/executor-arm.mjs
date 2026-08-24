@@ -73,26 +73,6 @@ export function cardModelAlias(cardPath) {
   return null
 }
 
-/** One line naming the derived product repos + newest declared keyFile age; best-effort. */
-function preflightLine(worktree, phase) {
-  let keyFiles = []
-  try {
-    keyFiles = scanPhaseFile(join(worktree, 'roadmap', 'phases', `phase-${phase}.phase.ts`))?.keyFiles ?? []
-  } catch {
-    /* the preflight is diagnostic, never a gate */
-  }
-  const repos = productRepos(keyFiles, { worktree })
-  if (repos.length === 0) {
-    return `roadmap executor-arm: cross-repo preflight — none (${keyFiles.length} keyFile(s) declared, all in this worktree's repository)\n`
-  }
-  const age = newestKeyFileAgeMin(keyFiles)
-  return (
-    `roadmap executor-arm: cross-repo preflight — ${repos.length} product repo(s): ${repos.join(', ')};`
-    + ` newest declared keyFile ${age == null ? 'not written yet' : `${age.toFixed(1)}min old`}.`
-    + ' Stat those files before your first write: anything newer than your own spawn is another executor at work.\n'
-  )
-}
-
 /** The beacon events that mean "this executor handed something back", and so the only ones under
  *  which an arm may be cleared silently. Closed on purpose: anything else is work in flight. */
 const DISARM_ALLOWED = new Set(['phase-complete', 'result-returned'])

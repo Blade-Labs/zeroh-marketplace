@@ -464,6 +464,37 @@ test('findJournal: a journal that EXISTS and will not parse THROWS — never rep
   )
 })
 
+test('findJournal: a corrupt journal for OTHER phases is not this phase\'s problem — only a journal NAMING these ids throws', async () => {
+  // Nothing prunes .building. If any unparseable file in the directory threw, one truncated
+  // journal left by an abandoned run would block `codex status` and the gate reconcile for every
+  // OTHER phase in the checkout — including inline sessions that never had a journal at all.
+  // The filename is launch()'s own record of the ids it wrote into `phases`, so it is the honest
+  // candidacy test: the corrupt file below still throws for the phase it names.
+  const mod = await import('./codex.mjs')
+  const root = tmpRepo()
+  const corrupt = join(root, '.building', 'codex-91.json')
+  writeFileSync(corrupt, '{ "phases": ["91"], "driver": { "model": "gpt')
+
+  assert.equal(mod.findJournal(root, [3], 'run'), null, 'phase 3 has no journal of its own — that is an inline session, not a corrupt one')
+  writeJournal(root, [3])
+  assert.ok(mod.findJournal(root, [3], 'run'), 'and a healthy journal beside the corrupt one still resolves')
+  assert.throws(
+    () => mod.findJournal(root, [91], 'run'),
+    (e) => e.name === 'JournalUnreadableError' && e.message.includes(corrupt),
+    'the corrupt file is still loud for the ids its NAME covers — the scoping narrows blast radius, not the guard',
+  )
+
+  // The multi-phase (arc) journal shape: a corrupt codex-92-93.json covers 92, so it throws there.
+  const arcCorrupt = join(root, '.building', 'codex-92-93.json')
+  writeFileSync(arcCorrupt, '{ "phases": ["92", "93"')
+  assert.throws(
+    () => mod.findJournal(root, [92], 'run'),
+    (e) => e.name === 'JournalUnreadableError' && e.message.includes(arcCorrupt),
+    'an arc journal names every id it covers, so a member id must still find it',
+  )
+  assert.equal(mod.findJournal(root, [94], 'run'), null, 'a phase named by neither corrupt file is unaffected')
+})
+
 test('codex status: an unreadable journal reports the PARSE failure, never "no journal covers"', () => {
   const root = tmpRepo()
   mkdirSync(join(root, '.building'), { recursive: true })

@@ -232,6 +232,8 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/result.mjs',
         'plugins/zeroh-roadmap/cli/commands/result.test.mjs',
         'plugins/zeroh-roadmap/bin/roadmap.mjs',
+        'plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/arc-next.test.mjs',
         'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
         'plugins/zeroh-roadmap/DIET-LEDGER.md',
       ],
@@ -245,7 +247,7 @@ export default definePhase({
         skipped: 'None',
         hardcoded: 'None',
         limitations:
-          "Step 3 asked the doc to cite the 2026-08-23 near-miss; the operator ruling of 2026-08-24 (docs carry operative rules only, why lives in git WHY: blocks) post-dates the plan and supersedes that instruction, so the citation lives in the commit WHY: block, this report, and task 3.4's own problem field instead. The criterion itself — that do-arc SKILL.md forbids spawner-asserted model ids — is met verbatim. files[] gained four entries the plan did not declare: the executor-arm COMMAND and its test file (step 1 assigns the card read to the command, but files[] named only the lib), bin/roadmap.mjs for the --agent-card TREE row, and DIET-LEDGER.md for the funding rows. ALIAS_FAMILY covers the four Claude card aliases only; a card pinning a non-Claude model records an alias that maps to nothing and is announced-and-skipped, which is honest but means the session lane cannot yet reconcile a cross-family executor — that is plane 4's roles work. The reconcile compares FAMILY, not the exact model: an opus-card executor stamping any claude-opus-* id passes, so a wrong-version-same-family stamp is not caught. And the arm proves what was REQUESTED, never what the harness actually resolved — if a harness silently serves a different family than the card asked for, this reds the honest executor rather than the harness.",
+          "Step 3 asked the doc to cite the 2026-08-23 near-miss; the operator ruling of 2026-08-24 (docs carry operative rules only, why lives in git WHY: blocks) post-dates the plan and supersedes that instruction, so the citation lives in the commit WHY: block, this report, and task 3.4's own problem field instead. The criterion itself — that do-arc SKILL.md forbids spawner-asserted model ids — is met verbatim. files[] gained six entries the plan did not declare: the executor-arm COMMAND and its test file (step 1 assigns the card read to the command, but files[] named only the lib), bin/roadmap.mjs for the --agent-card TREE row, and DIET-LEDGER.md for the funding rows. Gate round 1 added the last two: arc-plane.workflow.mjs is the OTHER door onto the arm and was arming without the alias, so the reconcile it invokes itself silently no-opped, and arc-next.test.mjs pins that door. ALIAS_FAMILY covers the four Claude card aliases only; a card pinning a non-Claude model records an alias that maps to nothing and is announced-and-skipped, which is honest but means the session lane cannot yet reconcile a cross-family executor — that is plane 4's roles work. The reconcile compares FAMILY, not the exact model: an opus-card executor stamping any claude-opus-* id passes, so a wrong-version-same-family stamp is not caught. And the arm proves what was REQUESTED, never what the harness actually resolved — if a harness silently serves a different family than the card asked for, this reds the honest executor rather than the harness.",
       },
       done: true,
     },
