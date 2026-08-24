@@ -993,3 +993,32 @@ test('every lane prints the poll command that actually reads ITS journal', () =>
     assert.match(r.stderr, expected, `the ${lane} lane must print the poll command that reads its OWN journal — fix the poll hint in cli/commands/codex.mjs launch()`)
   }
 })
+
+test('status: `report` is the resolved PATH, never the journal\'s bare report name', () => {
+  const root = tmpRepo()
+  const worktree = join(root, 'wt-report-112')
+  mkdirSync(worktree, { recursive: true })
+  // A journal carrying `report` — every journal written since the review lane landed does.
+  writeFileSync(
+    join(root, '.building', 'codex-review-112.json'),
+    JSON.stringify({ phases: ['112'], lane: 'review', report: 'CODEX-REVIEW.md', worktree, pgid: 999999999, startedAt: new Date(Date.now() - 60_000).toISOString() }) + '\n',
+  )
+  const reportPath = join(worktree, 'CODEX-REVIEW.md')
+  writeFileSync(reportPath, 'findings\nCODEX-RUN-COMPLETE\n')
+
+  const fresh = spawnSync('node', [BIN, 'codex', 'status', '112', '--review'], { cwd: root, encoding: 'utf8' })
+  assert.equal(fresh.status, 0, fresh.stderr)
+  assert.equal(
+    JSON.parse(fresh.stdout).report,
+    reportPath,
+    'a reader given `CODEX-REVIEW.md` cannot open it — the journal must not overwrite the path status resolved; fix the output spread order in cli/commands/codex.mjs statusCodex',
+  )
+
+  // And the stale case must still read null: a report older than the launch is a PREVIOUS run's
+  // hand-off, and reporting a name there is indistinguishable from a fresh verdict.
+  backdate(reportPath)
+  const stale = spawnSync('node', [BIN, 'codex', 'status', '112', '--review'], { cwd: root, encoding: 'utf8' })
+  const out = JSON.parse(stale.stdout)
+  assert.equal(out.report, null, 'a stale report is not this run\'s verdict, and `report` must say so')
+  assert.equal(out.staleReport, reportPath, 'the stale report is surfaced, not silently dropped')
+})

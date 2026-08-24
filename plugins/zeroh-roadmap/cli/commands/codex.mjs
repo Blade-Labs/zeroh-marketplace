@@ -528,7 +528,10 @@ function statusCodex(root, ids, lane = 'run') {
   const alive = j.pgid ? groupAlive(j.pgid) : false
   const state = sentinel === 'CODEX-RUN-COMPLETE' ? 'complete' : sentinel === 'CODEX-RUN-BLOCKED' ? 'blocked' : alive ? 'running' : 'dead-no-report'
   const staleReport = reportExists && !fresh ? reportPath : undefined
-  process.stdout.write(JSON.stringify({ state, alive, sentinel, report: fresh ? reportPath : null, ...(staleReport ? { staleReport } : {}), ...j }, null, 2) + '\n')
+  // The journal spreads FIRST: `j.report` is the bare report NAME, and spreading it last
+  // overwrote the resolved path — every poll then reported a filename where a reader expected
+  // a location, and a stale report's `null` as if it were fresh.
+  process.stdout.write(JSON.stringify({ ...j, state, alive, sentinel, report: fresh ? reportPath : null, ...(staleReport ? { staleReport } : {}) }, null, 2) + '\n')
   return state === 'complete' ? 0 : state === 'running' ? 3 : 2
 }
 
