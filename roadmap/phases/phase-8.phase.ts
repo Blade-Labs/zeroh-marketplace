@@ -114,7 +114,18 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          'PLAN_PHASE_OWNED — 9 strings plan-phase/SKILL.md owns (the two prime-rule headlines, PROCEED_WITH_TASK, the number-reservation command, the clarification marker, the validate step, the timing-stats citation, and both references/ siblings) — each asserted >0 in the SKILL and 0 in the generated plan prompt.',
+        how:
+          "The run lane's guard shape verbatim, including its precondition half: a set member absent from the SKILL fails LOUDLY rather than passing on nothing. Anchors were chosen by grepping the SKILL for protocol-BODY lines the envelope has no business restating; the docblock records why each is owned and lists the lane material asserted present by the sibling overrides test.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'MUTATION PROOF, both directions, reverted after each. (A) planting `PRIME RULE 1: KNOW THE DIFF BEFORE WRITING THE TASK ...` into buildPlanPrompt reds the guard: `"KNOW THE DIFF BEFORE WRITING THE TASK" belongs to skills/plan-phase/SKILL.md — the plan prompt restating it forks the protocol and makes the eval scorecard\'s planner cells compare briefings rather than models; fix cli/commands/codex.mjs buildPlanPrompt`. (B) appending an anchor the SKILL does not carry reds the precondition arm instead, so drift is loud rather than silently green. As shipped: 37 pass / 0 fail.',
+      },
+      done: true,
     },
     {
       id: '8.3',

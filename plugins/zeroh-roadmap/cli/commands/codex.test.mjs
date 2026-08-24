@@ -922,3 +922,53 @@ test('plan: a number whose phase file already exists is refused, not planned ove
   assert.match(r.stderr, /already exists/, `the collision must be named; got: ${r.stderr}`)
   assert.equal(readFileSync(join(root, 'roadmap', 'phases', 'phase-108.phase.ts'), 'utf8'), 'export default {}\n', 'the existing plan is untouched')
 })
+
+/**
+ * Strings plan-phase/SKILL.md OWNS — protocol BODY, never this lane's disposition:
+ *  - `KNOW THE DIFF BEFORE WRITING THE TASK` / `ESCALATE TO ARCHITECT` / `PROCEED_WITH_TASK` —
+ *    the two prime rules and the architect verdict token: WHEN a plan is precise enough and when
+ *    to escalate is identical for every planner, so a second copy is a second protocol.
+ *  - `roadmap claim` — the number-reservation mechanics. This lane reserves BEFORE launching, so
+ *    the envelope overrides the step; restating its command would have the planner do it twice.
+ *  - `[NEEDS CLARIFICATION]` — the marker contract, and the queueing ban that rides on it.
+ *  - `roadmap phase validate` — the validate step the protocol commands.
+ *  - `timing-stats.json` — the timing reference class the docblock must cite.
+ *  - `verify-rehearsal.md` / `closure-checklist.md` — references/ siblings, reached through the
+ *    protocol's own pointer, never summarized by a launcher.
+ * Lane material by contrast (asserted present in the overrides test above): worktree discipline,
+ * the one-file rule, the reserved number, the commit trailer, the shared-host rules, the
+ * CODEX-PLAN.md hand-off.
+ */
+const PLAN_PHASE_OWNED = [
+  'KNOW THE DIFF BEFORE WRITING THE TASK',
+  'ESCALATE TO ARCHITECT',
+  'PROCEED_WITH_TASK',
+  'roadmap claim',
+  '[NEEDS CLARIFICATION]',
+  'roadmap phase validate',
+  'timing-stats.json',
+  'verify-rehearsal.md',
+  'closure-checklist.md',
+]
+
+test('plan: the plan-phase protocol BODY stays in the skill — the lane restates none of it', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-109')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '109', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-plan-109-prompt.txt'), 'utf8')
+  const protocol = readFileSync(PLAN_PHASE_SKILL, 'utf8')
+
+  for (const owned of PLAN_PHASE_OWNED) {
+    assert.ok(
+      protocol.includes(owned),
+      `precondition: skills/plan-phase/SKILL.md must own "${owned}" — it was reworded or removed there, so this guard would pass on nothing; re-anchor PLAN_PHASE_OWNED to the skill's current text`,
+    )
+    assert.ok(
+      !prompt.includes(owned),
+      `"${owned}" belongs to skills/plan-phase/SKILL.md — the plan prompt restating it forks the protocol and makes the eval scorecard's planner cells compare briefings rather than models; fix cli/commands/codex.mjs buildPlanPrompt (deliver the skill, override only disposition)`,
+    )
+  }
+})
