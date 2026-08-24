@@ -20,7 +20,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 4,
   name: 'Role bindings + do-phase delivered by path + manifests generated from one source',
-  status: 'in-progress',
+  status: 'done',
   arcId: 'POLYSEAT',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'feature',
@@ -73,6 +73,96 @@ export default definePhase({
   ],
   notes:
     "DESIGN (locked; architect risks 1-5 pre-empted): cli/lib/roles.mjs exports ROLES (frozen) — one entry per agents/*.md card plus the spawn-site audit the sub-gate enumerated (do-phase, plan-phase, plan-arc, arc-sweep ×3, release-sweep, validate-arc ×2, do-arc ×2, full-code-review, eval-arc). Entry: { id, agentCard, spawnSites, class: 'judge'|'builder', tierChain, inlineFallbackLegal }. class mechanizes review-phase's existing rule — a consumer's modelPolicy.judgeModel may override JUDGE-class roles only. TIER CHAINS (user ruling verbatim): software-architect ['claude-fable-5','gpt-5.6-sol','claude-opus-5']; every other role a 1-entry chain equal to today's behaviour (the generalize-forward vertical — per-role chains for the judge panel are the arc's named follow-up). Frontmatter model aliases STAY as the harness fail-safe (risk 1: cards cannot carry full model ids — arc-eval-judge's own pin note); each touched card gains the one-line alias-drift caveat. resolveRole(roleId, driverId) reads the phase-2 registry's roleCapabilities and returns { mode: 'native'|'child-cli'|'inline', model, substituted? } — the resolver drives the chain itself (risk 3: claude's --fallback-model is single-hop claude-family-only, verified, so it can never reach gpt-5.6-sol); every firing is recordable into executionResult.roles (phase 3's shape), and inline is a RECORDED mode (risk 5) so criterion any-model-full-protocol stays judgeable.\n\nFALLBACK FALSIFICATION (risk 4): rigor-preservation is proven by INJECTED unavailability — ROADMAP_ROLE_FORCE_UNAVAILABLE=<model-id> makes the resolver treat that tier as down; the test walks fable→sol and asserts the substitution record { from, to, reason } and unreduced prompt; the guard-mutation-proof discipline (red under the defect, not under a reverted fix).\n\nPROSE HOMES REDUCE TO POINTERS in the same commit as roles.mjs (architect same-commit obligation): software-architect.md §Model policy and review-phase's HOME statement each become a pointer to MULTI-DRIVER.md §1 + roles.mjs, with one DIET-LEDGER.md disposition row EACH — a trim without its ledger row is a gate failure per the ledger's own rail.\n\nRUN-LANE DELIVERY: buildPrompt becomes an envelope exactly like buildReviewPrompt — the path to skills/do-phase/SKILL.md, targets, and LANE OVERRIDES ONLY (worktree rules, resume rule, cross-repo, report contract, sentinel); the protocol body (per-task loop, commit grammar, gate ownership, transparency contract, architect escalation — which do-phase itself carries) is READ FROM THE SKILL. The codex.test.mjs duplication guard extends to the run lane: protocol-owned strings from do-phase/SKILL.md (e.g. 'PRIME RULE', 'transparencyReport', the commit grammar line) must appear in the SKILL and NOT in the generated prompt. This pays the debt the file header records and is criterion any-model-full-protocol's grep clause.\n\nNATIVE DISTRIBUTION (superpowers shape, verified from their shipped code): scripts/emit-manifests.mjs regenerates EVERY harness manifest from one source — version from plugins/zeroh-roadmap/package.json (single-sourcing map in the .version-bump.json style), skill list from `ls skills/` — covering .claude-plugin/plugin.json, .cursor-plugin/plugin.json, .copilot/plugin.yaml, gemini-extension.json, and the NEW .codex-plugin/plugin.json ({ skills: './skills/', hooks: {} } — the EMPTY hooks object is deliberate, copied from superpowers: codex surfaces skills natively and the empty object suppresses hooks.json auto-discovery of Claude-shaped hooks). .codex/INSTALL.md is regenerated or reduced to a pointer (it currently advertises the gauntlet-retired code-review skill and a wrong count). The RATCHET test fails when any manifest's version ≠ package.json or its skill list ≠ ls skills/ — 'never stuff on multiple places' made mechanical. Per-harness tool mapping rides skills/using-zeroh-roadmap/references/codex-tools.md (superpowers' exact layout): action vocabulary → codex tool names, multi_agent config note, the 0.145+ agent_type caveat, spawn_agent fork_turns guidance — content adapted from the superpowers reference but written for THIS plugin's roles.\n\nPARITY MEASURE (criterion no-claude-privilege's instrument): a test computes the byte set of protocol content delivered to a codex driver (envelope-referenced SKILL.md files) vs the claude skill load for the same mission and asserts equivalence within the envelope-overhead bound; measured, never asserted. PROTOCOL-SET RULE (review ruling 2026-08-23): the set is the mission's SKILL.md + its references/ tree; agents/*.md cards are harness-delivery context (measure-manifest's do-phase flow carries phase-executor.md + executor-reference.md as the Claude-spawn vehicle), excluded by name and printed — without this rule the identity assertion is false-red at HEAD-after-4.2 by construction.\n\nHOOKS CHANNEL PROBE (LOCKED 2026-08-23): the codex skill-surfacing channel is PROBED against the installed CLI and recorded with evidence in codex-tools.md (4.3) — the empty hooks {} manifest shape is copied only once the probe confirms manifest-channel discovery; absence or presence is never assumed.\n\nREVIEW RATIFICATIONS (Mode A, 2026-08-23): testMode tdd ratified on all four tasks — each authors its guard/test artifact first (roles.test, codex.test duplication guard, emit-manifests ratchet, parity test); doc/pointer steps ride the task commit. Shared-host capbuild rules are ENVELOPE material (verified absent from do-phase/SKILL.md), kept in 4.2's lane overrides.",
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1260,
+      total: 1260,
+      notes:
+        'The consumer binds ONE slot: unit = the whole plugin suite (node --test over bin/cli/hooks/scripts/test plus scripts/schema.test.ts), alongside the plugin-native history-comments scan of the phase diff and lint-diff. Baseline at phase start was 1200; this phase added 60 across roles.test.mjs (role table, resolver, reach, alias normalisation, parity), codex.test.mjs (the run-lane delivery guard plus a per-override regression fence) and the new emit-manifests.test.mjs, and RETIRED test/version-parity.test.mjs, whose two-file version assertion the manifest ratchet strictly subsumes. The history-comments scan was RED mid-phase on four added comment lines carrying ISO dates and is green after 14cfbb1. lint/types/build/integration are declaredAbsent in roadmap.config.json, not skipped by this phase — which is why the review rounds mattered: no slot here would have caught a single one of the eight round-1 findings.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — this consumer has no integration tier.',
+    },
+    e2eTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — a CLI + docs phase with no rendered surface.',
+    },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        '2 fixes, 1 SURFACED (then closed by the executor), 1 HARD-STOP [SCOPED-OUT], 5 skips with evidence. FIXED: resolveRoleEntry was exported with no importer anywhere (grep evidence: hits only inside roles.mjs) - made module-private; and task 4.1s own transparencyReport still named driverForModel, which commit ef0610d had deleted INSIDE this phases range - corrected to MODEL_DRIVERS in both fields. SURFACED: the tier chain had three prose copies while the one-home guard scanned only the two PRE-EXISTING prose files, so MULTI-DRIVER.md and codex-tools.md (both authored by this phase) restated it unguarded - closed rather than left open, with a POSITIVE ratchet asserting MULTI-DRIVER.md spells the chain exactly as ROLES holds it plus codex-tools.md on the forbidden-restatement list, mutation-proven on four drives. HARD-STOP [SCOPED-OUT]: the codex marketplace index entry lives at the REPO root, outside a plugin-rooted generator. No bugs; no guard weakened - all three mutation-proven guards re-read and judged non-vacuous.',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        '8 findings (3 HIGH / 3 MEDIUM / 2 LOW), all applied in 3d6f3da. HIGH: resolveRole prepended modelPolicy.judgeModel RAW while every consumer configures the harness ALIAS (roadmap.config.json and the fixture harness both set fable), so the configured judge was recorded as substituted away from itself - the exact false record the recording rule exists to prevent; the pointer reduction orphaned the fallback rails RUNTIME TRIGGER, leaving a spawner that hits a limit error with no instruction anywhere and the ledgers relocated disposition naming nothing; and the envelope dropped the lanes no-reachable-user disposition while newly DELIVERING a protocol that says post-and-wait, so a detached run would have waited forever. MEDIUM: reachMode derived spawn ability from the RUNNER entry alone; the envelopes YOU HAVE NO SUBAGENTS claim contradicted the registrys own probed multi_agent evidence and this phases stakeholderDemo; no worktree-lane override. LOW: two spawnSites inventories inconsistent with the stated rule; the commit trailer and no-full-suite lane rules dropped in the rewrite. The reviewer also re-ran one guard mutation and confirmed the quoted proof reproduces. Notable: the parity instrument RED on the executors own override growth, and the response was to trim the envelope prose back under the bound rather than raise it.',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        '13 findings (no HIGH), eleven applied in ec64d63 and two deliberately surfaced. The two that mattered: the re-ratcheted constants own rationale had gone false (it promised ~600 bytes of headroom over a real 23), and the four overrides round 1 added had NO test coverage - so the cheapest route to a green bound was deleting a rule, which is round 1s own HIGH one trim away. Both closed: bound re-ratcheted to 0.235 (still under the pre-delivery paraphrases 0.2391 red line) and every lane override now carries its own assertion. Also fixed: MODEL_ALIASES claimed to be the only alias vocabulary while result.mjs keeps ALIAS_FAMILY; MULTI-DRIVER.md still defined child-cli runner-only after reachMode stopped doing that; spawnSites named eval.mjs (whose docblock denies being a spawn) and missed arc-plane.workflow.mjs (which literally spawns the executor); the review lanes surviving no-subagents denial; the CLI help tables stale gate claim; an unroutable tiers reason naming one home; the YAML post-condition; and the report contracts verify COMMANDS. SURFACED: --check ratchets version only so a stale description drifts unnamed, and the fill-a-role override names a resolver with no CLI door.',
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'clean',
+      summary:
+        'Convergence round. No round-2 fix broke behaviour, and the reviewer independently re-derived the parity red line rather than trusting the comment - extracting buildPrompt from e965f4f~1 and evaluating it at 3992 bytes, confirming 0.2243 (HEAD) < 0.235 (bound) < 0.2391 (paraphrase) with the strict comparison the test uses. It judged both surfaced items correctly surfaced rather than defects this phase created (all six manifests carry byte-identical descriptions today, and the three directory-pointer manifests cannot enumerate a skill list at all). Two residual findings, both stale measurements the executor had written: the re-ratcheted docblock restamped to a pair measured BEFORE the same commit interpolated the role-bindings path (3676/0.2202 vs the instruments own 3744/0.2243), and task 4.4s report still described the pre-gate instrument entirely. Both restamped in 76b5e52, with the red lines sha anchored so a reader re-derives 3992 instead of trusting it. Verified clean at HEAD: the currentVersion overload, the template-literal conversion, the inventories under their own rule, and that no file still contains the two retired claims.',
+    },
+  ],
+  metrics: {
+    commits: 14,
+    linesAdded: 2593,
+    linesRemoved: 127,
+    filesChanged: 22,
+    testsAtStart: 1200,
+    testsAtEnd: 1260,
+    testsAdded: 60,
+    startedAt: '2026-08-24T16:52:38Z',
+    completedAt: '2026-08-24T19:16:10Z',
+    haltCount: 0,
+  },
+  compromises: 'None',
+  completedDate: '2026-08-24',
+  executionResult: {
+    phase: 4,
+    status: 'done',
+    driver: { model: 'claude-opus-5[1m]', lane: 'session' },
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      "The spawn card named a gate plan the CLI did not derive: it said reviewScope light, and by gate time the diff had grown to 22 files across 5 classes and the CLI derived FULL. The CLI's plan was followed, which is why a quality pass ran at all — and why three review rounds ran rather than one.",
+      "The codex discovery channel was PROBED and the probe corrected a plan assumption: discovery runs through the marketplace index at .agents/plugins/marketplace.json in the REPO root, not the Claude-side .claude-plugin/marketplace.json, and all 13 skills already surface natively (codex debug prompt-input, codex-cli 0.144.5) without .codex-plugin/plugin.json. The manifest was still added — it declares the channel and carries the empty hooks object — but the repo-root index entry is hand-landed and outside every ratchet, because emit-manifests roots at the plugin.",
+      "A capability was DECLARED during 4.1 rather than left absent: the codex entry gained headlessChild with its verifiedAt command and output re-probed and pasted. Without it resolveRole would have reported that a claude driver cannot reach gpt-5.6-sol at all — false, since this plugin's own run lane drives codex exec — and would have silently skipped the architect chain's second tier, exactly the rigor loss honesty rail 3 forbids.",
+      "The parity instrument RED twice on this phase's own work, both times on legitimate lane-override growth. The first response was to trim the envelope prose under the 0.22 bound; the second was to re-ratchet to 0.235, which is defensible only because the pre-delivery paraphrase measures 0.2391 and stays the red line. A bound that close to legitimate content taxes rather than discriminates, which is why every override now carries its own assertion — the cheapest green must not be deleting a rule.",
+      "roadmap/arc-evals/phase-4.peval.json is written by the gate and left UNTRACKED, matching phase 3's sibling record. Whether the arc commits per-phase eval records is do-arc's call; criterion per-phase-eval-records needs them ingested, and an untracked record is ingested locally but does not survive a fresh clone.",
+      "Nothing CONSUMES resolveRole yet, and it has no CLI door. The resolver, the chain, the substitution record and the parity instrument are all proven; no spawner calls them, so executionResult.roles is still hand-written and criterion no-claude-privilege's recorded-cross-family-firing half is not closed by this phase. `roadmap role resolve <role> [--driver <id>] --json` is the named follow-up.",
+      "emit-manifests --check ratchets `version` only, so a stale `description` in a hand-owned manifest would drift unnamed. All six manifests carry byte-identical descriptions today, so nothing is drifted; widening the map to per-target field lists is the named follow-up.",
+    ],
+    hardStops: [
+      {
+        tag: '[SCOPED-OUT]',
+        text: "The codex marketplace index entry at the repo-root .agents/plugins/marketplace.json is hand-landed and unratcheted: emit-manifests roots at the plugin, so a plugin-internal generator cannot own a marketplace-level file. Closing it needs a repo-root generator this phase scoped out.",
+      },
+    ],
+    gateRounds: 3,
+  },
   tasks: [
     {
       id: '4.1',
