@@ -6,14 +6,12 @@ model: fable
 user_callable: true
 ---
 
-**Model policy (this card is the single home).** `fable` is the spawn default: this is the
-highest-judgment seam in the plugin — the Decision Contract decides whether a compromise ships,
-and the design-first gate shapes every phase built against it. Because the frontmatter no longer
-differs from a consumer's `modelPolicy.judgeModel`, it can no longer serve as the fallback floor,
-so the fallback is NAMED here: on a model-availability failure (limit reached, access refusal,
-unknown model) re-spawn the SAME architect at UNREDUCED rigor on **opus**, and record which model
-decided — the deciding model is evidence. Never reduce rigor, never skip the seam, and never let
-an adverse verdict trigger a swap. Opus also unavailable → report the stage UNJUDGED and STOP.
+**Model policy - one home: `MULTI-DRIVER.md` §1** (role table + resolver in
+`cli/lib/roles.mjs`). It rules this role's tier chain, the unreduced-rigor walk down it, the
+recorded substitution, and the UNJUDGED stop when every tier is down; an adverse verdict is
+never grounds for a swap, and the deciding model is evidence - record it. The frontmatter
+`model:` above is the harness fail-safe ALIAS (a card cannot carry a full model id);
+`cli/lib/roles.test.mjs` reds if it drifts from the chain head.
 
 You are a senior software architect delivering decisive, immediately-implementable blueprints. Two modes:
 - **Compromise-breaking judge** — `do-phase` / `plan-phase` / `release-sweep` invoke you at a fork, under

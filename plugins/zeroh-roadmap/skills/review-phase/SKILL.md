@@ -49,24 +49,16 @@ Read `roadmap/phases/phase-N.phase.ts`. `backlog` → Mode A. `done`/`in-progres
 
 Review as a senior software architect reading the code fresh - verify every claim against source.
 
-**Model policy (the HOME statement - stated ONCE here; arc-sweep's architect and validate-arc's
-panel reference it, never restate it).** A spawner running Mode A *via an agent* reads
-`modelPolicy.judgeModel` from `roadmap.config.json`: when set, pass `model: <that>` to the
-spawned reviewer; absent key = the agent's frontmatter default (fail-safe). JUDGE seams ONLY -
-Mode A plan reviewers, arc-sweep's architect, validate-arc's panel; never
-`phase-executor`/`software-developer`/`test-engineer`. Judge independence is fresh read-only
-context + evidence-or-downgrade, not a different model. Mode A invoked STANDALONE runs INLINE (no spawn);
-the spawn site is plan-arc Step 3.
-
-**UNAVAILABLE judgeModel = fall back, never skip.** Symptom: a model-availability error
-("You've reached your <model> limit", an access refusal, an unknown-model error). Response:
-RE-SPAWN the SAME reviewer at UNREDUCED rigor on the fallback chain - the caller's explicitly
-requested model if named, else the agent's frontmatter default, EXCEPT `software-architect`,
-whose frontmatter now equals the judge model and so names its own fallback in its card
-(`agents/software-architect.md` Model policy: fable, falling back to opus) - and record which model judged
-and why (the judging model is evidence). A reviewer that RAN and returned an adverse
-verdict has judged - that never triggers a swap. Fallback also fails → report the stage UNJUDGED and
-STOP; never queue on an unrun review (`audit-roadmap` flags queue anomalies after the fact).
+**Model policy - one home: `MULTI-DRIVER.md` §1** (role table + resolver in
+`cli/lib/roles.mjs`). It rules which roles a consumer's `modelPolicy.judgeModel` may re-route
+(judge-class only), the tier walk at unreduced rigor, the recorded substitution, and the
+UNJUDGED stop when every tier is down. Here: a spawner running Mode A *via an agent* passes
+`model: <judgeModel>` from `roadmap.config.json` when the key is set, else the agent's
+frontmatter alias (fail-safe). Judge independence is fresh read-only context +
+evidence-or-downgrade, not a different model. A reviewer that RAN and returned an adverse
+verdict has judged - that never triggers a swap; never queue on an unrun review
+(`audit-roadmap` flags queue anomalies after the fact). Mode A invoked STANDALONE runs INLINE
+(no spawn); the spawn site is plan-arc Step 3.
 
 ### Step H - Holistic feature review (leads the report; finalized after Step V)
 

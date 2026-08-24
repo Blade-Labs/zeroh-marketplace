@@ -10,7 +10,9 @@
  * it locally; `roadmap driver register` refuses an id without fresh same-host provenance.
  *
  * `roleCapabilities` carries ONLY what that entry's verifiedAt output evidences. An absent key
- * is unproven, never a claim of absence.
+ * is unproven, never a claim of absence. Two keys answer different questions: `subagents` is how
+ * this driver spawns children, `headlessChild` is whether ANOTHER driver can drive this one as a
+ * headless child process (the reach `resolveRole` derives, MULTI-DRIVER.md §1).
  *
  * An unregistered id (grok today) is an EMPTY SLOT, never a guess — resolveDriver throws.
  *
@@ -34,7 +36,8 @@ hooks                                stable             true
 multi_agent                          stable             true
 plugin_hooks                         removed            false
 plugins                              stable             true
-"slug":"gpt-5.6-sol"`
+"slug":"gpt-5.6-sol"
+Usage: codex exec [OPTIONS] [PROMPT]`
 
 const CLAUDE_PROBE_OUTPUT = `2.1.241 (Claude Code)
   --agents <json>                       JSON object defining custom agents (e.g.
@@ -54,13 +57,14 @@ export const DRIVERS = Object.freeze({
       sandboxPosture: 'bypass',
     }),
     resume: 'codex resume [SESSION_ID] [--last]',
-    roleCapabilities: Object.freeze({ subagents: 'native', hooks: true, plugins: true }),
+    roleCapabilities: Object.freeze({ subagents: 'native', headlessChild: true, hooks: true, plugins: true }),
     verifiedAt: Object.freeze({
       date: '2026-08-24',
       host: 'illumination',
       command:
         "codex --version && codex features list | grep -E '^(hooks|multi_agent|plugin_hooks|plugins)\\b'"
-        + " && codex debug models | grep -o '\"slug\":\"gpt-5.6-sol\"'",
+        + " && codex debug models | grep -o '\"slug\":\"gpt-5.6-sol\"'"
+        + " && codex exec --help | grep -E '^Usage: codex exec'",
       output: CODEX_PROBE_OUTPUT,
     }),
   }),
@@ -74,7 +78,7 @@ export const DRIVERS = Object.freeze({
       sandboxPosture: 'inherit',
     }),
     resume: 'claude --resume [SESSION_ID] | claude --continue',
-    roleCapabilities: Object.freeze({ subagents: 'child-cli', headlessPrint: true }),
+    roleCapabilities: Object.freeze({ subagents: 'child-cli', headlessChild: true }),
     verifiedAt: Object.freeze({
       date: '2026-08-24',
       host: 'illumination',
@@ -83,6 +87,39 @@ export const DRIVERS = Object.freeze({
     }),
   }),
 })
+
+/**
+ * The model ids this plugin binds by name, so no consumer restates one (the one-home rule
+ * `drivers.test.mjs` ratchets). `SOL` IS the codex entry's pinned model — one value, two readers.
+ */
+export const MODEL_IDS = Object.freeze({
+  FABLE: 'claude-fable-5',
+  SONNET: 'claude-sonnet-5',
+  OPUS: 'claude-opus-5',
+  SOL: CODEX_MODEL,
+})
+
+/**
+ * Which registered driver's binary runs a given model id. ROUTING ONLY: presence here is not a
+ * capability claim — `roleCapabilities` + `verifiedAt` carry what was probed, per driver.
+ */
+export const MODEL_DRIVERS = Object.freeze({
+  [MODEL_IDS.FABLE]: 'claude',
+  [MODEL_IDS.SONNET]: 'claude',
+  [MODEL_IDS.OPUS]: 'claude',
+  [MODEL_IDS.SOL]: 'codex',
+})
+
+/** The registry id whose binary runs `modelId`, or a throw naming every routable id. */
+export function driverForModel(modelId) {
+  const id = Object.hasOwn(MODEL_DRIVERS, modelId) ? MODEL_DRIVERS[modelId] : undefined
+  if (!id) {
+    throw new Error(
+      `no registered driver runs model '${modelId}' — routable ids: ${Object.keys(MODEL_DRIVERS).join(', ')}. Add it to MODEL_DRIVERS in cli/lib/drivers.mjs alongside the driver entry that launches it`,
+    )
+  }
+  return id
+}
 
 /** The registry entry for `id`, or a throw naming the offending id and every known one. */
 export function resolveDriver(id) {

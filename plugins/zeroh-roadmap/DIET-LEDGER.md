@@ -495,3 +495,18 @@ The spawner-never-asserts-a-model-id prohibition was funded byte-for-byte in its
 | §non-done exits / `self-descope` — " — this is the arc face of the executor's never-rule 1" | obsolete-with-evidence(cross-reference label; "Never wave it through" and both dispositions survive verbatim) | do-arc §the loop, `self-descope` |
 | §non-done exits / `checkpoint` — "(the two-exit turn contract)" | obsolete-with-evidence(names the executor card's contract; not an instruction to the do-arc driver) | do-arc §the loop, `checkpoint` |
 | §non-done exits / `checkpoint` — "(the lossless precondition is broken)" | obsolete-with-evidence(rationale for the rule stated in the same clause; "A committedSha that does not resolve → treat as failed" survives) | do-arc §the loop, `checkpoint` |
+
+## Model-policy prose → MULTI-DRIVER.md §1 pointers — phase 4 task 4.1
+
+Two prose homes, one role each, became pointers at the single home the role table now backs:
+`agents/software-architect.md` 768 B → 501 B, `skills/review-phase/SKILL.md` 1,519 B → 829 B.
+Neither file is in the do-arc measured set, so no budget movement is claimed; the reduction is
+recorded here because the ledger's rail is about DELETED RULES, not about budgets.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| software-architect §Model policy — "`fable` is the spawn default: this is the highest-judgment seam… the design-first gate shapes every phase built against it" | obsolete-with-evidence(rationale for a value the table now carries; the frontmatter alias and the chain head are pinned by `cli/lib/roles.test.mjs`) | MULTI-DRIVER.md §1, `cli/lib/roles.mjs` ROLES['software-architect'] |
+| software-architect §Model policy — the named fallback ("re-spawn the SAME architect at UNREDUCED rigor on **opus**… Opus also unavailable → report the stage UNJUDGED and STOP") | enforced-by-code(`resolveRole` walks `tierChain` and throws `RoleUnjudgedError` naming every tier tried; `cli/lib/roles.test.mjs` walks fable→sol→opus under injected unavailability) | cli/lib/roles.mjs |
+| review-phase Mode A — "JUDGE seams ONLY - Mode A plan reviewers, arc-sweep's architect, validate-arc's panel; never `phase-executor`/`software-developer`/`test-engineer`" | enforced-by-code(`ROLES[*].class`; `resolveRole` applies `judgeModel` to judge-class only and ignores it for builder-class, asserted both directions) | cli/lib/roles.mjs, cli/lib/roles.test.mjs |
+| review-phase Mode A — "**UNAVAILABLE judgeModel = fall back, never skip.** Symptom: … ("You've reached your <model> limit", an access refusal, an unknown-model error)" | relocated | MULTI-DRIVER.md §1 The resolver (unavailability + the recorded walk); the symptom list is the operator's, not the protocol's |
+| review-phase Mode A — the `software-architect` fallback EXCEPTION ("whose frontmatter now equals the judge model and so names its own fallback in its card") | obsolete-with-evidence(the exception existed because the chain lived in a card; every role now resolves through one table) | MULTI-DRIVER.md §1, cli/lib/roles.mjs |
