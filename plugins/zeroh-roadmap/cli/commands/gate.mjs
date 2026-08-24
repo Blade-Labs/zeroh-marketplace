@@ -509,9 +509,10 @@ export default async function run(argv) {
  * No journal at all = an inline session = no check.
  *
  * A journal whose driver.model is null pins no model, so the model is announced UNRECONCILED
- * rather than silently skipped; its lane is still reconciled.
+ * rather than silently skipped; its lane is still reconciled. Returns { problems, notes } —
+ * `notes` are announcements that are not failures, and the CALLER writes both.
  */
-function driverReconcileProblems(cwd, fallbackRoot, phaseNum, parsed) {
+function driverReconcile(cwd, fallbackRoot, phaseNum, parsed) {
   let root
   try {
     root = mainCheckout(cwd)
@@ -519,17 +520,20 @@ function driverReconcileProblems(cwd, fallbackRoot, phaseNum, parsed) {
     root = fallbackRoot
   }
   const found = findJournal(root, [phaseNum], 'run')
-  if (!found) return []
+  if (!found) return { problems: [], notes: [] }
   const j = found.journal.driver
-  if (!j) return []
+  if (!j) return { problems: [], notes: [] }
   const where = `${found.path} (startedAt ${found.journal.startedAt ?? 'unrecorded'})`
   const claimed = parsed.executionResult?.driver
   if (!claimed) {
-    return [
-      `phase ${phaseNum} was launched by the ${j.lane} lane but its executionResult.driver is ABSENT — `
-        + `the launcher journalled { model: ${JSON.stringify(j.model)}, lane: ${JSON.stringify(j.lane)} } in ${where}. `
-        + 'A run the launcher recorded cannot land unattributed: record that driver in executionResult.',
-    ]
+    return {
+      problems: [
+        `phase ${phaseNum} was launched by the ${j.lane} lane but its executionResult.driver is ABSENT — `
+          + `the launcher journalled { model: ${JSON.stringify(j.model)}, lane: ${JSON.stringify(j.lane)} } in ${where}. `
+          + 'A run the launcher recorded cannot land unattributed: record that driver in executionResult.',
+      ],
+      notes: [],
+    }
   }
   const problems = []
   if (j.model != null && claimed.model !== j.model) {
@@ -545,13 +549,13 @@ function driverReconcileProblems(cwd, fallbackRoot, phaseNum, parsed) {
         + `the phase file claims ${JSON.stringify(claimed.lane)} (journal ${where}).`,
     )
   }
-  if (j.model == null) {
-    process.stderr.write(
-      `gate run --verify-complete: lane '${j.lane}' declares no pinned model in cli/lib/drivers.mjs — `
-        + `driver.model is self-report only, UNRECONCILED (journal ${where})\n`,
-    )
-  }
-  return problems
+  const notes = j.model == null
+    ? [
+        `gate run --verify-complete: lane '${j.lane}' declares no pinned model in cli/lib/drivers.mjs — `
+          + `driver.model is self-report only, UNRECONCILED (journal ${where})`,
+      ]
+    : []
+  return { problems, notes }
 }
 
 /**
@@ -652,7 +656,8 @@ export async function runGate(phaseNum, opts) {
     // Attribution is reconciled against the launcher BEFORE the consistency verdict, and both
     // report: a misattributed completion and an inconsistent one are separate failures, and
     // hiding one behind the other costs a round to discover.
-    const misattributed = driverReconcileProblems(process.cwd(), toplevel, phaseNum, imp.parsed)
+    const { problems: misattributed, notes } = driverReconcile(process.cwd(), toplevel, phaseNum, imp.parsed)
+    for (const n of notes) process.stderr.write(`${n}\n`)
     if (misattributed.length > 0) {
       process.stderr.write(`gate run --verify-complete: phase ${phaseNum} attribution disagrees with the lane journal:\n`)
       for (const p of misattributed) process.stderr.write(`  - ${p}\n`)

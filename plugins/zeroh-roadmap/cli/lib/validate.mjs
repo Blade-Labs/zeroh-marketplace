@@ -101,9 +101,6 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
  * Never an error: ~700 committed phase files predate these fields, and REDing them would make
  * the rule unlandable. `historical` and `cancelled` never warn at all — nobody is going to
  * re-derive who planned work that was abandoned or imported.
- *
- * A missing stamp is invisible until scorecard time, where it becomes an `unrecorded` cell
- * months after the only actor who knew the answer stopped running.
  */
 function attributionWarnings(phase) {
   const num = phase?.phase ?? '?'

@@ -507,9 +507,9 @@ test('14c) disarmExecutor — a HEARTBEAT last event refuses too: a heartbeating
 })
 
 // ── 3.4 — THE ARMED MODEL ALIAS (the session lane's launch journal grows a REQUEST record).
-// On 2026-08-23 a do-arc orchestrator wrote driver.model 'claude-fable-5' into the spawn prompt of
-// a phase-executor whose agent card declares `model: opus`: a spawner-asserted identity silently
-// overrode the executor's own self-knowledge, and no gate could see it (result check is shape-only,
+// A do-arc orchestrator that writes driver.model 'claude-fable-5' into the spawn prompt of a
+// phase-executor whose agent card declares `model: opus` silently overrides the executor's own
+// self-knowledge, and no gate sees it (result check is shape-only,
 // the codex reconcile is journal-gated, the validator warning fires on ABSENT attribution only).
 // The arm file is written pre-spawn at the one session-lane chokepoint, so it is where the REQUEST
 // is recorded. This lib owns only the recording; `roadmap result check` owns the reconcile.
@@ -583,7 +583,7 @@ test('27b) EXCLUSIVITY is executor-scoped, never alias-scoped — the alias is e
   )
   assert.equal(JSON.parse(readFileSync(armPath(worktree, 3004), 'utf8')).expectedModelAlias, 'sonnet', 'the re-arm re-records it')
 
-  // Different executor, identical alias — still the 2026-08-17 refusal.
+  // Different executor, identical alias — still the executor-exclusivity refusal.
   assert.throws(
     () => armExecutor(worktree, 3004, 'sess-shared', { executorId: 'exec-second', expectedModelAlias: 'sonnet' }),
     /exec-first/,

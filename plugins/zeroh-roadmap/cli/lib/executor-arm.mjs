@@ -37,7 +37,8 @@ import { join, dirname } from 'node:path'
 import { readBeaconLine } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
 
-function armPath(worktree, phase) {
+/** The one home for the arm-file path: `roadmap result check` reconciles against the same file. */
+export function armPath(worktree, phase) {
   return join(worktree, '.building', `${phase}-executor.armed`)
 }
 

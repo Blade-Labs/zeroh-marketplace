@@ -12,7 +12,7 @@
  * `<path>: <message>` per Zod issue) · 1 toolchain-or-config error.
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { armPath } from '../lib/executor-arm.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import {
   bridgeEval,
@@ -42,11 +42,11 @@ const ALIAS_FAMILY = { fable: 'claude-fable', opus: 'claude-opus', sonnet: 'clau
  * and the validator warning fires on absent attribution rather than wrong attribution.
  */
 function reconcileArmedAlias(root, phase, parsed) {
-  const armPath = join(root, '.building', `${phase}-executor.armed`)
-  if (!existsSync(armPath)) return 0
+  const arm = armPath(root, phase)
+  if (!existsSync(arm)) return 0
   let armed
   try {
-    armed = JSON.parse(readFileSync(armPath, 'utf8')).expectedModelAlias
+    armed = JSON.parse(readFileSync(arm, 'utf8')).expectedModelAlias
   } catch {
     return 0 // an unreadable or legacy arm records no request — nothing to reconcile against
   }
@@ -55,7 +55,7 @@ function reconcileArmedAlias(root, phase, parsed) {
   if (!family) {
     process.stderr.write(
       `roadmap result check: armed model alias '${armed}' maps to no model family — driver.model NOT reconciled `
-        + `(arm ${armPath}). Add it to ALIAS_FAMILY in cli/commands/result.mjs if it is a real card alias.\n`,
+        + `(arm ${arm}). Add it to ALIAS_FAMILY in cli/commands/result.mjs if it is a real card alias.\n`,
     )
     return 0
   }
@@ -63,7 +63,7 @@ function reconcileArmedAlias(root, phase, parsed) {
   if (typeof returned !== 'string' || returned.length === 0) {
     process.stderr.write(
       `roadmap result check: the launcher requested model alias '${armed}' but the result carries NO driver.model `
-        + `(arm ${armPath}). A spawn the launcher recorded cannot return unattributed: stamp driver `
+        + `(arm ${arm}). A spawn the launcher recorded cannot return unattributed: stamp driver `
         + '{ model: <your own exact model id>, lane: \'session\' }.\n',
     )
     return 2
@@ -71,7 +71,7 @@ function reconcileArmedAlias(root, phase, parsed) {
   if (returned.startsWith(family)) return 0
   process.stderr.write(
     `roadmap result check: driver.model '${returned}' is not of the family the launcher requested — the arm records `
-      + `alias '${armed}' (family '${family}-*') at ${armPath}. The arm is what was ASKED FOR; driver.model is the `
+      + `alias '${armed}' (family '${family}-*') at ${arm}. The arm is what was ASKED FOR; driver.model is the `
       + 'executor\'s self-report. If a spawn prompt asserted a model id, that is the defect: an executor stamps its '
       + 'own id from its own harness context, never one handed to it.\n',
   )

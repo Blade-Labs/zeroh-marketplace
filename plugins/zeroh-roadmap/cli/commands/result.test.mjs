@@ -160,9 +160,9 @@ test('seam-3 conformance — NO second PhaseExecutionResultShape z.object defini
 })
 
 // ── 3.4 — THE SESSION-LANE ATTRIBUTION RECONCILE ────────────────────────────────────────────────
-// On 2026-08-23 the do-arc orchestrator wrote driver.model 'claude-fable-5' into the spawn prompt
-// of a phase-executor whose agent card declares `model: opus`, and the returned result carried the
-// spawner's assertion as if it were self-knowledge. Nothing could have caught it: this command
+// A do-arc orchestrator that writes driver.model 'claude-fable-5' into the spawn prompt of a
+// phase-executor whose agent card declares `model: opus` gets that assertion back in the result
+// as if it were self-knowledge. Nothing else catches it: this command
 // validates SHAPE (driver is optional), the codex reconcile is journal-gated, and the validator
 // warning fires on ABSENT attribution only. The arm file is the session lane's launch journal —
 // written pre-spawn, carrying the alias the launcher READ off the card — so it is the launcher

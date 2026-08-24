@@ -106,7 +106,7 @@ export default async function run(argv) {
     expectedModelAlias
       ? `roadmap executor-arm: requested model alias '${expectedModelAlias}' recorded from ${cardPath}`
         + ' — the executor stamps its own exact id and `roadmap result check` reconciles the two by family\n'
-      : `roadmap executor-arm: no model alias recorded (${cardPath} declares no frontmatter model: line)`
+      : `roadmap executor-arm: no model alias recorded (${existsSync(cardPath) ? `${cardPath} declares no frontmatter model: line` : `no agent card at ${cardPath}`})`
         + ' — the returned driver.model will NOT be reconciled\n',
   )
   process.stderr.write(preflightLine(worktree, phase))

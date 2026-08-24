@@ -285,14 +285,12 @@ export const PhaseExecutionResultShape = z.object({
    *  collector can SEE, never a silent zero. Capture only in this arc; the cross-actor
    *  comparisons are EVALLOOP's job. */
   driver: DriverShape.optional(),
-  /** WHICH model filled each protocol role, and HOW that role was fulfilled. The resolver that
-   *  WRITES this lands in POLYSEAT plane 4; the shape lands here first so the schema ships once
-   *  and that plane is purely behavioural (the same land-the-shape-early pattern `assumptions`
-   *  used). `via` records resolveRole's `mode` return — same three values, so an inline
-   *  fulfillment is never indistinguishable from a native one. `substituted` is present only
-   *  when a role fell down its tier chain, and names who was asked, who answered, and why.
-   *  Optional: absent means no bindings were recorded, which a reader must be able to tell
-   *  apart from zero bindings recorded. */
+  /** WHICH model filled each protocol role, and HOW that role was fulfilled. The role resolver
+   *  is the only writer; nothing writes this yet. `via` records resolveRole's `mode` return —
+   *  same three values, so an inline fulfillment is never indistinguishable from a native one.
+   *  `substituted` is present only when a role fell down its tier chain, and names who was
+   *  asked, who answered, and why. Optional: absent means no bindings were recorded, which a
+   *  reader must be able to tell apart from zero bindings recorded. */
   roles: z
     .array(
       z.object({

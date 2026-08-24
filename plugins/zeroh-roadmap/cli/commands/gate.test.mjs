@@ -1032,6 +1032,37 @@ test('gate run --verify-complete — a phase whose driver AGREES with the journa
   assert.deepEqual(driverAbsentLines(r.stdout), [], 'a recorded, agreeing driver warns about nothing')
 })
 
+test('gate run --verify-complete — a journal whose lane pins NO model announces the model UNRECONCILED and still reconciles the lane', () => {
+  const repo = makeRepo(RUN_CFG())
+  // A registry entry may pin no model (the claude lane: the harness resolves it). The launcher
+  // then cannot contradict the model half, so it must SAY so rather than pass silently — a
+  // silent pass is indistinguishable from a checked one.
+  repo.writePhase(1614, donePhase(1614, { model: CLAIMED_MODEL, lane: 'claude' }))
+  repo.commit('feat: phase 1614 — code', { 'lib/n.ts': 'export const n = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1614']).code, 0)
+  const jPath = writeRunJournal(repo.root, [1614], { driver: { model: null, lane: 'claude' } })
+
+  const r = runGateCmd(repo.root, ['1614', '--verify-complete'])
+  assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `an unpinned model is announced, never red; stderr: ${r.stderr}`)
+  assert.match(r.stderr, /UNRECONCILED/, `the unchecked half must be NAMED; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(jPath), `the journal it came from is named; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(!r.stderr.includes(CLAIMED_MODEL), 'an unpinnable model is not compared, so the claim is not quoted as a mismatch')
+})
+
+test('gate run --verify-complete — an unpinned-model journal still REDS a lane that disagrees', () => {
+  const repo = makeRepo(RUN_CFG())
+  // The lane half is knowable even when the model half is not: announcing the model must not
+  // buy the whole reconcile an exemption.
+  repo.writePhase(1615, donePhase(1615, { model: CLAIMED_MODEL, lane: 'session' }))
+  repo.commit('feat: phase 1615 — code', { 'lib/o.ts': 'export const o = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1615']).code, 0)
+  writeRunJournal(repo.root, [1615], { driver: { model: null, lane: 'claude' } })
+
+  const r = runGateCmd(repo.root, ['1615', '--verify-complete'])
+  assert.equal(r.code, 2, `a lane disagreement reds even with no pinned model; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.match(r.stderr, /driver\.lane disagrees/, `the lane half is named as the failure; stderr: ${JSON.stringify(r.stderr)}`)
+})
+
 test('gate run --verify-complete — with NO lane journal the driver claim is not reconciled at all (an inline session)', () => {
   const repo = makeRepo(RUN_CFG())
   // The SAME claim the mismatch fixture reds on — with no journal there is no truth to check it

@@ -221,9 +221,9 @@ test('7) the help tree lists the new flag sets', () => {
 })
 
 // ── 3.4 — THE ARMED CARD ALIAS. `executor-arm` is the session lane's pre-spawn chokepoint, so it
-// is where the REQUESTED model is recorded: on 2026-08-23 a do-arc orchestrator asserted
-// driver.model 'claude-fable-5' in the spawn prompt of an executor whose card declares
-// `model: opus`, and nothing downstream could contradict it. The alias must therefore be read
+// is where the REQUESTED model is recorded: a do-arc orchestrator that asserts driver.model
+// 'claude-fable-5' in the spawn prompt of an executor whose card declares `model: opus` cannot
+// be contradicted by anything downstream. The alias must therefore be read
 // MECHANICALLY off the agent card — never taken from a caller, never guessed — and PRINTED, so the
 // launcher's own record of what it asked for is visible at the moment it asks.
 //
