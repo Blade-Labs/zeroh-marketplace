@@ -48,16 +48,21 @@ const BOOTSTRAP_SKILL = 'using-zeroh-roadmap'
 
 class SourceError extends Error {}
 
+/** JSON at `path`, or a SourceError naming the file — a manifest that will not parse is never
+ *  quietly treated as an empty one, which would silently drop every field it carries. */
+function parseJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch (e) {
+    throw new SourceError(`${path} will not parse: ${e.message}`)
+  }
+}
+
 /** version + skill list + agent list, or a SourceError naming exactly what is missing. */
 function readSource(root) {
   const pkgPath = join(root, 'package.json')
   if (!existsSync(pkgPath)) throw new SourceError(`no package.json at ${pkgPath} — the version has ONE source and it is not there`)
-  let pkg
-  try {
-    pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-  } catch (e) {
-    throw new SourceError(`package.json at ${pkgPath} will not parse: ${e.message}`)
-  }
+  const pkg = parseJson(pkgPath)
   if (!pkg.version) throw new SourceError(`package.json at ${pkgPath} carries no version field`)
 
   const skillsDir = join(root, 'skills')
@@ -80,11 +85,7 @@ function readSource(root) {
 function claudeMeta(root) {
   const p = join(root, '.claude-plugin', 'plugin.json')
   if (!existsSync(p)) return {}
-  try {
-    return JSON.parse(readFileSync(p, 'utf8'))
-  } catch {
-    return {}
-  }
+  return parseJson(p)
 }
 
 function renderCodexPlugin(root, src) {
@@ -157,15 +158,9 @@ const RENDERERS = {
 
 const isJson = (path) => path.endsWith('.json')
 
-/** The version currently in `text`, or undefined when the field is absent/unparseable. */
-function currentVersion(text, target) {
-  if (isJson(target.path)) {
-    try {
-      return JSON.parse(text)[target.field]
-    } catch {
-      return undefined
-    }
-  }
+/** The version currently declared in `path`, or undefined when the field is absent. */
+function currentVersion(text, target, path) {
+  if (isJson(target.path)) return parseJson(path)[target.field]
   return text.match(new RegExp(`^${target.field}:[ \\t]*(\\S+)[ \\t]*$`, 'm'))?.[1]
 }
 
@@ -191,6 +186,16 @@ function lineDelta(have, want, max = 3) {
 }
 
 export function run(argv) {
+  try {
+    return emit(argv)
+  } catch (e) {
+    if (!(e instanceof SourceError)) throw e
+    process.stderr.write(`emit-manifests: ${e.message}\n`)
+    return 1
+  }
+}
+
+function emit(argv) {
   const ri = argv.indexOf('--root')
   const known = new Set(['--check', '--root'])
   const flagValue = ri >= 0 ? ri + 1 : -1
@@ -207,15 +212,7 @@ export function run(argv) {
   }
   const check = argv.includes('--check')
   const root = ri >= 0 ? resolve(argv[ri + 1]) : PLUGIN_ROOT
-
-  let src
-  try {
-    src = readSource(root)
-  } catch (e) {
-    if (!(e instanceof SourceError)) throw e
-    process.stderr.write(`emit-manifests: ${e.message}\n`)
-    return 1
-  }
+  const src = readSource(root)
 
   const drift = []
   const changed = []
@@ -249,7 +246,7 @@ export function run(argv) {
       continue
     }
     const text = readFileSync(p, 'utf8')
-    const have = currentVersion(text, target)
+    const have = currentVersion(text, target, p)
     if (have === src.version) continue
     drift.push(`${target.path}: ${target.field} is ${have ?? '(absent)'}, package.json says ${src.version}`)
     if (!check) write(target.path, withVersion(text, target, src.version))
