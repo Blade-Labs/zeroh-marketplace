@@ -18,9 +18,7 @@ validate-arc PASS + clean sweep + green suite + no blocker; standalone `/arc-swe
 **Read `skills/release-sweep/SKILL.md` FIRST.** arc-sweep reuses release-sweep's debt-disposition
 vocabulary and `debtResolutions[]` persistence verbatim — never a parallel taxonomy.
 
-**When vs release-sweep:** arc-sweep runs **pre-merge** on an unversioned arc; release-sweep runs
-**pre-archive** on versioned phases. arc-sweep is NOT `full-code-review` — it is a lighter,
-seam-specific architect pass.
+arc-sweep is NOT `full-code-review` — it is a lighter, seam-specific architect pass.
 
 ## Step 1: Consolidated debt sweep
 
@@ -70,15 +68,9 @@ status, via, date }`); an autonomous disposition writes the SAME entry, marking 
   - **DESCOPE** — drop it. Requires **explicit user ratification EVEN in autonomous mode**. Record
     BOTH `{ status: "won't_fix", via: 'descope — ratified by <who> <when>' }` AND a typed
     `Arc.descopes[]` `{ item, ratifiedBy, ratifiedAt }` — durable and typed, never buried in prose.
-- **ACCEPT** == release-sweep **(w) Won't fix** (reason ≥20 chars → `"won't_fix"`) or **(d) Dismiss**
-  (never-was-debt → `'dismissed'`).
-- **OPERATOR-PENDING** — a required **deploy/operator action, not code**. Writes `{ status:
-  'operator-pending', via: '<runbook / DEPLOY.md anchor>' }` so deploy debt is schema-visible, detail
-  in `roadmap/followups/<arcId>.md`. **Exempt from the openFollowups budget** but counted + listed in
-  the RunnerSummary notes; stays OPEN until a later release-sweep disposes it post-deploy.
-
-`ref`/`status`/`via`/`date`, the ≥20-char `won't_fix` reason, and the dismissed-ratio nudge are
-release-sweep's — do not redefine them.
+- **OPERATOR-PENDING** — detail in `roadmap/followups/<arcId>.md`. **Exempt from the
+  openFollowups budget** but counted + listed in the RunnerSummary notes; stays OPEN until a
+  later release-sweep disposes it post-deploy.
 
 **`limitations` are out of scope — by design.** The roll-up carries `compromises`/`skipped`/
 `hardcoded` but NOT `limitations` (a permanent design constraint, not deferred work) — **release-sweep**
@@ -89,9 +81,6 @@ LISTS any present in the Step-3 report under "deferred to release-sweep".
 report ephemeral. `roadmap/followups/<arcId>.md` holds only OPERATOR-PENDING detail + ratified-descope rationale.
 
 ## Step 2: Whole-arc cross-phase review (against singleSeams + designRefs)
-
-A per-phase gate sees only its own diff — it CANNOT catch a seam one phase quietly forked. **Only a
-whole-arc view catches a forked seam** — that is this step's whole job.
 
 Run ONE `zeroh-roadmap:software-architect` over `git diff <arc.baseRef>..HEAD` and judge it as **a
 single system** against `arc.singleSeams`: for each seam, did any consumer fork it, or is it a single
@@ -121,17 +110,9 @@ author **PLAN-PHASE** follow-ups for real debt that should not block the merge.
 
 ## Step 2.5: Estate ratchets — the whole-tree conformance pack, ONCE per arc
 
-Per-phase gates are diff-scoped by design, so an arc's accumulated drift only shows up where a
-WHOLE-TREE check runs. Today that is `arc land` and the release PR — the two most expensive
-moments (a v0.36.0 release burned three CI rounds on drift every phase gate had passed, and the
-FRONTDOOR land tripped five ratchets at once). Once per arc, here, is the right altitude: too slow
-per phase, too late at land.
-
 When the consumer binds `gateCommands.ratchets`, run it **FOREGROUND** after the whole-arc review.
-Its scope is the consumer's own conformance estate (count/threshold ratchets, test-inventory and
-scan locks, migration-knob cross-checks — whatever the consumer put behind the binding). A red run
-is a sweep FINDING disposed through the Step-1 table like any other, with **RESOLVE-NOW as the
-default** (ratchet fixes are mechanical: reword the comment, add the knob, ratchet the number down).
+A red run is a sweep FINDING disposed through the Step-1 table like any other, with
+**RESOLVE-NOW as the default**.
 No binding → record the named skip (`ratchets: not bound in gateCommands — estate ratchets skipped`)
 in the Step-3 report; never a silent pass.
 
@@ -147,4 +128,3 @@ sweep BLOCKER — a sweep whose own report will not parse does not report green.
 THEN render the chat report FROM that document: it is a PROJECTION, so a fact not in the file does
 not exist for any later eval. **arc-sweep never merges — it reports.** Under `do-arc`, hand it
 back; standalone, hold for the user's go.
-</content>

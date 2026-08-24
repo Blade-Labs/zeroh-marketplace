@@ -15,9 +15,7 @@ judgment, the CLI owns the mechanics. Invoke the CLI as `roadmap <cmd>`
 (fallback `node ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`).
 
 You drive the loop INLINE with Bash CLI calls + one subagent spawn per executor-band phase —
-do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime (it is the loop's
-tested LIBRARY form, a Node module for the fixture tier and non-Claude runners; a sandboxed
-workflow engine cannot host its imports).
+do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime.
 
 ## Trigger
 
@@ -41,27 +39,23 @@ workflow engine cannot host its imports).
       SESSION ID> --executor-id <the id of the subagent you are about to spawn>` (the
       session-scoped dir name in your transcript/scratchpad paths) — the CLI refuses an
       unbound arm, and a foreign session is never guarded. `--executor-id` is what makes the
-      arm EXCLUSIVE: one session spawns many executors, so a session id alone cannot tell a
-      respawn from a second executor onto a live phase. READ the cross-repo preflight line the
+      arm EXCLUSIVE. READ the cross-repo preflight line the
       arm prints (the product repos this phase's keyFiles point into, and the newest declared
       keyFile age) before spawning: a keyFile fresher than a few minutes means someone is
       already writing there. Liveness =
       `roadmap watch <id> --once --json` SPOT-CHECKS on each executor notification and before
-      every resume decision — never a long-lived background `watch` daemon (every daemon
-      instance to date was reaped by a session event before its arc finished).
+      every resume decision — never a long-lived background `watch` daemon.
    4. On return: `roadmap result check --phase <phase>` over the returned JSON (parse or
       die — never trust prose), then `roadmap executor-disarm <phase>` (`roadmap
       executor-disarm --sweep` at arc start clears stale leftovers). When NO
       result came back the disarm REFUSES (exit 2) and prints the beacon evidence.
       `--force` is a deliberate act taken only after READING that evidence, never on a
-      STALLED verdict alone: on 2026-08-17 a STALLED verdict on a healthy cross-repo executor
-      is exactly what put two executors on one working tree and one branch.
+      STALLED verdict alone.
       `status` ≠ `done` → the halt branch below. Criterion-narrowing compromise → the
       self-descope branch. Else `roadmap gate run <phase> --verify-complete`, groom the
       backlog entry, run the `emit` slot, and loop.
    **Control returns to you between planes** — checkpoints, pauses, and user rulings live
-   there. Position re-derives from disk on every `arc next`, so resuming always
-   fast-forwards past committed work — a completed phase never re-runs.
+   there.
 
 ## The loop's non-done exits — you own them
 
@@ -82,20 +76,18 @@ workflow engine cannot host its imports).
     verify `checkpoint.committedSha` resolves on disk (`git cat-file -t <sha>`), then respawn the
     phase-executor UNCONDITIONALLY with the checkpoint verbatim in the spawn prompt — resume is
     lossless from disk, and the respawned executor's first act is the on-wake drill over
-    `checkpoint.watch`. No SendMessage negotiation, no judgment call: the wake is owned by this
-    contract. Bound: THREE consecutive checkpoints with no new commit between them → escalate to
-    the user with the beacon trail (a progress ratchet, not a leash). A committedSha that does
+    `checkpoint.watch`. Bound: THREE consecutive checkpoints with no new commit between them →
+    escalate to the user with the beacon trail. A committedSha that does
     not resolve → treat as `failed` (the lossless precondition is broken).
   - `blocked` → surface the reason (unmet dep, foreign lane), resolve it, relaunch.
   - `stalled` / `exited` → the evidence IS the `roadmap watch --once` verdict JSON. If the executor
-    is addressable, `SendMessage` it once with that evidence; otherwise respawn it mid-phase
-    (resume is free — re-derivation from disk makes a respawn lossless). Still stuck after a
+    is addressable, `SendMessage` it once with that evidence; otherwise respawn it mid-phase. Still stuck after a
     bounded wait → escalate to the user. Never restart committed work.
   - `unobserved` (watch exit 5, verdict UNOBSERVED) → no life signal could be PROBED, which is not
     death: never respawn on it — supply `--transcript-dir` or check the executor's own
     task-notification channel first. An executor
     expected to run past ~30min gets periodic `roadmap watch --once` spot-checks, and forensics read
-    that verdict evidence, never `ls` on a tasks symlink (whose own mtime is not the transcript's).
+    that verdict evidence, never `ls` on a tasks symlink.
 
 ## Terminal handoffs (in-session)
 
@@ -114,8 +106,8 @@ workflow engine cannot host its imports).
    the arc-end suite, the final blocker check, backlog regroom, RunnerSummary, and the
    autonomous push per the consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user ·
    2 = blocker; surface the blocker JSON on any non-zero exit — a `roadmap arc land: <id> —
-   <verdict> (exit N)` line also lands on stderr, so a piped stdout can never mask the
-   outcome (never trust a pipeline's exit code over that line). `baseRef → master` is NEVER
+   <verdict> (exit N)` line also lands on stderr — never trust a pipeline's exit code over
+   that line. `baseRef → master` is NEVER
    part of landing — a release is a held human act. A user instruction to
    review-before-merge always overrides autonomy.
    **Suite scope**: `mergePolicy.arcEndSuite` applies to EVERY integration model —

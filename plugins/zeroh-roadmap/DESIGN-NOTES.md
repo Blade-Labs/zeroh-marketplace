@@ -338,3 +338,13 @@ Four contracts came out of it, and they hold together — each closes one link o
 ~30min gets periodic `roadmap watch --once` spot-checks, and that is one documented line in do-arc,
 not machinery. STALLED itself was not renamed; consumers keep their meaning and the new member
 carries the new one.
+
+## driving-tiers — worked example (azure_private_agent)
+
+Relocated from `skills/validate-arc/references/driving-tiers.md` by phase 1 task 1.4 (the
+protocol-load diet). It is an example consumer's own `validationTiers` bindings, **NOT a plugin
+default** — the plugin ships none of these commands, and each consumer documents its own.
+
+- `wired` → in-process wired turn through `integration/harness.ts` `driveTurn` (`app.run` with external boundaries faked) — run ONE suite via the consumer's `integration-scoped` Gate-commands slot (scoped-slot resolution rule); never `-- <suite>`, which appends after the inline glob and runs the whole tier.
+- `live-ui` → the Playwright projects in `e2e/playwright.config.ts` (`deployed` = the console, loginless; `office-pane`; `sharepoint`) + a screenshot — `E2E_PROJECT=<project> npx playwright test …` (storageState auth via `npm run e2e:auth` where needed).
+- `live-host` → real model + masking against a running host — `npm run test:live`.

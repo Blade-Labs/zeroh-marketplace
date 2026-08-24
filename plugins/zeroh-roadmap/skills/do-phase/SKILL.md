@@ -65,8 +65,8 @@ For each task in order:
 2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; scope touched tests via
    the scoped slot (never a hand-built filter); a run that executed ZERO tests still exits green,
    so confirm a nonzero executed-test count before trusting a pass. A UI change runs `build`. **Any run expected
-   under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (a session
-   event kills the Monitor's wake silently; the long-run protocol covers genuinely long runs).
+   under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (the
+   long-run protocol covers genuinely long runs).
    A NEW guard (a check that reds when a claim about the TREE goes false) is mutation-proven per
    `references/guard-mutation-proof.md` before its commit, three results quoted; unproven = undone.
 3. **Commit** — `<type>(<scope>): phase N — <task title>`. First, when the consumer binds a
@@ -103,10 +103,7 @@ matching 1369.
 **The LANDED subject** (what `phase curate` composes, and the style every commit that survives
 curation should already aim at): `type(scope): phase N — <imperative summary>` ≤72 chars — the
 change to the tree, never the story of making it (no round numbers, no task bookkeeping in the
-subject; that detail lives in the body and the gate report). Task-commit prose is working
-material: in the worktree lane it stays worktree-internal and the integration branch receives
-the curated commits plus the phase's closing state commits (`mark phase N complete`, the groom)
-— those are records in their own right, never squash fodder.
+subject; that detail lives in the body and the gate report).
 
 ## The gate (after the last task)
 
@@ -137,18 +134,14 @@ absorb phase work — never another phase-executor, `Explore`, or a fork for a "
 
 ## Curate the landed history
 
-After the gate goes green, before Complete + return (that order is BINDING: `docs(roadmap): mark
-phase N complete` carries no `—` boundary, so a completion commit inside the range reads as
-foreign and refuses the whole curate): run `roadmap phase curate <N>` (a DRY RUN —
+After the gate goes green, before Complete + return (that order is BINDING): run `roadmap phase curate <N>` (a DRY RUN —
 read the plan: range, classification, groups, composed messages), then re-run with `--apply` to
 land the phase as 1-3 logical commits (`--groups "1-3,4-6"` splits by task-id ranges when the
 phase is genuinely composite). The command records the curation evidence — squashed SHAs and
-every scratch/revert RED-proof pair — into the gate report BEFORE the squash, so nothing the
-review relied on goes unreachable. A **foreign-commit refusal** (a sibling session's commit
+every scratch/revert RED-proof pair — into the gate report BEFORE the squash. A
+**foreign-commit refusal** (a sibling session's commit
 interleaves the range) is recorded in the phase's `limitations` and left alone — history staying
-granular is the honest fallback, NEVER a forced rewrite of someone else's work. In the worktree
-lane a refusal cannot fire (the scratch head carries only this phase's commits by construction) —
-one on a primary-checkout phase means siblings shared the range.
+granular is the honest fallback, NEVER a forced rewrite of someone else's work.
 
 ## Complete + return
 
@@ -172,13 +165,9 @@ still happen, in the worktree, before the land so they ride the curated commits.
 
 ## Codex delegation lane (`roadmap codex run <N…>`)
 
-When the session delegates implementation to Codex, use the CLI lane — never hand-roll the
-launch (the shared-host hook and reaper classify argv; the entrypoint carries the invariants:
-direct CLI, prompt via stdin, detached own-group spawn, a double-run-refusing
-`.building/codex-*.json` journal, the `CODEX-REPORT.md` sentinel).
+When the session delegates implementation to Codex, use the CLI lane — never hand-roll the launch.
 Poll `roadmap codex status <N>` (typed: running/complete/blocked/dead-no-report). A whole arc
-delegates as one run: `roadmap codex run --arc <ID>` (members in planes order). **Division of
-labor (user ruling 2026-07-22):** Codex runs each phase FULLY — tasks, per-task commits +
+delegates as one run: `roadmap codex run --arc <ID>` (members in planes order). **Division of labor:** Codex runs each phase FULLY — tasks, per-task commits +
 transparencyReports, the gate to green (an honestly-labeled codex-self-review gateRound, the
 done-flip, `--verify-complete`). The session owns the back half only: AUDIT the commits and gate
 claims against the plan (spot-check verifies; a false green is a bounce), then merge, push,
@@ -190,8 +179,7 @@ judgment stays with the session.
 **Integration routing (the session's merge, after CODEX-RUN-COMPLETE):** rebase `codex/<N>`
 onto develop inside the codex worktree, then run `git merge --ff-only codex/<N>` FROM THE
 PRIMARY checkout — run inside the codex worktree it merges the branch into itself and silently
-no-ops ("Already up to date" there is the tell; a compound command whose `cd` reset re-runs
-later steps in the wrong checkout is the usual cause). Then push, groom the backlog, and remove
+no-ops. Then push, groom the backlog, and remove
 the worktree, the `codex/<N>` branch AND the `.building/codex-<N>.json` journal. **Cross-repo
 phases ride the lane normally** — the lane prompt carries the cross-repo instruction (product
 commits in the other checkout on its checked-out branch, roadmap-state commits in the

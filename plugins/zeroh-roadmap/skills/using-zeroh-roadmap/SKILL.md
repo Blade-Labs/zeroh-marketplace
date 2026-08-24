@@ -7,8 +7,7 @@ disable-model-invocation: false
 # zeroh-roadmap: Phase-Driven Development
 
 Route ALL development work through the phase system — never create files/schemas/structure
-ad hoc (honor-system: no hook blocks this; the routing table is the control).
-Invoke the CLI as `roadmap <cmd>` (fallback `node
+ad hoc. Invoke the CLI as `roadmap <cmd>` (fallback `node
 ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` scaffolds
 `roadmap/` + `roadmap.config.json` — the ONLY sanctioned initialization path.
 
@@ -27,7 +26,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | arc landed / eval the arc | **eval-arc** (do-arc Step 9 auto-runs it) |
 | show roadmap, backlog | `roadmap status` + `roadmap/ROADMAP.md` |
 | what's next, next phase | `roadmap status` → **do-phase** |
-| code review (a diff) | the `code-reviewer` agent / the built-in review command (skill retired 2026-08-14, no outcome delta) |
+| code review (a diff) | the `code-reviewer` agent / the built-in review command |
 | full code review, pre-release review | **full-code-review** |
 | audit roadmap, roadmap health check | **audit-roadmap** |
 | pause the arc | stop anywhere; resume = relaunch the plane workflow |
@@ -35,8 +34,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | migrate / upgrade roadmap | `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` |
 
 NEVER handle these yourself — the skills carry the full protocol; your job ends at
-correct dispatch plus the coordination steps below (honor-system: no mechanism blocks
-inline handling — the review gates catch its artifacts, not the act).
+correct dispatch plus the coordination steps below.
 
 ## Multi-session coordination (shared repos)
 
@@ -60,6 +58,3 @@ routed-to work surfaces the artifact class and the target skill has not already:
 - Assigning a task's `testMode` or refusing a test → `references/test-worthiness.md`
 - Splitting or placing a UI component (at planning time) → `references/component-structure.md`
 - Introducing any external package/font/icon/image/snippet/model → `references/external-assets-licensing.md`
-
-Provenance: this routing is exercised in the primary consumer repo — 16 ArcEvalReports
-under `roadmap/arc-evals/*.json` (2026-07-19 → 2026-08-12).

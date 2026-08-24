@@ -1,6 +1,6 @@
 # Driving tiers — what each can honestly judge
 
-`validate-arc` and the `intent-validator` agent speak ONE generic tier vocabulary. The plugin owns the vocabulary; each **consumer repo binds each tier to a concrete command** in the `validationTiers` key of its `roadmap.config.json` (the binding the judge reads). The plugin hardcodes no consumer command.
+`validate-arc` and the `intent-validator` agent speak ONE generic tier vocabulary. The plugin owns the vocabulary; each **consumer repo binds each tier to a concrete command** in the `validationTiers` key of its `roadmap.config.json` (the binding the judge reads).
 
 A criterion's `tier` is the **cheapest tier that can honestly see its `signal` and `bar`** — not the most thorough.
 
@@ -23,12 +23,4 @@ A criterion's `tier` is the **cheapest tier that can honestly see its `signal` a
 - **Evidence:** the real response body excerpt showing the signal present.
 - **Cost:** nondeterministic, spends tokens, needs a running host (and its network/VNet). Use only when the criterion is specifically about real model/masking behaviour.
 
-## Worked example — `azure_private_agent` (an example consumer, NOT a plugin default)
-
-This is how one consumer binds the tiers (its `validationTiers` config); the commands are **that repo's**, shown to make the vocabulary concrete — the plugin ships none of them:
-
-- `wired` → in-process wired turn through `integration/harness.ts` `driveTurn` (`app.run` with external boundaries faked) — run ONE suite via the consumer's `integration-scoped` Gate-commands slot (scoped-slot resolution rule); never `-- <suite>`, which appends after the inline glob and runs the whole tier.
-- `live-ui` → the Playwright projects in `e2e/playwright.config.ts` (`deployed` = the console, loginless; `office-pane`; `sharepoint`) + a screenshot — `E2E_PROJECT=<project> npx playwright test …` (storageState auth via `npm run e2e:auth` where needed).
-- `live-host` → real model + masking against a running host — `npm run test:live`.
-
-Another consumer with a different stack writes a different block; the judge reads whichever the consumer documents.
+A worked example of one consumer's bindings is in `DESIGN-NOTES.md` §driving-tiers — worked example (azure_private_agent); the judge reads whichever bindings the consumer documents.

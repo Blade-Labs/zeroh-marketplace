@@ -31,8 +31,7 @@ release-sweep [<version> | --arc <id> | --all-done] [--archive]
 
 **Release does NOT gate on debts** — a phase can ship with open debts on any release if the operator
 chooses; release-sweep blocks no release ON DEBTS (its ONE release gate is Step 2.5's followup
-dispositions, minor/major only). **Archive DOES gate.** Once a phase is in
-`roadmap/archive/<version>/` the operator commits to never revisiting its open debts, so archive requires
+dispositions, minor/major only). **Archive DOES gate** — archive requires
 every candidate debt (a non-`"None"` transparency-report entry) to have a matching `debtResolutions[].ref`
 with a CLOSING status. "Open" = no matching ref, **OR** a matching entry still open (the 1371 contract):
 `'planned'` is open until its `via: 'phase-<N>'` phase is `done`; `'operator-pending'` is open until this
@@ -94,17 +93,13 @@ for N in <phase-numbers>; do
   git mv "$src" "$dst"
 done
 ```
-The skip-if-already-archived guard makes `--archive` **re-runnable** (a Ctrl-C'd partial archive resumes on
-re-invoke); a both-paths-exist conflict is **fatal** and demands manual investigation. Commit:
-`chore(roadmap): archive <version> — N phases moved`. After the move: `roadmap audit` covers archive
-integrity (checks 12.3/12.4 join the archive census); transparency reports +
-`debtResolutions` are preserved on the archived files (`won't_fix`/`dismissed` stay visible to auditors).
+Commit: `chore(roadmap): archive <version> — N phases moved`. After the move: `roadmap audit` covers
+archive integrity (checks 12.3/12.4 join the archive census).
 
 ## Edge cases + scope
 Zero debts is archive-eligible. Skip/warn `version: undefined`; Step 1 excludes non-done matches. A
 dangling resolution warns without repair. New debt from an inline fix belongs to that fix's phase.
 Per-resolution commits and archive are resumable. Never change versions, gate archived work, or cancel phases.
 
-**No summary file.** The phase files ARE the audit trail — `debtResolutions[]` + the transparency reports it
-points to carry everything an auditor needs; a separate `reviews/<version>-debt-sweep.md` drifts. Don't write one.
-</content>
+**No summary file.** The phase files ARE the audit trail (`debtResolutions[]` + the transparency reports
+it points to); never write a separate `reviews/<version>-debt-sweep.md`.

@@ -17,16 +17,24 @@ disposition is exactly one of three:
 - **obsolete-with-evidence**(`<one-line evidence>`) — falsifiable evidence the passage is dead (a
   retired mechanism, a superseded decision with its ruling date), not "seems unused".
 
+**Ruling (operator, 2026-08-24) — the diet's standing bar.** Protocol bodies carry
+**operative rules only**: incident archeology and why-a-rule-exists live in git history (the commits already
+carry `WHY:` blocks), at most ONE clause of rationale survives where judgment genuinely depends on
+it, and rarely-consulted detail decomposes into an on-demand reference. The budget is therefore not
+a target but the MEASURED load at the last ratification, with zero growth allowed.
+
 **Measured, never asserted (rail 4).** Size/token claims are `wc -c` and `roadmap measure`
 outputs. The measured do-arc protocol load vs the ~49k baseline is recorded here:
 
 > **Baseline (2026-07-15 plugin audit):** do-arc protocol load ≈ 49,000 tokens.
 > **Measured (phase 1659.8, `roadmap measure --flow do-arc`):** **8,233 tokens** (32,924 B over 6
 > model-loaded files) — an **~83% cut**, well under the budget (`roadmap measure --flow do-arc
-> --assert <budget>` exits 0). The budget is **12,500 tokens**, held in ONE place —
+> --assert <budget>` exits 0). The budget is the MEASURED load at the last ratification —
+> **13,264 tokens** (2026-08-24, phase 1 task 1.4) — held in ONE place —
 > `cli/lib/measure-budget.mjs` `PROTOCOL_LOAD_BUDGET_TOKENS`, read by the measure gate
 > (cli/commands/measure.test.mjs) and by the ELICIT pass (cli/lib/eval-propose.mjs); it was
-> re-ratcheted from 12,000 by user ruling 2026-07-27 (phase 1995 escalation). The
+> 12,000 → 12,500 by user ruling 2026-07-27 (phase 1995 escalation) before the 2026-08-24 ruling
+> replaced the aspirational number with the measured one. The
 > cut is deletion-with-disposition (every removed passage has a row below), not hidden content — the
 > fixture tier (1660) + rehearsal (1661) prove nothing load-bearing regressed.
 
@@ -352,3 +360,121 @@ Row added; the flow now measures honestly at **14,917 tokens / 59,656 B** (skill
 net-negative under 2422's diet; the +433-token reference is named growth, never hidden). The
 whole 12,500 recovery remains the diet lane's, per the phase-2420 flag. Correction of a 2420
 close-out line: measure.test.mjs DOES carry the real-tree 12,500 assertion (cli/commands/measure.test.mjs:146, the PROTOCOL_LOAD_BUDGET_TOKENS assert) — it is the standing red, not an absent test.
+
+## Phase 1 task 1.4 — the operative-rules-only diet + measured rebaseline (2026-08-24)
+
+Operator ruling of 2026-08-24 (header, above). **Every diff in this pass is a DELETION or a MOVE —
+no operative rule was reworded**, because a rewrite risks degrading a protocol the reviewer cannot
+re-derive. `roadmap measure --flow do-arc` before **14,917 tokens / 59,656 B**, after **13,264
+tokens / 53,046 B** (−1,653 tokens, −6,610 B, −11.1%), and `PROTOCOL_LOAD_BUDGET_TOKENS` is
+re-ratcheted to that post-diet measured total — zero growth from here.
+
+**One row per dieted file (before → after tokens):**
+
+| file | tokens | disposition | evidence |
+|---|---:|---|---|
+| skills/do-arc/SKILL.md | 2,840 → 2,606 | obsolete-with-evidence(dated incident + justification prose; every operative rule survives verbatim) | rows below |
+| skills/do-phase/SKILL.md | 3,329 → 3,051 | obsolete-with-evidence(dated attribution + mechanism narration; every operative rule survives verbatim) | rows below |
+| skills/arc-sweep/SKILL.md | 2,595 → 2,229 | obsolete-with-evidence(self-duplicating disposition prose + a dated release incident) | rows below |
+| skills/validate-arc/SKILL.md | 2,161 → 1,882 | obsolete-with-evidence(framing + justification parentheticals; every judge/panel/bound rule survives) | rows below |
+| skills/release-sweep/SKILL.md | 1,819 → 1,697 | obsolete-with-evidence(prose restating the file's own bash comments + rationale clauses) | rows below |
+| skills/using-zeroh-roadmap/SKILL.md | 945 → 852 | obsolete-with-evidence(honor-system asides + a dated provenance paragraph) | rows below |
+| skills/validate-arc/references/driving-tiers.md | 795 → 569 | relocated | DESIGN-NOTES.md §driving-tiers — worked example (azure_private_agent) |
+| skills/release-sweep/references/followup-contract.md | 433 → 378 | obsolete-with-evidence(restatement of the release-sweep gate it is a reference for) | rows below |
+
+**Per-passage rows.**
+
+### skills/do-arc/SKILL.md
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| intro — "(it is the loop's tested LIBRARY form … a sandboxed workflow engine cannot host its imports)" | relocated | DESIGN-NOTES.md §2026-07-17 — the per-plane workflow is a LIBRARY, not a hosted workflow script |
+| Run it 2.3 — the `--executor-id` exclusivity rationale ("one session spawns many executors …") | obsolete-with-evidence(the operative rule "`--executor-id` is what makes the arm EXCLUSIVE" survives; the CLI refuses an unbound arm) | cli/commands/executor-arm path, do-arc §Run it |
+| Run it 2.3 — "(every daemon instance to date was reaped by a session event before its arc finished)" | obsolete-with-evidence(archeology; "never a long-lived background `watch` daemon" survives as the rule) | do-arc §Run it |
+| Run it 2.4 — the 2026-08-17 two-executors-on-one-tree incident | obsolete-with-evidence(dated incident; "`--force` … only after READING that evidence, never on a STALLED verdict alone" survives) | DESIGN-NOTES.md §Liveness observes the EXECUTOR (2026-08-18 incident) |
+| Run it — "Position re-derives from disk on every `arc next` … a completed phase never re-runs" | obsolete-with-evidence(verbatim duplicate of §Pause & resume, which owns the fact) | do-arc §Pause & resume |
+| halts/checkpoint — "No SendMessage negotiation, no judgment call: the wake is owned by this contract" + "(a progress ratchet, not a leash)" | obsolete-with-evidence(restates "respawn … UNCONDITIONALLY" and the stated three-checkpoint bound) | do-arc §The loop's non-done exits |
+| halts/stalled — "(resume is free — re-derivation from disk makes a respawn lossless)" | obsolete-with-evidence(duplicate of §Pause & resume) | do-arc §Pause & resume |
+| halts/unobserved — "(whose own mtime is not the transcript's)" | obsolete-with-evidence(rationale; "never `ls` on a tasks symlink" survives as the rule) | do-arc §The loop's non-done exits |
+| land — "so a piped stdout can never mask the outcome" | obsolete-with-evidence(rationale; "never trust a pipeline's exit code over that line" survives) | do-arc §Terminal handoffs |
+
+### skills/do-phase/SKILL.md
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| per-task loop 2 — "(a session event kills the Monitor's wake silently…)" | obsolete-with-evidence(archeology; the FOREGROUND rule and the long-run pointer survive) | do-phase §The per-task loop |
+| Commit grammar — "Task-commit prose is working material: … never squash fodder" | obsolete-with-evidence(narrates what §Curate the landed history already governs) | do-phase §Curate the landed history |
+| Curate — "(that order is BINDING: `docs(roadmap): mark phase N complete` carries no `—` boundary …)" | obsolete-with-evidence(rationale; "(that order is BINDING)" survives) | cli/commands/phase.mjs curate |
+| Curate — ", so nothing the review relied on goes unreachable" | obsolete-with-evidence(rationale for CLI behaviour the sentence already states) | cli/commands/phase.mjs curate |
+| Curate — "In the worktree lane a refusal cannot fire (…) — one on a primary-checkout phase means siblings shared the range" | obsolete-with-evidence(explanation of a case the stated rule already handles identically) | do-phase §Curate the landed history |
+| Codex lane — "(the shared-host hook and reaper classify argv; the entrypoint carries the invariants: …)" | enforced-by-code(`roadmap codex run` owns every invariant listed; the rule "never hand-roll the launch" survives) | cli/commands/codex.mjs |
+| Codex lane — "(user ruling 2026-07-22)" attribution | obsolete-with-evidence(dated attribution belongs to git history; the division of labor survives verbatim) | git log |
+| Codex lane — the merge-in-the-wrong-checkout diagnosis ("Already up to date" tell, `cd`-reset cause) | obsolete-with-evidence(archeology; "run … FROM THE PRIMARY checkout" and the silent no-op survive) | do-phase §Codex delegation lane |
+
+### skills/arc-sweep/SKILL.md
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| intro — "**When vs release-sweep:** arc-sweep runs pre-merge on an unversioned arc; release-sweep runs pre-archive on versioned phases." | obsolete-with-evidence(duplicate of the file's own "Not this skill" line four lines above; the full-code-review disambiguation survives) | arc-sweep §intro |
+| Step 1 — the whole **ACCEPT** bullet | obsolete-with-evidence(verbatim restatement of the disposition table's ACCEPT rows, including the ≥20-char reason) | arc-sweep §Step 1 table |
+| Step 1 — the OPERATOR-PENDING bullet's `{ status, via }` restatement, and "`ref`/`status`/`via`/`date` … do not redefine them" | obsolete-with-evidence(the table row carries the shape; "never a parallel taxonomy" is already the file's opening rule) | arc-sweep §Step 1 table + intro |
+| Step 2 — "A per-phase gate sees only its own diff … that is this step's whole job." | obsolete-with-evidence(pure justification; the operative instruction follows immediately) | arc-sweep §Step 2 |
+| Step 2.5 — the v0.36.0 three-CI-round + FRONTDOOR five-ratchet incidents and the "right altitude" argument | obsolete-with-evidence(dated incidents; "Once per arc, here" survives as the step's own placement) | git log |
+| Step 2.5 — the estate scope enumeration and "(ratchet fixes are mechanical: …)" | obsolete-with-evidence(the consumer's `gateCommands.ratchets` binding defines the scope; RESOLVE-NOW-as-default survives) | arc-sweep §Step 2.5 |
+| EOF — a stray `</content>` tag | obsolete-with-evidence(an authoring artifact, never protocol) | arc-sweep EOF |
+
+### skills/validate-arc/SKILL.md
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| intro — "The per-phase gate proves the code correct; `arc-sweep` proves the arc coheres. Neither drives the shipped product …" | obsolete-with-evidence(framing; the operative "resolve criteria → drive → fresh independent judge → PASS/GAPS" survives) | validate-arc §intro |
+| intro — the Step-5 pipeline restatement | obsolete-with-evidence(Step 5 owns it verbatim) | validate-arc §Step 5 |
+| Step 0.2 — the drifted-arc explanation and the criteria-immutability consequence clause | obsolete-with-evidence(rationale; "Run step 3 FIRST" and "immutable post-planning (the validator enforces it)" survive) | validate-arc §Step 0 |
+| Step 0.3 — "Not circular: the artifact was USER-CONFIRMED at the design gate …" | obsolete-with-evidence(justification for a derivation the step already sanctions) | validate-arc §Step 0 |
+| Step 3 — "(the safe read-mostly fan-out `plan-arc` Step 3 uses)" and "This is the independent-judge singleSeam." | obsolete-with-evidence(justification + restatement; the spawn rule and edit-confinement/independence invariants survive) | validate-arc §Step 3 |
+| Step 3 — the two-judge and split-verdict rationale parentheticals | obsolete-with-evidence(the panel rule and "split verdict is a GAP carrying BOTH verdicts (fail-visible — the user arbitrates)" survive) | validate-arc §Step 3 |
+| Step 5 — "(user ruling 2026-07-18)" and "(the singleSeam)" | obsolete-with-evidence(dated attribution + label; the autonomous/hold rule and the no-parallel-executor rule survive) | git log |
+| Step 5.3 — "A bound, not a guarantee: … the backstop is two-layered (…)" | obsolete-with-evidence(justification; "Widen if a phase's blast radius plausibly reaches other criteria" survives as the operative instruction) | validate-arc §Step 5 |
+
+### skills/release-sweep/SKILL.md
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| PRIME RULE — "Once a phase is in `roadmap/archive/<version>/` the operator commits to never revisiting its open debts, so" | obsolete-with-evidence(rationale; "**Archive DOES gate**" + the full open-debt definition survive) | release-sweep §PRIME RULE |
+| Step 5 — "The skip-if-already-archived guard makes `--archive` re-runnable (…); a both-paths-exist conflict is fatal …" | obsolete-with-evidence(restates the two inline comments in the bash block directly above it) | release-sweep §Step 5 bash block |
+| Step 5 — "transparency reports + `debtResolutions` are preserved on the archived files (…)" | obsolete-with-evidence(describes `git mv` semantics; no action depends on it) | release-sweep §Step 5 |
+| No summary file — the audit-trail justification | obsolete-with-evidence(the operative prohibition survives: never write `reviews/<version>-debt-sweep.md`) | release-sweep §No summary file |
+| EOF — a stray `</content>` tag | obsolete-with-evidence(an authoring artifact, never protocol) | release-sweep EOF |
+
+### skills/using-zeroh-roadmap/SKILL.md
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| intro + routing — the two "(honor-system: no hook blocks this …)" asides | obsolete-with-evidence(both rules survive as stated prohibitions; naming the absence of a hook changes no action) | using-zeroh-roadmap §intro |
+| routing table — "(skill retired 2026-08-14, no outcome delta)" | obsolete-with-evidence(dated archeology; the route to the `code-reviewer` agent survives) | git log |
+| EOF — the "Provenance: … 16 ArcEvalReports (2026-07-19 → 2026-08-12)" paragraph | obsolete-with-evidence(dated provenance, not a rule; the reports are on disk in the consumer) | roadmap/arc-evals/ |
+
+### skills/validate-arc/references/driving-tiers.md
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| intro — "The plugin hardcodes no consumer command." | obsolete-with-evidence(restates the preceding clause: each consumer binds each tier in its own `roadmap.config.json`) | driving-tiers §intro |
+| §Worked example — `azure_private_agent` (the whole section) | relocated | DESIGN-NOTES.md §driving-tiers — worked example (azure_private_agent); the reference keeps a pointer + the "the judge reads whichever bindings the consumer documents" rule |
+
+### skills/release-sweep/references/followup-contract.md
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| Frontmatter grammar — "so lifecycle tooling fails open and the operator can disposition the file" | obsolete-with-evidence(rationale; "Unknown or malformed frontmatter is reported as UNTRIAGED" survives) | followup-contract §Frontmatter grammar |
+| Release-sweep dispositions — "this contract adds no new decision vocabulary" | obsolete-with-evidence(restates "one existing release-sweep disposition" in the same sentence) | followup-contract §Release-sweep dispositions |
+| EOF — "Disposition completes triage; it does not require building a promoted phase during release-sweep." | obsolete-with-evidence(duplicate of release-sweep Step 2.5's "This gates disposition only, never completion of promoted work") | release-sweep §Step 2.5 |
+
+**Two non-model-loaded corrections rode this pass** (no ledger rows owed — neither file is in the
+measured set, both were stale claims about the budget itself): `cli/measure-manifest.json`'s printed
+note still claimed a "≤12k-token budget", and `cli/lib/measure-budget.mjs`'s docblock carried the
+three-disagreeing-homes history — replaced by the one-line semantic plus the dated ruling. The
+budget-coupled proposal fixtures (`cli/testdata/eval-proposals/{ALPHA,BRAVO,CHARLIE,DELTA}`) were
+re-based by the same +764 delta so every boundary property they encode (one report EXACTLY at
+budget, two prod-grade + one fast-lane OVER) is preserved, and `eval-propose.test.mjs` test 16 now
+derives its corpus from `PROTOCOL_LOAD_BUDGET_TOKENS` instead of a literal 12,500 — the next
+re-ratchet cannot silently re-point that arithmetic.

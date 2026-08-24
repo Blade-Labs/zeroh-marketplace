@@ -21,13 +21,11 @@ review-by: 2026-12-31
 - `review-by` is optional. When present, it is an ISO `YYYY-MM-DD` date.
 - A file with no frontmatter is **UNTRIAGED**. That is a census/audit finding, never a parse error.
 
-Unknown or malformed frontmatter is reported as UNTRIAGED so lifecycle tooling fails open and the
-operator can disposition the file.
+Unknown or malformed frontmatter is reported as UNTRIAGED.
 
 ## Release-sweep dispositions
 
-Each flagged file receives one existing release-sweep disposition; this contract adds no new
-decision vocabulary:
+Each flagged file receives one existing release-sweep disposition:
 
 - **Promote — (p) Plan a new phase:** run `plan-phase`, leave the phase queued, and build it later in
   the normal lane.
@@ -38,5 +36,3 @@ decision vocabulary:
 
 `(s) Skip` ("decide later") is deliberately NOT in this mapping: a skipped file stays UNDISPOSITIONED
 and holds the minor/major gate.
-
-Disposition completes triage; it does not require building a promoted phase during release-sweep.
