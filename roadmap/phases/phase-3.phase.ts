@@ -17,7 +17,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 3,
   name: 'Mechanical attribution — launcher stamps, validator warns, roles shape lands',
-  status: 'backlog',
+  status: 'in-progress',
   arcId: 'POLYSEAT',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'feature',
