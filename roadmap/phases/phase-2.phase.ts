@@ -17,7 +17,8 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 2,
   name: 'Driver registry — one home for launch semantics, probed capabilities, open lane field',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-08-24',
   arcId: 'POLYSEAT',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'feature',
@@ -60,6 +61,98 @@ export default definePhase({
   ],
   notes:
     "DESIGN (locked, architect risk 8): the registry lives in CODE — cli/lib/drivers.mjs — never in roadmap.config.json (capabilities are per-HOST facts; the config is a per-CONSUMER binding; a context-free verified flag there would become a lie the moment the host changes — the committed verifiedAt on a DRIVERS entry stays honest ONLY because it is host-stamped evidence: {date, host, command, output} names where it was proven, never a claim about YOUR host). Full probe reports go to consumer-root .building/driver-verify-<id>.json — at HEAD that path is untracked but NOT ignored (only plugins/zeroh-roadmap/.gitignore covers .building/; the repo root has no .gitignore), so 2.3 adds the root ignore entry in the same commit: provenance is per-host and must never be committable. Entry schema: { id, family, bin, launch: { argv, promptChannel, sandboxPosture }, resume, roleCapabilities, verifiedAt: { date, host, command, output } } — verifiedAt carries PASTED probe output, never a bare boolean. Populated entries: codex (extracted from launch()), claude (child-CLI: `claude -p --agents '<json>'`, verified on this host 2026-08-23). grok: NO entry — `roadmap driver register` refuses an unverified id, which is how the empty slot stays honest (arc honesty rail 1).\n\nLANES STAY: the LANES table in codex.mjs owns lane mechanics (journal/report/sentinel) — orthogonal to drivers (singleSeam 4). launch() keeps its detach/stdin/journal shape and sources ONLY argv from launchArgv('codex', …); the literal spawn argv is deleted in the same commit, and the ratchet test (singleSeam 2) greps that no model-binary argv exists outside drivers.mjs.\n\nLANE FIELD OPENING (architect risk 6, user requirement 'grok later without surgery'): templates/schema.ts PhaseExecutionResultShape.driver.lane widens to z.string().min(1) so a phase file ALWAYS loads regardless of who wrote it; the 'is this a known driver/lane?' check moves to the validation ENGINE — cli/lib/validate.mjs, where result.warnings is assembled (bin/validate-roadmap-file.mjs only PRINTS warnings, and `roadmap phase validate` shares the engine — a bin-side check would miss the CLI face) — as a WARNING that names the unknown id and the known set (read from drivers.mjs + 'session') — a warning, never a parse failure, so 700+ historical files and future drivers both survive. NOTE the arc's decision sweep worded this as 'a superRefine naming unknown ids': a Zod superRefine issue FAILS the parse (resurrecting the corruption bug) and consumer copies of schema.ts have no drivers.mjs to read, so the validator warning is the mechanism that honors risk 6's intent; the phase deviates from the sweep's wording deliberately. Downstream shapes are already open strings (attribution.drivers[].lane, ScorecardDriverCellShape.lane — verified by the architect), and lane SEMANTICS stay 'how it was launched' so no scorecard cohort re-partition occurs (risk 7: no baseline reset).\n\nVERIFY VERB: `roadmap driver verify <id>` probes — bin exists, --version, codex `features list` parse (multi_agent/hooks), a read-only exec smoke — sourcing the binary from resolveDriver(id).bin (never a literal; the 2.2 ratchet holds), and writes the PASS/FAIL table + interpretation + pasted evidence to .building/driver-verify-<id>.json, exit 0/2; shaped after plugins/zeroh-sdd/scripts/codex-hook-discovery.mjs (report structure only — not its hooks.json backup dance, and note its markerScript is Windows-only). `roadmap driver register <id>` contract: without FRESH PASS provenance it refuses, exit 2, naming `roadmap driver verify <id>` as the remediation — fresh = .building/driver-verify-<id>.json present at the consumer root, its host field equal to the current os.hostname() (a copied file is not proof), every probe pass:true; WITH it, register exits 0 and prints the drivers.mjs entry skeleton to paste — guidance only, it NEVER edits drivers.mjs (the registry is committed code a human lands). TREE row added in bin/roadmap.mjs.\n\nCONSUMER SYNC: the lane widening is a templates/schema.ts edit — byte-sync this repo's lib/roadmap/schema.ts in the same commit (the copies are byte-identical at HEAD, diff -q exit 0; scripts/schema.test.ts asserts SHAPES only and 'trusts the sync' per its own comment — the diff clause in 2.4's verify is the sync guard); azure_private_agent / mudarabah2 / viki-agent pick it up at their next plugin bump (named, not chased).\n\nREVIEW RATIFICATIONS (Mode A, 2026-08-23, judged by claude-fable-5): testMode 'tdd' ratified for all four tasks (each pairs impl + test files; 2.2 and 2.4 carry recorded falsifications); no testScope or reviewScope relaxations declared; userFacing none — CLI + schema only, the arc's design gate recorded the UX skip.",
+  gateRounds: [
+    {
+      round: 1,
+      agent: "code-reviewer",
+      verdict: "findings-fixed",
+      summary:
+        "6 findings (1 HIGH, 4 MEDIUM, 1 LOW), all fixed in 227cfe0. HIGH: runProbe matched expect tokens as SUBSTRINGS, so a codex feature table reading 'hooks removed false' passed the capabilities probe, and 'plugin_hooks removed false' alone satisfied the 'hooks' token with the real feature absent \u2014 the reviewer reproduced both against a fake binary. Fixed with line-anchored regexes carrying the value column and falsified both ways (value-false FAIL, plugin_hooks-only FAIL, real host still PASS). MEDIUM: the claude entry declared hooks/plugins that its own pasted evidence never showed (now records only subagents + headlessPrint); entrySkeleton interpolated raw probe output into a template literal, so a backtick in 'codex exec --help' made the entry it told a human to paste unparseable JavaScript (now JSON-encoded, with a backtick in the fake fixture and a parse assertion, falsified by restoring the interpolation); the done-flip test carrying the not-gated-on-isNewToGit rule never committed its fixture, so the placement it exists for was unguarded (now committed, falsified by gating the lint \u2014 only that case reds); register printed an unqualified 'is verified' without the report's interpretation. LOW: a why-the-rule-exists docblock paragraph trimmed to its operative sentence. The reviewer independently re-ran ratchet mutation 1 and reproduced the quoted RED exactly, re-ran both verifiedAt commands byte-for-byte on this host, and confirmed the schema byte-sync plus the absence of any exhaustive match on driver.lane.",
+    },
+    {
+      round: 2,
+      agent: "code-reviewer",
+      verdict: "findings-fixed",
+      summary:
+        "7 findings (1 HIGH, 4 MEDIUM, 2 LOW). Six fixed in d34a6b0; one surfaced. HIGH: the round-1 HIGH fix had NO regression guard \u2014 the reviewer re-planted the exact pre-fix substring matcher in a scratch copy and driver.test.mjs stayed 8/8 green, so the one defect that mattered was the one nothing held. Four feature-table cases now decide the capabilities probe. MEDIUM: the replacement regex over-constrained the STATUS column, so a real codex table reading 'hooks under development true' would have gone FAIL and refused registration on a capability the table reports ON (crying wolf) \u2014 widened to the value column only. MEDIUM: register printed an entry skeleton straight from the report file without checking whose binary it probed, so codex's evidence filed as driver-verify-grok.json registered grok on it, printing 'undefined' where the interpretation should be \u2014 freshProvenance now refuses a foreign-binary report, a missing interpretation, and an id absent from the registry. MEDIUM: task 2.1's report claimed 'Capability values are PROBED, not declared' while its own limitations conceded roleCapabilities is unasserted \u2014 narrowed to what holds. LOW: a cwd outside a git repo was the one path answering with a stack trace; the TREE row rendered '[ROADCODE 2]' for a command no ROADCODE phase owns, now tagged by its arc. SURFACED, not fixed: UNRECORDED_DRIVER in cli/lib/eval-score.mjs guesses lane 'session' for every unattributed phase, inflating the session cohort \u2014 pre-existing, outside this diff, and unblocked BY this phase's lane widening; it belongs to plane 3, which owns attribution. Reviewer confirmed the schema byte-sync survived both fix rounds and drove falsifications A/B/C in scratch copies.",
+    },
+    {
+      round: 3,
+      agent: "code-reviewer",
+      verdict: "findings-fixed",
+      summary:
+        "5 findings (4 MEDIUM, 1 LOW), all fixed in 7c32a95; the reviewer also re-drove the round-2 falsifications and confirmed each reproduces. The substantive one: the capability patterns were NOT line-confined despite the docblock saying so, because JS \\s matches \\n \u2014 demonstrated end-to-end with a fake codex printing 'hooks removed false' followed by a bare 'true' line, which the probe certified PASS at exit 0, the honesty rail approving a feature the table reports OFF. Separators are now [ \\t] and a fifth table case pins the bridged-row form at exit 2. Second: the round-2 stack-trace fix used a bare `catch {}`, so git missing inside a REAL checkout was misdiagnosed as 'not a git repository' with a remediation that cannot help \u2014 the cosmetic fix had traded away the actual error, which now rides along as 'git said: <cause>' with a test asserting it. Third: `date` was the one entrySkeleton input freshProvenance never validated, so an undated report registered at exit 0 and printed date: \"undefined\" into the entry a human is told to paste into committed code; the never-prints-undefined pin now covers both fields. Fourth: task 2.3's report stated three of the six refusal conditions. LOW: the module docblock's FRESH definition under-specified the same contract. Verified clean by the reviewer: no round-1 or round-2 fix regressed, the two schema copies still byte-identical, all four tasks' acceptance criteria met, the prefix binding cannot be defeated by a bin that is a prefix of another, no stale consumer of the widened lane, and docblock discipline holds on every added line.",
+    },
+    {
+      round: 4,
+      agent: "code-reviewer",
+      verdict: "findings-fixed",
+      summary:
+        "4 findings (2 MEDIUM, 2 LOW), all fixed in 860fc6e, and a convergence judgement: every earlier falsification narrative reproduces exactly as written (the reviewer re-drove six mutations including the 2.2 ratchet's :212 quote and the 2.4 closed-enum restoration, all verbatim), both registry entries' pasted provenance re-proves byte-identically on this host, the two schema copies are byte-identical, and all four tasks' acceptance criteria hold \u2014 what remained was one function applying its own distrust discipline to most inputs but not all. MEDIUM: the capability patterns read the row's LAST token rather than its value column, so 'hooks removed false true' (a trailing default column) and 'hooks removed false default was true' were both certified ON \u2014 the round-3 bridged-row hole rotated from vertical to horizontal; replaced with a tokenising featureOn() that requires the row whose FIRST token is the feature to end in true and to state no other verdict before it. MEDIUM: freshProvenance validated top-level fields but never a probe ROW, so a row missing 'output' silently dropped that evidence from the pasteable entry, 'output: true' rendered a boolean into it, and a null element threw an uncaught TypeError at exit 1 \u2014 against the one input this command exists to distrust. LOW: a report with no 'host' refused with the literal text 'undefined' and misdiagnosed a malformed report as a foreign-host copy. LOW: '--agents' was satisfied by '--agents-legacy' \u2014 the round-1 longer-name hole surviving on the claude side, which had no adversarial fixture at all. Reviewer agreed with routing UNRECORDED_DRIVER's lane guess and ensureBuildingIgnored's root resolution to plane 3.",
+    },
+    {
+      round: 5,
+      agent: "code-reviewer",
+      verdict: "findings-fixed",
+      summary:
+        "CAP ROUND. 5 findings (3 MEDIUM, 2 LOW), all fixed in a521f38, each mutation-proven by the executor before commit. The important one broke a landed acceptance criterion: DRIVERS[id] walked the prototype chain, so resolveDriver('constructor') RETURNED a function and 'toString'/'__proto__' resolved instead of refusing \u2014 task 2.1 requires an unknown id to throw naming the known set, never a silent undefined \u2014 and `verify toString` crashed with a stack trace; the probe-set lookup had the identical hole. Both now use Object.hasOwn, pinned across five prototype keys at both entry points. Second: freshProvenance dereferenced the parsed document before proving it an object, so a file containing literally `null` threw an uncaught TypeError at exit 1 \u2014 the same class round 4 closed for a probe ELEMENT but not for the document; now proven a non-array object first, pinned for null/array/number/string. Third: task 2.3's transparencyReport still credited the round-1/2 line-anchored regex that round 4 had replaced, so the durable record described an honesty rail the code no longer used; it now carries the real four-round history. LOW: featureOn returned on the FIRST matching row, so a table stating one feature twice with opposite verdicts was decided by row order rather than refused as self-contradicting; LOW: `date` was proven non-empty but never a date, so an unparseable value was stamped truncated to ten characters into the pasteable entry. The reviewer also drove 19 adversarial feature tables (CRLF, tabs, pipes, NBSP, True/TRUE, name-only rows, JSON-shaped output) and found 18 decide as a careful human would, every divergence failing CLOSED, and re-drove the 2.2 ratchet and 2.4 enum falsifications verbatim including the :212 line number. HONEST GAP: because this was the cap round, the five fixes it produced did NOT receive an independent sixth review \u2014 they carry the executor's own mutation proofs (four drives, each reddening exactly its own case) and a green full gate, which is weaker evidence than a fresh reviewer.",
+    },
+  ],
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1141,
+      total: 1141,
+      notes:
+        'The consumer binds ONE slot: unit = the whole plugin suite (node --test over the bin/cli/hooks/scripts/test files + scripts/schema.test.ts), plus the plugin-native history-comments scan of the phase diff (0 findings). lint/types/build/integration/e2e are declaredAbsent in roadmap.config.json, not skipped by this phase.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — this consumer has no integration tier.',
+    },
+    e2eTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — a CLI + schema phase with no rendered surface.',
+    },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  metrics: {
+    commits: 1,
+    linesAdded: 1130,
+    linesRemoved: 29,
+    filesChanged: 14,
+    testsAtStart: 1096,
+    testsAtEnd: 1141,
+    testsAdded: 45,
+    startedAt: '2026-08-24T10:59:17.000Z',
+    completedAt: '2026-08-24T13:26:37.000Z',
+    haltCount: 0,
+  },
+  executionResult: {
+    phase: 2,
+    status: 'done',
+    driver: { model: 'claude-opus-5[1m]', lane: 'session' },
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      "Onboarding order for a driver with NO entry yet: `roadmap driver verify <id>` sources its binary from resolveDriver(id).bin, so it refuses an unregistered id (exit 2, naming the known set) — a brand-new driver must have a draft entry landed in cli/lib/drivers.mjs before it can be probed. The register-refuses-unverified rail (arc honesty rail 1) holds either way, and resolveDriver's message now states the real order instead of naming a command that cannot run. If plane 4 wants a probe-before-entry path it needs a deliberate --bin door, never a silent fallback.",
+      "The codex exec-smoke probe runs `<bin> exec --help`: it proves the exec entrypoint exists and parses, NOT that a model turn succeeds. The probe name, the recorded command and the interpretation all say only that, and no roleCapabilities value is derived from it — but a reader of a green verify report should not take it for end-to-end proof.",
+      "The claude entry's launch.argv (['-p', '--agents', <json>]) is NOT pinned by a literal fixture the way codex's is, because nothing launches it yet. Plane 4 is its first caller and should pin it at the moment it lands one, or that entry stays a declaration with no behavioural guard.",
+      "Widening the SHARED DriverShape opened PhaseEvalRecord.attribution.driver.lane with it, so two checks in plugins/zeroh-roadmap/scripts/schema.test.ts that pinned the closed vocabulary were re-pinned to the open one (both still reject a blank lane). That file is outside this phase's planned files[]; the change is a contract update, not a weakening, but it edits a shape phase 1 landed.",
+      "The driver.model binding phase 3 task 3.1 step 1 requires was deliberately left to THAT task, whose step text instructs adding it, sourced from the driver-verify probe this phase built. Exactly one home; phase 2's entry schema stays the one its notes locked.",
+      "The gate hit its 5-round cap WITH findings, so the five fixes round 5 produced (Object.hasOwn on both registry lookups, the document-is-an-object check, the unparseable-date refusal, the contradicting-row refusal, and the task-2.3 report correction) never received an independent sixth review. They carry the executor's own mutation proofs — four drives, each reddening exactly its own case and nothing else — plus a green full gate. That is weaker evidence than a fresh reviewer and is the one place in this phase where the review chain stops short of the code.",
+      "Two forward-capability paths in cli/commands/driver.mjs are unreachable with only two registered drivers and so are exercised by no test: GENERIC_PROBES and interpret()'s `generic` branch, which exist so a newly landed third entry gets presence-proven with its capabilities recorded UNPROVEN. Whichever plane lands driver number three should be the one to pin them. Separately, ensureBuildingIgnored recognises only the exact lines `.building/` and `.building`, so a consumer root already ignoring `/.building/` gets a harmless duplicate entry.",
+      "FOR PLANE 3 (attribution): UNRECORDED_DRIVER in cli/lib/eval-score.mjs is { model: 'unrecorded', lane: 'session' } — the model is honestly unrecorded, the LANE is a guess, so every phase with no recorded driver is counted as an in-harness session run by eval-scorecard and eval-score, inflating the very cohort the arc exists to compare against. Pre-existing and outside this diff, but THIS phase unblocks the fix: attribution.driver is DriverShape.strict(), so lane 'unrecorded' failed the closed enum and now parses. Fix is lane: 'unrecorded' plus the three eval-scorecard.test.mjs assertions pinning the literal; the new validator WARN then names it instead of the cohort absorbing it. Arc honesty rail 2 is the reason this is not cosmetic.",
+      "DIET-LEDGER.md's arc-mode row cites templates/schema.ts by LINE for PhaseExecutionResultShape.driver; that anchor was already stale before this phase and the lane docblock widened the drift by a few lines. Pre-existing, outside this diff, and due a stable-anchor retarget the next time that row is touched.",
+    ],
+    hardStops: [],
+    gateRounds: 5,
+  },
   tasks: [
     {
       id: '2.1',
