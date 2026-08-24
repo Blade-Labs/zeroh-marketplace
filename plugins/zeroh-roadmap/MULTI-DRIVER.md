@@ -10,9 +10,14 @@ card, a skill or a lane prompt points here.
 |---|---|---|
 | **role** | a protocol spawn point (one per `agents/*.md` card): who is asked, in what class, down which model tier chain | `cli/lib/roles.mjs` |
 | **driver** | a model-running CLI (`codex`, `claude`): binary, argv, prompt channel, sandbox posture, probed capabilities | `cli/lib/drivers.mjs` |
-| **lane** | how work was launched — `run` / `review` (the codex command's missions), `session` / `codex` (the attribution vocabulary) | `cli/commands/codex.mjs`, `DriverShape` |
+| **lane** | how work was launched — `run` / `plan` / `review` (the codex command's missions), `session` / `codex` (the attribution vocabulary) | `cli/commands/codex.mjs`, `DriverShape` |
 | **slot** | one mechanical gate check (`types`, `unit`, `build`…) | `cli/lib/slots.mjs` |
 | **plane** | one phase of an arc, executed as a unit | `workflows/arc-plane.workflow.mjs` |
+
+Each codex mission DELIVERS its protocol by path and overrides only disposition: `run` →
+`skills/do-phase` (hand-off `CODEX-REPORT.md`) · `plan` → `skills/plan-phase`
+(`CODEX-PLAN.md`, `--brief <path>` required) · `review` → `skills/review-phase`
+(`CODEX-REVIEW.md`). A fourth mission is one `LANES` entry, never a second launcher.
 
 The **SEATS dispatcher** (an external consumer of the beacon/sidecar contract, DESIGN-NOTES.md
 §2026-07-18) is none of these: it selects and verifies WORK, never models. "Seat" is its word;

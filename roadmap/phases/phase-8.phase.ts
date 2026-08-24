@@ -149,7 +149,18 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/MULTI-DRIVER.md', 'roadmap/roadmap.config.json'],
       testMode: 'none',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "MULTI-DRIVER.md: the glossary lane row now reads `run` / `plan` / `review`, and one paragraph names what each mission delivers and hands off (plan → skills/plan-phase, CODEX-PLAN.md, --brief required). roadmap.config.json gained validationTiers.wired bound to `node plugins/zeroh-roadmap/bin/roadmap.mjs`, with live-ui / live-host deliberately absent.",
+        how:
+          'Operative statements only, no dated archeology, one rationale clause ("a fourth mission is one LANES entry, never a second launcher"). Verifies: `grep -qF CODEX-PLAN.md plugins/zeroh-roadmap/MULTI-DRIVER.md` exit 0; `roadmap status` exit 0 (the config strict-parses with the new key against ValidationTiersShape, where absent tier keys are legal).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "The binding is live, not decorative: agents/intent-validator.md resolves a criterion's tier through this key and reports a gap naming the missing binding when it is absent — which is what every judge in this arc's round 1 had to do. Budget: `roadmap measure --flow do-arc` reads 13253 tokens over the same 8 files before and after; both files touched here are outside the measured set. (The phase text says 13256 — the measured figure on this tree is 13253; the criterion that matters, UNCHANGED, holds.)",
+      },
+      done: true,
     },
     {
       id: '8.4',
