@@ -46,7 +46,6 @@ export default defineBacklog([
   // dependency order: 1 eval records (independent, fills the pipe first) → 2 driver
   // registry → 3 attribution (dependsOn 2) → 4 roles+delivery+manifests (dependsOn 2,3).
   // Queued after 4 Mode A reviews returned READY/CLEAN (2026-08-23). Execute: /do-arc POLYSEAT
-  { phase: 1, name: 'Per-phase eval records — the gate emits, the scorecard ingests' },
   {
     phase: 2,
     name: 'Driver registry — one home for launch semantics, probed capabilities, open lane field',
