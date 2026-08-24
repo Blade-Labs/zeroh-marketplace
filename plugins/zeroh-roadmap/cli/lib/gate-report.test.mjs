@@ -397,6 +397,27 @@ test('an UNUSABLE model is REFUSED by the parse, not recorded as attribution', (
   }
 })
 
+test('slotFilter — a subset marker that cannot be read as a FULL run', () => {
+  // The discriminator both done-flip guards branch on (`if (report.slotFilter)`). An empty
+  // string is the dangerous value: it parses as a string, is FALSY, and so re-opens the exact
+  // door phase 1 gate R3 closed — a filtered report certifying a done flip and refreshing the
+  // eval record. Absent is how a FULL run is spelled; '' would mean filtered while READING full.
+  const isError = (e) => e instanceof Error
+  for (const [why, slotFilter] of [
+    ['an empty slotFilter', ''],
+    ['a numeric slotFilter', 42],
+    ['an explicitly null slotFilter (absent is how a full run is spelled)', null],
+  ])
+    assert.throws(
+      () => GateRunReportShape.parse(baseReport({ slotFilter })),
+      isError,
+      `${why}: GateRunReportShape must REFUSE it — a falsy marker reads as a full run to both guards`,
+    )
+
+  assert.equal(GateRunReportShape.parse(baseReport({ slotFilter: 'types' })).slotFilter, 'types', 'a real --slots value survives')
+  assert.equal(GateRunReportShape.parse(baseReport()).slotFilter, undefined, 'a FULL run carries no marker at all')
+})
+
 test('appendAgentRound — a round with an unusable model is refused BEFORE the write', () => {
   const root = tmpRoot()
   writeReport(root, baseReport())
