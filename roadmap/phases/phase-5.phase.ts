@@ -23,7 +23,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 5,
   name: 'Handoff skill — route context into phases first, residue to .building/HANDOFF.md',
-  status: 'in-progress',
+  status: 'done',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'feature',
   kind: 'logic',
@@ -63,6 +63,95 @@ export default definePhase({
   ],
   notes:
     "DESIGN (ratified in-session 2026-08-23, all decisions pre-made — implement, do not re-decide):\n\nTHE ROUTER PROTOCOL (the skill's core): at session end, for each candidate context item ask where it durably belongs and ROUTE IT THERE FIRST — design reasoning & learned code-facts → the phase's `notes`; new tripwires → `assumptions`; rulings → the arc's LOCKED DECISIONS; durable cross-project facts → the operator's vault (if bound); durable lessons → `roadmap eval lesson`. Committing phase-file edits IS the handoff. Only the measured residue classes land in .building/HANDOFF.md: scope fences · cross-phase intent (e.g. release framing) · mid-flight uncommitted state with shas + live background tasks + artifact URLs · unclear-awaiting-whom · ephemeral gotchas. Each residue line records WHY it was not routable — the self-liquidating property: the better the phases, the emptier the file.\n\nTHE ONE-LINER is the skill's final output, pointing at the right door: pure `do arc <ID>` / `do phase <N>`; hybrid `Read .building/HANDOFF.md (the fence), then do phase <N>`; pre-phase `Read .building/HANDOFF.md and continue from Next.` An agreed place makes the pickup line a CONSTANT — that is the whole win; pickup needs no skill.\n\nFILE CONTRACT: .building/HANDOFF.md, never committed (.building/ is the agreed untracked scratch home in every consumer — codex journals, arm files, driver provenance). Header carries freshness anchors: writtenAt · HEAD sha · 'supersedes previous' (the RESUME-702-703 discipline, mechanized); the template instructs the fresh session to run `git log --oneline <sha>..HEAD` and trust the repo over the file when they diverge. `--name <slug>` variant → .building/handoff-<slug>.md for parallel sessions on one repo; the default file lists siblings. PHASE-IN-FLIGHT REFUSAL: when `roadmap status` / the phase file already carry doing/state/next, the skill says so and refuses to duplicate them — the handoff exists ONLY for what has not crystallized.\n\nSKILL-ONLY, NO CLI VERB (ratified): routing is judgment (the skill half of the plugin's split); the mechanical bits (anchors, staleness diff) are three instructed lines — no TREE row, no protocol-load growth until proven needed.\n\nDEGREES OF FREEDOM (per the Anthropic best-practices doc, fetched 2026-08-23): routing decisions = high freedom (judgment checklist); the residue file format = strict template (references/template.md); the freshness check = low freedom (exact command, do not vary). EVAL-FIRST (the doc's 'Build evaluations first'): task 5.1 authors the three evaluation scenarios BEFORE the skill body — pure-phase (expect: routes everything, file near-empty, one-liner `do phase N`), hybrid (expect: fence + intent in file, hybrid one-liner), pre-phase freeform (expect: full residue file) — in the doc's evaluation JSON structure (skills/query/files/expected_behavior).\n\nREVIEW TASK 5.3 (operator-requested): score the FINISHED skill against BOTH bars — the Anthropic best-practices checklist (description third-person + triggers; body <500 lines; references one level deep; no time-sensitive info; consistent terminology — pick 'handoff' and never 'resume/prompt file'; concrete examples; workflow with checklist; feedback loop) AND the plugin's SKILL-AUTHORING-STANDARD v2 (every rule PASS/FAIL/N-A, delta-only paragraphs per R1). Name/description constraints: lowercase-hyphen ≤64 chars; description ≤1024 chars, third person, what + when with trigger terms (handoff, hand off, fresh session, continue in new session, context file, one-line prompt).\n\nMANIFEST INTERPLAY: phase 4's ratchet asserts manifest skill lists == ls skills/ — adding skills/handoff/ REDS the suite until scripts/emit-manifests.mjs regenerates; 5.4 runs it in the same commit as the skill directory (dependsOn [4]).\n\nREVIEW RATIFICATIONS (Mode A, 2026-08-23): R20 provenance rule — the skill's evidence-of-use line cites the 2026-08-23 survey by date + this phase's commit, NEVER the historical handoff filenames (5.3's terminology probe bans those tokens deliberately; consumer-repo paths would also break R21 portability). testMode 'none' ratified on all four tasks — every artifact is declarative (markdown/JSON/regenerated manifests); the guards are the step-level grep/node verifies plus phase 4's manifest ratchet, per the declarative-artifact rule (ratchet/lint lane, not bespoke tests). kind 'logic' accepted — the enum (mockup|logic|hardening|release) has no docs kind. The 5.2 <200-line cap is SKILL-AUTHORING-STANDARD R7's workflow cap, the DELIBERATE tighter of the two bars (the Anthropic doc's <500 is the looser; both must pass, the tighter binds — not drift). Assumption 2 fails at plan time BY DESIGN: it is the execution-time tripwire proving dependsOn [4] actually delivered scripts/emit-manifests.mjs before 5.4 leans on it.",
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1260,
+      total: 1260,
+      notes:
+        'The authoritative full plugin gate is roadmap/.gate/5/run-000010-2026-08-24T20-50-39-029Z.json: all 1,260 tests passed. lint, types, build, and integration are declared absent in gateCommands; the plugin-native history-comments scan and lint-diff hygiene slot also exited cleanly.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — this declarative skill phase has no integration tier.',
+    },
+    e2eTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — this phase adds no rendered surface.',
+    },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Corrected the skill provenance anchor to the committed eval artifact and, after an architect PROCEED_WITH_FIX verdict, replaced the speculative arc filename with the real POLYSEAT.arc.ts convention. The focused manifest test passed 15/15.',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Closed four contract gaps: the hybrid eval now targets POLYSEAT phase 4 and emits its exact phase invocation, handoff and do-arc name their two-way boundary, the always-active router dispatches handoff requests, and task 5.4 records the generator output actually changed.',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'The do-arc protocol-load ratchet exposed the new routing prose as over budget. Compressed the boundary and dispatch wording without dropping the rule, recorded the diet, and proved 13,253 tokens against the 13,257 ceiling plus 10/10 focused measure tests.',
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'clean',
+      summary:
+        'Convergence review returned no findings after independently checking the eval routes, handoff/do-arc ownership boundary, generated discovery inventory, authoring scorecards, protocol-load budget, and task evidence.',
+    },
+  ],
+  metrics: {
+    commits: 1,
+    linesAdded: 232,
+    linesRemoved: 17,
+    filesChanged: 8,
+    testsAtStart: 1260,
+    testsAtEnd: 1260,
+    testsAdded: 0,
+    startedAt: '2026-08-24T19:25:56Z',
+    completedAt: '2026-08-24T20:52:26Z',
+    haltCount: 0,
+  },
+  compromises: 'None',
+  completedDate: '2026-08-24',
+  executionResult: {
+    phase: 5,
+    status: 'done',
+    driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    roles: [
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'software-architect', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'The envelope-prescribed scoped helper scripts/test/run-tier.sh does not exist in this checkout. Its exact invocation exited 127; no substitute tier command was invented. The focused manifest test and the authoritative full gate supplied the proof.',
+      'The first full gate was environmental RED because the plugin-local node_modules tree was absent (79 failures, all missing dependencies). A capbuild-wrapped local npm install restored the declared environment, and the authoritative rerun passed 1,260/1,260.',
+      'The quality pass raised a speculative arc-path hard stop. The bound software-architect returned PROCEED_WITH_FIX, and the executor corrected both the eval fixture and skill pattern to the repository\'s real <ID>.arc.ts convention.',
+      'roadmap phase curate rewrote the required lane trailer to its generic Claude trailer. The executor amended only the newly curated commit message to restore the exact Claude Fable 5 trailer required by this lane.',
+    ],
+    hardStops: [],
+    gateRounds: 3,
+  },
   tasks: [
     {
       id: '5.1',
