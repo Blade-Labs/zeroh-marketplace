@@ -40,7 +40,7 @@ import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildPrompt } from '../commands/codex.mjs'
-import { DRIVERS, MODEL_DRIVERS, MODEL_IDS } from './drivers.mjs'
+import { DRIVERS, MODEL_ALIASES, MODEL_DRIVERS, MODEL_IDS } from './drivers.mjs'
 import { ROLES, RoleUnjudgedError, reachMode, resolveRole } from './roles.mjs'
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../../', import.meta.url))
@@ -136,6 +136,14 @@ test("each card's frontmatter model alias and its chain HEAD are one decision �
       `${id}: frontmatter alias '${m[1]}' (=${mapped}) drifted from the chain head ${ROLES[id].tierChain[0]} — fix whichever is wrong in agents/${id}.md or cli/lib/roles.mjs`,
     )
   }
+})
+
+test('the registry OWNS the alias vocabulary this fixture spells out — one map, not two', () => {
+  assert.deepEqual(
+    { ...MODEL_ALIASES },
+    ALIAS_TO_MODEL,
+    'MODEL_ALIASES in cli/lib/drivers.mjs must equal the alias map written out above: a card frontmatter and a consumer modelPolicy.judgeModel both carry aliases, and resolveRole normalises through the registry copy — a drift here means one of the two readers resolves a word no driver runs',
+  )
 })
 
 test('every tier named in every chain is a model some registered driver can run', () => {
@@ -377,6 +385,26 @@ test('judgeModel is IGNORED for EVERY builder-class role — the HOME rule is ju
   }
 })
 
+test('a judgeModel configured as a harness ALIAS leads the chain — never recorded as substituted away from itself', () => {
+  // roadmap.config.json and test/fixture-consumer/harness.mjs both set judgeModel: 'fable'; the
+  // spawner passes that value straight through. Prepending it RAW would make every judge seam
+  // record { from: 'fable', to: 'claude-fable-5', reason: 'no registered driver runs it' } — a
+  // fabricated substitution away from the very model that answered.
+  for (const [alias, model] of Object.entries(ALIAS_TO_MODEL)) {
+    const res = resolveRole('code-reviewer', 'claude', { judgeModel: alias, env: {} })
+    assert.equal(
+      res.model,
+      model,
+      `judgeModel '${alias}' must resolve to ${model} — normalise the alias through MODEL_ALIASES in cli/lib/roles.mjs before prepending it to the chain`,
+    )
+    assert.equal(
+      Object.hasOwn(res, 'substituted'),
+      false,
+      `judgeModel '${alias}' WAS honoured, so nothing was substituted — recording one would tell the scorecard a model failed that never did`,
+    )
+  }
+})
+
 test('an UNAVAILABLE judgeModel falls back down the role\'s own chain and records from: the judgeModel', () => {
   const res = resolveRole('code-reviewer', 'claude', { judgeModel: FABLE, forceUnavailable: [FABLE], env: {} })
   assert.equal(res.model, OPUS, `a downed judgeModel must fall to the card default, got ${res.model}`)
@@ -455,10 +483,16 @@ test('reachMode: a driver that can reach NO separate model fills the role INLINE
 })
 
 test('reachMode: a tier whose runner this driver cannot reach at all is null — unreachable, not "inline anyway"', () => {
+  // BOTH sides decide: the runner being drivable is not enough if the DRIVER cannot spawn at all.
   assert.equal(
     reachMode('prompt-harness', PROMPTS_ONLY, 'claude', DRIVERS.claude),
+    null,
+    "the claude entry is drivable as a child, but a driver declaring subagents: 'none' can launch nothing — returning child-cli would hand it a model it can never start",
+  )
+  assert.equal(
+    reachMode('codex', DRIVERS.codex, 'claude', DRIVERS.claude),
     'child-cli',
-    'the claude entry declares a headless child mechanism, so even a prompts-only driver can shell to it',
+    'a driver that DOES spawn reaches a headless-child runner — this is the cross-family route the arc exists for',
   )
   const unreachable = Object.freeze({ ...PROMPTS_ONLY, id: 'other-harness' })
   assert.equal(

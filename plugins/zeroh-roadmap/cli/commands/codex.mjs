@@ -157,22 +157,25 @@ export function buildPrompt(root, ids) {
   }
   if (!existsSync(RUN_SKILL)) throw new Error(`run protocol missing: ${RUN_SKILL}`)
   return [
-    `You are IMPLEMENTING ${ids.length > 1 ? `${ids.length} roadmap phases` : 'ONE roadmap phase'} end-to-end in this git worktree, as the driver of record. Work ONLY in this worktree.`,
+    `You are IMPLEMENTING ${ids.length > 1 ? `${ids.length} roadmap phases` : 'ONE roadmap phase'} end-to-end, as the driver of record. Work ONLY in this worktree.`,
     '',
     `YOUR PROTOCOL IS A FILE — read it in full, first, before touching anything: ${RUN_SKILL}`,
-    `Its \`references/\` siblings (in ${dirname(RUN_SKILL)}/references/) are part of the protocol — read each one it sends you to, when it sends you there. Follow it as written, end to end, including every part it hands to the driver rather than to a supervising session. This envelope adds only the targets and the overrides below; where the two disagree about HOW to implement, the protocol wins.`,
+    `Its \`references/\` siblings (in ${dirname(RUN_SKILL)}/references/) are part of the protocol — read each one when it sends you there. Follow it as written, end to end, including every part it hands to the driver rather than to a supervising session. This envelope adds only the targets and the overrides below; where the two disagree, the protocol wins.`,
     '',
-    `TARGETS — run the protocol once per phase, in this order: ${phaseFiles.join(', ')}. Every decision is pre-made in their notes: implement, never re-decide.`,
+    `TARGETS — run the protocol once per phase, in order: ${phaseFiles.join(', ')}. Every decision is pre-made in their notes: implement, never re-decide.`,
     '',
     'WHAT THIS LANE OVERRIDES — everything else in the protocol runs unchanged:',
-    '- THIS WORKTREE ONLY. Never merge, never push, never switch branches, never touch the primary checkout or backlog.ts — the supervising session double-checks your work, integrates, and cleans up. Stage explicit paths; never `git add -A` (sibling sessions share this checkout).',
-    "- CROSS-REPO PHASES: a plan whose steps/files name paths in ANOTHER checkout (a different git toplevel than this worktree) is a cross-repo phase, and the plan's own paths ARE the instruction — implement and commit the PRODUCT work in that checkout on its currently checked-out branch, while every roadmap-state commit (the phase file, gate artifacts) stays in THIS worktree. The never-touch-the-primary rule protects this roadmap repo's primary checkout only. In the other checkout too: stage explicit paths, never push, never merge, never switch branches.",
+    '- THIS WORKTREE ONLY. Never merge, never push, never switch branches, never touch the primary checkout or backlog.ts — the supervising session audits, integrates and cleans up. Stage explicit paths; never `git add -A` (siblings share this checkout).',
+    "- CROSS-REPO PHASES: a plan naming paths in ANOTHER checkout (a different git toplevel) means what it says — commit the PRODUCT work in that other checkout on its current branch, while every roadmap-state commit (the phase file, gate artifacts) stays in THIS worktree. There too: stage explicit paths, never push, never merge, never switch branches.",
     '- RESUME RULE: a task already `done: true` in the phase file whose commit is present in git log is FINISHED — skip it, never redo or amend it (a relaunch over a half-done worktree resumes from the first unfinished task).',
-    '- SHARED-HOST RULES (~5 concurrent AI sessions on 16 GB — violating these can freeze the box): every test suite / type-check / build runs wrapped as `capbuild <cmd>`; scoped tiers run EXACTLY `bash scripts/test/run-tier.sh <slot> <files…>` (self-wraps capbuild); NEVER pipe tier output through tail/head/grep; no dev servers.',
-    '- YOU HAVE NO SUBAGENTS in this lane. Wherever the protocol spawns an agent, run that step yourself, inline, once per target, and record it under your own name — never claim an agent review that did not run.',
+    '- SHARED HOST (~5 AI sessions on 16 GB — breaking these can freeze the box): wrap every suite / type-check / build as `capbuild <cmd>`; scoped tiers run EXACTLY `bash scripts/test/run-tier.sh <slot> <files…>`; never pipe tier output through tail/head/grep; no dev servers; no full-suite run outside the gate slot naming one.',
+    '- COMMIT TRAILER: end every commit with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` — a lane convention the protocol does not carry.',
+    '- NO REACHABLE USER in this lane. Any protocol step that resolves to "stop and ask the user" — an escalating verdict, a failed `assumptions[]` check, a post-and-wait instruction — ENDS this run instead: write the report below with the question and its options, end it with CODEX-RUN-BLOCKED, and stop. Never wait for an answer that cannot come.',
+    '- YOU ARE ALREADY IN YOUR WORKTREE, on your own branch, both made by the launcher: skip the protocol\'s worktree-lane setup (`roadmap worktree up` / `worktree reset`) and its landing step. Never claim a second slot.',
+    '- FILL PROTOCOL ROLES rather than substituting yourself for them: `resolveRole(<role>, \'codex\')` (MULTI-DRIVER.md §1) names the model and how to reach it — spawn it natively when it is yours, else as a headless child (Claude family: `claude -p [--agents <json>]`). Record every firing; a role you fill yourself is recorded inline and labelled your own, never as a review that did not run.',
     '- ATTRIBUTION: this lane is `codex`, which only the launcher knows — `executionResult.driver` is `{ model: <your own model id>, lane: "codex" }`. The launcher wrote that same pair into its journal, and a disagreement fails the phase completion check.',
     '',
-    `WHEN FINISHED (or blocked): write ${LANES.run.report} in the worktree root (do NOT commit it) with per-task commit sha + verify commands run + outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
+    `WHEN FINISHED (or blocked): write ${LANES.run.report} in the worktree root (do NOT commit it) with per-task commit sha + verify outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
   ].join('\n')
 }
 

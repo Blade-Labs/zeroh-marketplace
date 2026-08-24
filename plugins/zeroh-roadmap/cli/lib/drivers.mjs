@@ -100,6 +100,17 @@ export const MODEL_IDS = Object.freeze({
 })
 
 /**
+ * Harness ALIAS → the model id it names. A card's frontmatter and a consumer's
+ * `modelPolicy.judgeModel` can only ever carry an alias (neither can hold a full model id), so
+ * every reader of those two surfaces normalises through this map before touching a chain.
+ */
+export const MODEL_ALIASES = Object.freeze({
+  fable: MODEL_IDS.FABLE,
+  sonnet: MODEL_IDS.SONNET,
+  opus: MODEL_IDS.OPUS,
+})
+
+/**
  * Which registered driver's binary runs a given model id. ROUTING ONLY: presence here is not a
  * capability claim — `roleCapabilities` + `verifiedAt` carry what was probed, per driver.
  */

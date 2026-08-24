@@ -10,15 +10,16 @@
  * a role returning a verdict on work it did not produce. `tierChain` is model ids best-first,
  * and only `software-architect` carries a real chain, in the user's verbatim order (MULTI-DRIVER.md §1);
  * every other role carries its card's frontmatter alias, which stays on the card as the harness
- * fail-safe. `spawnSites` is evidence, not a claim — roles.test.mjs reds when a listed file
- * stops naming the role.
+ * fail-safe. `spawnSites` lists every file that SPAWNS the role — a skill that invokes it or the
+ * CLI/library that resolves its card — and is evidence, not a claim: roles.test.mjs reds when a
+ * listed file stops naming the role.
  *
  * `resolveRole` drives the chain ITSELF: no harness fallback flag substitutes for it, because
  * claude's `--fallback-model` is single-hop and claude-family-only and so can never reach the
  * openai tier. Falling down the chain never reduces rigor — the same role runs unabridged on the
  * next tier, and the walk is RECORDED.
  */
-import { DRIVERS, MODEL_IDS, MODEL_DRIVERS, resolveDriver } from './drivers.mjs'
+import { DRIVERS, MODEL_ALIASES, MODEL_IDS, MODEL_DRIVERS, resolveDriver } from './drivers.mjs'
 
 const { FABLE, SONNET, OPUS, SOL } = MODEL_IDS
 
@@ -72,7 +73,11 @@ export const ROLES = Object.freeze({
   'arc-eval-judge': Object.freeze({
     id: 'arc-eval-judge',
     agentCard: 'agents/arc-eval-judge.md',
-    spawnSites: Object.freeze(['skills/do-arc/SKILL.md', 'skills/eval-arc/SKILL.md']),
+    spawnSites: Object.freeze([
+      'skills/do-arc/SKILL.md',
+      'skills/eval-arc/SKILL.md',
+      'cli/commands/eval.mjs',
+    ]),
     class: 'judge',
     tierChain: Object.freeze([SONNET]),
     inlineFallbackLegal: true,
@@ -80,7 +85,11 @@ export const ROLES = Object.freeze({
   'phase-executor': Object.freeze({
     id: 'phase-executor',
     agentCard: 'agents/phase-executor.md',
-    spawnSites: Object.freeze(['skills/do-arc/SKILL.md', 'skills/do-phase/SKILL.md']),
+    spawnSites: Object.freeze([
+      'skills/do-arc/SKILL.md',
+      'skills/do-phase/SKILL.md',
+      'cli/lib/executor-arm.mjs',
+    ]),
     class: 'builder',
     tierChain: Object.freeze([OPUS]),
     inlineFallbackLegal: true,
@@ -135,13 +144,21 @@ function resolveRoleEntry(id) {
  * null when this driver cannot reach that runner at all (an UNREACHABLE tier, which the walk
  * treats as unavailable rather than pretending someone else answered).
  *
+ * BOTH sides are consulted, and they answer different questions: `driverEntry.roleCapabilities
+ * .subagents` is whether THIS driver can spawn anything at all, `runnerEntry.roleCapabilities
+ * .headlessChild` is whether the target can BE driven as a child. Claiming child-cli off the
+ * runner alone would hand a prompts-only harness a model it can never launch.
+ *
  * Takes the entries rather than reading the registry so the prompts-only branch is provable:
- * both registered drivers today declare a headless child mechanism, so `inline` is only
- * reachable for a driver that declares neither native subagents nor `headlessChild`.
+ * both registered drivers today spawn, so `inline` is only reachable for a driver that declares
+ * no spawn mechanism.
  */
 export function reachMode(driverId, driverEntry, runnerId, runnerEntry) {
-  if (runnerId === driverId && driverEntry.roleCapabilities.subagents === 'native') return 'native'
-  if (runnerEntry.roleCapabilities.headlessChild === true) return 'child-cli'
+  const subagents = driverEntry.roleCapabilities.subagents
+  // An ABSENT key is unproven, never a claim of ability: only an explicit non-'none' spawns.
+  const driverSpawns = subagents !== undefined && subagents !== 'none'
+  if (runnerId === driverId && subagents === 'native') return 'native'
+  if (driverSpawns && runnerEntry.roleCapabilities.headlessChild === true) return 'child-cli'
   if (runnerId === driverId) return 'inline'
   return null
 }
@@ -187,7 +204,13 @@ export function resolveRole(roleId, driverId, opts = {}) {
   const down = forcedDown(opts)
   // A judgeModel LEADS a judge seam's chain; a builder seam ignores it (the review-phase HOME
   // rule). It is a tier like any other — unavailable, it falls through and the ask is recorded.
-  const chain = role.class === 'judge' && opts.judgeModel ? [opts.judgeModel, ...role.tierChain] : [...role.tierChain]
+  // Consumers configure the harness ALIAS (`modelPolicy.judgeModel: 'fable'`), so normalise
+  // through MODEL_ALIASES first: prepending the raw alias would record the configured judge as
+  // substituted away from itself, for want of a driver that runs a word rather than a model.
+  const asked = opts.judgeModel != null && Object.hasOwn(MODEL_ALIASES, opts.judgeModel)
+    ? MODEL_ALIASES[opts.judgeModel]
+    : opts.judgeModel
+  const chain = role.class === 'judge' && asked ? [asked, ...role.tierChain] : [...role.tierChain]
 
   const skipped = []
   for (const model of chain) {

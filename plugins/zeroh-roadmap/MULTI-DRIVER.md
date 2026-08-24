@@ -48,7 +48,13 @@ this plugin says **role**.
 - **The resolver drives the chain itself.** No harness fallback flag is a substitute: `claude
   --fallback-model` is single-hop and claude-family-only, so it can never reach `gpt-5.6-sol`.
 - **A tier is unavailable** when `forceUnavailable` or `ROADMAP_ROLE_FORCE_UNAVAILABLE`
-  (comma-separated model ids) names it, or when no registered driver runs it.
+  (comma-separated model ids) names it, when no registered driver runs it, or when this driver
+  declares no way to reach the driver that does.
+- **A SPAWN that fails on model availability is the fourth trigger, and the SPAWNER owns it** —
+  the resolver cannot see a live launch. Symptom: a limit-reached error, an access refusal, an
+  unknown-model error. Response: re-ask `resolveRole` with that model in `forceUnavailable`, run
+  the SAME role at unreduced rigor on the tier it returns, and record the substitution. A model
+  that RAN and returned an adverse verdict has judged — that is never an availability failure.
 - **Falling down the chain never reduces rigor** — the same role runs, unabridged, on the next
   tier, and the walk is RECORDED: `substituted: { from, to, reason }`.
 - **Every tier down** throws `RoleUnjudgedError` naming the role and each tier tried. A stage
