@@ -15,7 +15,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 8,
   name: 'Codex plan lane — deliver plan-phase by path, bind validationTiers, drive it once',
-  status: 'backlog',
+  status: 'in-progress',
   arcId: 'POLYSEAT',
   plannedBy: { model: 'claude-fable-5' },
   category: 'feature',
