@@ -700,3 +700,225 @@ test('codex status: an unreadable journal reports the PARSE failure, never "no j
     `the journal is right there — claiming none covers the phase sends the reader to the wrong place; got: ${r.stderr}`,
   )
 })
+
+// ── plan lane: a third mission on the SAME launch mechanics ────────────────────
+// The privilege the arc's any-model-full-protocol criterion forbids is a protocol only one model
+// family can read. run and review already deliver theirs by path; without a plan lane no
+// non-Claude driver can author a phase at all, and the scorecard's `planners` cells hold exactly
+// one family no matter how many models ran.
+
+/** The plan lane's protocol, resolved the way codex.mjs must resolve it (plugin-move follows). */
+const PLAN_PHASE_SKILL = join(HERE, '..', '..', 'skills', 'plan-phase', 'SKILL.md')
+
+/** A brief on disk (the lane refuses to plan without an input) → its repo-relative path. */
+function writeBrief(root, name = '.building/plan-brief.md') {
+  const p = join(root, name)
+  mkdirSync(dirname(p), { recursive: true })
+  writeFileSync(p, '# follow-up fixes\n- one line per item\n')
+  return name
+}
+
+test('plan: the mission DELIVERS plan-phase by path, references included', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-100')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '100', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-plan-100-prompt.txt'), 'utf8')
+
+  assert.ok(existsSync(PLAN_PHASE_SKILL), `a lane naming a missing protocol briefs on nothing — no plan-phase protocol at ${PLAN_PHASE_SKILL}`)
+  assert.ok(
+    prompt.includes(PLAN_PHASE_SKILL),
+    `the plan prompt must NAME the resolved protocol path ${PLAN_PHASE_SKILL} — fix cli/commands/codex.mjs buildPlanPrompt: hand the SKILL over as a file, the way buildReviewPrompt hands over review-phase`,
+  )
+  assert.match(prompt, /YOUR PROTOCOL IS A FILE/, 'the plan lane must point at the protocol it runs, in the other lanes\' own words — cli/commands/codex.mjs buildPlanPrompt')
+
+  const refs = join(dirname(PLAN_PHASE_SKILL), 'references')
+  assert.ok(existsSync(refs), `precondition: plan-phase's references/ siblings must exist at ${refs} — an empty pointer would make the next assertion decorative`)
+  assert.ok(
+    prompt.includes(refs),
+    `the prompt must point at the protocol's references/ siblings (${refs}) — a planner that never reads verify-rehearsal.md authors backward verifies; fix cli/commands/codex.mjs buildPlanPrompt`,
+  )
+
+  assert.ok(
+    prompt.includes('roadmap/phases/phase-100.phase.ts'),
+    'the envelope must carry its TARGET — the one file the plan act may create; fix cli/commands/codex.mjs buildPlanPrompt',
+  )
+  assert.ok(prompt.includes(brief), 'the envelope must name the brief it was given — the plan input is the whole point of the flag; fix cli/commands/codex.mjs buildPlanPrompt')
+})
+
+test('plan: --brief is MANDATORY and the refusal names the flag', () => {
+  const root = tmpRepo()
+  const worktree = join(root, 'wt-plan-101')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '101', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(r.status, 0, `a plan with no input is a hallucination invitation — it must refuse; stderr: ${r.stderr}`)
+  assert.match(r.stderr, /--brief/, `the refusal must NAME the flag that fixes it, not just say no; got: ${r.stderr}`)
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-101.json')), 'a refused launch must journal nothing')
+})
+
+test('plan: a --brief pointing at nothing fails loudly and journals nothing', () => {
+  const root = tmpRepo()
+  const worktree = join(root, 'wt-plan-102')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '102', '--brief', '.building/nope.md', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(r.status, 0)
+  assert.match(r.stderr, /brief missing/, `an unreadable plan input must be named, never planned around; got: ${r.stderr}`)
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-102.json')), 'a refused launch must journal nothing')
+})
+
+test('plan: the gitignored brief is copied into the worktree it names', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-103')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '103', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(
+    readFileSync(join(worktree, brief), 'utf8'),
+    readFileSync(join(root, brief), 'utf8'),
+    'a brief under .building/ is gitignored and absent from a fresh worktree — the lane must carry it in, or the mission\'s first read fails on a path it just validated',
+  )
+})
+
+test('plan: journal, prompt and report are separate from run and review', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-104')
+  const env = fakeLaunchEnv(root, worktree)
+  assert.equal(spawnSync('node', [BIN, 'codex', 'plan', '104', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env }).status, 0)
+  const j = JSON.parse(readFileSync(join(root, '.building', 'codex-plan-104.json'), 'utf8'))
+  assert.equal(j.lane, 'plan')
+  assert.equal(j.report, 'CODEX-PLAN.md')
+  assert.ok(!existsSync(join(root, '.building', 'codex-104.json')), 'a plan must not write the run lane\'s journal')
+  assert.ok(!existsSync(join(root, '.building', 'codex-review-104.json')), 'a plan must not write the review lane\'s journal')
+
+  // The launcher stamps attribution: asking the model to self-report the driver the launcher
+  // already commanded is an honesty rail with no floor under it.
+  assert.equal(typeof DRIVERS.codex.model, 'string', 'the registry must DECLARE codex\'s model id — undefined === undefined would pass the next line on nothing')
+  assert.equal(j.driver?.model, DRIVERS.codex.model, 'the journalled model is the registry entry\'s, never a literal in the launcher')
+  assert.equal(j.driver?.lane, 'codex', 'driver.lane names the DRIVER that ran, never the run/review/plan mission')
+
+  // Everything the poller and the reconcile read survives on the new lane.
+  assert.deepEqual(j.phases, ['104'])
+  assert.equal(j.worktree, worktree)
+  assert.ok(Number.isInteger(j.pgid), 'the liveness probe still has its pgid')
+  assert.ok(Number.isFinite(Date.parse(j.startedAt)), 'the freshness guard still has a parseable startedAt')
+})
+
+test('plan: findJournal and status resolve the codex-plan- prefix, and no other lane answers for it', async () => {
+  const mod = await import('./codex.mjs')
+  const root = tmpRepo()
+  const worktree = join(root, 'wt-plan-105')
+  mkdirSync(worktree, { recursive: true })
+  writeFileSync(
+    join(root, '.building', 'codex-plan-105.json'),
+    JSON.stringify({ phases: ['105'], lane: 'plan', report: 'CODEX-PLAN.md', worktree, pgid: 999999999, startedAt: new Date(Date.now() - 60_000).toISOString() }) + '\n',
+  )
+
+  assert.equal(mod.findJournal(root, [105], 'run'), null, 'a PLAN of phase 105 is not an implementation run of it')
+  assert.equal(mod.findJournal(root, [105], 'review'), null, 'nor a review of it')
+  const found = mod.findJournal(root, [105], 'plan')
+  assert.ok(found, 'the same id resolves under its OWN lane')
+  assert.equal(found.path, join(root, '.building', 'codex-plan-105.json'))
+
+  // The lane's verdict is readable through the same status command, selected by its own flag.
+  writeFileSync(join(worktree, 'CODEX-PLAN.md'), 'planned\nCODEX-RUN-COMPLETE\n')
+  const planned = spawnSync('node', [BIN, 'codex', 'status', '105', '--plan'], { cwd: root, encoding: 'utf8' })
+  assert.equal(planned.status, 0, planned.stderr)
+  assert.equal(JSON.parse(planned.stdout).state, 'complete')
+
+  // A default (run-lane) poll must not adopt it — and must say where the journal actually is,
+  // rather than sending the reader off to look for a run that never existed.
+  const bare = spawnSync('node', [BIN, 'codex', 'status', '105'], { cwd: root, encoding: 'utf8' })
+  assert.equal(bare.status, 1, 'run-lane status must not see a plan journal')
+  assert.match(bare.stderr, /--plan/, `the miss must name the flag that finds the journal sitting right there; got: ${bare.stderr}`)
+})
+
+test('plan: a live plan refuses an implementation run into the same worktree', () => {
+  const root = tmpRepo()
+  const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
+  child.unref()
+  cleanups.push(() => {
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch {}
+  })
+  const worktree = join(root, 'wt-plan-shared')
+  mkdirSync(worktree, { recursive: true })
+  writeFileSync(
+    join(root, '.building', 'codex-plan-106.json'),
+    JSON.stringify({ phases: ['106'], lane: 'plan', report: 'CODEX-PLAN.md', worktree, pgid: child.pid, startedAt: new Date().toISOString() }) + '\n',
+  )
+  writePhase(root, 106)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '106', '--worktree', worktree], { cwd: root, encoding: 'utf8' })
+  assert.equal(r.status, 2, r.stderr)
+  assert.match(r.stderr, /LIVE run .* in this worktree — refusing/, 'the liveness guard must span all three lanes')
+})
+
+test('plan: the lane-only overrides SURVIVE the delivery', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-107')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '107', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-plan-107-prompt.txt'), 'utf8')
+  const protocol = readFileSync(PLAN_PHASE_SKILL, 'utf8')
+
+  assert.match(prompt, /work only (here|in this worktree)/i, 'the delegated plan must be fenced to its worktree — fix cli/commands/codex.mjs buildPlanPrompt')
+  assert.match(prompt, /never push/i, 'a driver that may push can land an unreviewed plan on the integration branch — fix cli/commands/codex.mjs buildPlanPrompt')
+  assert.match(prompt, /stage explicit paths/i, 'sibling sessions share this checkout — fix cli/commands/codex.mjs buildPlanPrompt')
+  assert.ok(prompt.includes('git add -A'), 'the staging rule must NAME the forbidden command, not gesture at it — `git add -A` scoops a sibling session\'s work; fix cli/commands/codex.mjs buildPlanPrompt')
+
+  // The number is the launcher's, not the planner's: the protocol reserves one, this lane already did.
+  assert.match(
+    prompt,
+    /ALREADY RESERVED/,
+    'the launcher claimed the number before spawning; without the override the planner reserves a SECOND one and plans into a file nobody is waiting for — fix cli/commands/codex.mjs buildPlanPrompt',
+  )
+
+  // Queueing is review-phase's act and the supervising session runs it. A delegated planner that
+  // edits backlog.ts queues a plan no one has reviewed.
+  assert.ok(prompt.includes('roadmap/backlog.ts'), 'the queue file must be named as off-limits, not gestured at — fix cli/commands/codex.mjs buildPlanPrompt')
+  assert.ok(
+    protocol.includes('backlog.ts'),
+    'precondition: plan-phase must still be the protocol that talks about the queue — if it stopped, this override is guarding nothing',
+  )
+
+  assert.match(
+    prompt,
+    /NO REACHABLE USER[^\n]*CODEX-RUN-BLOCKED/,
+    'a detached planner cannot ask anyone: the delivered protocol interviews and escalates to the user, so the lane MUST say that ends the run — fix cli/commands/codex.mjs buildPlanPrompt',
+  )
+  assert.match(
+    prompt,
+    /plannedBy/,
+    'the plan artifact carries its own author field — unstamped, the scorecard\'s planner cells cannot tell which family authored it; fix cli/commands/codex.mjs buildPlanPrompt',
+  )
+  assert.match(prompt, /resolveRole/, 'the plan protocol spawns the architect; the lane fills that role through the resolver rather than substituting itself — fix cli/commands/codex.mjs buildPlanPrompt')
+
+  assert.ok(
+    !protocol.includes('capbuild'),
+    'precondition: skills/plan-phase/SKILL.md must NOT carry the shared-host rules — if it now does, they stopped being lane material',
+  )
+  assert.ok(prompt.includes('capbuild'), 'the shared-host memory cap is absent from the protocol, so only the lane can carry it — fix cli/commands/codex.mjs buildPlanPrompt')
+
+  assert.ok(prompt.includes('CODEX-PLAN.md'), 'the plan lane hands off its OWN report, never the run lane\'s — fix cli/commands/codex.mjs buildPlanPrompt')
+  assert.match(prompt, /do not commit|never commit/i, 'the report is never committed — the launching run owns the file (stale-sentinel bug 2026-08-11)')
+  assert.ok(prompt.includes('CODEX-RUN-COMPLETE'), 'without the terminal sentinel every finished plan polls as dead-no-report')
+  assert.ok(prompt.includes('CODEX-RUN-BLOCKED'), 'a blocked plan must be able to SAY so; missing, it is indistinguishable from a crash')
+})
+
+test('plan: a number whose phase file already exists is refused, not planned over', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  writePhase(root, 108)
+  const worktree = join(root, 'wt-plan-108')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '108', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(r.status, 0, 'this lane authors a NEWLY reserved number — an existing file means the wrong number was passed')
+  assert.match(r.stderr, /already exists/, `the collision must be named; got: ${r.stderr}`)
+  assert.equal(readFileSync(join(root, 'roadmap', 'phases', 'phase-108.phase.ts'), 'utf8'), 'export default {}\n', 'the existing plan is untouched')
+})

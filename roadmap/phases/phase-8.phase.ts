@@ -84,7 +84,18 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "The plan lane: LANES.plan = { prefix 'codex-plan-', report 'CODEX-PLAN.md', journalRe /^codex-plan-[\\d-]+\\.json$/ }, a PLAN_SKILL constant beside RUN_SKILL/REVIEW_SKILL, buildPlanPrompt, and `roadmap codex plan <N> --brief <path>` wired through the shared launch()/refuseIfLive/findJournal/statusCodex mechanics. --brief is mandatory. 10 tests added.",
+        how:
+          'TDD: the plan-lane tests were appended and run FIRST — 8 red on `roadmap codex: usage:` (no plan subcommand) against 27 pre-existing green; the implementation turned them green, 36/36. buildPlanPrompt mirrors buildReviewPrompt: protocol-is-a-file line, references clause, target, then LANE OVERRIDES ONLY (worktree discipline, the one-file rule naming roadmap/backlog.ts, the docs(roadmap) commit grammar, the CODEX-PLAN.md report contract, the sentinel, the plannedBy stamp, the role-resolver bullet, NO REACHABLE USER). The missing-flag refusal throws before any worktree work, naming the flag and printing the re-run command. Verify: `capbuild node --test cli/commands/codex.test.mjs` → 36 pass / 0 fail.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "Four additive deviations, none narrowing the criterion: (a) LANES entries gained `flag` (run null, review '--review', plan '--plan') and the lane selector derives from that table instead of a hardcoded --review ternary, so adding a lane stays one entry; (b) statusCodex's `!found` branch now names the lane whose journal DOES cover the ids plus the exact flag — `roadmap codex status 9` on a plan journal otherwise reported 'no run journal covers' over a journal sitting right there; (c) the worktree setup common to run (branch + npm ci) and review (--detach, no install) was extracted to ensureWorktree and the --doc carry-in to carryIn, because the plan act BOTH commits and validates through the consumer's tsx — the alternative was a third copy-pasted setup; (d) an extra guard + test refuses planning onto a number whose phase file already exists, since this lane authors a freshly reserved number and would otherwise clobber a real plan. The lane is machinery only until task 8.4 fires it.",
+      },
+      done: true,
     },
     {
       id: '8.2',

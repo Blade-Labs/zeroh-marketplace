@@ -4,10 +4,12 @@
  *
  *   roadmap codex run <N> [<N2>…] [--worktree <path>] [--base <ref>]
  *   roadmap codex review <N> [<N2>…] [--doc <path>] [--focus <text>]
- *   roadmap codex status <N> [--review]
+ *   roadmap codex plan <N> --brief <path> [--worktree <path>] [--base <ref>]
+ *   roadmap codex status <N> [--review|--plan]
  *
- * TWO LANES, one set of launch mechanics. `run` IMPLEMENTS a plan (worktree on a branch,
- * npm ci, per-task commits, its own gate). `review` runs review-phase against one, report-only,
+ * THREE LANES, one set of launch mechanics. `run` IMPLEMENTS a plan (worktree on a branch,
+ * npm ci, per-task commits, its own gate). `plan` AUTHORS one, committing exactly one phase file.
+ * `review` runs review-phase against one, report-only,
  * landing a CODEX-REVIEW.md and nothing else. The review lane exists because a
  * plan authored and then reviewed by the same model has only ever been marked by its own
  * author — and because `/codex:rescue`, the other route to an outside read, cannot run on this
@@ -57,9 +59,15 @@ import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
+/**
+ * One entry per mission. Adding a lane is adding an entry here — the launcher, the liveness guard,
+ * the journal lookup and `status` all read the table, so a fourth mission never grows a fourth
+ * launcher. `flag` is how `status` is pointed at the lane (the run lane is the default, hence null).
+ */
 const LANES = {
-  run: { prefix: 'codex-', report: 'CODEX-REPORT.md', journalRe: /^codex-[\d-]+\.json$/ },
-  review: { prefix: 'codex-review-', report: 'CODEX-REVIEW.md', journalRe: /^codex-review-[\d-]+\.json$/ },
+  run: { prefix: 'codex-', report: 'CODEX-REPORT.md', journalRe: /^codex-[\d-]+\.json$/, flag: null },
+  review: { prefix: 'codex-review-', report: 'CODEX-REVIEW.md', journalRe: /^codex-review-[\d-]+\.json$/, flag: '--review' },
+  plan: { prefix: 'codex-plan-', report: 'CODEX-PLAN.md', journalRe: /^codex-plan-[\d-]+\.json$/, flag: '--plan' },
 }
 
 function journalPath(root, ids, lane = 'run') {
@@ -224,9 +232,60 @@ function buildReviewPrompt(root, ids, { doc, focus } = {}) {
   ].join('\n')
 }
 
+/** The plan protocol is the plan-phase SKILL, resolved from THIS file so a plugin move follows. */
+const PLAN_SKILL = fileURLToPath(new URL('../../skills/plan-phase/SKILL.md', import.meta.url))
+
 /**
- * Both lanes refuse to launch over live work: the same-lane journal first (an id set
- * relaunching itself), then ANY journal of EITHER lane whose worktree is this one — a live
+ * The plan lane's envelope: which number, which input, what this lane overrides, where the
+ * hand-off goes. The protocol body stays in the skill and is read at run time, so every driver
+ * plans under the same one — a per-lane copy would leave the scorecard's per-model cells comparing
+ * briefings instead of models.
+ */
+function buildPlanPrompt(root, ids, { brief } = {}) {
+  if (ids.length !== 1) throw new Error(`plan lane: exactly ONE phase number per run (got ${ids.length}) \u2014 one plan act authors one phase file`)
+  if (!brief || brief.startsWith('--')) {
+    throw new Error(
+      'plan lane: --brief <path> is REQUIRED \u2014 a plan with no stated input is an invitation to invent one. '
+        + `Write the request down (one line per item) and re-run: roadmap codex plan ${ids[0]} --brief <path/to/brief.md>`,
+    )
+  }
+  if (!existsSync(join(root, brief))) throw new Error(`plan lane: brief missing: ${brief}`)
+  const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
+  if (existsSync(join(root, phaseFile))) {
+    throw new Error(
+      `plan lane: ${phaseFile} already exists \u2014 this lane authors a NEWLY reserved number, so an existing file means the wrong number was passed. `
+        + 'Reserve a fresh one and re-run; editing an existing plan is a supervised act, not a detached one.',
+    )
+  }
+  if (!existsSync(PLAN_SKILL)) throw new Error(`plan protocol missing: ${PLAN_SKILL}`)
+  if (!existsSync(ROLE_BINDINGS)) throw new Error(`role bindings missing: ${ROLE_BINDINGS}`)
+  return [
+    'You are PLANNING one roadmap phase \u2014 authoring its phase file, and nothing else. Work ONLY in this worktree.',
+    '',
+    `YOUR PROTOCOL IS A FILE \u2014 read it in full, first, before investigating anything: ${PLAN_SKILL}`,
+    `Its \`references/\` siblings (in ${dirname(PLAN_SKILL)}/references/) are part of the protocol \u2014 read each one when it sends you there. Follow it as written, end to end, including every part it hands to the author rather than to a supervising session. This envelope adds only the target and the overrides below; where the two disagree, the protocol wins.`,
+    '',
+    `TARGET \u2014 author exactly ${phaseFile}. That number is ALREADY RESERVED for you by the launching session: skip the protocol's number-reservation step, never renumber, and never author a second phase.`,
+    '',
+    `PLAN INPUT \u2014 the request you are planning, read it before the code: ${join(root, brief)} (also at ${brief} in this worktree). It states WHAT to plan; HOW is yours to decide from the code, per the protocol. An item you cannot plan to a known diff is reported below, never softened into a vague task.`,
+    '',
+    'WHAT THIS LANE OVERRIDES \u2014 everything else in the protocol runs unchanged:',
+    '- THIS WORKTREE ONLY. Never merge, never push, never switch branches, never touch the primary checkout \u2014 the supervising session integrates and cleans up. Stage explicit paths; never `git add -A` (siblings share this checkout).',
+    `- ONE FILE MAY CHANGE: ${phaseFile}. Never roadmap/backlog.ts, never source, never another phase file, never a doc. The protocol's closing auto-invoked review pass and the queueing that follows it are DISABLED here \u2014 the supervising session runs that pass, which owns the queue. Still DO the reasoning and report what it would have found.`,
+    '- COMMIT: exactly one commit, subject `docs(roadmap): phase <N> \u2014 <desc>`, staging that one path explicitly, and end it with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` \u2014 a lane convention the protocol does not carry.',
+    '- SHARED HOST (~5 AI sessions on 16 GB \u2014 breaking these can freeze the box): reading and grepping are free, so read widely; wrap any suite / type-check / build you run as `capbuild <cmd>`; no dev servers.',
+    '- NO REACHABLE USER in this lane. Any protocol step that resolves to "stop and ask the user" \u2014 an interview, an unresolvable ambiguity, a placement ruling \u2014 ENDS this run instead: write the report below with the question and its options, end it with CODEX-RUN-BLOCKED, and stop. Never wait for an answer that cannot come.',
+    '- YOU ARE ALREADY IN YOUR WORKTREE, on your own branch, both made by the launcher. Never claim a second slot.',
+    `- FILL PROTOCOL ROLES rather than substituting yourself for them: the table in ${ROLE_BINDINGS} \u00a71 (resolveRole in cli/lib/roles.mjs) names the model and how to reach it \u2014 spawn it natively when it is yours, else as a headless child (Claude family: \`claude -p [--agents <json>]\`). Record every firing in the report; a role you fill yourself is labelled your own, never as a consult that did not run.`,
+    "- ATTRIBUTION: the phase file's `plannedBy` is `{ model: <your own model id> }` \u2014 yours, never the launching session's. The launcher journalled the driver it started, and a disagreement is a finding.",
+    '',
+    `WHEN FINISHED (or blocked): write ${LANES.plan.report} in the worktree root (do NOT commit it) with the phase number + file, the commit sha, each probe you ran and what it yielded, every role firing, and any decision you could not make, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
+  ].join('\n')
+}
+
+/**
+ * Every lane refuses to launch over live work: the same-lane journal first (an id set
+ * relaunching itself), then ANY journal of ANY lane whose worktree is this one — a live
  * review reading a worktree must not get an implementation run started underneath it.
  */
 function refuseIfLive(root, ids, lane, worktree, jPath, relaunchNote) {
@@ -312,6 +371,39 @@ function launch(root, ids, lane, { worktree, base, prompt }) {
   return 0
 }
 
+/**
+ * The shared worktree setup: a branch when the mission COMMITS (run, plan), detached when it only
+ * reads (review), and `npm ci` only where the mission needs the consumer's toolchain — the plan
+ * act validates its phase file through the consumer's tsx. Returns 0 or an exit to propagate.
+ */
+function ensureWorktree(root, { worktree, base, branch, install }) {
+  if (existsSync(worktree)) return 0
+  const addArgs = branch ? [worktree, '-b', branch, base] : ['--detach', worktree, base]
+  const wt = spawnSync('git', ['worktree', 'add', ...addArgs], { cwd: root, stdio: 'inherit' })
+  if (wt.status !== 0) return wt.status ?? 1
+  if (!install) return 0
+  const capbuild = spawnSync('which', ['capbuild']).status === 0
+  for (const dir of [worktree, join(worktree, 'web')]) {
+    if (!existsSync(join(dir, 'package.json'))) continue
+    const ci = capbuild
+      ? spawnSync('capbuild', ['npm', 'ci', '--no-audit', '--no-fund'], { cwd: dir, stdio: 'inherit' })
+      : spawnSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: dir, stdio: 'inherit' })
+    if (ci.status !== 0) {
+      process.stderr.write(`roadmap codex: npm ci failed in ${dir} — not launching\n`)
+      return 1
+    }
+  }
+  return 0
+}
+
+/** A gitignored input (a release plan, a plan brief) is absent from a fresh worktree — carry it in,
+ *  or the mission's first read fails on a path the launcher just validated. */
+function carryIn(root, worktree, rel) {
+  if (!rel || existsSync(join(worktree, rel))) return
+  mkdirSync(dirname(join(worktree, rel)), { recursive: true })
+  copyFileSync(join(root, rel), join(worktree, rel))
+}
+
 function runCodex(root, ids, argv) {
   const wi = argv.indexOf('--worktree')
   const bi = argv.indexOf('--base')
@@ -324,21 +416,8 @@ function runCodex(root, ids, argv) {
   const refused = refuseIfLive(root, ids, 'run', worktree, jPath, "; the prompt's resume rule skips already-done tasks")
   if (refused !== 0) return refused
 
-  if (!existsSync(worktree)) {
-    const wt = spawnSync('git', ['worktree', 'add', worktree, '-b', `codex/${ids.join('-')}`, base], { cwd: root, stdio: 'inherit' })
-    if (wt.status !== 0) return wt.status ?? 1
-    const capbuild = spawnSync('which', ['capbuild']).status === 0
-    for (const dir of [worktree, join(worktree, 'web')]) {
-      if (!existsSync(join(dir, 'package.json'))) continue
-      const ci = capbuild
-        ? spawnSync('capbuild', ['npm', 'ci', '--no-audit', '--no-fund'], { cwd: dir, stdio: 'inherit' })
-        : spawnSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: dir, stdio: 'inherit' })
-      if (ci.status !== 0) {
-        process.stderr.write(`roadmap codex: npm ci failed in ${dir} — not launching\n`)
-        return 1
-      }
-    }
-  }
+  const made = ensureWorktree(root, { worktree, base, branch: `codex/${ids.join('-')}`, install: true })
+  if (made !== 0) return made
 
   // buildPrompt can still throw (a renamed/renumbered phase file) — resolve it BEFORE
   // touching the previous run's hand-off, so a failed relaunch destroys no evidence.
@@ -370,18 +449,39 @@ function reviewCodex(root, ids, argv) {
   const focus = fi >= 0 ? argv[fi + 1] : undefined
   const prompt = buildReviewPrompt(root, ids, { doc, focus })
 
-  if (!existsSync(worktree)) {
-    const wt = spawnSync('git', ['worktree', 'add', '--detach', worktree, base], { cwd: root, stdio: 'inherit' })
-    if (wt.status !== 0) return wt.status ?? 1
-  }
-  // A release plan usually lives in .building/, which is gitignored and therefore absent from
-  // a fresh worktree — copy it in, or the mission's first read fails on a path just validated.
-  if (doc && !existsSync(join(worktree, doc))) {
-    mkdirSync(dirname(join(worktree, doc)), { recursive: true })
-    copyFileSync(join(root, doc), join(worktree, doc))
-  }
+  const made = ensureWorktree(root, { worktree, base, branch: null, install: false })
+  if (made !== 0) return made
+  carryIn(root, worktree, doc)
   preserveStaleReport(worktree, LANES.review.report)
   return launch(root, ids, 'review', { worktree, base, prompt })
+}
+
+/**
+ * The plan lane. A branch and an install like `run` (the plan act commits its phase file and
+ * validates it through the consumer's tsx), but exactly one file may change and the number is
+ * reserved before launch — the planner never picks its own.
+ */
+function planCodex(root, ids, argv) {
+  const wi = argv.indexOf('--worktree')
+  const bi = argv.indexOf('--base')
+  const fi = argv.indexOf('--brief')
+  const base = bi >= 0 ? argv[bi + 1] : 'develop'
+  const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-plan-${ids.join('-')}`
+  mkdirSync(join(root, '.building'), { recursive: true })
+  const jPath = journalPath(root, ids, 'plan')
+
+  const refused = refuseIfLive(root, ids, 'plan', worktree, jPath, ' — a plan re-authors from scratch')
+  if (refused !== 0) return refused
+
+  // Resolve the prompt against the PRIMARY checkout before any worktree work, so a missing
+  // --brief or a taken number fails loudly and destroys no previous hand-off.
+  const prompt = buildPlanPrompt(root, ids, { brief: fi >= 0 ? argv[fi + 1] : undefined })
+
+  const made = ensureWorktree(root, { worktree, base, branch: `codex-plan/${ids.join('-')}`, install: true })
+  if (made !== 0) return made
+  carryIn(root, worktree, argv[fi + 1])
+  preserveStaleReport(worktree, LANES.plan.report)
+  return launch(root, ids, 'plan', { worktree, base, prompt })
 }
 
 function statusCodex(root, ids, lane = 'run') {
@@ -393,7 +493,22 @@ function statusCodex(root, ids, lane = 'run') {
     return 1
   }
   if (!found) {
-    process.stderr.write(`roadmap codex: no ${lane} journal covers phase(s) ${ids.join(',')} in ${join(root, '.building')}\n`)
+    // A journal sitting right there under another lane's prefix is the likeliest cause of this
+    // miss; reporting only "none" sends the reader hunting for a run that never existed.
+    // An unreadable journal in ANOTHER lane cannot prove coverage, and the miss being reported
+    // is the message that matters — it must not be replaced by a hint's own failure.
+    const covers = (l) => {
+      try {
+        return Boolean(findJournal(root, ids, l))
+      } catch {
+        return false
+      }
+    }
+    const elsewhere = Object.keys(LANES).filter((l) => l !== lane && covers(l))
+    const hint = elsewhere.length > 0
+      ? ` — but a ${elsewhere.join('/')} journal DOES cover them: \`roadmap codex status ${ids.join(' ')}${elsewhere.map((l) => (LANES[l].flag ? ` ${LANES[l].flag}` : '')).join('')}\``
+      : ''
+    process.stderr.write(`roadmap codex: no ${lane} journal covers phase(s) ${ids.join(',')} in ${join(root, '.building')}${hint}\n`)
     return 1
   }
   const { path: jPath, journal: j } = found
@@ -435,16 +550,18 @@ export default async function run(argv) {
     return 1
   }
   // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).
-  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--arc'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
+  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
   const ids = arcId ? arcPhases(root, arcId) : argv.slice(1).filter((a, i) => /^\d+$/.test(a) && !flagValues.has(i + 1))
-  const lane = argv.includes('--review') ? 'review' : 'run'
+  const lane = Object.keys(LANES).find((l) => LANES[l].flag && argv.includes(LANES[l].flag)) ?? 'run'
   if (sub === 'run' && ids.length > 0) return runCodex(root, ids, argv)
   if (sub === 'review' && ids.length > 0) return reviewCodex(root, ids, argv)
+  if (sub === 'plan' && ids.length > 0) return planCodex(root, ids, argv)
   if (sub === 'status' && ids.length > 0) return statusCodex(root, ids, lane)
   process.stderr.write(
     'roadmap codex: usage: roadmap codex run <N> [<N2>…] | run --arc <ID> [--worktree <path>] [--base <ref>]\n' +
       '                     roadmap codex review <N> [<N2>…] [--doc <path>] [--focus <text>] [--worktree <path>] [--base <ref>]\n' +
-      '                     roadmap codex status <N> [<N2>…] [--review] | status --arc <ID>\n',
+      '                     roadmap codex plan <N> --brief <path> [--worktree <path>] [--base <ref>]\n' +
+      '                     roadmap codex status <N> [<N2>…] [--review|--plan] | status --arc <ID>\n',
   )
   return 1
 }
