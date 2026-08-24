@@ -160,7 +160,18 @@ const isJson = (path) => path.endsWith('.json')
 
 /** The version currently declared in `path`, or undefined when the field is absent. */
 function currentVersion(text, target, path) {
-  if (isJson(target.path)) return parseJson(path)[target.field]
+  if (isJson(target.path)) {
+    // `path` names the file for a read-from-disk caller; a null path means "parse this text",
+    // which is how the post-patch re-read checks a buffer that is not on disk yet.
+    if (path === null) {
+      try {
+        return JSON.parse(text)[target.field]
+      } catch (e) {
+        throw new SourceError(`${target.path}: the patched text no longer parses as JSON: ${e.message}`)
+      }
+    }
+    return parseJson(path)[target.field]
+  }
   return text.match(new RegExp(`^${target.field}:[ \\t]*(\\S+)[ \\t]*$`, 'm'))?.[1]
 }
 
@@ -176,9 +187,11 @@ function withVersion(text, target, version) {
   if (!re.test(text)) throw new SourceError(`${target.path} carries no ${target.field} field to patch`)
   const patched = text.replace(re, json ? `$1"${version}"` : `${target.field}: ${version}`)
   // A textual patch targets the FIRST matching line, so re-read the field the way a consumer
-  // will: a nested key patched instead of the top-level one would otherwise ship silently.
-  if (json && JSON.parse(patched)[target.field] !== version) {
-    throw new SourceError(`${target.path}: patching ${target.field} hit the wrong line — the top-level field still reads ${JSON.parse(patched)[target.field]}`)
+  // will: a nested key patched instead of the top-level one would otherwise ship silently. Both
+  // formats, read back through the same reader `--check` uses.
+  const landed = currentVersion(patched, target, null)
+  if (landed !== version) {
+    throw new SourceError(`${target.path}: patching ${target.field} hit the wrong line — the top-level field still reads ${landed ?? '(absent)'}`)
   }
   return patched
 }

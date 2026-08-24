@@ -101,8 +101,11 @@ export const MODEL_IDS = Object.freeze({
 
 /**
  * Harness ALIAS → the model id it names. A card's frontmatter and a consumer's
- * `modelPolicy.judgeModel` can only ever carry an alias (neither can hold a full model id), so
- * every reader of those two surfaces normalises through this map before touching a chain.
+ * `modelPolicy.judgeModel` can only ever carry an alias (neither can hold a full model id), so a
+ * reader that needs a MODEL normalises through this map — `resolveRole` before it prepends a
+ * judgeModel to a chain. It is not the only alias vocabulary in the CLI: `cli/commands/result.mjs`
+ * ALIAS_FAMILY maps the same aliases to family PREFIXES for the attribution reconcile, and carries
+ * `haiku`, which no chain names. The two answer different questions; neither derives the other.
  */
 export const MODEL_ALIASES = Object.freeze({
   fable: MODEL_IDS.FABLE,

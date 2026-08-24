@@ -144,6 +144,9 @@ function groupAlive(pgid) {
 /** The run protocol is the do-phase SKILL, resolved from THIS file so a plugin move follows. */
 export const RUN_SKILL = fileURLToPath(new URL('../../skills/do-phase/SKILL.md', import.meta.url))
 
+/** The role bindings the run lane's fill-a-role override sends the driver to, same resolution. */
+const ROLE_BINDINGS = fileURLToPath(new URL('../../MULTI-DRIVER.md', import.meta.url))
+
 /**
  * The run lane's envelope: which phases, what this lane overrides, where the hand-off goes.
  * The protocol body stays in the skill and is read at run time, so every driver implements under
@@ -156,6 +159,7 @@ export function buildPrompt(root, ids) {
     if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
   }
   if (!existsSync(RUN_SKILL)) throw new Error(`run protocol missing: ${RUN_SKILL}`)
+  if (!existsSync(ROLE_BINDINGS)) throw new Error(`role bindings missing: ${ROLE_BINDINGS}`)
   return [
     `You are IMPLEMENTING ${ids.length > 1 ? `${ids.length} roadmap phases` : 'ONE roadmap phase'} end-to-end, as the driver of record. Work ONLY in this worktree.`,
     '',
@@ -172,10 +176,10 @@ export function buildPrompt(root, ids) {
     '- COMMIT TRAILER: end every commit with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` — a lane convention the protocol does not carry.',
     '- NO REACHABLE USER in this lane. Any protocol step that resolves to "stop and ask the user" — an escalating verdict, a failed `assumptions[]` check, a post-and-wait instruction — ENDS this run instead: write the report below with the question and its options, end it with CODEX-RUN-BLOCKED, and stop. Never wait for an answer that cannot come.',
     '- YOU ARE ALREADY IN YOUR WORKTREE, on your own branch, both made by the launcher: skip the protocol\'s worktree-lane setup (`roadmap worktree up` / `worktree reset`) and its landing step. Never claim a second slot.',
-    '- FILL PROTOCOL ROLES rather than substituting yourself for them: `resolveRole(<role>, \'codex\')` (MULTI-DRIVER.md §1) names the model and how to reach it — spawn it natively when it is yours, else as a headless child (Claude family: `claude -p [--agents <json>]`). Record every firing; a role you fill yourself is recorded inline and labelled your own, never as a review that did not run.',
+    `- FILL PROTOCOL ROLES rather than substituting yourself for them: the table in ${ROLE_BINDINGS} §1 (resolveRole in cli/lib/roles.mjs) names the model and how to reach it — spawn it natively when it is yours, else as a headless child (Claude family: \`claude -p [--agents <json>]\`). Record every firing; a role you fill yourself is recorded inline and labelled your own, never as a review that did not run.`,
     '- ATTRIBUTION: this lane is `codex`, which only the launcher knows — `executionResult.driver` is `{ model: <your own model id>, lane: "codex" }`. The launcher wrote that same pair into its journal, and a disagreement fails the phase completion check.',
     '',
-    `WHEN FINISHED (or blocked): write ${LANES.run.report} in the worktree root (do NOT commit it) with per-task commit sha + verify outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
+    `WHEN FINISHED (or blocked): write ${LANES.run.report} in the worktree root (do NOT commit it) with per-task commit sha + the verify commands run and their outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
   ].join('\n')
 }
 
@@ -208,7 +212,7 @@ function buildReviewPrompt(root, ids, { doc, focus } = {}) {
     '',
     'WHAT THIS LANE OVERRIDES — everything else in the protocol runs unchanged:',
     `- REPORT-ONLY. Step F auto-repair and Step 8's queue mutation are DISABLED here. Never edit a phase file, never touch backlog.ts, never \`git add\`, commit, push, merge, or switch branches; the ONLY file you write is ${LANES.review.report}. Still DO the reasoning of both steps and report their outcome — a repair you would have applied belongs under \`Findings:\` as OPEN, and your placement ruling still goes on the \`Placement:\` line, phrased as a recommendation.`,
-    '- You have NO subagents. Wherever the protocol spawns an agent per phase or per criterion, run that step yourself, inline, once per target.',
+    '- THIS LANE REVIEWS INLINE BY DESIGN — not for want of a spawn: independence here is the fresh read, and the verdict must be attributable to the model that formed it. Wherever the protocol spawns an agent per phase or per criterion, run that step yourself, once per target.',
     '- `judged by:` in the verdict block is YOUR OWN model id. Never claim a review that did not run.',
     '- INDEPENDENCE IS THE POINT: a plan and the review already recorded in it may share an author, so treat that recorded review as a HYPOTHESIS to re-test, never as evidence, and "already reviewed" as grounds for more suspicion rather than less. Re-derive every claim from the code at HEAD.',
     '- Cross-repo targets: read the other checkout by full path (it is outside this worktree), and never write there either.',

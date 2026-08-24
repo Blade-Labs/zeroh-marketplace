@@ -341,6 +341,29 @@ test('run: the lane-only overrides SURVIVE the delivery', () => {
     'the shared-host memory cap is absent from the protocol, so only the lane can carry it — an unwrapped suite on this 16 GB box freezes ~5 sessions; fix cli/commands/codex.mjs buildPrompt',
   )
 
+  // The four overrides added at gate R1. Each is lane-owned and unreachable from the skill, and
+  // the envelope now sits close to its byte ceiling — without these, the cheapest way to get the
+  // parity bound green again would be deleting a rule.
+  assert.match(
+    prompt,
+    /NO REACHABLE USER[^\n]*CODEX-RUN-BLOCKED/,
+    'a detached run cannot ask anyone: the delivered protocol says post-and-wait, so the lane MUST say that ends the run with CODEX-RUN-BLOCKED — fix cli/commands/codex.mjs buildPrompt',
+  )
+  assert.match(
+    prompt,
+    /ALREADY IN YOUR WORKTREE/i,
+    "the launcher already made this worktree and branch; without the override the delivered protocol's worktree-lane setup tells the driver to claim a second slot — fix cli/commands/codex.mjs buildPrompt",
+  )
+  assert.match(
+    prompt,
+    /resolveRole/,
+    'the lane fills protocol roles through the resolver rather than substituting itself for them — dropping this bullet re-asserts the false "no subagents" claim; fix cli/commands/codex.mjs buildPrompt',
+  )
+  assert.ok(
+    prompt.includes('Co-Authored-By:'),
+    'the commit trailer is a lane convention the protocol does not carry — without it delegated task commits land untrailered; fix cli/commands/codex.mjs buildPrompt',
+  )
+
   // The hand-off contract `codex status` parses.
   assert.ok(prompt.includes('CODEX-REPORT.md'), 'the report name is the lane\'s hand-off, read by codex status — fix cli/commands/codex.mjs buildPrompt')
   assert.match(prompt, /do not commit|never commit/i, 'CODEX-REPORT.md is never committed — the launching run owns the file (stale-sentinel bug 2026-08-11); fix cli/commands/codex.mjs buildPrompt')

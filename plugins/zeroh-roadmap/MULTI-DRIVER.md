@@ -59,12 +59,14 @@ this plugin says **role**.
   tier, and the walk is RECORDED: `substituted: { from, to, reason }`.
 - **Every tier down** throws `RoleUnjudgedError` naming the role and each tier tried. A stage
   reported UNJUDGED is honest; a silently skipped one is not.
-- **`mode`** is how this driver reaches that model, read off the registry: `native` (same
-  driver, `subagents: 'native'`), `child-cli` (the model's runner declares a headless child
-  mechanism — e.g. a Codex session filling the architect role via `claude -p --agents`), or
-  `inline` (prompt-delivery: the driver runs the role itself). Inline is first-class and
-  RECORDED — never indistinguishable from native — and refused for a role whose card forbids
-  grading its own work (`inlineFallbackLegal: false`).
+- **`mode`** is how this driver reaches that model, read off the registry, and BOTH entries
+  decide: `native` (same driver, its `subagents: 'native'`), `child-cli` (this driver's
+  `subagents` is present and not `'none'` AND the model's runner declares `headlessChild` — e.g.
+  a Codex session filling the architect role via `claude -p --agents`), or `inline`
+  (prompt-delivery: the driver runs the role itself). A runner being drivable is not enough: a
+  driver that can launch nothing must never be handed a model it cannot start. Inline is
+  first-class and RECORDED — never indistinguishable from native — and an inline-only tier is
+  unavailable to a role whose card forbids grading its own work (`inlineFallbackLegal: false`).
 
 ### The recording rule
 

@@ -744,14 +744,16 @@ const HARNESS_DELIVERY_PREFIX = 'agents/'
 /**
  * Envelope overhead ceiling: generated-prompt bytes ÷ delivered-protocol bytes.
  *
- * The envelope exists to DELIVER the protocol, never to BE it. Measured: 3070 / 16693
- * = 0.184. The pre-task-4.2 envelope — the one that PARAPHRASED do-phase instead of handing over
- * its path (cli/commands/codex.mjs at e965f4f~1) — measured 3992 / 16693 = 0.239. This bound sits
- * between the two on purpose: ~600 bytes of headroom for genuine new lane overrides, and a red the
- * moment the lane starts restating protocol it is supposed to deliver by path, which is exactly
- * how the scorecard's per-model cells silently become a comparison of briefings.
+ * The envelope exists to DELIVER the protocol, never to BE it. The RED LINE is the pre-delivery
+ * envelope — the one that PARAPHRASED do-phase instead of handing over its path — which measured
+ * 3992 / 16693 = 0.2391; a bound above that would certify the very regression this instrument
+ * exists to catch. The bound therefore sits just under it, and the lane's own overrides must fit:
+ * measured 3676 / 16693 = 0.2202, leaving ~246 bytes. A ceiling with only a sentence of slack
+ * stops discriminating and starts taxing — a genuine new override would red it, and the cheapest
+ * green would be deleting a rule to buy bytes, which is why every lane override carries its own
+ * assertion below.
  */
-const MAX_ENVELOPE_PROTOCOL_RATIO = 0.22
+const MAX_ENVELOPE_PROTOCOL_RATIO = 0.235
 
 /** The one command a reader runs to re-derive both numbers without trusting this file. */
 const REDERIVE_CMD = [

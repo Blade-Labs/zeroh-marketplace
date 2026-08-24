@@ -73,11 +73,7 @@ export const ROLES = Object.freeze({
   'arc-eval-judge': Object.freeze({
     id: 'arc-eval-judge',
     agentCard: 'agents/arc-eval-judge.md',
-    spawnSites: Object.freeze([
-      'skills/do-arc/SKILL.md',
-      'skills/eval-arc/SKILL.md',
-      'cli/commands/eval.mjs',
-    ]),
+    spawnSites: Object.freeze(['skills/do-arc/SKILL.md', 'skills/eval-arc/SKILL.md']),
     class: 'judge',
     tierChain: Object.freeze([SONNET]),
     inlineFallbackLegal: true,
@@ -89,6 +85,7 @@ export const ROLES = Object.freeze({
       'skills/do-arc/SKILL.md',
       'skills/do-phase/SKILL.md',
       'cli/lib/executor-arm.mjs',
+      'workflows/arc-plane.workflow.mjs',
     ]),
     class: 'builder',
     tierChain: Object.freeze([OPUS]),
@@ -220,7 +217,7 @@ export function resolveRole(roleId, driverId, opts = {}) {
     }
     const runnerId = Object.hasOwn(modelDrivers, model) ? modelDrivers[model] : undefined
     if (!runnerId) {
-      skipped.push(`${model} (no registered driver runs it — cli/lib/drivers.mjs MODEL_DRIVERS)`)
+      skipped.push(`${model} (nothing runs it — if it is a harness alias, map it in MODEL_ALIASES; if it is a model id, route it in MODEL_DRIVERS; both cli/lib/drivers.mjs)`)
       continue
     }
     const mode = reachMode(driverId, driverEntry, runnerId, drivers[runnerId])
