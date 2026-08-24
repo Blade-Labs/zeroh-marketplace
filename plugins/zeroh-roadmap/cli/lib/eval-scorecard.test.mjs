@@ -949,8 +949,8 @@ test('computeScorecard — no traces yields empty tables, never a table of zeros
 
 // ══ 15. the PHASE-RECORD source (arc POLYSEAT plane 1) ═════════════════════════════════
 // Driver and planner cells are fed by ARC traces alone, so a consumer that executes ordinary
-// phases without arcs renders ZERO cells however much work it does (measured in mudarabah2,
-// 2026-08-23). `readPhaseEvalSamples` reads roadmap/arc-evals/phase-<N>.peval.json into the
+// phases without arcs renders ZERO cells however much work it does (measured in mudarabah2).
+// `readPhaseEvalSamples` reads roadmap/arc-evals/phase-<N>.peval.json into the
 // same entry shape, and `computeScorecard`'s `phaseSamples` option is where they enter.
 //
 // A phase record is a DEGRADED source, and the degradation is precisely bounded:

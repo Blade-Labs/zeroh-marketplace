@@ -178,9 +178,9 @@ export function readPhaseEvalSamples(repoRoot, { validate = phaseEvalValidator(r
   }
   const docs = []
   const paths = []
-  // Ordered by PHASE NUMBER, never by filename: a lexical sort puts phase 8801 before phase 99,
-  // so the sample list would not read in the order a human asks for it and two archives with the
-  // same records could serialize differently.
+  // Ordered by PHASE NUMBER, never by filename: a lexical sort puts '8801' before '99', so the
+  // sample list would not read in the order a human asks for it and two archives with the same
+  // records could serialize differently.
   const named = []
   for (const f of entries) {
     const m = f.match(PEVAL_NAME_RE)

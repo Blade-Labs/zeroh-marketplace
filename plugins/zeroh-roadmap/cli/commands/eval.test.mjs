@@ -3099,7 +3099,7 @@ test('eval propose — an UNRESOLVABLE tsx bridge aborts the run with the worktr
 // ══ `roadmap eval scorecard` over PHASE RECORDS (arc POLYSEAT plane 1) ══════════════════
 // The slice's corpus used to be "arcs that already have a dated report" and nothing else, so a
 // consumer that executes ordinary phases without arcs got a scorecard with ZERO driver cells
-// however much work it did (measured in mudarabah2, 2026-08-23). `roadmap gate run` now leaves
+// however much work it did (measured in mudarabah2). `roadmap gate run` now leaves
 // a record per phase at roadmap/arc-evals/phase-<N>.peval.json, and runScorecard reads them
 // beside its arc-trace loop.
 //

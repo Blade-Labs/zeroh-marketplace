@@ -418,10 +418,10 @@ export type SweepReport = z.output<typeof SweepReportShape>
  *
  * The scorecard's driver/planner cells are fed by ARC traces alone, so a consumer that
  * executes ordinary phases without arcs renders zero cells however much work it does
- * (measured in mudarabah2, 2026-08-23: 0 records, every family under the N-floor). This
+ * (measured in mudarabah2: 0 records, every family under the N-floor). This
  * record is the per-phase inlet that fills them.
  *
- * DETERMINISTIC + ATTRIBUTION ONLY (ruling 2026-08-23): gate slot results, metrics, and an
+ * DETERMINISTIC + ATTRIBUTION ONLY (the arc's ruling): gate slot results, metrics, and an
  * attribution snapshot — zero judge tokens per phase. Judge-scored dimensions stay arc-level
  * in ArcEvalReportShape; a field here that needed a judge call would put a model call on the
  * critical path of every gate run, which is the cost this record exists to avoid.

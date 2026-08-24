@@ -1,7 +1,7 @@
 /**
  * measure-budget — the SINGLE home of the do-arc protocol-load budget: the MEASURED load at the
- * last ratification (operator ruling 2026-08-24), moved only by a diet (down) or a dated ruling
- * (up). Every reader resolves it here — the `roadmap measure --flow do-arc --assert` gate
+ * last ratification under the operator's standing ruling, moved only by a diet (down) or a new
+ * ruling (up). Every reader resolves it here — the `roadmap measure --flow do-arc --assert` gate
  * (cli/commands/measure.test.mjs), the ELICIT pass (cli/lib/eval-propose.mjs), and DIET-LEDGER.md's
  * prose — so a re-ratchet is one edit and cannot half-land.
  *

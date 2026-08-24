@@ -587,7 +587,7 @@ test('collectArcTrace — plannedBy travels from the phase file; an unrecorded o
 // ══ 11. the PER-PHASE eval record inlet (arc POLYSEAT plane 1) ═════════════════════════
 // `computeScorecard` only ever sees ARC traces, so a consumer that executes ordinary phases
 // without arcs renders zero driver and zero planner cells however much work it does (measured
-// in mudarabah2, 2026-08-23). `roadmap gate run` now leaves a record per phase at
+// in mudarabah2). `roadmap gate run` now leaves a record per phase at
 // roadmap/arc-evals/phase-<N>.peval.json; `readPhaseEvalSamples` is the reader that turns that
 // archive into scorecard samples.
 //
