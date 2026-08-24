@@ -185,7 +185,18 @@ export default definePhase({
       files: ['roadmap/phases/phase-8.phase.ts'],
       batchMode: true,
       testMode: 'none',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "`roadmap claim` returned 9; .building/plan-brief-9.md was authored from the seven surfaced follow-ups (each probed against the real code first, so the brief states symptom + file + why it matters rather than a remembered summary); `roadmap codex plan 9 --brief .building/plan-brief-9.md --base feat/roadmap-arcs` was launched ONCE and reached CODEX-RUN-COMPLETE. roadmap/phases/phase-9.phase.ts is on feat/roadmap-arcs (cherry-pick 09e8682 → 09e8682's content, 287 lines, 7 tasks).",
+        how:
+          "Verified before merging anything back: exactly ONE commit on codex-plan/9 touching exactly ONE file; `roadmap phase validate 9` OK in the lane worktree and again on feat/roadmap-arcs; plannedBy { model: 'gpt-5.6-sol' } agrees with the launcher's journal driver { model: 'gpt-5.6-sol', lane: 'codex' } (the registry pin, not a self-report); 0 [NEEDS CLARIFICATION] markers; roadmap/backlog.ts untouched. Phase 9 is deliberately NOT queued — review-phase Mode A owns that. Journal .building/codex-plan-9.json, log .building/codex-plan-9.log, report /home/patrik/zeroh-marketplace-codex-plan-9/CODEX-PLAN.md (uncommitted, as the contract requires); the lane worktree is left in place so that evidence survives.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "The drive found two real defects in the 8.1 lane, both fixed under this phase with mutation-proved tests rather than deferred: launch()'s poll hint still chose run-vs-review by a hardcoded ternary, so the plan lane printed the RUN-lane poll for a live plan journal; and statusCodex spread the journal LAST into its output, so `j.report` (a bare filename) overwrote the resolved report path AND the deliberate null that marks a stale report — wrong for every lane whose journal carries `report`, not just the new one. CODEX-PLAN.md self-reports 'Role firings: None' — the planner filled no protocol role and represented no review as having run; its own independent-review step was disabled by the lane, so phase 9 carries NO review yet and must not be queued until review-phase Mode A runs. Plan QUALITY is unjudged here by design (the phase's named risk): schema-valid, 7 bounded tasks, 0 markers is the whole claim.",
+      },
+      done: true,
     },
   ],
 })
