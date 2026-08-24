@@ -18,7 +18,7 @@ surfacing.
 
 ## What is surfaced (v0.32.0)
 
-**12 skills** + the always-active bootstrap `using-zeroh-roadmap`:
+**13 skills** + the always-active bootstrap `using-zeroh-roadmap`:
 
 - arc-sweep
 - audit-roadmap
@@ -26,6 +26,7 @@ surfacing.
 - do-phase
 - eval-arc
 - full-code-review
+- handoff
 - plan-arc
 - plan-phase
 - release-sweep

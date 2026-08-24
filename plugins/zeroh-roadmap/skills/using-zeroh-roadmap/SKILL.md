@@ -31,6 +31,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | audit roadmap, roadmap health check | **audit-roadmap** |
 | pause the arc | stop anywhere; resume = relaunch the plane workflow |
 | resume / continue arc X | **do-arc** — `roadmap arc next` fast-forwards from disk |
+| hand off / fresh session | **handoff** |
 | migrate / upgrade roadmap | `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` |
 
 NEVER handle these yourself — the skills carry the full protocol; your job is correct
