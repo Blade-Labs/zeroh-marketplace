@@ -20,7 +20,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 4,
   name: 'Role bindings + do-phase delivered by path + manifests generated from one source',
-  status: 'backlog',
+  status: 'in-progress',
   arcId: 'POLYSEAT',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'feature',
