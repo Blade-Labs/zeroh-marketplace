@@ -81,12 +81,18 @@ export function liveArm(worktree, phase) {
  * Refuses when an existing arm names a DIFFERENT executorId than the incoming one, unless
  * `force`. An incoming arm with no executorId cannot prove it is the incumbent, so it refuses
  * too; an EXISTING arm carrying no executorId never refuses, so nothing already on disk breaks.
+ *
+ * `expectedModelAlias` records the model the launcher REQUESTED (the agent card's alias), which
+ * makes this file the session lane's launch journal: a spawner cannot know the executor's exact
+ * model id, but it knows what it asked for, and `roadmap result check` reconciles the two by
+ * family. It is NOT an exclusivity axis — a re-arm may change it without refusing — and an empty
+ * alias records nothing, because a blank request is not a request.
  */
 export function armExecutor(worktree, phase, sessionId, opts = {}) {
   if (!sessionId || typeof sessionId !== 'string' || sessionId.trim().length === 0) {
     throw new Error('executor-arm: sessionId is required — an unbound arm file is never written (the 2026-07-17 fabrication hazard)')
   }
-  const { executorId, force = false } = opts
+  const { executorId, expectedModelAlias, force = false } = opts
   const incumbent = armedExecutorId(worktree, phase)
   if (!force && incumbent && incumbent !== executorId) {
     throw new Error(
@@ -98,7 +104,13 @@ export function armExecutor(worktree, phase, sessionId, opts = {}) {
   }
   const p = armPath(worktree, phase)
   mkdirSync(dirname(p), { recursive: true })
-  const body = { sessionId, ...(executorId ? { executorId } : {}), armedAt: new Date().toISOString() }
+  const alias = typeof expectedModelAlias === 'string' ? expectedModelAlias.trim() : ''
+  const body = {
+    sessionId,
+    ...(executorId ? { executorId } : {}),
+    ...(alias ? { expectedModelAlias: alias } : {}),
+    armedAt: new Date().toISOString(),
+  }
   writeFileSync(p, JSON.stringify(body) + '\n')
   return p
 }

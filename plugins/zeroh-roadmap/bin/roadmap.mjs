@@ -34,7 +34,7 @@ const TREE = {
   arc: { phase: 1657, sub: ['next <arcId>', 'land <arcId>'], desc: 'position derivation + the ONE landing engine' },
   watch: { phase: 1657, sub: ['<arcId>', '--once'], desc: 'executor liveness (absorbs executor-watch/liveness)' },
   beacon: { phase: 1737, sub: ['<event> --phase <N>', '--detail', '--log', '--session'], desc: 'typed executor heartbeat (closed vocabulary)' },
-  'executor-arm': { phase: 1737, sub: ['<N> --session <id> [--executor-id <id>] [--force]'], desc: 'write the executor arm file (never unbound; refuses over another executor)' },
+  'executor-arm': { phase: 1737, sub: ['<N> --session <id> [--executor-id <id>] [--agent-card <path>] [--force]'], desc: 'write the executor arm file (never unbound; refuses over another executor)' },
   'executor-disarm': { phase: 1737, sub: ['<N> [--force]', '--sweep'], desc: 'remove an executor arm (refuses a live one) / sweep exactly the stale set' },
   phase: { phase: 1657, sub: ['validate <N|file>', 'start <N>', 'curate <N> [--apply] [--groups]', 'land <N>'], desc: 'phase-file validation, start, born-clean curation and the worktree-lane land' },
   worktree: { phase: 2146, sub: ['up', 'status', 'reset [--base <ref>]'], desc: 'the session worktree lane: claim a slot, inspect claims, reset the scratch head per phase' },

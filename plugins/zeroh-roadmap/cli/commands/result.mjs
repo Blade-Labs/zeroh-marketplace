@@ -11,7 +11,8 @@
  * Exit-code contract (pre-made decision 10): 0 valid · 2 invalid/mismatch (one
  * `<path>: <message>` per Zod issue) · 1 toolchain-or-config error.
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import {
   bridgeEval,
@@ -19,6 +20,63 @@ import {
   BridgeError,
   TSX_ABSENT_HINT,
 } from '../lib/tsx-bridge.mjs'
+
+/**
+ * Agent-card aliases → the model-id prefix that satisfies them. The launcher can only ever record
+ * the ALIAS (a card cannot carry a full model id), so the reconcile is by family: the executor's
+ * exact id must begin with its family, which admits a suffixed real-world id like
+ * `claude-opus-5[1m]` while still refusing a different family.
+ *
+ * An alias outside this map — `inherit`, or any harness alias added later — is UNMAPPABLE, and an
+ * unmappable alias is announced and skipped, never treated as a mismatch.
+ */
+const ALIAS_FAMILY = { fable: 'claude-fable', opus: 'claude-opus', sonnet: 'claude-sonnet', haiku: 'claude-haiku' }
+
+/**
+ * Reconcile the executor's self-stamped driver.model against the alias the LAUNCHER requested,
+ * recorded in the arm file pre-spawn. Returns an exit code: 0 = nothing to say or agreement,
+ * 2 = the return contradicts the request.
+ *
+ * A spawn prompt that ASSERTS a model id overrides the executor's own self-knowledge, and no other
+ * check catches it: shape validation has driver optional, the codex reconcile is journal-gated,
+ * and the validator warning fires on absent attribution rather than wrong attribution.
+ */
+function reconcileArmedAlias(root, phase, parsed) {
+  const armPath = join(root, '.building', `${phase}-executor.armed`)
+  if (!existsSync(armPath)) return 0
+  let armed
+  try {
+    armed = JSON.parse(readFileSync(armPath, 'utf8')).expectedModelAlias
+  } catch {
+    return 0 // an unreadable or legacy arm records no request — nothing to reconcile against
+  }
+  if (typeof armed !== 'string' || armed.length === 0) return 0
+  const family = Object.hasOwn(ALIAS_FAMILY, armed) ? ALIAS_FAMILY[armed] : undefined
+  if (!family) {
+    process.stderr.write(
+      `roadmap result check: armed model alias '${armed}' maps to no model family — driver.model NOT reconciled `
+        + `(arm ${armPath}). Add it to ALIAS_FAMILY in cli/commands/result.mjs if it is a real card alias.\n`,
+    )
+    return 0
+  }
+  const returned = parsed.driver?.model
+  if (typeof returned !== 'string' || returned.length === 0) {
+    process.stderr.write(
+      `roadmap result check: the launcher requested model alias '${armed}' but the result carries NO driver.model `
+        + `(arm ${armPath}). A spawn the launcher recorded cannot return unattributed: stamp driver `
+        + '{ model: <your own exact model id>, lane: \'session\' }.\n',
+    )
+    return 2
+  }
+  if (returned.startsWith(family)) return 0
+  process.stderr.write(
+    `roadmap result check: driver.model '${returned}' is not of the family the launcher requested — the arm records `
+      + `alias '${armed}' (family '${family}-*') at ${armPath}. The arm is what was ASKED FOR; driver.model is the `
+      + 'executor\'s self-report. If a spawn prompt asserted a model id, that is the defect: an executor stamps its '
+      + 'own id from its own harness context, never one handed to it.\n',
+  )
+  return 2
+}
 
 // Parse+validate the input JSON through the consumer shape's safeParse. argv[1] =
 // schema path, argv[2] = the input JSON. PARSED on success, ZODISSUES (exit 3) on
@@ -125,7 +183,8 @@ export default async function run(argv) {
       return 2
     }
     process.stdout.write(JSON.stringify(parsed) + '\n')
-    return 0
+    // The arm is phase-scoped, so without --phase there is no arm to read.
+    return opts.phase != null ? reconcileArmedAlias(toplevel, opts.phase, parsed) : 0
   }
   if (res.kind === 'tsx-absent') {
     process.stderr.write(TSX_ABSENT_HINT + '\n')

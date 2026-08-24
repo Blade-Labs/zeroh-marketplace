@@ -12,11 +12,43 @@
  *
  * Returns its exit code to the dispatcher — never hard-exits the process.
  */
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { armExecutor } from '../lib/executor-arm.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { scanPhaseFile } from '../lib/phasescan.mjs'
 import { productRepos, newestKeyFileAgeMin } from '../lib/product-repos.mjs'
+
+const DEFAULT_AGENT_CARD = fileURLToPath(new URL('../../agents/phase-executor.md', import.meta.url))
+
+/**
+ * The model alias an agent card DECLARES, or null.
+ *
+ * Bounded to the frontmatter block and line-anchored on the `model:` key: cards discuss their own
+ * pin in prose (agents/arc-eval-judge.md says `model: sonnet` on three lines, one of them the
+ * declaration), and a card's `description:` may quote a model id, so a first-match-anywhere search
+ * records a sentence fragment as the request. Absent card, absent fence or absent key => null,
+ * never a guess.
+ */
+function cardModelAlias(cardPath) {
+  if (!existsSync(cardPath)) return null
+  let text
+  try {
+    text = readFileSync(cardPath, 'utf8')
+  } catch {
+    return null
+  }
+  const lines = text.split('\n')
+  if (lines[0].trim() !== '---') return null
+  const end = lines.indexOf('---', 1)
+  if (end < 0) return null
+  for (const line of lines.slice(1, end)) {
+    const m = line.match(/^model:[ \t]*(\S+)[ \t]*$/)
+    if (m) return m[1]
+  }
+  return null
+}
 
 /** One line naming the derived product repos + newest declared keyFile age; best-effort. */
 function preflightLine(worktree, phase) {
@@ -48,23 +80,34 @@ export default async function run(argv) {
   // Resolved once, so the arm and the line reporting it can never disagree.
   const executorId = rawExecutorId?.startsWith('--') ? undefined : rawExecutorId
   const force = argv.includes('--force')
+  const ci = argv.indexOf('--agent-card')
+  const rawCard = ci >= 0 ? argv[ci + 1] : undefined
+  const cardPath = rawCard && !rawCard.startsWith('--') ? rawCard : DEFAULT_AGENT_CARD
   if (!phase || !session || session.startsWith('--')) {
     process.stderr.write(
-      'roadmap executor-arm: usage: roadmap executor-arm <N> --session <id> [--executor-id <id>] [--force]'
-        + ' (an unbound arm is never written)\n',
+      'roadmap executor-arm: usage: roadmap executor-arm <N> --session <id> [--executor-id <id>]'
+        + ' [--agent-card <path>] [--force] (an unbound arm is never written)\n',
     )
     return 1
   }
+  const expectedModelAlias = cardModelAlias(cardPath)
   const worktree = gitToplevel(process.cwd())
   let p
   try {
-    p = armExecutor(worktree, phase, session, { executorId, force })
+    p = armExecutor(worktree, phase, session, { executorId, expectedModelAlias, force })
   } catch (err) {
     process.stderr.write(`roadmap executor-arm: ${err.message}\n`)
     return 2
   }
   process.stderr.write(
     `roadmap executor-arm: phase ${phase} armed for session ${session}${executorId ? ` / executor ${executorId}` : ''} → ${p}\n`,
+  )
+  process.stderr.write(
+    expectedModelAlias
+      ? `roadmap executor-arm: requested model alias '${expectedModelAlias}' recorded from ${cardPath}`
+        + ' — the executor stamps its own exact id and `roadmap result check` reconciles the two by family\n'
+      : `roadmap executor-arm: no model alias recorded (${cardPath} declares no frontmatter model: line)`
+        + ' — the returned driver.model will NOT be reconciled\n',
   )
   process.stderr.write(preflightLine(worktree, phase))
   return 0

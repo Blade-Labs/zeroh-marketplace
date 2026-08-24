@@ -39,9 +39,10 @@ do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime.
       SESSION ID> --executor-id <the id of the subagent you are about to spawn>` (the
       session-scoped dir name in your transcript/scratchpad paths) — the CLI refuses an
       unbound arm, and a foreign session is never guarded. `--executor-id` is what makes the
-      arm EXCLUSIVE. READ the cross-repo preflight line the
-      arm prints (the product repos this phase's keyFiles point into, and the newest declared
-      keyFile age) before spawning: a keyFile fresher than a few minutes means someone is
+      arm EXCLUSIVE. The spawn prompt NEVER asserts the executor's model id — the executor
+      stamps its own; the arm records the card's requested alias and `roadmap result check`
+      reconciles the two by family. READ the cross-repo preflight line the
+      arm prints before spawning: a keyFile fresher than a few minutes means someone is
       already writing there. Liveness =
       `roadmap watch <id> --once --json` SPOT-CHECKS on each executor notification and before
       every resume decision — never a long-lived background `watch` daemon.
@@ -71,14 +72,14 @@ do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime.
   - `self-descope` → the evidence names a compromise/skipped that NARROWS a task or arc
     acceptanceCriterion. The bounce-vs-ratify call is yours with the user: **bounce** the phase
     (redo with the criterion honored) or record a user-ratified `Arc.descopes` item. Never wave
-    it through — this is the arc face of the executor's never-rule 1.
-  - `checkpoint` → the executor's honest unbounded-work hand-off (the two-exit turn contract):
+    it through.
+  - `checkpoint` → the executor's honest unbounded-work hand-off:
     verify `checkpoint.committedSha` resolves on disk (`git cat-file -t <sha>`), then respawn the
     phase-executor UNCONDITIONALLY with the checkpoint verbatim in the spawn prompt — resume is
     lossless from disk, and the respawned executor's first act is the on-wake drill over
     `checkpoint.watch`. Bound: THREE consecutive checkpoints with no new commit between them →
     escalate to the user with the beacon trail. A committedSha that does
-    not resolve → treat as `failed` (the lossless precondition is broken).
+    not resolve → treat as `failed`.
   - `blocked` → surface the reason (unmet dep, foreign lane), resolve it, relaunch.
   - `stalled` / `exited` → the evidence IS the `roadmap watch --once` verdict JSON. If the executor
     is addressable, `SendMessage` it once with that evidence; otherwise respawn it mid-phase. Still stuck after a

@@ -505,3 +505,108 @@ test('14c) disarmExecutor — a HEARTBEAT last event refuses too: a heartbeating
   assert.throws(() => disarmExecutor(worktree, 2384), /heartbeat/, 'the refusal must name the beacon event so the caller can judge')
   assert.ok(existsSync(armPath(worktree, 2384)), 'a REFUSED disarm must not remove the arm it refused to clear')
 })
+
+// ── 3.4 — THE ARMED MODEL ALIAS (the session lane's launch journal grows a REQUEST record).
+// On 2026-08-23 a do-arc orchestrator wrote driver.model 'claude-fable-5' into the spawn prompt of
+// a phase-executor whose agent card declares `model: opus`: a spawner-asserted identity silently
+// overrode the executor's own self-knowledge, and no gate could see it (result check is shape-only,
+// the codex reconcile is journal-gated, the validator warning fires on ABSENT attribution only).
+// The arm file is written pre-spawn at the one session-lane chokepoint, so it is where the REQUEST
+// is recorded. This lib owns only the recording; `roadmap result check` owns the reconcile.
+//
+// ADDITIVE is the whole contract: the arm body is a cross-process wire format (the guard's
+// detectArm, staleArms, liveArm and every arm already on disk read it), so the new key may not
+// change what any of them see, and an unrecorded alias must be ABSENT — a null/'' would make
+// "the launcher recorded nothing" indistinguishable from "the launcher recorded an empty alias".
+
+test('26) armExecutor — records expectedModelAlias additively; omitted ⇒ the key is ABSENT', () => {
+  const worktree = newTmp()
+  const rec = JSON.parse(readFileSync(armExecutor(worktree, 3004, 'sess-abc', { expectedModelAlias: 'opus' }), 'utf8'))
+  assert.equal(rec.expectedModelAlias, 'opus', 'the alias the launcher READ off the agent card is launcher truth of the request')
+  assert.equal(rec.sessionId, 'sess-abc', 'the session binding is untouched by the widening')
+  assert.ok(!Number.isNaN(Date.parse(rec.armedAt)), 'armedAt is untouched by the widening')
+
+  const worktree2 = newTmp()
+  const without = JSON.parse(readFileSync(armExecutor(worktree2, 3004, 'sess-abc'), 'utf8'))
+  assert.equal('expectedModelAlias' in without, false, 'absent means absent — never a null a reconciler must special-case')
+})
+
+test('26b) armExecutor — the alias rides alongside executorId, and neither displaces the other', () => {
+  const worktree = newTmp()
+  const rec = JSON.parse(
+    readFileSync(armExecutor(worktree, 3004, 'sess-abc', { executorId: 'exec-1', expectedModelAlias: 'opus' }), 'utf8'),
+  )
+  assert.deepEqual(
+    Object.keys(rec).sort(),
+    ['armedAt', 'executorId', 'expectedModelAlias', 'sessionId'],
+    'the full arm body is exactly { sessionId, executorId?, expectedModelAlias?, armedAt } — no more, no less',
+  )
+})
+
+test('26c) armExecutor — an EMPTY alias records nothing (a meaningless alias is not launcher truth)', () => {
+  const worktree = newTmp()
+  const rec = JSON.parse(readFileSync(armExecutor(worktree, 3004, 'sess-abc', { expectedModelAlias: '' }), 'utf8'))
+  assert.equal('expectedModelAlias' in rec, false, "a card with no model line yields '' — record ABSENT, never an empty alias")
+})
+
+test('27) the alias never disturbs the GUARD contract — detectArm parse, liveArm, staleArms all unchanged', () => {
+  const worktree = newTmp()
+  const phasesDir = join(newTmp(), 'phases')
+  const p = armExecutor(worktree, 3004, 'sess-xyz-123', { executorId: 'exec-1', expectedModelAlias: 'opus' })
+
+  // detectArm (hooks/executor-result-guard.mjs) replicated verbatim: an unknown key must not
+  // change which session id the guard recovers.
+  const raw = readFileSync(p, 'utf8').trim()
+  let armedSession = null
+  if (raw.startsWith('{')) armedSession = JSON.parse(raw).sessionId ?? null
+  else if (raw.length > 0) armedSession = raw
+  assert.equal(armedSession, 'sess-xyz-123', 'detectArm still recovers the exact arming session id')
+
+  assert.deepEqual(liveArm(worktree, 3004), { executorId: 'exec-1', beaconEvent: null }, 'liveArm is unchanged by the new key')
+
+  writePhaseFile(phasesDir, 3004, 'in-progress')
+  assert.deepEqual(staleArms(worktree, phasesDir), [], 'an aliased arm on a live phase is still bound, still not stale')
+
+  writePhaseFile(phasesDir, 3004, 'done')
+  assert.equal(staleArms(worktree, phasesDir).length, 1, 'and the done-phase leak class still fires through it')
+})
+
+test('27b) EXCLUSIVITY is executor-scoped, never alias-scoped — the alias is evidence, not identity', () => {
+  const worktree = newTmp()
+  armExecutor(worktree, 3004, 'sess-shared', { executorId: 'exec-first', expectedModelAlias: 'opus' })
+
+  // Same executor, different card alias (a re-arm after the card was re-pointed) — the legitimate
+  // resume path must not become a refusal just because a new field disagrees.
+  assert.doesNotThrow(
+    () => armExecutor(worktree, 3004, 'sess-shared', { executorId: 'exec-first', expectedModelAlias: 'sonnet' }),
+    'the arm refuses on EXECUTOR identity; the alias is recorded evidence and never a second exclusivity axis',
+  )
+  assert.equal(JSON.parse(readFileSync(armPath(worktree, 3004), 'utf8')).expectedModelAlias, 'sonnet', 'the re-arm re-records it')
+
+  // Different executor, identical alias — still the 2026-08-17 refusal.
+  assert.throws(
+    () => armExecutor(worktree, 3004, 'sess-shared', { executorId: 'exec-second', expectedModelAlias: 'sonnet' }),
+    /exec-first/,
+    'a matching alias never buys a second executor its way onto one phase',
+  )
+})
+
+test('27c) the unbound-session throw is UNCHANGED by the alias widening', () => {
+  const worktree = newTmp()
+  assert.throws(() => armExecutor(worktree, 3004, '', { expectedModelAlias: 'opus' }), /session/i)
+  assert.equal(existsSync(armPath(worktree, 3004)), false, 'still nothing written — an alias is not a session binding')
+})
+
+test('28) a PRE-EXISTING arm (written before the alias existed) still parses everywhere', () => {
+  // The field is additive in BOTH directions: every arm already on disk lacks it, and the readers
+  // must treat that as "the launcher recorded no request", not as a corrupt arm.
+  const worktree = newTmp()
+  const phasesDir = join(newTmp(), 'phases')
+  writeRawArm(worktree, 3004, JSON.stringify({ sessionId: 'ea584379-4810-40b6-bb67-20906c8bf6d3', armedAt: isoAgo(30) }) + '\n')
+  writePhaseFile(phasesDir, 3004, 'in-progress')
+  writeBeacon(worktree, 3004, [{ ts: isoAgo(5), event: 'task-start', phase: 3004 }])
+
+  assert.deepEqual(staleArms(worktree, phasesDir), [], 'a legacy alias-less arm on a live phase is bound and not stale')
+  assert.deepEqual(liveArm(worktree, 3004), { executorId: null, beaconEvent: 'task-start' }, 'and it is still live')
+  assert.equal('expectedModelAlias' in JSON.parse(readFileSync(armPath(worktree, 3004), 'utf8')), false, 'no reader invents one')
+})

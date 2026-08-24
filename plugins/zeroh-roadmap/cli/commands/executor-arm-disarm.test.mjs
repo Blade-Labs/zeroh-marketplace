@@ -219,3 +219,133 @@ test('7) the help tree lists the new flag sets', () => {
   assert.ok(armLine && armLine.includes('--executor-id'), `executor-arm must advertise --executor-id; got:\n${armLine}`)
   assert.ok(disarmLine && disarmLine.includes('--force'), `executor-disarm must advertise --force; got:\n${disarmLine}`)
 })
+
+// ── 3.4 — THE ARMED CARD ALIAS. `executor-arm` is the session lane's pre-spawn chokepoint, so it
+// is where the REQUESTED model is recorded: on 2026-08-23 a do-arc orchestrator asserted
+// driver.model 'claude-fable-5' in the spawn prompt of an executor whose card declares
+// `model: opus`, and nothing downstream could contradict it. The alias must therefore be read
+// MECHANICALLY off the agent card — never taken from a caller, never guessed — and PRINTED, so the
+// launcher's own record of what it asked for is visible at the moment it asks.
+//
+// The parse is bounded to the FRONTMATTER block. That bound is the whole difficulty:
+// agents/arc-eval-judge.md carries the string `model: sonnet` on three lines (one frontmatter, two
+// prose), and agent cards routinely mention a model inside `description:` — an unbounded search
+// reads whichever line it hits first and records a sentence fragment as launcher truth.
+
+const CARD = join(HERE, '..', '..', 'agents', 'phase-executor.md')
+
+/** The alias declared in a card's FRONTMATTER block (fixture precondition only). */
+function frontmatterAlias(cardPath) {
+  const lines = readFileSync(cardPath, 'utf8').split('\n')
+  const end = lines.indexOf('---', 1)
+  const block = lines.slice(1, end < 0 ? 1 : end)
+  const line = block.find((l) => /^model:\s*\S/.test(l))
+  return line ? line.replace(/^model:\s*/, '').trim() : null
+}
+
+/** Write a card fixture: frontmatter lines + body lines, ---fenced. */
+function writeCard(dir, name, { frontmatter = [], body = [] } = {}) {
+  mkdirSync(dir, { recursive: true })
+  const p = join(dir, name)
+  writeFileSync(p, ['---', ...frontmatter, '---', '', ...body, ''].join('\n'))
+  return p
+}
+
+const FAMILY_WORDS = /\b(opus|sonnet|haiku|fable)\b/
+
+test('8) executor-arm records the DEFAULT card alias and prints what it recorded', () => {
+  const repo = newRepo()
+  assert.equal(frontmatterAlias(CARD), 'opus', `fixture precondition: ${CARD} must declare model: opus in its frontmatter`)
+
+  const res = roadmap(repo, 'executor-arm', '2375', '--session', 'sess-abc', '--executor-id', 'exec-1')
+  assert.equal(res.status, 0, `arm must exit 0; stderr:\n${res.stderr}`)
+  const rec = JSON.parse(readFileSync(armPath(repo, 2375), 'utf8'))
+  assert.equal(
+    rec.expectedModelAlias,
+    'opus',
+    'the alias is read from agents/phase-executor.md resolved beside the plugin CLI — the launcher never asks the caller',
+  )
+  assert.ok(res.stderr.includes('opus'), `the command must PRINT the alias it recorded; got:\n${res.stderr}`)
+  assert.equal(rec.sessionId, 'sess-abc', 'the session binding is untouched')
+  assert.equal(rec.executorId, 'exec-1', 'the executor binding is untouched')
+})
+
+test('9) --agent-card overrides, and the parse is bounded to the FRONTMATTER block', () => {
+  // The arc-eval-judge.md shape reproduced: the declared alias in the frontmatter, and PROSE below
+  // that discusses other model aliases. Only the frontmatter declaration is a declaration.
+  const repo = newRepo()
+  const card = writeCard(newTmp('zr-cli-execarm-card-'), 'judge-shaped.md', {
+    frontmatter: ['name: shaped', 'description: scores a landed arc', 'tools: Glob, Grep', 'model: haiku', 'user_callable: false'],
+    body: [
+      '> **Pin note.** The frontmatter `model: haiku` is a harness ALIAS.',
+      '',
+      'model: opus',
+      '',
+      'Never restate a model in prose; a reader that does would record `model: sonnet` here.',
+    ],
+  })
+
+  const res = roadmap(repo, 'executor-arm', '2375', '--session', 'sess-abc', '--agent-card', card)
+  assert.equal(res.status, 0, `arm must exit 0; stderr:\n${res.stderr}`)
+  const rec = JSON.parse(readFileSync(armPath(repo, 2375), 'utf8'))
+  assert.equal(rec.expectedModelAlias, 'haiku', 'the FRONTMATTER declaration wins over every prose mention below the fence')
+})
+
+test('9b) a `model:` token inside the frontmatter DESCRIPTION never wins over the declaration', () => {
+  // The first-match-anywhere killer: the decoy precedes the real declaration, so a search that is
+  // not bounded to a line-anchored frontmatter key records a fragment of an English sentence.
+  const repo = newRepo()
+  const card = writeCard(newTmp('zr-cli-execarm-card-'), 'decoy-first.md', {
+    frontmatter: [
+      'name: decoy',
+      'description: returns a PhaseExecutionResult whose driver names the model: claude-fable-5 it actually ran as',
+      'model: opus',
+    ],
+    body: ['Body prose.'],
+  })
+
+  const res = roadmap(repo, 'executor-arm', '2375', '--session', 'sess-abc', '--agent-card', card)
+  assert.equal(res.status, 0, `arm must exit 0; stderr:\n${res.stderr}`)
+  const rec = JSON.parse(readFileSync(armPath(repo, 2375), 'utf8'))
+  assert.equal(
+    rec.expectedModelAlias,
+    'opus',
+    'a description mentioning a model id is prose — only a line-anchored frontmatter `model:` key is a declaration',
+  )
+})
+
+test('10) a card with NO frontmatter model line records NOTHING — never a guess from prose', () => {
+  const repo = newRepo()
+  const card = writeCard(newTmp('zr-cli-execarm-card-'), 'undeclared.md', {
+    frontmatter: ['name: undeclared', 'description: inherits the harness model', 'tools: "*"'],
+    body: ['This card deliberately declares no model.', '', 'model: sonnet'],
+  })
+
+  const res = roadmap(repo, 'executor-arm', '2375', '--session', 'sess-abc', '--agent-card', card)
+  assert.equal(res.status, 0, `an undeclared alias is not an error; stderr:\n${res.stderr}`)
+  const rec = JSON.parse(readFileSync(armPath(repo, 2375), 'utf8'))
+  assert.equal('expectedModelAlias' in rec, false, 'absent means absent — the reconciler must be able to tell "no request recorded" apart')
+  assert.ok(!FAMILY_WORDS.test(res.stderr), `nothing may be printed as recorded when nothing was; got:\n${res.stderr}`)
+})
+
+test('10b) a card path that does not exist records nothing and still ARMS (the arm is never a card gate)', () => {
+  const repo = newRepo()
+  const missing = join(newTmp('zr-cli-execarm-card-'), 'no-such-card.md')
+
+  const res = roadmap(repo, 'executor-arm', '2375', '--session', 'sess-abc', '--agent-card', missing)
+  assert.equal(res.status, 0, `a missing card must not block the arm — exclusivity outranks attribution; stderr:\n${res.stderr}`)
+  assert.ok(existsSync(armPath(repo, 2375)), 'the arm is still written')
+  const rec = JSON.parse(readFileSync(armPath(repo, 2375), 'utf8'))
+  assert.equal('expectedModelAlias' in rec, false, 'no card ⇒ no recorded request')
+  assert.ok(!FAMILY_WORDS.test(res.stderr), `and no alias is invented for the printed line; got:\n${res.stderr}`)
+})
+
+test('10c) the recorded alias survives the OTHER arm paths — a forced re-arm re-reads the card', () => {
+  const repo = newRepo()
+  assert.equal(roadmap(repo, 'executor-arm', '2375', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)
+  const forced = roadmap(repo, 'executor-arm', '2375', '--session', 'sess-2', '--executor-id', 'exec-second', '--force')
+  assert.equal(forced.status, 0, `--force is the deliberate override; stderr:\n${forced.stderr}`)
+  const rec = JSON.parse(readFileSync(armPath(repo, 2375), 'utf8'))
+  assert.equal(rec.expectedModelAlias, 'opus', 'every write of the arm records the request — a forced re-arm is still a spawn')
+  assert.equal(rec.executorId, 'exec-second', 'and the exclusivity semantics are unchanged')
+})

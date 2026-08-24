@@ -482,3 +482,16 @@ re-based by the same +757 delta so every boundary property they encode (one repo
 budget, two prod-grade + one fast-lane OVER) is preserved, and `eval-propose.test.mjs` test 16 now
 derives its corpus from `PROTOCOL_LOAD_BUDGET_TOKENS` instead of a literal 12,500 — the next
 re-ratchet cannot silently re-point that arithmetic.
+
+## do-arc/SKILL.md — phase 3 task 3.4 (diet-funded)
+
+The spawner-never-asserts-a-model-id prohibition was funded byte-for-byte in its own file, so
+`PROTOCOL_LOAD_BUDGET_TOKENS` stays 13257: 10,423 B → 10,404 B, flow total 13,257 → 13,252 tokens
+(`roadmap measure --flow do-arc`). `measure` ceils per file, so the funding had to land here.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| §the loop 2.3 — the preflight parenthetical "(the product repos this phase's keyFiles point into, and the newest declared keyFile age)" | enforced-by-code(`roadmap executor-arm` prints the preflight line; the instruction to READ it and the fresher-than-a-few-minutes decision rule both survive) | do-arc §the loop, spawn step |
+| §non-done exits / `self-descope` — " — this is the arc face of the executor's never-rule 1" | obsolete-with-evidence(cross-reference label; "Never wave it through" and both dispositions survive verbatim) | do-arc §the loop, `self-descope` |
+| §non-done exits / `checkpoint` — "(the two-exit turn contract)" | obsolete-with-evidence(names the executor card's contract; not an instruction to the do-arc driver) | do-arc §the loop, `checkpoint` |
+| §non-done exits / `checkpoint` — "(the lossless precondition is broken)" | obsolete-with-evidence(rationale for the rule stated in the same clause; "A committedSha that does not resolve → treat as failed" survives) | do-arc §the loop, `checkpoint` |
