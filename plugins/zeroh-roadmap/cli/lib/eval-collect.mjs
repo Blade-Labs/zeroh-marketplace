@@ -198,7 +198,7 @@ export function readPhaseEvalSamples(repoRoot, { validate = phaseEvalValidator(r
   }
   if (docs.length === 0) return { samples: [], warnings }
 
-  const reason = (res) => ((res?.stderr || res?.kind || 'unknown').toString().trim().split('\n')[0])
+  const failureReason = (res) => (res?.stderr || res?.kind || 'unknown').toString().trim().split('\n')[0]
   let res = validate(docs)
   if (!res.ok) {
     // Grouped BY FILE, never per issue: one record with three broken fields is one dropped
@@ -209,19 +209,19 @@ export function readPhaseEvalSamples(repoRoot, { validate = phaseEvalValidator(r
     for (const iss of res.res?.issues ?? []) {
       const i = Array.isArray(iss.path) ? iss.path[0] : undefined
       const where = (iss.path ?? []).slice(1).join('.') || '(root)'
-      const reason = `${where}: ${iss.message}`
+      const detail = `${where}: ${iss.message}`
       if (typeof i === 'number') {
         if (!bad.has(i)) bad.set(i, [])
-        bad.get(i).push(reason)
-      } else unattributed.push(reason)
+        bad.get(i).push(detail)
+      } else unattributed.push(detail)
     }
     for (const [i, reasons] of [...bad.entries()].sort((a, b) => a[0] - b[0]))
       warnings.push(`${paths[i] ?? dir}: does not match PhaseEvalRecordShape (${reasons.join('; ')}) — excluded from the scorecard`)
-    for (const reason of unattributed)
-      warnings.push(`${dir}: does not match PhaseEvalRecordShape (${reason})`)
+    for (const detail of unattributed)
+      warnings.push(`${dir}: does not match PhaseEvalRecordShape (${detail})`)
     if (bad.size === 0) {
       warnings.push(
-        `${dir}: the per-phase eval records could not be validated (${reason(res.res)}) — NO phase-record samples fed the scorecard`,
+        `${dir}: the per-phase eval records could not be validated (${failureReason(res.res)}) — NO phase-record samples fed the scorecard`,
       )
       return { samples: [], warnings }
     }
@@ -230,7 +230,7 @@ export function readPhaseEvalSamples(repoRoot, { validate = phaseEvalValidator(r
     res = validate(survivors)
     if (!res.ok) {
       warnings.push(
-        `${dir}: the surviving per-phase eval records still fail validation (${reason(res.res)}) — NO phase-record samples fed the scorecard`,
+        `${dir}: the surviving per-phase eval records still fail validation (${failureReason(res.res)}) — NO phase-record samples fed the scorecard`,
       )
       return { samples: [], warnings }
     }
