@@ -177,8 +177,13 @@ export function resolveRole(roleId, driverId, opts = {}) {
   const drivers = opts.drivers ?? DRIVERS
   const modelDrivers = opts.modelDrivers ?? MODEL_DRIVERS
   const role = resolveRoleEntry(roleId)
-  const driverEntry = drivers === DRIVERS ? resolveDriver(driverId) : drivers[driverId]
-  if (!driverEntry) throw new Error(`unknown driver '${driverId}' — known drivers: ${Object.keys(drivers).join(', ')}`)
+  // Object.hasOwn on both paths: a prototype member ('toString') is not a driver.
+  if (!Object.hasOwn(drivers, driverId)) {
+    // The registry's own throw carries the verify/register remediation; an injected set has none.
+    if (drivers === DRIVERS) resolveDriver(driverId)
+    throw new Error(`unknown driver '${driverId}' — known drivers: ${Object.keys(drivers).join(', ')}`)
+  }
+  const driverEntry = drivers[driverId]
   const down = forcedDown(opts)
   // A judgeModel LEADS a judge seam's chain; a builder seam ignores it (the review-phase HOME
   // rule). It is a tier like any other — unavailable, it falls through and the ask is recorded.

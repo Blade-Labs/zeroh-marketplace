@@ -18,6 +18,10 @@
  *  7. NO ROT — every agentCard and every spawnSite path exists on disk, spawnSites MENTION the
  *     role (inventory as evidence), roles map 1:1 onto agents/*.md, and the chain has exactly
  *     one home (the two prose files may not restate it).
+ *  8. PROTOCOL PARITY — the codex envelope and the claude manifest deliver the SAME protocol set
+ *     (SKILL.md + its references/ tree; agents/*.md cards excluded by a NAMED, PRINTED rule), and
+ *     the envelope's byte overhead over that protocol is bounded. MEASURED, with the re-derivation
+ *     command printed alongside the numbers (POLYSEAT no-claude-privilege).
  *
  * The registry is REAL (cli/lib/drivers.mjs) and the files are the REAL files on disk — nothing
  * here is mocked. Ambient env is fenced out with an explicit `env: {}` wherever a case must not
@@ -31,9 +35,11 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildPrompt } from '../commands/codex.mjs'
 import { DRIVERS, MODEL_DRIVERS, MODEL_IDS } from './drivers.mjs'
 import { ROLES, RoleUnjudgedError, reachMode, resolveRole } from './roles.mjs'
 
@@ -663,4 +669,184 @@ test('the tier chain has exactly ONE home — neither prose file restates it, an
       `${rel} must point at MULTI-DRIVER.md for model policy — a card or skill that carries its own policy is the drift the table exists to kill`,
     )
   }
+})
+
+// ── 8. PROTOCOL PARITY — the two drivers' protocol sets, MEASURED ─────────────────────
+
+/**
+ * POLYSEAT's `no-claude-privilege` criterion forbids benefiting claude by supporting its protocol
+ * while omitting a driver that could also be fully harnessed, and its honesty rail says a parity
+ * claim ships with the command that would falsify it. Task 4.2 made the codex run lane deliver
+ * skills/do-phase/SKILL.md BY PATH instead of paraphrasing it — this block is the instrument that
+ * turns "same protocol" from an assertion into a measurement.
+ *
+ * THE PROTOCOL SET RULE (locked 2026-08-23): the PROTOCOL SET of a mission is its
+ * `skills/<mission>/SKILL.md` plus every file under that skill's `references/` tree. `agents/*.md`
+ * cards (and `agents/references/*`) are HARNESS-DELIVERY CONTEXT, not protocol: they are the
+ * vehicle a Claude spawn uses to carry a subagent's own instruction set, and Codex has no
+ * equivalent. They are excluded BY THIS NAMED RULE and PRINTED as exclusions, so the exclusion is
+ * visible rather than silent. Without the rule the identity assertion is false-red by
+ * construction — the claude-side manifest lists two agent cards a codex envelope can never name.
+ *
+ * The codex side is derived from the PROMPT TEXT that cli/commands/codex.mjs buildPrompt actually
+ * generates (an envelope that stops naming its SKILL yields an EMPTY set and reds here); the
+ * claude side from the committed cli/measure-manifest.json, flow `do-phase`. Nothing is mocked:
+ * a real prompt over a real tmp root, the real manifest, the real files on disk.
+ */
+
+/** Manifest entries under here are protocol. */
+const PROTOCOL_PREFIX = 'skills/'
+/** Manifest entries under here are harness-delivery context — excluded by the rule, and printed. */
+const HARNESS_DELIVERY_PREFIX = 'agents/'
+
+/**
+ * Envelope overhead ceiling: generated-prompt bytes ÷ delivered-protocol bytes.
+ *
+ * The envelope exists to DELIVER the protocol, never to BE it. Measured 2026-08-23: 3070 / 16693
+ * = 0.184. The pre-task-4.2 envelope — the one that PARAPHRASED do-phase instead of handing over
+ * its path (cli/commands/codex.mjs at e965f4f~1) — measured 3992 / 16693 = 0.239. This bound sits
+ * between the two on purpose: ~600 bytes of headroom for genuine new lane overrides, and a red the
+ * moment the lane starts restating protocol it is supposed to deliver by path, which is exactly
+ * how the scorecard's per-model cells silently become a comparison of briefings.
+ */
+const MAX_ENVELOPE_PROTOCOL_RATIO = 0.22
+
+/** The one command a reader runs to re-derive both numbers without trusting this file. */
+const REDERIVE_CMD = [
+  `cd ${PLUGIN_ROOT} && node --input-type=module -e`,
+  `"import{buildPrompt,RUN_SKILL}from'./cli/commands/codex.mjs';`,
+  `import{mkdtempSync,mkdirSync,writeFileSync,statSync,readdirSync}from'node:fs';import{join,dirname}from'node:path';`,
+  `import{tmpdir}from'node:os';const r=mkdtempSync(join(tmpdir(),'psr-'));mkdirSync(join(r,'roadmap','phases'),{recursive:true});`,
+  `writeFileSync(join(r,'roadmap','phases','phase-1.phase.ts'),'');const d=join(dirname(RUN_SKILL),'references');`,
+  `const f=[RUN_SKILL,...readdirSync(d,{recursive:true}).map(x=>join(d,x))].filter(x=>statSync(x).isFile());`,
+  `const p=f.reduce((s,x)=>s+statSync(x).size,0);const e=Buffer.byteLength(buildPrompt(r,['1']),'utf8');`,
+  `console.log({envelopeBytes:e,protocolBytes:p,ratio:+(e/p).toFixed(4)})"`,
+].join('')
+
+/** Plugin-relative, forward-slashed — the two sides derive paths differently, so they only meet here. */
+const pluginRel = (abs) => relative(PLUGIN_ROOT, abs).split(sep).join('/')
+
+/** THE RULE, applied: one mission SKILL.md + every file under its references/ tree. */
+function protocolSetOf(skillRel) {
+  const refDir = join(PLUGIN_ROOT, dirname(skillRel), 'references')
+  const refs = existsSync(refDir)
+    ? readdirSync(refDir, { recursive: true, withFileTypes: true })
+        .filter((e) => e.isFile())
+        .map((e) => pluginRel(join(e.parentPath ?? e.path, e.name)))
+    : []
+  return [...new Set([skillRel, ...refs])].sort()
+}
+
+/** What the run-lane ENVELOPE actually references — read back out of the generated prompt text. */
+const codexSide = (() => {
+  const root = mkdtempSync(join(tmpdir(), 'protocol-parity-'))
+  try {
+    mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+    writeFileSync(join(root, 'roadmap', 'phases', 'phase-1.phase.ts'), '')
+    const prompt = buildPrompt(root, ['1'])
+    const skills = [...new Set([...prompt.matchAll(/\S*\/SKILL\.md/g)].map((m) => m[0]))]
+      .map((p) => (isAbsolute(p) ? pluginRel(p) : p))
+      .filter((p) => !p.startsWith('..'))
+      .sort()
+    return { envelopeBytes: Buffer.byteLength(prompt, 'utf8'), skills, set: [...new Set(skills.flatMap(protocolSetOf))].sort() }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})()
+
+/** What a claude phase-executor LOADS, per the committed manifest — partitioned by the rule. */
+const claudeSide = (() => {
+  const flow = JSON.parse(read('cli/measure-manifest.json')).flows['do-phase']
+  const paths = (flow?.files ?? []).map((f) => f.path)
+  const protocolEntries = paths.filter((p) => p.startsWith(PROTOCOL_PREFIX))
+  return {
+    paths,
+    excluded: paths.filter((p) => !p.startsWith(PROTOCOL_PREFIX)).sort(),
+    set: [...new Set(protocolEntries.flatMap(protocolSetOf))].sort(),
+  }
+})()
+
+test('codex and claude are handed the SAME protocol set — the identity is measured, file by file', () => {
+  assert.ok(
+    claudeSide.paths.length > 0,
+    "cli/measure-manifest.json has no flows['do-phase'].files — with no claude-side manifest there is nothing to compare the codex envelope against, so the parity claim is unfalsifiable",
+  )
+  assert.ok(
+    codexSide.set.length > 0,
+    'the run-lane prompt names NO SKILL.md, so the codex driver is handed no protocol at all — fix cli/commands/codex.mjs buildPrompt (it must deliver skills/do-phase/SKILL.md by path, not paraphrase it)',
+  )
+  const onlyCodex = codexSide.set.filter((p) => !claudeSide.set.includes(p))
+  const onlyClaude = claudeSide.set.filter((p) => !codexSide.set.includes(p))
+  assert.deepEqual(
+    codexSide.set,
+    claudeSide.set,
+    'PROTOCOL PARITY BROKEN — the two drivers do not read the same bytes, so every per-model cell of the eval scorecard is comparing briefings, not models.\n'
+      + `  only the CODEX envelope delivers: ${onlyCodex.length ? onlyCodex.join(', ') : '(none)'}\n`
+      + `  only the CLAUDE manifest loads:   ${onlyClaude.length ? onlyClaude.join(', ') : '(none)'}\n`
+      + '  Fix ONE of three places, whichever is wrong: cli/commands/codex.mjs buildPrompt (the envelope stopped naming a protocol file), '
+      + 'cli/measure-manifest.json flow do-phase (a file was added to the claude load without reaching the codex lane), '
+      + "or the protocol-set rule itself in this block (a new kind of protocol file that isn't SKILL.md + references/).",
+  )
+})
+
+test('the harness-delivery exclusions are PRINTED, and every one is an agents/ path — the rule may never quietly drop a skill file', () => {
+  console.log(
+    '\n[protocol-set rule] agents/*.md cards are HARNESS-DELIVERY CONTEXT, not protocol — excluded from the parity set '
+      + `(a Claude spawn's own instruction-set vehicle; Codex has no equivalent). Excluded from cli/measure-manifest.json flow do-phase:\n`
+      + claudeSide.excluded.map((p) => `  - ${p}`).join('\n'),
+  )
+  assert.ok(
+    claudeSide.excluded.length > 0,
+    'the exclusion list is EMPTY, so this rule is currently deciding nothing and the parity assertion above is unguarded — '
+      + 'if the agent cards really left cli/measure-manifest.json flow do-phase, delete the rule instead of leaving a no-op in place',
+  )
+  for (const p of claudeSide.excluded) {
+    assert.ok(
+      p.startsWith(HARNESS_DELIVERY_PREFIX),
+      `'${p}' is being excluded from the protocol set but is not an ${HARNESS_DELIVERY_PREFIX} path — the rule excludes harness-delivery cards ONLY. `
+        + 'If this is a skill file, the parity assertion is silently comparing a shrunken set: fix cli/measure-manifest.json (wrong prefix) or state a NEW named rule here for it.',
+    )
+  }
+})
+
+test('the protocol set is non-trivial — one mission SKILL.md, at least one references/ file, all on disk', () => {
+  assert.deepEqual(
+    codexSide.skills,
+    ['skills/do-phase/SKILL.md'],
+    `the run lane delivers exactly ONE mission protocol, do-phase — the prompt names ${codexSide.skills.join(', ') || '(nothing)'}; fix cli/commands/codex.mjs buildPrompt`,
+  )
+  for (const skill of codexSide.skills) {
+    assert.ok(codexSide.set.includes(skill), `${skill} is named by the envelope but missing from its own protocol set — the rule's expansion dropped it`)
+  }
+  assert.ok(
+    codexSide.set.some((p) => p.includes('/references/')),
+    `the protocol set carries no references/ file (${codexSide.set.join(', ')}) — parity over a single SKILL.md proves nothing about the tree it sends the driver into; `
+      + "if skills/do-phase/references/ really emptied, this block's rule needs re-deciding, not relaxing",
+  )
+  assert.ok(codexSide.set.length >= 2, `a ${codexSide.set.length}-file protocol set is too thin to certify parity over: ${codexSide.set.join(', ')}`)
+  for (const p of codexSide.set) {
+    assert.ok(
+      existsSync(join(PLUGIN_ROOT, p)),
+      `protocol member '${p}' does NOT exist under ${PLUGIN_ROOT} — the codex driver is being sent to a deleted or renamed file; fix cli/commands/codex.mjs buildPrompt (RUN_SKILL) or restore the file`,
+    )
+  }
+})
+
+test('envelope overhead is BOUNDED — the prompt delivers the protocol, it does not restate it', () => {
+  const protocolBytes = codexSide.set.reduce((sum, p) => sum + statSync(join(PLUGIN_ROOT, p)).size, 0)
+  const { envelopeBytes } = codexSide
+  const ratio = envelopeBytes / protocolBytes
+  console.log(
+    `\n[envelope overhead] envelopeBytes=${envelopeBytes} protocolBytes=${protocolBytes} ratio=${ratio.toFixed(4)} (bound ${MAX_ENVELOPE_PROTOCOL_RATIO})\n`
+      + `  protocol set: ${codexSide.set.join(', ')}\n`
+      + `  re-derive it yourself: ${REDERIVE_CMD}`,
+  )
+  assert.ok(protocolBytes > 0, 'the protocol set measured 0 bytes — nothing is being delivered, so the ratio below would be meaningless')
+  assert.ok(
+    ratio < MAX_ENVELOPE_PROTOCOL_RATIO,
+    `envelope overhead ${ratio.toFixed(4)} (${envelopeBytes}B envelope over ${protocolBytes}B of protocol) breached MAX_ENVELOPE_PROTOCOL_RATIO=${MAX_ENVELOPE_PROTOCOL_RATIO}. `
+      + 'A lane that starts RESTATING its protocol grows the envelope — that is the regression this number catches (the pre-4.2 paraphrasing envelope measured 0.239). '
+      + 'Fix cli/commands/codex.mjs buildPrompt: move the prose into skills/do-phase/SKILL.md (or its references/) and hand it over by path, keeping only targets + disposition overrides here. '
+      + `Re-derive: ${REDERIVE_CMD}`,
+  )
 })

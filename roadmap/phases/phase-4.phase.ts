@@ -238,9 +238,24 @@ export default definePhase({
       acceptanceCriteria: [
         'The parity test names any file present in one driver\'s protocol set and not the other, prints the agent-card exclusions with the classification rule, and passes at HEAD after 4.2',
       ],
-      files: ['plugins/zeroh-roadmap/cli/lib/roles.test.mjs'],
+      files: [
+        'plugins/zeroh-roadmap/cli/lib/roles.test.mjs',
+        'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+      ],
       testMode: 'tdd',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "cli/lib/roles.test.mjs gained the parity block: four tests that MEASURE, rather than assert, that a codex driver and a claude driver are handed the same protocol bytes for the do-phase mission. The codex side is derived from the text buildPrompt actually generates over a real tmp root — an envelope that stops naming its SKILL yields an empty set and reds — and the claude side from the committed cli/measure-manifest.json flow do-phase. Both are expanded by the named PROTOCOL SET RULE (a mission's SKILL.md plus every file under its references/ tree) and compared as sorted plugin-relative paths, with the difference in each direction printed by name on failure. The agents/*.md exclusions are PRINTED with the rule that excludes them, and a second test asserts the exclusion list is non-empty and contains only agents/ paths, so the rule can never quietly start dropping a skill file. A third test refuses a trivial set (exactly one mission skill, at least one references/ file, every member on disk). The fourth bounds envelope overhead against MAX_ENVELOPE_PROTOCOL_RATIO and prints the one-line command a reader runs to re-derive both numbers. cli/commands/codex.mjs exports buildPrompt and RUN_SKILL so the measurement reads the real generator rather than a copy of it.",
+        how:
+          "The instrument is the artifact, so the falsification is a mutation proof rather than a red-then-green: it is designed to PASS at HEAD after 4.2, which it does. MEASURED, printed by the run itself: envelopeBytes=3070, protocolBytes=16693, ratio=0.1839 against a bound of 0.22 — a bound chosen to sit between today's value and the pre-4.2 paraphrasing envelope's 3992/16693 = 0.239, so a lane that starts restating protocol reds while ~600 bytes of headroom stay available for genuine new overrides. Protocol set as measured: skills/do-phase/SKILL.md + skills/do-phase/references/guard-mutation-proof.md. Exclusions printed: agents/phase-executor.md, agents/references/executor-reference.md. GUARD MUTATION PROOF, three drives. Planted violation: buildPrompt's protocol line changed to name no path ('ask the supervising session') -> RED on 'codex and claude are handed the SAME protocol set' AND on the non-trivial-set test, 37 pass / 3 fail. Anchor drift: cli/measure-manifest.json's do-phase flow given a protocol file the lane never names (skills/plan-phase/SKILL.md) -> RED on the parity test naming the one-sided file, 39 pass / 1 fail. Decoy: a genuine new LANE override line added to the envelope -> GREEN 40/40, so legal envelope growth does not cry wolf. Both mutations reverted from pristine copies; git diff confirmed the manifest clean and codex.mjs carrying only the two exports plus one capitalisation. Verified: 40/40 in roles.test.mjs, 27/27 in codex.test.mjs after the export change.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "Parity is measured over the FILE SET and the envelope's byte ratio, not over what either driver does with it: identical bytes delivered is necessary, not sufficient, and criterion any-model-full-protocol still needs a real codex run at validate-arc time to close. The claude side is the committed manifest, not an observation of a live claude session — if the manifest under-describes what a phase-executor really loads, both sides are wrong together and the test still passes; the manifest's own missing-path exit-1 rail is what keeps it honest. The 0.22 bound has roughly 600 bytes of headroom, so a legitimately large new lane override will red it and force a deliberate re-ratchet rather than silently absorbing; that is the intended cost. The rule covers ONE mission (do-phase, the only mission the run lane delivers); a second delegated mission would need its own row, and nothing yet forces that.",
+      },
+      done: true,
+      doneDate: '2026-08-24',
     },
   ],
 })

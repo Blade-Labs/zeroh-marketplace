@@ -142,7 +142,7 @@ function groupAlive(pgid) {
 }
 
 /** The run protocol is the do-phase SKILL, resolved from THIS file so a plugin move follows. */
-const RUN_SKILL = fileURLToPath(new URL('../../skills/do-phase/SKILL.md', import.meta.url))
+export const RUN_SKILL = fileURLToPath(new URL('../../skills/do-phase/SKILL.md', import.meta.url))
 
 /**
  * The run lane's envelope: which phases, what this lane overrides, where the hand-off goes.
@@ -150,7 +150,7 @@ const RUN_SKILL = fileURLToPath(new URL('../../skills/do-phase/SKILL.md', import
  * the same one — a per-lane copy would leave the scorecard's per-model cells comparing briefings
  * instead of models.
  */
-function buildPrompt(root, ids) {
+export function buildPrompt(root, ids) {
   const phaseFiles = ids.map((n) => `roadmap/phases/phase-${n}.phase.ts`)
   for (const f of phaseFiles) {
     if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
@@ -165,7 +165,7 @@ function buildPrompt(root, ids) {
     `TARGETS — run the protocol once per phase, in this order: ${phaseFiles.join(', ')}. Every decision is pre-made in their notes: implement, never re-decide.`,
     '',
     'WHAT THIS LANE OVERRIDES — everything else in the protocol runs unchanged:',
-    '- THIS WORKTREE ONLY. Never merge, never push, never switch branches, never touch the primary checkout or backlog.ts — the supervising session double-checks your work, integrates, and cleans up. stage explicit paths; never `git add -A` (sibling sessions share this checkout).',
+    '- THIS WORKTREE ONLY. Never merge, never push, never switch branches, never touch the primary checkout or backlog.ts — the supervising session double-checks your work, integrates, and cleans up. Stage explicit paths; never `git add -A` (sibling sessions share this checkout).',
     "- CROSS-REPO PHASES: a plan whose steps/files name paths in ANOTHER checkout (a different git toplevel than this worktree) is a cross-repo phase, and the plan's own paths ARE the instruction — implement and commit the PRODUCT work in that checkout on its currently checked-out branch, while every roadmap-state commit (the phase file, gate artifacts) stays in THIS worktree. The never-touch-the-primary rule protects this roadmap repo's primary checkout only. In the other checkout too: stage explicit paths, never push, never merge, never switch branches.",
     '- RESUME RULE: a task already `done: true` in the phase file whose commit is present in git log is FINISHED — skip it, never redo or amend it (a relaunch over a half-done worktree resumes from the first unfinished task).',
     '- SHARED-HOST RULES (~5 concurrent AI sessions on 16 GB — violating these can freeze the box): every test suite / type-check / build runs wrapped as `capbuild <cmd>`; scoped tiers run EXACTLY `bash scripts/test/run-tier.sh <slot> <files…>` (self-wraps capbuild); NEVER pipe tier output through tail/head/grep; no dev servers.',
