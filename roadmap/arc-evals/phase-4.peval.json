@@ -1,0 +1,76 @@
+{
+  "phase": 4,
+  "date": "2026-08-24",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 7
+  },
+  "taskCount": 4,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/cli/lib/roles.mjs",
+    "plugins/zeroh-roadmap/cli/commands/codex.mjs",
+    "plugins/zeroh-roadmap/agents/software-architect.md",
+    "plugins/zeroh-roadmap/skills/review-phase/SKILL.md",
+    "plugins/zeroh-roadmap/scripts/emit-manifests.mjs",
+    "plugins/zeroh-roadmap/.codex-plugin/plugin.json",
+    "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/codex-tools.md",
+    "plugins/zeroh-roadmap/MULTI-DRIVER.md",
+    "plugins/zeroh-roadmap/DIET-LEDGER.md"
+  ],
+  "gate": {
+    "green": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1307550
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 14,
+    "linesAdded": 2593,
+    "linesRemoved": 127,
+    "filesChanged": 22,
+    "testsAtStart": 1200,
+    "testsAtEnd": 1260,
+    "testsAdded": 60,
+    "startedAt": "2026-08-24T16:52:38Z",
+    "completedAt": "2026-08-24T19:16:10Z",
+    "haltCount": 0
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "claude-opus-5[1m]"
+    },
+    "driver": {
+      "model": "claude-opus-5[1m]",
+      "lane": "session"
+    }
+  }
+}
