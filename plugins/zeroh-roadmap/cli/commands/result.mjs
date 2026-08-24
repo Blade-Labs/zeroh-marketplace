@@ -44,11 +44,29 @@ const ALIAS_FAMILY = { fable: 'claude-fable', opus: 'claude-opus', sonnet: 'clau
 function reconcileArmedAlias(root, phase, parsed) {
   const arm = armPath(root, phase)
   if (!existsSync(arm)) return 0
+  let raw
+  try {
+    raw = readFileSync(arm, 'utf8').trim()
+  } catch (e) {
+    process.stderr.write(
+      `roadmap result check: the arm ${arm} exists but could not be read (${e.message}) — driver.model NOT reconciled.\n`,
+    )
+    return 0
+  }
+  // The pre-1737 arm body is a RAW session id, not JSON (cli/lib/executor-arm.mjs); it records no
+  // request and is silent by design. A body that opens `{` and will not parse is a DIFFERENT
+  // thing — a half-written arm — and skipping it silently is indistinguishable from no arm.
+  if (!raw.startsWith('{')) return 0
   let armed
   try {
-    armed = JSON.parse(readFileSync(arm, 'utf8')).expectedModelAlias
-  } catch {
-    return 0 // an unreadable or legacy arm records no request — nothing to reconcile against
+    armed = JSON.parse(raw).expectedModelAlias
+  } catch (e) {
+    process.stderr.write(
+      `roadmap result check: the arm ${arm} is JSON-shaped but does not parse (${e.message}) — driver.model NOT `
+        + 'reconciled. A half-written arm is a launcher record that was interrupted: re-read it before trusting '
+        + 'this return\'s attribution.\n',
+    )
+    return 0
   }
   if (typeof armed !== 'string' || armed.length === 0) return 0
   const family = Object.hasOwn(ALIAS_FAMILY, armed) ? ALIAS_FAMILY[armed] : undefined
@@ -182,9 +200,13 @@ export default async function run(argv) {
       process.stderr.write(`result.phase ${parsed.phase} !== --phase ${opts.phase}\n`)
       return 2
     }
+    // The arm is phase-scoped, so without --phase there is no arm to read. The reconcile runs
+    // BEFORE the echo so exit 2 always means "stdout is empty, this result was rejected" — the
+    // same contract the --phase mismatch above already has.
+    const rc = opts.phase != null ? reconcileArmedAlias(toplevel, opts.phase, parsed) : 0
+    if (rc !== 0) return rc
     process.stdout.write(JSON.stringify(parsed) + '\n')
-    // The arm is phase-scoped, so without --phase there is no arm to read.
-    return opts.phase != null ? reconcileArmedAlias(toplevel, opts.phase, parsed) : 0
+    return 0
   }
   if (res.kind === 'tsx-absent') {
     process.stderr.write(TSX_ABSENT_HINT + '\n')

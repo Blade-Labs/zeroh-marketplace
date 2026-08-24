@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
-import { findJournal } from './codex.mjs'
+import { findJournal, JournalUnreadableError } from './codex.mjs'
 import { derivePhaseStartSha, GitScanError } from '../lib/gitscan.mjs'
 import { bridgeImport, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
@@ -506,7 +506,8 @@ export default async function run(argv) {
  *
  * Journals live under the PRIMARY checkout's .building/ while verify-complete runs INSIDE the
  * codex worktree, so the lookup is rooted at mainCheckout — gitToplevel alone never sees them.
- * No journal at all = an inline session = no check.
+ * No journal at all = an inline session = no check; a journal that EXISTS and will not parse is
+ * a PROBLEM, never an absence — silently skipping it would disarm this seam on a corrupt file.
  *
  * A journal whose driver.model is null pins no model, so the model is announced UNRECONCILED
  * rather than silently skipped; its lane is still reconciled. Returns { problems, notes } —
@@ -519,7 +520,15 @@ function driverReconcile(cwd, fallbackRoot, phaseNum, parsed) {
   } catch {
     root = fallbackRoot
   }
-  const found = findJournal(root, [phaseNum], 'run')
+  let found
+  try {
+    found = findJournal(root, [phaseNum], 'run')
+  } catch (e) {
+    if (!(e instanceof JournalUnreadableError)) throw e
+    // An unreadable journal is not an absent one: passing it as "inline session" would drop the
+    // reconcile without a word, which is exactly the silence this seam exists to remove.
+    return { problems: [`phase ${phaseNum} attribution could NOT be reconciled: ${e.message}`], notes: [] }
+  }
   if (!found) return { problems: [], notes: [] }
   const j = found.journal.driver
   if (!j) return { problems: [], notes: [] }
@@ -530,7 +539,8 @@ function driverReconcile(cwd, fallbackRoot, phaseNum, parsed) {
       problems: [
         `phase ${phaseNum} was launched by the ${j.lane} lane but its executionResult.driver is ABSENT — `
           + `the launcher journalled { model: ${JSON.stringify(j.model)}, lane: ${JSON.stringify(j.lane)} } in ${where}. `
-          + 'A run the launcher recorded cannot land unattributed: record that driver in executionResult.',
+          + 'A run the launcher recorded cannot land unattributed: record that driver in executionResult. '
+          + `If that lane run was ABANDONED, the journal is stale — delete ${found.path} (nothing prunes journals).`,
       ],
       notes: [],
     }
@@ -540,13 +550,17 @@ function driverReconcile(cwd, fallbackRoot, phaseNum, parsed) {
     problems.push(
       `phase ${phaseNum} driver.model disagrees with the launcher: journal says ${JSON.stringify(j.model)}, `
         + `the phase file claims ${JSON.stringify(claimed.model)} (journal ${where}). `
-        + 'The journal is what was launched; the file is self-report — one of them is wrong.',
+        + 'The journal is what was launched; the file is self-report — one of them is wrong. '
+        + 'If that lane run was ABANDONED and this phase was completed some other way, the journal is stale: '
+        + `delete ${found.path} (nothing prunes journals) and re-run --verify-complete.`,
     )
   }
   if (claimed.lane !== j.lane) {
     problems.push(
       `phase ${phaseNum} driver.lane disagrees with the launcher: journal says ${JSON.stringify(j.lane)}, `
-        + `the phase file claims ${JSON.stringify(claimed.lane)} (journal ${where}).`,
+        + `the phase file claims ${JSON.stringify(claimed.lane)} (journal ${where}). `
+        + 'If that lane run was ABANDONED and this phase was completed some other way, the journal is stale: '
+        + `delete ${found.path} (nothing prunes journals) and re-run --verify-complete.`,
     )
   }
   const notes = j.model == null

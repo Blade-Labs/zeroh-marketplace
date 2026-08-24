@@ -1112,3 +1112,39 @@ test('gate run --verify-complete inside a LINKED codex worktree — the journal 
   assert.ok(r.stderr.includes(CLAIMED_MODEL), `the file's claim is named beside it; stderr: ${JSON.stringify(r.stderr)}`)
   assert.ok(r.stderr.includes(jPath), `the PRIMARY checkout's journal path is named (${jPath}); stderr: ${JSON.stringify(r.stderr)}`)
 })
+
+test('gate run --verify-complete — an UNREADABLE lane journal reds naming the file, never passes as "inline session"', () => {
+  const repo = makeRepo(RUN_CFG())
+  // A launch that died mid-write leaves a truncated journal. Treating it as "no journal" drops
+  // the reconcile with no output at all — the phase file's claim goes unchecked and nobody knows.
+  repo.writePhase(1616, donePhase(1616, { model: CLAIMED_MODEL, lane: 'session' }))
+  repo.commit('feat: phase 1616 — code', { 'lib/p.ts': 'export const p = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1616']).code, 0)
+  mkdirSync(join(repo.root, '.building'), { recursive: true })
+  const jPath = join(repo.root, '.building', 'codex-1616.json')
+  writeFileSync(jPath, '{\n  "phases": [\n    "1616"\n  ],\n  "driver": { "model": "gpt')
+
+  const r = runGateCmd(repo.root, ['1616', '--verify-complete'])
+  assert.equal(r.code, 2, `an unreadable launcher record is not an absent one; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.ok(r.stderr.includes(jPath), `the file that could not be read must be NAMED; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.match(r.stderr, /inline session/, `and told apart from the no-journal case; stderr: ${JSON.stringify(r.stderr)}`)
+})
+
+test('gate run --verify-complete — a driver mismatch names the STALE-JOURNAL remedy, not just the disagreement', () => {
+  const repo = makeRepo(RUN_CFG())
+  // The abandoned-lane case: `codex run` was launched, the run died or came back BLOCKED, and the
+  // phase was finished inline. Nothing prunes journals, so the honest inline stamp reds forever
+  // unless the error says what to do about it.
+  repo.writePhase(1617, donePhase(1617, { model: CLAIMED_MODEL, lane: 'session' }))
+  repo.commit('feat: phase 1617 — code', { 'lib/q.ts': 'export const q = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1617']).code, 0)
+  const jPath = writeRunJournal(repo.root, [1617])
+
+  const r = runGateCmd(repo.root, ['1617', '--verify-complete'])
+  assert.equal(r.code, 2, `the disagreement still reds; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.match(r.stderr, /ABANDONED/, `an operator holding an honest inline stamp needs the way out NAMED; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(
+    r.stderr.includes(`delete ${jPath}`),
+    `the remedy must name the exact file to remove (nothing prunes journals); stderr: ${JSON.stringify(r.stderr)}`,
+  )
+})

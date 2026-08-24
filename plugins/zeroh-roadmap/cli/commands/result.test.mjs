@@ -280,6 +280,25 @@ test("result check — alias 'inherit' ⇒ a NAMED skip on stderr, and the exit 
 // the realest possible "not a Claude card alias", and the one-home ratchet forbids a second copy.
 const NON_CLAUDE_MODEL = DRIVERS.codex.model
 
+test('result check — a REJECTED result writes nothing to stdout: exit 2 means the echo did not happen', () => {
+  // The --phase mismatch branch already returns 2 before printing. If the attribution branch
+  // echoed first, exit 2 would mean "stdout empty" in one case and "stdout populated" in the
+  // other, and a caller reading stdout without gating on the code consumes a rejected result.
+  const doc = returnedResult(sessionDriver('claude-fable-5'))
+  const root = makeConsumer()
+  plantArm(root, 9001, { expectedModelAlias: 'opus' })
+  const r = checkResult(root, doc)
+  assert.equal(r.code, 2, `precondition: this is the rejecting case; stderr: ${r.stderr}`)
+  assert.equal(r.stdout.trim(), '', `a rejected result must not be echoed; stdout: ${JSON.stringify(r.stdout)}`)
+
+  // The decoy: the ACCEPTED twin still echoes, so this is not "stdout is always empty".
+  const ok = makeConsumer()
+  plantArm(ok, 9001, { expectedModelAlias: 'fable' })
+  const good = checkResult(ok, doc)
+  assert.equal(good.code, 0, `agreement still passes; stderr: ${good.stderr}`)
+  assert.match(good.stdout, /"phase":\s*9001/, 'and an accepted result is still echoed')
+})
+
 test('result check — an alias outside the family map (a real non-Claude model id) skips the same way', () => {
   const doc = returnedResult(sessionDriver('claude-fable-5'))
   const bare = makeConsumer()
@@ -374,4 +393,33 @@ test('result check — the reconcile runs AFTER the parse and never masks a shap
   const r = checkResult(root, bad)
   assert.equal(r.code, 2, `an invalid doc is still exit 2; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`)
   assert.match(r.stderr, /gateRounds/, `the Zod issue must survive — an attribution finding never replaces it; got:\n${r.stderr}`)
+})
+
+test('result check — a LEGACY raw-prose arm stays silent, a HALF-WRITTEN JSON arm is announced', () => {
+  const doc = returnedResult(sessionDriver('claude-fable-5'))
+  const bare = makeConsumer()
+  const baseline = checkResult(bare, doc)
+
+  // The pre-1737 body is a bare session id — it records no request and never had one.
+  const legacy = makeConsumer()
+  const legacyArm = armPathFor(legacy, 9001)
+  mkdirSync(dirname(legacyArm), { recursive: true })
+  writeFileSync(legacyArm, 'ea584379-4810-40b6-bb67-20906c8bf6d3\n')
+  const legacyRun = checkResult(legacy, doc)
+  assert.deepEqual(
+    { code: legacyRun.code, stdout: legacyRun.stdout, stderr: legacyRun.stderr },
+    { code: baseline.code, stdout: baseline.stdout, stderr: baseline.stderr },
+    'a legacy arm makes no claim — byte-identical, exactly as no arm at all',
+  )
+
+  // A body that OPENS `{` and will not parse is a launcher record that was interrupted. Skipping
+  // it as if it were "no arm" hides that the reconcile did not run.
+  const broken = makeConsumer()
+  const brokenArm = armPathFor(broken, 9001)
+  mkdirSync(dirname(brokenArm), { recursive: true })
+  writeFileSync(brokenArm, '{"sessionId":"sess-arc","expectedModelAlias":"op')
+  const r = checkResult(broken, doc)
+  assert.equal(r.code, baseline.code, `an unreadable arm never REDs an honest return; stderr:\n${r.stderr}`)
+  assert.ok(r.stderr.includes(brokenArm), `the arm that could not be read must be NAMED; got:\n${r.stderr}`)
+  assert.match(r.stderr, /NOT reconcil/i, `and the skipped reconcile stated; got:\n${r.stderr}`)
 })

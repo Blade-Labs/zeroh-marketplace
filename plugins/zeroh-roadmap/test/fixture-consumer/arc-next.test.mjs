@@ -256,6 +256,27 @@ test('N12 — an executor that never returns leaves the arm STANDING, bound to t
   assert.match(body.executorId, /^[0-9a-f-]{36}$/, 'and names the executor minted for THIS spawn')
 })
 
+test('N12b — the workflow arm records the card alias too: the CLI is not the only door onto the arm', async () => {
+  // arc-plane is the other caller of armExecutor, and it invokes `result check` itself further
+  // down. An alias-less arm there makes that reconcile a silent no-op — the same hole task 3.4
+  // closed on the CLI path — so both doors must record what was requested.
+  const { cardModelAlias, DEFAULT_AGENT_CARD } = await import('../../cli/lib/executor-arm.mjs')
+  const expected = cardModelAlias(DEFAULT_AGENT_CARD)
+  assert.equal(typeof expected, 'string', 'precondition: the shipped phase-executor card declares a model alias')
+
+  const root = memberRepo(9801)
+  beacon(root, 9801, { ts: new Date().toISOString(), phase: 9801, event: 'task-start', task: '9801.1' })
+  await driveWorkflow(root, 9801, {
+    agentReturns: [{ watchExit: 4, watchVerdict: { verdict: 'EXITED' } }],
+    deps: { sessionId: 'sess-12b' },
+  }).promise
+  assert.equal(
+    readArm(root, 9801).expectedModelAlias,
+    expected,
+    'the workflow-written arm carries the requested alias, so result check has something to reconcile against',
+  )
+})
+
 test('N13 — a second launch over a standing arm halts blocked, naming the incumbent, and spawns nothing', async () => {
   const root = memberRepo(9801)
   beacon(root, 9801, { ts: new Date().toISOString(), phase: 9801, event: 'task-start', task: '9801.1' })

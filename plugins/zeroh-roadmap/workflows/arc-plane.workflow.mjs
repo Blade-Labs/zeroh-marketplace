@@ -39,7 +39,7 @@ import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
 import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine, appendExecutorEvent } from '../cli/lib/beacon.mjs'
-import { armExecutor, disarmExecutor, liveArm } from '../cli/lib/executor-arm.mjs'
+import { armExecutor, disarmExecutor, liveArm, cardModelAlias, DEFAULT_AGENT_CARD } from '../cli/lib/executor-arm.mjs'
 import { pidAlive } from '../cli/lib/sidecar.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
@@ -232,7 +232,9 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     const armed = Boolean(sessionId)
     if (armed) {
       try {
-        armExecutor(worktree, phase, sessionId, { executorId })
+        // Same alias the CLI records: this workflow is the other door onto the arm, and an
+        // alias-less arm here silently no-ops the reconcile at line ~280 (`result check`).
+        armExecutor(worktree, phase, sessionId, { executorId, expectedModelAlias: cardModelAlias(DEFAULT_AGENT_CARD) })
       } catch (e) {
         // The belt for a race between the read above and this write (the lib is the same rule).
         return buildHaltPayload('blocked', { phase, evidence: { executorArm: e.message } })

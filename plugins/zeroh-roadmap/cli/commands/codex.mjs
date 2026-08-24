@@ -65,6 +65,23 @@ function journalPath(root, ids, lane = 'run') {
   return join(root, '.building', `${LANES[lane].prefix}${ids.join('-')}.json`)
 }
 
+/** A journal that EXISTS and will not parse. Never folded into "no journal": an absent journal
+ *  means an inline session (nothing to reconcile), an unreadable one means the launcher's record
+ *  is there and unreadable, and treating those alike disarms the reconcile in silence. */
+export class JournalUnreadableError extends Error {
+  constructor(failures) {
+    super(
+      `roadmap codex: ${failures.length} journal file(s) under .building could not be parsed, so no lane journal `
+        + 'could be resolved \u2014 this is NOT the same as an inline session with no journal:\n'
+        + failures.map(({ path, message }) => `  - ${path}: ${message}`).join('\n')
+        + '\nRead the file: a truncated journal is a launch that died mid-write \u2014 delete it if that run is gone, '
+        + 'and relaunch the lane.',
+    )
+    this.name = 'JournalUnreadableError'
+    this.failures = failures
+  }
+}
+
 /**
  * The lane journal covering every id in `ids` → { path, journal }, or null.
  *
@@ -74,13 +91,18 @@ function journalPath(root, ids, lane = 'run') {
  *
  * Shared rather than private because the reconcile at landing (gate --verify-complete) must
  * find the same journal `codex status` does; two lookups would drift.
+ *
+ * THROWS JournalUnreadableError when nothing matched but a candidate file failed to parse: a
+ * null there would report "no journal" over a journal that is sitting right on disk.
  */
 export function findJournal(root, ids, lane = 'run') {
   const wanted = ids.map(String)
+  const failures = []
   const read = (p) => {
     try {
       return JSON.parse(readFileSync(p, 'utf8'))
-    } catch {
+    } catch (e) {
+      failures.push({ path: p, message: e.message })
       return null
     }
   }
@@ -93,10 +115,12 @@ export function findJournal(root, ids, lane = 'run') {
   for (const f of existsSync(dir) ? readdirSync(dir) : []) {
     if (!LANES[lane].journalRe.test(f)) continue
     const path = join(dir, f)
+    if (path === exact && failures.some((x) => x.path === exact)) continue
     const journal = read(path)
     const phases = (journal?.phases ?? []).map(String)
     if (journal && wanted.every((n) => phases.includes(n))) return { path, journal }
   }
+  if (failures.length > 0) throw new JournalUnreadableError(failures)
   return null
 }
 
@@ -344,7 +368,13 @@ function reviewCodex(root, ids, argv) {
 }
 
 function statusCodex(root, ids, lane = 'run') {
-  const found = findJournal(root, ids, lane)
+  let found
+  try {
+    found = findJournal(root, ids, lane)
+  } catch (e) {
+    process.stderr.write(`${e.message}\n`)
+    return 1
+  }
   if (!found) {
     process.stderr.write(`roadmap codex: no ${lane} journal covers phase(s) ${ids.join(',')} in ${join(root, '.building')}\n`)
     return 1

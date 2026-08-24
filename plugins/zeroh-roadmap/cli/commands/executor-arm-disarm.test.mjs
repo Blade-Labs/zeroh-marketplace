@@ -340,6 +340,17 @@ test('10b) a card path that does not exist records nothing and still ARMS (the a
   assert.ok(!FAMILY_WORDS.test(res.stderr), `and no alias is invented for the printed line; got:\n${res.stderr}`)
 })
 
+test('10d) --agent-card with a FLAG-shaped value is a usage error, never a silent fall back to the default card', () => {
+  // Falling back to the default here records the default card's alias against an executor the
+  // caller meant to point elsewhere, and `result check` would then red an honest return. The
+  // sibling --executor-id parse already treats this shape as omitted; this one must not guess.
+  const repo = newRepo('zr-cli-execarm-')
+  const res = roadmap(repo, 'executor-arm', '2375', '--session', 'sess-abc', '--agent-card', '--force')
+  assert.equal(res.status, 1, `a flag-shaped card path is malformed input; stderr: ${res.stderr}`)
+  assert.match(res.stderr, /--agent-card/, `the usage line names the flag; stderr: ${res.stderr}`)
+  assert.ok(!existsSync(armPath(repo, 2375)), 'and no arm is written on a usage error')
+})
+
 test('10c) the recorded alias survives the OTHER arm paths — a forced re-arm re-reads the card', () => {
   const repo = newRepo()
   assert.equal(roadmap(repo, 'executor-arm', '2375', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)

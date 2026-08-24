@@ -444,3 +444,35 @@ test('findJournal: a review journal never answers for lane run, and a miss is nu
   assert.equal(review.path, join(root, '.building', 'codex-review-75.json'))
   assert.equal(mod.findJournal(root, [99], 'run'), null, 'no journal covers 99 — a miss is null, never a nearby journal')
 })
+
+test('findJournal: a journal that EXISTS and will not parse THROWS — never reported as "no journal"', async () => {
+  const mod = await import('./codex.mjs')
+  const root = tmpRepo()
+  mkdirSync(join(root, '.building'), { recursive: true })
+  const corrupt = join(root, '.building', 'codex-77.json')
+  writeFileSync(corrupt, '{ "phases": ["77"], "driver": { "model": "gpt')
+
+  assert.throws(
+    () => mod.findJournal(root, [77], 'run'),
+    (e) => {
+      assert.equal(e.name, 'JournalUnreadableError', `an unreadable journal must be its own class; got ${e.name}: ${e.message}`)
+      assert.ok(e.message.includes(corrupt), `the unreadable file must be NAMED; got: ${e.message}`)
+      assert.ok(/inline session/.test(e.message), `and distinguished from the inline-session case; got: ${e.message}`)
+      return true
+    },
+    'a truncated journal is a launch that died mid-write — reporting it as absent disarms the reconcile in silence',
+  )
+})
+
+test('codex status: an unreadable journal reports the PARSE failure, never "no journal covers"', () => {
+  const root = tmpRepo()
+  mkdirSync(join(root, '.building'), { recursive: true })
+  writeFileSync(join(root, '.building', 'codex-78.json'), '{ "phases": ["78"')
+  const r = spawnSync('node', [BIN, 'codex', 'status', '78'], { cwd: root, encoding: 'utf8' })
+  assert.equal(r.status, 1, `an unreadable journal is still a failure exit; stderr: ${r.stderr}`)
+  assert.ok(r.stderr.includes('codex-78.json'), `the file the reader choked on must be named; got: ${r.stderr}`)
+  assert.ok(
+    !/no run journal covers/.test(r.stderr),
+    `the journal is right there — claiming none covers the phase sends the reader to the wrong place; got: ${r.stderr}`,
+  )
+})

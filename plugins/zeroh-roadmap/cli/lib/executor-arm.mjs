@@ -34,12 +34,63 @@
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { readBeaconLine } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
 
 /** The one home for the arm-file path: `roadmap result check` reconciles against the same file. */
 export function armPath(worktree, phase) {
   return join(worktree, '.building', `${phase}-executor.armed`)
+}
+
+export const DEFAULT_AGENT_CARD = fileURLToPath(new URL('../../agents/phase-executor.md', import.meta.url))
+
+/**
+ * The model alias an agent card DECLARES, or null.
+ *
+ * Bounded to the frontmatter block and line-anchored on the `model:` key: cards discuss their own
+ * pin in prose (agents/arc-eval-judge.md says `model: sonnet` on three lines, one of them the
+ * declaration), and a card's `description:` may quote a model id, so a first-match-anywhere search
+ * records a sentence fragment as the request. Absent card, absent fence or absent key => null,
+ * never a guess.
+ */
+export function cardModelAlias(cardPath) {
+  if (!existsSync(cardPath)) return null
+  let text
+  try {
+    text = readFileSync(cardPath, 'utf8')
+  } catch {
+    return null
+  }
+  const lines = text.split('\n')
+  if (lines[0].trim() !== '---') return null
+  const end = lines.indexOf('---', 1)
+  if (end < 0) return null
+  for (const line of lines.slice(1, end)) {
+    const m = line.match(/^model:[ \t]*(\S+)[ \t]*$/)
+    if (m) return m[1]
+  }
+  return null
+}
+
+/** One line naming the derived product repos + newest declared keyFile age; best-effort. */
+function preflightLine(worktree, phase) {
+  let keyFiles = []
+  try {
+    keyFiles = scanPhaseFile(join(worktree, 'roadmap', 'phases', `phase-${phase}.phase.ts`))?.keyFiles ?? []
+  } catch {
+    /* the preflight is diagnostic, never a gate */
+  }
+  const repos = productRepos(keyFiles, { worktree })
+  if (repos.length === 0) {
+    return `roadmap executor-arm: cross-repo preflight — none (${keyFiles.length} keyFile(s) declared, all in this worktree's repository)\n`
+  }
+  const age = newestKeyFileAgeMin(keyFiles)
+  return (
+    `roadmap executor-arm: cross-repo preflight — ${repos.length} product repo(s): ${repos.join(', ')};`
+    + ` newest declared keyFile ${age == null ? 'not written yet' : `${age.toFixed(1)}min old`}.`
+    + ' Stat those files before your first write: anything newer than your own spawn is another executor at work.\n'
+  )
 }
 
 /** The beacon events that mean "this executor handed something back", and so the only ones under
