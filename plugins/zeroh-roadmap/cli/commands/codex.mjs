@@ -43,7 +43,7 @@
  *  - the hand-off contract: Codex ends by writing CODEX-REPORT.md (never committed) with
  *    per-task shas + verify outcomes and a terminal sentinel CODEX-RUN-COMPLETE|BLOCKED.
  *
- * Division of labor (user ruling 2026-07-22, stated in do-phase SKILL.md): the delegated driver
+ * Division of labor (the user ruling do-phase SKILL.md states): the delegated driver
  * runs each phase FULLY — tasks, per-task commits, and its own gate to green. The supervising
  * session owns the back half only: audit the commits and gate claims against the plan, then
  * integrate and clean up. This command never merges and never pushes.

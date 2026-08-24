@@ -680,7 +680,7 @@ test('the tier chain has exactly ONE home — neither prose file restates it, an
  * skills/do-phase/SKILL.md BY PATH instead of paraphrasing it — this block is the instrument that
  * turns "same protocol" from an assertion into a measurement.
  *
- * THE PROTOCOL SET RULE (locked 2026-08-23): the PROTOCOL SET of a mission is its
+ * THE PROTOCOL SET RULE (locked, MULTI-DRIVER.md §1): the PROTOCOL SET of a mission is its
  * `skills/<mission>/SKILL.md` plus every file under that skill's `references/` tree. `agents/*.md`
  * cards (and `agents/references/*`) are HARNESS-DELIVERY CONTEXT, not protocol: they are the
  * vehicle a Claude spawn uses to carry a subagent's own instruction set, and Codex has no
@@ -702,7 +702,7 @@ const HARNESS_DELIVERY_PREFIX = 'agents/'
 /**
  * Envelope overhead ceiling: generated-prompt bytes ÷ delivered-protocol bytes.
  *
- * The envelope exists to DELIVER the protocol, never to BE it. Measured 2026-08-23: 3070 / 16693
+ * The envelope exists to DELIVER the protocol, never to BE it. Measured: 3070 / 16693
  * = 0.184. The pre-task-4.2 envelope — the one that PARAPHRASED do-phase instead of handing over
  * its path (cli/commands/codex.mjs at e965f4f~1) — measured 3992 / 16693 = 0.239. This bound sits
  * between the two on purpose: ~600 bytes of headroom for genuine new lane overrides, and a red the

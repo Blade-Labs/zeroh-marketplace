@@ -8,7 +8,7 @@
  *
  * `class` decides who a consumer's `modelPolicy.judgeModel` may re-route: JUDGE-class only —
  * a role returning a verdict on work it did not produce. `tierChain` is model ids best-first,
- * and only `software-architect` carries a real chain (user ruling 2026-08-23, verbatim order);
+ * and only `software-architect` carries a real chain, in the user's verbatim order (MULTI-DRIVER.md §1);
  * every other role carries its card's frontmatter alias, which stays on the card as the harness
  * fail-safe. `spawnSites` is evidence, not a claim — roles.test.mjs reds when a listed file
  * stops naming the role.
