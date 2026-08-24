@@ -94,10 +94,12 @@ The authoritative reference — they shipped this, we copy the shape:
 ## Shared-host rules
 
 ~5 concurrent AI sessions, 16 GB. Suites/builds through `capbuild`. The plugin's own test
-suite has 3 KNOWN environmental failures on this host (2 × `/usr/bin/env: 'node'` under
-sanitized test env in eval/derive tsx-bridge tests, 1 × `measure --flow do-arc --assert
-12500` over budget) — pre-existing on clean tree, verified 2026-08-23. A phase gate must
-not claim them; fixing them is fair game inside a phase if it touches those seams.
+suite had 2 environmental failures on this host (`/usr/bin/env: 'node'` under a sanitized
+test env in the eval/derive tsx-bridge tests) — FIXED in phase 1 task 1.3, which touched that
+seam. The third standing red, `measure --flow do-arc --assert <budget>`, was never
+environmental (it failed on any host): it was a repo-state protocol-load overage, resolved by
+phase 1 task 1.4's diet + the 2026-08-24 measured rebaseline. A phase gate must not claim an
+environmental failure it has not verified as one.
 
 ## Deferred (do not build)
 
