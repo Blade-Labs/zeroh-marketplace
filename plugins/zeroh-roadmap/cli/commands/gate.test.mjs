@@ -858,6 +858,18 @@ test('gate run --slots <subset> — leaves the record UNTOUCHED and says so (a f
   const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
   repo.writePhase(1707, phaseObj({ phase: 1707, plannedBy: PLANNER, tasks: [{ id: '1707.1' }] }))
   repo.commit('feat: phase 1707 — code', { 'lib/h.ts': 'export const h = 1\n' })
+
+  // The per-task loop's FIRST `--slots types` lands before any full run, so the line must not
+  // claim a file that does not exist yet — and must not mint one either.
+  const fresh = runGateCmd(repo.root, ['1707', '--slots', 'types'])
+  assert.equal(fresh.code, 0, fresh.stderr)
+  assert.equal(existsSync(recordPath(repo.root, 1707)), false, 'a filtered run mints no record')
+  assert.match(
+    emitFailureLines(fresh.stderr).join('\n'),
+    /has not been written yet/,
+    `with no record on disk the line says so; got: ${JSON.stringify(fresh.stderr)}`,
+  )
+
   assert.equal(runGateCmd(repo.root, ['1707']).code, 0)
   const full = readFileSync(recordPath(repo.root, 1707), 'utf8')
   assert.ok(readRecord(repo.root, 1707).gate.slots.length > 1, 'precondition: the full run recorded more than one slot')
@@ -869,8 +881,8 @@ test('gate run --slots <subset> — leaves the record UNTOUCHED and says so (a f
   assert.equal(readFileSync(recordPath(repo.root, 1707), 'utf8'), full, 'a --slots run must not rewrite the record')
   assert.match(
     emitFailureLines(r.stderr).join('\n'),
-    /PARTIAL run/,
-    `the skip is NAMED on stderr, never silent; got: ${JSON.stringify(r.stderr)}`,
+    /PARTIAL run.*was left untouched/s,
+    `the skip is NAMED on stderr and names the record it spared; got: ${JSON.stringify(r.stderr)}`,
   )
 })
 

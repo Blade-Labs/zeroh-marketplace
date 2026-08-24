@@ -732,12 +732,17 @@ export async function runGate(phaseNum, opts) {
   // A --slots run is a SUBSET projection, not a sample: `green` is computed over the filtered
   // rows alone, so writing it into the phase's latest-run-wins record would silently degrade
   // the durable measurement on every routine per-task `--slots types` run. Named, never silent.
-  if (wanted)
+  if (wanted) {
+    // The verb branches on what is actually on disk: do-phase runs `--slots types` after task
+    // 1, before any full run has written a record, so "left untouched" would name a file that
+    // does not exist. A diagnostic that asserts a false fact is worse than none.
+    const rec = phaseEvalRecordPath(toplevel, phaseNum)
+    const verb = existsSync(rec) ? 'was left untouched' : 'has not been written yet'
     process.stderr.write(
-      `gate run: --slots ${opts.slots} is a PARTIAL run, so the per-phase eval record ` +
-        `${phaseEvalRecordPath(toplevel, phaseNum)} was left untouched — a filtered run is not a ` +
-        `sample; the next full gate run refreshes it\n`,
+      `gate run: --slots ${opts.slots} is a PARTIAL run, so the per-phase eval record ${rec} ` +
+        `${verb} — a filtered run is not a sample; the next full gate run writes it\n`,
     )
+  }
   else emitPhaseEvalRecord(toplevel, phaseNum, { parsed: built.parsed, report: written.report })
 
   if (opts.json) process.stdout.write(JSON.stringify(written.report) + '\n')
