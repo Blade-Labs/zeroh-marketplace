@@ -341,7 +341,7 @@ test('assembleAttribution — a recorded driver travels; an unrecorded one is th
 
   const unrecorded = drivers.find((d) => d.model === 'unrecorded')
   assert.ok(unrecorded, `phase 9002 has no driver — it must land as 'unrecorded', never a guessed model id`)
-  assert.equal(unrecorded.lane, 'session')
+  assert.equal(unrecorded.lane, 'unrecorded', 'a phase naming no driver names no lane either — session must not absorb it')
   assert.deepEqual(unrecorded.phases, [9002])
 
   assert.equal(drivers.length, 2, `exactly the two attribution buckets; got ${JSON.stringify(drivers)}`)
@@ -386,7 +386,7 @@ test('assembleAttribution — planners group BY MODEL: two planners split their 
   // adding it must not move a phase between driver rows or invent a third one.
   assert.deepEqual(sortByModel(drivers), [
     { model: 'claude-opus-5', lane: 'session', phases: [9001] },
-    { model: 'unrecorded', lane: 'session', phases: [9002] },
+    { model: 'unrecorded', lane: 'unrecorded', phases: [9002] },
   ])
 
   // Grouping, not one row per phase: two phases planned by one model collapse into one entry.
@@ -445,7 +445,7 @@ test('assembleAttribution — a planner entry is EXACTLY { model, phases } (no l
   // an addition, not a rewrite.
   assert.deepEqual(sortByModel(drivers), [
     { model: 'claude-opus-5', lane: 'session', phases: [9001] },
-    { model: 'unrecorded', lane: 'session', phases: [9002] },
+    { model: 'unrecorded', lane: 'unrecorded', phases: [9002] },
   ])
   assert.deepEqual([...reviewers].sort((a, b) => a.agent.localeCompare(b.agent)), [
     { agent: 'code-reviewer', rounds: 3 },

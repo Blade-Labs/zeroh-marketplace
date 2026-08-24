@@ -76,19 +76,51 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
   // grandfathered: the file must be new to git (no HEAD blob) for any of them to fire, so
   // the gate is resolved ONCE here (it shells out to git) rather than per lint.
   //
-  // The driver-lane lint below is DATA, not authoring, so it sits OUTSIDE that gate: the case
-  // it exists for is a done-flip, which edits a file git already has.
+  // The driver-lane and attribution lints below are DATA, not authoring, so they sit OUTSIDE
+  // that gate: the case they exist for is a done-flip, which edits a file git already has.
   const warnings = isPhase && parsed
     ? [
         ...(isNewToGit(normalized)
           ? [...stepVerifyGrammarWarnings(parsed), ...verifyPolarityWarnings(parsed), ...stepDescriptionLengthWarnings(parsed)]
           : []),
         ...driverLaneWarnings(parsed),
+        ...attributionWarnings(parsed),
       ]
     : []
 
   if (errors.length > 0) return { kind: 'errors', ok: false, errors, warnings }
   return { kind: 'ok', ok: true, warnings }
+}
+
+/**
+ * WARN when a phase carries no attribution for the stage it is at: a backlog phase with no
+ * plannedBy, a done phase with no executionResult.driver. Each warning carries the one line
+ * that fixes it, because the fix is a single field and a warning that only names a gap costs
+ * a lookup.
+ *
+ * Never an error: ~700 committed phase files predate these fields, and REDing them would make
+ * the rule unlandable. `historical` and `cancelled` never warn at all — nobody is going to
+ * re-derive who planned work that was abandoned or imported.
+ *
+ * A missing stamp is invisible until scorecard time, where it becomes an `unrecorded` cell
+ * months after the only actor who knew the answer stopped running.
+ */
+function attributionWarnings(phase) {
+  const num = phase?.phase ?? '?'
+  if (phase?.status === 'backlog' && !phase?.plannedBy?.model) {
+    return [
+      `WARN phase ${num}: plannedBy missing — add plannedBy: { model: <your model id> }. `
+        + 'The scorecard\'s planner cells fill from this field; absent, this phase scores as unrecorded.',
+    ]
+  }
+  if (phase?.status === 'done' && !phase?.executionResult?.driver?.model) {
+    return [
+      `WARN phase ${num}: executionResult.driver missing — add driver: { model: <your model id>, lane: 'session' } `
+        + "to executionResult (lane is 'session' for an in-harness run, else the driver id). "
+        + 'The scorecard\'s driver cells fill from this field; absent, this phase scores as unrecorded.',
+    ]
+  }
+  return []
 }
 
 /** Every lane the registry recognises: 'session' (an in-harness session) plus each driver id. */

@@ -191,7 +191,7 @@ test('SCORECARD_N_FLOOR is 5, and the cohort axes come from eval-score, not a se
   assert.deepEqual(TASK_COUNT_BANDS.map((b) => b.label), ['1-3', '4-6', '7+'])
   assert.equal(SURFACE_PATH_RE.test(SURFACE_FILE), true, 'fixture precondition: the web/ file is a surface path')
   assert.equal(SURFACE_PATH_RE.test(CLI_FILE), false, 'fixture precondition: the cli/ file is not')
-  assert.deepEqual(UNRECORDED_DRIVER, { model: 'unrecorded', lane: 'session' })
+  assert.deepEqual(UNRECORDED_DRIVER, { model: 'unrecorded', lane: 'unrecorded' })
 })
 
 // ── 1. the acceptance criterion: abstention ───────────────────────────────────────────
@@ -462,10 +462,19 @@ test('computeScorecard — an unattributed phase lands in its OWN unrecorded cel
   assert.ok(real, 'the recorded driver keeps a cell of its own')
   assert.equal(real.samples, 6, 'the recorded driver owns exactly the six phases it reported')
 
-  const unrecorded = driverCell(sc, { model: 'unrecorded', lane: 'session' })
+  const unrecorded = driverCell(sc, { model: 'unrecorded', lane: 'unrecorded' })
   assertAbstains(unrecorded, 3, 'the unrecorded bucket')
   assert.equal(unrecorded.model, 'unrecorded', 'the literal sentinel model id, never a guessed one')
-  assert.equal(unrecorded.lane, 'session', 'and the literal UNRECORDED_DRIVER lane')
+  assert.equal(
+    unrecorded.lane,
+    'unrecorded',
+    'the lane is unrecorded too — a file naming no driver names no lane, and crediting it to session inflates that cohort',
+  )
+  assert.equal(
+    driverCell(sc, { model: 'unrecorded', lane: 'session' }),
+    undefined,
+    'no unattributed phase may sit in the session cohort',
+  )
 
   assertNoPooledCell(sc.drivers, 9, 'recorded plus unrecorded')
   assert.equal(

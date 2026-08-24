@@ -168,8 +168,14 @@ const TIER_RANK = { wired: 1, 'live-ui': 2, 'live-host': 3 }
 /** A low-confidence verdict is weaker evidence in BOTH directions, so it weighs less. */
 const CONFIDENCE_WEIGHT = { high: 1, medium: 0.8, low: 0.6 }
 
-/** The honest stand-in for an executor that did not self-report — never a guessed model id. */
-export const UNRECORDED_DRIVER = { model: 'unrecorded', lane: 'session' }
+/**
+ * The honest stand-in for an executor that did not self-report — never a guessed model id.
+ *
+ * The LANE is unrecorded for the same reason the model is: a phase file that names no driver
+ * names no lane either, and defaulting it to 'session' silently credited every unattributed
+ * phase to the session cohort, inflating it against the lanes that do report.
+ */
+export const UNRECORDED_DRIVER = { model: 'unrecorded', lane: 'unrecorded' }
 
 const clamp = (n) => Math.min(100, Math.max(0, n))
 /** One decimal: enough to see movement, few enough digits that float noise cannot fake a delta. */

@@ -288,6 +288,7 @@ function runValidatorCaptured(filePath) {
 const stepsPhase = (desc) => `${IMPORT}
 export default definePhase({
   phase: 9008, name: 'fixture verify-grammar phase', status: 'backlog',
+  plannedBy: { model: 'fixture-model' },
   category: 'infra', kind: 'logic', source: 'fixture source', priority: 'LOW',
   dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',
   tasks: [{ id: '9008.1', title: 'the fixture task title', problem: 'the fixture problem statement is intentionally long', steps: [{ file: 'x', description: '${desc}' }], acceptanceCriteria: ['it works as specified'], files: ['x'], testMode: 'none', done: false }],
@@ -426,4 +427,116 @@ test('driver.lane lint: the unknown-lane WARN also fires on a status:done phase 
   assert.equal(r.code, 0, `a WARN never turns a passing file into a failing one; stderr: ${r.stderr}`)
   assert.match(r.stderr, /WARN phase 9009/, 'a done-flip edits an existing file — the lint is not status-gated')
   assert.match(r.stderr, new RegExp(UNKNOWN_LANE), 'the WARN names the offending lane value')
+})
+
+// ── attribution-stamp lints — WARN-level, grandfathered by STATUS not by git ───────
+// A forgotten plannedBy/driver stamp surfaces months later as an empty column in the
+// model-comparison scorecard, so validate time is the catch. Grandfathering is by STATUS
+// ('historical'/'cancelled' never warn); it is NOT gated on isNewToGit, because the case
+// these lints exist for is a done-flip — an edit to a file git already tracks.
+const PLANNED_BY = `\n  plannedBy: { model: 'fixture-model' },`
+const DRIVER = `\n  executionResult: { phase: 9011, status: 'done', gateRounds: 1, driver: { model: 'fixture-model', lane: 'session' } },`
+
+const backlogAttribution = (stamp) => `${IMPORT}
+export default definePhase({
+  phase: 9010, name: 'fixture backlog attribution phase', status: 'backlog',${stamp}
+  category: 'infra', kind: 'logic', source: 'fixture source', priority: 'LOW',
+  dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',
+  tasks: [],
+})
+`
+const doneAttribution = (stamp) => `${IMPORT}
+export default definePhase({
+  phase: 9011, name: 'fixture done attribution phase', status: 'done',
+  category: 'infra', kind: 'logic', source: 'fixture source', priority: 'LOW',
+  dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',${doneGate}${stamp}
+  tasks: [],
+})
+`
+const grandfatheredAttribution = (num, status) => `${IMPORT}
+export default definePhase({
+  phase: ${num}, name: 'fixture ${status} attribution phase', status: '${status}',
+  category: 'infra', kind: 'logic', source: 'fixture source', priority: 'LOW',
+  dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',
+  tasks: [],
+})
+`
+
+/** Pin the fixture's git state. A lint that silently fires only on new-to-git files would
+ *  miss every done-flip, so each attribution case states which side of that line it sits on. */
+function assertGitTracked({ path, base }, expected) {
+  const rel = path.slice(base.length + 1)
+  const tracked = spawnSync('git', ['-C', base, 'cat-file', '-e', `HEAD:${rel}`], { encoding: 'utf8' }).status === 0
+  assert.equal(tracked, expected, `fixture ${rel} must be ${expected ? 'COMMITTED' : 'NEW'} to git for this case to prove anything`)
+}
+
+/** The one stderr line naming `needle` — one line, so a fix wrapped across lines is not
+ *  copy-pasteable and fails here. */
+function warnLine(stderr, needle) {
+  const lines = stderr.split('\n').filter((l) => l.includes(needle))
+  assert.equal(lines.length, 1, `expected exactly ONE stderr line naming '${needle}'; got ${lines.length}. stderr:\n${stderr || '(empty)'}`)
+  return lines[0]
+}
+
+test('attribution lint: a backlog phase with NO plannedBy WARNS with a copy-pasteable one-line fix', () => {
+  for (const commit of [false, true]) {
+    const f = writeGitPhase('phase-9010.phase.ts', backlogAttribution(''), { commit })
+    assertGitTracked(f, commit)
+    const r = runValidatorCaptured(f.path)
+    const twin = runValidatorCaptured(writeGitPhase('phase-9010.phase.ts', backlogAttribution(PLANNED_BY), { commit }).path)
+    assert.equal(r.code, twin.code, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+    assert.equal(r.code, 0, `the fixture parses clean — exit stays 0 (committed=${commit}); stderr: ${r.stderr}`)
+    const line = warnLine(r.stderr, 'plannedBy')
+    assert.match(line, /WARN phase 9010\b/, 'the WARN names the offending phase')
+    assert.match(line, /missing/i, 'the WARN states the stamp is absent')
+    assert.match(line, /plannedBy:\s*\{\s*model:/, 'the one-line fix is copy-pasteable as written')
+  }
+})
+
+test('attribution lint: a backlog phase WITH plannedBy draws no warning (same exit code)', () => {
+  for (const commit of [false, true]) {
+    const f = writeGitPhase('phase-9010.phase.ts', backlogAttribution(PLANNED_BY), { commit })
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `stamped twin exits 0; stderr: ${r.stderr}`)
+    assert.doesNotMatch(r.stderr, /WARN phase 9010/, 'a stamped phase is compliant — the lint stays quiet')
+  }
+})
+
+test('attribution lint: a COMMITTED done phase with NO executionResult.driver WARNS (the done-flip case)', () => {
+  const f = writeGitPhase('phase-9011.phase.ts', doneAttribution(''), { commit: true })
+  assertGitTracked(f, true) // the 715–719 drop was a done-flip: a newness-gated lint never fires
+  const r = runValidatorCaptured(f.path)
+  const twin = runValidatorCaptured(writeGitPhase('phase-9011.phase.ts', doneAttribution(DRIVER), { commit: true }).path)
+  assert.equal(r.code, twin.code, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+  assert.equal(r.code, 0, `an unstamped done phase still validates; stderr: ${r.stderr}`)
+  const line = warnLine(r.stderr, 'executionResult.driver')
+  assert.match(line, /WARN phase 9011\b/, 'the WARN names the offending phase')
+  assert.match(line, /missing/i, 'the WARN states the stamp is absent')
+  assert.match(line, /driver:\s*\{\s*model:/, 'the one-line fix is copy-pasteable as written')
+})
+
+test('attribution lint: a done phase WITH executionResult.driver draws no warning', () => {
+  const f = writeGitPhase('phase-9011.phase.ts', doneAttribution(DRIVER), { commit: true })
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `stamped twin exits 0; stderr: ${r.stderr}`)
+  assert.doesNotMatch(r.stderr, /WARN phase 9011/, 'a stamped done phase is compliant — the lint stays quiet')
+})
+
+test('attribution lint: a historical phase missing BOTH stamps never warns (the ~700-file floor)', () => {
+  for (const commit of [false, true]) {
+    const f = writeGitPhase('phase-9012.phase.ts', grandfatheredAttribution(9012, 'historical'), { commit })
+    assertGitTracked(f, commit)
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `grandfathering is absolute — a historical file never REDs; stderr: ${r.stderr}`)
+    assert.doesNotMatch(r.stderr, /WARN phase 9012/, 'historical phases predate attribution — they are exempt forever')
+  }
+})
+
+test('attribution lint: a cancelled phase missing BOTH stamps never warns', () => {
+  for (const commit of [false, true]) {
+    const f = writeGitPhase('phase-9013.phase.ts', grandfatheredAttribution(9013, 'cancelled'), { commit })
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `a cancelled file never REDs; stderr: ${r.stderr}`)
+    assert.doesNotMatch(r.stderr, /WARN phase 9013/, 'a cancelled phase was never executed — nothing to attribute')
+  }
 })

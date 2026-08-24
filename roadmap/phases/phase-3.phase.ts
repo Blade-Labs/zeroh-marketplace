@@ -136,9 +136,23 @@ export default definePhase({
       files: [
         'plugins/zeroh-roadmap/cli/lib/validate.mjs',
         'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/eval-score.mjs',
+        'plugins/zeroh-roadmap/cli/lib/eval-score.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/eval-scorecard.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "attributionWarnings(phase) landed in cli/lib/validate.mjs's warnings array, OUTSIDE the isNewToGit authoring-lint gate: a backlog phase with no plannedBy and a done phase with no executionResult.driver each draw one WARN naming the phase and carrying the single line that fixes it; historical and cancelled never warn; exit codes are untouched, so the ~700 committed phase files stay green. The engine is the only edit — bin/validate-roadmap-file.mjs and the `roadmap phase validate` face both already print result.warnings. In the same seam, the handed-off UNRECORDED_DRIVER defect was fixed: cli/lib/eval-score.mjs's sentinel was { model: 'unrecorded', lane: 'session' }, so every unattributed phase was credited to the session cohort and inflated it against the lanes that do report; it is now { model: 'unrecorded', lane: 'unrecorded' }, which parses because phase 2 opened the lane enum.",
+        how:
+          "TDD: test-engineer wrote six fixtures blind to the implementation and ran them RED for the right reason — \"expected exactly ONE stderr line naming 'plannedBy'; got 0. stderr: (empty)\" and the same for 'executionResult.driver' — with the four over-fire guards (stamped twin, historical, cancelled) GREEN from the start. The plan's falsification was run twice: the in-file wrong-string swap reds only at the earlier absent-output gate pre-implementation, so a second, discriminating one fed the spec'd warning line through the same assertions and REDs on the wrong expectation (expected /plannedByModel=<id>/, actual the real line) then passes corrected. The done-flip case is pinned with a COMMITTED fixture and an explicit assertGitTracked(true), so an implementation placed inside the isNewToGit gate leaves it red — that placement is the whole point of the rule, since the 715-719 drops were done-flips of files git already had. Live mutation proof outside the fixtures: plannedBy was stripped from the real roadmap/phases/phase-4.phase.ts and `roadmap phase validate` printed \"WARN phase 4: plannedBy missing — add plannedBy: { model: <your model id> }...\" while still exiting 0 and reporting OK; the file was restored (git diff clean). Three pre-existing fixtures in the grammar/description-length blocks went red because they are backlog phases with no plannedBy — the new rule firing correctly. The FIXTURE was corrected (plannedBy added to stepsPhase), never the assertion: those tests still assert their own lint is silent on a committed file, and still red if it is not. The UNRECORDED_DRIVER change reddened five pinned assertions across two suites (one deepEqual on the constant, a driverCell lookup key and its lane assertion, and two attribution expectations); each was updated to the corrected literal, and the scorecard test gained a new assertion that the session cohort holds NO unattributed phase — the inflation this fixes. Verified: gate run 3 --slots types GREEN, validate-roadmap-file 25/25, validate 6/6, phase 71/71, eval-score 55/55, eval-scorecard 46/46, eval + eval-collect 125/125.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "files[] gained the three eval-* files: the UNRECORDED_DRIVER lane fix was handed to this task by phase 2's executor to land in-seam with the validator work, and the plan's files[] predates that hand-off. The rule warns on a backlog phase missing plannedBy and a done phase missing driver, and deliberately not on a done phase missing plannedBy — the plan named those two classes and widening it here would warn on hundreds of historical done files whose planner is genuinely unrecoverable. Nothing yet warns at PLAN time (plan-phase writes the file, the write-hook prints the warning, and a planner who does not read stderr still lands an unstamped file); the mechanical catch for that is a launcher stamp, which is what task 3.4 does for the session lane. Changing the UNRECORDED_DRIVER lane re-partitions historical scorecard cohorts: any phase previously counted in the session cell now counts in an unrecorded cell, so a scorecard read from before this commit is not comparable to one after it.",
+      },
+      done: true,
     },
     {
       id: '3.3',
