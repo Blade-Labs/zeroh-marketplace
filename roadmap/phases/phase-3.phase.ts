@@ -17,7 +17,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 3,
   name: 'Mechanical attribution — launcher stamps, validator warns, roles shape lands',
-  status: 'in-progress',
+  status: 'done',
   arcId: 'POLYSEAT',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'feature',
@@ -252,4 +252,87 @@ export default definePhase({
       done: true,
     },
   ],
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1200,
+      total: 1200,
+      notes:
+        'The consumer binds ONE slot: unit = the whole plugin suite (node --test over bin/cli/hooks/scripts/test plus scripts/schema.test.ts), alongside the plugin-native history-comments scan of the phase diff (0 findings) and lint-diff. Baseline at phase start was 1141; this phase added 59. lint/types/build/integration are declaredAbsent in roadmap.config.json, not skipped by this phase — which is why the round-0 finding of a broken function in cli/lib/executor-arm.mjs mattered: no slot here would ever have caught it.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — this consumer has no integration tier.',
+    },
+    e2eTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — a CLI + schema phase with no rendered surface.',
+    },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        "6 fixes, 2 surfaced, 0 hard-stops. driverReconcileProblems wrote its unpinned-model announce to stderr from inside a compute-problems function, so no caller could reconcile without emitting — split into driverReconcile returning { problems, notes }, stderr and exit codes byte-identical. Task 3.4 had spelled the arm path inline in result.mjs, duplicating the armPath() cli/lib/executor-arm.mjs has owned since 1737.2 — exported and reused, with the test-side copy deliberately left as an independent oracle. The executor-arm no-alias line claimed the card declared no model even when no card existed at that path. Four comment lines carried dated incident narration, which was a LIVE history-comments RED at the phase base sha rather than a style call; reworded to the standing hazard, re-scan 0 findings. Two docblocks lost pure-rationale paragraphs per the 2026-08-24 operator ruling. SURFACED: task 3.4's transparencyReport claimed --slots history-comments GREEN when the read predated its own test files landing (corrected in the phase file), and the driverReconcile notes path had no test (closed by the executor with two fixtures, mutation-proven).",
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        "6 findings; the reviewer fixed 3 with falsification and the executor fixed the 3 left for a scope call. The reviewer's three share one shape — a guard this phase added could be DISARMED SILENTLY: findJournal swallowed a JSON parse failure to null so a corrupt journal read as no-journal and skipped the whole attribution reconcile with zero output; reconcileArmedAlias swallowed a truncated JSON arm identically; and nothing prunes lane journals, so an abandoned codex run REDs an honest inline stamp forever, a false-RED direction whose cheapest operator exit was to stamp a lie, now remediated by naming the journal path to delete. EXECUTOR FIXED: arc-plane.workflow.mjs armed WITHOUT expectedModelAlias, so the result check it invokes 60 lines later silently no-opped — the exact fable-for-opus hole 3.4 exists to close, in the workflow that backstops do-arc; cardModelAlias was lifted into cli/lib/executor-arm.mjs so both doors read one implementation, pinned by arc-next N12b and mutation-proven. A flag-shaped --agent-card value silently fell back to the DEFAULT card, recording the wrong alias and redding an honest executor — now a usage error. Exit 2 now uniformly means stdout is empty.",
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        "Verified the round-0 and round-1 fixes and caught a HIGH REGRESSION ROUND 1 HAD INTRODUCED, which is exactly why this round existed: R1 made findJournal THROW on an unreadable journal instead of swallowing it, but the throw was UNSCOPED — any codex-*.json that failed to parse threw for EVERY phase. Reproduced: with only .building/codex-99.json truncated, `gate run 3 --verify-complete` exited 2 for an honest inline session that never had a journal, so one abandoned journal blocked the LANDING GATE for every phase in the checkout. Fixed by filename-candidacy scoping. MEDIUM: the R1 lift had copy-pasted preflightLine into cli/lib/executor-arm.mjs where it was unreferenced AND called two identifiers that module never imports — a latent ReferenceError that lint/types (declared-none here) could never catch; deleted. LOW: task 3.4's files[] omitted the workflow and its test (corrected). LOW accepted: the flag-shaped --agent-card rejection routes into the shared usage line, matching the sibling convention.",
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'clean',
+      summary:
+        "Zero findings, tree untouched. Aimed at R2's own fix on the reasoning that logic written under pressure to fix a regression is where a third defect hides, and it PROVED rather than read: filename-candidacy is sound at the source (journalPath and launch consume the same ids array, so name and phases cannot diverge for a launcher-produced journal), and every disagreement case was probed live — ordering, the review-lane prefix, prefix/substring confusion. The guard still fires (corrupt codex-91.json throws for [91], null for [3]; the arc shape throws in both directions; a superset lookup returns null). Nothing new is swallowed. It did not trust R2's falsification claim: stripping the scoping reds codex test 22 for the right reason, and it built an INDEPENDENT gate-level probe the phase does not have — a done phase plus an abandoned corrupt journal through verify-complete, exit 0 with the fix and exit 2 without — reproducing the operator symptom at the seam that actually broke. All four acceptance criteria re-verified after three rounds of edits. SURFACED as pre-existing and out of scope: refuseIfLive parses a journal unguarded, so `codex run` over a truncated journal dies with a bare SyntaxError naming neither the file nor the remedy — loud, not silent, predates this arc (bc396a4), belongs in its own commit.",
+    },
+  ],
+  metrics: {
+    commits: 8,
+    linesAdded: 2059,
+    linesRemoved: 96,
+    filesChanged: 29,
+    testsAtStart: 1141,
+    testsAtEnd: 1200,
+    testsAdded: 59,
+    startedAt: '2026-08-24T13:31:22.000Z',
+    completedAt: '2026-08-24T16:47:47.000Z',
+    haltCount: 0,
+  },
+  compromises: 'None',
+  completedDate: '2026-08-24',
+  executionResult: {
+    phase: 3,
+    status: 'done',
+    driver: { model: 'claude-opus-5[1m]', lane: 'session' },
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      "Assumption 2's tripwire FAILED at Step 0 and this executor proceeded anyway, deliberately and on the record: the probe greps the WHOLE of templates/schema.ts for 'roles', and plane 1 had since landed PhaseEvalRecordShape.attribution.roles — a different shape. The underlying claim (executionResult carries no roles field) was verified precisely against the PhaseExecutionResultShape block, 0 hits, before any code. The probe was stale, not the claim.",
+      "The gate plan the spawn card named (reviewScope none) is not the one the CLI derived: at task time it resolved LIGHT, and by gate time the diff had grown to 26 files across 5 classes and it resolved FULL. The CLI plan was followed, which is why a quality pass ran at all — and that pass found a live history-comments RED the phase's own record had claimed green.",
+      "An independent review of the LAST fixes is owed for the arc sweep: round 3 was clean and touched nothing, so the round-2 fixes it verified did receive independent review — but round 3's own reading was not itself re-reviewed. Standard cap-round residue, weaker evidence than a fresh pass.",
+      "PRE-EXISTING, surfaced by round 3 and NOT fixed here: refuseIfLive in cli/commands/codex.mjs parses a lane journal unguarded, so `roadmap codex run <N>` over a truncated journal dies with a bare SyntaxError naming neither the corrupt file nor the remedy — the same class this phase closed one function away, on the launch path. It predates the arc (bc396a4) and is loud rather than silent, so it is a follow-up, not a phase-3 regression.",
+      "The codex driver's pinned model is verified LISTED on this host (codex debug models), not verified to be what a server-side default would have chosen — pinning -m is what makes the journal true, and the trade is that a retired slug now fails the lane loudly at launch instead of running on a silent fallback.",
+    ],
+    hardStops: [],
+    gateRounds: 4,
+  },
 })
