@@ -886,6 +886,46 @@ test('gate run --slots <subset> — leaves the record UNTOUCHED and says so (a f
   )
 })
 
+test('gate run --verify-complete over a FILTERED latest report — refuses the flip and refreshes nothing', { timeout: 240_000 }, () => {
+  // The second door onto the record. latestReport() returns the newest run file whatever
+  // produced it, so a routine per-task `--slots types` landing after a RED full run must not
+  // become the basis of either a done flip or a refreshed sample.
+  const red = RUN_CFG({ gateCommands: { ...RUN_CFG().gateCommands, types: 'exit 1' } })
+  const repo = makeRepo(red, { consumerSchema: true })
+  const donePhase = {
+    phase: 1708,
+    status: 'done',
+    plannedBy: PLANNER,
+    tasks: [{ id: '1708.1' }],
+    keyFiles: ['lib/i.ts'],
+    executionResult: { phase: 1708, status: 'done', driver: DRIVER },
+    metrics: METRICS,
+  }
+  repo.writePhase(1708, phaseObj({ ...donePhase, status: 'in-progress' }))
+  repo.commit('feat: phase 1708 — code', { 'lib/i.ts': 'export const i = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1708']).code, 2, 'precondition: the FULL run is RED')
+  assert.equal(readRecord(repo.root, 1708).gate.green, false, 'precondition: the record carries the red verdict')
+
+  // now a GREEN filtered run over a slot that passes — the fabricated-pass setup
+  writeFileSync(join(repo.root, 'roadmap', 'roadmap.config.json'), JSON.stringify(RUN_CFG()))
+  assert.equal(runGateCmd(repo.root, ['1708', '--slots', 'types']).code, 0, 'the filtered run is green over its subset')
+
+  repo.writePhase(1708, phaseObj(donePhase))
+  const r = runGateCmd(repo.root, ['1708', '--verify-complete'])
+  assert.equal(r.code, 2, `a subset report cannot certify a done flip; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.match(r.stderr, /--slots types run: its green covers that subset alone/, `the refusal names WHY; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.equal(
+    readRecord(repo.root, 1708).gate.green,
+    false,
+    'the refresh did not rewrite the red sample to the subset green — the fabricated pass is unreachable',
+  )
+  assert.match(
+    emitFailureLines(r.stderr).join('\n'),
+    /was NOT refreshed from it/,
+    `the skipped refresh is NAMED; stderr: ${JSON.stringify(r.stderr)}`,
+  )
+})
+
 test('gate run --record-round — records no eval record (it changes only agent rounds, which the record does not carry)', { timeout: 240_000 }, () => {
   const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
   repo.writePhase(1706, phaseObj({ phase: 1706, plannedBy: PLANNER, tasks: [{ id: '1706.1' }] }))

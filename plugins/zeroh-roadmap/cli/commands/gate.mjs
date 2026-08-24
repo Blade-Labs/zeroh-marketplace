@@ -578,7 +578,18 @@ export async function runGate(phaseNum, opts) {
     // not exist when the execute path wrote this record. Emitted before the verdict returns so
     // an INCONSISTENT completion is sampled too — excluding it would quietly drop the runs
     // most worth measuring.
-    emitPhaseEvalRecord(toplevel, phaseNum, { parsed: imp.parsed, report: latest.report })
+    // ...unless the latest report is a FILTERED run. latestReport() returns the newest run file
+    // whatever produced it, so without this the routine per-task `--slots types` becomes a second
+    // door onto the record: the refresh would overwrite a full sample with a subset projection,
+    // and a green subset landing after a RED full run would rewrite the record to green.
+    if (latest.report.slotFilter)
+      process.stderr.write(
+        `gate run --verify-complete: the latest report ${latest.path} is a --slots ` +
+          `${latest.report.slotFilter} run, so the per-phase eval record ` +
+          `${phaseEvalRecordPath(toplevel, phaseNum)} was NOT refreshed from it — a filtered run ` +
+          `is not a sample; re-run the full gate\n`,
+      )
+    else emitPhaseEvalRecord(toplevel, phaseNum, { parsed: imp.parsed, report: latest.report })
     const result = checkPhaseConsistency(imp.parsed, latest.report)
     if (!result.ok) {
       process.stderr.write(`gate run --verify-complete: phase ${phaseNum} inconsistent with ${latest.path}:\n`)
@@ -715,6 +726,7 @@ export async function runGate(phaseNum, opts) {
     slots: rows,
     agents: [],
     green,
+    ...(wanted ? { slotFilter: opts.slots } : {}),
     notes: [
       ...plan.notes,
       ...untestedGateFixFindings(toplevel, phaseNum, plan.baseSha),

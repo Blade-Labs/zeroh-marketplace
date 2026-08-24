@@ -68,6 +68,13 @@ export const GateRunReportShape = z.object({
   green: z.boolean(),
   notes: z.array(z.string()).default([]),
   curation: CurationShape.optional(),
+  /**
+   * The --slots value when the run was FILTERED. Its presence means `green` covers a SUBSET of
+   * the plan's slots, so the report is a debugging projection, not evidence about the phase.
+   * Absent on a full run. Read by checkPhaseConsistency (a subset can never certify a done
+   * flip) and by the --verify-complete eval refresh (a subset is not a sample).
+   */
+  slotFilter: z.string().optional(),
 })
 
 /** The record element gate run --record-round parses (without recordedAt — added on append). */
@@ -169,6 +176,11 @@ export function recordCuration(toplevel, phase, block) {
 export function checkPhaseConsistency(parsedPhase, report) {
   const problems = []
   if (!report.green) problems.push('the latest gate report is not green (a done flip needs a green gate run)')
+  if (report.slotFilter)
+    problems.push(
+      `the latest gate report is a --slots ${report.slotFilter} run: its green covers that subset alone, ` +
+        'so it cannot certify a done flip (re-run the full gate)',
+    )
   if (report.phase !== parsedPhase?.phase)
     problems.push(`report.phase ${report.phase} !== phase ${parsedPhase?.phase} (phase/report mismatch)`)
   if (parsedPhase?.testScope && report.testScope.declared !== parsedPhase.testScope)

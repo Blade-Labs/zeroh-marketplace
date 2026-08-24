@@ -2100,8 +2100,17 @@ test('eval scorecard — nothing rendered or persisted claims a cross-cohort tot
     !cells.some(({ cell }) => cell.samples === total),
     `fixture precondition: the pooled total (${total}) must not coincide with any cell's own n`,
   )
+  // The scan covers the RENDERED REPORT only. The trailing `wrote <path>` confirmation carries
+  // the fixture's mkdtemp suffix — a random filesystem name, never a claim about the data — and
+  // printsNumber's lookarounds exclude only [\d.-], so a suffix like `zr-evalfix-WiQ4p8` reads
+  // as "a line printing 8". That is what made this test fail on roughly one run in three.
+  const rendered = r.stdout.split('\n').filter((l) => !l.startsWith('wrote '))
+  assert.ok(
+    rendered.length < r.stdout.split('\n').length,
+    'precondition: the write confirmation is present and was the line excluded',
+  )
   assert.deepEqual(
-    r.stdout.split('\n').filter((l) => printsNumber(l, total)),
+    rendered.filter((l) => printsNumber(l, total)),
     [],
     `no line may print the cross-cohort total ${total} — work is not randomly assigned, so a pooled` +
       ` figure is a comparison the data cannot support; stdout was:\n${r.stdout}`,
