@@ -110,17 +110,6 @@ export const MODEL_DRIVERS = Object.freeze({
   [MODEL_IDS.SOL]: 'codex',
 })
 
-/** The registry id whose binary runs `modelId`, or a throw naming every routable id. */
-export function driverForModel(modelId) {
-  const id = Object.hasOwn(MODEL_DRIVERS, modelId) ? MODEL_DRIVERS[modelId] : undefined
-  if (!id) {
-    throw new Error(
-      `no registered driver runs model '${modelId}' — routable ids: ${Object.keys(MODEL_DRIVERS).join(', ')}. Add it to MODEL_DRIVERS in cli/lib/drivers.mjs alongside the driver entry that launches it`,
-    )
-  }
-  return id
-}
-
 /** The registry entry for `id`, or a throw naming the offending id and every known one. */
 export function resolveDriver(id) {
   const entry = Object.hasOwn(DRIVERS, id) ? DRIVERS[id] : undefined

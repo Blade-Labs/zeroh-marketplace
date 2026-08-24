@@ -80,8 +80,8 @@ a role binding that is not recorded did not happen as far as the scorecard is co
   drift the registry exists to kill (`drivers.test.mjs` ratchets it).
 - **`model`** is what the launcher PINS on the argv — a command, not an observation. An entry
   without one records `driverStamp().model === null` rather than guessing.
-- **`MODEL_DRIVERS` / `driverForModel(id)`** route a model id to the driver whose binary runs
-  it. Routing only: presence there is not a capability claim.
+- **`MODEL_IDS` / `MODEL_DRIVERS`** name every model id once and route each to the driver whose
+  binary runs it. Routing only: presence there is not a capability claim.
 - **`roleCapabilities`** carries only what that entry's `verifiedAt` output evidences. An absent
   key is unproven, never a claim of absence.
 - **`verifiedAt`** carries the probe command and its output VERBATIM, stamped with the host it
