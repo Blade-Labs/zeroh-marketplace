@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DRIVERS, resolveDriver, launchArgv } from './drivers.mjs'
+import { DRIVERS, resolveDriver, launchArgv, driverStamp } from './drivers.mjs'
 
 // ── criterion 1: the extraction reproduces today's spawn inputs byte-for-byte ─────────
 test("launchArgv('codex') plus the entry's bin reproduce today's spawn inputs exactly", () => {
@@ -19,6 +19,8 @@ test("launchArgv('codex') plus the entry's bin reproduce today's spawn inputs ex
   assert.deepEqual(launchArgv('codex', { worktree: '/tmp/wt-42' }), [
     'exec',
     '--dangerously-bypass-approvals-and-sandbox',
+    '-m',
+    'gpt-5.6-sol',
     '-C',
     '/tmp/wt-42',
     '-',
@@ -29,10 +31,39 @@ test('launchArgv threads the caller\'s worktree into the -C position, never a ba
   assert.deepEqual(launchArgv('codex', { worktree: '/srv/checkouts/zeroh-codex-2' }), [
     'exec',
     '--dangerously-bypass-approvals-and-sandbox',
+    '-m',
+    'gpt-5.6-sol',
     '-C',
     '/srv/checkouts/zeroh-codex-2',
     '-',
   ])
+})
+
+// ── the launcher PINS the model, so the journal records a command, not an observation ──
+test("the codex entry's declared model is the one the argv pins — one home, no second literal", () => {
+  const entry = resolveDriver('codex')
+  assert.equal(typeof entry.model, 'string')
+  assert.ok(entry.model.length > 0, 'a declared model must be a real id')
+  const argv = launchArgv('codex', { worktree: '/tmp/wt-1' })
+  const at = argv.indexOf('-m')
+  assert.ok(at >= 0, `the launch argv must pin the model: ${argv.join(' ')}`)
+  assert.equal(
+    argv[at + 1],
+    entry.model,
+    'the pinned argv model and the declared entry model must be one value — a divergence makes the journal lie',
+  )
+})
+
+test('driverStamp reads { model, lane } off the registry — lane is the DRIVER ID, not the journal lane', () => {
+  assert.deepEqual(driverStamp(resolveDriver('codex')), { model: 'gpt-5.6-sol', lane: 'codex' })
+})
+
+test('driverStamp on an entry declaring NO model records model: null explicitly, never an absent key', () => {
+  assert.equal(resolveDriver('claude').model, undefined, 'fixture precondition: the claude entry pins no model')
+  const stamp = driverStamp(resolveDriver('claude'))
+  assert.equal(stamp.lane, 'claude')
+  assert.equal(stamp.model, null, 'an unpinned model is RECORDED as unrecorded, never guessed')
+  assert.ok('model' in stamp, 'present-and-null — an omitted key is indistinguishable from a forgotten stamp')
 })
 
 // ── criterion 2: an unregistered id REFUSES, naming the known set ─────────────────────
@@ -106,6 +137,8 @@ test('every populated entry carries host-stamped verifiedAt with PASTED probe ou
 const CLI_ROOT = fileURLToPath(new URL('../', import.meta.url))
 // Quote-inclusive: the bare flag name is legal in prose, only a quoted token is launcher argv.
 const BYPASS_ARGV = "'--dangerously-bypass-approvals-and-sandbox'"
+const MODEL_LITERAL = "'gpt-5.6-sol'"
+const REGISTRY_NEEDLES = [BYPASS_ARGV, MODEL_LITERAL]
 const ARGV_HOMES = new Set(['lib/drivers.mjs', 'lib/drivers.test.mjs'])
 
 function readCliTree(dir, prefix = '') {
@@ -119,7 +152,7 @@ function readCliTree(dir, prefix = '') {
   return files
 }
 
-test('no file under cli/ outside the driver registry carries the codex bypass argv literal', () => {
+test('no file under cli/ outside the driver registry carries a codex launch literal', () => {
   assert.ok(
     existsSync(CLI_ROOT) && statSync(CLI_ROOT).isDirectory(),
     `unresolved anchor: scan root ${CLI_ROOT} is not a directory — this ratchet would scan nothing`,
@@ -133,21 +166,25 @@ test('no file under cli/ outside the driver registry carries the codex bypass ar
     )
   }
   const registry = files.find((f) => f.rel === 'lib/drivers.mjs')
-  assert.ok(
-    registry.text.includes(BYPASS_ARGV),
-    `stale needle: ${BYPASS_ARGV} no longer appears in lib/drivers.mjs — retarget this ratchet at the registry's current argv`,
-  )
+  for (const needle of REGISTRY_NEEDLES) {
+    assert.ok(
+      registry.text.includes(needle),
+      `stale needle: ${needle} no longer appears in lib/drivers.mjs — retarget this ratchet at the registry's current launch literals`,
+    )
+  }
 
   const offenders = []
   for (const file of files) {
     if (ARGV_HOMES.has(file.rel)) continue
     file.text.split('\n').forEach((line, i) => {
-      if (line.includes(BYPASS_ARGV)) offenders.push(`cli/${file.rel}:${i + 1}`)
+      for (const needle of REGISTRY_NEEDLES) {
+        if (line.includes(needle)) offenders.push(`cli/${file.rel}:${i + 1} (${needle})`)
+      }
     })
   }
   assert.deepEqual(
     offenders,
     [],
-    `model-specific argv outside the driver registry: ${offenders.join(', ')} — source it from launchArgv('codex', { worktree }) in cli/lib/drivers.mjs, the one home for every launch argv`,
+    `model-specific launch literal outside the driver registry: ${offenders.join(', ')} — source it from launchArgv('codex', { worktree }) / driverStamp(resolveDriver('codex')) in cli/lib/drivers.mjs, the one home for every launch argv and every declared model id`,
   )
 })

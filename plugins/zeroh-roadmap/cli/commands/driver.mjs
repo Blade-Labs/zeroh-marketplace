@@ -50,6 +50,25 @@ function featureOn(name) {
 }
 
 /**
+ * A model slug is PINNABLE only if the catalog lists exactly one row for it, that row is
+ * `supported_in_api` and its visibility is `list`. Same doctrine as featureOn: a catalog naming
+ * the slug twice is self-contradicting evidence, not a verdict to pick from by row order. An
+ * unparseable catalog proves nothing, so it fails.
+ */
+function modelListed(slug) {
+  return (output) => {
+    let catalog
+    try {
+      catalog = JSON.parse(String(output))
+    } catch {
+      return false
+    }
+    const rows = (Array.isArray(catalog?.models) ? catalog.models : []).filter((m) => m?.slug === slug)
+    return rows.length === 1 && rows[0].supported_in_api === true && rows[0].visibility === 'list'
+  }
+}
+
+/**
  * Per-driver probe sets. Only the ARGV is per-driver here; the binary always comes from the
  * registry. Every `expect` entry — a predicate or a regex — must hold over the output for the
  * probe to pass; without one, a zero exit is the pass. A driver with no entry gets the generic
@@ -63,6 +82,7 @@ const PROBES = Object.freeze({
     { name: 'version', args: ['--version'] },
     { name: 'capabilities', args: ['features', 'list'], expect: [featureOn('multi_agent'), featureOn('hooks')] },
     { name: 'exec-smoke', args: ['exec', '--help'] },
+    { name: 'model-pin', args: ['debug', 'models'], expect: [modelListed(DRIVERS.codex.model)] },
   ]),
   claude: Object.freeze([
     { name: 'version', args: ['--version'] },

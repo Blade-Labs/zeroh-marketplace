@@ -27,6 +27,7 @@ import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync,
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { DRIVERS } from '../lib/drivers.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -354,4 +355,92 @@ test("review: a flag's value is never parsed as a phase id", () => {
   assert.equal(r.status, 0, r.stderr)
   assert.ok(existsSync(join(root, '.building', 'codex-review-67.json')))
   assert.ok(!existsSync(join(root, '.building', 'codex-review-67-719.json')), "a --base ref must not join the phase list")
+})
+
+// ── lane attribution: the LAUNCHER journals who ran ────────────────────────────
+// A delegated run is attributable only if the side that KNOWS the identity records it. Asking
+// the model to self-report the driver the launcher already chose is an honesty rail with no
+// floor under it, and nothing at landing time can then contradict a wrong claim.
+// The expected model id is read from the registry (cli/lib/drivers.mjs is the ONE home for a
+// model id): a literal here would fork that home and go stale silently.
+
+test('run lane: the launch journal records the driver { model, lane } read from the registry', () => {
+  const root = tmpRepo()
+  writePhase(root, 70)
+  const worktree = join(root, 'wt-run-70')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '70', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+
+  const model = DRIVERS.codex.model
+  assert.equal(typeof model, 'string', 'the registry must DECLARE codex\'s model id — an undeclared one makes every attribution below vacuous')
+  assert.ok(model.length > 0, 'a driver entry with an empty model id cannot attribute anything')
+
+  const j = JSON.parse(readFileSync(join(root, '.building', 'codex-70.json'), 'utf8'))
+  assert.equal(j.driver?.model, model, 'the journalled model is the registry entry\'s, never a literal in the launcher')
+  assert.equal(j.driver?.lane, 'codex', 'driver.lane names the DRIVER that ran')
+  // Additive: the key JOINS the journal — everything the poller and the reconcile read survives.
+  assert.deepEqual(j.phases, ['70'])
+  assert.equal(j.lane, 'run')
+  assert.equal(j.worktree, worktree)
+  assert.equal(j.report, 'CODEX-REPORT.md')
+  assert.ok(Number.isInteger(j.pgid), 'the liveness probe still has its pgid')
+  assert.ok(Number.isFinite(Date.parse(j.startedAt)), 'the freshness guard still has a parseable startedAt')
+})
+
+test('review lane: driver.lane names the DRIVER, never the run/review lane it launched', () => {
+  const root = tmpRepo()
+  writePhase(root, 71)
+  const worktree = join(root, 'wt-review-71')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'review', '71', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const j = JSON.parse(readFileSync(join(root, '.building', 'codex-review-71.json'), 'utf8'))
+  assert.equal(j.lane, 'review', 'precondition: this journal is the review lane\'s')
+  assert.equal(typeof DRIVERS.codex.model, 'string', 'the registry must DECLARE codex\'s model id — undefined === undefined would pass the next line on nothing')
+  assert.equal(j.driver?.model, DRIVERS.codex.model, 'both lanes attribute to the same registry entry')
+  assert.equal(j.driver?.lane, 'codex', 'the two lane fields are different axes — driver.lane must not mirror journal.lane')
+})
+
+// ── findJournal: the ONE journal lookup both `codex status` and the gate reconcile read ──
+// Two cases the lookup has always had to serve: the exact single-phase name, and a multi-phase
+// (arc) journal that covers an id without being named for it. A second, divergent copy of this
+// resolution is how a gate reconcile silently stops finding arc runs.
+
+test('findJournal: resolves the exact single-phase name AND the multi-phase journal that covers an id', async () => {
+  const mod = await import('./codex.mjs')
+  assert.equal(typeof mod.findJournal, 'function', 'codex.mjs must export findJournal — the shared journal lookup')
+  const root = tmpRepo()
+  writeJournal(root, [72])
+  writeJournal(root, [73, 74])
+
+  const exact = mod.findJournal(root, [72], 'run')
+  assert.ok(exact, 'the exact-name journal must resolve')
+  assert.equal(exact.path, join(root, '.building', 'codex-72.json'))
+  assert.deepEqual(exact.journal.phases, ['72'], 'the parsed journal comes back with it, not just a path')
+
+  // An id inside an arc journal: numeric ids (the gate passes a phase number) must resolve the
+  // same journal a string id does — a strict comparison against the journal's string phases
+  // would leave every arc run unreconciled.
+  const scanned = mod.findJournal(root, [74], 'run')
+  assert.ok(scanned, 'a multi-phase journal covering 74 must resolve for the NUMBER 74')
+  assert.equal(scanned.path, join(root, '.building', 'codex-73-74.json'))
+  assert.deepEqual(mod.findJournal(root, ['74'], 'run'), scanned, 'the string id resolves the identical result')
+})
+
+test('findJournal: a review journal never answers for lane run, and a miss is null', async () => {
+  const mod = await import('./codex.mjs')
+  assert.equal(typeof mod.findJournal, 'function', 'codex.mjs must export findJournal — the shared journal lookup')
+  const root = tmpRepo()
+  writeJournal(root, [76])
+  writeFileSync(
+    join(root, '.building', 'codex-review-75.json'),
+    JSON.stringify({ phases: ['75'], lane: 'review', report: 'CODEX-REVIEW.md', worktree: join(root, 'wt-75'), startedAt: new Date().toISOString() }) + '\n',
+  )
+
+  assert.equal(mod.findJournal(root, [75], 'run'), null, 'a review of phase 75 is not an implementation run of it')
+  const review = mod.findJournal(root, [75], 'review')
+  assert.ok(review, 'the same id resolves under its OWN lane')
+  assert.equal(review.path, join(root, '.building', 'codex-review-75.json'))
+  assert.equal(mod.findJournal(root, [99], 'run'), null, 'no journal covers 99 — a miss is null, never a nearby journal')
 })

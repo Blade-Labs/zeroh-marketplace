@@ -942,3 +942,142 @@ test('gate run --record-round — records no eval record (it changes only agent 
   assert.equal(r.code, 0, r.stderr)
   assert.equal(existsSync(recordPath(repo.root, 1706)), false, 'the round-append lane holds no slot results — it must not mint a record')
 })
+
+// ── --verify-complete: reconciling the phase file's driver against the LANE JOURNAL ──
+// The lane journal is the launcher's own record of who it started, written before any model
+// spoke. When one exists, it is the TRUTH and the phase file's executionResult.driver is a
+// CLAIM: a claim that disagrees, or is missing entirely, mis-attributes landed work to a cohort
+// that never ran it, and no later reader can tell. An INLINE session leaves no journal, so
+// there is nothing to reconcile against and the lane stays silent (the warn-only lane above
+// still covers that case). Every fixture here is otherwise CONSISTENT — the driver is the only
+// thing in dispute, so the exit code can only come from the reconcile.
+const JOURNAL_MODEL = 'journal-model-alpha'
+const CLAIMED_MODEL = 'claimed-model-beta'
+const JOURNAL_STARTED_AT = '2026-08-24T10:00:00.000Z'
+
+/** The run-lane journal `roadmap codex run` leaves in the PRIMARY checkout's .building/. */
+function writeRunJournal(mainRoot, ids, over = {}) {
+  const stem = `codex-${ids.join('-')}`
+  mkdirSync(join(mainRoot, '.building'), { recursive: true })
+  const path = join(mainRoot, '.building', `${stem}.json`)
+  writeFileSync(
+    path,
+    JSON.stringify(
+      {
+        phases: ids.map(String),
+        lane: 'run',
+        report: 'CODEX-REPORT.md',
+        worktree: join(mainRoot, `wt-${ids.join('-')}`),
+        base: 'develop',
+        pgid: 999999999, // never a live group
+        log: join(mainRoot, '.building', `${stem}.log`),
+        prompt: join(mainRoot, '.building', `${stem}-prompt.txt`),
+        startedAt: JOURNAL_STARTED_AT,
+        driver: { model: JOURNAL_MODEL, lane: 'codex' },
+        ...over,
+      },
+      null,
+      2,
+    ) + '\n',
+  )
+  return path
+}
+
+const donePhase = (phase, driver) =>
+  phaseObj({ phase, status: 'done', ...(driver ? { executionResult: { phase, status: 'done', driver } } : {}) })
+
+test('gate run --verify-complete — a phase claiming a DIFFERENT driver than the lane journal exits 2, naming journal truth beside file claim', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1610, donePhase(1610, { model: CLAIMED_MODEL, lane: 'codex' }))
+  repo.commit('feat: phase 1610 — code', { 'lib/j.ts': 'export const j = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1610']).code, 0)
+  assert.equal(latestReportOf(repo.root, 1610).green, true, 'precondition: the fixture is otherwise consistent — only the driver is in dispute')
+  const jPath = writeRunJournal(repo.root, [1610])
+
+  const r = runGateCmd(repo.root, ['1610', '--verify-complete'])
+  assert.equal(r.code, 2, `a lane-launched run whose phase file claims another driver must not verify; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.ok(r.stderr.includes(JOURNAL_MODEL), `the journal's truth is named; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(CLAIMED_MODEL), `the file's claim is named BESIDE it — a reader must not have to open the journal; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(jPath), `the journal that decided it is named (${jPath}); stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(JOURNAL_STARTED_AT), `the journal's startedAt places the run in time; stderr: ${JSON.stringify(r.stderr)}`)
+})
+
+test('gate run --verify-complete — a lane journal beside a phase file with NO executionResult.driver exits 2, not a warning', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1611, donePhase(1611, null))
+  repo.commit('feat: phase 1611 — code', { 'lib/k.ts': 'export const k = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1611']).code, 0)
+  const jPath = writeRunJournal(repo.root, [1611])
+
+  const r = runGateCmd(repo.root, ['1611', '--verify-complete'])
+  assert.equal(
+    r.code,
+    2,
+    `a run the launcher journalled cannot land unattributed — the warn-only lane is for inline sessions; stdout: ${r.stdout} stderr: ${r.stderr}`,
+  )
+  assert.ok(r.stderr.includes(JOURNAL_MODEL), `the driver the launcher started is named; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(jPath), `the journal that decided it is named (${jPath}); stderr: ${JSON.stringify(r.stderr)}`)
+})
+
+test('gate run --verify-complete — a phase whose driver AGREES with the journal verifies unchanged', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1612, donePhase(1612, { model: JOURNAL_MODEL, lane: 'codex' }))
+  repo.commit('feat: phase 1612 — code', { 'lib/l.ts': 'export const l = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1612']).code, 0)
+  writeRunJournal(repo.root, [1612])
+
+  const r = runGateCmd(repo.root, ['1612', '--verify-complete'])
+  assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `agreement is the normal case and must stay silent; stderr: ${r.stderr}`)
+  assert.match(r.stdout, /phase 1612 consistent with the latest green gate report/, 'the consistency verdict still prints')
+  assert.deepEqual(driverAbsentLines(r.stdout), [], 'a recorded, agreeing driver warns about nothing')
+})
+
+test('gate run --verify-complete — with NO lane journal the driver claim is not reconciled at all (an inline session)', () => {
+  const repo = makeRepo(RUN_CFG())
+  // The SAME claim the mismatch fixture reds on — with no journal there is no truth to check it
+  // against, so an inline session must pass exactly as it did before the reconcile existed.
+  repo.writePhase(1613, donePhase(1613, { model: CLAIMED_MODEL, lane: 'session' }))
+  repo.commit('feat: phase 1613 — code', { 'lib/m.ts': 'export const m = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1613']).code, 0)
+  assert.equal(existsSync(join(repo.root, '.building')), false, 'precondition: no lane ever ran here')
+
+  const r = runGateCmd(repo.root, ['1613', '--verify-complete'])
+  assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `no journal ⇒ no check; stderr: ${r.stderr}`)
+  assert.match(r.stdout, /phase 1613 consistent with the latest green gate report/, 'the consistency verdict is unchanged')
+  assert.ok(!r.stderr.includes(CLAIMED_MODEL), `an unjournalled driver claim is nobody's business; stderr: ${JSON.stringify(r.stderr)}`)
+})
+
+/** gate run with cwd anywhere — the worktree case needs its OWN checkout's config, not the primary's. */
+function runGateIn(cwd, args) {
+  const r = spawnSync('node', [BIN, 'gate', 'run', ...args], {
+    cwd, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ROADMAP_CONFIG: join(cwd, 'roadmap', 'roadmap.config.json') },
+  })
+  return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+}
+
+test('gate run --verify-complete inside a LINKED codex worktree — the journal is resolved from the PRIMARY checkout', { timeout: 240_000 }, () => {
+  // The lane runs its own verify-complete from INSIDE the worktree it was given, while the
+  // journal only ever exists under the primary checkout's .building/. A lookup rooted at the
+  // git toplevel finds nothing here and every lane-run phase reconciles against silence — the
+  // exact hole this test exists to keep shut, so it is a separate fixture, not a variant.
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1614, donePhase(1614, { model: CLAIMED_MODEL, lane: 'codex' }))
+  repo.commit('feat: phase 1614 — code', { 'lib/n.ts': 'export const n = 1\n' })
+  const worktree = `${repo.root}-codex-1614`
+  bases.push(worktree)
+  repo.git('worktree', 'add', '-q', '-b', 'codex/1614', worktree, 'HEAD')
+  assert.equal(existsSync(join(worktree, 'roadmap', 'phases', 'phase-1614.phase.ts')), true, 'precondition: the lane sees the phase file')
+
+  assert.equal(runGateIn(worktree, ['1614']).code, 0, 'precondition: the code gate runs in the worktree')
+  assert.equal(existsSync(join(worktree, 'roadmap', '.gate', '1614')), true, 'precondition: the report the verify reads is the worktree\'s own')
+
+  const jPath = writeRunJournal(repo.root, [1614])
+  assert.equal(existsSync(join(worktree, '.building')), false, 'precondition: the journal exists ONLY under the primary checkout')
+
+  const r = runGateIn(worktree, ['1614', '--verify-complete'])
+  assert.equal(r.code, 2, `the journal one directory level up still decides it; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.ok(r.stderr.includes(JOURNAL_MODEL), `the journal's truth is named; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(CLAIMED_MODEL), `the file's claim is named beside it; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(jPath), `the PRIMARY checkout's journal path is named (${jPath}); stderr: ${JSON.stringify(r.stderr)}`)
+})

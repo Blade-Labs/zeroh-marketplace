@@ -52,7 +52,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
-import { launchArgv, resolveDriver } from '../lib/drivers.mjs'
+import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
@@ -63,6 +63,41 @@ const LANES = {
 
 function journalPath(root, ids, lane = 'run') {
   return join(root, '.building', `${LANES[lane].prefix}${ids.join('-')}.json`)
+}
+
+/**
+ * The lane journal covering every id in `ids` → { path, journal }, or null.
+ *
+ * Two lookups, in order: the exact single-phase name, then a scan for the multi-phase journal
+ * an arc run writes. Ids are compared as STRINGS on both sides — a journal's `phases` may hold
+ * either, and a strict compare would leave every arc run unreconciled.
+ *
+ * Shared rather than private because the reconcile at landing (gate --verify-complete) must
+ * find the same journal `codex status` does; two lookups would drift.
+ */
+export function findJournal(root, ids, lane = 'run') {
+  const wanted = ids.map(String)
+  const read = (p) => {
+    try {
+      return JSON.parse(readFileSync(p, 'utf8'))
+    } catch {
+      return null
+    }
+  }
+  const exact = journalPath(root, ids, lane)
+  if (existsSync(exact)) {
+    const journal = read(exact)
+    if (journal) return { path: exact, journal }
+  }
+  const dir = join(root, '.building')
+  for (const f of existsSync(dir) ? readdirSync(dir) : []) {
+    if (!LANES[lane].journalRe.test(f)) continue
+    const path = join(dir, f)
+    const journal = read(path)
+    const phases = (journal?.phases ?? []).map(String)
+    if (journal && wanted.every((n) => phases.includes(n))) return { path, journal }
+  }
+  return null
 }
 
 /** Process-group liveness without pgrep (pgrep -f self-matches its own probe argv). */
@@ -197,7 +232,14 @@ function preserveStaleReport(worktree, reportName) {
   process.stderr.write(`roadmap codex: preserved the previous run's ${reportName} as ${prev}\n`)
 }
 
-/** The shared detached launch: prompt on STDIN, own process group, journal + log in .building/. */
+/**
+ * The shared detached launch: prompt on STDIN, own process group, journal + log in .building/.
+ *
+ * The journal records the DRIVER the registry pinned, so attribution never depends on the model
+ * remembering to self-report what the launcher already commanded. `driver.lane` is the registry
+ * id (the DriverShape lane vocabulary) — deliberately not this function's `lane`, which is the
+ * run/review mission.
+ */
 function launch(root, ids, lane, { worktree, base, prompt }) {
   const building = join(root, '.building')
   const stem = `${LANES[lane].prefix}${ids.join('-')}`
@@ -207,8 +249,9 @@ function launch(root, ids, lane, { worktree, base, prompt }) {
   const logFd = openSync(logPath, 'a')
 
   // Prompt on STDIN (argv stays clean of test keywords), fully detached, own group.
+  const entry = resolveDriver('codex')
   const child = spawn(
-    resolveDriver('codex').bin,
+    entry.bin,
     launchArgv('codex', { worktree }),
     { detached: true, stdio: [openSync(promptPath, 'r'), logFd, logFd] },
   )
@@ -218,7 +261,7 @@ function launch(root, ids, lane, { worktree, base, prompt }) {
   writeFileSync(
     jPath,
     JSON.stringify(
-      { phases: ids, lane, report: LANES[lane].report, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, startedAt: new Date().toISOString() },
+      { phases: ids, lane, driver: driverStamp(entry), report: LANES[lane].report, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, startedAt: new Date().toISOString() },
       null,
       2,
     ) + '\n',
@@ -301,27 +344,12 @@ function reviewCodex(root, ids, argv) {
 }
 
 function statusCodex(root, ids, lane = 'run') {
-  let jPath = journalPath(root, ids, lane)
-  if (!existsSync(jPath)) {
-    // A single id may belong to a multi-phase journal — scan .building for one containing it.
-    const dir = join(root, '.building')
-    const hit = (existsSync(dir) ? readdirSync(dir) : [])
-      .filter((f) => LANES[lane].journalRe.test(f))
-      .find((f) => {
-        try {
-          const ph = JSON.parse(readFileSync(join(dir, f), 'utf8')).phases ?? []
-          return ids.every((n) => ph.includes(n))
-        } catch {
-          return false
-        }
-      })
-    if (!hit) {
-      process.stderr.write(`roadmap codex: no ${lane} journal covers phase(s) ${ids.join(',')} in ${dir}\n`)
-      return 1
-    }
-    jPath = join(dir, hit)
+  const found = findJournal(root, ids, lane)
+  if (!found) {
+    process.stderr.write(`roadmap codex: no ${lane} journal covers phase(s) ${ids.join(',')} in ${join(root, '.building')}\n`)
+    return 1
   }
-  const j = JSON.parse(readFileSync(jPath, 'utf8'))
+  const { path: jPath, journal: j } = found
   // Journals written before the review lane existed carry no `report` — they are all run-lane.
   const reportPath = join(j.worktree, j.report ?? LANES.run.report)
   // A report older than this run's launch is a PREVIOUS run's hand-off — reading its sentinel

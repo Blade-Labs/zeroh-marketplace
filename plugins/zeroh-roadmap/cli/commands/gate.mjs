@@ -13,7 +13,8 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { gitToplevel } from '../lib/gitroot.mjs'
+import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
+import { findJournal } from './codex.mjs'
 import { derivePhaseStartSha, GitScanError } from '../lib/gitscan.mjs'
 import { bridgeImport, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
@@ -496,6 +497,64 @@ export default async function run(argv) {
 }
 
 /**
+ * Reconcile the landed phase file's self-reported driver against the LAUNCHER's journal.
+ *
+ * The journal is launcher truth (it records the driver the registry pinned on the argv); the
+ * phase file is model self-report. A disagreement means one of them lies, so it is an ERROR
+ * naming both — unlike the absent-driver WARNING, which covers inline sessions with no
+ * launcher to ask.
+ *
+ * Journals live under the PRIMARY checkout's .building/ while verify-complete runs INSIDE the
+ * codex worktree, so the lookup is rooted at mainCheckout — gitToplevel alone never sees them.
+ * No journal at all = an inline session = no check.
+ *
+ * A journal whose driver.model is null pins no model, so the model is announced UNRECONCILED
+ * rather than silently skipped; its lane is still reconciled.
+ */
+function driverReconcileProblems(cwd, fallbackRoot, phaseNum, parsed) {
+  let root
+  try {
+    root = mainCheckout(cwd)
+  } catch {
+    root = fallbackRoot
+  }
+  const found = findJournal(root, [phaseNum], 'run')
+  if (!found) return []
+  const j = found.journal.driver
+  if (!j) return []
+  const where = `${found.path} (startedAt ${found.journal.startedAt ?? 'unrecorded'})`
+  const claimed = parsed.executionResult?.driver
+  if (!claimed) {
+    return [
+      `phase ${phaseNum} was launched by the ${j.lane} lane but its executionResult.driver is ABSENT — `
+        + `the launcher journalled { model: ${JSON.stringify(j.model)}, lane: ${JSON.stringify(j.lane)} } in ${where}. `
+        + 'A run the launcher recorded cannot land unattributed: record that driver in executionResult.',
+    ]
+  }
+  const problems = []
+  if (j.model != null && claimed.model !== j.model) {
+    problems.push(
+      `phase ${phaseNum} driver.model disagrees with the launcher: journal says ${JSON.stringify(j.model)}, `
+        + `the phase file claims ${JSON.stringify(claimed.model)} (journal ${where}). `
+        + 'The journal is what was launched; the file is self-report — one of them is wrong.',
+    )
+  }
+  if (claimed.lane !== j.lane) {
+    problems.push(
+      `phase ${phaseNum} driver.lane disagrees with the launcher: journal says ${JSON.stringify(j.lane)}, `
+        + `the phase file claims ${JSON.stringify(claimed.lane)} (journal ${where}).`,
+    )
+  }
+  if (j.model == null) {
+    process.stderr.write(
+      `gate run --verify-complete: lane '${j.lane}' declares no pinned model in cli/lib/drivers.mjs — `
+        + `driver.model is self-report only, UNRECONCILED (journal ${where})\n`,
+    )
+  }
+  return problems
+}
+
+/**
  * gate run <phase> — three modes:
  *   --record-round '<json>'  append an agent round to the latest report (exit 2 malformed)
  *   --verify-complete        phase-file ↔ latest-report consistency (exit 1 no report, 2 problems)
@@ -590,12 +649,20 @@ export async function runGate(phaseNum, opts) {
           `is not a sample; re-run the full gate\n`,
       )
     else emitPhaseEvalRecord(toplevel, phaseNum, { parsed: imp.parsed, report: latest.report })
+    // Attribution is reconciled against the launcher BEFORE the consistency verdict, and both
+    // report: a misattributed completion and an inconsistent one are separate failures, and
+    // hiding one behind the other costs a round to discover.
+    const misattributed = driverReconcileProblems(process.cwd(), toplevel, phaseNum, imp.parsed)
+    if (misattributed.length > 0) {
+      process.stderr.write(`gate run --verify-complete: phase ${phaseNum} attribution disagrees with the lane journal:\n`)
+      for (const p of misattributed) process.stderr.write(`  - ${p}\n`)
+    }
     const result = checkPhaseConsistency(imp.parsed, latest.report)
     if (!result.ok) {
       process.stderr.write(`gate run --verify-complete: phase ${phaseNum} inconsistent with ${latest.path}:\n`)
       for (const p of result.problems) process.stderr.write(`  - ${p}\n`)
-      return 2
     }
+    if (misattributed.length > 0 || !result.ok) return 2
     process.stdout.write(`phase ${phaseNum} consistent with the latest green gate report\n`)
     return 0
   }

@@ -63,10 +63,28 @@ const FAKE_STDOUT = [
   'config lives at `~/.codex/config.toml` (a backtick + ${brace} the skeleton must survive)',
 ]
 
-function fakeBinOnPath(root, name = 'codex', lines = FAKE_STDOUT) {
+/** A model catalog shaped like `codex debug models` — one listed, API-supported row per slug. */
+function fakeCatalog(rows = [{ slug: DRIVERS.codex.model, supported_in_api: true, visibility: 'list' }]) {
+  return JSON.stringify({ models: rows })
+}
+
+/**
+ * The fake dispatches on argv for `debug models` ONLY: that probe reads a JSON catalog, so a
+ * fake echoing the capability table for every subcommand would fail it for the wrong reason.
+ */
+function fakeBinOnPath(root, name = 'codex', lines = FAKE_STDOUT, catalog = fakeCatalog()) {
   const dir = join(root, 'fakebin')
   mkdirSync(dir, { recursive: true })
-  const body = ['#!/bin/sh', ...lines.map((l) => `echo '${l}'`), 'exit 0', ''].join('\n')
+  const body = [
+    '#!/bin/sh',
+    'if [ "$1" = "debug" ] && [ "$2" = "models" ]; then',
+    `  echo '${catalog}'`,
+    '  exit 0',
+    'fi',
+    ...lines.map((l) => `echo '${l}'`),
+    'exit 0',
+    '',
+  ].join('\n')
   writeFileSync(join(dir, name), body)
   chmodSync(join(dir, name), 0o755)
   return { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH}` }
@@ -142,7 +160,7 @@ test('verify records the probe stdout VERBATIM and exits 0 when every probe pass
 
   // The verbatim rail: every line the report carries is a line the binary actually printed.
   // A summary, a truncation or a rewritten verdict fails this.
-  const printed = new Set(FAKE_STDOUT.map((l) => l.trimEnd()))
+  const printed = new Set([...FAKE_STDOUT, fakeCatalog()].map((l) => l.trimEnd()))
   for (const p of doc.probes) {
     for (const line of p.output.split('\n').map((l) => l.trimEnd()).filter(Boolean)) {
       assert.ok(
@@ -177,6 +195,52 @@ test('verify against an ABSENT binary writes a FAIL row and exits 2 with no stac
     assert.equal(typeof p.output, 'string')
     assert.ok(p.output.trim().length > 0, `probe ${p.name}: a failure must record what happened, not an empty string`)
   }
+})
+
+// ── the model-pin probe: the declared model id is PROVEN listed, never asserted ────────
+// Each case below plants one specific lie in the catalog. The pinned model is what the
+// launcher puts on the argv and stamps into the journal, so a catalog that cannot evidence
+// it must red here rather than at the next codex launch.
+const modelPinRow = (root, catalog) => {
+  const env = fakeBinOnPath(root, DRIVERS.codex.bin, FAKE_STDOUT, catalog)
+  const r = cli(root, ['driver', 'verify', 'codex'], env)
+  return { r, probe: report(root, 'codex').probes.find((p) => p.name === 'model-pin') }
+}
+
+test('verify reds when the catalog does NOT list the pinned model — an unlisted pin is unproven', () => {
+  const { r, probe } = modelPinRow(tmpRepo(), fakeCatalog([{ slug: 'some-other-model', supported_in_api: true, visibility: 'list' }]))
+  assert.equal(r.code, 2, `a catalog without the pinned slug must refuse: ${r.err}`)
+  assert.equal(probe.pass, false, 'the model-pin probe is the row that fails')
+  assert.match(r.err, /model-pin/, `the refusal must name the failed probe: ${r.err}`)
+})
+
+test('verify reds when the pinned model is listed but NOT supported_in_api', () => {
+  const { r, probe } = modelPinRow(
+    tmpRepo(),
+    fakeCatalog([{ slug: DRIVERS.codex.model, supported_in_api: false, visibility: 'list' }]),
+  )
+  assert.equal(r.code, 2, `a slug the API cannot serve is not a pinnable model: ${r.err}`)
+  assert.equal(probe.pass, false)
+})
+
+test('verify reds when the catalog names the pinned model TWICE — contradicting evidence is not a verdict', () => {
+  const row = { slug: DRIVERS.codex.model, supported_in_api: true, visibility: 'list' }
+  const { r, probe } = modelPinRow(tmpRepo(), fakeCatalog([row, row]))
+  assert.equal(r.code, 2, `two rows for one slug must refuse, never be picked from by row order: ${r.err}`)
+  assert.equal(probe.pass, false)
+})
+
+test('verify reds when the catalog is not readable JSON — an unparseable catalog proves nothing', () => {
+  const { r, probe } = modelPinRow(tmpRepo(), 'not json at all')
+  assert.equal(r.code, 2, `an unparseable catalog is unproven, never assumed good: ${r.err}`)
+  assert.equal(probe.pass, false)
+})
+
+test('verify PASSES the model-pin probe on a catalog that genuinely lists the pinned model', () => {
+  const { r, probe } = modelPinRow(tmpRepo(), fakeCatalog())
+  assert.equal(r.code, 0, `the decoy must stay green — a guard that reds on everything proves nothing: ${r.err}`)
+  assert.equal(probe.pass, true)
+  assert.ok(probe.command.startsWith(`${DRIVERS.codex.bin} `), `the probe runs the entry's OWN binary: ${probe.command}`)
 })
 
 test('verify on an UNREGISTERED id refuses, naming every known driver id', () => {

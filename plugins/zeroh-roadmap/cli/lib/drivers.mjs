@@ -14,18 +14,27 @@
  *
  * An unregistered id (grok today) is an EMPTY SLOT, never a guess — resolveDriver throws.
  *
+ * `model` is the id the launcher PINS on the argv — a command, not an observation. The probe
+ * proves the id is a real, API-supported, listed model on this host; it never proves it is the
+ * server-side default, which the pin makes irrelevant. An entry without `model` cannot know
+ * what ran, so driverStamp records null there rather than a guess.
+ *
  * Entry shape:
- *   { id, family, bin,
+ *   { id, family, bin, model?,
  *     launch: { argv: ({ worktree }) => string[], promptChannel, sandboxPosture },
  *     resume, roleCapabilities, verifiedAt: { date, host, command, output } }
  */
+
+/** The one home for the pinned codex model id: the entry field and the argv share this value. */
+const CODEX_MODEL = 'gpt-5.6-sol'
 
 /** Probe evidence pasted verbatim from the command each entry's verifiedAt names. */
 const CODEX_PROBE_OUTPUT = `codex-cli 0.144.5
 hooks                                stable             true
 multi_agent                          stable             true
 plugin_hooks                         removed            false
-plugins                              stable             true`
+plugins                              stable             true
+"slug":"gpt-5.6-sol"`
 
 const CLAUDE_PROBE_OUTPUT = `2.1.241 (Claude Code)
   --agents <json>                       JSON object defining custom agents (e.g.
@@ -36,8 +45,9 @@ export const DRIVERS = Object.freeze({
     id: 'codex',
     family: 'openai',
     bin: 'codex',
+    model: CODEX_MODEL,
     launch: Object.freeze({
-      argv: ({ worktree }) => ['exec', '--dangerously-bypass-approvals-and-sandbox', '-C', worktree, '-'],
+      argv: ({ worktree }) => ['exec', '--dangerously-bypass-approvals-and-sandbox', '-m', CODEX_MODEL, '-C', worktree, '-'],
       promptChannel: 'stdin',
       // This host's bubblewrap cannot create loopback (bwrap RTM_NEWADDR under
       // apparmor_restrict_unprivileged_userns), so isolation is the worktree, not the sandbox.
@@ -48,7 +58,9 @@ export const DRIVERS = Object.freeze({
     verifiedAt: Object.freeze({
       date: '2026-08-24',
       host: 'illumination',
-      command: "codex --version && codex features list | grep -E '^(hooks|multi_agent|plugin_hooks|plugins)\\b'",
+      command:
+        "codex --version && codex features list | grep -E '^(hooks|multi_agent|plugin_hooks|plugins)\\b'"
+        + " && codex debug models | grep -o '\"slug\":\"gpt-5.6-sol\"'",
       output: CODEX_PROBE_OUTPUT,
     }),
   }),
@@ -87,4 +99,15 @@ export function resolveDriver(id) {
 /** The argv for `id`'s launch, sourced from the registry so no caller carries a literal. */
 export function launchArgv(id, opts = {}) {
   return resolveDriver(id).launch.argv(opts)
+}
+
+/**
+ * The attribution a LAUNCHER stamps for `entry`: { model, lane }, where lane is the registry
+ * id (the DriverShape lane vocabulary), not a journal's own run/review lane.
+ *
+ * An entry that pins no model yields model: null — present and null, so a reader can tell an
+ * unpinned lane from a forgotten stamp.
+ */
+export function driverStamp(entry) {
+  return { model: entry.model ?? null, lane: entry.id }
 }
