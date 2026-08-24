@@ -12,7 +12,7 @@ metadata:
 `validate-arc` closes the arc loop: resolve `acceptanceCriteria`, drive the real flow at each
 criterion's tier with a **fresh independent judge** (`intent-validator` — never the agent that built
 it), and report **PASS** (all met) or **GAPS** (≥1 unmet) with concrete evidence. It **never merges**
-(do-arc's call); on GAPS, Step 5 takes over.
+(do-arc's call).
 
 **Trigger:** `validate arc <id>`, `/validate-arc <id>`; also `do-arc`'s close-out validate step (after
 `arc-sweep`, before `arc land`). `<id>` matches `Arc.id`.

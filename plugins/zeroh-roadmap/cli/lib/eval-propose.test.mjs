@@ -77,7 +77,7 @@ const EXPECTED_FINDINGS_PER_CLASS = {
   'recurring-sentinel': 3, // unjudged-backfill x2, no-verdicts-file x1; pending-judge x2 produce NOTHING
   'recurring-low-score': 3, // code-confidence x2, plan-quality x1; the two exactly-70 scores produce nothing
   'recurring-lesson-key': 9, // 2 + 2 + 2 + 2 + 1 across the sidecar's nine lines
-  'protocol-load-over-budget': 3, // 13265, 13964, 15764; the exactly-at-budget report and the block-less report produce nothing
+  'protocol-load-over-budget': 3, // 13258, 13957, 15757; the exactly-at-budget report and the block-less report produce nothing
 }
 
 const NO_LANE_LESSON_KEY = 'capbuild'
@@ -365,7 +365,7 @@ test('extractFindings + clusterFindings — two independent runs over the same c
 // ── 8. the protocol-load budget boundary ──────────────────────────────────────────────
 
 test('extractFindings — protocolLoadTokens EXACTLY at the budget is within budget, and a report with no workflow block contributes nothing', () => {
-  assert.equal(PROTOCOL_LOAD_BUDGET_TOKENS, 13264, 'the budget cli/lib/measure-budget.mjs holds, which is the number the measure gate asserts')
+  assert.equal(PROTOCOL_LOAD_BUDGET_TOKENS, 13257, 'the budget cli/lib/measure-budget.mjs holds, which is the number the measure gate asserts')
 
   const wf = (protocolLoadTokens) => ({ pluginVersion: '0.18.0', pluginSha: 'eeee11112222', protocolLoadTokens, profile: 'prod-grade' })
   const atBudget = extractFindings(

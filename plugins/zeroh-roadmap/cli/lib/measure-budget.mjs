@@ -8,4 +8,4 @@
  * The value is the ENFORCED one: what `roadmap measure --flow do-arc --assert <N>` exits 0 against.
  * Strictly greater is a breach; sitting exactly on the budget is within it.
  */
-export const PROTOCOL_LOAD_BUDGET_TOKENS = 13264
+export const PROTOCOL_LOAD_BUDGET_TOKENS = 13257

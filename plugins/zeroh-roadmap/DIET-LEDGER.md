@@ -17,6 +17,10 @@ disposition is exactly one of three:
 - **obsolete-with-evidence**(`<one-line evidence>`) — falsifiable evidence the passage is dead (a
   retired mechanism, a superseded decision with its ruling date), not "seems unused".
 
+A pass may ALSO open with a per-FILE roll-up row carrying before/after tokens; that row is a
+measurement index, not a disposition — the per-passage rows beneath it carry the falsifiable
+evidence the vocabulary demands.
+
 **Ruling (operator, 2026-08-24) — the diet's standing bar.** Protocol bodies carry
 **operative rules only**: incident archeology and why-a-rule-exists live in git history (the commits already
 carry `WHY:` blocks), at most ONE clause of rationale survives where judgment genuinely depends on
@@ -30,7 +34,7 @@ outputs. The measured do-arc protocol load vs the ~49k baseline is recorded here
 > **Measured (phase 1659.8, `roadmap measure --flow do-arc`):** **8,233 tokens** (32,924 B over 6
 > model-loaded files) — an **~83% cut**, well under the budget (`roadmap measure --flow do-arc
 > --assert <budget>` exits 0). The budget is the MEASURED load at the last ratification —
-> **13,264 tokens** (2026-08-24, phase 1 task 1.4) — held in ONE place —
+> **13,257 tokens** (2026-08-24, phase 1 task 1.4) — held in ONE place —
 > `cli/lib/measure-budget.mjs` `PROTOCOL_LOAD_BUDGET_TOKENS`, read by the measure gate
 > (cli/commands/measure.test.mjs) and by the ELICIT pass (cli/lib/eval-propose.mjs); it was
 > 12,000 → 12,500 by user ruling 2026-07-27 (phase 1995 escalation) before the 2026-08-24 ruling
@@ -365,8 +369,8 @@ close-out line: measure.test.mjs DOES carry the real-tree 12,500 assertion (cli/
 
 Operator ruling of 2026-08-24 (header, above). **Every diff in this pass is a DELETION or a MOVE —
 no operative rule was reworded**, because a rewrite risks degrading a protocol the reviewer cannot
-re-derive. `roadmap measure --flow do-arc` before **14,917 tokens / 59,656 B**, after **13,264
-tokens / 53,046 B** (−1,653 tokens, −6,610 B, −11.1%), and `PROTOCOL_LOAD_BUDGET_TOKENS` is
+re-derive. `roadmap measure --flow do-arc` before **14,917 tokens / 59,656 B**, after **13,257
+tokens / 53,018 B** (−1,660 tokens, −6,638 B, −11.1%), and `PROTOCOL_LOAD_BUDGET_TOKENS` is
 re-ratcheted to that post-diet measured total — zero growth from here.
 
 **One row per dieted file (before → after tokens):**
@@ -376,7 +380,7 @@ re-ratcheted to that post-diet measured total — zero growth from here.
 | skills/do-arc/SKILL.md | 2,840 → 2,606 | obsolete-with-evidence(dated incident + justification prose; every operative rule survives verbatim) | rows below |
 | skills/do-phase/SKILL.md | 3,329 → 3,051 | obsolete-with-evidence(dated attribution + mechanism narration; every operative rule survives verbatim) | rows below |
 | skills/arc-sweep/SKILL.md | 2,595 → 2,229 | obsolete-with-evidence(self-duplicating disposition prose + a dated release incident) | rows below |
-| skills/validate-arc/SKILL.md | 2,161 → 1,882 | obsolete-with-evidence(framing + justification parentheticals; every judge/panel/bound rule survives) | rows below |
+| skills/validate-arc/SKILL.md | 2,161 → 1,875 | obsolete-with-evidence(framing + justification parentheticals; every judge/panel/bound rule survives) | rows below |
 | skills/release-sweep/SKILL.md | 1,819 → 1,697 | obsolete-with-evidence(prose restating the file's own bash comments + rationale clauses) | rows below |
 | skills/using-zeroh-roadmap/SKILL.md | 945 → 852 | obsolete-with-evidence(honor-system asides + a dated provenance paragraph) | rows below |
 | skills/validate-arc/references/driving-tiers.md | 795 → 569 | relocated | DESIGN-NOTES.md §driving-tiers — worked example (azure_private_agent) |
@@ -428,7 +432,7 @@ re-ratcheted to that post-diet measured total — zero growth from here.
 | passage (origin heading/anchor) | disposition | evidence |
 |---|---|---|
 | intro — "The per-phase gate proves the code correct; `arc-sweep` proves the arc coheres. Neither drives the shipped product …" | obsolete-with-evidence(framing; the operative "resolve criteria → drive → fresh independent judge → PASS/GAPS" survives) | validate-arc §intro |
-| intro — the Step-5 pipeline restatement | obsolete-with-evidence(Step 5 owns it verbatim) | validate-arc §Step 5 |
+| intro — the Step-5 pipeline restatement, and the "on GAPS, Step 5 takes over" pointer | obsolete-with-evidence(Step 5 owns the pipeline verbatim; Step 4 already closes with "On GAPS, Step 5 takes over") | validate-arc §Step 4 + §Step 5 |
 | Step 0.2 — the drifted-arc explanation and the criteria-immutability consequence clause | obsolete-with-evidence(rationale; "Run step 3 FIRST" and "immutable post-planning (the validator enforces it)" survive) | validate-arc §Step 0 |
 | Step 0.3 — "Not circular: the artifact was USER-CONFIRMED at the design gate …" | obsolete-with-evidence(justification for a derivation the step already sanctions) | validate-arc §Step 0 |
 | Step 3 — "(the safe read-mostly fan-out `plan-arc` Step 3 uses)" and "This is the independent-judge singleSeam." | obsolete-with-evidence(justification + restatement; the spawn rule and edit-confinement/independence invariants survive) | validate-arc §Step 3 |
@@ -474,7 +478,7 @@ measured set, both were stale claims about the budget itself): `cli/measure-mani
 note still claimed a "≤12k-token budget", and `cli/lib/measure-budget.mjs`'s docblock carried the
 three-disagreeing-homes history — replaced by the one-line semantic plus the dated ruling. The
 budget-coupled proposal fixtures (`cli/testdata/eval-proposals/{ALPHA,BRAVO,CHARLIE,DELTA}`) were
-re-based by the same +764 delta so every boundary property they encode (one report EXACTLY at
+re-based by the same +757 delta so every boundary property they encode (one report EXACTLY at
 budget, two prod-grade + one fast-lane OVER) is preserved, and `eval-propose.test.mjs` test 16 now
 derives its corpus from `PROTOCOL_LOAD_BUDGET_TOKENS` instead of a literal 12,500 — the next
 re-ratchet cannot silently re-point that arithmetic.
