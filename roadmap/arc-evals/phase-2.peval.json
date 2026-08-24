@@ -50,9 +50,25 @@
       }
     ]
   },
+  "metrics": {
+    "commits": 1,
+    "linesAdded": 1130,
+    "linesRemoved": 29,
+    "filesChanged": 14,
+    "testsAtStart": 1096,
+    "testsAtEnd": 1141,
+    "testsAdded": 45,
+    "startedAt": "2026-08-24T10:59:17.000Z",
+    "completedAt": "2026-08-24T13:26:37.000Z",
+    "haltCount": 0
+  },
   "attribution": {
     "plannedBy": {
       "model": "claude-opus-5[1m]"
+    },
+    "driver": {
+      "model": "claude-opus-5[1m]",
+      "lane": "session"
     }
   }
 }
