@@ -16,6 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, realp
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { DRIVERS } from '../lib/drivers.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_ROOT = join(HERE, '..', '..')
@@ -275,16 +276,20 @@ test("result check — alias 'inherit' ⇒ a NAMED skip on stderr, and the exit 
   assert.match(r.stderr, /skip|unmapp|unknown|not reconcil/i, `the line must say the reconcile did not happen; got:\n${r.stderr}`)
 })
 
-test("result check — an alias outside the family map ('gpt-5.6-sol') skips the same way", () => {
+// The codex driver's own pinned model id, sourced from the registry rather than restated: it is
+// the realest possible "not a Claude card alias", and the one-home ratchet forbids a second copy.
+const NON_CLAUDE_MODEL = DRIVERS.codex.model
+
+test('result check — an alias outside the family map (a real non-Claude model id) skips the same way', () => {
   const doc = returnedResult(sessionDriver('claude-fable-5'))
   const bare = makeConsumer()
   const baseline = checkResult(bare, doc)
 
   const root = makeConsumer()
-  const arm = plantArm(root, 9001, { expectedModelAlias: 'gpt-5.6-sol' })
+  const arm = plantArm(root, 9001, { expectedModelAlias: NON_CLAUDE_MODEL })
   const r = checkResult(root, doc)
   assert.equal(r.code, baseline.code, `an alias this CLI cannot place never reds a return; stderr:\n${r.stderr}`)
-  assert.ok(r.stderr.includes('gpt-5.6-sol'), `the unplaceable alias must be named; got:\n${r.stderr}`)
+  assert.ok(r.stderr.includes(NON_CLAUDE_MODEL), `the unplaceable alias must be named; got:\n${r.stderr}`)
   assert.ok(r.stderr.includes(arm), `and the arm it came from named; got:\n${r.stderr}`)
   assert.match(r.stderr, /skip|unmapp|unknown|not reconcil/i, `and the skip stated; got:\n${r.stderr}`)
 })
@@ -345,7 +350,7 @@ test('result check — the FAMILY MAP is exhaustive and family-ANCHORED, not a s
     ['haiku', 'claude-fable-5'],
     ['fable', 'claude-haiku-4-5'],
     ['opus', 'opus-5'], // the family is 'claude-opus' — a bare vendorless id is not that family
-    ['opus', 'gpt-5.6-sol'], // a lane confusion is exactly what this reconcile exists to catch
+    ['opus', NON_CLAUDE_MODEL], // a lane confusion is exactly what this reconcile exists to catch
   ]
   for (const [alias, model] of agree) {
     const root = makeConsumer()
