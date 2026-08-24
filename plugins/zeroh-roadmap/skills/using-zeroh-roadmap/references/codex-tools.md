@@ -72,8 +72,9 @@ it — you do not choose either:
 - **`native`** — the model is your own: `spawn_agent`.
 - **`child-cli`** — the model belongs to another driver. Launch it as a headless child with the
   prompt on stdin, argv from the registry (`cli/lib/drivers.mjs`) — for the Claude family that is
-  `claude -p [--agents <json>]`. This is how a Codex session fills the architect role on
-  `claude-fable-5`, which is the chain's first tier.
+  `claude -p [--agents <json>]`. This is how a Codex session fills the architect role on its
+  chain's FIRST tier, a Claude-family model — read the chain itself off `MULTI-DRIVER.md` §1,
+  never off this page.
 - **`inline`** — no separate model is reachable, so you run the role yourself. Legal for
   builder-class roles, and RECORDED as inline: label it as your own work and never present it as
   an independent review.

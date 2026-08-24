@@ -656,7 +656,15 @@ test('the tier chain has exactly ONE home — neither prose file restates it, an
     'MULTI-DRIVER.md must point at cli/lib/roles.mjs as the executable home of the role table — prose that owns the chain is a second source of truth',
   )
 
-  for (const rel of ['agents/software-architect.md', 'skills/review-phase/SKILL.md']) {
+  // POSITIVE ratchet: forbidding the literal elsewhere only proves nobody ELSE says it. This
+  // proves the one prose home says what the table holds, so the ruling cannot rot in place.
+  const rendered = ROLES['software-architect'].tierChain.map((m) => `\`${m}\``).join(' → ')
+  assert.ok(
+    bindings.includes(rendered),
+    `MULTI-DRIVER.md §1 must spell the architect chain exactly as cli/lib/roles.mjs holds it (${rendered}) — it is the ONE prose home, so a drift there is a lie about the user's ruling`,
+  )
+
+  for (const rel of ['agents/software-architect.md', 'skills/review-phase/SKILL.md', 'skills/using-zeroh-roadmap/references/codex-tools.md']) {
     assert.ok(existsSync(join(PLUGIN_ROOT, rel)), `unresolved anchor: ${rel} does not exist under ${PLUGIN_ROOT}`)
     const text = read(rel)
     assert.equal(

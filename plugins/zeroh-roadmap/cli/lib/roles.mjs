@@ -120,7 +120,7 @@ export const ROLES = Object.freeze({
 })
 
 /** The ROLES entry for `id`, or a throw naming the offending id and every known one. */
-export function resolveRoleEntry(id) {
+function resolveRoleEntry(id) {
   const entry = Object.hasOwn(ROLES, id) ? ROLES[id] : undefined
   if (!entry) {
     throw new Error(
