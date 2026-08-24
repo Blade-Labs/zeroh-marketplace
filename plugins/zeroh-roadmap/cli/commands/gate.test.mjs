@@ -854,6 +854,26 @@ test('gate run — a re-run OVERWRITES the record (latest-run-wins), never an ac
   assert.equal(types.exitCode, 1)
 })
 
+test('gate run --slots <subset> — leaves the record UNTOUCHED and says so (a filtered run is not a sample)', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  repo.writePhase(1707, phaseObj({ phase: 1707, plannedBy: PLANNER, tasks: [{ id: '1707.1' }] }))
+  repo.commit('feat: phase 1707 — code', { 'lib/h.ts': 'export const h = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1707']).code, 0)
+  const full = readFileSync(recordPath(repo.root, 1707), 'utf8')
+  assert.ok(readRecord(repo.root, 1707).gate.slots.length > 1, 'precondition: the full run recorded more than one slot')
+
+  // The per-task loop runs `--slots types` after every task. Its `green` covers the filtered
+  // rows alone, so recording it would overwrite the fuller sample with a one-slot projection.
+  const r = runGateCmd(repo.root, ['1707', '--slots', 'types'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.equal(readFileSync(recordPath(repo.root, 1707), 'utf8'), full, 'a --slots run must not rewrite the record')
+  assert.match(
+    emitFailureLines(r.stderr).join('\n'),
+    /PARTIAL run/,
+    `the skip is NAMED on stderr, never silent; got: ${JSON.stringify(r.stderr)}`,
+  )
+})
+
 test('gate run --record-round — records no eval record (it changes only agent rounds, which the record does not carry)', { timeout: 240_000 }, () => {
   const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
   repo.writePhase(1706, phaseObj({ phase: 1706, plannedBy: PLANNER, tasks: [{ id: '1706.1' }] }))

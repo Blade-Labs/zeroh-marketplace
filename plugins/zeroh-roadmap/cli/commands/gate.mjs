@@ -44,7 +44,9 @@ import {
  * Leave the per-phase eval record beside the gate's own artifacts — the measurement pipe's
  * inlet (arc POLYSEAT plane 1). Called at BOTH completions where slot results exist: the
  * execute path (which captures plannedBy) and --verify-complete (the refresh that captures
- * executionResult.driver and metrics, neither of which exists yet at execute time).
+ * executionResult.driver and metrics, neither of which exists yet at execute time). A
+ * --slots-FILTERED execute run does not call this: its `green` covers the filtered rows only,
+ * so recording it would degrade the sample on every routine per-task run (gate R1, phase 1).
  * Latest-run-wins: one file per phase, history lives in git if the consumer commits it.
  *
  * NEVER THROWS AND NEVER CHANGES AN EXIT CODE. Every failure mode — no consumer schema, no
@@ -727,7 +729,16 @@ export async function runGate(phaseNum, opts) {
     return 1
   }
 
-  emitPhaseEvalRecord(toplevel, phaseNum, { parsed: built.parsed, report: written.report })
+  // A --slots run is a SUBSET projection, not a sample: `green` is computed over the filtered
+  // rows alone, so writing it into the phase's latest-run-wins record would silently degrade
+  // the durable measurement on every routine per-task `--slots types` run. Named, never silent.
+  if (wanted)
+    process.stderr.write(
+      `gate run: --slots ${opts.slots} is a PARTIAL run, so the per-phase eval record ` +
+        `${phaseEvalRecordPath(toplevel, phaseNum)} was left untouched — a filtered run is not a ` +
+        `sample; the next full gate run refreshes it\n`,
+    )
+  else emitPhaseEvalRecord(toplevel, phaseNum, { parsed: built.parsed, report: written.report })
 
   if (opts.json) process.stdout.write(JSON.stringify(written.report) + '\n')
   else {
