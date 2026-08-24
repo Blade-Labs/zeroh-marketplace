@@ -366,7 +366,7 @@ function launch(root, ids, lane, { worktree, base, prompt }) {
       2,
     ) + '\n',
   )
-  const poll = lane === 'review' ? `roadmap codex status ${ids[0]} --review` : `roadmap codex status ${ids[0]}`
+  const poll = `roadmap codex status ${ids[0]}${LANES[lane].flag ? ` ${LANES[lane].flag}` : ''}`
   process.stderr.write(`roadmap codex: launched pgid ${child.pid} in ${worktree} — journal ${jPath}, log ${logPath}. Poll: ${poll}\n`)
   return 0
 }

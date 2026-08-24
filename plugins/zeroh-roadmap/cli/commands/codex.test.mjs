@@ -972,3 +972,24 @@ test('plan: the plan-phase protocol BODY stays in the skill — the lane restate
     )
   }
 })
+
+test('every lane prints the poll command that actually reads ITS journal', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  writePhase(root, 111)
+  fakeLaunchEnv(root, join(root, 'wt-poll-110'))
+  const env = fakeLaunchEnv(root, join(root, 'wt-poll-111'))
+
+  // The launcher's own hint is the only poll instruction most callers ever see. A hint naming a
+  // lane other than the one just launched sends them to `no journal covers` on a live run.
+  const cases = [
+    ['plan', ['plan', '110', '--brief', brief, '--worktree', join(root, 'wt-poll-110')], /status 110 --plan/],
+    ['review', ['review', '111', '--worktree', join(root, 'wt-poll-111')], /status 111 --review/],
+    ['run', ['run', '111', '--worktree', join(root, 'wt-poll-111')], /status 111(?! --)/],
+  ]
+  for (const [lane, args, expected] of cases) {
+    const r = spawnSync('node', [BIN, 'codex', ...args], { cwd: root, encoding: 'utf8', env })
+    assert.equal(r.status, 0, `${lane}: ${r.stderr}`)
+    assert.match(r.stderr, expected, `the ${lane} lane must print the poll command that reads its OWN journal — fix the poll hint in cli/commands/codex.mjs launch()`)
+  }
+})
