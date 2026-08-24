@@ -3,9 +3,9 @@
   "nFloor": 5,
   "drivers": [
     {
-      "model": "claude-opus-5",
+      "model": "claude-opus-5[1m]",
       "lane": "session",
-      "taskCountBand": "1-3",
+      "taskCountBand": "4-6",
       "surface": false,
       "samples": 1,
       "abstained": true
@@ -14,7 +14,7 @@
   "planners": [
     {
       "model": "claude-opus-5[1m]",
-      "taskCountBand": "1-3",
+      "taskCountBand": "4-6",
       "surface": false,
       "samples": 1,
       "abstained": true
