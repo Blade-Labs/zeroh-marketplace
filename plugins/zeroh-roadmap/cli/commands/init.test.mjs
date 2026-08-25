@@ -13,7 +13,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, statSync, rmSync, realpathSync } from 'node:fs'
+import {
+  mkdtempSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  existsSync,
+  statSync,
+  rmSync,
+  realpathSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -108,4 +117,90 @@ test('3) `init --scaffold` execs scaffold-roadmap.sh — schema.ts + roadmap/pha
 
   const phasesDir = join(repo, 'roadmap', 'phases')
   assert.ok(existsSync(phasesDir) && statSync(phasesDir).isDirectory(), 'scaffold created the roadmap/phases/ directory')
+})
+
+const PLUGIN_ROOT = join(HERE, '..', '..')
+
+/** stdout + stderr of a run, as one string — the copier's chatter arrives on stdout via stdio:'inherit'. */
+function output(res) {
+  return `${res.stdout}${res.stderr}`
+}
+
+test('4) init --scaffold leaves roadmap/arcs opt-in and empty — the template stays plugin-side reference material', () => {
+  const repo = newRepo()
+  const res = roadmap(repo, 'init', '--scaffold')
+  assert.equal(res.status, 0, `init --scaffold must exit 0; stderr:\n${res.stderr}`)
+
+  // The directory IS still scaffolded: arcs are opt-in, and `roadmap/arcs/` is the
+  // place an authored arc lands. Removing the copy step must not remove the mkdir.
+  const arcsDir = join(repo, 'roadmap', 'arcs')
+  assert.ok(
+    existsSync(arcsDir) && statSync(arcsDir).isDirectory(),
+    'scaffold still creates the roadmap/arcs/ directory (arcs are opt-in, not absent)',
+  )
+
+  // The whole listing, not just example.arc.ts — a differently-named seeded arc is
+  // the same defect (a LIVE arc in a repo where no arc has been authored).
+  const listing = readdirSync(arcsDir)
+  assert.deepEqual(
+    listing,
+    [],
+    `a fresh scaffold must leave roadmap/arcs/ EMPTY — no arc is live until one is authored; found: ${JSON.stringify(listing)}`,
+  )
+  assert.equal(
+    existsSync(join(arcsDir, 'example.arc.ts')),
+    false,
+    'roadmap/arcs/example.arc.ts must NOT be created — a copied example is a live arc (id A, phases [1])',
+  )
+
+  // …and the copier must not narrate a file it no longer writes. One substring covers
+  // both the "Created …" and the "Skipped … (already exists)" wordings.
+  assert.equal(
+    output(res).includes('example.arc.ts'),
+    false,
+    `scaffold output must never mention example.arc.ts; got:\n${output(res)}`,
+  )
+
+  // The fix is REMOVE-THE-COPY, not remove-the-template: the template stays installed
+  // with the plugin as opt-in reference material for /plan-arc.
+  assert.ok(
+    existsSync(join(PLUGIN_ROOT, 'templates', 'example.arc.ts')),
+    'plugins/zeroh-roadmap/templates/example.arc.ts must SURVIVE as plugin reference material',
+  )
+
+  // Positive control — the fix cannot be "scaffold nothing".
+  assert.ok(existsSync(join(repo, 'lib', 'roadmap', 'schema.ts')), 'scaffold still created lib/roadmap/schema.ts')
+  const phasesDir = join(repo, 'roadmap', 'phases')
+  assert.ok(existsSync(phasesDir) && statSync(phasesDir).isDirectory(), 'scaffold still created roadmap/phases/')
+  assert.ok(existsSync(join(repo, 'roadmap', 'backlog.ts')), 'scaffold still created roadmap/backlog.ts')
+})
+
+test('5) a SECOND init --scaffold is idempotent and never claims the example arc was created', () => {
+  const repo = newRepo()
+  const first = roadmap(repo, 'init', '--scaffold')
+  assert.equal(first.status, 0, `first init --scaffold must exit 0; stderr:\n${first.stderr}`)
+
+  const second = roadmap(repo, 'init', '--scaffold')
+  assert.equal(second.status, 0, `a re-run of init --scaffold must exit 0; stderr:\n${second.stderr}`)
+
+  const arcsDir = join(repo, 'roadmap', 'arcs')
+  const listing = readdirSync(arcsDir)
+  assert.deepEqual(
+    listing,
+    [],
+    `the second scaffold must still leave roadmap/arcs/ EMPTY; found: ${JSON.stringify(listing)}`,
+  )
+
+  // The removed branch is the if/else that printed "Skipped … (already exists)" on
+  // re-run — neither arm of it may survive.
+  assert.equal(
+    output(second).includes('example.arc.ts'),
+    false,
+    `the re-run must not mention example.arc.ts (created OR skipped); got:\n${output(second)}`,
+  )
+
+  assert.ok(
+    existsSync(join(PLUGIN_ROOT, 'templates', 'example.arc.ts')),
+    'the plugin template is still installed after two scaffolds',
+  )
 })

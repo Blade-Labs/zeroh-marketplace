@@ -54,13 +54,10 @@ fi
 
 # Scaffold roadmap/arcs/ (OPT-IN — arcs are optional; defineArc rides along via schema.ts).
 # Deliberately NOT in audit REQUIRED_ARTIFACTS: a repo without arcs is fully valid.
+# The directory only, never an example arc file: anything landing here is a LIVE arc, so a
+# copied example makes id A with phases [1] real in a consumer that has authored none.
+# templates/example.arc.ts stays installed with the plugin as reference material.
 mkdir -p "$PROJECT_DIR/roadmap/arcs"
-if [ ! -f "$PROJECT_DIR/roadmap/arcs/example.arc.ts" ]; then
-  cp "$PLUGIN_DIR/templates/example.arc.ts" "$PROJECT_DIR/roadmap/arcs/example.arc.ts"
-  echo "  Created roadmap/arcs/example.arc.ts"
-else
-  echo "  Skipped roadmap/arcs/example.arc.ts (already exists)"
-fi
 
 # Copy scripts
 for script in pre-review.sh collect-phase-metrics.ts build-dashboard.sh generate-changelog-md.ts; do

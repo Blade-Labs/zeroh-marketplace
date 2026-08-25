@@ -266,7 +266,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/init.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-25',
+      transparencyReport: {
+        whatWasDone:
+          'scaffold-roadmap.sh no longer copies templates/example.arc.ts into a fresh consumer. The whole copy/skip branch is gone, so `roadmap init --scaffold` creates an EMPTY roadmap/arcs/ directory and its output never mentions example.arc.ts in either wording. templates/example.arc.ts stays installed with the plugin as opt-in reference material.',
+        how:
+          'test-engineer wrote two RED tests driving the real `roadmap init --scaffold` subprocess, RED at 3 pass / 2 fail on the defect verbatim: a fresh scaffold must leave roadmap/arcs/ EMPTY, and the listing came back holding example.arc.ts. It also proved independently, by running the CLI twice in a throwaway repo, that BOTH arms of the removed if/else were misleading: run 1 printed `Created roadmap/arcs/example.arc.ts` and run 2 printed `Skipped roadmap/arcs/example.arc.ts (already exists)`, so removing only the Created wording would have left the second run lying. The tests assert the WHOLE directory listing is empty rather than just the one filename, which is what makes the rename mutation below fail. GUARD MUTATION PROOF, four results: (1) planted violation restoring the exact copy/skip branch produced `not ok 4` and `not ok 5`, 3 pass / 2 fail; (2) planted violation keeping the copy under a DIFFERENT name (sample.arc.ts) also produced `not ok 4/5`, 3 pass / 2 fail, so the listing assertion catches an example the filename check would miss; (3) planted violation deleting templates/example.arc.ts instead of the copy step produced `not ok 4/5`, 3 pass / 2 fail, so the wrong fix is pinned too; (4) decoy, a comment line above the mkdir, stayed 5 pass / 0 fail. Restored and re-verified: init.test.mjs 5/5.',
+        compromises: 'None — the copy step was removed outright rather than made conditional or renamed.',
+        skipped: 'None — both step verifies ran and passed.',
+        hardcoded: 'None — no paths or ids were introduced; a block was deleted.',
+        limitations:
+          'Consumers scaffolded before this change still carry roadmap/arcs/example.arc.ts on disk; the scaffold is not a migration and does not remove it, so an existing consumer stays as it is until someone deletes the file. roadmap/arcs/ is still created because arcs remain opt-in and the directory is deliberately outside the audit REQUIRED_ARTIFACTS set.',
+      },
     },
     {
       id: '9.6',
