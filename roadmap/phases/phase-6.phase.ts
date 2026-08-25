@@ -18,7 +18,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 6,
   name: 'Worktree disposal owned by the done-verbs — land cleans, review-complete archives',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'fix',
   kind: 'hardening',
