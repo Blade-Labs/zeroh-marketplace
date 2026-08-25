@@ -56,7 +56,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
-import { disposeWorktree } from '../lib/worktree.mjs'
+import { disposeWorktree, groupAlive } from '../lib/worktree.mjs'
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
@@ -70,6 +70,17 @@ const LANES = {
   review: { prefix: 'codex-review-', report: 'CODEX-REVIEW.md', journalRe: /^codex-review-[\d-]+\.json$/, closedRe: /^codex-review-[\d-]+\.closed\.json$/, flag: '--review' },
   plan: { prefix: 'codex-plan-', report: 'CODEX-PLAN.md', journalRe: /^codex-plan-[\d-]+\.json$/, closedRe: /^codex-plan-[\d-]+\.closed\.json$/, flag: '--plan' },
 }
+
+/** A previous run's hand-off, preserved rather than deleted; the name is a lane's report with
+ *  `.prev` before the extension. */
+const prevReportName = (report) => report.replace(/\.md$/, '.prev.md')
+
+/**
+ * The run lane's hand-off files. Written into the lane worktree and NEVER committed by contract
+ * (the header's hand-off note), which is why the disposal rail takes them as its named untracked
+ * exceptions: without them every codex-lane disposal would refuse on the lane's own report.
+ */
+export const RUN_LANE_ARTIFACTS = [LANES.run.report, prevReportName(LANES.run.report)]
 
 function journalPath(root, ids, lane = 'run') {
   return join(root, '.building', `${LANES[lane].prefix}${ids.join('-')}.json`)
@@ -161,16 +172,6 @@ export function findJournal(root, ids, lane = 'run') {
   }
   if (failures.length > 0) throw new JournalUnreadableError(failures)
   return null
-}
-
-/** Process-group liveness without pgrep (pgrep -f self-matches its own probe argv). */
-function groupAlive(pgid) {
-  try {
-    process.kill(-pgid, 0)
-    return true
-  } catch {
-    return false
-  }
 }
 
 /**
@@ -421,7 +422,7 @@ function refuseIfLive(root, ids, lane, worktree, jPath, relaunchNote) {
 function preserveStaleReport(worktree, reportName) {
   const stale = join(worktree, reportName)
   if (!existsSync(stale)) return
-  const prev = reportName.replace(/\.md$/, '.prev.md')
+  const prev = prevReportName(reportName)
   renameSync(stale, join(worktree, prev))
   process.stderr.write(`roadmap codex: preserved the previous run's ${reportName} as ${prev}\n`)
 }

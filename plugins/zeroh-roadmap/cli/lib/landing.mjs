@@ -401,7 +401,7 @@ import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
 import { disposeWorktree } from './worktree.mjs'
-import { findJournal } from '../commands/codex.mjs'
+import { findJournal, RUN_LANE_ARTIFACTS } from '../commands/codex.mjs'
 import { loadConfig, ConfigError } from './config.mjs'
 
 /**
@@ -634,6 +634,10 @@ function writeRunnerSummary(repoRoot, summary) {
  * is where `home` points; an unreadable one proves nothing about a lane and is left to the
  * guards that already refuse loudly on it (the launch guard, gate --verify-complete).
  *
+ * Keyed by WORKTREE, not by member: an arc delegated as one `codex run --arc` shares a single
+ * multi-phase journal across its members, so a per-member caller would run the disposal rail a
+ * second time against a directory the first pass removed.
+ *
  * The lane branch is not in the journal — `launch()` writes phases/worktree/pgid and no branch —
  * so it is derived the way the launcher builds it: `codex/<ids joined by ->`.
  */
@@ -735,16 +739,11 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
     // Every landed member's codex lane, through the SAME rail the phase land uses. This is the
     // only done-moment those worktrees ever get: do-arc's SKILL names arc land the cleanup owner,
     // and while that was prose two fully merged exec lanes squatted slot dirs for weeks.
-    // Keyed by WORKTREE, not by member — an arc
-    // delegated as one `codex run --arc` shares a single multi-phase journal across its members,
-    // and a second call would run the rail against a directory the first one removed.
-    for (const laneDir of codexLaneDirs(home, state.members ?? [])) {
+    for (const laneDir of codexLaneDirs(home, state.members)) {
       const r = dispose(home, laneDir.dir, {
         branch: laneDir.branch,
         integrationRef: baseRef,
-        // Never committed by contract (cli/commands/codex.mjs) — without the exception every
-        // lane refuses on its own hand-off report.
-        allowUntracked: ['CODEX-REPORT.md', 'CODEX-REPORT.prev.md'],
+        allowUntracked: RUN_LANE_ARTIFACTS,
         pgid: laneDir.pgid,
       })
       record.push({

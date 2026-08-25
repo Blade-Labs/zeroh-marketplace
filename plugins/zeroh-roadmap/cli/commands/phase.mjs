@@ -15,6 +15,10 @@
  * (cli/lib/curate.mjs): dry run by default, --apply lands the phase's task/gate history
  * as 1-3 curated commits, a foreign interleave refuses rather than rewrite it.
  *
+ * roadmap phase land <N> — the lane's closing act: rebase onto the integration ref, guarded
+ * fast-forward, push when authorized, then dispose the lane just landed. Only a lane may run it:
+ * the session worktree lane, or a journal-confirmed codex lane whatever executionIsolation says.
+ *
  * Exit: 0 clean · 1 usage/config/toolchain · 2 validation failed / refused.
  */
 import { existsSync, readFileSync, writeFileSync, realpathSync, rmSync } from 'node:fs'
@@ -27,7 +31,7 @@ import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
 import { landPhase, disposeWorktree } from '../lib/worktree.mjs'
-import { findJournal } from './codex.mjs'
+import { findJournal, RUN_LANE_ARTIFACTS } from './codex.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
 
 function runStart(argv) {
@@ -400,9 +404,7 @@ function disposeSource(lane, { cwd, laneBranch, baseRef, out, err }) {
     r = disposeWorktree(lane.root, cwd, {
       branch: laneBranch,
       integrationRef: baseRef,
-      // The run lane's hand-off file is never committed by contract (cli/commands/codex.mjs),
-      // so without this exception EVERY codex-lane disposal would refuse on its own report.
-      allowUntracked: ['CODEX-REPORT.md', 'CODEX-REPORT.prev.md'],
+      allowUntracked: RUN_LANE_ARTIFACTS,
       pgid: lane.journal?.pgid ?? null,
     })
   } catch (e) {

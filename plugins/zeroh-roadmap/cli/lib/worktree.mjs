@@ -35,9 +35,10 @@ const alive = (pid) => {
   }
 }
 
-/** Process-GROUP liveness (the codex-journal probe): a lane journal records the group its
- *  detached driver leads, and pgrep -f self-matches its own argv. */
-const groupAlive = (pgid) => {
+/** Process-GROUP liveness without pgrep, which self-matches its own probe argv. A lane journal
+ *  records the group its detached driver leads; both the disposal rail here and `codex status`
+ *  ask this same question of it. */
+export const groupAlive = (pgid) => {
   try {
     process.kill(-pgid, 0)
     return true
