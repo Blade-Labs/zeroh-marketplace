@@ -556,7 +556,12 @@ function driverReconcile(cwd, fallbackRoot, phaseNum, parsed) {
   // class deliberately excludes — but it is still the launcher's record, and dropping the
   // reconcile for it would mean every gate re-run after a delegated phase lands stops checking
   // the phase file's claim, silently, exactly where the claim is least likely to be self-checked.
-  if (!found) found = findClosedJournal(root, [phaseNum], 'run')
+  try {
+    if (!found) found = findClosedJournal(root, [phaseNum], 'run', { strict: true })
+  } catch (e) {
+    if (!(e instanceof JournalUnreadableError)) throw e
+    return { problems: [`phase ${phaseNum} attribution could NOT be reconciled: ${e.message}`], notes: [] }
+  }
   if (!found) return { problems: [], notes: [] }
   const j = found.journal.driver
   if (!j) return { problems: [], notes: [] }

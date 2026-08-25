@@ -400,7 +400,7 @@ import { sweepOrphanCapbuildUnits } from './orphan-sweep.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
-import { disposeWorktree } from './worktree.mjs'
+import { disposeWorktree, isSlotDir } from './worktree.mjs'
 import { archiveJournal, findJournal, RUN_LANE_ARTIFACTS } from '../commands/codex.mjs'
 import { loadConfig, ConfigError } from './config.mjs'
 
@@ -652,7 +652,10 @@ function codexLaneDirs(home, members) {
       continue
     }
     const dir = found?.journal?.worktree
-    if (!dir || seen.has(resolve(dir))) continue
+    // A journal names whatever directory the launcher was handed, and `codex run --worktree
+    // <root>-wt-3` (reusing a provisioned slot to skip the npm ci) names a SLOT. Same refusal as
+    // the phase-land side, from the same home — a guard on one of two call sites is no guard.
+    if (!dir || isSlotDir(home, dir) || seen.has(resolve(dir))) continue
     seen.add(resolve(dir))
     const ids = (found.journal.phases ?? [m.num]).map(String)
     lanes.push({ dir, branch: `codex/${ids.join('-')}`, pgid: found.journal.pgid ?? null, journalPath: found.path, journal: found.journal })
@@ -665,7 +668,7 @@ function codexLaneDirs(home, members) {
  * blockers already cleared (landCommand gates it). Returns { outcome, exitCode, record,
  * pushed, pushRefused, summaryPath }. record is the ordered step log the tests replay.
  */
-export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null, dispose = disposeWorktree }) {
+export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null, dispose = disposeWorktree, archive = archiveJournal }) {
   const git = gitLayer(exec)
   const mp = config.mergePolicy
   const primary = mp.primaryCheckout
@@ -740,6 +743,7 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
     // only done-moment those worktrees ever get: do-arc's SKILL names arc land the cleanup owner,
     // and while that was prose two fully merged exec lanes squatted slot dirs for weeks.
     for (const laneDir of codexLaneDirs(home, state.members)) {
+      let disposedNow = false
       // Isolated PER LANE, inside the outer best-effort block rather than instead of it: one
       // exploding rm must not strand every remaining member's worktree, and the outer catch's
       // "remove the sidecar/claims by hand" would send the operator at the acts that succeeded.
@@ -750,19 +754,36 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
           allowUntracked: RUN_LANE_ARTIFACTS,
           pgid: laneDir.pgid,
         })
+        disposedNow = r.disposed
         record.push({
           step: 'codex-lane-dispose',
           worktree: laneDir.dir,
           outcome: r.alreadyDisposed ? 'already-disposed' : r.disposed ? 'disposed' : 'refused',
-          ...(r.disposed ? { branchDeleted: r.branchDeleted === true } : { reason: r.reason, detail: r.detail }),
+          ...(r.disposed ? { branchDeleted: r.branchDeleted === true } : { reason: r.reason }),
+          // `detail` on the PASS path carries a merged branch the rail could not delete; dropping
+          // it there makes the field dead and the leak invisible.
+          ...(r.detail ? { detail: r.detail } : {}),
         })
-        // Archive ONLY what actually went. A refused lane still stands and still needs an
-        // operator, and a journal claiming it closed is the one thing worse than no cleanup.
-        if (r.disposed && !r.alreadyDisposed) archiveJournal(laneDir.journalPath, laneDir.journal, 'arc land')
       } catch (e) {
         const detail = e?.message?.split('\n')[0] ?? String(e)
         record.push({ step: 'codex-lane-dispose', worktree: laneDir.dir, outcome: 'errored', detail })
         record.push({ step: 'cleanup', warning: `disposing the codex lane ${laneDir.dir} failed (${detail}) — the land itself is complete; remove that worktree by hand` })
+        continue
+      }
+      // Archive whatever is GONE — `alreadyDisposed` included, since a lane whose directory died
+      // is exactly when its journal must stop reading live. A refused lane still stands and still
+      // needs an operator; a journal claiming it closed is the one thing worse than no cleanup.
+      // Its OWN try: an archive failure is not a disposal outcome, and recording it as one would
+      // put two contradictory answers for the same worktree in the record.
+      if (!disposedNow) continue
+      try {
+        archive(laneDir.journalPath, laneDir.journal, 'arc land')
+      } catch (e) {
+        record.push({
+          step: 'cleanup',
+          warning: `the codex lane ${laneDir.dir} was disposed but its journal could not be ARCHIVED (${e?.message?.split('\n')[0] ?? e}) — `
+            + `\`codex status\` will read it as live until ${laneDir.journalPath} is renamed to .closed.json by hand`,
+        })
       }
     }
   } catch (e) {

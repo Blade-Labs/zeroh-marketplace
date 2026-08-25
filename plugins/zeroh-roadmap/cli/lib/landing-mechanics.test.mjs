@@ -685,3 +685,91 @@ test('cleanup — one lane throwing does not skip the REST: each disposal is iso
   assert.match(laneRecord(res.record, boom), /rm -rf exploded/, 'the lane that threw is named WITH its real failure')
   assert.match(laneRecord(res.record, ok), /disposed/, 'and the one after it still went')
 })
+
+test('cleanup — a lane whose directory is ALREADY gone still gets its journal archived', () => {
+  const primary = makeConsumer()
+  const jPath = seedCodexJournal(primary, [10], `${primary}-codex-10`)
+  const { exec } = recordingExec()
+  // /tmp died, or a sibling removed it first. The lane IS gone — which is precisely when the
+  // journal must stop reading live, or `codex status 10` answers dead-no-report for a member
+  // that ran and landed: the symptom the archive was added to remove.
+  const rec = disposeRecorder({ disposed: true, alreadyDisposed: true, reason: null, detail: null, branchDeleted: false })
+
+  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+
+  assert.equal(res.outcome, 'landed')
+  assert.ok(!existsSync(jPath), 'the live journal name is gone for a lane that is gone')
+  assert.ok(existsSync(join(primary, '.building', 'codex-10.closed.json')), 'archived, exactly as phase land would have')
+})
+
+test('cleanup — a journal naming a SLOT worktree is never disposed by arc land either', () => {
+  const primary = makeConsumer()
+  const slot = `${primary}-wt-1`
+  seedCodexJournal(primary, [10], slot)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder()
+
+  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+
+  assert.equal(res.outcome, 'landed')
+  assert.deepEqual(
+    rec.calls,
+    [],
+    'a slot is not a lane: removing one takes its node_modules with it and leaves the slot registry holding a live claim on a deleted path — slot retirement is out of this rail\'s scope',
+  )
+})
+
+test('cleanup — a disposed lane whose JOURNAL fails to archive records that, not a second contradictory dispose outcome', () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-codex-10`
+  seedCodexJournal(primary, [10], lane)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder()
+
+  const res = landArc({
+    repoRoot: primary,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary),
+    dispose: rec.dispose,
+    archive: () => {
+      throw new Error('EACCES writing the closed journal')
+    },
+  })
+
+  assert.equal(res.outcome, 'landed')
+  const laneEntries = res.record.filter((s) => s.step === 'codex-lane-dispose' && s.worktree === lane)
+  assert.equal(
+    laneEntries.length,
+    1,
+    `one lane, ONE outcome — a record carrying both 'disposed' and 'errored' for the same worktree blames the disposal for an archive failure and misleads a first-match reader; got:\n${JSON.stringify(laneEntries, null, 2)}`,
+  )
+  assert.equal(laneEntries[0].outcome, 'disposed', 'the disposal really did happen and the record must say so')
+  const warned = res.record.find((s) => s.step === 'cleanup' && /archive/i.test(s.warning ?? ''))
+  assert.ok(warned, `the archive failure gets its OWN warning; got:\n${JSON.stringify(res.record, null, 2)}`)
+  assert.match(warned.warning, /EACCES/, 'naming the real failure')
+})
+
+test('cleanup — a merged lane branch that could not be deleted is NAMED in the land record', () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-codex-10`
+  seedCodexJournal(primary, [10], lane)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder({
+    disposed: true,
+    alreadyDisposed: false,
+    reason: null,
+    detail: `${lane} was removed, but its merged branch codex/10 could NOT be deleted — a ref lock is held`,
+    branchDeleted: false,
+  })
+
+  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+
+  assert.match(
+    laneRecord(res.record, lane),
+    /could NOT be deleted/,
+    'the rail reports a leaked merged branch in `detail` on the PASS path — a record that drops it makes the field dead and the leak invisible',
+  )
+})

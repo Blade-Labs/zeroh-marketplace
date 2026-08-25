@@ -30,7 +30,7 @@ import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
-import { landPhase, disposeWorktree, listSlots } from '../lib/worktree.mjs'
+import { landPhase, disposeWorktree, isSlotDir, samePath } from '../lib/worktree.mjs'
 import { archiveJournal, findJournal, JournalUnreadableError, RUN_LANE_ARTIFACTS } from './codex.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
 
@@ -246,32 +246,6 @@ export function runCurate({
 }
 
 /**
- * Is `dir` one of the session lane's SLOTS? Two independent reads, because either alone has a
- * hole: the registry knows a CLAIMED slot but not one provisioned without a claim row, and the
- * `<root>-wt-<k>` shape (ensureWorktree's, its one home) knows the namespace but not which slots
- * exist. Either answering yes is enough — this guard only has to refuse.
- */
-function isSlotDir(root, dir) {
-  const k = /-wt-(\d+)$/.exec(dir)?.[1]
-  if (k && samePath(`${root}-wt-${k}`, dir)) return true
-  try {
-    return listSlots(root).some((slot) => samePath(slot.dir, dir))
-  } catch {
-    // an unreadable slot registry cannot prove this IS a slot — the shape check above stands
-    return false
-  }
-}
-
-/** Same path, whatever symlinks /tmp and the shared host put in the way. */
-function samePath(a, b) {
-  try {
-    return realpathSync(a) === realpathSync(b)
-  } catch {
-    return resolve(a) === resolve(b)
-  }
-}
-
-/**
  * `cwd` as a codex RUN-lane source, or null — the ONE question that lets a delegated lane
  * reach `phase land` at all.
  *
@@ -286,7 +260,7 @@ function samePath(a, b) {
  * (the launch guard and `gate --verify-complete` both refuse loudly on it already) — it falls
  * through to null, which means the ordinary isolation refusal answers.
  */
-function codexLaneSource(cwd, phaseNum, err) {
+function codexLaneSource(cwd, phaseNum) {
   let root
   try {
     root = mainCheckout(cwd)
@@ -304,7 +278,10 @@ function codexLaneSource(cwd, phaseNum, err) {
     // An unreadable journal is NOT an absent one. Falling through silently hands the operator the
     // isolation message, whose remedy — flip the knob — makes the land succeed and then take the
     // not-a-lane branch, so the worktree is never disposed and nobody learns why.
-    if (e instanceof JournalUnreadableError) err.write(`phase land: ${e.message}\n`)
+    // Returned as a distinct REFUSAL, not as "not a lane": falling through would add the
+    // isolation remedy underneath, and flipping that knob makes the land succeed down the
+    // not-a-lane branch — the worktree then never gets disposed and nobody learns why.
+    if (e instanceof JournalUnreadableError) return { unreadable: e.message }
     return null
   }
   const dir = found?.journal?.worktree
@@ -338,7 +315,11 @@ function codexLaneSource(cwd, phaseNum, err) {
  * reported on stderr with exit 0 intact — the land succeeded, and cleanup reports beside it.
  */
 export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr }) {
-  const lane = codexLaneSource(cwd, phaseNum, err)
+  const lane = codexLaneSource(cwd, phaseNum)
+  if (lane?.unreadable) {
+    err.write(`phase land: ${lane.unreadable}\n`)
+    return 1
+  }
   const isolation = executionIsolationOf(config)
   if (isolation !== 'worktree' && !lane) {
     err.write(
@@ -436,6 +417,10 @@ function disposeSource(lane, { cwd, laneBranch, baseRef, out, err }) {
   out.write(
     `disposed the codex lane ${cwd}${r.branchDeleted ? ` and its merged ${laneBranch} branch` : ''}; journal archived to ${closed}\n`,
   )
+  // The rail reports a merged branch it could NOT delete in `detail` on the pass path. Dropping
+  // it would print "disposed the codex lane" over a leak the operator never hears about — which
+  // is the accumulation class in miniature, and would leave the field dead.
+  if (r.detail) err.write(`phase land: ${r.detail}\n`)
 }
 
 function runLandCli(argv) {

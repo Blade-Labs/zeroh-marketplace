@@ -10,8 +10,8 @@
  * stolen. Claiming is a REGISTRY act only — git happens in ensureWorktree.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 const git = (cwd, args) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 60_000, encoding: 'utf8' }).trim()
@@ -332,6 +332,30 @@ export function resetForPhase(worktreeDir, baseRef) {
   git(worktreeDir, ['reset', '--hard', `${baseRef}^{commit}`])
 }
 
+/** Same path, whatever symlinks /tmp and the shared host put in the way. */
+export function samePath(a, b) {
+  try {
+    return realpathSync(a) === realpathSync(b)
+  } catch {
+    return resolve(a) === resolve(b)
+  }
+}
+
+/**
+ * Is `dir` one of this repo's session-lane SLOTS?
+ *
+ * The namespace is `<root>-wt-<k>` and ensureWorktree is its only builder, so the shape IS the
+ * membership test — `listSlots` derives the same string from the same two parts and could not
+ * answer differently. It lives here rather than beside a caller because BOTH landing verbs have
+ * to ask it: `codex run --worktree <root>-wt-3` (reusing a provisioned slot to skip the npm ci)
+ * journals a slot, and disposing one takes its node_modules with it while the slot registry keeps
+ * a live claim on a deleted path. Slot retirement is deliberately nobody's job here.
+ */
+export function isSlotDir(root, dir) {
+  const k = /-wt-(\d+)$/.exec(dir)?.[1]
+  return Boolean(k) && samePath(`${root}-wt-${k}`, dir)
+}
+
 /**
  * The disposal rail: ONE home for "this worktree has reached its done-moment, take it away".
  *
@@ -374,6 +398,15 @@ export function resetForPhase(worktreeDir, baseRef) {
  * @returns {{ disposed: boolean, alreadyDisposed: boolean, reason: 'dirty'|'unpushed'|'live'|'failed'|null,
  *             detail: string|null, branchDeleted: boolean }}
  */
+/** A 'failed' refusal is usually a broken REF, and refs are shared across every worktree of the
+ *  repo — so one dangling entry refuses every lane in the consumer at once, and landing is a
+ *  one-shot done-moment with no sweep verb allowed to come back for them. The remedy has to
+ *  travel with the refusal or the worktrees quietly accumulate. */
+const RECOVERY =
+  '\n  Refs are shared repo-wide, so this refuses EVERY lane until it is fixed: find the bad ref '
+  + '(`git for-each-ref --format="%(refname) %(objectname)" | while read r o; do git cat-file -e "$o" 2>/dev/null || echo "$r"; done`), '
+  + 'delete it, and land again. To dispose this one worktree by hand: `git worktree remove <dir>` from the primary checkout.'
+
 export function disposeWorktree(
   repoRoot,
   dir,
@@ -440,7 +473,7 @@ export function disposeWorktree(
   // its commits in the reflog alone.
   const head = quiet(dir, ['rev-parse', 'HEAD'])
   if (!head.ok) {
-    return refuse('failed', `cannot resolve HEAD in ${dir}, so its commits cannot be shown to be carried elsewhere — ${head.out}`)
+    return refuse('failed', `cannot resolve HEAD in ${dir}, so its commits cannot be shown to be carried elsewhere — ${head.out}${RECOVERY}`)
   }
   {
     const headSha = head.out.trim()
@@ -454,7 +487,7 @@ export function disposeWorktree(
     const survivors = ['--not', ...excl, '--branches', '--remotes', '--tags']
     const orphan = quiet(dir, ['rev-list', '--count', headSha, ...survivors])
     if (!orphan.ok) {
-      return refuse('failed', `cannot prove ${dir}'s commits are carried elsewhere — ${orphan.out}`)
+      return refuse('failed', `cannot prove ${dir}'s commits are carried elsewhere — ${orphan.out}${RECOVERY}`)
     }
     if (Number(orphan.out.trim()) > 0) {
       const subjects = quiet(dir, ['log', '--format=%h %s', '-n', '10', headSha, ...survivors])

@@ -1444,3 +1444,57 @@ test('phase land — an UNREADABLE lane journal says so, instead of sending the 
   )
   assert.equal(f.baseTip(), f.seed, 'and nothing landed')
 })
+
+test('phase land — a merged lane branch that could not be deleted is NAMED beside the disposal', () => {
+  const f = codexLaneFixture(107)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
+  // A held ref lock, the shape a crashed sibling git leaves. The worktree still goes; the branch
+  // does not — and "disposed the codex lane <dir>" with no mention of it is how a leak stays
+  // invisible for weeks, which is the class this phase exists to end.
+  const lock = join(f.root, '.git', 'refs', 'heads', `${f.branch}.lock`)
+  mkdirSync(dirname(lock), { recursive: true })
+  writeFileSync(lock, '')
+  const out = sink()
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 107,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out,
+    err,
+  })
+
+  assert.equal(code, 0, `the land and the removal both succeed; stderr:\n${err.text}`)
+  assert.ok(!existsSync(f.wt), 'the worktree is gone')
+  assert.equal(f.branchExists(f.branch), true, 'the branch could not be deleted')
+  assert.ok(
+    `${out.text}${err.text}`.includes(f.branch),
+    `and the operator is TOLD which branch leaked — the rail returns it in detail and a caller that drops it makes the field dead; got out:\n${out.text}\nerr:\n${err.text}`,
+  )
+})
+
+test('phase land — an unreadable journal refusal does NOT also hand over the isolation remedy', () => {
+  const f = codexLaneFixture(108)
+  writeFileSync(f.journalPath, '{"phases": [108], "worktr')
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 108,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 1, `stderr:\n${err.text}`)
+  assert.ok(err.text.includes(f.journalPath), `the real cause is named; got:\n${err.text}`)
+  assert.ok(
+    !/set executionIsolation/.test(err.text),
+    `two remedies is worse than one when the second is HARMFUL — flipping the knob makes this land succeed down the not-a-lane branch and the worktree is never disposed; got:\n${err.text}`,
+  )
+})

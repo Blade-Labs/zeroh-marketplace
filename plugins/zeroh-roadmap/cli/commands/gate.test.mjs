@@ -1578,3 +1578,22 @@ test('gate run --verify-complete — attribution is still reconciled after the l
   assert.equal(r.code, 2, `an archived journal is still launcher truth — the disagreement must red; stdout: ${r.stdout} stderr: ${r.stderr}`)
   assert.ok(r.stderr.includes(closed), `and the remedy names the ARCHIVED file, not a path that no longer exists; stderr: ${JSON.stringify(r.stderr)}`)
 })
+
+test('gate run --verify-complete — an UNREADABLE ARCHIVED journal reds, exactly as the live one does', () => {
+  const repo = makeRepo(RUN_CFG())
+  // archiveJournal's write is not atomic, so a crash mid-write leaves a truncated .closed.json.
+  // driverReconcile's own contract two lines above the closed-fallback says a journal that EXISTS
+  // and will not parse is a PROBLEM, never an absence — landing a delegated phase must not be
+  // what turns that loud guard quiet.
+  repo.writePhase(1619, donePhase(1619, { model: CLAIMED_MODEL, lane: 'session' }))
+  repo.commit('feat: phase 1619 — code', { 'lib/s.ts': 'export const s = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1619']).code, 0)
+  mkdirSync(join(repo.root, '.building'), { recursive: true })
+  const closed = join(repo.root, '.building', 'codex-1619.closed.json')
+  writeFileSync(closed, '{\n  "phases": [\n    "1619"\n  ],\n  "driver": { "model": "gpt')
+
+  const r = runGateCmd(repo.root, ['1619', '--verify-complete'])
+
+  assert.equal(r.code, 2, `an unreadable archived record is not an absent one; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.ok(r.stderr.includes(closed), `the file that could not be read must be NAMED; stderr: ${JSON.stringify(r.stderr)}`)
+})

@@ -611,8 +611,13 @@ function planCodex(root, ids, argv) {
  * lookups as the live one (the exact name, then a scan), because an arc lands as ONE journal and
  * an exact-name-only probe would miss every member but the first.
  *
- * Deliberately quiet about unreadable candidates: a closed lane proves nothing about liveness, so
- * a corrupt one is not a refusal, it is simply not an answer.
+ * QUIET by default and LOUD on demand, because the two readers want opposite things from a
+ * corrupt file. `codex status` asks about liveness, which a closed lane cannot prove either way,
+ * so an unreadable one is simply not an answer there. The gate's attribution reconcile asks
+ * whether the launcher's record agrees with the phase file's claim, and its contract is explicit
+ * that a journal which EXISTS and will not parse is a PROBLEM, never an absence — archiveJournal's
+ * write is not atomic, so a crash mid-write produces exactly that file, and answering null would
+ * let landing a delegated phase turn a loud guard quiet. `strict` throws JournalUnreadableError.
  */
 /**
  * Archive a landed lane's journal: `codex-<ids>.json` → `codex-<ids>.closed.json`, stamped with
@@ -631,20 +636,27 @@ export function archiveJournal(journalPath, journal, closedBy) {
   return closed
 }
 
-export function findClosedJournal(root, ids, lane = 'run') {
+export function findClosedJournal(root, ids, lane = 'run', { strict = false } = {}) {
   const wanted = ids.map(String)
-  const read = (p) => {
+  const failures = []
+  const read = (p, candidate) => {
     let value
     try {
       value = JSON.parse(readFileSync(p, 'utf8'))
-    } catch {
+    } catch (e) {
+      if (candidate) failures.push({ path: p, message: e.message })
       return null
     }
-    return journalDeclineReason(value) ? null : value
+    const declined = journalDeclineReason(value)
+    if (declined) {
+      if (candidate) failures.push({ path: p, message: declined })
+      return null
+    }
+    return value
   }
   const exact = journalPath(root, ids, lane).replace(/\.json$/, '.closed.json')
   if (existsSync(exact)) {
-    const journal = read(exact)
+    const journal = read(exact, true)
     if (journal) return { path: exact, journal }
   }
   const dir = join(root, '.building')
@@ -652,10 +664,15 @@ export function findClosedJournal(root, ids, lane = 'run') {
     if (!LANES[lane].closedRe.test(f)) continue
     const path = join(dir, f)
     if (path === exact) continue
-    const journal = read(path)
+    // Candidacy off the FILENAME, the scoping findJournal uses: a corrupt journal belonging to
+    // OTHER phases is not this lookup's business, and nothing is skipped in silence — that file
+    // still throws for the ids it names.
+    const named = f.match(/\d+/g) ?? []
+    const journal = read(path, wanted.every((n) => named.includes(n)))
     const phases = (journal?.phases ?? []).map(String)
     if (journal && wanted.every((n) => phases.includes(n))) return { path, journal }
   }
+  if (strict && failures.length > 0) throw new JournalUnreadableError(failures)
   return null
 }
 
