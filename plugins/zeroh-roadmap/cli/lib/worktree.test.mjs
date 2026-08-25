@@ -1265,3 +1265,30 @@ test('disposeWorktree: a merged branch that will not delete is NAMED, never sile
     `a merged branch that failed to delete must be NAMED — the caller prints "disposed the lane" and the operator never learns the branch leaked; got detail ${JSON.stringify(out.detail)}`,
   )
 })
+
+test('disposeWorktree: a removal that FAILED carries the real cause and a way out, like the other terminal refusals', async () => {
+  const { r, dir, branch, shas } = laneFixture({
+    commits: [{ subject: 'feat(cli): phase 6 — landed work', rel: 'cli/lib/locked.txt' }],
+  })
+  mergeIntoBase(r, shas[0])
+  // A LOCKED worktree: both the plain remove and the --force retry refuse, and for the same real
+  // reason. The plain probe's own message is worthless here — the comment above the fallback says
+  // it always fails on the allowUntracked lane artifacts, so reporting it hands every codex lane
+  // "contains modified or untracked files" whatever actually went wrong.
+  r.git('worktree', 'lock', dir)
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assert.equal(out.disposed, false, `a removal that did not happen is not a disposal; got ${JSON.stringify(out)}`)
+  assert.equal(out.reason, 'failed')
+  assert.match(out.detail, /lock/i, `the detail must carry the REAL cause; got: ${out.detail}`)
+  // Terminal, exactly like the two reachability refusals: a land is one-shot, and the ruling
+  // allows no sweep verb to come back for what it left. The other two `failed` sites carry the
+  // remediation for that reason; this one is no less final.
+  assert.match(
+    out.detail,
+    /will not come back/,
+    `a terminal refusal must say so and hand over the manual finish — matching on "git worktree remove" alone is vacuous, the failure message already contains it; got: ${out.detail}`,
+  )
+  assert.ok(existsSync(dir), 'and the worktree is still there')
+})

@@ -56,7 +56,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
-import { disposeWorktree, groupAlive } from '../lib/worktree.mjs'
+import { disposeWorktree, groupAlive, isSlotDir } from '../lib/worktree.mjs'
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
@@ -601,6 +601,23 @@ function planCodex(root, ids, argv) {
 }
 
 /**
+ * Archive a landed lane's journal: `codex-<ids>.json` → `codex-<ids>.closed.json`, stamped with
+ * who closed it and when, never deleted.
+ *
+ * ONE home, because two done-verbs land lanes — `phase land` for a single delegated phase, `arc
+ * land` for every member of a delegated arc — and a lane that got two different post-disposal
+ * answers depending on which verb closed it is a lane nobody can report on. The name leaves both
+ * live scans by construction: the journalRe class `[\d-]` has no '.', so no launch guard can
+ * mistake a closed lane for a live one, while findClosedJournal still resolves it.
+ */
+export function archiveJournal(journalPath, journal, closedBy) {
+  const closed = journalPath.replace(/\.json$/, '.closed.json')
+  writeFileSync(closed, JSON.stringify({ ...journal, closedAt: new Date().toISOString(), closedBy }, null, 2) + '\n')
+  rmSync(journalPath, { force: true })
+  return closed
+}
+
+/**
  * The ARCHIVED journal covering every id, or null — the closed twin of findJournal.
  *
  * `phase land` renames a landed run journal `codex-<ids>.json` → `codex-<ids>.closed.json`
@@ -619,23 +636,6 @@ function planCodex(root, ids, argv) {
  * write is not atomic, so a crash mid-write produces exactly that file, and answering null would
  * let landing a delegated phase turn a loud guard quiet. `strict` throws JournalUnreadableError.
  */
-/**
- * Archive a landed lane's journal: `codex-<ids>.json` → `codex-<ids>.closed.json`, stamped with
- * who closed it and when, never deleted.
- *
- * ONE home, because two done-verbs land lanes — `phase land` for a single delegated phase, `arc
- * land` for every member of a delegated arc — and a lane that got two different post-disposal
- * answers depending on which verb closed it is a lane nobody can report on. The name leaves both
- * live scans by construction: the journalRe class `[\d-]` has no '.', so no launch guard can
- * mistake a closed lane for a live one, while findClosedJournal still resolves it.
- */
-export function archiveJournal(journalPath, journal, closedBy) {
-  const closed = journalPath.replace(/\.json$/, '.closed.json')
-  writeFileSync(closed, JSON.stringify({ ...journal, closedAt: new Date().toISOString(), closedBy }, null, 2) + '\n')
-  rmSync(journalPath, { force: true })
-  return closed
-}
-
 export function findClosedJournal(root, ids, lane = 'run', { strict = false } = {}) {
   const wanted = ids.map(String)
   const failures = []
@@ -710,6 +710,17 @@ function archiveReviewLane(root, jPath, journal, reportPath) {
   // poll loop reads status in between — so a one-shot done-moment would refuse 'live' once and
   // leave the worktree forever, which is the leak class this rail exists to close and which no
   // sweep verb is allowed to mop up. Retry on every read until the lane is actually gone.
+  // The third disposal call site, and the one that fires from a READ command — so it needs the
+  // same slot refusal the two landing verbs carry. `codex review <N> --worktree <root>-wt-3`
+  // names a provisioned slot, and untracked-tolerance means even its node_modules would not
+  // refuse: the slot would be force-removed while its registry row still claims a live path.
+  if (isSlotDir(root, journal.worktree)) {
+    process.stderr.write(
+      `roadmap codex: the review verdict is archived at ${archived}, but ${journal.worktree} is a session SLOT, not a review lane — `
+        + 'refusing to remove it; slot retirement is a held human act\n',
+    )
+    return { journal: stamped, archived }
+  }
   const r = disposeWorktree(root, journal.worktree, { branch: null, untrackedTolerant: true, pgid: journal.pgid ?? null })
   if (!r.disposed && !r.alreadyDisposed) {
     process.stderr.write(

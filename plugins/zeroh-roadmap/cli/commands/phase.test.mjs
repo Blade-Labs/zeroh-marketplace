@@ -46,7 +46,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1496,5 +1496,37 @@ test('phase land — an unreadable journal refusal does NOT also hand over the i
   assert.ok(
     !/set executionIsolation/.test(err.text),
     `two remedies is worse than one when the second is HARMFUL — flipping the knob makes this land succeed down the not-a-lane branch and the worktree is never disposed; got:\n${err.text}`,
+  )
+})
+
+test('phase land — a journal that cannot be ARCHIVED does not crash a land that already succeeded', () => {
+  const f = codexLaneFixture(109)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
+  const err = sink()
+  const out = sink()
+  // The merge and the push already happened. archiveJournal is a writeFileSync + rmSync on the
+  // primary's .building, and an EACCES there must not turn a completed land into a stack trace —
+  // the arc side already gives its archive its own catch, and the two verbs must not disagree.
+  chmodSync(join(f.root, '.building'), 0o500)
+  let code
+  try {
+    code = runLand({
+      cwd: f.wt,
+      toplevel: f.wt,
+      phaseNum: 109,
+      loadPhase: () => f.record,
+      config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+      out,
+      err,
+    })
+  } finally {
+    chmodSync(join(f.root, '.building'), 0o700)
+  }
+
+  assert.equal(code, 0, `the land itself is complete — cleanup reports beside it, it never rewrites the verdict; stderr:\n${err.text}`)
+  assert.deepEqual(f.baseSubjects(), f.expectedBaseSubjects(), 'the integration ref moved exactly as it should have')
+  assert.ok(
+    err.text.includes(f.journalPath),
+    `the un-archived journal must be NAMED — \`codex status\` will keep reading it as live until it is renamed by hand; got:\n${err.text}`,
   )
 })

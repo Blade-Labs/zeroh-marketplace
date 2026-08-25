@@ -21,9 +21,9 @@
  *
  * Exit: 0 clean · 1 usage/config/toolchain · 2 validation failed / refused.
  */
-import { existsSync, readFileSync, writeFileSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join, relative, resolve } from 'node:path'
+import { join, relative } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { validateRoadmapFile, renderZodIssues } from '../lib/validate.mjs'
 import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
@@ -413,7 +413,19 @@ function disposeSource(lane, { cwd, laneBranch, baseRef, out, err }) {
     err.write(`phase land: LANDED, but the lane worktree was KEPT (${r.reason}) — ${r.detail}\n`)
     return
   }
-  const closed = archiveJournal(lane.journalPath, lane.journal, 'phase land')
+  // Its OWN try, mirroring the arc side: the merge and the push are already done, and an EACCES
+  // on the primary's .building must report beside a completed land, never as a stack trace over
+  // one. The two landing verbs must not disagree about that.
+  let closed
+  try {
+    closed = archiveJournal(lane.journalPath, lane.journal, 'phase land')
+  } catch (e) {
+    err.write(
+      `phase land: the lane was disposed but its journal could NOT be archived (${e?.message?.split('\n')[0] ?? e}) — `
+        + `\`codex status\` will keep reading it as live until ${lane.journalPath} is renamed to .closed.json by hand\n`,
+    )
+    return
+  }
   out.write(
     `disposed the codex lane ${cwd}${r.branchDeleted ? ` and its merged ${laneBranch} branch` : ''}; journal archived to ${closed}\n`,
   )

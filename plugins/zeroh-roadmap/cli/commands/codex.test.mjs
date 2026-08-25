@@ -1827,3 +1827,29 @@ test('status: a CLOSED lane reports report: null — its worktree, and the repor
     'the journal carries the bare report NAME, and land force-removed that file with the worktree — spreading it unresolved hands the reader a path that exists nowhere',
   )
 })
+
+test('review archive: a journal naming a SLOT worktree is never disposed by a status read', () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [209])
+  // `codex review 209 --worktree <root>-wt-3` names a provisioned slot (reviewCodex honours
+  // --worktree, and ensureWorktree early-returns for a dir that exists). untrackedTolerant means
+  // node_modules would not even refuse, and a detached HEAD on develop passes the orphan check —
+  // so without the guard a READ command force-removes a slot while the registry keeps a live
+  // claim on the deleted path.
+  // The slot NAMESPACE is a sibling of the repo root — `${root}-wt-<k>`, ensureWorktree's own
+  // construction — not a child. A child named `x-wt-3` is not a slot and must not be treated as one.
+  const slot = `${root}-wt-3`
+  cleanups.push(() => rmSync(slot, { recursive: true, force: true }))
+  execFileSync('git', ['-C', root, 'worktree', 'add', '--detach', '-q', slot, 'HEAD'])
+  writeFileSync(join(slot, 'CODEX-REVIEW.md'), 'findings\nCODEX-RUN-COMPLETE\n')
+  writeFileSync(lane.jPath, JSON.stringify({ ...journalOf(lane), worktree: slot }) + '\n')
+
+  const { code, out, err } = laneStatus(root, [209], '--review')
+
+  assert.equal(out?.state, 'complete', `the verdict is still delivered; stderr: ${err}`)
+  assert.equal(code, 0)
+  assert.ok(
+    existsSync(slot),
+    `a slot is not a review lane: disposing one takes its node_modules and leaves the slot registry holding a live claim on a deleted path; stderr: ${err}`,
+  )
+})

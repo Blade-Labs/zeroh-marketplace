@@ -356,6 +356,15 @@ export function isSlotDir(root, dir) {
   return Boolean(k) && samePath(`${root}-wt-${k}`, dir)
 }
 
+/** A 'failed' refusal is usually a broken REF, and refs are shared across every worktree of the
+ *  repo — so one dangling entry refuses every lane in the consumer at once, and landing is a
+ *  one-shot done-moment with no sweep verb allowed to come back for them. The remedy has to
+ *  travel with the refusal or the worktrees quietly accumulate. */
+const RECOVERY =
+  '\n  Refs are shared repo-wide, so this refuses EVERY lane until it is fixed: find the bad ref '
+  + '(`git for-each-ref --format="%(refname) %(objectname)" | while read r o; do git cat-file -e "$o" 2>/dev/null || echo "$r"; done`), '
+  + 'delete it, and land again. To dispose this one worktree by hand: `git worktree remove <dir>` from the primary checkout.'
+
 /**
  * The disposal rail: ONE home for "this worktree has reached its done-moment, take it away".
  *
@@ -398,15 +407,6 @@ export function isSlotDir(root, dir) {
  * @returns {{ disposed: boolean, alreadyDisposed: boolean, reason: 'dirty'|'unpushed'|'live'|'failed'|null,
  *             detail: string|null, branchDeleted: boolean }}
  */
-/** A 'failed' refusal is usually a broken REF, and refs are shared across every worktree of the
- *  repo — so one dangling entry refuses every lane in the consumer at once, and landing is a
- *  one-shot done-moment with no sweep verb allowed to come back for them. The remedy has to
- *  travel with the refusal or the worktrees quietly accumulate. */
-const RECOVERY =
-  '\n  Refs are shared repo-wide, so this refuses EVERY lane until it is fixed: find the bad ref '
-  + '(`git for-each-ref --format="%(refname) %(objectname)" | while read r o; do git cat-file -e "$o" 2>/dev/null || echo "$r"; done`), '
-  + 'delete it, and land again. To dispose this one worktree by hand: `git worktree remove <dir>` from the primary checkout.'
-
 export function disposeWorktree(
   repoRoot,
   dir,
@@ -504,8 +504,19 @@ export function disposeWorktree(
   // file, including the named lane artifacts the dirt check above deliberately allowed, so the
   // force only ever runs on a tree this function has already proven carries nothing but them.
   const removed = quiet(repoRoot, ['worktree', 'remove', dir])
-  if (!removed.ok && !quiet(repoRoot, ['worktree', 'remove', '--force', dir]).ok) {
-    return refuse('failed', `git worktree remove ${dir} failed — ${removed.out}`)
+  if (!removed.ok) {
+    // The FORCE result is what gets reported. The probe above fails on any untracked file, so on
+    // a codex lane its message is always "contains modified or untracked files" whatever actually
+    // went wrong — reporting it would hand every real failure the same red herring.
+    const forced = quiet(repoRoot, ['worktree', 'remove', '--force', dir])
+    if (!forced.ok) {
+      return refuse(
+        'failed',
+        `git worktree remove ${dir} failed — ${forced.out}\n  The land will not come back for this worktree (landing is a one-shot done-moment, `
+          + `and no sweep verb exists): fix the cause above, then finish by hand with \`git worktree remove --force ${dir}\` `
+          + `run from ${repoRoot}, followed by \`git worktree prune\`.`,
+      )
+    }
   }
 
   // A merged branch that will NOT delete (checked out in another worktree, a ref lock) is a leak
