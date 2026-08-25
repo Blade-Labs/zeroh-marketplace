@@ -185,7 +185,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/lib/eval-collect.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-25',
+      transparencyReport: {
+        whatWasDone:
+          'summarizeGateRuns now skips any GateRunReportShape record whose slotFilter is present, after the safeParse and before the projection. A --slots subset check no longer contributes a gate-round entry, and its recorded agent rounds no longer reach the eval at all. Full reports keep their ordering and their projected shape byte-for-byte.',
+        how:
+          'test-engineer wrote three RED tests first, driving real run-<seq>-<ts>.json files through the production writeReport: interleaved full/filtered/full/filtered, a filtered report as BOTH the newest and the oldest, and an all-full positive control beside an all-filtered corpus. RED was 30 pass / 3 fail, failing on the defect — four entries where two were expected, with the filtered runs contributing a round-9 subset-only-reviewer that belongs to no phase. GUARD MUTATION PROOF, three results: (1) planted violation deleting the guard line entirely produced `not ok 31/32/33`, 30 pass / 3 fail; (2) planted violation narrowing it to the FIRST filtered report (`report.slotFilter && out.length === 0`) — the shape a naive fix takes — produced `not ok 31/32`, 31 pass / 2 fail, so the non-initial case is genuinely load-bearing; (3) decoy, `report.slotFilter !== undefined` (an equivalent test against a schema field that is either absent or a non-empty string), stayed 33 pass / 0 fail. Restored and re-verified: 33/33.',
+        compromises: 'None — the exclusion was implemented at the projection boundary, not narrowed or deferred.',
+        skipped: 'None — both step verifies ran and passed.',
+        hardcoded: 'None — the guard reads the schema field, no slot-name list.',
+        limitations:
+          'The guard is presence-based, matching GateRunReportShape, where slotFilter is either absent or a non-empty string; a future partial-run marker that is not slotFilter would need its own exclusion. checkPhaseConsistency and the verify-complete eval refresh already refused filtered reports independently, so this closes the third and last door rather than introducing the rule.',
+      },
     },
     {
       id: '9.4',

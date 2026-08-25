@@ -387,7 +387,8 @@ function readJson(path) {
  *
  * A run file that will not read or will not match GateRunReportShape is SKIPPED, never
  * thrown and never half-counted: a corrupt record is missing data, not a reason to refuse
- * an entire arc. The filter stays keyed on `run-<seq>-*.json` so the bridge's sibling
+ * an entire arc. A FILTERED run (`slotFilter` present) is skipped for the opposite reason —
+ * it read fine and says nothing about the phase. The filter stays keyed on `run-<seq>-*.json` so the bridge's sibling
  * `.typed-cache/` mirror under roadmap/.gate/ can never be read as a run.
  */
 export function summarizeGateRuns(repoRoot, phaseNum) {
@@ -410,6 +411,11 @@ export function summarizeGateRuns(repoRoot, phaseNum) {
     const parsed = GateRunReportShape.safeParse(read.value)
     if (!parsed.success) continue
     const report = parsed.data
+    // A --slots run proves a SUBSET on purpose: its green covers the filtered rows alone and its
+    // agents[] belong to that projection, not to the phase. Counting one as a gate round inflates
+    // the round count of every phase whose driver debugged with --slots — which is the routine
+    // per-task path, so the inflation is systematic rather than occasional.
+    if (report.slotFilter) continue
     out.push({
       startedAt: report.startedAt,
       green: report.green,

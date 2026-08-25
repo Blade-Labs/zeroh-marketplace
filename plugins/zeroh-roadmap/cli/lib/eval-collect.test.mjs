@@ -24,7 +24,7 @@ import { basename, join } from 'node:path'
 import { defaultExec } from './exec.mjs'
 import { bridgeEval } from './tsx-bridge.mjs'
 import { buildEvalFixture, ARC_ID, PHASE_NUMS, SUMMARY_DATE } from '../testdata/eval-arc/build-fixture.mjs'
-import { GateRunReportShape } from './gate-report.mjs'
+import { GateRunReportShape, writeReport } from './gate-report.mjs'
 import {
   collectArcTrace,
   summarizeGateRuns,
@@ -854,4 +854,165 @@ test('readPhaseEvalSamples — an unparseable record is a WARNING naming the fil
       `${name} must be NAMED in the warnings — a silent skip makes a shrinking corpus indistinguishable from a stable one; warnings were ${JSON.stringify(warnings)}`,
     )
   assert.equal(warnings.length, 2, `exactly one warning per unreadable record — no warning for the three that loaded; got ${JSON.stringify(warnings)}`)
+})
+
+// ── 12. a --slots SUBSET run is not a gate round ───────────────────────────────────────
+//
+//   `roadmap gate run <N> --slots types` is the routine debugging projection a driver runs
+//   once per task: it proves ONE slot, on purpose, and its `green` says nothing about the
+//   plan's other slots. `GateRunReportShape.slotFilter` is set exactly when a run was
+//   filtered that way, and both checkPhaseConsistency and the --verify-complete eval refresh
+//   already refuse such a report as evidence about the phase. summarizeGateRuns is the
+//   remaining door: every filtered subset check it emits is counted by the eval as a
+//   complete gate round, which inflates the round count of any phase whose driver debugged
+//   with --slots — the phases that needed the most iteration read as the most disciplined.
+
+/** A bare repo root. summarizeGateRuns reads `roadmap/.gate/<phase>` and NOTHING else, so the
+ *  slotFilter contract is pinned without the corpus builder's git script or tsx bridge. */
+function gateScratch() {
+  const root = mkdtempSync(join(tmpdir(), 'zr-evalfix-slotfilter-'))
+  scratch.push(root)
+  return root
+}
+
+/** A REAL GateRunReport — written through the production `writeReport`, so these fixtures are
+ *  the same bytes, the same run-<seq>-<ts>.json names and the same Zod validation a real gate
+ *  run produces. A test that hand-spelled the filename would keep passing after the writer moved. */
+const gateRun = (phase, o = {}) => ({
+  phase,
+  startedAt: o.startedAt,
+  baseSha: o.baseSha ?? '0'.repeat(40),
+  mode: 'phase',
+  kind: 'logic',
+  testScope: { derived: 'relevant', declared: null, effective: 'relevant' },
+  reviewScope: { derived: 'full', declared: null, effective: 'full' },
+  slots: o.slots ?? [{ slot: 'lint', command: 'npm run lint', exitCode: 0, durationMs: 1200, logPath: null }],
+  agents: (o.agents ?? []).map((a, i) => ({ summary: `round ${i}`, recordedAt: '2026-07-16T12:05:00.000Z', ...a })),
+  green: o.green ?? true,
+  notes: [],
+  ...(o.slotFilter ? { slotFilter: o.slotFilter } : {}),
+})
+
+/** The agent round only a FILTERED run recorded — its presence anywhere in the output means a
+ *  subset check's reviewer round was counted as one of the phase's rounds. */
+const SUBSET_ROUND = { round: 9, agent: 'subset-only-reviewer', verdict: 'clean' }
+
+/** Written as the rounds of a full run, and — since `gateRun` supplies the summary/recordedAt
+ *  the report shape requires — also exactly how summarizeGateRuns must project them back. */
+const FULL_ROUNDS = [
+  { round: 0, agent: 'quality-pass', verdict: 'clean', model: 'claude-opus-5' },
+  { round: 1, agent: 'code-reviewer', verdict: 'findings-fixed' },
+]
+
+test('summarizeGateRuns — excludes slotFilter reports (a subset check is not a gate round)', () => {
+  const root = gateScratch()
+  // INTERLEAVED on purpose: full, filtered, full, filtered. A skip that only looked at the
+  // first element, or only at the newest, would survive a corpus that grouped them.
+  writeReport(root, gateRun(7001, { startedAt: '2026-07-16T10:00:00.000Z', agents: FULL_ROUNDS }))
+  writeReport(root, gateRun(7001, { startedAt: '2026-07-16T10:30:00.000Z', slotFilter: 'types', agents: [SUBSET_ROUND] }))
+  writeReport(root, gateRun(7001, {
+    startedAt: '2026-07-16T11:00:00.000Z',
+    agents: [{ round: 2, agent: 'code-reviewer', verdict: 'clean' }],
+    slots: [
+      { slot: 'lint', command: 'npm run lint', exitCode: 0, durationMs: 900, logPath: null },
+      { slot: 'types', command: 'npm run type-check', exitCode: 1, durationMs: 4200, logPath: null },
+      { slot: 'e2e', note: 'skipped', declaredAbsent: true },
+    ],
+    green: false,
+  }))
+  writeReport(root, gateRun(7001, { startedAt: '2026-07-16T11:30:00.000Z', slotFilter: 'lint,types', agents: [SUBSET_ROUND] }))
+
+  const out = summarizeGateRuns(root, 7001)
+
+  assert.equal(
+    out.length,
+    2,
+    `exactly the two FULL runs: a --slots run proves a subset on purpose, so counting it as a gate round inflates ` +
+      `the round count of every phase whose driver debugged with --slots; got ${JSON.stringify(out)}`,
+  )
+  assert.deepEqual(
+    out.map((r) => r.startedAt),
+    ['2026-07-16T10:00:00.000Z', '2026-07-16T11:00:00.000Z'],
+    'the surviving full runs keep run-<seq> order — filtering removes entries, it never reorders them',
+  )
+  // Whole-array deepEqual: the filter must not alter what a FULL run projects. A dropped model,
+  // a leaked slotFilter key or a re-counted slotFailure fails here rather than travelling on.
+  assert.deepEqual(
+    out,
+    [
+      { startedAt: '2026-07-16T10:00:00.000Z', green: true, rounds: FULL_ROUNDS, slotFailures: 0 },
+      {
+        startedAt: '2026-07-16T11:00:00.000Z',
+        green: false,
+        rounds: [{ round: 2, agent: 'code-reviewer', verdict: 'clean' }],
+        slotFailures: 1,
+      },
+    ],
+    'the projected shape of a full run is byte-identical to today — startedAt/green/rounds/slotFailures, nothing added',
+  )
+
+  // A filtered run's reviewer round is a round about a SUBSET, not a round about the phase.
+  const rounds = out.flatMap((r) => r.rounds)
+  assert.equal(
+    rounds.some((r) => r.agent === SUBSET_ROUND.agent),
+    false,
+    `no round from a --slots run may appear in the output; rounds were ${JSON.stringify(rounds)}`,
+  )
+  assert.equal(rounds.length, 3, 'three rounds total — the two filtered runs contribute none')
+})
+
+test('summarizeGateRuns — the newest filtered report is still excluded, and so is the oldest', () => {
+  const root = gateScratch()
+  // The non-initial, non-terminal cases both: seq 1 filtered, seq 2 full, seq 3 filtered. An
+  // implementation that skipped only a leading filtered report, or that stopped scanning at the
+  // newest file, passes the naive corpus and fails here.
+  writeReport(root, gateRun(7002, { startedAt: '2026-07-17T09:00:00.000Z', slotFilter: 'types', agents: [SUBSET_ROUND] }))
+  writeReport(root, gateRun(7002, { startedAt: '2026-07-17T09:30:00.000Z', agents: FULL_ROUNDS }))
+  writeReport(root, gateRun(7002, { startedAt: '2026-07-17T10:00:00.000Z', slotFilter: 'lint', agents: [SUBSET_ROUND] }))
+
+  const out = summarizeGateRuns(root, 7002)
+
+  assert.equal(out.length, 1, `only the one full run survives; got ${JSON.stringify(out)}`)
+  assert.deepEqual(
+    out,
+    [{ startedAt: '2026-07-17T09:30:00.000Z', green: true, rounds: FULL_ROUNDS, slotFailures: 0 }],
+    'the newest run being a --slots subset does not make it the phase gate round — the full run in the middle is',
+  )
+  assert.equal(
+    out.at(-1).startedAt,
+    '2026-07-17T09:30:00.000Z',
+    'the LAST entry is the newest FULL run, never the newest filtered one (the eval reads the tail as the final gate)',
+  )
+})
+
+test('summarizeGateRuns — an all-full corpus is unchanged; an all-filtered one is [] (never null, never a throw)', () => {
+  const full = gateScratch()
+  for (const [startedAt, round] of [
+    ['2026-07-18T09:00:00.000Z', 0],
+    ['2026-07-18T10:00:00.000Z', 1],
+    ['2026-07-18T11:00:00.000Z', 2],
+  ])
+    writeReport(full, gateRun(7003, { startedAt, agents: [{ round, agent: 'code-reviewer', verdict: 'clean' }] }))
+  assert.deepEqual(
+    summarizeGateRuns(full, 7003),
+    [
+      { startedAt: '2026-07-18T09:00:00.000Z', green: true, rounds: [{ round: 0, agent: 'code-reviewer', verdict: 'clean' }], slotFailures: 0 },
+      { startedAt: '2026-07-18T10:00:00.000Z', green: true, rounds: [{ round: 1, agent: 'code-reviewer', verdict: 'clean' }], slotFailures: 0 },
+      { startedAt: '2026-07-18T11:00:00.000Z', green: true, rounds: [{ round: 2, agent: 'code-reviewer', verdict: 'clean' }], slotFailures: 0 },
+    ],
+    'POSITIVE CONTROL: with no filtered report in the dir, every run is emitted exactly as today',
+  )
+  // The shipped corpus too — the real report bytes, not this file's dialect.
+  assert.equal(summarizeGateRuns(fixture(), 9001).length, 1, 'the shipped model-less corpus is untouched by the filter')
+
+  const filtered = gateScratch()
+  writeReport(filtered, gateRun(7004, { startedAt: '2026-07-19T09:00:00.000Z', slotFilter: 'types', agents: [SUBSET_ROUND] }))
+  writeReport(filtered, gateRun(7004, { startedAt: '2026-07-19T10:00:00.000Z', slotFilter: 'types' }))
+  const none = summarizeGateRuns(filtered, 7004)
+  assert.equal(Array.isArray(none), true, 'a phase whose every run was a subset check returns an ARRAY')
+  assert.deepEqual(
+    none,
+    [],
+    'a phase that only ever ran --slots subsets has NO evidenced gate round — an empty list, not a fabricated one',
+  )
 })
