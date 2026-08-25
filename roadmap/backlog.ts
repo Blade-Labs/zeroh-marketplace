@@ -47,10 +47,6 @@ export default defineBacklog([
   // registry → 3 attribution (dependsOn 2) → 4 roles+delivery+manifests (dependsOn 2,3).
   // Queued after 4 Mode A reviews returned READY/CLEAN (2026-08-23). Execute: /do-arc POLYSEAT
   // ── Standalone, post-arc (dependsOn 4: manifest generator + ratchet) ──────
-  {
-    phase: 6,
-    name: 'Worktree disposal owned by the done-verbs — land cleans, review-complete archives',
-  },
   // ── Post-arc spike (dependsOn 1: peval pipe; LOW — after the fenced 6) ────
   {
     phase: 7,
