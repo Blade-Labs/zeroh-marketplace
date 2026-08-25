@@ -1154,12 +1154,11 @@ test('a lane flag contradicting its subcommand is refused, not ignored', () => {
 })
 
 // ── refuseIfLive: the same-lane journal read must be GUARDED, not a raw JSON.parse ────────
-// refuseIfLive parses its own same-lane journal directly (`JSON.parse(readFileSync(jPath))`)
-// instead of going through findJournal's try/catch + JournalUnreadableError wrapping. A
-// truncated same-lane journal (a launch that died mid-write) therefore escapes at relaunch
-// time as a raw, unnamed SyntaxError with no journal path and no remedy — exactly the failure
-// mode findJournal was built to prevent for every OTHER caller (see the two tests above this
-// section, and `codex status`'s own PARSE-failure reporting).
+// A journal the lookup declines — truncated mid-write, or parsing to something that is not a
+// journal object — must reach the operator as a NAMED error carrying the file and the delete-
+// and-relaunch remedy, the way findJournal already serves every other caller. The failure these
+// pin is a raw, unnamed SyntaxError with no path and no remedy, or an internal
+// lookup-disagreement throw that blames the code for a file's contents.
 
 test('refuseIfLive — a truncated same-lane journal never reports raw SyntaxError', () => {
   const root = tmpRepo()

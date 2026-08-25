@@ -74,41 +74,24 @@ function journalPath(root, ids, lane = 'run') {
   return join(root, '.building', `${LANES[lane].prefix}${ids.join('-')}.json`)
 }
 
-/** A journal that EXISTS and will not parse. Never folded into "no journal": an absent journal
+/** A journal that EXISTS and cannot be read as one — it will not parse, or it parses to
+ *  something that is not a journal object. Never folded into "no journal": an absent journal
  *  means an inline session (nothing to reconcile), an unreadable one means the launcher's record
  *  is there and unreadable, and treating those alike disarms the reconcile in silence. */
 export class JournalUnreadableError extends Error {
   constructor(failures) {
     super(
-      `roadmap codex: ${failures.length} journal file(s) NAMING these phase(s) could not be parsed, so no lane journal `
-        + 'could be resolved \u2014 this is NOT the same as an inline session with no journal:\n'
+      `roadmap codex: ${failures.length} journal file(s) NAMING these phase(s) could not be read as a journal, so no `
+        + 'lane journal could be resolved \u2014 this is NOT the same as an inline session with no journal:\n'
         + failures.map(({ path, message }) => `  - ${path}: ${message}`).join('\n')
-        + '\nRead the file: a truncated journal is a launch that died mid-write \u2014 delete it if that run is gone, '
-        + 'and relaunch the lane.',
+        + '\nRead the file: a truncated journal is a launch that died mid-write, and a file that parses to anything but '
+        + 'an object is not a journal at all \u2014 delete it if that run is gone, and relaunch the lane.',
     )
     this.name = 'JournalUnreadableError'
     this.failures = failures
   }
 }
 
-/**
- * The lane journal covering every id in `ids` → { path, journal }, or null.
- *
- * Two lookups, in order: the exact single-phase name, then a scan for the multi-phase journal
- * an arc run writes. Ids are compared as STRINGS on both sides — a journal's `phases` may hold
- * either, and a strict compare would leave every arc run unreconciled.
- *
- * Shared rather than private because the reconcile at landing (gate --verify-complete) must
- * find the same journal `codex status` does; two lookups would drift.
- *
- * THROWS JournalUnreadableError when nothing matched but a candidate file that COULD have covered
- * these ids failed to parse: a null there would report "no journal" over a journal that is sitting
- * right on disk. Candidacy is read off the FILENAME, which launch() builds from the very ids it
- * writes into `phases` — so a corrupt journal belonging to other phases is not this lookup's
- * business, and nothing is skipped in silence: that file still throws for the ids it names.
- * Scoping matters because nothing prunes .building, so one truncated journal would otherwise
- * block the reconcile for every phase in the checkout, including inline ones.
- */
 /**
  * Why a PARSED journal is still unreadable, or null when it is fine. ONE definition, because two
  * readers must agree: a journal is an OBJECT, and anything else JSON yields — null, a bare number
@@ -124,6 +107,24 @@ function journalDeclineReason(value) {
     : null
 }
 
+/**
+ * The lane journal covering every id in `ids` → { path, journal }, or null.
+ *
+ * Two lookups, in order: the exact single-phase name, then a scan for the multi-phase journal
+ * an arc run writes. Ids are compared as STRINGS on both sides — a journal's `phases` may hold
+ * either, and a strict compare would leave every arc run unreconciled.
+ *
+ * Shared rather than private because the reconcile at landing (gate --verify-complete) must
+ * find the same journal `codex status` does; two lookups would drift.
+ *
+ * THROWS JournalUnreadableError when nothing matched but a candidate file that COULD have covered
+ * these ids was DECLINED — it would not parse, or it parsed to something journalDeclineReason
+ * refuses: a null there would report "no journal" over a journal that is sitting right on disk. Candidacy is read off the FILENAME, which launch() builds from the very ids it
+ * writes into `phases` — so a corrupt journal belonging to other phases is not this lookup's
+ * business, and nothing is skipped in silence: that file still throws for the ids it names.
+ * Scoping matters because nothing prunes .building, so one truncated journal would otherwise
+ * block the reconcile for every phase in the checkout, including inline ones.
+ */
 export function findJournal(root, ids, lane = 'run') {
   const wanted = ids.map(String)
   const failures = []
@@ -322,13 +323,13 @@ function buildPlanPrompt(root, ids, { brief } = {}) {
   ].join('\n')
 }
 
-/** The refusal a journal that will not parse earns at LAUNCH time: exit 1, not the exit 2 a
- *  proven-live run earns — nothing was proven, the evidence is unreadable. */
+/** The refusal an unreadable journal earns at LAUNCH time: exit 1, not the exit 2 a proven-live
+ *  run earns — nothing was proven, the evidence is unreadable. */
 function refuseUnreadableJournal(lane, ids, failures) {
   const e = new JournalUnreadableError(failures)
   process.stderr.write(
     `roadmap codex: ${e.name} — a ${lane} for ${ids.join(',')} was NOT launched: a ${lane} journal NAMING these `
-      + 'phase(s) will not parse, so a live run underneath it cannot be ruled out.\n'
+      + 'phase(s) cannot be read as a journal, so a live run underneath it cannot be ruled out.\n'
       + `${e.message}\n`,
   )
   return 1
@@ -364,8 +365,9 @@ function journalParseFailure(path) {
  * launch record as a bare SyntaxError. Two questions, scoped differently: LIVENESS is answered
  * by the EXACT journal this launch would overwrite alone, so a readable arc journal that merely
  * covers these ids falls through to the worktree-level check below, which names the file it
- * found. READABILITY is not scoped that way — any journal NAMING these ids that will not parse
- * refuses the launch, because a covering journal nobody can read cannot be shown to be dead.
+ * found. READABILITY is not scoped that way — any journal NAMING these ids that findJournal
+ * declines refuses the launch, because a covering journal nobody can read cannot be shown to
+ * be dead.
  */
 function refuseIfLive(root, ids, lane, worktree, jPath, relaunchNote) {
   const building = join(root, '.building')
@@ -376,8 +378,9 @@ function refuseIfLive(root, ids, lane, worktree, jPath, relaunchNote) {
     if (!(e instanceof JournalUnreadableError)) throw e
     return refuseUnreadableJournal(lane, ids, e.failures)
   }
-  // findJournal returns the exact journal whenever it parses, so a broader match while that
-  // file sits on disk means the broader one MASKED an unreadable exact journal.
+  // findJournal returns the exact journal whenever it parses AND is a journal object, so a
+  // broader match while that file sits on disk means the broader one MASKED an unreadable
+  // exact journal — journalParseFailure asks WHICH decline it was.
   if (existsSync(jPath) && found?.path !== jPath)
     return refuseUnreadableJournal(lane, ids, [{ path: jPath, message: journalParseFailure(jPath) }])
   if (found?.path === jPath) {
