@@ -328,25 +328,6 @@ export const phaseEvalRecordPath = (repoRoot, phase) =>
 const didNotRun = (s) => s.declaredAbsent === true || /^\(skipped:/.test(String(s.command ?? ''))
 
 /**
- * Assemble a per-phase eval record from what a gate run already holds. PURE: `date` and
- * `fingerprint` are passed IN, never derived here — the SweepReportShape discipline (a
- * recorder that reads its own wall clock makes a silent re-record indistinguishable from the
- * original). The gate passes the run report's own `startedAt`, so the date is a recorded
- * fact about the run rather than a fresh reading.
- *
- * `taskCount` and `keyFiles` are the COHORT KEYS computeScorecard slices on
- * (bandFor x surfaceOf), which is why they are lifted from the phase file rather than left
- * to the reader: a record without them does not lose detail, it MIS-COHORTS.
- *
- * Attribution is copied FIELD BY FIELD, never spread: PhaseEvalRecordShape is strict, and a
- * consumer phase file carrying an extra key under executionResult.driver would otherwise
- * turn a measurement write into a refusal.
- *
- * Returns { record, warnings }: projecting the per-firing role list onto a one-model-per-role
- * record can drop an ambiguous role (projectRoleModels), and a caller that could not SAY so
- * would be dropping it in silence. Warnings never fail anything — the caller prints them.
- */
-/**
  * Project the per-firing `executionResult.roles` ARRAY onto the model-only RECORD
  * `PhaseEvalRecordShape.attribution.roles` accepts — plus the warnings that projection owes.
  *
@@ -397,6 +378,25 @@ export function projectRoleModels(phase, roles) {
   return { roles: Object.fromEntries(entries), warnings }
 }
 
+/**
+ * Assemble a per-phase eval record from what a gate run already holds. PURE: `date` and
+ * `fingerprint` are passed IN, never derived here — the SweepReportShape discipline (a
+ * recorder that reads its own wall clock makes a silent re-record indistinguishable from the
+ * original). The gate passes the run report's own `startedAt`, so the date is a recorded
+ * fact about the run rather than a fresh reading.
+ *
+ * `taskCount` and `keyFiles` are the COHORT KEYS computeScorecard slices on
+ * (bandFor x surfaceOf), which is why they are lifted from the phase file rather than left
+ * to the reader: a record without them does not lose detail, it MIS-COHORTS.
+ *
+ * Attribution is copied FIELD BY FIELD, never spread: PhaseEvalRecordShape is strict, and a
+ * consumer phase file carrying an extra key under executionResult.driver would otherwise
+ * turn a measurement write into a refusal.
+ *
+ * Returns { record, warnings }: projecting the per-firing role list onto a one-model-per-role
+ * record can drop an ambiguous role (projectRoleModels), and a caller that could not SAY so
+ * would be dropping it in silence. Warnings never fail anything — the caller prints them.
+ */
 export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerprint, date }) {
   const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : []
   const record = {

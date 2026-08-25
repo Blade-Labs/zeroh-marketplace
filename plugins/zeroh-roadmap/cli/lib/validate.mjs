@@ -16,7 +16,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { bridgeImport } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
 import { DRIVERS } from './drivers.mjs'
-import { gateDir, latestReport, checkPhaseConsistency, GateReportUnreadableError } from './gate-report.mjs'
+import { latestReport, checkPhaseConsistency, GateReportUnreadableError } from './gate-report.mjs'
 
 /** Phases planned after arc ROADOPUS — below this floor the provenance rules (c)/(d) are exempt. */
 const ENFORCEMENT_FLOOR = 1365
@@ -280,10 +280,6 @@ function gateReportConsistencyErrors(phase, normalizedPath) {
   } catch {
     return [] // git absent → fail open (today's behavior)
   }
-  const dir = gateDir(toplevel, num)
-  if (!existsSync(dir) || readdirSync(dir).filter((f) => /^run-\d+-.*\.json$/.test(f)).length === 0) {
-    return [] // no report yet → today's behavior (non-breaking during the parallel-impl window)
-  }
   let latest
   try {
     latest = latestReport(toplevel, num)
@@ -299,6 +295,8 @@ function gateReportConsistencyErrors(phase, normalizedPath) {
       },
     ]
   }
+  // No run file at all → fail open: the rule judges the evidence a phase HAS, and a consumer
+  // that has not adopted the gate is not making a false claim.
   if (!latest) return []
   const result = checkPhaseConsistency(phase, latest.report)
   if (result.ok) return []

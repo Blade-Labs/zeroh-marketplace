@@ -1146,7 +1146,7 @@ function linkedWorktree(repo, name, branch) {
     git('add', join('roadmap', 'phases', `phase-${num}.phase.ts`))
     git('commit', '-q', '-m', `seed phase-${num} file`) // NO em-dash → not phase-own
   }
-  return { dir, git, writePhase }
+  return { dir, writePhase }
 }
 
 const phaseFileCount = (root) => readdirSync(join(root, 'roadmap', 'phases')).filter((f) => f.endsWith('.phase.ts')).length
@@ -1308,7 +1308,10 @@ test('gate run --record-round — corrupt newest report is NAMED, never reported
 
   const r = runGateCmd(repo.root, ['1310', '--record-round', round])
 
-  assert.notEqual(r.code, 0, `an unreadable report cannot record a round; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  // EXACT code, not merely non-zero: --record-round answers every failure with 2 (malformed
+  // JSON, shape refusal, no report to append to), and unreadable evidence is one more of those.
+  // A loose `!= 0` would let the mode's own convention drift without a red.
+  assert.equal(r.code, 2, `--record-round refuses with 2, its code for every other failure; stdout: ${r.stdout} stderr: ${r.stderr}`)
   assert.match(r.stderr, /GateReportUnreadableError/, `the failure names its class; stderr: ${JSON.stringify(r.stderr)}`)
   assert.ok(r.stderr.includes(corruptPath), `and the concrete run file; stderr: ${JSON.stringify(r.stderr)}`)
   assert.equal(
@@ -1337,7 +1340,11 @@ test('gate run --verify-complete — corrupt newest report names the report, not
 
   const r = runGateCmd(repo.root, ['1410', '--verify-complete'])
 
-  assert.notEqual(r.code, 0, `an unreadable report cannot certify a completion; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  // EXACT code, not merely non-zero. --verify-complete splits its codes: 1 when it CANNOT
+  // evaluate (no .gate dir, no run file, unreadable phase file) and 2 when it evaluated and
+  // found a problem. Unreadable evidence is the first kind, so 1 — and pinning it keeps the
+  // two commands' differing conventions deliberate rather than accidental.
+  assert.equal(r.code, 1, `--verify-complete cannot EVALUATE, which is its 1; stdout: ${r.stdout} stderr: ${r.stderr}`)
   assert.match(r.stderr, /GateReportUnreadableError/, `the failure names its class; stderr: ${JSON.stringify(r.stderr)}`)
   assert.ok(r.stderr.includes(corruptPath), `and the concrete run file; stderr: ${JSON.stringify(r.stderr)}`)
   assert.equal(
