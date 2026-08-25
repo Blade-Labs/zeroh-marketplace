@@ -662,7 +662,11 @@ function findClosedJournal(root, ids, lane = 'run') {
  */
 function archiveReviewLane(root, jPath, journal, reportPath) {
   const archived = jPath.replace(/\.json$/, '-REPORT.md')
-  if (existsSync(reportPath) && !existsSync(archived)) copyFileSync(reportPath, archived)
+  // Unconditional overwrite. Idempotence is carried by the caller's `archivedAt` check, so this
+  // line only ever runs on a verdict that has NOT been consumed yet — and a relaunched review of
+  // the same ids finds the PREVIOUS review's copy sitting at exactly this path. Skipping the write
+  // there would dispose the new lane and leave `status` serving the superseded verdict forever.
+  if (existsSync(reportPath)) copyFileSync(reportPath, archived)
   const r = disposeWorktree(root, journal.worktree, { branch: null, untrackedTolerant: true, pgid: journal.pgid ?? null })
   if (!r.disposed && !r.alreadyDisposed) {
     process.stderr.write(

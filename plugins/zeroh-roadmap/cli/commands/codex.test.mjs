@@ -1744,3 +1744,32 @@ test('status: a phase with NO journal at all still misses — the closed probe m
   assert.match(err, /no run journal covers/, `with the message that has always named it; got: ${err}`)
   assert.equal(out, null, 'and no state is printed for a lane that never ran')
 })
+
+test('review archive: a SECOND review of the same phase archives ITS verdict, never the previous one', () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [207], { body: 'first pass: NEEDS WORK\nCODEX-RUN-COMPLETE\n' })
+  assert.equal(laneStatus(root, [207], '--review').out?.state, 'complete', 'precondition: the first review archives')
+  assert.ok(!existsSync(lane.worktree), 'precondition: and its worktree is gone')
+
+  // The relaunch: `codex review 207` again writes a FRESH journal (no archivedAt) and a new
+  // detached worktree, exactly as reviewCodex does. The archived name is keyed on the ids, so
+  // the previous verdict is sitting at the very path this run must write.
+  const second = 'second pass: READY\nCODEX-RUN-COMPLETE\n'
+  execFileSync('git', ['-C', root, 'worktree', 'add', '--detach', '-q', lane.worktree, 'HEAD'])
+  writeFileSync(join(lane.worktree, 'CODEX-REVIEW.md'), second)
+  writeFileSync(
+    lane.jPath,
+    JSON.stringify({ ...journalOf(lane), archivedAt: undefined, archivedReport: undefined, startedAt: new Date(Date.now() - 60_000).toISOString() }) + '\n',
+  )
+
+  const { code, out, err } = laneStatus(root, [207], '--review')
+
+  assert.equal(out?.state, 'complete', `stderr: ${err}`)
+  assert.equal(code, 0, `stderr: ${err}`)
+  assert.equal(
+    readFileSync(lane.archived, 'utf8'),
+    second,
+    'the archived verdict is THIS run\'s — a copy skipped because the path was already occupied leaves `status` serving a superseded review from a lane it just disposed',
+  )
+  assert.ok(!existsSync(lane.worktree), 'and the second lane is disposed like the first')
+})
