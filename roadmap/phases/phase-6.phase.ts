@@ -18,7 +18,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 6,
   name: 'Worktree disposal owned by the done-verbs — land cleans, review-complete archives',
-  status: 'in-progress',
+  status: 'done',
   plannedBy: { model: 'claude-opus-5[1m]' },
   category: 'fix',
   kind: 'hardening',
@@ -65,6 +65,302 @@ export default definePhase({
   ],
   notes:
     "LOCKED (operator ruling 2026-08-23, verbatim intent): no standalone sweep/clean command — disposal has NO verb of its own; no timer reaper of any period. Disposal fires ONLY inside verbs that already exist, at their success moments. A lane that never reaches its done-verb keeps its worktree — that is correct (in-flight work is sacred); the accumulation class this kills is DONE work whose cleanup was honor-system prose.\n\nTHE DISPOSAL RAIL (shared helper, one home — cli/lib/worktree.mjs beside landPhase): disposeWorktree(repoRoot, dir, { expectBranchMerged, allowUntracked }) refuses with NAMED reasons — dirty tree (untracked .building/ excepted, matching the audit protocol, PLUS caller-named lane artifacts via allowUntracked: the run lane's CODEX-REPORT.md is never committed by contract (codex.mjs header), so without the exception EVERY codex-lane disposal refuses on its own report; review lanes dispose untracked-tolerant — the detached read-only lane never commits and its --doc file is a copy from the primary (reviewCodex docblock) — so only MODIFIED TRACKED files refuse there), unpushed commits (log @{u}.. or --not --remotes), live pgid in a lane journal — and on refusal KEEPS the worktree and prints why; on pass: git worktree remove, delete the branch ONLY when fully merged into the integration ref, git worktree prune ride-along. Every git call anchors at repoRoot, never the disposed dir — phase land runs INSIDE the worktree it disposes (the landing.mjs METERTENANT rule: post-merge acts anchor on the PRIMARY checkout). Refusal is stderr + nonzero detail in the land report, never a land failure — landing succeeded; disposal reports honestly.\n\nDONE-MOMENTS AND THEIR OWNERS (the whole design):\n(1) PHASE LAND (runLandCli path in cli/commands/phase.mjs → landPhase in cli/lib/worktree.mjs): slot-lane landing keeps the slot (its lifecycle is reuse-via-reset) but prunes metadata; a land whose source is a codex lane worktree ({root}-codex-<ids>, journal via findJournal ROOTED AT mainCheckout(cwd) — journals live under the PRIMARY .building/ while phase land runs inside the worktree, the phase-3 anchor) disposes worktree + merged codex/* branch + archives the journal (renamed .closed.json so status reads a closed lane honestly, never dead-no-report — the statusCodex closed-read in (3) is that promise's mechanism). REACHABILITY (review finding 2026-08-23): today the codex lane NEVER reaches this seam — do-phase's Integration-routing paragraph lands codex work by MANUAL rebase + ff-only merge from the primary, and runLand refuses under executionIsolation 'primary' (executionIsolationOf defaults to 'primary'; this consumer's roadmap.config.json sets no override). So (1) also makes phase land the codex lane's landing verb: accept a JOURNAL-CONFIRMED codex-lane source regardless of executionIsolation — source-keyed safety, the land rebases the codex worktree and moves the integration ref while the primary tree stays untouched, exactly the guarantee the manual routing gave; the isolation refusal stays for every non-codex source. landPhase's rebase+guarded-ff IS the documented manual sequence mechanized; 6.4 reroutes the skill prose to match.\n(2) ARC LAND (landArc in cli/lib/landing.mjs — do-arc SKILL already names it the cleanup owner: 'arc land completes the BOOKKEEPING only (cleanup, RunnerSummary, push)'): extend its existing cleanup to dispose every landed member's codex-lane worktree via the same rail; probe at execution what its cleanup ALREADY covers and extend, never fork (the plan-arc reuse rule).\n(3) REVIEW COMPLETE (statusCodex in cli/commands/codex.mjs): when state=complete on a review-lane journal, ARCHIVE the lane — copy CODEX-REVIEW.md to the primary's .building/codex-review-<ids>-REPORT.md, remove the detached worktree (no branch exists — review lanes add --detach), stamp the journal archived; idempotent (a second status on an archived lane reports state=complete from the relocated report). The stale-sentinel mtime guard semantics MUST survive unchanged — the archived-journal read path bypasses the worktree report entirely. statusCodex also RESOLVES archived RUN-lane journals: probe codex-<ids>.closed.json + a closed-journal scan, reporting an honest closed state (exit 0) — the live journalRe class [\\d-] excludes '.', so .closed.json escapes both lane scans today and a landed lane would otherwise read 'no journal covers phase(s)'. Status gains a completion SIDE EFFECT deliberately: consuming the verdict IS the review lane's done-moment, and the alternative is a new close verb the ruling forbids.\n(4) SKILL PROSE → MECHANISM: do-phase's codex-delegation 'clean up the worktree' line becomes a pointer to (1)'s mechanics (one line, DIET-LEDGER row for the trim); plan-phase's verify-rehearsal scratch-worktree protocol already instructs removal — verify at execution it names `git worktree remove` explicitly, tighten only if not.\n\nOUT OF SCOPE, honestly: harness-created worktrees (EnterWorktree isolation, ad-hoc session scratchpads like the seven /tmp ones from the audit) are not plugin flows — the plugin cannot own their lifecycle; the prune ride-alongs in (1)/(2) at least clear their dead REPO METADATA when /tmp dies. Slot worktree retirement (a slot dir no session will ever reclaim) stays manual — slots are persistent by design and npm-ci-expensive to recreate.\n\nWHY dependsOn [3]: phase 3 lands findJournal (the shared journal scan this reuses) and the journal driver key; both phases edit codex.mjs journal/status seams — strict ordering beats a conflict fence.\n\n## Hypotheses\n1. CONFIRMED — cleanup exists only as honor-system skill prose at TWO do-phase SKILL.md sites ('clean up the worktree' in the delegation paragraph; 'remove the worktree, the `codex/<N>` branch AND the `.building/codex-<N>.json` journal' in Integration routing) with NO code path disposing codex/review worktrees: the only programmatic remove in the CLI is landArc's own sidecar cleanup (landing.mjs worktree-remove step). Evidence: grep for worktree remove/worktreeRemove across cli/ hits landing.mjs alone; the 2026-08-23 audit found two FULLY MERGED exec lanes still squatting.\n2. REFUTED — 'leaks are crash-orphans, so done-verb hooks would not have fired anyway': the audit's exec-lane worktrees had fully merged branches — their done-verbs ran to completion; only the cleanup was prose. (True crash-orphans are the in-flight class the ruling deliberately keeps sacred.)\n3. NOT TESTED — 'operators skip the prose because manual disposal feels unsafe without checks': plausible contributor; the refusal-first rail removes the risk either way.\n\nREVIEW RATIFICATIONS (Mode A, 2026-08-23): testMode tdd ratified on 6.1–6.3 (each step's verify is the test tripwire the task itself authors); 6.4 testMode none ratified — declarative markdown/ledger artifacts guarded by the step-level grep verify plus the designHomes DIET-LEDGER protocol (declarative-artifact rule). No testScope/reviewScope relaxations declared; userFacing n/a (CLI + skill prose). Assumption 3 fails at plan time BY DESIGN: it is the execution-time tripwire proving dependsOn [3] actually delivered the exported findJournal before this phase leans on it (the phase-5 assumption-2 precedent).",
+  version: '0.32.0',
+  completedDate: '2026-08-25',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: { passed: 1366, total: 1366, notes: 'the whole plugin suite via the consumer unit slot; +54 over the 1312 baseline, across five files' },
+    integrationTests: { passed: 0, total: 0, notes: "declared-none in this consumer's gateCommands; the fixture-consumer tier inside the unit slot IS the integration level, and its 36 tests are green" },
+    e2eTests: { passed: 0, total: 0, notes: 'no e2e slot — CLI plugin, no UI surface' },
+    build: 'clean',
+    notes:
+      "lint/types/build are declared-none in this consumer; the binding mechanical slots are unit, lint-diff and the history-comments ratchet, all exit 0 (run-000014). The hardening closure verification was driven against the REAL CLI in scratch consumers rather than only in-suite: `roadmap phase land` from inside a codex worktree landed, disposed the worktree, deleted the merged branch and archived the journal; `roadmap codex status` then read the archived lane as 'closed' exit 0 where it had printed 'no journal covers phase(s) 500' exit 1 before; a complete review lane self-archived and stayed readable on a second read; a blocking untracked file kept its worktree with the land still green; and a journal naming a session slot was refused by both the land and the status read. Falsified in the other direction too: the same fixture driven against the pre-phase code (bf08360, restored verbatim into a scratch plugin copy) refuses the land outright under executionIsolation 'primary' and leaks both the worktree and the branch — the audit's exact finding.",
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Deduplicated a byte-identical groupAlive probe and the hand-written run-lane artifact list (now RUN_LANE_ARTIFACTS in the module that owns LANES.run.report); dropped a redundant guard and two duplicated comments; moved the dedupe rationale into the helper implementing it. Hard-stopped [SPECULATIVE] on unifying findClosedJournal with findJournal. Surfaced one REAL bug: archiveReviewLane skipped its copy when the ids-keyed destination already existed, so a relaunched review disposed its lane and left status serving the previous verdict.',
+      findings: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+          severity: 'MEDIUM',
+          confidence: 90,
+          agent: 'quality-pass',
+          description:
+            "archiveReviewLane guarded its copy on `!existsSync(archived)`. A second `codex review <N>` writes a fresh journal, so the archive fires and the new lane IS disposed — but the copy was skipped because the previous review's verdict occupied the ids-keyed path, leaving `codex status` serving a superseded verdict from a lane it had just removed.",
+          fixedInCommit: '25b8df9',
+        },
+      ],
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Nine findings, all fixed in e13778d, each pinned by a test that reds without the fix. The HIGH was reproduced empirically in a scratch repo.',
+      findings: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
+          severity: 'HIGH',
+          confidence: 90,
+          agent: 'code-reviewer',
+          description:
+            'The unpushed reachability rail FAILED OPEN: one dangling ref under refs/remotes makes `rev-list --not --branches --remotes --tags` exit 128, and `orphan.ok && count > 0` read that as "nothing is orphaned", falling through to `worktree remove --force`. For a `branch: null` lane — what archiveReviewLane passes — the commits survive only in the reflog. Now an unresolvable HEAD or an unanswerable query refuses "failed".',
+          fixedInCommit: 'e13778d',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+          severity: 'MEDIUM',
+          confidence: 90,
+          agent: 'code-reviewer',
+          description:
+            "The review done-moment was one-shot. `state === 'complete'` with a LIVE process group is reachable (a driver writes its sentinel before its group exits, and do-phase polls status in a loop), so a poll in that window archived the verdict, got reason 'live', and no later status ever retried — the worktree leaked forever, the exact class this phase exists to kill. The relocation stays one-shot; the disposal now retries while the worktree exists.",
+          fixedInCommit: 'e13778d',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
+          severity: 'MEDIUM',
+          confidence: 90,
+          agent: 'code-reviewer',
+          description:
+            'Arc land disposed a member lane but never archived its journal, so `codex status` read dead-no-report exit 2 for a lane that ran and landed, while the same lane landed by `phase land` read closed — two answers for one lane. archiveJournal moved into codex.mjs as the shared home and arc land calls it.',
+          fixedInCommit: 'e13778d',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          severity: 'MEDIUM',
+          confidence: 85,
+          agent: 'code-reviewer',
+          description:
+            'codexLaneSource confirmed a source purely by path equality with the journal, and `codex run --worktree <existing dir>` journals whatever it is handed — so a provisioned slot, or the primary checkout itself, could be confirmed as a codex lane and disposed. Now neither can be.',
+          fixedInCommit: 'e13778d',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          severity: 'MEDIUM',
+          confidence: 85,
+          agent: 'code-reviewer',
+          description:
+            'A JournalUnreadableError was swallowed to null, so a truncated launch record produced the isolation refusal — whose remedy is actively harmful: flipping the knob makes the land succeed and take the not-a-lane branch, silently never disposing the lane.',
+          fixedInCommit: 'e13778d',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
+          severity: 'LOW',
+          confidence: 85,
+          agent: 'code-reviewer',
+          description:
+            "A throw on lane #1 skipped disposal of lanes #2..N, and the outer catch's message sent the operator at the sidecar/claims acts that had already succeeded. Each disposal is now isolated and named.",
+          fixedInCommit: 'e13778d',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
+          severity: 'LOW',
+          confidence: 85,
+          agent: 'code-reviewer',
+          description:
+            'A merged branch that would not delete (checked out elsewhere, a ref lock) was discarded into a bare boolean, so the caller printed "disposed the lane" over a leak nobody could see. The pass path now carries the git text in `detail`.',
+          fixedInCommit: 'e13778d',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+          severity: 'LOW',
+          confidence: 85,
+          agent: 'code-reviewer',
+          description:
+            "A closed lane spread the journal unresolved, emitting the bare report NAME for a file the land had force-removed with the worktree — a path that exists nowhere. Now `report: null`.",
+          fixedInCommit: 'e13778d',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/gate.mjs',
+          severity: 'LOW',
+          confidence: 80,
+          agent: 'code-reviewer',
+          description:
+            'driverReconcile asked only findJournal, whose class excludes ".", so once a land archived the journal every gate re-run silently took the "inline session = no check" path and stopped comparing executionResult.driver against launcher truth. It now falls back to findClosedJournal.',
+          fixedInCommit: 'e13778d',
+        },
+      ],
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Reviewed the R1 FIXES and found two of them had recreated the symptom they closed. Eight findings, all fixed in 6a9b423.',
+      findings: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
+          severity: 'MEDIUM',
+          confidence: 97,
+          agent: 'code-reviewer',
+          description:
+            'The R1 archive gate was `r.disposed && !r.alreadyDisposed`, which skips exactly the case where the lane IS gone (/tmp died, or a sibling removed it) — so arc land left the journal live and `codex status` read dead-no-report for a landed member, the very symptom R1 finding 3 was raised against, while `phase land` did the opposite. Now gated on `disposed` alone.',
+          fixedInCommit: '6a9b423',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
+          severity: 'MEDIUM',
+          confidence: 90,
+          agent: 'code-reviewer',
+          description:
+            'The R1 slot guard was applied to one of the two disposal call sites; codexLaneDirs had none, so `arc land` could still force-remove a provisioned slot. isSlotDir/samePath hoisted into worktree.mjs — the module that owns the <root>-wt-<k> namespace — and applied at both.',
+          fixedInCommit: '6a9b423',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          severity: 'MEDIUM',
+          confidence: 95,
+          agent: 'code-reviewer',
+          description:
+            'The pass-path `detail` R1 added had NO reader in any of the three callers, so the field was dead and a leaked merged branch stayed invisible — the symptom the R1 finding described verbatim. phase land now writes it; the arc record spreads it.',
+          fixedInCommit: '6a9b423',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
+          severity: 'MEDIUM',
+          confidence: 85,
+          agent: 'code-reviewer',
+          description:
+            "The new fail-closed refusal has repo-GLOBAL blast radius — refs are shared, so one dangling entry refuses every lane in the consumer — and a land is a one-shot done-moment with no sweep verb allowed to return. The remedy now travels in the refusal text (how to find the bad ref, how to finish by hand); a run-lane retry was judged out of scope and the round 3 reviewer independently confirmed from the code that no success-moment exists to hang one on.",
+          fixedInCommit: '6a9b423',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/gate.mjs',
+          severity: 'MEDIUM',
+          confidence: 88,
+          agent: 'code-reviewer',
+          description:
+            "findClosedJournal swallowed a corrupt archived journal (archiveJournal's write is not atomic), so driverReconcile returned no problems where its own contract two lines above says a journal that EXISTS and will not parse is a PROBLEM, never an absence. An opt-in strict mode used by the gate caller alone restores the loud guard.",
+          fixedInCommit: '6a9b423',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          severity: 'LOW',
+          confidence: 92,
+          agent: 'code-reviewer',
+          description:
+            'The R1 unreadable-journal message was printed and then FOLLOWED by the isolation refusal, so the operator received the harmful remedy underneath the honest one. codexLaneSource now returns a distinct unreadable refusal and runLand refuses with that alone.',
+          fixedInCommit: '6a9b423',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
+          severity: 'LOW',
+          confidence: 90,
+          agent: 'code-reviewer',
+          description:
+            "The R1 per-lane try wrapped the archive too, so an archive failure pushed a second 'errored' entry after the lane's 'disposed' one — two contradictory outcomes for one worktree, with the archive failure blamed on the disposal. The archive has its own try and its own cleanup warning.",
+          fixedInCommit: '6a9b423',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          severity: 'LOW',
+          confidence: 93,
+          agent: 'code-reviewer',
+          description:
+            "isSlotDir's comment claimed two independent reads where the registry leg could only ever return a directory the shape test already matched — a rationale the code cannot have. The dead read is gone and the comment is honest.",
+          fixedInCommit: '6a9b423',
+        },
+      ],
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        "Reviewed the R2 fixes ANALYTICALLY (no suites — the full mechanical gate ran concurrently on this shared host; the executor ran every verification instead). Cleared both shape-change hunts it was pointed at (the codexLaneSource union at its single call site, disposedNow's scope) and confirmed the fail-closed scope ruling from the code: a second `phase land` cannot re-attempt, because landPhase throws on the already-landed head and runLand returns 2 before disposeSource, so there is no success-moment to hang a retry on. Six findings, all fixed in e73c6be.",
+      findings: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+          severity: 'MEDIUM',
+          confidence: 85,
+          agent: 'code-reviewer',
+          description:
+            'archiveReviewLane is a THIRD disposeWorktree call site and the R2 slot guard had reached only two — and this one fires from a READ command. `codex review <N> --worktree <root>-wt-3` plus any status read would force-remove a slot, with untracked-tolerance meaning even its node_modules would not refuse. It now refuses, says so, and still delivers the verdict.',
+          fixedInCommit: 'e73c6be',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
+          severity: 'MEDIUM',
+          confidence: 90,
+          agent: 'code-reviewer',
+          description:
+            'The failed-removal refusal reported the PROBE\'s output rather than the --force attempt\'s, and the comment three lines above says the probe always fails on the allowUntracked lane artifacts — so every real failure (locked worktree, EACCES, main working tree) was reported as "contains modified or untracked files". This site also lacked the remediation the other two terminal refusals gained.',
+          fixedInCommit: 'e73c6be',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          severity: 'MEDIUM',
+          confidence: 88,
+          agent: 'code-reviewer',
+          description:
+            "disposeSource's docstring promised it never throws, but archiveJournal (writeFileSync + rmSync on the primary's .building) was unguarded — an EACCES there propagated out of runLand as a stack trace over a land whose merge and push had already succeeded, with no word about the journal left reading live. The arc side already had its own catch; the two verbs now agree.",
+          fixedInCommit: 'e73c6be',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          severity: 'LOW',
+          confidence: 95,
+          agent: 'code-reviewer',
+          description: 'Two imports (realpathSync, resolve) orphaned by the R2 hoist of samePath/isSlotDir into worktree.mjs.',
+          fixedInCommit: 'e73c6be',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+          severity: 'LOW',
+          confidence: 90,
+          agent: 'code-reviewer',
+          description:
+            "The doc block R2 wrote to explain `strict` sat immediately above archiveJournal's own block, so it documented nothing and findClosedJournal had none. Moved onto the function it describes.",
+          fixedInCommit: 'e73c6be',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
+          severity: 'LOW',
+          confidence: 90,
+          agent: 'code-reviewer',
+          description:
+            "R2 inserted the RECOVERY constant between disposeWorktree's JSDoc and the function, detaching the rail's entire contract doc from the rail. Hoisted above it.",
+          fixedInCommit: 'e73c6be',
+        },
+      ],
+    },
+  ],
+  metrics: {
+    commits: 12,
+    linesAdded: 2478,
+    linesRemoved: 63,
+    filesChanged: 13,
+    testsAtStart: 1312,
+    testsAtEnd: 1366,
+    testsAdded: 54,
+  },
+  compromises: 'None',
+  executionResult: {
+    phase: 6,
+    status: 'done',
+    driver: { model: 'claude-opus-5[1m]', lane: 'session' },
+    roles: [
+      { role: 'test-engineer', model: 'claude-opus-5[1m]', via: 'native' },
+      { role: 'quality-pass', model: 'claude-opus-5[1m]', via: 'native' },
+      { role: 'code-reviewer', model: 'claude-opus-5[1m]', via: 'native' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      "The round 3 fixes (commit e73c6be) did not themselves receive an independent review round — the gate cap says a final round with findings is SURFACED rather than self-reviewed. They were verified by scoped suites, the full mechanical gate (run-000014, green), and a live end-to-end drive of all four verbs, but a fourth independent read is OWED for the arc sweep.",
+      "[SPECULATIVE] hard-stop from the quality pass, still open: findClosedJournal is a structural parallel of findJournal (exact-name probe, then a .building scan, then a phases-cover check). Unifying them needs a flag that toggles findJournal's heavily-pinned JournalUnreadableError semantics; round 2 then required exactly such a flag for the gate reconcile, so a narrow `strict` seam now exists and a future unification has a starting point. Left for a human call.",
+      "cli/lib/landing.mjs now imports three symbols (archiveJournal, findJournal, RUN_LANE_ARTIFACTS) from cli/commands/codex.mjs — a lib importing a command. Sanctioned by codex.mjs's own docblock and required by this phase's assumption 3, but the boundary is now load-bearing enough that the next journal consumer should extract a lib-level journal/lane-contract module rather than become a fourth importer.",
+      "Arc land archives the journal of an ALREADY-GONE lane but never deletes its merged codex/<ids> branch — disposeWorktree's missing-dir early return cannot reach the branch delete, and the archive then closes the journal, so no verb looks at that branch again. Branch accumulation is a strictly smaller class than worktree accumulation and closing it would need a done-moment the operator ruling does not grant; recorded so a later round does not rediscover it as a bug.",
+    ],
+    hardStops: [],
+    gateRounds: 4,
+  },
   tasks: [
     {
       id: '6.1',
