@@ -711,7 +711,8 @@ test('codex status: an unreadable journal reports the PARSE failure, never "no j
 const PLAN_PHASE_SKILL = join(HERE, '..', '..', 'skills', 'plan-phase', 'SKILL.md')
 
 /** A brief on disk (the lane refuses to plan without an input) → its repo-relative path. */
-function writeBrief(root, name = '.building/plan-brief.md') {
+function writeBrief(root) {
+  const name = '.building/plan-brief.md'
   const p = join(root, name)
   mkdirSync(dirname(p), { recursive: true })
   writeFileSync(p, '# follow-up fixes\n- one line per item\n')

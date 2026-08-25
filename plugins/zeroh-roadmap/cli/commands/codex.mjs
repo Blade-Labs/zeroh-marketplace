@@ -19,10 +19,10 @@
  * phase cannot read each other's verdict; they DO share the liveness guard, so neither
  * launches over the other.
  *
- * A LANE DELIVERS A PROTOCOL, IT NEVER RESTATES ONE. Both envelopes hand over the path to their
- * mission's SKILL.md — skills/do-phase for `run`, skills/review-phase for `review` — and override
- * only disposition. This is load-bearing for cross-model comparison: the eval scorecard slices
- * `drivers` / `planners` / `reviewers` by model, and those cells only mean something if every
+ * A LANE DELIVERS A PROTOCOL, IT NEVER RESTATES ONE. Every envelope hands over the path to its
+ * mission's SKILL.md — skills/do-phase for `run`, skills/plan-phase for `plan`, skills/review-phase
+ * for `review` — and overrides only disposition. This is load-bearing for cross-model comparison:
+ * the eval scorecard slices `drivers` / `planners` / `reviewers` by model, and those cells only mean something if every
  * driver read the SAME protocol — a per-lane copy turns that into a comparison of briefings,
  * silently, because the confound never reaches the output. codex.test.mjs greps each generated
  * prompt for its mission's protocol-owned strings and reds when one reappears.
@@ -338,7 +338,7 @@ function preserveStaleReport(worktree, reportName) {
  * The journal records the DRIVER the registry pinned, so attribution never depends on the model
  * remembering to self-report what the launcher already commanded. `driver.lane` is the registry
  * id (the DriverShape lane vocabulary) — deliberately not this function's `lane`, which is the
- * run/review mission.
+ * run/plan/review mission.
  */
 function launch(root, ids, lane, { worktree, base, prompt }) {
   const building = join(root, '.building')
@@ -475,11 +475,12 @@ function planCodex(root, ids, argv) {
 
   // Resolve the prompt against the PRIMARY checkout before any worktree work, so a missing
   // --brief or a taken number fails loudly and destroys no previous hand-off.
-  const prompt = buildPlanPrompt(root, ids, { brief: fi >= 0 ? argv[fi + 1] : undefined })
+  const brief = fi >= 0 ? argv[fi + 1] : undefined
+  const prompt = buildPlanPrompt(root, ids, { brief })
 
   const made = ensureWorktree(root, { worktree, base, branch: `codex-plan/${ids.join('-')}`, install: true })
   if (made !== 0) return made
-  carryIn(root, worktree, argv[fi + 1])
+  carryIn(root, worktree, brief)
   preserveStaleReport(worktree, LANES.plan.report)
   return launch(root, ids, 'plan', { worktree, base, prompt })
 }
@@ -528,9 +529,8 @@ function statusCodex(root, ids, lane = 'run') {
   const alive = j.pgid ? groupAlive(j.pgid) : false
   const state = sentinel === 'CODEX-RUN-COMPLETE' ? 'complete' : sentinel === 'CODEX-RUN-BLOCKED' ? 'blocked' : alive ? 'running' : 'dead-no-report'
   const staleReport = reportExists && !fresh ? reportPath : undefined
-  // The journal spreads FIRST: `j.report` is the bare report NAME, and spreading it last
-  // overwrote the resolved path — every poll then reported a filename where a reader expected
-  // a location, and a stale report's `null` as if it were fresh.
+  // The journal spreads FIRST: `j.report` is the bare report NAME, so spreading it last would
+  // overwrite both the path status resolved and the `null` that marks a stale report.
   process.stdout.write(JSON.stringify({ ...j, state, alive, sentinel, report: fresh ? reportPath : null, ...(staleReport ? { staleReport } : {}) }, null, 2) + '\n')
   return state === 'complete' ? 0 : state === 'running' ? 3 : 2
 }
