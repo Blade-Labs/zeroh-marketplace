@@ -126,17 +126,50 @@ export function writeReport(toplevel, report) {
   return { path, report: parsed }
 }
 
-/** The newest report for a phase, or null. */
+/** The newest run file EXISTS and will not read — malformed JSON, or valid JSON that misses
+ *  GateRunReportShape. Never folded into "no report": an absent report means the gate has not
+ *  run, an unreadable one means the evidence is sitting on disk and cannot be trusted, and a
+ *  caller that treats them alike certifies a done flip over corruption. */
+export class GateReportUnreadableError extends Error {
+  constructor(path, cause) {
+    super(
+      `gate report: the newest run report ${path} could not be read, so this phase's gate evidence is `
+        + 'UNREADABLE \u2014 which is NOT the same as a phase with no gate report:\n'
+        + `  ${cause?.message ?? cause}\n`
+        + 'Read the file: a truncated report is a gate run that died mid-write and a shape refusal is a report '
+        + 'that predates a schema change \u2014 delete it if that run is gone, then re-run `roadmap gate run <phase>` '
+        + 'to write a fresh one. Nothing may read past it.',
+    )
+    this.name = 'GateReportUnreadableError'
+    this.path = path
+    this.cause = cause
+  }
+}
+
+/**
+ * The newest report for a phase, or null when the phase has NO run file at all.
+ *
+ * The newest file decides alone: falling back to an older readable run would answer with stale
+ * evidence for a run whose own record nobody can read. An unreadable newest file THROWS
+ * GateReportUnreadableError.
+ */
 export function latestReport(toplevel, phase) {
   const dir = gateDir(toplevel, phase)
   const files = runFiles(dir)
   if (files.length === 0) return null
-  const newest = files[files.length - 1].f
+  const path = join(dir, files[files.length - 1].f)
+  let raw
   try {
-    return { path: join(dir, newest), report: GateRunReportShape.parse(JSON.parse(readFileSync(join(dir, newest), 'utf8'))) }
-  } catch {
-    return null
+    raw = JSON.parse(readFileSync(path, 'utf8'))
+  } catch (e) {
+    throw new GateReportUnreadableError(path, e)
   }
+  const parsed = GateRunReportShape.safeParse(raw)
+  if (!parsed.success) {
+    const detail = parsed.error.issues.map((i) => `${(i.path ?? []).join('.') || '(root)'}: ${i.message}`).join('; ')
+    throw new GateReportUnreadableError(path, new Error(detail))
+  }
+  return { path, report: parsed.data }
 }
 
 /** Append an agent round to the LATEST report (no new run file). Returns the updated

@@ -1148,3 +1148,100 @@ test('gate run --verify-complete — a driver mismatch names the STALE-JOURNAL r
     `the remedy must name the exact file to remove (nothing prunes journals); stderr: ${JSON.stringify(r.stderr)}`,
   )
 })
+
+// ── the corrupt-latest-report lane (phase 9.2) ───────────────────────────────────────
+//
+// latestReport() answers `null` both when a phase has no gate report AND when the newest
+// run file cannot be read, so both --record-round and --verify-complete narrate corrupt
+// evidence as MISSING evidence: "no run report for phase N" / "no readable report under
+// roadmap/.gate/N/". The operator then re-runs the gate, a fresh run file lands on top, and
+// nobody ever learns which record was unreadable. The fix is a typed refusal
+// (GateReportUnreadableError) that names the concrete file; these fixtures pin that the CLI
+// SURFACES it rather than translating it back into absence, that it never quietly repairs or
+// rewrites the file, and — the positive control in each — that a well-formed report behaves
+// exactly as it does today.
+
+/** Replace the NEWEST run file under a phase's gate dir with `body`. Returns its path. */
+function corruptNewestReport(root, phase, body) {
+  const dir = join(root, 'roadmap', '.gate', String(phase))
+  const files = readdirSync(dir)
+    .filter((f) => /^run-\d+-.*\.json$/.test(f))
+    .sort()
+  assert.ok(files.length > 0, 'fixture bug: the phase must already have a gate report to corrupt')
+  const path = join(dir, files[files.length - 1])
+  writeFileSync(path, body)
+  return path
+}
+/** The OLDEST run file's parsed contents — the report a fall-back reader would wrongly use. */
+const oldestReportOf = (root, phase) => {
+  const dir = join(root, 'roadmap', '.gate', String(phase))
+  const files = readdirSync(dir).filter((f) => /^run-\d+-.*\.json$/.test(f)).sort()
+  return JSON.parse(readFileSync(join(dir, files[0]), 'utf8'))
+}
+const CORRUPT_BODY = '{ "phase": 0, "green": tru }\n'
+
+test('gate run --record-round — corrupt newest report is NAMED, never reported as no report at all', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1310, phaseObj({ phase: 1310 }))
+  repo.commit('feat: phase 1310 — code', { 'lib/e2.ts': 'export const e = 1\n' })
+  // TWO runs: the older report stays well-formed, so a reader that fell back to the newest
+  // READABLE file would append the round to stale evidence and exit 0 — green over a record
+  // nobody can read.
+  assert.equal(runGateCmd(repo.root, ['1310']).code, 0)
+  assert.equal(runGateCmd(repo.root, ['1310']).code, 0)
+  const corruptPath = corruptNewestReport(repo.root, 1310, CORRUPT_BODY)
+  const round = JSON.stringify({ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: '0 findings' })
+
+  const r = runGateCmd(repo.root, ['1310', '--record-round', round])
+
+  assert.notEqual(r.code, 0, `an unreadable report cannot record a round; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.match(r.stderr, /GateReportUnreadableError/, `the failure names its class; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(corruptPath), `and the concrete run file; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.equal(
+    /no run report for phase/.test(r.stderr),
+    false,
+    `corrupt evidence must never be narrated as ABSENT evidence; stderr: ${JSON.stringify(r.stderr)}`,
+  )
+  assert.equal(/no readable report/.test(r.stderr), false, `nor as "no readable report"; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.equal(readFileSync(corruptPath, 'utf8'), CORRUPT_BODY, 'the unreadable file is left byte-identical — nothing repairs it')
+  assert.equal(oldestReportOf(repo.root, 1310).agents.length, 0, 'and the round did NOT land in an older report instead')
+
+  // Positive control: the SAME command over a well-formed newest report behaves as today.
+  writeFileSync(corruptPath, JSON.stringify({ ...oldestReportOf(repo.root, 1310), baseSha: 'repaired' }, null, 2) + '\n')
+  const ok = runGateCmd(repo.root, ['1310', '--record-round', round])
+  assert.equal(ok.code, 0, ok.stderr)
+  assert.equal(latestReportOf(repo.root, 1310).agents.length, 1, 'the round appends to the newest report exactly as before')
+})
+
+test('gate run --verify-complete — corrupt newest report names the report, not an empty .gate dir', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1410, phaseObj({ phase: 1410 }))
+  repo.commit('feat: phase 1410 — code', { 'lib/f2.ts': 'export const f = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1410']).code, 0)
+  assert.equal(runGateCmd(repo.root, ['1410']).code, 0)
+  const corruptPath = corruptNewestReport(repo.root, 1410, CORRUPT_BODY)
+
+  const r = runGateCmd(repo.root, ['1410', '--verify-complete'])
+
+  assert.notEqual(r.code, 0, `an unreadable report cannot certify a completion; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.match(r.stderr, /GateReportUnreadableError/, `the failure names its class; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(corruptPath), `and the concrete run file; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.equal(
+    /no readable report under roadmap\/\.gate\//.test(r.stderr),
+    false,
+    `the .gate dir is NOT empty — saying so sends the operator to re-run the gate and bury the corrupt file; stderr: ${JSON.stringify(r.stderr)}`,
+  )
+  assert.equal(/no run report for phase/.test(r.stderr), false, `nor the absent-report wording; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.equal(
+    /consistent with the latest green gate report/.test(r.stdout),
+    false,
+    `and it certainly never verdicts CONSISTENT; stdout: ${JSON.stringify(r.stdout)}`,
+  )
+  assert.equal(readFileSync(corruptPath, 'utf8'), CORRUPT_BODY, 'the unreadable file is left byte-identical')
+
+  // Positive control: restore a well-formed newest report and the verify passes as today.
+  writeFileSync(corruptPath, JSON.stringify({ ...oldestReportOf(repo.root, 1410), baseSha: 'repaired' }, null, 2) + '\n')
+  const ok = runGateCmd(repo.root, ['1410', '--verify-complete'])
+  assert.equal(ok.code, 0, ok.stderr)
+  assert.match(ok.stdout, /phase 1410 consistent with the latest green gate report/)
+})

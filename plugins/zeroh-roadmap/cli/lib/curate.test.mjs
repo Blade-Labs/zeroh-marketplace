@@ -1019,3 +1019,80 @@ test('composeLandedMessage: the Co-Authored-By trailer is the LAST non-empty lin
   assert.ok(lines.indexOf(trailers[0]) > 0, 'the trailer follows the body content, it is not the whole body')
   assert.ok(out.body.includes('did the second thing'), 'the trailer rule must not have swallowed the content')
 })
+
+// ── curate over an UNREADABLE gate report (phase 9.2) ────────────────────────────────
+//
+// executeCurate reads the phase's latest report twice — prevLatest for the update-ref
+// rollback, then recordCuration — and both go through latestReport(), which answers `null`
+// for a corrupt newest run file exactly as it does for a phase with no report at all. The
+// abort that follows is therefore the RIGHT action for the WRONG reason: it says the phase
+// has no gate report while the unreadable one sits on disk, so the operator's fix ("run the
+// gate") lands a fresh run file on top and the corrupt record is buried unexamined. The
+// refusal must name the file it could not read, and — the property this whole step exists
+// for — it must still happen BEFORE any history mutation.
+
+test('curate — corrupt newest gate report aborts before history mutation, naming the file', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-64 file')
+
+  r.commit('docs(roadmap): phase 64 — move to in-progress')
+  r.commit('feat(cli): phase 64 — 64.1 the range')
+  const scratch = r.commit('scratch(cli): phase 64 — prove the tripwire bites')
+  const revert = r.revert(scratch)
+  r.commit('feat(cli): phase 64 — 64.2 the executor')
+  r.commit('docs(roadmap): phase 64 — record the transparency report')
+
+  const range = deriveCurationRange(r.root, 64)
+  assert.equal(range.ok, true, 'fixture bug: the range must derive before it can be curated')
+  const preHead = r.head()
+  const preTree = r.tree(preHead)
+  const preShas = range.commits.map((c) => c.sha)
+  const branch = r.git('rev-parse', '--abbrev-ref', 'HEAD')
+  const plan = planFrom(range, [range.commits.length], [
+    { subject: 'feat(cli): phase 64 — land the executor', body: 'One curated commit.' },
+  ])
+
+  // An OLDER readable report, then an unreadable NEWEST one. The older report is the trap: a
+  // reader that fell back to it would record this curation into a report that is not the
+  // record, and the squash would proceed on evidence written to the wrong file.
+  const { path: olderPath } = seedGateReport(r.root, 64)
+  const dir = gateDir(r.root, 64)
+  const body = '{ "phase": 64, "green": tru }\n'
+  const corruptPath = join(dir, 'run-000002-2026-08-25T10-00-00-000Z.json')
+  writeFileSync(corruptPath, body)
+  assert.equal(readdirSync(dir).filter((f) => f.endsWith('.json')).length, 2, 'fixture: two run files, the newest unreadable')
+
+  let caught = null
+  try {
+    executeCurate(r.root, plan, { toplevel: r.root, phase: 64, redProofs: [{ scratch, revert, subject: r.subject(scratch) }] })
+  } catch (err) {
+    if (err instanceof assert.AssertionError) throw err // the missing-export guard, not the refusal
+    caught = err
+  }
+
+  assert.ok(caught, 'an unreadable gate report must ABORT the curate — a squash whose proof went nowhere is unrecoverable')
+  assert.equal(caught.name, 'GateReportUnreadableError', `the refusal is the typed one, not translated into an absent-report error (got ${caught.name}: ${caught.message})`)
+  assert.ok(caught.message.includes(corruptPath), `the abort NAMES the file it could not read (got: ${caught.message})`)
+  assert.equal(
+    /no run report for phase/.test(caught.message),
+    false,
+    `the phase HAS a report — calling it missing sends the operator to bury it under a fresh run (got: ${caught.message})`,
+  )
+
+  // Evidence before surgery: nothing about history moved.
+  assert.equal(r.head(), preHead, 'HEAD is UNMOVED')
+  assert.equal(r.git('rev-parse', branch), preHead, 'the branch ref is unmoved too')
+  assert.equal(r.tree(r.head()), preTree, 'and so is the tree')
+  assert.deepEqual(r.rangeShas(range.base), preShas, 'the granular history is intact, commit for commit')
+  assert.ok(r.git('rev-list', 'HEAD').split('\n').includes(scratch), 'the scratch commit is still reachable — nothing was rewritten')
+
+  // And curation history was not mutated on the way past.
+  assert.equal(readFileSync(corruptPath, 'utf8'), body, 'the unreadable report is left byte-identical — no repair, no overwrite')
+  assert.equal(runFileCount(r.root, 64), 2, 'no third run file was invented to route around the failure')
+  assert.equal(
+    JSON.parse(readFileSync(olderPath, 'utf8')).curation,
+    undefined,
+    'and no curation block landed in the OLDER report — a squash that did not happen leaves no record saying it did',
+  )
+})

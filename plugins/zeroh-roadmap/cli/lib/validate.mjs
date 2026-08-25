@@ -16,7 +16,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { bridgeImport } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
 import { DRIVERS } from './drivers.mjs'
-import { gateDir, latestReport, checkPhaseConsistency } from './gate-report.mjs'
+import { gateDir, latestReport, checkPhaseConsistency, GateReportUnreadableError } from './gate-report.mjs'
 
 /** Phases planned after arc ROADOPUS — below this floor the provenance rules (c)/(d) are exempt. */
 const ENFORCEMENT_FLOOR = 1365
@@ -284,7 +284,21 @@ function gateReportConsistencyErrors(phase, normalizedPath) {
   if (!existsSync(dir) || readdirSync(dir).filter((f) => /^run-\d+-.*\.json$/.test(f)).length === 0) {
     return [] // no report yet → today's behavior (non-breaking during the parallel-impl window)
   }
-  const latest = latestReport(toplevel, num)
+  let latest
+  try {
+    latest = latestReport(toplevel, num)
+  } catch (e) {
+    if (!(e instanceof GateReportUnreadableError)) throw e
+    // Unreadable evidence is a FINDING, not a pass: returning [] here would let a done phase
+    // validate clean precisely when its gate record stopped being readable.
+    return [
+      {
+        rule: 'done-without-green-gate-report',
+        msg: `${e.name}: ${e.message}`,
+        fix: `inspect ${e.path}; delete it if that run is gone, then re-run \`roadmap gate run ${num}\` green and record the correctness rounds with \`roadmap gate run ${num} --record-round …\` before the phase can stay done`,
+      },
+    ]
+  }
   if (!latest) return []
   const result = checkPhaseConsistency(phase, latest.report)
   if (result.ok) return []

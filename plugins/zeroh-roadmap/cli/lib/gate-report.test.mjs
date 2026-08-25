@@ -26,7 +26,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -432,4 +432,161 @@ test('appendAgentRound — a round with an unusable model is refused BEFORE the 
 
   assert.equal(readFileSync(path, 'utf8'), before, 'the report file is byte-identical — no half-recorded round')
   assert.equal(latestReport(root, 1670).report.agents.length, 0, 'nothing was appended')
+})
+
+// ── latestReport over an UNREADABLE newest run file (phase 9.2) ───────────────────────
+//
+// TEST-FIRST for GateReportUnreadableError. latestReport() answers ONE question — "what is
+// this phase's newest gate report?" — and today it answers `null` to two utterly different
+// worlds: there is no evidence, and the evidence on disk cannot be read. Every caller
+// (appendAgentRound, recordCuration, gate run --record-round / --verify-complete, phase
+// validate's done-flip rule, executeCurate) reads that null as ABSENT, so a corrupt or
+// schema-drifted run file is narrated as "no report" while it sits there. The properties
+// pinned below are therefore (a) null is reserved for zero run files, (b) an unreadable
+// NEWEST file throws a typed error naming the concrete path and the parse/Zod detail, and
+// (c) it is the NEWEST file that decides — never a scan that falls back to an older
+// readable run, which would certify a done flip from stale evidence.
+
+// The class lands with the fix. Resolved lazily (not a static named import) so a missing
+// export is a per-test RED, not a link-time SyntaxError that stops every test above.
+const GateReportUnreadableError = () => {
+  assert.equal(
+    typeof gateReport.GateReportUnreadableError,
+    'function',
+    'gate-report.mjs must export class GateReportUnreadableError (constructed from (path, cause))',
+  )
+  return gateReport.GateReportUnreadableError
+}
+
+/** Drop `body` into a phase's gate dir as the NEWEST run file (seq = highest + 1). */
+function writeNewestRun(root, phase, body) {
+  const dir = gateDir(root, phase)
+  mkdirSync(dir, { recursive: true })
+  const seqs = readdirSync(dir)
+    .filter((f) => /^run-\d+-.*\.json$/.test(f))
+    .map((f) => Number(f.match(/^run-(\d+)-/)[1]))
+  const seq = (seqs.length ? Math.max(...seqs) : 0) + 1
+  const path = join(dir, `run-${String(seq).padStart(6, '0')}-2026-08-25T10-00-00-000Z.json`)
+  writeFileSync(path, body)
+  return path
+}
+
+/** Call latestReport expecting a THROW; a returned value (null above all) fails here. */
+function latestExpectingThrow(root, phase, why) {
+  let returned
+  try {
+    returned = latestReport(root, phase)
+  } catch (err) {
+    if (err instanceof assert.AssertionError) throw err // the missing-export guard, not the refusal
+    return err
+  }
+  assert.fail(
+    `${why}: latestReport returned ${JSON.stringify(returned)} instead of throwing — ` +
+      'every caller reads that as "this phase has no gate report" while corrupt evidence sits on disk',
+  )
+}
+
+/** The typed-refusal contract: class, path, cause, and a message that names both. */
+function assertUnreadable(err, path, detail, why) {
+  assert.equal(err.name, 'GateReportUnreadableError', `${why}: the refusal is a NAMED error, not a bare Error`)
+  assert.ok(err instanceof GateReportUnreadableError(), `${why}: it is an instance of the exported class`)
+  assert.ok(err instanceof Error, `${why}: and still an Error`)
+  assert.equal(err.path, path, `${why}: .path is the concrete run file that could not be read`)
+  assert.ok(err.cause, `${why}: .cause carries the underlying JSON/Zod failure`)
+  assert.ok(
+    err.message.includes(path),
+    `${why}: the message must NAME the run file (got: ${err.message})`,
+  )
+  assert.ok(
+    err.message.includes(detail),
+    `${why}: the message must carry the underlying detail '${detail}' — a bare "unreadable" costs a lookup (got: ${err.message})`,
+  )
+}
+
+/** The JSON.parse failure these exact bytes produce — derived, never a copied literal. */
+function parseDetailOf(body) {
+  try {
+    JSON.parse(body)
+  } catch (e) {
+    return e.message
+  }
+  assert.fail('fixture bug: the corrupt body must not parse')
+}
+
+test('latestReport — ABSENT is the ONLY null (no dir, empty dir, no run files)', () => {
+  // Kept deliberately apart from the failure cases below: the whole defect is that these two
+  // worlds share one return value, so the fixture that owns "absent" must own nothing else.
+  const root = tmpRoot()
+  assert.equal(latestReport(root, 4242), null, 'no roadmap/.gate/<phase>/ at all → null')
+
+  mkdirSync(gateDir(root, 4243), { recursive: true })
+  assert.equal(latestReport(root, 4243), null, 'an EMPTY phase dir → null')
+
+  writeFileSync(join(gateDir(root, 4243), 'notes.txt'), 'not a run file\n')
+  writeFileSync(join(gateDir(root, 4243), 'summary.json'), '{"green":true}\n')
+  assert.equal(latestReport(root, 4243), null, 'a dir holding no run-<seq>-*.json → still null')
+})
+
+test('latestReport — corrupt newest report throws GateReportUnreadableError (corrupt is not absent)', () => {
+  const root = tmpRoot()
+  // An OLDER well-formed report FIRST: the newest file must decide on its own. A reader that
+  // scanned backwards for the first readable run would answer with this stale one — green
+  // evidence for a run whose real record nobody can read.
+  const older = writeReport(root, baseReport({ baseSha: 'older-and-well-formed' }))
+  const body = '{ "phase": 1670, "green": tru }\n'
+  const corrupt = writeNewestRun(root, 1670, body)
+  const before = readFileSync(corrupt, 'utf8')
+
+  const err = latestExpectingThrow(root, 1670, 'the newest run file will not JSON.parse')
+  assertUnreadable(err, corrupt, parseDetailOf(body), 'malformed JSON')
+
+  assert.ok(
+    !err.message.includes(older.path),
+    'the refusal names the file it could not read, never the older one it declined to fall back to',
+  )
+  assert.equal(readFileSync(corrupt, 'utf8'), before, 'the unreadable file is left byte-identical — a reader never repairs evidence')
+  assert.equal(runFileNames(root, 1670).length, 2, 'and never deletes it to make the problem go away')
+})
+
+test('latestReport — a schema-drifted newest report throws too, naming the Zod issue', () => {
+  // Valid JSON, wrong shape: the second half of the conflated catch. `green: "yes"` is the
+  // dangerous one — truthy to anything that skips the parse, so a fall-back-to-absent reading
+  // hides a report that would otherwise certify a done flip on a string.
+  for (const [why, drift] of [
+    ['green as the string "yes"', { ...baseReport(), green: 'yes' }],
+    ['a missing required field (baseSha)', (() => { const r = baseReport(); delete r.baseSha; return r })()],
+  ]) {
+    const root = tmpRoot()
+    writeReport(root, baseReport({ baseSha: 'older-and-well-formed' }))
+    const body = JSON.stringify(drift, null, 2) + '\n'
+    const corrupt = writeNewestRun(root, 1670, body)
+    const before = readFileSync(corrupt, 'utf8')
+
+    const check = GateRunReportShape.safeParse(drift)
+    assert.equal(check.success, false, `fixture bug: ${why} must not satisfy GateRunReportShape`)
+    const issue = check.error.issues[0]
+
+    const err = latestExpectingThrow(root, 1670, `the newest run file is ${why}`)
+    assertUnreadable(err, corrupt, issue.message, why)
+    assert.ok(
+      err.message.includes(String(issue.path[0])),
+      `${why}: the message names the offending field '${issue.path[0]}' (got: ${err.message})`,
+    )
+    assert.equal(readFileSync(corrupt, 'utf8'), before, `${why}: the drifted file is left byte-identical`)
+  }
+})
+
+test('latestReport — a well-formed newest report still returns { path, report }, even behind an older corrupt one', () => {
+  // The positive control, and the other half of "the NEWEST decides": an unreadable OLDER run
+  // is nobody's evidence, so it must not red a phase whose newest report is fine.
+  const root = tmpRoot()
+  writeReport(root, baseReport({ baseSha: 'first' }))
+  writeNewestRun(root, 1670, '{ "phase": 1670, "green": tru }\n')
+  const newest = writeReport(root, baseReport({ baseSha: 'newest-and-well-formed' }))
+
+  const latest = latestReport(root, 1670)
+  assert.ok(latest, 'a readable newest report still resolves')
+  assert.equal(latest.path, newest.path, 'and it is the newest run file')
+  assert.equal(latest.report.baseSha, 'newest-and-well-formed')
+  assert.equal(latest.report.green, true, 'the report comes back parsed through the shape, exactly as before')
 })

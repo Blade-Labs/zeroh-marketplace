@@ -39,6 +39,7 @@ import {
   checkPhaseConsistency,
   gateDir,
   AgentRoundInputShape,
+  GateReportUnreadableError,
 } from '../lib/gate-report.mjs'
 
 /**
@@ -611,7 +612,9 @@ export async function runGate(phaseNum, opts) {
     try {
       appendAgentRound(toplevel, phaseNum, check.data)
     } catch (e) {
-      process.stderr.write(`gate run --record-round: ${e.message}\n`)
+      // The CLASS is named as well as the message: "no report yet" and "the report on disk will
+      // not read" send the reader to opposite remedies, and only one of them is a corruption.
+      process.stderr.write(`gate run --record-round: ${e instanceof GateReportUnreadableError ? `${e.name}: ` : ''}${e.message}\n`)
       return 2
     }
     process.stdout.write(`recorded round ${check.data.round} (${check.data.agent}: ${check.data.verdict})\n`)
@@ -633,9 +636,16 @@ export async function runGate(phaseNum, opts) {
       else process.stderr.write(`gate run --verify-complete: cannot read ${phaseFile}: ${imp.stderr || imp.kind}\n`)
       return 1
     }
-    const latest = latestReport(toplevel, phaseNum)
+    let latest
+    try {
+      latest = latestReport(toplevel, phaseNum)
+    } catch (e) {
+      if (!(e instanceof GateReportUnreadableError)) throw e
+      process.stderr.write(`gate run --verify-complete: ${e.name}: ${e.message}\n`)
+      return 1
+    }
     if (!latest) {
-      process.stderr.write(`gate run --verify-complete: no readable report under roadmap/.gate/${phaseNum}/\n`)
+      process.stderr.write(`gate run --verify-complete: no run report under roadmap/.gate/${phaseNum}/ (the directory exists but holds no run-<seq>-*.json)\n`)
       return 1
     }
     // MECHRATCHET rank 9 — recompute the untested-gate-fix warnings over the FULL phase range

@@ -146,7 +146,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/lib/curate.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-25',
+      transparencyReport: {
+        whatWasDone:
+          'gate-report.mjs gained an exported GateReportUnreadableError(path, cause) and latestReport now returns null ONLY when a phase has zero run files. A newest run file that will not JSON.parse, or that misses GateRunReportShape, throws with its concrete path and the JSON/Zod detail. gate run --record-round and --verify-complete name the class and preserve the path instead of claiming no report; phase validate turns it into a done-without-green-gate-report FINDING naming the file and the cause; curate keeps aborting before update-ref, now for the right reason.',
+        how:
+          'test-engineer wrote six RED tests across the four suites first, each failing on the defect verbatim — validate returned kind "ok" for a done phase whose newest report would not parse, --record-round printed "gate report: no run report for phase 1310 to record a round into" with two run files on disk, --verify-complete printed "no readable report under roadmap/.gate/1410/", and curate aborted as a bare Error rather than the typed one. Every fixture seeds an OLDER well-formed report beneath the corrupt newest one, so an implementation that scanned backwards for the first readable run would go green on stale evidence; positive controls restore a well-formed newest report in place so corruption is provably the only variable. The implementation keeps the newest-file-decides rule explicit and never repairs or deletes evidence. The verify-complete zero-run-file branch was reworded off "no readable report" (that phrase now belongs to the unreadable case alone) to "no run report under roadmap/.gate/N/ (the directory exists but holds no run-<seq>-*.json)". GUARD MUTATION PROOF, three results: (1) planted violation restoring both swallows (`catch { return null }` for JSON and for the shape refusal) produced exactly the six new tests red — `not ok 54/55/77/99/100/108`, 102 pass / 6 fail; (2) planted violation replacing the newest-file rule with a scan-back-to-the-first-readable-run fallback produced 97 pass / 11 fail, adding `not ok 80 - latestReport — picks the newest run`, `not ok 101 - latestReport — a well-formed newest report still returns { path, report }, even behind an older corrupt one` and `not ok 43 - gate run --verify-complete over a FILTERED latest report`; (3) decoy, a comment appended to the `files` binding, stayed 108 pass / 0 fail. Restored and re-verified: 108/108, plus phase.test.mjs + the two fixture-consumer suites + eval-collect.test.mjs at 67/67.',
+        compromises: 'None — every caller of latestReport was audited and either guarded or confirmed to propagate honestly.',
+        skipped: 'None — all six step verifies ran and passed.',
+        hardcoded: 'None — the Zod detail is derived from the issue list, never a copied literal.',
+        limitations:
+          'curate.mjs needed no edit: executeCurate reads latestReport BEFORE update-ref and phase.mjs already surfaces a non-CurateError with its message and exit 1, so the typed throw aborts before any history mutation on its own. appendAgentRound and recordCuration keep their own zero-run-file throws, so "no report at all" and "the report will not read" now have two distinct messages rather than one.',
+      },
     },
     {
       id: '9.3',
