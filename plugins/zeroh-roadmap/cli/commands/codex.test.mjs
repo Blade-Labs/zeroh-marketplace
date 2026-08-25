@@ -1439,9 +1439,9 @@ test('refuseIfLive — a declined-but-parseable journal MASKED by a covering one
 
 // ── the review lane's done-moment: consuming the verdict archives the lane ─────
 // A REVIEW lane is a detached read-only worktree. It never commits, never lands, never merges —
-// so it has no done-VERB, and the 2026-08-23 audit found seven such worktrees outliving their
-// verdicts indefinitely. The operator ruling forbids both a standalone close/sweep verb and a
-// timer reaper, which leaves exactly one honest done-moment: the verdict being CONSUMED. So
+// so it has no done-VERB, and such worktrees outlive their verdicts indefinitely. The operator
+// ruling forbids both a standalone close/sweep verb and a timer reaper, which leaves exactly
+// one honest done-moment: the verdict being CONSUMED. So
 // `codex status` gains a completion SIDE EFFECT deliberately — reading a COMPLETE review lane
 // IS that lane's close. The tests below pin the three things that makes safe: the verdict must
 // SURVIVE the disposal (relocated, byte-identical, readable forever), the disposal must go
@@ -1658,8 +1658,8 @@ test('review archive: a BLOCKED verdict is not a done-moment', () => {
 
 test('review archive: a STALE sentinel is not a verdict, so it is not a done-moment either', () => {
   const root = tmpRepo()
-  // The 2026-08-11 bug in its archival form: a previous run's CODEX-RUN-COMPLETE, older than this
-  // journal's startedAt. The mtime guard already refuses to read it as the verdict — and the
+  // The stale-sentinel bug in its archival form: a previous run's CODEX-RUN-COMPLETE, older than
+  // this journal's startedAt. The mtime guard already refuses to read it as the verdict — and the
   // archival must fire on the VERDICT, not on the file, or the guard is defeated from behind and
   // a live lane's worktree is deleted out from under it.
   const lane = reviewLane(root, [206], { startedAt: new Date().toISOString() })

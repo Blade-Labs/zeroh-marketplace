@@ -1050,9 +1050,9 @@ test('phase \u2014 the dispatcher advertises `land <N>` beside validate/start/cu
 
 // ── phase land — the codex lane's disposal at its done-moment (6.2) ────────────────────────────
 //
-// Landing is the done-moment for a work-producing worktree, and today it walks away: the
-// 2026-08-23 audit found two FULLY MERGED codex exec lanes squatting slot dirs for weeks
-// because nothing at land time owned closure. These tests pin the two halves of making the
+// Landing is the done-moment for a work-producing worktree, and an audited checkout found two
+// FULLY MERGED codex exec lanes squatting slot dirs for weeks because nothing at land time
+// owned closure. These tests pin the two halves of making the
 // skill's claim true — (a) the codex lane can REACH `phase land` at all (a journal-confirmed
 // source is not gated on executionIsolation, which defaults to 'primary'), and (b) a land that
 // succeeds disposes what it landed, through the committed rail in cli/lib/worktree.mjs, with a

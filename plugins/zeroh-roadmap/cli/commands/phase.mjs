@@ -303,7 +303,7 @@ function archiveJournal(journalPath, journal) {
  * landed.
  *
  * WHO MAY LAND. The worktree lane, always. And a JOURNAL-CONFIRMED codex lane, whatever
- * `executionIsolation` says — source-keyed safety (operator ruling 2026-08-25). The knob exists
+ * `executionIsolation` says — source-keyed safety, by operator ruling. The knob exists
  * because landing rewrites and moves refs, which is only safe when the tree doing it is not the
  * shared checkout; a codex lane worktree satisfies that by construction, and gating it on a knob
  * this consumer never sets is what left the lane landing by hand-typed rebase + ff-merge, with

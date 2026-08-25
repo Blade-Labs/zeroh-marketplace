@@ -423,7 +423,7 @@ test('REAL merge — landing merges into LOCAL develop and a sibling unpushed co
 // ── arc land disposes every landed member's codex lane (6.2) ──────────────────────────────────
 //
 // do-arc's SKILL already names `arc land` the cleanup owner ("arc land completes the BOOKKEEPING
-// only"). The 2026-08-23 audit falsified the claim: two FULLY MERGED codex exec lanes squatted
+// only"). An audited checkout falsified the claim: two FULLY MERGED codex exec lanes squatted
 // slot dirs for weeks. The disposal RAIL (cli/lib/worktree.mjs disposeWorktree) is committed and
 // tested on its own; these tests pin the WIRING — one injected seam, inside the cleanup block
 // that already removes the sidecar/RESUME.md/claims, best-effort by the same law.

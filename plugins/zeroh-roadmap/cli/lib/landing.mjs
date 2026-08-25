@@ -733,9 +733,9 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
     releaseClaims(home, state.members.map((m) => m.num))
     record.push({ step: 'cleanup', removed: ['.building sidecar', 'RESUME.md', 'claims'] })
     // Every landed member's codex lane, through the SAME rail the phase land uses. This is the
-    // only done-moment those worktrees ever get: do-arc's SKILL has always named arc land the
-    // cleanup owner, and the 2026-08-23 audit found two fully merged exec lanes squatting slot
-    // dirs for weeks because the claim was prose. Keyed by WORKTREE, not by member — an arc
+    // only done-moment those worktrees ever get: do-arc's SKILL names arc land the cleanup owner,
+    // and while that was prose two fully merged exec lanes squatted slot dirs for weeks.
+    // Keyed by WORKTREE, not by member — an arc
     // delegated as one `codex run --arc` shares a single multi-phase journal across its members,
     // and a second call would run the rail against a directory the first one removed.
     for (const laneDir of codexLaneDirs(home, state.members ?? [])) {
