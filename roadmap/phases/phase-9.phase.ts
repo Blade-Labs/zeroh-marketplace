@@ -224,7 +224,22 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/lib/eval-collect.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-25',
+      transparencyReport: {
+        whatWasDone:
+          "assemblePhaseEvalRecord now projects executionResult.roles into attribution.roles through a new exported projectRoleModels(phase, roles), and returns { record, warnings } so the projection's own losses can be spoken. emitPhaseEvalRecord prints each warning to stderr before validation, in the existing measurement voice (the gate verdict is unaffected).",
+        how:
+          "The plan pre-made 'copy by role key with model only' but not the duplicate-role case, and the source shape makes it reachable: executionResult.roles is an ARRAY of per-firing bindings while attribution.roles is a RECORD holding one model per role. Real committed data already duplicates (phase-5 records code-reviewer three times, phase-8 twice) and this phase produced the first DISAGREEING duplicate. A software-architect Decision Contract call returned PROCEED_WITH_FIX for option (c): agreeing duplicates collapse to their single model, a role whose firings disagree is OMITTED and NAMED in warnings rather than collapsed, absent stays absent (undefined) and an empty list becomes {} so 'the resolver bound nothing' stays distinguishable from 'no bindings recorded'. Keys are built with Object.fromEntries in first-firing order — a plain assignment would silently lose a role literally named __proto__, and unstable order would churn the committed record on re-runs. test-engineer then wrote three RED tests against that contract, fed with phase-5's committed firing array verbatim, RED at 33 pass / 3 fail. GUARD MUTATION PROOF, four results: (1) planted violation last-wins collapse produced `not ok 36 - assemblePhaseEvalRecord — a role whose firings DISAGREE on the model is omitted and NAMED, never collapsed`, 35 pass / 1 fail; (2) planted violation returning {} for an absent roles list produced `not ok 35 - assemblePhaseEvalRecord — roles stay absent when execution recorded none`, 35 pass / 1 fail; (3) planted violation first-wins collapse produced `not ok 36` again, 35 pass / 1 fail — so both collapse directions are pinned, not just one; (4) decoy, `distinct.length === 1` rewritten as the equivalent `new Set(models).size === 1`, stayed 36 pass / 0 fail. Restored and re-verified: eval-collect.test.mjs + gate.test.mjs = 91/91.",
+        compromises:
+          'None — the collapse was NOT taken. The one swallow that survived the first cut (a firing missing role or model dropped by `continue`) was flagged by test-engineer and closed in the same task: it now pushes a warning naming the entry, so an unreachable-through-the-bridge malformation is still spoken.',
+        skipped: 'None — both step verifies ran and passed.',
+        hardcoded: 'None — no model ids or role ids appear in the projection; it reads whatever the phase file recorded.',
+        limitations:
+          "ADDITIVE DEVIATION from files[]: cli/commands/gate.mjs is a third file, needed because assemblePhaseEvalRecord's return shape changed and its single caller must print the warnings; plugin-internal, no consumer contract touched. The projection stays lossy by design — `via` and `substituted` cannot travel at all under a strict `{ model }` value, so the tier-fallback walk never reaches the scorecard. That is surfaced as a named follow-up rather than fixed here: widening PhaseEvalRecordShape.attribution.roles to the per-firing array is a consumer-contract change (byte-synced templates/schema.ts) and wants its own phase.",
+        decisionRef:
+          'software-architect Decision Contract, 2026-08-25 — verdict PROCEED_WITH_FIX, option (c) omit-and-name; rejected (a) silent collapse as a swallow, (b) throw as over-refusal of schema-valid input, (d) schema widening as out of scope and a named follow-up.',
+      },
     },
     {
       id: '9.5',

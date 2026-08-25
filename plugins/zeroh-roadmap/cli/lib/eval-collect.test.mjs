@@ -33,6 +33,7 @@ import {
   newestArtifactDated,
   assembleWorkflowStamp,
   assembleConsumerFingerprint,
+  assemblePhaseEvalRecord,
   phaseEvalRecordPath,
   phaseEvalValidator,
   readPhaseEvalSamples,
@@ -1015,4 +1016,230 @@ test('summarizeGateRuns — an all-full corpus is unchanged; an all-filtered one
     [],
     'a phase that only ever ran --slots subsets has NO evidenced gate round — an empty list, not a fabricated one',
   )
+})
+
+// ── 14. assemblePhaseEvalRecord — the ROLE-BINDING projection ──────────────────────────
+//
+// PhaseExecutionResultShape.roles is an ARRAY of per-FIRING bindings
+// (`{ role, model, via, substituted? }`); PhaseEvalRecordShape.attribution.roles is a strict
+// RECORD keyed by role whose value is `{ model }` and nothing else. The projection is
+// therefore LOSSY BY CONTRACT: `via`, `substituted` and the firing COUNT do not travel,
+// because the field answers WHO filled the role, not how or how many times. Three things
+// must survive it:
+//
+//   (1) ABSENT STAYS ABSENT. `roles: []` ("the resolver ran and bound nothing") must remain
+//       distinguishable from an absent `roles` ("no bindings were recorded") — {} vs
+//       undefined. Collapsing them would let a resolver that seated nobody read exactly like
+//       a phase that predates the resolver.
+//   (2) DETERMINISTIC KEY ORDER. The record is committed to disk; a re-run over unchanged
+//       input that reorders keys is a diff with no fact behind it. Order is FIRST-FIRING.
+//   (3) NO PLAUSIBLE COLLAPSE. When a role's firings disagree on the model, neither firing is
+//       "the" model — first-wins and last-wins are both fabrications. The key is OMITTED and
+//       the ambiguity is NAMED, which is the only form that a later reader can act on.
+
+/** The role firings COMMITTED in roadmap/phases/phase-5.phase.ts executionResult.roles — the
+ *  shape a real arc actually wrote, verbatim, rather than a dialect invented by this file. */
+const phase5RoleFirings = () => [
+  { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
+  { role: 'software-architect', model: 'claude-fable-5', via: 'child-cli' },
+  { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+  { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+  { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+]
+
+/** The gate's own call shape (cli/commands/gate.mjs). Only `parsed` varies across these tests. */
+const assembleArgs = (phase, parsed) => ({
+  phase,
+  parsed,
+  green: true,
+  slots: [{ slot: 'lint', exitCode: 0, durationMs: 1200 }],
+  fingerprint: { repo: 'zr-evalfix', language: 'typescript', corpusSize: 12 },
+  date: '2026-08-20',
+})
+
+/** Round-trip an assembled record through the CONSUMER's REAL PhaseEvalRecordShape, over the
+ *  same tsx bridge production validates with. The shape is strict at every level, so this is
+ *  what proves the PROJECTION (`{ model }` only) rather than a restatement of it here. */
+function assertValidatesAsRecord(root, record, why) {
+  const res = phaseEvalValidator(root)([record])
+  assert.equal(res.ok, true, `${why}; the shape refused it: ${JSON.stringify(res.res ?? {}).slice(0, 1500)}`)
+  return res.parsed[0]
+}
+
+test('assemblePhaseEvalRecord — copies executionResult.roles into attribution.roles by role, model only', { timeout: 120_000 }, () => {
+  const root = fixture()
+  const parsed = () => ({
+    tasks: [{ id: '5.1' }, { id: '5.2' }],
+    keyFiles: ['src/collector.ts'],
+    plannedBy: { model: 'claude-fable-5' },
+    executionResult: { driver: { model: 'claude-opus-5', lane: 'session' }, roles: phase5RoleFirings() },
+  })
+
+  const { record, warnings } = assemblePhaseEvalRecord(assembleArgs(8811, parsed()))
+
+  assert.deepEqual(warnings, [], 'no role disagrees with itself in this corpus — there is nothing to warn about')
+
+  assert.deepEqual(
+    record.attribution?.roles,
+    {
+      'quality-pass': { model: 'claude-opus-5' },
+      'software-architect': { model: 'claude-fable-5' },
+      'code-reviewer': { model: 'claude-fable-5' },
+    },
+    "three code-reviewer firings on one model collapse to ONE key: the field answers WHO filled " +
+      'the role, and a firing COUNT recorded here would be a second, drifting copy of the gate rounds',
+  )
+  assert.deepEqual(
+    Object.keys(record.attribution.roles),
+    ['quality-pass', 'software-architect', 'code-reviewer'],
+    'the key SET is the distinct roles and the key ORDER is FIRST FIRING — not alphabetical ' +
+      '(code-reviewer would lead) and not last-firing: the record is committed to disk, so a ' +
+      're-run over unchanged input must not churn it',
+  )
+
+  // The KNOWN-LOSSY half, pinned so it cannot quietly stop being lossy: the target value shape
+  // is a strictObject of exactly `{ model }`, so a `via` or a `substituted` riding along would
+  // not be extra detail — it would REFUSE the whole record at write time.
+  for (const [role, binding] of Object.entries(record.attribution.roles)) {
+    assert.deepEqual(Object.keys(binding), ['model'], `${role}: the binding is exactly { model }`)
+    assert.equal('via' in binding, false, `${role}: 'via' does NOT travel into the record`)
+    assert.equal('substituted' in binding, false, `${role}: 'substituted' does NOT travel into the record`)
+  }
+
+  // The role snapshot arrives BESIDE the two attribution fields that already worked, never
+  // instead of them.
+  assert.deepEqual(record.attribution.plannedBy, { model: 'claude-fable-5' }, 'plannedBy is unaffected')
+  assert.deepEqual(record.attribution.driver, { model: 'claude-opus-5', lane: 'session' }, 'driver is unaffected')
+
+  const parsedBack = assertValidatesAsRecord(root, record, 'the assembled record must satisfy PhaseEvalRecordShape')
+  assert.deepEqual(
+    parsedBack.attribution.roles,
+    {
+      'quality-pass': { model: 'claude-opus-5' },
+      'software-architect': { model: 'claude-fable-5' },
+      'code-reviewer': { model: 'claude-fable-5' },
+    },
+    'and it survives the real shape unchanged — the strict record is what proves the projection',
+  )
+
+  assert.equal(
+    JSON.stringify(assemblePhaseEvalRecord(assembleArgs(8811, parsed())).record),
+    JSON.stringify(record),
+    'IDEMPOTENCE: the same input assembles BYTE-identically, so re-recording a phase produces no diff',
+  )
+})
+
+test('assemblePhaseEvalRecord — roles stay absent when execution recorded none', { timeout: 120_000 }, () => {
+  const root = fixture()
+  const base = { tasks: [{ id: '5.1' }], keyFiles: ['src/collector.ts'] }
+
+  // (a1) NOTHING recorded — no executionResult at all. Absence must not mint an empty block.
+  const nothing = assemblePhaseEvalRecord(assembleArgs(8812, { ...base })).record
+  assert.equal(nothing.attribution?.roles, undefined, 'no executionResult ⇒ no roles snapshot')
+  assert.equal('attribution' in nothing, false, 'and with nothing else recorded, attribution itself is ABSENT — an empty block is a fabricated record')
+
+  // (a2) An executionResult that recorded a driver but NO roles. The roles key must not appear
+  // just because its neighbour did.
+  const noRoles = assemblePhaseEvalRecord(
+    assembleArgs(8813, { ...base, executionResult: { driver: { model: 'claude-opus-5', lane: 'session' } } }),
+  ).record
+  assert.deepEqual(noRoles.attribution, { driver: { model: 'claude-opus-5', lane: 'session' } }, 'the driver travels alone')
+  assert.equal('roles' in noRoles.attribution, false, 'an unrecorded roles snapshot is an ABSENT KEY, never an empty record')
+
+  // (b) The resolver RAN and bound nobody. That is a recorded fact, and it is not the same
+  // fact as (a).
+  const emptied = assemblePhaseEvalRecord(assembleArgs(8814, { ...base, executionResult: { roles: [] } })).record
+  assert.deepEqual(emptied.attribution?.roles, {}, 'roles: [] ⇒ an EMPTY RECORD — the resolver ran and bound nothing')
+
+  // THE POINT, pinned explicitly: these two must never converge. A reader asking "did the
+  // resolver run?" gets a different answer from each, and only if they stay different.
+  assert.notDeepStrictEqual(
+    emptied.attribution?.roles,
+    noRoles.attribution?.roles,
+    '{} (bound nothing) and undefined (recorded nothing) are DIFFERENT claims — collapsing them makes a resolver that seated nobody read exactly like a phase that predates the resolver',
+  )
+  assert.equal(typeof emptied.attribution?.roles, 'object', 'the empty case is an object…')
+  assert.equal(noRoles.attribution?.roles, undefined, '…and the absent case is undefined, not an object')
+
+  for (const [record, why] of [
+    [nothing, 'a record with no attribution at all'],
+    [noRoles, 'a record whose attribution carries only a driver'],
+    [emptied, 'a record whose roles snapshot is empty'],
+  ])
+    assertValidatesAsRecord(root, record, `${why} must satisfy PhaseEvalRecordShape`)
+})
+
+test('assemblePhaseEvalRecord — a role whose firings DISAGREE on the model is omitted and NAMED, never collapsed', { timeout: 120_000 }, () => {
+  const root = fixture()
+  // Four test-engineer firings, ONE of them on a different model (a tier substitution mid-phase),
+  // interleaved with a code-reviewer that agrees with itself. The odd firing is LAST so that
+  // first-wins and last-wins are DISTINGUISHABLE projections — otherwise falsifying one would
+  // vacuously falsify the other.
+  const agreeing = [
+    { role: 'test-engineer', model: 'claude-fable-5', via: 'child-cli' },
+    { role: 'code-reviewer', model: 'claude-opus-5', via: 'child-cli' },
+    { role: 'test-engineer', model: 'claude-fable-5', via: 'child-cli' },
+    { role: 'test-engineer', model: 'claude-fable-5', via: 'child-cli' },
+    { role: 'code-reviewer', model: 'claude-opus-5', via: 'child-cli' },
+  ]
+  const dissenting = {
+    role: 'test-engineer',
+    model: 'gpt-5.6-sol',
+    via: 'child-cli',
+    substituted: { from: 'claude-fable-5', to: 'gpt-5.6-sol', reason: 'unavailable: claude-fable-5 (no child CLI) — re-run at UNREDUCED rigor on gpt-5.6-sol' },
+  }
+  const base = { tasks: [{ id: '9.4' }], keyFiles: ['src/collector.ts'] }
+
+  const { record, warnings } = assemblePhaseEvalRecord(
+    assembleArgs(8815, { ...base, executionResult: { roles: [...agreeing, dissenting] } }),
+  )
+
+  assert.deepEqual(
+    record.attribution?.roles,
+    { 'code-reviewer': { model: 'claude-opus-5' } },
+    'the UNAMBIGUOUS role is unaffected: one bad neighbour drops one key, never the whole snapshot',
+  )
+
+  assert.equal(
+    'test-engineer' in record.attribution.roles,
+    false,
+    'a role with two recorded models has no single answer to "who filled it" — the key is OMITTED rather than answered wrongly',
+  )
+
+  // Both plausible collapses, falsified BY NAME. Either one would look entirely reasonable in
+  // the committed record and would silently assert a fact the firings do not support.
+  assert.notDeepStrictEqual(
+    record.attribution?.roles,
+    { 'test-engineer': { model: 'claude-fable-5' }, 'code-reviewer': { model: 'claude-opus-5' } },
+    'FIRST-WINS is not the rule — the majority/earliest model is still only one of two recorded',
+  )
+  assert.notDeepStrictEqual(
+    record.attribution?.roles,
+    { 'test-engineer': { model: 'gpt-5.6-sol' }, 'code-reviewer': { model: 'claude-opus-5' } },
+    'LAST-WINS is not the rule either — a substitution on the final firing does not retroactively fill the earlier ones',
+  )
+
+  assert.equal(warnings.length, 1, `exactly ONE warning for one ambiguous role; got ${JSON.stringify(warnings)}`)
+  const w = warnings[0]
+  assert.ok(w.includes('test-engineer'), `the warning must NAME the role it dropped; got ${JSON.stringify(w)}`)
+  assert.ok(w.includes('8815'), `and the PHASE, or the operator cannot find the record it came from; got ${JSON.stringify(w)}`)
+  assert.ok(w.includes('claude-fable-5'), `and every distinct model recorded, so the ambiguity is resolvable by hand; got ${JSON.stringify(w)}`)
+  assert.ok(w.includes('gpt-5.6-sol'), `including the substituted one; got ${JSON.stringify(w)}`)
+  assert.ok(
+    w.indexOf('claude-fable-5') < w.indexOf('gpt-5.6-sol'),
+    `the distinct models are named in FIRING order, not sorted — the order is itself the evidence; got ${JSON.stringify(w)}`,
+  )
+
+  assertValidatesAsRecord(root, record, 'a record that dropped an ambiguous role is still a VALID record')
+
+  // FALSIFICATION CONTROL: the same input minus the one disagreeing firing. Three duplicate
+  // test-engineer firings remain, so if the guard keyed on DUPLICATION rather than on
+  // DISAGREEMENT this would still be dropped and still warn.
+  const control = assemblePhaseEvalRecord(assembleArgs(8815, { ...base, executionResult: { roles: agreeing } }))
+  assert.deepEqual(
+    control.record.attribution?.roles,
+    { 'test-engineer': { model: 'claude-fable-5' }, 'code-reviewer': { model: 'claude-opus-5' } },
+    'with the dissenting firing removed the role is GAINED — the guard keys on disagreement, not on repeated firings',
+  )
+  assert.deepEqual(control.warnings, [], 'and the warning is LOST with it')
 })

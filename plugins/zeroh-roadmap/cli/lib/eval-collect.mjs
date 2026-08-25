@@ -334,7 +334,62 @@ const didNotRun = (s) => s.declaredAbsent === true || /^\(skipped:/.test(String(
  * Attribution is copied FIELD BY FIELD, never spread: PhaseEvalRecordShape is strict, and a
  * consumer phase file carrying an extra key under executionResult.driver would otherwise
  * turn a measurement write into a refusal.
+ *
+ * Returns { record, warnings }: projecting the per-firing role list onto a one-model-per-role
+ * record can drop an ambiguous role (projectRoleModels), and a caller that could not SAY so
+ * would be dropping it in silence. Warnings never fail anything — the caller prints them.
  */
+/**
+ * Project the per-firing `executionResult.roles` ARRAY onto the model-only RECORD
+ * `PhaseEvalRecordShape.attribution.roles` accepts — plus the warnings that projection owes.
+ *
+ * The two shapes disagree on purpose-built ground: the source records EVERY firing (a role that
+ * fired twice, or fell down its tier chain the second time, appears twice), while the target
+ * holds one model per role. So `via` and `substituted` cannot travel at all, and a role whose
+ * firings DISAGREE on the model is OMITTED and named rather than collapsed to one of them:
+ * seating one model in a cell it only half-occupied is the direction that flatters the record.
+ * An absent roles list stays absent; an EMPTY one becomes `{}`, because "the resolver bound
+ * nothing" is a different fact from "no bindings were recorded" and both must stay readable.
+ *
+ * Object.fromEntries, never obj[role] — a plain-object assignment for a role named
+ * `__proto__` creates no own property, and the role would vanish in silence.
+ */
+export function projectRoleModels(phase, roles) {
+  if (!Array.isArray(roles)) return { roles: undefined, warnings: [] }
+  const byRole = new Map()
+  const warnings = []
+  for (const firing of roles) {
+    const role = firing?.role
+    const model = firing?.model
+    // PhaseExecutionResultShape requires both, so a firing missing either did not come through
+    // the bridge. Unreachable is not a licence to drop it in silence — the reader needs to know
+    // an entry was there and could not be read.
+    if (!role || !model) {
+      warnings.push(
+        `phase ${phase}: an executionResult.roles entry is missing ${!role ? 'role' : 'model'} `
+          + `(${JSON.stringify(firing)}) and was NOT projected into attribution.roles`,
+      )
+      continue
+    }
+    if (!byRole.has(role)) byRole.set(role, [])
+    byRole.get(role).push(model)
+  }
+  const entries = []
+  for (const [role, models] of byRole) {
+    const distinct = [...new Set(models)]
+    if (distinct.length === 1) {
+      entries.push([role, { model: distinct[0] }])
+      continue
+    }
+    warnings.push(
+      `phase ${phase}: role '${role}' was filled by MORE THAN ONE model (${distinct.join(', ')}) and `
+        + 'attribution.roles holds one model per role — the role is OMITTED rather than collapsed to one of '
+        + `them; the full per-firing list stays in roadmap/phases/phase-${phase}.phase.ts executionResult.roles`,
+    )
+  }
+  return { roles: Object.fromEntries(entries), warnings }
+}
+
 export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerprint, date }) {
   const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : []
   const record = {
@@ -366,8 +421,10 @@ export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerpri
   if (parsed?.plannedBy?.model) attribution.plannedBy = { model: parsed.plannedBy.model }
   const driver = parsed?.executionResult?.driver
   if (driver?.model && driver?.lane) attribution.driver = { model: driver.model, lane: driver.lane }
+  const projected = projectRoleModels(phase, parsed?.executionResult?.roles)
+  if (projected.roles) attribution.roles = projected.roles
   if (Object.keys(attribution).length > 0) record.attribution = attribution
-  return record
+  return { record, warnings: projected.warnings }
 }
 
 /** Read + JSON.parse an artifact. Returns { value } or { error } — never throws. */

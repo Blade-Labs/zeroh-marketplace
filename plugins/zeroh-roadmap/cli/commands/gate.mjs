@@ -63,7 +63,7 @@ export function emitPhaseEvalRecord(toplevel, phaseNum, { parsed, report }) {
   const path = phaseEvalRecordPath(toplevel, phaseNum)
   try {
     const schemaPath = consumerSchemaPath(toplevel)
-    const record = assemblePhaseEvalRecord({
+    const { record, warnings } = assemblePhaseEvalRecord({
       phase: phaseNum,
       parsed,
       green: report.green,
@@ -71,6 +71,9 @@ export function emitPhaseEvalRecord(toplevel, phaseNum, { parsed, report }) {
       fingerprint: assembleConsumerFingerprint(toplevel),
       date: String(report.startedAt).slice(0, 10),
     })
+    // Printed BEFORE validation: an ambiguous role binding is a true fact about the phase even
+    // on a run whose shape check then refuses, and it would be lost in the catch below.
+    for (const w of warnings) process.stderr.write(`gate run: ${w} — the gate verdict is unaffected\n`)
     const validated = bridgeParseShape(toplevel, schemaPath, 'PhaseEvalRecordShape', record)
     if (!validated.ok) {
       const { res } = validated
