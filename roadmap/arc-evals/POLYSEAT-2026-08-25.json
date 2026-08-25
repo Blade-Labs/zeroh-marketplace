@@ -1,6 +1,7 @@
 {
   "arcId": "POLYSEAT",
   "date": "2026-08-25",
+  "judgeModel": "claude-sonnet-5",
   "dimensions": {
     "code-confidence": {
       "owner": "deterministic",
@@ -45,14 +46,15 @@
     },
     "standards-adherence": {
       "owner": "judge",
-      "sentinel": "pending-judge",
+      "score": 86,
       "signals": {
         "nonCleanReviewRounds": 22,
         "compromisesRecorded": 0,
         "hardcodedRecorded": 0,
         "skippedRecorded": 0,
         "transparencyDebtEntries": 0,
-        "sweepVerdict": "no-sweep-report"
+        "sweepVerdict": "no-sweep-report",
+        "confidence": "high"
       },
       "sourceRefs": [
         "roadmap/phases/phase-1.phase.ts",
@@ -60,15 +62,17 @@
         "roadmap/phases/phase-3.phase.ts",
         "roadmap/phases/phase-4.phase.ts",
         "roadmap/phases/phase-8.phase.ts"
-      ]
+      ],
+      "evidence": "Zero unnamed compromises: diff 58d48b1..HEAD added lines carry no TODO/FIXME/HACK/as any/@ts-ignore; every phase's compromises/hardcoded/skipped read None with real out-of-scope items NAMED (e.g. phase-1 result.mjs PARSE_SCRIPT residual). singleSeams held mechanically: codex.mjs imports argv/model/lane exclusively from drivers.mjs; software-architect.md model policy collapsed to a MULTI-DRIVER.md pointer. The 22 non-clean review rounds were real defect-finding (phase-2 R1 HIGH: prior fix had no regression guard, proven by replanting the bug). Docked: no sweep-report corroboration (census-empty sweep); ALIAS_FAMILY/MODEL_ALIASES near-duplication in drivers.mjs narrowed rather than removed."
     },
     "doc-brevity": {
       "owner": "judge",
-      "sentinel": "pending-judge",
+      "score": 90,
       "signals": {
         "transparencyReports": 20,
         "transparencyChars": 49005,
-        "meanCharsPerReport": 2450.3
+        "meanCharsPerReport": 2450.3,
+        "confidence": "high"
       },
       "sourceRefs": [
         "roadmap/phases/phase-1.phase.ts",
@@ -76,16 +80,18 @@
         "roadmap/phases/phase-3.phase.ts",
         "roadmap/phases/phase-4.phase.ts",
         "roadmap/phases/phase-8.phase.ts"
-      ]
+      ],
+      "evidence": "The arc enacted the 2026-08-24 operative-rules-only ruling: DIET-LEDGER records a measured 14917->13257 token cut (-11.1%) with deletions/moves only, no operative rule reworded; the history-comments ratchet (slots.mjs HISTORY_COMMENT_RE) scans clean over the arc's own diff. MULTI-DRIVER.md (112 lines) consolidates per-card model-policy paragraphs into one boundary-contract doc, legitimate under the decision bar. transparencyReport verbosity correctly exempt (gate/fix-log material by design)."
     },
     "composability-testability": {
       "owner": "judge",
-      "sentinel": "pending-judge",
+      "score": 79,
       "signals": {
         "testsAdded": 209,
         "filesChanged": 108,
         "testsPerFileChanged": 1.9,
-        "phasesWithMetrics": 5
+        "phasesWithMetrics": 5,
+        "confidence": "high"
       },
       "sourceRefs": [
         "roadmap/phases/phase-1.phase.ts",
@@ -93,7 +99,8 @@
         "roadmap/phases/phase-3.phase.ts",
         "roadmap/phases/phase-4.phase.ts",
         "roadmap/phases/phase-8.phase.ts"
-      ]
+      ],
+      "evidence": "New seams genuinely injectable: resolveRole(roleId, driverId, opts) takes drivers/modelDrivers as parameters for provability; launchArgv is a pure wrapper over the one registry. Test weight tracks risk: roles.test.mjs 903 lines over a 249-line module, with recorded guard mutation proofs (planted violation, anchor drift, decoy). Docked: resolveRole has no production caller — referenced only in prompt text the codex driver reads; a richly-tested seam wired only by a model's prompt-reading is weaker composability than one the machinery calls."
     },
     "speed": {
       "owner": "deterministic",
@@ -117,14 +124,15 @@
     },
     "plan-quality": {
       "owner": "judge",
-      "sentinel": "pending-judge",
+      "score": 85,
       "signals": {
         "escalations": 0,
         "checkpoints": 0,
         "hardStops": 1,
         "surfaced": 36,
         "haltCountTotal": 1,
-        "plannedByRecorded": 5
+        "plannedByRecorded": 5,
+        "confidence": "high"
       },
       "sourceRefs": [
         "roadmap/phases/phase-1.phase.ts",
@@ -132,7 +140,8 @@
         "roadmap/phases/phase-3.phase.ts",
         "roadmap/phases/phase-4.phase.ts",
         "roadmap/phases/phase-8.phase.ts"
-      ]
+      ],
+      "evidence": "Plans pre-made decisions: phase-8 carries grep-anchored assumptions with onFalse ESCALATE and six PRE-MADE DECISIONS the executor followed with zero escalations (haltCount 0). All members' plannedBy matches the tier-chain ruling. The one hard-stop (phase 1) came from the execution prompt's own wrong environmental classification of the measure ratchet — caught by the escalation mechanism, ruled by the operator, folded back into LOCKED DECISIONS. Docked: that wrong assumption shipped in the arc prompt in the first place and cost a full escalation cycle."
     }
   },
   "ratchet": [
@@ -155,7 +164,7 @@
     {
       "dimension": "standards-adherence",
       "baseline": null,
-      "value": null,
+      "value": 86,
       "delta": null,
       "regression": false,
       "note": "no-baseline"
@@ -163,7 +172,7 @@
     {
       "dimension": "doc-brevity",
       "baseline": null,
-      "value": null,
+      "value": 90,
       "delta": null,
       "regression": false,
       "note": "no-baseline"
@@ -171,7 +180,7 @@
     {
       "dimension": "composability-testability",
       "baseline": null,
-      "value": null,
+      "value": 79,
       "delta": null,
       "regression": false,
       "note": "no-baseline"
@@ -187,7 +196,7 @@
     {
       "dimension": "plan-quality",
       "baseline": null,
-      "value": null,
+      "value": 85,
       "delta": null,
       "regression": false,
       "note": "no-baseline"
