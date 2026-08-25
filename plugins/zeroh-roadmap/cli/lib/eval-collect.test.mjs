@@ -25,6 +25,7 @@ import { defaultExec } from './exec.mjs'
 import { bridgeEval } from './tsx-bridge.mjs'
 import { buildEvalFixture, ARC_ID, PHASE_NUMS, SUMMARY_DATE } from '../testdata/eval-arc/build-fixture.mjs'
 import { GateRunReportShape, writeReport } from './gate-report.mjs'
+import { MODEL_IDS } from './drivers.mjs'
 import {
   collectArcTrace,
   summarizeGateRuns,
@@ -1184,9 +1185,9 @@ test('assemblePhaseEvalRecord — a role whose firings DISAGREE on the model is 
   ]
   const dissenting = {
     role: 'test-engineer',
-    model: 'gpt-5.6-sol',
+    model: MODEL_IDS.SOL,
     via: 'child-cli',
-    substituted: { from: 'claude-fable-5', to: 'gpt-5.6-sol', reason: 'unavailable: claude-fable-5 (no child CLI) — re-run at UNREDUCED rigor on gpt-5.6-sol' },
+    substituted: { from: 'claude-fable-5', to: MODEL_IDS.SOL, reason: `unavailable: claude-fable-5 (no child CLI) — re-run at UNREDUCED rigor on ${MODEL_IDS.SOL}` },
   }
   const base = { tasks: [{ id: '9.4' }], keyFiles: ['src/collector.ts'] }
 
@@ -1215,7 +1216,7 @@ test('assemblePhaseEvalRecord — a role whose firings DISAGREE on the model is 
   )
   assert.notDeepStrictEqual(
     record.attribution?.roles,
-    { 'test-engineer': { model: 'gpt-5.6-sol' }, 'code-reviewer': { model: 'claude-opus-5' } },
+    { 'test-engineer': { model: MODEL_IDS.SOL }, 'code-reviewer': { model: 'claude-opus-5' } },
     'LAST-WINS is not the rule either — a substitution on the final firing does not retroactively fill the earlier ones',
   )
 
@@ -1224,9 +1225,9 @@ test('assemblePhaseEvalRecord — a role whose firings DISAGREE on the model is 
   assert.ok(w.includes('test-engineer'), `the warning must NAME the role it dropped; got ${JSON.stringify(w)}`)
   assert.ok(w.includes('8815'), `and the PHASE, or the operator cannot find the record it came from; got ${JSON.stringify(w)}`)
   assert.ok(w.includes('claude-fable-5'), `and every distinct model recorded, so the ambiguity is resolvable by hand; got ${JSON.stringify(w)}`)
-  assert.ok(w.includes('gpt-5.6-sol'), `including the substituted one; got ${JSON.stringify(w)}`)
+  assert.ok(w.includes(MODEL_IDS.SOL), `including the substituted one; got ${JSON.stringify(w)}`)
   assert.ok(
-    w.indexOf('claude-fable-5') < w.indexOf('gpt-5.6-sol'),
+    w.indexOf('claude-fable-5') < w.indexOf(MODEL_IDS.SOL),
     `the distinct models are named in FIRING order, not sorted — the order is itself the evidence; got ${JSON.stringify(w)}`,
   )
 
