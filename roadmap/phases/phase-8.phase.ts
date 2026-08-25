@@ -15,7 +15,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 8,
   name: 'Codex plan lane — deliver plan-phase by path, bind validationTiers, drive it once',
-  status: 'in-progress',
+  status: 'done',
   arcId: 'POLYSEAT',
   plannedBy: { model: 'claude-fable-5' },
   category: 'feature',
@@ -58,6 +58,87 @@ export default definePhase({
   ],
   notes:
     "PRE-MADE DECISIONS: (1) LANES gains plan: { prefix: 'codex-plan-', report: 'CODEX-PLAN.md', journalRe: /^codex-plan-[\\d-]+\\.json$/ } — the review-lane idiom exactly; PLAN_SKILL resolves skills/plan-phase/SKILL.md beside RUN_SKILL/REVIEW_SKILL (fileURLToPath, plugin-move-safe). (2) buildPlanPrompt mirrors buildReviewPrompt: the protocol-is-a-file line, the references clause, targets, then LANE OVERRIDES ONLY — worktree discipline (the plan act edits EXACTLY roadmap/phases/phase-<N>.phase.ts plus the roadmap claim artifact; never backlog.ts, never source), commit grammar 'docs(roadmap): phase <N> — <desc>', the CODEX-PLAN.md report contract, the CODEX-RUN-(COMPLETE|BLOCKED) sentinel, and the brief: `roadmap codex plan <N> --brief <path>` requires --brief (a plan without an input is a hallucination invitation; refuse with remediation naming the flag). plannedBy: the protocol already instructs the planner to stamp its own model id; the launcher journals driver { model, lane: 'codex' } mechanically via the shared launch() — no new attribution surface. (3) Launch mechanics are SHARED (launch(), liveness guard, sentinel, status): a plan lane entry rides findJournal and statusCodex for free — singleSeam 4 (lane mechanics stay single; a new lane adds a LANES entry, never a parallel launcher). (4) Duplication guard: PLAN_PHASE_OWNED string set in codex.test.mjs sampled from plan-phase SKILL.md's protocol-owned lines (e.g. 'KNOW THE DIFF BEFORE WRITING THE TASK', 'roadmap claim', '[NEEDS CLARIFICATION]', 'ESCALATE TO ARCHITECT'); each must grep >0 in the SKILL and 0 in the generated prompt — the run-lane guard shape verbatim. (5) validationTiers binding (strict shape { command, scopedSlot?, variants?, notes? }): wired: { command: 'node plugins/zeroh-roadmap/bin/roadmap.mjs', notes: 'wired criteria drive the plugin CLI; each criterion signal names its own subcommand' }; live-ui/live-host stay unbound (no UI surface in this consumer) — absent keys are legal in ValidationTiersShape. (6) The DRIVE (task 8.4) targets the follow-up-fixes brief listed in .building/plan-brief-9.md (authored in 8.4 from the executors' surfaced items: refuseIfLive unguarded parse; summarizeGateRuns slotFilter inlet; assemblePhaseEvalRecord not copying executionResult.roles into attribution.roles; templates/example.arc.ts + scaffold-roadmap.sh collision; latestReport swallow; --slots silently ignored under --record-round/--verify-complete; worktree consumerFingerprint split). Phase 9 is CLAIMED inside 8.4 via roadmap claim before the drive. The planned phase merges back to feat/roadmap-arcs but is NOT queued by this phase — review-phase owns queueing (its Mode A pass runs after this phase completes, as with any authored plan). REVIEW RATIFICATIONS deferred to the Mode A pass. userFacing false: CLI tooling, no product surface, no flag applies. NAMED RISK: codex plan quality is unknown on first drive — the review-phase gate after is the containment; a BLOCKED sentinel or invalid phase file is an honest escalation, never retried blind.",
+  completedDate: '2026-08-25',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1278,
+      total: 1278,
+      notes:
+        'Authoritative full gate: roadmap/.gate/8/run-000006-2026-08-25T01-46-35-386Z.json — GREEN, 1,278/1,278, run on the FINAL tree after the round-2 fixes. 18 tests added (1,260 baseline). lint, types, build and integration are declared-none in gateCommands; the lint-diff and plugin-native history-comments hygiene slots both exit 0.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — this CLI phase has no integration tier.',
+    },
+    e2eTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — no rendered surface.',
+    },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'PASS. Fixed the two-lane docblocks left behind when the third lane landed (that paragraph is where the duplication guard sends readers on failure), a double read of argv for --brief, past-tense narration against the history-comments ratchet, and a dead test-helper parameter. Ratified all five additive deviations and confirmed both invariants: one LANES entry with no parallel launcher, and PLAN_PHASE_OWNED enforcing deliver-by-path on both arms. Left one real bug to the executor (the multi-lane hint concatenating flags into an unrunnable command) and one [SPECULATIVE] hard-stop it deliberately did not sweep.',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Correctness round: 1 MEDIUM + 4 LOW. The MEDIUM was real breakage — join(root, absolutePath) yields <root>/abs, so an absolute --brief that exists refused as missing while naming a path the caller can see, and the carry-in copied from the same wrong source. Also: the existing-file guard checked the primary checkout while the worktree comes from --base; two lane flags resolved first-match-wins; a shared worktree raced the poll-hint test against the liveness guard; a stale header docblock. The reviewer independently re-ran a PLAN_PHASE_OWNED mutation proof and confirmed it reproduces the quoted message.',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Not a clean round, and the finding that matters is that all 5 entered with the round-1 fix. repoRelative normalized only the absolute branch, so an unnormalized docs/../../out.md still escaped the checkout — the very hazard the fix was written to close, proven empirically by the reviewer. The new worktree-side guard blamed --base for a file a previous dead run had committed and prescribed burning a fresh number, which would duplicate the plan rather than harvest the commit holding it. Plus: the base check ran only after a full npm ci and left an orphan branch; a legal in-repo ..config.md refused as an escape; and a lane flag contradicting its subcommand still launched silently. All fixed, each mutation-proved.',
+    },
+  ],
+  metrics: {
+    commits: 14,
+    linesAdded: 736,
+    linesRemoved: 55,
+    filesChanged: 5,
+    testsAtStart: 1260,
+    testsAtEnd: 1278,
+    testsAdded: 18,
+    startedAt: '2026-08-24T23:25:33Z',
+    completedAt: '2026-08-25T01:55:44Z',
+    haltCount: 0,
+  },
+  executionResult: {
+    phase: 8,
+    status: 'done',
+    driver: { model: 'claude-opus-5[1m]', lane: 'session' },
+    roles: [
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      "Round 2 raised findings and its fixes (076732d) were NOT re-reviewed independently — the gate cap ended the loop there rather than have the executor self-review its own last fixes. A round 3 over 076732d + feeac94 is genuinely OWED. The two round-2 MEDIUMs both entered with a fix round, which is the concrete argument for running it.",
+      "quality-pass raised a [SPECULATIVE] hard-stop it deliberately did not sweep: runCodex/reviewCodex/planCodex now repeat the same four-line preamble (--worktree/--base index parse, mkdirSync('.building'), journalPath), and the default worktree is derivable from the LANES table. A laneSetup(root, ids, lane, argv) would make a fourth lane a pure table entry. Not swept because the default base differs per lane (develop vs HEAD) and several factorings are equally valid — it wants a planned task.",
+      'Phase 9 (roadmap/phases/phase-9.phase.ts, cherry-picked as 76d578c) is on this branch but deliberately NOT queued and carries NO review: the plan lane disables the protocol closing review pass, and CODEX-PLAN.md self-reports zero role firings. review-phase Mode A owns both the review and the queueing. Its plan QUALITY is unjudged by this phase, by design (the phase named that as its risk); the claim made here is only that it is schema-valid, 7 bounded tasks, 0 clarification markers, plannedBy gpt-5.6-sol.',
+      'The lane worktree /home/patrik/zeroh-marketplace-codex-plan-9 and branch codex-plan/9 are left in place so CODEX-PLAN.md (never committed, per the lane contract) survives as evidence of the drive. They need cleanup at arc landing.',
+      "The round-2 summary recorded into gate report run-000002 cites the fix commit as 30fd0f0; the real sha is 076732d. The rounds were re-recorded correctly into the authoritative run-000006 report, and this phase file's gateRounds carry the accurate narrative — the stale run-000002 copy is superseded, not authoritative.",
+      "The reviewer noted a residual symlink case in repoRelative: a repo-committed symlink pointing outside the checkout could still route the carry-in write outside the worktree. Judged out of threat model for a self-use CLI over one's own checkout, and recorded rather than silently accepted.",
+    ],
+    hardStops: [],
+    gateRounds: 3,
+  },
   tasks: [
     {
       id: '8.1',
