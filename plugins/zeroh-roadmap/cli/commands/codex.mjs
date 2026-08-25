@@ -109,6 +109,21 @@ export class JournalUnreadableError extends Error {
  * Scoping matters because nothing prunes .building, so one truncated journal would otherwise
  * block the reconcile for every phase in the checkout, including inline ones.
  */
+/**
+ * Why a PARSED journal is still unreadable, or null when it is fine. ONE definition, because two
+ * readers must agree: a journal is an OBJECT, and anything else JSON yields — null, a bare number
+ * or string, an array — carries no pgid and no phases while still sitting on disk. Falsiness is
+ * not the test: `[]` and `"text"` are truthy and would reach the launch guard as a journal with
+ * `pgid undefined`, which reads as a dead run and relaunches over a file nobody could read.
+ * Completeness is a different question — an object missing `phases` is the coverage check's
+ * business, and journals predating a field are deliberately tolerated elsewhere in this lane.
+ */
+function journalDeclineReason(value) {
+  return !value || typeof value !== 'object' || Array.isArray(value)
+    ? `parsed to ${JSON.stringify(value)} — a journal must be an object`
+    : null
+}
+
 export function findJournal(root, ids, lane = 'run') {
   const wanted = ids.map(String)
   const failures = []
@@ -120,13 +135,9 @@ export function findJournal(root, ids, lane = 'run') {
       if (candidate) failures.push({ path: p, message: e.message })
       return null
     }
-    // A journal is an OBJECT. Anything else that parses — null, a bare number or string, an
-    // array — carries no pgid and no phases, so it answers nothing this lookup asks while still
-    // sitting on disk. Falsiness is not the test: `[]` and `"text"` are truthy and would reach
-    // the launch guard as a journal with `pgid undefined`, which reads as a dead run and
-    // relaunches over a file nobody could read.
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      if (candidate) failures.push({ path: p, message: `parsed to ${JSON.stringify(value)} — a journal must be an object` })
+    const declined = journalDeclineReason(value)
+    if (declined) {
+      if (candidate) failures.push({ path: p, message: declined })
       return null
     }
     return value
@@ -323,15 +334,20 @@ function refuseUnreadableJournal(lane, ids, failures) {
   return 1
 }
 
-/** The parse failure of a journal findJournal declined to return while the file is on disk —
- *  which findJournal only does when it will not parse. A file that parses on re-read means the
- *  lookup and this guard disagree, and that is a bug to surface, never to launch over. */
+/** Why findJournal declined a journal that is on disk — a parse failure, or the same
+ *  decline reason the lookup applied. Asking journalDeclineReason rather than assuming
+ *  "it must not have parsed" is what keeps the disagreement throw below meaning what it says:
+ *  a file that parses AND is a well-formed journal, yet was declined, is a real contradiction
+ *  between the lookup and this guard — never to launch over, and never to blame on the file. */
 function journalParseFailure(path) {
+  let value
   try {
-    JSON.parse(readFileSync(path, 'utf8'))
+    value = JSON.parse(readFileSync(path, 'utf8'))
   } catch (e) {
     return e.message
   }
+  const declined = journalDeclineReason(value)
+  if (declined) return declined
   throw new Error(
     `roadmap codex: ${path} parsed on re-read after findJournal declined it — the journal lookup and the launch `
       + 'guard disagree about the same file; fix the lookup before relaunching this lane.',

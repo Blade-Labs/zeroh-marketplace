@@ -1394,3 +1394,46 @@ test('findJournal — an OBJECT still parses through; only non-objects are unrea
   assert.ok(empty, 'an OBJECT with no phases is readable — the exact-name branch still answers with it')
   assert.deepEqual(empty.journal, {}, 'and it comes back verbatim, not coerced')
 })
+
+test('refuseIfLive — a declined-but-parseable journal MASKED by a covering one still blames the FILE, not the lookup', () => {
+  // The lookup declines two different ways: a file that will not parse, and a file that parses
+  // to something that is not a journal. When a readable covering journal masks the throw, the
+  // launch guard re-reads the exact file — and if it only asks "did it parse?", the second kind
+  // comes back parseable and it accuses the CODE, withholding the delete-and-relaunch remedy
+  // from an operator whose file is the whole problem.
+  for (const body of ['[]', '"text"', '42', 'true']) {
+    const root = tmpRepo()
+    const brief = writeBrief(root)
+    const worktree = join(root, 'wt-plan-970')
+    const env = fakeLaunchEnv(root, worktree)
+    const exact = join(root, '.building', 'codex-plan-970.json')
+    writeFileSync(exact, `${body}\n`)
+    writeFileSync(
+      join(root, '.building', 'codex-plan-970-971.json'),
+      JSON.stringify({
+        phases: ['970', '971'],
+        lane: 'plan',
+        worktree: join(root, 'wt-plan-970-971'),
+        base: 'develop',
+        pgid: 999999999, // dead and READABLE — the mask
+        log: join(root, '.building', 'x.log'),
+        startedAt: new Date().toISOString(),
+      }) + '\n',
+    )
+
+    const r = spawnSync('node', [BIN, 'codex', 'plan', '970', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+    assert.notEqual(r.status, 0, `${body}: the declined exact journal still refuses; stderr: ${r.stderr}`)
+    assert.ok(
+      !existsSync(join(root, '.building', 'codex-plan-970-prompt.txt')),
+      `${body}: and never launches; stderr: ${r.stderr}`,
+    )
+    assert.ok(r.stderr.includes('JournalUnreadableError'), `${body}: the FILE's named error; got: ${r.stderr}`)
+    assert.ok(r.stderr.includes(exact), `${body}: naming the exact file, not the mask; got: ${r.stderr}`)
+    assert.ok(r.stderr.includes('delete it if that run is gone'), `${body}: with the remedy that applies; got: ${r.stderr}`)
+    assert.ok(
+      !/fix the lookup/.test(r.stderr),
+      `${body}: never the internal disagreement throw — the lookup is working exactly as written; got: ${r.stderr}`,
+    )
+  }
+})
