@@ -506,8 +506,11 @@ function statusCodex(root, ids, lane = 'run') {
       }
     }
     const elsewhere = Object.keys(LANES).filter((l) => l !== lane && covers(l))
+    // ONE runnable command per covering lane: the flags are alternatives, and concatenating them
+    // yields a command whose lane selector silently takes the first match.
     const hint = elsewhere.length > 0
-      ? ` — but a ${elsewhere.join('/')} journal DOES cover them: \`roadmap codex status ${ids.join(' ')}${elsewhere.map((l) => (LANES[l].flag ? ` ${LANES[l].flag}` : '')).join('')}\``
+      ? ` — but ${elsewhere.length > 1 ? 'these lanes DO' : 'this lane DOES'} cover them: `
+        + elsewhere.map((l) => `${l} → \`roadmap codex status ${ids.join(' ')}${LANES[l].flag ? ` ${LANES[l].flag}` : ''}\``).join(' · ')
       : ''
     process.stderr.write(`roadmap codex: no ${lane} journal covers phase(s) ${ids.join(',')} in ${join(root, '.building')}${hint}\n`)
     return 1

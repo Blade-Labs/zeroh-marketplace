@@ -1023,3 +1023,29 @@ test('status: `report` is the resolved PATH, never the journal\'s bare report na
   assert.equal(out.report, null, 'a stale report is not this run\'s verdict, and `report` must say so')
   assert.equal(out.staleReport, reportPath, 'the stale report is surfaced, not silently dropped')
 })
+
+test('status: when TWO other lanes cover the ids, each gets its own runnable command', () => {
+  const root = tmpRepo()
+  // A phase that was codex-planned AND codex-reviewed — the realistic multi-lane case.
+  for (const [lane, prefix, report] of [['review', 'codex-review-', 'CODEX-REVIEW.md'], ['plan', 'codex-plan-', 'CODEX-PLAN.md']]) {
+    const worktree = join(root, `wt-${lane}-113`)
+    mkdirSync(worktree, { recursive: true })
+    writeFileSync(
+      join(root, '.building', `${prefix}113.json`),
+      JSON.stringify({ phases: ['113'], lane, report, worktree, pgid: 999999999, startedAt: new Date().toISOString() }) + '\n',
+    )
+  }
+  const r = spawnSync('node', [BIN, 'codex', 'status', '113'], { cwd: root, encoding: 'utf8' })
+  assert.equal(r.status, 1, 'run-lane status still must not adopt another lane\'s journal')
+
+  // Concatenating the flags into one command is the trap: run()'s selector takes the FIRST
+  // LANES match, so `status 113 --review --plan` silently means --review and the plan journal the
+  // reader was just pointed at is never shown.
+  assert.doesNotMatch(
+    r.stderr,
+    /--review --plan|--plan --review/,
+    `the flags are ALTERNATIVES — one command per covering lane, never a concatenation nobody can run as printed; got: ${r.stderr}`,
+  )
+  assert.match(r.stderr, /roadmap codex status 113 --review/, `the review lane needs its own runnable command; got: ${r.stderr}`)
+  assert.match(r.stderr, /roadmap codex status 113 --plan/, `and so does the plan lane; got: ${r.stderr}`)
+})
