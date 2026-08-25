@@ -23,7 +23,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync, spawn } from 'node:child_process'
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, utimesSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1435,4 +1435,312 @@ test('refuseIfLive — a declined-but-parseable journal MASKED by a covering one
       `${body}: never the internal disagreement throw — the lookup is working exactly as written; got: ${r.stderr}`,
     )
   }
+})
+
+// ── the review lane's done-moment: consuming the verdict archives the lane ─────
+// A REVIEW lane is a detached read-only worktree. It never commits, never lands, never merges —
+// so it has no done-VERB, and the 2026-08-23 audit found seven such worktrees outliving their
+// verdicts indefinitely. The operator ruling forbids both a standalone close/sweep verb and a
+// timer reaper, which leaves exactly one honest done-moment: the verdict being CONSUMED. So
+// `codex status` gains a completion SIDE EFFECT deliberately — reading a COMPLETE review lane
+// IS that lane's close. The tests below pin the three things that makes safe: the verdict must
+// SURVIVE the disposal (relocated, byte-identical, readable forever), the disposal must go
+// through the shared rail (refusing rather than destroying), and NOTHING non-complete may fire
+// it — least of all a sentinel the stale-report mtime guard already rejected.
+
+/**
+ * A REAL detached review worktree, made the way reviewCodex makes one (`git worktree add
+ * --detach`, no branch), plus its journal in the PRIMARY `.building/`. Real because the archival
+ * runs through disposeWorktree, whose every answer — dirty, unpushed, alreadyDisposed — is read
+ * off actual git state; a mkdir stand-in would let a broken disposal look clean.
+ *
+ * `develop` is created so the rail's default integrationRef resolves: without it a branch handed
+ * to the rail could never test as merged, and the "this lane owns NO branch" assertions below
+ * would pass on a rail that simply failed to delete.
+ */
+function reviewLane(root, ids, { body = 'findings\nCODEX-RUN-COMPLETE\n', startedAt = new Date(Date.now() - 60_000).toISOString(), pgid = 999999999 } = {}) {
+  const git = (...args) =>
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' })
+  writeFileSync(join(root, 'seed.txt'), 'seed\n')
+  git('add', 'seed.txt')
+  git('commit', '-q', '-m', 'seed')
+  git('branch', '-f', 'develop')
+  const worktree = join(root, `wt-review-${ids.join('-')}`)
+  git('worktree', 'add', '--detach', '-q', worktree, 'HEAD')
+  const jPath = join(root, '.building', `codex-review-${ids.join('-')}.json`)
+  writeFileSync(
+    jPath,
+    JSON.stringify(
+      { phases: ids.map(String), lane: 'review', report: 'CODEX-REVIEW.md', worktree, base: 'HEAD', pgid, log: join(root, '.building', 'x.log'), startedAt },
+      null,
+      2,
+    ) + '\n',
+  )
+  const reportPath = join(worktree, 'CODEX-REVIEW.md')
+  if (body !== null) writeFileSync(reportPath, body)
+  return { worktree, jPath, reportPath, git, archived: join(root, '.building', `codex-review-${ids.join('-')}-REPORT.md`) }
+}
+
+/** `codex status <ids…>` under an explicit lane flag. */
+function laneStatus(root, ids, ...flags) {
+  const r = spawnSync('node', [BIN, 'codex', 'status', ...ids.map(String), ...flags], { cwd: root, encoding: 'utf8' })
+  return { code: r.status, out: r.stdout ? JSON.parse(r.stdout) : null, err: r.stderr }
+}
+
+function journalOf(lane) {
+  return JSON.parse(readFileSync(lane.jPath, 'utf8'))
+}
+
+/** The whole no-side-effect claim in one place: nothing copied, nothing stamped, nothing removed. */
+function assertLaneUntouched(lane, why) {
+  assert.ok(!existsSync(lane.archived), `${why}: no report may be relocated — ${lane.archived} exists`)
+  const j = journalOf(lane)
+  assert.equal(j.archivedAt, undefined, `${why}: the journal must carry no archivedAt — got ${j.archivedAt}`)
+  assert.equal(j.archivedReport, undefined, `${why}: the journal must carry no archivedReport — got ${j.archivedReport}`)
+  assert.ok(existsSync(lane.worktree), `${why}: the worktree must survive — ${lane.worktree} was removed`)
+}
+
+test('review archive: a COMPLETE lane self-archives on the first status read', () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [200])
+  const verdict = readFileSync(lane.reportPath, 'utf8')
+  // A detached review lane owns NO branch. These two are the names a lane-branch convention would
+  // produce, and both are merged into develop, so a disposal handed a branch WOULD delete them.
+  lane.git('branch', 'codex-review/200')
+  lane.git('branch', 'codex/200')
+
+  const { code, out, err } = laneStatus(root, [200], '--review')
+
+  assert.equal(out?.state, 'complete', `the verdict is still the verdict; stderr: ${err}`)
+  assert.equal(code, 0, `a consumed COMPLETE review exits 0; stderr: ${err}`)
+  assert.ok(
+    existsSync(lane.archived),
+    `the verdict must be COPIED into the primary's .building/ before the worktree goes — expected ${lane.archived}; fix statusCodex in cli/commands/codex.mjs`,
+  )
+  assert.equal(readFileSync(lane.archived, 'utf8'), verdict, 'the relocated verdict is byte-identical — a summarized or re-rendered copy is a second source of truth')
+  assert.equal(
+    out.report,
+    lane.archived,
+    `\`report\` must be the RELOCATED path: a reader handed a path inside a removed worktree cannot open it; got ${out.report}`,
+  )
+  assert.ok(!existsSync(lane.worktree), `the review worktree's done-moment has passed — ${lane.worktree} must be disposed`)
+  assert.ok(
+    !lane.git('worktree', 'list', '--porcelain').includes(lane.worktree),
+    'the disposal must go through disposeWorktree (remove + prune), never an rmSync — a hand-deleted directory leaves its repo metadata haunting `git worktree list`',
+  )
+
+  const j = journalOf(lane)
+  assert.ok(existsSync(lane.jPath), 'the journal keeps its codex-review-<ids>.json NAME — renaming it is how findJournal loses the archived lane and the second read regresses to "no journal covers"')
+  assert.ok(Number.isFinite(Date.parse(j.archivedAt)), `the journal must be STAMPED with an ISO archivedAt — got ${JSON.stringify(j.archivedAt)}`)
+  assert.equal(j.archivedReport, lane.archived, `archivedReport must be the ABSOLUTE relocated path — got ${JSON.stringify(j.archivedReport)}`)
+
+  const branches = lane.git('branch', '--list')
+  assert.match(branches, /codex-review\/200/, 'a detached review lane owns no branch — the archival must never hand one to the rail')
+  assert.match(branches, /codex\/200/, 'nor the run lane\'s branch name — disposeWorktree deletes a merged branch it is given')
+})
+
+test('review archive: the disposal is untracked-tolerant — a carried-in --doc never refuses the archive', () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [201])
+  // Everything a real review lane leaves behind is untracked: its own CODEX-REVIEW.md, and the
+  // --doc copy carryIn() writes in. The lane never commits, so none of it is work — but the rail
+  // refuses on ANY untracked file unless the caller says untrackedTolerant.
+  mkdirSync(join(lane.worktree, 'docs'), { recursive: true })
+  writeFileSync(join(lane.worktree, 'docs', 'RELEASE-PLAN.md'), '# the release plan\n')
+  writeFileSync(join(lane.worktree, 'scratch-notes.md'), 'reading notes\n')
+
+  const { code, out, err } = laneStatus(root, [201], '--review')
+
+  assert.equal(out?.state, 'complete', `stderr: ${err}`)
+  assert.equal(code, 0, `stderr: ${err}`)
+  assert.ok(
+    !existsSync(lane.worktree),
+    `a review lane's untracked leftovers are copies and notes, never work — disposeWorktree must be called with untrackedTolerant: true or EVERY review lane refuses on its own carried-in files; stderr: ${err}`,
+  )
+})
+
+test('review archive: a refused disposal still delivers the verdict, and says why the worktree stayed', () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [202])
+  const verdict = readFileSync(lane.reportPath, 'utf8')
+  // A MODIFIED TRACKED file is the one thing a read-only lane should never have produced — so it
+  // is unexplained work, and the rail refuses. The verdict is what the operator came for; it must
+  // not be held hostage to the cleanup.
+  writeFileSync(join(lane.worktree, 'seed.txt'), 'the reviewer edited a tracked file\n')
+
+  const { code, out, err } = laneStatus(root, [202], '--review')
+
+  assert.equal(out?.state, 'complete', `a refused CLEANUP is not a refused verdict; stderr: ${err}`)
+  assert.equal(code, 0, `and it still exits 0; stderr: ${err}`)
+  assert.ok(existsSync(lane.archived), `the verdict is relocated regardless of the disposal's answer — expected ${lane.archived}`)
+  assert.equal(readFileSync(lane.archived, 'utf8'), verdict, 'byte-identical, refusal or not')
+  // WHICH copy `report` names here is the one thing the contract leaves open, and pinning it to
+  // the relocated path would fork the pre-existing `report` is the resolved PATH test (whose
+  // review lane's disposal also refuses). The invariant that actually matters is the one the
+  // relocation exists to serve: `report` must name a path the reader can OPEN.
+  assert.ok(existsSync(out.report), `\`report\` must name a path that exists — a reader cannot open ${out.report}`)
+  assert.equal(readFileSync(out.report, 'utf8'), verdict, 'and opening it must yield the verdict, whichever copy it names')
+  assert.ok(Number.isFinite(Date.parse(journalOf(lane).archivedAt)), 'the journal is stamped: the verdict HAS been consumed, whatever happened to the directory')
+
+  assert.ok(existsSync(lane.worktree), `${lane.worktree} carries a modified TRACKED file — disposing it would destroy the only copy`)
+  assert.ok(existsSync(join(lane.worktree, 'seed.txt')), 'and the file that blocked it is untouched')
+  assert.equal(
+    readFileSync(lane.reportPath, 'utf8'),
+    verdict,
+    'the relocation is a COPY, never a move — a worktree that survived its disposal must keep its own verdict, or the operator sent there to resolve the refusal finds the report gone',
+  )
+  assert.ok(
+    err.includes(lane.worktree),
+    `the refusal must NAME the worktree the operator now has to deal with — a silent survival is how seven of these accumulated; got: ${err}`,
+  )
+  assert.match(err, /refus|dirty|kept/i, `and say that it was kept rather than removed; got: ${err}`)
+  assert.match(
+    err,
+    /seed\.txt/,
+    `and carry the rail's own detail naming the blocking file — reason without detail sends the operator to a directory with no idea what is holding it (the phase land precedent writes both); got: ${err}`,
+  )
+})
+
+test('review archive: a second status on an archived lane still delivers the verdict', () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [203])
+  const verdict = readFileSync(lane.reportPath, 'utf8')
+
+  const first = laneStatus(root, [203], '--review')
+  assert.equal(first.out?.state, 'complete', `precondition: the first read archives; stderr: ${first.err}`)
+  assert.ok(!existsSync(lane.worktree), 'precondition: the worktree is gone after the first read')
+  const stampedAt = journalOf(lane).archivedAt
+  const copiedAt = statSync(lane.archived).mtimeMs
+
+  const { code, out, err } = laneStatus(root, [203], '--review')
+
+  assert.equal(out?.state, 'complete', `an archived lane is READABLE FOREVER — a consumed verdict must never decay to dead-no-report; stderr: ${err}`)
+  assert.equal(code, 0, `stderr: ${err}`)
+  assert.equal(out.report, lane.archived, `and still points at the relocated report; got ${out.report}`)
+  assert.equal(readFileSync(lane.archived, 'utf8'), verdict, 'which still holds the verdict')
+  assert.ok(
+    !/ENOENT|no such file|Error/i.test(err),
+    `the second read must not go looking in the removed worktree — the archived-journal path bypasses it entirely; got: ${err}`,
+  )
+  assert.equal(journalOf(lane).archivedAt, stampedAt, 're-stamping an already-archived lane rewrites when the verdict was consumed')
+  assert.equal(statSync(lane.archived).mtimeMs, copiedAt, 'and the report is not re-copied — its source no longer exists')
+})
+
+test('review archive: a RUNNING lane is never archived', () => {
+  const root = tmpRepo()
+  const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
+  child.unref()
+  cleanups.push(() => {
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch {}
+  })
+  const lane = reviewLane(root, [204], { body: null, pgid: child.pid })
+
+  const { code, out, err } = laneStatus(root, [204], '--review')
+
+  assert.equal(out?.state, 'running', `precondition: a live group with no report is running; stderr: ${err}`)
+  assert.equal(code, 3)
+  assertLaneUntouched(lane, 'a running review has not delivered a verdict, so nothing has been consumed')
+})
+
+test('review archive: a BLOCKED verdict is not a done-moment', () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [205], { body: 'could not review\nCODEX-RUN-BLOCKED\n' })
+
+  const { code, out, err } = laneStatus(root, [205], '--review')
+
+  assert.equal(out?.state, 'blocked', `precondition: a fresh BLOCKED sentinel is the verdict; stderr: ${err}`)
+  assert.equal(code, 2)
+  assertLaneUntouched(lane, 'a blocked lane is the one an operator must go READ — archiving it removes the evidence')
+  assert.ok(existsSync(lane.reportPath), 'and its report stays where the operator was told to look')
+})
+
+test('review archive: a STALE sentinel is not a verdict, so it is not a done-moment either', () => {
+  const root = tmpRepo()
+  // The 2026-08-11 bug in its archival form: a previous run's CODEX-RUN-COMPLETE, older than this
+  // journal's startedAt. The mtime guard already refuses to read it as the verdict — and the
+  // archival must fire on the VERDICT, not on the file, or the guard is defeated from behind and
+  // a live lane's worktree is deleted out from under it.
+  const lane = reviewLane(root, [206], { startedAt: new Date().toISOString() })
+  backdate(lane.reportPath)
+
+  const { code, out, err } = laneStatus(root, [206], '--review')
+
+  assert.equal(out?.state, 'dead-no-report', `a stale sentinel must not read as a verdict; stderr: ${err}`)
+  assert.equal(out.report, null, 'nor be reported as a readable report')
+  assert.equal(out.staleReport, lane.reportPath, 'the stale report is surfaced from the WORKTREE, unchanged by the archival path')
+  assert.equal(code, 2)
+  assertLaneUntouched(lane, 'the freshness guard rejected this sentinel, so the archival must never have seen it')
+  assert.equal(readFileSync(lane.reportPath, 'utf8'), 'findings\nCODEX-RUN-COMPLETE\n', 'and the stale hand-off is still on disk, unread and unmoved')
+})
+
+// ── the RUN lane's archived journal: a landed lane reads CLOSED, never "no journal" ────────────
+// `phase land` renames codex-<ids>.json → codex-<ids>.closed.json (stamped, never deleted) so the
+// live-lane scans drop it: the journalRe class /^codex-[\d-]+\.json$/ has no '.' in [\d-]. That
+// exclusion is deliberate and correct for the LAUNCH guards — and it makes `codex status <N>`
+// exit 1 with "no journal covers phase(s) N" over a journal sitting right there in .building/.
+
+/** The post-land state: a stamped .closed.json, and no worktree (land disposed it). */
+function writeClosedJournal(root, ids, extra = {}) {
+  const j = {
+    phases: ids.map(String),
+    lane: 'run',
+    report: 'CODEX-REPORT.md',
+    worktree: join(root, `wt-${ids.join('-')}`), // removed by the land — deliberately absent
+    base: 'develop',
+    pgid: 999999999,
+    log: join(root, '.building', 'x.log'),
+    startedAt: new Date(Date.now() - 3600_000).toISOString(),
+    closedAt: new Date().toISOString(),
+    closedBy: 'phase land',
+    ...extra,
+  }
+  const path = join(root, '.building', `codex-${ids.join('-')}.closed.json`)
+  writeFileSync(path, JSON.stringify(j, null, 2) + '\n')
+  return { path, journal: j }
+}
+
+test('status: an ARCHIVED run journal reports a CLOSED lane, never "no journal covers"', () => {
+  const root = tmpRepo()
+  const closed = writeClosedJournal(root, [210])
+
+  const { code, out, err } = status(root, 210)
+
+  assert.ok(
+    !/no run journal covers/.test(err),
+    `${closed.path} is sitting right there — claiming none covers the phase sends the reader hunting for a run that DID happen and landed; got: ${err}`,
+  )
+  assert.equal(out?.state, 'closed', `a landed lane's honest state is 'closed'; stderr: ${err}`)
+  assert.equal(code, 0, `and a closed lane is not a failure to report; stderr: ${err}`)
+  assert.equal(out.closedBy, 'phase land', 'the archived journal\'s fields come back with it — who closed it')
+  assert.equal(out.closedAt, closed.journal.closedAt, 'and when')
+  assert.deepEqual(out.phases, ['210'], 'and which phases it covered')
+})
+
+test('status: a MULTI-PHASE closed journal covers a member id it is not named for', () => {
+  const root = tmpRepo()
+  // The same two-lookup shape findJournal already has: the exact name, THEN a scan. An arc lands
+  // as one journal, so an exact-name-only closed probe reports "no journal covers 212" for every
+  // arc member but the first — the arc case regressing in silence.
+  const closed = writeClosedJournal(root, [211, 212])
+
+  const { code, out, err } = status(root, 212)
+
+  assert.ok(!/no run journal covers/.test(err), `${closed.path} covers 212 without being named for it alone; got: ${err}`)
+  assert.equal(out?.state, 'closed', `an arc member resolves through the closed-journal SCAN, not just the exact name; stderr: ${err}`)
+  assert.equal(code, 0, `stderr: ${err}`)
+  assert.deepEqual(out.phases, ['211', '212'], 'and it comes back carrying the whole arc it closed')
+})
+
+test('status: a phase with NO journal at all still misses — the closed probe manufactures nothing', () => {
+  const root = tmpRepo()
+  // The falsification for the two tests above: a probe made unconditional would turn every
+  // inline session — a phase that never had a lane — into a false 'closed', which is exactly the
+  // "landed and cleaned up" claim an unrun phase must never be able to make.
+  const { code, out, err } = status(root, 213)
+
+  assert.equal(code, 1, `an absent journal is still a miss; stdout: ${JSON.stringify(out)}`)
+  assert.match(err, /no run journal covers/, `with the message that has always named it; got: ${err}`)
+  assert.equal(out, null, 'and no state is printed for a lane that never ran')
 })

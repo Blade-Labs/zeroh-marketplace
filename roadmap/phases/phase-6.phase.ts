@@ -175,7 +175,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "statusCodex gains the review lane's done-moment and the run lane's closed read. A COMPLETE, not-yet-archived review journal: the verdict is COPIED to <journal-dir>/codex-review-<ids>-REPORT.md, the detached worktree is disposed through the rail (untrackedTolerant, NO branch \u2014 a review lane owns none and the rail deletes a merged branch it is given), and the journal is STAMPED in place with archivedAt + archivedReport, keeping its live .json name so findJournal keeps resolving it. A new findClosedJournal (the closed twin of findJournal, same two lookups \u2014 exact name then scan) answers a miss with state 'closed' exit 0 instead of 'no journal covers'; LANES gains a per-lane closedRe beside journalRe, the table-driven shape the file already uses.",
+        how:
+          "TDD via test-engineer: 10 tests added (54\u219264), 6 RED on the missing behaviour and 4 deliberate negative regression guards, then GREEN 64/64 with all 54 pre-existing tests unedited. Falsified against a scratch reference implementation, 13/13 mutations caught \u2014 including 'archive fires on a stale/blocked sentinel', 'report moved instead of copied', 'journal renamed to .closed.json' (which breaks idempotence by losing the journal from findJournal), 'untrackedTolerant dropped', 'dispose called with a branch', 'closed probe made unconditional', and 'closed probe exact-name only' (which regresses every arc member but the first). The archival is keyed on the computed VERDICT (state === 'complete'), never on the report FILE, so a stale sentinel the mtime guard just rejected cannot archive a lane from behind and delete a live reviewer's worktree. Integration-level verification against the real CLI in a scratch consumer: `roadmap phase land 500` from inside a codex worktree landed, disposed and archived (worktree gone, branch gone, codex-500.closed.json); `roadmap codex status 500` then reported state 'closed' exit 0 where it had printed 'no journal covers phase(s) 500' exit 1 before the fix; `codex status 999` still misses, proving the probe manufactures nothing.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "The plan said an archived lane reports 'complete' FROM the relocated report. Taken as 'once archived, report is ALWAYS the relocated path' that contradicts this phase's own acceptance criterion that every pre-existing codex test stays green unmodified: the pre-existing `status: report is the resolved PATH` test drives a review lane whose disposal REFUSES (its worktree is a bare mkdir) and asserts report === <worktree>/CODEX-REVIEW.md. The satisfiable reading, implemented: the archived copy answers only once the worktree's own report is GONE. Both intents hold simultaneously and nothing was renegotiated downward. Also: findClosedJournal is deliberately quiet about an unreadable closed candidate (unlike findJournal, which throws) \u2014 a closed lane proves nothing about liveness, so a corrupt one is not an answer rather than a refusal; if a consumer ever needs to audit closed journals, that silence is where to start.",
+      },
+      done: true,
+      doneDate: '2026-08-25',
     },
     {
       id: '6.4',

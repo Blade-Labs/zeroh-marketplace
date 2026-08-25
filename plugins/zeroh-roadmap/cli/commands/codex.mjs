@@ -56,6 +56,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
+import { disposeWorktree } from '../lib/worktree.mjs'
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
@@ -65,9 +66,9 @@ const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
  * launcher. `flag` is how `status` is pointed at the lane (the run lane is the default, hence null).
  */
 const LANES = {
-  run: { prefix: 'codex-', report: 'CODEX-REPORT.md', journalRe: /^codex-[\d-]+\.json$/, flag: null },
-  review: { prefix: 'codex-review-', report: 'CODEX-REVIEW.md', journalRe: /^codex-review-[\d-]+\.json$/, flag: '--review' },
-  plan: { prefix: 'codex-plan-', report: 'CODEX-PLAN.md', journalRe: /^codex-plan-[\d-]+\.json$/, flag: '--plan' },
+  run: { prefix: 'codex-', report: 'CODEX-REPORT.md', journalRe: /^codex-[\d-]+\.json$/, closedRe: /^codex-[\d-]+\.closed\.json$/, flag: null },
+  review: { prefix: 'codex-review-', report: 'CODEX-REVIEW.md', journalRe: /^codex-review-[\d-]+\.json$/, closedRe: /^codex-review-[\d-]+\.closed\.json$/, flag: '--review' },
+  plan: { prefix: 'codex-plan-', report: 'CODEX-PLAN.md', journalRe: /^codex-plan-[\d-]+\.json$/, closedRe: /^codex-plan-[\d-]+\.closed\.json$/, flag: '--plan' },
 }
 
 function journalPath(root, ids, lane = 'run') {
@@ -598,6 +599,80 @@ function planCodex(root, ids, argv) {
   return launch(root, ids, 'plan', { worktree, base, prompt })
 }
 
+/**
+ * The ARCHIVED journal covering every id, or null — the closed twin of findJournal.
+ *
+ * `phase land` renames a landed run journal `codex-<ids>.json` → `codex-<ids>.closed.json`
+ * (stamped, never deleted). That name leaves both live scans on purpose: the journalRe class
+ * `[\d-]` has no '.', so no launch guard can ever mistake a closed lane for a live one. The cost
+ * is that `status` would report "no journal covers phase(s) N" over a journal sitting right there
+ * in .building/ — sending the reader hunting for a run that DID happen and landed. Same two
+ * lookups as the live one (the exact name, then a scan), because an arc lands as ONE journal and
+ * an exact-name-only probe would miss every member but the first.
+ *
+ * Deliberately quiet about unreadable candidates: a closed lane proves nothing about liveness, so
+ * a corrupt one is not a refusal, it is simply not an answer.
+ */
+function findClosedJournal(root, ids, lane = 'run') {
+  const wanted = ids.map(String)
+  const read = (p) => {
+    let value
+    try {
+      value = JSON.parse(readFileSync(p, 'utf8'))
+    } catch {
+      return null
+    }
+    return journalDeclineReason(value) ? null : value
+  }
+  const exact = journalPath(root, ids, lane).replace(/\.json$/, '.closed.json')
+  if (existsSync(exact)) {
+    const journal = read(exact)
+    if (journal) return { path: exact, journal }
+  }
+  const dir = join(root, '.building')
+  for (const f of existsSync(dir) ? readdirSync(dir) : []) {
+    if (!LANES[lane].closedRe.test(f)) continue
+    const path = join(dir, f)
+    if (path === exact) continue
+    const journal = read(path)
+    const phases = (journal?.phases ?? []).map(String)
+    if (journal && wanted.every((n) => phases.includes(n))) return { path, journal }
+  }
+  return null
+}
+
+/**
+ * The review lane's done-moment, executed.
+ *
+ * A review lane is a detached read-only worktree: no branch, no commits, no land — so it has no
+ * done-VERB, and the operator ruling forbids inventing one (no standalone close, no timer reaper).
+ * Consuming the verdict is therefore the only honest close, which is why `status` gains a side
+ * effect here rather than somewhere more polite.
+ *
+ * Order is the safety: COPY the verdict out FIRST, then dispose. A move would leave an operator
+ * sent to resolve a refusal standing in a worktree whose report is gone. Disposal is
+ * untracked-tolerant because everything a review lane leaves behind is untracked BY DESIGN — its
+ * own CODEX-REVIEW.md, the --doc copy carryIn() wrote — so only a MODIFIED TRACKED file, the one
+ * thing a read-only lane should never have produced, refuses. No branch is ever passed: the lane
+ * owns none, and disposeWorktree deletes a merged branch it is given.
+ *
+ * The journal keeps its LIVE name and is stamped in place. Renaming it to .closed.json here would
+ * drop it out of findJournal, and the very next `status` would regress to "no journal covers".
+ */
+function archiveReviewLane(root, jPath, journal, reportPath) {
+  const archived = jPath.replace(/\.json$/, '-REPORT.md')
+  if (existsSync(reportPath) && !existsSync(archived)) copyFileSync(reportPath, archived)
+  const r = disposeWorktree(root, journal.worktree, { branch: null, untrackedTolerant: true, pgid: journal.pgid ?? null })
+  if (!r.disposed && !r.alreadyDisposed) {
+    process.stderr.write(
+      `roadmap codex: the review verdict is archived at ${archived}, but its worktree was KEPT (${r.reason}) — ${r.detail}\n`,
+    )
+  }
+  const stamped = { ...journal, archivedAt: new Date().toISOString(), archivedReport: archived }
+  writeFileSync(jPath, JSON.stringify(stamped, null, 2) + '\n')
+  return { journal: stamped, archived }
+}
+
 function statusCodex(root, ids, lane = 'run') {
   let found
   try {
@@ -607,6 +682,13 @@ function statusCodex(root, ids, lane = 'run') {
     return 1
   }
   if (!found) {
+    // A LANDED lane is not a missing one. Probe the archived twin before reporting a miss, or a
+    // phase whose lane ran, landed and was cleaned up reads exactly like a phase that never ran.
+    const closed = findClosedJournal(root, ids, lane)
+    if (closed) {
+      process.stdout.write(JSON.stringify({ ...closed.journal, state: 'closed', alive: false, sentinel: null, journal: closed.path }, null, 2) + '\n')
+      return 0
+    }
     // A journal sitting right there under another lane's prefix is the likeliest cause of this
     // miss; reporting only "none" sends the reader hunting for a run that never existed.
     // An unreadable journal in ANOTHER lane cannot prove coverage, and the miss being reported
@@ -640,14 +722,30 @@ function statusCodex(root, ids, lane = 'run') {
   // dead-no-report forever.
   const launchedAt = j.startedAt ? Date.parse(j.startedAt) : NaN
   const fresh = reportExists && (!Number.isFinite(launchedAt) || statSync(reportPath).mtimeMs >= launchedAt)
-  const report = fresh ? readFileSync(reportPath, 'utf8') : ''
+  // The archived copy answers only once the worktree's own is GONE. Preferring it while both
+  // exist would hand a refused-disposal lane the relocated path and quietly retire the resolved
+  // worktree path every other reader (and the stale-report guard below) is written against; a
+  // disposal that refused has changed nothing about where the live hand-off lives.
+  const archived = j.archivedReport && !reportExists && existsSync(j.archivedReport) ? j.archivedReport : null
+  const readFrom = fresh ? reportPath : archived
+  const report = readFrom ? readFileSync(readFrom, 'utf8') : ''
   const sentinel = report.match(SENTINEL_RE)?.[0] ?? null
   const alive = j.pgid ? groupAlive(j.pgid) : false
   const state = sentinel === 'CODEX-RUN-COMPLETE' ? 'complete' : sentinel === 'CODEX-RUN-BLOCKED' ? 'blocked' : alive ? 'running' : 'dead-no-report'
   const staleReport = reportExists && !fresh ? reportPath : undefined
+  // THE REVIEW LANE'S DONE-MOMENT. Keyed on the VERDICT (`state`), never on the file: a stale
+  // sentinel the freshness guard just rejected must not archive a lane from behind, which would
+  // delete a live reviewer's worktree out from under it.
+  let journal = j
+  let reported = readFrom
+  if (lane === 'review' && state === 'complete' && !j.archivedAt) {
+    const done = archiveReviewLane(root, jPath, j, reportPath)
+    journal = done.journal
+    reported = existsSync(reportPath) ? reportPath : done.archived
+  }
   // The journal spreads FIRST: `j.report` is the bare report NAME, so spreading it last would
   // overwrite both the path status resolved and the `null` that marks a stale report.
-  process.stdout.write(JSON.stringify({ ...j, state, alive, sentinel, report: fresh ? reportPath : null, ...(staleReport ? { staleReport } : {}) }, null, 2) + '\n')
+  process.stdout.write(JSON.stringify({ ...journal, state, alive, sentinel, report: reported ?? null, ...(staleReport ? { staleReport } : {}) }, null, 2) + '\n')
   return state === 'complete' ? 0 : state === 'running' ? 3 : 2
 }
 
