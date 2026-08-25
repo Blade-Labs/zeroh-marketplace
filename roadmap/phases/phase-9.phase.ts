@@ -82,7 +82,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-25',
+      transparencyReport: {
+        whatWasDone:
+          'refuseIfLive no longer reads its same-lane journal with a bare JSON.parse. The read routes through findJournal, so a truncated journal is refused as a named JournalUnreadableError carrying the exact path and the delete-and-relaunch remedy (exit 1 — nothing was PROVEN live, the evidence is unreadable) instead of escaping as a raw SyntaxError out of planCodex/runCodex/reviewCodex.',
+        how:
+          'test-engineer wrote the RED fixture first (a truncated .building/codex-plan-900.json driven through a real `roadmap codex plan` subprocess); it failed on the defect verbatim — `roadmap: SyntaxError: Unexpected end of JSON input at refuseIfLive (codex.mjs:311)` — with a passing dead-pgid positive control beside it so the fix could not be "refuse everything". The implementation keeps the same-lane question scoped to the EXACT journal the launch would overwrite (found?.path === jPath): a first cut that accepted any journal findJournal covers shadowed the worktree-level guard and turned "a LIVE run under a different journal id refuses a launch into the same worktree" red, because an arc journal codex-50-51.json began answering for id 50 with a message that never names the file. Scoping to the exact path reopened one hole — findJournal returns a readable BROADER journal without throwing, masking an unreadable exact journal beside it — closed by refusing when the exact file is on disk yet is not what findJournal returned; journalParseFailure() re-derives the parse message and THROWS if the file parses on re-read rather than leaving a dead branch. Two extra tests pin both halves. GUARD MUTATION PROOF, three results: (1) planted violation `if (false && existsSync(jPath) && found?.path !== jPath)` produced `not ok 48 - refuseIfLive — a readable ARC journal covering these ids never masks an unreadable exact journal`, 48 pass / 1 fail; (2) planted violation widening the same-lane check back to `if (found)` produced `not ok 6 - a LIVE run under a different journal id refuses a launch into the same worktree` AND `not ok 49 - refuseIfLive — the same-lane check reads the EXACT journal, leaving an arc journal to the worktree guard`, 47 pass / 2 fail; (3) decoy, a comment appended to the `building` binding, stayed 49 pass / 0 fail. Restored and re-verified: capbuild node --test cli/commands/codex.test.mjs = 49/49.',
+        compromises: 'None — the exact-journal scoping and the mask guard were both implemented, not deferred.',
+        skipped: 'None — both step verifies ran and passed.',
+        hardcoded: 'None — no new literals; the refusal reuses JournalUnreadableError and the existing LANES table.',
+        limitations:
+          'Two tests beyond the two the steps named were added (the arc-journal mask, and the exact-journal scoping that keeps the worktree guard reachable) because the implementation separated a seam the plan had folded together. The unreadable-journal refusal exits 1, deliberately distinct from the 2 a proven-live run earns; no caller distinguished those before, so nothing downstream reads the difference yet.',
+      },
     },
     {
       id: '9.2',

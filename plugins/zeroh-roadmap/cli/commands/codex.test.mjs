@@ -1151,3 +1151,147 @@ test('a lane flag contradicting its subcommand is refused, not ignored', () => {
   const agree = spawnSync('node', [BIN, 'codex', 'review', '120', '--review', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
   assert.equal(agree.status, 0, `a flag AGREEING with its subcommand is not a contradiction; stderr: ${agree.stderr}`)
 })
+
+// ── refuseIfLive: the same-lane journal read must be GUARDED, not a raw JSON.parse ────────
+// refuseIfLive parses its own same-lane journal directly (`JSON.parse(readFileSync(jPath))`)
+// instead of going through findJournal's try/catch + JournalUnreadableError wrapping. A
+// truncated same-lane journal (a launch that died mid-write) therefore escapes at relaunch
+// time as a raw, unnamed SyntaxError with no journal path and no remedy — exactly the failure
+// mode findJournal was built to prevent for every OTHER caller (see the two tests above this
+// section, and `codex status`'s own PARSE-failure reporting).
+
+test('refuseIfLive — a truncated same-lane journal never reports raw SyntaxError', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-900')
+  const env = fakeLaunchEnv(root, worktree)
+  const jPath = join(root, '.building', 'codex-plan-900.json')
+  // A launch that died mid-write: valid JSON prefix, then nothing.
+  writeFileSync(jPath, '{"phases":["900"],"pgid":')
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '900', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+  assert.notEqual(r.status, 0, `a truncated same-lane journal must refuse the relaunch, not silently proceed; stderr: ${r.stderr}`)
+  assert.ok(
+    !existsSync(join(root, '.building', 'codex-plan-900-prompt.txt')),
+    'a refused relaunch must never spawn — the prompt file is only written by launch()',
+  )
+  assert.ok(
+    r.stderr.includes('JournalUnreadableError'),
+    `a truncated journal must be diagnosed by its own named class, the way findJournal's callers already are; got: ${r.stderr}`,
+  )
+  assert.ok(
+    r.stderr.includes(jPath),
+    `the diagnostic must NAME the exact journal file refuseIfLive choked on (${jPath}) — a path-less report sends the reader hunting; got: ${r.stderr}`,
+  )
+  assert.ok(
+    r.stderr.includes('delete it if that run is gone'),
+    `the diagnostic must carry the deletion/relaunch remedy JournalUnreadableError already states for every other caller; got: ${r.stderr}`,
+  )
+  assert.ok(
+    !r.stderr.includes('SyntaxError'),
+    `refuseIfLive must never let the bare JSON.parse failure surface as the whole diagnostic (it may appear only as a wrapped cause detail, never as the unnamed report itself); got: ${r.stderr}`,
+  )
+})
+
+test('refuseIfLive — a well-formed dead-pgid same-lane journal still relaunches (the fix must not refuse everything)', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-901')
+  const env = fakeLaunchEnv(root, worktree)
+  const jPath = join(root, '.building', 'codex-plan-901.json')
+  writeFileSync(
+    jPath,
+    JSON.stringify({
+      phases: ['901'],
+      lane: 'plan',
+      worktree,
+      base: 'develop',
+      pgid: 999999999, // never a live group
+      log: join(root, '.building', 'x.log'),
+      startedAt: new Date().toISOString(),
+    }) + '\n',
+  )
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '901', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+  assert.equal(r.status, 0, `a well-formed dead-pgid same-lane journal must still relaunch; stderr: ${r.stderr}`)
+  assert.match(
+    r.stderr,
+    /previous run \(pgid 999999999\) is dead — relaunching/,
+    `the existing dead-pgid relaunch diagnostic must still fire — a fix that refuses every same-lane journal (corrupt or not) passes the test above for the wrong reason; got: ${r.stderr}`,
+  )
+})
+
+test('refuseIfLive — a readable ARC journal covering these ids never masks an unreadable exact journal', () => {
+  // findJournal answers with the multi-phase journal when the exact name is absent — but when
+  // the exact name is PRESENT and corrupt, that broader answer would let the launch proceed and
+  // overwrite the very file whose liveness could not be read. The exact journal owns the
+  // same-lane question; the arc journal is the worktree-level check's business.
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-910')
+  const env = fakeLaunchEnv(root, worktree)
+  const exact = join(root, '.building', 'codex-plan-910.json')
+  writeFileSync(exact, '{"phases":["910"],"pgid":')
+  writeFileSync(
+    join(root, '.building', 'codex-plan-910-911.json'),
+    JSON.stringify({
+      phases: ['910', '911'],
+      lane: 'plan',
+      worktree: join(root, 'wt-plan-910-911'),
+      base: 'develop',
+      pgid: 999999999, // dead, and readable — the mask
+      log: join(root, '.building', 'x.log'),
+      startedAt: new Date().toISOString(),
+    }) + '\n',
+  )
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '910', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+  assert.notEqual(r.status, 0, `the unreadable exact journal must still refuse; stderr: ${r.stderr}`)
+  assert.ok(
+    !existsSync(join(root, '.building', 'codex-plan-910-prompt.txt')),
+    'a refused relaunch must never spawn — the prompt file is only written by launch()',
+  )
+  assert.ok(r.stderr.includes('JournalUnreadableError'), `the named class must survive the arc journal beside it; got: ${r.stderr}`)
+  assert.ok(r.stderr.includes(exact), `the EXACT journal is the one that could not be read — it must be the one named; got: ${r.stderr}`)
+})
+
+test('refuseIfLive — the same-lane check reads the EXACT journal, leaving an arc journal to the worktree guard', () => {
+  // The worktree-level guard is the only one that names the FILE holding the live run. Widening
+  // the same-lane read to any journal covering these ids would shadow it with a message that
+  // never says which journal to look at.
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-920')
+  const env = fakeLaunchEnv(root, worktree)
+  const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
+  child.unref()
+  cleanups.push(() => {
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch {}
+  })
+  writeFileSync(
+    join(root, '.building', 'codex-plan-920-921.json'),
+    JSON.stringify({
+      phases: ['920', '921'],
+      lane: 'plan',
+      worktree,
+      base: 'develop',
+      pgid: child.pid,
+      log: join(root, '.building', 'x.log'),
+      startedAt: new Date().toISOString(),
+    }) + '\n',
+  )
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '920', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+  assert.equal(r.status, 2, `a live run in this worktree is a proven double-run (exit 2); stderr: ${r.stderr}`)
+  assert.match(
+    r.stderr,
+    /journal codex-plan-920-921\.json has a LIVE run .* in this worktree — refusing/,
+    `the refusal must name the journal file holding the live run; got: ${r.stderr}`,
+  )
+})

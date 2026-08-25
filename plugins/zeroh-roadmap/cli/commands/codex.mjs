@@ -300,15 +300,59 @@ function buildPlanPrompt(root, ids, { brief } = {}) {
   ].join('\n')
 }
 
+/** The refusal a journal that will not parse earns at LAUNCH time: exit 1, not the exit 2 a
+ *  proven-live run earns — nothing was proven, the evidence is unreadable. */
+function refuseUnreadableJournal(lane, ids, failures) {
+  const e = new JournalUnreadableError(failures)
+  process.stderr.write(
+    `roadmap codex: ${e.name} — a ${lane} for ${ids.join(',')} was NOT launched: its same-lane journal will not `
+      + 'parse, so a live run underneath it cannot be ruled out.\n'
+      + `${e.message}\n`,
+  )
+  return 1
+}
+
+/** The parse failure of a journal findJournal declined to return while the file is on disk —
+ *  which findJournal only does when it will not parse. A file that parses on re-read means the
+ *  lookup and this guard disagree, and that is a bug to surface, never to launch over. */
+function journalParseFailure(path) {
+  try {
+    JSON.parse(readFileSync(path, 'utf8'))
+  } catch (e) {
+    return e.message
+  }
+  throw new Error(
+    `roadmap codex: ${path} parsed on re-read after findJournal declined it — the journal lookup and the launch `
+      + 'guard disagree about the same file; fix the lookup before relaunching this lane.',
+  )
+}
+
 /**
  * Every lane refuses to launch over live work: the same-lane journal first (an id set
  * relaunching itself), then ANY journal of ANY lane whose worktree is this one — a live
  * review reading a worktree must not get an implementation run started underneath it.
+ *
+ * The same-lane read goes through findJournal so an UNREADABLE journal is a typed refusal
+ * carrying its path and the deletion remedy; a raw JSON.parse here surfaced the truncated
+ * launch record as a bare SyntaxError. Only the EXACT journal this launch would overwrite
+ * answers the same-lane question — a broader arc journal that merely covers these ids is the
+ * worktree-level check's business below, which names the file it found.
  */
 function refuseIfLive(root, ids, lane, worktree, jPath, relaunchNote) {
   const building = join(root, '.building')
-  if (existsSync(jPath)) {
-    const j = JSON.parse(readFileSync(jPath, 'utf8'))
+  let found
+  try {
+    found = findJournal(root, ids, lane)
+  } catch (e) {
+    if (!(e instanceof JournalUnreadableError)) throw e
+    return refuseUnreadableJournal(lane, ids, e.failures)
+  }
+  // findJournal returns the exact journal whenever it parses, so a broader match while that
+  // file sits on disk means the broader one MASKED an unreadable exact journal.
+  if (existsSync(jPath) && found?.path !== jPath)
+    return refuseUnreadableJournal(lane, ids, [{ path: jPath, message: journalParseFailure(jPath) }])
+  if (found?.path === jPath) {
+    const j = found.journal
     if (j.pgid && groupAlive(j.pgid)) {
       process.stderr.write(`roadmap codex: a ${lane} for ${ids.join(',')} is LIVE (pgid ${j.pgid}, log ${j.log}) — refusing a double-run\n`)
       return 2
