@@ -1089,9 +1089,9 @@ test('plan: a phase file present on --base but not on the primary is still refus
   const brief = writeBrief(root)
   const worktree = join(root, 'wt-plan-117')
   const env = fakeLaunchEnv(root, worktree)
-  // The primary checkout has no phase-117 — the pre-launch guard passes. The WORKTREE (made from
-  // --base) does: the planner's one-file target would clobber a real plan and still audit as one
-  // commit against one file.
+  // Only the worktree holds the file, so the primary-checkout guard passes and the worktree-side
+  // one must catch it: otherwise the planner's one-file target clobbers a real plan and still
+  // audits as one commit against one file.
   mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
   const planted = join(worktree, 'roadmap', 'phases', 'phase-117.phase.ts')
   writeFileSync(planted, 'export default { real: true }\n')
