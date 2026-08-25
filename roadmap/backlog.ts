@@ -48,10 +48,6 @@ export default defineBacklog([
   // Queued after 4 Mode A reviews returned READY/CLEAN (2026-08-23). Execute: /do-arc POLYSEAT
   // ── Standalone, post-arc (dependsOn 4: manifest generator + ratchet) ──────
   {
-    phase: 9,
-    name: 'POLYSEAT follow-up hardening — honest journals, gates, and eval identity',
-  },
-  {
     phase: 6,
     name: 'Worktree disposal owned by the done-verbs — land cleans, review-complete archives',
   },
