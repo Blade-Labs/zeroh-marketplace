@@ -93,7 +93,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          'disposeWorktree(repoRoot, dir, { branch, integrationRef, allowUntracked, untrackedTolerant, pgid }) lands in cli/lib/worktree.mjs beside landPhase, plus a groupAlive process-group probe (the codex-journal pattern, absent from this module until now). Four refusal classes, each keeping the worktree and naming its reason: live pgid, dirty (modified TRACKED file, or an untracked file outside the exceptions), unpushed (commits no remote and no other branch carries), and a failed remove. The pass path removes the worktree, deletes the lane branch ONLY when it is fully merged into integrationRef, and prunes. cli/lib/worktree.test.mjs gains 11 tests (+386 lines, no existing test edited).',
+        how:
+          'TDD via test-engineer, contract-only brief (problem + acceptanceCriteria + files + the type signature; never the steps). RED proven on the committed module: 27 tests, 16 pass, 11 fail, all 11 on the named missing export. GREEN after the implementation: 27/27. Three implementation traps the RED round surfaced and the tests then caught: (a) the module\'s own git() helper trims, which eats the leading space of `git status --porcelain`\'s FIRST line so a slice(3) parse names `rc/seed.txt` for `src/seed.txt` — disposal reads status UNTRIMMED; (b) `--exclude refs/heads/<b>` silently matches nothing against --branches (short form only — the same trap reclaimable() documents ten lines above), measured in a scratch repo: long form 0, short form 1; (c) `git branch -d` measures merged-ness against HEAD, so a parked primary would refuse a branch fully merged into develop — merged-ness is an explicit `merge-base --is-ancestor <branch> <integrationRef>` with -D behind it. Anchoring: every git call passes BOTH `-C <root>` and an explicit spawn cwd of repoRoot, so the caller can dispose the worktree it is standing in without the post-removal calls hitting ENOENT on a deleted cwd. `git worktree remove` refuses any untracked file, so the pass path falls back to --force — only ever on a tree this helper has already proven carries nothing but named-allowed artifacts.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The unpushed rail reads reachability from remotes/other-branches/tags, which in a checkout with NO remote configured means any lane commit not also on another branch refuses — correct for this design (the operator pushes or lands first) and pinned by the tests, but it means a purely local consumer never auto-disposes an unlanded lane. A fifth outcome beyond the plan\'s four refusal classes exists: reason \'failed\' for a `git worktree remove` that fails for a reason the checks did not predict, rather than laundering it as \'dirty\'.',
+      },
+      done: true,
+      doneDate: '2026-08-25',
     },
     {
       id: '6.2',

@@ -43,6 +43,24 @@
  * each retry actually taken; `beforeSwap` is the injected seam that makes the race DETERMINISTIC
  * — the fixture advances the base from inside it, exactly where a sibling's swap would land.
  *
+ * disposeWorktree(repoRoot, dir, { branch, integrationRef, allowUntracked, untrackedTolerant, pgid })
+ * — the other done-moment (phase 6.1): the `rm` half of the lane, so REFUSAL is the whole contract.
+ * It returns rather than throws, because a refused disposal must not fail the land that succeeded:
+ * every check that can mean "there is still work here" comes back { disposed: false } with a NAMED
+ * reason ('dirty' | 'unpushed' | 'live') and a detail that says WHICH path / WHICH pgid / WHICH
+ * commits — a bare "no" leaves an operator with nothing to act on, and a bare "yes" is an rm -rf of
+ * someone's uncommitted phase. The four refusal classes are asserted one per case with the tree left
+ * standing; the two untracked EXCEPTIONS (a caller-named lane artifact, and the read-only lane's
+ * untracked-tolerant mode) are asserted never to mask a modified TRACKED file, because that is the
+ * one way an exception becomes data loss. The pass path is proven by what is GONE (dir, merged
+ * branch, worktree metadata) and by what SURVIVES: an unmerged branch outlives its worktree, since
+ * deleting it would be the same loss by another route. `unpushed` is pinned by a triple that admits
+ * only one reading — commits reachable from no remote AND no other branch refuse; commits merged
+ * into the integration ref do not; commits pushed to a REAL bare remote do not — so neither
+ * `--not --remotes` alone nor `--not --branches` alone can satisfy the file. Liveness uses a REAL
+ * detached child process group (the codex.test.mjs idiom), proven live before the refusal and proven
+ * dead before the pass.
+ *
  * Real seeded git repos (execFileSync git with -c identity, the makeRepo idiom from
  * cli/lib/curate.test.mjs); worktree dirs land NEXT TO the repo root and are swept with it.
  * Run: capbuild node --test cli/lib/worktree.test.mjs
@@ -91,6 +109,13 @@ const ensureWorktree = async (...args) =>
 const resetForPhase = async (...args) => (await resolveExport('resetForPhase', 'resetForPhase(worktreeDir, baseRef)'))(...args)
 const landPhase = async (...args) =>
   (await resolveExport('landPhase', 'landPhase(worktreeDir, baseRef, { retries, onRetry, beforeSwap })'))(...args)
+const disposeWorktree = async (...args) =>
+  (
+    await resolveExport(
+      'disposeWorktree',
+      'disposeWorktree(repoRoot, dir, { branch, integrationRef, allowUntracked, untrackedTolerant, pgid })',
+    )
+  )(...args)
 
 /** The one thing the contract fixes about the registry: WHERE it lives. */
 const REGISTRY_REL = join('.building', 'worktree-slots.json')
@@ -827,4 +852,365 @@ test('landPhase: a real file conflict halts typed and distinct, with the worktre
 
   assert.equal(baseTip(r), sibling, 'the base ref did not move: a conflicted land lands NOTHING')
   assert.deepEqual(subjectsOf(r.root, `refs/heads/${BASE}`), baseBefore, 'and the base’s history is exactly what the sibling left')
+})
+
+// ── disposeWorktree: the rm half of the lane, where REFUSAL is the contract ───────────
+
+/** kill(0) against a process GROUP — the liveness a lane journal's pgid actually means. */
+const groupAlive = (pgid) => {
+  try {
+    process.kill(-pgid, 0)
+    return true
+  } catch (e) {
+    return e?.code === 'EPERM'
+  }
+}
+
+/** A real detached child: its own group leader, so pgid === pid and killing it kills the group.
+ *  A non-detached child would share the RUNNER's group — "live" for the wrong reason, and
+ *  unreapable, which would make the dead-pgid half of the case impossible to prove. */
+function liveGroup() {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { stdio: 'ignore', detached: true })
+  kids.push(child)
+  assert.ok(groupAlive(child.pid), `fixture bug: the spawned group ${child.pid} must be alive before a 'live' refusal is asserted`)
+  return child
+}
+
+/** Reap a group and prove it is genuinely gone before the non-refusal is asserted. */
+async function reapGroup(child) {
+  child.kill('SIGKILL')
+  await once(child, 'exit')
+  assert.equal(groupAlive(child.pid), false, `fixture bug: group ${child.pid} must be dead before the pass path is asserted`)
+}
+
+/** Does a ref resolve at all? (A boolean probe, so the "gone" and "survives" cases both assert.) */
+function refResolves(r, ref) {
+  try {
+    return gitIn(r.root, 'rev-parse', '--verify', `${ref}^{commit}`).length === 40
+  } catch {
+    return false
+  }
+}
+
+/**
+ * A repo whose integration branch is a bare ref (BASE), plus a lane worktree shaped like the
+ * ones the done-verbs dispose: `worktree add -b codex/<n>` for a work lane, `--detach` for a
+ * read-only review lane. The primary is deliberately NOT on BASE — disposal must not depend on
+ * which checkout holds the integration ref.
+ */
+function laneFixture({ slot = 1, branch = 'codex/6', detach = false, commits = [] } = {}) {
+  const r = makeRepo()
+  const seed = commitIn(r.root, 'seed: the integration branch exists', 'src/seed.txt')
+  if (r.branch() === BASE) r.git('branch', '-m', `${BASE}-primary`)
+  r.git('branch', BASE)
+  assert.notEqual(r.branch(), BASE, 'fixture bug: the primary must not be checked out on the integration branch')
+  const dir = `${r.root}-wt-${slot}`
+  if (detach) r.git('worktree', 'add', '--detach', dir, BASE)
+  else r.git('worktree', 'add', '-b', branch, dir, BASE)
+  assert.ok(r.worktrees().includes(dir), 'fixture bug: git must know the lane worktree before disposal is asked about it')
+  const shas = commits.map(({ subject, rel }) => commitIn(dir, subject, rel))
+  return { r, dir, seed, branch: detach ? null : branch, shas }
+}
+
+/** Fast-forward the integration ref onto a lane tip — the "already landed" state disposal follows. */
+function mergeIntoBase(r, tip) {
+  r.git('update-ref', `refs/heads/${BASE}`, tip, r.git('rev-parse', `refs/heads/${BASE}`))
+}
+
+/**
+ * A REAL bare remote with the lane branch pushed to it and its upstream set. The only honest way
+ * to say "these commits are not unpushed", and it satisfies both readings of the check (`@{u}..`
+ * needs the upstream; `--not --remotes` needs the remote-tracking ref).
+ */
+function pushLane(r, dir, branch) {
+  const remote = `${r.root}-remote.git`
+  bases.push(remote)
+  execFileSync('git', ['init', '--bare', '-q', remote], { stdio: 'ignore' })
+  r.git('remote', 'add', 'origin', remote)
+  gitIn(dir, 'push', '-q', '-u', 'origin', branch)
+  assert.ok(refResolves(r, `refs/remotes/origin/${branch}`), 'fixture bug: the lane must actually be pushed for the "not unpushed" case to mean anything')
+  return remote
+}
+
+/** Every refusal is the same shape: nothing removed, nothing deleted, and a reason an operator can act on. */
+function assertRefused(r, out, dir, { reason, names, why }) {
+  assert.equal(out.disposed, false, `${why}: disposal must REFUSE — a worktree that may still hold work is never removed`)
+  assert.equal(
+    out.reason,
+    reason,
+    `${why}: the refusal must carry the NAMED class '${reason}' the caller branches on; got ${JSON.stringify(out.reason)} (detail: ${out.detail})`,
+  )
+  assert.equal(out.branchDeleted, false, `${why}: a refused disposal deletes nothing, least of all the branch`)
+  assert.equal(out.alreadyDisposed, false, `${why}: the worktree is still standing — alreadyDisposed is the missing-dir case alone`)
+  assert.equal(typeof out.detail, 'string', `${why}: detail must be a human string; an operator cannot act on ${JSON.stringify(out.detail)}`)
+  for (const name of names) {
+    assert.ok(out.detail.includes(name), `${why}: the refusal must NAME what blocked it (${name}) — "no" is not a debugging interface; got: ${out.detail}`)
+  }
+  assert.equal(existsSync(dir), true, `${why}: the worktree directory SURVIVES the refusal`)
+  assert.ok(r.worktrees().includes(dir), `${why}: and git still knows it — a refusal must not half-remove`)
+}
+
+test('disposeWorktree: a MODIFIED TRACKED file refuses as dirty, names the path, and leaves the tree and branch standing', async () => {
+  const { r, dir, branch } = laneFixture()
+  const editedBytes = writeIn(dir, 'src/seed.txt', 'a session edited this tracked file and never committed it\n')
+  const tip = gitIn(dir, 'rev-parse', 'HEAD')
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assertRefused(r, out, dir, {
+    reason: 'dirty',
+    names: ['src/seed.txt'],
+    why: 'modified tracked file',
+  })
+  assert.deepEqual(readFileSync(join(dir, 'src', 'seed.txt')), editedBytes, 'the uncommitted edit survives byte-identical — the whole point of refusing')
+  assert.equal(refResolves(r, `refs/heads/${branch}`), true, 'the lane branch survives a refused disposal')
+  assert.equal(gitIn(dir, 'rev-parse', 'HEAD'), tip, 'and the lane head is where the session left it')
+})
+
+test('disposeWorktree: an untracked file OUTSIDE allowUntracked refuses as dirty — the exception is scoped to what it names', async () => {
+  const { r, dir, branch } = laneFixture()
+  writeIn(dir, 'CODEX-REPORT.md', '# the lane report, never committed by contract\n')
+  const scratchBytes = writeIn(dir, 'scratch/half-done.md', 'a session’s half-done notes\né—\n')
+
+  // The allowed artifact is present TOO: an exception that blanket-allows would dispose here and
+  // take the scratch notes with it.
+  const out = await disposeWorktree(r.root, dir, { branch, allowUntracked: ['CODEX-REPORT.md'] })
+
+  assertRefused(r, out, dir, {
+    reason: 'dirty',
+    names: ['scratch/half-done.md'],
+    why: 'untracked file outside allowUntracked',
+  })
+  assert.deepEqual(readFileSync(join(dir, 'scratch', 'half-done.md')), scratchBytes, 'the untracked work survives byte-identical')
+})
+
+test('disposeWorktree: lane commits reachable from no remote and no other branch refuse as unpushed, naming them', async () => {
+  const { r, dir, branch, shas } = laneFixture({
+    commits: [
+      { subject: 'feat(cli): phase 6 — the disposal rail', rel: 'cli/lib/dispose.txt' },
+      { subject: 'test(cli): phase 6 — the refusal cases', rel: 'cli/lib/dispose-test.txt' },
+    ],
+  })
+  assert.equal(r.git('rev-list', '--count', `refs/heads/${BASE}..refs/heads/${branch}`), '2', 'fixture: two commits live only on the lane')
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assertRefused(r, out, dir, {
+    reason: 'unpushed',
+    names: ['feat(cli): phase 6 — the disposal rail', 'test(cli): phase 6 — the refusal cases'],
+    why: 'unpushed lane commits',
+  })
+  assert.equal(refResolves(r, `refs/heads/${branch}`), true, 'the branch carrying the only copy of those commits is NOT deleted')
+  assert.equal(gitIn(dir, 'rev-parse', 'HEAD'), shas[1], 'and the lane head still points at them')
+})
+
+test('disposeWorktree: a LIVE process group refuses as live and names the pgid; the same group once reaped does not', async () => {
+  const { r, dir, branch } = laneFixture()
+  const runner = liveGroup()
+
+  const refused = await disposeWorktree(r.root, dir, { branch, pgid: runner.pid })
+
+  assertRefused(r, refused, dir, {
+    reason: 'live',
+    names: [String(runner.pid)],
+    why: 'live lane process group',
+  })
+  assert.equal(refResolves(r, `refs/heads/${branch}`), true, 'a running lane keeps its branch as well as its tree')
+
+  await reapGroup(runner)
+
+  const out = await disposeWorktree(r.root, dir, { branch, pgid: runner.pid })
+
+  assert.equal(
+    out.disposed,
+    true,
+    `the SAME pgid once dead must not refuse — a liveness check that never clears turns every finished lane into a permanent leak; got ${JSON.stringify(out)}`,
+  )
+  assert.equal(out.reason, null, 'a disposal that happened has no reason')
+  assert.equal(existsSync(dir), false, 'and the worktree is actually gone')
+})
+
+test('disposeWorktree: the clean pass removes the worktree, deletes the MERGED branch, and prunes the metadata', async () => {
+  const { r, dir, branch, seed, shas } = laneFixture({
+    commits: [{ subject: 'feat(cli): phase 6 — the landed lane work', rel: 'cli/lib/landed.txt' }],
+  })
+  mergeIntoBase(r, shas[0])
+  assert.equal(r.git('rev-parse', `refs/heads/${BASE}`), shas[0], 'fixture: the lane work is already ON the integration branch — this is the post-land moment')
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assert.deepEqual(
+    Object.keys(out).sort(),
+    ['alreadyDisposed', 'branchDeleted', 'detail', 'disposed', 'reason'],
+    'disposeWorktree returns exactly { disposed, reason, detail, branchDeleted, alreadyDisposed } — three callers read this shape',
+  )
+  assert.equal(out.disposed, true, `a clean, landed, idle lane disposes; got ${JSON.stringify(out)}`)
+  assert.equal(out.reason, null, 'nothing blocked, so no reason')
+  assert.equal(out.detail, null, 'and nothing to name')
+  assert.equal(out.alreadyDisposed, false, 'this call did the removing — alreadyDisposed would misreport it as a no-op to the land report')
+  assert.equal(out.branchDeleted, true, 'a FULLY MERGED lane branch is deleted: leaving it is the merged-exec-lane leak the audit found')
+
+  assert.equal(existsSync(dir), false, 'the worktree directory is gone from disk')
+  assert.equal(refResolves(r, `refs/heads/${branch}`), false, 'and its branch is gone from the repo')
+  assert.deepEqual(r.worktrees(), [r.root], `stale worktree METADATA is pruned too, or \`git worktree list\` grows a graveyard; got ${r.worktrees().join(', ')}`)
+
+  assert.equal(r.git('rev-parse', `refs/heads/${BASE}`), shas[0], 'the integration ref is untouched — disposal never rewinds what was landed')
+  assert.equal(r.git('rev-list', '--count', `${seed}..refs/heads/${BASE}`), '1', 'and the landed commit is still reachable from it after its branch died')
+  assert.equal(r.status(r.root), '', 'the primary checkout is left clean')
+})
+
+test('disposeWorktree: an UNMERGED branch SURVIVES its worktree removal, and integrationRef is what merged-ness is measured against', async () => {
+  const { r, dir, branch, shas } = laneFixture({
+    commits: [{ subject: 'feat(cli): phase 6 — work that never reached develop', rel: 'cli/lib/unlanded.txt' }],
+  })
+  pushLane(r, dir, branch)
+  assert.equal(r.git('rev-list', '--count', `refs/heads/${BASE}..refs/heads/${branch}`), '1', 'fixture: pushed, but NOT merged into the integration ref')
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assert.equal(out.disposed, true, `pushed commits are not "unpushed", so the tree goes; got ${JSON.stringify(out)}`)
+  assert.equal(out.reason, null, 'the disposal was not refused')
+  assert.equal(
+    out.branchDeleted,
+    false,
+    'the branch is NOT fully merged into develop — deleting it would discard the only named handle on that work as surely as an rm would',
+  )
+  assert.equal(existsSync(dir), false, 'the worktree itself is gone')
+  assert.equal(refResolves(r, `refs/heads/${branch}`), true, 'and the branch still resolves')
+  assert.equal(r.git('rev-parse', `refs/heads/${branch}`), shas[0], 'still pointing at exactly the work it carried')
+  assert.deepEqual(r.worktrees(), [r.root], 'metadata pruned even when the branch stays')
+
+  // The same branch state, measured against the ref it IS merged into: the parameter must be used.
+  const second = laneFixture({ slot: 2, branch: 'codex/7' })
+  const landed = commitIn(second.dir, 'feat(cli): phase 6 — landed on a different integration ref', 'cli/lib/other.txt')
+  second.r.git('branch', 'release', landed)
+
+  const out2 = await disposeWorktree(second.r.root, second.dir, { branch: 'codex/7', integrationRef: 'release' })
+
+  assert.equal(out2.disposed, true, `merged into the NAMED integration ref, so it disposes; got ${JSON.stringify(out2)}`)
+  assert.equal(
+    out2.branchDeleted,
+    true,
+    'integrationRef is the ref merged-ness is measured against — a hardcoded develop would keep this branch forever, and the same bug would DELETE one merged only into develop when the caller named another ref',
+  )
+  assert.equal(refResolves(second.r, 'refs/heads/codex/7'), false, 'the merged lane branch is gone')
+  assert.equal(refResolves(second.r, 'refs/heads/release'), true, 'and the ref it merged into is untouched')
+})
+
+test('disposeWorktree: untracked .building/ content alone is NOT a refusal — the lane journal is not the session’s work', async () => {
+  const { r, dir, branch } = laneFixture()
+  writeIn(dir, '.building/codex-6.json', '{"state":"complete"}\n')
+  writeIn(dir, '.building/logs/run.log', 'lane chatter\n')
+  assert.match(gitIn(dir, 'status', '--porcelain', '-uall'), /\.building\//, 'fixture: git DOES see .building as untracked here — the exception must be deliberate, not incidental')
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assert.equal(out.disposed, true, `.building/ is machinery, not work — refusing on it would make every real lane undisposable; got ${JSON.stringify(out)}`)
+  assert.equal(out.reason, null, 'so there is no refusal reason')
+  assert.equal(existsSync(dir), false, 'the worktree is removed despite git calling the tree unclean — git’s own remove heuristic must not veto a decision this helper already made')
+  assert.deepEqual(r.worktrees(), [r.root], 'and the metadata is pruned')
+})
+
+test('disposeWorktree: an allowUntracked-named artifact alone is NOT a refusal — the codex report is never committed by contract', async () => {
+  const { r, dir, branch } = laneFixture()
+  writeIn(dir, 'CODEX-REPORT.md', '# the run lane’s report\n')
+
+  const out = await disposeWorktree(r.root, dir, { branch, allowUntracked: ['CODEX-REPORT.md'] })
+
+  assert.equal(
+    out.disposed,
+    true,
+    `the report is the lane's own output and is never committed, so without the exception EVERY codex-lane disposal refuses on it; got ${JSON.stringify(out)}`,
+  )
+  assert.equal(out.reason, null, 'no refusal')
+  assert.equal(existsSync(dir), false, 'and the lane is gone, report and all')
+})
+
+test('disposeWorktree: untrackedTolerant ignores ALL untracked files, but a modified TRACKED file still refuses', async () => {
+  // The read-only review lane: detached, never commits, its --doc file is a copy from the primary.
+  const readOnly = laneFixture({ detach: true })
+  writeIn(readOnly.dir, 'CODEX-REVIEW.md', '# the verdict\n')
+  writeIn(readOnly.dir, 'notes/whatever.md', 'scratch the reviewer left behind\n')
+
+  const out = await disposeWorktree(readOnly.r.root, readOnly.dir, { branch: null, untrackedTolerant: true })
+
+  assert.equal(out.disposed, true, `a read-only lane's untracked residue is never work — it is a copy; got ${JSON.stringify(out)}`)
+  assert.equal(out.reason, null, 'no refusal')
+  assert.equal(out.branchDeleted, false, 'branch: null is a --detach lane — there is nothing to delete, and reporting true would be a lie in the land report')
+  assert.equal(existsSync(readOnly.dir), false, 'the review worktree is removed')
+  assert.deepEqual(readOnly.r.worktrees(), [readOnly.r.root], 'and its metadata pruned')
+
+  // Tolerance is about UNTRACKED files only. A tracked file that changed is the one thing a
+  // read-only lane should never have, and is therefore exactly what must stop the rm.
+  const edited = laneFixture({ slot: 2, detach: true })
+  const editedBytes = writeIn(edited.dir, 'src/seed.txt', 'the reviewer edited a tracked file — this is not a copy any more\n')
+
+  const refused = await disposeWorktree(edited.r.root, edited.dir, { branch: null, untrackedTolerant: true })
+
+  assertRefused(edited.r, refused, edited.dir, {
+    reason: 'dirty',
+    names: ['src/seed.txt'],
+    why: 'untrackedTolerant with a modified TRACKED file',
+  })
+  assert.deepEqual(
+    readFileSync(join(edited.dir, 'src', 'seed.txt')),
+    editedBytes,
+    'the edit survives — an untracked exception that swallowed tracked modifications would be the data loss the whole rail exists to prevent',
+  )
+})
+
+test('disposeWorktree: a dir that is already gone reports alreadyDisposed, prunes the stale metadata, and never throws', async () => {
+  const { r, dir } = laneFixture()
+  const never = `${r.root}-wt-5`
+  assert.equal(existsSync(never), false, 'fixture: this slot dir was never created')
+
+  const missing = await disposeWorktree(r.root, never, {})
+
+  assert.equal(missing.disposed, true, `arc land disposes members that may already be gone — a never-created dir is a SUCCESS, not an error; got ${JSON.stringify(missing)}`)
+  assert.equal(missing.alreadyDisposed, true, 'and it says so, so the land report can distinguish "removed it" from "nothing to remove"')
+  assert.equal(missing.reason, null, 'a no-op is not a refusal')
+  assert.equal(missing.branchDeleted, false, 'no branch was named, so nothing was deleted')
+
+  // The audit's other shape: the directory died with /tmp, but the repo still lists it.
+  rmSync(dir, { recursive: true, force: true })
+  assert.ok(r.worktrees().includes(dir), 'fixture: git still lists the vanished worktree until something prunes it')
+
+  const stale = await disposeWorktree(r.root, dir, {})
+
+  assert.equal(stale.alreadyDisposed, true, 'a vanished worktree is already disposed')
+  assert.equal(stale.disposed, true, 'and reports success')
+  assert.deepEqual(
+    r.worktrees(),
+    [r.root],
+    `the prune ride-along clears the DEAD METADATA even when the directory beat us to it; got ${r.worktrees().join(', ')}`,
+  )
+})
+
+test('disposeWorktree: every git call anchors at repoRoot — the caller disposes the worktree it is standing in', async () => {
+  // The METERTENANT rule in rm form: phase land runs INSIDE the lane it disposes. A git anchored
+  // at `dir` cannot delete the branch (it is checked out until the worktree goes) nor prune
+  // afterwards — it dies with ENOENT in a directory it just removed.
+  const { r, dir, branch, shas } = laneFixture({
+    commits: [{ subject: 'feat(cli): phase 6 — landed from inside the lane', rel: 'cli/lib/inside.txt' }],
+  })
+  mergeIntoBase(r, shas[0])
+  const cwdBefore = process.cwd()
+
+  let out = null
+  let thrown = null
+  process.chdir(dir)
+  try {
+    out = await disposeWorktree(r.root, dir, { branch })
+  } catch (err) {
+    if (err instanceof assert.AssertionError) throw err
+    thrown = err
+  } finally {
+    process.chdir(cwdBefore)
+  }
+
+  assert.equal(thrown, null, `disposing the worktree you stand in must not throw; got ${thrown?.code ?? ''} ${thrown?.message ?? ''}`)
+  assert.equal(out.disposed, true, `and it must actually dispose; got ${JSON.stringify(out)}`)
+  assert.equal(out.branchDeleted, true, 'the branch delete happens AFTER the removal that frees it — only a repoRoot-anchored git can run it')
+  assert.equal(existsSync(dir), false, 'the lane the caller stood in is gone')
+  assert.deepEqual(r.worktrees(), [r.root], 'and the prune ran too, from the primary checkout')
 })
