@@ -479,9 +479,11 @@ export default async function run(argv) {
   // --slots filters the slots buildPlan is about to EXECUTE. Both modes below return before
   // buildPlan is ever reached, so the flag cannot narrow anything there — accepting it hands
   // back a full-scope action to an operator who asked for a subset. Refused at the dispatch
-  // boundary, before any report is read or written.
+  // boundary, before any report is read or written, and scoped to `run`: neither mode exists
+  // under another subcommand, so firing there would lecture about flags the command ignores
+  // and shadow the diagnostic that subcommand actually owes.
   const unfilterable = opts.recordRound != null ? '--record-round' : opts.verifyComplete ? '--verify-complete' : null
-  if (opts.slots && unfilterable) {
+  if (sub === 'run' && opts.slots && unfilterable) {
     process.stderr.write(
       `roadmap gate ${sub}: --slots ${opts.slots} cannot be combined with ${unfilterable} — ${unfilterable} reads and `
         + 'writes the existing report and never executes slots, so there is nothing for --slots to filter. Drop --slots, '
@@ -630,6 +632,20 @@ export async function runGate(phaseNum, opts) {
       return 2
     }
     try {
+      // The same rule the --verify-complete refresh already applies: a --slots report covers
+      // that subset alone. A round recorded there is not a round about the PHASE — and since
+      // summarizeGateRuns skips filtered reports outright, it reaches the eval as nothing at
+      // all. The same-invocation form is refused at dispatch; this is the sequential form the
+      // per-task ritual actually produces.
+      const latest = latestReport(toplevel, phaseNum)
+      if (latest?.report.slotFilter) {
+        process.stderr.write(
+          `gate run --record-round: the latest report ${latest.path} is a --slots ${latest.report.slotFilter} run, so it `
+            + 'covers that subset alone and is not evidence about the phase — a round recorded there is dropped by the eval. '
+            + `Re-run the full gate (roadmap gate run ${phaseNum}) and record the round into that report.\n`,
+        )
+        return 2
+      }
       appendAgentRound(toplevel, phaseNum, check.data)
     } catch (e) {
       // The CLASS is named as well as the message: "no report yet" and "the report on disk will

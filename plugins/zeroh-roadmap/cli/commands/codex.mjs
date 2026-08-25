@@ -113,12 +113,21 @@ export function findJournal(root, ids, lane = 'run') {
   const wanted = ids.map(String)
   const failures = []
   const read = (p, candidate) => {
+    let value
     try {
-      return JSON.parse(readFileSync(p, 'utf8'))
+      value = JSON.parse(readFileSync(p, 'utf8'))
     } catch (e) {
       if (candidate) failures.push({ path: p, message: e.message })
       return null
     }
+    // A file parsing to a FALSY literal (null, 0, "", false) carries no pgid and no phases, so
+    // it answers nothing this lookup asks — but it is on disk, and returning null for it would
+    // report an existing journal as an inline session with none.
+    if (!value) {
+      if (candidate) failures.push({ path: p, message: `parsed to ${JSON.stringify(value)} — a journal must be an object` })
+      return null
+    }
+    return value
   }
   const exact = journalPath(root, ids, lane)
   if (existsSync(exact)) {
@@ -305,8 +314,8 @@ function buildPlanPrompt(root, ids, { brief } = {}) {
 function refuseUnreadableJournal(lane, ids, failures) {
   const e = new JournalUnreadableError(failures)
   process.stderr.write(
-    `roadmap codex: ${e.name} — a ${lane} for ${ids.join(',')} was NOT launched: its same-lane journal will not `
-      + 'parse, so a live run underneath it cannot be ruled out.\n'
+    `roadmap codex: ${e.name} — a ${lane} for ${ids.join(',')} was NOT launched: a ${lane} journal NAMING these `
+      + 'phase(s) will not parse, so a live run underneath it cannot be ruled out.\n'
       + `${e.message}\n`,
   )
   return 1
@@ -334,9 +343,11 @@ function journalParseFailure(path) {
  *
  * The same-lane read goes through findJournal so an UNREADABLE journal is a typed refusal
  * carrying its path and the deletion remedy; a raw JSON.parse here surfaced the truncated
- * launch record as a bare SyntaxError. Only the EXACT journal this launch would overwrite
- * answers the same-lane question — a broader arc journal that merely covers these ids is the
- * worktree-level check's business below, which names the file it found.
+ * launch record as a bare SyntaxError. Two questions, scoped differently: LIVENESS is answered
+ * by the EXACT journal this launch would overwrite alone, so a readable arc journal that merely
+ * covers these ids falls through to the worktree-level check below, which names the file it
+ * found. READABILITY is not scoped that way — any journal NAMING these ids that will not parse
+ * refuses the launch, because a covering journal nobody can read cannot be shown to be dead.
  */
 function refuseIfLive(root, ids, lane, worktree, jPath, relaunchNote) {
   const building = join(root, '.building')

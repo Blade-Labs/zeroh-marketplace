@@ -1488,3 +1488,83 @@ test('gate run --slots on the default execute path stays fully supported and sta
   assert.equal(rep.slotFilter, 'types', 'the filtered run is stamped as a subset projection')
   assert.ok(rep.slots.some((s) => s.slot === 'types'), `the wanted slot actually ran; got ${rep.slots.map((s) => s.slot).join(', ')}`)
 })
+
+// ── R1: a reviewer round must not land in a filtered report, and the flag-conflict guard
+//    must not answer for subcommands that have no such modes ──────────────────────────────
+
+/** `roadmap gate <sub> …` for a sub other than run — the guard must never speak for these. */
+function runGateSub(root, sub, args) {
+  const r = spawnSync('node', [BIN, 'gate', sub, ...args], {
+    cwd: root, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ROADMAP_CONFIG: join(root, 'roadmap', 'roadmap.config.json') },
+  })
+  return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+}
+
+test('gate run --record-round refuses a FILTERED latest report — the sequential form, not just the same-invocation one', () => {
+  // --slots + --record-round in ONE invocation is refused at dispatch. The per-task ritual
+  // produces the SEQUENTIAL form instead: a filtered run, then a round recorded later. Without
+  // this the round appends to a subset projection and summarizeGateRuns then drops the report
+  // entirely, so the round reaches the eval as nothing at all.
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1510, phaseObj({ phase: 1510 }))
+  repo.commit('feat: phase 1510 — code', { 'lib/g2.ts': 'export const g = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1510']).code, 0, 'a FULL run first, so a full report exists to be shadowed')
+  assert.equal(runGateCmd(repo.root, ['1510', '--slots', 'types']).code, 0, 'then the routine filtered run lands on top')
+  const filtered = latestReportOf(repo.root, 1510)
+  assert.equal(filtered.slotFilter, 'types', 'fixture: the NEWEST report must be the filtered one')
+
+  const dir = join(repo.root, 'roadmap', '.gate', '1510')
+  const newest = readdirSync(dir).filter((f) => /^run-\d+-.*\.json$/.test(f)).sort().pop()
+  const before = readFileSync(join(dir, newest), 'utf8')
+  const round = JSON.stringify({ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: '0 findings' })
+
+  const r = runGateCmd(repo.root, ['1510', '--record-round', round])
+
+  assert.equal(r.code, 2, `a filtered report is not a place to record a round; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.ok(r.stderr.includes('types'), `the refusal names the FILTER that made it a subset; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(r.stderr.includes(join(dir, newest)), `and the concrete report; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.equal(
+    /recorded round/.test(r.stdout),
+    false,
+    `and it never claims the round was recorded; stdout: ${JSON.stringify(r.stdout)}`,
+  )
+  assert.equal(readFileSync(join(dir, newest), 'utf8'), before, 'the filtered report is left byte-identical')
+  assert.equal(latestReportOf(repo.root, 1510).agents.length, 0, 'no round landed anywhere')
+
+  // Positive control: the SAME round against a fresh FULL run is recorded exactly as before.
+  assert.equal(runGateCmd(repo.root, ['1510']).code, 0)
+  const ok = runGateCmd(repo.root, ['1510', '--record-round', round])
+  assert.equal(ok.code, 0, ok.stderr)
+  assert.equal(latestReportOf(repo.root, 1510).agents.length, 1, 'the round appends to the full report')
+})
+
+test('the --slots conflict guard answers for `run` ONLY — it never shadows another subcommand\'s own diagnostic', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1520, phaseObj({ phase: 1520 }))
+  repo.commit('feat: phase 1520 — code', { 'lib/h2.ts': 'export const h = 1\n' })
+
+  // `gate plan` has neither mode, so the guard must stay silent and plan must behave normally.
+  const plan = runGateSub(repo.root, 'plan', ['1520', '--slots', 'types', '--verify-complete'])
+  assert.equal(
+    /cannot be combined with/.test(plan.stderr),
+    false,
+    `plan has no --verify-complete mode, so lecturing about it describes a command that does not exist; stderr: ${JSON.stringify(plan.stderr)}`,
+  )
+  assert.equal(plan.code, 0, `and plan still emits its plan; stderr: ${JSON.stringify(plan.stderr)}`)
+  assert.equal(JSON.parse(plan.stdout).phase, 1520, 'the plan is the real one')
+
+  // An unknown subcommand owes its OWN diagnostic — the flag lecture must not pre-empt it.
+  const bogus = runGateSub(repo.root, 'frobnicate', ['1520', '--slots', 'types', '--verify-complete'])
+  assert.match(
+    bogus.stderr,
+    /unknown subcommand 'frobnicate'/,
+    `an unknown subcommand names itself; the flag conflict is not the reader's problem yet; stderr: ${JSON.stringify(bogus.stderr)}`,
+  )
+  assert.equal(/cannot be combined with/.test(bogus.stderr), false, 'and the guard stayed out of it')
+
+  // Positive control: under `run`, both conflicts still refuse.
+  assert.equal(runGateCmd(repo.root, ['1520', '--slots', 'types', '--verify-complete']).code, 1)
+  const rr = JSON.stringify({ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: 'x' })
+  assert.equal(runGateCmd(repo.root, ['1520', '--slots', 'types', '--record-round', rr]).code, 1)
+})

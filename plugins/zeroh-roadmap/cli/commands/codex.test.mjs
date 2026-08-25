@@ -1295,3 +1295,58 @@ test('refuseIfLive — the same-lane check reads the EXACT journal, leaving an a
     `the refusal must name the journal file holding the live run; got: ${r.stderr}`,
   )
 })
+
+test('refuseIfLive — a journal parsing to a FALSY literal is unreadable, not a lookup disagreement', () => {
+  // JSON.parse succeeds on `null`, so the value passed the try/catch while failing the truthiness
+  // check that decides whether a journal was found. The launch guard then re-read a file that
+  // parses and blamed the CODE — an operator staring at "fix the lookup" gets no remedy for the
+  // file that is actually at fault.
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-930')
+  const env = fakeLaunchEnv(root, worktree)
+  const jPath = join(root, '.building', 'codex-plan-930.json')
+  writeFileSync(jPath, 'null\n')
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '930', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+  assert.notEqual(r.status, 0, `a journal that carries no pgid cannot clear a live run; stderr: ${r.stderr}`)
+  assert.ok(
+    !existsSync(join(root, '.building', 'codex-plan-930-prompt.txt')),
+    'a refused relaunch must never spawn — the prompt file is only written by launch()',
+  )
+  assert.ok(r.stderr.includes('JournalUnreadableError'), `the FILE is at fault, so it earns the file's error; got: ${r.stderr}`)
+  assert.ok(r.stderr.includes(jPath), `named concretely; got: ${r.stderr}`)
+  assert.ok(r.stderr.includes('delete it if that run is gone'), `with the remedy that actually applies; got: ${r.stderr}`)
+  assert.ok(
+    !/fix the lookup/.test(r.stderr),
+    `and never the lookup-disagreement diagnostic, which sends the reader to debug working code; got: ${r.stderr}`,
+  )
+})
+
+test('refuseIfLive — an UNREADABLE arc journal covering these ids refuses, and the message says covering, not same-lane', () => {
+  // Readability is not scoped the way liveness is: a covering journal nobody can parse cannot be
+  // shown to be dead, so it refuses even with no exact journal on disk. The wording has to match
+  // — naming a "same-lane journal" that does not exist sends the reader looking for the wrong file.
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-940')
+  const env = fakeLaunchEnv(root, worktree)
+  const arcPath = join(root, '.building', 'codex-plan-940-941.json')
+  writeFileSync(arcPath, '{"phases":["940","941"],"pgid":')
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-940.json')), 'fixture: there is NO exact same-lane journal')
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '940', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+  assert.notEqual(r.status, 0, `an unreadable covering journal cannot be proven dead; stderr: ${r.stderr}`)
+  assert.ok(
+    !existsSync(join(root, '.building', 'codex-plan-940-prompt.txt')),
+    'a refused relaunch must never spawn — the prompt file is only written by launch()',
+  )
+  assert.ok(r.stderr.includes('JournalUnreadableError'), `the named class; got: ${r.stderr}`)
+  assert.ok(r.stderr.includes(arcPath), `naming the ARC journal it could not read; got: ${r.stderr}`)
+  assert.ok(
+    !/same-lane journal/.test(r.stderr),
+    `no exact same-lane journal exists here, so calling it one names a file the operator will not find; got: ${r.stderr}`,
+  )
+})
