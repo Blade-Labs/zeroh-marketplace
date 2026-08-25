@@ -210,7 +210,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/DIET-LEDGER.md',
       ],
       testMode: 'none',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "Both cleanup carriers are gone from skills/do-phase/SKILL.md. The delegation paragraph's back-half list ends at 'then land it'; the Integration-routing paragraph no longer teaches a manual rebase + ff-merge-from-the-primary and no longer says to remove the journal \u2014 it names `roadmap phase land <N>` run INSIDE the codex worktree, the disposal it performs, the three refusal classes (stderr, land still green), and the backlog groom that follows. `codex status`'s typed vocabulary gains `closed`. A three-row DIET-LEDGER.md section lands in the same commit with per-passage dispositions and code+test evidence.",
+        how:
+          "The step verify passes both directions: `! grep -qF 'clean up the worktree' && ! grep -qF 'branch AND the' && grep -qF 'worktree remove' skills/plan-phase/references/verify-rehearsal.md`. verify-rehearsal already named `git worktree remove` explicitly, so the plan's conditional tighten was not needed \u2014 nothing changed there. Protocol-load budget: the first draft GREW do-phase 12,203 B \u2192 12,243 B (3,051 \u2192 3,061 tokens, total 13,263 \u2014 over the 13,253 ceiling), caught by `roadmap measure --flow do-arc` before the commit; a second pass tightened it to 12,181 B / 3,046 tokens, total 13,248, and `measure --flow do-arc --assert 13253` reports 'within budget'. codex.test.mjs greps this SKILL for its protocol-owned strings and stays green (74/74 with measure.test.mjs).",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "The prose now describes disposal from the phase-land side only. Arc land's per-member lane disposal (task 6.2) and the review lane's archive-at-status (task 6.3) are NOT named in any skill \u2014 deliberately, since do-arc's SKILL already names arc land the cleanup owner and the review lane's close is a side effect of a command the reader already runs, and both surfaces are inside the measured zero-growth set. If either behaviour ever needs a reader-visible caveat, it costs budget that must be funded by a trim elsewhere.",
+      },
+      done: true,
+      doneDate: '2026-08-25',
     },
   ],
 })

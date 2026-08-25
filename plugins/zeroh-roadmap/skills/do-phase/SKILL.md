@@ -166,21 +166,19 @@ still happen, in the worktree, before the land so they ride the curated commits.
 ## Codex delegation lane (`roadmap codex run <N…>`)
 
 When the session delegates implementation to Codex, use the CLI lane — never hand-roll the launch.
-Poll `roadmap codex status <N>` (typed: running/complete/blocked/dead-no-report). A whole arc
-delegates as one run: `roadmap codex run --arc <ID>` (members in planes order). **Division of labor:** Codex runs each phase FULLY — tasks, per-task commits +
+Poll `roadmap codex status <N>` (typed: running/complete/blocked/dead-no-report/closed). A whole
+arc delegates as one run: `roadmap codex run --arc <ID>` (members in planes order). **Division of labor:** Codex runs each phase FULLY — tasks, per-task commits +
 transparencyReports, the gate to green (an honestly-labeled codex-self-review gateRound, the
 done-flip, `--verify-complete`). The session owns the back half only: AUDIT the commits and gate
-claims against the plan (spot-check verifies; a false green is a bounce), then merge, push,
-backlog-groom, clean up the worktree. Codex never merges/pushes in ANY checkout, and never
-touches THIS repo's primary checkout (a cross-repo phase's product commits in the OTHER repo's
-checkout are the plan's own instruction, not a violation); for an arc, sweep/validate/land
-judgment stays with the session.
+claims against the plan (spot-check verifies; a false green is a bounce), then land it. Codex
+never merges/pushes in ANY checkout, and never touches THIS repo's primary checkout (a cross-repo
+phase's product commits in the OTHER repo's checkout are the plan's own instruction, not a
+violation); for an arc, sweep/validate/land judgment stays with the session.
 
-**Integration routing (the session's merge, after CODEX-RUN-COMPLETE):** rebase `codex/<N>`
-onto develop inside the codex worktree, then run `git merge --ff-only codex/<N>` FROM THE
-PRIMARY checkout — run inside the codex worktree it merges the branch into itself and silently
-no-ops. Then push, groom the backlog, and remove
-the worktree, the `codex/<N>` branch AND the `.building/codex-<N>.json` journal. **Cross-repo
-phases ride the lane normally** — the lane prompt carries the cross-repo instruction (product
-commits in the other checkout on its checked-out branch, roadmap-state commits in the
-worktree); integration then also pushes the product repo's branch.
+**Integration routing (after CODEX-RUN-COMPLETE):** run `roadmap phase land <N>` INSIDE the codex
+worktree — it rebases onto the integration ref, guarded-ffs, pushes when authorized, then disposes
+the worktree, its merged `codex/<N>` branch and the journal (renamed `.closed.json`, never
+deleted). Disposal REFUSES — on stderr, land still green — on a dirty tree, commits no other ref
+carries, or a live lane. Groom the backlog after. **Cross-repo phases ride the lane normally** —
+the lane prompt carries the cross-repo instruction (product commits in the other checkout on its
+checked-out branch, roadmap-state commits in the worktree); integration also pushes that branch.

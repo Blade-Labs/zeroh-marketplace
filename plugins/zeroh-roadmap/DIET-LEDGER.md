@@ -532,3 +532,17 @@ The `references/codex-tools.md` pointer (the per-harness tool mapping) was funde
 |---|---|---|
 | §Cross-cutting standards — "Downstream skills cite these same files at their own steps" | obsolete-with-evidence(the instruction that follows — load it yourself when the target skill has not — is the whole rule; the observation about downstream skills changes no reader's action) | using-zeroh-roadmap §Cross-cutting standards |
 | §Routing — "your job ends at correct dispatch plus the coordination steps below" | obsolete-with-evidence(compressed to "your job is correct dispatch plus the coordination below"; both clauses survive) | using-zeroh-roadmap §Routing |
+
+## do-phase/SKILL.md — phase 6 task 6.4 (net trim)
+
+Worktree disposal moved from honor-system prose into the done-verbs (`roadmap phase land`,
+`roadmap arc land`, `codex status` on a complete review lane). Both cleanup carriers in the
+codex-delegation section were the audit's falsified promise; the manual integration sequence they
+sat in is now the land verb's own mechanics. do-phase went 12,203 B → 12,181 B, flow total
+13,253 → 13,248 tokens (`roadmap measure --flow do-arc`).
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| §Codex delegation lane — "then merge, push, backlog-groom, clean up the worktree" | enforced-by-code(`roadmap phase land` disposes the lane worktree + its merged branch and archives the journal; a refusal is named on stderr with the land still green) | cli/commands/phase.mjs `runLand`/`disposeSource`, cli/lib/worktree.mjs `disposeWorktree`, cli/commands/phase.test.mjs "a landed codex lane is DISPOSED" |
+| §Integration routing — "rebase `codex/<N>` onto develop inside the codex worktree, then run `git merge --ff-only codex/<N>` FROM THE PRIMARY checkout — run inside the codex worktree it merges the branch into itself and silently no-ops" | enforced-by-code(the rebase-onto-tip + guarded fast-forward IS `landPhase`; `advanceBase` resolves the checkout holding the base ref, so the self-merge no-op is unwritable) | cli/lib/worktree.mjs `landPhase`/`advanceBase`, cli/commands/phase.test.mjs "a JOURNAL-CONFIRMED codex lane lands whatever executionIsolation says" |
+| §Integration routing — "remove the worktree, the `codex/<N>` branch AND the `.building/codex-<N>.json` journal" | superseded-with-equivalent(the journal is now ARCHIVED rather than removed — `codex-<N>.closed.json`, which `codex status` reads as a closed lane; deleting it was the instruction that cost the reader an honest post-land answer) | cli/commands/phase.mjs `archiveJournal`, cli/commands/codex.mjs `findClosedJournal`, cli/commands/codex.test.mjs "an ARCHIVED run journal reports a CLOSED lane" |
