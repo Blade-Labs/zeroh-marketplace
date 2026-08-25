@@ -1365,3 +1365,82 @@ test('phase land — a slot-lane land clears STALE worktree metadata (the prune 
   )
   assert.ok(existsSync(f.wt), 'while its OWN slot is kept')
 })
+
+test('phase land — a journal that names a SLOT worktree, or the primary itself, is never confirmed as a codex lane', () => {
+  // `roadmap codex run <N> --worktree <existing dir>` journals whatever directory it is handed —
+  // codex.mjs ensureWorktree returns 0 for any dir that already exists, and reusing a provisioned
+  // slot to skip npm ci is exactly what the squatting exec lanes did. Confirming a slot here would
+  // make the land DELETE the slot and its wt/<k> branch while the registry keeps a live claim row
+  // pointing at a removed directory; slot retirement is explicitly out of this phase's scope.
+  const f = landFixture(104)
+  const building = join(f.root, '.building')
+  mkdirSync(building, { recursive: true })
+  writeFileSync(
+    join(building, 'codex-104.json'),
+    JSON.stringify({ phases: [104], lane: 'run', report: 'CODEX-REPORT.md', worktree: f.wt, base: f.baseName, pgid: 2147483646, startedAt: new Date().toISOString() }),
+  )
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 104,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 1, `a slot worktree is not a codex lane, whatever a journal says about it; stderr:\n${err.text}`)
+  assert.match(err.text, /executionIsolation/, `the isolation refusal still answers; got:\n${err.text}`)
+  assert.ok(existsSync(f.wt), 'the slot survives')
+  assert.equal(f.git('rev-parse', 'refs/heads/wt/1') !== '', true, 'and so does its scratch branch')
+  assert.equal(f.baseTip(), f.seed, 'nothing landed either')
+
+  // The primary checkout itself: a journal naming it would otherwise bypass the isolation
+  // refusal and run the rebase + ref move + push on the shared tree.
+  const g = landFixture(105)
+  mkdirSync(join(g.root, '.building'), { recursive: true })
+  writeFileSync(
+    join(g.root, '.building', 'codex-105.json'),
+    JSON.stringify({ phases: [105], lane: 'run', report: 'CODEX-REPORT.md', worktree: g.root, base: g.baseName, pgid: 2147483646, startedAt: new Date().toISOString() }),
+  )
+  const errG = sink()
+  const codeG = runLand({
+    cwd: g.root,
+    toplevel: g.root,
+    phaseNum: 105,
+    loadPhase: () => g.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(g.root, g.baseName) },
+    out: sink(),
+    err: errG,
+  })
+  assert.equal(codeG, 1, `the PRIMARY checkout is never a lane source; stderr:\n${errG.text}`)
+  assert.equal(g.baseTip(), g.seed, 'and the shared checkout is untouched')
+})
+
+test('phase land — an UNREADABLE lane journal says so, instead of sending the operator to flip the isolation knob', () => {
+  const f = codexLaneFixture(106)
+  // The launch-died-mid-write case JournalUnreadableError was authored for. Reporting the
+  // isolation refusal here is worse than unhelpful: flipping the knob makes the land succeed and
+  // then take the not-a-lane branch, so the worktree is silently never disposed.
+  writeFileSync(f.journalPath, '{"phases": [106], "worktr')
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 106,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 1, `an unreadable journal still refuses the land; stderr:\n${err.text}`)
+  assert.ok(
+    err.text.includes(f.journalPath),
+    `the refusal must NAME the journal it could not read — "set executionIsolation" is the wrong remediation for a truncated launch record; got:\n${err.text}`,
+  )
+  assert.equal(f.baseTip(), f.seed, 'and nothing landed')
+})

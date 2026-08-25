@@ -21,7 +21,7 @@
  *
  * Exit: 0 clean · 1 usage/config/toolchain · 2 validation failed / refused.
  */
-import { existsSync, readFileSync, writeFileSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, realpathSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, relative, resolve } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
@@ -30,8 +30,8 @@ import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
-import { landPhase, disposeWorktree } from '../lib/worktree.mjs'
-import { findJournal, RUN_LANE_ARTIFACTS } from './codex.mjs'
+import { landPhase, disposeWorktree, listSlots } from '../lib/worktree.mjs'
+import { archiveJournal, findJournal, JournalUnreadableError, RUN_LANE_ARTIFACTS } from './codex.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
 
 function runStart(argv) {
@@ -245,6 +245,23 @@ export function runCurate({
   }
 }
 
+/**
+ * Is `dir` one of the session lane's SLOTS? Two independent reads, because either alone has a
+ * hole: the registry knows a CLAIMED slot but not one provisioned without a claim row, and the
+ * `<root>-wt-<k>` shape (ensureWorktree's, its one home) knows the namespace but not which slots
+ * exist. Either answering yes is enough — this guard only has to refuse.
+ */
+function isSlotDir(root, dir) {
+  const k = /-wt-(\d+)$/.exec(dir)?.[1]
+  if (k && samePath(`${root}-wt-${k}`, dir)) return true
+  try {
+    return listSlots(root).some((slot) => samePath(slot.dir, dir))
+  } catch {
+    // an unreadable slot registry cannot prove this IS a slot — the shape check above stands
+    return false
+  }
+}
+
 /** Same path, whatever symlinks /tmp and the shared host put in the way. */
 function samePath(a, b) {
   try {
@@ -269,35 +286,35 @@ function samePath(a, b) {
  * (the launch guard and `gate --verify-complete` both refuse loudly on it already) — it falls
  * through to null, which means the ordinary isolation refusal answers.
  */
-function codexLaneSource(cwd, phaseNum) {
+function codexLaneSource(cwd, phaseNum, err) {
   let root
   try {
     root = mainCheckout(cwd)
   } catch {
     return null
   }
+  // The PRIMARY checkout is never a lane, whatever a journal claims: `codex run --worktree <dir>`
+  // journals any directory that already exists, and confirming the shared tree here would bypass
+  // the isolation refusal and run the rebase, the ref move and the push on it.
+  if (samePath(root, cwd)) return null
   let found
   try {
     found = findJournal(root, [phaseNum], 'run')
-  } catch {
+  } catch (e) {
+    // An unreadable journal is NOT an absent one. Falling through silently hands the operator the
+    // isolation message, whose remedy — flip the knob — makes the land succeed and then take the
+    // not-a-lane branch, so the worktree is never disposed and nobody learns why.
+    if (e instanceof JournalUnreadableError) err.write(`phase land: ${e.message}\n`)
     return null
   }
   const dir = found?.journal?.worktree
   if (!dir || !samePath(dir, cwd)) return null
+  // A SLOT is not a lane either. Reusing a provisioned slot as a `--worktree` target (to skip the
+  // npm ci) is exactly what the squatting exec lanes did; disposing one would delete the slot and
+  // its wt/<k> branch while the registry keeps a live claim row pointing at a removed directory,
+  // and slot retirement is deliberately out of this rail's scope.
+  if (isSlotDir(root, cwd)) return null
   return { root, journalPath: found.path, journal: found.journal }
-}
-
-/**
- * Archive a landed lane's journal: `codex-<ids>.json` → `codex-<ids>.closed.json`, stamped,
- * never deleted. The live lane scans key on /^codex-[\d-]+\.json$/, whose `[\d-]` class
- * excludes the '.', so a closed journal leaves both scans while staying on disk for `codex
- * status` to read a closed lane honestly instead of "no journal covers phase(s) N".
- */
-function archiveJournal(journalPath, journal) {
-  const closed = journalPath.replace(/\.json$/, '.closed.json')
-  writeFileSync(closed, JSON.stringify({ ...journal, closedAt: new Date().toISOString(), closedBy: 'phase land' }, null, 2) + '\n')
-  rmSync(journalPath, { force: true })
-  return closed
 }
 
 /**
@@ -321,7 +338,7 @@ function archiveJournal(journalPath, journal) {
  * reported on stderr with exit 0 intact — the land succeeded, and cleanup reports beside it.
  */
 export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr }) {
-  const lane = codexLaneSource(cwd, phaseNum)
+  const lane = codexLaneSource(cwd, phaseNum, err)
   const isolation = executionIsolationOf(config)
   if (isolation !== 'worktree' && !lane) {
     err.write(
@@ -415,7 +432,7 @@ function disposeSource(lane, { cwd, laneBranch, baseRef, out, err }) {
     err.write(`phase land: LANDED, but the lane worktree was KEPT (${r.reason}) — ${r.detail}\n`)
     return
   }
-  const closed = archiveJournal(lane.journalPath, lane.journal)
+  const closed = archiveJournal(lane.journalPath, lane.journal, 'phase land')
   out.write(
     `disposed the codex lane ${cwd}${r.branchDeleted ? ` and its merged ${laneBranch} branch` : ''}; journal archived to ${closed}\n`,
   )

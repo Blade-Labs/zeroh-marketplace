@@ -23,6 +23,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync, spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -1772,4 +1773,57 @@ test('review archive: a SECOND review of the same phase archives ITS verdict, ne
     'the archived verdict is THIS run\'s — a copy skipped because the path was already occupied leaves `status` serving a superseded review from a lane it just disposed',
   )
   assert.ok(!existsSync(lane.worktree), 'and the second lane is disposed like the first')
+})
+
+test('review archive: a disposal refused while the lane was still LIVE is RETRIED on the next status', async () => {
+  const root = tmpRepo()
+  // Deliberately NOT unref'd, unlike the running-lane test above: this one has to AWAIT the
+  // child's exit, and an unref'd handle lets node drain the loop out from under the await
+  // (the whole test then cancels with "event loop has already resolved").
+  const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
+  cleanups.push(() => {
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch {}
+  })
+  // The reachable window this pins: a driver writes CODEX-RUN-COMPLETE and its process group
+  // exits a moment later, and do-phase polls `codex status` in a loop. A poll landing inside that
+  // window sees the verdict AND a live group — so the rail correctly refuses 'live'. If the
+  // done-moment were one-shot, no later status would ever retry and the worktree would leak
+  // forever, with no sweep verb allowed to mop it up.
+  const lane = reviewLane(root, [208], { pgid: child.pid })
+
+  const first = laneStatus(root, [208], '--review')
+  assert.equal(first.out?.state, 'complete', `precondition: the verdict is complete; stderr: ${first.err}`)
+  assert.ok(existsSync(lane.worktree), 'precondition: a LIVE group refuses the disposal, so the worktree stays')
+  assert.match(first.err, /live/i, `precondition: and the refusal says so; got: ${first.err}`)
+  assert.ok(existsSync(lane.archived), 'the verdict is archived even though the worktree stayed')
+
+  // AWAIT the exit, never a sleep: a SIGKILLed child stays a zombie until node reaps it, and
+  // kill(-pgid, 0) succeeds on a zombie group — a timed wait would read as still-live.
+  process.kill(-child.pid, 'SIGKILL')
+  await once(child, 'exit')
+
+  const { code, out, err } = laneStatus(root, [208], '--review')
+
+  assert.equal(out?.state, 'complete', `stderr: ${err}`)
+  assert.equal(code, 0, `stderr: ${err}`)
+  assert.ok(
+    !existsSync(lane.worktree),
+    `the group is dead now, so the retry must dispose — a done-moment that fires once leaves exactly the leak this phase exists to kill; stderr: ${err}`,
+  )
+})
+
+test('status: a CLOSED lane reports report: null — its worktree, and the report inside it, are gone', () => {
+  const root = tmpRepo()
+  writeClosedJournal(root, [214])
+
+  const { out } = status(root, 214)
+
+  assert.equal(out.state, 'closed')
+  assert.equal(
+    out.report,
+    null,
+    'the journal carries the bare report NAME, and land force-removed that file with the worktree — spreading it unresolved hands the reader a path that exists nowhere',
+  )
 })

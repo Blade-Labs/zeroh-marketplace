@@ -617,3 +617,71 @@ test('cleanup — a dispose that THROWS is still best-effort: the land keeps its
   assert.match(warned.warning, /rm -rf exploded/, 'and the warning names the real failure, never a generic one')
   assert.ok(existsSync(join(primary, 'roadmap', 'arc-summary.json')), 'everything after the cleanup block still runs — the RunnerSummary lands')
 })
+
+test('cleanup — a disposed member lane gets its journal ARCHIVED, so `codex status` reads the same closed answer whichever verb landed it', () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-codex-10`
+  const jPath = seedCodexJournal(primary, [10], lane)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder()
+
+  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+
+  assert.equal(res.outcome, 'landed')
+  assert.ok(
+    !existsSync(jPath),
+    'the LIVE journal name must go — leaving it means `codex status 10` reads dead-no-report for a lane that ran and landed, while the same lane landed by `phase land` reads closed',
+  )
+  const closed = join(primary, '.building', 'codex-10.closed.json')
+  assert.ok(existsSync(closed), `the journal is renamed to ${closed}, never deleted`)
+  const j = JSON.parse(readFileSync(closed, 'utf8'))
+  assert.deepEqual(j.phases, [10], 'carrying its phases')
+  assert.ok(Number.isFinite(Date.parse(j.closedAt)), 'stamped with when it closed')
+  assert.equal(typeof j.closedBy, 'string', 'and by which verb')
+})
+
+test('cleanup — a REFUSED member lane keeps its live journal: nothing may claim a lane closed while its worktree stands', () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-codex-10`
+  const jPath = seedCodexJournal(primary, [10], lane)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder({ disposed: false, alreadyDisposed: false, reason: 'dirty', detail: `${lane} carries uncommitted work`, branchDeleted: false })
+
+  landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+
+  assert.ok(existsSync(jPath), 'the journal stays LIVE — the lane is still there and still needs an operator')
+  assert.ok(!existsSync(join(primary, '.building', 'codex-10.closed.json')), 'and nothing was archived')
+})
+
+test('cleanup — one lane throwing does not skip the REST: each disposal is isolated and named', () => {
+  const primary = makeConsumer()
+  const boom = `${primary}-codex-10`
+  const ok = `${primary}-codex-11`
+  seedCodexJournal(primary, [10], boom)
+  seedCodexJournal(primary, [11], ok)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder((dir) => {
+    if (dir === boom) throw new Error('rm -rf exploded')
+    return { disposed: true, alreadyDisposed: false, reason: null, detail: null, branchDeleted: true }
+  })
+
+  const res = landArc({
+    repoRoot: primary,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary, { members: [doneMember(10), doneMember(11)] }),
+    dispose: rec.dispose,
+  })
+
+  assert.equal(res.outcome, 'landed')
+  assert.equal(res.exitCode, 0)
+  assert.deepEqual(
+    rec.calls.map((c) => c.dir).sort(),
+    [boom, ok].sort(),
+    'every lane is attempted — one exploding rm must not silently strand the arc\'s remaining worktrees',
+  )
+  assert.match(laneRecord(res.record, boom), /rm -rf exploded/, 'the lane that threw is named WITH its real failure')
+  assert.match(laneRecord(res.record, ok), /disposed/, 'and the one after it still went')
+})

@@ -12,17 +12,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  readdirSync,
-  existsSync,
-  symlinkSync,
-  realpathSync,
-  rmSync,
-} from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, symlinkSync, realpathSync, rmSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1567,4 +1557,24 @@ test('the --slots conflict guard answers for `run` ONLY — it never shadows ano
   assert.equal(runGateCmd(repo.root, ['1520', '--slots', 'types', '--verify-complete']).code, 1)
   const rr = JSON.stringify({ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: 'x' })
   assert.equal(runGateCmd(repo.root, ['1520', '--slots', 'types', '--record-round', rr]).code, 1)
+})
+
+test('gate run --verify-complete — attribution is still reconciled after the lane journal is ARCHIVED by a land', () => {
+  const repo = makeRepo(RUN_CFG())
+  // `phase land` / `arc land` rename a landed lane's journal to `codex-<N>.closed.json`, which
+  // the live scan class /^codex-[\d-]+\.json$/ deliberately excludes. If the reconcile only ever
+  // asks findJournal, every gate re-run after a landed delegated phase silently takes the
+  // "no journal at all = an inline session = no check" path — the launcher's record still exists,
+  // and nothing compares it to the phase file's claim any more.
+  repo.writePhase(1618, donePhase(1618, { model: CLAIMED_MODEL, lane: 'session' }))
+  repo.commit('feat: phase 1618 — code', { 'lib/r.ts': 'export const r = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1618']).code, 0)
+  const live = writeRunJournal(repo.root, [1618])
+  const closed = live.replace(/\.json$/, '.closed.json')
+  renameSync(live, closed)
+
+  const r = runGateCmd(repo.root, ['1618', '--verify-complete'])
+
+  assert.equal(r.code, 2, `an archived journal is still launcher truth — the disagreement must red; stdout: ${r.stdout} stderr: ${r.stderr}`)
+  assert.ok(r.stderr.includes(closed), `and the remedy names the ARCHIVED file, not a path that no longer exists; stderr: ${JSON.stringify(r.stderr)}`)
 })

@@ -1214,3 +1214,54 @@ test('disposeWorktree: every git call anchors at repoRoot — the caller dispose
   assert.equal(existsSync(dir), false, 'the lane the caller stood in is gone')
   assert.deepEqual(r.worktrees(), [r.root], 'and the prune ran too, from the primary checkout')
 })
+
+test('disposeWorktree: a reachability question git could not ANSWER refuses — the unpushed rail never fails open', async () => {
+  const { r, dir, branch, shas } = laneFixture({
+    commits: [{ subject: 'feat(cli): phase 6 — work carried by nothing else', rel: 'cli/lib/only-copy.txt' }],
+  })
+  pushLane(r, dir, branch)
+  // A dangling ref under refs/remotes — a partial fetch, a hand-poked ref, a pruned remote whose
+  // ref file survived. `rev-list … --remotes` then exits 128 on it. A rail that reads a git
+  // FAILURE as "nothing is orphaned" removes the worktree on the strength of an answer it never
+  // got, and for a detached lane (branch: null — what archiveReviewLane passes) the commits are
+  // left in the reflog alone.
+  // Written as a raw ref FILE: `update-ref` validates the object and would refuse, which is
+  // exactly why a dangling ref only ever arrives this way (an interrupted fetch, a copied .git).
+  const ghost = join(r.root, '.git', 'refs', 'remotes', 'origin')
+  mkdirSync(ghost, { recursive: true })
+  writeFileSync(join(ghost, 'ghost'), `${'1'.repeat(40)}\n`)
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assert.equal(
+    out.disposed,
+    false,
+    `an unanswerable reachability question is not a pass — disposal must refuse; got ${JSON.stringify(out)}`,
+  )
+  assert.equal(out.reason, 'failed', `the refusal is named 'failed', not laundered as clean; got ${JSON.stringify(out.reason)}`)
+  assert.match(out.detail, /rev-list|bad object|fatal/i, `and carries git's own words so an operator can fix the ref; got: ${out.detail}`)
+  assert.equal(existsSync(dir), true, 'the worktree survives a question we could not answer')
+  assert.equal(gitIn(dir, 'rev-parse', 'HEAD'), shas[0], 'with its commits where they were')
+})
+
+test('disposeWorktree: a merged branch that will not delete is NAMED, never silently leaked', async () => {
+  const { r, dir, branch, shas } = laneFixture({
+    commits: [{ subject: 'feat(cli): phase 6 — landed work', rel: 'cli/lib/landed2.txt' }],
+  })
+  mergeIntoBase(r, shas[0])
+  // A held ref lock — the shape a crashed sibling git leaves behind. `branch -D` then refuses
+  // for a reason that has nothing to do with the worktree, which is the case that used to be
+  // swallowed into a bare `false`.
+  const lock = join(r.root, '.git', 'refs', 'heads', `${branch}.lock`)
+  mkdirSync(dirname(lock), { recursive: true })
+  writeFileSync(lock, '')
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assert.equal(out.disposed, true, `the worktree still goes — its own removal is unaffected; got ${JSON.stringify(out)}`)
+  assert.equal(out.branchDeleted, false, 'but the branch did not go')
+  assert.ok(
+    typeof out.detail === 'string' && out.detail.includes(branch),
+    `a merged branch that failed to delete must be NAMED — the caller prints "disposed the lane" and the operator never learns the branch leaked; got detail ${JSON.stringify(out.detail)}`,
+  )
+})

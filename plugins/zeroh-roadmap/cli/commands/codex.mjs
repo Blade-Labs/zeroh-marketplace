@@ -50,7 +50,7 @@
  * session owns the back half only: audit the commits and gate claims against the plan, then
  * integrate and clean up. This command never merges and never pushes.
  */
-import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -614,7 +614,24 @@ function planCodex(root, ids, argv) {
  * Deliberately quiet about unreadable candidates: a closed lane proves nothing about liveness, so
  * a corrupt one is not a refusal, it is simply not an answer.
  */
-function findClosedJournal(root, ids, lane = 'run') {
+/**
+ * Archive a landed lane's journal: `codex-<ids>.json` → `codex-<ids>.closed.json`, stamped with
+ * who closed it and when, never deleted.
+ *
+ * ONE home, because two done-verbs land lanes — `phase land` for a single delegated phase, `arc
+ * land` for every member of a delegated arc — and a lane that got two different post-disposal
+ * answers depending on which verb closed it is a lane nobody can report on. The name leaves both
+ * live scans by construction: the journalRe class `[\d-]` has no '.', so no launch guard can
+ * mistake a closed lane for a live one, while findClosedJournal still resolves it.
+ */
+export function archiveJournal(journalPath, journal, closedBy) {
+  const closed = journalPath.replace(/\.json$/, '.closed.json')
+  writeFileSync(closed, JSON.stringify({ ...journal, closedAt: new Date().toISOString(), closedBy }, null, 2) + '\n')
+  rmSync(journalPath, { force: true })
+  return closed
+}
+
+export function findClosedJournal(root, ids, lane = 'run') {
   const wanted = ids.map(String)
   const read = (p) => {
     let value
@@ -662,19 +679,26 @@ function findClosedJournal(root, ids, lane = 'run') {
  */
 function archiveReviewLane(root, jPath, journal, reportPath) {
   const archived = jPath.replace(/\.json$/, '-REPORT.md')
-  // Unconditional overwrite. Idempotence is carried by the caller's `archivedAt` check, so this
-  // line only ever runs on a verdict that has NOT been consumed yet — and a relaunched review of
-  // the same ids finds the PREVIOUS review's copy sitting at exactly this path. Skipping the write
-  // there would dispose the new lane and leave `status` serving the superseded verdict forever.
-  if (existsSync(reportPath)) copyFileSync(reportPath, archived)
+  let stamped = journal
+  // The RELOCATION is one-shot, keyed on archivedAt: the copy is unconditional within that (a
+  // relaunched review of the same ids finds the PREVIOUS verdict sitting at exactly this path,
+  // and skipping the write would leave `status` serving a superseded review forever).
+  if (!journal.archivedAt) {
+    if (existsSync(reportPath)) copyFileSync(reportPath, archived)
+    stamped = { ...journal, archivedAt: new Date().toISOString(), archivedReport: archived }
+    writeFileSync(jPath, JSON.stringify(stamped, null, 2) + '\n')
+  }
+  // The DISPOSAL is not: a refusal is a state that can change. `state === 'complete'` with a LIVE
+  // group is reachable — a driver writes its sentinel before its process group exits, and the
+  // poll loop reads status in between — so a one-shot done-moment would refuse 'live' once and
+  // leave the worktree forever, which is the leak class this rail exists to close and which no
+  // sweep verb is allowed to mop up. Retry on every read until the lane is actually gone.
   const r = disposeWorktree(root, journal.worktree, { branch: null, untrackedTolerant: true, pgid: journal.pgid ?? null })
   if (!r.disposed && !r.alreadyDisposed) {
     process.stderr.write(
       `roadmap codex: the review verdict is archived at ${archived}, but its worktree was KEPT (${r.reason}) — ${r.detail}\n`,
     )
   }
-  const stamped = { ...journal, archivedAt: new Date().toISOString(), archivedReport: archived }
-  writeFileSync(jPath, JSON.stringify(stamped, null, 2) + '\n')
   return { journal: stamped, archived }
 }
 
@@ -691,7 +715,13 @@ function statusCodex(root, ids, lane = 'run') {
     // phase whose lane ran, landed and was cleaned up reads exactly like a phase that never ran.
     const closed = findClosedJournal(root, ids, lane)
     if (closed) {
-      process.stdout.write(JSON.stringify({ ...closed.journal, state: 'closed', alive: false, sentinel: null, journal: closed.path }, null, 2) + '\n')
+      // `report: null`, never the journal's bare NAME: the run lane's report is an allowUntracked
+      // artifact, so the land force-removed it with the worktree and there is no relocated copy
+      // (unlike the review lane, whose verdict IS copied out). Naming a file that exists nowhere
+      // is worse than saying there is none.
+      process.stdout.write(
+        JSON.stringify({ ...closed.journal, state: 'closed', alive: false, sentinel: null, report: null, journal: closed.path }, null, 2) + '\n',
+      )
       return 0
     }
     // A journal sitting right there under another lane's prefix is the likeliest cause of this
@@ -743,7 +773,7 @@ function statusCodex(root, ids, lane = 'run') {
   // delete a live reviewer's worktree out from under it.
   let journal = j
   let reported = readFrom
-  if (lane === 'review' && state === 'complete' && !j.archivedAt) {
+  if (lane === 'review' && state === 'complete' && (!j.archivedAt || existsSync(j.worktree))) {
     const done = archiveReviewLane(root, jPath, j, reportPath)
     journal = done.journal
     reported = existsSync(reportPath) ? reportPath : done.archived

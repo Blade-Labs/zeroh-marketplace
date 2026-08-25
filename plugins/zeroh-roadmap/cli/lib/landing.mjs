@@ -401,7 +401,7 @@ import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
 import { disposeWorktree } from './worktree.mjs'
-import { findJournal, RUN_LANE_ARTIFACTS } from '../commands/codex.mjs'
+import { archiveJournal, findJournal, RUN_LANE_ARTIFACTS } from '../commands/codex.mjs'
 import { loadConfig, ConfigError } from './config.mjs'
 
 /**
@@ -655,7 +655,7 @@ function codexLaneDirs(home, members) {
     if (!dir || seen.has(resolve(dir))) continue
     seen.add(resolve(dir))
     const ids = (found.journal.phases ?? [m.num]).map(String)
-    lanes.push({ dir, branch: `codex/${ids.join('-')}`, pgid: found.journal.pgid ?? null })
+    lanes.push({ dir, branch: `codex/${ids.join('-')}`, pgid: found.journal.pgid ?? null, journalPath: found.path, journal: found.journal })
   }
   return lanes
 }
@@ -740,18 +740,30 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
     // only done-moment those worktrees ever get: do-arc's SKILL names arc land the cleanup owner,
     // and while that was prose two fully merged exec lanes squatted slot dirs for weeks.
     for (const laneDir of codexLaneDirs(home, state.members)) {
-      const r = dispose(home, laneDir.dir, {
-        branch: laneDir.branch,
-        integrationRef: baseRef,
-        allowUntracked: RUN_LANE_ARTIFACTS,
-        pgid: laneDir.pgid,
-      })
-      record.push({
-        step: 'codex-lane-dispose',
-        worktree: laneDir.dir,
-        outcome: r.alreadyDisposed ? 'already-disposed' : r.disposed ? 'disposed' : 'refused',
-        ...(r.disposed ? { branchDeleted: r.branchDeleted === true } : { reason: r.reason, detail: r.detail }),
-      })
+      // Isolated PER LANE, inside the outer best-effort block rather than instead of it: one
+      // exploding rm must not strand every remaining member's worktree, and the outer catch's
+      // "remove the sidecar/claims by hand" would send the operator at the acts that succeeded.
+      try {
+        const r = dispose(home, laneDir.dir, {
+          branch: laneDir.branch,
+          integrationRef: baseRef,
+          allowUntracked: RUN_LANE_ARTIFACTS,
+          pgid: laneDir.pgid,
+        })
+        record.push({
+          step: 'codex-lane-dispose',
+          worktree: laneDir.dir,
+          outcome: r.alreadyDisposed ? 'already-disposed' : r.disposed ? 'disposed' : 'refused',
+          ...(r.disposed ? { branchDeleted: r.branchDeleted === true } : { reason: r.reason, detail: r.detail }),
+        })
+        // Archive ONLY what actually went. A refused lane still stands and still needs an
+        // operator, and a journal claiming it closed is the one thing worse than no cleanup.
+        if (r.disposed && !r.alreadyDisposed) archiveJournal(laneDir.journalPath, laneDir.journal, 'arc land')
+      } catch (e) {
+        const detail = e?.message?.split('\n')[0] ?? String(e)
+        record.push({ step: 'codex-lane-dispose', worktree: laneDir.dir, outcome: 'errored', detail })
+        record.push({ step: 'cleanup', warning: `disposing the codex lane ${laneDir.dir} failed (${detail}) — the land itself is complete; remove that worktree by hand` })
+      }
     }
   } catch (e) {
     record.push({ step: 'cleanup', warning: `best-effort cleanup failed (${e?.message?.split('\n')[0] ?? e}) — the land itself is complete; remove the sidecar/claims by hand` })

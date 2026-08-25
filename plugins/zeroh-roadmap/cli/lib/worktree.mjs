@@ -433,8 +433,16 @@ export function disposeWorktree(
   // gave the question its context is not. Anchored on integrationRef, never on HEAD.
   const merged = branch ? quiet(repoRoot, ['merge-base', '--is-ancestor', branch, integrationRef]).ok : false
 
+  // FAIL CLOSED. A reachability question git could not ANSWER is not the answer "nothing is
+  // orphaned": one dangling ref under refs/remotes (a partial fetch, a pruned remote whose ref
+  // file survived) makes `rev-list --remotes` exit 128, and a rail that read that as a pass would
+  // remove a worktree on the strength of an answer it never got — for a detached lane, leaving
+  // its commits in the reflog alone.
   const head = quiet(dir, ['rev-parse', 'HEAD'])
-  if (head.ok) {
+  if (!head.ok) {
+    return refuse('failed', `cannot resolve HEAD in ${dir}, so its commits cannot be shown to be carried elsewhere — ${head.out}`)
+  }
+  {
     const headSha = head.out.trim()
     // The lane's OWN branch is never a survivor: it is the handle this disposal is closing on,
     // so the question is whether anything ELSE — a remote, another branch, a tag — carries the
@@ -445,7 +453,10 @@ export function disposeWorktree(
     const excl = branch ? ['--exclude', branch] : []
     const survivors = ['--not', ...excl, '--branches', '--remotes', '--tags']
     const orphan = quiet(dir, ['rev-list', '--count', headSha, ...survivors])
-    if (orphan.ok && Number(orphan.out.trim()) > 0) {
+    if (!orphan.ok) {
+      return refuse('failed', `cannot prove ${dir}'s commits are carried elsewhere — ${orphan.out}`)
+    }
+    if (Number(orphan.out.trim()) > 0) {
       const subjects = quiet(dir, ['log', '--format=%h %s', '-n', '10', headSha, ...survivors])
       const named = (subjects.ok ? subjects.out : headSha).trim().split('\n').join('\n  ')
       return refuse(
@@ -464,8 +475,16 @@ export function disposeWorktree(
     return refuse('failed', `git worktree remove ${dir} failed — ${removed.out}`)
   }
 
+  // A merged branch that will NOT delete (checked out in another worktree, a ref lock) is a leak
+  // the caller would otherwise print "disposed the lane" over. The removal already succeeded, so
+  // this is not a refusal — it is the detail the pass path carries so the land report can say it.
   let branchDeleted = false
-  if (branch && merged) branchDeleted = quiet(repoRoot, ['branch', '-D', branch]).ok
+  let detail = null
+  if (branch && merged) {
+    const del = quiet(repoRoot, ['branch', '-D', branch])
+    branchDeleted = del.ok
+    if (!del.ok) detail = `${dir} was removed, but its merged branch ${branch} could NOT be deleted — ${del.out}`
+  }
   quiet(repoRoot, ['worktree', 'prune'])
-  return { disposed: true, alreadyDisposed: false, reason: null, detail: null, branchDeleted }
+  return { disposed: true, alreadyDisposed: false, reason: null, detail, branchDeleted }
 }

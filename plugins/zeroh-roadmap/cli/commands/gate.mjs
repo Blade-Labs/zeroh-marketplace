@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
-import { findJournal, JournalUnreadableError } from './codex.mjs'
+import { findClosedJournal, findJournal, JournalUnreadableError } from './codex.mjs'
 import { derivePhaseStartSha, GitScanError } from '../lib/gitscan.mjs'
 import { bridgeImport, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
@@ -552,6 +552,11 @@ function driverReconcile(cwd, fallbackRoot, phaseNum, parsed) {
     // reconcile without a word, which is exactly the silence this seam exists to remove.
     return { problems: [`phase ${phaseNum} attribution could NOT be reconciled: ${e.message}`], notes: [] }
   }
+  // A LANDED lane's journal was renamed `.closed.json` by the land verb, which the live scan
+  // class deliberately excludes — but it is still the launcher's record, and dropping the
+  // reconcile for it would mean every gate re-run after a delegated phase lands stops checking
+  // the phase file's claim, silently, exactly where the claim is least likely to be self-checked.
+  if (!found) found = findClosedJournal(root, [phaseNum], 'run')
   if (!found) return { problems: [], notes: [] }
   const j = found.journal.driver
   if (!j) return { problems: [], notes: [] }
