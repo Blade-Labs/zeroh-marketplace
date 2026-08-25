@@ -10,7 +10,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 9,
   name: 'POLYSEAT follow-up hardening — honest journals, gates, and eval identity',
-  status: 'in-progress',
+  status: 'done',
   plannedBy: { model: 'gpt-5.6-sol' },
   category: 'fix',
   kind: 'hardening',
@@ -56,6 +56,106 @@ export default definePhase({
   ],
   notes:
     "No feature flag applies: this phase hardens CLI orchestration and measurement artifacts, not a product-visible surface. REVIEW RATIFICATIONS (Mode A, 2026-08-25, claude-fable-5): all 4 assumptions probed PASS at HEAD; latestReport blast radius verified closed (validate.mjs, curate.mjs, gate.mjs — all in plan); tdd testMode ratified on all 7 tasks; step verifies use bare node --test on single files — executors run them under capbuild per host rules, ratified as written; userFacing false ratified.\n\nSCAFFOLD DECISION: scripts/scaffold-roadmap.sh stops creating roadmap/arcs/example.arc.ts. templates/example.arc.ts remains installed with the plugin as opt-in reference material; changing its id or phase number would still make any copied file a live arc, while removing the copy step makes fresh consumers truthfully arc-free. cli/commands/init.test.mjs pins both absence of the file and absence of the misleading creation line.\n\nFINGERPRINT DECISION: assembleConsumerFingerprint(toplevel, { identityRoot = toplevel } = {}) keeps language and corpusSize derived from the active checkout, but derives repo from identityRoot. emitPhaseEvalRecord passes mainCheckout(toplevel) as identityRoot, so linked worktrees share the primary checkout basename without reading a remote or under-counting worktree phase files.\n\nERROR DECISION: refuseIfLive routes its exact same-lane journal through findJournal so JournalUnreadableError owns the typed path and deletion remedy. gate-report.mjs adds GateReportUnreadableError carrying the newest path plus JSON/Zod detail; latestReport returns null only when no run file exists and throws for an unreadable newest report. Existing callers already catch operational errors or are extended to name this error; none may translate it back to 'no report'.\n\n## Hypotheses\n1. CONFIRMED — seven seam-specific omissions survived because each happy-path shape existed while one discriminator, attribution field, or parse failure was dropped at a boundary; evidence: cli/commands/codex.mjs refuseIfLive, cli/lib/eval-collect.mjs summarizeGateRuns/assemblePhaseEvalRecord, cli/lib/gate-report.mjs latestReport, cli/commands/gate.mjs early returns, and scripts/scaffold-roadmap.sh copy the reported behavior verbatim.\n2. REFUTED — one shared parser or schema defect causes all seven symptoms; the sites cross journal JSON, gate reports, scaffold shell, eval projection, argument dispatch, and git identity, with no common implementation seam.",
+  completedDate: '2026-08-25',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1312,
+      total: 1312,
+      notes:
+        'Authoritative full gate: roadmap/.gate/9/run-000006-2026-08-25T06-20-39-435Z.json — GREEN, 1,312/1,312, run on the FINAL tree after the round-4 fixes. 34 tests added (1,278 baseline). lint, types, build and integration are declared-none in gateCommands; the lint-diff and plugin-native history-comments hygiene slots both exit 0.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes:
+        'declared-none in gateCommands — this CLI phase has no integration tier. The hardening closure rerun is served by the wired subprocess suites (gate.test.mjs, codex.test.mjs, init.test.mjs), which drive the real CLI end to end against tmp git repos and were re-run after every fix round.',
+    },
+    e2eTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — no rendered surface.',
+    },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        "Three fixes: task 9.4 had inserted projectRoleModels between assemblePhaseEvalRecord and its own JSDoc so each function carried the other's doc (reordered, proven pure by sorted-line-multiset equality); validate.mjs kept a run-file pre-check that task 9.2 made redundant (dropped with its now-unused gateDir import); an unread git handle removed from the linkedWorktree fixture. One finding it surfaced rather than decided, closed by the executor: both new CLI refusals asserted only non-zero, so either exit code could drift silently — now pinned exactly (2 for --record-round, 1 for --verify-complete) with reasons, falsified by returning 2 from verify-complete. It declined three tempting consolidations with evidence rather than performing them.",
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Four findings over the seven task commits, all fixed in 221730c and each mutation-proven. MEDIUM: task 9.6 closed only the same-invocation --slots conflict, so the SEQUENTIAL form the per-task ritual actually produces still recorded rounds into a subset projection that task 9.3 then drops from the eval entirely. LOW: that guard shadowed other subcommands. LOW: a journal parsing to a falsy literal made the launch guard blame the code instead of the file. LOW: the refusal named an exact same-lane journal that did not exist. The reviewer independently re-ran the phase\u2019s own mutation proofs for 9.1, 9.2, 9.4 and 9.7 and confirmed all four genuine.',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'One MEDIUM over the R0/R1 fixes, demonstrated with a nine-case probe: the R1 readability guard tested falsiness while claiming objecthood, so [], "text", 42 and true reached the launcher as journals with pgid undefined and were relaunched over — the cannot-be-shown-to-be-dead hazard itself. Fixed in 2010f6b and pinned in both directions. It also verified the R1 filtered-report guard inspects the same file appendAgentRound would have, that no full run can be refused by it, and that the R0 validate change is behaviour-equivalent in all three worlds.',
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'One MEDIUM with a verbatim repro: the R2 widening left journalParseFailure assuming declined implies did-not-parse, so a non-object masked by a readable covering journal raised the internal lookup-disagreement Error with a raw stack. Fixed in e1c9953 by extracting journalDeclineReason as the ONE definition both readers ask. The reviewer enumerated 18 JSON bodies to confirm the predicate over-refuses nothing, confirmed no journal shape any plugin version wrote is rejected, and judged the empty-object case correctly out of scope against the lane\u2019s own precedent.',
+    },
+    {
+      round: 4,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'The confirming round. MECHANISM VERIFIED SOUND — the disagreement throw is genuinely unreachable rather than relocated, journalDeclineReason cannot disagree with itself across its two call sites, the failure message is byte-identical to R2, and both new-test defects red as claimed. Three documentation findings remained, fixed in e1732a6: every operator-facing string still narrated one kind of decline (a journal holding [] got a truncation remedy contradicted by its own detail line), the R3 insertion point reintroduced the doc-adjacency defect Round 0 had just fixed elsewhere, and two comments still stated the falsified one-way premise. Those doc fixes were NOT re-reviewed \u2014 see surfaced.',
+    },
+  ],
+  metrics: {
+    commits: 14,
+    linesAdded: 1948,
+    linesRemoved: 52,
+    filesChanged: 14,
+    testsAtStart: 1278,
+    testsAtEnd: 1312,
+    testsAdded: 34,
+    startedAt: '2026-08-25T02:00:31Z',
+    completedAt: '2026-08-25T06:21:48Z',
+    haltCount: 0,
+  },
+  compromises:
+    'None. The one decision the plan had not pre-made (a role whose firings disagree on the model, where the source array and the target record cannot both be satisfied) went to a software-architect Decision Contract rather than being collapsed silently; its verdict is recorded on task 9.4. Five review rounds each entered with a real defect and each was fixed rather than accepted, and the curate refusal below is a deliberate non-rewrite, not a shortcut.',
+  executionResult: {
+    phase: 9,
+    status: 'done',
+    driver: { model: 'claude-opus-5[1m]', lane: 'session' },
+    roles: [
+      { role: 'test-engineer', model: 'claude-sonnet-5', via: 'native', substituted: { from: 'claude-opus-5', to: 'claude-sonnet-5', reason: "executor chose a cheaper tier for task 9.1's RED fixture; unforced, not a tier-chain fallback, and not repeated for 9.2-9.7" } },
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'native' },
+      { role: 'software-architect', model: 'claude-fable-5', via: 'native' },
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'native' },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'native' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      "Round 4 raised findings and its fixes (e1732a6) were NOT re-reviewed independently \u2014 the gate cap ended the loop rather than have the executor self-review its own last fixes. An independent round over e1732a6 is genuinely OWED. Mitigating: those fixes are documentation and diagnostic wording only, with no behaviour change, verified at 116/116 on the touched suites plus 132/132 on neighbours and a clean history-comments ratchet. Every earlier round entered with a real defect, which is the concrete argument for running it.",
+      "attribution.roles is a model-only record keyed by role, authored in phase 1 one day before executionResult.roles chose per-firing ARRAY semantics in phase 3. It cannot express a role filled by more than one model, and drops `via` and `substituted` entirely \u2014 so the tier-fallback walk, the sub-population the eval most wants, never reaches the scorecard. This phase's OWN record exercises that: test-engineer fired on two models, so projectRoleModels omits it and warns. The fix is to widen PhaseEvalRecordShape.attribution.roles to the per-firing array; it is a consumer-contract change (byte-synced templates/schema.ts, lib/roadmap/schema.ts, scripts/schema.test.ts) and wants its own phase. No .peval.json on disk carries the key today, so the widening breaks no data and gets cheaper the sooner it lands.",
+      "`roadmap codex status <N>` against a journal that parses to an EMPTY OBJECT still dies with a bare TypeError [ERR_INVALID_ARG_TYPE] and a raw stack at statusCodex's join(j.worktree, ...) \u2014 no path, no remediation. Pre-existing and unchanged by this phase (task 9.1 was scoped to refuseIfLive), and readability deliberately lets {} through because completeness is the coverage check's question. It is the last raw-stack path left in this lane and is the PRIME-DIRECTIVE gap a follow-up phase should own.",
+      "The same {} journal at the exact path makes refuseIfLive print `previous run (pgid undefined) is dead \u2014 relaunching` and launch \u2014 a liveness-narration defect (cannot-be-shown-to-be-dead stated as is-dead), distinct from the readability one this phase fixed. No launcher-written journal can lack pgid, so the only route is a hand-edited file. It belongs to a phase that owns the narration, not to this predicate.",
+      "assembleConsumerFingerprint's two arc-level call sites in cli/commands/eval.mjs still fingerprint the ACTIVE toplevel, so a lane running from a worktree emits arc artifacts under the worktree basename while phase records now use the primary's. Latent metadata only \u2014 nothing reads consumerFingerprint yet \u2014 but the two halves should be normalized together.",
+      "projectRoleModels' missing-role/missing-model warning branch has no test. It is unreachable through a CURRENT consumer's bridge (PhaseExecutionResultShape requires both), and reachable only for an older consumer schema vintage, which is why it exists; a test would need a hand-built older schema fixture.",
+    ],
+    hardStops: [],
+    gateRounds: 5,
+  },
   tasks: [
     {
       id: '9.1',
@@ -367,7 +467,7 @@ export default definePhase({
         skipped: 'None — all four step verifies ran and passed.',
         hardcoded: 'None — mainCheckout is the existing git-common-dir resolver, already imported by gate.mjs.',
         limitations:
-          'mainCheckout throws for a bare repository. That throw lands inside emitPhaseEvalRecord existing catch-all, so the failure surfaces as its named one-line stderr and no record, never as a changed gate verdict — consistent with that function documented contract, but it does mean a bare-repo consumer loses the sample rather than falling back to the active basename. The other two assembleConsumerFingerprint call sites (cli/commands/eval.mjs, arc-level) still fingerprint the active toplevel; normalizing those is arc-eval territory and was out of this task files[].',
+          'CURATE REFUSED (recorded, not forced): two sibling phase-8 commits (a1d8899, c6e9e4f) interleave the base..HEAD range, so `roadmap phase curate 9` refuses rather than rewrite work that is not this phase\u2019s. History stays granular at 14 phase-own commits; that is the honest fallback. mainCheckout throws for a bare repository. That throw lands inside emitPhaseEvalRecord existing catch-all, so the failure surfaces as its named one-line stderr and no record, never as a changed gate verdict — consistent with that function documented contract, but it does mean a bare-repo consumer loses the sample rather than falling back to the active basename. The other two assembleConsumerFingerprint call sites (cli/commands/eval.mjs, arc-level) still fingerprint the active toplevel; normalizing those is arc-eval territory and was out of this task files[].',
       },
     },
   ],
