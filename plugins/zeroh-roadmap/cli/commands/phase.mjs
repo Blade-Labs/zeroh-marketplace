@@ -17,16 +17,17 @@
  *
  * Exit: 0 clean · 1 usage/config/toolchain · 2 validation failed / refused.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, realpathSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join, relative } from 'node:path'
-import { gitToplevel } from '../lib/gitroot.mjs'
+import { join, relative, resolve } from 'node:path'
+import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { validateRoadmapFile, renderZodIssues } from '../lib/validate.mjs'
 import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
-import { landPhase } from '../lib/worktree.mjs'
+import { landPhase, disposeWorktree } from '../lib/worktree.mjs'
+import { findJournal } from './codex.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
 
 function runStart(argv) {
@@ -240,17 +241,88 @@ export function runCurate({
   }
 }
 
+/** Same path, whatever symlinks /tmp and the shared host put in the way. */
+function samePath(a, b) {
+  try {
+    return realpathSync(a) === realpathSync(b)
+  } catch {
+    return resolve(a) === resolve(b)
+  }
+}
+
 /**
- * `roadmap phase land <N>` — the worktree lane's closing act: curate --apply, then land
- * the curated commits on the integration branch (rebase-onto-tip + guarded ff), then
- * push when an origin exists and the ref is push-authorized. REFUSES under primary
- * isolation: landing rewrites and moves refs, which only the worktree lane makes safe.
+ * `cwd` as a codex RUN-lane source, or null — the ONE question that lets a delegated lane
+ * reach `phase land` at all.
+ *
+ * Journals live in the PRIMARY checkout's .building/ (the launcher wrote them where it stood),
+ * while `phase land` runs INSIDE the lane worktree, so the lookup roots at mainCheckout(cwd);
+ * gitToplevel alone never sees them. The confirmation is path EQUALITY between the journal's
+ * `worktree` and `cwd`, never mere existence: "a journal exists" would turn the isolation knob
+ * off for every checkout that ever delegated anything, where "this journal names THIS tree" is
+ * the source-keyed reading the acceptance rests on.
+ *
+ * An unreadable journal proves nothing about this source and is not this command's business
+ * (the launch guard and `gate --verify-complete` both refuse loudly on it already) — it falls
+ * through to null, which means the ordinary isolation refusal answers.
+ */
+function codexLaneSource(cwd, phaseNum) {
+  let root
+  try {
+    root = mainCheckout(cwd)
+  } catch {
+    return null
+  }
+  let found
+  try {
+    found = findJournal(root, [phaseNum], 'run')
+  } catch {
+    return null
+  }
+  const dir = found?.journal?.worktree
+  if (!dir || !samePath(dir, cwd)) return null
+  return { root, journalPath: found.path, journal: found.journal }
+}
+
+/**
+ * Archive a landed lane's journal: `codex-<ids>.json` → `codex-<ids>.closed.json`, stamped,
+ * never deleted. The live lane scans key on /^codex-[\d-]+\.json$/, whose `[\d-]` class
+ * excludes the '.', so a closed journal leaves both scans while staying on disk for `codex
+ * status` to read a closed lane honestly instead of "no journal covers phase(s) N".
+ */
+function archiveJournal(journalPath, journal) {
+  const closed = journalPath.replace(/\.json$/, '.closed.json')
+  writeFileSync(closed, JSON.stringify({ ...journal, closedAt: new Date().toISOString(), closedBy: 'phase land' }, null, 2) + '\n')
+  rmSync(journalPath, { force: true })
+  return closed
+}
+
+/**
+ * `roadmap phase land <N>` — the closing act for BOTH work-producing lanes: curate --apply has
+ * already run, so this rebases the scratch head onto the integration branch, advances it by
+ * guarded fast-forward, pushes when the ref is push-authorized, and then disposes what it just
+ * landed.
+ *
+ * WHO MAY LAND. The worktree lane, always. And a JOURNAL-CONFIRMED codex lane, whatever
+ * `executionIsolation` says — source-keyed safety (operator ruling 2026-08-25). The knob exists
+ * because landing rewrites and moves refs, which is only safe when the tree doing it is not the
+ * shared checkout; a codex lane worktree satisfies that by construction, and gating it on a knob
+ * this consumer never sets is what left the lane landing by hand-typed rebase + ff-merge, with
+ * "remove the worktree" as prose. Every OTHER source keeps the refusal.
+ *
+ * DISPOSAL. A codex lane's land IS its done-moment: the worktree goes, the now-merged codex/<N>
+ * branch goes, and the journal is archived. A slot lane keeps its worktree — a slot's lifecycle
+ * is reuse-via-reset and recreating one costs a full npm ci — but still rides the prune along, so
+ * a sibling slot whose /tmp directory died stops haunting `git worktree list`. Disposal runs LAST,
+ * after the push, because it removes the very directory the earlier acts run in; and a refusal is
+ * reported on stderr with exit 0 intact — the land succeeded, and cleanup reports beside it.
  */
 export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr }) {
+  const lane = codexLaneSource(cwd, phaseNum)
   const isolation = executionIsolationOf(config)
-  if (isolation !== 'worktree') {
+  if (isolation !== 'worktree' && !lane) {
     err.write(
-      `phase land: executionIsolation is '${isolation}' — landing is a worktree-lane act; set executionIsolation: "worktree" in roadmap.config.json to activate the lane\n`,
+      `phase land: executionIsolation is '${isolation}' and ${cwd} is not a journal-confirmed codex lane — landing is a lane act; `
+        + 'set executionIsolation: "worktree" in roadmap.config.json to activate the session worktree lane\n',
     )
     return 1
   }
@@ -261,6 +333,10 @@ export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = proc
     err.write(`phase land: refusing to land onto ${baseRef} — a release branch is a held human act, never a lane act\n`)
     return 1
   }
+  // The lane branch is read BEFORE the land, while HEAD is still the lane's own: after the
+  // rebase+ff it is the same commit as the integration tip, and after the removal there is no
+  // worktree left to ask. The journal records no branch, so the checkout is the only witness.
+  const laneBranch = lane ? headBranchOf(cwd) : null
   // Land is the LAND act only. Curation is its own earlier protocol step (gate → curate
   // → done flip): by land time the range carries the completion/groom commits, whose
   // subjects the curation grammar deliberately reads as foreign — re-curating here would
@@ -292,7 +368,55 @@ export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = proc
       return 2
     }
   }
+  disposeSource(lane, { cwd, laneBranch, baseRef, out, err })
   return 0
+}
+
+/** The lane worktree's own branch name, or null on a detached head. */
+function headBranchOf(cwd) {
+  try {
+    const name = execFileSync('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim()
+    return name === 'HEAD' ? null : name
+  } catch {
+    return null
+  }
+}
+
+/** The post-land disposal act. Never throws and never changes the land's verdict. */
+function disposeSource(lane, { cwd, laneBranch, baseRef, out, err }) {
+  if (!lane) {
+    // Slot lane: the slot itself is kept (reuse-via-reset), but its repo METADATA is shared,
+    // so a sibling slot whose directory died is ours to clear on the way past.
+    try {
+      const root = mainCheckout(cwd)
+      execFileSync('git', ['-C', root, 'worktree', 'prune'], { cwd: root, stdio: 'ignore', timeout: 60_000 })
+    } catch {
+      // a prune that cannot run leaves stale metadata, which is cosmetic — never a land failure
+    }
+    return
+  }
+  let r
+  try {
+    r = disposeWorktree(lane.root, cwd, {
+      branch: laneBranch,
+      integrationRef: baseRef,
+      // The run lane's hand-off file is never committed by contract (cli/commands/codex.mjs),
+      // so without this exception EVERY codex-lane disposal would refuse on its own report.
+      allowUntracked: ['CODEX-REPORT.md', 'CODEX-REPORT.prev.md'],
+      pgid: lane.journal?.pgid ?? null,
+    })
+  } catch (e) {
+    err.write(`phase land: the land is complete, but disposing ${cwd} threw — ${e?.message ?? e}\n`)
+    return
+  }
+  if (!r.disposed) {
+    err.write(`phase land: LANDED, but the lane worktree was KEPT (${r.reason}) — ${r.detail}\n`)
+    return
+  }
+  const closed = archiveJournal(lane.journalPath, lane.journal)
+  out.write(
+    `disposed the codex lane ${cwd}${r.branchDeleted ? ` and its merged ${laneBranch} branch` : ''}; journal archived to ${closed}\n`,
+  )
 }
 
 function runLandCli(argv) {

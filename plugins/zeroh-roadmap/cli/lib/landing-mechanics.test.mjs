@@ -419,3 +419,201 @@ test('REAL merge — landing merges into LOCAL develop and a sibling unpushed co
   assert.match(log, /arc work/, 'the arc commit landed on local develop')
   assert.match(log, /sibling: unrelated unpushed develop work/, 'the sibling unpushed commit survived the merge — never clobbered')
 })
+
+// ── arc land disposes every landed member's codex lane (6.2) ──────────────────────────────────
+//
+// do-arc's SKILL already names `arc land` the cleanup owner ("arc land completes the BOOKKEEPING
+// only"). The 2026-08-23 audit falsified the claim: two FULLY MERGED codex exec lanes squatted
+// slot dirs for weeks. The disposal RAIL (cli/lib/worktree.mjs disposeWorktree) is committed and
+// tested on its own; these tests pin the WIRING — one injected seam, inside the cleanup block
+// that already removes the sidecar/RESUME.md/claims, best-effort by the same law.
+
+/** A codex RUN-lane journal where codex.mjs launch() writes it — the PRIMARY's .building/, which
+ *  is also where findJournal looks. `phases` is what makes a lane cover a member id. */
+function seedCodexJournal(primary, phases, worktree) {
+  const dir = join(primary, '.building')
+  mkdirSync(dir, { recursive: true })
+  const path = join(dir, `codex-${phases.join('-')}.json`)
+  writeFileSync(
+    path,
+    JSON.stringify(
+      { phases, lane: 'run', report: 'CODEX-REPORT.md', worktree, base: 'develop', pgid: null, startedAt: new Date().toISOString() },
+      null,
+      2,
+    ) + '\n',
+  )
+  return path
+}
+
+/** The injected disposal seam: records every (repoRoot, dir, opts) and answers with a rail-shaped
+ *  result. `answer` may be a function of the dir (per-lane outcomes) and may throw. */
+function disposeRecorder(answer = { disposed: true, alreadyDisposed: false, reason: null, detail: null, branchDeleted: true }) {
+  const calls = []
+  const dispose = (repoRoot, dir, opts = {}) => {
+    calls.push({ repoRoot, dir, opts })
+    return typeof answer === 'function' ? answer(dir) : answer
+  }
+  return { dispose, calls }
+}
+
+const doneMember = (num) => ({ num, done: true, kind: 'logic', executionResult: { status: 'done', hardStops: [] } })
+
+/** The record entry that NAMES a lane worktree, serialized. Which key carries the path is the
+ *  implementer's choice; that the path AND its outcome are both readable from the record is not. */
+function laneRecord(record, dir) {
+  const hit = record.find((e) => e.worktree === dir || e.dir === dir || JSON.stringify(e).includes(dir))
+  assert.ok(hit, `the land record must carry an entry naming the lane worktree ${dir}; got:\n${JSON.stringify(record, null, 2)}`)
+  return JSON.stringify(hit)
+}
+
+test('cleanup — arc landing disposes EVERY landed member’s codex lane through the rail, anchored at the primary, beside the sidecar/RESUME.md/claims it already removed', () => {
+  const primary = makeConsumer()
+  mkdirSync(join(primary, 'roadmap', 'arcs', '.building'), { recursive: true })
+  writeFileSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: primary }))
+  writeFileSync(join(primary, 'roadmap', 'arcs', 'A-RESUME.md'), '# notes\n')
+  const laneTen = `${primary}-codex-10`
+  const laneEleven = `${primary}-codex-11`
+  seedCodexJournal(primary, [10], laneTen)
+  seedCodexJournal(primary, [11], laneEleven)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder()
+  // `arc land` routinely runs from INSIDE the arc worktree, so the invocation root may be the
+  // very tree the land removes (postmortem 3.6): a disposal anchored on repoRoot would spawn
+  // git in a deleted cwd and fail ENOENT before git ever parses argv.
+  const goneWt = join(primary, '..', 'zr-gone-arc-wt-does-not-exist')
+
+  const res = landArc({
+    repoRoot: goneWt,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary, { members: [doneMember(10), doneMember(11)], sidecar: { worktree: goneWt, branch: 'arc/a' } }),
+    dispose: rec.dispose,
+  })
+
+  assert.equal(res.outcome, 'landed')
+  assert.deepEqual(
+    rec.calls.map((c) => c.dir).sort(),
+    [laneTen, laneEleven].sort(),
+    `both landed members' lanes are disposed; got ${JSON.stringify(rec.calls.map((c) => c.dir))}`,
+  )
+  for (const c of rec.calls) {
+    assert.equal(
+      c.repoRoot,
+      primary,
+      'every disposal anchors at the PRIMARY checkout — the invocation root may be the very tree being removed (the METERTENANT rule)',
+    )
+    assert.ok(
+      (c.opts?.allowUntracked ?? []).includes('CODEX-REPORT.md'),
+      `the run lane's never-committed hand-off file must be excepted or every lane refuses on its own report; got ${JSON.stringify(c.opts)}`,
+    )
+  }
+  // The new work EXTENDS the existing best-effort block; it never forks a second cleanup.
+  assert.ok(!existsSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json')), 'the sidecar is still removed')
+  assert.ok(!existsSync(join(primary, 'roadmap', 'arcs', 'A-RESUME.md')), 'RESUME.md is still removed')
+  assert.ok(
+    res.record.some((s) => s.step === 'cleanup' && !s.warning),
+    `the pre-existing cleanup step still records its removals; got:\n${JSON.stringify(res.record, null, 2)}`,
+  )
+})
+
+test('cleanup — an arc delegated as ONE codex run shares one journal and one worktree: it is disposed EXACTLY once, not once per member', () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-codex-10-11`
+  seedCodexJournal(primary, [10, 11], lane)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder()
+
+  const res = landArc({
+    repoRoot: primary,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary, { members: [doneMember(10), doneMember(11)] }),
+    dispose: rec.dispose,
+  })
+
+  assert.equal(res.outcome, 'landed')
+  assert.equal(
+    rec.calls.length,
+    1,
+    `one worktree means one disposal — a second call would re-run the rail against a directory the first call removed; got ${JSON.stringify(rec.calls.map((c) => c.dir))}`,
+  )
+  assert.equal(rec.calls[0].dir, lane, 'and it is the shared multi-phase lane')
+})
+
+test('cleanup — a lane worktree that is ALREADY gone reports already-disposed and never fails the land', () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-codex-10`
+  seedCodexJournal(primary, [10], lane)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder({ disposed: true, alreadyDisposed: true, reason: null, detail: null, branchDeleted: false })
+
+  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+
+  assert.equal(res.outcome, 'landed')
+  assert.equal(res.exitCode, 0, 'a vanished worktree is a state, not an error — /tmp dies and the land is still complete')
+  assert.match(
+    laneRecord(res.record, lane),
+    /already-disposed/,
+    'the record says already-disposed rather than claiming a removal this land did not perform',
+  )
+})
+
+test('cleanup — the land record names each lane outcome, and a REFUSED disposal changes neither the outcome nor the exit code', () => {
+  const primary = makeConsumer()
+  const kept = `${primary}-codex-10`
+  const gone = `${primary}-codex-11`
+  seedCodexJournal(primary, [10], kept)
+  seedCodexJournal(primary, [11], gone)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder((dir) =>
+    dir === kept
+      ? {
+          disposed: false,
+          alreadyDisposed: false,
+          reason: 'dirty',
+          detail: `${kept} still carries uncommitted work — refusing to remove it:\n  ?? notes.txt (untracked, not a named lane artifact)`,
+          branchDeleted: false,
+        }
+      : { disposed: true, alreadyDisposed: false, reason: null, detail: null, branchDeleted: true },
+  )
+
+  const res = landArc({
+    repoRoot: primary,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary, { members: [doneMember(10), doneMember(11)] }),
+    dispose: rec.dispose,
+  })
+
+  assert.equal(res.outcome, 'landed', 'the merge already happened — a refused cleanup never rewrites the land’s verdict')
+  assert.equal(res.exitCode, 0)
+  const refused = laneRecord(res.record, kept)
+  assert.match(refused, /dirty/, 'the refusal REASON is in the record')
+  assert.match(refused, /notes\.txt/, 'together with the detail naming what blocked it — an operator has to know what to do next')
+  assert.match(laneRecord(res.record, gone), /disposed/, 'and the lane that went is recorded as disposed')
+})
+
+test('cleanup — a dispose that THROWS is still best-effort: the land keeps its outcome and the EXISTING cleanup catch records the warning', () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-codex-10`
+  seedCodexJournal(primary, [10], lane)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder(() => {
+    throw new Error('rm -rf exploded')
+  })
+
+  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+
+  assert.equal(res.outcome, 'landed', 'a cleanup fatal after a completed merge reads as a failed land — the exact crash the best-effort law exists to prevent')
+  assert.equal(res.exitCode, 0)
+  const warned = res.record.find((s) => s.step === 'cleanup' && s.warning)
+  assert.ok(warned, `the new disposal work must sit INSIDE the existing best-effort catch; got:\n${JSON.stringify(res.record, null, 2)}`)
+  assert.match(warned.warning, /rm -rf exploded/, 'and the warning names the real failure, never a generic one')
+  assert.ok(existsSync(join(primary, 'roadmap', 'arc-summary.json')), 'everything after the cleanup block still runs — the RunnerSummary lands')
+})

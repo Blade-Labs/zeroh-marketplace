@@ -400,6 +400,8 @@ import { sweepOrphanCapbuildUnits } from './orphan-sweep.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
+import { disposeWorktree } from './worktree.mjs'
+import { findJournal } from '../commands/codex.mjs'
 import { loadConfig, ConfigError } from './config.mjs'
 
 /**
@@ -627,11 +629,39 @@ function writeRunnerSummary(repoRoot, summary) {
 }
 
 /**
+ * The DISTINCT codex run-lane worktrees covering these members, each with the branch its ids
+ * imply and the pgid its journal recorded. Journals live under the primary's .building/, which
+ * is where `home` points; an unreadable one proves nothing about a lane and is left to the
+ * guards that already refuse loudly on it (the launch guard, gate --verify-complete).
+ *
+ * The lane branch is not in the journal — `launch()` writes phases/worktree/pgid and no branch —
+ * so it is derived the way the launcher builds it: `codex/<ids joined by ->`.
+ */
+function codexLaneDirs(home, members) {
+  const seen = new Set()
+  const lanes = []
+  for (const m of members) {
+    let found = null
+    try {
+      found = findJournal(home, [m.num], 'run')
+    } catch {
+      continue
+    }
+    const dir = found?.journal?.worktree
+    if (!dir || seen.has(resolve(dir))) continue
+    seen.add(resolve(dir))
+    const ids = (found.journal.phases ?? [m.num]).map(String)
+    lanes.push({ dir, branch: `codex/${ids.join('-')}`, pgid: found.journal.pgid ?? null })
+  }
+  return lanes
+}
+
+/**
  * landArc — the decision-9 landing sequence over the injectable exec seam. Assumes
  * blockers already cleared (landCommand gates it). Returns { outcome, exitCode, record,
  * pushed, pushRefused, summaryPath }. record is the ordered step log the tests replay.
  */
-export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null }) {
+export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null, dispose = disposeWorktree }) {
   const git = gitLayer(exec)
   const mp = config.mergePolicy
   const primary = mp.primaryCheckout
@@ -702,6 +732,28 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
     rmSync(join(home, 'roadmap', 'arcs', `${arcId}-RESUME.md`), { force: true })
     releaseClaims(home, state.members.map((m) => m.num))
     record.push({ step: 'cleanup', removed: ['.building sidecar', 'RESUME.md', 'claims'] })
+    // Every landed member's codex lane, through the SAME rail the phase land uses. This is the
+    // only done-moment those worktrees ever get: do-arc's SKILL has always named arc land the
+    // cleanup owner, and the 2026-08-23 audit found two fully merged exec lanes squatting slot
+    // dirs for weeks because the claim was prose. Keyed by WORKTREE, not by member — an arc
+    // delegated as one `codex run --arc` shares a single multi-phase journal across its members,
+    // and a second call would run the rail against a directory the first one removed.
+    for (const laneDir of codexLaneDirs(home, state.members ?? [])) {
+      const r = dispose(home, laneDir.dir, {
+        branch: laneDir.branch,
+        integrationRef: baseRef,
+        // Never committed by contract (cli/commands/codex.mjs) — without the exception every
+        // lane refuses on its own hand-off report.
+        allowUntracked: ['CODEX-REPORT.md', 'CODEX-REPORT.prev.md'],
+        pgid: laneDir.pgid,
+      })
+      record.push({
+        step: 'codex-lane-dispose',
+        worktree: laneDir.dir,
+        outcome: r.alreadyDisposed ? 'already-disposed' : r.disposed ? 'disposed' : 'refused',
+        ...(r.disposed ? { branchDeleted: r.branchDeleted === true } : { reason: r.reason, detail: r.detail }),
+      })
+    }
   } catch (e) {
     record.push({ step: 'cleanup', warning: `best-effort cleanup failed (${e?.message?.split('\n')[0] ?? e}) — the land itself is complete; remove the sidecar/claims by hand` })
   }

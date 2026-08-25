@@ -46,7 +46,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1046,4 +1046,322 @@ test('phase \u2014 the dispatcher advertises `land <N>` beside validate/start/cu
   for (const sub of ['validate', 'start', 'curate']) {
     assert.ok(res.stderr.includes(sub), `the existing subcommand '${sub}' must stay advertised; got:\n${res.stderr}`)
   }
+})
+
+// ── phase land — the codex lane's disposal at its done-moment (6.2) ────────────────────────────
+//
+// Landing is the done-moment for a work-producing worktree, and today it walks away: the
+// 2026-08-23 audit found two FULLY MERGED codex exec lanes squatting slot dirs for weeks
+// because nothing at land time owned closure. These tests pin the two halves of making the
+// skill's claim true — (a) the codex lane can REACH `phase land` at all (a journal-confirmed
+// source is not gated on executionIsolation, which defaults to 'primary'), and (b) a land that
+// succeeds disposes what it landed, through the committed rail in cli/lib/worktree.mjs, with a
+// refusal reported BESIDE the land instead of failing it.
+
+/** A dead process group. spawnSync returns the pid of a child that has already exited, so a
+ *  journal carrying it reads DEAD through the rail's liveness probe — the honest shape of a
+ *  finished lane's journal, which codex.mjs launch() always stamps with a pgid. */
+const deadPgid = () => spawnSync('true').pid ?? 0x7ffffffe
+
+/**
+ * The state a finished codex RUN lane leaves behind: the primary checkout carrying the
+ * integration ref, a `${root}-codex-<ids>` worktree on branch `codex/<ids>` holding the
+ * delegated commits, and the lane journal in the PRIMARY's .building/ — never the worktree's
+ * (codex.mjs writes it where the launcher stood, which is the whole reason the lookup has to
+ * root at mainCheckout(cwd) when `phase land` runs from inside the worktree).
+ */
+function codexLaneFixture(phaseNum, { baseName = LAND_BASE, ids = [phaseNum] } = {}) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'zr-phase-codexland-')))
+  bases.push(root)
+  const stem = ids.join('-')
+  const wt = `${root}-codex-${stem}`
+  const branch = `codex/${stem}`
+  bases.push(wt)
+  gitAt(root, 'init', '-q')
+  gitAt(root, 'config', 'user.email', 't@t')
+  gitAt(root, 'config', 'user.name', 't')
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  writeFileSync(
+    join(root, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`),
+    `export default { phase: ${phaseNum}, status: 'in-progress' }\n`,
+  )
+  writeFileSync(join(root, '.gitignore'), '.building/\n')
+  gitAt(root, 'add', '--', '.gitignore', 'roadmap')
+  gitAt(root, 'commit', '-q', '-m', SEED_SUBJECT)
+  const seed = gitAt(root, 'rev-parse', 'HEAD')
+  if (gitAt(root, 'rev-parse', '--abbrev-ref', 'HEAD') === baseName) gitAt(root, 'branch', '-m', `${baseName}-primary`)
+  gitAt(root, 'branch', baseName)
+  const primaryBranch = gitAt(root, 'rev-parse', '--abbrev-ref', 'HEAD')
+  // codex.mjs ensureWorktree, verbatim shape: `git worktree add <dir> -b codex/<ids> <base>`.
+  gitAt(root, 'worktree', 'add', '-q', wt, '-b', branch, baseName)
+  const laneSubjects = [
+    commitAt(wt, `feat(cli): phase ${phaseNum} — ${phaseNum}.1 the delegated task`, 'cli/lib/delegated.txt'),
+    commitAt(wt, `docs(roadmap): phase ${phaseNum} — record the transparency report`, 'roadmap/report.txt'),
+  ].map((sha) => gitAt(wt, 'log', '-1', '--format=%s', sha))
+
+  const building = join(root, '.building')
+  mkdirSync(building, { recursive: true })
+  const journalPath = join(building, `codex-${stem}.json`)
+  writeFileSync(
+    journalPath,
+    JSON.stringify(
+      {
+        phases: ids,
+        lane: 'run',
+        driver: { id: 'codex', model: 'fixture' },
+        report: 'CODEX-REPORT.md',
+        worktree: wt,
+        base: baseName,
+        pgid: deadPgid(),
+        log: join(building, `codex-${stem}.log`),
+        prompt: join(building, `codex-${stem}-prompt.txt`),
+        startedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ) + '\n',
+  )
+
+  const record = recordOf(phaseNum, 'Land a delegated phase from its own codex worktree', [
+    {
+      id: `${phaseNum}.1`,
+      title: 'The delegated task',
+      transparencyReport: { whatWasDone: 'built it in the codex worktree', compromises: 'None' },
+    },
+  ])
+
+  return {
+    root,
+    wt,
+    branch,
+    seed,
+    baseName,
+    primaryBranch,
+    record,
+    laneSubjects,
+    journalPath,
+    closedPath: join(building, `codex-${stem}.closed.json`),
+    /** A second REAL lane worktree beside this one — so a "different directory" is a directory
+     *  that exists, and the source check is proven to be path EQUALITY, not mere existence. */
+    sibling(name) {
+      const dir = `${root}-codex-${name}`
+      bases.push(dir)
+      gitAt(root, 'worktree', 'add', '-q', dir, '-b', `codex/${name}`, baseName)
+      return dir
+    },
+    rewriteJournal(patch) {
+      const j = JSON.parse(readFileSync(journalPath, 'utf8'))
+      writeFileSync(journalPath, JSON.stringify({ ...j, ...patch }, null, 2) + '\n')
+    },
+    git: (...a) => gitAt(root, ...a),
+    worktreeMetadata: () => gitAt(root, 'worktree', 'list', '--porcelain'),
+    branchExists: (b) => gitAt(root, 'branch', '--list', b).replace(/^[*+]?\s*/, '').trim() === b,
+    baseTip: () => gitAt(root, 'rev-parse', `refs/heads/${baseName}`),
+    baseSubjects: () => subjectsAt(root, `refs/heads/${baseName}`),
+    /** The lane's commits as they must appear on the integration ref: newest first, with the
+     *  base's own history intact underneath. */
+    expectedBaseSubjects: () => [...laneSubjects].reverse().concat(SEED_SUBJECT),
+  }
+}
+
+test('phase land — a JOURNAL-CONFIRMED codex lane lands whatever executionIsolation says, and a journal naming a DIFFERENT worktree never confirms THIS source', () => {
+  // (a) executionIsolation 'primary' — the knob a delegated lane must not be gated on. The
+  // codex lane has never reached this seam (the skill routes it through a manual rebase +
+  // ff-merge from the primary), and the isolation refusal is why.
+  const a = codexLaneFixture(95)
+  const errA = sink()
+  const codeA = runLand({
+    cwd: a.wt,
+    toplevel: a.wt,
+    phaseNum: 95,
+    loadPhase: () => a.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(a.root, a.baseName) },
+    out: sink(),
+    err: errA,
+  })
+  assert.equal(codeA, 0, `a journal-confirmed codex lane IS a lane — it must land under 'primary'; stderr:\n${errA.text}`)
+  assert.deepEqual(
+    a.baseSubjects(),
+    a.expectedBaseSubjects(),
+    'the integration ref gained exactly the lane commits, with its own history intact underneath',
+  )
+
+  // (b) an ABSENT knob reads 'primary' too (executionIsolationOf) — same source, same answer;
+  // the base ref falls back to develop, so the fixture names its integration branch develop.
+  const b = codexLaneFixture(96, { baseName: 'develop' })
+  const errB = sink()
+  const codeB = runLand({ cwd: b.wt, toplevel: b.wt, phaseNum: 96, loadPhase: () => b.record, config: {}, out: sink(), err: errB })
+  assert.equal(codeB, 0, `an absent executionIsolation must not gate a codex-lane source either; stderr:\n${errB.text}`)
+  assert.deepEqual(b.baseSubjects(), b.expectedBaseSubjects(), 'the fallback integration ref gained the lane commits')
+
+  // (c) THE safety property: the acceptance is keyed on the SOURCE, not on "a journal exists".
+  // A journal whose worktree is some other directory confirms nothing about this one — without
+  // this leg the knob is simply disabled rather than source-keyed.
+  const c = codexLaneFixture(97)
+  const elsewhere = c.sibling('97-elsewhere')
+  c.rewriteJournal({ worktree: elsewhere })
+  const errC = sink()
+  const codeC = runLand({
+    cwd: c.wt,
+    toplevel: c.wt,
+    phaseNum: 97,
+    loadPhase: () => c.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(c.root, c.baseName) },
+    out: sink(),
+    err: errC,
+  })
+  assert.equal(codeC, 1, `a journal naming ${elsewhere} does not make ${c.wt} a codex-lane source — the isolation refusal stands; stderr:\n${errC.text}`)
+  assert.match(errC.text, /executionIsolation/, `the refusal still names the knob the operator has to flip; got:\n${errC.text}`)
+  assert.equal(c.baseTip(), c.seed, 'and the integration ref never moved')
+  assert.ok(existsSync(c.wt), 'a refused land disposes nothing')
+})
+
+test('phase land — the master/main rail refuses a codex-lane source too: a release branch is a held human act, never a lane act', () => {
+  for (const ref of ['master', 'main']) {
+    const f = codexLaneFixture(98, { baseName: ref })
+    const err = sink()
+    const code = runLand({
+      cwd: f.wt,
+      toplevel: f.wt,
+      phaseNum: 98,
+      loadPhase: () => f.record,
+      config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, ref) },
+      out: sink(),
+      err,
+    })
+    assert.equal(code, 1, `landing a codex lane onto ${ref} must refuse; stderr:\n${err.text}`)
+    assert.match(err.text, new RegExp(ref), `the refusal names the release branch it refused, not some other rail; got:\n${err.text}`)
+    assert.equal(f.baseTip(), f.seed, `${ref} never moved`)
+    assert.ok(existsSync(f.wt), 'a refused lane keeps its worktree — nothing was landed, so nothing is done')
+    assert.ok(existsSync(f.journalPath), 'and its journal stays live')
+  }
+})
+
+test('phase land — a landed codex lane is DISPOSED: worktree removed, merged codex/<N> branch deleted, stale metadata pruned, and its own untracked CODEX-REPORT.md never blocks it', () => {
+  const f = codexLaneFixture(99)
+  // The run lane's hand-off file is never committed by contract (codex.mjs), so without the
+  // allowUntracked exception EVERY codex-lane disposal would refuse on its own report.
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n\nthe hand-off\n')
+  // A dead sibling lane whose /tmp directory vanished: its REPO METADATA is still the primary's
+  // to clear, and the rail's prune ride-along is what clears it.
+  const dead = f.sibling('dead-lane')
+  rmSync(dead, { recursive: true, force: true })
+  assert.ok(f.worktreeMetadata().includes(dead), 'fixture: the dead lane is still in the metadata before the land')
+
+  const err = sink()
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 99,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 0, `the land itself succeeds; stderr:\n${err.text}`)
+  assert.deepEqual(f.baseSubjects(), f.expectedBaseSubjects(), 'the lane commits reached the integration ref')
+  assert.ok(!existsSync(f.wt), `the worktree ${f.wt} is GONE — the audit's two merged exec lanes squatted for weeks because nothing owned this moment`)
+  assert.equal(f.branchExists(f.branch), false, `the now-merged ${f.branch} branch is deleted, not left behind as a second handle on landed work`)
+  assert.ok(!f.worktreeMetadata().includes(f.wt), 'the removed worktree is out of the repo metadata')
+  assert.ok(!f.worktreeMetadata().includes(dead), "the prune ride-along cleared the dead sibling's metadata too")
+})
+
+test('phase land — the disposed lane’s journal is ARCHIVED to .closed.json, never deleted: `codex status` must read a closed lane honestly', () => {
+  const f = codexLaneFixture(100)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 100,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 0, `the land succeeds; stderr:\n${err.text}`)
+  assert.ok(
+    !existsSync(f.journalPath),
+    `the LIVE journal name must be gone — the lane scan class /^codex-[\\d-]+\\.json$/ would otherwise keep reading a closed lane as live`,
+  )
+  assert.ok(existsSync(f.closedPath), `the journal is RENAMED to ${f.closedPath} (same directory), never deleted — deleting it costs 'codex status' its honest closed read`)
+  const closed = JSON.parse(readFileSync(f.closedPath, 'utf8'))
+  assert.deepEqual(closed.phases.map(String), ['100'], 'the archived journal still carries its original phases')
+  assert.equal(closed.worktree, f.wt, 'and still names the lane it closed')
+})
+
+test('phase land — a codex lane carrying BLOCKING untracked work still LANDS: worktree, branch and live journal all survive, and the refusal reason reaches stderr', () => {
+  const f = codexLaneFixture(101)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n') // allowed
+  mkdirSync(join(f.wt, 'scratch'), { recursive: true })
+  writeFileSync(join(f.wt, 'scratch', 'leftover.txt'), 'half-finished work nobody committed\n') // blocking
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 101,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 0, `disposal reports honestly BESIDE a land, it never fails one — the merge already happened; stderr:\n${err.text}`)
+  assert.deepEqual(f.baseSubjects(), f.expectedBaseSubjects(), 'the integration ref moved exactly as it would have without any disposal')
+  assert.ok(existsSync(f.wt), 'the refused worktree SURVIVES — uncommitted work is never destroyed by a cleanup')
+  assert.equal(f.branchExists(f.branch), true, 'its branch survives with it')
+  assert.ok(existsSync(f.journalPath), 'and the journal stays LIVE (.json): nothing was closed, so nothing may claim it was')
+  assert.ok(!existsSync(f.closedPath), 'no .closed.json for a lane that still exists')
+  assert.match(err.text, /scratch\/leftover\.txt/, `the refusal names the file that blocked it — an operator has to know what to do next; got:\n${err.text}`)
+  assert.ok(err.text.includes(f.wt), `and names the worktree it kept; got:\n${err.text}`)
+})
+
+test('phase land — a SLOT-lane land KEEPS its worktree and its wt/<k> branch: a slot’s lifecycle is reuse-via-reset, never disposal', () => {
+  const f = landFixture(102)
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 102,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'worktree', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 0, `the slot lane lands; stderr:\n${err.text}`)
+  assert.ok(existsSync(f.wt), 'the slot worktree survives its land — recreating one costs a full npm ci, and the next phase resets it instead')
+  assert.equal(f.git('rev-parse', 'refs/heads/wt/1'), f.baseTip(), 'and wt/1 still resolves, sitting on the landed tip')
+  assert.ok(gitAt(f.root, 'worktree', 'list', '--porcelain').includes(f.wt), 'the slot keeps its repo metadata too')
+})
+
+test('phase land — a slot-lane land clears STALE worktree metadata (the prune ride-along) while keeping its own slot', () => {
+  const f = landFixture(103)
+  const dead = `${f.root}-wt-3`
+  ensureWorktree(f.root, 3, { baseRef: f.baseName })
+  rmSync(dead, { recursive: true, force: true })
+  assert.ok(gitAt(f.root, 'worktree', 'list', '--porcelain').includes(dead), 'fixture: the dead slot is in the metadata before the land')
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 103,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'worktree', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 0, `the slot lane lands; stderr:\n${err.text}`)
+  assert.ok(
+    !gitAt(f.root, 'worktree', 'list', '--porcelain').includes(dead),
+    "the land pruned the dead slot's metadata — when /tmp dies the repo metadata is still ours to clear",
+  )
+  assert.ok(existsSync(f.wt), 'while its OWN slot is kept')
 })

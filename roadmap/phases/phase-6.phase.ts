@@ -135,7 +135,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "runLand in cli/commands/phase.mjs gains codexLaneSource (mainCheckout(cwd) + the exported findJournal + path EQUALITY between the journal's worktree and cwd) and accepts such a source whatever executionIsolation says — the operator-approved design change that makes `roadmap phase land` the codex lane's landing verb. Every other source keeps the isolation refusal; the master/main rail still refuses first. After the push it disposes: worktree removed, merged codex/<N> branch deleted, journal RENAMED to codex-<ids>.closed.json (stamped closedAt/closedBy, never deleted). A slot lane keeps its worktree but rides the prune along. landArc in cli/lib/landing.mjs gains an injected `dispose = disposeWorktree` seam and a codexLaneDirs helper, wired INSIDE the existing best-effort cleanup block, one entry per lane in the land record (disposed / already-disposed / refused + reason + detail).",
+        how:
+          "TDD via test-engineer on a contract-only brief; 12 tests added across two files (phase.test.mjs 25\u219232, landing-mechanics.test.mjs 22\u219227), RED first with the failures quoted, then GREEN 32/32 and 27/27. The test-engineer falsified both suites against a throwaway reference implementation in the scratchpad and caught 13/13 mutations \u2014 including 'accept ANY journal' (drops the source-keying), 'delete the journal instead of renaming', 'drop allowUntracked', 'hardcode integrationRef develop', 'no dedupe', and 'fork a second try/catch instead of extending'. Dedupe is keyed on resolve(worktree): an arc delegated as ONE `codex run --arc` shares a single multi-phase journal across members, and a second call would run the rail against a directory the first removed. The lane branch is read from the checkout BEFORE the land (the journal records no branch, and after the rebase+ff the branch is the integration tip); landArc derives it from the journal's ids the way launch() builds it. Disposal runs LAST, after the push, because it removes the directory the earlier acts run in.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "PLAN DRIFT, named: the plan's step verify pointed at cli/lib/landing.test.mjs for the arc half, but landArc's cleanup is tested in cli/lib/landing-mechanics.test.mjs (landing.test.mjs holds the DECISION half only \u2014 the eight-blocker table and the followups arithmetic). The tests went to the real home. Two additions beyond the plan's letter: a slot-lane prune-ride-along test (grounded in the step's own 'slot-lane sources get prune ride-along only') and allowUntracked asserted on the arc path too (same run lane, same never-committed report). cli/lib/landing.mjs now imports findJournal from cli/commands/codex.mjs \u2014 a lib importing a command, which the module's own docblock sanctions ('shared rather than private because the reconcile at landing must find the same journal codex status does') and this phase's assumption 3 requires, but it is a layering the next journal-consumer should turn into a lib module rather than a third importer.",
+      },
+      done: true,
+      doneDate: '2026-08-25',
     },
     {
       id: '6.3',
