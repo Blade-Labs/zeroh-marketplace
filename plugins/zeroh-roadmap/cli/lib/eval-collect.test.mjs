@@ -18,7 +18,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { defaultExec } from './exec.mjs'
@@ -410,6 +410,85 @@ test('assembleConsumerFingerprint — derived offline from the checkout, never f
 
   const bare = scratchRoot([])
   assert.deepEqual(assembleConsumerFingerprint(bare), { repo: basename(bare), language: 'unknown', corpusSize: 0 })
+})
+
+/**
+ * Two checkouts that agree on NOTHING the fingerprint reads: different basename, different
+ * language rung, and different NON-ZERO corpus sizes. A linked worktree is exactly this shape —
+ * one repository seen from a directory with another name — and the divergence is what makes an
+ * implementation that fingerprints the identityRoot WHOLESALE fail on all three fields instead
+ * of quietly agreeing on two of them.
+ */
+function fingerprintDivergentPair() {
+  const make = (stem, files, corpus) => {
+    const d = mkdtempSync(join(tmpdir(), stem))
+    scratch.push(d)
+    for (const f of files) writeFileSync(join(d, f), '{}\n')
+    mkdirSync(join(d, 'roadmap', 'phases'), { recursive: true })
+    for (let i = 1; i <= corpus; i += 1)
+      writeFileSync(join(d, 'roadmap', 'phases', `phase-${1000 + i}.phase.ts`), 'export default {}\n')
+    return d
+  }
+  return {
+    active: make('zr-fp-linked-', ['tsconfig.json', 'package.json'], 3),
+    primary: make('zr-fp-primary-', ['package.json'], 1),
+  }
+}
+
+test('assembleConsumerFingerprint — identityRoot normalizes only repo identity', () => {
+  const { active, primary } = fingerprintDivergentPair()
+  assert.notEqual(basename(active), basename(primary), 'fixture precondition: the two checkouts have different basenames')
+
+  const solo = assembleConsumerFingerprint(active)
+  const normalized = assembleConsumerFingerprint(active, { identityRoot: primary })
+
+  // The WHOLE contract in one comparison: identityRoot moves `repo` and touches nothing else.
+  assert.deepEqual(
+    normalized,
+    { ...solo, repo: basename(primary) },
+    'identityRoot must move repo ALONE — every other field stays what the active checkout derived',
+  )
+  assert.equal(normalized.repo, basename(primary), 'the identity is the primary checkout, so one repository is ONE cohort')
+  assert.notEqual(normalized.repo, basename(active), 'a linked checkout must not open a cohort of its own in the corpus')
+
+  // Calling with one argument (and with an empty options object) is unchanged: every existing
+  // call site keeps fingerprinting the tree it was handed.
+  assert.equal(solo.repo, basename(active))
+  assert.deepEqual(assembleConsumerFingerprint(active, {}), solo, 'an empty options object is the no-options call')
+  assert.deepEqual(
+    assembleConsumerFingerprint(active, { identityRoot: active }),
+    solo,
+    'identityRoot defaulting to the toplevel is the same call by another spelling',
+  )
+})
+
+test('assembleConsumerFingerprint — the active checkout still owns language and corpusSize', () => {
+  const { active, primary } = fingerprintDivergentPair()
+  const soloActive = assembleConsumerFingerprint(active)
+  const soloPrimary = assembleConsumerFingerprint(primary)
+
+  // Falsification anchors: both derived fields DISAGREE across the pair, and neither corpus is
+  // empty — so "reads the identityRoot wholesale" cannot pass by accidentally matching zero.
+  assert.equal(soloActive.language, 'typescript', 'fixture precondition: the active tree carries a tsconfig')
+  assert.equal(soloPrimary.language, 'javascript', 'fixture precondition: the identity tree carries only a package.json')
+  assert.equal(soloActive.corpusSize, 3, 'fixture precondition: the active corpus is non-zero')
+  assert.equal(soloPrimary.corpusSize, 1, 'fixture precondition: the identity corpus is non-zero AND different')
+
+  const normalized = assembleConsumerFingerprint(active, { identityRoot: primary })
+
+  assert.equal(normalized.repo, basename(primary), 'the identity half IS normalized — that is the only thing identityRoot buys')
+  assert.equal(
+    normalized.language,
+    soloActive.language,
+    'a linked checkout may carry its own tsconfig/package: language describes the tree that was measured',
+  )
+  assert.equal(
+    normalized.corpusSize,
+    soloActive.corpusSize,
+    'a linked checkout may legitimately hold a different phase count: reading the identity tree would under- or over-count the corpus',
+  )
+  assert.notEqual(normalized.language, soloPrimary.language, 'the identity tree\'s language must not leak into the measurement')
+  assert.notEqual(normalized.corpusSize, soloPrimary.corpusSize, 'the identity tree\'s corpus must not leak into the measurement')
 })
 
 test('newestArtifactDated — returns the newest file WITH its filename date; absent stays null', () => {

@@ -68,7 +68,10 @@ export function emitPhaseEvalRecord(toplevel, phaseNum, { parsed, report }) {
       parsed,
       green: report.green,
       slots: report.slots,
-      fingerprint: assembleConsumerFingerprint(toplevel),
+      // A linked codex worktree is the SAME repository as the checkout it was cut from, so its
+      // identity comes from the primary checkout; the corpus facts still come from `toplevel`.
+      // Placement is unaffected — the record lands beside this checkout's own gate artifacts.
+      fingerprint: assembleConsumerFingerprint(toplevel, { identityRoot: mainCheckout(toplevel) }),
       date: String(report.startedAt).slice(0, 10),
     })
     // Printed BEFORE validation: an ambiguous role binding is a true fact about the phase even

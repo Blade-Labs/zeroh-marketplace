@@ -97,11 +97,18 @@ export function assembleWorkflowStamp({ exec = defaultExec, pluginRoot = PLUGIN_
 
 /**
  * Which CONSUMER produced this report, so numbers from two repos are comparable. Every
- * component is derived OFFLINE from the checkout — `repo` is the toplevel's basename rather
- * than a git remote, because a remote read is a network call and a rename would silently
- * repartition the corpus mid-history.
+ * component is derived OFFLINE from the checkout — `repo` is a basename rather than a git
+ * remote, because a remote read is a network call and a rename would silently repartition
+ * the corpus mid-history.
+ *
+ * `identityRoot` splits the two questions the toplevel used to answer at once. IDENTITY (which
+ * repository is this) comes from identityRoot, so a linked worktree lands in the same cohort as
+ * the checkout it was cut from instead of partitioning one repository in two. The DERIVED facts
+ * (language, corpusSize) keep reading the ACTIVE checkout, because a worktree legitimately holds
+ * its own phase files and its own tsconfig, and normalizing those would mis-count the corpus in
+ * exchange for nothing. Defaults to toplevel, so a one-argument call is unchanged.
  */
-export function assembleConsumerFingerprint(toplevel) {
+export function assembleConsumerFingerprint(toplevel, { identityRoot = toplevel } = {}) {
   const language = existsSync(join(toplevel, 'tsconfig.json'))
     ? 'typescript'
     : existsSync(join(toplevel, 'package.json'))
@@ -113,7 +120,7 @@ export function assembleConsumerFingerprint(toplevel) {
   } catch {
     corpusSize = 0 // an absent phases dir is an empty corpus, not a failure
   }
-  return { repo: basename(toplevel), language, corpusSize }
+  return { repo: basename(identityRoot), language, corpusSize }
 }
 
 /**

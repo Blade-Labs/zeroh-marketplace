@@ -1113,6 +1113,120 @@ test('gate run --verify-complete inside a LINKED codex worktree — the journal 
   assert.ok(r.stderr.includes(jPath), `the PRIMARY checkout's journal path is named (${jPath}); stderr: ${JSON.stringify(r.stderr)}`)
 })
 
+// ── the eval record's CONSUMER IDENTITY seen from a linked worktree ───────────────────
+// A linked checkout is the SAME repository under another directory name. The record's
+// consumerFingerprint.repo is the corpus cohort key, so deriving it from the active toplevel
+// splits one consumer into two cohorts the moment a lane runs the gate out of a worktree —
+// and every cohort-sliced number downstream is computed over half the samples. Identity is
+// normalized to the primary checkout; the MEASURED fields (language, corpusSize) and the
+// record's PLACEMENT still belong to the checkout that actually ran.
+
+/**
+ * A linked worktree of `repo` at a DIFFERENT basename, reusing the fixture the existing
+ * worktree case builds inline. node_modules is gitignored, so the checkout does not carry the
+ * consumer's zod seam — it is re-linked here or every bridge-validated write in the worktree
+ * would fail for a reason that has nothing to do with identity.
+ */
+function linkedWorktree(repo, name, branch) {
+  const dir = `${repo.root}-${name}`
+  bases.push(dir)
+  repo.git('worktree', 'add', '-q', '-b', branch, dir, 'HEAD')
+  const zod = join(repo.root, 'node_modules', 'zod')
+  if (existsSync(zod)) {
+    mkdirSync(join(dir, 'node_modules'), { recursive: true })
+    symlinkSync(realpathSync(zod), join(dir, 'node_modules', 'zod'), 'dir')
+  }
+  const git = (...a) =>
+    execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8',
+    })
+  const writePhase = (num, obj) => {
+    writeFileSync(join(dir, 'roadmap', 'phases', `phase-${num}.phase.ts`), `export default ${JSON.stringify(obj, null, 2)}\n`)
+    git('add', join('roadmap', 'phases', `phase-${num}.phase.ts`))
+    git('commit', '-q', '-m', `seed phase-${num} file`) // NO em-dash → not phase-own
+  }
+  return { dir, git, writePhase }
+}
+
+const phaseFileCount = (root) => readdirSync(join(root, 'roadmap', 'phases')).filter((f) => f.endsWith('.phase.ts')).length
+
+test('gate eval fingerprint matches primary checkout from linked worktree', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  repo.writePhase(1720, phaseObj({ phase: 1720, plannedBy: PLANNER, tasks: [{ id: '1720.1' }], keyFiles: ['lib/w.ts'] }))
+  repo.commit('feat: phase 1720 — code', { 'lib/w.ts': 'export const w = 1\n' })
+
+  const wt = linkedWorktree(repo, 'codex-1720', 'codex/1720')
+  assert.notEqual(basename(wt.dir), basename(repo.root), 'precondition: the linked checkout has a different directory name')
+  // A second phase file the PRIMARY does not have: the corpus counts must be able to disagree,
+  // or "corpusSize came from the active checkout" is unfalsifiable here.
+  wt.writePhase(1721, phaseObj({ phase: 1721 }))
+  assert.equal(phaseFileCount(repo.root), 1, 'precondition: the primary corpus')
+  assert.equal(phaseFileCount(wt.dir), 2, 'precondition: the linked corpus is non-zero AND different')
+
+  const r = runGateIn(wt.dir, ['1720'])
+  assert.equal(r.code, 0, `stdout: ${r.stdout} stderr: ${r.stderr}`)
+
+  // Placement is unchanged: the record still lands beside the gate artifacts of the checkout
+  // that ran, never beside the primary's.
+  assert.ok(existsSync(recordPath(wt.dir, 1720)), `no record at ${recordPath(wt.dir, 1720)}; stderr: ${r.stderr}`)
+  assert.deepEqual(recordFilesIn(repo.root), [], 'the primary checkout gets no record — only the identity travels, not the artifact')
+
+  const fp = readRecord(wt.dir, 1720).consumerFingerprint
+  assert.equal(
+    fp.repo,
+    basename(repo.root),
+    `one repository is ONE cohort: the identity is the primary checkout's basename, got ${fp.repo}`,
+  )
+  assert.notEqual(fp.repo, basename(wt.dir), 'a linked checkout must not partition the corpus into a cohort of its own')
+  assert.equal(fp.corpusSize, 2, 'the normalisation is identity-only: the corpus is the one the running checkout holds')
+  assert.equal(fp.language, 'javascript', 'and the language is the running checkout\'s own')
+})
+
+test('gate run --verify-complete refresh keeps the primary checkout fingerprint', { timeout: 240_000 }, () => {
+  // The refresh is the moment the record MATTERS — it is the one that captures the driver and
+  // the metrics. A refresh that recomputed identity from the active toplevel would re-partition
+  // the cohort at completion time, after the execute-time record got it right.
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  const inFlight = { phase: 1722, status: 'in-progress', plannedBy: PLANNER, tasks: [{ id: '1722.1' }] }
+  repo.writePhase(1722, phaseObj(inFlight))
+  repo.commit('feat: phase 1722 — code', { 'lib/x.ts': 'export const x = 1\n' })
+
+  const wt = linkedWorktree(repo, 'codex-1722', 'codex/1722')
+  wt.writePhase(1723, phaseObj({ phase: 1723 }))
+  assert.equal(existsSync(join(repo.root, '.building')), false, 'precondition: no lane journal, so only consistency decides the exit code')
+
+  const execute = runGateIn(wt.dir, ['1722'])
+  assert.equal(execute.code, 0, `stdout: ${execute.stdout} stderr: ${execute.stderr}`)
+  assert.ok(existsSync(recordPath(wt.dir, 1722)), `no execute-time record; stderr: ${execute.stderr}`)
+
+  wt.writePhase(
+    1722,
+    phaseObj({
+      ...inFlight,
+      status: 'done',
+      keyFiles: ['lib/x.ts'],
+      executionResult: { phase: 1722, status: 'done', driver: DRIVER },
+      metrics: METRICS,
+    }),
+  )
+  const r = runGateIn(wt.dir, ['1722', '--verify-complete'])
+  assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `stdout: ${r.stdout} stderr: ${r.stderr}`)
+
+  const rec = readRecord(wt.dir, 1722)
+  assert.deepEqual(rec.attribution.driver, DRIVER, 'the refresh really re-emitted the record — otherwise the fingerprint assertion below is vacuous')
+  assert.deepEqual(rec.metrics, METRICS, 'and captured the completion metrics')
+  assert.equal(
+    rec.consumerFingerprint.repo,
+    basename(repo.root),
+    `the refreshed record keeps the primary checkout's identity, got ${rec.consumerFingerprint.repo}`,
+  )
+  assert.notEqual(rec.consumerFingerprint.repo, basename(wt.dir), 'completion time is exactly when a re-partitioned cohort would go unnoticed')
+  assert.equal(rec.consumerFingerprint.corpusSize, 2, 'the refresh still measures the checkout that ran')
+  assert.ok(existsSync(recordPath(wt.dir, 1722)), 'the refreshed record stays in the active checkout')
+  assert.deepEqual(recordFilesIn(repo.root), [], 'and the primary checkout still receives no artifact')
+})
+
 test('gate run --verify-complete — an UNREADABLE lane journal reds naming the file, never passes as "inline session"', () => {
   const repo = makeRepo(RUN_CFG())
   // A launch that died mid-write leaves a truncated journal. Treating it as "no journal" drops

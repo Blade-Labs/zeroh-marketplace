@@ -356,7 +356,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-25',
+      transparencyReport: {
+        whatWasDone:
+          'assembleConsumerFingerprint takes an optional { identityRoot } defaulting to toplevel. repo now derives from identityRoot while language and corpusSize keep reading the ACTIVE checkout. emitPhaseEvalRecord passes mainCheckout(toplevel), so a linked codex worktree emits under the primary checkout basename on both the execute path and the verify-complete refresh. Artifact placement is unchanged — the record still lands beside the active checkout gate artifacts.',
+        how:
+          'test-engineer wrote four RED tests, two unit and two wired through a real git worktree add, RED at 94 pass / 4 fail on the defect verbatim: the emitted record carried zr-gate-y5BhBd-codex-1720 where zr-gate-y5BhBd belonged, and the refresh carried zr-gate-yWPUQi-codex-1722. The unit pair diverges the two checkouts on BOTH derived fields with both corpus sizes non-zero, so a wholesale-identityRoot implementation cannot pass by accident, and the whole contract is one deepEqual against { ...solo, repo: basename(primary) }. The wired pair asserts placement and corpus separately from identity, and the refresh test first proves the record was genuinely re-emitted (driver and metrics change) so the identity assertion is not vacuous. GUARD MUTATION PROOF, four results: (1) planted violation dropping identityRoot at the call site produced `not ok 52` and `not ok 53`, 96 pass / 2 fail; (2) planted violation normalizing WHOLESALE (identityRoot overriding toplevel for language and corpusSize too) produced `not ok 52/53/76/77`, 94 pass / 4 fail, so identity-only is pinned in both directions; (3) planted violation defaulting identityRoot to a constant instead of toplevel produced `not ok 15 - assembleConsumerFingerprint — derived offline from the checkout, never from a remote` and `not ok 16`, 36 pass / 2 fail, so the unchanged one-argument contract is protected by the pre-existing test; (4) decoy, the destructure rewritten as `opts = {}` plus `opts.identityRoot ?? toplevel`, stayed 98 pass / 0 fail. Restored and re-verified: 98/98.',
+        compromises: 'None — identity and the derived corpus facts were split rather than one being sacrificed to the other.',
+        skipped: 'None — all four step verifies ran and passed.',
+        hardcoded: 'None — mainCheckout is the existing git-common-dir resolver, already imported by gate.mjs.',
+        limitations:
+          'mainCheckout throws for a bare repository. That throw lands inside emitPhaseEvalRecord existing catch-all, so the failure surfaces as its named one-line stderr and no record, never as a changed gate verdict — consistent with that function documented contract, but it does mean a bare-repo consumer loses the sample rather than falling back to the active basename. The other two assembleConsumerFingerprint call sites (cli/commands/eval.mjs, arc-level) still fingerprint the active toplevel; normalizing those is arc-eval territory and was out of this task files[].',
+      },
     },
   ],
 })
