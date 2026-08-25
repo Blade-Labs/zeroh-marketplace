@@ -359,6 +359,10 @@ export default definePhase({
       "Arc land archives the journal of an ALREADY-GONE lane but never deletes its merged codex/<ids> branch — disposeWorktree's missing-dir early return cannot reach the branch delete, and the archive then closes the journal, so no verb looks at that branch again. Branch accumulation is a strictly smaller class than worktree accumulation and closing it would need a done-moment the operator ruling does not grant; recorded so a later round does not rediscover it as a bug.",
     ],
     hardStops: [],
+    limitations: [
+      "History stays GRANULAR: `roadmap phase curate 6` refuses, naming `docs(roadmap): mark phase 6 complete` as a foreign commit interleaving the range. The cause is an ordering slip by this executor — the protocol's binding order is gate, then curate, then the completion commit, and the completion commit went first. It was left alone rather than forced: the four gate rounds cite fix commits by sha (25b8df9, e13778d, 6a9b423, e73c6be), and a squash would make every one of those references unreachable, which costs more than tidy history is worth. Twelve task/gate commits plus the completion commit reach the integration branch instead of 1-3 curated ones.",
+      "`gate run 6 --verify-complete` passes with one WARNING it leaves to reviewer judgement: 42ca720 (the round-0 quality pass) touches only source files with no test in its diff. That commit is pure deduplication — one groupAlive probe replacing two byte-identical copies, and one exported RUN_LANE_ARTIFACTS replacing a hand-written list at two call sites — with no behaviour change, so no new test is owed; the existing suites cover it and all three later review rounds read it.",
+    ],
     gateRounds: 4,
   },
   tasks: [
