@@ -52,7 +52,7 @@
  */
 import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
@@ -147,6 +147,20 @@ function groupAlive(pgid) {
   } catch {
     return false
   }
+}
+
+/**
+ * A flag value that may arrive absolute, as a path RELATIVE to the checkout. `join(root, '/abs')`
+ * yields `<root>/abs`, so an absolute path that exists refuses as missing and the carry-in copies
+ * from nowhere; and a path outside the checkout would carry IN to a location outside the worktree.
+ */
+function repoRelative(root, p, flag) {
+  if (!p) return p
+  const rel = isAbsolute(p) ? relative(root, p) : p
+  if (rel.startsWith('..')) {
+    throw new Error(`${flag} must name a path inside this checkout (${root}) — got ${p}, which resolves outside it`)
+  }
+  return rel
 }
 
 /** The run protocol is the do-phase SKILL, resolved from THIS file so a plugin move follows. */
@@ -445,7 +459,7 @@ function reviewCodex(root, ids, argv) {
 
   // Resolve the prompt against the PRIMARY checkout before any worktree work, so a bad --doc
   // or a renumbered phase file fails loudly and destroys no previous hand-off.
-  const doc = di >= 0 ? argv[di + 1] : undefined
+  const doc = repoRelative(root, di >= 0 ? argv[di + 1] : undefined, '--doc')
   const focus = fi >= 0 ? argv[fi + 1] : undefined
   const prompt = buildReviewPrompt(root, ids, { doc, focus })
 
@@ -475,11 +489,21 @@ function planCodex(root, ids, argv) {
 
   // Resolve the prompt against the PRIMARY checkout before any worktree work, so a missing
   // --brief or a taken number fails loudly and destroys no previous hand-off.
-  const brief = fi >= 0 ? argv[fi + 1] : undefined
+  const brief = repoRelative(root, fi >= 0 ? argv[fi + 1] : undefined, '--brief')
   const prompt = buildPlanPrompt(root, ids, { brief })
 
   const made = ensureWorktree(root, { worktree, base, branch: `codex-plan/${ids.join('-')}`, install: true })
   if (made !== 0) return made
+  // The worktree comes from --base, which may carry a phase file the primary checkout does not:
+  // the planner's one-file target would then clobber a real plan and still audit as one commit.
+  const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
+  if (existsSync(join(worktree, phaseFile))) {
+    process.stderr.write(
+      `roadmap codex: ${phaseFile} already exists on ${base} (in ${worktree}) — this lane authors a newly reserved number. `
+        + 'Reserve a fresh one and re-run; editing an existing plan is a supervised act, not a detached one.\n',
+    )
+    return 1
+  }
   carryIn(root, worktree, brief)
   preserveStaleReport(worktree, LANES.plan.report)
   return launch(root, ids, 'plan', { worktree, base, prompt })
@@ -558,7 +582,16 @@ export default async function run(argv) {
   // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).
   const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
   const ids = arcId ? arcPhases(root, arcId) : argv.slice(1).filter((a, i) => /^\d+$/.test(a) && !flagValues.has(i + 1))
-  const lane = Object.keys(LANES).find((l) => LANES[l].flag && argv.includes(LANES[l].flag)) ?? 'run'
+  // Lane flags are ALTERNATIVES. First-match would silently drop the second one — the very trap
+  // the status hint refuses to print as a single command.
+  const laneFlags = Object.keys(LANES).filter((l) => LANES[l].flag && argv.includes(LANES[l].flag))
+  if (laneFlags.length > 1) {
+    process.stderr.write(
+      `roadmap codex: ${laneFlags.map((l) => LANES[l].flag).join(' and ')} are alternatives, not a set — pass exactly one lane flag (or none for the run lane)\n`,
+    )
+    return 1
+  }
+  const lane = laneFlags[0] ?? 'run'
   if (sub === 'run' && ids.length > 0) return runCodex(root, ids, argv)
   if (sub === 'review' && ids.length > 0) return reviewCodex(root, ids, argv)
   if (sub === 'plan' && ids.length > 0) return planCodex(root, ids, argv)

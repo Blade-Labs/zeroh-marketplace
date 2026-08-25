@@ -10,10 +10,10 @@
  *   - `codex run` deletes any existing CODEX-REPORT.md before spawning (the report is never
  *     committed, so the launching run owns the file).
  *
- * The review-lane tests below pin the property that makes two lanes safe to share one
- * command: separate journals, prompts and report names, so a review and an implementation of
- * the same phase can never read each other's verdict — plus the read-only mission rules,
- * which are the only thing standing between an unsandboxed Codex and the plans it reviews.
+ * The review- and plan-lane tests below pin the property that makes three lanes safe to share
+ * one command: separate journals, prompts and report names, so lanes can never read each other's
+ * verdict — plus the read-only mission rules, which are the only thing standing between an
+ * unsandboxed Codex and the plans it reviews.
  *
  * Hermetic-tmp-git-repo pattern from cli/commands/claim.test.mjs; the launch-path tests put a
  * fake `codex` executable on PATH and pre-make the worktree so nothing real launches.
@@ -978,7 +978,10 @@ test('every lane prints the poll command that actually reads ITS journal', () =>
   const root = tmpRepo()
   const brief = writeBrief(root)
   writePhase(root, 111)
+  // Each case gets its OWN worktree: the fake codex is detached, and a launch into a worktree
+  // whose previous fake has not yet exited is refused by the cross-lane liveness guard.
   fakeLaunchEnv(root, join(root, 'wt-poll-110'))
+  fakeLaunchEnv(root, join(root, 'wt-poll-111-run'))
   const env = fakeLaunchEnv(root, join(root, 'wt-poll-111'))
 
   // The launcher's own hint is the only poll instruction most callers ever see. A hint naming a
@@ -986,7 +989,7 @@ test('every lane prints the poll command that actually reads ITS journal', () =>
   const cases = [
     ['plan', ['plan', '110', '--brief', brief, '--worktree', join(root, 'wt-poll-110')], /status 110 --plan/],
     ['review', ['review', '111', '--worktree', join(root, 'wt-poll-111')], /status 111 --review/],
-    ['run', ['run', '111', '--worktree', join(root, 'wt-poll-111')], /status 111(?! --)/],
+    ['run', ['run', '111', '--worktree', join(root, 'wt-poll-111-run')], /status 111(?! --)/],
   ]
   for (const [lane, args, expected] of cases) {
     const r = spawnSync('node', [BIN, 'codex', ...args], { cwd: root, encoding: 'utf8', env })
@@ -1048,4 +1051,55 @@ test('status: when TWO other lanes cover the ids, each gets its own runnable com
   )
   assert.match(r.stderr, /roadmap codex status 113 --review/, `the review lane needs its own runnable command; got: ${r.stderr}`)
   assert.match(r.stderr, /roadmap codex status 113 --plan/, `and so does the plan lane; got: ${r.stderr}`)
+})
+
+test('an ABSOLUTE --brief is honored, and one pointing outside the checkout is refused', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const abs = join(root, brief)
+  const worktree = join(root, 'wt-plan-114')
+  const env = fakeLaunchEnv(root, worktree)
+
+  // join(root, '/abs/path') yields '<root>/abs/path', so an absolute brief that EXISTS would
+  // refuse as missing — naming a path the caller can see on disk. --worktree beside it takes
+  // absolute paths everywhere in this file.
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '114', '--brief', abs, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, `an absolute --brief that exists must launch, not refuse as missing; stderr: ${r.stderr}`)
+  assert.equal(readFileSync(join(worktree, brief), 'utf8'), readFileSync(abs, 'utf8'), 'and it must still be carried into the worktree')
+
+  // Outside the checkout the carry-in would write OUTSIDE the worktree — refuse by name.
+  const outside = join(tmpdir(), 'codex-outside-brief.md')
+  writeFileSync(outside, '# not in this repo\n')
+  cleanups.push(() => rmSync(outside, { force: true }))
+  const esc = spawnSync('node', [BIN, 'codex', 'plan', '115', '--brief', outside, '--worktree', join(root, 'wt-plan-115')], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(esc.status, 0, 'a brief outside the checkout must not be planned from')
+  assert.match(esc.stderr, /inside this checkout/, `the refusal must say WHY; got: ${esc.stderr}`)
+})
+
+test('two lane flags are refused as alternatives, never first-match-wins', () => {
+  const root = tmpRepo()
+  const r = spawnSync('node', [BIN, 'codex', 'status', '116', '--review', '--plan'], { cwd: root, encoding: 'utf8' })
+  assert.equal(r.status, 1, 'a command naming two lanes asks for something impossible — it must not silently pick one')
+  assert.match(r.stderr, /alternatives/, `the refusal must name the conflict; got: ${r.stderr}`)
+  assert.match(r.stderr, /--review and --plan|--plan and --review/, `and name BOTH flags it saw; got: ${r.stderr}`)
+})
+
+test('plan: a phase file present on --base but not on the primary is still refused', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-117')
+  const env = fakeLaunchEnv(root, worktree)
+  // The primary checkout has no phase-117 — the pre-launch guard passes. The WORKTREE (made from
+  // --base) does: the planner's one-file target would clobber a real plan and still audit as one
+  // commit against one file.
+  mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
+  const planted = join(worktree, 'roadmap', 'phases', 'phase-117.phase.ts')
+  writeFileSync(planted, 'export default { real: true }\n')
+  assert.ok(!existsSync(join(root, 'roadmap', 'phases', 'phase-117.phase.ts')), 'precondition: the primary must NOT have it, or this tests the other guard')
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '117', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(r.status, 0, 'the number is taken on the branch the planner will work from')
+  assert.match(r.stderr, /already exists/, `the collision must be named; got: ${r.stderr}`)
+  assert.equal(readFileSync(planted, 'utf8'), 'export default { real: true }\n', 'the existing plan is untouched')
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-117.json')), 'a refused launch must journal nothing')
 })
