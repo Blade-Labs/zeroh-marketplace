@@ -52,7 +52,7 @@
  */
 import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
@@ -156,8 +156,10 @@ function groupAlive(pgid) {
  */
 function repoRelative(root, p, flag) {
   if (!p) return p
-  const rel = isAbsolute(p) ? relative(root, p) : p
-  if (rel.startsWith('..')) {
+  // resolve() FIRST: an unnormalized `docs/../../x.md` passes a raw startsWith('..') test and still
+  // escapes. Compare segment-wise after, or a legal `..cfg.md` refuses as an escape.
+  const rel = relative(root, resolve(root, p))
+  if (rel === '..' || rel.startsWith(`..${sep}`)) {
     throw new Error(`${flag} must name a path inside this checkout (${root}) — got ${p}, which resolves outside it`)
   }
   return rel
@@ -263,7 +265,8 @@ function buildPlanPrompt(root, ids, { brief } = {}) {
         + `Write the request down (one line per item) and re-run: roadmap codex plan ${ids[0]} --brief <path/to/brief.md>`,
     )
   }
-  if (!existsSync(join(root, brief))) throw new Error(`plan lane: brief missing: ${brief}`)
+  const briefPath = join(root, brief)
+  if (!existsSync(briefPath) || !statSync(briefPath).isFile()) throw new Error(`plan lane: brief missing (or not a file): ${brief}`)
   const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
   if (existsSync(join(root, phaseFile))) {
     throw new Error(
@@ -492,15 +495,25 @@ function planCodex(root, ids, argv) {
   const brief = repoRelative(root, fi >= 0 ? argv[fi + 1] : undefined, '--brief')
   const prompt = buildPlanPrompt(root, ids, { brief })
 
+  // --base may carry a phase file the primary checkout does not. Checked from the PRIMARY, before
+  // the worktree and its npm ci, so a taken number costs no install and leaves no orphan branch.
+  const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
+  if (spawnSync('git', ['cat-file', '-e', `${base}:${phaseFile}`], { cwd: root }).status === 0) {
+    process.stderr.write(
+      `roadmap codex: ${phaseFile} already exists on ${base} — this lane authors a newly reserved number. `
+        + 'Reserve a fresh one and re-run; editing an existing plan is a supervised act, not a detached one.\n',
+    )
+    return 1
+  }
+
   const made = ensureWorktree(root, { worktree, base, branch: `codex-plan/${ids.join('-')}`, install: true })
   if (made !== 0) return made
-  // The worktree comes from --base, which may carry a phase file the primary checkout does not:
-  // the planner's one-file target would then clobber a real plan and still audit as one commit.
-  const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
+  // Present here but NOT on base means a PREVIOUS run of this number authored it (refuseIfLive
+  // relaunches over a dead one) — a different cause needing the opposite remedy.
   if (existsSync(join(worktree, phaseFile))) {
     process.stderr.write(
-      `roadmap codex: ${phaseFile} already exists on ${base} (in ${worktree}) — this lane authors a newly reserved number. `
-        + 'Reserve a fresh one and re-run; editing an existing plan is a supervised act, not a detached one.\n',
+      `roadmap codex: ${phaseFile} already exists in ${worktree} but NOT on ${base} — a previous plan run of this number `
+        + 'committed it. Inspect or harvest that commit; this lane never authors over a predecessor\'s output.\n',
     )
     return 1
   }
@@ -588,6 +601,12 @@ export default async function run(argv) {
   if (laneFlags.length > 1) {
     process.stderr.write(
       `roadmap codex: ${laneFlags.map((l) => LANES[l].flag).join(' and ')} are alternatives, not a set — pass exactly one lane flag (or none for the run lane)\n`,
+    )
+    return 1
+  }
+  if (laneFlags.length === 1 && ['run', 'review', 'plan'].includes(sub) && laneFlags[0] !== sub) {
+    process.stderr.write(
+      `roadmap codex: the '${sub}' subcommand already selects its lane — ${LANES[laneFlags[0]].flag} contradicts it (lane flags select a lane for 'status' only)\n`,
     )
     return 1
   }

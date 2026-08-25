@@ -1100,6 +1100,54 @@ test('plan: a phase file present on --base but not on the primary is still refus
   const r = spawnSync('node', [BIN, 'codex', 'plan', '117', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
   assert.notEqual(r.status, 0, 'the number is taken on the branch the planner will work from')
   assert.match(r.stderr, /already exists/, `the collision must be named; got: ${r.stderr}`)
+  // Not on base: the cause is a PREDECESSOR run's own output, and telling the operator to burn a
+  // fresh number would duplicate the plan instead of harvesting the commit that already has it.
+  assert.match(r.stderr, /previous plan run|harvest/, `the message must name the cause it can prove; got: ${r.stderr}`)
   assert.equal(readFileSync(planted, 'utf8'), 'export default { real: true }\n', 'the existing plan is untouched')
   assert.ok(!existsSync(join(root, '.building', 'codex-plan-117.json')), 'a refused launch must journal nothing')
+})
+
+test('repoRelative: an unnormalized relative escape is refused, and a legal ..-prefixed name is not', () => {
+  const root = tmpRepo()
+  const worktree = join(root, 'wt-plan-118')
+  const env = fakeLaunchEnv(root, worktree)
+
+  // `docs/../../out.md` never starts with '..' as written, but resolves outside the checkout —
+  // a raw startsWith test passes it straight through to a carry-in that writes outside the worktree.
+  const outside = join(dirname(root), 'codex-escape-brief.md')
+  writeFileSync(outside, '# outside\n')
+  cleanups.push(() => rmSync(outside, { force: true }))
+  mkdirSync(join(root, 'docs'), { recursive: true })
+  const sneaky = `docs/../../${'codex-escape-brief.md'}`
+  assert.ok(existsSync(join(root, sneaky)), 'precondition: the escaping path must actually resolve to a real file, or this proves nothing')
+  const esc = spawnSync('node', [BIN, 'codex', 'plan', '118', '--brief', sneaky, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(esc.status, 0, 'an unnormalized relative path that resolves outside the checkout must be refused')
+  assert.match(esc.stderr, /inside this checkout/, `got: ${esc.stderr}`)
+
+  // And the mirror: a file INSIDE whose name merely begins with two dots is legal.
+  const dotted = '..config.md'
+  writeFileSync(join(root, dotted), '# a legal name\n')
+  const ok = spawnSync('node', [BIN, 'codex', 'plan', '119', '--brief', dotted, '--worktree', join(root, 'wt-plan-119')], {
+    cwd: root,
+    encoding: 'utf8',
+    env: fakeLaunchEnv(root, join(root, 'wt-plan-119')),
+  })
+  assert.equal(ok.status, 0, `a path inside the checkout must not be refused for how its name is spelled; stderr: ${ok.stderr}`)
+})
+
+test('a lane flag contradicting its subcommand is refused, not ignored', () => {
+  const root = tmpRepo()
+  writePhase(root, 120)
+  const worktree = join(root, 'wt-contradict-120')
+  const env = fakeLaunchEnv(root, worktree)
+  // `review 120 --plan` asks for two different lanes. Silently launching a review is the same
+  // drop-contradictory-input class as the two-flag case.
+  const r = spawnSync('node', [BIN, 'codex', 'review', '120', '--plan', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 1, `got status ${r.status}: ${r.stderr}`)
+  assert.match(r.stderr, /contradicts/, `the refusal must name the contradiction; got: ${r.stderr}`)
+  assert.ok(!existsSync(join(root, '.building', 'codex-review-120.json')), 'a refused launch must journal nothing')
+
+  // The redundant-but-consistent form still works: the flag agrees with the subcommand.
+  const agree = spawnSync('node', [BIN, 'codex', 'review', '120', '--review', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(agree.status, 0, `a flag AGREEING with its subcommand is not a contradiction; stderr: ${agree.stderr}`)
 })
