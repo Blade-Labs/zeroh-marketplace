@@ -383,7 +383,12 @@ export function disposeWorktree(
   // file that does not exist (`rc/seed.txt` for `src/seed.txt`). Scalars trim at their own site.
   const quiet = (root, args) => {
     try {
-      return { ok: true, out: execFileSync('git', ['-C', root, ...args], { cwd: repoRoot, timeout: 60_000, encoding: 'utf8' }) }
+      // stderr PIPED, not inherited: execFileSync leaks a failing git's stderr to the parent by
+      // default, so the plain `worktree remove` probe below printed a real-looking
+      // `fatal: … contains modified or untracked files` on every SUCCESSFUL codex-lane disposal
+      // (measured end-to-end 2026-08-25). A refusal that did not happen is not a debugging
+      // interface — the text belongs in the returned `out`, which every caller already reads.
+      return { ok: true, out: execFileSync('git', ['-C', root, ...args], { cwd: repoRoot, timeout: 60_000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) }
     } catch (e) {
       return { ok: false, out: `${e.stdout ?? ''}${e.stderr ?? ''}`.trim() || e.message }
     }
