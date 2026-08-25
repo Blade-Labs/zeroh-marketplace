@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-08-25T00:00:00.000Z",
+  "cohorts": [
+    {
+      "taskCountBand": "4-6",
+      "surface": false,
+      "samples": 4,
+      "medianMinutes": 148.8,
+      "p80Minutes": 196.4,
+      "interruptedExcluded": 1
+    }
+  ],
+  "notes": [
+    "the surface axis is a HEURISTIC over each phase keyFiles (web/, office/, spa/ paths), not a declared field",
+    "1 phase(s) excluded from the samples and counted per cohort: a recorded halt, a missing timestamp, or an unreadable record",
+    "elapsed wall clock on a shared box is not effort - an interrupted phase is excluded rather than averaged in",
+    "0 sampled phase(s) carry NO halt evidence - a historical backfill derives its span from commits, which survive, while the executor beacons that would evidence a halt do not; those spans are elapsed wall clock no halt count could correct"
+  ]
+}
