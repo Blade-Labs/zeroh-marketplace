@@ -10,7 +10,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 9,
   name: 'POLYSEAT follow-up hardening — honest journals, gates, and eval identity',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'gpt-5.6-sol' },
   category: 'fix',
   kind: 'hardening',
