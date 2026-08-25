@@ -1245,3 +1245,125 @@ test('gate run --verify-complete — corrupt newest report names the report, not
   assert.equal(ok.code, 0, ok.stderr)
   assert.match(ok.stdout, /phase 1410 consistent with the latest green gate report/)
 })
+
+// ── --slots against a mode that cannot apply it ──────────────────────────────────────
+//
+// parseArgs accepts --slots beside --record-round and --verify-complete, but both of those
+// modes return from runGate before buildPlan ever constructs the filter. The operator asks for
+// a scoped action and silently gets the full-scope one. The dispatch must REFUSE instead, by
+// both flag names, before any gate report is read or written — a refusal that lands after
+// appendAgentRound has already mutated the evidence it was meant to protect.
+
+/** Every path under a phase's gate dir (recursive, sorted) + the bytes of each .json.
+ *  The listing catches a new run file or slot log; the bytes catch an in-place append. */
+function gateTreeSnapshot(root, phase) {
+  const dir = join(root, 'roadmap', '.gate', String(phase))
+  const walk = (d, prefix) => {
+    const out = []
+    for (const e of readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const rel = prefix ? `${prefix}/${e.name}` : e.name
+      if (e.isDirectory()) out.push(...walk(join(d, e.name), rel))
+      else out.push(rel)
+    }
+    return out
+  }
+  const listing = walk(dir, '')
+  const bytes = {}
+  for (const rel of listing) if (rel.endsWith('.json')) bytes[rel] = readFileSync(join(dir, ...rel.split('/')), 'utf8')
+  return { listing, bytes }
+}
+
+const CONFLICT_ROUND = JSON.stringify({ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: '0 findings' })
+// `roadmap --help`: 0 clean · 1 usage/config · 2 check-failed-or-refused. Two flags that cannot
+// be combined is a malformed INVOCATION, not a gate that ran and said no.
+const USAGE_EXIT = 1
+
+test('gate run refuses --slots with --record-round — both flags named, the report byte-identical', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1320, phaseObj({ phase: 1320 }))
+  repo.commit('feat: phase 1320 — code', { 'lib/conflict-a.ts': 'export const a = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1320']).code, 0, 'fixture: a well-formed report must exist to be spared')
+  const before = gateTreeSnapshot(repo.root, 1320)
+  assert.ok(before.listing.some((f) => /^run-\d+-.*\.json$/.test(f)), 'fixture: a run file is on disk')
+
+  const r = runGateCmd(repo.root, ['1320', '--slots', 'types', '--record-round', CONFLICT_ROUND])
+
+  assert.equal(
+    r.code,
+    USAGE_EXIT,
+    `two flags that cannot be combined is a USAGE error, so exit ${USAGE_EXIT} (0 clean / 1 usage / 2 refused); stdout: ${r.stdout} stderr: ${JSON.stringify(r.stderr)}`,
+  )
+  assert.ok(r.stderr.includes('--slots'), `the diagnostic names --slots; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(
+    r.stderr.includes('--record-round'),
+    `and the mode flag it cannot apply to — a generic "bad flags" line leaves the operator guessing which to drop; stderr: ${JSON.stringify(r.stderr)}`,
+  )
+  assert.equal(
+    /recorded round /.test(r.stdout),
+    false,
+    `a refused invocation never reports a recorded round; stdout: ${JSON.stringify(r.stdout)}`,
+  )
+
+  const after = gateTreeSnapshot(repo.root, 1320)
+  assert.deepEqual(after.listing, before.listing, 'no new run file and no new slot log — the refusal precedes every report read and write')
+  assert.deepEqual(
+    after.bytes,
+    before.bytes,
+    'the existing report is byte-identical: a refusal that fired AFTER appendAgentRound would already have mutated it',
+  )
+  assert.equal(latestReportOf(repo.root, 1320).agents.length, 0, 'and no round landed in it')
+
+  // Positive control — the same round WITHOUT --slots still appends and exits clean.
+  const ok = runGateCmd(repo.root, ['1320', '--record-round', CONFLICT_ROUND])
+  assert.equal(ok.code, 0, ok.stderr)
+  assert.equal(latestReportOf(repo.root, 1320).agents.length, 1, 'the unconflicted round lane is untouched by the new refusal')
+})
+
+test('gate run refuses --slots with --verify-complete — both flags named, no verdict and no refresh', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1420, phaseObj({ phase: 1420 }))
+  repo.commit('feat: phase 1420 — code', { 'lib/conflict-b.ts': 'export const b = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1420']).code, 0, 'fixture: a well-formed green report must exist')
+  const before = gateTreeSnapshot(repo.root, 1420)
+  assert.ok(before.listing.some((f) => /^run-\d+-.*\.json$/.test(f)), 'fixture: a run file is on disk')
+
+  const r = runGateCmd(repo.root, ['1420', '--slots', 'types', '--verify-complete'])
+
+  assert.equal(
+    r.code,
+    USAGE_EXIT,
+    `two flags that cannot be combined is a USAGE error, so exit ${USAGE_EXIT} (0 clean / 1 usage / 2 refused); stdout: ${r.stdout} stderr: ${JSON.stringify(r.stderr)}`,
+  )
+  assert.ok(r.stderr.includes('--slots'), `the diagnostic names --slots; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(
+    r.stderr.includes('--verify-complete'),
+    `and the mode flag it cannot apply to — a generic "bad flags" line leaves the operator guessing which to drop; stderr: ${JSON.stringify(r.stderr)}`,
+  )
+  assert.equal(
+    /consistent with the latest green gate report/.test(r.stdout),
+    false,
+    `a refused invocation must not deliver a consistency verdict the operator asked to scope; stdout: ${JSON.stringify(r.stdout)}`,
+  )
+
+  const after = gateTreeSnapshot(repo.root, 1420)
+  assert.deepEqual(after.listing, before.listing, 'no new run file and no new slot log — the refusal precedes every report read and write')
+  assert.deepEqual(after.bytes, before.bytes, 'and the existing report is byte-identical')
+
+  // Positive control — --verify-complete WITHOUT --slots behaves exactly as before.
+  const ok = runGateCmd(repo.root, ['1420', '--verify-complete'])
+  assert.equal(ok.code, 0, ok.stderr)
+  assert.match(ok.stdout, /phase 1420 consistent with the latest green gate report/, 'the unconflicted verify lane is untouched by the new refusal')
+})
+
+test('gate run --slots on the default execute path stays fully supported and stamps slotFilter', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1270, phaseObj({ phase: 1270 }))
+  repo.commit('feat: phase 1270 — code', { 'lib/conflict-c.ts': 'export const c = 1\n' })
+
+  const r = runGateCmd(repo.root, ['1270', '--slots', 'types'])
+
+  assert.equal(r.code, 0, `--slots alone is the mode that CAN apply it — refusing it would be over-refusal; stderr: ${r.stderr}`)
+  const rep = latestReportOf(repo.root, 1270)
+  assert.equal(rep.slotFilter, 'types', 'the filtered run is stamped as a subset projection')
+  assert.ok(rep.slots.some((s) => s.slot === 'types'), `the wanted slot actually ran; got ${rep.slots.map((s) => s.slot).join(', ')}`)
+})

@@ -473,6 +473,20 @@ export default async function run(argv) {
     return 1
   }
 
+  // --slots filters the slots buildPlan is about to EXECUTE. Both modes below return before
+  // buildPlan is ever reached, so the flag cannot narrow anything there — accepting it hands
+  // back a full-scope action to an operator who asked for a subset. Refused at the dispatch
+  // boundary, before any report is read or written.
+  const unfilterable = opts.recordRound != null ? '--record-round' : opts.verifyComplete ? '--verify-complete' : null
+  if (opts.slots && unfilterable) {
+    process.stderr.write(
+      `roadmap gate ${sub}: --slots ${opts.slots} cannot be combined with ${unfilterable} — ${unfilterable} reads and `
+        + 'writes the existing report and never executes slots, so there is nothing for --slots to filter. Drop --slots, '
+        + `or run \`roadmap gate run ${phaseNum} --slots ${opts.slots}\` on its own to execute that subset.\n`,
+    )
+    return 1
+  }
+
   if (sub === 'plan') {
     let built
     try {

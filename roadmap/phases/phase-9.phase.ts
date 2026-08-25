@@ -305,7 +305,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-25',
+      transparencyReport: {
+        whatWasDone:
+          'roadmap gate run now refuses --slots combined with --record-round or --verify-complete at the dispatch boundary, after phase-number validation and before any report is read or written. The refusal names both conflicting flags, explains that neither mode executes slots, points at the standalone filtered run, and exits 1 (usage). The default execute path keeps --slots exactly as it was.',
+        how:
+          'test-engineer wrote both permutations plus an over-refusal control, RED at 56 pass / 2 fail on the defect verbatim: with --slots types present, --record-round still printed `recorded round 1 (code-reviewer: clean)` and --verify-complete still printed `phase 1420 consistent with the latest green gate report` — the flag silently ignored and the full-scope action taken. The byte-snapshot assertion is the load-bearing one for --record-round (a guard placed after appendAgentRound would still have mutated the report); test-engineer falsified it separately by stripping the earlier asserts and confirming it fails on the appended agents[] entry, so it is not decorative. Exit 1 rather than 2 follows the CLI vocabulary in roadmap --help: 0 clean / 1 usage-config / 2 check-failed-or-refused, and two flags that cannot be combined is a usage error. GUARD MUTATION PROOF, three results: (1) planted violation disabling the guard produced `not ok 56` and `not ok 57`, 56 pass / 2 fail; (2) planted violation narrowing it to --record-round only produced `not ok 57`, 57 pass / 1 fail, so the verify-complete arm is independently pinned; (3) OVER-refusal violation rejecting --slots on the execute path too produced 53 pass / 5 fail, reddening `not ok 24/25/42/43/58` — the ordinary filtered run is genuinely protected against a fix that refuses too much. Restored and re-verified: gate.test.mjs 58/58.',
+        compromises: 'None — the refusal lands at the dispatch boundary rather than being softened into a warning.',
+        skipped: 'None — both step verifies ran and passed.',
+        hardcoded: 'None — the flag names come from the same literals parseArgs reads.',
+        limitations:
+          'parseArgs still ACCEPTS --slots in every mode; the conflict is caught one level up at dispatch, which is where the test contract pins it and where the phase number is already validated for the diagnostic. A future third read-only mode would need adding to the unfilterable ternary — the guard enumerates the two modes that exist rather than deriving them.',
+      },
     },
     {
       id: '9.7',
