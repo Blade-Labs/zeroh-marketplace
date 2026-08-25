@@ -28,6 +28,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DRIVERS } from '../lib/drivers.mjs'
+import { findJournal as mod_findJournal } from './codex.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -1349,4 +1350,47 @@ test('refuseIfLive — an UNREADABLE arc journal covering these ids refuses, and
     !/same-lane journal/.test(r.stderr),
     `no exact same-lane journal exists here, so calling it one names a file the operator will not find; got: ${r.stderr}`,
   )
+})
+
+test('refuseIfLive — a journal parsing to a TRUTHY non-object never reads as a dead run', () => {
+  // Falsiness is the wrong test. `[]`, `"text"`, `42` and `true` all parse and are truthy, so a
+  // truthiness-only guard hands them to the launch path as a journal — where `j.pgid` is
+  // undefined, which reads as "previous run is dead" and RELAUNCHES over a file nobody could
+  // read. That is precisely the "cannot be shown to be dead" hazard this guard exists to stop.
+  for (const [label, body] of [['an array', '[]'], ['a string', '"text"'], ['a number', '42'], ['a boolean', 'true']]) {
+    const root = tmpRepo()
+    const brief = writeBrief(root)
+    const worktree = join(root, `wt-plan-950-${label.replace(/\W+/g, '')}`)
+    const env = fakeLaunchEnv(root, worktree)
+    const jPath = join(root, '.building', 'codex-plan-950.json')
+    writeFileSync(jPath, `${body}\n`)
+
+    const r = spawnSync('node', [BIN, 'codex', 'plan', '950', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+    assert.ok(
+      !existsSync(join(root, '.building', 'codex-plan-950-prompt.txt')),
+      `${label}: a journal that cannot be read must never be launched over — the prompt file proves launch() ran; stderr: ${r.stderr}`,
+    )
+    assert.notEqual(r.status, 0, `${label}: and the launch is refused; stderr: ${r.stderr}`)
+    assert.ok(r.stderr.includes('JournalUnreadableError'), `${label}: with the file's own named error; got: ${r.stderr}`)
+    assert.ok(r.stderr.includes(jPath), `${label}: naming the file; got: ${r.stderr}`)
+    assert.ok(
+      !/pgid undefined/.test(r.stderr),
+      `${label}: it must never be narrated as a dead run with no pgid; got: ${r.stderr}`,
+    )
+  }
+})
+
+test('findJournal — an OBJECT still parses through; only non-objects are unreadable', () => {
+  // The boundary must not over-refuse: an object missing `phases` is a different question (the
+  // coverage check answers it), and narrowing to "must have phases" here would change what the
+  // scan means rather than what readability means.
+  const root = tmpRepo()
+  writeJournal(root, [960])
+  assert.ok(mod_findJournal(root, [960], 'run'), 'a well-formed journal object still resolves')
+
+  writeFileSync(join(root, '.building', 'codex-961.json'), '{}\n')
+  const empty = mod_findJournal(root, [961], 'run')
+  assert.ok(empty, 'an OBJECT with no phases is readable — the exact-name branch still answers with it')
+  assert.deepEqual(empty.journal, {}, 'and it comes back verbatim, not coerced')
 })

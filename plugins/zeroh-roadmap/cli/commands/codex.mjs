@@ -120,10 +120,12 @@ export function findJournal(root, ids, lane = 'run') {
       if (candidate) failures.push({ path: p, message: e.message })
       return null
     }
-    // A file parsing to a FALSY literal (null, 0, "", false) carries no pgid and no phases, so
-    // it answers nothing this lookup asks — but it is on disk, and returning null for it would
-    // report an existing journal as an inline session with none.
-    if (!value) {
+    // A journal is an OBJECT. Anything else that parses — null, a bare number or string, an
+    // array — carries no pgid and no phases, so it answers nothing this lookup asks while still
+    // sitting on disk. Falsiness is not the test: `[]` and `"text"` are truthy and would reach
+    // the launch guard as a journal with `pgid undefined`, which reads as a dead run and
+    // relaunches over a file nobody could read.
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
       if (candidate) failures.push({ path: p, message: `parsed to ${JSON.stringify(value)} — a journal must be an object` })
       return null
     }
