@@ -102,7 +102,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/lib/capacity.mjs', 'plugins/zeroh-roadmap/cli/lib/capacity.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'cli/lib/capacity.mjs exports CapacityVerdictShape, DEFAULT_CAPACITY, defaultProbes (live /proc/meminfo, /proc/loadavg + availableParallelism, systemctl running capbuild-* units, live executor arms via liveArm over <toplevel>/.building) and probeCapacity(config, probes) with the admission math from the plan; degraded probes drop OUT of the min (never counted as zero slots), fail-open per-signal.',
+        how:
+          'TDD: test-engineer wrote 9 RED tests from the API contract only (module absent — ERR_MODULE_NOT_FOUND quoted), including exact-boundary pairs, underflow clamps, per-signal fail-open (degraded memory beside an at-cap executor signal still refuses), busy-as-sum, partial-config precedence, a shape-refusal case, and a live-box defaultProbes smoke; the test author mutation-validated the fixtures against a scratchpad reference (10/10 seeded mutants killed). Implementation went 9/9 first run.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None — the four policy bounds live in DEFAULT_CAPACITY (config-overridable per box), grounded in the recorded capbuild MemoryMax contract.',
+        limitations:
+          'liveExecutorArms counts arms in the CURRENT toplevel only — cross-worktree arms on the same box are invisible to the default probe (the capbuild-units signal still sees their gate load); a cross-worktree registry is a nameable follow-up if multi-arc-per-box becomes routine.',
+      },
       interfaces: { consumes: [], produces: ['probeCapacity (cli/lib/capacity.mjs)', 'CapacityVerdictShape (cli/lib/capacity.mjs)'] },
     },
     {
