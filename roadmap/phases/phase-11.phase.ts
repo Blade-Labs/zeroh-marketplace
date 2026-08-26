@@ -13,7 +13,99 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 11,
   name: 'Dynamic executor-capacity admission — roadmap capacity verb, spawn-site wiring, executionMode removal',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-08-26',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1410,
+      total: 1410,
+      notes:
+        'Authoritative full gate: roadmap/.gate/11/ run of 2026-08-26T16:38Z — GREEN, 1,410/1,410, run on the FINAL tree after the round-3 fixes (two earlier full runs: the first REDDED on the v0.33.0 manifest drift + a history-comment, fixed as gate R1-mechanical; the second, 1,405/1,405, predated the agent-round fixes and was superseded). 39 tests added over the 1,371 baseline. lint/types/build/integration declared-none; lint-diff and history-comments exit 0.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — the wired subprocess suites inside the unit tier (capacity, arc-next, arm-disarm, status) drive the real CLI end to end against tmp git repos.',
+    },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none in gateCommands — no rendered surface.' },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Three fixes (its own commit 4d84957, correct grammar this time): the SEAM_ENV constant became the one home for the env name, consumerCapacityConfig() extracted for the two advisory readers with the verb deliberately excluded (fail-loud, documented), and the two arc-next gate branches collapsed behind an override flag (equivalence checked, pinned by N25-N29). Handed three leads to round 1.',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Five findings, all fixed: (MEDIUM) seamProbes accepted a PARTIAL payload and silently invented zero-busy signals — a permissive verdict that parsed cleanly (reviewer reproduced it); now a strict five-reading shape, missing keys NAMED in a SeamError through every consumer. (MEDIUM) liveExecutorArms counted a completed-but-undisarmed arm as busy — three leftovers would fail arc next CLOSED forever (reproduced); now filtered through the staleArms oracle. (LOW×3) harness surfaces spawnSync errors; the arm advisory got test-pinned and a broken seam is NAMED instead of silently blinding arm; the capacity verb seam refusal aligned to exit 1 per the bin contract.',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Four LOW findings, fixed: three durable-record drifts the R1 code fixes left behind were trued in place (11.1 staleArms filter named, 11.3 exit-1 partial-payload contract with provenance, 11.5 advisory pin recorded), and the one asymmetry R1 itself created — a SeamError silently swallowed under --ignore-capacity — now prints a named note while run-phase stands. All R1 fixes verified HOLD: every consumer driven live against the partial-seam repro, two scratch mutations killed.',
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Two LOW findings, fixed: N30 pins the override-seam named note (exit 0, derivation byte-intact; disabling the branch reds it — mutation-checked), and task 11.4 limitations trued with the R2 override path. All R2 fixes verified HOLD.',
+    },
+    {
+      round: 4,
+      agent: 'code-reviewer',
+      verdict: 'clean',
+      summary:
+        'Zero findings. N30 mutation-executed independently (short-circuited branch → not ok; reverted with a clean diff); the 11.4 record verified accurate clause-by-clause against arc.mjs at HEAD; phase validate OK; capacity 10/10 and arm-disarm 11/11 green.',
+    },
+  ],
+  metrics: {
+    commits: 12,
+    linesAdded: 1677,
+    linesRemoved: 44,
+    filesChanged: 24,
+    testsAtStart: 1371,
+    testsAtEnd: 1410,
+    testsAdded: 39,
+    startedAt: '2026-08-26T14:06:28Z',
+    completedAt: '2026-08-26T16:56:00Z',
+    haltCount: 0,
+  },
+  compromises:
+    'None. The one plan-time-unmade decision surfaced by a tester (a bare .int() admitting a zero bound that would divide the admission math by zero) had one correct answer under PRIME RULE 1 (ambiguity → throw: .int().positive() + a boundary case), not a fork. The curate refusal is a deliberate non-rewrite: two phase-12 planning commits (user-directed mid-phase, this session) interleave the range and the foreign-detector correctly refuses to squash across them; history stays granular.',
+  executionResult: {
+    phase: 11,
+    status: 'done',
+    driver: { model: 'claude-fable-5', lane: 'session' },
+    roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'native' },
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'native' },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'native' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'Capacity policy defaults are grounded in THIS box (capbuild 6G, 31G, ~6 sessions); other consumer repos should set roadmap.config.json capacity to their own bounds — the live probes adapt, the policy does not.',
+      'status --json with a malformed seam exits 1 named but is untested at that tier (the seam contract is pinned at the capacity-command, lib, arc-next and arm tiers).',
+      'Under --ignore-capacity, a NON-SeamError throw from the capacity path stays silent — deliberate override semantics (R4 INFO), the one path with no operator-visible trace.',
+      'staleArms treats only phase-complete/terminal-phase/unbound as stale, so an arm whose last beacon is result-returned on a not-yet-done phase still counts busy — fail-closed conservatism consistent with one staleness oracle (R2 INFO).',
+      'liveExecutorArms sees the CURRENT toplevel only — cross-worktree arms on the same box are invisible to the default probe; a cross-worktree registry is the nameable follow-up if multi-arc-per-box becomes routine.',
+    ],
+    hardStops: [],
+    gateRounds: 5,
+  },
   plannedBy: { model: 'claude-fable-5' },
   category: 'feature',
   kind: 'logic',
