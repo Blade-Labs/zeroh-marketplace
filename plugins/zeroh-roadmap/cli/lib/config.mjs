@@ -129,6 +129,17 @@ const ExecShape = z.strictObject({
   longRunWrapper: z.string().nullable().optional(),
 })
 
+/** Per-box executor-admission policy bounds (phase 11). ALL optional — an absent field keeps
+ *  the DEFAULT_CAPACITY value in cli/lib/capacity.mjs (no shape-level defaults, so the parse
+ *  round-trips byte-faithful and never overwrites the lib defaults with invented values).
+ *  Positive integers only: a zero bound would divide the admission math by zero. */
+const CapacityConfigShape = z.strictObject({
+  memPerExecutorMb: z.number().int().positive().optional(),
+  minFreeMemMb: z.number().int().positive().optional(),
+  loadPerExecutor: z.number().int().positive().optional(),
+  maxExecutors: z.number().int().positive().optional(),
+})
+
 /** The full roadmap.config.json shape (ROADCODE-DESIGN.md §1, configVersion 1). */
 export const RoadmapConfigShape = z.strictObject({
   $schema: z.string().optional(),
@@ -159,6 +170,7 @@ export const RoadmapConfigShape = z.strictObject({
   reviewFocus: z.array(ReviewFocusShape).optional(),
   testConventions: z.array(z.string()).optional(),
   exec: ExecShape.optional(),
+  capacity: CapacityConfigShape.optional(),
 })
 
 /** True iff `<baseRef>:roadmap/roadmap.config.json` exists (a pre-cutover branch). */

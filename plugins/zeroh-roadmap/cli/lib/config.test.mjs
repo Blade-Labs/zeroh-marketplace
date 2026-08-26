@@ -515,3 +515,120 @@ test('executionIsolation: an unknown value fails the parse loud, naming the fiel
   const e = loadErr(repo)
   assert.ok(/executionIsolation/.test(String(e.message)), `the refusal names the field; got: ${e.message}`)
 })
+
+// ── capacity (phase 11.2) — the OPTIONAL per-box executor-admission policy ──────────────────
+// The block only sets policy bounds; capacity.mjs spreads it over DEFAULT_CAPACITY, so every
+// field is optional and an absent field must stay ABSENT (a shape-level default would overwrite
+// the module default and break the byte-faithful round-trip test 1 relies on).
+
+test('capacity: a FULL block parses and round-trips all four values deep-equal', () => {
+  const repo = newRepo()
+  const capacity = {
+    memPerExecutorMb: 6144,
+    minFreeMemMb: 4096,
+    loadPerExecutor: 2,
+    maxExecutors: 3,
+  }
+  const input = validConfig({ capacity })
+  writeConfig(repo, input)
+  const cfg = loadConfig(repo)
+  assert.deepEqual(cfg, input, 'the whole config still round-trips byte-faithful with capacity bound')
+  assert.deepEqual(
+    cfg.capacity,
+    capacity,
+    'all four policy fields survive the parse with their exact values (no coercion, no drop)',
+  )
+})
+
+test('capacity: a PARTIAL block round-trips EXACTLY the keys given (no invented per-field defaults)', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ capacity: { maxExecutors: 1 } }))
+  const cfg = loadConfig(repo)
+  assert.deepEqual(
+    cfg.capacity,
+    { maxExecutors: 1 },
+    'every other field stays ABSENT — the shape must not materialize defaults that would ' +
+      'shadow capacity.mjs DEFAULT_CAPACITY in the { ...DEFAULT_CAPACITY, ...config } spread',
+  )
+  assert.deepEqual(Object.keys(cfg.capacity), ['maxExecutors'])
+})
+
+test('capacity: an EMPTY block {} parses (present-but-blank policy = every default stands)', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ capacity: {} }))
+  const cfg = loadConfig(repo)
+  assert.deepEqual(cfg.capacity, {}, 'a blank block is legal and stays blank')
+})
+
+test('capacity: absent → stays absent; the key is never materialized (parses exactly as today)', () => {
+  const repo = newRepo()
+  const input = validConfig() // no capacity block
+  writeConfig(repo, input)
+  const cfg = loadConfig(repo)
+  assert.deepEqual(cfg, input, 'a config with no capacity block parses exactly as it does today')
+  assert.equal(cfg.capacity, undefined)
+  assert.ok(
+    !('capacity' in cfg),
+    'the optional block must not appear as a key at all (an invented {} default would ' +
+      'break round-trip identity for every consumer that never opted in)',
+  )
+})
+
+test('capacity: an unknown key INSIDE the block rejects, scoped to capacity (strictObject, not passthrough)', () => {
+  const repo = newRepo()
+  writeConfig(
+    repo,
+    validConfig({
+      // near-miss typo of the real field — a passthrough/loose block would silently accept it
+      // and the box would run on DEFAULT_CAPACITY.maxExecutors while the operator believed 6.
+      capacity: { memPerExecutorMb: 6144, maxExecutor: 6 },
+    }),
+  )
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^capacity:\s/.test(l) && /maxExecutor/.test(l)),
+    `expected the unrecognized-key issue scoped to the block ("capacity: Unrecognized key: ` +
+      `\\"maxExecutor\\"") — NOT a root-level line rejecting the whole capacity key, and not ` +
+      `silent acceptance; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
+test('capacity: a non-integer field rejects with the field named (integer contract)', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ capacity: { memPerExecutorMb: 6144.5 } }))
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^capacity\.memPerExecutorMb:\s/.test(l)),
+    `expected a "capacity.memPerExecutorMb: <message>" dotted-path line; got:\n${err.messageLines.join('\n')}`,
+  )
+
+  const repo2 = newRepo()
+  writeConfig(repo2, validConfig({ capacity: { maxExecutors: '3' } })) // string, not int
+  const err2 = loadErr(repo2)
+  assert.ok(err2 instanceof ConfigError)
+  assert.ok(
+    err2.messageLines.some((l) => /^capacity\.maxExecutors:\s/.test(l)),
+    `expected a "capacity.maxExecutors: <message>" dotted-path line (a stringly-typed bound ` +
+      `must not slip through); got:\n${err2.messageLines.join('\n')}`,
+  )
+})
+
+test('capacity: zero rejects, one parses (positive-integer boundary — a zero bound would divide the admission math by zero)', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ capacity: { memPerExecutorMb: 0 } }))
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.ok(
+    err.messageLines.some((l) => /^capacity\.memPerExecutorMb:\s/.test(l)),
+    `expected a "capacity.memPerExecutorMb: <message>" rejection for 0; got:\n${err.messageLines.join('\n')}`,
+  )
+
+  const repo2 = newRepo()
+  writeConfig(repo2, validConfig({ capacity: { memPerExecutorMb: 1 } }))
+  const cfg = loadConfig(join(repo2, 'roadmap'))
+  assert.equal(cfg.capacity.memPerExecutorMb, 1)
+})

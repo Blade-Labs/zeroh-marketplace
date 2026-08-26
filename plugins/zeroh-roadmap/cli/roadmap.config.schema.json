@@ -420,6 +420,32 @@
         }
       },
       "additionalProperties": false
+    },
+    "capacity": {
+      "type": "object",
+      "properties": {
+        "memPerExecutorMb": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "minFreeMemMb": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "loadPerExecutor": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxExecutors": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [

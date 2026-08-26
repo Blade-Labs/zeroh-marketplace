@@ -143,7 +143,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/roadmap.config.schema.json',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'RoadmapConfigShape gained optional `capacity` (strictObject, all four fields optional positive integers, NO shape-level defaults so the parse round-trips byte-faithful and never shadows DEFAULT_CAPACITY); roadmap.config.schema.json regenerated via the generator (+26 lines); the drift subtest covers it.',
+        how:
+          'TDD: test-engineer added 6 RED cases (5 red + 1 deliberate regression guard green-today; root-level "Unrecognized key: capacity" failures quoted). The tester flagged that a bare .int() would admit 0 and divide the admission math by zero — resolved as .int().positive() (ambiguity → throw; one correct answer, no fork) with an added zero-rejects/one-parses boundary case. Suite 38/38 GREEN including drift.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The boundary case was authored by the executor during the green step (the tester offered it conditional on the positivity ruling); RED discipline was served by the original 5.',
+      },
       interfaces: { consumes: [], produces: ['config.capacity (CapacityConfigShape, cli/lib/config.mjs)'] },
     },
     {
