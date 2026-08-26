@@ -49,6 +49,10 @@ export default defineBacklog([
   // ── Standalone, post-arc (dependsOn 4: manifest generator + ratchet) ──────
   // ── Post-arc spike (dependsOn 1: peval pipe; LOW — after the fenced 6) ────
   {
+    phase: 11,
+    name: 'Dynamic executor-capacity admission — roadmap capacity verb, spawn-site wiring, executionMode removal',
+  },
+  {
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
