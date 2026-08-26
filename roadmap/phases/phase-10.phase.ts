@@ -265,9 +265,21 @@ export default definePhase({
         'plugins/zeroh-roadmap/skills/review-phase/SKILL.md',
       ],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
       dependsOn: ['10.3'],
       interfaces: { consumes: ['ArcShape.rejectedAlternatives (templates/schema.ts)'], produces: [] },
+      transparencyReport: {
+        whatWasDone:
+          'rejectedAlternatives is now written by the plan-arc interview (a rejecting ruling appends an entry; the LOCKED DECISIONS line cites it) and both design-gate Confirm paragraphs (each losing arm recorded in the designRefs write), and read by the architect’s prior-art search, plan-phase Step 0’s member-phase probe, and review-phase H2 (implementing a rejected option = HIGH finding).',
+        how:
+          'Five in-place additive edits (1-2 lines each, hotfix class per GAUNTLET lesson 2) at the plan’s named anchors; all five step verifies green (design-gate carries 3 occurrences ≥ the required 2). Consumed interface ArcShape.rejectedAlternatives grep-verified present before editing.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The H2 resurrection red-line is reviewer judgment aided by a grep target — semantic matching is not mechanizable (named residual from the architect verdict, recorded in phase notes).',
+      },
     },
     {
       id: '10.6',

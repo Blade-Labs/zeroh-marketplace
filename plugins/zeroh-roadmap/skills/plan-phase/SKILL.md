@@ -60,7 +60,9 @@ phase cites the parent arc's interview instead of re-interviewing.
 Genuinely user-owned forks are asked as AskUserQuestion options, never open-ended.
 **Duplicate probe, every request, before claiming:** run
 `grep -rln -F '<central symbol or topic>' roadmap/phases roadmap/backlog.ts` (fixed strings,
-bounded paths) and skim `roadmap status`. Existing coverage found: do NOT author a duplicate and
+bounded paths) and skim `roadmap status`. A member phase of an arc ALSO runs
+`grep -F 'rejectedAlternatives'` on the parent `.arc.ts` and reads the hits before authoring —
+never re-propose a listed option. Existing coverage found: do NOT author a duplicate and
 do NOT queue anything; hand the queue/priority ruling to the user with options. If the tracked
 artifact IS the right home, improve IT instead of planning anew: re-run its `assumptions[].verify`
 against the current tree, re-check every anchor, hunt contradictions between carried-forward notes

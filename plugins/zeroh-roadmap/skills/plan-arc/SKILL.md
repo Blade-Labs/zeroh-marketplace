@@ -43,7 +43,8 @@ drift). Decide WITH the user: `planes`, `singleSeams`, `honestyRails`,
 **Interview first (before criteria or the gate).** One question at a time, prioritizing
 answers that change architecture or scope; record each as a ONE-LINE dated ruling in the
 arc's **LOCKED DECISIONS** comment block (user intent here; the Step-1b architect owns
-TECHNICAL decisions). Narrative rationale - research digests, coverage/pricing findings -
+TECHNICAL decisions). A ruling that REJECTS an option ALSO appends a `rejectedAlternatives`
+entry to the arc; the comment line cites the entry, never restates the why (one home per fact). Narrative rationale - research digests, coverage/pricing findings -
 lives ONLY in the execution prompt (Step 4); the arc header comment, phase `source`
 fields, and designRef summaries CITE it, never restate it. Skip ONLY by recording
 `interview: skipped - <why>` (design pre-ratified / mechanical).

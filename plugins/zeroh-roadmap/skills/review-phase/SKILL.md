@@ -67,7 +67,8 @@ A plan can be flawless per-task and still be the wrong, half, or too-much thing.
 - **H1 Right problem, worth doing now?** Superseded by landed work or a live-state change
   (the "stale OPERATOR-PENDING actually live" class)? Check `git log` since authoring +
   `roadmap status` before trusting the phase's framing.
-- **H2 Right shape?** Against CONFIRMED `designRefs` + locked decisions (drift = finding). Does
+- **H2 Right shape?** Against CONFIRMED `designRefs` + locked decisions + `rejectedAlternatives`
+  (drift = finding; a task implementing a rejected option is a HIGH finding). Does
   it EXTEND a declared seam or quietly fork one (`singleSeams`)? Right altitude - vertical now,
   generalization as a named follow-up (consumer CLAUDE.md §Generalize-forward)?
 - **H3 Whole?** Build the **promise ledger** per `references/plan-adversary.md` §D: every docblock/
