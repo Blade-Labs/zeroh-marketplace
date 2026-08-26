@@ -56,6 +56,11 @@ export default defineBacklog([
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
+  // ── DEFERRED (standing user hold 2026-08-26): do NOT execute until the user asks ──
+  {
+    phase: 12,
+    name: 'DEFERRED — closed-loop trigger design: scheduled detection that authors draft fix proposals',
+  },
   // Flat form (back-compat):
   // { phase: 1, name: 'Example phase name' },
   //
