@@ -41,7 +41,10 @@ The tell on 2026-08-17 was a stale line number in a test failure not matching th
 and half that session went into re-deriving a fix already sitting in the tree. Then, one task =
 one commit:
 1. `roadmap beacon task-start --phase <N>` (the typed writer — never a hand-appended JSONL line).
-2. Implement `steps` (TDD via `test-engineer` for `testMode` tdd/e2e). A NEW guard (a check that
+2. A task declaring `interfaces.consumes` first `grep -F`s each consumed symbol against the
+   worktree; a miss = the sibling's `produces` never landed → return `status: "escalated"`
+   naming the symbol, NEVER re-derive it locally. Then implement `steps` (TDD via
+   `test-engineer` for `testMode` tdd/e2e). A NEW guard (a check that
    reds when a claim about the TREE goes false) is mutation-proven before its commit per
    `skills/do-phase/references/guard-mutation-proof.md`, its three results quoted in the report.
 3. Verify — `roadmap gate run <N> --slots types` + the phase-relevant scoped tests.

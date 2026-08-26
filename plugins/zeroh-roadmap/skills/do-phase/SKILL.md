@@ -50,7 +50,9 @@ status field.
 ## The per-task loop (one task = one commit)
 
 For each task in order:
-1. **Implement `steps`.** testMode semantics:
+1. **Implement `steps`.** First, a task declaring `interfaces.consumes` `grep -F`s each consumed
+   symbol against the tree; a miss STOPS and escalates with the symbol name (escalating IS
+   success, the `assumptions[]` posture). testMode semantics:
    `skills/using-zeroh-roadmap/references/test-worthiness.md`. An external dep/asset is verified
    against its planned license per
    `skills/using-zeroh-roadmap/references/external-assets-licensing.md` BEFORE it is

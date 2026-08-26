@@ -332,7 +332,18 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/agents/phase-executor.md', 'plugins/zeroh-roadmap/skills/do-phase/SKILL.md'],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'The executor task loop (agent card item 2) and do-phase per-task loop step 1 now require: a task declaring interfaces.consumes grep -F-verifies each consumed symbol before implementing; a miss escalates naming the symbol (arc-mode status: "escalated"), never a local re-derivation.',
+        how: 'Two in-place additive edits, 4 lines + 3 lines; both verifies green. do-phase flow measure re-run after the edits: 5947 tokens / 3 files (no budget assertion exists for this flow; recorded as the honest footprint).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The AC said ≤4 lines total; the two edits total 7 physical lines at the repo wrap width while staying two sentences — substance is at the promised size, line count is wrap arithmetic.',
+      },
     },
     {
       id: '10.8',
