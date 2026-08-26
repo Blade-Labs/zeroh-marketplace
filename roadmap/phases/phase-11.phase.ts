@@ -106,7 +106,7 @@ export default definePhase({
       doneDate: '2026-08-26',
       transparencyReport: {
         whatWasDone:
-          'cli/lib/capacity.mjs exports CapacityVerdictShape, DEFAULT_CAPACITY, defaultProbes (live /proc/meminfo, /proc/loadavg + availableParallelism, systemctl running capbuild-* units, live executor arms via liveArm over <toplevel>/.building) and probeCapacity(config, probes) with the admission math from the plan; degraded probes drop OUT of the min (never counted as zero slots), fail-open per-signal.',
+          'cli/lib/capacity.mjs exports CapacityVerdictShape, DEFAULT_CAPACITY, defaultProbes (live /proc/meminfo, /proc/loadavg + availableParallelism, systemctl running capbuild-* units, live executor arms via liveArm over <toplevel>/.building MINUS the staleArms oracle set — gate R1 added the filter so a completed-but-undisarmed leftover never fails arc next CLOSED; oracle unreadable ⇒ fall back to liveArm alone) and probeCapacity(config, probes) with the admission math from the plan; degraded probes drop OUT of the min (never counted as zero slots), fail-open per-signal.',
         how:
           'TDD: test-engineer wrote 9 RED tests from the API contract only (module absent — ERR_MODULE_NOT_FOUND quoted), including exact-boundary pairs, underflow clamps, per-signal fail-open (degraded memory beside an at-cap executor signal still refuses), busy-as-sum, partial-config precedence, a shape-refusal case, and a live-box defaultProbes smoke; the test author mutation-validated the fixtures against a scratchpad reference (10/10 seeded mutants killed). Implementation went 9/9 first run.',
         compromises: 'None',
@@ -193,7 +193,7 @@ export default definePhase({
       doneDate: '2026-08-26',
       transparencyReport: {
         whatWasDone:
-          'roadmap capacity landed: human verdict line + per-signal table + reasons with exit 0/3 (3 = at capacity, the scriptable gate), --json = the CapacityVerdictShape object verbatim at exit 0; COMMANDS registry row added and the bin header exit-code contract updated to name capacity’s exit-3 meaning (the tester’s honesty note). Deterministic seam: env ZEROH_ROADMAP_CAPACITY_PROBES replaces ALL probes with fixed values; malformed seam JSON is a named exit-2 refusal, never a silent live fallback.',
+          'roadmap capacity landed: human verdict line + per-signal table + reasons with exit 0/3 (3 = at capacity, the scriptable gate), --json = the CapacityVerdictShape object verbatim at exit 0; COMMANDS registry row added and the bin header exit-code contract updated to name capacity’s exit-3 meaning (the tester’s honesty note). Deterministic seam: env ZEROH_ROADMAP_CAPACITY_PROBES replaces ALL probes with fixed values; a malformed OR PARTIAL seam payload is a named exit-1 configuration refusal (task-time build used exit 2 and accepted partial payloads; gate R1 widened validation to all five readings and aligned the code to the bin contract), never a silent live fallback.',
         how:
           'TDD: test-engineer wrote 10 RED wired subprocess cases (unknown-command failures quoted; 11/11 seeded mutants killed against a scratch reference, including partial-seam leaks and narration bleed into --json stdout). Implementation went 10/10 first run; the plan’s registry verify (extracted verbatim at plan time) also green. Consumed interfaces grep-verified before building (probeCapacity, CapacityVerdictShape in cli/lib/capacity.mjs).',
         compromises: 'None',
@@ -285,7 +285,7 @@ export default definePhase({
         skipped: 'None',
         hardcoded: 'None',
         limitations:
-          'The arm advisory is grep-verified per the plan, not test-pinned (arm-disarm suite untouched, still 9/9); a malformed seam on status --json exits 1 named (untested — the seam contract is pinned at the capacity-command tier).',
+          'The arm advisory was grep-verified only at task time; gate R1 test-pinned it (arm-disarm cases 10-11: starved prints, clear silent, broken seam NAMED, arm exit 0 — suite 11/11). Still untested: a malformed seam on status --json exits 1 named (the seam contract is pinned at the capacity-command and lib tiers).',
       },
       dependsOn: ['11.1'],
       interfaces: { consumes: ['probeCapacity (cli/lib/capacity.mjs)', 'CapacityVerdictShape (cli/lib/capacity.mjs)'], produces: [] },

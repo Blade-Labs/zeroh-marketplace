@@ -54,8 +54,10 @@ async function arcNext(rest) {
   if (pos.action === 'run-phase') {
     // --ignore-capacity still PROBES: the override's audit note has to name what it overrode.
     const override = rest.includes('--ignore-capacity')
+    let SeamErrorClass
     try {
       const { probeCapacity, defaultProbes, seamProbes, SeamError, SEAM_ENV } = await import('../lib/capacity.mjs')
+      SeamErrorClass = SeamError
       let verdict
       try {
         verdict = probeCapacity(cfg.capacity, seamProbes() ?? defaultProbes)
@@ -80,9 +82,12 @@ async function arcNext(rest) {
         }
       }
     } catch (e) {
-      // The override asked to skip the gate, so a failing check changes nothing there.
+      // The override asked to skip the gate, so a failing check changes nothing — but a broken
+      // seam is still the OPERATOR's knob and gets NAMED (never silently advisory-blind).
       if (!override)
         process.stderr.write(`arc next: capacity check unreadable (${e?.message ?? e}) — fail-open, run-phase stands\n`)
+      else if (SeamErrorClass && e instanceof SeamErrorClass)
+        process.stderr.write(`arc next: ${e.message} (override active — run-phase stands)\n`)
     }
   }
   process.stdout.write(JSON.stringify(pos, null, json ? 0 : 2) + '\n')
