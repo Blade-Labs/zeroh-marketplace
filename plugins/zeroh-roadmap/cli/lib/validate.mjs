@@ -418,13 +418,24 @@ function arcImmutabilityChecks(arc, content, arcFile) {
   // Collected, never early-returned: the append-only check below must fire even when the
   // acceptanceCriteria branch would have short-circuited (unchanged AC, or a fresh ratification).
   const out = []
-  const curRej = countTopLevelElements(extractKeyBlock(content, 'rejectedAlternatives'))
-  const headRej = countTopLevelElements(extractKeyBlock(headContent, 'rejectedAlternatives'))
-  if (curRej < headRej) {
+  // Append-only means every HEAD entry SURVIVES verbatim (whitespace-normalized) — a content
+  // compare, not a count compare: a delete hidden behind an unrelated append (2→2) and an
+  // in-place rewrite both erase a recorded rejection without shrinking the count.
+  const normEl = (s) => s.replace(/\s+/g, ' ').trim()
+  const curRejEls = topLevelElements(extractKeyBlock(content, 'rejectedAlternatives')).map(normEl)
+  const headRejEls = topLevelElements(extractKeyBlock(headContent, 'rejectedAlternatives')).map(normEl)
+  const pool = [...curRejEls]
+  const erased = headRejEls.filter((e) => {
+    const at = pool.indexOf(e)
+    if (at === -1) return true
+    pool.splice(at, 1)
+    return false
+  })
+  if (erased.length > 0) {
     out.push({
       rule: 'rejectedAlternatives-append-only',
-      msg: `arc ${id} is building but its rejectedAlternatives shrank (was ${headRej}, now ${curRej})`,
-      fix: 'a rejection is history — append a superseding dated entry, never delete',
+      msg: `arc ${id} is building but ${erased.length} recorded rejection(s) were deleted or rewritten (HEAD had ${headRejEls.length}, ${curRejEls.length} now)`,
+      fix: 'a rejection is history — append a superseding dated entry, never delete or rewrite one',
     })
   }
   const norm = (s) => (s ? s.replace(/\s+/g, ' ').trim() : '')
@@ -498,20 +509,30 @@ function extractBalanced(text, openIdx) {
 }
 
 function countTopLevelElements(arrayBlock) {
-  if (!arrayBlock) return 0
+  return topLevelElements(arrayBlock).length
+}
+
+/** Split an extractKeyBlock array block into its top-level element source strings (the same
+ *  quote/depth tokenizer countTopLevelElements always used, kept segment-wise so immutability
+ *  guards can compare CONTENT, not just counts). */
+function topLevelElements(arrayBlock) {
+  if (!arrayBlock) return []
   const inner = arrayBlock.slice(1, -1)
   let depth = 0
   let quote = null
-  let count = 0
+  const elements = []
+  let seg = ''
   let segHasContent = false
   for (let i = 0; i < inner.length; i++) {
     const c = inner[i]
     if (quote) {
       if (c === '\\') {
+        seg += c + (inner[i + 1] ?? '')
         i++
         continue
       }
       if (c === quote) quote = null
+      seg += c
       segHasContent = true
       continue
     }
@@ -525,13 +546,17 @@ function countTopLevelElements(arrayBlock) {
       depth--
       segHasContent = true
     } else if (c === ',' && depth === 0) {
-      if (segHasContent) count++
+      if (segHasContent) elements.push(seg)
+      seg = ''
       segHasContent = false
+      continue
     } else if (!/\s/.test(c)) {
       segHasContent = true
     }
+    seg += c
   }
-  return segHasContent ? count + 1 : count
+  if (segHasContent) elements.push(seg)
+  return elements
 }
 
 function runPhaseNumberAndClaimChecks(normalizedPath, phaseMatch) {

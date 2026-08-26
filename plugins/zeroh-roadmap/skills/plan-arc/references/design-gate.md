@@ -45,7 +45,7 @@ Split the roles: the `software-architect` agent ADVISES (search, recommend); the
 - When earned, the architect designs the GENERAL seam and the arc's `singleSeams` widen to "this seam is consumed beyond this arc"; member phases plan against the general seam.
 - **Consumer bias knob:** a consumer whose stated product thesis is a generic substrate ("any workflow / any agent / any RAG") weights harder toward the general seam - still inside the two-consumer gate.
 
-**Confirm (conduct: §0).** PAUSE for the user's explicit go before phase-planning. An unconfirmed design is not a spec - the user is the design gate, and the generalize-forward verdict is part of what they confirm. The orchestrator then writes every confirmed designRef onto `roadmap/arcs/<id>.arc.ts` → `designRefs`, and records each LOSING arm as a `rejectedAlternatives` entry in the same write.
+**Confirm (conduct: §0).** PAUSE for the user's explicit go before phase-planning. An unconfirmed design is not a spec - the user is the design gate, and the generalize-forward verdict is part of what they confirm. The orchestrator then writes every confirmed designRef onto `roadmap/arcs/<id>.arc.ts` → `designRefs`, and records each LOSING arm as a `rejectedAlternatives` entry in the same write (`{ option, why, decidedBy, decidedAt }` - the shape lives on `ArcShape` in `lib/roadmap/schema.ts`).
 
 ## 3. The UX reuse-or-design contract
 

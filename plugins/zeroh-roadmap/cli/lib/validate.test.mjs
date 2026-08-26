@@ -384,6 +384,29 @@ test('rejectedAlternatives — growth or an unchanged count on a building arc is
   )
 })
 
+test('rejectedAlternatives — a count-preserving substitution or in-place rewrite on a building arc is the same erasure', () => {
+  const repo = makeArcRepo()
+  repo.write({ rejected: [REJECT_A, REJECT_B] })
+  repo.commitAll('v1: two recorded rejections')
+  repo.markBuilding()
+
+  // SUBSTITUTION: delete B while appending C — the count stays 2, a recorded rejection is gone.
+  repo.write({ rejected: [REJECT_A, REJECT_C] })
+  const swapped = validateRoadmapFile(repo.arcPath)
+  assert.ok(appendOnly(swapped), `a delete hidden behind an append must red; got rules ${JSON.stringify(rulesOf(swapped))}`)
+
+  // IN-PLACE REWRITE: same count, same slot, different content — the entry HEAD recorded is gone.
+  const softened = { ...REJECT_B, why: 'quietly softened after the fact, the overwrite the guard must catch' }
+  repo.write({ rejected: [REJECT_A, softened] })
+  const overwrote = validateRoadmapFile(repo.arcPath)
+  assert.ok(appendOnly(overwrote), `rewriting a recorded rejection must red; got rules ${JSON.stringify(rulesOf(overwrote))}`)
+
+  // REORDER of the same surviving entries is NOT an erasure — pins the multiset semantics.
+  repo.write({ rejected: [REJECT_B, REJECT_A] })
+  const reordered = validateRoadmapFile(repo.arcPath)
+  assert.equal(appendOnly(reordered), undefined, `reordering surviving entries is clean; got ${JSON.stringify(rulesOf(reordered))}`)
+})
+
 const adoptionWarns = (res) => (res.warnings ?? []).filter((w) => /rejectedAlternatives/.test(w))
 
 test('rejectedAlternatives — a NEW-to-git arc writing REJECTED in prose with no typed field gets an adoption WARN, never an error', () => {
