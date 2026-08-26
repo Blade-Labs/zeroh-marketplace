@@ -267,3 +267,25 @@ test('9) disarm of an unknown lane: exit 2, stderr names what was not found (nev
   assert.match(res.stderr, /NOPE/, `stderr must name the missing arc; got:\n${res.stderr}`)
   assert.match(res.stderr, /not found/i, `stderr must say what was not found; got:\n${res.stderr}`)
 })
+
+// ── capacity advisory on arm (phase 11 gate R1: pin the disclosed coverage gap) ──────────────
+
+const seamEnv = (o) => ({ ...process.env, ZEROH_ROADMAP_CAPACITY_PROBES: typeof o === 'string' ? o : JSON.stringify(o) })
+const armWithSeam = (cwd, arcId, seam) =>
+  spawnSync('node', [BIN, 'arm', arcId], { cwd, encoding: 'utf8', env: seamEnv(seam) })
+
+test('10) arm on a STARVED box still succeeds but prints the capacity advisory; a clear box says nothing', () => {
+  const starved = armWithSeam(newRepo(), 'CAPX', { memAvailableMb: 64000, load1: 0.5, cores: 16, capbuildUnits: 99, liveArms: 0 })
+  assert.equal(starved.status, 0, `arming is a claim, not a spawn — never refused for capacity; stderr:\n${starved.stderr}`)
+  assert.match(starved.stderr, /box at capacity/, `the advisory names the starvation:\n${starved.stderr}`)
+
+  const clear = armWithSeam(newRepo(), 'CAPY', { memAvailableMb: 64000, load1: 0.5, cores: 16, capbuildUnits: 0, liveArms: 0 })
+  assert.equal(clear.status, 0)
+  assert.doesNotMatch(clear.stderr, /box at capacity/, `a clear box arms without capacity noise:\n${clear.stderr}`)
+})
+
+test('11) a broken seam never blinds arm SILENTLY: the arm succeeds and the seam error is NAMED', () => {
+  const r = armWithSeam(newRepo(), 'CAPZ', '{"memAvailableMb": 64000}')
+  assert.equal(r.status, 0, 'advisory failure never fails the arm')
+  assert.match(r.stderr, /ZEROH_ROADMAP_CAPACITY_PROBES/, `the operator's broken knob is named:\n${r.stderr}`)
+})

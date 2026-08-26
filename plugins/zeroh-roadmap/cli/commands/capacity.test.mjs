@@ -16,7 +16,7 @@
  *             carries the verdict; the exit code must not double-encode it).
  *   seam    : env ZEROH_ROADMAP_CAPACITY_PROBES = {memAvailableMb, load1, cores, capbuildUnits,
  *             liveArms} makes EVERY probe fixed — no live read at all. Malformed JSON in it is
- *             a NAMED error, exit 2, and NEVER a silent fallback to live probes (a fallback
+ *             a NAMED error, exit 1, and NEVER a silent fallback to live probes (a fallback
  *             would make a scripted gate silently consult the wrong box).
  *   policy  : the consumer config's `capacity` block still applies on top of the fixed signals.
  *             Signals and policy are separate inputs — same probes + different maxExecutors
@@ -308,16 +308,18 @@ test('8) SEAM: every signal comes from the env probes — no live read leaks int
   assert.deepEqual(body.degraded, [], 'fully injected probes degrade nothing')
 })
 
-test('9) MALFORMED seam JSON: exit 2, the env var is NAMED, and NO verdict is emitted (never a silent live fallback)', () => {
+test('9) MALFORMED or PARTIAL seam: exit 1 (configuration error), the env var is NAMED, and NO verdict is emitted (never a silent live fallback)', () => {
   const repo = newRepo(CLEAR_POLICY)
-  for (const bad of ['{"memAvailableMb": 64000', 'not-json-at-all']) {
+  // Partial-but-valid JSON is the sharp case: unvalidated, a missing capbuildUnits/liveArms
+  // silently INVENTS a zero-busy signal and a permissive verdict that parses cleanly.
+  for (const bad of ['{"memAvailableMb": 64000', 'not-json-at-all', '{"memAvailableMb": 64000, "load1": 0.5, "cores": 16}']) {
     for (const args of [[], ['--json']]) {
       const res = capacity(repo, { probes: bad, args })
       const where = `input ${JSON.stringify(bad)} args ${JSON.stringify(args)}`
       assert.equal(
         res.status,
-        2,
-        `${where}: a malformed probe env is a refusal (exit 2), not a fallback; stdout:\n${res.stdout}\nstderr:\n${res.stderr}`,
+        1,
+        `${where}: a malformed or partial probe env is a configuration refusal (exit 1), not a fallback; stdout:\n${res.stdout}\nstderr:\n${res.stderr}`,
       )
       assert.match(
         res.stderr,

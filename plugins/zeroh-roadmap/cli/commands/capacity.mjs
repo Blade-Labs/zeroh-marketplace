@@ -9,8 +9,8 @@
  *
  * Determinism seam: env ZEROH_ROADMAP_CAPACITY_PROBES = JSON
  * {memAvailableMb, load1, cores, capbuildUnits, liveArms} replaces ALL live probes with the
- * fixed values (wired tests + dry-run simulation). Malformed JSON in the seam is a NAMED
- * refusal, exit 2 — never a silent fallback to live probes.
+ * fixed values (wired tests + dry-run simulation). A malformed or PARTIAL seam payload is a
+ * NAMED refusal, exit 1 (configuration error) — never a silent fallback to live probes.
  *
  * Returns its exit code to the dispatcher — never hard-exits (testability seam).
  */
@@ -30,8 +30,10 @@ export default async function run(argv) {
     probes = seamProbes() ?? defaultProbes
   } catch (e) {
     if (e instanceof SeamError) {
+      // exit 1, not 2: a broken env var is a CONFIGURATION error under the bin contract
+      // (2 is reserved for a real refused check; 3 is this verb's at-capacity gate verdict).
       process.stderr.write(`roadmap capacity: ${e.message}\n`)
-      return 2
+      return 1
     }
     throw e
   }

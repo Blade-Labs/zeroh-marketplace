@@ -78,12 +78,19 @@ export default async function run(argv) {
   // Capacity advisory (phase 11) — arming is a CLAIM, not a spawn, so a starved box never
   // refuses the arm; one stderr line warns the operator. Advisory math never fails the arm.
   try {
-    const { probeCapacity, defaultProbes, seamProbes, consumerCapacityConfig } = await import('../lib/capacity.mjs')
-    const verdict = probeCapacity(consumerCapacityConfig(cwd), seamProbes() ?? defaultProbes)
-    if (!verdict.canSpawn)
-      process.stderr.write(`roadmap arm: box at capacity — ${verdict.reasons[0] ?? 'no headroom'}; this lane may thrash live executors\n`)
+    const { probeCapacity, defaultProbes, seamProbes, consumerCapacityConfig, SeamError } = await import('../lib/capacity.mjs')
+    try {
+      const verdict = probeCapacity(consumerCapacityConfig(cwd), seamProbes() ?? defaultProbes)
+      if (!verdict.canSpawn)
+        process.stderr.write(`roadmap arm: box at capacity — ${verdict.reasons[0] ?? 'no headroom'}; this lane may thrash live executors\n`)
+    } catch (e) {
+      // A broken seam is the OPERATOR's knob — name it (arm still succeeds; advisory only),
+      // never go silently advisory-blind. Anything else stays swallowed: advisory math must
+      // never fail the arm.
+      if (e instanceof SeamError) process.stderr.write(`roadmap arm: ${e.message}\n`)
+    }
   } catch {
-    /* advisory only */
+    /* advisory only — even the import failing never fails the arm */
   }
   return 0
 }

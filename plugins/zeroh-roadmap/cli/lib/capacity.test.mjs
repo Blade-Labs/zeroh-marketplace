@@ -346,3 +346,51 @@ test('probeCapacity — defaultProbes reads the LIVE box: a shape-valid verdict,
   const explicit = verdict(probeCapacity(undefined, defaultProbes))
   assert.equal(typeof explicit.canSpawn, 'boolean', 'defaultProbes is the exported default, usable by name')
 })
+
+// ── the seam + the stale-arm filter (phase 11 gate R1) ──────────────────────────────────────
+
+test('seamProbes — a PARTIAL payload is a NAMED SeamError, never invented zero signals', async () => {
+  const { seamProbes, SeamError, SEAM_ENV } = await import('./capacity.mjs')
+  // valid JSON, three of five readings: unvalidated this coerced busy to 0 — a permissive
+  // verdict that parses cleanly (the R1 finding). Every missing key must be NAMED.
+  assert.throws(
+    () => seamProbes({ [SEAM_ENV]: '{"memAvailableMb": 64000, "load1": 0.5, "cores": 16}' }),
+    (e) => e instanceof SeamError && /capbuildUnits/.test(e.message) && /liveArms/.test(e.message),
+  )
+  // an unknown extra key is a different malformation, same refusal
+  assert.throws(
+    () => seamProbes({ [SEAM_ENV]: '{"memAvailableMb":1,"load1":1,"cores":1,"capbuildUnits":0,"liveArms":0,"typo":1}' }),
+    (e) => e instanceof SeamError,
+  )
+  // the complete payload passes through verbatim
+  const p = seamProbes({ [SEAM_ENV]: '{"memAvailableMb":64000,"load1":0.5,"cores":16,"capbuildUnits":2,"liveArms":1}' })
+  assert.equal(p.runningCapbuildUnits() + p.liveExecutorArms(), 3)
+  // unset stays null (live probes)
+  assert.equal(seamProbes({}), null)
+})
+
+test('defaultProbes.liveExecutorArms — a COMPLETED-but-undisarmed arm is stale, not busy', async (t) => {
+  const { mkdtempSync, mkdirSync, writeFileSync, realpathSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { execFileSync } = await import('node:child_process')
+  const d = realpathSync(mkdtempSync(join(tmpdir(), 'zr-cap-arms-')))
+  t.after(() => rmSync(d, { recursive: true, force: true }))
+  execFileSync('git', ['-C', d, 'init', '-q'])
+  mkdirSync(join(d, '.building'), { recursive: true })
+  mkdirSync(join(d, 'roadmap', 'phases'), { recursive: true })
+  // Arm A: its phase is TERMINAL (status done) — staleArms flags it; MUST NOT count as busy.
+  writeFileSync(join(d, 'roadmap', 'phases', 'phase-9301.phase.ts'), "export default { phase: 9301, status: 'done' }\n")
+  writeFileSync(join(d, '.building', '9301-executor.armed'), JSON.stringify({ sessionId: 's1', executorId: 'e1' }))
+  // Arm B: phase in-progress, bound executor — genuinely live, counts.
+  writeFileSync(join(d, 'roadmap', 'phases', 'phase-9302.phase.ts'), "export default { phase: 9302, status: 'in-progress' }\n")
+  writeFileSync(join(d, '.building', '9302-executor.armed'), JSON.stringify({ sessionId: 's1', executorId: 'e2' }))
+  const prev = process.cwd()
+  t.after(() => process.chdir(prev))
+  process.chdir(d)
+  assert.equal(
+    defaultProbes.liveExecutorArms(),
+    1,
+    'the terminal-phase leftover is stale evidence — counting it would fail arc next CLOSED forever',
+  )
+})

@@ -196,7 +196,9 @@ export function runCli(root, args, env = {}, { input } = {}) {
   })
   const code = r.status ?? 1
   const stdout = (r.stdout ?? '').toString()
-  const stderr = (r.stderr ?? '').toString()
+  // A spawn failure / timeout has status null + error set — surface it so a hung CLI reds
+  // with ETIMEDOUT in the assertion message instead of masquerading as a usage exit 1.
+  const stderr = (r.stderr ?? '').toString() + (r.error ? `\n[runCli] spawn error: ${r.error}` : '')
   let json
   const t = stdout.trim()
   if (t.startsWith('{') || t.startsWith('[')) {

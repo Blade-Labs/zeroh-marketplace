@@ -21,7 +21,7 @@ import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { liveArm } from './executor-arm.mjs'
+import { liveArm, staleArms } from './executor-arm.mjs'
 import { gitToplevel } from './gitroot.mjs'
 import { loadConfig } from './config.mjs'
 
@@ -77,10 +77,21 @@ export const defaultProbes = {
     } catch {
       return 0 // no .building dir = no arms; an absent registry is a real zero, not a degrade
     }
+    // liveArm alone answers spawn-exclusivity for ONE phase and counts a completed-but-
+    // undisarmed arm as live; unfiltered, three such leftovers would make every arc next
+    // fail CLOSED on stale evidence. staleArms is the staleness oracle — subtract its set.
+    const stale = new Set()
+    try {
+      for (const s of staleArms(toplevel, join(toplevel, 'roadmap', 'phases'))) stale.add(s.file)
+    } catch {
+      /* no oracle → fall back to liveArm alone (conservative) */
+    }
     let live = 0
     for (const f of entries) {
       const m = f.match(/^(\d+)-executor\.armed$/)
-      if (m && liveArm(toplevel, Number(m[1]))) live++
+      if (!m) continue
+      if (stale.has(join(toplevel, '.building', f))) continue
+      if (liveArm(toplevel, Number(m[1]))) live++
     }
     return live
   },
@@ -105,10 +116,21 @@ export class SeamError extends Error {}
 
 export const SEAM_ENV = 'ZEROH_ROADMAP_CAPACITY_PROBES'
 
+/** The seam payload carries ALL FIVE readings or it is malformed: a partial payload would
+ *  silently INVENT signals (a missing capbuildUnits/liveArms coerces to zero busy — a
+ *  permissive verdict that parses cleanly), the exact silent-fallback the seam contract bans. */
+const SeamPayloadShape = z.strictObject({
+  memAvailableMb: z.number(),
+  load1: z.number(),
+  cores: z.number(),
+  capbuildUnits: z.number(),
+  liveArms: z.number(),
+})
+
 /** The deterministic probe seam (wired tests + dry-run simulation): when the env var is set,
  *  ALL probes come from its fixed JSON values {memAvailableMb, load1, cores, capbuildUnits,
- *  liveArms}. Returns null when unset; throws SeamError on malformed JSON. ONE home — the
- *  capacity command and the arc-next admission gate read the same seam. */
+ *  liveArms}. Returns null when unset; throws SeamError on malformed JSON or a payload missing
+ *  any of the five readings. ONE home — every capacity consumer reads the same seam. */
 export function seamProbes(env = process.env) {
   const raw = env[SEAM_ENV]
   if (!raw) return null
@@ -118,6 +140,12 @@ export function seamProbes(env = process.env) {
   } catch (e) {
     throw new SeamError(`${SEAM_ENV} is not valid JSON (${e.message}) — refusing to emit a verdict, not falling back to live probes`)
   }
+  const parsed = SeamPayloadShape.safeParse(v)
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ')
+    throw new SeamError(`${SEAM_ENV} payload is incomplete or malformed (${issues}) — all five readings are required; refusing to invent signals`)
+  }
+  v = parsed.data
   return {
     memAvailableMb: () => v.memAvailableMb,
     load: () => ({ load1: v.load1, cores: v.cores }),
