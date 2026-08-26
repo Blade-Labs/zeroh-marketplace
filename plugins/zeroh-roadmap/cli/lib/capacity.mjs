@@ -23,6 +23,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { liveArm } from './executor-arm.mjs'
 import { gitToplevel } from './gitroot.mjs'
+import { loadConfig } from './config.mjs'
 
 /** Policy defaults, grounded in the shared dev box's contract (capbuild MemoryMax 6G);
  *  every field overridable per box via roadmap.config.json `capacity`. */
@@ -83,6 +84,19 @@ export const defaultProbes = {
     }
     return live
   },
+}
+
+/** The consumer's optional `capacity` policy block, or undefined where no readable config
+ *  exists — the ADVISORY readers (status --json, arm) surface capacity as a side note and must
+ *  not explode on an estate whose config is absent or invalid; falling back to undefined runs
+ *  the admission math on DEFAULT_CAPACITY. A verb whose whole job is the verdict (`roadmap
+ *  capacity`) calls loadConfig directly instead, so a broken config still fails loud there. */
+export function consumerCapacityConfig(cwd) {
+  try {
+    return loadConfig(cwd).capacity
+  } catch {
+    return undefined
+  }
 }
 
 /** Named refusal for a malformed ZEROH_ROADMAP_CAPACITY_PROBES seam — callers print it and

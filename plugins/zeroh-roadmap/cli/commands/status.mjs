@@ -263,19 +263,12 @@ export default async function run(argv) {
       ...(model.postMergeRed ? [model.postMergeRed] : []),
     ]
     // Box capacity rides the --json machine shape ONLY (phase 11) — the human table is
-    // parity-pinned byte-compatible and never carries it. Config-less estates read with the
-    // library defaults: status is a read verb and must not explode where loadConfig refuses.
-    const { probeCapacity, defaultProbes, seamProbes, SeamError } = await import('../lib/capacity.mjs')
-    let capacityCfg
-    try {
-      const { loadConfig } = await import('../lib/config.mjs')
-      capacityCfg = loadConfig(process.cwd()).capacity
-    } catch {
-      capacityCfg = undefined
-    }
+    // parity-pinned byte-compatible and never carries it.
+    const { probeCapacity, defaultProbes, seamProbes, SeamError, consumerCapacityConfig } =
+      await import('../lib/capacity.mjs')
     let capacity
     try {
-      capacity = probeCapacity(capacityCfg, seamProbes() ?? defaultProbes)
+      capacity = probeCapacity(consumerCapacityConfig(process.cwd()), seamProbes() ?? defaultProbes)
     } catch (e) {
       if (e instanceof SeamError) {
         process.stderr.write(`roadmap status: ${e.message}\n`)

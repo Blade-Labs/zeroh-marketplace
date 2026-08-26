@@ -78,15 +78,8 @@ export default async function run(argv) {
   // Capacity advisory (phase 11) — arming is a CLAIM, not a spawn, so a starved box never
   // refuses the arm; one stderr line warns the operator. Advisory math never fails the arm.
   try {
-    const { probeCapacity, defaultProbes, seamProbes } = await import('../lib/capacity.mjs')
-    let capacityCfg
-    try {
-      const { loadConfig } = await import('../lib/config.mjs')
-      capacityCfg = loadConfig(cwd).capacity
-    } catch {
-      capacityCfg = undefined
-    }
-    const verdict = probeCapacity(capacityCfg, seamProbes() ?? defaultProbes)
+    const { probeCapacity, defaultProbes, seamProbes, consumerCapacityConfig } = await import('../lib/capacity.mjs')
+    const verdict = probeCapacity(consumerCapacityConfig(cwd), seamProbes() ?? defaultProbes)
     if (!verdict.canSpawn)
       process.stderr.write(`roadmap arm: box at capacity — ${verdict.reasons[0] ?? 'no headroom'}; this lane may thrash live executors\n`)
   } catch {

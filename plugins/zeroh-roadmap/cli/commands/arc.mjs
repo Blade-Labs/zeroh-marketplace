@@ -51,39 +51,38 @@ async function arcNext(rest) {
   // action do-arc already handles. Scoped to run-phase ONLY — a resume continues committed work
   // and refusing it would strand a wedged arc. Seam errors are the OPERATOR's knob → loud exit 1;
   // a live-probe computation failure fails OPEN (advisory math must never wedge the pipeline).
-  if (pos.action === 'run-phase' && !rest.includes('--ignore-capacity')) {
+  if (pos.action === 'run-phase') {
+    // --ignore-capacity still PROBES: the override's audit note has to name what it overrode.
+    const override = rest.includes('--ignore-capacity')
     try {
-      const { probeCapacity, defaultProbes, seamProbes, SeamError } = await import('../lib/capacity.mjs')
+      const { probeCapacity, defaultProbes, seamProbes, SeamError, SEAM_ENV } = await import('../lib/capacity.mjs')
       let verdict
       try {
         verdict = probeCapacity(cfg.capacity, seamProbes() ?? defaultProbes)
       } catch (e) {
-        if (e instanceof SeamError || process.env.ZEROH_ROADMAP_CAPACITY_PROBES) {
+        if (!override && (e instanceof SeamError || process.env[SEAM_ENV])) {
           process.stderr.write(`arc next: ${e.message}\n`)
           return 1
         }
         throw e
       }
       if (!verdict.canSpawn) {
-        pos = {
-          ...pos,
-          action: 'blocked',
-          reason: `box at capacity — ${verdict.reasons.join('; ')} — re-run when load drops, or override with --ignore-capacity`,
-          // the refused member goes back on the board — refused, not consumed
-          remaining: [pos.phase, ...(pos.remaining ?? [])],
+        if (override) {
+          process.stderr.write(`arc next: --ignore-capacity override — spawning despite: ${verdict.reasons.join('; ')}\n`)
+        } else {
+          pos = {
+            ...pos,
+            action: 'blocked',
+            reason: `box at capacity — ${verdict.reasons.join('; ')} — re-run when load drops, or override with --ignore-capacity`,
+            // the refused member goes back on the board — refused, not consumed
+            remaining: [pos.phase, ...(pos.remaining ?? [])],
+          }
         }
       }
     } catch (e) {
-      process.stderr.write(`arc next: capacity check unreadable (${e?.message ?? e}) — fail-open, run-phase stands\n`)
-    }
-  } else if (pos.action === 'run-phase' && rest.includes('--ignore-capacity')) {
-    try {
-      const { probeCapacity, defaultProbes, seamProbes } = await import('../lib/capacity.mjs')
-      const verdict = probeCapacity(cfg.capacity, seamProbes() ?? defaultProbes)
-      if (!verdict.canSpawn)
-        process.stderr.write(`arc next: --ignore-capacity override — spawning despite: ${verdict.reasons.join('; ')}\n`)
-    } catch {
-      /* the override asked to skip the gate; a failing check changes nothing */
+      // The override asked to skip the gate, so a failing check changes nothing there.
+      if (!override)
+        process.stderr.write(`arc next: capacity check unreadable (${e?.message ?? e}) — fail-open, run-phase stands\n`)
     }
   }
   process.stdout.write(JSON.stringify(pos, null, json ? 0 : 2) + '\n')
