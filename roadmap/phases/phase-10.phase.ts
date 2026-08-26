@@ -99,7 +99,18 @@ export default definePhase({
         'plugins/zeroh-roadmap/skills/plan-phase/references/phase-file-contract.md',
       ],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'plan-phase Step 3 gained the one vertical-slice sentence for userFacing phases (no layer-batched tasks; every consumer-bound task reaches an observable its → verify: names), citing phase-file-contract.md §Ordering; the reference §Ordering bullet carries the rationale detail (layer batching leaves nothing testable until the tail; foundation → consumers governs dependency direction within a slice, not layer batching across the phase).',
+        how: 'Two in-place additive edits at the exact anchors the plan named (SKILL.md Step 3 granularity paragraph tail; contract §Ordering bullet). Both step verifies ran green; types slot declared-none in this consumer.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The rule is authoring guidance (honor-system, enforced at review-phase Mode A reading Step 3) — no lint parses task shape for layer batching.',
+      },
     },
     {
       id: '10.2',

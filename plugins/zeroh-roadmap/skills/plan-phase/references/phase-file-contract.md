@@ -84,7 +84,11 @@ line saying WHY the skipped stages are low-value; review-phase Mode A ratifies i
   populated, cold vs warm layout), at least one criterion exercises the NON-initial state
   (BRAINVIEW's cold-layout-only criteria shipped a geometry fix inert at real prod density).
 - **Ordering:** owned by SKILL.md Step 3 (foundation → consumers → validation last, deps flow
-  downward); not restated here.
+  downward); not restated here. The vertical-slice rule for `userFacing: true` phases: a
+  layer-batched task list (all schema, then all API, then all UI) leaves nothing testable until
+  the last layer lands — order tasks so each slice reaches an observable behavior early;
+  foundation → consumers governs dependency DIRECTION within a slice, never layer batching
+  across the phase.
 - **`testMode`:** assigned per `skills/using-zeroh-roadmap/references/test-worthiness.md`: `tdd`
   where it earns its keep (pure logic/contracts/error paths), `e2e` for real-boundary user flows,
   `none` for everything else including the NEVER classes (declarative artifacts, UI presentation,

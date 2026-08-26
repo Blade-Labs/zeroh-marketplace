@@ -96,6 +96,9 @@ serialization tail, so don't shard). Split below ~4 only for a nameable reason (
 dependency boundary, a distinct `kind`) — "felt like a separate topic" is not one. Past ~10
 tasks you are in do-arc's HEAVY band. One task = one focused change; "and also..." is two tasks.
 Order foundation → consumers → validation last; N.3 may depend on N.2, never N.4.
+A `userFacing: true` phase slices vertically — no task batches a whole layer; each consumer-bound
+task carries its change through to an observable its `→ verify:` names (detail:
+`references/phase-file-contract.md` §Ordering).
 
 **Cite the recorded timing reference class, never clock-feel.** Read
 `roadmap/arc-evals/timing-stats.json` and annotate the docblock with the cohort (task-count band ×
