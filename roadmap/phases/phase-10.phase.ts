@@ -164,8 +164,20 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/templates/schema.ts', 'lib/roadmap/schema.ts'],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
       interfaces: { consumes: [], produces: ['ArcShape.rejectedAlternatives (templates/schema.ts)'] },
+      transparencyReport: {
+        whatWasDone:
+          'ArcShape gained the optional rejectedAlternatives array ({option ≥10, why ≥10, decidedBy ≥2, decidedAt ≥8}) directly after descopes, docblock naming provenance, append-only intent, and the resurrection-leak it closes; consumer lib/roadmap/schema.ts re-synced byte-identical.',
+        how:
+          'Insertion at the architect-named anchor; cp for the byte-sync. Both step verifies green; additive-parse proven live: ArcShape.safeParse succeeded both WITH a rejectedAlternatives entry and WITHOUT the field (the acceptance criterion, run via node --import tsx).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The append-only promise in the docblock is enforced by task 10.4’s validate guard, not by Zod (Zod sees one file state, not history).',
+      },
     },
     {
       id: '10.4',

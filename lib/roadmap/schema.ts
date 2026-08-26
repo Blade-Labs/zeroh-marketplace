@@ -1080,6 +1080,25 @@ export const ArcShape = z.object({
       }),
     )
     .optional(),
+  /** Typed rejected alternatives — options a human (or a recorded Decision
+   *  Contract verdict) already ruled OUT: interview rulings, losing design-gate
+   *  arms, architect-verdict rejects. `decidedBy` carries provenance ('user' |
+   *  'software-architect verdict <date>') — decided, not ratified: architect
+   *  rejects are recorded decisions, not user ratifications. Append-only (a
+   *  rejection is history; validate reds a shrink on a building arc). A future
+   *  planner greps this before proposing — a rejection surviving only as
+   *  LOCKED-DECISIONS prose is the resurrection-leak this closes.
+   *  Optional → additive. */
+  rejectedAlternatives: z
+    .array(
+      z.object({
+        option: z.string().min(10),
+        why: z.string().min(10),
+        decidedBy: z.string().min(2),
+        decidedAt: z.string().min(8),
+      }),
+    )
+    .optional(),
   /** Append-only log of legitimate post-planning acceptanceCriteria changes —
    *  each entry is a dated "why". validate-roadmap-file v2 rejects a criteria
    *  edit on a building arc UNLESS this array grew (the 1343.6 silent-drift
