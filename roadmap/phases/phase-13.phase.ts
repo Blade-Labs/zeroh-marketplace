@@ -212,9 +212,14 @@ export default definePhase({
           description:
             'Module docblock line for next gains [--ignore-capacity] (matching both usage strings the range already updated) → verify: bash -c "sed -n \'3p\' plugins/zeroh-roadmap/cli/commands/arc.mjs | grep -qF -- \'--ignore-capacity\'"',
         },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/driver.mjs',
+          description:
+            'Delete entrySkeleton’s unreachable unknown-driver fallbacks (every register/verify path calls resolveDriver first, which throws on an unknown id — the `known ? … : …` arms can never take the else branch); driver suite stays green → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/driver.test.mjs',
+        },
       ],
-      acceptanceCriteria: ['--help and the two docblocks agree with the code’s actual flags and exits; no test regression in gate/watch suites'],
-      files: ['plugins/zeroh-roadmap/bin/roadmap.mjs', 'plugins/zeroh-roadmap/cli/commands/arc.mjs'],
+      acceptanceCriteria: ['--help and the two docblocks agree with the code’s actual flags and exits; driver suite green after the dead-arm deletion'],
+      files: ['plugins/zeroh-roadmap/bin/roadmap.mjs', 'plugins/zeroh-roadmap/cli/commands/arc.mjs', 'plugins/zeroh-roadmap/cli/commands/driver.mjs'],
       testMode: 'none',
       done: false,
     },
@@ -285,14 +290,9 @@ export default definePhase({
             'Set status: \'merged\' (the members ARE in mainline history) with a dated comment citing the eval’s recorded no-sweep-report dock — the honest terminal state, not a claim a sweep ran → verify: bash -c "grep -qF \\"status: \'merged\'\\" roadmap/arcs/POLYSEAT.arc.ts"',
         },
         {
-          file: 'roadmap/arc-evals/scorecard.json',
-          description:
-            'Regenerate via node plugins/zeroh-roadmap/bin/roadmap.mjs eval scorecard (never hand-edit); confirm the notes line counts 10 phase records → verify: bash -c "grep -qF \'10 phase record\' roadmap/arc-evals/scorecard.json"',
-        },
-        {
           file: 'roadmap/ROADMAP.md',
           description:
-            'Rewrite lean from the real process: the phase/arc lifecycle actually run (plan-phase → review-phase queue → do-phase with kind-gates + rounds → curate → complete; arcs via plan-arc/do-arc), the real commands (roadmap status/gate/capacity), the real branch (feat/roadmap-arcs, no develop), created-date trued; delete the scaffold’s dead references (collect-phase-metrics gate, reviews/changelog.json emit) → verify: bash -c "! grep -qF \'YYYY-MM-DD\' roadmap/ROADMAP.md && grep -qF \'do-phase\' roadmap/ROADMAP.md"',
+            'Rewrite lean from the real process: the phase/arc lifecycle actually run (plan-phase → review-phase queue → do-phase with kind-gates + rounds → curate → complete; arcs via plan-arc/do-arc), the real commands (roadmap status/gate/capacity), the real branch (feat/roadmap-arcs, no develop), created-date trued; delete the scaffold’s dead references (collect-phase-metrics gate, reviews/changelog.json emit); ONE evidence-location line: gate reports under roadmap/.gate/ are checkout-local (gitignored) — the durable substance lives in the committed .peval.json slot rows, so phase-record gate citations are local-evidence pointers → verify: bash -c "! grep -qF \'YYYY-MM-DD\' roadmap/ROADMAP.md && grep -qF \'do-phase\' roadmap/ROADMAP.md"',
         },
         {
           file: 'plugins/zeroh-roadmap/docs/orientation.html',
@@ -306,11 +306,10 @@ export default definePhase({
         },
       ],
       acceptanceCriteria: [
-        'A stranger reading only the records reconstructs POLYSEAT as finished, the scorecard covers all ten records, ROADMAP.md describes the process that actually runs, and no record still owes phase 6 anything',
+        'A stranger reading only the records reconstructs POLYSEAT as finished, ROADMAP.md describes the process that actually runs (including where gate evidence durably lives), and no record still owes phase 6 anything',
       ],
       files: [
         'roadmap/arcs/POLYSEAT.arc.ts',
-        'roadmap/arc-evals/scorecard.json',
         'roadmap/ROADMAP.md',
         'plugins/zeroh-roadmap/docs/orientation.html',
         'roadmap/backlog.ts',
@@ -344,6 +343,43 @@ export default definePhase({
         'plugins/zeroh-roadmap/package.json',
         'plugins/zeroh-roadmap/.claude-plugin/plugin.json',
         'roadmap/phases/phase-11.phase.ts',
+      ],
+      testMode: 'none',
+      done: false,
+    },
+    {
+      id: '13.8',
+      title: 'One gateRounds counting convention, then the scorecard rejoins the corpus',
+      problem:
+        'executionResult.gateRounds is counted two ways across the ten done records — phases 1/2/4/5 count agent rounds (round ≥ 1) only, phases 3/6/8/9/10/11 count every round including the round-0 quality pass — and eval-score.mjs means over the raw number, so the POLYSEAT code-confidence gateRoundsMean mixes conventions. Separately the scorecard was last regenerated at 7 phase records with 10 on disk.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/templates/schema.ts',
+          description:
+            'The gateRounds field docblock DEFINES the convention: every recorded round INCLUDING round 0 (the majority + current practice); byte-sync lib/roadmap/schema.ts → verify: bash -c "grep -qF \'including round 0\' plugins/zeroh-roadmap/templates/schema.ts && cmp plugins/zeroh-roadmap/templates/schema.ts lib/roadmap/schema.ts"',
+        },
+        {
+          file: 'roadmap/phases/phase-1.phase.ts',
+          description:
+            'True the four outlier records to the convention (phases 1, 2, 4, 5: each +1, a count correction not testimony, dated same-line comment naming phase 13) → verify: bash -c "grep -qF \'phase 13\' roadmap/phases/phase-1.phase.ts && grep -qF \'phase 13\' roadmap/phases/phase-5.phase.ts"',
+        },
+        {
+          file: 'roadmap/arc-evals/scorecard.json',
+          description:
+            'LAST: regenerate via node plugins/zeroh-roadmap/bin/roadmap.mjs eval scorecard (never hand-edit) so the mean reflects one convention and all ten records feed the cells → verify: bash -c "grep -qF \'10 phase record\' roadmap/arc-evals/scorecard.json"',
+        },
+      ],
+      acceptanceCriteria: [
+        'Every done record counts gateRounds under the one documented convention; the regenerated scorecard notes name ten phase records',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/templates/schema.ts',
+        'lib/roadmap/schema.ts',
+        'roadmap/phases/phase-1.phase.ts',
+        'roadmap/phases/phase-2.phase.ts',
+        'roadmap/phases/phase-4.phase.ts',
+        'roadmap/phases/phase-5.phase.ts',
+        'roadmap/arc-evals/scorecard.json',
       ],
       testMode: 'none',
       done: false,
