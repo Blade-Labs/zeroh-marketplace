@@ -49,6 +49,10 @@ export default defineBacklog([
   // ── Standalone, post-arc (dependsOn 4: manifest generator + ratchet) ──────
   // ── Post-arc spike (dependsOn 1: peval pipe; LOW — after the fenced 6) ────
   {
+    phase: 13,
+    name: 'Retro remediation — roles seam, codex-journal home, census/audit truth, release axis, derived-record refresh',
+  },
+  {
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
