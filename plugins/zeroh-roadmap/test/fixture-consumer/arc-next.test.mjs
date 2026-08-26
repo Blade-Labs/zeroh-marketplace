@@ -511,3 +511,13 @@ test('N29 — the gate honors the consumer config capacity block, not just the l
   assert.match(tight.json.reason, /executors: 1 busy/)
   assert.match(tight.json.reason, /maxExecutors 1/, 'the CONFIGURED bound is what was applied, not the default 3')
 })
+
+test('N30 — a broken seam under --ignore-capacity is NAMED, never silent: exit 0, run-phase stdout intact', () => {
+  const root = runnableRepo()
+  const clear = nextUnder(root, CLEAR, ['--ignore-capacity'])
+  const broken = nextUnder(root, { memAvailableMb: 64000 }, ['--ignore-capacity'])
+  assert.equal(broken.code, 0, 'the override stands — a broken advisory knob never blocks')
+  assert.equal(broken.stdout, clear.stdout, 'the machine-read derivation is untouched by the seam failure')
+  assert.match(broken.stderr, /ZEROH_ROADMAP_CAPACITY_PROBES/, `the operator's broken knob is named:\n${broken.stderr}`)
+  assert.match(broken.stderr, /override active/, 'and the note says the override is why run-phase stands')
+})

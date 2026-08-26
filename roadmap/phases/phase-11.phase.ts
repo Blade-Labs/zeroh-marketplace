@@ -238,7 +238,7 @@ export default definePhase({
         skipped: 'None',
         hardcoded: 'None',
         limitations:
-          'test/fixture-consumer/harness.mjs joined the diff beyond the plan’s files[] (the runCli stderr capture fix N26 required). Seam-error handling in arc next: operator-set seam problems exit 1 loudly; a live-probe computation throw fails OPEN with a stderr note (untested by the N-cases — the lib tier owns degraded behavior).',
+          'test/fixture-consumer/harness.mjs joined the diff beyond the plan’s files[] (the runCli stderr capture fix N26 required). Seam-error handling in arc next: operator-set seam problems exit 1 loudly WITHOUT --ignore-capacity; under the override (gate R2) a seam error prints a named note ("override active — run-phase stands") and exits 0 with the derivation intact (pinned by N30, gate R3); a live-probe computation throw fails OPEN with a stderr note (untested by the N-cases — the lib tier owns degraded behavior).',
       },
       dependsOn: ['11.1'],
       interfaces: { consumes: ['probeCapacity (cli/lib/capacity.mjs)'], produces: [] },
