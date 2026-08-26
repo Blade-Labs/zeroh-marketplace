@@ -66,9 +66,9 @@ export default definePhase({
       onFalse: 'ESCALATE',
     },
     {
-      claim: 'POLYSEAT parses with the default status planning despite all members done (the drift 13.6 closes).',
+      claim: 'POLYSEAT declares NO status field (defineArc returns the raw object; the Zod default renders it as planning downstream) despite all members done — the drift 13.6 closes.',
       verify:
-        'bash -c "node --import tsx -e \\"import(\'./roadmap/arcs/POLYSEAT.arc.ts\').then(m=>process.exit(m.default.status===\'planning\'?0:1))\\""',
+        'bash -c "node --import tsx -e \\"import(\'./roadmap/arcs/POLYSEAT.arc.ts\').then(m=>process.exit(m.default.status===undefined?0:1))\\""',
       onFalse: 'ESCALATE',
     },
     {
