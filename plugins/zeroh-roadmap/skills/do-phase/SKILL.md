@@ -50,9 +50,8 @@ status field.
 ## The per-task loop (one task = one commit)
 
 For each task in order:
-1. **Implement `steps`.** First, a task declaring `interfaces.consumes` `grep -F`s each consumed
-   symbol against the tree; a miss STOPS and escalates with the symbol name (escalating IS
-   success, the `assumptions[]` posture). testMode semantics:
+1. **Implement `steps`** (`interfaces.consumes` first: `grep -F` each symbol; miss ⇒ escalate
+   naming it). testMode semantics:
    `skills/using-zeroh-roadmap/references/test-worthiness.md`. An external dep/asset is verified
    against its planned license per
    `skills/using-zeroh-roadmap/references/external-assets-licensing.md` BEFORE it is
@@ -65,8 +64,8 @@ For each task in order:
    test file IS part of the task's diff; if the plan omitted it from `files[]`, note the
    addition in `limitations`.
 2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; scope touched tests via
-   the scoped slot (never a hand-built filter); a run that executed ZERO tests still exits green,
-   so confirm a nonzero executed-test count before trusting a pass. A UI change runs `build`. **Any run expected
+   the scoped slot (never a hand-built filter); a ZERO-tests-executed run exits green, so
+   confirm a nonzero executed count. A UI change runs `build`. **Any run expected
    under ~10 min is FOREGROUND in the turn — no exceptions, never a Monitor-park** (the
    long-run protocol covers genuinely long runs).
    A NEW guard (a check that reds when a claim about the TREE goes false) is mutation-proven per
@@ -142,8 +141,7 @@ land the phase as 1-3 logical commits (`--groups "1-3,4-6"` splits by task-id ra
 phase is genuinely composite). The command records the curation evidence — squashed SHAs and
 every scratch/revert RED-proof pair — into the gate report BEFORE the squash. A
 **foreign-commit refusal** (a sibling session's commit
-interleaves the range) is recorded in the phase's `limitations` and left alone — history staying
-granular is the honest fallback, NEVER a forced rewrite of someone else's work.
+interleaves the range) is recorded in the phase's `limitations` and left alone — NEVER a forced rewrite of someone else's work.
 
 ## Complete + return
 

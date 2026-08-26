@@ -546,3 +546,15 @@ sat in is now the land verb's own mechanics. do-phase went 12,203 B → 12,181 B
 | §Codex delegation lane — "then merge, push, backlog-groom, clean up the worktree" | enforced-by-code(`roadmap phase land` disposes the lane worktree + its merged branch and archives the journal; a refusal is named on stderr with the land still green) | cli/commands/phase.mjs `runLand`/`disposeSource`, cli/lib/worktree.mjs `disposeWorktree`, cli/commands/phase.test.mjs "a landed codex lane is DISPOSED" |
 | §Integration routing — "rebase `codex/<N>` onto develop inside the codex worktree, then run `git merge --ff-only codex/<N>` FROM THE PRIMARY checkout — run inside the codex worktree it merges the branch into itself and silently no-ops" | enforced-by-code(the rebase-onto-tip + guarded fast-forward IS `landPhase`; `advanceBase` resolves the checkout holding the base ref, so the self-merge no-op is unwritable) | cli/lib/worktree.mjs `landPhase`/`advanceBase`, cli/commands/phase.test.mjs "a JOURNAL-CONFIRMED codex lane lands whatever executionIsolation says" |
 | §Integration routing — "remove the worktree, the `codex/<N>` branch AND the `.building/codex-<N>.json` journal" | superseded-with-equivalent(the journal is now ARCHIVED rather than removed — `codex-<N>.closed.json`, which `codex status` reads as a closed lane; deleting it was the instruction that cost the reader an honest post-land answer) | cli/commands/phase.mjs `archiveJournal`, cli/commands/codex.mjs `findClosedJournal`, cli/commands/codex.test.mjs "an ARCHIVED run journal reports a CLOSED lane" |
+
+## do-phase/SKILL.md — phase 10 (diet-funded)
+
+The `interfaces.consumes` grep-first mirror (phase 10 task 10.7, per-task loop step 1) was funded
+in-file. **Measured:** do-phase/SKILL.md **12,266 B → 12,178 B** (`wc -c`); the do-arc flow
+**13,247 tokens / 52,978 B** (`roadmap measure --flow do-arc --json`) against the enforced
+`--assert 13257` (PROTOCOL_LOAD_BUDGET_TOKENS, unchanged), exits 0.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| Per-task loop 2 Verify — "a run that executed ZERO tests still exits green, so confirm a nonzero executed-test count before trusting a pass" | obsolete-with-evidence(pure wording compression — both operative elements survive as "a ZERO-tests-executed run exits green, so confirm a nonzero executed count"; deliberately NOT enforced-by-code: `roadmap gate run` counts nothing — runSlot trusts the slot's raw exit code (cli/lib/slots.mjs) and gate.mjs's zero-match guard is slot-NAME matching only, so the rule stays prose-carried) | do-phase §per-task loop step 2 |
+| §Curate the landed history — "history staying granular is the honest fallback, " | obsolete-with-evidence(rationale clause per the 2026-08-24 operative-rules-only ruling; the operative rule survives verbatim — foreign-commit refusal recorded in `limitations`, left alone, "NEVER a forced rewrite of someone else's work") | do-phase §Curate the landed history |
