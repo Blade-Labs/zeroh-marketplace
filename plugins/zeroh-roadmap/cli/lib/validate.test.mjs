@@ -197,3 +197,249 @@ test('phase validate — corrupt newest gate report is a named finding, never a 
   writeFileSync(corruptPath, readFileSync(olderPath, 'utf8'))
   assert.equal(validate(root, 2007).code, 0, 'the ONLY thing this phase was red for was the unreadable report')
 })
+
+// ── the rejectedAlternatives lane (phase 10.4) ───────────────────────────────────────
+//
+// ArcShape.rejectedAlternatives is a TYPED, append-only record of options a human or a
+// recorded architect verdict already ruled OUT. Two guards keep it from decaying back into
+// prose, and neither exists yet:
+//
+//   (1) APPEND-ONLY. A building arc whose rejectedAlternatives array lost entries against
+//       git HEAD is deleting history — the resurrection leak the field closes. This must be
+//       INDEPENDENT of the acceptanceCriteria-immutable branch that shares the function:
+//       that branch returns [] the moment AC are unchanged (and again the moment a
+//       ratification was appended), so a shrink riding either shortcut is invisible today.
+//   (2) ADOPTION. An arc NEW to git that writes REJECTED in prose but carries no
+//       `rejectedAlternatives:` key gets a WARN — pressure at the one cheap moment
+//       (authoring), never an error (committed arcs are grandfathered exactly like the
+//       phase-file lint family).
+//
+// Arc fixtures go through validateRoadmapFile directly (the `phase validate` CLI face is
+// phase-only); the git-HEAD + `.building/<id>.json` sidecar machinery is the bin suite's
+// arc fixture (bin/validate-roadmap-file.test.mjs case (e)), ported here over the real
+// schema so the entries are shape-valid rejections and not just text the counter can see.
+
+const SCHEMA = join(HERE, '..', '..', 'templates', 'schema.ts')
+
+const REJECT_A = {
+  option: 'a Phase-level rejectedAlternatives field',
+  why: 'Phase-schema churn is the wider blast radius and standalone rejections persist in decisionRef',
+  decidedBy: 'software-architect verdict 2026-08-26',
+  decidedAt: '2026-08-26',
+}
+const REJECT_B = {
+  option: 'extend descopes to also carry rejections',
+  why: 'a rejected alternative is not a scope narrowing and would force every descopes reader to filter',
+  decidedBy: 'user',
+  decidedAt: '2026-08-26',
+}
+const REJECT_C = {
+  option: 'keep rejections in LOCKED DECISIONS prose only',
+  why: 'prose is not greppable by a future planner, which is the resurrection leak itself',
+  decidedBy: 'user',
+  decidedAt: '2026-08-27',
+}
+
+/**
+ * An arc source file. `rejected: null` omits the key entirely (the deletion an author
+ * actually performs); `[]` writes an empty array. `rails` and `ratifications` are the
+ * benign-edit and AC-ratification levers the cases below need.
+ */
+function arcSource({ signal = 'the original signal text', rejected = null, rails = [], ratifications = null } = {}) {
+  const railBlock = rails.length ? `\n  honestyRails: [${rails.map((r) => `'${r}'`).join(', ')}],` : ''
+  const rejBlock =
+    rejected === null
+      ? ''
+      : `\n  rejectedAlternatives: [\n${rejected
+          .map((r) => `    { option: '${r.option}', why: '${r.why}', decidedBy: '${r.decidedBy}', decidedAt: '${r.decidedAt}' },`)
+          .join('\n')}\n  ],`
+  const ratBlock = ratifications === null ? '' : `\n  criteriaRatifications: [${ratifications.map((r) => `'${r}'`).join(', ')}],`
+  return `import { defineArc } from '${SCHEMA}'
+export default defineArc({
+  id: 'TESTARC', name: 'a fixture test arc', baseRef: 'develop',
+  planes: [{ name: 'only plane', phases: [9006] }],${railBlock}
+  acceptanceCriteria: [{ id: 'ac-1', job: 'as a user I want the thing', surfaces: ['cli'], signal: '${signal}', tier: 'wired', bar: 'the bar is cleared' }],${rejBlock}${ratBlock}
+})
+`
+}
+
+/** A tmp consumer repo holding roadmap/arcs/TESTARC.arc.ts, plus its git + sidecar levers. */
+function makeArcRepo() {
+  const base = mkdtempSync(join(tmpdir(), 'zr-validate-arc-'))
+  bases.push(base)
+  const arcsDir = join(base, 'roadmap', 'arcs')
+  mkdirSync(arcsDir, { recursive: true })
+  const arcPath = join(arcsDir, 'TESTARC.arc.ts')
+  const git = (...args) =>
+    execFileSync('git', ['-C', base, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { stdio: 'ignore' })
+  git('init', '-q')
+  return {
+    base,
+    arcPath,
+    write: (opts) => writeFileSync(arcPath, arcSource(opts)),
+    commitAll: (msg) => {
+      git('add', '-A')
+      git('commit', '-q', '-m', msg)
+    },
+    /** The `.building/<id>.json` marker: the arc is past planning, so its record is frozen. */
+    markBuilding: () => {
+      mkdirSync(join(arcsDir, '.building'), { recursive: true })
+      writeFileSync(join(arcsDir, '.building', 'TESTARC.json'), JSON.stringify({ arcId: 'TESTARC' }))
+    },
+  }
+}
+
+const rulesOf = (res) => (res.errors ?? []).map((e) => e.rule)
+const appendOnly = (res) => (res.errors ?? []).find((e) => e.rule === 'rejectedAlternatives-append-only')
+
+test('rejectedAlternatives — a building arc that DELETES a recorded rejection is an append-only ERROR, on every path the AC branch short-circuits', () => {
+  const repo = makeArcRepo()
+  // HEAD holds TWO recorded rejections.
+  repo.write({ rejected: [REJECT_A, REJECT_B] })
+  repo.commitAll('v1: two recorded rejections')
+  repo.markBuilding()
+
+  // (a) MINIMAL shrink — 2 → 1, acceptanceCriteria byte-identical. Today the shared
+  // arcImmutabilityChecks returns [] at `if (curAC === headAC)` before it could look.
+  repo.write({ rejected: [REJECT_A] })
+  const shrunk = validateRoadmapFile(repo.arcPath)
+  assert.equal(shrunk.kind, 'errors', `dropping a recorded rejection must RED (got kind ${shrunk.kind})`)
+  const finding = appendOnly(shrunk)
+  assert.ok(finding, `expected a rejectedAlternatives-append-only error; got rules ${JSON.stringify(rulesOf(shrunk))}`)
+  assert.ok(finding.msg.includes('TESTARC'), `the finding names the arc (got: ${finding.msg})`)
+  assert.match(finding.msg, /\b2\b/, `and the count it had — 2 (got: ${finding.msg})`)
+  assert.match(finding.msg, /\b1\b/, `and the count it now has — 1 (got: ${finding.msg})`)
+  assert.match(
+    String(finding.fix),
+    /append/i,
+    `the fix tells the author to APPEND a superseding entry rather than delete (got: ${finding.fix})`,
+  )
+  assert.equal(
+    rulesOf(shrunk).includes('acceptanceCriteria-immutable'),
+    false,
+    'acceptanceCriteria did not change, so the AC rule must stay silent — this error is its own',
+  )
+
+  // (b) BOUNDARY: the whole key deleted (2 → 0) — the deletion an author actually performs.
+  repo.write({ rejected: null })
+  const gone = validateRoadmapFile(repo.arcPath)
+  assert.ok(
+    appendOnly(gone),
+    `removing the rejectedAlternatives key outright is the same deletion; got rules ${JSON.stringify(rulesOf(gone))}`,
+  )
+
+  // (c) The OTHER short-circuit: acceptanceCriteria changed WITH a fresh ratification, which
+  // makes the AC branch return [] on `curRat > headRat`. A shrink smuggled into that same edit
+  // must still red — the two records are independent.
+  repo.write({
+    signal: 'a RATIFIED broadened signal',
+    rejected: [REJECT_A],
+    ratifications: ['2026-08-27: broadened ac-1 signal per user ratification'],
+  })
+  const ratified = validateRoadmapFile(repo.arcPath)
+  assert.ok(
+    appendOnly(ratified),
+    `a ratified AC change does not license deleting a rejection; got rules ${JSON.stringify(rulesOf(ratified))}`,
+  )
+  assert.equal(
+    rulesOf(ratified).includes('acceptanceCriteria-immutable'),
+    false,
+    'and the ratification still satisfies the AC rule — the shrink is the only complaint',
+  )
+})
+
+test('rejectedAlternatives — growth or an unchanged count on a building arc is CLEAN, even when acceptanceCriteria never changed', () => {
+  const repo = makeArcRepo()
+  repo.write({ rejected: [REJECT_A, REJECT_B] })
+  repo.commitAll('v1: two recorded rejections')
+  repo.markBuilding()
+
+  // UNCHANGED count, with a real edit elsewhere so the file genuinely differs from HEAD
+  // (an identical file would pass for the wrong reason).
+  repo.write({ rejected: [REJECT_A, REJECT_B], rails: ['every claim in this arc names the run that proved it'] })
+  const same = validateRoadmapFile(repo.arcPath)
+  assert.notEqual(
+    readFileSync(repo.arcPath, 'utf8'),
+    execFileSync('git', ['-C', repo.base, 'show', 'HEAD:roadmap/arcs/TESTARC.arc.ts'], { encoding: 'utf8' }),
+    'fixture bug: the working copy must differ from HEAD',
+  )
+  assert.equal(same.ok, true, `an unchanged rejection count is not a finding; got ${JSON.stringify(same.errors ?? [])}`)
+  assert.equal(appendOnly(same), undefined, 'no append-only error on an unchanged count')
+
+  // GROWTH — 2 → 3, acceptanceCriteria still byte-identical to HEAD.
+  repo.write({ rejected: [REJECT_A, REJECT_B, REJECT_C] })
+  const grown = validateRoadmapFile(repo.arcPath)
+  assert.equal(grown.ok, true, `appending a rejection is the intended motion; got ${JSON.stringify(grown.errors ?? [])}`)
+  assert.equal(appendOnly(grown), undefined, 'no append-only error on growth')
+
+  // ARMED-check: the two clean verdicts above are only worth something if this fixture CAN
+  // red. Shrink the very same file and demand the error — without this, deleting the guard
+  // outright leaves this test green.
+  repo.write({ rejected: [REJECT_A] })
+  assert.ok(
+    appendOnly(validateRoadmapFile(repo.arcPath)),
+    'the guard is armed on this fixture — the clean verdicts above are about the count, not about a dead check',
+  )
+})
+
+const adoptionWarns = (res) => (res.warnings ?? []).filter((w) => /rejectedAlternatives/.test(w))
+
+test('rejectedAlternatives — a NEW-to-git arc writing REJECTED in prose with no typed field gets an adoption WARN, never an error', () => {
+  const repo = makeArcRepo()
+  // HEAD exists but does NOT hold this arc file: the lint fires on authoring, not on edits.
+  writeFileSync(join(repo.base, 'README.md'), '# fixture consumer\n')
+  repo.commitAll('v0: repo without the arc')
+  repo.write({ rails: ['the streaming-writer option was REJECTED at the design gate — do not resurrect it'] })
+  const content = readFileSync(repo.arcPath, 'utf8')
+  assert.match(content, /\bREJECTED\b/, 'fixture bug: the prose the lint keys on must be present')
+  assert.equal(/rejectedAlternatives:/.test(content), false, 'fixture bug: the typed key must be ABSENT')
+
+  const res = validateRoadmapFile(repo.arcPath)
+  assert.equal(res.ok, true, `the nudge is advisory — it must never red the file (got ${JSON.stringify(res.errors ?? [])})`)
+  assert.equal(res.kind, 'ok')
+  const warns = adoptionWarns(res)
+  assert.equal(warns.length, 1, `expected exactly one rejectedAlternatives nudge; got ${JSON.stringify(res.warnings ?? [])}`)
+  assert.match(warns[0], /WARN/, `it is labelled a WARN (got: ${warns[0]})`)
+  assert.ok(warns[0].includes('TESTARC'), `and names the arc it is about (got: ${warns[0]})`)
+
+  // Grandfathering: the SAME bytes, once git has them, stop warning — the ~committed arcs
+  // are not a backlog of lint debt.
+  repo.commitAll('v1: the arc as authored')
+  assert.deepEqual(
+    adoptionWarns(validateRoadmapFile(repo.arcPath)),
+    [],
+    'a committed arc is grandfathered exactly like the phase-file lint family',
+  )
+})
+
+test('rejectedAlternatives — the same new-to-git arc WITH a rejectedAlternatives key gets no adoption WARN', () => {
+  const repo = makeArcRepo()
+  writeFileSync(join(repo.base, 'README.md'), '# fixture consumer\n')
+  repo.commitAll('v0: repo without the arc')
+  // Identical to the previous fixture EXCEPT the typed key — the prose stays, so a pass here
+  // can only come from the key being seen, never from the trigger having vanished.
+  repo.write({
+    rails: ['the streaming-writer option was REJECTED at the design gate — do not resurrect it'],
+    rejected: [REJECT_A],
+  })
+  const content = readFileSync(repo.arcPath, 'utf8')
+  assert.match(content, /\bREJECTED\b/, 'fixture bug: the trigger prose must still be present')
+  assert.match(content, /rejectedAlternatives:/, 'fixture bug: the typed key must be present')
+
+  const res = validateRoadmapFile(repo.arcPath)
+  assert.equal(res.ok, true, `a well-formed arc stays green; got ${JSON.stringify(res.errors ?? [])}`)
+  assert.deepEqual(
+    adoptionWarns(res),
+    [],
+    'the author already used the typed field — nudging them again is noise',
+  )
+
+  // ARMED-check: drop ONLY the key from this same new-to-git file and the nudge must appear,
+  // proving the silence above came from the key and not from an absent lint.
+  repo.write({ rails: ['the streaming-writer option was REJECTED at the design gate — do not resurrect it'] })
+  assert.equal(
+    adoptionWarns(validateRoadmapFile(repo.arcPath)).length,
+    1,
+    'the lint is armed on this fixture — the silence above is about the typed key, not about a dead lint',
+  )
+})

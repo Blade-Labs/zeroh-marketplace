@@ -206,9 +206,21 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/lib/validate.mjs', 'plugins/zeroh-roadmap/cli/lib/validate.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
       dependsOn: ['10.3'],
       interfaces: { consumes: ['ArcShape.rejectedAlternatives (templates/schema.ts)'], produces: [] },
+      transparencyReport: {
+        whatWasDone:
+          'arcImmutabilityChecks now COLLECTS findings instead of early-returning: the rejectedAlternatives-append-only error fires on a building arc whose entry count shrank vs HEAD, independent of the acceptanceCriteria branch (whose two short-circuits are preserved inside a conditional). rejectedProseWarnings adds the new-to-git arc WARN: prose REJECTED with no rejectedAlternatives: key nudges toward the typed field.',
+        how:
+          'TDD: test-engineer wrote 4 RED tests first from problem/criteria only (RED evidence: 7 pass / 4 fail, failures quoted per test); implementation turned the suite 11/11 with the parity suite bin/validate-roadmap-file.test.mjs still 25/25. GUARD MUTATION PROOF, three results: (1) dead shrink check (false &&) → not ok 8 AND not ok 9, 9 pass / 2 fail; (2) dead adoption WARN (early return []) → not ok 10 AND not ok 11, 9 pass / 2 fail; (3) decoy comment on the curRej binding → 11 pass / 0 fail. Restored and re-verified: 11/11.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Semantic resurrection (a plan re-proposing a rejected option in different words) is deliberately NOT mechanized — review-phase H2 (task 10.5) is the judgment red-line; these guards cover only shrink and prose-burial.',
+      },
     },
     {
       id: '10.5',

@@ -86,7 +86,9 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
         ...driverLaneWarnings(parsed),
         ...attributionWarnings(parsed),
       ]
-    : []
+    : isArc && parsed && isNewToGit(normalized)
+      ? rejectedProseWarnings(parsed, content, normalized)
+      : []
 
   if (errors.length > 0) return { kind: 'errors', ok: false, errors, warnings }
   return { kind: 'ok', ok: true, warnings }
@@ -412,19 +414,47 @@ function arcImmutabilityChecks(arc, content, arcFile) {
   } catch {
     return []
   }
+  // Collected, never early-returned: the append-only check below must fire even when the
+  // acceptanceCriteria branch would have short-circuited (unchanged AC, or a fresh ratification).
+  const out = []
+  const curRej = countTopLevelElements(extractKeyBlock(content, 'rejectedAlternatives'))
+  const headRej = countTopLevelElements(extractKeyBlock(headContent, 'rejectedAlternatives'))
+  if (curRej < headRej) {
+    out.push({
+      rule: 'rejectedAlternatives-append-only',
+      msg: `arc ${id} is building but its rejectedAlternatives shrank (was ${headRej}, now ${curRej})`,
+      fix: 'a rejection is history — append a superseding dated entry, never delete',
+    })
+  }
   const norm = (s) => (s ? s.replace(/\s+/g, ' ').trim() : '')
   const curAC = norm(extractKeyBlock(content, 'acceptanceCriteria'))
   const headAC = norm(extractKeyBlock(headContent, 'acceptanceCriteria'))
-  if (curAC === headAC) return []
-  const curRat = countTopLevelElements(extractKeyBlock(content, 'criteriaRatifications'))
-  const headRat = countTopLevelElements(extractKeyBlock(headContent, 'criteriaRatifications'))
-  if (curRat > headRat) return []
+  if (curAC !== headAC) {
+    const curRat = countTopLevelElements(extractKeyBlock(content, 'criteriaRatifications'))
+    const headRat = countTopLevelElements(extractKeyBlock(headContent, 'criteriaRatifications'))
+    if (!(curRat > headRat)) {
+      out.push({
+        rule: 'acceptanceCriteria-immutable',
+        msg: `arc ${id} is building but its acceptanceCriteria changed without a new criteriaRatifications entry (was ${headRat}, now ${curRat})`,
+        fix: 'append a dated entry to criteriaRatifications explaining the change, or record a typed descope — never silently narrow a criterion (the 1343.6 defect)',
+      })
+    }
+  }
+  return out
+}
+
+/** WARN-level adoption nudge (NEW-to-git arc files only, mirroring the phase-lint grandfather
+ *  gate): an arc whose prose says REJECTED but which carries no typed `rejectedAlternatives:`
+ *  key is burying a rejection where no planner's grep will find it. Never an error —
+ *  review-phase H2 is the enforcement. */
+function rejectedProseWarnings(arc, content, normalizedPath) {
+  const id = arc?.id ?? normalizedPath
+  if (!/\bREJECTED\b/.test(content)) return []
+  if (/\brejectedAlternatives\s*:/.test(content)) return []
   return [
-    {
-      rule: 'acceptanceCriteria-immutable',
-      msg: `arc ${id} is building but its acceptanceCriteria changed without a new criteriaRatifications entry (was ${headRat}, now ${curRat})`,
-      fix: 'append a dated entry to criteriaRatifications explaining the change, or record a typed descope — never silently narrow a criterion (the 1343.6 defect)',
-    },
+    `[zeroh-roadmap] WARN arc ${id}: prose says REJECTED but there is no typed ` +
+      `rejectedAlternatives: entry — record the ruled-out option in the field so a future ` +
+      `planner's grep finds it (new arc files only)`,
   ]
 }
 
