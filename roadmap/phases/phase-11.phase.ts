@@ -189,7 +189,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/bin/roadmap.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'roadmap capacity landed: human verdict line + per-signal table + reasons with exit 0/3 (3 = at capacity, the scriptable gate), --json = the CapacityVerdictShape object verbatim at exit 0; COMMANDS registry row added and the bin header exit-code contract updated to name capacity’s exit-3 meaning (the tester’s honesty note). Deterministic seam: env ZEROH_ROADMAP_CAPACITY_PROBES replaces ALL probes with fixed values; malformed seam JSON is a named exit-2 refusal, never a silent live fallback.',
+        how:
+          'TDD: test-engineer wrote 10 RED wired subprocess cases (unknown-command failures quoted; 11/11 seeded mutants killed against a scratch reference, including partial-seam leaks and narration bleed into --json stdout). Implementation went 10/10 first run; the plan’s registry verify (extracted verbatim at plan time) also green. Consumed interfaces grep-verified before building (probeCapacity, CapacityVerdictShape in cli/lib/capacity.mjs).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None — the seam env name is a single exported-in-doc constant in the module.',
+        limitations:
+          'The seam env is honored in ALL contexts, not only tests — deliberately, as a dry-run simulation knob; an operator setting it and forgetting gets fixed verdicts, mitigated by the named env in every refusal and the doc header.',
+      },
       dependsOn: ['11.1', '11.2'],
       interfaces: { consumes: ['probeCapacity (cli/lib/capacity.mjs)', 'CapacityVerdictShape (cli/lib/capacity.mjs)'], produces: [] },
     },

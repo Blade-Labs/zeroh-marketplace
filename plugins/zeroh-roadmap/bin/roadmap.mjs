@@ -7,7 +7,7 @@
  *   0  success / clean / the requested state holds
  *   1  usage or configuration error (missing config, unknown/args, not-yet-implemented)
  *   2  check failed / refused / red (the caller cannot narrate around it)
- *   3/4 long-poll verdicts (watch — 1657; NOT used here)
+ *   3/4 long-poll verdicts (watch — 1657) · capacity's gate verdict is exit 3 (at capacity)
  *
  * Commands are cli/commands/<name>.mjs default-export async run(argv) → exit code.
  * A command whose module is not present yet is listed in the tree with its owning
@@ -42,6 +42,7 @@ const TREE = {
   followups: { phase: 2422, sub: ['census', '--json'], desc: 'census followup-file lifecycle and inbound references' },
   debt: { phase: 1658, sub: ['census', 'dispose', 'check'], desc: 'debt census/dispose wrappers' },
   measure: { phase: 1659, sub: ['--flow', '--assert'], desc: 'protocol-load meter (bytes/4 over the invocation path)' },
+  capacity: { phase: 11, sub: ['[--json]'], desc: 'live box-resource admission check — can another executor spawn right now (the mandatory gate for any parallel fan-out; exit 3 = at capacity)' },
   codex: { phase: 1838, sub: ['run <N> [<N2>…] [--worktree] [--base]', 'review <N> [<N2>…] [--doc] [--focus]', 'status <N> [--review]'], desc: 'detached Codex delegation lane — run implements a plan, review adversarially reads one (worktree + stdin prompt + journal; the driver runs the gate, the session audits and integrates)' },
   driver: { arc: 'POLYSEAT', phase: 2, sub: ['verify <id>', 'register <id>'], desc: "probe a driver's real capabilities (pasted provenance); register refuses an unverified id" },
   eval: { phase: 1996, sub: ['<ARCID> [--date] [--force] [--collect-only] [--json]', 'record-sweep --arc <ID>', 'record-verdicts --arc <ID>', 'merge-judge --arc <ID>', 'trend', 'restamp', 'lesson "<text>" [--phase N]', 'scorecard [--date] [--json]', 'propose [--json] [--dry-run]'], desc: 'arc eval: collect the trace, score the deterministic dimensions and ratchet, merge the judge verdict, record the land-time aggregates, capture a durable lesson to the committed sidecar, and cluster the corpus into ratify-only improvement proposals' },
