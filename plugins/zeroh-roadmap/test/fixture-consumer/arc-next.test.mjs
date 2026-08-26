@@ -398,7 +398,8 @@ const CLEAR = { memAvailableMb: 64000, load1: 0.5, cores: 16, capbuildUnits: 0, 
 const STARVED = { ...CLEAR, capbuildUnits: 3 }
 const nextUnder = (root, probes, extraArgs = []) =>
   runCli(root, ['arc', 'next', 'FX', '--json', ...extraArgs], probesEnv(probes))
-/** Two backlog members: the derivation's answer is run-phase 9101 — the only gated action.
+/** Two backlog members, so a runnable member exists AND `remaining` stays non-empty after
+ *  selection — both shapes the capacity gate must preserve when it transforms the action.
  *  `config` (optional) is shallow-merged into the fixture's roadmap.config.json. */
 const runnableRepo = (config) => arcRepo([
   { phase: 9101, status: 'backlog', arcId: 'FX', tasks: [{ id: '9101.1', done: false }] },
