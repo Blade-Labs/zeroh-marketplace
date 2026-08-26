@@ -1088,7 +1088,8 @@ export const ArcShape = z.object({
    *  arms, architect-verdict rejects. `decidedBy` carries provenance ('user' |
    *  'software-architect verdict <date>') — decided, not ratified: architect
    *  rejects are recorded decisions, not user ratifications. Append-only (a
-   *  rejection is history; validate reds a shrink on a building arc). A future
+   *  rejection is history; validate reds any HEAD entry deleted or rewritten
+   *  on a building arc). A future
    *  planner greps this before proposing — a rejection surviving only as
    *  LOCKED-DECISIONS prose is the resurrection-leak this closes.
    *  Optional → additive. */
