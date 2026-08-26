@@ -85,6 +85,33 @@ export const defaultProbes = {
   },
 }
 
+/** Named refusal for a malformed ZEROH_ROADMAP_CAPACITY_PROBES seam — callers print it and
+ *  refuse; NEVER a silent fallback to live probes. */
+export class SeamError extends Error {}
+
+export const SEAM_ENV = 'ZEROH_ROADMAP_CAPACITY_PROBES'
+
+/** The deterministic probe seam (wired tests + dry-run simulation): when the env var is set,
+ *  ALL probes come from its fixed JSON values {memAvailableMb, load1, cores, capbuildUnits,
+ *  liveArms}. Returns null when unset; throws SeamError on malformed JSON. ONE home — the
+ *  capacity command and the arc-next admission gate read the same seam. */
+export function seamProbes(env = process.env) {
+  const raw = env[SEAM_ENV]
+  if (!raw) return null
+  let v
+  try {
+    v = JSON.parse(raw)
+  } catch (e) {
+    throw new SeamError(`${SEAM_ENV} is not valid JSON (${e.message}) — refusing to emit a verdict, not falling back to live probes`)
+  }
+  return {
+    memAvailableMb: () => v.memAvailableMb,
+    load: () => ({ load1: v.load1, cores: v.cores }),
+    runningCapbuildUnits: () => v.capbuildUnits,
+    liveExecutorArms: () => v.liveArms,
+  }
+}
+
 /**
  * Compute the admission verdict. `config` is the consumer's optional `capacity` block (absent →
  * DEFAULT_CAPACITY verbatim; a partial block keeps every untouched default). Pure over the

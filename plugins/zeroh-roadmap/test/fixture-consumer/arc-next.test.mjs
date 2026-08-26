@@ -15,9 +15,10 @@ import {
 } from './harness.mjs'
 import arcPlaneWorkflow from '../../workflows/arc-plane.workflow.mjs'
 
-/** Build arc FX over the given member phase objects (+ optional acceptanceCriteria). */
-function arcRepo(members, { criteria = true, arcId = 'FX', extra = {} } = {}) {
-  const root = makeFixtureRepo()
+/** Build arc FX over the given member phase objects (+ optional acceptanceCriteria).
+ *  `config` is shallow-merged into the fixture's roadmap.config.json (makeFixtureRepo opts). */
+function arcRepo(members, { criteria = true, arcId = 'FX', extra = {}, config } = {}) {
+  const root = makeFixtureRepo(config ? { config } : {})
   writeArcFile(root, {
     id: arcId, baseRef: 'develop', planes: [{ name: 'P', phases: members.map((m) => m.phase) }],
     ...(criteria ? { acceptanceCriteria: [{ id: 'c1', job: 'the fixture arc job here', surfaces: ['plugin'], signal: 'observable signal here', tier: 'wired', bar: 'good enough to judge' }] } : {}),
@@ -383,4 +384,129 @@ test('N24 — an unrecognized wake STILL falls through to stalled (the fall-thro
   const root = arcRepo([{ phase: 9801, status: 'in-progress', arcId: 'FX', tasks: [{ id: '9801.1', done: false }] }])
   const result = await driveWorkflow(root, 9801, { agentReturns: [{ watchExit: 99, watchVerdict: { verdict: 'WAT' } }] }).promise
   assert.equal(result.halt, 'stalled', 'only exit 5 maps to unobserved — an unknown wake keeps its old handling')
+})
+
+// ── N25-N29 — the capacity ADMISSION GATE at `arc next` (phase 11 task 11.4) ──────────────
+// do-arc spawns whatever `arc next` hands it, so a starved box has to be refused HERE, in the
+// CLI choke point, using the blocked action do-arc already halts on. Determinism comes from the
+// SAME seam the capacity verb documents: ZEROH_ROADMAP_CAPACITY_PROBES replaces every live probe
+// with fixed values, so these cases never read this box's real memory/load/units.
+const probesEnv = (probes) => ({ ZEROH_ROADMAP_CAPACITY_PROBES: JSON.stringify(probes) })
+/** A box with room to spare on every signal (default bounds: 6144+4096 MB, 2 cores, 3 executors). */
+const CLEAR = { memAvailableMb: 64000, load1: 0.5, cores: 16, capbuildUnits: 0, liveArms: 0 }
+/** Same box, but the executor bound is already spent (3 busy ≥ maxExecutors 3). */
+const STARVED = { ...CLEAR, capbuildUnits: 3 }
+const nextUnder = (root, probes, extraArgs = []) =>
+  runCli(root, ['arc', 'next', 'FX', '--json', ...extraArgs], probesEnv(probes))
+/** Two backlog members: the derivation's answer is run-phase 9101 — the only gated action.
+ *  `config` (optional) is shallow-merged into the fixture's roadmap.config.json. */
+const runnableRepo = (config) => arcRepo([
+  { phase: 9101, status: 'backlog', arcId: 'FX', tasks: [{ id: '9101.1', done: false }] },
+  { phase: 9102, status: 'backlog', arcId: 'FX', tasks: [{ id: '9102.1', done: false }] },
+], config ? { config } : {})
+
+test('N25 — a starved box turns run-phase into blocked, quoting the BINDING signal and the override (exit 2)', () => {
+  const root = runnableRepo()
+  // Control first: the ONLY difference between these two runs is the seam value.
+  const clear = nextUnder(root, CLEAR)
+  assert.equal(clear.code, 0)
+  assert.equal(clear.json.action, 'run-phase', 'precondition: this fixture is runnable on a clear box')
+
+  // (a) the executor bound binds
+  const busy = nextUnder(root, STARVED)
+  assert.equal(busy.code, 2, 'a capacity refusal exits on the existing blocked mapping, not a new code')
+  assert.equal(busy.json.action, 'blocked')
+  assert.ok(
+    busy.json.reason.startsWith('box at capacity — '),
+    `the reason opens with the capacity prefix do-arc reads: ${JSON.stringify(busy.json.reason)}`,
+  )
+  assert.match(busy.json.reason, /executors: 3 busy/, 'and quotes the reason that actually bound')
+  assert.match(busy.json.reason, /maxExecutors 3/, 'naming the bound it hit')
+  assert.match(busy.json.reason, /--ignore-capacity/, 'and the operator override, so the halt is actionable')
+  assert.ok(busy.json.remaining.includes(9101), 'the refused member is still on the board, not consumed')
+
+  // (b) a DIFFERENT signal binds → a different quoted reason (the gate reads the verdict, not one field)
+  const starvedMem = { ...CLEAR, memAvailableMb: 2000 }
+  const mem = nextUnder(root, starvedMem)
+  assert.equal(mem.code, 2)
+  assert.equal(mem.json.action, 'blocked')
+  assert.ok(mem.json.reason.startsWith('box at capacity — '))
+  assert.match(
+    mem.json.reason,
+    /memory: 2000 MB available < 10240 MB needed/,
+    `the memory signal's own reason text rides through: ${JSON.stringify(mem.json.reason)}`,
+  )
+  assert.doesNotMatch(mem.json.reason, /executors: /, 'and a signal that did NOT bind is not invented into the halt')
+})
+
+test('N26 — --ignore-capacity restores the UNTRANSFORMED run-phase result byte-for-byte, with a stderr override note', () => {
+  const root = runnableRepo()
+  const clear = nextUnder(root, CLEAR)
+  const overridden = nextUnder(root, STARVED, ['--ignore-capacity'])
+  assert.equal(overridden.code, 0, 'the override is a full restore, including the exit code')
+  assert.equal(
+    overridden.stdout,
+    clear.stdout,
+    'the machine-read stdout is the derivation verbatim — an override must not narrate into the JSON',
+  )
+  assert.equal(overridden.json.action, 'run-phase')
+  assert.equal(overridden.json.phase, 9101)
+  // The note is the audit trail for a deliberate override: it must name what was overridden.
+  assert.match(overridden.stderr, /--ignore-capacity/, `the override announces itself: ${JSON.stringify(overridden.stderr)}`)
+  assert.match(overridden.stderr, /executors: 3 busy/, 'and names the capacity reason it is overriding')
+  assert.doesNotMatch(clear.stderr, /capacity/i, 'a clear box says nothing about capacity anywhere')
+})
+
+test('N27 — a box WITH capacity leaves the derivation untouched: no capacity fields, no dependence on the numbers', () => {
+  const root = runnableRepo()
+  // Two clear boxes with DIFFERENT (still generous) readings. If any capacity-era field leaked
+  // into the report, these two runs would differ; if the gate mis-fired, neither would be run-phase.
+  const a = nextUnder(root, CLEAR)
+  const b = nextUnder(root, { memAvailableMb: 31000, load1: 3.25, cores: 8, capbuildUnits: 1, liveArms: 0 })
+  assert.equal(a.code, 0)
+  assert.equal(b.code, 0)
+  assert.equal(a.stdout, b.stdout, 'the run-phase report is byte-identical across two healthy boxes')
+  assert.deepEqual(a.json, b.json)
+  assert.equal(a.json.action, 'run-phase')
+  assert.equal(a.json.phase, 9101)
+  for (const leak of ['capacity', 'canSpawn', 'maxParallel', 'ignore-capacity']) {
+    assert.doesNotMatch(a.stdout, new RegExp(leak), `no ${leak} field rides the healthy-box report`)
+  }
+})
+
+test('N28 — the gate binds ONLY run-phase: a dependency block keeps its own reason, a complete arc stays complete', () => {
+  // (a) an unmet cross-phase dependency on a STARVED box — same exit 2, but capacity must not
+  // overwrite (or prepend itself to) the reason the driver has to act on.
+  const depRoot = arcRepo([{ phase: 9101, status: 'backlog', arcId: 'FX', dependsOn: [8888], tasks: [{ id: '9101.1', done: false }] }])
+  const dep = nextUnder(depRoot, STARVED)
+  assert.equal(dep.code, 2)
+  assert.equal(dep.json.action, 'blocked')
+  assert.match(dep.json.reason, /dependenc/i, 'the unmet-dependency reason survives a starved box')
+  assert.doesNotMatch(dep.json.reason, /box at capacity/, 'capacity never relabels a block it did not cause')
+  assert.deepEqual(dep.json, nextUnder(depRoot, CLEAR).json, 'and the whole report is capacity-independent')
+
+  // (b) a terminal action the gate has no business touching — nothing is spawned to complete an arc.
+  const doneRoot = arcRepo([
+    { phase: 9101, status: 'done', arcId: 'FX', tasks: [{ id: '9101.1', done: true }], executionResult: { phase: 9101, status: 'done', gateRounds: 1, hardStops: [] } },
+  ], { criteria: false })
+  writeFileSync(join(doneRoot, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId: 'FX', outcome: 'shipped' }))
+  const starvedComplete = nextUnder(doneRoot, STARVED)
+  assert.equal(starvedComplete.code, 0, 'a starved box still lets a finished arc report complete')
+  assert.equal(starvedComplete.json.action, 'complete')
+  assert.equal(starvedComplete.stdout, nextUnder(doneRoot, CLEAR).stdout, 'byte-identical to the clear-box report')
+})
+
+test('N29 — the gate honors the consumer config capacity block, not just the library defaults', () => {
+  // ONE busy unit: clear under the default bound (3), at capacity under a box that declares 1.
+  const probes = { ...CLEAR, capbuildUnits: 1 }
+  const defaults = nextUnder(runnableRepo(), probes)
+  assert.equal(defaults.code, 0, 'precondition: 1 busy unit is well inside the default maxExecutors 3')
+  assert.equal(defaults.json.action, 'run-phase')
+
+  const tight = nextUnder(runnableRepo({ capacity: { maxExecutors: 1 } }), probes)
+  assert.equal(tight.code, 2, 'the same box refuses once the consumer declares a bound of one executor')
+  assert.equal(tight.json.action, 'blocked')
+  assert.match(tight.json.reason, /^box at capacity — /)
+  assert.match(tight.json.reason, /executors: 1 busy/)
+  assert.match(tight.json.reason, /maxExecutors 1/, 'the CONFIGURED bound is what was applied, not the default 3')
 })

@@ -15,28 +15,7 @@
  * Returns its exit code to the dispatcher — never hard-exits (testability seam).
  */
 import { loadConfig } from '../lib/config.mjs'
-import { probeCapacity, defaultProbes } from '../lib/capacity.mjs'
-
-const SEAM_ENV = 'ZEROH_ROADMAP_CAPACITY_PROBES'
-
-function seamProbes() {
-  const raw = process.env[SEAM_ENV]
-  if (!raw) return null
-  let v
-  try {
-    v = JSON.parse(raw)
-  } catch (e) {
-    throw new SeamError(`roadmap capacity: ${SEAM_ENV} is not valid JSON (${e.message}) — refusing to emit a verdict, not falling back to live probes`)
-  }
-  return {
-    memAvailableMb: () => v.memAvailableMb,
-    load: () => ({ load1: v.load1, cores: v.cores }),
-    runningCapbuildUnits: () => v.capbuildUnits,
-    liveExecutorArms: () => v.liveArms,
-  }
-}
-
-class SeamError extends Error {}
+import { probeCapacity, defaultProbes, seamProbes, SeamError } from '../lib/capacity.mjs'
 
 export default async function run(argv) {
   const json = argv.includes('--json')
@@ -51,7 +30,7 @@ export default async function run(argv) {
     probes = seamProbes() ?? defaultProbes
   } catch (e) {
     if (e instanceof SeamError) {
-      process.stderr.write(e.message + '\n')
+      process.stderr.write(`roadmap capacity: ${e.message}\n`)
       return 2
     }
     throw e

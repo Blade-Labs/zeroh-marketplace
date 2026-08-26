@@ -227,7 +227,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/arc.mjs', 'plugins/zeroh-roadmap/test/fixture-consumer/arc-next.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'arc next gained the capacity admission gate: a run-phase on a starved box transforms to the blocked action (reason `box at capacity — <reasons> … --ignore-capacity`, refused member returned to remaining, exit 2 via the existing mapping); --ignore-capacity restores the untransformed derivation byte-for-byte with a stderr audit note naming the flag and the overridden reasons; the probe seam moved to cli/lib/capacity.mjs (seamProbes/SeamError/SEAM_ENV — ONE home shared with the capacity command). Gate scoped to run-phase only: refusing a RESUME would strand committed work mid-phase (the tester’s scope note, resolved per the plan’s explicit run-phase contract).',
+        how:
+          'TDD: test-engineer added N25-N29 (3 RED + 2 fence cases; real reason strings pre-verified against probeCapacity). Two implementation findings: the refused member had to go BACK into remaining (refused ≠ consumed), and N26 exposed a real harness defect — runCli dropped all exit-0 stderr because execFileSync only exposes stderr on the error object; fixed with spawnSync and the lesson flushed to the eval lane. arc-next 25/25; ALL fixture-consumer suites 73/73 after the harness change; do-arc budget still exactly 13257/13257 (acceptance criterion re-run).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'test/fixture-consumer/harness.mjs joined the diff beyond the plan’s files[] (the runCli stderr capture fix N26 required). Seam-error handling in arc next: operator-set seam problems exit 1 loudly; a live-probe computation throw fails OPEN with a stderr note (untested by the N-cases — the lib tier owns degraded behavior).',
+      },
       dependsOn: ['11.1'],
       interfaces: { consumes: ['probeCapacity (cli/lib/capacity.mjs)'], produces: [] },
     },

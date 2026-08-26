@@ -20,7 +20,7 @@
  * Teardown is the executor-liveness.test.mjs idiom: a process-exit rmSync over every tmp dir
  * this module created — no scratch repo survives the suite (the 1660.8 residue-delta gate).
  */
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import {
   cpSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync,
   realpathSync, existsSync, rmSync, chmodSync,
@@ -186,20 +186,17 @@ export function runCli(root, args, env = {}, { input } = {}) {
     FIXTURE_SLOT_LOG: join(root, '.fixture-slots.jsonl'),
     ...env,
   }
-  let code = 0
-  let stdout = ''
-  let stderr = ''
-  try {
-    stdout = execFileSync('node', [BIN, ...args], {
-      cwd: root, encoding: 'utf8', timeout: 120_000,
-      stdio: [input != null ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-      ...(input != null ? { input } : {}), env: fullEnv,
-    })
-  } catch (e) {
-    code = e.status ?? 1
-    stdout = (e.stdout ?? '').toString()
-    stderr = (e.stderr ?? '').toString()
-  }
+  // spawnSync, not execFileSync: exit-0 stderr must be observable too (execFileSync only
+  // exposes stderr on the thrown error object, silently dropping advisory lines on success —
+  // the phase-11 --ignore-capacity override note was the first assertion to need them).
+  const r = spawnSync('node', [BIN, ...args], {
+    cwd: root, encoding: 'utf8', timeout: 120_000,
+    stdio: [input != null ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+    ...(input != null ? { input } : {}), env: fullEnv,
+  })
+  const code = r.status ?? 1
+  const stdout = (r.stdout ?? '').toString()
+  const stderr = (r.stderr ?? '').toString()
   let json
   const t = stdout.trim()
   if (t.startsWith('{') || t.startsWith('[')) {
