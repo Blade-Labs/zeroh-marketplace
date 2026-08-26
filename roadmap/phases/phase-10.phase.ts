@@ -12,7 +12,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 10,
   name: 'Zane-workflow adoption — vertical slices, default interview, typed rejections, interface checks, parallel-dispatch investigation',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'feature',
   kind: 'logic',
