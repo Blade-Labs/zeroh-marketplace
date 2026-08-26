@@ -298,7 +298,17 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/templates/schema.ts', 'lib/roadmap/schema.ts'],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'The executionMode docblock now states the truth: RESERVED, consulted by nothing in v1 (derive.mjs single-member return, do-phase forbids task parallelism), do not author parallel, fate owned by the phase-10 parallel-dispatch investigation. Consumer copy re-synced byte-identical.',
+        how: 'One docblock replacement + cp; verify green (negated old-text grep + cmp), and the untrue text confirmed gone from BOTH copies.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'The enum keeps its parallel member for parse-compat with any existing consumer file; only the doc changed — removal (if 10.8 recommends it) is a schema change with its own phase.',
+      },
     },
     {
       id: '10.7',

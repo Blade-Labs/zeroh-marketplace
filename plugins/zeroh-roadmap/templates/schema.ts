@@ -733,7 +733,10 @@ const BasePhaseFields = {
   keyFiles: z.array(z.string()),
   /** One-sentence user-facing description (becomes changelog entry) */
   stakeholderDemo: z.string().min(10),
-  /** Execution mode: sequential = one task at a time with commit between each (default). parallel = agent batching allowed for truly independent tasks. */
+  /** RESERVED — consulted by NOTHING in v1: derive.mjs returns one runnable member and
+   *  do-phase forbids task parallelism, so 'parallel' has no reader. Do not author it.
+   *  The field's fate (wire or remove) is owned by the phase-10 parallel-dispatch
+   *  investigation (plugins/zeroh-roadmap/DESIGN-NOTES.md §Parallel dispatch). */
   executionMode: z.enum(['sequential', 'parallel']).default('sequential'),
   /** Structured tasks (full or minimal for historical phases) */
   tasks: z.array(z.union([PhaseTaskShape, MinimalTaskShape])),
