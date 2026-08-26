@@ -348,3 +348,66 @@ default** — the plugin ships none of these commands, and each consumer documen
 - `wired` → in-process wired turn through `integration/harness.ts` `driveTurn` (`app.run` with external boundaries faked) — run ONE suite via the consumer's `integration-scoped` Gate-commands slot (scoped-slot resolution rule); never `-- <suite>`, which appends after the inline glob and runs the whole tier.
 - `live-ui` → the Playwright projects in `e2e/playwright.config.ts` (`deployed` = the console, loginless; `office-pane`; `sharepoint`) + a screenshot — `E2E_PROJECT=<project> npx playwright test …` (storageState auth via `npm run e2e:auth` where needed).
 - `live-host` → real model + masking against a running host — `npm run test:live`.
+
+## Parallel dispatch investigation (phase 10)
+
+The user asked how the roadmap system could execute genuinely parallel work, given that
+dependency edges already exist at both levels (`PhaseTask.dependsOn`, phase-level `dependsOn`)
+but execution only ever picks THE one next item. Investigation only — no code moved; the ruling
+on what (if anything) to build is user-owned and recorded at the end.
+
+### Where sequentiality is enforced today (verified 2026-08-26)
+
+- `cli/lib/derive.mjs:230-268` — RUN-PHASE returns the FIRST backlog member in plane order whose
+  deps are done; the selection loop `return`s on the first runnable candidate. One next action by
+  construction, never a runnable set.
+- `skills/do-phase/SKILL.md:30` — PRIME RULE 2: one task at a time; never batch tasks or launch
+  parallel agents for tasks.
+- `agents/phase-executor.md:70-71` — the sub-agent rule: NEVER another phase-executor or a fork
+  for a "too-big" task; one executor = one whole phase.
+- `templates/schema.ts:999-1001` — the `planes` docblock: v1 executes phases in `dependsOn`
+  order; a plane is presentational; "a future version will run separate planes in parallel."
+- `templates/schema.ts:740` — `executionMode`: RESERVED, consulted by nothing (docblock trued by
+  phase 10 task 10.6).
+- `skills/using-zeroh-roadmap/SKILL.md:40-47` — the one SANCTIONED parallelism that already
+  works: multi-session lane coordination (`roadmap claim`, `roadmap arm`, the backlog header
+  board) — different sessions drive different arcs/lanes concurrently, CLI-enforced lane locks.
+
+### Three candidate architectures, priced against the shared host (31 GB / 16 cores, ~6 sessions)
+
+**(a) Plane-level do-arc fan-out.** do-arc asks derive for the runnable SET (all dep-satisfied
+backlog members), spawns one phase-executor per member, each in its OWN worktree on its own
+branch; `arc land` merges in plane order. Change surface: derive.mjs (set-valued RUN-PHASE),
+do-arc SKILL (fan-out + join + per-lane halt handling), arc land (N-branch integration),
+liveness/beacons (today they watch ONE executor). Costs that are real on this box: each worktree
+needs its own `npm ci` (no shared node_modules — proven again this session); each gate run is a
+capbuild cgroup up to 6G, so two concurrent gates + ~6 sessions can exhaust 31 GB; same-file
+contention between phases becomes merge conflicts at land time (`conflictsWith` models it but
+nothing schedules around it today). Verdict: buildable, medium-size arc of its own, worth it only
+when a real arc actually has independent planes AND the host has headroom.
+
+**(b) Cross-arc lane parallelism — exists today, zero build.** Two sessions arm two different
+arcs (or one arc + standalone phases in another lane) and run concurrently; the claim/arm locks
+and the backlog board already serialize the shared state. This is the dependency-graph-worked-
+by-several-agents shape at ARC granularity, and it is the honest match for a ~6-session shared
+box: parallelism across coarse, disjoint units, not inside one arc.
+
+**(c) Task-level batching inside a phase.** Rejected: it dissolves one-task-one-commit, the
+per-task transparencyReport, and the gate discipline (do-phase PRIME RULE 2); `batchMode` is
+already the sanctioned escape for the mechanical case and it batches COMMITS, not agents.
+
+### executionMode's fate
+
+The field models (c), which is rejected — recommend REMOVING it in a follow-up schema change
+(keep the enum parse-compatible until then; the docblock already warns against authoring it).
+Wiring it to mean (a) would misplace the knob: (a) is an arc/do-arc property, not a per-phase one.
+
+### Options for the user (ruling owned by the user, not this phase)
+
+1. **Ratify (b) as the sanctioned parallel path now** (document it as such in
+   using-zeroh-roadmap's coordination section) + queue a small follow-up phase to REMOVE
+   `executionMode`. Zero build, immediate. ← RECOMMENDED
+2. **Additionally plan arc "PARDISPATCH"** for (a) plane-level fan-out (derive set-valued
+   next, do-arc fan-out/join, N-branch land, per-lane liveness) — defer until an arc with
+   genuinely independent planes exists and host headroom is proven.
+3. **Do nothing further** — keep the field reserved, revisit when a concrete arc needs (a).

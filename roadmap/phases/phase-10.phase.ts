@@ -362,7 +362,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/DESIGN-NOTES.md'],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'DESIGN-NOTES.md §Parallel dispatch investigation (phase 10): all six sequential-enforcement sites mapped with file:line re-verified at execution time; three architectures priced against the shared host; executionMode ruled remove-in-follow-up; ends with three user options, recommending: ratify cross-arc lane parallelism (exists today, zero build) + a small executionMode-removal follow-up, deferring plane-level do-arc fan-out until a real multi-plane arc and host headroom exist.',
+        how:
+          'Anchors re-grepped before writing (derive.mjs:230-268, do-phase:30, phase-executor:70-71, schema planes:999-1001 + executionMode:740, using-zeroh-roadmap:40-47); costs grounded in observed facts (per-worktree npm ci proven this session, 6G capbuild cgroup, ~6 sessions on 31G/16c). No code mutated.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The ruling itself is deliberately open — the section ends with options; option 1 needs a user go before anyone documents (b) as sanctioned or queues the executionMode-removal phase.',
+      },
     },
   ],
   notes:
