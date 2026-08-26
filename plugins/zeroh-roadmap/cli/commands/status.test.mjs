@@ -17,6 +17,8 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { CapacityVerdictShape, probeCapacity } from '../lib/capacity.mjs'
+
 const HERE = dirname(fileURLToPath(import.meta.url)) // cli/commands/
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
 
@@ -340,4 +342,153 @@ test('11) clean lane — an in-progress member with no task divergence and no ar
   const human = status(root)
   assert.equal(human.status, 0)
   assert.doesNotMatch(human.stdout, /DIVERGED\?|STALE-ARM/, 'a clean lane prints neither integrity flag')
+})
+
+// ── box capacity on the --json machine shape ONLY (task 11.5) ────────────────────
+// `capacity` rides --json because the human table is parity-pinned byte-compatible
+// (status.parity.test.mjs). Case 14 pins that constraint from the behavior side, so a
+// capacity line leaking into the human table reds HERE too, not only in the parity lock.
+
+/**
+ * A STARVED probe fixture that no live box can produce and NO policy block can rescue:
+ * 0 MB available (memSlots 0 for any non-negative minFreeMemMb), load 64 on 1 core
+ * (loadSlots 0), 198 busy executors (busySlots 0 for any sane maxExecutors). canSpawn is
+ * therefore false on the fixture's own merits — the discriminating value, since a status
+ * that ignored the seam and read this dev box would answer true.
+ */
+const STARVED_PROBES = Object.freeze({
+  memAvailableMb: 0,
+  load1: 64,
+  cores: 1,
+  capbuildUnits: 99,
+  liveArms: 99,
+})
+
+/** The env-probe payload projected onto probeCapacity's injectable reader contract
+ *  (same projection as capacity.test.mjs — the library stays the one source of truth). */
+const asProbes = (p) => ({
+  memAvailableMb: () => p.memAvailableMb,
+  load: () => ({ load1: p.load1, cores: p.cores }),
+  runningCapbuildUnits: () => p.capbuildUnits,
+  liveExecutorArms: () => p.liveArms,
+})
+
+/**
+ * A BUILDING estate inside a real git repo that carries a minimal roadmap.config.json with
+ * NO `capacity` block — so the policy bounds are DEFAULT_CAPACITY, never this dev box's
+ * consumer config. Returns { repoDir, root }.
+ * NB the tmp prefix must not contain the word "capacity": case 14 greps the human output,
+ * which prints repo + worktree paths.
+ */
+function configuredEstate() {
+  const repoDir = join(newTmp('zr-status-seam-'), 'repo')
+  const root = join(repoDir, 'roadmap')
+  const building = join(root, 'arcs', '.building')
+  mkdirSync(building, { recursive: true })
+  gitify(repoDir)
+  writeFileSync(
+    join(root, 'roadmap.config.json'),
+    JSON.stringify(
+      {
+        configVersion: 1,
+        gateCommands: { lint: 'none', types: 'none', unit: 'none', integration: 'none', build: 'none', e2e: 'none', emit: 'none' },
+      },
+      null,
+      2,
+    ) + '\n',
+  )
+  writePhase(join(root, 'phases'), 'phase-2001.phase.ts', { phase: 2001, status: 'in-progress', arcId: 'BUILDA' })
+  writeFileSync(
+    join(building, 'BUILDA.json'),
+    JSON.stringify({ arcId: 'BUILDA', worktree: '/nonexistent/wt-builda', branch: 'arc/builda', mode: 'mixed' }) + '\n',
+  )
+  return { repoDir, root }
+}
+
+/**
+ * Spawn status FROM `cwd` (config resolution happens off the process cwd, as in
+ * capacity.mjs). `probes` object → serialized into the seam env; omitted → the seam is
+ * explicitly UNSET so the live-box case cannot be faked by an ambient var. ROADMAP_CONFIG
+ * is stripped too: an inherited one would defeat the hermetic config above.
+ */
+function statusIn(cwd, { probes, args = [] } = {}) {
+  const env = { ...process.env }
+  delete env.ROADMAP_CONFIG
+  delete env.ZEROH_ROADMAP_CAPACITY_PROBES
+  if (probes !== undefined) env.ZEROH_ROADMAP_CAPACITY_PROBES = JSON.stringify(probes)
+  return spawnSync('node', [BIN, 'status', ...args], { cwd, encoding: 'utf8', env })
+}
+
+test('12) --json carries a top-level capacity verdict computed from the probe seam (starved fixture → canSpawn false)', () => {
+  const { repoDir, root } = configuredEstate()
+  const expected = probeCapacity(undefined, asProbes(STARVED_PROBES)) // no config `capacity` block
+  assert.equal(expected.canSpawn, false, 'fixture guard: the starved fixture must be a refusal')
+  assert.equal(expected.maxParallel, 0, 'fixture guard: a refusal admits zero further executors')
+
+  const res = statusIn(repoDir, { probes: STARVED_PROBES, args: [root, '--json'] })
+  assert.equal(res.status, 0, `status --json must exit 0; stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+
+  let parsed
+  assert.doesNotThrow(() => {
+    parsed = JSON.parse(res.stdout)
+  }, `stdout must be PURE JSON; got:\n${res.stdout}`)
+
+  assert.ok('capacity' in parsed, `--json must carry the "capacity" key; got keys ${Object.keys(parsed)}`)
+  assert.doesNotThrow(
+    () => CapacityVerdictShape.parse(parsed.capacity),
+    `capacity must parse through CapacityVerdictShape; got:\n${JSON.stringify(parsed.capacity, null, 2)}`,
+  )
+  assert.equal(parsed.capacity.canSpawn, false, 'the starved fixture must report canSpawn false')
+  assert.equal(parsed.capacity.maxParallel, 0, 'a refusal admits zero further executors')
+
+  // The seam must supply EVERY signal — a status that read the live box (or wired only some
+  // fields) cannot produce 0 MB available on a 1-core host.
+  const mem = parsed.capacity.signals.find((s) => /mem/i.test(s.name))
+  const load = parsed.capacity.signals.find((s) => /load/i.test(s.name))
+  assert.equal(mem?.value, STARVED_PROBES.memAvailableMb, 'the memory signal reports the INJECTED MemAvailable, not the live box')
+  assert.equal(load?.limit, STARVED_PROBES.cores, 'the load signal reports the INJECTED core count, not the live box')
+  assert.deepEqual(parsed.capacity.degraded, [], 'fully injected probes degrade nothing')
+
+  assert.deepEqual(
+    parsed.capacity,
+    expected,
+    'capacity must be the probeCapacity verdict VERBATIM — status may not re-implement the admission math',
+  )
+})
+
+test('13) --json WITHOUT the seam still carries a shape-valid capacity (live box; no value pinned)', () => {
+  const { repoDir, root } = configuredEstate()
+  const res = statusIn(repoDir, { args: [root, '--json'] }) // seam explicitly unset
+  assert.equal(res.status, 0, `status --json must exit 0 on the live box; stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+
+  let parsed
+  assert.doesNotThrow(() => {
+    parsed = JSON.parse(res.stdout)
+  }, `stdout must be PURE JSON; got:\n${res.stdout}`)
+  assert.ok('capacity' in parsed, `--json must carry the "capacity" key without the seam too; got keys ${Object.keys(parsed)}`)
+  assert.doesNotThrow(
+    () => CapacityVerdictShape.parse(parsed.capacity),
+    `the live verdict must satisfy CapacityVerdictShape; got:\n${JSON.stringify(parsed.capacity, null, 2)}`,
+  )
+})
+
+test('14) HUMAN output carries NO capacity text — byte-identical with and without the seam (the parity constraint)', () => {
+  const { repoDir, root } = configuredEstate()
+  const stripDerived = (s) => s.replace(/derived [0-9T:.Z-]+/g, 'derived <TS>')
+
+  const seamed = statusIn(repoDir, { probes: STARVED_PROBES, args: [root] })
+  assert.equal(seamed.status, 0, `human status must exit 0; stdout:\n${seamed.stdout}\nstderr:\n${seamed.stderr}`)
+  assert.doesNotMatch(
+    seamed.stdout,
+    /capacity/i,
+    `the human table must print NO capacity text (status.parity.test.mjs pins it byte-compatible); got:\n${seamed.stdout}`,
+  )
+
+  const bare = statusIn(repoDir, { args: [root] })
+  assert.equal(bare.status, 0, `human status must exit 0 without the seam; stderr:\n${bare.stderr}`)
+  assert.equal(
+    stripDerived(seamed.stdout),
+    stripDerived(bare.stdout),
+    'a set probe seam may not change ONE byte of the human table (only --json is additive)',
+  )
 })

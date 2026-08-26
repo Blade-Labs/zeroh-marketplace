@@ -274,7 +274,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/arm.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'status --json gained a top-level capacity key (CapacityVerdictShape, seam-honored; config-less estates read with library defaults — status is a read verb and never explodes where loadConfig refuses); the human table stays byte-identical (parity suite 2/2 before and after). arm prints one stderr advisory after a successful arm when canSpawn is false (arming is a claim, not a spawn — never a refusal), advisory math never fails the arm.',
+        how:
+          'TDD: test-engineer added 2 RED + 1 constraint-fence case (mutation-checked: a seam-ignoring implementation and a human-table capacity leak both kill); implementation 13/13 + parity 2/2 + arm-disarm 9/9 first run; arm grep verify green. The starved fixture is policy-independent (all three signals at zero slots) so no consumer config can flip it.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The arm advisory is grep-verified per the plan, not test-pinned (arm-disarm suite untouched, still 9/9); a malformed seam on status --json exits 1 named (untested — the seam contract is pinned at the capacity-command tier).',
+      },
       dependsOn: ['11.1'],
       interfaces: { consumes: ['probeCapacity (cli/lib/capacity.mjs)', 'CapacityVerdictShape (cli/lib/capacity.mjs)'], produces: [] },
     },

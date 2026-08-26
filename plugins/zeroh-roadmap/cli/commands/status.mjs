@@ -262,9 +262,30 @@ export default async function run(argv) {
       ...(model.noArcId.length ? [`in-progress phase(s) with NO arcId: ${model.noArcId.join(', ')}`] : []),
       ...(model.postMergeRed ? [model.postMergeRed] : []),
     ]
+    // Box capacity rides the --json machine shape ONLY (phase 11) — the human table is
+    // parity-pinned byte-compatible and never carries it. Config-less estates read with the
+    // library defaults: status is a read verb and must not explode where loadConfig refuses.
+    const { probeCapacity, defaultProbes, seamProbes, SeamError } = await import('../lib/capacity.mjs')
+    let capacityCfg
+    try {
+      const { loadConfig } = await import('../lib/config.mjs')
+      capacityCfg = loadConfig(process.cwd()).capacity
+    } catch {
+      capacityCfg = undefined
+    }
+    let capacity
+    try {
+      capacity = probeCapacity(capacityCfg, seamProbes() ?? defaultProbes)
+    } catch (e) {
+      if (e instanceof SeamError) {
+        process.stderr.write(`roadmap status: ${e.message}\n`)
+        return 1
+      }
+      throw e
+    }
     process.stdout.write(
       JSON.stringify(
-        { derivedAt: model.derivedAt, repo: model.repo, rows: model.rows, otherWorktrees: model.otherWorktrees, warnings },
+        { derivedAt: model.derivedAt, repo: model.repo, rows: model.rows, otherWorktrees: model.otherWorktrees, warnings, capacity },
         null,
         2,
       ) + '\n',
