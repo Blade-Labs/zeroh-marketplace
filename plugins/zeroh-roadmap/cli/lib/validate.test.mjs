@@ -2,9 +2,12 @@
 /**
  * Fixtures for the NEW validate surface (the ported rules stay covered by the UNMODIFIED
  * bin/validate-roadmap-file.test.mjs — no duplicate fixtures here): the gate-report
- * done-flip consistency rule (four clauses + green pass + no-dir pass) and the
- * `roadmap phase validate` CLI exit mapping. Driven through the real bin over tmp git
- * repos with plain-object phase files. Run: node --test cli/lib/validate.test.mjs
+ * done-flip consistency rule (four clauses + green pass + no-dir pass), the
+ * `roadmap phase validate` CLI exit mapping, and the arc `rejectedAlternatives` lane
+ * (append-only ERROR + adoption WARN). Phase cases drive the real bin over tmp git repos
+ * with plain-object phase files; arc cases call `validateRoadmapFile` directly over the real
+ * schema (the `phase validate` CLI face is phase-only).
+ * Run: node --test cli/lib/validate.test.mjs
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -202,22 +205,21 @@ test('phase validate — corrupt newest gate report is a named finding, never a 
 //
 // ArcShape.rejectedAlternatives is a TYPED, append-only record of options a human or a
 // recorded architect verdict already ruled OUT. Two guards keep it from decaying back into
-// prose, and neither exists yet:
+// prose:
 //
 //   (1) APPEND-ONLY. A building arc whose rejectedAlternatives array lost entries against
 //       git HEAD is deleting history — the resurrection leak the field closes. This must be
 //       INDEPENDENT of the acceptanceCriteria-immutable branch that shares the function:
-//       that branch returns [] the moment AC are unchanged (and again the moment a
-//       ratification was appended), so a shrink riding either shortcut is invisible today.
+//       that branch stops looking the moment AC are unchanged (and again the moment a
+//       ratification was appended), so a shrink riding either shortcut would go unseen.
 //   (2) ADOPTION. An arc NEW to git that writes REJECTED in prose but carries no
 //       `rejectedAlternatives:` key gets a WARN — pressure at the one cheap moment
 //       (authoring), never an error (committed arcs are grandfathered exactly like the
 //       phase-file lint family).
 //
-// Arc fixtures go through validateRoadmapFile directly (the `phase validate` CLI face is
-// phase-only); the git-HEAD + `.building/<id>.json` sidecar machinery is the bin suite's
-// arc fixture (bin/validate-roadmap-file.test.mjs case (e)), ported here over the real
-// schema so the entries are shape-valid rejections and not just text the counter can see.
+// The git-HEAD + `.building/<id>.json` sidecar machinery below is the bin suite's arc fixture
+// (bin/validate-roadmap-file.test.mjs case (e)), ported here over the real schema so the
+// entries are shape-valid rejections and not just text the counter can see.
 
 const SCHEMA = join(HERE, '..', '..', 'templates', 'schema.ts')
 

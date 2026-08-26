@@ -70,11 +70,12 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
     if (phaseMatch) errors.push(...runPhaseNumberAndClaimChecks(normalized, phaseMatch))
   }
 
-  // ── WARN-level authoring lints (NEW-to-git phase files only) ──────────────────────
-  // Never a non-zero exit — reminders of plan-phase's authoring rules, not enforcement
-  // (review-phase Mode A is the enforcement). The ~1,100 already-committed phase files are
-  // grandfathered: the file must be new to git (no HEAD blob) for any of them to fire, so
-  // the gate is resolved ONCE here (it shells out to git) rather than per lint.
+  // ── WARN-level authoring lints (NEW-to-git roadmap files) ─────────────────────────
+  // Never a non-zero exit — reminders of plan-phase's and plan-arc's authoring rules, not
+  // enforcement (review-phase Mode A is the enforcement). The ~1,100 already-committed phase
+  // files and every committed arc are grandfathered: the file must be new to git (no HEAD blob)
+  // for any of them to fire, so the gate is resolved ONCE here (it shells out to git) rather
+  // than per lint.
   //
   // The driver-lane and attribution lints below are DATA, not authoring, so they sit OUTSIDE
   // that gate: the case they exist for is a done-flip, which edits a file git already has.
