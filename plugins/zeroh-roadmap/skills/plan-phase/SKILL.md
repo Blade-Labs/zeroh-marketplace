@@ -52,9 +52,11 @@ a mutated file run against scratch copies in the session scratchpad or a throwaw
 
 ## Step 0: Interview + duplicate probe
 
-An underspecified standalone request gets an INTERVIEW before any code investigation: one question
+A STANDALONE request gets an INTERVIEW by default, before any code investigation: one question
 at a time, scope first, exactly as plan-arc interviews (user intent and scope at request time;
 Prime Rule 2's architect owns TECHNICAL decisions during authoring: two different stops).
+Skip ONLY by recording `interview: skipped — <why>` in the phase file's `notes`; an arc-member
+phase cites the parent arc's interview instead of re-interviewing.
 Genuinely user-owned forks are asked as AskUserQuestion options, never open-ended.
 **Duplicate probe, every request, before claiming:** run
 `grep -rln -F '<central symbol or topic>' roadmap/phases roadmap/backlog.ts` (fixed strings,

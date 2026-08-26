@@ -129,7 +129,18 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/skills/plan-phase/SKILL.md'],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'plan-phase Step 0 interview is now default-on for standalone requests, skippable ONLY by recording `interview: skipped — <why>` in the phase notes; arc-member phases cite the parent arc interview instead of re-interviewing. The self-judged "underspecified" trigger is gone.',
+        how: 'One in-place rewrite of the Step 0 opening (four sentences → six lean lines, no section rewrite); the AskUserQuestion structured-fork rule and the plan-arc parity citation kept verbatim. Verify (positive grep + negated old-trigger grep) green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Honor-system like plan-arc’s twin rule — no lint checks the notes line exists; review-phase Mode A reads Step 0 as the enforcement seam.',
+      },
     },
     {
       id: '10.3',
