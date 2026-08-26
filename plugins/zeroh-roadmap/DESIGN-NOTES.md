@@ -411,3 +411,10 @@ Wiring it to mean (a) would misplace the knob: (a) is an arc/do-arc property, no
    next, do-arc fan-out/join, N-branch land, per-lane liveness) — defer until an arc with
    genuinely independent planes exists and host headroom is proven.
 3. **Do nothing further** — keep the field reserved, revisit when a concrete arc needs (a).
+
+**Resolution (2026-08-26, phase 11, user-ratified via AskUserQuestion):** option ratified =
+check + wire today's spawn sites. `executionMode` REMOVED from both schema copies (it modeled
+the rejected task-level batching; old files carrying the key keep parsing — Zod strips unknown
+keys on the non-strict PhaseShape). `roadmap capacity` is the mandatory admission gate any
+future parallel fan-out (PARDISPATCH) must consult; today it already gates `arc next` run-phase
+dispatch (override: `--ignore-capacity`) and surfaces on `status --json` and `arm`.

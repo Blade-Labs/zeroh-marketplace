@@ -312,7 +312,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/templates/schema.ts', 'lib/roadmap/schema.ts', 'plugins/zeroh-roadmap/DESIGN-NOTES.md'],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-08-26',
+      transparencyReport: {
+        whatWasDone:
+          'executionMode deleted from PhaseShape in both schema copies (byte-synced); DESIGN-NOTES §Parallel dispatch gained the dated resolution: option ratified, field removed, roadmap capacity named as the mandatory admission gate for any future fan-out and its live wiring listed.',
+        how:
+          'The plan-time compound verify ran verbatim green: no executionMode in either copy, cmp byte-identical, and the compat probe proved a phase object still CARRYING the key parses (Zod strips unknown keys on the non-strict PhaseShape). scripts/schema.test.ts PASS — 0 failures.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Historical prose naming executionMode (phase-10 records, the pre-resolution investigation text) stays as history — records are not rewritten; the resolution line supersedes them in place.',
+      },
     },
   ],
   notes:
