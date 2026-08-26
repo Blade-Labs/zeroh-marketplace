@@ -13,7 +13,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 11,
   name: 'Dynamic executor-capacity admission — roadmap capacity verb, spawn-site wiring, executionMode removal',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'feature',
   kind: 'logic',
