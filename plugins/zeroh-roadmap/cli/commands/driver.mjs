@@ -218,19 +218,22 @@ function freshProvenance(root, id) {
 
 /** The entry a human pastes into cli/lib/drivers.mjs, carrying THIS host's probe evidence. */
 function entrySkeleton(id, doc) {
+  // `known` is always present: every register/verify path resolves the driver FIRST
+  // (freshProvenance → resolveDriver throws on an unknown id), so this skeleton needs no
+  // unknown-driver fallbacks.
   const known = DRIVERS[id]
   const evidence = doc.probes.map((p) => p.output).join('\n')
   return [
     `  ${id}: Object.freeze({`,
     `    id: '${id}',`,
-    `    family: '${known?.family ?? '<family>'}',`,
-    `    bin: '${known?.bin ?? id}',`,
+    `    family: '${known.family}',`,
+    `    bin: '${known.bin}',`,
     '    launch: Object.freeze({',
-    `      argv: (${known ? '{ worktree }' : 'opts'}) => [${known ? '/* keep the landed argv */' : '/* the launch argv */'}],`,
-    `      promptChannel: '${known?.launch?.promptChannel ?? '<stdin|argv>'}',`,
-    `      sandboxPosture: '${known?.launch?.sandboxPosture ?? '<bypass|inherit|sandboxed>'}',`,
+    `      argv: ({ worktree }) => [/* keep the landed argv */],`,
+    `      promptChannel: '${known.launch.promptChannel}',`,
+    `      sandboxPosture: '${known.launch.sandboxPosture}',`,
     '    }),',
-    `    resume: ${known?.resume ? `'${known.resume}'` : 'null'},`,
+    `    resume: ${known.resume ? `'${known.resume}'` : 'null'},`,
     `    roleCapabilities: Object.freeze({ /* only what the probes above proved */ }),`,
     '    verifiedAt: Object.freeze({',
     `      date: ${JSON.stringify(String(doc.date).slice(0, 10))},`,

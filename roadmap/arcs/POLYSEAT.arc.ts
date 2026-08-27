@@ -180,4 +180,9 @@ export default defineArc({
       bar: 'record present, ingested, attributed; a record requiring a judge call fails the ruling',
     },
   ],
+  // Terminal state set 2026-08-26 (phase 13.6): every member is done and IN MAINLINE HISTORY,
+  // validate round 2 returned PASS on all four criteria, the eval is finalized. 'merged' is the
+  // factual state; no arc-sweep ever ran and the eval already records that dock
+  // (POLYSEAT-2026-08-25.json sweepVerdict 'no-sweep-report') — 'swept' would be a lie.
+  status: 'merged',
 })

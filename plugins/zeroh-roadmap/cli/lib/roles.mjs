@@ -66,7 +66,12 @@ export const ROLES = Object.freeze({
     agentCard: 'agents/intent-validator.md',
     spawnSites: Object.freeze(['skills/validate-arc/SKILL.md']),
     class: 'judge',
-    tierChain: Object.freeze([OPUS]),
+    // FABLE is the single tier, and the card's frontmatter alias must MATCH it: a panel that
+    // bypasses this resolver falls back to the frontmatter, so a divergent fail-safe judges on a
+    // different model than the consumer's judgeModel asked for — silently. ONE entry per
+    // MULTI-DRIVER.md §1 (only software-architect carries a real chain); fable down → honestly
+    // UNJUDGED, like every other non-architect role.
+    tierChain: Object.freeze([FABLE]),
     // Its card: "never grades work it built". Inline fulfillment IS the builder grading itself.
     inlineFallbackLegal: false,
   }),

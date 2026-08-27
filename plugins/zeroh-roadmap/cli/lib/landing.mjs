@@ -401,7 +401,7 @@ import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
 import { disposeWorktree, isSlotDir } from './worktree.mjs'
-import { archiveJournal, findJournal, RUN_LANE_ARTIFACTS } from '../commands/codex.mjs'
+import { archiveJournal, findJournal, RUN_LANE_ARTIFACTS } from './codex-journal.mjs'
 import { loadConfig, ConfigError } from './config.mjs'
 
 /**

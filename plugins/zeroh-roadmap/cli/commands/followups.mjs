@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { isTerminalPhaseSource } from '../lib/phasescan.mjs'
 
 const STATUSES = new Set(['live', 'parked', 'superseded', 'spent'])
 const emptySummary = () => ({
@@ -66,8 +67,9 @@ function referencedBasenames(path, { liveOnly = false } = {}) {
     const text = readFileSync(file, 'utf8')
     // A DONE phase's record cites its inputs historically — that citation must not block a
     // deletion, or the remedy becomes editing shipped history. Only a phase that can still
-    // CONSUME the followup as a plan input counts as a live reference.
-    if (liveOnly && /status:\s*'(done|historical|cancelled)'/.test(text)) continue
+    // CONSUME the followup as a plan input counts as a live reference. The skip applies to
+    // PHASE FILES only — a note or an arc file has no status field to read at all.
+    if (liveOnly && file.endsWith('.phase.ts') && isTerminalPhaseSource(text)) continue
     for (const name of basenamesIn(text)) names.add(name)
   }
   return names

@@ -58,7 +58,7 @@ const ALIAS_TO_MODEL = { fable: FABLE, opus: OPUS, sonnet: SONNET }
 const EXPECTED_CHAINS = {
   'arc-eval-judge': [SONNET],
   'code-reviewer': [OPUS],
-  'intent-validator': [OPUS],
+  'intent-validator': [FABLE], // a 1-entry chain: the card's frontmatter fail-safe equals the judge tier
   'phase-executor': [OPUS],
   'quality-pass': [OPUS],
   'software-architect': [FABLE, SOL, OPUS],
@@ -205,8 +205,9 @@ test('resolveRole × every driver — the exact model and reach mode for all 18 
     ['arc-eval-judge', 'claude', SONNET, 'child-cli'],
     ['code-reviewer', 'codex', OPUS, 'child-cli'],
     ['code-reviewer', 'claude', OPUS, 'child-cli'],
-    ['intent-validator', 'codex', OPUS, 'child-cli'],
-    ['intent-validator', 'claude', OPUS, 'child-cli'],
+    // the head is FABLE — the card's frontmatter fail-safe equals the judge tier
+    ['intent-validator', 'codex', FABLE, 'child-cli'],
+    ['intent-validator', 'claude', FABLE, 'child-cli'],
     ['phase-executor', 'codex', OPUS, 'child-cli'],
     ['phase-executor', 'claude', OPUS, 'child-cli'],
     ['quality-pass', 'codex', OPUS, 'child-cli'],
@@ -509,7 +510,9 @@ test('a role that may not grade its own work skips an inline-only tier and repor
     "fixture precondition: intent-validator's card says it never grades work it built",
   )
   const drivers = { 'prompt-harness': PROMPTS_ONLY }
-  const modelDrivers = { [OPUS]: 'prompt-harness' }
+  // intent-validator's head is FABLE — map it here so the refusal under test is the INLINE one,
+  // not "nothing runs it"
+  const modelDrivers = { [FABLE]: 'prompt-harness', [OPUS]: 'prompt-harness' }
   assert.throws(
     () => resolveRole('intent-validator', 'prompt-harness', { drivers, modelDrivers, env: {} }),
     (err) => {

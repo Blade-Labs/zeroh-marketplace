@@ -51,8 +51,7 @@ return a gap naming the mismatch). Never silently upgrade the tier — the misma
 
 ## Step 3: Fan out the judge — one `intent-validator` per criterion, in parallel
 
-Spawn `intent-validator` **once per criterion, concurrently**. **Spawn each with `model` per the `modelPolicy.judgeModel` home statement (review-phase
-SKILL.md)** — EVERY judge in a panel. Two invariants:
+Spawn `intent-validator` **once per criterion, concurrently**. **Spawn each with `model` per the `modelPolicy.judgeModel` home (MULTI-DRIVER.md §1)** — EVERY judge in a panel. Two invariants:
 
 - **Edit-confinement:** judges are READ-ONLY — they drive and observe, writing NOTHING in the consumer tree
   or roadmap (driving may run the consumer's tests/build; no judge edits source, backlog, or a phase file).

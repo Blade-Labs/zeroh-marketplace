@@ -150,7 +150,7 @@ export default definePhase({
       'roadmap phase curate rewrote the required lane trailer to its generic Claude trailer. The executor amended only the newly curated commit message to restore the exact Claude Fable 5 trailer required by this lane.',
     ],
     hardStops: [],
-    gateRounds: 3,
+    gateRounds: 4, // trued 3→4 (phase 13.8): the convention counts every recorded round INCLUDING round 0
   },
   tasks: [
     {

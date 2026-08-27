@@ -1,6 +1,6 @@
 /**
  * roadmap arc <sub> — the arc-level transitions (arc ROADCODE §2).
- *   next <arcId> [--json]                    the ONE position derivation (seam 2)
+ *   next <arcId> [--json] [--ignore-capacity]  the ONE position derivation (seam 2) + admission gate
  *   record-validate <arcId> --verdict <v>    stamp the validate verdict artifact (decision 5)
  *   land <arcId> [--push|--no-push|--hold]   the ONE landing engine (seam 4, 1657.5)
  *

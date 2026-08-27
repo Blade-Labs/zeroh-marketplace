@@ -42,12 +42,6 @@
 import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
-  // ── ARC POLYSEAT tier — phases 1-4 exactly (claimed 2026-08-23), plane order =
-  // dependency order: 1 eval records (independent, fills the pipe first) → 2 driver
-  // registry → 3 attribution (dependsOn 2) → 4 roles+delivery+manifests (dependsOn 2,3).
-  // Queued after 4 Mode A reviews returned READY/CLEAN (2026-08-23). Execute: /do-arc POLYSEAT
-  // ── Standalone, post-arc (dependsOn 4: manifest generator + ratchet) ──────
-  // ── Post-arc spike (dependsOn 1: peval pipe; LOW — after the fenced 6) ────
   {
     phase: 13,
     name: 'Retro remediation — roles seam, codex-journal home, census/audit truth, release axis, derived-record refresh',

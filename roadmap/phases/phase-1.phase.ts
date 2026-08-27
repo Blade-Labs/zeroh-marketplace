@@ -153,7 +153,7 @@ export default definePhase({
       'Reviewer cells are still fed by arc traces alone — a phase record carries slot results, not agent rounds. The plan\'s v1 ruling; parsing gateRounds into records is the named follow-up.',
     ],
     hardStops: [],
-    gateRounds: 5,
+    gateRounds: 6, // trued 5→6 (phase 13.8): the convention counts every recorded round INCLUDING round 0
   },
   tasks: [
     {

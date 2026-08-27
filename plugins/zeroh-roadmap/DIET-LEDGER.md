@@ -119,7 +119,7 @@ trigger + invocation + verdict interpretation + is/is-not routing.
 | Check 1 dangling phase dependsOn | enforced-by-code(cli/audit-checks.mjs check 1 + audit.test.mjs) | CRITICAL preserved |
 | Check 2 dependency cycles | enforced-by-code(cli/audit-checks.mjs check 2 DFS + audit.test.mjs) | CRITICAL preserved |
 | Check 3 backlog→missing phase | enforced-by-code(cli/audit-checks.mjs check 3 + audit.test.mjs) | HIGH preserved |
-| Check 4 [NEEDS CLARIFICATION] markers | enforced-by-code(cli/commands/audit.mjs check 4 raw file:line + queued→CRITICAL + audit.test.mjs) | MEDIUM/CRITICAL preserved |
+| Check 4 [NEEDS CLARIFICATION] markers | enforced-by-code(cli/commands/audit.mjs check 4 file:line + queued→CRITICAL + audit.test.mjs; scoped by phase 13.3 to LIVE phases and a TERMINATED token — a terminal phase's recorded question and an unterminated guard string are data, both documented marker forms still fire) | MEDIUM/CRITICAL preserved |
 | Check 5 done phase incomplete tasks | enforced-by-code(cli/audit-checks.mjs check 5, historical exempt + audit.test.mjs) | HIGH preserved |
 | Check 6 task dependsOn bad IDs | enforced-by-code(cli/audit-checks.mjs check 6 + audit.test.mjs) | HIGH/HIGH/MEDIUM preserved |
 | Check 7 stale in-progress | enforced-by-code(cli/commands/audit.mjs check 7 git-log staleness + audit.test.mjs) | LOW preserved |
@@ -558,3 +558,34 @@ in-file. **Measured:** do-phase/SKILL.md **12,266 B → 12,178 B** (`wc -c`); th
 |---|---|---|
 | Per-task loop 2 Verify — "a run that executed ZERO tests still exits green, so confirm a nonzero executed-test count before trusting a pass" | obsolete-with-evidence(pure wording compression — both operative elements survive as "a ZERO-tests-executed run exits green, so confirm a nonzero executed count"; deliberately NOT enforced-by-code: `roadmap gate run` counts nothing — runSlot trusts the slot's raw exit code (cli/lib/slots.mjs) and gate.mjs's zero-match guard is slot-NAME matching only, so the rule stays prose-carried) | do-phase §per-task loop step 2 |
 | §Curate the landed history — "history staying granular is the honest fallback, " | obsolete-with-evidence(rationale clause per the 2026-08-24 operative-rules-only ruling; the operative rule survives verbatim — foreign-commit refusal recorded in `limitations`, left alone, "NEVER a forced rewrite of someone else's work") | do-phase §Curate the landed history |
+
+## roles.mjs enforcement claim — phase 13.2 correction
+
+The 2026-08-25 rows that deleted the model-policy prose homes justified the deletions with
+"resolveRole enforces" — at deletion time that was an OVERSTATEMENT: `cli/lib/roles.mjs` had no
+runtime consumer (only its own test; the codex hits are prompt strings), so the walk, the judge
+routing, the recorded substitution and the UNJUDGED stop were convention-with-a-test, and the
+POLYSEAT validate panel demonstrably ran on the frontmatter fallback (opus) against a configured
+judgeModel of fable. **Corrected 2026-08-26 (phase 13.2):** `roadmap role resolve <role>
+[--driver <id>] [--json]` is the reachable seam (exit 2 = UNJUDGED), pinned by 11 wired tests;
+intent-validator's frontmatter fail-safe now equals the judge tier — one fable tier, no named
+fallback, so fable down is honestly UNJUDGED (gate R1 ruling). The deleted prose stays deleted;
+its claim is now true.
+
+## do-arc flow reconciliation — phase 13.5 (measured 2026-08-26)
+
+The 2026-08-26 phase-11 gate rounds grew do-phase/SKILL.md 12,178 B → 12,220 B (+42 B, the
+terminal-identifier mirror wording) with no ledger row — the budget then sat at exactly
+13,257/13,257, zero headroom, one byte from a silent assert breach. **Reconciled by phase 13.5
+in one batch:** the two stale `judgeModel` home cites (arc-sweep, validate-arc) shortened to
+their true home `MULTI-DRIVER.md §1` (the one-home rule those cites violated), FUNDING the
+restored R28 `(honor-system)` tags in using-zeroh-roadmap, the trued pause-arc routing row, and
+the do-arc `--executor-id` gloss fix (the session-dir gloss had attached to the executor-id
+placeholder — a driver following it would collapse exclusivity back to the session).
+**Measured after:** `roadmap measure --flow do-arc` = **13,252 tokens / 52,998 B** against the
+unchanged `--assert 13257` (PROTOCOL_LOAD_BUDGET_TOKENS), exit 0 — 5 tokens of headroom
+restored. **Re-measured at gate R1 = 13,255**: the `--executor-id` line was rewritten again to
+keep the whole invocation in ONE copyable span (a reviewer found the split span read as a
+runnable command that omitted the exclusivity flag) — +3 tokens, spent deliberately on a
+correctness-of-instruction fix, 2 tokens still spare. Every operative rule survives; no deletion rows owed (edits are cite-corrections and
+tag restorations, not content trims).

@@ -213,6 +213,86 @@ test('check 4 GREEN — no unresolved marker → no check-4 finding', () => {
   assert.ok(!has(report, 4, 'MEDIUM') && !has(report, 4, 'CRITICAL'), 'clean notes → no check-4 finding')
 })
 
+// ── Check 4 scoping: WHERE the check is armed, and WHAT counts as a marker ──
+// Two independent suppressors, tested one at a time so a half-fix cannot pass:
+//   (a) STATUS — a terminal phase (done/historical/cancelled) is a shipped record, and a record
+//       may quote whatever it resolved; the check is armed only on phases still to be executed.
+//   (b) TERMINATION — a marker is the token CLOSED by a colon (question inline) or a bracket (the bare
+//       form every protocol home documents). Both fire: missing a real unresolved question in a
+//       queued phase is the dangerous direction. An UNTERMINATED occurrence is a guard string
+//       NAMING the token, never one being asked. A live phase that quotes a terminated form in
+//       prose does red — accepted conservatism; records describe the token instead of quoting it.
+// Both shapes below are verbatim from done phase 8, which this audit red permanently and falsely.
+
+/** A multi-LINE phase literal: check 4 reports file:line, so each shape needs its own line. */
+const phaseLines = (n, status, tail) => `export default {
+  phase: ${n},
+  name: 'Phase named right here',
+  status: '${status}',
+  kind: 'logic',
+  arcId: null,
+  tasks: [],
+${tail}}
+`
+const REAL_MARKER = '[NEEDS CLARIFICATION: which auth flow?]'
+
+test('check 4 — a DONE phase quoting the literal at all (guard string, sign-off count) yields no finding — the STATUS suppressor', () => {
+  const root = makeRepo()
+  writeRawPhase(root, 800, phaseLines(800, 'done',
+    "  markerGuards: ['[NEEDS CLARIFICATION', 'TODO('],\n"
+    + "  notes: 'Sign-off evidence: 0 [NEEDS CLARIFICATION] markers remained in the plan.',\n"))
+  const { code, report } = audit(root)
+  assert.deepEqual(report.findings.filter((f) => f.check === 4), [], 'neither a guard-string list entry nor a count of markers is an open question')
+  assert.equal(report.verdict, 'CLEAN', 'these two shapes alone are what pinned a real roadmap at a standing HAS ISSUES verdict')
+  assert.equal(code, 0)
+})
+
+test('check 4 — a REAL marker is history in a terminal phase, but still fires in a live one', () => {
+  for (const status of ['done', 'historical', 'cancelled']) {
+    const terminal = makeRepo()
+    writeRawPhase(terminal, 800, phaseLines(800, status, `  notes: '${REAL_MARKER}',\n`))
+    const { report } = audit(terminal)
+    assert.deepEqual(report.findings.filter((f) => f.check === 4), [], `a ${status} phase cannot be executed again — its recorded question is not an open one`)
+  }
+
+  const live = makeRepo()
+  writeRawPhase(live, 800, phaseLines(800, 'backlog', `  notes: '${REAL_MARKER}',\n`))
+  const { code, report } = audit(live)
+  const found = report.findings.filter((f) => f.check === 4)
+  assert.equal(found.length, 1, 'the check stays armed on a live phase — exactly one marker, one finding')
+  assert.equal(found[0].severity, 'MEDIUM', 'not queued → MEDIUM')
+  assert.equal(code, 0)
+  assert.match(found[0].location, /phase-800\.phase\.ts:8$/, 'the location points at the marker LINE (line 8), not the file')
+})
+
+test('check 4 — TERMINATION is the boundary: an unterminated guard string is clean, BOTH documented marker forms fire', () => {
+  const guard = makeRepo()
+  writeRawPhase(guard, 800, phaseLines(800, 'backlog', "  notes: 'markerGuards scanned for [NEEDS CLARIFICATION and TODO(',\n"))
+  writeBacklog(guard, [{ phase: 800, name: 'Queued phase named here' }])
+  const guardReport = audit(guard).report
+  assert.deepEqual(guardReport.findings.filter((f) => f.check === 4), [], 'a guard string NAMING the token is not a marker, even in the phase that runs next')
+  assert.equal(guardReport.verdict, 'CLEAN')
+
+  // The dangerous direction: the BARE documented form carrying a question must still red. Every
+  // protocol home writes the marker bare, and this check is the only code enforcement of it.
+  const bare = makeRepo()
+  writeRawPhase(bare, 800, phaseLines(800, 'backlog', "  notes: '[NEEDS CLARIFICATION] which auth flow does the consumer use?',\n"))
+  writeBacklog(bare, [{ phase: 800, name: 'Queued phase named here' }])
+  const bareFound = audit(bare).report.findings.filter((f) => f.check === 4)
+  assert.equal(bareFound.length, 1, 'the bare documented marker form in a QUEUED phase must escalate')
+  assert.equal(bareFound[0].severity, 'CRITICAL')
+
+  const real = makeRepo()
+  writeRawPhase(real, 800, phaseLines(800, 'backlog', `  notes: '${REAL_MARKER}',\n`))
+  writeBacklog(real, [{ phase: 800, name: 'Queued phase named here' }])
+  const { code, report } = audit(real)
+  const found = report.findings.filter((f) => f.check === 4)
+  assert.equal(found.length, 1)
+  assert.equal(found[0].severity, 'CRITICAL', 'an unanswered question in the phase queued for execution still escalates')
+  assert.equal(found[0].phase, 800)
+  assert.equal(code, 2)
+})
+
 // ════════════════════════════════════════════════════════════════════════════
 // Check 5 — status:'done' phase with a task done:false → HIGH
 // ════════════════════════════════════════════════════════════════════════════

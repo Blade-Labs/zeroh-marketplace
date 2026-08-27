@@ -7,7 +7,7 @@ disable-model-invocation: false
 # zeroh-roadmap: Phase-Driven Development
 
 Route ALL development work through the phase system — never create files/schemas/structure
-ad hoc. Invoke the CLI as `roadmap <cmd>` (fallback `node
+ad hoc (honor-system). Invoke the CLI as `roadmap <cmd>` (fallback `node
 ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` scaffolds
 `roadmap/` + `roadmap.config.json` — the ONLY sanctioned initialization path.
 
@@ -29,12 +29,12 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | code review (a diff) | the `code-reviewer` agent / the built-in review command |
 | full code review, pre-release review | **full-code-review** |
 | audit roadmap, roadmap health check | **audit-roadmap** |
-| pause the arc | stop anywhere; resume = relaunch the plane workflow |
+| pause the arc | stop anywhere; files are the truth |
 | resume / continue arc X | **do-arc** — `roadmap arc next` fast-forwards from disk |
 | hand off / fresh session | **handoff** |
 | migrate / upgrade roadmap | `${CLAUDE_PLUGIN_ROOT}/scripts/migrate/README.md` |
 
-NEVER handle these yourself — the skills carry the full protocol; your job is correct
+NEVER handle these yourself (honor-system) — the skills carry the full protocol; your job is correct
 dispatch plus the coordination below.
 
 ## Multi-session coordination (shared repos)

@@ -8,7 +8,8 @@
  * discoverPhases/crossValidate + the plugin's suggestKind — never a second parser. This
  * orchestrator owns the checks that need git or raw file:line, and reuses the debt-census
  * join (via derive.debtCensusJson --include-archive) for 12.3-12.4:
- *   4  [NEEDS CLARIFICATION] markers (raw grep → file:line; CRITICAL when the phase is queued)
+ *   4  [NEEDS CLARIFICATION] markers — LIVE phases only, terminated token (':' or ']'); an
+ *      unterminated guard string is data. file:line; CRITICAL when the phase is queued
  *   7  stale in-progress phases (git log staleness > 30 days)
  *   12.3 archived phase with unresolved/planned-not-done/operator-pending debt (HIGH)
  *   12.4 dangling debtResolution on an archived phase (MEDIUM)
@@ -25,6 +26,7 @@ import { fileURLToPath } from 'node:url'
 import { debtCensusJson } from '../lib/derive.mjs'
 import { TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import { censusFollowups } from './followups.mjs'
+import { isTerminalPhaseSource } from '../lib/phasescan.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -65,13 +67,22 @@ export default async function run(argv) {
   const aux = typed.aux
   const backlogSet = new Set(aux.backlogPhases ?? [])
 
-  // ── Check 4: [NEEDS CLARIFICATION] markers (raw, file:line) ────────────────
+  // ── Check 4: [NEEDS CLARIFICATION] markers (file:line; marker grammar + live phases only) ──
+  // Two suppressors: a TERMINAL phase cannot be executed again, so its recorded question is
+  // history, never an open marker (isTerminalPhaseSource — the census reads the same rule); and
+  // the token must be TERMINATED — '[NEEDS CLARIFICATION:' (question inline) or the documented
+  // bare '[NEEDS CLARIFICATION]'. An UNTERMINATED occurrence is a guard string naming the token
+  // ("markerGuards: ['[NEEDS CLARIFICATION'"), never a marker. Both terminated forms must fire:
+  // missing a real unresolved question in a queued phase is the dangerous direction, and this
+  // check is the only CODE enforcement of the marker rule.
   for (const f of readdirSync(phasesDir).filter((n) => n.endsWith('.phase.ts')).sort()) {
     const full = join(phasesDir, f)
-    const lines = readFileSync(full, 'utf8').split('\n')
+    const src = readFileSync(full, 'utf8')
+    if (isTerminalPhaseSource(src)) continue
+    const lines = src.split('\n')
     const num = Number(f.match(/phase-(\d+)/)?.[1] ?? 0) || null
     lines.forEach((line, i) => {
-      if (line.includes('[NEEDS CLARIFICATION')) {
+      if (/\[NEEDS CLARIFICATION[:\]]/.test(line)) {
         const queued = num != null && backlogSet.has(num)
         findings.push({
           check: 4,

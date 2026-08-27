@@ -84,8 +84,7 @@ report ephemeral. `roadmap/followups/<arcId>.md` holds only OPERATOR-PENDING det
 
 Run ONE `zeroh-roadmap:software-architect` over `git diff <arc.baseRef>..HEAD` and judge it as **a
 single system** against `arc.singleSeams`: for each seam, did any consumer fork it, or is it a single
-implementation across the arc? **Spawn it with `model` per the `modelPolicy.judgeModel` home statement
-(review-phase SKILL.md)** — this whole-arc architect is a JUDGE.
+implementation across the arc? **Spawn it with `model` per the `modelPolicy.judgeModel` home (MULTI-DRIVER.md §1)** — this whole-arc architect is a JUDGE.
 
 **Design-conformance — judge against `arc.designRefs` too.** Read the arc's confirmed `designRefs` and
 judge whether the build implements each: a `reused` pattern genuinely followed (not re-invented), a

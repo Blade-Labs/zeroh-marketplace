@@ -1,81 +1,57 @@
-# Project — Roadmap
+# zeroh-marketplace — Roadmap
 
-**Created:** YYYY-MM-DD
-**Status:** Active — source of truth for multi-session work
-
----
-
-## How This Works
-
-- **"Do phase N"** = read `roadmap/phases/phase-N.phase.ts`, execute all tasks, run the Validation Gate below.
-- Phase files are TypeScript using `definePhase()` from `lib/roadmap/schema.ts`.
-- **Status transitions:** Edit the `status` field (`'backlog'` → `'in-progress'` → `'done'`). Terminal statuses: `'done'`, `'cancelled'`, and `'historical'` (a phase that completed before the current gate-discipline schema — parses loose, accepted as-recorded; the sanctioned alternative to backfilling a legacy phase that can't meet the strict done gate). Terminal phases are not executed and are removed from the backlog.
-- **Task tracking:** Each task has a `done: boolean` field. Set `done: true` and add `doneDate` when complete. Commit after each task.
-- **Phase sizing:** One phase = one feature a stakeholder could demo. Target ≤5 key files and ≤300 lines of diff.
-
-### Planning Discipline — High-Confidence Tasks Only
-
-**Every task must be planned to the point where you know the exact diff before writing code.**
-
-If you cannot name the specific files, functions, and nature of the change — you haven't planned enough.
+**Created:** 2026-08-23 (scaffold) · rewritten 2026-08-26 (phase 13.6) to describe the process
+actually run here
+**Status:** Active — the entry document; `roadmap/backlog.ts` answers "what's next", `roadmap
+status` answers "what's live"
 
 ---
 
-## Git Strategy
+## The lifecycle actually run in this repo
 
-### Branches
-- `main` — production. PR from develop only.
-- `develop` — dev environment. Direct push. All phase work lands here first.
-- `feat/phase-N-slug` — parallel sessions only. Branched from develop.
+Every change rides a phase. The loop, with the skill/verb that owns each step:
 
----
+1. **Plan** — `plan-phase` (or `plan-arc` for a multi-phase arc): interview by default, read the
+   code first, author `roadmap/phases/phase-N.phase.ts` (`definePhase()` from
+   `lib/roadmap/schema.ts`) with known-diff steps ending in `→ verify:` clauses and
+   `assumptions[]` tripwires. `roadmap claim` reserves the number; `roadmap phase validate N`
+   parses it.
+2. **Review + queue** — `review-phase` Mode A: independent plan review against the real tree;
+   only a READY plan is queued into `roadmap/backlog.ts` (review-phase is the only queue writer).
+3. **Execute** — `do-phase` (arcs: `do-arc` + `roadmap arc next`, capacity-gated since phase 11):
+   one task = one commit + a `transparencyReport`; `roadmap phase start N` flips status
+   atomically — never a hand edit.
+4. **Gate** — `roadmap gate plan N` → `gate run N` (kind-selected slots; the unit tier here is
+   `capbuild npm test` in the plugin) → the agent chain: round-0 quality pass, then
+   code-reviewer rounds to clean, each recorded via `gate run N --record-round`.
+5. **Curate + complete** — `roadmap phase curate N` (born-clean history where the range allows),
+   the completion edit (gate/gateRounds/metrics/executionResult), `gate run N
+   --verify-complete`, backlog groom, push.
 
-## Post-Phase Validation Gate (MANDATORY)
+Arcs add: design-first gate (plan-arc), arc-sweep, validate-arc (judge panel vs
+acceptanceCriteria), `roadmap arc land`, and a dated eval record.
 
-> Run after every phase completes. Do NOT skip steps. Do NOT mark a phase complete until all steps pass.
-> **NO EXCEPTIONS** — not for "test-only", "docs-only", or "low-risk" phases. Every phase gets the full gate.
-> **Token budget:** ~150-200k tokens per gate (2 agents x 2 rounds typical). The pre-review script catches mechanical issues before agents run, reducing rounds.
+## Where evidence lives
 
-> Steps 1–4 run the consumer's own commands, resolved from the `## Gate commands` block in
-> this repo's CLAUDE.md (slots: `lint` / `types` / `unit` / `build`). A missing binding fails
-> the gate loud — never substitute a guessed `npm`/`pnpm` command.
+- **Committed and durable:** the phase file's `gate`/`gateRounds`/`metrics`/`executionResult`,
+  `roadmap/arc-evals/*.peval.json` (per-phase eval records with the gate slot rows),
+  arc verdicts + evals, `plugins/zeroh-roadmap/CHANGELOG.md` for releases.
+- **Checkout-local:** gate run reports under `roadmap/.gate/` are gitignored working evidence —
+  a phase record citing `run-00000N-….json` points at THIS checkout's copy; the durable
+  substance is the committed `.peval.json` slot rows. Do not chase those paths from a fresh
+  clone.
 
-### Step 1: Lint — run the `lint` slot
+## Git strategy (as practiced)
 
-### Step 2: Type-Check — run the `types` slot
+- Work lands on `feat/roadmap-arcs`, pushed to origin; `main` receives PRs. There is no
+  `develop` branch in this repo.
+- Shared checkout: stage explicit paths only; commit grammar is binding
+  (`docs(roadmap): phase N — …`, task commits carry `phase N` + the task id — the CLI parses
+  subjects).
 
-### Step 3: Tests — run the `unit` slot
+## Planning discipline (the two prime rules)
 
-### Step 4: Build — run the `build` slot
-
-### Step 5: Code Review — 2 Parallel Agents
-
-**Prepare the diff:** Find the first task commit SHA. Diff from that commit to HEAD:
-```bash
-git diff <first-task-SHA>~1..HEAD
-```
-
-Launch both **in parallel** with the exact diff command in each prompt:
-
-#### Agent 1: Code Quality & Platform Standards (`code-reviewer`)
-#### Agent 2: Regression Risk & Contract Compliance (`code-reviewer`)
-
-### Step 6: Fix ALL Findings
-- Fix all agent issues. Commit each fix atomically.
-- **Commit convention for gate fixes:** `fix(<scope>): phase N gate RX — <what was fixed>`
-  - This enables `git log --grep="phase N gate"` to find all fixes for a phase.
-- After fixes, re-run **Step 3 (tests)** to catch regressions from agent-driven fixes.
-
-**Scoped R2+ re-runs (token efficiency):**
-- Skip agents that returned **ZERO FINDINGS** in the prior round.
-- Re-run surviving agents on the **fix diff only**: `git diff <last-gate-fix-commit>~N..HEAD` — not the full phase diff.
-- **Exception:** If fixes touch files the skipped agent also reviewed in R1, re-run both on the fix diff.
-- **Loop Steps 3→5→6 until tests pass AND all running agents return ZERO findings in the SAME round.**
-- Do NOT declare the gate passed after fixing R1 issues — the fix itself may introduce new issues that only R2 catches.
-
-### Step 7: Record Results, Mark Done & Push
-- Run `npx tsx scripts/collect-phase-metrics.ts {N}` to fill `gate` and `metrics` fields.
-- Set `status: 'done'` in the `.phase.ts` file.
-- Run the `emit` slot to regenerate `reviews/changelog.json`.
-- Commit: `docs(roadmap): mark phase N complete`.
-- Push to remote.
+- **Know the diff before writing the task** — a task you cannot name files/functions for is an
+  investigation task, never a vague one.
+- **Escalate to the architect before giving up** — the software-architect Decision Contract
+  answers technical forks; `ESCALATE_TO_USER` is the only verdict that stops planning.

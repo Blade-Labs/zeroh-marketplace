@@ -13,6 +13,13 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
+// v12 migration notes (consumers syncing from v11 — ONE REMOVAL, not additive):
+// - BasePhaseFields DROPS `executionMode` (phase 11; nothing ever consulted it). Zod
+//   still parses old files (unknown keys strip on the non-strict shape), but a consumer
+//   .phase.ts OBJECT LITERAL still carrying `executionMode:` becomes a tsc
+//   excess-property error the moment the schema syncs — sweep the key from phase files
+//   (one grep) before or with the sync.
+//
 // v11 migration notes (consumers syncing from v10 — additive/optional, historical
 // files keep parsing unmodified):
 // - PhaseTask gains optional `interfaces` ({consumes[], produces[]} — exact symbol/
@@ -272,7 +279,11 @@ export type Driver = z.output<typeof DriverShape>
  *  - `surfaced`: architect-critique SURFACED entries worth knowing before deploy.
  *  - `hardStops`: architect-critique HARD-STOP entries by tag — `do-arc` keys its
  *    pre-merge decision on `[MULTI-REPO]` in particular.
- *  - `gateRounds`: how many correctness rounds the gate took (0 for mockup). */
+ *  - `gateRounds`: how many recorded gate rounds the phase took, INCLUDING round 0 (the
+ *    quality pass) — i.e. the length of the `gateRounds[]` array on the phase. One
+ *    convention, because `eval-score` means over this number: counting agent rounds only
+ *    (round >= 1) made phases 1/2/4/5 read one round cheaper than their siblings until
+ *    phase 13.8 trued them. 0 only when no gate agent ran at all (mockup). */
 export const PhaseExecutionResultShape = z.object({
   phase: z.number().int().positive(),
   status: z.enum(['done', 'escalated', 'failed', 'checkpoint']),
@@ -568,8 +579,9 @@ export const PhaseTaskShape = z.object({
   dependsOn: z.array(z.string().regex(/^\d+\.\d+$/)).default([]),
   /** Cross-task contract, filled ONLY when this task consumes a sibling task's
    *  output or produces one a later task relies on. Entries are exact symbol/
-   *  contract names ("makeWorkIqClient(fetch?) from N.1"), never prose, so a
-   *  reviewer can grep -F a declared name against the steps that owe it.
+   *  contract names ("makeWorkIqClient(fetch?) from N.1"), never prose. The wired
+   *  reader is EXECUTION-side: the executor grep -F's each consumed terminal
+   *  identifier before building (do-phase step 1); produces has no wired grep.
    *  Omit entirely for self-contained tasks. */
   interfaces: z
     .object({

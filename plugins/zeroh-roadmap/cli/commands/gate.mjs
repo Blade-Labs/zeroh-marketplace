@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
-import { findClosedJournal, findJournal, JournalUnreadableError } from './codex.mjs'
+import { findClosedJournal, findJournal, JournalUnreadableError } from '../lib/codex-journal.mjs'
 import { derivePhaseStartSha, GitScanError } from '../lib/gitscan.mjs'
 import { bridgeImport, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {

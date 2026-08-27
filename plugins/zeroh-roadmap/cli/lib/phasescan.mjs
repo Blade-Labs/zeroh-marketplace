@@ -28,6 +28,18 @@ export function matchStatusField(src) {
 }
 
 /**
+ * Is this phase source's status FIELD terminal — a shipped record no execution can revisit?
+ * ONE home, because two readers must agree on the rule: the followups census (a terminal
+ * phase's citation is history, never a live plan input) and audit check 4 (a terminal phase's
+ * recorded question is history, never an open marker). Always via matchStatusField, never a
+ * whole-file regex — a docblock QUOTING a terminal status would otherwise silence a live phase.
+ */
+export function isTerminalPhaseSource(src) {
+  const status = matchStatusField(src)?.status
+  return status === 'done' || status === 'historical' || status === 'cancelled'
+}
+
+/**
  * Match the arcId FIELD, not prose — the same anchor `matchStatusField` uses, and for the same
  * reason: a docstring that NAMES another arc ("supersedes arcId: 'OTHER'") sits above the real
  * field, and a whole-file first-match hands back the wrong owner. Membership decisions read this,

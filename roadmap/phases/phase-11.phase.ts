@@ -101,6 +101,7 @@ export default definePhase({
       'status --json with a malformed seam exits 1 named but is untested at that tier (the seam contract is pinned at the capacity-command, lib, arc-next and arm tiers).',
       'Under --ignore-capacity, a NON-SeamError throw from the capacity path stays silent — deliberate override semantics (R4 INFO), the one path with no operator-visible trace.',
       'staleArms treats only phase-complete/terminal-phase/unbound as stale, so an arm whose last beacon is result-returned on a not-yet-done phase still counts busy — fail-closed conservatism consistent with one staleness oracle (R2 INFO).',
+      'Version bump owed and NOT surfaced at completion time (phase 10 set the convention and prompted its human; phase 11 shipped a new verb, a config block, a flag and a schema-field removal unversioned) — surfaced late by the 2026-08-26 retro review and DISCHARGED by v0.34.0 in phase 13.7.',
       'liveExecutorArms sees the CURRENT toplevel only — cross-worktree arms on the same box are invisible to the default probe; a cross-worktree registry is the nameable follow-up if multi-arc-per-box becomes routine.',
     ],
     hardStops: [],

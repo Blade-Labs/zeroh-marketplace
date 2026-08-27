@@ -36,8 +36,8 @@ do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime.
       ONE `phase-executor` subagent: prompt = the phase file + the gate plan + the arc's
       execution-prompt doc; result schema from `roadmap contract show --json-schema`. BEFORE
       the spawn, arm the Stop-hook guard: `roadmap executor-arm <phase> --session <YOUR
-      SESSION ID> --executor-id <the id of the subagent you are about to spawn>` (the
-      session-scoped dir name in your transcript/scratchpad paths) — the CLI refuses an
+      SESSION ID> --executor-id <ID>` (session = the session-scoped dir name in your
+      transcript/scratchpad paths; ID = one you mint, unique per spawn) — the CLI refuses an
       unbound arm, and a foreign session is never guarded. `--executor-id` is what makes the
       arm EXCLUSIVE. The spawn prompt NEVER asserts the executor's model id — the executor
       stamps its own; the arm records the card's requested alias and `roadmap result check`

@@ -368,7 +368,8 @@ on what (if anything) to build is user-owned and recorded at the end.
 - `templates/schema.ts:999-1001` — the `planes` docblock: v1 executes phases in `dependsOn`
   order; a plane is presentational; "a future version will run separate planes in parallel."
 - `templates/schema.ts:740` — `executionMode`: RESERVED, consulted by nothing (docblock trued by
-  phase 10 task 10.6).
+  phase 10 task 10.6; the field was REMOVED in phase 11 — see the resolution below, so this
+  line is inventory-of-record, not a live cite).
 - `skills/using-zeroh-roadmap/SKILL.md:40-47` — the one SANCTIONED parallelism that already
   works: multi-session lane coordination (`roadmap claim`, `roadmap arm`, the backlog header
   board) — different sessions drive different arcs/lanes concurrently, CLI-enforced lane locks.
@@ -412,8 +413,10 @@ Wiring it to mean (a) would misplace the knob: (a) is an arc/do-arc property, no
    genuinely independent planes exists and host headroom is proven.
 3. **Do nothing further** — keep the field reserved, revisit when a concrete arc needs (a).
 
-**Resolution (2026-08-26, phase 11, user-ratified via AskUserQuestion):** option ratified =
-check + wire today's spawn sites. `executionMode` REMOVED from both schema copies (it modeled
+**Resolution (2026-08-26, phase 11, user-ratified via AskUserQuestion):** OPTION 1 of the
+list above ratified (scope phrasing at ratification: "check + wire today's spawn sites"); its
+documentation half (naming cross-arc lanes the sanctioned path in using-zeroh-roadmap) landed
+via phase 13.5's routing-row true-up. `executionMode` REMOVED from both schema copies (it modeled
 the rejected task-level batching; old files carrying the key keep parsing — Zod strips unknown
 keys on the non-strict PhaseShape). `roadmap capacity` is the mandatory admission gate any
 future parallel fan-out (PARDISPATCH) must consult; today it already gates `arc next` run-phase

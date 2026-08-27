@@ -35,8 +35,9 @@ definePhase({
   task can start earlier than its position suggests. Cross-phase deps go on the Phase field.
 - `tasks[].interfaces` (optional `{ consumes: string[], produces: string[] }`): the cross-task
   contract, filled ONLY when this task consumes a sibling task's output or produces one a later
-  task relies on. Entries are exact symbol/contract names review-phase can `grep -F` against the
-  steps — never prose. Example:
+  task relies on. Entries are exact symbol/contract names — never prose. The WIRED check is execution-side:
+  do-phase/phase-executor `grep -F` each consumed terminal identifier before building;
+  `produces` is reviewer-judgment material (no wired grep). Example:
   `interfaces: { consumes: ['makeWorkIqClient(fetch?) from 12.1'], produces: ['WorkIqApiError'] }`.
   Omit entirely for self-contained tasks; an empty object is noise, not a signal.
 

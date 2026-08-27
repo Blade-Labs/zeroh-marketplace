@@ -160,7 +160,7 @@ defaults — the consumer's <code>modelPolicy.judgeModel</code> upgrades every j
   <tr><td>code-reviewer</td><td>opus</td><td>correctness rounds 1..N (cap 5), confidence-filtered findings</td></tr>
   <tr><td>intent-validator</td><td>judgeModel (fable here)</td><td>one independent judge per acceptance criterion, drives the real flow, evidence or downgrade</td></tr>
   <tr><td>arc-eval-judge</td><td>sonnet (pinned)</td><td>scores landed arcs vs a rolling baseline — pinned so the baseline stays comparable</td></tr>
-  <tr><td>Codex lane</td><td>gpt-5</td><td><code>roadmap codex run</code> — plans and executes whole phases in its own worktree; never merges, never pushes, never touches the primary checkout</td></tr>
+  <tr><td>Codex lane</td><td>gpt-5.6-sol</td><td><code>roadmap codex run</code> — plans and executes whole phases in its own worktree; never merges, never pushes, never touches the primary checkout</td></tr>
   <tr><td>Grok</td><td>—</td><td>today a governed generative connector only (workflow b-roll); a Grok coding-agent lane is planned once its CLI is agent-mature</td></tr>
 </table></div>
 <p><b>Why the model column matters:</b> every artifact records who produced it —
@@ -168,7 +168,7 @@ defaults — the consumer's <code>modelPolicy.judgeModel</code> upgrades every j
 executor's <code>driver</code> (model + lane) in its typed result, the validate panel's actual
 <code>judgeModel</code>, and the eval judge's pin. The arc-evals slice on exactly these stamps, so
 "which LLM is good at which seam" is a measured question here, not a vibe: a phase planned by fable,
-built by opus, delegated to gpt-5, and judged on the pin all leave attributable evidence, and a model
+built by opus, delegated to gpt-5.6-sol, and judged on the pin all leave attributable evidence, and a model
 swap shows up in the baseline instead of being argued about.</p>
 
 <h2>Honest trade-offs</h2>
@@ -190,7 +190,7 @@ swap shows up in the baseline instead of being argued about.</p>
       <td>Planning is genuinely expensive; it buys unattended execution (and is being leaned further — phase 2420)</td></tr>
   <tr><td>Portability</td><td>8+ harnesses (Claude Code, Cursor, Codex, Devin…)</td>
       <td>Orchestration is Claude-Code-native; <b>execution is already multi-vendor</b> — the governed Codex
-      lane runs (and plans) whole phases on gpt-5, and every artifact records which model did what (see
+      lane runs (and plans) whole phases on gpt-5.6-sol, and every artifact records which model did what (see
       "The cast" below)</td></tr>
   <tr><td>Maintenance</td><td>Active OSS community, MIT</td>
       <td>One team; survives model drift via its own measured eval loop, not via crowd testing</td></tr>
@@ -223,7 +223,7 @@ workspaces (≈ the worktree lane), review-fix loops that resume the implementer
   <li><code>GAUNTLET-2026-08.md</code> — how the skills are regression-tested; read the six lessons before editing any skill</li>
 </ul>
 
-<div class="foot">Written 2026-08-22 against plugin v0.30.0 and superpowers v6.3.0. If the lifecycle or gate
+<div class="foot">Written 2026-08-22 against plugin v0.30.0; refreshed 2026-08-26 against v0.34.0 (worktree disposal at land, capacity admission, the codex plan lane, the role resolve seam) and superpowers v6.3.0. If the lifecycle or gate
 chain changes, this page is documentation debt — redraw it.</div>
 
 </div>

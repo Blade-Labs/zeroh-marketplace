@@ -7,7 +7,8 @@
  *   0  success / clean / the requested state holds
  *   1  usage or configuration error (missing config, unknown/args, not-yet-implemented)
  *   2  check failed / refused / red (the caller cannot narrate around it)
- *   3/4 long-poll verdicts (watch — 1657) · capacity's gate verdict is exit 3 (at capacity)
+ *   3/4 long-poll verdicts (watch — 1657) · 5 watch UNOBSERVED (2384.2) · capacity's gate
+ *   verdict is exit 3 (at capacity) · role resolve's UNJUDGED refusal is exit 2
  *
  * Commands are cli/commands/<name>.mjs default-export async run(argv) → exit code.
  * A command whose module is not present yet is listed in the tree with its owning
@@ -42,8 +43,9 @@ const TREE = {
   followups: { phase: 2422, sub: ['census', '--json'], desc: 'census followup-file lifecycle and inbound references' },
   debt: { phase: 1658, sub: ['census', 'dispose', 'check'], desc: 'debt census/dispose wrappers' },
   measure: { phase: 1659, sub: ['--flow', '--assert'], desc: 'protocol-load meter (bytes/4 over the invocation path)' },
-  capacity: { phase: 11, sub: ['[--json]'], desc: 'live box-resource admission check — can another executor spawn right now (the mandatory gate for any parallel fan-out; exit 3 = at capacity)' },
-  codex: { phase: 1838, sub: ['run <N> [<N2>…] [--worktree] [--base]', 'review <N> [<N2>…] [--doc] [--focus]', 'status <N> [--review]'], desc: 'detached Codex delegation lane — run implements a plan, review adversarially reads one (worktree + stdin prompt + journal; the driver runs the gate, the session audits and integrates)' },
+  capacity: { arc: 'zeroh-marketplace', phase: 11, sub: ['[--json]'], desc: 'live box-resource admission check — can another executor spawn right now (the mandatory gate for any parallel fan-out; exit 3 = at capacity)' },
+  role: { arc: 'zeroh-marketplace', phase: 13, sub: ['resolve <role> [--driver <id>] [--json]'], desc: 'resolve a role to model + reach mode via the tier chain and the consumer modelPolicy (exit 2 = UNJUDGED, every tier unavailable)' },
+  codex: { phase: 1838, sub: ['run <N> [<N2>…] [--worktree] [--base]', 'review <N> [<N2>…] [--doc] [--focus]', 'plan <N> --brief <path>', 'status <N> [--review|--plan]'], desc: 'detached Codex delegation lane — run implements a plan, review adversarially reads one, plan authors one from a brief (worktree + stdin prompt + journal; the driver runs the gate, the session audits and integrates)' },
   driver: { arc: 'POLYSEAT', phase: 2, sub: ['verify <id>', 'register <id>'], desc: "probe a driver's real capabilities (pasted provenance); register refuses an unverified id" },
   eval: { phase: 1996, sub: ['<ARCID> [--date] [--force] [--collect-only] [--json]', 'record-sweep --arc <ID>', 'record-verdicts --arc <ID>', 'merge-judge --arc <ID>', 'trend', 'restamp', 'lesson "<text>" [--phase N]', 'scorecard [--date] [--json]', 'propose [--json] [--dry-run]'], desc: 'arc eval: collect the trace, score the deterministic dimensions and ratchet, merge the judge verdict, record the land-time aggregates, capture a durable lesson to the committed sidecar, and cluster the corpus into ratify-only improvement proposals' },
 }
@@ -54,7 +56,7 @@ function printHelp() {
     const subs = meta.sub?.length ? `  ${meta.sub.join(' | ')}` : ''
     lines.push(`  ${name.padEnd(9)}${subs.padEnd(38)} ${meta.desc}  [${meta.arc ?? 'ROADCODE'} ${meta.phase}]`)
   }
-  lines.push('', 'Exit codes: 0 clean · 1 usage/config · 2 check failed/refused · 3/4 watch verdicts')
+  lines.push('', 'Exit codes: 0 clean · 1 usage/config · 2 check failed/refused · 3/4 watch verdicts · 5 watch UNOBSERVED · capacity 3 = at capacity')
   process.stdout.write(lines.join('\n') + '\n')
 }
 

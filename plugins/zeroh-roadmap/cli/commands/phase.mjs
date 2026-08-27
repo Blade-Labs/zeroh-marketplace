@@ -31,7 +31,7 @@ import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
 import { landPhase, disposeWorktree, isSlotDir, samePath } from '../lib/worktree.mjs'
-import { archiveJournal, findJournal, JournalUnreadableError, RUN_LANE_ARTIFACTS } from './codex.mjs'
+import { archiveJournal, findJournal, JournalUnreadableError, RUN_LANE_ARTIFACTS } from '../lib/codex-journal.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
 
 function runStart(argv) {

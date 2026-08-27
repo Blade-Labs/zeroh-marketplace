@@ -162,7 +162,7 @@ export default definePhase({
         text: "The codex marketplace index entry at the repo-root .agents/plugins/marketplace.json is hand-landed and unratcheted: emit-manifests roots at the plugin, so a plugin-internal generator cannot own a marketplace-level file. Closing it needs a repo-root generator this phase scoped out.",
       },
     ],
-    gateRounds: 3,
+    gateRounds: 4, // trued 3→4 (phase 13.8): the convention counts every recorded round INCLUDING round 0
   },
   tasks: [
     {
