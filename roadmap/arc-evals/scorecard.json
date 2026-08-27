@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "generatedAt": "2026-08-27T00:00:00.000Z",
   "nFloor": 5,
   "drivers": [
     {
@@ -37,7 +37,7 @@
       "lane": "session",
       "taskCountBand": "7+",
       "surface": false,
-      "samples": 1,
+      "samples": 2,
       "abstained": true
     },
     {
@@ -81,7 +81,7 @@
       "model": "claude-fable-5",
       "taskCountBand": "7+",
       "surface": false,
-      "samples": 1,
+      "samples": 2,
       "abstained": true
     }
   ],
@@ -91,6 +91,6 @@
     "planner cells measure the EXECUTION of phases that planner planned — plan quality shows through the executor, never directly",
     "the surface axis is the timing table's HEURISTIC over each phase keyFiles (web/, office/, spa/ paths), not a declared field",
     "cells under 5 samples ABSTAIN and carry no metrics — an abstained cell is not a zero score",
-    "sources: 1 arc trace(s) and 5 phase record(s) fed these cells (5 record(s) suppressed as already covered by an arc trace) — phase records carry no escape scan, so every cell they touch reads escapeFixesPerPhase 'scan-unavailable', never 0; reviewer cells are fed by arc traces alone"
+    "sources: 1 arc trace(s) and 6 phase record(s) fed these cells (5 record(s) suppressed as already covered by an arc trace) — phase records carry no escape scan, so every cell they touch reads escapeFixesPerPhase 'scan-unavailable', never 0; reviewer cells are fed by arc traces alone"
   ]
 }
