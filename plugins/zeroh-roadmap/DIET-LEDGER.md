@@ -589,3 +589,14 @@ keep the whole invocation in ONE copyable span (a reviewer found the split span 
 runnable command that omitted the exclusivity flag) — +3 tokens, spent deliberately on a
 correctness-of-instruction fix, 2 tokens still spare. Every operative rule survives; no deletion rows owed (edits are cite-corrections and
 tag restorations, not content trims).
+
+
+## using-zeroh-roadmap/SKILL.md — 2026-08-27 (diet-funded, closure audit)
+
+The OPTION-1 documentation half (one coordination bullet: cross-arc lanes ARE the sanctioned
+parallel path, one arc per session, gated by `roadmap capacity`) was funded in-file by three
+wording compressions, every operative element surviving: the answer-from-status bullet (drops
+the ROADMAP.md pointer — the entry doc is one hop away via the board), the mirror bullet
+(mirror + CLI-wins survive), and the claim bullet (creation-is-the-lock + across-worktrees
+survive). **Measured:** using-zeroh-roadmap 3,478 B → 3,483 B; the do-arc flow **13,256
+tokens** against the unchanged `--assert 13257`, exit 0 — 1 token spare.

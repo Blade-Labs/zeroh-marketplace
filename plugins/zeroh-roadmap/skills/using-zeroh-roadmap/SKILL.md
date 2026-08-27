@@ -41,14 +41,14 @@ dispatch plus the coordination below.
 
 - The COORDINATION BOARD is `roadmap/backlog.ts`'s header (lane map + release plan) —
   read it FIRST on "what next".
-- `roadmap claim` BEFORE authoring a phase number (CLI-enforced: creation-is-the-lock,
-  shared across worktrees).
+- `roadmap claim` BEFORE authoring a phase number (CLI-enforced: creation is the lock
+  across worktrees).
 - `roadmap status` shows live lanes; `roadmap arm <id>` claims an arc lane (CLI-enforced:
   refuses a taken lane — honor the refusal, never take over another session's arc).
-- Answer roadmap/lane/backlog questions from `roadmap status`, `roadmap/ROADMAP.md`, and
-  the board — never from session memory.
-- A consumer repo's CLAUDE.md restating this protocol is a mirror; this skill is the
-  owner — on drift, the CLI's actual behavior wins.
+- Cross-arc lanes ARE the sanctioned parallel path — one arc per session, gated by
+  `roadmap capacity`.
+- Answer lane/backlog questions from `roadmap status` + the board — never session memory.
+- A consumer CLAUDE.md restating this is a mirror; on drift the CLI's behavior wins.
 
 ## Cross-cutting standards — load the reference when the work produces the artifact
 

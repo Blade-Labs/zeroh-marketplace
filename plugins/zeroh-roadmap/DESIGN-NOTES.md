@@ -417,11 +417,9 @@ Wiring it to mean (a) would misplace the knob: (a) is an arc/do-arc property, no
 list above ratified (scope phrasing at ratification: "check + wire today's spawn sites").
 CORRECTION (2026-08-27, closure audit): its documentation half — one line in
 using-zeroh-roadmap's coordination section naming cross-arc lanes the sanctioned parallel
-path — did NOT land in phase 13.5 (only the honor-system tags and the pause-row true-up
-touched that file), and the metered do-arc budget (13,255/13,257) cannot carry it today.
-The STANDING STATEMENT lives here, in architecture (b) above: cross-arc lane parallelism via
-`roadmap arm`/`claim`, admission-checked by `roadmap capacity`, IS the sanctioned parallel
-path. The one-line skill citation is OWED when budget headroom exists. `executionMode` REMOVED from both schema copies (it modeled
+path — did NOT land in phase 13.5 as first recorded. LANDED later the same day, diet-funded
+(two coordination-bullet compressions paid for the line; DIET-LEDGER §using-zeroh-roadmap
+2026-08-27). The standing architecture statement remains (b) above. `executionMode` REMOVED from both schema copies (it modeled
 the rejected task-level batching; old files carrying the key keep parsing — Zod strips unknown
 keys on the non-strict PhaseShape). `roadmap capacity` is the mandatory admission gate any
 future parallel fan-out (PARDISPATCH) must consult; today it already gates `arc next` run-phase
