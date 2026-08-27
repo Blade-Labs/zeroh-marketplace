@@ -13,7 +13,100 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 13,
   name: 'Retro remediation — roles seam, codex-journal home, census/audit truth, release axis, derived-record refresh',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-08-27',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1427,
+      total: 1427,
+      notes:
+        'Authoritative full gate: roadmap/.gate/13/ run of 2026-08-27T09:24Z — GREEN, 1,427/1,427, on the FINAL tree after the round-3 fix. Two earlier full runs were superseded: the first REDDED on a real half-change (the intent-validator card moved to fable while its resolver chain head stayed opus — the frontmatter/chain guard caught it) plus two narrative comments; the second (1,426/1,426) predated the agent-round fixes. 17 tests added over the 1,410 baseline. lint/types/build/integration declared-none; lint-diff and history-comments exit 0.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — the wired subprocess suites inside the unit tier (audit, role, followups, codex, arc-land) drive the real CLI end to end against tmp git repos.',
+    },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none in gateCommands — no rendered surface.' },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Nine fixes (commit 25dda04), two of them gate-bypass class: the history-comments ratchet was RED on four dated comment lines, and `roadmap audit` read BROKEN because task 13.3’s own record reproduced the marker inside a live queued phase — the guard this phase shipped firing on the record that describes it. Also: the terminal-status rule had landed twice (audit + followups) and became `isTerminalPhaseSource` in phasescan beside matchStatusField; records trued after gate R1 made the chain single-tier; stale MOVE seam comments; an unused import and four dead re-exports (findJournal kept, pinned by five dynamic-import assertions).',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Seven findings, all fixed. The HIGH one was self-inflicted: task 13.3’s colon-only marker grammar was a FALSE NEGATIVE — every protocol home documents the bare form, so a QUEUED phase carrying a real unresolved question audited CLEAN (the reviewer reproduced it), and check 4 is the only code enforcement of the marker rule. Corrected to TERMINATION (both documented forms fire; only an unterminated guard string is data), bare form test-pinned. Also: 13.1’s record claimed a deleted re-export that was only narrowed; phase-6 recorded haltCount 0 where its own provenance said no halt evidence (key omitted per the honest-absent rule the scorecard’s halt-rate filter depends on); `role resolve --driver` with no value told the operator to register a driver named undefined; the do-arc gloss fix had split one command into two spans, the first omitting the exclusivity flag; the audit docblock and a DIET-LEDGER enforcement row still described the pre-13.3 check.',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Five findings, all fixed: the R1 `--driver` usage branch had shipped unpinned (two wired cases now — deleting the branch reproduces the registry error the test forbids); audit.test.mjs’s scoping header and two titles still taught the superseded colon rule, which would have led a maintainer to revert the false-negative fix; 13.3’s whatWasDone still described the colon grammar; its mutation proof named a code shape that no longer existed and was RE-RUN fresh against the corrected guard (dead terminal-skip 59/2, colon-only revert 60/1, decoy 61/61, restored clean); the step description claimed a quote-analysis rule that was never implemented.',
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'One LOW finding, fixed: the last quote-analysis remnant in the 13.3 test step, restated as the termination rule. The reviewer independently confirmed every R2 fix present, verified case 9b is armed, and spot-reproduced mutation (2) exactly — the colon-only revert reds the boundary test at 60/1.',
+    },
+    {
+      round: 4,
+      agent: 'code-reviewer',
+      verdict: 'clean',
+      summary:
+        'Zero findings. The step text maps clause-by-clause to shipped assertions; a whole-file sweep found no remaining text describing quote analysis as implemented, and both marker occurrences in the phase file are unterminated so phase 13 does not self-red. Regression green: 80/80 on the touched suites, audit CLEAN, phase validate OK, budget 13255/13257, schema copies byte-identical, manifests --check exit 0.',
+    },
+  ],
+  metrics: {
+    commits: 16,
+    linesAdded: 1284,
+    linesRemoved: 359,
+    filesChanged: 46,
+    testsAtStart: 1410,
+    testsAtEnd: 1427,
+    testsAdded: 17,
+    startedAt: '2026-08-26T20:30:16Z',
+    completedAt: '2026-08-27T09:45:00Z',
+    haltCount: 0,
+  },
+  compromises:
+    'None. The one execution-time fork — whether intent-validator may carry a two-tier chain — went to a software-architect Decision Contract rather than executor judgement, because the suite states in as many words that a second tier is "a new user ruling, not a refactor". Verdict: single-tier FABLE, and the plan’s instruction to mirror software-architect’s "named opus fallback" was itself stale — phase 4 deleted that prose when the resolver landed, so the architect’s multi-tier chain is what makes its fallback legal. The invented line was dropped from the card and the CHANGELOG.',
+  executionResult: {
+    phase: 13,
+    status: 'done',
+    driver: { model: 'claude-fable-5', lane: 'session' },
+    roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'native' },
+      { role: 'software-architect', model: 'claude-fable-5', via: 'native' },
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'native' },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'native' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'Check 4 now reds when a LIVE phase quotes either terminated marker form in prose — accepted conservatism (missing a real unresolved question is the dangerous direction), so records must DESCRIBE the token rather than quote it. Both the quality pass and gate R1 had to de-quote this phase’s own text; a future planner will hit the same edge.',
+      'The role seam is reachable but not yet CITED by the spawner skills — deliberate: the do-arc protocol-load budget sits at 13255/13257 and prose wiring is a metered edit. The named follow-up is to cite `roadmap role resolve` in validate-arc/arc-sweep once headroom exists.',
+      'roles.mjs is now consumed by one command; the ROLES table is still authored by hand and no test asserts a spawner ACTUALLY routes through the resolver — a spawn that ignores the verb is still possible, which is what the frontmatter fail-safe now covers.',
+      'The retro’s outlier list for the gateRounds convention was one phase too wide (phase 2 already matched); counting every record before editing is the reason only three were trued.',
+      'The eval scorecard counts TRACKED .peval.json records; phase 13’s own record lands with the completion commit, so the scorecard is one record stale until the next regeneration — regenerate after landing, never before.',
+    ],
+    hardStops: [],
+    gateRounds: 5,
+  },
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
