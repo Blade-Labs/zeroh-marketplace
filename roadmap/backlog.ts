@@ -43,10 +43,6 @@ import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
   {
-    phase: 13,
-    name: 'Retro remediation — roles seam, codex-journal home, census/audit truth, release axis, derived-record refresh',
-  },
-  {
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
