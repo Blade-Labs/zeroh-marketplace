@@ -46,6 +46,35 @@ export default defineBacklog([
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
+  // ── MINESWEEP arc tier (phases 14, 15, 16, 17, 18, 19, 20 — exact claimed numbers; queued 2026-08-31 after all 7 plan reviews returned READY) ──
+  {
+    phase: 14,
+    name: 'Lane lifecycle accounting: inventory classifier, audit/status surfacing, plan-lane close, branch-delete gap',
+  },
+  {
+    phase: 15,
+    name: 'Codex lane hardening: lockfile-keyed bootstrap, absolute CLI + grammar in envelopes, plan post-run validation, plan --arc refusal',
+  },
+  {
+    phase: 16,
+    name: 'Commit-grammar tolerant attribution: one matcher home, widened read, deviant WARNs, grammar in agent cards',
+  },
+  {
+    phase: 17,
+    name: 'Delegated-lane gate integrity: widened round identities, no-self-judge refusal at verify-complete',
+  },
+  {
+    phase: 18,
+    name: 'Measurement repairs: schema-drift check, lessons merge-back on land, eval-gap visibility, census noise',
+  },
+  {
+    phase: 19,
+    name: 'Cross-repo gate awareness: productRepos floors review scope, arm-time product-tree overlap refusal',
+  },
+  {
+    phase: 20,
+    name: 'Anti-vacuity: scoped-runner cannot-fail probe, widened polarity lint, executable assumption tripwires',
+  },
   // ── DEFERRED (standing user hold 2026-08-26): do NOT execute until the user asks ──
   {
     phase: 12,
