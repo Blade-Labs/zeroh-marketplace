@@ -89,12 +89,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
           description:
-            'In disposeWorktree\'s `!existsSync(dir)` arm: before returning, when `branch` is given and `merge-base --is-ancestor branch integrationRef` holds, run the same `branch -D` + report shape as the normal path (branchDeleted true/false + detail on failure); an unmerged branch stays, exactly as on the normal path → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'already-gone lane still deletes its merged branch\' cli/lib/worktree.test.mjs && node --test cli/lib/worktree.test.mjs >/dev/null 2>&1"',
+            'In disposeWorktree\'s `!existsSync(dir)` arm: before returning, when `branch` is given and `merge-base --is-ancestor branch integrationRef` holds, run the same `branch -D` + report shape as the normal path (branchDeleted true/false + detail on failure); an unmerged branch stays, exactly as on the normal path → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'already-gone lane still deletes its merged branch\' cli/lib/worktree.test.mjs && capbuild node --test cli/lib/worktree.test.mjs >/dev/null 2>&1"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
           description:
-            'Add two tests against a real tmp repo: (a) "already-gone lane still deletes its merged branch" — create lane branch, merge to integration ref, remove the worktree dir by hand, dispose → alreadyDisposed:true AND branchDeleted:true AND `git branch --list` empty for it; (b) "already-gone lane keeps an unmerged branch" (name verbatim) → branchDeleted:false and the branch survives → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'keeps an unmerged branch\' cli/lib/worktree.test.mjs && node --test cli/lib/worktree.test.mjs >/dev/null 2>&1"',
+            'Add two tests against a real tmp repo: (a) "already-gone lane still deletes its merged branch" — create lane branch, merge to integration ref, remove the worktree dir by hand, dispose → alreadyDisposed:true AND branchDeleted:true AND `git branch --list` empty for it; (b) "already-gone lane keeps an unmerged branch" (name verbatim) → branchDeleted:false and the branch survives → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'keeps an unmerged branch\' cli/lib/worktree.test.mjs && capbuild node --test cli/lib/worktree.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -114,12 +114,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/worktree.mjs',
           description:
-            "Export surveyLanes(root): parse `git -C root worktree list --porcelain`; skip the primary (samePath) and slots (isSlotDir); match each remaining dir to its journal by worktree-path equality across live AND .closed codex journals of all LANES (unreadable → 'unknown', never a throw); classes: 'live' (pgid groupAlive) · 'stale-run'/'stale-plan'/'stale-review' · 'closed' · 'legacy' (no journal). Rows { dir, branch, class, journalPath|null, remedy }. Inventory + liveness ONLY — no dirty/unpushed probes (notes) → verify: bash -c \"grep -qF 'export function surveyLanes' plugins/zeroh-roadmap/cli/lib/worktree.mjs\"",
+            "Export surveyLanes(root): parse `git -C root worktree list --porcelain`; skip the primary (samePath) and slots (isSlotDir); match each remaining dir to its journal by worktree-path equality via samePath/resolve on BOTH sides (architect note N2 — the refuseIfLive precedent: a relative --worktree in a journal must not yield a phantom legacy row for its own absolute twin) across live AND .closed codex journals of all LANES (unreadable → 'unknown', never a throw); classes: 'live' (pgid groupAlive) · 'stale-run'/'stale-plan'/'stale-review' · 'closed' · 'legacy' (no journal). Rows { dir, branch, class, journalPath|null, remedy }. Inventory + liveness ONLY — no dirty/unpushed probes (notes) → verify: bash -c \"grep -qF 'export function surveyLanes' plugins/zeroh-roadmap/cli/lib/worktree.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
           description:
-            'Tests over a real tmp repo + real worktrees: a live-pgid lane (spawn a sleeping child, use its pid as journal pgid) classifies live; a dead-pgid run journal classifies stale-run with the land remedy; a journal-less worktree classifies legacy; a slot dir (-wt-1) and the primary never appear; an unreadable journal yields class unknown, never a throw → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'surveyLanes\' cli/lib/worktree.test.mjs && node --test cli/lib/worktree.test.mjs >/dev/null 2>&1"',
+            'Tests over a real tmp repo + real worktrees: a live-pgid lane (spawn a sleeping child, use its pid as journal pgid) classifies live; a dead-pgid run journal classifies stale-run with the land remedy; a journal-less worktree classifies legacy; a slot dir (-wt-1) and the primary never appear; an unreadable journal yields class unknown, never a throw → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'surveyLanes\' cli/lib/worktree.test.mjs && capbuild node --test cli/lib/worktree.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -145,7 +145,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/audit.test.mjs',
           description:
-            'Following the suite\'s caught-RED + clean-GREEN fixture pattern: a fixture repo with a dead-journal codex worktree yields the check-15 MEDIUM finding carrying the remedy text; the clean twin (no lane worktrees) yields no check-15 finding; a live-pgid lane yields none (three fixtures, real git worktrees in tmp) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'check 15\' cli/commands/audit.test.mjs && node --test cli/commands/audit.test.mjs >/dev/null 2>&1"',
+            'Following the suite\'s caught-RED + clean-GREEN fixture pattern: a fixture repo with a dead-journal codex worktree yields the check-15 MEDIUM finding carrying the remedy text; the clean twin (no lane worktrees) yields no check-15 finding; a live-pgid lane yields none (three fixtures, real git worktrees in tmp) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'check 15\' cli/commands/audit.test.mjs && capbuild node --test cli/commands/audit.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -172,7 +172,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/status.test.mjs',
           description:
-            'Two fixtures: with a dead-journal lane worktree the line and the --json strayLanes:1 appear; without one neither appears (doesNotMatch guarded by spawnSync stderr+stdout capture — the phase-11 lesson) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'strayLanes\' cli/commands/status.test.mjs && node --test cli/commands/status.test.mjs >/dev/null 2>&1"',
+            'Two fixtures: with a dead-journal lane worktree the line and the --json strayLanes:1 appear; without one neither appears (doesNotMatch guarded by spawnSync stderr+stdout capture — the phase-11 lesson) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'strayLanes\' cli/commands/status.test.mjs && capbuild node --test cli/commands/status.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -198,7 +198,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'Per terminal state (fixture journals + report files, dead pgid): the hint names the right verb and the right worktree/ids; the running state prints no hint; stdout JSON parses unchanged (assert JSON.parse succeeds and carries no `next` key) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'next-step hint\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'Per terminal state (fixture journals + report files, dead pgid): the hint names the right verb and the right worktree/ids; the running state prints no hint; stdout JSON parses unchanged (assert JSON.parse succeeds and carries no `next` key) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'next-step hint\' cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -217,23 +217,23 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
           description:
-            "Add archivePlanLane(root, jPath, journal, reportPath), called from statusCodex when lane==='plan' && state==='complete' (verdict-keyed like the review site). Guards, each a stderr refusal keeping the lane: (a) pgid groupAlive → live; (b) worktree dirty beyond untracked lane artifacts (CODEX-PLAN.md, .building/); (c) `diff --name-only <journal.base>...HEAD` (THREE-dot: merge-base diff — journal.base is a moving ref the harvest itself advances, so a two-dot tree-diff would call every sibling landing an invariant breach) ≠ exactly the one phase file → invariant breach; (d) `git -C root show <integrationRefOf(config)>:<phaseFile>` not byte-equal to `git -C wt show HEAD:<phaseFile>` → NOT harvested, refusal names `git -C <root> cherry-pick <branch tip sha>` → verify: bash -c \"grep -qF 'archivePlanLane' plugins/zeroh-roadmap/cli/commands/codex.mjs\"",
+            "Add archivePlanLane(root, jPath, journal, reportPath), called from statusCodex when lane==='plan' && state==='complete' (verdict-keyed like the review site). Guards, each a stderr refusal keeping the lane: (a) pgid groupAlive → live; (b) worktree dirty beyond untracked lane artifacts (CODEX-PLAN.md, .building/); (c) `diff --name-only <journal.base>...HEAD` (THREE-dot: merge-base diff — journal.base is a moving ref the harvest itself advances, so a two-dot tree-diff would call every sibling landing an invariant breach) ≠ exactly the one phase file → invariant breach; (d) harvested ⇔ TWO-arm blob proof (architect amendment A2 — strict byte-equality would refuse the NORMAL harvest-then-amend flow: Mode A repairs routinely edit the file after harvest): `git -C root rev-parse <integrationRefOf(config)>:<phaseFile>` blob-equals `git -C wt rev-parse HEAD:<phaseFile>` OR the lane's HEAD blob id appears among `git -C root rev-parse <sha>:<phaseFile>` over `git -C root log --format=%H <integrationRef> -- <phaseFile>` (the harvest commit carried the lane's exact bytes; a never-harvested lane or a re-plan of the number never puts that blob in the history); neither arm → NOT harvested, refusal names `git -C <root> cherry-pick <branch tip sha>` → verify: bash -c \"grep -qF 'archivePlanLane' plugins/zeroh-roadmap/cli/commands/codex.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
           description:
-            'On all guards passing: copy CODEX-PLAN.md to the jPath-derived archived twin (the archiveReviewLane one-shot archivedAt pattern, keyed the same way), then `git -C root worktree remove --force <wt>` + `branch -D codex-plan/<ids>` + `worktree prune`, all anchored -C root with cwd root (the METERTENANT rule), and stamp the journal in place (live name, archivedAt + archivedReport) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'consume-the-plan\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'On all guards passing: copy CODEX-PLAN.md to the jPath-derived archived twin (the archiveReviewLane one-shot archivedAt pattern, keyed the same way), then `git -C root worktree remove --force <wt>` + `branch -D codex-plan/<ids>` + `worktree prune`, all anchored -C root with cwd root (the METERTENANT rule), and stamp the journal in place (live name, archivedAt + archivedReport) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'consume-the-plan\' cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'Real tmp repo + real plan worktree fixtures: (a) harvested (file cherry-picked to integration ref, byte-equal) → status read archives the plan, removes worktree AND branch; a second read still resolves the journal (live name — the archiveReviewLane pattern), serves the archived report with archivedAt stamped, and attempts no re-archive (never a "no journal covers" miss); (b) unharvested → refusal text contains the cherry-pick command and NOTHING is removed; (c) live pgid → untouched; (d) a second changed file on the branch → invariant refusal, nothing removed → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'unharvested\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'Real tmp repo + real plan worktree fixtures: (a) harvested (file cherry-picked to integration ref, byte-equal) → status read archives the plan, removes worktree AND branch; a second read still resolves the journal (live name — the archiveReviewLane pattern), serves the archived report with archivedAt stamped, and attempts no re-archive (never a "no journal covers" miss); (b) unharvested → refusal text contains the cherry-pick command and NOTHING is removed; (c) live pgid → untouched; (d) a second changed file on the branch → invariant refusal, nothing removed; (e) harvested THEN amended at the integration ref (Mode A repairs the harvested file) → still closes via the blob-history arm → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'unharvested\' cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
         'A harvested plan lane closes on the next `codex status <N> --plan` read: plan archived beside the journal, worktree and codex-plan branch gone, journal stamped (live name + archivedAt, the archiveReviewLane pattern); the re-read resolves the same journal, serves the archived report, and never re-archives or reports "no journal covers" (state coverage: second read)',
         'Unharvested, live, dirty, and invariant-breach lanes all refuse with the named reason and remedy; nothing is ever removed on a refusal (each direction has a test)',
-        'The byte-equality proof reads committed blobs on both sides (`git show ref:path`), never working-tree files',
+        'The harvest proof reads committed blob ids on both sides (`git rev-parse ref:path`), never working-tree files: byte-equal at, or in the committed history of, the phase file at the integration ref',
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
       testMode: 'tdd',
