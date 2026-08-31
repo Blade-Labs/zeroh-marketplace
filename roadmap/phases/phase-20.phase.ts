@@ -87,7 +87,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/slots.test.mjs',
           description:
-            'Tests with stub runners: an exit-0-always script → vacuous:true; a script that exits 2 on a missing file → vacuous:false; a hanging script under a short timeoutMs → vacuous:null with the timeout named; a template without {files} → skipped (null, "not a scoped template") → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'probeScopedSlot\' cli/lib/slots.test.mjs && node --test cli/lib/slots.test.mjs >/dev/null 2>&1"',
+            'Tests with stub runners: an exit-0-always script → vacuous:true; a script that exits 2 on a missing file → vacuous:false; a hanging script under a short timeoutMs → vacuous:null with the timeout named; a template without {files} → skipped (null, "not a scoped template") → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'probeScopedSlot\' cli/lib/slots.test.mjs && capbuild node --test cli/lib/slots.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -107,12 +107,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/gate.mjs',
           description:
-            "In the gate-plan path (the `plan` subcommand emission — `gate run` shares buildPlan and must NOT pay the probe), for each resolved slot whose command template carries {files}: run probeScopedSlot once (per distinct template, cached within the run); vacuous:true → a `warning: <slot> scoped runner cannot fail …` line + a plan-notes entry; vacuous:null → a probe-unanswerable note. WARN-only — exit codes unchanged (arc acceptance bar: the executor judges) → verify: bash -c \"grep -qF 'cannot fail' plugins/zeroh-roadmap/cli/commands/gate.mjs\"",
+            "In the gate-plan path (the `plan` subcommand emission — `gate run` shares buildPlan and must NOT pay the probe), for each scoped slot's RAW template (architect amendment A5 — resolved slot rows carry the POST-substitution command with no {files} left: substitute() runs inside resolveSlot/resolveScopedOrFallback, so either carry `template` on resolveScopedOrFallback's return for scoped slots, the preferred one-line seam, or re-read cfg.gateCommands[<slot>] per built slot name) containing {files}: run probeScopedSlot once (per distinct template, cached within the run); vacuous:true → a `warning: <slot> scoped runner cannot fail …` line + a plan-notes entry; vacuous:null → a probe-unanswerable note. WARN-only — exit codes unchanged (arc acceptance bar: the executor judges) → verify: bash -c \"grep -qF 'cannot fail' plugins/zeroh-roadmap/cli/commands/gate.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
           description:
-            'Fixture-consumer: gateCommands binding a stub exit-0-always scoped runner → gate plan output carries the warning and still exits by its normal contract; the honest-runner twin carries no warning (both directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'cannot fail\' cli/commands/gate.test.mjs && node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
+            'Fixture-consumer: gateCommands binding a stub exit-0-always scoped runner → gate plan output carries the warning and still exits by its normal contract; the honest-runner twin carries no warning (both directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'cannot fail\' cli/commands/gate.test.mjs && capbuild node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -138,7 +138,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs',
           description:
-            'Table rows per class from the recorded incidents verbatim (the 2421 node|tail form; `cmd || true`; `cmd; echo done`) each WARN on a new-to-git fixture phase; the clean twins (node run judged by $?; && echo INSIDE a test\'s expected-output assertion… kept un-warned via the final-element rule) do not; committed-to-git files stay exempt (grandfather rule pinned) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'|| true\' bin/validate-roadmap-file.test.mjs && node --test bin/validate-roadmap-file.test.mjs >/dev/null 2>&1"',
+            'Table rows per class from the recorded incidents verbatim (the 2421 node|tail form; `cmd || true`; `cmd; echo done`) each WARN on a new-to-git fixture phase; the clean twins (node run judged by $?; && echo INSIDE a test\'s expected-output assertion… kept un-warned via the final-element rule) do not; committed-to-git files stay exempt (grandfather rule pinned) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'|| true\' bin/validate-roadmap-file.test.mjs && capbuild node --test bin/validate-roadmap-file.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -162,7 +162,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/phase.test.mjs',
           description:
-            'Fixture-consumer: a phase whose two tripwires are green → exit 0 with two ok lines; one flipped stale (fixture edit) → exit 2 naming exactly that claim; a phase with no assumptions → note + exit 0; flagless run unchanged (regression pin) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF -- \'--assumptions\' cli/commands/phase.test.mjs && node --test cli/commands/phase.test.mjs >/dev/null 2>&1"',
+            'Fixture-consumer: a phase whose two tripwires are green → exit 0 with two ok lines; one flipped stale (fixture edit) → exit 2 naming exactly that claim; a phase with no assumptions → note + exit 0; flagless run unchanged (regression pin) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF -- \'--assumptions\' cli/commands/phase.test.mjs && capbuild node --test cli/commands/phase.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
