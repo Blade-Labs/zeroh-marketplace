@@ -448,16 +448,28 @@ export function surveyLanes(anyRoot) {
     }
     // Falsiness is not the test: `[]` and `"text"` are truthy and would reach the classifier as a
     // journal with `pgid undefined` — i.e. as a DEAD run, a lifecycle invented out of a bad file.
+    // A journal that PARSES but names no worktree is unreadable in the sense that matters here: it
+    // cannot be attributed, so folding it into "no journal" would report `legacy` — "nothing ran" —
+    // over a launcher record sitting right on disk, the exact fold the doctrine above forbids.
     if (journalDeclineReason(value) || !value.worktree) {
-      if (journalDeclineReason(value)) unreadable.push({ path, text })
+      unreadable.push({ path, text })
       continue
     }
     const closed = LANES[lane].closedRe.test(f)
     const key = resolved(value.worktree)
+    const prior = byDir.get(key)
     // A LIVE journal outranks an archived one for the same tree: a relaunch after a close is the
     // newer truth, and reporting `closed` there would tell an operator the lane is finished.
-    if (closed && byDir.has(key)) continue
-    if (!closed && byDir.get(key)?.closed === false) continue
+    if (closed && prior) continue
+    if (!closed && prior?.closed === false) {
+      // TWO live journals naming one tree — a dir reused across lanes (`codex run <N> --worktree
+      // <a former plan lane>`). Recency decides, never readdir order: the loser's class would send
+      // the operator to another lane's done-moment, which can only refuse. A journal with no
+      // parseable startedAt loses to one that has it, and ties keep the incumbent.
+      const mine = Date.parse(value.startedAt ?? '')
+      const theirs = Date.parse(prior.journal.startedAt ?? '')
+      if (!(Number.isFinite(mine) && (!Number.isFinite(theirs) || mine > theirs))) continue
+    }
     byDir.set(key, { path, journal: value, lane, closed })
   }
 
@@ -478,6 +490,25 @@ export function surveyLanes(anyRoot) {
     const idList = ids.join(' ')
     const flag = hit ? LANES[hit.lane].flag : null
     const laneFlag = flag ? ` ${flag}` : ''
+    const live = Boolean(hit && !hit.closed && hit.journal.pgid && groupAlive(hit.journal.pgid))
+    // A PRUNABLE entry: git still lists the worktree, the directory is gone (a swept /tmp, a hand
+    // rm). Every command below that addresses `dir` exits 128 there, so the remedy would be a
+    // paste that only errors — the class this survey exists to replace. What is actually left is
+    // the REGISTRATION, and one prune clears it; the branch then stands alone, and if the lane
+    // never landed, its commits are the only copy, so the row says to look before deleting it.
+    // Asked AFTER liveness, because a lane whose group still runs is never handed a prune.
+    if (!live && !existsSync(dir)) {
+      const prune = `git -C ${root} worktree prune`
+      return {
+        dir,
+        branch,
+        class: hit ? (hit.closed ? 'closed' : `stale-${hit.lane}`) : 'legacy',
+        journalPath: hit?.path ?? null,
+        remedy: branch
+          ? `(1) ${prune} — the directory is already gone; only its registration remains; (2) its branch ${branch} then stands alone: git -C ${root} log --oneline ${branch}, and delete it with git -C ${root} branch -D ${branch} only once you are sure it is carried elsewhere`
+          : `${prune} — the directory is already gone and the lane was detached; only its registration remains`,
+      }
+    }
     const removeCmd = `git -C ${root} worktree remove --force ${dir}`
       + (branch ? ` && git -C ${root} branch -D ${branch}` : '')
       + ` && git -C ${root} worktree prune`
@@ -510,7 +541,7 @@ export function surveyLanes(anyRoot) {
       // verb is allowed to come back for it (the operator ruling), so the remedy IS the hand-run.
       return { dir, branch, class: 'closed', journalPath: hit.path, remedy: removeCmd }
     }
-    if (hit.journal.pgid && groupAlive(hit.journal.pgid)) {
+    if (live) {
       // A lane in flight is never actionable: handing an operator a removal or a landing verb for
       // a run still writing into that tree is the data loss the rail exists to prevent. Observe it.
       return {
@@ -530,9 +561,20 @@ export function surveyLanes(anyRoot) {
       // removed the tree would throw the phase away), while the plan and review lanes make no
       // commits the integration branch wants — their close is consuming the hand-off on a status
       // read, so `phase land` there would only refuse.
+      //
+      // ONE land per lane, even for an arc lane covering several ids: landPhase moves the whole
+      // scratch head (the phase number never scopes the commits) and then disposes the worktree,
+      // so a chained second land would run from a deleted cwd — a remedy that cannot finish.
+      //
+      // And the consume-close both read-only lanes are sent to is gated on the COMPLETE verdict,
+      // while `stale-` says only that the process group is gone. A lane that died without writing
+      // its sentinel would get a command that prints its journal and changes nothing, reported
+      // MEDIUM forever — so the remedy names the hand-finish for that case in the same breath.
       remedy: hit.lane === 'run'
-        ? `cd ${dir} && ${ids.length ? ids.map((n) => `roadmap phase land ${n}`).join(' && ') : 'roadmap phase land <N>'}`
-        : `roadmap codex status ${idList || '<N>'}${laneFlag}`,
+        ? `cd ${dir} && roadmap phase land ${ids[0] ?? '<N>'}`
+          + (ids.length > 1 ? `  (one land moves the whole lane head, covering ${idList})` : '')
+        : `roadmap codex status ${idList || '<N>'}${laneFlag} — if the lane reported COMPLETE that read closes it; `
+          + `if it died without a sentinel, harvest anything you still want and then: ${removeCmd}`,
     }
   })
 }

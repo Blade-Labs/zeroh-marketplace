@@ -331,7 +331,7 @@ function preserveStaleReport(worktree, reportName) {
  * id (the DriverShape lane vocabulary) — deliberately not this function's `lane`, which is the
  * run/plan/review mission.
  */
-function launch(root, ids, lane, { worktree, base, prompt }) {
+function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null }) {
   const building = join(root, '.building')
   const stem = `${LANES[lane].prefix}${ids.join('-')}`
   const promptPath = join(building, `${stem}-prompt.txt`)
@@ -352,7 +352,11 @@ function launch(root, ids, lane, { worktree, base, prompt }) {
   writeFileSync(
     jPath,
     JSON.stringify(
-      { phases: ids, lane, driver: driverStamp(entry), report: LANES[lane].report, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, startedAt: new Date().toISOString() },
+      // `carriedIn` is the repo-relative path carryIn() copied INTO the worktree, recorded because
+      // nothing else can recover it: the copy lands untracked at a path only the launcher knew, and
+      // a done-moment that cannot name it refuses on the launcher's own artifact — the same trap
+      // RUN_LANE_ARTIFACTS exists to stop for CODEX-REPORT.md. Absent when nothing was carried in.
+      { phases: ids, lane, driver: driverStamp(entry), report: LANES[lane].report, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString() },
       null,
       2,
     ) + '\n',
@@ -493,7 +497,7 @@ function planCodex(root, ids, argv) {
   }
   carryIn(root, worktree, brief)
   preserveStaleReport(worktree, LANES.plan.report)
-  return launch(root, ids, 'plan', { worktree, base, prompt })
+  return launch(root, ids, 'plan', { worktree, base, prompt, carriedIn: brief })
 }
 
 /**
@@ -634,12 +638,35 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     return keep(`${wt} is a session SLOT, not a plan lane. Retire it by hand if it is really spent: roadmap worktree status`)
   }
 
+  // THE LANE REF. Every proof below reads it from the PRIMARY checkout rather than from inside the
+  // worktree, and they are the same object: a plan lane commits on `codex-plan/<ids>`, so the tree's
+  // HEAD and the branch tip move together. Reading the branch is what lets a lane whose DIRECTORY
+  // died (a swept /tmp, a hand rm) still be proven and closed — the residue class 14.1 just shut on
+  // the disposal rail, reopened here if the guards could only ever address a tree.
+  const laneRef = q(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]).ok ? branch : 'HEAD'
+
   // (b) DIRT. Everything a plan lane legitimately leaves untracked is named: its own CODEX-PLAN.md
-  // (never committed, by contract) and the .building/ the launcher carried in. Anything else — and
-  // any MODIFIED TRACKED file — is unexplained work, and removing the tree destroys its only copy.
+  // (never committed, by contract), the .building/ the launcher carried in, and the brief carryIn()
+  // copied. Anything else — and any MODIFIED TRACKED file — is unexplained work, and removing the
+  // tree destroys its only copy.
   const st = q(wt, ['status', '--porcelain', '-uall'])
-  if (!st.ok) return keep(`its working state could not be read, so it cannot be shown to be spent — ${st.out.trim()}`)
-  const artifacts = new Set([LANES.plan.report, prevReportName(LANES.plan.report)])
+  if (!st.ok) {
+    // The commonest cause is a DIRECTORY that is gone (a /tmp reaper, a hand rm). Such a lane can
+    // never reach this function by the front door — with no tree there is no CODEX-PLAN.md, so the
+    // read computes `dead-no-report`, not `complete` — but the refusal must still name the way out
+    // or the stale registration and the branch squat with nobody told what to do. Report-only, per
+    // the operator ruling: `roadmap audit` check 15 reports the same lane with the same prune.
+    return keep(
+      `its working state could not be read, so it cannot be shown to be spent — ${st.out.trim()}\n`
+        + `  If ${wt} is gone, the tree cannot be judged from here: \`git -C ${root} worktree prune\` clears the stale registration, and its branch ${branch} `
+        + `then stands alone — read it with \`git -C ${root} log --oneline ${branch}\` before deleting it, because if the plan was never harvested those commits are its only copy.`,
+    )
+  }
+  // The lane's own untracked outputs, plus the brief the LAUNCHER carried in: carryIn() copies it
+  // only when the worktree lacks it, i.e. exactly when it is not committed on base, so it lands
+  // untracked at a repo-relative path nothing else records. Without it the close refuses on a file
+  // this command created — the trap RUN_LANE_ARTIFACTS exists to stop for the run lane's report.
+  const artifacts = new Set([LANES.plan.report, prevReportName(LANES.plan.report), journal.carriedIn].filter(Boolean))
   const blocking = []
   for (const line of st.out.split('\n').filter(Boolean)) {
     const code = line.slice(0, 2)
@@ -659,19 +686,23 @@ function archivePlanLane(root, jPath, journal, reportPath) {
   // (c) THE ONE-FILE INVARIANT. THREE dots: `base` is a moving ref the harvest itself advances, so a
   // two-dot tree diff would report every sibling landing as a change this lane made and refuse
   // every harvested plan. The merge-base diff asks only what the LANE did.
-  const diff = q(wt, ['diff', '--name-only', `${base}...HEAD`])
+  const diff = q(wt, ['diff', '--name-only', `${base}...${laneRef}`])
   if (!diff.ok) return keep(`its diff against ${base} could not be read, so the one-file invariant cannot be checked — ${diff.out.trim()}`)
   const changed = diff.out.split('\n').map((s) => s.trim()).filter(Boolean)
   if (changed.length !== 1 || changed[0] !== phaseFile) {
     return keep(
-      `it breaches the plan lane's ONE-FILE invariant: ${base}...HEAD changed ${changed.length} file(s) — ${changed.join(', ') || '(none)'} — where exactly ${phaseFile} was allowed. `
+      `it breaches the plan lane's ONE-FILE invariant: ${base}...${laneRef} changed ${changed.length} file(s) — ${changed.join(', ') || '(none)'} — where exactly ${phaseFile} was allowed. `
+        + (changed.length === 0
+          ? `An empty diff means ${base} already CONTAINS this lane's commit, which a merge does and a cherry-pick does not — if it was landed by merge, remove the lane by hand: `
+            + `git -C ${root} worktree remove --force ${wt} && git -C ${root} branch -D ${branch}. `
+          : '')
         + 'The harvest proof covers that one path, so anything else would ride out of the lane unproven; inspect the branch and land or drop the extra work by hand',
     )
   }
 
   // (d) THE HARVEST, proven off committed blob ids on both sides.
-  const laneBlob = q(wt, ['rev-parse', `HEAD:${phaseFile}`])
-  if (!laneBlob.ok) return keep(`${phaseFile} is not committed at this lane's HEAD, so there is nothing to prove harvested — ${laneBlob.out.trim()}`)
+  const laneBlob = q(wt, ['rev-parse', `${laneRef}:${phaseFile}`])
+  if (!laneBlob.ok) return keep(`${phaseFile} is not committed at this lane's ${laneRef}, so there is nothing to prove harvested — ${laneBlob.out.trim()}`)
   const lb = laneBlob.out.trim()
   // The configured integration ref is the plan's ruling; an UNCONFIGURED consumer falls back to the
   // ref this lane was branched from, which is the launcher's own recorded answer to the same
@@ -697,24 +728,26 @@ function archivePlanLane(root, jPath, journal, reportPath) {
   if (!harvested) {
     const tip = q(root, ['rev-parse', branch])
     return keep(
-      `its plan was never HARVESTED: the committed blob of ${phaseFile} at this lane's HEAD is neither at ${integrationRef}:${phaseFile} nor anywhere in that path's history there, `
+      `its plan was never HARVESTED: the committed blob of ${phaseFile} at this lane's ${laneRef} is neither at ${integrationRef}:${phaseFile} nor anywhere in that path's history there, `
         + `so removing the lane would destroy the only copy of the plan. Harvest it first: git -C ${root} cherry-pick ${tip.ok ? tip.out.trim() : branch}`,
     )
   }
 
   // PASS. Copy the plan out BEFORE anything is removed. The relocation is one-shot, keyed on
-  // archivedAt exactly as archiveReviewLane keys it.
-  const archived = jPath.replace(/\.json$/, '-REPORT.md')
+  // archivedAt exactly as archiveReviewLane keys it. archivedReport stays NULL when there was
+  // nothing to copy — a tree that died before this read took its hand-off with it, and stamping a
+  // path to a file that exists nowhere is worse than saying there is none.
+  const archived = existsSync(reportPath) ? jPath.replace(/\.json$/, '-REPORT.md') : null
   let stamped = journal
   if (!journal.archivedAt) {
-    if (existsSync(reportPath)) copyFileSync(reportPath, archived)
+    if (archived) copyFileSync(reportPath, archived)
     stamped = { ...journal, archivedAt: new Date().toISOString(), archivedReport: archived }
     writeFileSync(jPath, JSON.stringify(stamped, null, 2) + '\n')
   }
   const removed = q(root, ['worktree', 'remove', '--force', wt])
   if (!removed.ok) {
     process.stderr.write(
-      `roadmap codex: the plan is archived at ${archived}, but its worktree ${wt} could NOT be removed — ${removed.out.trim()}\n`
+      `roadmap codex: the plan is ${archived ? `archived at ${archived}` : 'gone with its hand-off (nothing to archive)'}, but its worktree ${wt} could NOT be removed — ${removed.out.trim()}\n`
         + `  No sweep verb will come back for it: finish by hand from ${root} — git worktree remove --force ${wt} && git branch -D ${branch} && git worktree prune\n`,
     )
     return { journal: stamped, archived }
@@ -759,7 +792,12 @@ function nextStepHint(lane, state, journal, reportPath) {
   const relaunch = `roadmap codex run ${ids.join(' ')}`
   if (state === 'complete') {
     // `phase land` resolves its checkout from cwd, so the cd is part of the command, not context.
-    return wt ? `cd ${wt} && ${ids.map((n) => `roadmap phase land ${n}`).join(' && ')}` : null
+    // ONE land, even for an arc lane covering several ids: landPhase moves the whole scratch head
+    // (the phase number never scopes the commits) and then disposes the worktree, so a chained
+    // second land would run from a deleted cwd — a hint that cannot finish is worse than none.
+    if (!wt) return null
+    return `cd ${wt} && roadmap phase land ${ids[0]}`
+      + (ids.length > 1 ? `  (one land moves the whole lane head, covering ${ids.join(' ')})` : '')
   }
   if (state === 'dead-no-report') {
     return `${relaunch} — the lane died without a hand-off; the prompt's RESUME RULE skips tasks already done with a commit, and a previous report is preserved as its .prev twin rather than clobbered`

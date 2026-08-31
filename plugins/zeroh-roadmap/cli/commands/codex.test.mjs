@@ -2462,6 +2462,7 @@ test('consume-the-plan: a branch that failed to delete is RETRIED and re-reporte
   // verb is allowed to come back for it.
   const root = tmpRepo()
   const lane = planLane(root, [307])
+  const plan = readFileSync(lane.reportPath, 'utf8') // captured BEFORE any read, so the last assertion has a constant to compare against
   harvest(lane)
   // A held ref lock — the shape a crashed sibling git leaves behind. `branch -D` refuses for a
   // reason that has nothing to do with the worktree, so the removal still succeeds.
@@ -2497,5 +2498,45 @@ test('consume-the-plan: a branch that failed to delete is RETRIED and re-reporte
     !branchResolves(lane),
     `once the cause is cleared the retry must actually delete it — a report that never acts is the sweep verb the operator ruling refused, wearing a nag's clothes; stderr: ${healed.err}`,
   )
-  assert.equal(readFileSync(lane.archived, 'utf8'), readFileSync(lane.archived, 'utf8'), 'and the archived plan is untouched throughout')
+  assert.equal(
+    readFileSync(lane.archived, 'utf8'),
+    plan,
+    'and the archived plan survived all three reads byte-identical — the retry is a branch act, and it must never re-copy or re-render the hand-off',
+  )
+})
+
+test('consume-the-plan: a lane whose DIRECTORY died is never closed on an unseen verdict, and the refusal names the prune', () => {
+  // Gate R1, corrected by the fixture that found it. A plan lane whose directory was swept (a /tmp
+  // reaper, a hand rm) CANNOT reach the consume-close by the front door: with no tree there is no
+  // CODEX-PLAN.md, so the read computes `dead-no-report`, and the close is gated on the COMPLETE
+  // verdict. That is the right refusal — closing a lane whose verdict was never seen would be
+  // guessing — but the branch and the stale registration must not squat with nobody told. The
+  // operator ruling forbids a sweep verb, so the answer is REPORT: this read refuses by name, and
+  // `roadmap audit` check 15 reports the same lane as a prunable row with the same prune.
+  const root = tmpRepo()
+  const lane = planLane(root, [308])
+  harvest(lane)
+  rmSync(lane.worktree, { recursive: true, force: true })
+  assert.ok(
+    lane.git('worktree', 'list', '--porcelain').includes(lane.worktree),
+    'fixture: git still LISTS the vanished worktree — that is the prunable shape a swept /tmp leaves, not an absent one',
+  )
+
+  const { code, out, err } = laneStatus(root, [308], '--plan')
+
+  assert.equal(
+    out?.state,
+    'dead-no-report',
+    `a hand-off that died with its directory is not a verdict: the read must say dead-no-report rather than infer completion from a journal; stderr: ${err}`,
+  )
+  assert.equal(code, 2, `and carry the non-terminal exit; stderr: ${err}`)
+  assert.ok(
+    branchResolves(lane),
+    `NOTHING is removed on an unseen verdict — the branch is the only named handle on that plan, harvested or not; stderr: ${err}`,
+  )
+  assert.ok(
+    lane.git('worktree', 'list', '--porcelain').includes(lane.worktree),
+    'and the registration is left for the operator to prune — a read command never prunes on its own',
+  )
+  assert.equal(journalOf(lane).archivedAt, undefined, 'nor is the journal stamped closed over a verdict nobody saw')
 })

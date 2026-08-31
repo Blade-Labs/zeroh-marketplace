@@ -1831,3 +1831,39 @@ test('surveyLanes: the classifier is INVENTORY AND LIVENESS ONLY — no per-dir 
     'nor the ARRAY-arg form of the same probe: `[\'status\', \'--porcelain\', \'-uall\']` would satisfy a literal `status --porcelain` grep while running exactly the probe the criterion forbids',
   )
 })
+
+test('surveyLanes: a PRUNABLE entry (registered, directory gone) is remedied by a prune, never by a command that cannot run', async () => {
+  // Gate R1. `git worktree list --porcelain` keeps listing a worktree whose directory was swept
+  // (a /tmp reaper, a hand rm) until something prunes it. Every command addressing that dir exits
+  // 128 there, so the row's remedy was a paste that only errors — `cd <gone> && roadmap phase land
+  // <N>` for a journalled lane, `git -C <gone> log` for a journal-less one. What is actually left
+  // is the REGISTRATION, and one prune clears it.
+  const r = surveyRepo()
+  const dir = laneAt(r, 'codex-41', { branch: 'codex/41' })
+  const dead = liveGroup()
+  await reapGroup(dead)
+  journalFor(r, { lane: 'run', ids: ['41'], worktree: dir, pgid: dead.pid })
+  rmSync(dir, { recursive: true, force: true })
+  assert.ok(
+    r.worktrees().includes(dir),
+    'fixture: git must STILL list the vanished worktree — that is what makes this the prunable shape rather than an absent one',
+  )
+
+  const row = rowFor(await surveyLanes(r.root), dir, 'a registered worktree whose directory is gone')
+
+  assert.equal(row.class, 'stale-run', 'its journal still says what it was, so the class is unchanged — only what can be DONE about it changed')
+  assertRunnableRemedy(row, 'prunable lane')
+  assert.match(
+    row.remedy,
+    new RegExp(`git -C ${r.root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} worktree prune`),
+    `the only act left is clearing the registration, so the remedy must name the prune anchored at the repo; got: ${row.remedy}`,
+  )
+  assert.ok(
+    !row.remedy.includes(`cd ${dir} &&`) && !row.remedy.includes(`git -C ${dir} `),
+    `and it must NOT hand the operator a command that runs IN the missing directory — every one of those exits 128; got: ${row.remedy}`,
+  )
+  assert.ok(
+    row.remedy.includes('codex/41'),
+    `the branch outlives the directory and may hold the only copy of the lane's commits, so the remedy names it rather than deleting it silently; got: ${row.remedy}`,
+  )
+})
