@@ -85,7 +85,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
           description:
-            'Fixture-consumer round-trip: a phase file recording gateRounds agents software-architect and self-review passes `roadmap phase validate`, and `gate run --record-round` with agent software-architect appends cleanly (the 2423 shape, now expressible) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \\"software-architect\\" cli/commands/gate.test.mjs && node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
+            'Fixture-consumer round-trip: a phase file recording gateRounds agents software-architect and self-review passes `roadmap phase validate`, and `gate run --record-round` with agent software-architect appends cleanly (the 2423 shape, now expressible) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \\"software-architect\\" cli/commands/gate.test.mjs && capbuild node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -109,12 +109,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/gate-report.mjs',
           description:
-            "In checkPhaseConsistency, when parsed.executionResult?.driver?.lane === 'codex' AND parsed.reviewScope !== 'none' (a declared docs/data phase legitimately reviews nothing — the ladder's own exemption, kept): require ≥1 report agents[] round with round >= 1 whose agent is neither 'self-review' nor a legacy '*self-review*' free-string variant; violation pushes ONE problem naming the ratified rule and the remedy (`gate run <N> --record-round` with an independent agent) → verify: bash -c \"grep -qF 'self-review' plugins/zeroh-roadmap/cli/lib/gate-report.mjs\"",
+            "In checkPhaseConsistency, when parsed.executionResult?.driver?.lane === 'codex' AND neither parsed.reviewScope === 'none' NOR report.reviewScope?.effective === 'none' (architect amendment A3 — the ladder DERIVES none for docs-only diffs with no declaration, and the report is already in hand at this seam; keying on the declared field alone would refuse a delegated docs-only phase for lacking a review the ladder itself waived): require ≥1 report agents[] round with round >= 1 whose agent is neither 'self-review' nor a legacy '*self-review*' free-string variant; violation pushes ONE problem naming the ratified rule and the remedy (`gate run <N> --record-round` with an independent agent) → verify: bash -c \"grep -qF 'self-review' plugins/zeroh-roadmap/cli/lib/gate-report.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/gate-report.test.mjs',
           description:
-            'Five directions: codex lane + only self-review rounds → problem (exit-2 path); codex + zero rounds → problem; codex + one code-reviewer round → clean; session lane + only self-review → clean (the rule is lane-scoped); codex + reviewScope none → clean (exemption pinned) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'independent recorded round\' cli/lib/gate-report.test.mjs && node --test cli/lib/gate-report.test.mjs >/dev/null 2>&1"',
+            'Six directions: codex lane + only self-review rounds → problem (exit-2 path); codex + zero rounds → problem; codex + one code-reviewer round → clean; session lane + only self-review → clean (the rule is lane-scoped); codex + DECLARED reviewScope none → clean; codex + undeclared scope with report effective none → clean (the derived-none exemption, A3) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'independent recorded round\' cli/lib/gate-report.test.mjs && capbuild node --test cli/lib/gate-report.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -141,7 +141,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'Prompt-content assertion: the run prompt carries the independence line; review and plan prompts do not (they record no gate rounds) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \\"never satisfy completion\\" cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'Prompt-content assertion: the run prompt carries the independence line; review and plan prompts do not (they record no gate rounds) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \\"never satisfy completion\\" cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
