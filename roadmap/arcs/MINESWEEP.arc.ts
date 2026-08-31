@@ -135,7 +135,7 @@ export default defineArc({
       job: 'A finished codex plan lane stops squatting once its plan is harvested, mirroring the review-lane close',
       surfaces: ['cli'],
       signal:
-        'On a real fixture worktree pair: `codex status <N> --plan` with the authored phase file byte-equal at the primary integration ref archives CODEX-PLAN.md beside the journal and disposes the worktree+branch; the same read BEFORE harvest refuses, names the harvest step, and disposes nothing — run twice each way (second read of the closed lane reports closed, not missing).',
+        'On a real fixture worktree pair: `codex status <N> --plan` with the authored phase file byte-equal AT, or in the committed history of, the phase file at the primary integration ref (the harvest-then-amend flow closes too — architect amendment A2) archives CODEX-PLAN.md beside the journal and disposes the worktree+branch; the same read BEFORE harvest refuses, names the harvest step, and disposes nothing — run twice each way (second read of the closed lane resolves the same journal and serves the archived report, never a missing-journal miss).',
       tier: 'wired',
       bar: 'The verdict artifact survives disposal at the archived path; an unharvested or live lane is never removed; the refusal text contains the exact harvest command.',
     },
@@ -175,6 +175,9 @@ export default defineArc({
       tier: 'wired',
       bar: 'WARN-only (exit codes unchanged — the executor judges); each finding cites the incident class it encodes so the warning teaches.',
     },
+  ],
+  criteriaRatifications: [
+    '2026-08-31: plan-lane-close signal widened per software-architect amendment A2 (pre-execution, arc status planning): strict byte-equality would refuse the normal harvest-then-amend flow (Mode A repairs edit the harvested file); the proof is now byte-equal at, or in the committed blob history of, the phase file at the integration ref — the content-proof LOCKED intent is preserved, every close remains content-proven.',
   ],
   rejectedAlternatives: [
     {
