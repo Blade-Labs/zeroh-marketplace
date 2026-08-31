@@ -549,6 +549,43 @@ function archiveReviewLane(root, jPath, journal, reportPath) {
   return { journal: stamped, archived }
 }
 
+/**
+ * The runnable next step for a terminal lane state, or null.
+ *
+ * A dead or finished lane printed its state and stopped there, so recovery was improvised every
+ * time (the atlas arc hand-finished 9/9 quota deaths; "no resume verb" was the standing complaint).
+ * Every verb below already existed — the state read simply never named one. STDERR only: stdout is
+ * a parsed stream (the do-phase poll loop, the gate reconcile), so it may gain no key and no prose.
+ *
+ * Two states are deliberately silent. `running` has no next step — naming the relaunch invites a
+ * double-run into a live worktree, which refuseIfLive exists to refuse, and naming the land invites
+ * landing half a phase. The whole `review` lane is silent because its done-moment fires on this
+ * very read (archiveReviewLane, above): a hint there would name a verb that has already run.
+ *
+ * The ids come from the JOURNAL, not from the poll: an arc lane launched as `222 223` and polled by
+ * `223` must be relaunched with both, or the operator is handed a command that abandons 222.
+ */
+function nextStepHint(lane, state, journal, reportPath) {
+  const ids = (journal.phases ?? []).map(String)
+  const wt = journal.worktree
+  if (lane === 'plan' && state === 'complete') {
+    return `roadmap codex status ${ids.join(' ')} --plan — the plan lane's done-moment: harvest the phase file to the primary checkout, then this read closes the lane`
+  }
+  if (lane !== 'run' || ids.length === 0) return null
+  const relaunch = `roadmap codex run ${ids.join(' ')}`
+  if (state === 'complete') {
+    // `phase land` resolves its checkout from cwd, so the cd is part of the command, not context.
+    return wt ? `cd ${wt} && ${ids.map((n) => `roadmap phase land ${n}`).join(' && ')}` : null
+  }
+  if (state === 'dead-no-report') {
+    return `${relaunch} — the lane died without a hand-off; the prompt's RESUME RULE skips tasks already done with a commit, and a previous report is preserved as its .prev twin rather than clobbered`
+  }
+  if (state === 'blocked') {
+    return `read ${reportPath} for the question it stopped on, resolve it, then relaunch: ${relaunch} (the RESUME RULE skips the tasks it already finished)`
+  }
+  return null
+}
+
 function statusCodex(root, ids, lane = 'run') {
   let found
   try {
@@ -628,6 +665,8 @@ function statusCodex(root, ids, lane = 'run') {
   // The journal spreads FIRST: `j.report` is the bare report NAME, so spreading it last would
   // overwrite both the path status resolved and the `null` that marks a stale report.
   process.stdout.write(JSON.stringify({ ...journal, state, alive, sentinel, report: reported ?? null, ...(staleReport ? { staleReport } : {}) }, null, 2) + '\n')
+  const hint = nextStepHint(lane, state, journal, reportPath)
+  if (hint) process.stderr.write(`next: ${hint}\n`)
   return state === 'complete' ? 0 : state === 'running' ? 3 : 2
 }
 

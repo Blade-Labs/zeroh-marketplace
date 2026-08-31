@@ -1853,3 +1853,241 @@ test('review archive: a journal naming a SLOT worktree is never disposed by a st
     `a slot is not a review lane: disposing one takes its node_modules and leaves the slot registry holding a live claim on a deleted path; stderr: ${err}`,
   )
 })
+
+// ── the next-step hint: a terminal state NAMES the verb that closes it ─────────────────────────
+// A dead or finished lane printed its state and stopped there, so recovery was improvised every
+// time (the atlas arc hand-finished 9/9 quota deaths; "no resume verb" was the standing
+// complaint). The verbs all existed already — the state read simply never named them. So `status`
+// gains ONE stderr line, `next:`-prefixed, keyed on the pair (lane, state):
+//   run + complete       → `cd <worktree> && roadmap phase land <N>` (the run lane's done-moment)
+//   run + dead-no-report → relaunch `roadmap codex run <ids…>` (the RESUME RULE skips done tasks,
+//                          and the previous report survives as its .prev twin)
+//   run + blocked        → read the report AT ITS PATH, resolve, then the same relaunch
+//   plan + complete      → the plan lane's consume read, `roadmap codex status <N> --plan`
+//   running              → nothing. There is nothing to do but wait.
+//   review (any state)   → nothing. Its done-moment already fired on this very read.
+// The hint is stderr-ONLY and pasteable: STDOUT is a parsed stream (do-phase polls it, the gate
+// reconcile reads it), so it may gain no key and carry no prose, and a hint holding `<N>` where a
+// phase id belongs is a sentence, not a command.
+
+/** `codex status` driven exactly as laneStatus drives it, keeping the RAW stdout bytes as well —
+ *  the byte-compatibility case asserts on the stream itself, not only on what it parses to. */
+function statusRaw(root, ids, ...flags) {
+  const r = spawnSync('node', [BIN, 'codex', 'status', ...ids.map(String), ...flags], { cwd: root, encoding: 'utf8' })
+  return { code: r.status, stdout: r.stdout, out: r.stdout ? JSON.parse(r.stdout) : null, err: r.stderr }
+}
+
+/** The one stderr line the hint owns, or null. Every other line this command writes is prefixed
+ *  `roadmap codex:`; the `next:` key is what lets an operator (and this suite) tell them apart. */
+function nextHint(err) {
+  return (err ?? '').split('\n').find((l) => l.includes('next:')) ?? null
+}
+
+/** A journal pgid is only evidence of a DEAD lane once the group is proven gone — otherwise a
+ *  recycled pid turns a dead-lane case into a running one and the assertion below lies. */
+function assertGroupDead(pgid, why) {
+  assert.throws(() => process.kill(-pgid, 0), `${why}: pgid ${pgid} must be a DEAD process group for this fixture to mean what it says`)
+}
+
+/** A live detached group that cannot expire mid-test (a `sleep` can), reaped by the suite's own
+ *  cleanup rail. Never awaited: an unref'd child's 'exit' can drain the runner's loop. */
+function liveGroup() {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { detached: true, stdio: 'ignore' })
+  child.unref()
+  cleanups.push(() => {
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch {}
+  })
+  return child.pid
+}
+
+test('next-step hint: a COMPLETE run lane names its done-moment — `cd <worktree> && roadmap phase land <N>`, pasteable', () => {
+  const root = tmpRepo()
+  const j = writeJournal(root, [230], { lane: 'run', report: 'CODEX-REPORT.md', startedAt: new Date(Date.now() - 60_000).toISOString() })
+  writeFileSync(join(j.worktree, 'CODEX-REPORT.md'), 'per-task shas, gate green\nCODEX-RUN-COMPLETE\n')
+  assertGroupDead(j.pgid, 'a finished run is not a live one')
+
+  const { code, out, stdout, err } = statusRaw(root, [230])
+
+  assert.equal(out?.state, 'complete', `precondition: a fresh COMPLETE sentinel is the verdict; stderr: ${err}`)
+  assert.equal(code, 0, `and a complete lane still exits 0 — a hint may never be bought with an exit code; stderr: ${err}`)
+
+  const hint = nextHint(err)
+  assert.ok(hint, `a COMPLETE run lane has a done-VERB and this read is where the operator learns it; got stderr: ${err}`)
+  assert.ok(
+    hint.includes('roadmap phase land 230'),
+    `the run lane's done-moment lands the work AND disposes the lane — it must be named, with THIS lane's phase id; got: ${hint}`,
+  )
+  assert.ok(
+    hint.includes(`cd ${j.worktree} && roadmap phase land 230`),
+    `\`phase land\` resolves its checkout from cwd, so the hint is only runnable with the cd in front of it — expected \`cd ${j.worktree} && roadmap phase land 230\`; got: ${hint}`,
+  )
+  assert.ok(!/<N>|<worktree>|<ids/.test(hint), `a placeholder is a sentence, not a command — the operator must be able to paste this line; got: ${hint}`)
+
+  // STDOUT is the parsed stream. It may not gain the hint in any form.
+  assert.equal(out.state, 'complete', 'stdout still parses, and still carries the state every consumer reads')
+  assert.ok(!('next' in out), `the hint is stderr-only: a new key on the parsed object breaks byte-compatibility for every consumer of this stream; got keys ${Object.keys(out).join(',')}`)
+  assert.ok(!stdout.includes('next:'), `nor may the hint leak onto stdout as text — it would sit inside the JSON the poll loop parses; got stdout: ${stdout}`)
+})
+
+test('next-step hint: a DEAD run lane names the relaunch with ITS OWN ids, and says it resumes rather than redoes', () => {
+  const root = tmpRepo()
+  // An ARC journal, queried by a member id: the relaunch needs the whole id set the lane was
+  // launched with, not the one id the operator happened to poll — `codex run 223` alone would
+  // start a second lane over the same worktree and abandon 222.
+  const j = writeJournal(root, [222, 223], { lane: 'run', report: 'CODEX-REPORT.md' })
+  assertGroupDead(j.pgid, 'this is the quota-death case — the group must really be gone')
+
+  const { code, out, stdout, err } = statusRaw(root, [223])
+
+  assert.equal(out?.state, 'dead-no-report', `precondition: a dead group with no report is the quota-death state; stderr: ${err}`)
+  assert.equal(code, 2, `dead-no-report still exits 2; stderr: ${err}`)
+
+  const hint = nextHint(err)
+  assert.ok(hint, `a dead lane with no hand-off is the state operators improvised through 9 times — this read must name the relaunch; got stderr: ${err}`)
+  assert.ok(
+    hint.includes('roadmap codex run 222 223'),
+    `the relaunch must carry the LANE's own ids (222 223), or the arc's other members are abandoned by the command the operator was handed; got: ${hint}`,
+  )
+  assert.ok(
+    /resum|skip|already[- ]done|\.prev/i.test(hint),
+    `a relaunch that looks like a REDO will not be run: the hint must say the prompt's RESUME RULE skips already-done tasks (or that the previous report is preserved as its .prev twin); got: ${hint}`,
+  )
+  assert.ok(!/<N>|<ids/.test(hint), `and it must be pasteable, not a template; got: ${hint}`)
+
+  assert.ok(!('next' in out), `stdout must not gain a \`next\` key; got keys ${Object.keys(out).join(',')}`)
+  assert.ok(!stdout.includes('next:'), `and the hint must not leak onto the parsed stream; got stdout: ${stdout}`)
+})
+
+test('next-step hint: a BLOCKED run lane names the REPORT PATH to read, then the relaunch verb', () => {
+  const root = tmpRepo()
+  const j = writeJournal(root, [231], { lane: 'run', report: 'CODEX-REPORT.md', startedAt: new Date(Date.now() - 60_000).toISOString() })
+  const reportPath = join(j.worktree, 'CODEX-REPORT.md')
+  writeFileSync(reportPath, 'Q: which ref does the land target?\nCODEX-RUN-BLOCKED\n')
+  assertGroupDead(j.pgid, 'a blocked lane has stopped')
+
+  const { code, out, stdout, err } = statusRaw(root, [231])
+
+  assert.equal(out?.state, 'blocked', `precondition: a fresh BLOCKED sentinel is the verdict; stderr: ${err}`)
+  assert.equal(code, 2, `blocked still exits 2; stderr: ${err}`)
+
+  const hint = nextHint(err)
+  assert.ok(hint, `BLOCKED means a question is waiting in a file — a state read that does not say where is the improvisation this hint exists to end; got stderr: ${err}`)
+  assert.ok(
+    hint.includes(reportPath),
+    `the operator must be sent to the report by PATH — the report name alone cannot be opened from the primary checkout; expected ${reportPath}; got: ${hint}`,
+  )
+  assert.ok(
+    hint.includes('roadmap codex run 231'),
+    `and resolving the question is only half the recovery: the hint must name the relaunch that finishes the phase; got: ${hint}`,
+  )
+
+  assert.ok(!('next' in out), `stdout must not gain a \`next\` key; got keys ${Object.keys(out).join(',')}`)
+  assert.ok(!stdout.includes('next:'), `and the hint must not leak onto the parsed stream; got stdout: ${stdout}`)
+})
+
+test('next-step hint: a RUNNING lane gets NO hint — there is nothing to do but wait', () => {
+  const root = tmpRepo()
+  const pgid = liveGroup()
+  const j = writeJournal(root, [232], { lane: 'run', report: 'CODEX-REPORT.md', pgid })
+
+  const { code, out, err } = statusRaw(root, [232])
+
+  assert.equal(out?.state, 'running', `precondition: a live group with no report is running; stderr: ${err}`)
+  assert.equal(code, 3, `running still exits 3; stderr: ${err}`)
+  assert.equal(
+    nextHint(err),
+    null,
+    `a running lane has no next step: naming the relaunch here invites a double-run into a live worktree (the very thing refuseIfLive exists to refuse), and naming the land invites landing half a phase; got stderr: ${err}`,
+  )
+  assert.equal(out.alive, true, 'and the liveness this case turns on is real, not a stale pgid')
+  assert.ok(existsSync(j.worktree), 'the live lane is untouched by the read')
+})
+
+test('next-step hint: a COMPLETE plan lane names its consume read, `roadmap codex status <N> --plan`', () => {
+  const root = tmpRepo()
+  const worktree = join(root, 'wt-plan-233')
+  mkdirSync(worktree, { recursive: true })
+  writeFileSync(
+    join(root, '.building', 'codex-plan-233.json'),
+    JSON.stringify({ phases: ['233'], lane: 'plan', report: 'CODEX-PLAN.md', worktree, base: 'develop', pgid: 999999999, log: join(root, '.building', 'x.log'), startedAt: new Date(Date.now() - 60_000).toISOString() }, null, 2) + '\n',
+  )
+  writeFileSync(join(worktree, 'CODEX-PLAN.md'), 'authored roadmap/phases/phase-233.phase.ts @ abc1234\nCODEX-RUN-COMPLETE\n')
+  assertGroupDead(999999999, 'the plan act has finished')
+
+  const { code, out, stdout, err } = statusRaw(root, [233], '--plan')
+
+  assert.equal(out?.state, 'complete', `precondition: the plan lane reports its own verdict; stderr: ${err}`)
+  assert.equal(code, 0, `and exits 0 like any complete lane; stderr: ${err}`)
+
+  const hint = nextHint(err)
+  assert.ok(hint, `the plan lane's done-moment is its consume read, and no other verb closes it — the hint must name it; got stderr: ${err}`)
+  assert.ok(
+    hint.includes('roadmap codex status 233 --plan'),
+    `with the REAL id and the plan lane's own flag: a run-lane command here reads the wrong journal ("no run journal covers 233"); got: ${hint}`,
+  )
+  assert.ok(!hint.includes('roadmap phase land'), `a plan lane makes no commits the integration branch wants — sending it to \`phase land\` sends it to a verb that refuses; got: ${hint}`)
+
+  assert.ok(!('next' in out), `stdout must not gain a \`next\` key; got keys ${Object.keys(out).join(',')}`)
+  assert.ok(!stdout.includes('next:'), `and the hint must not leak onto the parsed stream; got stdout: ${stdout}`)
+})
+
+test('next-step hint: the REVIEW lane gets NO hint in any state — its done-moment fires on this very read', () => {
+  // COMPLETE: the archival above already ran as a side effect of this read, so a hint would name
+  // a done-moment that has already fired. BLOCKED: the operator is at the report, and the review
+  // lane has no relaunch-to-finish — a fresh review is a new act, not a resumption.
+  // A repo each: reviewLane seeds and COMMITS, and a second seed in one root has nothing to commit.
+  const root = tmpRepo()
+  const complete = reviewLane(root, [234])
+  const done = laneStatus(root, [234], '--review')
+  assert.equal(done.out?.state, 'complete', `precondition: the verdict is complete; stderr: ${done.err}`)
+  assert.equal(done.code, 0, `stderr: ${done.err}`)
+  assert.ok(existsSync(complete.archived), 'precondition: and the read consumed it — the done-moment has already happened')
+  assert.equal(
+    nextHint(done.err),
+    null,
+    `nothing is left for the operator to run: this read archived the verdict and disposed the lane; got stderr: ${done.err}`,
+  )
+
+  const blockedRoot = tmpRepo()
+  const blocked = reviewLane(blockedRoot, [235], { body: 'could not review: the phase file is unparseable\nCODEX-RUN-BLOCKED\n' })
+  const r = laneStatus(blockedRoot, [235], '--review')
+  assert.equal(r.out?.state, 'blocked', `precondition: a fresh BLOCKED sentinel is the verdict; stderr: ${r.err}`)
+  assert.equal(r.code, 2, `stderr: ${r.err}`)
+  assert.equal(
+    nextHint(r.err),
+    null,
+    `a review lane owns no landing, no relaunch-to-resume and no consume verb beyond this read — a hint here would name a command that does not close it; got stderr: ${r.err}`,
+  )
+  assert.ok(existsSync(blocked.reportPath), 'and the blocked review\'s report stays where it is')
+})
+
+test('next-step hint: STDOUT stays byte-compatible — the same object, the same key set, no `next` anywhere on it', () => {
+  const root = tmpRepo()
+  const j = writeJournal(root, [236], { lane: 'run', report: 'CODEX-REPORT.md', startedAt: new Date(Date.now() - 60_000).toISOString() })
+  writeFileSync(join(j.worktree, 'CODEX-REPORT.md'), 'gate green\nCODEX-RUN-COMPLETE\n')
+
+  const { out, stdout, err } = statusRaw(root, [236])
+  assert.ok(nextHint(err), `precondition: this is the terminal state whose hint must NOT be visible on stdout; got stderr: ${err}`)
+
+  // The documented shape: the journal's own fields, plus the four `status` resolves. Asserted as
+  // a SET rather than field by field — a hint delivered as a key is exactly the regression a
+  // per-field assertion would miss, and every consumer of this stream (the do-phase poll loop,
+  // the gate reconcile) was written against this shape.
+  assert.deepEqual(
+    Object.keys(out).sort(),
+    ['alive', 'base', 'lane', 'log', 'pgid', 'phases', 'report', 'sentinel', 'startedAt', 'state', 'worktree'],
+    `the stdout object gained or lost a key — the hint lane is stderr, and this stream is parsed by callers who never asked for a new field; got ${JSON.stringify(Object.keys(out))}`,
+  )
+  assert.ok(!('next' in out), 'and `next` in particular is never a field: the contract puts the hint on stderr precisely so this object does not move')
+  assert.ok(!stdout.includes('next:'), `nor may a hint be written to stdout as prose — it would land inside (or beside) the JSON and break the parse; got stdout: ${stdout}`)
+
+  // The whole stream is the pretty-printed object and one newline: nothing prepended, nothing
+  // appended. This is the byte-level statement the per-case assertions above only approximate.
+  assert.equal(
+    stdout,
+    JSON.stringify(out, null, 2) + '\n',
+    `stdout must be EXACTLY the JSON object status has always printed — any extra byte on this stream is a parse failure in someone else's poll loop; got: ${JSON.stringify(stdout)}`,
+  )
+})

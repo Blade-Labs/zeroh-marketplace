@@ -253,7 +253,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-31',
+      transparencyReport: {
+        whatWasDone:
+          "nextStepHint(lane, state, journal, reportPath) landed beside statusCodex and fires one stderr `next:` line after the stdout write, keyed on (lane, state): run+complete → `cd <worktree> && roadmap phase land <N>` (chained per id for an arc lane); run+dead-no-report → `roadmap codex run <ids…>` naming the RESUME RULE and the .prev preservation, so the relaunch does not read as a redo; run+blocked → read the report AT ITS PATH, then the same relaunch; plan+complete → `roadmap codex status <N> --plan`, the consume read 14.6 makes a real close. `running` and the whole `review` lane are silent by design — a running lane's only next step would invite a double-run into a live worktree, and the review lane's done-moment fires on this very read. The ids come from the JOURNAL, never from the poll: an arc lane launched as `222 223` and polled by `223` is relaunched with both.",
+        how:
+          "TDD: test-engineer wrote 7 cases (69-75) against real tmp repos and real journals; 5 were RED with an empty stderr (`got stderr: ` — the state and exit-code preconditions all passed first, so a hint bought with an exit-code change would have redded them too), 2 were the silence guards. Suite now 75/75, exit 0, zero `not ok` lines. Byte-compatibility is pinned three ways in case 75: the stdout key SET against the documented 11 fields, `next` absent from the object, and `stdout === JSON.stringify(out, null, 2) + '\\n'` — the whole stream, nothing prepended or appended.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "Hints cover only the (lane, state) pairs the plan enumerates. A plan or review lane that is dead-no-report or blocked gets no hint — the plan lane has no relaunch-to-resume (a re-plan is a new act over a reserved number, which planCodex already refuses over a predecessor's output) and the review lane owns no verb beyond this read. Naming a recovery for those would be inventing one, which is the opposite of this task.",
+      },
     },
     {
       id: '14.6',
