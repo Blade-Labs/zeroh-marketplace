@@ -70,6 +70,28 @@ export { findJournal }
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
+const PNPM_INSTALLER = Object.freeze({ bin: 'pnpm', args: Object.freeze(['install', '--frozen-lockfile']) })
+const NPM_INSTALLER = Object.freeze({ bin: 'npm', args: Object.freeze(['ci', '--no-audit', '--no-fund']) })
+
+/** Select the package manager solely from the package directory's committed lockfile. */
+export function detectInstaller(dir) {
+  if (!existsSync(join(dir, 'package.json'))) return undefined
+
+  const hasPnpmLock = existsSync(join(dir, 'pnpm-lock.yaml'))
+  const hasNpmLock = existsSync(join(dir, 'package-lock.json'))
+  if (hasPnpmLock) {
+    return {
+      bin: PNPM_INSTALLER.bin,
+      args: [...PNPM_INSTALLER.args],
+      ...(hasNpmLock
+        ? { reason: 'pnpm-lock.yaml takes precedence over package-lock.json because it is the stricter package-manager claim' }
+        : {}),
+    }
+  }
+  if (hasNpmLock) return { bin: NPM_INSTALLER.bin, args: [...NPM_INSTALLER.args] }
+  return null
+}
+
 /**
  * A flag value that may arrive absolute, as a path RELATIVE to the checkout. `join(root, '/abs')`
  * yields `<root>/abs`, so an absolute path that exists refuses as missing and the carry-in copies

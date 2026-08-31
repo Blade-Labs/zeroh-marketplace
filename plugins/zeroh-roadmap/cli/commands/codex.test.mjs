@@ -24,7 +24,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -2738,4 +2738,172 @@ test('next-step hint: a plan lane journalled at a SLOT is promised no close, bec
     `and no hint may promise a close the very next line refused: an operator who runs it gets the same refusal, forever; got: ${err}`,
   )
   assert.ok(existsSync(slot), 'and the slot is untouched — slot retirement is a held human act')
+})
+
+// ── detectInstaller: the install decision, keyed on the LOCKFILE the consumer committed ────────
+// Task 15.1. Today ensureWorktree hardcodes `npm ci`, which means (a) the decision cannot be
+// exercised without a network install, and (b) a pnpm consumer discovers the mismatch only AFTER
+// the worktree and the branch exist. Lifting the decision into a pure function makes both the
+// recipe and its precedence testable from real files in a tmp dir — no spawns, no network.
+//
+// The four branches are DISTINCT return shapes, and the distinction is load-bearing for 15.2:
+// a recipe means "install with this"; `null` means "a package dir I cannot decide" (the caller
+// must refuse BEFORE creating anything); `undefined` means "not a package dir" (skip it silently).
+// Collapsing null into undefined would turn a loud refusal into a silent skip, so every test below
+// pins the sentinel identity, not just falsiness.
+//
+// The export is loaded through the namespace, the way the findJournal tests above do it: a missing
+// named import would fail the whole file at link time and take the unrelated lanes down with it.
+
+/** The two supported recipes, spelled out here so a drift in codex.mjs has something to fail against. */
+const PNPM_RECIPE = { bin: 'pnpm', args: ['install', '--frozen-lockfile'] }
+const NPM_RECIPE = { bin: 'npm', args: ['ci', '--no-audit', '--no-fund'] }
+
+const A_PACKAGE_JSON = '{ "name": "consumer", "private": true }\n'
+
+/** A tmp dir holding exactly the named files — real files on disk, nothing installed. */
+function fixtureDir(files) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'installer-')))
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
+  for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body)
+  return dir
+}
+
+async function loadDetectInstaller() {
+  const mod = await import('./codex.mjs')
+  assert.equal(
+    typeof mod.detectInstaller,
+    'function',
+    'cli/commands/codex.mjs must export detectInstaller(dir) — the lockfile-keyed install decision ensureWorktree (15.2) and worktree.mjs installDeps both consume; without the export every assertion below is vacuous',
+  )
+  return mod.detectInstaller
+}
+
+/** bin + args only: the recorded reason is asserted where it belongs, on the both-lockfiles case. */
+function recipeOf(result) {
+  assert.ok(result && typeof result === 'object', `detectInstaller must return a recipe OBJECT here, got ${JSON.stringify(result)}`)
+  return { bin: result.bin, args: result.args }
+}
+
+test('detectInstaller: a pnpm lockfile keys the pnpm recipe, verbatim', async () => {
+  const detectInstaller = await loadDetectInstaller()
+  const dir = fixtureDir({ 'package.json': A_PACKAGE_JSON, 'pnpm-lock.yaml': "lockfileVersion: '9.0'\n" })
+
+  const got = detectInstaller(dir)
+  assert.deepEqual(
+    recipeOf(got),
+    PNPM_RECIPE,
+    'a committed pnpm-lock.yaml must spawn `pnpm install --frozen-lockfile` — the frozen flag is what makes a lane install reproduce the lockfile instead of quietly resolving a newer tree',
+  )
+  assert.ok(
+    !JSON.stringify(got).includes('package-lock.json'),
+    'this dir has ONE lockfile: nothing here may record a precedence that was never exercised, or the both-lockfiles reason below proves nothing',
+  )
+})
+
+test('detectInstaller: a package-lock keys the npm recipe, byte-identical to the ci that ships today', async () => {
+  const detectInstaller = await loadDetectInstaller()
+  const dir = fixtureDir({ 'package.json': A_PACKAGE_JSON, 'package-lock.json': '{ "lockfileVersion": 3 }\n' })
+
+  assert.deepEqual(
+    recipeOf(detectInstaller(dir)),
+    NPM_RECIPE,
+    'the npm recipe must stay exactly `npm ci --no-audit --no-fund` — 15.2 replaces the hardcoded spawn with this value, and an npm consumer must not notice the refactor at all',
+  )
+})
+
+test('detectInstaller: BOTH lockfiles → pnpm wins, and the win is RECORDED', async () => {
+  const detectInstaller = await loadDetectInstaller()
+  // Written pnpm-first here and package-lock-first below: a precedence that depends on directory
+  // order is not a precedence, it is whichever readdir/statSync happened to run first.
+  const pnpmFirst = fixtureDir({
+    'package.json': A_PACKAGE_JSON,
+    'pnpm-lock.yaml': "lockfileVersion: '9.0'\n",
+    'package-lock.json': '{ "lockfileVersion": 3 }\n',
+  })
+  const npmFirst = fixtureDir({
+    'package.json': A_PACKAGE_JSON,
+    'package-lock.json': '{ "lockfileVersion": 3 }\n',
+    'pnpm-lock.yaml': "lockfileVersion: '9.0'\n",
+  })
+
+  for (const [label, dir] of [['pnpm-lock written first', pnpmFirst], ['package-lock written first', npmFirst]]) {
+    const got = detectInstaller(dir)
+    assert.deepEqual(
+      recipeOf(got),
+      PNPM_RECIPE,
+      `both lockfiles present (${label}) must resolve to the pnpm recipe — pnpm-lock.yaml is the stricter claim, and running npm ci against a tree pnpm installed rebuilds node_modules in the wrong shape`,
+    )
+    assert.equal(
+      typeof got.reason,
+      'string',
+      `an ambiguous dir that resolves silently teaches nobody why (${label}): detectInstaller must record WHY pnpm won on the returned recipe, e.g. a \`reason\` string`,
+    )
+    assert.ok(got.reason.length > 0, `an empty reason records nothing (${label})`)
+    assert.match(
+      got.reason,
+      /pnpm-lock\.yaml/,
+      `the recorded reason must name the lockfile that WON (${label}) — an operator reading it should not have to guess which file decided; got: ${got.reason}`,
+    )
+    assert.match(
+      got.reason,
+      /package-lock\.json/,
+      `and the lockfile it beat (${label}): a reason that omits the loser is indistinguishable from the single-lockfile case and records no precedence at all; got: ${got.reason}`,
+    )
+  }
+})
+
+test('detectInstaller: a package dir with NEITHER lockfile is null — undecidable, never guessed', async () => {
+  const detectInstaller = await loadDetectInstaller()
+  const dir = fixtureDir({ 'package.json': A_PACKAGE_JSON })
+
+  const got = detectInstaller(dir)
+  // Strict equality, so this also pins the sentinel APART from undefined: 15.2 refuses loudly on
+  // null and skips silently on undefined, so an undecidable package dir answering undefined would
+  // launch a lane with no install at all.
+  assert.equal(
+    got,
+    null,
+    `a package dir with no lockfile is a decision the function may not invent: falling back to npm is exactly the failure 15.1 exists to end. Got ${JSON.stringify(got)}`,
+  )
+})
+
+test('detectInstaller: a dir with no package.json is undefined — a non-package dir is skipped, not refused', async () => {
+  const detectInstaller = await loadDetectInstaller()
+  const empty = fixtureDir({})
+
+  const got = detectInstaller(empty)
+  // Strict again, and in this direction it is null that must not appear: 15.2 refuses on null, so a
+  // non-package dir reported as undecidable would make every consumer without a web/ unlaunchable.
+  assert.equal(
+    got,
+    undefined,
+    `a dir that is not a package (no package.json) must read as "nothing to install here" — the caller walks worktree and worktree/web and most consumers have no web/. Got ${JSON.stringify(got)}`,
+  )
+
+  // The boundary: package.json is what makes a dir a package dir. A stray lockfile beside no
+  // manifest (a leftover, a docs fixture) is still not a package dir — deciding on the lockfile
+  // alone would have the caller install in a directory with nothing to install.
+  const strayLock = fixtureDir({ 'pnpm-lock.yaml': "lockfileVersion: '9.0'\n" })
+  assert.equal(
+    detectInstaller(strayLock),
+    undefined,
+    `a lockfile without a package.json is not a package dir — the manifest is the gate, the lockfile only picks the manager. Got ${JSON.stringify(detectInstaller(strayLock))}`,
+  )
+})
+
+test('detectInstaller: the decision is a pure read — it installs nothing and is stable across calls', async () => {
+  const detectInstaller = await loadDetectInstaller()
+  const dir = fixtureDir({ 'package.json': A_PACKAGE_JSON, 'pnpm-lock.yaml': "lockfileVersion: '9.0'\n" })
+  const before = readdirSync(dir).sort()
+
+  const first = detectInstaller(dir)
+  const second = detectInstaller(dir)
+
+  assert.deepEqual(
+    readdirSync(dir).sort(),
+    before,
+    'detectInstaller must decide from filesystem reads alone: a probe that spawns a manager (or writes a node_modules/, a lockfile, a cache) is the un-testable install this task exists to remove',
+  )
+  assert.deepEqual(second, first, 'the same dir must decide the same way twice — a decision that drifts between the pre-creation probe and the post-creation re-run (15.2) refuses on nothing')
 })
