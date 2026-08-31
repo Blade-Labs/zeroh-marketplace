@@ -145,7 +145,19 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['15.1'],
       interfaces: { consumes: ['detectInstaller(dir) from 15.1'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-08-31',
+      transparencyReport: {
+        whatWasDone:
+          'Rewired codex lane and session-worktree dependency provisioning through detectInstaller. Codex preflights package directories before git state exists, re-detects from each created worktree directory, preserves exact npm argv, supports pnpm and mixed root/web managers, and refuses undecidable package directories. worktree installDeps now exports the same shared decision path.',
+        how:
+          'The test-engineer role (claude-opus-5 via child-cli) added pre-state refusal, exact shim-recorded argv, mixed-manager, non-package, and shared-seam cases. The mandated scoped runner was absent (exit 127), so the architect Decision Contract fired: claude-fable-5 was quota-unavailable and gpt-5.6-sol substituted natively, verdict PROCEED_WITH_FIX via the named unit gate. singleSeam guard mutation proof: planted hardcoded npm recipe → RED (`not ok 575`, restated-recipe assertion); changed the named import to namespace access → RED (`not ok 575`, must import detectInstaller); renamed only the local installer binding → GREEN (`ok 575`). Restored tree then passed the unit slot: 1,489 tests and schema checks, exit 0.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The repository lacks scripts/test/run-tier.sh, so its mandated scoped command exits 127. Mutation and GREEN proof therefore used the architect-approved named full unit gate; plugin-local test dependencies were pinned to repository Zod 4.4.3 after a caret install exposed schema-output drift.',
+      },
     },
     {
       id: '15.3',

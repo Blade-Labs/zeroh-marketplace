@@ -11,9 +11,9 @@
  * deliberate act. Base ref resolution everywhere: --base wins, else the consumer's
  * mergePolicy.autonomousPushRefs[0], else 'develop'.
  */
-import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
+import { detectInstaller } from './codex.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { loadConfig, integrationRefOf } from '../lib/config.mjs'
 import { claimSlot, ensureWorktree, resetForPhase, listSlots, ownerIdentity, WorktreeError } from '../lib/worktree.mjs'
@@ -27,9 +27,8 @@ function integrationRef(root, argv) {
   return integrationRefOf(loadConfig(root))
 }
 
-/** npm ci per subdir carrying a package.json — the codex-lane install pattern; a repo
- *  with no package.json anywhere installs nothing. capbuild wraps when present. */
-function installDeps(dir) {
+/** Install each package directory according to its committed lockfile. */
+export function installDeps(dir) {
   const capbuild = (() => {
     try {
       execFileSync('which', ['capbuild'], { stdio: 'ignore' })
@@ -39,8 +38,12 @@ function installDeps(dir) {
     }
   })()
   for (const sub of [dir, join(dir, 'web')]) {
-    if (!existsSync(join(sub, 'package.json'))) continue
-    const argv = capbuild ? ['capbuild', 'npm', 'ci', '--no-audit', '--no-fund'] : ['npm', 'ci', '--no-audit', '--no-fund']
+    const installer = detectInstaller(sub)
+    if (installer === undefined) continue
+    if (installer === null) {
+      throw new Error(`cannot select a package manager for ${sub}: commit pnpm-lock.yaml or package-lock.json`)
+    }
+    const argv = capbuild ? ['capbuild', installer.bin, ...installer.args] : [installer.bin, ...installer.args]
     execFileSync(argv[0], argv.slice(1), { cwd: sub, stdio: 'inherit' })
   }
 }

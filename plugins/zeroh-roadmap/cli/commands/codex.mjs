@@ -8,7 +8,7 @@
  *   roadmap codex status <N> [--review|--plan]
  *
  * THREE LANES, one set of launch mechanics. `run` IMPLEMENTS a plan (worktree on a branch,
- * npm ci, per-task commits, its own gate). `plan` AUTHORS one, committing exactly one phase file.
+ * dependency install, per-task commits, its own gate). `plan` AUTHORS one, committing exactly one phase file.
  * `review` runs review-phase against one, report-only,
  * landing a CODEX-REVIEW.md and nothing else. The review lane exists because a
  * plan authored and then reviewed by the same model has only ever been marked by its own
@@ -390,23 +390,41 @@ function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null }) {
 
 /**
  * The shared worktree setup: a branch when the mission COMMITS (run, plan), detached when it only
- * reads (review), and `npm ci` only where the mission needs the consumer's toolchain — the plan
+ * reads (review), and dependency installation only where the mission needs the consumer's toolchain — the plan
  * act validates its phase file through the consumer's tsx. Returns 0 or an exit to propagate.
  */
 function ensureWorktree(root, { worktree, base, branch, install }) {
   if (existsSync(worktree)) return 0
+  if (install) {
+    for (const dir of [root, join(root, 'web')]) {
+      const installer = detectInstaller(dir)
+      if (installer === null) {
+        process.stderr.write(
+          `roadmap codex: cannot select a package manager for ${dir}: commit pnpm-lock.yaml or package-lock.json; nothing was created\n`,
+        )
+        return 1
+      }
+    }
+  }
   const addArgs = branch ? [worktree, '-b', branch, base] : ['--detach', worktree, base]
   const wt = spawnSync('git', ['worktree', 'add', ...addArgs], { cwd: root, stdio: 'inherit' })
   if (wt.status !== 0) return wt.status ?? 1
   if (!install) return 0
   const capbuild = spawnSync('which', ['capbuild']).status === 0
   for (const dir of [worktree, join(worktree, 'web')]) {
-    if (!existsSync(join(dir, 'package.json'))) continue
+    const installer = detectInstaller(dir)
+    if (installer === undefined) continue
+    if (installer === null) {
+      process.stderr.write(
+        `roadmap codex: cannot select a package manager for ${dir}: commit pnpm-lock.yaml or package-lock.json — not launching\n`,
+      )
+      return 1
+    }
     const ci = capbuild
-      ? spawnSync('capbuild', ['npm', 'ci', '--no-audit', '--no-fund'], { cwd: dir, stdio: 'inherit' })
-      : spawnSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: dir, stdio: 'inherit' })
+      ? spawnSync('capbuild', [installer.bin, ...installer.args], { cwd: dir, stdio: 'inherit' })
+      : spawnSync(installer.bin, installer.args, { cwd: dir, stdio: 'inherit' })
     if (ci.status !== 0) {
-      process.stderr.write(`roadmap codex: npm ci failed in ${dir} — not launching\n`)
+      process.stderr.write(`roadmap codex: ${installer.bin} install failed in ${dir} — not launching\n`)
       return 1
     }
   }
@@ -444,7 +462,7 @@ function runCodex(root, ids, argv) {
 }
 
 /**
- * The review lane. No branch and no `npm ci`: the mission never builds and never commits, so
+ * The review lane. No branch and no dependency install: the mission never builds and never commits, so
  * the worktree is a detached read-only copy — isolation that costs a checkout, not an install.
  */
 function reviewCodex(root, ids, argv) {
@@ -496,7 +514,7 @@ function planCodex(root, ids, argv) {
   const prompt = buildPlanPrompt(root, ids, { brief })
 
   // --base may carry a phase file the primary checkout does not. Checked from the PRIMARY, before
-  // the worktree and its npm ci, so a taken number costs no install and leaves no orphan branch.
+  // the worktree and its dependency install, so a taken number costs no install and leaves no orphan branch.
   const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
   if (spawnSync('git', ['cat-file', '-e', `${base}:${phaseFile}`], { cwd: root }).status === 0) {
     process.stderr.write(

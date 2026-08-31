@@ -2907,3 +2907,197 @@ test('detectInstaller: the decision is a pure read — it installs nothing and i
   )
   assert.deepEqual(second, first, 'the same dir must decide the same way twice — a decision that drifts between the pre-creation probe and the post-creation re-run (15.2) refuses on nothing')
 })
+
+// ── 15.2: ensureWorktree CONSUMES the detector — and an undecidable consumer costs nothing ─────
+// Today the order is inverted: `git worktree add` runs first, then a hardcoded `npm ci`. A pnpm
+// consumer therefore pays a full checkout AND an orphan `codex/<N>` branch for a refusal it was
+// always going to get (atlas worked around it by pre-creating worktrees by hand). What these tests
+// pin is the ORDER — the decision happens while there is still nothing to clean up — and the
+// per-package-dir recipe, asserted on the argv that was really spawned.
+//
+// Nothing installs here: `npm`, `pnpm` and `capbuild` are replaced on PATH by shims that RECORD
+// their cwd + argv and exit 0. `capbuild` is shimmed deliberately — it exists for real on this
+// host, so an unshimmed one would run the true install and reach the network.
+
+/** Appends "<cwd>\t<bin>\t<arg>…" per invocation. `pwd -P` (not $PWD, which the parent's env
+ *  carries in stale) is what makes the per-dir cwd assertions mean anything. */
+const RECORDING_SHIM = [
+  '#!/bin/sh',
+  '{',
+  '  printf \'%s\\t%s\' "$(pwd -P)" "$(basename "$0")"',
+  '  for a in "$@"; do printf \'\\t%s\' "$a"; done',
+  '  printf \'\\n\'',
+  '} >> "$ZR_INSTALL_RECORD"',
+  'exit 0',
+  '',
+].join('\n')
+
+/**
+ * A consumer whose lockfiles are COMMITTED: `git worktree add` checks the base out, so the
+ * post-creation re-detect reads the worktree's own files rather than the primary checkout's.
+ */
+function installRepo(files, phaseId) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'codex-install-')))
+  cleanups.push(() => rmSync(root, { recursive: true, force: true }))
+  const git = (...a) =>
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
+  git('init', '-q')
+  writeFileSync(join(root, '.gitignore'), '.building/\n')
+  for (const [rel, body] of Object.entries(files)) {
+    const abs = join(root, rel)
+    mkdirSync(dirname(abs), { recursive: true })
+    writeFileSync(abs, body)
+  }
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  writeFileSync(join(root, 'roadmap', 'phases', `phase-${phaseId}.phase.ts`), 'export default {}\n')
+  git('add', '--all')
+  git('commit', '-q', '-m', 'seed: the consumer exactly as its lockfiles describe it')
+  mkdirSync(join(root, '.building'), { recursive: true })
+  const worktree = `${root}-codex-${phaseId}`
+  cleanups.push(() => rmSync(worktree, { recursive: true, force: true }))
+  return {
+    root,
+    worktree,
+    base: git('rev-parse', 'HEAD'),
+    /** Absolute paths of every worktree git knows about, primary checkout first. */
+    worktrees: () =>
+      git('worktree', 'list', '--porcelain')
+        .split('\n')
+        .filter((l) => l.startsWith('worktree '))
+        .map((l) => l.slice('worktree '.length)),
+    branchExists: (name) => {
+      try {
+        git('rev-parse', '--verify', `refs/heads/${name}`)
+        return true
+      } catch {
+        return false
+      }
+    },
+  }
+}
+
+/** PATH shims that record instead of installing, plus the fake `codex` driver so a successful
+ *  probe still launches nothing real. */
+function recordingEnv(root) {
+  const binDir = join(root, 'shimbin')
+  mkdirSync(binDir, { recursive: true })
+  const record = join(root, 'installs.tsv')
+  for (const name of ['npm', 'pnpm', 'capbuild']) {
+    writeFileSync(join(binDir, name), RECORDING_SHIM)
+    chmodSync(join(binDir, name), 0o755)
+  }
+  writeFileSync(join(binDir, 'codex'), '#!/bin/sh\nexit 0\n')
+  chmodSync(join(binDir, 'codex'), 0o755)
+  return {
+    env: { ...process.env, PATH: `${binDir}:${process.env.PATH}`, ZR_INSTALL_RECORD: record },
+    /** One { cwd, argv } per spawned install, sorted by cwd, with the capbuild wrapper stripped:
+     *  WHETHER capbuild wraps is today's behavior and stays out of the recipe assertions. */
+    installs: () =>
+      (existsSync(record) ? readFileSync(record, 'utf8') : '')
+        .split('\n')
+        .filter((l) => l.trim() !== '')
+        .map((line) => {
+          const [cwd, ...argv] = line.split('\t')
+          return { cwd, argv: argv[0] === 'capbuild' ? argv.slice(1) : argv }
+        })
+        .sort((a, b) => (a.cwd < b.cwd ? -1 : a.cwd > b.cwd ? 1 : 0)),
+  }
+}
+
+const runLane = (fx, rec, id) =>
+  spawnSync('node', [BIN, 'codex', 'run', String(id), '--worktree', fx.worktree, '--base', fx.base], {
+    cwd: fx.root,
+    encoding: 'utf8',
+    env: rec.env,
+  })
+
+test('codex run: an undecidable consumer refuses naming both lockfiles, BEFORE worktree, branch or journal exist', () => {
+  const fx = installRepo({ 'package.json': A_PACKAGE_JSON }, 151)
+  const rec = recordingEnv(fx.root)
+
+  const r = runLane(fx, rec, 151)
+
+  assert.equal(
+    r.status,
+    1,
+    `a package dir with no lockfile is undecidable: the lane must refuse with exit 1 rather than guess a manager; stderr:\n${r.stderr}`,
+  )
+  assert.ok(
+    r.stderr.includes('pnpm-lock.yaml') && r.stderr.includes('package-lock.json'),
+    `the refusal must name both supported lockfiles — an operator's fix is to commit one, and a message that names neither leaves them guessing; got:\n${r.stderr}`,
+  )
+  assert.ok(r.stderr.includes(fx.root), `and it must name the DIR it could not decide; got:\n${r.stderr}`)
+
+  // The pre-state criterion: the probe runs BEFORE `git worktree add`, so the refusal is free.
+  assert.equal(existsSync(fx.worktree), false, 'no worktree directory may survive a refusal the launcher could have made first')
+  assert.deepEqual(
+    fx.worktrees(),
+    [fx.root],
+    `git must still know exactly ONE worktree — a doomed install that runs AFTER the checkout is the cost this task removes; got: ${fx.worktrees().join(', ')}`,
+  )
+  assert.equal(
+    fx.branchExists('codex/151'),
+    false,
+    'nor an orphan codex/151 branch: every retry against an undecidable consumer would leave another one behind',
+  )
+  assert.equal(existsSync(join(fx.root, '.building', 'codex-151.json')), false, 'and no journal — a refused lane has no run to reconcile')
+  assert.equal(existsSync(join(fx.root, '.building', 'codex-151-prompt.txt')), false, 'nor a prompt for a mission that never launched')
+  assert.deepEqual(rec.installs(), [], 'and no package manager was spawned at all — the decision is a filesystem read')
+})
+
+test('codex run: a pnpm consumer installs with `pnpm install --frozen-lockfile`, never npm ci', () => {
+  const fx = installRepo({ 'package.json': A_PACKAGE_JSON, 'pnpm-lock.yaml': "lockfileVersion: '9.0'\n" }, 152)
+  const rec = recordingEnv(fx.root)
+
+  const r = runLane(fx, rec, 152)
+
+  assert.equal(r.status, 0, `a decidable consumer must launch; stderr:\n${r.stderr}`)
+  assert.deepEqual(
+    rec.installs(),
+    [{ cwd: fx.worktree, argv: [PNPM_RECIPE.bin, ...PNPM_RECIPE.args] }],
+    'the lockfile the consumer committed picks the manager: running npm ci against a pnpm tree is the bootstrap failure this task exists to end',
+  )
+  assert.equal(existsSync(join(fx.worktree, 'pnpm-lock.yaml')), true, 'and the re-detect read the WORKTREE — its own committed lockfile is what decided')
+})
+
+test('codex run: an npm consumer keeps the exact `npm ci --no-audit --no-fund` argv it ships today', () => {
+  const fx = installRepo({ 'package.json': A_PACKAGE_JSON, 'package-lock.json': '{ "lockfileVersion": 3 }\n' }, 153)
+  const rec = recordingEnv(fx.root)
+
+  const r = runLane(fx, rec, 153)
+
+  assert.equal(r.status, 0, `an npm consumer must still launch; stderr:\n${r.stderr}`)
+  assert.deepEqual(
+    rec.installs(),
+    [{ cwd: fx.worktree, argv: [NPM_RECIPE.bin, ...NPM_RECIPE.args] }],
+    'the npm path is a REGRESSION pin, argv byte-identical: every consumer of this lane today is an npm consumer, and routing them through the detector must change nothing they observe',
+  )
+})
+
+test('codex run: a mixed-manager consumer gives the nested web/ package dir its OWN manager', () => {
+  const fx = installRepo(
+    {
+      'package.json': A_PACKAGE_JSON,
+      'package-lock.json': '{ "lockfileVersion": 3 }\n',
+      'web/package.json': '{ "name": "web", "private": true }\n',
+      'web/pnpm-lock.yaml': "lockfileVersion: '9.0'\n",
+    },
+    154,
+  )
+  const rec = recordingEnv(fx.root)
+
+  const r = runLane(fx, rec, 154)
+
+  assert.equal(r.status, 0, `a mixed-manager consumer is decidable in both dirs and must launch; stderr:\n${r.stderr}`)
+  assert.deepEqual(
+    rec.installs(),
+    [
+      { cwd: fx.worktree, argv: [NPM_RECIPE.bin, ...NPM_RECIPE.args] },
+      { cwd: join(fx.worktree, 'web'), argv: [PNPM_RECIPE.bin, ...PNPM_RECIPE.args] },
+    ],
+    'each package dir is decided by ITS OWN lockfile: one manager chosen at the root and applied to web/ is the same wrong-shaped node_modules, one level down',
+  )
+})

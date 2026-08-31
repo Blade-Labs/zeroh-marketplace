@@ -36,7 +36,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -402,4 +402,185 @@ test('roadmap --help lists every mounted command — a command bin auto-mounts b
 
   const missing = expected.filter((name) => !new RegExp(`(^|\\s)${name}(\\s|$)`, 'm').test(res.stdout))
   assert.deepEqual(missing, [], `every mounted cli/commands/<name>.mjs must appear in the --help tree; missing: ${missing.join(', ')}`)
+})
+
+// ── 15.2 blast radius: installDeps keys on the SAME detector (singleSeam 3) ────────────────────
+// installDeps here is the SECOND hardcoded `npm ci` site — the comment above it calls itself "the
+// codex-lane install pattern" — and it provisions the very slots `codex run --worktree` reuses.
+// A pnpm consumer running `worktree up` therefore hits the identical doomed install one module
+// over, so fixing only codex.mjs would leave the bug alive at the other call site.
+//
+// These run installDeps IN-PROCESS (it is a plain function, not a command) with `npm`, `pnpm` and
+// `capbuild` replaced on PATH by shims that record cwd + argv and exit 0. capbuild is shimmed
+// deliberately: it is really on this host, and an unshimmed one would run the true install.
+
+const INSTALL_SHIM = [
+  '#!/bin/sh',
+  '{',
+  '  printf \'%s\\t%s\' "$(pwd -P)" "$(basename "$0")"',
+  '  for a in "$@"; do printf \'\\t%s\' "$a"; done',
+  '  printf \'\\n\'',
+  '} >> "$ZR_INSTALL_RECORD"',
+  'exit 0',
+  '',
+].join('\n')
+
+/** The two recipes 15.1 locked, spelled out again here so a drift in codex.mjs fails against
+ *  something in THIS file rather than silently agreeing with itself. */
+const PNPM_ARGV = ['pnpm', 'install', '--frozen-lockfile']
+const NPM_ARGV = ['npm', 'ci', '--no-audit', '--no-fund']
+
+/** Loaded through the namespace: a missing named import would fail this whole file at link time
+ *  and take the unrelated up/status/reset cases down with it. */
+async function loadInstallDeps() {
+  const mod = await import('./worktree.mjs')
+  assert.equal(
+    typeof mod.installDeps,
+    'function',
+    'cli/commands/worktree.mjs must EXPORT installDeps(dir) — an install decision reachable only by spawning `worktree up` cannot be pinned without a real network install, which is how this second call site drifted from the first',
+  )
+  return mod.installDeps
+}
+
+/** A tmp package tree holding exactly the named files. */
+function pkgTree(files) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'zr-installdeps-')))
+  bases.push(dir)
+  for (const [rel, body] of Object.entries(files)) {
+    const abs = join(dir, rel)
+    mkdirSync(dirname(abs), { recursive: true })
+    writeFileSync(abs, body)
+  }
+  return dir
+}
+
+/** Runs `fn` with the recording shims first on PATH; returns what they saw and what fn threw. */
+function withRecordedInstalls(fn) {
+  const binDir = realpathSync(mkdtempSync(join(tmpdir(), 'zr-installbin-')))
+  bases.push(binDir)
+  const record = join(binDir, 'installs.tsv')
+  for (const name of ['npm', 'pnpm', 'capbuild']) {
+    writeFileSync(join(binDir, name), INSTALL_SHIM)
+    chmodSync(join(binDir, name), 0o755)
+  }
+  const savedPath = process.env.PATH
+  const savedRecord = process.env.ZR_INSTALL_RECORD
+  process.env.PATH = `${binDir}:${savedPath}`
+  process.env.ZR_INSTALL_RECORD = record
+  let thrown = null
+  try {
+    fn()
+  } catch (e) {
+    thrown = e
+  } finally {
+    process.env.PATH = savedPath
+    if (savedRecord === undefined) delete process.env.ZR_INSTALL_RECORD
+    else process.env.ZR_INSTALL_RECORD = savedRecord
+  }
+  const installs = (existsSync(record) ? readFileSync(record, 'utf8') : '')
+    .split('\n')
+    .filter((l) => l.trim() !== '')
+    .map((line) => {
+      const [cwd, ...argv] = line.split('\t')
+      // WHETHER capbuild wraps is today's behavior and stays out of the recipe assertions.
+      return { cwd, argv: argv[0] === 'capbuild' ? argv.slice(1) : argv }
+    })
+    .sort((a, b) => (a.cwd < b.cwd ? -1 : a.cwd > b.cwd ? 1 : 0))
+  return { installs, thrown }
+}
+
+test('installDeps — a pnpm slot installs with `pnpm install --frozen-lockfile`', async () => {
+  const installDeps = await loadInstallDeps()
+  const dir = pkgTree({ 'package.json': '{ "name": "c", "private": true }\n', 'pnpm-lock.yaml': "lockfileVersion: '9.0'\n" })
+
+  const { installs, thrown } = withRecordedInstalls(() => installDeps(dir))
+
+  assert.equal(thrown, null, `a decidable slot must install, not throw: ${thrown?.message}`)
+  assert.deepEqual(
+    installs,
+    [{ cwd: dir, argv: PNPM_ARGV }],
+    'the slot provisioner reads the same committed lockfile the codex lane does — a `worktree up` that npm-ci’s a pnpm consumer leaves the session with a node_modules in the wrong shape',
+  )
+})
+
+test('installDeps — an npm slot keeps the exact `npm ci --no-audit --no-fund` argv it ships today', async () => {
+  const installDeps = await loadInstallDeps()
+  const dir = pkgTree({ 'package.json': '{ "name": "c", "private": true }\n', 'package-lock.json': '{ "lockfileVersion": 3 }\n' })
+
+  const { installs, thrown } = withRecordedInstalls(() => installDeps(dir))
+
+  assert.equal(thrown, null, `an npm slot must still install: ${thrown?.message}`)
+  assert.deepEqual(
+    installs,
+    [{ cwd: dir, argv: NPM_ARGV }],
+    'the npm path is a REGRESSION pin, argv byte-identical: routing today’s consumers through the detector must change nothing they observe',
+  )
+})
+
+test('installDeps — a lockfile-less slot THROWS naming both lockfiles, and spawns nothing', async () => {
+  const installDeps = await loadInstallDeps()
+  const dir = pkgTree({ 'package.json': '{ "name": "c", "private": true }\n' })
+
+  const { installs, thrown } = withRecordedInstalls(() => installDeps(dir))
+
+  assert.ok(
+    thrown instanceof Error,
+    'an undecidable package dir must refuse — this function’s existing posture is the execFileSync throw, and a silent skip would hand the session an empty worktree it believes is provisioned',
+  )
+  assert.ok(
+    thrown.message.includes('pnpm-lock.yaml') && thrown.message.includes('package-lock.json'),
+    `the refusal names both supported lockfiles, exactly as the codex lane’s does — one vocabulary, one decision; got: ${thrown.message}`,
+  )
+  assert.ok(thrown.message.includes(dir), `and names the dir it could not decide; got: ${thrown.message}`)
+  assert.deepEqual(installs, [], 'and no manager ran: guessing npm here is the failure 15.1 exists to end')
+})
+
+test('installDeps — a mixed-manager slot gives the nested web/ package dir its OWN manager', async () => {
+  const installDeps = await loadInstallDeps()
+  const dir = pkgTree({
+    'package.json': '{ "name": "c", "private": true }\n',
+    'package-lock.json': '{ "lockfileVersion": 3 }\n',
+    'web/package.json': '{ "name": "web", "private": true }\n',
+    'web/pnpm-lock.yaml': "lockfileVersion: '9.0'\n",
+  })
+
+  const { installs, thrown } = withRecordedInstalls(() => installDeps(dir))
+
+  assert.equal(thrown, null, `a mixed-manager slot is decidable in both dirs: ${thrown?.message}`)
+  assert.deepEqual(
+    installs,
+    [
+      { cwd: dir, argv: NPM_ARGV },
+      { cwd: join(dir, 'web'), argv: PNPM_ARGV },
+    ],
+    'each package dir is decided by ITS OWN lockfile: a root manager applied to web/ is the same wrong-shaped node_modules, one level down',
+  )
+})
+
+test('installDeps — a slot with no package.json anywhere installs nothing and does not refuse', async () => {
+  const installDeps = await loadInstallDeps()
+  const dir = pkgTree({ 'src.txt': 'seed\n' })
+
+  const { installs, thrown } = withRecordedInstalls(() => installDeps(dir))
+
+  assert.equal(
+    thrown,
+    null,
+    `a non-package repo is not undecidable, it is EMPTY — refusing here would break the bare-repo up case this lane already ships: ${thrown?.message}`,
+  )
+  assert.deepEqual(installs, [], 'nothing to install means nothing installed')
+})
+
+test('installDeps — the decision is SOURCED from codex.mjs’s detector, not restated here (singleSeam 3)', () => {
+  const src = readFileSync(join(HERE, 'worktree.mjs'), 'utf8')
+  assert.match(
+    src,
+    /import\s*\{[^}]*\bdetectInstaller\b[^}]*\}\s*from\s*'\.\/codex\.mjs'/,
+    'worktree.mjs must import detectInstaller from ./codex.mjs — two call sites each carrying their own install decision is exactly how this one drifted into a hardcoded npm ci while calling itself "the codex-lane install pattern"',
+  )
+  assert.equal(
+    /'ci',\s*'--no-audit'/.test(src),
+    false,
+    'and it may not spell the npm argv itself: a literal recipe here is a second source of truth the next manager added to the detector will silently not reach',
+  )
 })
