@@ -675,15 +675,23 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     return keep(
       `it breaches the plan lane's ONE-FILE invariant: ${base}...HEAD changed ${changed.length} file(s) — ${changed.join(', ') || '(none)'} — where exactly ${phaseFile} was allowed. `
         + (changed.length === 0
-          ? // An empty diff has TWO causes wanting opposite acts, and they are separated HERE rather
-            // than by a command handed to the operator: `merge-base --is-ancestor` answers yes to
-            // both (a lane that never committed sits ON the merge-base), so prescribing it would
-            // route the never-committed lane into a removal that destroys its only record.
-            q(wt, ['cat-file', '-e', `HEAD:${phaseFile}`]).ok
-            ? `An empty diff with the file committed means ${base} already CONTAINS this lane's commit — a merge does that, a cherry-pick does not. `
-              + `Nothing is left to harvest, so remove the lane by hand: git -C ${root} worktree remove --force ${wt} && git -C ${root} branch -D ${branch}. `
-            : `The lane never committed ${phaseFile} at all, so there is no plan to harvest and nothing this close can prove. `
-              + `${join(wt, LANES.plan.report)} is the only record of what it did — READ that before removing anything. `
+          ? // An empty diff has TWO causes wanting opposite acts, distinguished HERE rather than by
+            // a command handed to the operator: `merge-base --is-ancestor` answers yes to both (a
+            // lane that never committed sits ON the merge-base), so prescribing it would route the
+            // never-committed lane into a removal that destroys its only record.
+            //
+            // The probe below asks whether the phase file EXISTS at this lane's HEAD, which is not
+            // quite "did this lane author it" — a lane reset onto a base that already carried the
+            // file takes the first arm while having authored nothing. So NEITHER arm prescribes a
+            // bare removal: both send the operator to read first, and the destructive half names
+            // the archive copy ahead of it, because nothing on this path has archived anything (the
+            // copy happens only on the PASS path below).
+            (q(wt, ['cat-file', '-e', `HEAD:${phaseFile}`]).ok
+              ? `An empty diff with ${phaseFile} present at HEAD usually means ${base} already CONTAINS this lane's commit — a merge does that, a cherry-pick does not. `
+                + `Confirm with git -C ${wt} log --oneline ${base}..HEAD (empty = the lane added nothing of its own). `
+              : `${phaseFile} is not committed at this lane's HEAD at all, so there is no plan here to harvest and nothing this close can prove. `)
+            + `Either way ${join(wt, LANES.plan.report)} is the only record of what this lane did: read it, and if you then remove the lane, keep that record — `
+            + `cp ${join(wt, LANES.plan.report)} ${jPath.replace(/\.json$/, '-REPORT.md')} && git -C ${root} worktree remove --force ${wt} && git -C ${root} branch -D ${branch}. `
           : '')
         + 'The harvest proof covers that one path, so anything else would ride out of the lane unproven; inspect the branch and land or drop the extra work by hand',
     )
@@ -796,8 +804,10 @@ function nextStepHint(lane, state, journal, reportPath, root) {
     if (state !== 'complete') return null
     // Only while the lane is still standing. A CONSUMED plan lane (this read closed it, or an
     // earlier one did) has no next step, and naming its own consume read would send an operator to
-    // a done-moment that has already fired.
-    if (!wt || !existsSync(wt)) return null
+    // a done-moment that has already fired. A SLOT is the other lane the close will never take —
+    // it refuses by design, so promising "then this read closes the lane" there is a hint that can
+    // never come true, printed on every read forever.
+    if (!wt || !existsSync(wt) || (root && isSlotDir(root, wt))) return null
     return `roadmap codex status ${ids.join(' ')} --plan — the plan lane's done-moment: harvest the phase file to the primary checkout, then this read closes the lane`
   }
   if (lane !== 'run' || ids.length === 0) return null

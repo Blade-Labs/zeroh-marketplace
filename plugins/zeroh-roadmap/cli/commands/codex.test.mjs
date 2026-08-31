@@ -2511,7 +2511,8 @@ test('consume-the-plan: a lane whose DIRECTORY died is never closed on an unseen
   // CODEX-PLAN.md, so the read computes `dead-no-report`, and the close is gated on the COMPLETE
   // verdict. That is the right refusal — closing a lane whose verdict was never seen would be
   // guessing — but the branch and the stale registration must not squat with nobody told. The
-  // operator ruling forbids a sweep verb, so the answer is REPORT: this read refuses by name, and
+  // operator ruling forbids a sweep verb, so the answer is REPORT: this read names the prune in its
+  // next-step hint (the case below pins that text), and
   // `roadmap audit` check 15 reports the same lane as a prunable row with the same prune.
   const root = tmpRepo()
   const lane = planLane(root, [308])
@@ -2595,4 +2596,74 @@ test('next-step hint: a CONSUMED plan lane stays silent — the close removed it
     `nor on any later read: a consumed lane that nags forever is how an operator learns to ignore \`next:\` entirely; got stderr: ${again.err}`,
   )
   assert.equal(again.code, 0, `and the archived lane still reads clean; stderr: ${again.err}`)
+})
+
+test('consume-the-plan: an EMPTY one-file diff refuses both ways, and neither way says "just remove it"', () => {
+  // Gate R4. Acceptance criterion 2 wants each refusal direction tested, and the empty-diff branch
+  // had none through three rounds of churn — R2 shipped a discriminator that answered yes to both
+  // causes and R3 replaced it, with nothing pinning either. An empty `base...HEAD` means the lane
+  // added nothing of its own, which happens when base already carries its commit (a merge) and when
+  // the lane never authored the file at all. The two want opposite acts, and BOTH must send the
+  // operator to CODEX-PLAN.md first: nothing on this path has archived it, so a bare removal
+  // destroys the only record of what the lane did.
+  const merged = tmpRepo()
+  const lane = planLane(merged, [312])
+  // A MERGE landing, not a cherry-pick: base gains the lane's own commit, so the merge-base moves
+  // up to it and the three-dot diff empties out.
+  lane.git('branch', '-f', 'develop', lane.tip)
+  assert.equal(
+    lane.lgit('diff', '--name-only', 'develop...HEAD').trim(),
+    '',
+    'fixture: the three-dot diff really is empty — that is the branch under test',
+  )
+
+  const m = laneStatus(merged, [312], '--plan')
+  assert.match(m.err, /ONE-FILE invariant/, `an empty diff still fails the one-file check; got: ${m.err}`)
+  assert.match(m.err, /0 file\(s\)/, `and says so with the count that made it fail; got: ${m.err}`)
+  assert.ok(m.err.includes(join(lane.worktree, 'CODEX-PLAN.md')), `the hand-off is the only record of what the lane did, so the refusal names it BY PATH; got: ${m.err}`)
+  assert.ok(
+    m.err.includes(`cp ${join(lane.worktree, 'CODEX-PLAN.md')}`),
+    `and if the operator removes the lane anyway, the remedy keeps that record FIRST — nothing on this path archived it; got: ${m.err}`,
+  )
+  assert.ok(existsSync(lane.worktree) && branchResolves(lane), 'and the lane itself is untouched by a refusal')
+
+  // The other cause: the lane committed something, but never the phase file.
+  const empty = tmpRepo()
+  const never = planLane(empty, [313])
+  never.lgit('rm', '-q', never.phaseFile)
+  never.lgit('commit', '-q', '-m', 'plan(313): drop the phase file again')
+  never.git('branch', '-f', 'develop', never.lgit('rev-parse', 'HEAD').trim())
+
+  const n = laneStatus(empty, [313], '--plan')
+  assert.match(
+    n.err,
+    /not committed at this lane's HEAD at all/,
+    `a lane with no phase file at HEAD must be told THAT, not that its plan was already merged — the two want opposite acts; got: ${n.err}`,
+  )
+  assert.ok(n.err.includes(join(never.worktree, 'CODEX-PLAN.md')), `this direction names the hand-off too; got: ${n.err}`)
+  assert.ok(existsSync(never.worktree) && branchResolves(never), 'nothing removed here either')
+})
+
+test('next-step hint: a plan lane journalled at a SLOT is promised no close, because the close refuses slots', () => {
+  // Gate R4. The slot refusal and the consume hint disagreed: the read printed "is a session SLOT
+  // … Retire it by hand" and one line later promised "then this read closes the lane" — a hint that
+  // can never come true, on every read forever. Same shape as the R3 HIGH, narrower trigger.
+  const root = tmpRepo()
+  const slot = `${root}-wt-3`
+  cleanups.push(() => rmSync(slot, { recursive: true, force: true }))
+  const lane = planLane(root, [314])
+  // Re-journal the same real lane at a SLOT path, which `codex plan --worktree <root>-wt-3` does.
+  execFileSync('git', ['-C', root, 'worktree', 'move', lane.worktree, slot], { encoding: 'utf8' })
+  const j = JSON.parse(readFileSync(lane.jPath, 'utf8'))
+  writeFileSync(lane.jPath, JSON.stringify({ ...j, worktree: slot }, null, 2) + '\n')
+
+  const { err } = laneStatus(root, [314], '--plan')
+
+  assert.match(err, /session SLOT/, `precondition: the close must refuse a slot — that refusal is what the hint contradicted; got: ${err}`)
+  assert.equal(
+    nextHint(err),
+    null,
+    `and no hint may promise a close the very next line refused: an operator who runs it gets the same refusal, forever; got: ${err}`,
+  )
+  assert.ok(existsSync(slot), 'and the slot is untouched — slot retirement is a held human act')
 })

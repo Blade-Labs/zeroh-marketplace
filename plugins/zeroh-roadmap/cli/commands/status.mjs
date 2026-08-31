@@ -239,6 +239,7 @@ function derive(root) {
   // scripts/arc-status.mjs, so a lanes-free estate must see no output change at all (the
   // postMergeRedLine precedent — the additive divergence is absent whenever the condition is).
   let strayLanes = 0
+  let strayError = null
   if (existsSync(join(repo, '.git'))) {
     try {
       strayLanes = surveyLanes(repo).filter((l) => l.class !== 'live').length
@@ -247,17 +248,20 @@ function derive(root) {
       // quiet either — surveyLanes deliberately lets its enumeration throw because "reporting an
       // empty inventory would be the silent all-clear this whole seam exists to stop", and status is
       // the command every protocol entry runs, so a swallowed failure here is the widest-reach
-      // version of exactly that. stderr keeps the stdout byte-parity this file is pinned on.
+      // version of exactly that. It travels on BOTH surfaces, like every other advisory in this
+      // file (unreadableSidecars, noArcId, postMergeRed): stderr for the human, `warnings` for the
+      // machine — a --json consumer reading `warnings: []` is the same silent all-clear.
       strayLanes = 0
-      process.stderr.write(`  ⚠ stray lane worktrees could not be surveyed in ${repo} — ${e.message}\n`)
+      strayError = `stray lane worktrees could not be surveyed in ${repo} — ${e.message}`
     }
   }
 
-  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes }
+  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes, strayError }
 }
 
 function printHuman(m) {
   for (const w of m.unreadableSidecars) process.stderr.write(`  ⚠ ${w}\n`)
+  if (m.strayError) process.stderr.write(`  ⚠ ${m.strayError}\n`)
   const out = []
   out.push(`arc-status — derived ${m.derivedAt} (repo ${m.repo})\n`)
   if (m.postMergeRed) out.push(`  ⚠ ${m.postMergeRed}\n`)
@@ -287,6 +291,7 @@ export default async function run(argv) {
       ...model.unreadableSidecars,
       ...(model.noArcId.length ? [`in-progress phase(s) with NO arcId: ${model.noArcId.join(', ')}`] : []),
       ...(model.postMergeRed ? [model.postMergeRed] : []),
+      ...(model.strayError ? [model.strayError] : []),
     ]
     // Box capacity rides the --json machine shape ONLY (phase 11) — the human table is
     // parity-pinned byte-compatible and never carries it.
