@@ -496,8 +496,8 @@ test('14) HUMAN output carries NO capacity text — byte-identical with and with
 // ── the stray-lane line: status counts the lanes that outlived their run (task 14.4) ──
 //
 // `status` is the one command every protocol entry already runs, so it is the automatic
-// surfacing seam for the 2026-08-31 census finding (19 sibling worktrees, ~6.5 GB, invisible
-// from every command). ONE line, fed by the already-landed classifier surveyLanes(root) over
+// surfacing seam for lane worktrees that outlive their run and are otherwise invisible
+// from every command. ONE line, fed by the already-landed classifier surveyLanes(root) over
 // the repo status already derives — never a second worktree-enumeration parser.
 //
 // The zero case is a ZERO-OUTPUT change on BOTH surfaces: no line, and the `strayLanes` key

@@ -231,8 +231,8 @@ function derive(root) {
   const postMergeRed = postMergeRedLine(root)
 
   // 8) Stray lane worktrees — the count only, from the ONE classifier (surveyLanes). status is
-  // the command every protocol entry already runs, so it is the automatic surfacing seam for the
-  // accumulation the 2026-08-31 census found; the per-lane class and remedy stay with `roadmap
+  // the command every protocol entry already runs, so it is the automatic surfacing seam for lane
+  // trees that outlived their run; the per-lane class and remedy stay with `roadmap
   // audit` check 15, which this line points at rather than restating. The pre-existing porcelain
   // parse at (1) is sidecar correlation and predates the seam — this appends, it does not fork it.
   // ZERO is silence, not a zero: the human table is parity-pinned byte-compatible with the legacy

@@ -364,9 +364,9 @@ export function isSlotDir(root, dir) {
  *
  * Three readers want this same answer — `roadmap audit` check 15, the `roadmap status` stray line,
  * and any operator who would otherwise run `git worktree list` by hand — and a second
- * worktree-enumeration parser is the forked seam this export exists to prevent. The 2026-08-31
- * census found 19 stray sibling worktrees (~6.5 GB) across four consumers, every sampled journal
- * dead and unarchived; none of it was visible from any command.
+ * worktree-enumeration parser is the forked seam this export exists to prevent. Stray lane
+ * trees accumulate silently across consumers — dead, unarchived journals over gigabytes of
+ * checkout — precisely because no command names them.
  *
  * INVENTORY AND LIVENESS ONLY, by design. Whether a tree is SAFE to remove — dirt, unpushed
  * commits — is disposeWorktree's question, asked once at a done-moment; asking it per lane on

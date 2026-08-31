@@ -791,9 +791,9 @@ test('usage error — auditing a dir with no roadmap/phases exits 1', () => {
 // Check 15 — stray lane worktrees (surveyLanes, report-only)
 // ════════════════════════════════════════════════════════════════════════════
 //
-// The catalogue above never looks at worktrees, so the leak class the 2026-08-31 census found
-// (19 sibling lane trees, ~6.5 GB, every sampled journal dead) is invisible to every review flow
-// that runs `roadmap audit`. Check 15 is that eye: ONE finding per NON-LIVE row of
+// The catalogue above never looks at worktrees, so lane trees that outlive their run accumulate
+// invisibly to every review flow that runs `roadmap audit` (dead journals, gigabytes of node_modules,
+// no command naming them). Check 15 is that eye: ONE finding per NON-LIVE row of
 // surveyLanes(root) — MEDIUM for the classes that HAVE a done-moment (stale-run/-plan/-review,
 // closed), whose message carries that row's own remedy verbatim, and LOW for legacy/unknown,
 // where only manual inspection is honest. `live` is never a finding, and the check REMOVES
