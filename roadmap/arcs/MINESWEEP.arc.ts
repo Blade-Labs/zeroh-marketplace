@@ -32,7 +32,8 @@
  *   ref); unharvested lanes refuse and name the harvest step.
  * - 2026-08-31: commit-grammar tolerance is READ-side only — the canonical write grammar
  *   (`type(scope): phase N — …`) stays the one taught form; attribution/curation learn to
- *   READ the four recorded deviant classes, and deviant-grammar findings keep warning.
+ *   READ the five recorded deviant classes (D1-D5, phase 16), and deviant-grammar
+ *   findings keep warning.
  * - 2026-08-31: package-manager detection keys on the LOCKFILE (pnpm-lock.yaml → pnpm,
  *   package-lock.json → npm ci, neither → loud refusal naming the gap); never a silent
  *   npm fallback (atlas phase-25 "plugin fix owed upstream", mudarabah2 HANDOFF).
