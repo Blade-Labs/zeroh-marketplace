@@ -1867,3 +1867,29 @@ test('surveyLanes: a PRUNABLE entry (registered, directory gone) is remedied by 
     `the branch outlives the directory and may hold the only copy of the lane's commits, so the remedy names it rather than deleting it silently; got: ${row.remedy}`,
   )
 })
+
+test('surveyLanes: a PRUNABLE entry whose journal will not READ is unknown, never legacy', async () => {
+  // Gate R2. The prunable arm returned before the unreadable-journal handling, so a vanished
+  // directory whose journal is corrupt came back `legacy` with journalPath null — audit then printed
+  // "has no journal naming it" over a journal sitting right on disk. A missing tree changes what can
+  // be DONE about a lane; it never changes what is KNOWN about it.
+  const r = surveyRepo()
+  const dir = laneAt(r, 'codex-42', { branch: 'codex/42' })
+  const whole = JSON.stringify({ phases: ['42'], lane: 'run', worktree: dir, pgid: 424242 }, null, 2)
+  const truncated = whole.slice(0, whole.lastIndexOf('"pgid"'))
+  assert.ok(truncated.includes(dir), 'fixture bug: the truncated bytes must still NAME the worktree')
+  assert.throws(() => JSON.parse(truncated), SyntaxError, 'fixture bug: the journal must genuinely fail to parse')
+  const jPath = journalFor(r, { lane: 'run', ids: ['42'], raw: truncated })
+  rmSync(dir, { recursive: true, force: true })
+  assert.ok(r.worktrees().includes(dir), 'fixture: git still lists the vanished worktree — the prunable shape')
+
+  const row = rowFor(await surveyLanes(r.root), dir, 'a prunable lane whose journal will not parse')
+
+  assert.equal(
+    row.class,
+    'unknown',
+    `a journal that could cover this lane EXISTS and cannot be read: 'legacy' would claim the launcher never recorded a run, which is the fold the doctrine forbids; got ${JSON.stringify(row)}`,
+  )
+  assert.equal(realOf(row.journalPath), realOf(jPath), 'and the row names the unreadable journal, so an operator can go read it')
+  assert.match(row.remedy, /worktree prune/, `the directory is still gone, so the ACT is still the prune; got: ${row.remedy}`)
+})

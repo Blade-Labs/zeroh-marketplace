@@ -491,6 +491,12 @@ export function surveyLanes(anyRoot) {
     const flag = hit ? LANES[hit.lane].flag : null
     const laneFlag = flag ? ` ${flag}` : ''
     const live = Boolean(hit && !hit.closed && hit.journal.pgid && groupAlive(hit.journal.pgid))
+    // The journal-less classification, computed BEFORE the prunable arm below: a vanished directory
+    // changes what can be DONE about a lane, never what is KNOWN about it, and folding an
+    // unreadable journal into `legacy` there would report "nothing ran" over a record on disk —
+    // exactly the fold this module's doctrine forbids.
+    const named = hit ? null : unreadable.find((u) => u.text.includes(basename(dir))) ?? null
+    const blindClass = hit ? null : named || blind.length > 0 ? 'unknown' : 'legacy'
     // A PRUNABLE entry: git still lists the worktree, the directory is gone (a swept /tmp, a hand
     // rm). Every command below that addresses `dir` exits 128 there, so the remedy would be a
     // paste that only errors — the class this survey exists to replace. What is actually left is
@@ -502,8 +508,8 @@ export function surveyLanes(anyRoot) {
       return {
         dir,
         branch,
-        class: hit ? (hit.closed ? 'closed' : `stale-${hit.lane}`) : 'legacy',
-        journalPath: hit?.path ?? null,
+        class: hit ? (hit.closed ? 'closed' : `stale-${hit.lane}`) : blindClass,
+        journalPath: hit?.path ?? named?.path ?? null,
         remedy: branch
           ? `(1) ${prune} — the directory is already gone; only its registration remains; (2) its branch ${branch} then stands alone: git -C ${root} log --oneline ${branch}, and delete it with git -C ${root} branch -D ${branch} only once you are sure it is carried elsewhere`
           : `${prune} — the directory is already gone and the lane was detached; only its registration remains`,
@@ -513,8 +519,7 @@ export function surveyLanes(anyRoot) {
       + (branch ? ` && git -C ${root} branch -D ${branch}` : '')
       + ` && git -C ${root} worktree prune`
     if (!hit) {
-      const named = unreadable.find((u) => u.text.includes(basename(dir))) ?? null
-      if (!named && blind.length === 0) {
+      if (blindClass === 'legacy') {
         return {
           dir,
           branch,
@@ -573,8 +578,8 @@ export function surveyLanes(anyRoot) {
       remedy: hit.lane === 'run'
         ? `cd ${dir} && roadmap phase land ${ids[0] ?? '<N>'}`
           + (ids.length > 1 ? `  (one land moves the whole lane head, covering ${idList})` : '')
-        : `roadmap codex status ${idList || '<N>'}${laneFlag} — if the lane reported COMPLETE that read closes it; `
-          + `if it died without a sentinel, harvest anything you still want and then: ${removeCmd}`,
+        : `roadmap codex status ${idList || '<N>'}${laneFlag} — if the lane reported COMPLETE that read closes it; if it died without a sentinel there is no harvest proof, `
+          + `so READ it first (git -C ${dir} log --oneline -5${branch ? `, git -C ${root} log --oneline ${branch}` : ''}) and only then: ${removeCmd}`,
     }
   })
 }

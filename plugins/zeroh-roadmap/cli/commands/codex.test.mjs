@@ -2540,3 +2540,28 @@ test('consume-the-plan: a lane whose DIRECTORY died is never closed on an unseen
   )
   assert.equal(journalOf(lane).archivedAt, undefined, 'nor is the journal stamped closed over a verdict nobody saw')
 })
+
+test('next-step hint: a plan lane whose DIRECTORY is gone gets the prune hint — the one path that state reaches', () => {
+  // Gate R2. Such a lane can never read `complete` (no tree, no CODEX-PLAN.md), so the consume-close
+  // is unreachable and every refusal inside it is dead text. dead-no-report IS the state it reaches,
+  // and before this the plan lane was silent there — the operator got a JSON blob and nothing else.
+  const root = tmpRepo()
+  const lane = planLane(root, [310])
+  rmSync(lane.worktree, { recursive: true, force: true })
+
+  const { out, err } = laneStatus(root, [310], '--plan')
+
+  assert.equal(out?.state, 'dead-no-report', `precondition: with no tree there is no hand-off, so no verdict; stderr: ${err}`)
+  const hint = nextHint(err)
+  assert.ok(hint, `this is the ONLY place a dead plan lane is told anything — silence here is how a stale registration and a branch squat unnoticed; got stderr: ${err}`)
+  assert.ok(
+    hint.includes(`git -C ${root} worktree prune`),
+    `the act that actually clears what is left is the prune — every command addressing the missing directory exits 128; got: ${hint}`,
+  )
+  assert.ok(
+    hint.includes(`codex-plan/310`),
+    `and the surviving BRANCH must be named: if the plan was never harvested those commits are its only copy, so the hint says read it before deleting; got: ${hint}`,
+  )
+  assert.match(hint, /read|log/i, `named as something to READ first, never as a delete; got: ${hint}`)
+  assert.ok(branchResolves(lane), 'and nothing was removed by the read itself')
+})
