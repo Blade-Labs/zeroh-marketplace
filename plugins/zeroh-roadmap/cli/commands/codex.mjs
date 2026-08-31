@@ -110,6 +110,8 @@ function repoRelative(root, p, flag) {
 
 /** The run protocol is the do-phase SKILL, resolved from THIS file so a plugin move follows. */
 export const RUN_SKILL = fileURLToPath(new URL('../../skills/do-phase/SKILL.md', import.meta.url))
+const ROADMAP_CLI = fileURLToPath(new URL('../../bin/roadmap.mjs', import.meta.url))
+const COMMIT_GRAMMAR = 'COMMIT GRAMMAR (BINDING — attribution binds on `phase N —`): task `type(scope): phase N — N.X: <what>`; gate fix `fix(scope): phase N gate RX — <what>`; state `docs(roadmap): phase N — <desc>`.'
 
 /** The role bindings the run lane's fill-a-role override sends the driver to, same resolution. */
 const ROLE_BINDINGS = fileURLToPath(new URL('../../MULTI-DRIVER.md', import.meta.url))
@@ -132,6 +134,8 @@ export function buildPrompt(root, ids) {
     '',
     `YOUR PROTOCOL IS A FILE — read it in full, first, before touching anything: ${RUN_SKILL}`,
     `Its \`references/\` siblings (in ${dirname(RUN_SKILL)}/references/) are part of the protocol — read each one when it sends you there. Follow it as written, end to end, including every part it hands to the driver rather than to a supervising session. This envelope adds only the targets and the overrides below; where the two disagree, the protocol wins.`,
+    `THE ROADMAP CLI: node ${ROADMAP_CLI} (bare \`roadmap\` may be absent from PATH — never assume it).`,
+    COMMIT_GRAMMAR,
     '',
     `TARGETS — run once per phase, in order: ${phaseFiles.join(', ')}. Notes pre-make every decision; implement, never re-decide.`,
     '',
@@ -171,6 +175,7 @@ function buildReviewPrompt(root, ids, { doc, focus } = {}) {
     '',
     `YOUR PROTOCOL IS A FILE — read it in full, first, before forming any opinion: ${REVIEW_SKILL}`,
     `Its \`references/\` siblings (in ${dirname(REVIEW_SKILL)}/references/) are part of the protocol — read each one it sends you to, when it sends you there. Follow it as written. This envelope adds only the targets and the overrides below; where the two disagree about HOW to review, the protocol wins.`,
+    `THE ROADMAP CLI: node ${ROADMAP_CLI} (bare \`roadmap\` may be absent from PATH — never assume it).`,
     '',
     `TARGETS — run the protocol once per phase, dispatching Mode A or Mode B from each phase's own status as it directs: ${phaseFiles.join(', ')}`,
     ...(doc
@@ -224,6 +229,8 @@ function buildPlanPrompt(root, ids, { brief } = {}) {
     '',
     `YOUR PROTOCOL IS A FILE \u2014 read it in full, first, before investigating anything: ${PLAN_SKILL}`,
     `Its \`references/\` siblings (in ${dirname(PLAN_SKILL)}/references/) are part of the protocol \u2014 read each one when it sends you there. Follow it as written, end to end, including every part it hands to the author rather than to a supervising session. This envelope adds only the target and the overrides below; where the two disagree, the protocol wins.`,
+    `THE ROADMAP CLI: node ${ROADMAP_CLI} (bare \`roadmap\` may be absent from PATH \u2014 never assume it).`,
+    COMMIT_GRAMMAR,
     '',
     `TARGET \u2014 author exactly ${phaseFile}. That number is ALREADY RESERVED for you by the launching session: skip the protocol's number-reservation step, never renumber, and never author a second phase.`,
     '',

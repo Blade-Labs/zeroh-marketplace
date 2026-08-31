@@ -26,7 +26,7 @@ import { execFileSync, spawnSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { chmodSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DRIVERS } from '../lib/drivers.mjs'
 import { findJournal as mod_findJournal } from './codex.mjs'
@@ -3100,4 +3100,122 @@ test('codex run: a mixed-manager consumer gives the nested web/ package dir its 
     ],
     'each package dir is decided by ITS OWN lockfile: one manager chosen at the root and applied to web/ is the same wrong-shaped node_modules, one level down',
   )
+})
+
+// ── 15.3: the envelope names the CLI it expects, and the grammar that BINDS ─────────────────────
+// Two recorded failures, one channel. Both azure lane reports deviate on the same thing — "Bare
+// `roadmap` was absent from PATH" (exit 127): `roadmap` is a shell convenience of the supervising
+// session, and a detached driver inherits none of it. And three repos' curation broke because the
+// executor was never told the subject grammar the CLI PARSES (mudarabah2: 11 phases whose curation
+// never ran). The envelope is the one channel that reaches every delegated driver in every family,
+// so both facts are pinned here — on the prompt file the launcher actually wrote, which is what the
+// driver reads, not on a builder's return value.
+
+/** Launch a lane with the fake `codex` on PATH and hand back the envelope the launcher wrote. */
+function lanePrompt(root, argv, journalName) {
+  const worktree = join(root, `wt-153-${journalName}`)
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', ...argv, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, `the ${journalName} lane must launch for its envelope to be observable; stderr:\n${r.stderr}`)
+  return readFileSync(join(root, '.building', `${journalName}-prompt.txt`), 'utf8')
+}
+
+test('15.3 — every lane envelope names the roadmap CLI by ABSOLUTE path, and says why', () => {
+  const root = tmpRepo()
+  writePhase(root, 120)
+  writePhase(root, 121)
+  const brief = writeBrief(root)
+
+  assert.ok(isAbsolute(BIN), 'precondition: the CLI path pinned below has to be absolute — a relative one would make every assertion here decorative')
+  assert.ok(existsSync(BIN), `precondition: the CLI the envelopes must name has to exist at ${BIN} — an envelope naming a missing file briefs on nothing`)
+
+  const lanes = [
+    ['run', lanePrompt(root, ['run', '120'], 'codex-120')],
+    ['review', lanePrompt(root, ['review', '121'], 'codex-review-121')],
+    ['plan', lanePrompt(root, ['plan', '122', '--brief', brief], 'codex-plan-122')],
+  ]
+
+  for (const [lane, prompt] of lanes) {
+    assert.ok(
+      prompt.includes(BIN),
+      `the ${lane} envelope never names ${BIN}, so a driver whose PATH has no \`roadmap\` cannot reach the CLI at all — both azure lane reports died exactly there (exit 127); fix cli/commands/codex.mjs: resolve the bin from import.meta.url the way RUN_SKILL does, and put that path in the envelope`,
+    )
+    assert.match(
+      prompt,
+      /absent from PATH/i,
+      `the ${lane} envelope must SAY that bare \`roadmap\` may not be there — handed a long path with no reason, a driver still types the short command it has seen in every doc; fix cli/commands/codex.mjs`,
+    )
+  }
+})
+
+/**
+ * The binding subject forms, as an executor must be able to COPY them. The `—` boundary is the
+ * load-bearing part (it stops phase 136 matching 1369), so each form is pinned with the em dash
+ * directly after the number — a prompt that teaches `phase N:` teaches an unparseable subject.
+ */
+const COMMIT_GRAMMAR = [
+  {
+    form: 'task',
+    re: /phase N — N\.X:/,
+    why: 'a task commit without `phase N — N.X:` is invisible to the unverified-done check and to curation — the mudarabah2 shape: 11 phases whose curation never ran',
+  },
+  {
+    form: 'gate fix',
+    re: /fix\([^)]*\): phase N gate R/,
+    why: 'gate-round fixes that do not say `gate RX` cannot be told apart from task work when the round is reconstructed',
+  },
+  {
+    form: 'roadmap-state',
+    re: /docs\(roadmap\): phase N —/,
+    why: 'the state commit is what base-SHA derivation keys on; a driver that invents its own subject moves the base of every later read',
+  },
+]
+
+test('15.3 — the COMMITTING lanes (run, plan) are taught the binding subject grammar', () => {
+  const root = tmpRepo()
+  writePhase(root, 123)
+  const brief = writeBrief(root)
+
+  const lanes = [
+    ['run', 'buildPrompt', lanePrompt(root, ['run', '123'], 'codex-123')],
+    ['plan', 'buildPlanPrompt', lanePrompt(root, ['plan', '124', '--brief', brief], 'codex-plan-124')],
+  ]
+
+  for (const [lane, builder, prompt] of lanes) {
+    for (const { form, re, why } of COMMIT_GRAMMAR) {
+      assert.match(
+        prompt,
+        re,
+        `the ${lane} envelope never names the ${form} subject form (${re}) — ${why}; fix cli/commands/codex.mjs ${builder}`,
+      )
+    }
+    const grammarLine = prompt.split('\n').find((l) => /N\.X:/.test(l))
+    assert.match(
+      grammarLine ?? '',
+      /bind/i,
+      `the ${lane} grammar must carry its REASON — attribution binds on \`phase N —\`, and a rule with no why is the first thing a driver drops when its own habit disagrees; fix cli/commands/codex.mjs ${builder}`,
+    )
+  }
+})
+
+test('15.3 — the READ-ONLY review lane carries no commit grammar, and the run lane does (both directions)', () => {
+  const root = tmpRepo()
+  writePhase(root, 125)
+  writePhase(root, 126)
+
+  const runPrompt = lanePrompt(root, ['run', '125'], 'codex-125')
+  const reviewPrompt = lanePrompt(root, ['review', '126'], 'codex-review-126')
+
+  for (const { form, re } of COMMIT_GRAMMAR) {
+    assert.match(
+      runPrompt,
+      re,
+      `positive control: the run lane commits, so it must carry the ${form} form — without this side, the negative below would pass on a grammar the implementation never ships`,
+    )
+    assert.doesNotMatch(
+      reviewPrompt,
+      re,
+      `the review lane is REPORT-ONLY and never commits: handing it the ${form} subject form briefs it for the one act the lane exists to forbid, and the existing "implementation grammar must not leak into a review" guard is what that costs; fix cli/commands/codex.mjs buildReviewPrompt`,
+    )
+  }
 })
