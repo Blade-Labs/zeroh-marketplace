@@ -88,12 +88,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/gitscan.mjs',
           description:
-            "Export phaseOwnPatterns(phaseNum) returning { ere, test } — ere: ONE extended-regex string usable by `git log -E --grep` and `new RegExp`, alternating the canonical form and the five recorded deviant classes: D1 `phase N task N.X <dash>` (no (k/M) token), D2 scope-carried `\\(phase-N\\)` directly after the type, D3 `mark phase N complete`, D4 dash variants as an ALTERNATION group `(—|–|-)` wherever the boundary dash appears — never a bracket expression (a multibyte char inside a POSIX bracket is locale-dependent under git's regcomp; alternating literal byte sequences is safe in any locale), D5 `phase N N.X <dash>`; every `phase N` occurrence is digit-bounded (`phase N[^0-9]`) so 21 never matches 214; test(subject) = anchored RegExp evaluation of the same ere → verify: bash -c \"grep -qF 'export function phaseOwnPatterns' plugins/zeroh-roadmap/cli/lib/gitscan.mjs\"",
+            "Export phaseOwnPatterns(phaseNum) returning { ere, test } — ere: ONE extended-regex string usable by `git log -E --grep` and `new RegExp`, alternating the canonical form and the five recorded deviant classes: D1 `phase N task N.X <dash>` (no (k/M) token), D2 scope-carried `\\(phase-N\\)` directly after the type, D3 `mark phase N complete`, D4 dash variants as an ALTERNATION group `(—|–|-)` wherever the boundary dash appears — never a bracket expression (a multibyte char inside a POSIX bracket is locale-dependent under git's regcomp; alternating literal byte sequences is safe in any locale), D5 `phase N N.X <dash>`; every `phase N` occurrence is digit-bounded by the class's own mandatory NEXT literal (dash, `)`, ` task`, ` complete` — architect note N3: a bare `[^0-9]` cannot match at end-of-subject, so bound with the following literal each class already requires, and keep one end-of-string boundary row in the table tests) so 21 never matches 214; test(subject) = anchored RegExp evaluation of the same ere → verify: bash -c \"grep -qF 'export function phaseOwnPatterns' plugins/zeroh-roadmap/cli/lib/gitscan.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/gitscan.test.mjs',
           description:
-            'Table-driven tests from the RECORDED incident subjects verbatim (mudarabah2 `feat(catalog): phase 715 task 715.2 — …`, `fix(phase-718): quality pass`, `docs(roadmap): mark phase 718 complete`; atlas ASCII-hyphen form; the 1696 `phase N N.X —` form) — each matches its own phase number; the boundary set (phase 21 vs 214, prose mid-sentence mention, a SIBLING phase\'s canonical subject) each does NOT match → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'phaseOwnPatterns\' cli/lib/gitscan.test.mjs && node --test cli/lib/gitscan.test.mjs >/dev/null 2>&1"',
+            'Table-driven tests from the RECORDED incident subjects verbatim (mudarabah2 `feat(catalog): phase 715 task 715.2 — …`, `fix(phase-718): quality pass`, `docs(roadmap): mark phase 718 complete`; atlas ASCII-hyphen form; the 1696 `phase N N.X —` form) — each matches its own phase number; the boundary set (phase 21 vs 214, prose mid-sentence mention, a SIBLING phase\'s canonical subject) each does NOT match → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'phaseOwnPatterns\' cli/lib/gitscan.test.mjs && capbuild node --test cli/lib/gitscan.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -123,7 +123,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/gitscan.test.mjs',
           description:
-            'Range-derivation test over a real tmp history interleaving D1/D2 subjects with a sibling phase: the derived base and the phase-own file set include the deviant commits\' files and exclude the sibling\'s AND a foreign commit whose body (not subject) quotes a deviant form (state coverage: derivation re-run after ANOTHER phase\'s commits land on top yields the same base) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'derivePhaseStartSha\' cli/lib/gitscan.test.mjs && node --test cli/lib/gitscan.test.mjs cli/commands/gate.test.mjs >/dev/null 2>&1"',
+            'Range-derivation test over a real tmp history interleaving D1/D2 subjects with a sibling phase: the derived base and the phase-own file set include the deviant commits\' files and exclude the sibling\'s AND a foreign commit whose body (not subject) quotes a deviant form (state coverage: derivation re-run after ANOTHER phase\'s commits land on top yields the same base) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'derivePhaseStartSha\' cli/lib/gitscan.test.mjs && capbuild node --test cli/lib/gitscan.test.mjs cli/commands/gate.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -155,12 +155,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/gate.mjs',
           description:
-            'deviantGrammarFindings: one WARN class per D1-D5 (D5 keeps its existing text), each naming the observed subject, its class, and the canonical form — tolerated is not silent (arc honesty rail 3) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'fix(phase-\' cli/commands/gate.test.mjs && node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
+            'deviantGrammarFindings: one WARN class per D1-D5 (D5 keeps its existing text), each naming the observed subject, its class, and the canonical form — tolerated is not silent (arc honesty rail 3) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'fix(phase-\' cli/commands/gate.test.mjs && capbuild node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/curate.test.mjs',
           description:
-            'Curation-range tests from the recorded incident subjects: a range interleaving all five deviant classes for phase N plus canonical commits derives ok:true with zero foreign; the same range plus ONE sibling-phase subject refuses naming exactly that commit (both directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'mark phase\' cli/lib/curate.test.mjs && node --test cli/lib/curate.test.mjs >/dev/null 2>&1"',
+            'Curation-range tests from the recorded incident subjects: a range interleaving all five deviant classes for phase N plus canonical commits derives ok:true with zero foreign; the same range plus ONE sibling-phase subject refuses naming exactly that commit (both directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'mark phase\' cli/lib/curate.test.mjs && capbuild node --test cli/lib/curate.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
