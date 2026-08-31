@@ -1186,6 +1186,66 @@ test('disposeWorktree: a dir that is already gone reports alreadyDisposed, prune
   )
 })
 
+test('disposeWorktree: an already-gone lane still deletes its merged branch — the tree beating us there is not amnesty for the ref', async () => {
+  // The recorded residue (marketplace phase 6, live specimens in atlas): a hand-removed lane makes
+  // `arc land` take the prune ride-along, which archives the journal and returns branchDeleted:false
+  // WITHOUT ever asking whether the branch merged. The tree is gone either way; the only thing the
+  // disappearance changes is which checkout can answer the question — not the answer.
+  const { r, dir, branch, seed, shas } = laneFixture({
+    commits: [{ subject: 'feat(cli): phase 14 — landed work whose lane was hand-removed', rel: 'cli/lib/handrm.txt' }],
+  })
+  mergeIntoBase(r, shas[0])
+  assert.equal(r.git('rev-parse', `refs/heads/${BASE}`), shas[0], 'fixture: the lane work IS on the integration branch — this is the post-land moment')
+  rmSync(dir, { recursive: true, force: true })
+  assert.ok(r.worktrees().includes(dir), 'fixture: git still lists the vanished worktree until something prunes it')
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assert.equal(out.disposed, true, `a vanished tree is still a successful disposal; got ${JSON.stringify(out)}`)
+  assert.equal(out.alreadyDisposed, true, 'and it says the removal was not ours to do')
+  assert.equal(
+    out.branchDeleted,
+    true,
+    'a FULLY MERGED lane branch is deleted on the ride-along too — short-circuiting before the merged-ness question strands codex/<ids> forever, and no sweep verb exists to come back for it',
+  )
+  assert.equal(
+    gitIn(r.root, 'branch', '--list', branch),
+    '',
+    `and it is deleted for real, not merely reported: \`git branch --list ${branch}\` must come back empty, got ${JSON.stringify(gitIn(r.root, 'branch', '--list', branch))}`,
+  )
+  assert.equal(refResolves(r, `refs/heads/${branch}`), false, 'the ref no longer resolves either')
+  assert.deepEqual(r.worktrees(), [r.root], `the prune ride-along still runs — deleting the branch must not cost the metadata sweep; got ${r.worktrees().join(', ')}`)
+  assert.equal(r.git('rev-parse', `refs/heads/${BASE}`), shas[0], 'the integration ref is untouched — a disposal never rewinds what was landed')
+  assert.equal(r.git('rev-list', '--count', `${seed}..refs/heads/${BASE}`), '1', 'and the landed commit is still reachable from it after its branch died: the handle went, the work stayed')
+})
+
+test('disposeWorktree: an already-gone lane keeps an unmerged branch — the missing tree is not a licence to delete', async () => {
+  // The other direction of the same arm, and the reason it cannot be a blanket `branch -D`: with
+  // the worktree gone, `git branch -d`'s own safety net is the only thing standing between an
+  // unlanded phase and oblivion, and the ride-along runs it from a checkout parked elsewhere.
+  const { r, dir, branch, shas } = laneFixture({
+    commits: [{ subject: 'feat(cli): phase 14 — work that never reached develop', rel: 'cli/lib/unlanded14.txt' }],
+  })
+  assert.equal(r.git('rev-list', '--count', `refs/heads/${BASE}..refs/heads/${branch}`), '1', 'fixture: the lane commit is NOT on the integration ref')
+  rmSync(dir, { recursive: true, force: true })
+  assert.ok(r.worktrees().includes(dir), 'fixture: git still lists the vanished worktree until something prunes it')
+
+  const out = await disposeWorktree(r.root, dir, { branch })
+
+  assert.equal(out.disposed, true, `the tree is gone, so the disposal succeeded; got ${JSON.stringify(out)}`)
+  assert.equal(out.alreadyDisposed, true, 'and it was already gone when we got there')
+  assert.equal(
+    out.branchDeleted,
+    false,
+    'an UNMERGED branch is never deleted — on a lane whose directory has already been rm’d, that branch is the last copy of the work, and deleting it is the same loss the whole rail exists to prevent',
+  )
+  assert.equal(refResolves(r, `refs/heads/${branch}`), true, 'so the branch still resolves')
+  assert.equal(r.git('rev-parse', `refs/heads/${branch}`), shas[0], 'pointing at exactly the commit it carried — an over-eager delete plus a recreate would not satisfy this')
+  assert.match(gitIn(r.root, 'branch', '--list', branch), new RegExp(`(^|\\s)${branch}$`), `and \`git branch --list\` still lists it; got ${JSON.stringify(gitIn(r.root, 'branch', '--list', branch))}`)
+  assert.deepEqual(r.worktrees(), [r.root], `the metadata is pruned even when the branch stays; got ${r.worktrees().join(', ')}`)
+  assert.equal(r.git('rev-list', '--count', `refs/heads/${BASE}..refs/heads/${branch}`), '1', 'and the integration ref did not quietly acquire the work to justify a delete')
+})
+
 test('disposeWorktree: every git call anchors at repoRoot — the caller disposes the worktree it is standing in', async () => {
   // The METERTENANT rule in rm form: phase land runs INSIDE the lane it disposes. A git anchored
   // at `dir` cannot delete the branch (it is checked out until the worktree goes) nor prune

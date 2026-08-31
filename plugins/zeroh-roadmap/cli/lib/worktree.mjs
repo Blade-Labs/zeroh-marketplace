@@ -366,6 +366,36 @@ const RECOVERY =
   + 'delete it, and land again. To dispose this one worktree by hand: `git worktree remove <dir>` from the primary checkout.'
 
 /**
+ * Delete a lane branch iff it is fully merged into `integrationRef`, reporting honestly.
+ *
+ * The already-gone arm's half of the branch question. Merged-ness is measured against
+ * integrationRef rather than HEAD for the same reason the normal path measures it there (a parked
+ * primary would refuse to delete a branch fully merged into develop), and a merged branch that
+ * will NOT delete — a held ref lock, another worktree still holding it — is NAMED rather than
+ * swallowed into a bare `false`, because the caller prints "disposed the lane" over this.
+ *
+ * It sits beside disposeWorktree rather than inside it because the normal path's copy of this
+ * decision is byte-frozen by task 14.1's acceptance criteria (it must ask `merged` BEFORE the
+ * removal, where this arm has no removal to order against) — so this is the second CALLER of one
+ * rule, deliberately not a refactor of the first.
+ *
+ * @param {(root: string, args: string[]) => {ok: boolean, out: string}} quiet  the caller's
+ *        repoRoot-anchored git runner (stderr piped — a refusal that did not happen is not output).
+ * @returns {{ branchDeleted: boolean, detail: string|null }}
+ */
+function deleteIfMerged(quiet, repoRoot, dir, branch, integrationRef) {
+  if (!branch) return { branchDeleted: false, detail: null }
+  if (!quiet(repoRoot, ['merge-base', '--is-ancestor', branch, integrationRef]).ok) {
+    return { branchDeleted: false, detail: null }
+  }
+  const del = quiet(repoRoot, ['branch', '-D', branch])
+  return {
+    branchDeleted: del.ok,
+    detail: del.ok ? null : `${dir} was already gone, but its merged branch ${branch} could NOT be deleted — ${del.out}`,
+  }
+}
+
+/**
  * The disposal rail: ONE home for "this worktree has reached its done-moment, take it away".
  *
  * Refusal-first by construction. Removing a worktree can destroy exactly two things — the
@@ -431,9 +461,17 @@ export function disposeWorktree(
 
   if (!existsSync(dir)) {
     // The prune ride-along: /tmp died, or a sibling already removed the tree — the REPO
-    // METADATA is still ours to clear, and clearing it is the whole remaining job.
+    // METADATA is still ours to clear. It runs FIRST because a branch is still "checked out"
+    // by the stale worktree entry until the prune drops it, and `branch -D` refuses on that.
     quiet(repoRoot, ['worktree', 'prune'])
-    return { disposed: true, alreadyDisposed: true, reason: null, detail: null, branchDeleted: false }
+    // The tree beating us here is not amnesty for the REF. The two things disposal can destroy
+    // both live in the tree, so a missing tree removes every reason to refuse — while the merged
+    // branch is exactly as strandable as on the normal path, and no sweep verb comes back for it
+    // (the leak this arm used to leave: `arc land` over a hand-removed lane archived the journal
+    // and kept codex/<ids> forever). Same question, same answer as below: merged into
+    // integrationRef → delete and report; unmerged → it stays, because the branch is then the
+    // only named handle on that work.
+    return { disposed: true, alreadyDisposed: true, reason: null, ...deleteIfMerged(quiet, repoRoot, dir, branch, integrationRef) }
   }
 
   // Liveness first: a running lane's tree is in flux, so every later read would race it.

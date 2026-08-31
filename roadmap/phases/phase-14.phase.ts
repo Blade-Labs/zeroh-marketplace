@@ -103,7 +103,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/lib/worktree.mjs', 'plugins/zeroh-roadmap/cli/lib/worktree.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-08-31',
+      transparencyReport: {
+        whatWasDone:
+          "disposeWorktree's already-gone arm now asks the SAME merged-ness question the normal path asks: after the prune ride-along (which must run first — a stale worktree entry still holds the branch checked out, so `branch -D` would refuse), a given branch that is an ancestor of integrationRef is deleted and reported; an unmerged branch stays, because it is then the only named handle on that work. The delete lives in a new module-level helper deleteIfMerged(quiet, repoRoot, dir, branch, integrationRef) → { branchDeleted, detail }, which also NAMES a merged branch that would not delete (a held ref lock) rather than swallowing it into a bare false.",
+        how:
+          "TDD: test-engineer wrote the two cases blind to the implementation and confirmed the RED — (a) 'already-gone lane still deletes its merged branch' failed on `branchDeleted false !== true` with the branch still resolving; (b) 'keeps an unmerged branch' was GREEN at HEAD by construction (it is the over-deletion guard, not a red-first case). Implementation then took the suite to 32/32 via capbuild node --test cli/lib/worktree.test.mjs. Both new cases also pin disposed/alreadyDisposed true and the metadata prune, so a fix that buys the branch delete by dropping the ride-along fails.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "deleteIfMerged is NOT shared with the normal path's branch-delete block: acceptance criterion 2 freezes everything below the liveness check byte-for-byte, and the normal path must ask `merged` BEFORE its removal (there is no removal to order against here). So one rule has two callers by deliberate plan ruling, not by oversight — the normal path's copy carries its own worktree-context wording.",
+      },
     },
     {
       id: '14.2',
