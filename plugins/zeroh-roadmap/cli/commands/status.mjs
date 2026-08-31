@@ -5,9 +5,10 @@
  * than reimplementing it). The human output stays BYTE-COMPATIBLE with the old script
  * so the status-parity test can diff them; --json is a new, additive machine shape.
  *
- * One ADDITIVE divergence from the legacy oracle: the post-merge-watch RED banner
- * (postMergeRedLine) — absent whenever the marker is absent/green/running, so the
- * parity estates (never a git repo with a red marker) still diff byte-identical.
+ * Two ADDITIVE divergences from the legacy oracle, both absent whenever their condition is, so
+ * the parity estates still diff byte-identical: the post-merge-watch RED banner (postMergeRedLine
+ * — the parity estates are never a git repo with a red marker) and the stray-lane count line
+ * (surveyLanes — the parity estates carry no lane worktrees).
  *
  * The shared substrate does the reading: phasescan.scanProgress (the progress fold),
  * beacon.lastEvent WITHOUT a worktree (main-registry-only, matching legacy beaconOf
@@ -21,6 +22,7 @@ import { scanProgress, scanPhaseFile } from '../lib/phasescan.mjs'
 import { arcProgress } from '../lib/derive.mjs'
 import { lastEvent, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN, WORK_EVENTS } from '../lib/beacon.mjs'
 import { staleArms } from '../lib/executor-arm.mjs'
+import { surveyLanes } from '../lib/worktree.mjs'
 
 const git = (args, cwd) => {
   try {
@@ -228,7 +230,24 @@ function derive(root) {
   // 7) The async post-merge sweep marker (read-only; null in the common case)
   const postMergeRed = postMergeRedLine(root)
 
-  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed }
+  // 8) Stray lane worktrees — the count only, from the ONE classifier (surveyLanes). status is
+  // the command every protocol entry already runs, so it is the automatic surfacing seam for the
+  // accumulation the 2026-08-31 census found; the per-lane class and remedy stay with `roadmap
+  // audit` check 15, which this line points at rather than restating. The pre-existing porcelain
+  // parse at (1) is sidecar correlation and predates the seam — this appends, it does not fork it.
+  // ZERO is silence, not a zero: the human table is parity-pinned byte-compatible with the legacy
+  // scripts/arc-status.mjs, so a lanes-free estate must see no output change at all (the
+  // postMergeRedLine precedent — the additive divergence is absent whenever the condition is).
+  let strayLanes = 0
+  if (existsSync(join(repo, '.git'))) {
+    try {
+      strayLanes = surveyLanes(repo).filter((l) => l.class !== 'live').length
+    } catch {
+      strayLanes = 0 // advisory, exactly like the marker above: status never fails on a survey
+    }
+  }
+
+  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes }
 }
 
 function printHuman(m) {
@@ -242,6 +261,7 @@ function printHuman(m) {
     out.push(`  ${''.padEnd(12)} activity: ${r.age}${r.note ? ` · ${r.note}` : ''}`)
   }
   if (m.noArcId.length) out.push(`\n  ⚠ in-progress phase(s) with NO arcId: ${m.noArcId.join(', ')}`)
+  if (m.strayLanes > 0) out.push(`\n  strays: ${m.strayLanes} lane worktree(s) past their done-moment — run \`roadmap audit\` for each remedy`)
   out.push(`\nOther worktrees on disk (context — may be unrelated to arcs):`)
   for (const { path, branch } of m.otherWorktrees) out.push(`  ${path} @ ${branch}`)
   out.push(`\nDecisions (priorities, release gates): roadmap/backlog.ts header board.`)
@@ -278,7 +298,17 @@ export default async function run(argv) {
     }
     process.stdout.write(
       JSON.stringify(
-        { derivedAt: model.derivedAt, repo: model.repo, rows: model.rows, otherWorktrees: model.otherWorktrees, warnings, capacity },
+        {
+          derivedAt: model.derivedAt,
+          repo: model.repo,
+          rows: model.rows,
+          otherWorktrees: model.otherWorktrees,
+          warnings,
+          capacity,
+          // Present only when there ARE strays: an always-present 0 would read as a measurement
+          // taken in a consumer where the survey never ran (no git, a failed enumeration).
+          ...(model.strayLanes > 0 ? { strayLanes: model.strayLanes } : {}),
+        },
         null,
         2,
       ) + '\n',

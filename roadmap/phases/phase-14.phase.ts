@@ -217,7 +217,19 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['14.2'],
       interfaces: { consumes: ['surveyLanes(root) from 14.2'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-08-31',
+      transparencyReport: {
+        whatWasDone:
+          "derive() gained step 8: the count of surveyLanes(repo) rows whose class is not `live`. printHuman prints one line after the lane table — `strays: <n> lane worktree(s) past their done-moment — run `roadmap audit` for each remedy` — and the --json object carries strayLanes: <n>. At zero BOTH are absent: the line is not printed and the key is omitted, never a 0. The module docblock now names two additive divergences from the legacy oracle instead of one. The per-lane class and remedy stay with audit check 15, which this line points at rather than restating; status.mjs's pre-existing porcelain parse (sidecar correlation, step 1) is untouched — this appends to the seam, it does not fork it.",
+        how:
+          "TDD: test-engineer wrote 6 cases (15-20) over real git estates with real lane worktrees at the launcher's sibling path shape and real detached process groups; 4 were RED (`0 !== 1`, `undefined !== 2`, `undefined !== 1` twice) and 2 were the zero-direction guards that cannot be red before the line exists. Every absence assertion runs against stdout AND stderr combined (the phase-11 lesson the plan names). Suites after the implementation: status 19/19, status.parity 2/2, both exit 0. Live smoke on this repo: the human line reads `strays: 1` and --json carries strayLanes: 1, matching audit check 15's one real finding.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "The test-engineer added a sixth case beyond the plan's two fixtures (20: a live lane BESIDE a stale one → strayLanes 1), because cases 15/18/19 are all satisfied by a naive `surveyLanes(repo).length` that never filters `live`. The plan's files[] already lists status.test.mjs, so this is extra coverage inside the task's own diff, not an added file.",
+      },
     },
     {
       id: '14.5',
