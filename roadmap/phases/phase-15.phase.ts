@@ -40,6 +40,7 @@ export default definePhase({
   keyFiles: [
     'plugins/zeroh-roadmap/cli/commands/codex.mjs',
     'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
+    'plugins/zeroh-roadmap/cli/commands/worktree.mjs',
     'plugins/zeroh-roadmap/cli/lib/drivers.mjs',
   ],
   stakeholderDemo:
@@ -105,7 +106,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
           description:
-            "In ensureWorktree with install:true: BEFORE `git worktree add`, probe detectInstaller on the primary root (and root/web when web/package.json exists); any null → stderr refusal naming the dir, both supported lockfiles, and that nothing was created; return 1. After creation, per package dir spawn the detected recipe (capbuild-wrapped exactly as today when capbuild resolves). The refusal costs no worktree, no branch, no journal (launch() runs after ensureWorktree) → verify: bash -c \"grep -qF 'detectInstaller' plugins/zeroh-roadmap/cli/commands/codex.mjs && ! grep -qF \\\"spawnSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: dir\\\" plugins/zeroh-roadmap/cli/commands/codex.mjs\"",
+            "In ensureWorktree with install:true: BEFORE `git worktree add`, probe detectInstaller on the primary root (and root/web when web/package.json exists); any null → stderr refusal naming the dir, both supported lockfiles, and that nothing was created; return 1. After creation, per package dir RE-RUN detectInstaller against the WORKTREE dir and spawn its recipe (capbuild-wrapped exactly as today when capbuild resolves) — the created tree is the truth, and a null there (base ref differing from the primary checkout) still refuses loudly, never falls back to a guessed manager. Retire the now-stale `npm ci` prose mentions in codex.mjs (module docblock, ensureWorktree/review-lane/planCodex comments) to manager-neutral wording. The refusal costs no worktree, no branch, no journal (launch() runs after ensureWorktree) → verify: bash -c \"grep -qF 'detectInstaller' plugins/zeroh-roadmap/cli/commands/codex.mjs && ! grep -qF \\\"spawnSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: dir\\\" plugins/zeroh-roadmap/cli/commands/codex.mjs\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/worktree.mjs',
+          description:
+            "Blast radius (singleSeam 3: no per-call-site install logic): installDeps() here is the SECOND hardcoded npm-ci site — self-described 'the codex-lane install pattern' (worktree.mjs:30) — and provisions the very slots `codex run --worktree` reuses, so a pnpm consumer's `worktree up` hits the identical doomed npm ci. Import detectInstaller from codex.mjs, key each subdir's recipe on it (npm recipe byte-identical to today), refuse null with the same both-lockfiles message (a thrown Error — the execFileSync throw posture this function already has); export installDeps and pin the refusal + both recipes at unit level in cli/commands/worktree.test.mjs → verify: bash -c \"grep -qF 'detectInstaller' plugins/zeroh-roadmap/cli/commands/worktree.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
@@ -116,8 +122,14 @@ export default definePhase({
       acceptanceCriteria: [
         'A lockfile-less consumer refuses before any worktree/branch/journal exists (asserted on all three); a pnpm consumer spawns pnpm install --frozen-lockfile (shim-recorded argv asserted); an npm consumer keeps byte-identical npm ci argv',
         'The nested web/ package dir takes its OWN detected manager (state coverage: mixed-manager fixture)',
+        'The worktree-up provisioner (commands/worktree.mjs installDeps) keys on the same detector with the same refusal — no second call-site install decision survives (singleSeam 3)',
       ],
-      files: ['plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
+      files: [
+        'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+        'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
+        'plugins/zeroh-roadmap/cli/commands/worktree.mjs',
+        'plugins/zeroh-roadmap/cli/commands/worktree.test.mjs',
+      ],
       testMode: 'tdd',
       dependsOn: ['15.1'],
       interfaces: { consumes: ['detectInstaller(dir) from 15.1'], produces: [] },
@@ -137,7 +149,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'The existing prompt-content tests gain assertions: all three built prompts contain the absolute bin/roadmap.mjs path; run and plan prompts contain `phase N —` grammar text; review prompt does NOT carry the grammar line (it never commits) → verify: bash -c "cd plugins/zeroh-roadmap && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'The existing prompt-content tests gain assertions: all three built prompts contain the absolute bin/roadmap.mjs path; run and plan prompts contain `phase N —` grammar text; review prompt does NOT carry the grammar line (it never commits) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'absent from PATH\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -201,5 +213,6 @@ export default definePhase({
     'reviewScope full (launch-path changes in a lane that creates git state). ' +
     'Cross-phase dependency: 15.4 extends archivePlanLane from 14.6 (phase dependsOn [14]); interfaces consumed are grep-checked by the executor per contract. ' +
     'drivers.mjs is in keyFiles for the ratchet only: drivers.test.mjs fails on model-specific argv outside the registry — 15.2 must keep install argv OUT of the registry (an installer is toolchain, not a model launch; decision recorded here so the executor does not "fix" the ratchet). ' +
-    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — detectInstaller 0 hits, `phase validate` 0 hits in codex.mjs, \'absent from PATH\' 0 hits, \'plan-arc\' 0 hits (each step-verify red for exactly the symbol/text its diff adds); the 15.2 negative grep (npm-ci literal removed) dry-run: the pattern anchors on the exact current spawn line including `{ cwd: dir` which no task re-writes — self-collision checked against all task texts (the 15.1 recipe line writes args only, not the spawn call); assumption probes all exit 0 including the live plan --arc traceback observation; runner clauses inherit polarity from their grep representatives.',
+    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — detectInstaller 0 hits (codex.mjs AND commands/worktree.mjs), `phase validate` 0 hits in codex.mjs, \'absent from PATH\' 0 hits (codex.mjs AND codex.test.mjs), \'plan-arc\' 0 hits (each step-verify red for exactly the symbol/text its diff adds); the 15.2 negative grep (npm-ci literal removed) dry-run: the pattern anchors on the exact current spawn line including `{ cwd: dir` which no task re-writes — self-collision checked against all task texts (the 15.1 recipe line writes args only, not the spawn call); assumption probes all exit 0 including the live plan --arc traceback observation; runner clauses inherit polarity from their grep representatives. ' +
+    'review-phase Mode A 2026-08-31 [FIXED]: blast-radius addition — commands/worktree.mjs installDeps() is the second hardcoded npm-ci site (it provisions the slots `codex run --worktree` reuses), now consumed into 15.2 as its own step per singleSeam 3; 15.3 test-step verify gained the red-now \'absent from PATH\' grep anchor (was runner-only, no achievable red); 15.2 step 1 made explicit that post-creation install RE-detects per worktree dir (primary-root probe is only the cheap pre-state refusal) and that the stale npm-ci prose mentions in codex.mjs are retired.',
 })
