@@ -55,6 +55,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
+import { integrationRefOf, loadConfig } from '../lib/config.mjs'
 import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
 import { disposeWorktree, groupAlive, isSlotDir } from '../lib/worktree.mjs'
 import {
@@ -550,6 +551,167 @@ function archiveReviewLane(root, jPath, journal, reportPath) {
 }
 
 /**
+ * The plan lane's done-moment, executed.
+ *
+ * The plan lane had no close at all. Its ONE output — roadmap/phases/phase-<N>.phase.ts — is
+ * cherry-picked to the primary by the supervising session, and the worktree plus its
+ * `codex-plan/<ids>` branch then squat forever (atlas-codex-plan-22 outlived its plan by weeks).
+ * The review lane's ratified pattern is the arc-LOCKED design to mirror: consume the hand-off on a
+ * status READ, archive it, dispose the lane. Order is the same safety — COPY the plan out FIRST,
+ * then remove, so a refusal never leaves an operator standing in a worktree whose plan is gone.
+ *
+ * What cannot be mirrored is disposeWorktree. Its orphan check is SHA-REACHABILITY, and a harvest
+ * is a cherry-pick: the landed commit carries the same bytes under a different sha, so the rail
+ * would read every legitimately harvested lane as committed-nowhere-else and refuse it forever.
+ * Harvest is CONTENT-carried, and the plan lane's ONE-FILE invariant (the plan envelope's "ONE FILE
+ * MAY CHANGE") is what makes a content proof TOTAL — one file, one blob, one question. Guards
+ * (a)-(d) below re-provide the liveness and dirt safety the rail would have given, at equal
+ * strictness; weakening disposeWorktree with an override flag was considered and rejected, because
+ * it would soften that rail for every other caller.
+ *
+ * THE HARVEST PROOF HAS TWO ARMS (architect amendment A2). Strict byte-equality at the integration
+ * tip alone would refuse the NORMAL flow: a Mode A repair routinely edits the harvested phase file
+ * again on the integration ref. So the lane counts as harvested when its committed blob either IS
+ * the blob at `<integrationRef>:<phaseFile>`, or appears anywhere in that path's committed history
+ * there. Both arms read `git rev-parse <ref>:<path>` — committed objects on both sides, never a
+ * working-tree file. A never-harvested lane, and a re-plan of the same number, put that blob in
+ * neither place.
+ *
+ * Every refusal KEEPS the lane, names its reason, and names what to do about it. Refusing is never
+ * an error: the caller's own act — the status read — already succeeded.
+ *
+ * The journal keeps its LIVE name and is stamped in place, exactly as archiveReviewLane does:
+ * renaming it to .closed.json would drop it out of findJournal and the very next read would regress
+ * to "no journal covers".
+ */
+function archivePlanLane(root, jPath, journal, reportPath) {
+  const wt = journal.worktree
+  const ids = (journal.phases ?? []).map(String)
+  const branch = `codex-plan/${ids.join('-')}`
+  const base = journal.base ?? 'develop'
+  const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
+  // stderr, never stdout: stdout is the parsed stream every poll loop reads.
+  const keep = (reason) => {
+    process.stderr.write(`roadmap codex: the plan lane at ${wt} was KEPT — ${reason}\n`)
+    return { journal, archived: null }
+  }
+  const q = (dir, args) => {
+    // cwd root, always (the landing.mjs METERTENANT rule): this function removes the very tree a
+    // caller may be standing in, and a spawn inheriting a deleted cwd fails ENOENT before git ever
+    // parses argv. Only the pre-removal INSPECTION addresses the worktree, because it is the thing
+    // being judged.
+    const r = spawnSync('git', ['-C', dir, ...args], { cwd: root, encoding: 'utf8' })
+    return { ok: r.status === 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` }
+  }
+
+  // (a) LIVENESS. `state === 'complete'` with a live group is reachable — a driver writes its
+  // sentinel before its process group exits, and the poll reads status in between.
+  if (journal.pgid && groupAlive(journal.pgid)) {
+    return keep(`its process group (pgid ${journal.pgid}) is still LIVE. Wait for it to exit, then read this status again; in-flight work is never disposed`)
+  }
+  // The slot refusal every disposal site carries: `codex plan --worktree <root>-wt-3` journals a
+  // SLOT, and removing one takes its node_modules with it while the registry keeps a live claim on
+  // a deleted path. Slot retirement is a held human act.
+  if (isSlotDir(root, wt)) {
+    return keep(`${wt} is a session SLOT, not a plan lane. Retire it by hand if it is really spent: roadmap worktree status`)
+  }
+
+  // (b) DIRT. Everything a plan lane legitimately leaves untracked is named: its own CODEX-PLAN.md
+  // (never committed, by contract) and the .building/ the launcher carried in. Anything else — and
+  // any MODIFIED TRACKED file — is unexplained work, and removing the tree destroys its only copy.
+  const st = q(wt, ['status', '--porcelain', '-uall'])
+  if (!st.ok) return keep(`its working state could not be read, so it cannot be shown to be spent — ${st.out.trim()}`)
+  const artifacts = new Set([LANES.plan.report, prevReportName(LANES.plan.report)])
+  const blocking = []
+  for (const line of st.out.split('\n').filter(Boolean)) {
+    const code = line.slice(0, 2)
+    const path = line.slice(3).trim().replace(/^"|"$/g, '')
+    if (code !== '??') {
+      blocking.push(`${code.trim()} ${path} (modified TRACKED file)`)
+      continue
+    }
+    if (path === '.building/' || path.startsWith('.building/')) continue
+    if (artifacts.has(path)) continue
+    blocking.push(`?? ${path} (untracked, not a named lane artifact)`)
+  }
+  if (blocking.length > 0) {
+    return keep(`it is DIRTY beyond its own lane artifacts — commit, move or delete this first:\n  ${blocking.join('\n  ')}`)
+  }
+
+  // (c) THE ONE-FILE INVARIANT. THREE dots: `base` is a moving ref the harvest itself advances, so a
+  // two-dot tree diff would report every sibling landing as a change this lane made and refuse
+  // every harvested plan. The merge-base diff asks only what the LANE did.
+  const diff = q(wt, ['diff', '--name-only', `${base}...HEAD`])
+  if (!diff.ok) return keep(`its diff against ${base} could not be read, so the one-file invariant cannot be checked — ${diff.out.trim()}`)
+  const changed = diff.out.split('\n').map((s) => s.trim()).filter(Boolean)
+  if (changed.length !== 1 || changed[0] !== phaseFile) {
+    return keep(
+      `it breaches the plan lane's ONE-FILE invariant: ${base}...HEAD changed ${changed.length} file(s) — ${changed.join(', ') || '(none)'} — where exactly ${phaseFile} was allowed. `
+        + 'The harvest proof covers that one path, so anything else would ride out of the lane unproven; inspect the branch and land or drop the extra work by hand',
+    )
+  }
+
+  // (d) THE HARVEST, proven off committed blob ids on both sides.
+  const laneBlob = q(wt, ['rev-parse', `HEAD:${phaseFile}`])
+  if (!laneBlob.ok) return keep(`${phaseFile} is not committed at this lane's HEAD, so there is nothing to prove harvested — ${laneBlob.out.trim()}`)
+  const lb = laneBlob.out.trim()
+  // The configured integration ref is the plan's ruling; an UNCONFIGURED consumer falls back to the
+  // ref this lane was branched from, which is the launcher's own recorded answer to the same
+  // question — never a bare literal, and never a throw: `codex status` is a read.
+  let integrationRef
+  try {
+    integrationRef = integrationRefOf(loadConfig(root))
+  } catch {
+    integrationRef = base
+  }
+  const atTip = q(root, [ 'rev-parse', `${integrationRef}:${phaseFile}`])
+  let harvested = atTip.ok && atTip.out.trim() === lb
+  if (!harvested) {
+    const history = q(root, ['log', '--format=%H', integrationRef, '--', phaseFile])
+    for (const sha of history.ok ? history.out.split('\n').map((s) => s.trim()).filter(Boolean) : []) {
+      const b = q(root, ['rev-parse', `${sha}:${phaseFile}`])
+      if (b.ok && b.out.trim() === lb) {
+        harvested = true
+        break
+      }
+    }
+  }
+  if (!harvested) {
+    const tip = q(root, ['rev-parse', branch])
+    return keep(
+      `its plan was never HARVESTED: the committed blob of ${phaseFile} at this lane's HEAD is neither at ${integrationRef}:${phaseFile} nor anywhere in that path's history there, `
+        + `so removing the lane would destroy the only copy of the plan. Harvest it first: git -C ${root} cherry-pick ${tip.ok ? tip.out.trim() : branch}`,
+    )
+  }
+
+  // PASS. Copy the plan out BEFORE anything is removed. The relocation is one-shot, keyed on
+  // archivedAt exactly as archiveReviewLane keys it.
+  const archived = jPath.replace(/\.json$/, '-REPORT.md')
+  let stamped = journal
+  if (!journal.archivedAt) {
+    if (existsSync(reportPath)) copyFileSync(reportPath, archived)
+    stamped = { ...journal, archivedAt: new Date().toISOString(), archivedReport: archived }
+    writeFileSync(jPath, JSON.stringify(stamped, null, 2) + '\n')
+  }
+  const removed = q(root, ['worktree', 'remove', '--force', wt])
+  if (!removed.ok) {
+    process.stderr.write(
+      `roadmap codex: the plan is archived at ${archived}, but its worktree ${wt} could NOT be removed — ${removed.out.trim()}\n`
+        + `  No sweep verb will come back for it: finish by hand from ${root} — git worktree remove --force ${wt} && git branch -D ${branch} && git worktree prune\n`,
+    )
+    return { journal: stamped, archived }
+  }
+  // A branch that will not delete is a leak the caller would otherwise print "consumed" over.
+  const del = q(root, ['branch', '-D', branch])
+  if (!del.ok) {
+    process.stderr.write(`roadmap codex: the plan lane was removed, but its branch ${branch} could NOT be deleted — ${del.out.trim()}\n`)
+  }
+  q(root, ['worktree', 'prune'])
+  process.stderr.write(`roadmap codex: plan lane consumed — plan archived at ${archived}; worktree ${wt}${del.ok ? ` and branch ${branch}` : ''} disposed\n`)
+  return { journal: stamped, archived }
+}
+
+/**
  * The runnable next step for a terminal lane state, or null.
  *
  * A dead or finished lane printed its state and stopped there, so recovery was improvised every
@@ -569,6 +731,10 @@ function nextStepHint(lane, state, journal, reportPath) {
   const ids = (journal.phases ?? []).map(String)
   const wt = journal.worktree
   if (lane === 'plan' && state === 'complete') {
+    // Only while the lane is still standing. A CONSUMED plan lane (this read closed it, or an
+    // earlier one did) has no next step, and naming its own consume read would send an operator to
+    // a done-moment that has already fired.
+    if (!wt || !existsSync(wt)) return null
     return `roadmap codex status ${ids.join(' ')} --plan — the plan lane's done-moment: harvest the phase file to the primary checkout, then this read closes the lane`
   }
   if (lane !== 'run' || ids.length === 0) return null
@@ -661,6 +827,13 @@ function statusCodex(root, ids, lane = 'run') {
     const done = archiveReviewLane(root, jPath, j, reportPath)
     journal = done.journal
     reported = existsSync(reportPath) ? reportPath : done.archived
+  }
+  // THE PLAN LANE'S DONE-MOMENT, keyed the same way — on the VERDICT, never on the file, so a stale
+  // sentinel the freshness guard just rejected can never close a lane from behind.
+  if (lane === 'plan' && state === 'complete' && (!j.archivedAt || existsSync(j.worktree))) {
+    const done = archivePlanLane(root, jPath, j, reportPath)
+    journal = done.journal
+    if (done.archived) reported = existsSync(reportPath) ? reportPath : done.archived
   }
   // The journal spreads FIRST: `j.report` is the bare report NAME, so spreading it last would
   // overwrite both the path status resolved and the `null` that marks a stale report.

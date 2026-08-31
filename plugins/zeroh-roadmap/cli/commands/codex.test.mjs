@@ -2091,3 +2091,365 @@ test('next-step hint: STDOUT stays byte-compatible — the same object, the same
     `stdout must be EXACTLY the JSON object status has always printed — any extra byte on this stream is a parse failure in someone else's poll loop; got: ${JSON.stringify(stdout)}`,
   )
 })
+
+// ── consume-the-plan: the plan lane's done-moment ──────────────────────────────────────────────
+// The plan lane had no close. Its one output — roadmap/phases/phase-<N>.phase.ts — is cherry-picked
+// to the primary by the supervising session, and the worktree plus its `codex-plan/<ids>` branch
+// then squat forever (atlas-codex-plan-22 outlived its plan by weeks). The review lane's ratified
+// pattern is the arc-LOCKED design to mirror: consume the verdict on a status READ, archive it, and
+// dispose the lane. What cannot be mirrored is disposeWorktree's reachability question — a
+// cherry-pick rewrites the sha, so a landed plan looks exactly as unpushed as an abandoned one.
+// Harvest is therefore CONTENT-carried, proven off committed BLOB IDS on both sides, and the lane's
+// ONE-FILE invariant is what makes such a proof total: one file, one blob, one question.
+//
+// Two arms, because strict byte-equality alone would refuse the NORMAL flow (architect amendment
+// A2): a Mode A repair routinely edits the harvested phase file again on the integration ref, so
+// the lane's blob must also count as harvested when it appears anywhere in that path's committed
+// history. Everything below drives the REAL git objects — a mkdir stand-in would let a proof that
+// reads working-tree files pass, which is the one implementation this contract forbids.
+
+/**
+ * A REAL plan lane: a `codex-plan/<ids>` branch worktree off `develop`, carrying exactly ONE
+ * committed file (the phase file — that single-file commit IS the one-file invariant), its journal
+ * in the PRIMARY `.building/` with the launcher's own field set, and a fresh CODEX-PLAN.md.
+ *
+ * `develop` is the integration ref (integrationRefOf's documented fallback, no config written) and
+ * is deliberately NOT the branch the primary has checked out, so the harvest below can advance it
+ * the way a supervising session does without touching the primary's HEAD.
+ */
+function planLane(root, ids, { body = null, startedAt = new Date(Date.now() - 60_000).toISOString(), pgid = 999999999 } = {}) {
+  const at = (dir) => (...args) =>
+    execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' })
+  const git = at(root)
+  writeFileSync(join(root, 'seed.txt'), 'seed\n')
+  git('add', 'seed.txt')
+  git('commit', '-q', '-m', 'seed')
+  git('branch', '-f', 'develop')
+
+  const n = ids[0]
+  const phaseFile = `roadmap/phases/phase-${n}.phase.ts`
+  const branch = `codex-plan/${ids.join('-')}`
+  // planCodex's OWN default path shape. Never `${root}-wt-<k>`: that namespace is a session slot,
+  // which no read command may ever remove.
+  const worktree = `${root}-codex-plan-${ids.join('-')}`
+  cleanups.push(() => rmSync(worktree, { recursive: true, force: true }))
+  git('worktree', 'add', '-q', '-b', branch, worktree, 'develop')
+  const lgit = at(worktree)
+  mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
+  writeFileSync(join(worktree, phaseFile), `export default { id: ${n}, tasks: [] }\n`)
+  lgit('add', phaseFile)
+  lgit('commit', '-q', '-m', `plan(${n}): author the phase`)
+  const tip = lgit('rev-parse', 'HEAD').trim()
+
+  const jPath = join(root, '.building', `codex-plan-${ids.join('-')}.json`)
+  writeFileSync(
+    jPath,
+    JSON.stringify(
+      {
+        phases: ids.map(String),
+        lane: 'plan',
+        driver: { model: DRIVERS.codex.model, lane: 'codex' },
+        report: 'CODEX-PLAN.md',
+        worktree,
+        base: 'develop',
+        pgid,
+        log: join(root, '.building', 'x.log'),
+        prompt: join(root, '.building', `codex-plan-${ids.join('-')}-prompt.txt`),
+        startedAt,
+      },
+      null,
+      2,
+    ) + '\n',
+  )
+  const reportPath = join(worktree, 'CODEX-PLAN.md')
+  // Written AFTER startedAt (60s ago) so the freshness guard reads this sentinel as the verdict.
+  writeFileSync(reportPath, body ?? `authored ${phaseFile} @ ${tip.slice(0, 7)}\nCODEX-RUN-COMPLETE\n`)
+  return { root, ids, git, lgit, worktree, branch, phaseFile, tip, jPath, reportPath, archived: jPath.replace(/\.json$/, '-REPORT.md') }
+}
+
+/**
+ * The harvest, performed the way a supervising session performs it: a REAL `git cherry-pick` onto
+ * `develop`, in its own checkout so the primary's HEAD never moves. The landed commit therefore has
+ * a DIFFERENT sha and the SAME blob — which is the whole point, and why a sha-reachability proof
+ * cannot answer this question. `amend` adds the Mode A repair: a further commit editing the same
+ * phase file at the integration ref, after the harvest.
+ *
+ * `develop` also MOVES here, by an unrelated commit, because that is what an integration ref does
+ * while a lane runs. It is load-bearing twice over: a cherry-pick onto an unmoved develop
+ * reproduces the lane's commit object byte for byte (same tree, same parent, same author) and this
+ * fixture would silently stop testing a sha change at all; and it is the reason the one-file diff
+ * must be a THREE-dot merge-base diff — `git diff --name-only develop HEAD` would report this
+ * unrelated file as a change the lane made, refusing every harvested lane as an invariant breach.
+ */
+function harvest(lane, { commit = lane.tip, amend = null } = {}) {
+  const dir = `${lane.root}-harvest`
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
+  lane.git('worktree', 'add', '-q', dir, 'develop')
+  const hgit = (...args) =>
+    execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' })
+  mkdirSync(join(dir, 'docs'), { recursive: true })
+  writeFileSync(join(dir, 'docs', 'other-work.md'), 'a sibling session landed this while the lane ran\n')
+  hgit('add', 'docs/other-work.md')
+  hgit('commit', '-q', '-m', 'docs: unrelated work on the integration ref')
+  hgit('cherry-pick', commit)
+  const landed = hgit('rev-parse', 'HEAD').trim()
+  if (amend !== null) {
+    writeFileSync(join(dir, lane.phaseFile), amend)
+    hgit('add', lane.phaseFile)
+    hgit('commit', '-q', '-m', `fix(plan): Mode A repair on the harvested phase file`)
+  }
+  lane.git('worktree', 'remove', '--force', dir)
+  return landed
+}
+
+/** The committed blob id of `path` at `ref`, read from `dir` — never the working tree. */
+function blobAt(dir, ref, path) {
+  const r = spawnSync('git', ['-C', dir, 'rev-parse', `${ref}:${path}`], { encoding: 'utf8' })
+  return r.status === 0 ? r.stdout.trim() : null
+}
+
+/** Every blob id this path has ever carried at `ref`, newest first — the second harvest arm. */
+function blobHistoryAt(dir, ref, path) {
+  return execFileSync('git', ['-C', dir, 'log', '--format=%H', ref, '--', path], { encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+    .map((sha) => blobAt(dir, sha, path))
+}
+
+function branchResolves(lane) {
+  return spawnSync('git', ['-C', lane.root, 'rev-parse', '--verify', '--quiet', `refs/heads/${lane.branch}`], { encoding: 'utf8' }).status === 0
+}
+
+/**
+ * "It refused" is half the contract; "it removed NOTHING" is the other half. A refusal that
+ * deleted the tree anyway is strictly worse than no done-moment at all, because the plan commit
+ * then exists nowhere but a dangling branch nobody was told about.
+ */
+function assertPlanLaneKept(lane, why) {
+  assert.ok(existsSync(lane.worktree), `${why}: the worktree must SURVIVE a refusal — ${lane.worktree} was removed`)
+  assert.ok(
+    lane.git('worktree', 'list', '--porcelain').includes(lane.worktree),
+    `${why}: and stay registered — a tree removed from git's metadata is unusable even while its files sit there`,
+  )
+  assert.ok(branchResolves(lane), `${why}: refs/heads/${lane.branch} must still resolve — the branch tip is the ONLY handle on an unharvested plan commit`)
+  assert.equal(lane.lgit('rev-parse', 'HEAD').trim(), lane.tip, `${why}: pointing at the same commit it did before the read`)
+  assert.ok(!existsSync(lane.archived), `${why}: and no archived twin may be written — ${lane.archived} exists, so the lane was treated as consumed`)
+  const j = journalOf(lane)
+  assert.equal(j.archivedAt, undefined, `${why}: the journal must carry no archivedAt — got ${j.archivedAt}`)
+  assert.equal(j.archivedReport, undefined, `${why}: nor an archivedReport — got ${j.archivedReport}`)
+}
+
+test('consume-the-plan: a HARVESTED lane closes on the next status read, and the re-read still serves it', () => {
+  const root = tmpRepo()
+  const lane = planLane(root, [300])
+  const plan = readFileSync(lane.reportPath, 'utf8')
+  const landed = harvest(lane)
+  assertGroupDead(999999999, 'the plan act has finished')
+
+  // The fixture's own claim, asserted rather than assumed: same CONTENT, different COMMIT. A test
+  // whose harvest fast-forwarded develop would pass under a sha-reachability proof and prove nothing.
+  assert.notEqual(landed, lane.tip, 'precondition: a cherry-pick rewrites the sha — this fixture must not be a fast-forward')
+  assert.equal(
+    blobAt(root, 'develop', lane.phaseFile),
+    blobAt(lane.worktree, 'HEAD', lane.phaseFile),
+    'precondition: and leaves the committed BLOB identical on both sides — the only thing that can prove a harvest',
+  )
+  assert.ok(
+    blobAt(root, 'develop', 'docs/other-work.md'),
+    'precondition: develop MOVED while this lane ran, as an integration ref does — so the one-file check must be a THREE-dot merge-base diff; a two-dot `git diff develop HEAD` reports this sibling commit as the lane\'s own second file and refuses a perfectly good lane',
+  )
+
+  const { code, out, err } = laneStatus(root, [300], '--plan')
+
+  assert.equal(out?.state, 'complete', `precondition: the plan lane's verdict is still the verdict; stderr: ${err}`)
+  assert.equal(code, 0, `a consumed plan lane exits 0 — the close is a side effect of a successful read, never a failure; stderr: ${err}`)
+  assert.ok(
+    existsSync(lane.archived),
+    `the plan must be COPIED beside its journal before the worktree goes — expected ${lane.archived} (jPath with .json → -REPORT.md, exactly as archiveReviewLane derives it); fix statusCodex in cli/commands/codex.mjs`,
+  )
+  assert.equal(readFileSync(lane.archived, 'utf8'), plan, 'byte-identical: a summarized or re-rendered copy is a second source of truth for what was planned')
+  assert.ok(!existsSync(lane.worktree), `the harvested lane's done-moment has passed — ${lane.worktree} must be removed, or it squats like atlas-codex-plan-22 did`)
+  assert.ok(
+    !lane.git('worktree', 'list', '--porcelain').includes(lane.worktree),
+    'the disposal must PRUNE the metadata too — a hand-deleted directory leaves its registration haunting `git worktree list`',
+  )
+  assert.ok(
+    !branchResolves(lane),
+    `${lane.branch} must be deleted: its content is on the integration ref under another sha, so the branch is a duplicate that no merge test will ever retire; fix statusCodex in cli/commands/codex.mjs`,
+  )
+
+  const j = journalOf(lane)
+  assert.ok(
+    existsSync(lane.jPath),
+    'the journal keeps its LIVE codex-plan-<ids>.json name — renaming it is how findJournal loses the lane and the very next read regresses to "no journal covers"',
+  )
+  assert.ok(Number.isFinite(Date.parse(j.archivedAt)), `the journal must be STAMPED with an ISO archivedAt — got ${JSON.stringify(j.archivedAt)}`)
+  assert.equal(j.archivedReport, lane.archived, `archivedReport must be the ABSOLUTE relocated path — got ${JSON.stringify(j.archivedReport)}`)
+
+  // THE SECOND READ. The lane is gone; the journal is not. This is the state a supervising session
+  // actually polls, and the one an archival that renamed or deleted the journal would break.
+  const again = laneStatus(root, [300], '--plan')
+  assert.equal(again.code, 0, `an archived plan lane is READABLE FOREVER — a consumed verdict must never decay into a failure exit; stderr: ${again.err}`)
+  assert.equal(again.out?.state, 'complete', `nor into dead-no-report; stderr: ${again.err}`)
+  assert.ok(
+    !/no plan journal covers/.test(again.err),
+    `the journal is sitting right there — claiming none covers the phase sends the reader hunting for a plan that DID happen; got: ${again.err}`,
+  )
+  assert.equal(again.out.report, lane.archived, `and \`report\` must be the ARCHIVED path: the worktree copy no longer exists to open; got ${again.out.report}`)
+  assert.equal(readFileSync(again.out.report, 'utf8'), plan, 'which still holds the plan the lane produced')
+  assert.equal(journalOf(lane).archivedAt, j.archivedAt, 're-stamping an already-archived lane rewrites when the plan was consumed — the one-shot key is archivedAt, as in archiveReviewLane')
+})
+
+test('consume-the-plan: an unharvested lane REFUSES, names the cherry-pick that fixes it, and removes NOTHING', () => {
+  const root = tmpRepo()
+  const lane = planLane(root, [301])
+  assertGroupDead(999999999, 'the plan act has finished — only the harvest is missing')
+  assert.equal(
+    blobAt(root, 'develop', lane.phaseFile),
+    null,
+    `precondition: ${lane.phaseFile} must be absent from develop — an unharvested lane is the whole case`,
+  )
+
+  const { out, err } = laneStatus(root, [301], '--plan')
+
+  assert.equal(out?.state, 'complete', `the verdict is still delivered — a refused CLEANUP is not a refused read; stderr: ${err}`)
+  assert.match(
+    err,
+    /harvest/i,
+    `an unharvested lane must be REFUSED by name: removing it destroys the only copy of the plan commit; got: ${err}`,
+  )
+  assert.ok(
+    err.includes(`git -C ${root} cherry-pick ${lane.tip}`),
+    `and the refusal must carry the runnable recovery — the lane branch tip is about to become unreachable, so \`git -C ${root} cherry-pick ${lane.tip}\` is the only thing standing between the operator and a lost plan; got: ${err}`,
+  )
+  assertPlanLaneKept(lane, 'the plan was never harvested')
+  assert.equal(readFileSync(join(lane.worktree, lane.phaseFile), 'utf8'), `export default { id: 301, tasks: [] }\n`, 'and the authored phase file is still there to harvest')
+})
+
+test('consume-the-plan: a LIVE process group refuses even with the harvest proven, and names the pgid', () => {
+  const root = tmpRepo()
+  // Reachable, not contrived: a driver writes CODEX-RUN-COMPLETE and its process group exits a
+  // moment later, and the poll loop reads status in between. The verdict is real; the lane is not
+  // yet dead. Removing a live driver's worktree out from under it is the one unrecoverable act here.
+  const pgid = liveGroup()
+  const lane = planLane(root, [302], { pgid })
+  harvest(lane)
+  assert.equal(blobAt(root, 'develop', lane.phaseFile), blobAt(lane.worktree, 'HEAD', lane.phaseFile), 'precondition: the harvest IS proven, so liveness is the only guard left to fire')
+
+  const { out, err } = laneStatus(root, [302], '--plan')
+
+  assert.equal(out?.state, 'complete', `the sentinel is fresh, so the verdict stands; stderr: ${err}`)
+  assert.equal(out.alive, true, 'and the liveness this case turns on is REAL, not a recycled pid')
+  assert.match(err, /live/i, `a live lane must be refused, not raced; got: ${err}`)
+  assert.ok(
+    err.includes(String(pgid)),
+    `naming the process group the operator can go look at — a bare "it is live" cannot be checked or waited on; expected pgid ${pgid} in: ${err}`,
+  )
+  assertPlanLaneKept(lane, 'a live plan lane is still running')
+})
+
+test('consume-the-plan: a SECOND changed file breaches the one-file invariant — the refusal names it and keeps the lane', () => {
+  const root = tmpRepo()
+  const lane = planLane(root, [303])
+  // A second COMMITTED file, not an untracked artifact: this is the invariant guard, not the dirt
+  // guard. The harvest of the phase-file commit is real, so nothing else can be refusing here.
+  writeFileSync(join(lane.worktree, 'notes.md'), 'stray working notes the plan act committed\n')
+  lane.lgit('add', 'notes.md')
+  lane.lgit('commit', '-q', '-m', 'plan(303): stray second file')
+  lane.tip = lane.lgit('rev-parse', 'HEAD').trim()
+  harvest(lane, { commit: `${lane.tip}~1` })
+  assert.equal(
+    blobAt(root, 'develop', lane.phaseFile),
+    blobAt(lane.worktree, 'HEAD', lane.phaseFile),
+    'precondition: the phase file IS harvested — the ONLY thing wrong with this lane is that it changed a second file',
+  )
+
+  const { out, err } = laneStatus(root, [303], '--plan')
+
+  assert.equal(out?.state, 'complete', `the verdict is still delivered; stderr: ${err}`)
+  assert.match(
+    err,
+    /one[- ]file|exactly one|invariant/i,
+    `a plan lane that changed more than its phase file is not a plan lane — the harvest proof covers ONE path, so a second file rides out of the lane unproven and unreviewed; got: ${err}`,
+  )
+  assert.ok(err.includes('notes.md'), `and the refusal must NAME the offending file — a reason with no detail sends the operator to a branch with no idea what is on it; got: ${err}`)
+  assertPlanLaneKept(lane, 'the lane breached the one-file invariant')
+  assert.ok(existsSync(join(lane.worktree, 'notes.md')), 'and the unproven file is still on disk where its author left it')
+})
+
+test('consume-the-plan: a harvest AMENDED at the integration ref still closes — the proof reads blob HISTORY, not byte-equality', () => {
+  const root = tmpRepo()
+  const lane = planLane(root, [304])
+  const plan = readFileSync(lane.reportPath, 'utf8')
+  // The Mode A repair flow, which is the NORMAL one: the supervising session cherry-picks the plan,
+  // then fixes it in place on develop. Strict byte-equality would refuse every such lane — and the
+  // operator's only recourse would be to re-harvest a plan that is already landed.
+  harvest(lane, { amend: 'export default { id: 304, tasks: [], repaired: true }\n' })
+
+  const laneBlob = blobAt(lane.worktree, 'HEAD', lane.phaseFile)
+  assert.notEqual(
+    blobAt(root, 'develop', lane.phaseFile),
+    laneBlob,
+    'precondition: arm 1 must FAIL here — if the tip blobs still matched, this case would prove nothing beyond the harvested one',
+  )
+  assert.ok(
+    blobHistoryAt(root, 'develop', lane.phaseFile).includes(laneBlob),
+    "precondition: and arm 2 must hold — the lane's blob is in the committed history of that path on develop, which is what proves the harvest happened",
+  )
+
+  const { code, out, err } = laneStatus(root, [304], '--plan')
+
+  assert.equal(out?.state, 'complete', `stderr: ${err}`)
+  assert.equal(code, 0, `stderr: ${err}`)
+  assert.ok(
+    !existsSync(lane.worktree),
+    `an amended harvest is STILL a harvest: the plan is on the integration ref and the lane is spent, so it must close — refusing here strands every lane that got the repair it was supposed to get; stderr: ${err}`,
+  )
+  assert.ok(!branchResolves(lane), `and ${lane.branch} goes with it — a branch kept "just in case" here is the squat this phase exists to end`)
+  assert.equal(readFileSync(lane.archived, 'utf8'), plan, 'with the plan archived beside its journal, byte-identical, before any of that happened')
+  assert.ok(Number.isFinite(Date.parse(journalOf(lane).archivedAt)), 'and the journal stamped in place under its live name')
+})
+
+test('consume-the-plan: a modified TRACKED file refuses as dirty, while untracked lane artifacts alone never do', () => {
+  // Guard (b) in both directions, one repo each — planLane seeds and COMMITS, and a second seed in
+  // one root has nothing to commit.
+  const dirtyRoot = tmpRepo()
+  const dirty = planLane(dirtyRoot, [305])
+  harvest(dirty)
+  writeFileSync(join(dirty.worktree, 'seed.txt'), 'the plan act edited a tracked file it never committed\n')
+
+  const refused = laneStatus(dirtyRoot, [305], '--plan')
+
+  assert.equal(refused.out?.state, 'complete', `the verdict is still delivered; stderr: ${refused.err}`)
+  assert.match(refused.err, /dirty|refus|kept/i, `uncommitted work in a tracked file is unexplained work — disposing the tree destroys the only copy; got: ${refused.err}`)
+  assert.ok(
+    refused.err.includes('seed.txt'),
+    `and the refusal carries the blocking path, the way the phase-land precedent writes reason AND detail; got: ${refused.err}`,
+  )
+  assertPlanLaneKept(dirty, 'the lane holds uncommitted work in a tracked file')
+  assert.equal(readFileSync(join(dirty.worktree, 'seed.txt'), 'utf8'), 'the plan act edited a tracked file it never committed\n', 'and that work is untouched')
+
+  // The other direction. EVERY plan lane ends with these two untracked: its own CODEX-PLAN.md
+  // (never committed, by contract) and the .building/ the launcher carried in. If either refused,
+  // no plan lane would ever close and this whole done-moment would be dead on arrival.
+  const cleanRoot = tmpRepo()
+  const clean = planLane(cleanRoot, [306])
+  harvest(clean)
+  mkdirSync(join(clean.worktree, '.building'), { recursive: true })
+  writeFileSync(join(clean.worktree, '.building', 'plan-brief.md'), '# the brief the lane was launched with\n')
+  assert.match(
+    clean.lgit('status', '--porcelain'),
+    /CODEX-PLAN\.md|\.building/,
+    'precondition: those artifacts really are untracked in this fixture — a gitignore would make the next assertion decorative',
+  )
+
+  const closed = laneStatus(cleanRoot, [306], '--plan')
+
+  assert.equal(closed.out?.state, 'complete', `stderr: ${closed.err}`)
+  assert.equal(closed.code, 0, `stderr: ${closed.err}`)
+  assert.ok(
+    !existsSync(clean.worktree),
+    `a lane's own hand-off and carried-in brief are artifacts, never work — the disposal must be untracked-tolerant or the plan lane's done-moment never fires once; stderr: ${closed.err}`,
+  )
+  assert.ok(!branchResolves(clean), `and ${clean.branch} is deleted with it`)
+})

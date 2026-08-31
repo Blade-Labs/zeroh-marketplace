@@ -297,7 +297,19 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
       testMode: 'tdd',
       dependsOn: ['14.5'],
-      done: false,
+      done: true,
+      doneDate: '2026-08-31',
+      transparencyReport: {
+        whatWasDone:
+          "archivePlanLane(root, jPath, journal, reportPath) landed beside archiveReviewLane and fires from statusCodex on the same verdict key (lane==='plan' && state==='complete' && (!archivedAt || the worktree still exists)). Four guards, each a stderr refusal that KEEPS the lane and names both reason and remedy: (a) a live pgid — reachable, because a driver writes its sentinel before its group exits; plus the slot refusal every disposal site carries; (b) dirt beyond the lane's own untracked artifacts (CODEX-PLAN.md, its .prev twin, .building/), a modified TRACKED file always blocking; (c) the ONE-FILE invariant via the THREE-dot `base...HEAD` merge-base diff; (d) the harvest, proven off committed blob ids on BOTH sides in two arms — byte-equal at `<integrationRef>:<phaseFile>`, or the lane's blob anywhere in that path's committed history there — with the refusal naming `git -C <root> cherry-pick <tip>`. On pass: the plan is COPIED beside the journal first (one-shot, keyed on archivedAt), then `worktree remove --force` + `branch -D codex-plan/<ids>` + `prune`, every git anchored -C root with cwd root, and the journal stamped in place under its LIVE name. 14.5's plan hint now falls silent once the lane is gone.",
+        how:
+          "TDD: test-engineer wrote 6 cases against REAL plan lanes — a real `git worktree add -b codex-plan/<ids>` off develop carrying exactly one committed phase file, and a real `git cherry-pick` harvest onto a develop that had MOVED. That last detail was a genuine find of theirs: a cherry-pick onto an unmoved develop reproduces the lane's commit object byte for byte (same tree, same parent, same author second), so their first fixture had identical shas and would have passed under a SHA-reachability check while proving nothing. The moved ref makes the sha change real AND forces the three-dot diff — a two-dot `develop HEAD` reports the sibling landing as the lane's own second file and would refuse every harvested lane. All 6 were RED; the suite is now 81/81, exit 0, zero `not ok` lines, first run after implementation.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "Two decisions the plan left open, both recorded rather than silent. (1) The integration ref for the blob proof is `integrationRefOf(loadConfig(root))` as ruled, but loadConfig THROWS on an unconfigured consumer and `codex status` is a read that must not fail — so an absent config falls back to the journal's own `base`, the launcher's recorded answer to the same question, never a bare 'develop' literal. (2) A slot refusal (isSlotDir) was added beyond the plan's four guards, mirroring archiveReviewLane's identical site verbatim: `codex plan --worktree <root>-wt-3` journals a SLOT, and removing one takes its node_modules with it while the registry keeps a live claim on a deleted path. Both widen safety only; neither narrows an acceptance criterion.",
+      },
     },
   ],
   notes:
