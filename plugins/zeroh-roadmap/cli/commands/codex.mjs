@@ -675,10 +675,15 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     return keep(
       `it breaches the plan lane's ONE-FILE invariant: ${base}...HEAD changed ${changed.length} file(s) — ${changed.join(', ') || '(none)'} — where exactly ${phaseFile} was allowed. `
         + (changed.length === 0
-          ? `An empty diff has TWO causes and they want opposite acts: ${base} already CONTAINS this lane's commit (a merge does that, a cherry-pick does not), or the lane never committed the phase file at all. `
-            + `Ask which: \`git -C ${root} merge-base --is-ancestor ${branch} ${base}\` succeeds only for the first. If it does, remove the lane by hand — `
-            + `git -C ${root} worktree remove --force ${wt} && git -C ${root} branch -D ${branch}. If it does NOT, the lane authored nothing that was kept, and ${wt}/${LANES.plan.report} `
-            + 'is the only record of what it did; read that before removing anything. '
+          ? // An empty diff has TWO causes wanting opposite acts, and they are separated HERE rather
+            // than by a command handed to the operator: `merge-base --is-ancestor` answers yes to
+            // both (a lane that never committed sits ON the merge-base), so prescribing it would
+            // route the never-committed lane into a removal that destroys its only record.
+            q(wt, ['cat-file', '-e', `HEAD:${phaseFile}`]).ok
+            ? `An empty diff with the file committed means ${base} already CONTAINS this lane's commit — a merge does that, a cherry-pick does not. `
+              + `Nothing is left to harvest, so remove the lane by hand: git -C ${root} worktree remove --force ${wt} && git -C ${root} branch -D ${branch}. `
+            : `The lane never committed ${phaseFile} at all, so there is no plan to harvest and nothing this close can prove. `
+              + `${join(wt, LANES.plan.report)} is the only record of what it did — READ that before removing anything. `
           : '')
         + 'The harvest proof covers that one path, so anything else would ride out of the lane unproven; inspect the branch and land or drop the extra work by hand',
     )
@@ -743,7 +748,9 @@ function archivePlanLane(root, jPath, journal, reportPath) {
   }
   q(root, ['worktree', 'prune'])
   process.stderr.write(
-    `roadmap codex: plan lane consumed — ${archived ? `plan archived at ${archived}` : `no ${LANES.plan.report} was left to archive`}`
+    // `archived` is this read's copy; on a re-entry after a failed removal the earlier read's copy
+    // is the honest answer, and reporting "nothing to archive" over it would be a lie.
+    `roadmap codex: plan lane consumed — ${archived ?? stamped.archivedReport ? `plan archived at ${archived ?? stamped.archivedReport}` : `no ${LANES.plan.report} was left to archive`}`
       + `; worktree ${wt}${del.ok ? ` and branch ${branch}` : ''} disposed\n`,
   )
   return { journal: stamped, archived }
@@ -769,13 +776,20 @@ function nextStepHint(lane, state, journal, reportPath, root) {
   const ids = (journal.phases ?? []).map(String)
   const wt = journal.worktree
   if (lane === 'plan') {
-    // A plan lane whose DIRECTORY died (a /tmp reaper, a hand rm) has no CODEX-PLAN.md, so it can
-    // never read `complete` and can never reach the consume-close — it lands here, as
-    // dead-no-report, and this is the only place an operator is told anything at all. The answer is
-    // the report-only one the operator ruling allows and `roadmap audit` check 15 gives the same
-    // lane: prune the stale registration, and READ the surviving branch before deleting it, because
-    // if the plan was never harvested those commits are its only copy.
-    if (wt && !existsSync(wt) && root) {
+    // A plan lane whose DIRECTORY died UNCONSUMED (a /tmp reaper, a hand rm before anyone read it)
+    // has no CODEX-PLAN.md, so it can never read `complete` and can never reach the consume-close —
+    // it lands here, as dead-no-report, and this is the only place an operator is told anything at
+    // all. The answer is the report-only one the operator ruling allows and `roadmap audit` check 15
+    // gives the same lane: prune the stale registration, and READ the surviving branch before
+    // deleting it, because if the plan was never harvested those commits are its only copy.
+    //
+    // THREE conditions, each earned by a way this fired wrongly. `archivedAt` unset: a CONSUMED lane
+    // has a missing directory too — the close on this very read removed it — and the hint then told
+    // the operator to prune what was already pruned and read a branch that was just deleted, one
+    // line under "plan lane consumed". `state !== 'running'`: a live group whose tree was swept is
+    // still in flight, and surveyLanes asks this same prunable question only after liveness for
+    // exactly that reason. `root`: the remedies are anchored at the primary checkout.
+    if (wt && !existsSync(wt) && root && !journal.archivedAt && state !== 'running') {
       return `${wt} is gone, so this lane can never report its verdict — git -C ${root} worktree prune clears the stale registration; `
         + `read git -C ${root} log --oneline codex-plan/${ids.join('-')} before deleting that branch, since an unharvested plan lives only there`
     }
@@ -783,7 +797,7 @@ function nextStepHint(lane, state, journal, reportPath, root) {
     // Only while the lane is still standing. A CONSUMED plan lane (this read closed it, or an
     // earlier one did) has no next step, and naming its own consume read would send an operator to
     // a done-moment that has already fired.
-    if (!wt) return null
+    if (!wt || !existsSync(wt)) return null
     return `roadmap codex status ${ids.join(' ')} --plan — the plan lane's done-moment: harvest the phase file to the primary checkout, then this read closes the lane`
   }
   if (lane !== 'run' || ids.length === 0) return null

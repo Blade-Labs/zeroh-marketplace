@@ -2505,7 +2505,7 @@ test('consume-the-plan: a branch that failed to delete is RETRIED and re-reporte
   )
 })
 
-test('consume-the-plan: a lane whose DIRECTORY died is never closed on an unseen verdict, and the refusal names the prune', () => {
+test('consume-the-plan: a lane whose DIRECTORY died is never closed on an unseen verdict, and nothing is removed', () => {
   // Gate R1, corrected by the fixture that found it. A plan lane whose directory was swept (a /tmp
   // reaper, a hand rm) CANNOT reach the consume-close by the front door: with no tree there is no
   // CODEX-PLAN.md, so the read computes `dead-no-report`, and the close is gated on the COMPLETE
@@ -2564,4 +2564,35 @@ test('next-step hint: a plan lane whose DIRECTORY is gone gets the prune hint �
   )
   assert.match(hint, /read|log/i, `named as something to READ first, never as a delete; got: ${hint}`)
   assert.ok(branchResolves(lane), 'and nothing was removed by the read itself')
+})
+
+test('next-step hint: a CONSUMED plan lane stays silent — the close removed its directory, which is not the same as losing it', () => {
+  // Gate R3, and the sharpest regression of the phase. The missing-worktree arm added at R2 fired
+  // for a lane the close had JUST disposed: `roadmap codex status` printed "plan lane consumed —
+  // plan archived at …; worktree … and branch codex-plan/300 disposed" and then, one line later,
+  // told the operator to prune what was already pruned and to read a branch that had just been
+  // deleted (that `git log` exits 128) "since an unharvested plan lives only there" — of a plan
+  // that was harvested and archived. And it repeated on every read, forever. A missing directory
+  // means two opposite things; `archivedAt` is what tells them apart.
+  const root = tmpRepo()
+  const lane = planLane(root, [311])
+  harvest(lane)
+
+  const closing = laneStatus(root, [311], '--plan')
+  assert.equal(closing.out?.state, 'complete', `precondition: the harvested lane closes on this read; stderr: ${closing.err}`)
+  assert.ok(!existsSync(lane.worktree), 'precondition: and its directory is gone — the state the bad arm keyed on')
+  assert.ok(!branchResolves(lane), 'precondition: its branch is gone too, so any hint naming it is unrunnable')
+  assert.equal(
+    nextHint(closing.err),
+    null,
+    `a lane this read CONSUMED has no next step — the close already happened, and the hint contradicted the line printed just above it; got stderr: ${closing.err}`,
+  )
+
+  const again = laneStatus(root, [311], '--plan')
+  assert.equal(
+    nextHint(again.err),
+    null,
+    `nor on any later read: a consumed lane that nags forever is how an operator learns to ignore \`next:\` entirely; got stderr: ${again.err}`,
+  )
+  assert.equal(again.code, 0, `and the archived lane still reads clean; stderr: ${again.err}`)
 })

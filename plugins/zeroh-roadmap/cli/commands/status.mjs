@@ -242,8 +242,14 @@ function derive(root) {
   if (existsSync(join(repo, '.git'))) {
     try {
       strayLanes = surveyLanes(repo).filter((l) => l.class !== 'live').length
-    } catch {
-      strayLanes = 0 // advisory, exactly like the marker above: status never fails on a survey
+    } catch (e) {
+      // Advisory, exactly like the marker above: status never FAILS on a survey. But it never goes
+      // quiet either — surveyLanes deliberately lets its enumeration throw because "reporting an
+      // empty inventory would be the silent all-clear this whole seam exists to stop", and status is
+      // the command every protocol entry runs, so a swallowed failure here is the widest-reach
+      // version of exactly that. stderr keeps the stdout byte-parity this file is pinned on.
+      strayLanes = 0
+      process.stderr.write(`  ⚠ stray lane worktrees could not be surveyed in ${repo} — ${e.message}\n`)
     }
   }
 
