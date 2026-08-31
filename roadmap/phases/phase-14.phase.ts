@@ -180,7 +180,18 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['14.2'],
       interfaces: { consumes: ['surveyLanes(root) from 14.2'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-08-31',
+      transparencyReport: {
+        whatWasDone:
+          "audit.mjs gained the git-tier check 15 after check 14: it calls surveyLanes(repo) and emits one finding per NON-LIVE row — MEDIUM for stale-run/stale-plan/stale-review/closed (a done-moment exists, and the message carries that row's remedy verbatim), LOW for legacy/unknown (only inspection is honest, and the message says so rather than claiming a done-moment it cannot name). `live` is never a finding; slots and the primary are not rows at all. The survey is skipped entirely when the consumer has no .git (the shape every other fixture in that suite has), and a git repo whose worktrees cannot be enumerated yields a LOW naming the failure rather than a silent all-clear. Report-only: nothing in the block removes, prunes or deletes. The module docblock's check inventory was trued from 14 to 15.",
+        how:
+          "TDD: test-engineer wrote 6 cases blind to the implementation over REAL git fixture repos with real `git worktree add` lanes at the launcher's sibling path shape, real journals, and real detached process groups; 3 were RED with `(none)` findings (the audit completed and simply carried no check-15 finding), 3 GREEN-by-pairing. Suite now 67/67, exit 0, zero `not ok` lines. Live smoke: `roadmap audit --json` on this repo named the one real legacy worktree (zeroh-marketplace-roadcode) at LOW with its inspect-then-remove remedy — verdict HAS ISSUES, exit 0, nothing removed. GUARD MUTATION PROOF on check 15 (scoped runner, baseline 6/6): (1) planted violation — the non-live filter inverted so the check stops looking at strays → RED, 3 pass / 3 fail (the two stray fixtures and the stability case); (2) anchor drift — `export function surveyLanes` renamed in worktree.mjs → LOUD degrade, 0 pass / 6 fail, `SyntaxError: The requested module '../lib/worktree.mjs' does not provide an export named 'surveyLanes'`; (3) decoy — the nearest LEGAL patterns (a LIVE lane, a lane-free git repo, a non-git consumer) → GREEN 3/3. Both mutations reverted from pristine copies; `git diff` on the two paths then showed only the intended 38-line audit addition.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '14.4',

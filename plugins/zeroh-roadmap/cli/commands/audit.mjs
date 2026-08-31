@@ -1,5 +1,5 @@
 /**
- * roadmap audit [repo-root] [--json] — audit-roadmap's 14 structural checks, mechanized
+ * roadmap audit [repo-root] [--json] — audit-roadmap's 15 structural checks, mechanized
  * (ROADCODE 1659.2, replacing skills/audit-roadmap's hand-run prose). Read-only: never
  * opens source code, never fixes — reports findings + a verdict.
  *
@@ -15,6 +15,8 @@
  *   12.4 dangling debtResolution on an archived phase (MEDIUM)
  *   14 followup hygiene: untriaged orphans (MEDIUM), spent/superseded-but-REFERENCED (HIGH),
  *      spent orphans + past-review files (LOW)
+ *   15 stray lane worktrees (surveyLanes): a non-live lane past its done-moment — MEDIUM with
+ *      that lane's own runnable close, LOW for legacy/unknown. Report-only, never removes.
  *
  * Exit contract (design §2): 0 = CLEAN or HAS ISSUES (MEDIUM/LOW only) · 2 = BROKEN (any
  * CRITICAL/HIGH) · 1 = usage / tsx-absent in this strict context.
@@ -27,6 +29,7 @@ import { debtCensusJson } from '../lib/derive.mjs'
 import { TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import { censusFollowups } from './followups.mjs'
 import { isTerminalPhaseSource } from '../lib/phasescan.mjs'
+import { surveyLanes } from '../lib/worktree.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -149,6 +152,42 @@ export default async function run(argv) {
     }
     if (row.reviewBy && row.reviewBy < today) {
       findings.push({ check: 14, severity: 'LOW', phase: null, message: `Followup ${row.file} passed review-by ${row.reviewBy}; refresh or disposition it.` })
+    }
+  }
+
+  // ── Check 15: stray lane worktrees (report-only) ──────────────────────────
+  // The catalogue above never looked at worktrees, so the leak class the 2026-08-31 census found
+  // (19 sibling lane trees, ~6.5 GB across four consumers, every sampled journal dead and
+  // unarchived) was invisible to every review flow that runs this command. It fires HERE rather
+  // than behind a new verb by the operator ruling: a sweep verb nobody runs is what the census
+  // was measuring. REPORT-ONLY — nothing below removes, prunes or deletes anything.
+  //
+  // Severity is the honest distinction between "a done-moment exists" and "somebody must look":
+  // a stale or closed lane names its own runnable close (MEDIUM), while a legacy or unreadable
+  // one can only be inspected (LOW). Neither is BROKEN — a lane an operator forgot to land must
+  // never block every /do-phase in the consumer.
+  if (existsSync(join(repo, '.git'))) {
+    try {
+      for (const row of surveyLanes(repo)) {
+        if (row.class === 'live') continue // work in flight is not a stray
+        const actionable = row.class !== 'legacy' && row.class !== 'unknown'
+        findings.push({
+          check: 15,
+          severity: actionable ? 'MEDIUM' : 'LOW',
+          phase: null,
+          location: row.dir,
+          message:
+            `Stray lane worktree ${row.dir} (class ${row.class}${row.branch ? `, branch ${row.branch}` : ', detached'}) `
+            + (actionable
+              ? `is past its done-moment — journal ${row.journalPath}. `
+              : `${row.journalPath ? `has a journal that cannot be read (${row.journalPath})` : 'has no journal naming it'}, so only inspection is honest. `)
+            + `Remedy: ${row.remedy}`,
+        })
+      }
+    } catch (err) {
+      // A git repo whose worktrees cannot be enumerated is a real problem, and reporting nothing
+      // for it would be the silent all-clear this check exists to end.
+      findings.push({ check: 15, severity: 'LOW', phase: null, message: `Lane worktrees could not be surveyed in ${repo} — ${err.message}` })
     }
   }
 

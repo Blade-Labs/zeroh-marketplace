@@ -786,3 +786,307 @@ test('usage error — auditing a dir with no roadmap/phases exits 1', () => {
   const { code } = audit(bare)
   assert.equal(code, 1, 'a missing roadmap/phases dir is a usage error, exit 1')
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+// Check 15 — stray lane worktrees (surveyLanes, report-only)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// The catalogue above never looks at worktrees, so the leak class the 2026-08-31 census found
+// (19 sibling lane trees, ~6.5 GB, every sampled journal dead) is invisible to every review flow
+// that runs `roadmap audit`. Check 15 is that eye: ONE finding per NON-LIVE row of
+// surveyLanes(root) — MEDIUM for the classes that HAVE a done-moment (stale-run/-plan/-review,
+// closed), whose message carries that row's own remedy verbatim, and LOW for legacy/unknown,
+// where only manual inspection is honest. `live` is never a finding, and the check REMOVES
+// NOTHING (the arc's honesty rail: no sweep verb is allowed to come back for these trees).
+//
+// The fixtures below are REAL: a real `git init` + commit, real `git worktree add` lanes at the
+// LAUNCHER's own sibling path shape (`<root>-codex-<ids>`, never `<root>-wt-<k>` — that is a
+// session slot, which surveyLanes excludes by design), real journals in <root>/.building/, and
+// liveness that is a REAL detached process group. A hand-written pgid would prove only that a
+// number was compared to something.
+
+// Needed only by this section (a detached group, its exit event, an existence probe on a sibling
+// dir); imported here so the section reads as one unit — ESM hoists these to module init.
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { existsSync } from 'node:fs'
+
+/** Live process-GROUP probe — the same question surveyLanes asks (kill(-pgid, 0)), asked here so
+ *  this suite keeps driving the CLI as a black box rather than importing the classifier. */
+const groupAlive = (pgid) => {
+  try {
+    process.kill(-pgid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Path identity through whatever symlink the host puts under /tmp — resolved on BOTH sides. */
+const realOf = (p) => {
+  try {
+    return realpathSync(p)
+  } catch {
+    return p
+  }
+}
+
+// Last-resort sweep for a group a failing test never reached the reap of. Only groups this process
+// has NOT already seen exit are signalled: a shared host recycles pids, and SIGKILLing a reaped
+// pgid by number could land on somebody else's session.
+const kids = []
+process.on('exit', () =>
+  kids.forEach((k) => {
+    if (k.exitCode !== null || k.signalCode !== null) return
+    try {
+      process.kill(-k.pid, 'SIGKILL')
+    } catch {
+      /* already gone */
+    }
+  }),
+)
+
+/** A detached group that is PROVEN alive before any fixture leans on its liveness. */
+function liveGroup() {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e6)'], { detached: true, stdio: 'ignore' })
+  child.unref()
+  kids.push(child)
+  assert.ok(groupAlive(child.pid), `fixture bug: group ${child.pid} must be RUNNING before a lane is fixtured as live`)
+  return child
+}
+
+/** Reap a group and PROVE it is gone — a "stale" fixture whose group still breathes tests nothing. */
+async function reapGroup(child) {
+  child.ref() // an unref'd handle delivers no 'exit' to a loop with nothing else holding it open
+  child.kill('SIGKILL')
+  await once(child, 'exit')
+  assert.equal(groupAlive(child.pid), false, `fixture bug: group ${child.pid} must be DEAD before a stale lane is asserted`)
+}
+
+const gitLane = (root, ...a) =>
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+
+/** An otherwise CLEAN fixture that IS a git repo — check 15 has no worktrees to survey without one. */
+function laneRepo() {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, { kind: 'logic', dependsOn: [] }))
+  writeBacklog(root, [{ phase: 100, name: 'First queued phase here' }])
+  gitCommitPhase(root, 100)
+  return root
+}
+
+/** A real lane worktree at the launcher's sibling path shape. It registers itself in `roots` so the
+ *  suite's exit sweep takes it: makeRepo only knows about <root>, and a leaked worktree is exactly
+ *  the accumulation this check exists to report. */
+function laneAt(root, suffix, { branch = null } = {}) {
+  const dir = `${root}-${suffix}`
+  roots.push(dir)
+  if (branch) gitLane(root, 'worktree', 'add', '-b', branch, dir, 'HEAD')
+  else gitLane(root, 'worktree', 'add', '--detach', dir, 'HEAD')
+  assert.ok(
+    gitLane(root, 'worktree', 'list', '--porcelain').includes(dir),
+    `fixture bug: git must KNOW ${dir} before audit is asked about it — otherwise "no finding" is vacuous`,
+  )
+  return dir
+}
+
+/** A real lane journal in the launcher's own name grammar and field set (launch() in codex.mjs). */
+function journalFor(root, { lane = 'run', ids = ['500'], worktree, pgid }) {
+  const prefix = { run: 'codex-', plan: 'codex-plan-', review: 'codex-review-' }[lane]
+  const report = { run: 'CODEX-REPORT.md', plan: 'CODEX-PLAN.md', review: 'CODEX-REVIEW.md' }[lane]
+  const stem = `${prefix}${ids.join('-')}`
+  mkdirSync(join(root, '.building'), { recursive: true })
+  const path = join(root, '.building', `${stem}.json`)
+  writeFileSync(
+    path,
+    JSON.stringify(
+      { phases: ids, lane, driver: 'codex', report, worktree, base: 'develop', pgid, log: join(root, '.building', `${stem}.log`), startedAt: new Date().toISOString() },
+      null,
+      2,
+    ) + '\n',
+  )
+  return path
+}
+
+/** Every check-15 finding, read tolerantly of nothing: the check id is compared as a NUMBER only
+ *  after the RED case has pinned the type, so a report with zero of them fails loudly by count. */
+const strays = (report) => {
+  // A crashed audit prints no JSON, and "zero check-15 findings" read off a null report would be
+  // the silent all-clear this whole seam exists to stop.
+  assert.ok(report?.findings, `the audit produced NO JSON report — surveying worktrees may never take the audit down; got: ${JSON.stringify(report)}`)
+  return report.findings.filter((f) => Number(f.check) === 15)
+}
+const strayList = (report) => strays(report).map((f) => `${f.severity}: ${f.message}`).join('\n  ') || '(none)'
+/** The comparable identity of a finding — order excluded on purpose, message and severity are not. */
+const strayShape = (report) =>
+  strays(report)
+    .map((f) => ({ check: Number(f.check), severity: f.severity, message: f.message }))
+    .sort((a, b) => (a.message < b.message ? -1 : a.message > b.message ? 1 : 0))
+
+test('check 15 RED — a dead-pgid codex run lane is ONE MEDIUM finding carrying that row’s remedy verbatim, exit 0', async () => {
+  const root = laneRepo()
+  const dir = laneAt(root, 'codex-500', { branch: 'codex/500' })
+  const dead = liveGroup()
+  await reapGroup(dead) // the deadness is REAL before it is classified, never assumed
+  journalFor(root, { lane: 'run', ids: ['500'], worktree: dir, pgid: dead.pid })
+
+  const { code, report } = audit(root)
+
+  assert.equal(
+    strays(report).length,
+    1,
+    `one stray lane is ONE finding — the repo carries exactly one non-live lane worktree (${dir}); findings were:\n  ${strayList(report)}`,
+  )
+  const [finding] = strays(report)
+  assert.equal(finding.check, 15, 'the catalogue numbers its checks — a string "15" would sort and group apart from checks 1-14 in every consumer of this report')
+  assert.equal(
+    finding.severity,
+    'MEDIUM',
+    `a stale-run lane HAS a done-moment (\`roadmap phase land\`), so it is actionable-but-not-broken; got ${JSON.stringify(finding)}`,
+  )
+  assert.match(
+    finding.message,
+    /stale-run/,
+    `the message names the row's CLASS — an operator triages a stale run lane differently from a legacy one, and "stray worktree" alone does not say which; got: ${finding.message}`,
+  )
+  assert.ok(
+    finding.message.includes(dir) || finding.message.includes(realOf(dir)),
+    `the message names the lane DIRECTORY — it is the only handle an operator has on a tree that is not their checkout; got: ${finding.message}`,
+  )
+  assert.ok(
+    finding.message.includes('roadmap phase land 500'),
+    `the message carries the row's remedy VERBATIM: the run lane's done-moment is \`roadmap phase land\`, and it must arrive with the lane's OWN phase id — a remedy that only removed the tree would throw the phase away; got: ${finding.message}`,
+  )
+  assert.doesNotMatch(
+    finding.message,
+    /land <N>/,
+    `the remedy is pasteable, not a template: a placeholder makes the operator go find the id the journal already recorded; got: ${finding.message}`,
+  )
+  assert.equal(code, 0, 'a stray worktree is HAS ISSUES, never BROKEN — exit 2 here would block every /do-phase in a consumer that merely forgot to land a lane')
+  assert.equal(report.verdict, 'HAS ISSUES', `MEDIUM-only → HAS ISSUES; findings were:\n  ${strayList(report)}`)
+})
+
+test('check 15 GREEN — the same git repo with NO lane worktrees reports nothing for check 15 and audits CLEAN', () => {
+  const root = laneRepo()
+  const worktrees = gitLane(root, 'worktree', 'list', '--porcelain').split('\n\n').filter(Boolean)
+  assert.equal(worktrees.length, 1, 'fixture: the primary checkout is the ONLY worktree, so "no finding" below is about absence of lanes, not absence of git')
+
+  const { code, report } = audit(root)
+
+  assert.deepEqual(
+    strays(report),
+    [],
+    `a repo with no lane worktrees has nothing to report — a check that fires here would put a permanent MEDIUM on every consumer that never ran a lane; got:\n  ${strayList(report)}`,
+  )
+  assert.equal(report.verdict, 'CLEAN', `and the clean direction stays CLEAN; findings were: ${JSON.stringify(report.findings)}`)
+  assert.equal(code, 0, 'CLEAN exits 0')
+})
+
+test('check 15 GREEN — a consumer that is not a git repo at all yields no check-15 finding and still audits', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, { kind: 'logic', dependsOn: [] }))
+  writeBacklog(root, [{ phase: 100, name: 'First queued phase here' }])
+  assert.equal(existsSync(join(root, '.git')), false, 'fixture: no git at all — the shape every other fixture in this suite has')
+
+  const { code, report, stderr } = audit(root)
+
+  assert.ok(report, `a repo with no git must still produce a report — check 15 asking git for worktrees may never take the audit down; stderr was: ${JSON.stringify(stderr)}`)
+  assert.deepEqual(strays(report), [], `no git means no worktrees means no findings; got:\n  ${strayList(report)}`)
+  assert.equal(code, 0, 'and the audit still returns its normal exit contract')
+})
+
+test('check 15 GREEN — a LIVE lane is an in-flight run, not a stray: no finding at any severity', async () => {
+  const root = laneRepo()
+  const dir = laneAt(root, 'codex-503', { branch: 'codex/503' })
+  const runner = liveGroup()
+  journalFor(root, { lane: 'run', ids: ['503'], worktree: dir, pgid: runner.pid })
+
+  const { code, report } = audit(root)
+  assert.ok(groupAlive(runner.pid), `fixture bug: the lane's group must still be running AT ASSERT TIME — a group that died mid-test would make this a stale-lane case wearing a live label`)
+
+  assert.deepEqual(
+    strays(report),
+    [],
+    `a lane whose process group is RUNNING is work in flight: reporting it as a stray invites an operator to remove a tree that is being written into; got:\n  ${strayList(report)}`,
+  )
+  assert.equal(code, 0, 'and an in-flight lane leaves the audit clean')
+  assert.equal(report.verdict, 'CLEAN', `nothing else fires either; findings were: ${JSON.stringify(report.findings)}`)
+
+  await reapGroup(runner)
+})
+
+test('check 15 severity routing — a legacy lane is LOW while a stale-plan lane in the same repo is MEDIUM', async () => {
+  const root = laneRepo()
+  const planDir = laneAt(root, 'codex-plan-501', { branch: 'codex-plan/501' })
+  const legacyDir = laneAt(root, 'codex-502', { branch: 'codex/502' })
+  const dead = liveGroup()
+  await reapGroup(dead)
+  journalFor(root, { lane: 'plan', ids: ['501'], worktree: planDir, pgid: dead.pid })
+  // ...and NO journal for legacyDir: the pre-journal tree the census found squatting.
+
+  const { code, report } = audit(root)
+
+  assert.equal(strays(report).length, 2, `two non-live lanes → two findings, one each; got:\n  ${strayList(report)}`)
+  const plan = strays(report).find((f) => f.message.includes(planDir) || f.message.includes(realOf(planDir)))
+  const legacy = strays(report).find((f) => f.message.includes(legacyDir) || f.message.includes(realOf(legacyDir)))
+  assert.ok(plan, `the stale-plan lane must be findable BY ITS DIR in the message — a finding an operator cannot map to a directory is not actionable; got:\n  ${strayList(report)}`)
+  assert.ok(legacy, `and so must the legacy lane; got:\n  ${strayList(report)}`)
+
+  assert.equal(
+    plan.severity,
+    'MEDIUM',
+    `a stale-plan lane has a known done-moment (consume the hand-off on a status read), so it is MEDIUM like every other stale class; got ${JSON.stringify(plan)}`,
+  )
+  assert.match(
+    plan.message,
+    /stale-plan/,
+    `and it is named stale-PLAN, not stale-run: the plan lane makes no commits the integration branch wants, so pointing the operator at \`phase land\` sends them to a verb that will refuse; got: ${plan.message}`,
+  )
+  assert.ok(
+    plan.message.includes('roadmap codex status 501'),
+    `the plan row's own remedy, verbatim — its close is consuming the hand-off, and the finding is where the operator reads it; got: ${plan.message}`,
+  )
+  assert.equal(
+    legacy.severity,
+    'LOW',
+    `NOTHING is known about a lane no journal names: there is no done-moment to run, only manual inspection, and calling that MEDIUM would flatten the two into one hardcoded severity; got ${JSON.stringify(legacy)}`,
+  )
+  assert.match(legacy.message, /legacy/, `and the class says so, so an operator knows why the remedy is "look, then decide"; got: ${legacy.message}`)
+  assert.equal(code, 0, 'MEDIUM + LOW is HAS ISSUES, exit 0 — a stray tree never blocks the queue')
+})
+
+test('check 15 RED — two audits over the unchanged stray fixture report identically, and the lane survives both (report-only)', async () => {
+  const root = laneRepo()
+  const dir = laneAt(root, 'codex-504', { branch: 'codex/504' })
+  const dead = liveGroup()
+  await reapGroup(dead)
+  journalFor(root, { lane: 'run', ids: ['504'], worktree: dir, pgid: dead.pid })
+
+  const first = audit(root)
+  const second = audit(root)
+
+  assert.ok(
+    strayShape(first.report).length >= 1,
+    `criterion 2 is about STABILITY, so it must have something to be stable about — the stray lane at ${dir} must be reported at all; first run gave:\n  ${strayList(first.report)}`,
+  )
+  assert.deepEqual(
+    strayShape(second.report),
+    strayShape(first.report),
+    `a second audit over an UNCHANGED fixture must report the same set — same count, same severities, same messages. A finding that flaps (an id, a timestamp, a counter in the text) makes review-flow diffs unreadable and trains operators to ignore it.\n  first:\n  ${strayList(first.report)}\n  second:\n  ${strayList(second.report)}`,
+  )
+  assert.equal(second.code, first.code, 'and the exit code is the same both times')
+
+  // Report-only is the arc's honesty rail: an audit that quietly disposed what it reported would
+  // satisfy every assertion above (run two would simply find nothing) while destroying a tree the
+  // operator never consented to lose.
+  assert.equal(existsSync(dir), true, `check 15 REMOVES NOTHING: ${dir} must still be on disk after two audits — audit is read-only, and no sweep verb is allowed to come back for these trees`)
+  assert.ok(
+    gitLane(root, 'worktree', 'list', '--porcelain').includes(dir),
+    `and git must still have it REGISTERED — a silent \`worktree prune\` is the same destruction with a tidier name; worktrees were:\n${gitLane(root, 'worktree', 'list')}`,
+  )
+  assert.equal(
+    gitLane(root, 'for-each-ref', '--format=%(refname:short)', 'refs/heads/codex/504'),
+    'codex/504',
+    'and the lane BRANCH survives: the commits in a stale run lane are unlanded work, and deleting the only ref that reaches them is the data loss the whole rail exists to prevent',
+  )
+})
