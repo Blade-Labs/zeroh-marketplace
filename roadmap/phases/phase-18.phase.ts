@@ -55,7 +55,7 @@ export default definePhase({
     {
       claim: 'The only schema-drift surfacing today is the tsx-bridge exit-4 stderr line — neither config check nor audit knows the export inventory.',
       verify:
-        'bash -c "grep -qF \'re-sync lib/roadmap/schema.ts\' plugins/zeroh-roadmap/cli/lib/tsx-bridge.mjs && test \\"$(grep -cF schemaDrift plugins/zeroh-roadmap/cli/commands/audit.mjs plugins/zeroh-roadmap/cli/commands/config.mjs | grep -c \':0\')\\" = \\"2\\""',
+        'bash -c "grep -qF \'re-sync lib/roadmap/schema.ts\' plugins/zeroh-roadmap/cli/lib/tsx-bridge.mjs && test \\"$(grep -cF schemaDrift plugins/zeroh-roadmap/cli/commands/audit.mjs)\\" = \\"0\\" && test \\"$(grep -cF schemaDrift plugins/zeroh-roadmap/cli/commands/config.mjs)\\" = \\"0\\""',
       onFalse: 'ESCALATE',
     },
     {
@@ -120,12 +120,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
           description:
-            "Export mergeLaneLessons(primaryRoot, laneDir): read both roadmap/arc-evals/lessons.jsonl files (absent → empty), append to the primary's every lane line absent from it by exact-line identity (append-only, order-preserving, no rewrite of existing lines), report { merged: n }; a malformed lane line is appended as-is (lessons are freeform JSONL — fidelity beats parsing) → verify: bash -c \"grep -qF 'export function mergeLaneLessons' plugins/zeroh-roadmap/cli/lib/landing.mjs\"",
+            "Export mergeLaneLessons(primaryRoot, laneDir): read both roadmap/arc-evals/lessons.jsonl files (absent → empty), append to the primary's every lane line absent from it by exact-line identity (append-only, order-preserving, no rewrite of existing lines; guarantee the primary ends with a newline before appending — concatenating onto an unterminated last line would corrupt both lines and defeat exact-line dedupe), report { merged: n }; a malformed lane line is appended as-is (lessons are freeform JSONL — fidelity beats parsing) → verify: bash -c \"grep -qF 'export function mergeLaneLessons' plugins/zeroh-roadmap/cli/lib/landing.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
           description:
-            'Call it in runLand for the codex-lane path BEFORE disposeSource (order is the safety: copy out first, then dispose — the archiveReviewLane rule), stderr-reporting a non-zero merge count; slot-lane lands share the primary file already (worktree lessons ARE the lane\'s own) — call only when cwd is a journal-confirmed lane → verify: bash -c "grep -qF \'mergeLaneLessons\' plugins/zeroh-roadmap/cli/commands/phase.mjs"',
+            'Call it in runLand for the codex-lane path BEFORE disposeSource (order is the safety: copy out first, then dispose — the archiveReviewLane rule), stderr-reporting a non-zero merge count; slot-lane lands share the primary file already (worktree lessons ARE the lane\'s own) — call only when cwd is a journal-confirmed lane; covered in phase.test.mjs (a lane fixture\'s novel lesson line reaches the primary before dispose) → verify: bash -c "grep -qF \'mergeLaneLessons\' plugins/zeroh-roadmap/cli/commands/phase.mjs && grep -qF \'mergeLaneLessons\' plugins/zeroh-roadmap/cli/commands/phase.test.mjs"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
@@ -170,7 +170,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/status.test.mjs',
           description:
-            'Fixtures: all-done arc without a report shows the marker; the same arc with a dated report does not; an in-progress arc does not (three directions) — eval.mjs summary line covered in eval.test.mjs with a pending-judge fixture report → verify: bash -c "cd plugins/zeroh-roadmap && node --test cli/commands/status.test.mjs cli/commands/eval.test.mjs >/dev/null 2>&1"',
+            'Fixtures: all-done arc without a report shows the marker; the same arc with a dated report does not; an in-progress arc does not (three directions) — eval.mjs summary line covered in eval.test.mjs with a pending-judge fixture report → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'eval: none\' cli/commands/status.test.mjs && grep -qF \'pending-judge —\' cli/commands/eval.test.mjs && node --test cli/commands/status.test.mjs cli/commands/eval.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -199,7 +199,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/scripts/debt-census.mts',
           description:
-            'Update the dangling-resolution join symmetrically (a resolution pointing at a now-excluded field reports as dangling with the exclusion named, not as a bare mystery) → verify: bash -c "cd plugins/zeroh-roadmap && npx tsx scripts/schema.test.ts >/dev/null 2>&1"',
+            'Update the dangling-resolution join symmetrically: a resolution pointing at a now-excluded field reports as dangling with the exclusion named — its dangling line carries the literal `excluded as explanatory-empty` instead of the bare no-matching-field mystery → verify: bash -c "grep -qF \'excluded as explanatory-empty\' plugins/zeroh-roadmap/scripts/debt-census.mts"',
         },
       ],
       acceptanceCriteria: [
@@ -214,5 +214,7 @@ export default definePhase({
     'interview: skipped — arc member; scope from the MINESWEEP arc record. reviewScope full (landing-path and census semantics changes). ' +
     'Out-of-scope, documented: azure\'s 9 report-less arcs and atlas\'s actual re-vendor are consumer operator acts the new findings name (arc DEFERRED); RunnerSummary backfill and timing-stats recalibration (azure LOW_SCORE 70 vs SPEED_REFERENCE 8) are proposal-lane work already tracked in azure\'s own proposals corpus — re-planning them here would duplicate a consumer\'s queue; scorecard codex-cell absence heals through samples once drift is fixed, not through code. ' +
     'Design decision recorded: the census exclusion is prefix-keyed to the RECORDED incident class and made VISIBLE via the count line rather than silent — a broader semantic filter risks eating real debt prose ("None of the fallbacks guard X" would still be excluded by prefix; accepted: that phrasing has zero recorded occurrences across 23 sweeps, and the count line keeps any future miss discoverable). ' +
-    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — schemaDrift 0 hits (config/audit), lessons 0 hits (landing/phase), explanatory-empty 0 hits, `pending-judge —` (em-dash form) 0 hits, `eval: none` 0 hits (each step-verify red for exactly what its diff adds); assumption probes all exit 0 (exact-None line present at debt-census.mts:95; export inventory >20 lines); runner clauses inherit polarity from their grep representatives.',
+    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — schemaDrift 0 hits (config/audit), lessons 0 hits (landing/phase), explanatory-empty 0 hits, `pending-judge —` (em-dash form) 0 hits, `eval: none` 0 hits (each step-verify red for exactly what its diff adds); assumption probes all exit 0 (exact-None line present at debt-census.mts:95; export inventory >20 lines); runner clauses inherit polarity from their grep representatives. ' +
+    'Review re-rehearsal 2026-08-31 (review-phase Mode A): all 4 assumption probes exit 0; two step verifies were green-now with no red grep representative and were re-keyed — 18.3.3 (both suites pass at HEAD; added `eval: none`/`pending-judge —` greps on the test files, both 0 hits now) and 18.4.2 (schema.test.ts never touches the census; re-keyed to `excluded as explanatory-empty` in debt-census.mts, 0 hits now); assumption-1 pipeline simplified to per-file zero-counts; 18.2.2 verify widened to phase.test.mjs (0 hits now) so both land verbs carry tested coverage. All other step verifies exit 1 at HEAD. NB eval.test.mjs runs ~4 min — budget the 18.3.3 runner accordingly. ' +
+    'Mode A metadata ratifications: testMode tdd stands on all four tasks (18.4\'s test home is the --check ratchet path or a census fixture per its criterion — debt-census.mts today has no test file); reviewScope full stands (landing-path + census semantics); userFacing:false correct (plugin-internal CLI surfaces only).',
 })
