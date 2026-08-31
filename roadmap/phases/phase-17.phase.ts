@@ -85,7 +85,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
           description:
-            'Fixture-consumer round-trip: a phase file recording gateRounds agents software-architect and self-review passes `roadmap phase validate`, and `gate run --record-round` with agent software-architect appends cleanly (the 2423 shape, now expressible) → verify: bash -c "cd plugins/zeroh-roadmap && node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
+            'Fixture-consumer round-trip: a phase file recording gateRounds agents software-architect and self-review passes `roadmap phase validate`, and `gate run --record-round` with agent software-architect appends cleanly (the 2423 shape, now expressible) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \\"software-architect\\" cli/commands/gate.test.mjs && node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -114,7 +114,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/gate-report.test.mjs',
           description:
-            'Four directions: codex lane + only self-review rounds → problem (exit-2 path); codex + zero rounds → problem; codex + one code-reviewer round → clean; session lane + only self-review → clean (the rule is lane-scoped); codex + reviewScope none → clean (exemption pinned) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'independent recorded round\' cli/lib/gate-report.test.mjs && node --test cli/lib/gate-report.test.mjs >/dev/null 2>&1"',
+            'Five directions: codex lane + only self-review rounds → problem (exit-2 path); codex + zero rounds → problem; codex + one code-reviewer round → clean; session lane + only self-review → clean (the rule is lane-scoped); codex + reviewScope none → clean (exemption pinned) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'independent recorded round\' cli/lib/gate-report.test.mjs && node --test cli/lib/gate-report.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -136,12 +136,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
           description:
-            "In buildPrompt's override list, extend the FILL-PROTOCOL-ROLES bullet with: reviews recorded as `self-review` never satisfy completion — a codex-lane phase needs at least one independent recorded round, and `--verify-complete` refuses without it → verify: bash -c \"grep -qF 'never satisfy completion' plugins/zeroh-roadmap/cli/commands/codex.mjs\"",
+            "In buildPrompt's override list (codex.mjs:123), extend the `FILL PROTOCOL ROLES` bullet with: reviews recorded as `self-review` never satisfy completion — a codex-lane phase needs at least one independent recorded round, and `--verify-complete` refuses without it. Run-lane copy ONLY: buildPlanPrompt carries a sibling FILL PROTOCOL ROLES bullet (~line 216) that stays untouched — the test pins that direction → verify: bash -c \"grep -qF 'never satisfy completion' plugins/zeroh-roadmap/cli/commands/codex.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'Prompt-content assertion: the run prompt carries the independence line; review and plan prompts do not (they record no gate rounds) → verify: bash -c "cd plugins/zeroh-roadmap && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'Prompt-content assertion: the run prompt carries the independence line; review and plan prompts do not (they record no gate rounds) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \\"never satisfy completion\\" cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -156,5 +156,6 @@ export default definePhase({
     'interview: skipped — arc member; scope from the MINESWEEP arc record (LOCKED: independence enforced at verify-complete; acceptance criterion delegated-independent-review). ' +
     'reviewScope full (a completion-refusal rule; a wrong polarity here blocks every delegated land). ' +
     '3 tasks below the 4-floor for a nameable reason: one contract widening + one rule at its single choke point + one teaching line; sharding further would fork the seam the phase exists to keep single. Out-of-scope, documented: a mutation-proof-presence check on transparencyReports was REJECTED as unverifiable at this seam (free prose can claim anything) — proof quality is phase 20\'s territory; historical phases recording laundered identities are data, never migrated. ' +
-    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — self-review 0 hits in both schema homes and gate-report.mjs (step-verifies red for exactly the members/rules their diffs add); assumption probes all exit 0 (enum-line diff empty across homes; agent: z.string() present at report side); the enum-line-diff verify was dry-run against the CURRENT identical pair (green direction) and is red under any one-sided edit by construction (diff non-empty); runner clauses inherit polarity from their grep representatives.',
+    'Dodge vectors reviewed (review-phase Mode A): the reviewScope-none exemption is not lane-controlled — scope is ratified pre-queue by review-phase Mode A, so a lane rewriting reviewScope to none post-queue is plan falsification visible in the phase diff and the Mode B audit (accepted residual, not a rule gap); the absent-driver dodge is already refused upstream — driverReconcile (gate.mjs) errors when a lane journal exists but executionResult.driver is absent, so the lane-keyed rule only goes silent for true inline sessions (the pre-existing, documented boundary). ' +
+    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — self-review 0 hits in both schema homes and gate-report.mjs (step-verifies red for exactly the members/rules their diffs add); assumption probes all exit 0 (enum-line diff empty across homes; agent: z.string() present at report side); the enum-line-diff verify was dry-run against the CURRENT identical pair (green direction) and is red under any one-sided edit by construction (diff non-empty); runner clauses inherit polarity from their grep representatives — every runner verify carries one in-clause (review-phase added the 17.1/17.3 representatives and re-ran all probes 2026-08-31: assumptions 0/0/0, step grep clauses all exit 1).',
 })
