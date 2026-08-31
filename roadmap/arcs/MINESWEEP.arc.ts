@@ -53,6 +53,39 @@
  *   this arc only makes the gate STOP mis-deriving from the wrong repo's diff; owner:
  *   next measurement arc; escalation: gate report names the foreign repos it cannot see.
  *
+ * PROMISE LEDGER (plan-arc Step 2c — audited by arc-sweep / validate-arc)
+ * | promise | kind | fulfilled by |
+ * |---|---|---|
+ * | stray-lane-visibility | criterion | 14.2 (classifier) + 14.3 (audit check 15) + 14.4 (status line) |
+ * | plan-lane-close | criterion | 14.6 (consume-the-plan) + 15.4 (entity-validation guard) |
+ * | grammar-tolerant-attribution | criterion | 16.1 (matcher) + 16.2 (derivation) + 16.3 (curate + WARNs) |
+ * | pnpm-bootstrap | criterion | 15.1 (detectInstaller) + 15.2 (ensureWorktree + pre-state refusal) |
+ * | delegated-independent-review | criterion | 17.1 (enum) + 17.2 (checkPhaseConsistency rule) |
+ * | vacuity-flagged | criterion | 20.1/20.2 (cannot-fail probe at gate plan) + 20.3 (polarity lint classes) |
+ * | singleSeam 1 (one lane classifier) | singleSeam | 14.2 (consumers 14.3, 14.4, 14.5) |
+ * | singleSeam 2 (one attribution matcher) | singleSeam | 16.1 (consumers 16.2, 16.3) |
+ * | singleSeam 3 (one pm detector) | singleSeam | 15.1 (consumer 15.2) |
+ * | singleSeam 4 (schema vendor pair) | singleSeam | 17.1 (same-commit line-identical widening) |
+ * | rail: report-only accounting | honestyRail | 14.3 (report-only check) + 14.6 (refusal-first close) |
+ * | rail: zero metered-skill growth | honestyRail | by construction (no task touches the 8 metered files; 16.4 is agent cards, diet-funded + DIET-LEDGER rows) — measure assert 13257 verified at every phase gate |
+ * | rail: tolerance never silent | honestyRail | 16.3 (per-class deviant WARNs) |
+ * | rail: refusals name reason+remedy | honestyRail | 14.6 + 15.2 + 15.4 + 17.2 (each refusal text tested) |
+ * | LOCKED: audit fires automatically at plan/review entry | decision | 14.3 (audit) + 14.4 (status — run by every protocol entry) |
+ * | LOCKED: 12,500 retired, 13,257 zero-growth stands | decision | no build — evidence ruling recorded above + closing report §budget |
+ * | LOCKED: lockfile-keyed bootstrap | decision | 15.1 |
+ * | LOCKED: plan-lane close mirrors review lane | decision | 14.6 |
+ * | LOCKED: read-side grammar tolerance | decision | 16.1-16.3 |
+ * | LOCKED: no-self-judge at verify-complete | decision | 17.2 |
+ * | USER ASK: "pls go and mine evals from this repo, ../zeroh, ../atlas, ../mudarabah2, ../azure - only latest relevant ones" | request | REFRAMED -> the mining synthesis IS the plan input: .building/eval-mining-2026-08-31.md (delivered pre-arc, 2026-08-31) |
+ * | USER ASK: "pls check we dispose of all properly" | request | checked (19 strays found, causes proven) -> 14.1-14.6 close the causes; deleting existing strays = DEFERRED consumer operator act, surfaced in the closing report |
+ * | USER ASK: "so that codex can properly plan phases/arcs too?" | request | phases: 15.3 + 15.4; arcs: REFRAMED -> 15.5 loud refusal + DEFERRED design (user ruling pending — the honest mapping, surfaced in the closing report) |
+ * | USER ASK: "it created a file not phase I believe?" | request | root-caused (CODEX-PLAN.md hand-off, not a failed authoring) + 15.4 makes the failure class mechanical |
+ * | USER ASK: "what else should we improve based on the data?" | request | phases 16, 17, 18, 19, 20 |
+ * | USER ASK: "is audit going to be run automaticalyl when planning/reviewing?" | request | yes after this arc: 14.3 + 14.4 (status is every entry's first read) |
+ * | USER ASK: "I want high confidence long term fixes" | request | every phase fixes the owning rail (no symptom patches; Lane B review on all seven) |
+ * | USER ASK: "once you plan / review arc, also review with codex" | request | REFRAMED -> the plan-process act: `roadmap codex review 14 15 16 17 18 19 20 --doc .building/eval-mining-2026-08-31.md` after queueing |
+ * | USER ASK: "12500 is imaginray budget… see if we can cather to it or should be increased? Properly check based on gauntlet findings" | request | answered by evidence ruling (LOCKED above): retired — measured zero-growth ratchet 13,257 stands, gauntlet lessons 1/3/4 cited |
+ *
  * design gate: skipped — no new pattern / no surface (mechanical arc). Every member
  * extends an existing rail: audit checks (cli/commands/audit.mjs check catalogue),
  * the disposal rail (cli/lib/worktree.mjs disposeWorktree + codex.mjs archiveReviewLane
