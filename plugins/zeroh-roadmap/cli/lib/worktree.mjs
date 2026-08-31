@@ -10,8 +10,9 @@
  * stolen. Claiming is a REGISTRY act only — git happens in ensureWorktree.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, realpathSync, rmSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
+import { LANES, journalDeclineReason } from './codex-journal.mjs'
 
 const git = (cwd, args) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 60_000, encoding: 'utf8' }).trim()
@@ -354,6 +355,162 @@ export function samePath(a, b) {
 export function isSlotDir(root, dir) {
   const k = /-wt-(\d+)$/.exec(dir)?.[1]
   return Boolean(k) && samePath(`${root}-wt-${k}`, dir)
+}
+
+/**
+ * The ONE lane inventory: every lane worktree this repo carries, with its lifecycle class and the
+ * exact command that closes it.
+ *
+ * Three readers want this same answer — `roadmap audit` check 15, the `roadmap status` stray line,
+ * and any operator who would otherwise run `git worktree list` by hand — and a second
+ * worktree-enumeration parser is the forked seam this export exists to prevent. The 2026-08-31
+ * census found 19 stray sibling worktrees (~6.5 GB) across four consumers, every sampled journal
+ * dead and unarchived; none of it was visible from any command.
+ *
+ * INVENTORY AND LIVENESS ONLY, by design. Whether a tree is SAFE to remove — dirt, unpushed
+ * commits — is disposeWorktree's question, asked once at a done-moment; asking it per lane on
+ * every `roadmap status` would be expensive and would race a lane still writing into its tree.
+ *
+ * Classes, one per row: `live` (the matched journal's pgid is a running process GROUP) ·
+ * `stale-run`/`stale-plan`/`stale-review` (its group is gone; the suffix is the journal's own
+ * lane, because the three lanes have three different done-moments) · `closed` (the match is an
+ * ARCHIVED journal, so the done-moment already ran and only the tree was left behind) · `legacy`
+ * (no journal names the dir) · `unknown` (a journal that could cover it will not read).
+ * `unknown` is never folded into `legacy` — the codex-journal doctrine: an absent record means
+ * nothing ran, an unreadable one means the launcher's record is there and unreadable, and
+ * treating those alike reports "manual inspection" over a journal sitting right on disk.
+ *
+ * Matching is by RESOLVED worktree path on BOTH sides (the refuseIfLive precedent): a journal may
+ * record `--worktree ../lane` as given, and a raw string compare would leave that lane reading as
+ * journal-less — a phantom `legacy` row for its own absolute twin. Relative entries resolve
+ * against `root`, which is what the CLI's cwd was when the launcher wrote them.
+ *
+ * NEVER throws on a journal. A single truncated file in .building/ would otherwise take down both
+ * `status` and `audit`. The worktree ENUMERATION is deliberately not caught: a repo that cannot
+ * list its own worktrees is broken, and reporting an empty inventory for it would be the silent
+ * all-clear this whole seam exists to stop.
+ *
+ * @param {string} root the primary checkout.
+ * @returns {Array<{ dir: string, branch: string|null,
+ *   class: 'live'|'stale-run'|'stale-plan'|'stale-review'|'closed'|'legacy'|'unknown',
+ *   journalPath: string|null, remedy: string }>} one row per lane worktree — never the primary,
+ *   never a session slot (isSlotDir: disposing one takes its node_modules with it while the slot
+ *   registry keeps a live claim on a deleted path).
+ */
+export function surveyLanes(root) {
+  const building = join(root, '.building')
+  const resolved = (p) => {
+    const abs = resolve(root, String(p ?? ''))
+    try {
+      return realpathSync(abs)
+    } catch {
+      return abs
+    }
+  }
+
+  // ── the journal index, built once: resolved worktree path → the record that names it ──
+  const byDir = new Map()
+  const unreadable = []
+  for (const f of existsSync(building) ? readdirSync(building) : []) {
+    const lane = Object.keys(LANES).find((l) => LANES[l].journalRe.test(f) || LANES[l].closedRe.test(f))
+    if (!lane) continue
+    const path = join(building, f)
+    let text = ''
+    let value
+    try {
+      text = readFileSync(path, 'utf8')
+      value = JSON.parse(text)
+    } catch {
+      unreadable.push({ path, text })
+      continue
+    }
+    // Falsiness is not the test: `[]` and `"text"` are truthy and would reach the classifier as a
+    // journal with `pgid undefined` — i.e. as a DEAD run, a lifecycle invented out of a bad file.
+    if (journalDeclineReason(value) || !value.worktree) {
+      if (journalDeclineReason(value)) unreadable.push({ path, text })
+      continue
+    }
+    const closed = LANES[lane].closedRe.test(f)
+    const key = resolved(value.worktree)
+    // A LIVE journal outranks an archived one for the same tree: a relaunch after a close is the
+    // newer truth, and reporting `closed` there would tell an operator the lane is finished.
+    if (closed && byDir.has(key)) continue
+    if (!closed && byDir.get(key)?.closed === false) continue
+    byDir.set(key, { path, journal: value, lane, closed })
+  }
+
+  const lanes = []
+  for (const block of git(root, ['worktree', 'list', '--porcelain']).split('\n\n')) {
+    const dir = /^worktree (.+)$/m.exec(block)?.[1]
+    if (!dir || samePath(dir, root) || isSlotDir(root, dir)) continue
+    lanes.push({ dir, branch: /^branch refs\/heads\/(.+)$/m.exec(block)?.[1] ?? null })
+  }
+  // An unreadable journal naming NO surveyed tree could still be any of theirs, so it downgrades
+  // every unmatched lane to `unknown` rather than letting one read as `legacy` — a truncated
+  // journal cut BEFORE its worktree field is exactly the file that cannot name itself.
+  const blind = unreadable.filter((u) => !lanes.some((l) => u.text.includes(basename(l.dir))))
+
+  return lanes.map(({ dir, branch }) => {
+    const hit = byDir.get(resolved(dir))
+    const ids = (hit?.journal?.phases ?? []).map(String)
+    const idList = ids.join(' ')
+    const flag = hit ? LANES[hit.lane].flag : null
+    const laneFlag = flag ? ` ${flag}` : ''
+    const removeCmd = `git -C ${root} worktree remove --force ${dir}`
+      + (branch ? ` && git -C ${root} branch -D ${branch}` : '')
+      + ` && git -C ${root} worktree prune`
+    if (!hit) {
+      const named = unreadable.find((u) => u.text.includes(basename(dir))) ?? null
+      if (!named && blind.length === 0) {
+        return {
+          dir,
+          branch,
+          class: 'legacy',
+          journalPath: null,
+          // No journal means no phase ids: the DIRECTORY is the only handle an operator has.
+          remedy: `git -C ${dir} log --oneline -5  # inspect what it holds, then: ${removeCmd}`,
+        }
+      }
+      return {
+        dir,
+        branch,
+        class: 'unknown',
+        journalPath: named?.path ?? null,
+        remedy: named
+          ? `cat ${named.path}  # a journal that will not parse — fix or delete it if that run is gone, then: roadmap audit`
+          : `ls ${building}  # a journal there will not parse and names no tree — fix or delete it, then: roadmap audit`,
+      }
+    }
+    if (hit.closed) {
+      // Its work landed and its journal is archived; the tree is the only thing left, and no sweep
+      // verb is allowed to come back for it (the operator ruling), so the remedy IS the hand-run.
+      return { dir, branch, class: 'closed', journalPath: hit.path, remedy: removeCmd }
+    }
+    if (hit.journal.pgid && groupAlive(hit.journal.pgid)) {
+      // A lane in flight is never actionable: handing an operator a removal or a landing verb for
+      // a run still writing into that tree is the data loss the rail exists to prevent. Observe it.
+      return {
+        dir,
+        branch,
+        class: 'live',
+        journalPath: hit.path,
+        remedy: idList ? `roadmap codex status ${idList}${laneFlag}` : `tail -f ${hit.journal.log ?? hit.path}`,
+      }
+    }
+    return {
+      dir,
+      branch,
+      class: `stale-${hit.lane}`,
+      journalPath: hit.path,
+      // Each lane's OWN done-moment, named verbatim: the run lane LANDS (a remedy that merely
+      // removed the tree would throw the phase away), while the plan and review lanes make no
+      // commits the integration branch wants — their close is consuming the hand-off on a status
+      // read, so `phase land` there would only refuse.
+      remedy: hit.lane === 'run'
+        ? `cd ${dir} && ${ids.length ? ids.map((n) => `roadmap phase land ${n}`).join(' && ') : 'roadmap phase land <N>'}`
+        : `roadmap codex status ${idList || '<N>'}${laneFlag}`,
+    }
+  })
 }
 
 /** A 'failed' refusal is usually a broken REF, and refs are shared across every worktree of the

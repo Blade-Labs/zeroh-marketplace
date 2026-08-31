@@ -69,9 +69,9 @@ import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname, isAbsolute } from 'node:path'
+import { join, dirname, isAbsolute, resolve, basename } from 'node:path'
 
 const bases = []
 const kids = []
@@ -116,6 +116,8 @@ const disposeWorktree = async (...args) =>
       'disposeWorktree(repoRoot, dir, { branch, integrationRef, allowUntracked, untrackedTolerant, pgid })',
     )
   )(...args)
+const surveyLanes = async (...args) =>
+  (await resolveExport('surveyLanes', 'surveyLanes(root) → [{ dir, branch, class, journalPath, remedy }]'))(...args)
 
 /** The one thing the contract fixes about the registry: WHERE it lives. */
 const REGISTRY_REL = join('.building', 'worktree-slots.json')
@@ -1351,4 +1353,439 @@ test('disposeWorktree: a removal that FAILED carries the real cause and a way ou
     `a terminal refusal must say so and hand over the manual finish — matching on "git worktree remove" alone is vacuous, the failure message already contains it; got: ${out.detail}`,
   )
   assert.ok(existsSync(dir), 'and the worktree is still there')
+})
+
+// ── surveyLanes: the ONE lane inventory, with lifecycle state (phase 14.2) ────────────
+//
+// Nothing enumerates lane worktrees today, so accumulation is invisible until somebody runs
+// `git worktree list` by hand — and three readers want the same answer (audit check 15, the
+// status stray line, codex status hints), which is why this is ONE classifier and not three
+// parsers. The contract is inventory + liveness ONLY: one row per LANE worktree, never the
+// primary and never a session slot, classified from the journal that NAMES the dir, with a
+// remedy an operator can paste. Every case below builds real git worktrees at the launcher's
+// own path shape (`<root>-codex[-plan|-review]-<ids>`) and real journals in <root>/.building/,
+// and liveness is a REAL detached process group (liveGroup/reapGroup) — a hand-written pgid
+// would prove only that a number was compared to something.
+
+/** The lane's report file, per the LANES table — journals carry it, so the fixtures do too. */
+const LANE_REPORT = { run: 'CODEX-REPORT.md', plan: 'CODEX-PLAN.md', review: 'CODEX-REVIEW.md' }
+const LANE_PREFIX = { run: 'codex-', plan: 'codex-plan-', review: 'codex-review-' }
+
+/** Path identity the way the contract states it: resolved on BOTH sides, symlinked /tmp and all. */
+const realOf = (p) => {
+  try {
+    return realpathSync(p)
+  } catch {
+    return resolve(String(p ?? ''))
+  }
+}
+
+/** A repo with an integration REF and no lane worktrees yet — the survey's starting point. */
+function surveyRepo() {
+  const r = makeRepo()
+  commitIn(r.root, 'seed: the integration branch exists', 'src/seed.txt')
+  if (r.branch() === BASE) r.git('branch', '-m', `${BASE}-primary`)
+  r.git('branch', BASE)
+  assert.notEqual(r.branch(), BASE, 'fixture bug: the primary must not sit on the integration branch')
+  return r
+}
+
+/**
+ * A real lane worktree at the LAUNCHER's path shape (`<root>-codex-<ids>`), attached to a branch
+ * or `--detach` for the read-only lanes. Deliberately NOT a `-wt-<k>` path: a slot is the one
+ * worktree shape the survey must never report, and building lanes there would hide that.
+ * makeRepo only sweeps <root> and <root>-wt-1..6, so the dir registers itself for cleanup here
+ * (the pushLane idiom above).
+ */
+function laneAt(r, suffix, { branch = null } = {}) {
+  const dir = `${r.root}-${suffix}`
+  bases.push(dir)
+  if (branch) r.git('worktree', 'add', '-b', branch, dir, BASE)
+  else r.git('worktree', 'add', '--detach', dir, BASE)
+  assert.ok(r.worktrees().includes(dir), `fixture bug: git must know ${dir} before the survey is asked about it`)
+  return dir
+}
+
+/**
+ * A REAL lane journal in <root>/.building/, in the launcher's own shape and name grammar.
+ * `closed: true` writes the ARCHIVED twin (`.closed.json`, the name `phase land` renames to);
+ * `raw` writes bytes verbatim, which is the only way to fixture a journal that will not read.
+ */
+function journalFor(r, { lane = 'run', ids = ['21'], worktree, pgid, closed = false, raw = null } = {}) {
+  const rel = join('.building', `${LANE_PREFIX[lane]}${ids.join('-')}${closed ? '.closed' : ''}.json`)
+  const body =
+    raw
+    ?? JSON.stringify(
+      {
+        phases: ids,
+        lane,
+        driver: 'codex',
+        report: LANE_REPORT[lane],
+        worktree,
+        base: BASE,
+        pgid,
+        log: join(r.root, '.building', `${LANE_PREFIX[lane]}${ids.join('-')}.log`),
+        startedAt: new Date().toISOString(),
+        ...(closed ? { closedAt: new Date().toISOString(), closedBy: 'phase land' } : {}),
+      },
+      null,
+      2,
+    ) + '\n'
+  writeIn(r.root, rel, body)
+  return join(r.root, rel)
+}
+
+/** The row for a dir, with the one-row-per-lane invariant enforced at the lookup (never by index). */
+function rowFor(rows, dir, why) {
+  assert.ok(Array.isArray(rows), `${why}: surveyLanes must return an ARRAY of rows; got ${JSON.stringify(rows)}`)
+  const seen = rows.map((row) => `${row?.dir} [${row?.class}]`).join(', ')
+  const hits = rows.filter((row) => realOf(row?.dir) === realOf(dir))
+  assert.equal(hits.length, 1, `${why}: exactly ONE row per lane worktree — expected one for ${dir}, got ${hits.length}; rows were: ${seen}`)
+  return hits[0]
+}
+
+/** A dir the survey must NEVER present. Read through realOf, so a realpath'd row cannot sneak past. */
+function noRowFor(rows, dir, why) {
+  const hits = rows.filter((row) => realOf(row?.dir) === realOf(dir))
+  assert.deepEqual(hits, [], `${why} must NEVER be a row (${dir}) — presenting it as a stray invites an operator to remove a checkout that is in active use`)
+}
+
+/** Criterion 1's "runnable remedy string per row": a command to paste, never prose, never empty. */
+function assertRunnableRemedy(row, why) {
+  assert.equal(
+    typeof row.remedy,
+    'string',
+    `${why}: every row carries a remedy STRING — audit check 15 prints it verbatim as the finding's fix; got ${JSON.stringify(row.remedy)}`,
+  )
+  assert.ok(
+    row.remedy.trim().length > 0,
+    `${why}: an empty remedy is "there is a stray worktree" with no way to act — the hand-run \`git worktree list\` this seam exists to replace`,
+  )
+  assert.match(
+    row.remedy,
+    /\b(roadmap|git|codex)\b/,
+    `${why}: the remedy must be a runnable COMMAND an operator can paste (a roadmap/git/codex verb), not a description; got: ${row.remedy}`,
+  )
+}
+
+test('surveyLanes: a LIVE run lane is class live and is never presented as actionable; the same lane reaped is stale-run', async () => {
+  const r = surveyRepo()
+  const dir = laneAt(r, 'codex-21', { branch: 'codex/21' })
+  const runner = liveGroup()
+  const jPath = journalFor(r, { lane: 'run', ids: ['21'], worktree: dir, pgid: runner.pid })
+
+  const row = rowFor(await surveyLanes(r.root), dir, 'live run lane')
+
+  assert.equal(
+    row.class,
+    'live',
+    `a journal whose pgid is a RUNNING process group is a lane in flight, not a stray; got ${JSON.stringify(row)}`,
+  )
+  assert.equal(realOf(row.journalPath), realOf(jPath), 'the row NAMES the journal it was classified from — an operator cannot check a verdict they cannot find')
+  assertRunnableRemedy(row, 'live run lane')
+  assert.doesNotMatch(
+    row.remedy,
+    /\b(remove|rm|dispose|prune|delete|land|kill)\b/i,
+    `a LIVE lane is not actionable: handing an operator a removal or a landing verb for a run still writing into that tree is the data loss the whole rail exists to prevent; got: ${row.remedy}`,
+  )
+  assert.match(
+    row.remedy,
+    /\b(status|log|logs|tail|watch|wait)\b/i,
+    `a live lane's only honest remedy is to OBSERVE it (read its status or its log) until it finishes; got: ${row.remedy}`,
+  )
+
+  await reapGroup(runner)
+
+  const after = rowFor(await surveyLanes(r.root), dir, 'the same lane once its group is reaped')
+  assert.equal(
+    after.class,
+    'stale-run',
+    `liveness must be MEASURED at every survey, never cached or inferred from the journal existing — the same journal whose group has since died is a stray; got ${JSON.stringify(after)}`,
+  )
+})
+
+test('surveyLanes: a dead-pgid run lane is stale-run and its remedy names the run lane’s done-moment', async () => {
+  const r = surveyRepo()
+  const dir = laneAt(r, 'codex-22', { branch: 'codex/22' })
+  const dead = liveGroup()
+  await reapGroup(dead) // the deadness is REAL before it is classified, never assumed
+  const jPath = journalFor(r, { lane: 'run', ids: ['22'], worktree: dir, pgid: dead.pid })
+
+  const row = rowFor(await surveyLanes(r.root), dir, 'dead-pgid run lane')
+
+  assert.equal(row.class, 'stale-run', `a run journal whose group is gone is a run lane past its run; got ${JSON.stringify(row)}`)
+  assert.equal(realOf(row.journalPath), realOf(jPath), 'and it names the journal that classified it')
+  assert.equal(row.branch, 'codex/22', 'branch is the SHORT name a `git branch -D` takes, not refs/heads/codex/22')
+  assertRunnableRemedy(row, 'stale run lane')
+  assert.match(
+    row.remedy,
+    /roadmap phase land/,
+    `the run lane's done-moment is \`roadmap phase land\` — the verb that lands the work AND disposes the lane; a remedy that only removes the tree throws the phase away; got: ${row.remedy}`,
+  )
+  assert.ok(
+    row.remedy.includes('22') || row.remedy.includes(row.dir),
+    `the remedy must identify WHICH lane it fixes (its phase ids or its dir) — a placeholder like \`roadmap phase land <N>\` is not pasteable; got: ${row.remedy}`,
+  )
+})
+
+test('surveyLanes: the stale suffix tracks the JOURNAL’s lane — a plan lane is stale-plan, a review lane is stale-review', async () => {
+  const r = surveyRepo()
+  const planDir = laneAt(r, 'codex-plan-23', { branch: 'codex-plan/23' })
+  const reviewDir = laneAt(r, 'codex-review-24') // the review lane is --detach and read-only
+  const dead = liveGroup()
+  await reapGroup(dead)
+  journalFor(r, { lane: 'plan', ids: ['23'], worktree: planDir, pgid: dead.pid })
+  journalFor(r, { lane: 'review', ids: ['24'], worktree: reviewDir, pgid: dead.pid })
+
+  const rows = await surveyLanes(r.root)
+  const plan = rowFor(rows, planDir, 'dead-pgid plan lane')
+  const review = rowFor(rows, reviewDir, 'dead-pgid review lane')
+
+  assert.equal(
+    plan.class,
+    'stale-plan',
+    `the suffix is the JOURNAL's lane: a hardcoded 'stale-run' would tell audit and status that a plan lane can be landed like a run lane; got ${JSON.stringify(plan)}`,
+  )
+  assert.equal(review.class, 'stale-review', `and a review journal yields 'stale-review'; got ${JSON.stringify(review)}`)
+  assert.equal(review.branch, null, 'a --detach review lane has no branch — null, never "HEAD" and never undefined')
+  assertRunnableRemedy(plan, 'stale plan lane')
+  assertRunnableRemedy(review, 'stale review lane')
+  for (const [name, row] of [['plan', plan], ['review', review]]) {
+    assert.doesNotMatch(
+      row.remedy,
+      /phase land/i,
+      `the ${name} lane has nothing to land — it makes no commits the integration branch wants, so a remedy copied from the run lane points the operator at a verb that will refuse; got: ${row.remedy}`,
+    )
+  }
+  assert.notEqual(
+    plan.remedy,
+    review.remedy,
+    'the remedy belongs to the ROW, not to the class: two different lanes in two different directories cannot share one pasteable command',
+  )
+})
+
+test('surveyLanes: an ARCHIVED .closed.json journal whose worktree is still on disk is class closed', async () => {
+  const r = surveyRepo()
+  const dir = laneAt(r, 'codex-25', { branch: 'codex/25' })
+  const dead = liveGroup()
+  await reapGroup(dead)
+  const jPath = journalFor(r, { lane: 'run', ids: ['25'], worktree: dir, pgid: dead.pid, closed: true })
+  assert.equal(
+    existsSync(join(r.root, '.building', 'codex-25.json')),
+    false,
+    'fixture: only the ARCHIVED twin exists — archiveJournal renames the live journal, it never leaves both',
+  )
+
+  const row = rowFor(await surveyLanes(r.root), dir, 'archived journal, worktree still on disk')
+
+  assert.equal(
+    row.class,
+    'closed',
+    `an archived journal means the lane already reached its done-moment and only the TREE was left behind — reading its dead pgid as 'stale-run' would send an operator to land a phase that landed; got ${JSON.stringify(row)}`,
+  )
+  assert.match(String(row.journalPath), /\.closed\.json$/, `a closed row points at the archived journal, the only record of that lane; got ${JSON.stringify(row.journalPath)}`)
+  assert.equal(realOf(row.journalPath), realOf(jPath), 'and it is the archive for THIS lane')
+  assertRunnableRemedy(row, 'closed lane')
+  assert.match(
+    row.remedy,
+    /\b(remove|dispose|prune|rm)\b/i,
+    `a closed lane's work is already landed and its journal already archived: the only thing left to do is take the tree away; got: ${row.remedy}`,
+  )
+})
+
+test('surveyLanes: a worktree no journal names at all is class legacy, and its remedy names the dir', async () => {
+  const r = surveyRepo()
+  const dir = laneAt(r, 'codex-26', { branch: 'codex/26' })
+  assert.equal(existsSync(join(r.root, '.building')), false, 'fixture: nothing in .building — this is the pre-journal lane the audit found squatting')
+
+  const row = rowFor(await surveyLanes(r.root), dir, 'a lane with no journal')
+
+  assert.equal(row.class, 'legacy', `no journal names this dir, so nothing is known about its run — 'legacy', never a guessed lifecycle; got ${JSON.stringify(row)}`)
+  assert.equal(row.journalPath, null, 'journalPath is null when there is no journal — not "" and not undefined, because callers print it')
+  assertRunnableRemedy(row, 'legacy lane')
+  assert.ok(
+    row.remedy.includes(row.dir),
+    `a legacy lane has NO journal and so no phase ids: the directory is the only handle an operator has on it, and a remedy that omits it cannot be pasted; got: ${row.remedy}`,
+  )
+})
+
+test('surveyLanes: the PRIMARY checkout and session SLOTS are never rows, even when a journal names a slot', async () => {
+  const r = surveyRepo()
+  const lane = laneAt(r, 'codex-27', { branch: 'codex/27' })
+  const slot = (await ensureWorktree(r.root, 1, { baseRef: BASE, installDeps: () => {} })).dir
+  assert.equal(slot, `${r.root}-wt-1`, 'fixture: the slot sits at the isSlotDir path shape')
+  const dead = liveGroup()
+  await reapGroup(dead)
+  journalFor(r, { lane: 'run', ids: ['27'], worktree: lane, pgid: dead.pid })
+  // `codex run --worktree <root>-wt-1` journals a SLOT — the shape that makes the exclusion a
+  // membership test rather than "has no journal".
+  journalFor(r, { lane: 'run', ids: ['28'], worktree: slot, pgid: dead.pid })
+
+  const rows = await surveyLanes(r.root)
+
+  // Asserted FIRST: every "never a row" claim below is vacuously true of an empty array.
+  assert.equal(rowFor(rows, lane, 'the real lane').class, 'stale-run', 'the genuine lane IS surveyed, so the exclusions below mean something')
+  noRowFor(rows, r.root, 'the primary checkout')
+  noRowFor(rows, slot, 'a session slot')
+  assert.equal(
+    rows.length,
+    1,
+    `three worktrees exist (primary, slot, lane) and exactly ONE is a lane — disposing a slot takes its node_modules with it while the slot registry keeps a live claim on a deleted path; rows were: ${rows.map((row) => `${row.dir} [${row.class}]`).join(', ')}`,
+  )
+})
+
+test('surveyLanes: an unreadable journal yields class unknown and never throws', async () => {
+  const r = surveyRepo()
+  const truncDir = laneAt(r, 'codex-29', { branch: 'codex/29' })
+  const arrayDir = laneAt(r, 'codex-30', { branch: 'codex/30' })
+
+  // (a) a launch that died MID-WRITE: the bytes still name the worktree, but nothing parses.
+  const whole = JSON.stringify({ phases: ['29'], lane: 'run', worktree: truncDir, pgid: 424242 }, null, 2)
+  const truncated = whole.slice(0, whole.lastIndexOf('"pgid"'))
+  assert.ok(truncated.includes(truncDir), 'fixture bug: the truncated bytes must still NAME the worktree, or the case proves nothing about attribution')
+  assert.throws(() => JSON.parse(truncated), SyntaxError, 'fixture bug: the truncated journal must genuinely fail to parse')
+  journalFor(r, { lane: 'run', ids: ['29'], raw: truncated })
+
+  // (b) parses, but not to a JOURNAL. Falsiness is not the test: an array is TRUTHY and reaches a
+  // naive reader as a journal with `pgid undefined` — i.e. as a DEAD run.
+  const asArray = JSON.stringify([{ worktree: arrayDir, pgid: 424242 }], null, 2) + '\n'
+  assert.ok(Array.isArray(JSON.parse(asArray)), 'fixture: this one parses — to an array, which is not a journal')
+  journalFor(r, { lane: 'run', ids: ['30'], raw: asArray })
+
+  let rows = null
+  let thrown = null
+  try {
+    rows = await surveyLanes(r.root)
+  } catch (err) {
+    if (err instanceof assert.AssertionError) throw err
+    thrown = err
+  }
+
+  assert.equal(
+    thrown,
+    null,
+    `an unreadable journal must yield a ROW, never an exception — the classifier is read by \`roadmap status\` and \`roadmap audit\`, and one truncated file in .building would take both down; got ${thrown?.name}: ${thrown?.message}`,
+  )
+  const truncRow = rowFor(rows, truncDir, 'a lane covered by a truncated journal')
+  const arrayRow = rowFor(rows, arrayDir, 'a lane covered by a journal that parses to a non-object')
+  assert.equal(
+    truncRow.class,
+    'unknown',
+    `a journal that could have covered this dir exists and cannot be READ: 'unknown' says so, where 'legacy' would claim the launcher never recorded a run; got ${JSON.stringify(truncRow)}`,
+  )
+  assert.equal(
+    arrayRow.class,
+    'unknown',
+    `and a file that parses to a non-object is unreadable too — treating it as a journal reads pgid undefined as "dead" and invents a lifecycle; got ${JSON.stringify(arrayRow)}`,
+  )
+  assertRunnableRemedy(truncRow, 'unknown (truncated journal)')
+  assertRunnableRemedy(arrayRow, 'unknown (non-object journal)')
+})
+
+test('surveyLanes: a journal recording a RELATIVE worktree path still matches its own absolute twin', async () => {
+  // The phantom-row regression (architect note N2, the refuseIfLive precedent): `codex run
+  // --worktree ../lane` journals the path as given, and a raw string compare then matches
+  // nothing — the lane comes back 'legacy', so audit hands an operator a "manual inspection"
+  // finding for a lane whose journal is sitting right there naming it.
+  const r = surveyRepo()
+  const dir = laneAt(r, 'codex-31', { branch: 'codex/31' })
+  const dead = liveGroup()
+  await reapGroup(dead)
+  const relative = `../${basename(dir)}`
+  assert.notEqual(relative, dir, 'fixture: the journal records a RELATIVE path — the two sides are not string-equal')
+  journalFor(r, { lane: 'run', ids: ['31'], worktree: relative, pgid: dead.pid })
+
+  // Run from the repo root: that is where the CLI runs, and what a relative --worktree was
+  // relative to, so both readings of "resolved on both sides" agree here.
+  const cwdBefore = process.cwd()
+  let rows = null
+  let thrown = null
+  process.chdir(r.root)
+  try {
+    rows = await surveyLanes(r.root)
+  } catch (err) {
+    if (err instanceof assert.AssertionError) throw err
+    thrown = err
+  } finally {
+    process.chdir(cwdBefore)
+  }
+
+  assert.equal(thrown, null, `a relative journal entry must not throw either; got ${thrown?.name}: ${thrown?.message}`)
+  const row = rowFor(rows, dir, 'a lane whose journal recorded a relative path')
+  assert.equal(
+    row.class,
+    'stale-run',
+    `the match is by RESOLVED path on both sides: unresolved, this lane reads as journal-less and comes back 'legacy' while its journal names it; got ${JSON.stringify(row)}`,
+  )
+  assert.equal(
+    rows.length,
+    1,
+    `and there is exactly ONE row — the relative entry and its absolute twin are the same lane, never a phantom second row; rows were: ${rows.map((x) => `${x.dir} [${x.class}]`).join(', ')}`,
+  )
+})
+
+test('surveyLanes: every row is exactly { dir, branch, class, journalPath, remedy }, with branch null on a detached lane', async () => {
+  const r = surveyRepo()
+  const attached = laneAt(r, 'codex-32', { branch: 'codex/32' })
+  const detached = laneAt(r, 'codex-review-33')
+  const orphan = laneAt(r, 'codex-34', { branch: 'codex/34' })
+  const dead = liveGroup()
+  await reapGroup(dead)
+  journalFor(r, { lane: 'run', ids: ['32'], worktree: attached, pgid: dead.pid })
+  journalFor(r, { lane: 'review', ids: ['33'], worktree: detached, pgid: dead.pid })
+
+  const rows = await surveyLanes(r.root)
+
+  assert.equal(rows.length, 3, `one row per LANE worktree, three lanes; rows were: ${rows.map((x) => `${x.dir} [${x.class}]`).join(', ')}`)
+  const CLASSES = ['live', 'stale-run', 'stale-plan', 'stale-review', 'closed', 'legacy', 'unknown']
+  for (const row of rows) {
+    assert.deepEqual(
+      Object.keys(row).sort(),
+      ['branch', 'class', 'dir', 'journalPath', 'remedy'],
+      `rows are exactly { dir, branch, class, journalPath, remedy } — audit, status and codex status all read this ONE shape; got ${JSON.stringify(row)}`,
+    )
+    assert.ok(CLASSES.includes(row.class), `class is one of ${CLASSES.join(' | ')} — a class outside the vocabulary has no severity in audit check 15; got ${JSON.stringify(row.class)}`)
+    assert.ok(isAbsolute(row.dir), `dir is ABSOLUTE — the remedy is pasted from wherever the operator is standing; got ${JSON.stringify(row.dir)}`)
+    assert.ok(
+      row.journalPath === null || (typeof row.journalPath === 'string' && isAbsolute(row.journalPath)),
+      `journalPath is an absolute path or null, never undefined and never relative; got ${JSON.stringify(row.journalPath)}`,
+    )
+    assertRunnableRemedy(row, `row ${row.dir}`)
+  }
+  assert.equal(rowFor(rows, attached, 'the attached lane').branch, 'codex/32', 'branch is the SHORT lane branch name')
+  assert.equal(rowFor(rows, detached, 'the detached lane').branch, null, 'a --detach lane reports branch null — "detached"/"HEAD"/undefined would each become a bogus `git branch -D` argument')
+  assert.equal(rowFor(rows, orphan, 'the journal-less lane').journalPath, null, 'and a lane no journal names reports journalPath null')
+})
+
+test('surveyLanes: the classifier is INVENTORY AND LIVENESS ONLY — no per-dir dirt or reachability probes', async () => {
+  // Acceptance criterion 2 as a shape check. A `status --porcelain` or `rev-list` per lane dir is
+  // what makes disposeWorktree a done-moment act: it is expensive, it races a running lane, and it
+  // is asked by every one of three readers on every status print. The survey answers what EXISTS
+  // and what is RUNNING; whether a tree is safe to remove is the disposal rail's question.
+  const src = readFileSync(new URL('./worktree.mjs', import.meta.url), 'utf8')
+  const anchor = src.indexOf('export function surveyLanes')
+  assert.notEqual(
+    anchor,
+    -1,
+    'anchor NOT FOUND: cli/lib/worktree.mjs must declare `export function surveyLanes` — an unresolved anchor is not "no probes found", it is a check that never ran',
+  )
+  const close = src.indexOf('\n}', anchor)
+  assert.notEqual(close, -1, 'anchor UNTERMINATED: no module-level closing brace after surveyLanes, so the body could not be sliced — the probe assertions below would be vacuous')
+  const body = src.slice(anchor, close)
+
+  assert.equal(
+    body.includes('rev-list'),
+    false,
+    'surveyLanes must run NO rev-list: a per-lane reachability walk is the disposal rail\'s question, asked once at the done-moment — not on every `roadmap status`',
+  )
+  assert.equal(
+    body.includes('status --porcelain'),
+    false,
+    'surveyLanes must run NO `status --porcelain`: dirt is a property of the moment you remove a tree, and reading it here races a live lane still writing into it',
+  )
+  assert.doesNotMatch(
+    body,
+    /['"`]status['"`]/,
+    'nor the ARRAY-arg form of the same probe: `[\'status\', \'--porcelain\', \'-uall\']` would satisfy a literal `status --porcelain` grep while running exactly the probe the criterion forbids',
+  )
 })

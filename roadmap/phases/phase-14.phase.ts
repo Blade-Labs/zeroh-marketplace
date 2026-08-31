@@ -141,7 +141,19 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/cli/lib/worktree.mjs', 'plugins/zeroh-roadmap/cli/lib/worktree.test.mjs'],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ['surveyLanes(root) from cli/lib/worktree.mjs'] },
-      done: false,
+      done: true,
+      doneDate: '2026-08-31',
+      transparencyReport: {
+        whatWasDone:
+          "surveyLanes(root) landed in cli/lib/worktree.mjs: it indexes every codex journal in .building/ — all three lanes, live AND .closed forms, read through the LANES table so no second name grammar exists — keyed by RESOLVED worktree path, then walks `git worktree list --porcelain` and returns one row { dir, branch, class, journalPath, remedy } per lane worktree, skipping the primary (samePath) and session slots (isSlotDir). Classes: live (pgid groupAlive) / stale-run|stale-plan|stale-review (suffix = the journal's own lane, because the three lanes have three different done-moments) / closed (archived journal, tree left behind) / legacy (no journal) / unknown (a journal that will not read). A live journal outranks an archived one for the same tree. Remedies are per-ROW pasteable commands: the run lane's `cd <dir> && roadmap phase land <N>`, the plan/review lanes' own consume-read `roadmap codex status <N> --plan|--review`, and a named git removal for closed/legacy.",
+        how:
+          "TDD: test-engineer wrote 10 cases blind to the implementation against real tmp repos, real git worktrees at the launcher's own path shape and real journals, with liveness proven by a REAL detached process group measured twice (live → reaped → surveyed again, so a cached or presence-inferred 'live' cannot pass). All 10 were RED on the missing export; the suite is now 42/42 (capbuild node --test cli/lib/worktree.test.mjs, exit 0, zero `not ok` lines). A module-load smoke over codex.mjs + landing.mjs confirms the new lib→lib import of codex-journal.mjs introduces no cycle.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "An unreadable journal is attributed to a lane by its raw bytes NAMING that directory; one truncated BEFORE its worktree field can name nothing, so it instead downgrades every otherwise-legacy lane to `unknown` with journalPath null. That is deliberately conservative — the codex-journal doctrine forbids folding an unreadable record into `no record` — but it means one corrupt file can widen the unknown class beyond the lane it really covers. Both directions are test-pinned.",
+      },
     },
     {
       id: '14.3',
