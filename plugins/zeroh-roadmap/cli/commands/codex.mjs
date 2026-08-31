@@ -604,6 +604,24 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     return { ok: r.status === 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` }
   }
 
+  // RE-ENTRY on an ALREADY-CONSUMED lane. The tree is gone and the plan is archived, so the only
+  // thing that can still be stranded is the BRANCH: a `branch -D` that lost to a ref lock on the
+  // closing read is announced once and then never retried and never re-reported, because both
+  // re-entry conditions have gone false. That is a silent leak of exactly the class this phase
+  // exists to end, so the retry lives here rather than in a sweep verb nobody is allowed to add.
+  if (journal.archivedAt && !existsSync(wt)) {
+    const stranded = q(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])
+    if (!stranded.ok) return { journal, archived: journal.archivedReport ?? null }
+    const retry = q(root, ['branch', '-D', branch])
+    process.stderr.write(
+      retry.ok
+        ? `roadmap codex: ${branch} was stranded by an earlier close (its worktree is already gone) and is now deleted\n`
+        : `roadmap codex: ${branch} is STILL stranded — its worktree was disposed on an earlier read, but the branch will not delete: ${retry.out.trim()}\n`
+          + `  Delete it by hand: git -C ${root} branch -D ${branch}\n`,
+    )
+    return { journal, archived: journal.archivedReport ?? null }
+  }
+
   // (a) LIVENESS. `state === 'complete'` with a live group is reachable — a driver writes its
   // sentinel before its process group exits, and the poll reads status in between.
   if (journal.pgid && groupAlive(journal.pgid)) {
@@ -664,7 +682,7 @@ function archivePlanLane(root, jPath, journal, reportPath) {
   } catch {
     integrationRef = base
   }
-  const atTip = q(root, [ 'rev-parse', `${integrationRef}:${phaseFile}`])
+  const atTip = q(root, ['rev-parse', `${integrationRef}:${phaseFile}`])
   let harvested = atTip.ok && atTip.out.trim() === lb
   if (!harvested) {
     const history = q(root, ['log', '--format=%H', integrationRef, '--', phaseFile])
@@ -828,9 +846,11 @@ function statusCodex(root, ids, lane = 'run') {
     journal = done.journal
     reported = existsSync(reportPath) ? reportPath : done.archived
   }
-  // THE PLAN LANE'S DONE-MOMENT, keyed the same way — on the VERDICT, never on the file, so a stale
-  // sentinel the freshness guard just rejected can never close a lane from behind.
-  if (lane === 'plan' && state === 'complete' && (!j.archivedAt || existsSync(j.worktree))) {
+  // THE PLAN LANE'S DONE-MOMENT, keyed on the VERDICT, never on the file, so a stale sentinel the
+  // freshness guard just rejected can never close a lane from behind. Unlike the review site this
+  // enters on EVERY complete read: an already-consumed lane can still be carrying a branch that
+  // failed to delete, and archivePlanLane's own first arm is what retries and re-reports it.
+  if (lane === 'plan' && state === 'complete') {
     const done = archivePlanLane(root, jPath, j, reportPath)
     journal = done.journal
     if (done.archived) reported = existsSync(reportPath) ? reportPath : done.archived

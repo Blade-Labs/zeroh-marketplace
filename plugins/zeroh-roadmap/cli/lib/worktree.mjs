@@ -13,6 +13,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, realpathSync, rmSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { LANES, journalDeclineReason } from './codex-journal.mjs'
+import { mainCheckout } from './gitroot.mjs'
 
 const git = (cwd, args) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 60_000, encoding: 'utf8' }).trim()
@@ -375,7 +376,10 @@ export function isSlotDir(root, dir) {
  * `stale-run`/`stale-plan`/`stale-review` (its group is gone; the suffix is the journal's own
  * lane, because the three lanes have three different done-moments) · `closed` (the match is an
  * ARCHIVED journal, so the done-moment already ran and only the tree was left behind) · `legacy`
- * (no journal names the dir) · `unknown` (a journal that could cover it will not read).
+ * (no journal names the dir) · `unknown` (a journal that could cover it will not read — including
+ * one truncated BEFORE its worktree field, which names no tree and so downgrades every otherwise-
+ * `legacy` lane rather than let one read as journal-less: one corrupt file widens `unknown` past
+ * the lane it really covers, which is the conservative direction on purpose).
  * `unknown` is never folded into `legacy` — the codex-journal doctrine: an absent record means
  * nothing ran, an unreadable one means the launcher's record is there and unreadable, and
  * treating those alike reports "manual inspection" over a journal sitting right on disk.
@@ -390,14 +394,32 @@ export function isSlotDir(root, dir) {
  * list its own worktrees is broken, and reporting an empty inventory for it would be the silent
  * all-clear this whole seam exists to stop.
  *
- * @param {string} root the primary checkout.
+ * @param {string} anyRoot any checkout of the repo — the survey resolves the MAIN one itself.
  * @returns {Array<{ dir: string, branch: string|null,
  *   class: 'live'|'stale-run'|'stale-plan'|'stale-review'|'closed'|'legacy'|'unknown',
  *   journalPath: string|null, remedy: string }>} one row per lane worktree — never the primary,
  *   never a session slot (isSlotDir: disposing one takes its node_modules with it while the slot
  *   registry keeps a live claim on a deleted path).
  */
-export function surveyLanes(root) {
+export function surveyLanes(anyRoot) {
+  // ONE answer to "which checkout", resolved HERE rather than trusted from a caller. Both
+  // consumers hand this a LINKED worktree in their default invocation: `roadmap audit` defaults
+  // its repo to cwd, `roadmap status` derives it from `rev-parse --show-toplevel`, and both return
+  // the linked tree when the command runs inside one — which is exactly where /do-phase (a session
+  // slot) and `roadmap phase land` (the codex lane) run. Surveyed from there, the PRIMARY checkout
+  // becomes a `legacy` stray whose remedy tells the operator to delete the main checkout and the
+  // integration branch; sibling slots escape isSlotDir, which anchors on the passed root, so
+  // `<root>-wt-2` never matches root `<root>-wt-1`; and journals are read from a .building that
+  // holds none, so every real lane classifies `legacy` and loses its done-moment. A wrong remedy is
+  // worse than no remedy, and this seam owns the question, so it answers it once for both callers.
+  let root
+  try {
+    root = mainCheckout(anyRoot)
+  } catch {
+    // A non-repo or bare tree has no worktrees to survey; the enumeration below reports that
+    // honestly by failing loud, which is the contract. Never a guessed path.
+    root = anyRoot
+  }
   const building = join(root, '.building')
   const resolved = (p) => {
     const abs = resolve(root, String(p ?? ''))
@@ -467,8 +489,10 @@ export function surveyLanes(root) {
           branch,
           class: 'legacy',
           journalPath: null,
-          // No journal means no phase ids: the DIRECTORY is the only handle an operator has.
-          remedy: `git -C ${dir} log --oneline -5  # inspect what it holds, then: ${removeCmd}`,
+          // No journal means no phase ids: the DIRECTORY is the only handle an operator has. TWO
+          // numbered steps, not one command with the second half hidden behind a `#` — audit
+          // renders this verbatim, and a shell-commented remedy pastes as a no-op.
+          remedy: `(1) git -C ${dir} log --oneline -5 — inspect what it holds; (2) only if it is spent: ${removeCmd}`,
         }
       }
       return {
@@ -477,8 +501,8 @@ export function surveyLanes(root) {
         class: 'unknown',
         journalPath: named?.path ?? null,
         remedy: named
-          ? `cat ${named.path}  # a journal that will not parse — fix or delete it if that run is gone, then: roadmap audit`
-          : `ls ${building}  # a journal there will not parse and names no tree — fix or delete it, then: roadmap audit`,
+          ? `(1) cat ${named.path} — a journal that will not parse; (2) fix or delete it if that run is gone, then re-run: roadmap audit`
+          : `(1) ls ${building} — a journal there will not parse and names no tree; (2) fix or delete it, then re-run: roadmap audit`,
       }
     }
     if (hit.closed) {

@@ -39,7 +39,7 @@ const TREE = {
   'executor-disarm': { phase: 1737, sub: ['<N> [--force]', '--sweep'], desc: 'remove an executor arm (refuses a live one) / sweep exactly the stale set' },
   phase: { phase: 1657, sub: ['validate <N|file>', 'start <N>', 'curate <N> [--apply] [--groups]', 'land <N>'], desc: 'phase-file validation, start, born-clean curation and the worktree-lane land' },
   worktree: { phase: 2146, sub: ['up', 'status', 'reset [--base <ref>]'], desc: 'the session worktree lane: claim a slot, inspect claims, reset the scratch head per phase' },
-  audit: { phase: 1659, sub: ['--json'], desc: "audit-roadmap's 14 checks, mechanized" },
+  audit: { phase: 1659, sub: ['--json'], desc: "audit-roadmap's 15 checks, mechanized" },
   followups: { phase: 2422, sub: ['census', '--json'], desc: 'census followup-file lifecycle and inbound references' },
   debt: { phase: 1658, sub: ['census', 'dispose', 'check'], desc: 'debt census/dispose wrappers' },
   measure: { phase: 1659, sub: ['--flow', '--assert'], desc: 'protocol-load meter (bytes/4 over the invocation path)' },

@@ -1634,6 +1634,48 @@ test('surveyLanes: the PRIMARY checkout and session SLOTS are never rows, even w
   )
 })
 
+test('surveyLanes: surveyed from a LINKED worktree it answers about the MAIN checkout, not about its caller', async () => {
+  // The gate R0 finding. Both consumers hand this a linked worktree in their DEFAULT invocation —
+  // `roadmap audit` defaults its repo to cwd, `roadmap status` derives it from --show-toplevel —
+  // and that is precisely where /do-phase (a session slot) and `roadmap phase land` (the codex
+  // lane) run. Trusting the caller's root there produced a `legacy` row for the PRIMARY checkout
+  // whose remedy deleted the main checkout and the integration branch, let sibling slots escape
+  // isSlotDir (it anchors on the passed root, so `<root>-wt-2` never matches root `<root>-wt-1`),
+  // and read journals from a .building holding none — so every real lane lost its class.
+  const r = surveyRepo()
+  const lane = laneAt(r, 'codex-40', { branch: 'codex/40' })
+  const slot1 = (await ensureWorktree(r.root, 1, { baseRef: BASE, installDeps: () => {} })).dir
+  const slot2 = (await ensureWorktree(r.root, 2, { baseRef: BASE, installDeps: () => {} })).dir
+  const dead = liveGroup()
+  await reapGroup(dead)
+  journalFor(r, { lane: 'run', ids: ['40'], worktree: lane, pgid: dead.pid })
+
+  const fromPrimary = await surveyLanes(r.root)
+  // The SAME question, asked from inside a slot — the /do-phase seat.
+  const fromSlot = await surveyLanes(slot1)
+
+  assert.deepEqual(
+    fromSlot,
+    fromPrimary,
+    `the survey is about the REPO, not about where the command was run — a caller standing in a linked worktree must get the identical inventory; from the slot: ${JSON.stringify(fromSlot, null, 2)}`,
+  )
+  assert.equal(rowFor(fromSlot, lane, 'the real lane, surveyed from a slot').class, 'stale-run', 'the lane keeps its REAL class: its journal lives in the MAIN checkout\'s .building, which a slot-rooted read never opens')
+  noRowFor(fromSlot, r.root, 'the primary checkout, surveyed from a slot')
+  noRowFor(fromSlot, slot1, 'the slot the caller is standing in')
+  noRowFor(fromSlot, slot2, 'a SIBLING slot — isSlotDir anchors on the resolved main checkout, never on the caller')
+  assert.equal(
+    fromSlot.length,
+    1,
+    `four worktrees exist (primary, two slots, one lane) and exactly ONE is a lane; rows were: ${fromSlot.map((row) => `${row.dir} [${row.class}]`).join(', ')}`,
+  )
+  for (const row of fromSlot) {
+    assert.ok(
+      !row.remedy.includes(`worktree remove --force ${r.root} `) && !row.remedy.includes(`worktree remove --force ${r.root}\n`) && !row.remedy.endsWith(`worktree remove --force ${r.root}`),
+      `no remedy may ever name the MAIN CHECKOUT as the thing to remove — that is the footgun this case exists to keep loaded-and-pointed-away; got: ${row.remedy}`,
+    )
+  }
+})
+
 test('surveyLanes: an unreadable journal yields class unknown and never throws', async () => {
   const r = surveyRepo()
   const truncDir = laneAt(r, 'codex-29', { branch: 'codex/29' })

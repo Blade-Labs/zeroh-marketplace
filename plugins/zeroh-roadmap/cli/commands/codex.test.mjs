@@ -2453,3 +2453,49 @@ test('consume-the-plan: a modified TRACKED file refuses as dirty, while untracke
   )
   assert.ok(!branchResolves(clean), `and ${clean.branch} is deleted with it`)
 })
+
+test('consume-the-plan: a branch that failed to delete is RETRIED and re-reported, never silently stranded', () => {
+  // The gate R0 finding. The close's two re-entry conditions (no archivedAt, or the worktree still
+  // standing) both go false the moment the tree is removed — so a `branch -D` that lost to a ref
+  // lock was announced exactly once and then never retried and never mentioned again, leaving the
+  // duplicate branch to squat. That is the leak class this whole phase exists to end, and no sweep
+  // verb is allowed to come back for it.
+  const root = tmpRepo()
+  const lane = planLane(root, [307])
+  harvest(lane)
+  // A held ref lock — the shape a crashed sibling git leaves behind. `branch -D` refuses for a
+  // reason that has nothing to do with the worktree, so the removal still succeeds.
+  const lock = join(root, '.git', 'refs', 'heads', `${lane.branch}.lock`)
+  mkdirSync(dirname(lock), { recursive: true })
+  writeFileSync(lock, '')
+
+  const closed = laneStatus(root, [307], '--plan')
+
+  assert.equal(closed.out?.state, 'complete', `stderr: ${closed.err}`)
+  assert.ok(!existsSync(lane.worktree), `the worktree still goes — its removal is unaffected by a branch that will not delete; stderr: ${closed.err}`)
+  assert.ok(branchResolves(lane), 'fixture: and the lock really did strand the branch, or the retry below tests nothing')
+  assert.ok(
+    closed.err.includes(lane.branch),
+    `a branch that leaked must be NAMED at the moment it leaks — the caller otherwise prints "consumed" over it; got: ${closed.err}`,
+  )
+
+  // The next read, with nothing changed: the leak must still be REPORTED, not forgotten.
+  const nagged = laneStatus(root, [307], '--plan')
+  assert.ok(
+    nagged.err.includes(lane.branch),
+    `a stranded branch must be re-reported on every read until it is gone — announcing it once and going quiet is how 19 stray worktrees accumulated unnoticed; got: ${nagged.err}`,
+  )
+  assert.ok(branchResolves(lane), 'and it is still there, because the lock is still there')
+  assert.equal(journalOf(lane).archivedAt !== undefined, true, 'the journal stays stamped — re-entry is a retry, never a re-archive')
+
+  // Clear the cause. The very next read must SELF-HEAL, with no verb the operator had to know.
+  rmSync(lock, { force: true })
+  const healed = laneStatus(root, [307], '--plan')
+
+  assert.equal(healed.out?.state, 'complete', `stderr: ${healed.err}`)
+  assert.ok(
+    !branchResolves(lane),
+    `once the cause is cleared the retry must actually delete it — a report that never acts is the sweep verb the operator ruling refused, wearing a nag's clothes; stderr: ${healed.err}`,
+  )
+  assert.equal(readFileSync(lane.archived, 'utf8'), readFileSync(lane.archived, 'utf8'), 'and the archived plan is untouched throughout')
+})

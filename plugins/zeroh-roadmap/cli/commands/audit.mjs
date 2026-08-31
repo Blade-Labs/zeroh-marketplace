@@ -156,11 +156,10 @@ export default async function run(argv) {
   }
 
   // ── Check 15: stray lane worktrees (report-only) ──────────────────────────
-  // The catalogue above never looked at worktrees, so the leak class the 2026-08-31 census found
-  // (19 sibling lane trees, ~6.5 GB across four consumers, every sampled journal dead and
-  // unarchived) was invisible to every review flow that runs this command. It fires HERE rather
-  // than behind a new verb by the operator ruling: a sweep verb nobody runs is what the census
-  // was measuring. REPORT-ONLY — nothing below removes, prunes or deletes anything.
+  // The catalogue above never looked at worktrees, so the leak class surveyLanes documents was
+  // invisible to every review flow that runs this command. It fires HERE rather than behind a new
+  // verb by the operator ruling: a sweep verb nobody runs is what the census was measuring.
+  // REPORT-ONLY — nothing below removes, prunes or deletes anything.
   //
   // Severity is the honest distinction between "a done-moment exists" and "somebody must look":
   // a stale or closed lane names its own runnable close (MEDIUM), while a legacy or unreadable
