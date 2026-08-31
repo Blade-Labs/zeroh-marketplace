@@ -107,7 +107,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/gate.mjs',
           description:
-            "In the gate-plan path, for each resolved slot whose command template carries {files}: run probeScopedSlot once (per distinct template, cached within the run); vacuous:true → a `warning: <slot> scoped runner cannot fail …` line + a plan-notes entry; vacuous:null → a probe-unanswerable note. WARN-only — exit codes unchanged (arc acceptance bar: the executor judges) → verify: bash -c \"grep -qF 'cannot fail' plugins/zeroh-roadmap/cli/commands/gate.mjs\"",
+            "In the gate-plan path (the `plan` subcommand emission — `gate run` shares buildPlan and must NOT pay the probe), for each resolved slot whose command template carries {files}: run probeScopedSlot once (per distinct template, cached within the run); vacuous:true → a `warning: <slot> scoped runner cannot fail …` line + a plan-notes entry; vacuous:null → a probe-unanswerable note. WARN-only — exit codes unchanged (arc acceptance bar: the executor judges) → verify: bash -c \"grep -qF 'cannot fail' plugins/zeroh-roadmap/cli/commands/gate.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
@@ -138,7 +138,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs',
           description:
-            'Table rows per class from the recorded incidents verbatim (the 2421 node|tail form; `cmd || true`; `cmd; echo done`) each WARN on a new-to-git fixture phase; the clean twins (node run judged by $?; && echo INSIDE a test\'s expected-output assertion… kept un-warned via the final-element rule) do not; committed-to-git files stay exempt (grandfather rule pinned) → verify: bash -c "cd plugins/zeroh-roadmap && node --test bin/validate-roadmap-file.test.mjs >/dev/null 2>&1"',
+            'Table rows per class from the recorded incidents verbatim (the 2421 node|tail form; `cmd || true`; `cmd; echo done`) each WARN on a new-to-git fixture phase; the clean twins (node run judged by $?; && echo INSIDE a test\'s expected-output assertion… kept un-warned via the final-element rule) do not; committed-to-git files stay exempt (grandfather rule pinned) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'|| true\' bin/validate-roadmap-file.test.mjs && node --test bin/validate-roadmap-file.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -177,5 +177,6 @@ export default definePhase({
     'interview: skipped — arc member; scope from the MINESWEEP arc record (acceptance criterion vacuity-flagged binds 20.2 + 20.3). ' +
     'reviewScope full (arc keystone; lint/probe polarity errors would mass-annoy or mass-miss). ' +
     'Out-of-scope, documented: fixture-vs-contract diffing and guard-encodes-the-bug detection are judgment classes owned by review-phase Lane A and the code-reviewer card (mechanizing them would need contract introspection no seam provides — recorded as the boundary, not a gap); the hook-adapter-as-CLI class is consumer-specific (azure bin layout) and its plugin-side twin is already typed (validate-roadmap-file is a real CLI here). ' +
-    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — probeScopedSlot 0 hits, `cannot fail` 0 hits (gate.mjs, slots.mjs), `--assumptions` 0 hits (phase.mjs), `|| true` 0 hits in validate.mjs (each step-verify red for exactly what its diff adds); assumption probes all exit 0 (runner-list literal and substitute join-form present); the 20.3 clean-twin design was checked against this phase\'s own verifies (none end in a bare echo/true, none carry `|| true`); runner clauses inherit polarity from their grep representatives.',
+    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — probeScopedSlot 0 hits, `cannot fail` 0 hits (gate.mjs, slots.mjs), `--assumptions` 0 hits (phase.mjs), `|| true` 0 hits in validate.mjs AND in bin/validate-roadmap-file.test.mjs (each step-verify red for exactly what its diff adds); assumption probes all exit 0 (runner-list literal and substitute join-form present); the 20.3 clean-twin design was checked against this phase\'s own verifies (none end in a bare echo/true; `|| true` appears only as a quoted grep PATTERN in three clauses — shape-distinct from the swallow class, and this committed file is grandfathered); runner clauses inherit polarity from their grep representatives. ' +
+    'review-phase Mode A 2026-08-31: [FIXED] 20.3.s2 verify was green-now (the suite already passes at HEAD and the clause carried no diff marker — itself the vacuous-green shape) — repaired with the `|| true` test-file marker grep, re-run red (exit 1); corpus measure: zero `; echo` / `|| true` verify clauses in roadmap/phases/*.phase.ts outside this file, so 20.3\'s new classes have no existing-plan false-positive exposure (grandfather rule shields committed files regardless); 20.2 scoped to the `plan` subcommand so `gate run` never pays probe latency.',
 })
