@@ -1,0 +1,181 @@
+import { definePhase } from '@/lib/roadmap/schema'
+
+/**
+ * MINESWEEP plane 3 (keystone) — anti-vacuity: name the proof that cannot fail.
+ *
+ * The single largest mined failure class (~20 incidents, all four repos): checks that
+ * pass whether or not the claim holds. Recorded shapes this phase mechanizes: a scoped
+ * runner exiting 0 on a nonexistent target ("existing Nx suites can exit 0 when passed a
+ * nonexistent file or unmatched -t" — the codex plan lane's own discovery; azure 2333's
+ * vitest include-glob running zero tests green), and judged-through-a-pipe validators
+ * ("a validate piped through tail -1 masked a schema failure and the red phase file got
+ * pushed" — azure 2421). The remaining shapes (fixture-from-plan, guards encoding the
+ * bug) stay judgment-side: review-phase Lane A and the verify-rehearsal reference own
+ * them, and this phase adds the mechanical door Lane A lacked — executing a plan's
+ * assumption tripwires on demand.
+ * Evidence: roadmap/arc-prompts/MINESWEEP-execution-prompt.md §vacuity.
+ *
+ * ## Hypotheses (why vacuous greens ship)
+ * 1. CONFIRMED — the existing polarity lint is narrower than the recorded incident set:
+ *    verifyPolarityWarnings (validate.mjs:204-231) catches bare `grep -c` absence and
+ *    pipe-judged RUNNERS (`npm|pnpm|yarn|tsc|capbuild|nx|vitest|node --test` left-sides
+ *    only) — azure 2421's `node bin/…mjs | tail -1` matches no class, `|| true` and
+ *    `; echo` tails match none, and NOTHING probes whether a gate slot's scoped runner
+ *    can fail at all (0 'cannot fail' hits in gate.mjs/slots.mjs).
+ * 2. REFUTED — "authors just need the rehearsal discipline": verify-rehearsal.md is
+ *    mandatory and SEODESKFIX/UCAUDIT still shipped backward verifies (4 and 8/20) —
+ *    the discipline needs its mechanical arms, not more prose.
+ *
+ * timing: no reference data for 1-3×surface:false
+ */
+export default definePhase({
+  phase: 20,
+  name: 'Anti-vacuity: scoped-runner cannot-fail probe, widened polarity lint, executable assumption tripwires',
+  status: 'backlog',
+  plannedBy: { model: 'claude-fable-5' },
+  category: 'fix',
+  kind: 'hardening',
+  arcId: 'MINESWEEP',
+  source:
+    'MINESWEEP plane "Proof of proof" — 2026-08-31 mining §Q3 item 1 (P1, the largest cross-repo class; atlas plan-22 self-caught vacuous Nx commands; azure 2333/2421; marketplace 11).',
+  priority: 'HIGH',
+  dependsOn: [],
+  conflictsWith: [],
+  keyFiles: [
+    'plugins/zeroh-roadmap/cli/commands/gate.mjs',
+    'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
+    'plugins/zeroh-roadmap/cli/lib/slots.mjs',
+    'plugins/zeroh-roadmap/cli/lib/slots.test.mjs',
+    'plugins/zeroh-roadmap/cli/lib/validate.mjs',
+    'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs',
+    'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+    'plugins/zeroh-roadmap/cli/commands/phase.test.mjs',
+  ],
+  stakeholderDemo:
+    'The gate names a scoped test runner that cannot fail before it certifies anything with it; the polarity lint catches the recorded piped-validator and swallowed-exit shapes; a reviewer can execute a plan\'s assumption tripwires with one flag instead of trusting the author\'s attestation.',
+  userFacing: false,
+  assumptions: [
+    {
+      claim: "The piped-judgement lint keys on a runner list that excludes plain `node`/`npx`/`tsx` invocations (azure 2421's exact shape), and no `|| true` or trailing-echo class exists.",
+      verify:
+        'bash -c "grep -qF \'(npm run|pnpm |yarn |tsc\\\\b|capbuild|nx run|vitest|node --test)\' plugins/zeroh-roadmap/cli/lib/validate.mjs && test \\"$(grep -cF \'|| true\' plugins/zeroh-roadmap/cli/lib/validate.mjs)\\" = \\"0\\""',
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim: 'Slot templates substitute {files} verbatim (slots.mjs substitute), so a sentinel nonexistent path can ride the SAME template the real gate uses — the probe never invents an invocation.',
+      verify: 'bash -c "grep -qF \\"cmd.split(\'{files}\').join\\" plugins/zeroh-roadmap/cli/lib/slots.mjs"',
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim: 'No assumption-execution door exists: `phase validate` parses and lints but never runs assumptions[].verify (0 `--assumptions` hits in phase.mjs).',
+      verify: 'bash -c "test \\"$(grep -cF -- --assumptions plugins/zeroh-roadmap/cli/commands/phase.mjs)\\" = \\"0\\""',
+      onFalse: 'ESCALATE',
+    },
+  ],
+  tasks: [
+    {
+      id: '20.1',
+      title: 'slots.mjs: probeScopedSlot — can this runner fail at all?',
+      problem:
+        'A scoped runner that exits 0 on a nonexistent target certifies every task it "scopes" vacuously (atlas plan-22 caught its own; azure 2333 shipped one) — and nothing ever asks the runner the one question that exposes it.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/slots.mjs',
+          description:
+            "Export probeScopedSlot(template, { cwd, timeoutMs = 120000 }): substitute a provably-nonexistent sentinel path (roadmap/.gate/__vacuity_probe_does_not_exist__.test.ts) into the template's {files} via the SAME substitute(), run it captured; exit 0 → { vacuous: true, message: 'scoped runner cannot fail on a missing target — a green scoped slot proves nothing (vacuous-green class)' }; non-zero → { vacuous: false }; spawn error/timeout → { vacuous: null, message } (an unanswerable probe is reported, never read as pass) → verify: bash -c \"grep -qF 'export function probeScopedSlot' plugins/zeroh-roadmap/cli/lib/slots.mjs\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/slots.test.mjs',
+          description:
+            'Tests with stub runners: an exit-0-always script → vacuous:true; a script that exits 2 on a missing file → vacuous:false; a hanging script under a short timeoutMs → vacuous:null with the timeout named; a template without {files} → skipped (null, "not a scoped template") → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'probeScopedSlot\' cli/lib/slots.test.mjs && node --test cli/lib/slots.test.mjs >/dev/null 2>&1"',
+        },
+      ],
+      acceptanceCriteria: [
+        'The probe answers vacuous true/false/null through the real template substitution, never a hand-built invocation; every branch has a stub-runner test',
+      ],
+      files: ['plugins/zeroh-roadmap/cli/lib/slots.mjs', 'plugins/zeroh-roadmap/cli/lib/slots.test.mjs'],
+      testMode: 'tdd',
+      interfaces: { consumes: [], produces: ['probeScopedSlot(template, opts) from cli/lib/slots.mjs'] },
+      done: false,
+    },
+    {
+      id: '20.2',
+      title: 'gate plan surfaces the cannot-fail probe as a HIGH warning',
+      problem:
+        'The probe is worthless unless it fires where scope is decided: gate plan is where a scoped tier gets chosen over the full suite, so a vacuous scoped runner must be named there, before it certifies a phase.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/gate.mjs',
+          description:
+            "In the gate-plan path, for each resolved slot whose command template carries {files}: run probeScopedSlot once (per distinct template, cached within the run); vacuous:true → a `warning: <slot> scoped runner cannot fail …` line + a plan-notes entry; vacuous:null → a probe-unanswerable note. WARN-only — exit codes unchanged (arc acceptance bar: the executor judges) → verify: bash -c \"grep -qF 'cannot fail' plugins/zeroh-roadmap/cli/commands/gate.mjs\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
+          description:
+            'Fixture-consumer: gateCommands binding a stub exit-0-always scoped runner → gate plan output carries the warning and still exits by its normal contract; the honest-runner twin carries no warning (both directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'cannot fail\' cli/commands/gate.test.mjs && node --test cli/commands/gate.test.mjs >/dev/null 2>&1"',
+        },
+      ],
+      acceptanceCriteria: [
+        'A vacuous scoped runner is named at plan time with unchanged exit semantics; honest runners stay silent; the probe runs once per distinct template per plan (asserted via the stub\'s invocation count)',
+      ],
+      files: ['plugins/zeroh-roadmap/cli/commands/gate.mjs', 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs'],
+      testMode: 'tdd',
+      dependsOn: ['20.1'],
+      interfaces: { consumes: ['probeScopedSlot(template, opts) from 20.1'], produces: [] },
+      done: false,
+    },
+    {
+      id: '20.3',
+      title: 'Polarity lint: the three recorded missing classes',
+      problem:
+        'azure 2421\'s `node bin/validate-roadmap-file.mjs <path> | tail -1` matches no lint class (the runner list excludes plain node/npx/tsx), and the `|| true` / trailing-`; echo` swallow shapes match none — three recorded incident classes the lint was built to catch and cannot.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/validate.mjs',
+          description:
+            "In verifyPolarityWarnings: (a) widen the piped-judgement left-side alternation with `node |npx |tsx ` (plain script invocations — the 2421 class), keeping the filter-tail regex as is; (b) new class: a command whose FINAL list element after `;` or `&&` is a bare `echo`/`true` (the judged exit is the echo's, unconditionally 0); (c) new class: `|| true` anywhere (the swallow) — each WARN cites its incident class in one clause → verify: bash -c \"grep -qF '|| true' plugins/zeroh-roadmap/cli/lib/validate.mjs\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs',
+          description:
+            'Table rows per class from the recorded incidents verbatim (the 2421 node|tail form; `cmd || true`; `cmd; echo done`) each WARN on a new-to-git fixture phase; the clean twins (node run judged by $?; && echo INSIDE a test\'s expected-output assertion… kept un-warned via the final-element rule) do not; committed-to-git files stay exempt (grandfather rule pinned) → verify: bash -c "cd plugins/zeroh-roadmap && node --test bin/validate-roadmap-file.test.mjs >/dev/null 2>&1"',
+        },
+      ],
+      acceptanceCriteria: [
+        'All three recorded shapes WARN with their incident citation; the clean twins stay silent; the grandfather rule is untouched (both directions per class)',
+      ],
+      files: ['plugins/zeroh-roadmap/cli/lib/validate.mjs', 'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs'],
+      testMode: 'tdd',
+      done: false,
+    },
+    {
+      id: '20.4',
+      title: '`phase validate --assumptions`: execute the tripwires',
+      problem:
+        'A plan\'s assumptions[].verify commands are attested by their author and re-run by nobody until execution trips over a stale claim — review-phase Lane A demands both-direction evidence but has no mechanical door to the green direction.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
+          description:
+            "Add --assumptions to `phase validate`: after the normal validation, execute each assumptions[].verify (spawn captured, cwd toplevel, 120s timeout each), print per-claim `ok`/`STALE (exit k)`/`TIMEOUT`; any non-ok → exit 2 listing the stale claims verbatim (a stale tripwire means the plan's territory moved — the review verdict, mechanized). Without the flag, behavior is byte-identical → verify: bash -c \"grep -qF -- '--assumptions' plugins/zeroh-roadmap/cli/commands/phase.mjs\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/phase.test.mjs',
+          description:
+            'Fixture-consumer: a phase whose two tripwires are green → exit 0 with two ok lines; one flipped stale (fixture edit) → exit 2 naming exactly that claim; a phase with no assumptions → note + exit 0; flagless run unchanged (regression pin) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF -- \'--assumptions\' cli/commands/phase.test.mjs && node --test cli/commands/phase.test.mjs >/dev/null 2>&1"',
+        },
+      ],
+      acceptanceCriteria: [
+        'Green, stale, timeout and assumption-less paths each behave and report as specified (all directions tested); flagless validate is byte-identical',
+      ],
+      files: ['plugins/zeroh-roadmap/cli/commands/phase.mjs', 'plugins/zeroh-roadmap/cli/commands/phase.test.mjs'],
+      testMode: 'tdd',
+      done: false,
+    },
+  ],
+  notes:
+    'interview: skipped — arc member; scope from the MINESWEEP arc record (acceptance criterion vacuity-flagged binds 20.2 + 20.3). ' +
+    'reviewScope full (arc keystone; lint/probe polarity errors would mass-annoy or mass-miss). ' +
+    'Out-of-scope, documented: fixture-vs-contract diffing and guard-encodes-the-bug detection are judgment classes owned by review-phase Lane A and the code-reviewer card (mechanizing them would need contract introspection no seam provides — recorded as the boundary, not a gap); the hook-adapter-as-CLI class is consumer-specific (azure bin layout) and its plugin-side twin is already typed (validate-roadmap-file is a real CLI here). ' +
+    'Verify rehearsal attestation: red-now probes executed 2026-08-31 — probeScopedSlot 0 hits, `cannot fail` 0 hits (gate.mjs, slots.mjs), `--assumptions` 0 hits (phase.mjs), `|| true` 0 hits in validate.mjs (each step-verify red for exactly what its diff adds); assumption probes all exit 0 (runner-list literal and substitute join-form present); the 20.3 clean-twin design was checked against this phase\'s own verifies (none end in a bare echo/true, none carry `|| true`); runner clauses inherit polarity from their grep representatives.',
+})
