@@ -29,7 +29,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 14,
   name: 'Lane lifecycle accounting: inventory classifier, audit/status surfacing, plan-lane close, branch-delete gap',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
