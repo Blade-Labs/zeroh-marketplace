@@ -95,7 +95,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/audit.test.mjs',
           description:
-            'Fixture pair: a consumer schema stripped of PhaseEvalRecordShape (the atlas shape, verbatim) fires check 16 HIGH naming that export; the in-sync twin fires nothing; config check mirrors both (its own test in config.test.mjs) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'check 16\' cli/commands/audit.test.mjs && node --test cli/commands/audit.test.mjs cli/commands/config.test.mjs >/dev/null 2>&1"',
+            'Fixture pair: a consumer schema stripped of PhaseEvalRecordShape (the atlas shape, verbatim) fires check 16 HIGH naming that export; the in-sync twin fires nothing; config check mirrors both (its own test in config.test.mjs) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'check 16\' cli/commands/audit.test.mjs && capbuild node --test cli/commands/audit.test.mjs cli/commands/config.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -130,12 +130,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
           description:
-            'Same call in landArc\'s codex-lane-dispose step, before each dispose, recorded as a `lessons-merge` record step ({ dir, merged }) so the land report carries it → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'lessons-merge\' cli/lib/landing.mjs && node --test cli/lib/landing.test.mjs cli/lib/landing-mechanics.test.mjs >/dev/null 2>&1"',
+            'Same call in landArc\'s codex-lane-dispose step, before each dispose, recorded as a `lessons-merge` record step ({ dir, merged }) so the land report carries it → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'lessons-merge\' cli/lib/landing.mjs && capbuild node --test cli/lib/landing.test.mjs cli/lib/landing-mechanics.test.mjs >/dev/null 2>&1"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
           description:
-            'Tests: a lane with two novel lines and one duplicate merges exactly the two, preserving primary order (second merge of the same lane is a no-op — state coverage: re-land idempotence); absent lane file merges zero without error; primary file created when absent → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'mergeLaneLessons\' cli/lib/landing.test.mjs && node --test cli/lib/landing.test.mjs >/dev/null 2>&1"',
+            'Tests: a lane with two novel lines and one duplicate merges exactly the two, preserving primary order (second merge of the same lane is a no-op — state coverage: re-land idempotence); absent lane file merges zero without error; primary file created when absent → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'mergeLaneLessons\' cli/lib/landing.test.mjs && capbuild node --test cli/lib/landing.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -165,12 +165,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/status.mjs',
           description:
-            'In the per-arc progress rendering: when arcProgress shows every member phase done AND roadmap/arc-evals/ holds no <ID>-YYYY-MM-DD.json, append ` · eval: none` to that arc\'s line (text + a evalMissing flag in --json); arcs still building show nothing → verify: bash -c "grep -qF \'eval: none\' plugins/zeroh-roadmap/cli/commands/status.mjs"',
+            'In the per-arc progress rendering: when arcProgress shows every member phase done AND roadmap/arc-evals/ holds no file matching the anchored `^<ID>-\\d{4}-\\d{2}-\\d{2}\\.json$` (architect amendment A6 — a `-verdicts.json` or `-sweep.json` sibling must NOT count as a report: the azure mined class is precisely arcs with verdicts and no report; the anchor is the same pattern eval.mjs:616 already defines), append ` · eval: none` to that arc\'s line (text + a evalMissing flag in --json); arcs still building show nothing → verify: bash -c "grep -qF \'eval: none\' plugins/zeroh-roadmap/cli/commands/status.mjs"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/status.test.mjs',
           description:
-            'Fixtures: all-done arc without a report shows the marker; the same arc with a dated report does not; an in-progress arc does not (three directions) — eval.mjs summary line covered in eval.test.mjs with a pending-judge fixture report → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'eval: none\' cli/commands/status.test.mjs && grep -qF \'pending-judge —\' cli/commands/eval.test.mjs && node --test cli/commands/status.test.mjs cli/commands/eval.test.mjs >/dev/null 2>&1"',
+            'Fixtures: all-done arc without a report shows the marker; the same arc with a dated report does not; an in-progress arc does not; an all-done arc with ONLY a -verdicts.json still shows it (four directions, A6) — eval.mjs summary line covered in eval.test.mjs with a pending-judge fixture report → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'eval: none\' cli/commands/status.test.mjs && grep -qF \'pending-judge —\' cli/commands/eval.test.mjs && capbuild node --test cli/commands/status.test.mjs cli/commands/eval.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
