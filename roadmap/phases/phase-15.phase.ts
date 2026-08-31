@@ -27,7 +27,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 15,
   name: 'Codex lane hardening: lockfile-keyed bootstrap, absolute CLI + grammar in envelopes, plan post-run validation, plan --arc refusal',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
