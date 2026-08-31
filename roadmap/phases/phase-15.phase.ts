@@ -86,7 +86,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'Unit tests over tmp dirs: each lockfile maps to its manager verbatim (bin + args asserted exactly); both lockfiles present → pnpm wins with a recorded reason (pnpm-lock is the stricter claim); neither → null; no package.json → undefined → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'detectInstaller\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'Unit tests over tmp dirs: each lockfile maps to its manager verbatim (bin + args asserted exactly); both lockfiles present → pnpm wins with a recorded reason (pnpm-lock is the stricter claim); neither → null; no package.json → undefined → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'detectInstaller\' cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -116,7 +116,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'End-to-end refusal test in a lockfile-less fixture repo: `codex run <N>` exits 1, names both lockfiles, and afterwards `git worktree list` has one entry, the codex branch does not exist, and no journal file was written (the pre-state criterion); a package-lock fixture proceeds past the probe (install itself may be stubbed by pointing PATH at a recording shim so no network runs) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'names both lockfiles\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'End-to-end refusal test in a lockfile-less fixture repo: `codex run <N>` exits 1, names both lockfiles, and afterwards `git worktree list` has one entry, the codex branch does not exist, and no journal file was written (the pre-state criterion); a package-lock fixture proceeds past the probe (install itself may be stubbed by pointing PATH at a recording shim so no network runs) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'names both lockfiles\' cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -149,7 +149,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'The existing prompt-content tests gain assertions: all three built prompts contain the absolute bin/roadmap.mjs path; run and plan prompts contain `phase N —` grammar text; review prompt does NOT carry the grammar line (it never commits) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'absent from PATH\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'The existing prompt-content tests gain assertions: all three built prompts contain the absolute bin/roadmap.mjs path; run and plan prompts contain `phase N —` grammar text; review prompt does NOT carry the grammar line (it never commits) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'absent from PATH\' cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -173,7 +173,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'Fixture pair on the 14.6 harness: a plan worktree whose committed phase file is syntactically broken refuses the close with the validator stderr present in the refusal and the worktree kept; the valid twin still closes (regression pin on 14.6 test a) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'does not validate as a phase entity\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'Fixture pair on the 14.6 harness: a plan worktree whose committed phase file is syntactically broken refuses the close with the validator stderr present in the refusal and the worktree kept; the valid twin still closes (regression pin on 14.6 test a) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'does not validate as a phase entity\' cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -197,7 +197,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'Test: plan --arc against a fixture arc exits 1, stderr names plan-arc and the per-member `codex plan <N> --brief` form, no stack trace (doesNotMatch /at planCodex/), and no worktree/journal is created; `codex run --arc` stays untouched (regression pin) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'plan --arc\' cli/commands/codex.test.mjs && node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'Test: plan --arc against a fixture arc exits 1, stderr names plan-arc and the per-member `codex plan <N> --brief` form, no stack trace (doesNotMatch /at planCodex/), and no worktree/journal is created; `codex run --arc` stays untouched (regression pin) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'plan --arc\' cli/commands/codex.test.mjs && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
