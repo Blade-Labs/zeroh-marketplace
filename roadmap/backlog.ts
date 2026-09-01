@@ -56,10 +56,6 @@ export default defineBacklog([
     name: 'Commit-grammar tolerant attribution: one matcher home, widened read, deviant WARNs, grammar in agent cards',
   },
   {
-    phase: 17,
-    name: 'Delegated-lane gate integrity: widened round identities, no-self-judge refusal at verify-complete',
-  },
-  {
     phase: 18,
     name: 'Measurement repairs: schema-drift check, lessons merge-back on land, eval-gap visibility, census noise',
   },
