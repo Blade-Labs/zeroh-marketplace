@@ -53,9 +53,15 @@ function classifySubject(subject, phaseNum) {
   if (new RegExp(`^${type}\\(phase-${P}\\): gate R\\d+`).test(subject)) return 'gate-fix'
   if (new RegExp(`^docs\\(roadmap\\): mark phase ${P} complete$`).test(subject)) return 'state'
   if (subject.startsWith('docs(roadmap):')) {
-    // The task-id grammar (`N.x`) also appears on roadmap-repo task commits; both kinds
-    // curate identically, so 'task' wins only on an explicit task id.
-    return new RegExp(`^docs\\(roadmap\\): phase ${P} ${dash} ${P}\\.\\d+`).test(subject) ? 'task' : 'state'
+    // Every shared task-id form is work even in the roadmap repo; only bookkeeping is state.
+    const taskForm = new RegExp(
+      `^docs\\(roadmap\\): phase ${P} (`
+      + `${dash} ${P}\\.[0-9]+`
+      + `|task ${P}\\.[0-9]+( \\([0-9]+/[0-9]+\\))? ${dash}`
+      + `|${P}\\.[0-9]+ ${dash}`
+      + ')',
+    )
+    return taskForm.test(subject) ? 'task' : 'state'
   }
   return 'task'
 }

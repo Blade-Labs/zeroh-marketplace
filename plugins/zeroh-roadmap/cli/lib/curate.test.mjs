@@ -269,12 +269,24 @@ test('a roadmap-repo task commit (docs(roadmap) + a task id) is curatable, never
 
   const res = deriveCurationRange(r.root, 31)
 
-  // Which of the two overlapping kinds wins is the implementation's call; that it is
-  // NOT foreign is the safety property — a docs-repo phase must never refuse itself.
   assert.equal(res.ok, true)
   const row = res.commits.find((c) => c.sha === dual)
   assert.deepEqual({ sha: row?.sha, subject: row?.subject }, { sha: dual, subject: r.subject(dual) })
-  assert.ok(['task', 'state'].includes(row.kind), `a docs(roadmap) task commit must classify task|state, got ${row.kind}`)
+  assert.equal(row.kind, 'task', `an explicit docs(roadmap) task id is work, got ${row.kind}`)
+})
+
+test('docs(roadmap) D1, D5 and batch subjects remain task work, never bookkeeping state', () => {
+  const r = makeRepo()
+  r.commit('docs(roadmap): phase 93 — move to in-progress')
+  const d1 = r.commit('docs(roadmap): phase 93 task 93.1 — record the first task')
+  const d5 = r.commit('docs(roadmap): phase 93 93.2 — record the second task')
+  const batch = r.commit('docs(roadmap): phase 93 task 93.3 (1/3) — a batch step lands')
+
+  const out = deriveCurationRange(r.root, 93)
+
+  assert.equal(out.ok, true)
+  const kindOf = (sha) => out.commits.find((c) => c.sha === sha)?.kind
+  assert.deepEqual([kindOf(d1), kindOf(d5), kindOf(batch)], ['task', 'task', 'task'])
 })
 
 test('anchoring + the batch grammar: a quoted mention stays foreign, a batch step commit is the phase\u2019s own', () => {
