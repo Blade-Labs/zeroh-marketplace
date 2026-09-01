@@ -616,3 +616,10 @@ binds and every landed subject uses.)
 | software-developer §Principles — examples and connective prose | obsolete-with-evidence(pure wording compression; read the call chain, extend patterns, focused/YAGNI scope, contextual canonical errors, never-null catches, and logical-unit commits survive) | agents/software-developer.md §Principles |
 | test-engineer §Coverage targets — expanded category wording | obsolete-with-evidence(pure wording compression; the 90% business/money and 80% auth/security/new-code thresholds survive) | agents/test-engineer.md §Coverage targets |
 | test-engineer §A good test — worked examples | obsolete-with-evidence(generic examples removed; invariants, regression sensitivity, call arguments, and exact-boundary requirements survive) | agents/test-engineer.md §A good test |
+
+**Gate R0, second quality sweep:** protocol step 5 of quality-pass.md still prescribed
+`fix(phase-N): quality pass — <summary>` — the D2 scope-carried class this phase teaches the
+gate to WARN about, and the verbatim marketplace-10 subject whose squash its own curation
+refused. Corrected to the canonical gate-fix form (round 0 IS the quality pass, per do-phase
+SKILL.md). **Measured:** quality-pass.md 5,542 → 5,543 B, still below the 5,545 B it carried
+at the phase start.

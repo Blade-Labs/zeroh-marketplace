@@ -63,7 +63,7 @@ loop/recurse or invoke another agent (one pass).
    recover → revert + demote to `[SCOPED-OUT]` (A) / SKIPPED (B).
 4. Before committing, run the tests covering the touched files (the `unit-scoped` slot where bound, else
    the phase-relevant suites) — type-check alone misses runtime breakage; a red relevant test → revert + demote.
-5. Commit as ONE commit `fix(phase-N): quality pass — <summary>` (nothing fixed → no commit).
+5. Commit as ONE commit `fix(scope): phase N gate R0 — <summary>` (nothing fixed → no commit).
 6. Report: `LINES −/+ across N files`; `FIXED (architect)`; `FIXED (simplify)` (grep evidence for
    deletions); `SURFACED` (migrations/schema); `HARD-STOPS` (`[TAG] file:line — why`); `SKIPPED`;
    `BUGS NOTED`. Empty → `none`. A clean phase is valid; a positive net line count → say why it was required.

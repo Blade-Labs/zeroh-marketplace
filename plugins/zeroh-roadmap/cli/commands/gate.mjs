@@ -114,12 +114,12 @@ const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { timeout: 
 const isExecutable = (p) => EXECUTABLE_EXTS.some((e) => p.endsWith(e))
 
 /**
- * baseSha = parent (^) of the OLDEST commit matching `phase <N> —` (the em-dash
- * boundary prevents 136 matching 1369 — do-phase SKILL.md:127-135). --base overrides.
- * Thin wrapper over the shared gitscan.derivePhaseStartSha (pre-made decision 3: ONE
- * em-dash rule; derive.mjs's resume.startSha uses the same helper) — this wrapper only
- * maps the typed GitScanError onto gate's exit-code contract (no-match ⇒ GateError(1)
- * naming the expected move-to-in-progress commit form).
+ * baseSha = the two-tier derivation over the commits phaseOwnPatterns(N) reads as this
+ * phase's own — parent (^) of the NEWEST move-to-in-progress commit, else of the OLDEST
+ * own match. --base overrides. Thin wrapper over the shared gitscan.derivePhaseStartSha
+ * (pre-made decision 3: ONE ownership rule; derive.mjs's resume.startSha uses the same
+ * helper) — this wrapper only maps the typed GitScanError onto gate's exit-code contract
+ * (no-match ⇒ GateError(1) naming the expected move-to-in-progress commit form).
  */
 export function deriveBaseSha(cwd, phaseNum, { base } = {}) {
   try {
