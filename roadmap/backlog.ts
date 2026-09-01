@@ -48,10 +48,6 @@ export default defineBacklog([
   },
   // ── MINESWEEP arc tier (phases 14, 15, 16, 17, 18, 19, 20 — exact claimed numbers; queued 2026-08-31 after all 7 plan reviews returned READY) ──
   {
-    phase: 14,
-    name: 'Lane lifecycle accounting: inventory classifier, audit/status surfacing, plan-lane close, branch-delete gap',
-  },
-  {
     phase: 15,
     name: 'Codex lane hardening: lockfile-keyed bootstrap, absolute CLI + grammar in envelopes, plan post-run validation, plan --arc refusal',
   },
