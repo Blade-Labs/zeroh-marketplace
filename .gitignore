@@ -1,1 +1,4 @@
 .building/
+node_modules/
+.playwright-mcp/
+.vibe/
