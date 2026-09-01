@@ -829,3 +829,137 @@ test('20) a live lane BESIDE a stale one → strayLanes: 1 — the count is the 
 
   await reapGroup(runner)
 })
+
+// ── the per-arc EVAL gap (task 18.3) ─────────────────────────────────────────────────
+// An arc whose every member phase is `done` and which carries NO dated eval report reads on
+// this table exactly like an arc with nothing left to do: "all phases done" is the last thing
+// the row says, and the missing report is invisible. The marker closes that, and it is scoped
+// to the ANCHORED report name `^<ID>-YYYY-MM-DD.json$` — roadmap/arc-evals/ also holds
+// `-verdicts.json` / `-sweep.json` siblings and OTHER arcs' reports, and reading any of those
+// as "the eval ran" is the false all-clear the marker exists to stop. An arc still building
+// shows nothing: its eval is not late, it is not yet due.
+
+const EVAL_NONE = 'eval: none'
+
+/**
+ * A BUILDING lane whose members are all `done` — an arc past its last phase, awaiting
+ * sweep/validate/land, which is exactly the moment a missing eval becomes visible.
+ * `lastStatus` re-opens the arc for the in-progress direction; `evalFiles` names what sits in
+ * roadmap/arc-evals/ (null = the directory does not exist at all).
+ */
+function estateWithLandedArc(arcId, { evalFiles = null, lastStatus = 'done' } = {}) {
+  const root = join(newTmp(), 'roadmap')
+  const phases = join(root, 'phases')
+  const building = join(root, 'arcs', '.building')
+  mkdirSync(building, { recursive: true })
+  writePhase(phases, 'phase-4001.phase.ts', { phase: 4001, status: 'done', arcId })
+  writePhase(phases, 'phase-4002.phase.ts', { phase: 4002, status: lastStatus, arcId })
+  writeFileSync(
+    join(building, `${arcId}.json`),
+    JSON.stringify({ arcId, worktree: `/nonexistent/wt-${arcId}`, branch: `arc/${arcId}`, mode: 'mixed' }) + '\n',
+  )
+  if (evalFiles) {
+    const evals = join(root, 'arc-evals')
+    mkdirSync(evals, { recursive: true })
+    // Shape-valid enough to be read as a report by anything that opens it — the point of the
+    // sibling cases is that the NAME alone decides, so the bytes must not be the reason.
+    for (const f of evalFiles) writeFileSync(join(evals, f), JSON.stringify({ arcId, dimensions: {} }) + '\n')
+  }
+  return root
+}
+
+/** The one row this arc owns, from the --json lane. */
+function jsonRow(root, arcId) {
+  const res = status(root, '--json')
+  assert.equal(res.status, 0, `status --json must exit 0; stderr:\n${res.stderr}`)
+  const row = JSON.parse(res.stdout).rows.find((r) => r.arc === arcId)
+  assert.ok(row, `the ${arcId} lane must be present in rows`)
+  return row
+}
+
+test('21) all member phases done + NO dated report → the eval: none marker and --json evalMissing: true', () => {
+  const root = estateWithLandedArc('EVALGAP') // no roadmap/arc-evals/ at all
+
+  const row = jsonRow(root, 'EVALGAP')
+  // Without this the case could pass while the arc was merely mid-flight and the marker was
+  // being printed for the wrong reason.
+  assert.match(
+    String(row.note ?? ''),
+    /all phases done/,
+    `precondition: EVALGAP's members must all read done; note was ${JSON.stringify(row.note)}`,
+  )
+  assert.equal(row.evalMissing, true, `a landed arc with no dated report must be flagged; row was ${JSON.stringify(row)}`)
+
+  const human = status(root)
+  assert.equal(human.status, 0, `status must exit 0; stderr:\n${human.stderr}`)
+  assert.ok(
+    human.stdout.includes(EVAL_NONE),
+    `the human table must carry the '${EVAL_NONE}' marker — an unscored arc that reads as finished is the whole gap; got:\n${human.stdout}`,
+  )
+})
+
+test('22) a dated report matching the anchored name SUPPRESSES both the marker and the flag', () => {
+  const root = estateWithLandedArc('EVALDONE', { evalFiles: ['EVALDONE-2026-08-30.json'] })
+
+  const row = jsonRow(root, 'EVALDONE')
+  assert.match(String(row.note ?? ''), /all phases done/, 'precondition: the arc is landed, so the marker would be due')
+  assert.notEqual(row.evalMissing, true, `the eval EXISTS — flagging it sends an operator to re-run a done job; row was ${JSON.stringify(row)}`)
+
+  const human = status(root)
+  assert.equal(human.status, 0)
+  assert.equal(
+    human.stdout.includes(EVAL_NONE),
+    false,
+    `a scored arc must not be marked; got:\n${human.stdout}`,
+  )
+})
+
+test('23) an IN-PROGRESS arc with no report shows NEITHER marker nor flag — its eval is not yet due', () => {
+  const root = estateWithLandedArc('EVALWIP', { lastStatus: 'in-progress' }) // no arc-evals dir either
+
+  const row = jsonRow(root, 'EVALWIP')
+  // The precondition is the test: if this arc read as all-done the case would be case 21 again.
+  assert.doesNotMatch(
+    String(row.note ?? ''),
+    /all phases done/,
+    `precondition: EVALWIP must still be mid-flight; note was ${JSON.stringify(row.note)}`,
+  )
+  assert.notEqual(
+    row.evalMissing,
+    true,
+    `an arc that is still building owes no eval yet; row was ${JSON.stringify(row)}`,
+  )
+
+  const human = status(root)
+  assert.equal(human.status, 0)
+  assert.equal(human.stdout.includes(EVAL_NONE), false, `a building lane must not be marked; got:\n${human.stdout}`)
+})
+
+test('24) siblings in roadmap/arc-evals/ are NOT reports — verdicts, sweep, and every unanchored name still leave the marker', () => {
+  const root = estateWithLandedArc('EVALSIB', {
+    evalFiles: [
+      'EVALSIB-2026-08-30-verdicts.json', // the mined class: verdicts recorded, eval never run
+      'EVALSIB-2026-08-30-sweep.json',
+      'pre-EVALSIB-2026-08-30.json', // PREFIXED — matches an unanchored search, is not this arc's report
+      'EVALSIB-2026-08-30.json.bak', // SUFFIXED — not a .json report either
+      'EVALSIB-2026-8-30.json', // wrong-shaped date, so not the dated-archive name at all
+      'OTHERARC-2026-08-30.json', // a different arc's real report never scores this one
+      'timing-stats.json',
+    ],
+  })
+
+  const row = jsonRow(root, 'EVALSIB')
+  assert.match(String(row.note ?? ''), /all phases done/, 'precondition: the arc is landed')
+  assert.equal(
+    row.evalMissing,
+    true,
+    `none of these names is \`EVALSIB-YYYY-MM-DD.json\` — reading one as the report is the false all-clear; row was ${JSON.stringify(row)}`,
+  )
+
+  const human = status(root)
+  assert.equal(human.status, 0)
+  assert.ok(
+    human.stdout.includes(EVAL_NONE),
+    `the marker must survive every sibling artifact; got:\n${human.stdout}`,
+  )
+})

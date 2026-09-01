@@ -207,7 +207,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/status.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Made both incomplete eval-chain states visible: newly persisted reports count pending-judge dimensions on stderr with the merge-judge command, and status rows for all-done arcs without an anchored dated report carry `eval: none` plus `evalMissing: true`.',
+        how:
+          'The test-engineer role added real CLI fixtures for pending and terminal report states plus all four status directions, including verdict, sweep, backup, malformed-date, prefixed, and other-arc filename decoys. Status derives completion from arcProgress and checks only the canonical roadmap/arc-evals directory with an escaped, anchored dated-report pattern. Eval counts the validated persisted dimension values after both report files are written. A RED during verification exposed that the suite helper discarded successful stderr; the two new cases now use a local dual-stream capture helper. Final verification passed status.test 23/23, eval.test 97/97, and the declared-none types slot.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The JSON status shape follows the existing present-only advisory convention: evalMissing is emitted only when true rather than serialized as false on healthy rows.',
+      },
     },
     {
       id: '18.4',
@@ -246,6 +258,7 @@ export default definePhase({
     status: 'failed',
     driver: { model: 'gpt-5.6-sol', lane: 'codex' },
     roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },

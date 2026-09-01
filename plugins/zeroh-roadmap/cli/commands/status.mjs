@@ -104,15 +104,26 @@ function derive(root) {
   //    scanProgress here supplies only the in-progress map for the IN-FLIGHT rows.
   const local = scanProgress(join(root, 'phases'))
   const inProgress = local.inProgress
-  const progressTxt = (id, worktree) => {
+  const progressOf = (id, worktree) => {
     const dir =
       worktree && existsSync(join(worktree, 'roadmap', 'phases'))
         ? join(worktree, 'roadmap', 'phases')
         : join(root, 'phases')
-    const p = arcProgress(dir, id)
+    return arcProgress(dir, id)
+  }
+  const progressTxt = (id, worktree) => {
+    const p = progressOf(id, worktree)
     if (!p) return ''
     const next = p.allDone ? 'all phases done → sweep/validate/land' : `next: ${p.next.join(', ')}`
     return `${p.done}/${p.total} done${p.inprog ? ` (${p.inprog} in-progress)` : ''} · ${next}`
+  }
+  const evalMissingOf = (id, worktree) => {
+    if (!progressOf(id, worktree)?.allDone) return false
+    const evals = join(root, 'arc-evals')
+    if (!existsSync(evals)) return true
+    const escaped = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const datedReport = new RegExp(`^${escaped}-\\d{4}-\\d{2}-\\d{2}\\.json$`)
+    return !readdirSync(evals).some((file) => datedReport.test(file))
   }
 
   // 5) Liveness — beacon-first, main-registry-only (parity with legacy beaconOf).
@@ -172,6 +183,7 @@ function derive(root) {
     const lanePhases = gone || !existsSync(join(wt, 'roadmap', 'phases')) ? join(root, 'phases') : join(wt, 'roadmap', 'phases')
     const diverged = divergedOf(id, lanePhases)
     const armFiles = gone ? [] : staleArmsOf(wt)
+    const evalMissing = evalMissingOf(id, gone ? undefined : wt)
     const flags = [
       gone && 'WORKTREE GONE',
       age.flag,
@@ -187,7 +199,8 @@ function derive(root) {
       age: age.txt,
       ...(diverged.length ? { diverged } : {}),
       ...(armFiles.length ? { staleArms: armFiles } : {}),
-      note: [progressTxt(id, gone ? undefined : wt), s.note, resumes.get(id) && `resume: ${resumes.get(id).file}`, flags]
+      ...(evalMissing ? { evalMissing: true } : {}),
+      note: [progressTxt(id, gone ? undefined : wt), evalMissing && 'eval: none', s.note, resumes.get(id) && `resume: ${resumes.get(id).file}`, flags]
         .filter(Boolean)
         .join(' · '),
     })
@@ -195,22 +208,26 @@ function derive(root) {
   for (const [id, r] of resumes) {
     if (seen.has(id)) continue
     seen.add(id)
+    const evalMissing = evalMissingOf(id)
     rows.push({
       arc: id,
       state: 'PAUSED',
       where: '(no sidecar — see resume file)',
       age: '-',
-      note: [progressTxt(id), `resume: ${r.file}`].filter(Boolean).join(' · '),
+      ...(evalMissing ? { evalMissing: true } : {}),
+      note: [progressTxt(id), evalMissing && 'eval: none', `resume: ${r.file}`].filter(Boolean).join(' · '),
     })
   }
   for (const [arc, phases] of inProgress) {
     if (seen.has(arc)) continue
+    const evalMissing = evalMissingOf(arc)
     rows.push({
       arc,
       state: 'IN-FLIGHT',
       where: '(UNREGISTERED — pre-v0.11 build or skipped Step 3b; likely the MAIN checkout)',
       age: '-',
-      note: [progressTxt(arc), `in-progress: ${phases.join(', ')}`].filter(Boolean).join(' · '),
+      ...(evalMissing ? { evalMissing: true } : {}),
+      note: [progressTxt(arc), evalMissing && 'eval: none', `in-progress: ${phases.join(', ')}`].filter(Boolean).join(' · '),
     })
   }
 

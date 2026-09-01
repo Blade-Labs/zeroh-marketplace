@@ -1403,6 +1403,13 @@ async function runArcEval(arcId, opts) {
     return 1
   }
 
+  const pendingJudge = Object.values(report.dimensions).filter((dimension) => dimension.sentinel === 'pending-judge').length
+  if (pendingJudge > 0) {
+    process.stderr.write(
+      `${pendingJudge} dimension(s) pending-judge — the eval-arc skill's judge pass (roadmap eval merge-judge --arc ${arcId}) finishes this report\n`,
+    )
+  }
+
   if (opts.json) process.stdout.write(JSON.stringify(report, null, 2) + '\n')
 
   say(`roadmap eval ${arcId} — report ${date}`)

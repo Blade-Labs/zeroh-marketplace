@@ -3241,3 +3241,81 @@ test('eval scorecard — an unreadable phase record is WARNED by name and the re
   assert.equal(scored.length, 1, `the five readable records still reach the floor; drivers were ${JSON.stringify(doc.drivers)}`)
   assert.equal(scored[0].samples, SCORECARD_N_FLOOR, 'and the corrupt one contributes NO sample — not a zero-filled one either')
 })
+
+// ══ the pending-judge SIGNAL on stderr (task 18.3) ═══════════════════════════════════════
+// A persisted report whose four judge-owned dimensions still carry `pending-judge` is a
+// THREE-dimension report wearing a seven-dimension shape. `wrote <path>` is the last thing the
+// run says, so the operator reads a finished artifact. The signal rides STDERR — the human
+// summary already prints the awaiting line on stdout, but stdout is the lane a caller pipes,
+// and this is the one line that must reach a human regardless — and it names the ONE command
+// that resolves the gap, so the reader never has to go looking for it.
+//
+// The silence direction is the other half: --backfill's judge dimensions are TERMINAL
+// (unjudged-backfill, no pass is coming), so nothing is pending, and printing a count or
+// pointing at merge-judge would send an operator to run a pass this mode deliberately declined.
+
+const MERGE_JUDGE_CMD = `roadmap eval merge-judge --arc ${ARC_ID}`
+
+/** The stderr line that CARRIES the count — the number standing alone, beside the word for
+ *  what is being counted. `printsNumber` (case 47's helper) is what keeps `4` from matching a
+ *  `24` or a date fragment. */
+const pendingCountLine = (stderr, n) =>
+  stderr.split('\n').find((l) => /pending|judge|unscored/i.test(l) && printsNumber(l, n))
+
+const roadmapCapturingBothStreams = (root, args) => {
+  const res = spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 120_000 })
+  return { code: res.status ?? 1, stdout: res.stdout ?? '', stderr: res.stderr ?? '' }
+}
+
+// ── 57. the signal: a count and the remediation command, on stderr ───────────────────────
+test('eval <ARCID> — a persisted report with pending-judge dimensions COUNTS them on stderr and names merge-judge', { timeout: 300_000 }, () => {
+  const root = buildEvalFixture()
+  const r = roadmapCapturingBothStreams(root, ['eval', ARC_ID, '--date', EVAL_DATE])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  assert.ok(existsSync(reportPath(root, EVAL_DATE)), 'precondition: the dated report really was persisted')
+
+  // Without this the assertions below could pass over a report that had nothing pending.
+  const report = readReport(root, EVAL_DATE)
+  for (const key of EVAL_JUDGE_KEYS)
+    assert.equal(report.dimensions[key].sentinel, 'pending-judge', `precondition: ${key} is pending`)
+
+  const line = pendingCountLine(r.stderr, EVAL_JUDGE_KEYS.length)
+  assert.ok(
+    line,
+    `stderr must carry a line COUNTING the ${EVAL_JUDGE_KEYS.length} pending-judge dimensions — ` +
+      `"wrote <path>" alone reads as a finished report; stderr was:\n${r.stderr}\nstdout was:\n${r.stdout}`,
+  )
+  assert.ok(
+    r.stderr.includes(MERGE_JUDGE_CMD),
+    `stderr must NAME the remediation command verbatim (\`${MERGE_JUDGE_CMD}\`) — a count with no next step ` +
+      `is a complaint, not a signal; stderr was:\n${r.stderr}`,
+  )
+})
+
+// ── 58. the silence: nothing pending → no count, no command ──────────────────────────────
+test('eval <ARCID> --backfill — with NOTHING pending, stderr carries neither the count nor merge-judge', { timeout: 300_000 }, () => {
+  const root = buildEvalFixture()
+  const r = roadmapCapturingBothStreams(root, ['eval', ARC_ID, '--backfill', '--date', BACKFILL_DATE])
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+
+  // The precondition IS the case: these dimensions are terminal, so zero are pending.
+  const report = readReport(root, BACKFILL_DATE)
+  for (const key of EVAL_JUDGE_KEYS)
+    assert.equal(report.dimensions[key].sentinel, 'unjudged-backfill', `precondition: ${key} is terminal, not pending`)
+
+  assert.equal(
+    r.stderr.includes('merge-judge'),
+    false,
+    `nothing is pending — pointing at the merge seam sends an operator to run a pass this mode declined; stderr was:\n${r.stderr}`,
+  )
+  assert.equal(
+    pendingCountLine(r.stderr, EVAL_JUDGE_KEYS.length) ?? null,
+    null,
+    `a count of pending dimensions must not be printed when the count is zero; stderr was:\n${r.stderr}`,
+  )
+  assert.equal(
+    /pending-judge/.test(r.stderr),
+    false,
+    `the word promises a pass that is not coming for a backfill; stderr was:\n${r.stderr}`,
+  )
+})
