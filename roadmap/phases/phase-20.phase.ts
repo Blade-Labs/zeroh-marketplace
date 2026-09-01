@@ -31,7 +31,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 20,
   name: 'Anti-vacuity: scoped-runner cannot-fail probe, widened polarity lint, executable assumption tripwires',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
