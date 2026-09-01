@@ -3577,3 +3577,59 @@ test('15.5 — `codex run --arc` is UNTOUCHED: the arc still resolves to its mem
     assert.ok(prompt.includes(`roadmap/phases/phase-${n}.phase.ts`), `the arc run still targets every member — phase ${n} is missing from the envelope`)
   }
 })
+
+// ── The two branches phase 15's own review found unexercised (gate R1, substituted reviewer) ──
+
+test('run: a worktree checked out from a base ref carrying NO lockfile refuses after creation', () => {
+  // The pre-check reads the PRIMARY root; the post-creation check reads the CREATED tree, and the
+  // two can disagree — a base ref whose commit predates the lockfile yields a package dir that
+  // declares no manager. That arm must refuse rather than guess, and it is the only way to reach
+  // it (a pre-created --worktree is a provisioned slot the launcher deliberately does not install).
+  const root = tmpRepo()
+  writeFileSync(join(root, 'package.json'), '{ "name": "consumer", "private": true }\n')
+  execFileSync('git', ['add', 'package.json'], { cwd: root })
+  execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'base without a lockfile'], { cwd: root })
+  execFileSync('git', ['branch', 'base-nolock'], { cwd: root })
+  // The primary now carries one, so the PRE-check passes and the refusal must come from the tree.
+  writeFileSync(join(root, 'package-lock.json'), '{ "lockfileVersion": 3 }\n')
+  writePhase(root, 92)
+
+  const r = spawnSync('node', [BIN, 'codex', 'run', '92', '--base', 'base-nolock'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: fakeCodexPath(root),
+  })
+
+  assert.notEqual(r.status, 0, 'a created worktree whose package dir declares no lockfile must REFUSE, never install with a guessed manager')
+  assert.match(
+    r.stderr,
+    /cannot select a package manager/,
+    `the refusal must name the undecidable dir and both accepted lockfiles — got: ${r.stderr}`,
+  )
+  assert.ok(
+    !existsSync(join(root, '.building', 'codex-92.json')),
+    'the refusal precedes launch(), so no journal may claim this lane ran',
+  )
+})
+
+test('plan close: a toolchain gap is reported as one, never as an invalid authored file', async () => {
+  // The validator exits 1 for toolchain-missing and 2 for a bad entity. A lane launched over a
+  // pre-created worktree never installs, so exit 1 is reachable with a perfectly good plan —
+  // blaming the file would send the operator to rewrite something that is fine.
+  const src = readFileSync(new URL('./codex.mjs', import.meta.url), 'utf8')
+  assert.match(
+    src,
+    /the lane's toolchain is incomplete, which says nothing about the authored file/,
+    'archivePlanLane must separate validator exit 1 (toolchain) from exit 2 (invalid entity) — cli/commands/codex.mjs',
+  )
+  assert.match(
+    src,
+    /validation\.status === 1/,
+    'the split must key on the validator EXIT CODE, not on message text — cli/commands/codex.mjs',
+  )
+  assert.match(
+    src,
+    /validation\.error\?\.message/,
+    'a spawn that never ran leaves its cause in error.message; dropping it makes the refusal undebuggable — cli/commands/codex.mjs',
+  )
+})

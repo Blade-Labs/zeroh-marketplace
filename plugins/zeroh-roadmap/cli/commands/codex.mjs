@@ -428,6 +428,9 @@ function ensureWorktree(root, { worktree, base, branch, install }) {
       )
       return 1
     }
+    // An ambiguous dir resolved by precedence says so: silently picking one of two committed
+    // lockfiles is the guess this seam exists to remove.
+    if (installer.reason) process.stderr.write(`roadmap codex: ${dir} — ${installer.reason}\n`)
     const ci = capbuild
       ? spawnSync('capbuild', [installer.bin, ...installer.args], { cwd: dir, stdio: 'inherit' })
       : spawnSync(installer.bin, installer.args, { cwd: dir, stdio: 'inherit' })
@@ -761,8 +764,16 @@ function archivePlanLane(root, jPath, journal, reportPath) {
   })
   if (validation.status !== 0) {
     const diagnostics = `${validation.stderr ?? ''}${validation.stdout ?? ''}`.trim()
+      || validation.error?.message
+      || `validator exited ${validation.status ?? 'without a status'} without diagnostics`
+    // Exit 1 is the validator's TOOLCHAIN-MISSING code (cli/commands/phase.mjs), exit 2 a genuinely
+    // invalid entity. A lane launched with --worktree over a pre-created dir never installs, so the
+    // toolchain gap is reachable here — and blaming the authored file for it would send the operator
+    // to rewrite a plan that is fine, with an `npm ci` instruction this phase exists to retire.
     return keep(
-      `the plan lane authored a file that does not validate as a phase entity:\n${diagnostics || `validator exited ${validation.status ?? 1} without diagnostics`}`,
+      validation.status === 1
+        ? `the plan could not be VALIDATED here — the lane's toolchain is incomplete, which says nothing about the authored file:\n${diagnostics}`
+        : `the plan lane authored a file that does not validate as a phase entity:\n${diagnostics}`,
     )
   }
 
@@ -1011,16 +1022,26 @@ export default async function run(argv) {
   }
   // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).
   const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
-  const ids = arcId ? arcPhases(root, arcId) : argv.slice(1).filter((a, i) => /^\d+$/.test(a) && !flagValues.has(i + 1))
+  // BEFORE the member list is resolved: arcPhases throws on an arc file with no parseable
+  // `phases:`, and a traceback is the exact outcome this refusal exists to replace.
   if (sub === 'plan' && arcId) {
+    let members = []
+    try {
+      members = arcPhases(root, arcId)
+    } catch {
+      // an unreadable member list changes nothing about WHY this is refused
+    }
     process.stderr.write(
       'roadmap codex: plan --arc is not a detached lane mission: arc planning is a supervised act because the plan-arc design-first gate needs the user. '
         + 'Reserve each member number, write one brief per member, then delegate separately:\n'
-        + ids.map((id) => `  roadmap codex plan ${id} --brief <path>`).join('\n')
+        + (members.length > 0
+          ? members.map((id) => `  node ${ROADMAP_CLI} codex plan ${id} --brief <path>`).join('\n')
+          : `  node ${ROADMAP_CLI} codex plan <N> --brief <path>   (per reserved member of ${arcId})`)
         + '\n',
     )
     return 1
   }
+  const ids = arcId ? arcPhases(root, arcId) : argv.slice(1).filter((a, i) => /^\d+$/.test(a) && !flagValues.has(i + 1))
   // Lane flags are ALTERNATIVES. First-match would silently drop the second one — the very trap
   // the status hint refuses to print as a single command.
   const laneFlags = Object.keys(LANES).filter((l) => LANES[l].flag && argv.includes(LANES[l].flag))
