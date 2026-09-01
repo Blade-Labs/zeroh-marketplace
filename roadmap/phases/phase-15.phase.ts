@@ -253,7 +253,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added an early plan-plus-arc refusal after arc/member validation and before any lane state. It explains the supervised plan-arc design gate, prints one per-member codex plan command with a brief placeholder, exits 1, and leaves run --arc unchanged. Also corrected task 15.4 validator placement to preserve the earlier one-file-invariant diagnostic while still validating before harvest advice.',
+        how:
+          'The test-engineer role (claude-opus-5 via child-cli) added real-CLI cases for multi-member and single-member arc refusal, zero worktree/branch/journal/prompt/log state, no traceback, the non-arc count backstop, and run --arc regression. Its direct capbuild node test run was a lane deviation and found two intended REDs plus a 15.4 empty-diff regression. That regression was re-derived and fixed by moving validation from before the one-file invariant to immediately before harvest; the durable lesson was recorded. The exact scoped runner still exits 127; types was GREEN declared-none and the full gate owns executable confirmation.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The mandated scripts/test/run-tier.sh helper is absent. The test-engineer substituted a direct capbuild test despite instructions; this deviation is recorded and the authoritative full gate remains required.',
+      },
     },
   ],
   notes:

@@ -712,17 +712,6 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     return keep(`it is DIRTY beyond its own lane artifacts — commit, move or delete this first:\n  ${blocking.join('\n  ')}`)
   }
 
-  const validation = spawnSync('node', [ROADMAP_CLI, 'phase', 'validate', phaseFile], {
-    cwd: wt,
-    encoding: 'utf8',
-  })
-  if (validation.status !== 0) {
-    const diagnostics = `${validation.stderr ?? ''}${validation.stdout ?? ''}`.trim()
-    return keep(
-      `the plan lane authored a file that does not validate as a phase entity:\n${diagnostics || `validator exited ${validation.status ?? 1} without diagnostics`}`,
-    )
-  }
-
   // (c) THE ONE-FILE INVARIANT. THREE dots: `base` is a moving ref the harvest itself advances, so a
   // two-dot tree diff would report every sibling landing as a change this lane made and refuse
   // every harvested plan. The merge-base diff asks only what the LANE did.
@@ -752,6 +741,17 @@ function archivePlanLane(root, jPath, journal, reportPath) {
             + `cp ${join(wt, LANES.plan.report)} ${jPath.replace(/\.json$/, '-REPORT.md')} && git -C ${root} worktree remove --force ${wt} && git -C ${root} branch -D ${branch}. `
           : '')
         + 'The harvest proof covers that one path, so anything else would ride out of the lane unproven; inspect the branch and land or drop the extra work by hand',
+    )
+  }
+
+  const validation = spawnSync('node', [ROADMAP_CLI, 'phase', 'validate', phaseFile], {
+    cwd: wt,
+    encoding: 'utf8',
+  })
+  if (validation.status !== 0) {
+    const diagnostics = `${validation.stderr ?? ''}${validation.stdout ?? ''}`.trim()
+    return keep(
+      `the plan lane authored a file that does not validate as a phase entity:\n${diagnostics || `validator exited ${validation.status ?? 1} without diagnostics`}`,
     )
   }
 
@@ -1001,6 +1001,15 @@ export default async function run(argv) {
   // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).
   const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
   const ids = arcId ? arcPhases(root, arcId) : argv.slice(1).filter((a, i) => /^\d+$/.test(a) && !flagValues.has(i + 1))
+  if (sub === 'plan' && arcId) {
+    process.stderr.write(
+      'roadmap codex: plan --arc is not a detached lane mission: arc planning is a supervised act because the plan-arc design-first gate needs the user. '
+        + 'Reserve each member number, write one brief per member, then delegate separately:\n'
+        + ids.map((id) => `  roadmap codex plan ${id} --brief <path>`).join('\n')
+        + '\n',
+    )
+    return 1
+  }
   // Lane flags are ALTERNATIVES. First-match would silently drop the second one — the very trap
   // the status hint refuses to print as a single command.
   const laneFlags = Object.keys(LANES).filter((l) => LANES[l].flag && argv.includes(LANES[l].flag))

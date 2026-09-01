@@ -475,6 +475,11 @@ test('review and plan lanes stay silent about the gate-round rule they cannot ac
 /** A premade worktree + fake `codex` on PATH: the launch path runs, nothing real spawns. */
 function fakeLaunchEnv(root, worktree) {
   mkdirSync(worktree, { recursive: true })
+  return fakeCodexPath(root)
+}
+
+/** fakeLaunchEnv's PATH half alone — for the tests that must assert NO worktree was made. */
+function fakeCodexPath(root) {
   const fakeBin = join(root, 'fakebin')
   mkdirSync(fakeBin, { recursive: true })
   writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nexit 0\n')
@@ -3381,5 +3386,185 @@ test('15.3 — the READ-ONLY review lane carries no commit grammar, and the run 
       re,
       `the review lane is REPORT-ONLY and never commits: handing it the ${form} subject form briefs it for the one act the lane exists to forbid, and the existing "implementation grammar must not leak into a review" guard is what that costs; fix cli/commands/codex.mjs buildReviewPrompt`,
     )
+  }
+})
+
+// ── 15.5: `plan --arc` is a SUPERVISED act — the refusal teaches the flow, never a traceback ─────
+// Probed 2026-08-31: `roadmap codex plan --arc MINESWEEP` exits 1 through an uncaught
+// buildPlanPrompt throw — "exactly ONE phase number per run (got 7)" over four `at` frames, none of
+// which contains the string `--arc`. The operator learns that a counter disagreed, not WHY arc
+// planning is not a lane mission: plan-arc owns the design-first gate, and that gate needs the user,
+// while this lane is no-reachable-user by contract. There IS a supervised path (reserve each number,
+// write each brief, delegate `codex plan <N> --brief <path>` per member), and a refusal that does
+// not name it strands the operator at exactly the moment they asked the right question.
+//
+// So the tests below pin a REFUSAL, not a message: the count is not the reason (a ONE-member arc is
+// refused too, and today it silently LAUNCHES), the refusal precedes every other plan-lane check
+// (the no-brief invocation is the real one an operator types), and it creates nothing — no journal,
+// no prompt, no worktree, no branch. Each absence is paired with a control proving this fixture
+// could have produced that state, or the assertion would pass on a lane that never got that far.
+
+/** An arc entity in the shape arcPhases() actually reads: `planes: [{ … phases: [ids] }]`. */
+function writeArc(root, id, ids) {
+  mkdirSync(join(root, 'roadmap', 'arcs'), { recursive: true })
+  writeFileSync(
+    join(root, 'roadmap', 'arcs', `${id}.arc.ts`),
+    `export default { id: '${id}', planes: [{ name: 'only', phases: [${ids.join(', ')}] }] }\n`,
+  )
+  return id
+}
+
+/** One commit + a `develop` integration ref, so a launch reaching ensureWorktree really makes one. */
+function seedDevelop(root) {
+  const git = (...args) =>
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' })
+  writeFileSync(join(root, 'seed.txt'), 'seed\n')
+  git('add', 'seed.txt')
+  git('commit', '-q', '-m', 'seed')
+  git('branch', '-f', 'develop')
+  return git
+}
+
+/** planCodex's OWN default worktree shape — a SIBLING of the checkout, so it needs its own cleanup. */
+function planWorktreeOf(root, ids) {
+  const wt = `${root}-codex-plan-${ids.join('-')}`
+  cleanups.push(() => rmSync(wt, { recursive: true, force: true }))
+  return wt
+}
+
+/** A V8 frame — `\n    at fn (file:///…)`. The shape an operator must never be handed by a refusal. */
+const STACK_FRAME = /\n\s+at \S+ \(?file:\/\//
+
+test('15.5 — plan --arc refuses with the SUPERVISED flow: plan-arc, the per-member delegation, and no traceback', () => {
+  const root = tmpRepo()
+  const git = seedDevelop(root)
+  writeArc(root, 'PLANARC', [130, 131])
+  const env = fakeCodexPath(root)
+  const arcWorktree = planWorktreeOf(root, [130, 131])
+
+  // The invocation an operator actually types: no --brief, because they are asking for a whole arc.
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '--arc', 'PLANARC'], { cwd: root, encoding: 'utf8', env })
+
+  assert.doesNotMatch(
+    r.stderr,
+    /needs a valid arc id/,
+    `precondition: the fixture arc must RESOLVE, or every assertion below would pass on the WRONG refusal; got: ${r.stderr}`,
+  )
+  assert.equal(r.status, 1, `an arc plan must refuse with a clean exit 1, not crash out; got status ${r.status}: ${r.stderr}`)
+
+  assert.match(
+    r.stderr,
+    /plan-arc/,
+    `the refusal must NAME the supervised flow that owns this act — plan-arc holds the design-first gate, and that gate needs the user this lane contractually cannot reach; fix cli/commands/codex.mjs run(): refuse \`sub === 'plan' && arcId\` before planCodex; got: ${r.stderr}`,
+  )
+  assert.match(
+    r.stderr,
+    /codex plan\s+(?:<N>|130|131)\s+--brief/,
+    `the refusal must hand back the per-member DELEGATION form (\`roadmap codex plan <N> --brief <path>\`, or the members spelled out) — an operator told only "no" has nowhere to go, and the lane can plan every member once each number is reserved and each brief written; got: ${r.stderr}`,
+  )
+  assert.doesNotMatch(
+    r.stderr,
+    /exactly ONE phase number/,
+    `the one-number count error is an INTERNAL invariant of buildPlanPrompt, not an answer to "plan this arc" — it names neither --arc nor the flow that does plan arcs; refuse in run() BEFORE planCodex so this message is never what an arc call reaches; got: ${r.stderr}`,
+  )
+  assert.doesNotMatch(
+    r.stderr,
+    /at planCodex/,
+    `an uncaught throw is not a refusal: the operator gets a traceback through the lane's own internals instead of the flow to use; got: ${r.stderr}`,
+  )
+  assert.doesNotMatch(
+    r.stderr,
+    STACK_FRAME,
+    `no stack frame belongs in a REFUSAL — a refused command is a decision the CLI made, not a bug it hit; got: ${r.stderr}`,
+  )
+
+  // Nothing created. `.building/` predates the command (tmpRepo makes it), so each named artifact is
+  // checked on its own — a directory listing would read as state the fixture itself provided.
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-130-131.json')), 'a refused arc plan must journal nothing')
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-130-131-prompt.txt')), 'a refused arc plan must write no prompt')
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-130-131.log')), 'a refused arc plan must open no log')
+  for (const n of [130, 131]) {
+    assert.ok(
+      !existsSync(join(root, '.building', `codex-plan-${n}.json`)),
+      `the refusal DELEGATES per member, it does not fan out and launch them: no lane may be started for phase ${n}`,
+    )
+  }
+  assert.ok(!existsSync(arcWorktree), `a refused arc plan must leave no worktree at ${arcWorktree}`)
+  assert.doesNotMatch(git('branch', '--list'), /codex-plan\//, 'a refused arc plan must leave no orphan codex-plan/ branch')
+
+  // CONTROL: the same seeded repo DOES produce all of that for a plain number — so the absences
+  // above are the refusal's doing, not a fixture that could never reach ensureWorktree.
+  const brief = writeBrief(root)
+  const soloWorktree = planWorktreeOf(root, [136])
+  const ok = spawnSync('node', [BIN, 'codex', 'plan', '136', '--brief', brief], { cwd: root, encoding: 'utf8', env })
+  assert.equal(ok.status, 0, `control: a plain-number plan must still launch in this fixture; stderr: ${ok.stderr}`)
+  assert.ok(existsSync(join(root, '.building', 'codex-plan-136.json')), 'control: a launched plan lane journals')
+  assert.ok(existsSync(soloWorktree), 'control: a launched plan lane makes its worktree — which is what the arc call above must NOT do')
+  assert.match(git('branch', '--list'), /codex-plan\/136/, 'control: a launched plan lane makes its branch')
+})
+
+test('15.5 — the refusal keys on --arc, not on the COUNT: a ONE-member arc is refused too, and launches nothing', () => {
+  const root = tmpRepo()
+  writeArc(root, 'SOLOARC', [132])
+  const brief = writeBrief(root)
+  // Pre-made worktree + a valid brief: every other plan-lane guard is satisfied, so today this call
+  // sails through to a real launch. The arc question is the ONLY thing standing in front of it.
+  const worktree = join(root, 'wt-plan-arc-132')
+  const env = fakeLaunchEnv(root, worktree)
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '--arc', 'SOLOARC', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+  assert.equal(
+    r.status,
+    1,
+    `--arc asks for ARC planning, and that is supervised whether the arc holds one member or seven — a one-member arc that plans anyway makes the refusal a count check wearing a lesson's clothes; got status ${r.status}: ${r.stderr}`,
+  )
+  assert.match(r.stderr, /plan-arc/, `the same teaching refusal is owed here; got: ${r.stderr}`)
+  assert.doesNotMatch(r.stderr, STACK_FRAME, `a refusal carries no stack frame; got: ${r.stderr}`)
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-132.json')), 'a refused arc plan must journal nothing — a one-member arc is not a shortcut into the lane')
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-132-prompt.txt')), 'a refused arc plan must write no prompt')
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-132.log')), 'a refused arc plan must open no log')
+  assert.ok(!existsSync(join(root, 'roadmap', 'phases', 'phase-132.phase.ts')), 'a refused arc plan must author nothing')
+})
+
+test('15.5 — the one-number backstop SURVIVES: a multi-id NON-arc plan still refuses, naming the count rule', () => {
+  const root = tmpRepo()
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-plan-multi')
+  const env = fakeLaunchEnv(root, worktree)
+  // No --arc anywhere: the arc refusal must not have REPLACED the count invariant, and the count
+  // invariant must not have been relaxed to make room for it. One plan act authors one phase file.
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '133', '134', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+
+  assert.notEqual(r.status, 0, `two numbers is still two plans — the backstop must refuse; stderr: ${r.stderr}`)
+  assert.match(
+    r.stderr,
+    /exactly ONE phase number/,
+    `the buildPlanPrompt backstop stays for the multi-id NON-arc call: the 15.5 refusal narrows to --arc, it does not take the count rule with it; got: ${r.stderr}`,
+  )
+  assert.ok(!existsSync(join(root, '.building', 'codex-plan-133-134.json')), 'a refused launch must journal nothing')
+})
+
+test('15.5 — `codex run --arc` is UNTOUCHED: the arc still resolves to its members and launches as one run', () => {
+  const root = tmpRepo()
+  writeArc(root, 'RUNARC', [130, 131])
+  writePhase(root, 130)
+  writePhase(root, 131)
+  const worktree = join(root, 'wt-run-arc')
+  const env = fakeLaunchEnv(root, worktree)
+
+  const r = spawnSync('node', [BIN, 'codex', 'run', '--arc', 'RUNARC', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, `the RUN lane plans nothing and needs no design-first gate — an arc run is exactly what --arc was built for; stderr: ${r.stderr}`)
+  assert.doesNotMatch(r.stderr, /plan-arc/, 'the plan-lane refusal must be scoped to the plan subcommand — a run must never be taught the plan flow')
+
+  const j = JSON.parse(readFileSync(join(root, '.building', 'codex-130-131.json'), 'utf8'))
+  assert.deepEqual(j.phases, ['130', '131'], 'the arc still resolves to its member phases, in planes order, under ONE journal')
+  assert.equal(j.lane, 'run')
+  assert.equal(j.worktree, worktree)
+  assert.equal(j.report, 'CODEX-REPORT.md')
+
+  const prompt = readFileSync(join(root, '.building', 'codex-130-131-prompt.txt'), 'utf8')
+  for (const n of [130, 131]) {
+    assert.ok(prompt.includes(`roadmap/phases/phase-${n}.phase.ts`), `the arc run still targets every member — phase ${n} is missing from the envelope`)
   }
 })
