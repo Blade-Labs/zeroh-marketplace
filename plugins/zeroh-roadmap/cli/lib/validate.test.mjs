@@ -82,6 +82,31 @@ test('done-flip rule — a done phase with a GREEN coherent report passes (exit 
   assert.equal(validate(root, 2001).code, 0)
 })
 
+test('done-flip rule — retained codex reports are bounded by the no-self-judge enforcement time', () => {
+  const selfReviewedPhase = (num) =>
+    donePhase(num, {
+      executionResult: { phase: num, status: 'done', driver: { model: 'codex-model', lane: 'codex' } },
+      gateRounds: [{ round: 1, agent: 'self-review' }],
+    })
+  const selfReviewedReport = (num, startedAt) =>
+    report(num, {
+      startedAt,
+      agents: [{ round: 1, agent: 'self-review', verdict: 'clean', summary: 'driver review', recordedAt: 't' }],
+    })
+
+  const historicalRoot = makeRepo()
+  writePhase(historicalRoot, 2010, selfReviewedPhase(2010))
+  writeReport(historicalRoot, selfReviewedReport(2010, '2026-09-01T07:30:26.999Z'))
+  assert.equal(validate(historicalRoot, 2010).code, 0, 'a retained pre-enforcement report remains valid historical evidence')
+
+  const currentRoot = makeRepo()
+  writePhase(currentRoot, 2011, selfReviewedPhase(2011))
+  writeReport(currentRoot, selfReviewedReport(2011, '2026-09-01T07:30:27.000Z'))
+  const current = validate(currentRoot, 2011)
+  assert.equal(current.code, 2, 'the same retained report at the enforcement boundary is refused')
+  assert.match(current.stderr, /no-self-judge/)
+})
+
 test('done-flip rule — a NOT-GREEN latest report fails exit 2 naming the rule + report path', () => {
   const root = makeRepo()
   writePhase(root, 2002, donePhase(2002))

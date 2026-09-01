@@ -18,6 +18,9 @@ import { join } from 'node:path'
 import { z } from 'zod'
 
 const RETAIN = 5
+// Reports begun before the no-self-judge rule landed are immutable historical evidence,
+// not delegated completions that can retroactively acquire an independent reviewer.
+const INDEPENDENT_REVIEW_ENFORCEMENT_AT = '2026-09-01T07:30:27.000Z'
 
 const ScopeTripleShape = z.object({
   derived: z.string(),
@@ -238,7 +241,8 @@ export function checkPhaseConsistency(parsedPhase, report) {
   const delegatedReviewRequired =
     parsedPhase?.executionResult?.driver?.lane === 'codex' &&
     parsedPhase?.reviewScope !== 'none' &&
-    report.reviewScope?.effective !== 'none'
+    report.reviewScope?.effective !== 'none' &&
+    report.startedAt >= INDEPENDENT_REVIEW_ENFORCEMENT_AT
   const hasIndependentRound = report.agents.some(
     (round) => round.round >= 1 && !round.agent.toLowerCase().includes('self-review'),
   )

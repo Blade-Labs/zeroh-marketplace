@@ -145,8 +145,10 @@ export default definePhase({
           'TDD: the test-engineer added six required directions plus legacy self-review spellings at the pure consistency seam. RED executed 27 tests with 25 passing and the two refusal/control cases failing; GREEN executed all 27 tests successfully. The capped types slot passed as declared-none, and a direct diff assertion confirmed gate.mjs received no caller-side lane logic.',
         compromises: 'None',
         skipped: 'None',
-        hardcoded: 'None',
-        limitations: 'None',
+        hardcoded:
+          'The named enforcement cutoff 2026-09-01T07:30:27.000Z is the phase-17 rule commit time, architect-approved so immutable pre-rule gate reports remain historical evidence rather than retroactive failures.',
+        limitations:
+          'Gate resolution added cli/lib/validate.test.mjs beyond the planned files to prove both callers share the same pre/post-cutoff behavior; no caller production code changed.',
       },
     },
     {

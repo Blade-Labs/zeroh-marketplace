@@ -86,6 +86,8 @@ const baseReport = (over = {}) => ({
   ...over,
 })
 
+const INDEPENDENT_REVIEW_ENFORCEMENT_AT = '2026-09-01T07:30:27.000Z'
+
 /**
  * A curation block as `roadmap phase curate --apply` records it: how many granular commits
  * were swallowed, the subjects that replaced them, and the scratch/revert pairs whose SHAs
@@ -625,6 +627,7 @@ const laneCase = (lane, agents, { phase: phaseOver = {}, report: reportOver = {}
     ...phaseOver,
   }),
   report: baseReport({
+    startedAt: INDEPENDENT_REVIEW_ENFORCEMENT_AT,
     testScope: { derived: 'relevant', declared: 'relevant', effective: 'relevant' },
     reviewScope: { derived: 'full', declared: 'full', effective: 'full' },
     agents: agents.map((a) => ({ round: 1, verdict: 'clean', summary: 's', recordedAt: 't', ...a })),
@@ -732,4 +735,23 @@ test('checkPhaseConsistency — the no-self-judge rule is lane-scoped and waived
     false,
     'control: zero rounds under reviewScope full IS refused (the waivers are the scope value, not the empty agents[])',
   )
+})
+
+test('checkPhaseConsistency — historical reports stay evidence while the enforcement boundary is inclusive', () => {
+  for (const agents of [[], [{ agent: 'self-review' }]]) {
+    const historical = laneCase('codex', agents, {
+      report: { startedAt: '2026-09-01T07:30:26.999Z' },
+    })
+    assert.equal(checkPhaseConsistency(historical.phase, historical.report).ok, true, 'pre-cutoff codex evidence is not retroactively refused')
+  }
+
+  const boundary = laneCase('codex', [{ agent: 'self-review' }], {
+    report: { startedAt: INDEPENDENT_REVIEW_ENFORCEMENT_AT },
+  })
+  assertRefusedForSelfJudge(checkPhaseConsistency(boundary.phase, boundary.report), 'exactly-at-cutoff self-review')
+
+  const reviewed = laneCase('codex', [{ agent: 'code-reviewer' }], {
+    report: { startedAt: '2026-09-01T07:30:27.001Z' },
+  })
+  assert.equal(checkPhaseConsistency(reviewed.phase, reviewed.report).ok, true, 'post-cutoff independent review is clean')
 })

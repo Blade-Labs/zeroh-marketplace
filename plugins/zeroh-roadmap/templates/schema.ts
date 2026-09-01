@@ -13,6 +13,11 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
+// v13 migration notes (consumers syncing from v12 — additive enum widening;
+// historical files keep parsing unmodified):
+// - StructuredGateRoundShape.agent adds 'software-architect' and 'self-review'.
+//   The five existing identities remain valid.
+
 // v12 migration notes (consumers syncing from v11 — ONE REMOVAL, not additive):
 // - BasePhaseFields DROPS `executionMode` (phase 11; nothing ever consulted it). Zod
 //   still parses old files (unknown keys strip on the non-strict shape), but a consumer
