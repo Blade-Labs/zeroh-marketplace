@@ -1,0 +1,84 @@
+{
+  "arcId": "MINESWEEP",
+  "date": "2026-09-01",
+  "estateRatchets": "skipped-not-bound",
+  "phaseGates": [
+    {
+      "phase": 14,
+      "done": true,
+      "gateGreen": true
+    },
+    {
+      "phase": 15,
+      "done": true,
+      "gateGreen": true
+    },
+    {
+      "phase": 16,
+      "done": true,
+      "gateGreen": true
+    },
+    {
+      "phase": 17,
+      "done": true,
+      "gateGreen": true
+    },
+    {
+      "phase": 18,
+      "done": true,
+      "gateGreen": true
+    },
+    {
+      "phase": 19,
+      "done": true,
+      "gateGreen": true
+    },
+    {
+      "phase": 20,
+      "done": true,
+      "gateGreen": true
+    }
+  ],
+  "debtDispositions": [
+    {
+      "item": "17.2.hardcoded — the no-self-judge enforcement cutoff anchored at the rule commit's own time (2026-09-01T07:30:27Z), so only pre-rule phases keep pre-rule gate reports as valid history",
+      "disposition": "ACCEPT",
+      "ref": "17.2.hardcoded"
+    },
+    {
+      "item": "20.3.compromises — the trailing-no-op polarity class narrowed from `;`/`&&` to `;` only, because `cmd && echo` short-circuits on failure and preserves the non-zero exit; the planned broader class was semantically wrong",
+      "disposition": "ACCEPT",
+      "ref": "20.3.compromises"
+    },
+    {
+      "item": "Architect LOW (iii): the arc-level rail text claimed every tolerated deviant WARNs, while D3 (`docs(roadmap): mark phase N complete`) is deliberately un-warned — it is the protocol's own completion form. Carve-out recorded in the arc's criteriaRatifications, matching the phase-16 gate-R2 Decision Contract",
+      "disposition": "RESOLVE-NOW"
+    },
+    {
+      "item": "Architect LOWs (i)+(1c-residual)+(cosmetic): consolidate the three worktree-porcelain parses under one exported listWorktrees enumerator; reword tsx-bridge's bare `npm ci` hint to the lockfile-keyed recipes; align the envelope's task-subject colon with the 16.4 cards. Authored as phase 21 (plan unverified, NOT queued — Mode A review post-arc)",
+      "disposition": "PLAN-PHASE",
+      "ref": "phase-21"
+    }
+  ],
+  "architectVerdict": "Merge-ready (fable judge, 2026-09-01). All four singleSeams hold as one implementation each: the schema vendor pair is byte-identical whole-file; phaseOwnPatterns and detectInstaller have provably single homes with all consumers routed through them; the one new worktree-porcelain parse (executor-arm worktreeRoots) answers a question the classifier structurally cannot (it needs the primary and slots surveyLanes excludes) and forks no classification logic. All four honesty rails mechanically in force: measure assert green at 13,256/13,257; the new accounting paths contain zero removal calls (report-only proven by grep and pinned by test); every spot-checked refusal names reason + runnable remedy; tolerance-never-silent holds for D1/D2/D4/D5 with the D3 carve-out now recorded at arc level. The design-gate skip survived the build — every new surface is a mechanical extension of a named existing rail. POLYSEAT's designRefs remain true: drivers.mjs has zero diff, launch still routes through the registry, and both the protocol-parity and envelope-overhead ratchets are green (envelope measured 3,831/16,710 = 0.2293 against 0.235). Every model-loaded-prose trim carries its DIET-LEDGER row with live code-side enforcement. Findings: three LOWs, zero blockers — none gates the merge.",
+  "deferredToReleaseSweep": [
+    "14.1.limitations — deleteIfMerged deliberately not shared with the normal path's branch-delete block (criterion 2 froze it byte-for-byte)",
+    "14.2.limitations — a journal truncated before its worktree field downgrades otherwise-legacy lanes to 'unknown'",
+    "14.4.limitations — the naive-count trap: three planned fixtures were satisfiable by an unfiltered surveyLanes().length; a sixth live-beside-stale case pins the filter",
+    "14.5.limitations — hints cover the enumerated (lane,state) pairs plus the gate-added gone-directory plan-lane case",
+    "14.6.limitations — integration-ref fallback to the journal's own base on an unconfigured consumer; slot refusal added beyond the plan's four guards; the never-consumable dead-directory lane is reported, not refused; journal.carriedIn backfill",
+    "15.1.limitations — no protocol-compliant scoped runner exists in this repo (scripts/test/run-tier.sh absent); direct capbuild substituted, recorded",
+    "15.2.limitations — same run-tier absence; zod pinned to repository 4.4.3",
+    "15.3.limitations — same run-tier absence (full gate carries the tests)",
+    "15.4.limitations — same run-tier absence (full gate carries the tests)",
+    "15.5.limitations — same run-tier absence; test-engineer deviation recorded",
+    "17.2.limitations — validate.test.mjs added beyond planned files to prove the shared consistency seam",
+    "17.3.limitations — roles.test.mjs touched outside planned prompt files to re-derive the envelope ratchet",
+    "18.1.limitations — the export inventory is deliberately text-level (line-oriented + export-star), not a TypeScript parser",
+    "18.2.limitations — lessons merge preserves malformed JSONL verbatim; only empty separator lines ignored",
+    "18.3.limitations — evalMissing follows the present-only advisory convention (emitted only when true)",
+    "18.4.limitations — audit.test.mjs census fixture added though files[] named only debt-census.mts; prefix semantics intentionally narrow"
+  ],
+  "overall": "green",
+  "blockers": []
+}
