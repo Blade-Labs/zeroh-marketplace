@@ -171,7 +171,18 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          "Extended only the codex run envelope's FILL PROTOCOL ROLES bullet with the exact independence rule: self-review never satisfies completion, at least one independent recorded round is required, and --verify-complete refuses without it. Added positive run assertions and negative review/plan assertions.",
+        how:
+          "TDD: the test-engineer added real-CLI prompt assertions and established RED at 88/89. An existing prompt-ownership assertion conflicted with the planned exact --verify-complete wording, so the software-architect returned PROCEED_WITH_FIX: preserve the exact teaching sentence and strip only that approved sentence before asserting no other completion mechanics leaked. The capped GREEN run executed 89/89; the types slot passed as declared-none.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
   ],
   notes:

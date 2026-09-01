@@ -392,10 +392,82 @@ test('run: the lane stamps driver attribution without restating the completion p
   )
 
   assert.ok(protocol.includes('--verify-complete'), 'precondition: the completion protocol (and its --verify-complete step) lives in skills/do-phase/SKILL.md')
+  const approvedTeachingLine =
+    'Reviews recorded as `self-review` never satisfy completion — a codex-lane phase needs at least one independent recorded round, and `--verify-complete` refuses without it.'
   assert.ok(
-    !prompt.includes('--verify-complete'),
-    'the completion protocol is the skill\'s — restating its steps beside the attribution override is how the two copies drift; fix cli/commands/codex.mjs buildPrompt',
+    !prompt.replace(approvedTeachingLine, '').includes('--verify-complete'),
+    'only the architect-approved no-self-judge teaching line may name --verify-complete; every other completion step belongs to the skill — fix cli/commands/codex.mjs buildPrompt',
   )
+})
+
+// The no-self-judge rule (gate-report.mjs checkPhaseConsistency) refuses a codex-lane completion
+// whose recorded rounds are all self-review. Enforced at --verify-complete, that lands AFTER the
+// lane has finished — too late to spawn the round it is missing. Only the RUN lane commits and
+// records gate rounds, so the teaching line is run-lane material: the review lane writes no
+// phase file and the plan lane runs no gate, and neither can act on it.
+
+test('run: the envelope names the independence bar the completion gate enforces', () => {
+  const root = tmpRepo()
+  writePhase(root, 85)
+  const worktree = join(root, 'wt-run-85')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '85', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-85-prompt.txt'), 'utf8')
+
+  // Precondition: the rule the envelope teaches must really be the one the gate enforces —
+  // otherwise this test pins a sentence no refusal backs.
+  const enforcement = readFileSync(join(HERE, '..', 'lib', 'gate-report.mjs'), 'utf8')
+  assert.ok(
+    enforcement.includes('self-review') && /satisfy completion/.test(enforcement),
+    'precondition: cli/lib/gate-report.mjs must own the no-self-judge completion rule — if it moved or was reworded, re-anchor this test to its new home before trusting the envelope assertions below',
+  )
+
+  assert.ok(
+    prompt.includes('never satisfy completion'),
+    'the run envelope must state the completion bar in the gate\'s own terms — without it the lane meets the refusal at --verify-complete, after the roles it could have spawned are gone; fix cli/commands/codex.mjs buildPrompt (extend the FILL PROTOCOL ROLES bullet)',
+  )
+  assert.match(
+    prompt,
+    /self-review[^\n]*never satisfy completion/i,
+    'the bar must name WHAT fails to satisfy completion: a rule that omits self-review reads as "reviews are optional" rather than "your own review does not count"; fix cli/commands/codex.mjs buildPrompt',
+  )
+  assert.match(
+    prompt,
+    /at least one independent[^\n]*round/i,
+    'stating the prohibition without the remedy leaves the driver no action: the envelope must require at least one INDEPENDENT recorded round, which is the thing the lane can still do at work time; fix cli/commands/codex.mjs buildPrompt',
+  )
+})
+
+test('review and plan lanes stay silent about the gate-round rule they cannot act on', () => {
+  const root = tmpRepo()
+  writePhase(root, 68)
+  const reviewWt = join(root, 'wt-review-68')
+  const reviewEnv = fakeLaunchEnv(root, reviewWt)
+  const rr = spawnSync('node', [BIN, 'codex', 'review', '68', '--worktree', reviewWt], { cwd: root, encoding: 'utf8', env: reviewEnv })
+  assert.equal(rr.status, 0, rr.stderr)
+
+  const brief = writeBrief(root)
+  const planWt = join(root, 'wt-plan-113')
+  const planEnv = fakeLaunchEnv(root, planWt)
+  const pr = spawnSync('node', [BIN, 'codex', 'plan', '113', '--brief', brief, '--worktree', planWt], { cwd: root, encoding: 'utf8', env: planEnv })
+  assert.equal(pr.status, 0, pr.stderr)
+
+  for (const [lane, file] of [['review', 'codex-review-68-prompt.txt'], ['plan', 'codex-plan-113-prompt.txt']]) {
+    const prompt = readFileSync(join(root, '.building', file), 'utf8')
+    // Guard the negatives: a mis-pathed or empty read would satisfy them vacuously.
+    assert.match(prompt, /YOUR PROTOCOL IS A FILE/, `precondition: ${file} must be the ${lane} lane's real envelope, or the two assertions below pass on nothing`)
+    assert.doesNotMatch(
+      prompt,
+      /never satisfy completion/i,
+      `the ${lane} lane records no gate rounds — the completion bar is run-lane disposition, and copying it here briefs a driver on a step it cannot take; fix cli/commands/codex.mjs (run-lane copy ONLY)`,
+    )
+    assert.doesNotMatch(
+      prompt,
+      /recorded round/i,
+      `the ${lane} lane never reaches a gate round, so a recorded-round instruction is dead text that dilutes the overrides it can act on; fix cli/commands/codex.mjs (run-lane copy ONLY)`,
+    )
+  }
 })
 
 // ── review lane ────────────────────────────────────────────────────────────
