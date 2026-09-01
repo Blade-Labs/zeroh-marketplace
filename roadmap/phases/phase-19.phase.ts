@@ -27,7 +27,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 19,
   name: 'Cross-repo gate awareness: productRepos floors review scope, arm-time product-tree overlap refusal',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
@@ -42,7 +42,12 @@ export default definePhase({
     'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
     'plugins/zeroh-roadmap/cli/commands/executor-arm.mjs',
     'plugins/zeroh-roadmap/cli/commands/executor-arm-disarm.test.mjs',
+    'plugins/zeroh-roadmap/cli/lib/executor-arm.mjs',
+    'plugins/zeroh-roadmap/cli/lib/workflow-steps.test.mjs',
     'plugins/zeroh-roadmap/cli/lib/product-repos.mjs',
+    'plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs',
+    'plugins/zeroh-roadmap/test/fixture-consumer/arc-next.test.mjs',
+    'plugins/zeroh-roadmap/skills/review-phase/references/metadata-ratifications.md',
   ],
   stakeholderDemo:
     'A phase whose product lives in a sibling repo can no longer gate as a one-file diff: review scope floors to full with the foreign repos named, and a second executor arming onto an overlapping product tree is refused with the evidence instead of silently sharing a branch.',
@@ -94,7 +99,18 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/cli/commands/gate.mjs', 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs'],
       testMode: 'tdd',
       interfaces: { consumes: ['productRepos(keyFiles, {worktree}) from cli/lib/product-repos.mjs'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Gate planning now derives foreign product repositories from absolute phase keyFiles, floors cross-repo reviewScope to full before constructing the agent chain, refuses a declared lower review rung, and names the repositories in both structured plan data and the explanatory notes.',
+        how:
+          'TDD: the claude-opus-5 test-engineer added fixture-consumer coverage using real sibling git repositories and proved a 3-test RED (82 passed, 3 failed). The implementation calls the existing productRepos seam inside buildPlan, applies the full floor before agents are selected, and preserves local and linked-worktree behavior. The scoped GREEN run passed 85/85; the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '19.2',
@@ -120,10 +136,26 @@ export default definePhase({
       files: [
         'plugins/zeroh-roadmap/cli/commands/executor-arm.mjs',
         'plugins/zeroh-roadmap/cli/commands/executor-arm-disarm.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/executor-arm.mjs',
+        'plugins/zeroh-roadmap/cli/lib/workflow-steps.test.mjs',
+        'plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/arc-next.test.mjs',
+        'plugins/zeroh-roadmap/skills/review-phase/references/metadata-ratifications.md',
       ],
       testMode: 'tdd',
       interfaces: { consumes: ['productRepos(keyFiles, {worktree}) from cli/lib/product-repos.mjs'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Executor arming now enumerates every registered roadmap worktree, considers only live sibling arms, derives each sibling phase product-repository claim from its own root, and refuses an intersecting foreign repository before writing the new arm. Forced overlaps remain possible but are named with both phases, roots, and shared repositories.',
+        how:
+          'TDD: the claude-opus-5 test-engineer added real-git fixtures across same-root and linked-worktree lanes and proved a 5-test RED (18 passed, 5 failed). The shared arm library scans git worktree porcelain roots, excludes terminal stale arms, and derives unbounded safety claims through productRepos; both the CLI and arc-plane workflow doors consume the same phaseKeyFiles reader and refuse overlap before writing or spawning, while surfacing underivable files and pruned roots. Review metadata now ratifies the cross-repo full floor explicitly. The initial scoped GREEN run passed 23/23; gate-review regressions cover both doors and unreadable/terminal phase cases; the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
   ],
   notes:

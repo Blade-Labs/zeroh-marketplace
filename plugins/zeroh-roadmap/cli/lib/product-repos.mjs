@@ -55,7 +55,7 @@ function nearestExistingDir(p) {
  * repository as foreign: this feeds an ALIVE arm of a liveness verdict, and a false ALIVE is the
  * one direction that verdict must never fail in.
  */
-export function productRepos(keyFiles, { worktree } = {}) {
+export function productRepos(keyFiles, { worktree, maxRepos = PRODUCT_REPO_CAP } = {}) {
   let ourCommon
   try {
     ourCommon = gitCommonDir(worktree)
@@ -66,7 +66,7 @@ export function productRepos(keyFiles, { worktree } = {}) {
   const seenDirs = new Set()
   const seenRoots = new Set()
   for (const keyFile of keyFiles ?? []) {
-    if (out.length >= PRODUCT_REPO_CAP) break
+    if (out.length >= maxRepos) break
     if (typeof keyFile !== 'string' || !isAbsolute(keyFile)) continue
     const dir = nearestExistingDir(keyFile)
     // Dedupe BEFORE git, not after: most phases declare many files under a handful of

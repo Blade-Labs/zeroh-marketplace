@@ -39,7 +39,8 @@ import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
 import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine, appendExecutorEvent } from '../cli/lib/beacon.mjs'
-import { armExecutor, disarmExecutor, liveArm, cardModelAlias, DEFAULT_AGENT_CARD } from '../cli/lib/executor-arm.mjs'
+import { armExecutor, disarmExecutor, liveArm, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps } from '../cli/lib/executor-arm.mjs'
+import { productRepos } from '../cli/lib/product-repos.mjs'
 import { pidAlive } from '../cli/lib/sidecar.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
@@ -156,6 +157,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
   const { arcId, planeName, force } = input
   const run = deps.run ?? defaultRun
   const agent = deps.agent ?? defaultAgent
+  const warn = deps.warn ?? ((message) => process.stderr.write(message))
   const cwd = deps.cwd ?? process.cwd()
   const repoRoot = gitToplevel(cwd)
   const cfg = loadConfig(cwd)
@@ -209,6 +211,25 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     // litters .building, and the lib refuses to write one at all (the 2026-07-17 hazard).
     const sessionId = deps.sessionId ?? input.sessionId ?? null
     const executorId = randomUUID()
+    const workflowKeys = phaseKeyFiles(worktree, phase)
+    if (workflowKeys === null) warn(`arc-plane: phase ${phase}'s own phase file is missing, unreadable, or has underivable keyFiles — no product-tree claim derived\n`)
+    const repos = productRepos(workflowKeys ?? [], { worktree, maxRepos: Infinity })
+    let productClaim
+    try {
+      productClaim = productRepoOverlaps(worktree, phase, repos)
+    } catch (e) {
+      return buildHaltPayload('blocked', { phase, evidence: { productRepoOverlap: `overlap scan failed: ${e.message}` } })
+    }
+    for (const note of productClaim.notes) warn(note)
+    if (productClaim.overlaps.length > 0) {
+      const evidence = productClaim.overlaps
+        .map((hit) => `phase ${hit.phase} in ${hit.root} shares ${hit.repos.join(', ')}`)
+        .join('; ')
+      return buildHaltPayload('blocked', {
+        phase,
+        evidence: { productRepoOverlap: `arc-plane: phase ${phase} product-tree overlap — ${evidence}` },
+      })
+    }
     // The incumbent CHECK is UNCONDITIONAL. D1 governs only the WRITE, but refusing to spawn onto
     // a phase another executor still owns must not depend on whether this lane happens to know its
     // own session id — a caller without one is precisely the lane that walked into the 2026-08-17

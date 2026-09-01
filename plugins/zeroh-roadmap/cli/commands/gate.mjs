@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { findClosedJournal, findJournal, JournalUnreadableError } from '../lib/codex-journal.mjs'
 import { derivePhaseStartSha, GitScanError, phaseOwnPatterns, SUBJECT_GRAMMAR } from '../lib/gitscan.mjs'
+import { productRepos } from '../lib/product-repos.mjs'
 import { bridgeImport, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
   assembleConsumerFingerprint,
@@ -369,6 +370,20 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   const floor = specialistFloor(diff, opts.cfg)
   const testScope = deriveTestScope(diff, phase, opts.cfg, { sequenceMember: !!opts.sequenceMember })
   const reviewScope = deriveReviewScope(diff, phase, opts.cfg)
+  const foreignProductRepos = productRepos(phase?.keyFiles, { worktree: toplevel, maxRepos: Infinity })
+  if (foreignProductRepos.length > 0) {
+    reviewScope.derived = 'full'
+    reviewScope.effective = 'full'
+    reviewScope.notes = [] // the rung-below-full honesty notes ("Round 0 skipped") are false at the floor
+    if (reviewScope.declared && reviewScope.declared !== 'full') {
+      const crossRepoRefusal =
+        `reviewScope '${reviewScope.declared}' declared but product repositories ${foreignProductRepos.join(', ')} ` +
+        'make the local diff structurally blind — cross-repo floor: full'
+      reviewScope.refused = reviewScope.refused
+        ? `${reviewScope.refused}; ${crossRepoRefusal}`
+        : crossRepoRefusal
+    }
+  }
 
   // ── slots — the non-test frame from the cell + test slots per effective testScope ──
   const cell = gateCell(kind, mode, opts.cfg)
@@ -429,6 +444,11 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   ]
   if (cell.closureItest) notes.push('hardening closure integration test required — never defers (both modes)')
   if (cell.e2e === 'deferred') notes.push('e2e defers to the arc end (do-arc Step 8)')
+  if (foreignProductRepos.length > 0)
+    notes.push(
+      `cross-repo: derivation is structurally blind to ${foreignProductRepos.join(', ')} — reviewScope floored to full; ` +
+        'mechanical slots run against THIS repo only, the product diff is reviewed from the foreign checkout',
+    )
   if (foreign.length > 0)
     notes.push(`foreignCommitsInRange: scope/floor bind to the phase-own file set; ${foreign.length} foreign file(s) in base..HEAD are excluded`)
 
@@ -454,6 +474,7 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
     reviewScope: pickScope(reviewScope),
     slots,
     agents,
+    ...(foreignProductRepos.length > 0 ? { productRepos: foreignProductRepos } : {}),
     designParity: designParity(phase),
     ...(foreign.length > 0 ? { foreignCommitsInRange: foreign } : {}),
     notes,

@@ -127,6 +127,32 @@ test('2c) a phase file that does not exist at all does not break the arm', () =>
   assert.ok(existsSync(armPath(repo, 2375)), 'the arm is still written')
 })
 
+test('2d) an unreadable OWN phase file is named instead of printing a false local-only all-clear', () => {
+  const repo = newRepo()
+  writeFileSync(join(repo, 'roadmap', 'phases', 'phase-2377.phase.ts'), 'export default { keyFiles: [\n')
+  const res = roadmap(repo, 'executor-arm', '2377', '--session', 'sess-abc', '--executor-id', 'exec-1')
+  assert.equal(res.status, 0, res.stderr)
+  assert.match(res.stderr, /phase 2377.*own phase file.*missing, unreadable/i)
+  assert.match(res.stderr, /preflight.*undetermined/i)
+  assert.doesNotMatch(res.stderr, /all in this worktree's repository/i)
+})
+
+test('2e) a declared but non-literal keyFiles field is underivable, never silently empty', () => {
+  const repo = newRepo()
+  writeFileSync(join(repo, 'roadmap', 'phases', 'phase-2378.phase.ts'), "const files = ['/tmp/product/x.ts']\nexport default { phase: 2378, status: 'in-progress', keyFiles: files }\n")
+  const res = roadmap(repo, 'executor-arm', '2378', '--session', 'sess-abc', '--executor-id', 'exec-1')
+  assert.equal(res.status, 0, res.stderr)
+  assert.match(res.stderr, /phase 2378.*own phase file.*underivable keyFiles/i)
+})
+
+test('2f) comments and prose mentioning keyFiles do not turn an honestly empty declaration into an error', () => {
+  const repo = newRepo()
+  writeFileSync(join(repo, 'roadmap', 'phases', 'phase-2379.phase.ts'), "export default { phase: 2379, status: 'in-progress', keyFiles: [ // intentionally empty\n ], notes: 'mentions keyFiles: in prose' }\n")
+  const res = roadmap(repo, 'executor-arm', '2379', '--session', 'sess-abc', '--executor-id', 'exec-1')
+  assert.equal(res.status, 0, res.stderr)
+  assert.doesNotMatch(res.stderr, /underivable keyFiles/i)
+})
+
 test('3) a re-arm with a DIFFERENT --executor-id exits 2 and names BOTH ids', () => {
   const repo = newRepo()
   assert.equal(roadmap(repo, 'executor-arm', '2375', '--session', 'sess-shared', '--executor-id', 'exec-first').status, 0)
@@ -359,4 +385,195 @@ test('10c) the recorded alias survives the OTHER arm paths — a forced re-arm r
   const rec = JSON.parse(readFileSync(armPath(repo, 2375), 'utf8'))
   assert.equal(rec.expectedModelAlias, 'opus', 'every write of the arm records the request — a forced re-arm is still a spawn')
   assert.equal(rec.executorId, 'exec-second', 'and the exclusivity semantics are unchanged')
+})
+
+// ── 19.2 — THE PRODUCT-TREE CLAIM. The exclusivity guard above is per-PHASE, so it never sees the
+// 2333 shape: two DIFFERENT phases, armed from two different lanes, whose keyFiles point into the
+// SAME foreign checkout. "Two executors then shared one working tree and one branch" — and the
+// cross-repo preflight, which already derives those repos, only narrated them.
+//
+// So the arm must CLAIM the trees it will write, and refuse when the claim overlaps a sibling arm's.
+// The registry of sibling arms is every worktree of this repository: `.building` is PER-WORKTREE, so
+// a scan of one root is structurally blind to the lane next door — which is exactly the lane a
+// parallel arc executor runs in. And because the claim is derived (a sibling arm resolves through
+// ITS OWN root's phase file), the derivation can fail: a sibling arm whose phase file is gone, or a
+// worktree git still lists but the filesystem no longer has. Neither may ever block an arm — missing
+// evidence is not evidence of a conflict — but neither may be silent either, or a scan that never
+// ran is indistinguishable from a scan that found nothing.
+
+/** A linked worktree of `repo` on its own branch: a sibling LANE, with its own `.building`. */
+function newLane(repo, branch) {
+  const lane = join(newTmp('zr-cli-execarm-lane-'), branch)
+  git(repo, 'worktree', 'add', '-q', '-b', branch, lane)
+  mkdirSync(join(lane, 'roadmap', 'phases'), { recursive: true })
+  return realpathSync(lane)
+}
+
+/** A real file inside a foreign product repo, so the derived claim has something to stand on. */
+function productKeyFile(product, rel) {
+  const p = join(product, rel)
+  mkdirSync(dirname(p), { recursive: true })
+  writeFileSync(p, 'export {}\n')
+  return p
+}
+
+test('11) a second arm whose product repos OVERLAP a live sibling arm is refused, naming both phases and the shared repo', () => {
+  const repo = newRepo()
+  const product = newRepo('zr-cli-execarm-product-')
+  writePhaseFile(repo, 5731, { keyFiles: [productKeyFile(product, join('src', 'relay', 'a.ts'))] })
+  writePhaseFile(repo, 5732, { keyFiles: [productKeyFile(product, join('src', 'relay', 'b.ts'))] })
+  assert.equal(roadmap(repo, 'executor-arm', '5731', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)
+
+  const res = roadmap(repo, 'executor-arm', '5732', '--session', 'sess-2', '--executor-id', 'exec-second')
+  assert.equal(res.status, 2, `a second claim on one working tree is REFUSED → exit 2; stderr:\n${res.stderr}`)
+  assert.match(res.stderr, /overlap/i, `the refusal names the condition; got:\n${res.stderr}`)
+  assert.ok(res.stderr.includes('5731'), `names the phase already holding the tree; got:\n${res.stderr}`)
+  assert.ok(res.stderr.includes('5732'), `names the phase being refused; got:\n${res.stderr}`)
+  assert.ok(res.stderr.includes(product), `names the shared repo — the tree both would write; got:\n${res.stderr}`)
+  assert.match(res.stderr, /force/, 'the message points at the deliberate override')
+  assert.ok(!/\bat\s+\w+\s+\(/.test(res.stderr), `a refusal is a message, never a stack; got:\n${res.stderr}`)
+  assert.equal(existsSync(armPath(repo, 5732)), false, 'a REFUSED arm is not written — the refusal is the whole point')
+  assert.ok(existsSync(armPath(repo, 5731)), 'and the incumbent arm is untouched')
+})
+
+test('12) THE CROSS-LANE DIRECTION — the sibling arm lives in ANOTHER worktree of this repo and is still found', () => {
+  // The registry has to be the repository's worktree list. Each lane keeps its own `.building`, so
+  // an arm scan rooted at the arming worktree sees nothing here and permits two different phases,
+  // one executing in the main checkout and one spawned in the adjacent lane, to write the same
+  // product checkout.
+  const repo = newRepo()
+  const lane = newLane(repo, 'lane-b')
+  const product = newRepo('zr-cli-execarm-product-')
+  writePhaseFile(repo, 5741, { keyFiles: [productKeyFile(product, join('src', 'a.ts'))] })
+  writePhaseFile(lane, 5742, { keyFiles: [productKeyFile(product, join('src', 'b.ts'))] })
+  assert.equal(roadmap(repo, 'executor-arm', '5741', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)
+
+  const res = roadmap(lane, 'executor-arm', '5742', '--session', 'sess-2', '--executor-id', 'exec-second')
+  assert.equal(res.status, 2, `the sibling lane's arm is as binding as one in this root; stderr:\n${res.stderr}`)
+  assert.ok(res.stderr.includes('5741'), `names the phase already holding the tree; got:\n${res.stderr}`)
+  assert.ok(res.stderr.includes(product), `names the shared repo; got:\n${res.stderr}`)
+  assert.ok(res.stderr.includes(repo), `and names the LANE holding the incumbent arm, or the refusal is unactionable; got:\n${res.stderr}`)
+  assert.equal(existsSync(armPath(lane, 5742)), false, 'no arm is written in this lane')
+  assert.ok(existsSync(armPath(repo, 5741)), 'and the other lane keeps its arm')
+})
+
+test('13) --force arms over the overlap and RECORDS on stderr what it overrode', () => {
+  const repo = newRepo()
+  const product = newRepo('zr-cli-execarm-product-')
+  writePhaseFile(repo, 5751, { keyFiles: [productKeyFile(product, join('src', 'a.ts'))] })
+  writePhaseFile(repo, 5752, { keyFiles: [productKeyFile(product, join('src', 'b.ts'))] })
+  assert.equal(roadmap(repo, 'executor-arm', '5751', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)
+
+  const forced = roadmap(repo, 'executor-arm', '5752', '--session', 'sess-2', '--executor-id', 'exec-second', '--force')
+  assert.equal(forced.status, 0, `--force is the deliberate override; stderr:\n${forced.stderr}`)
+  assert.ok(existsSync(armPath(repo, 5752)), 'the forced arm is written')
+  assert.match(forced.stderr, /overrid|forc/i, `the override is stated, not silent; got:\n${forced.stderr}`)
+  assert.ok(forced.stderr.includes('5751'), `and it names the arm it overrode; got:\n${forced.stderr}`)
+  assert.ok(forced.stderr.includes(product), `and the tree that is now double-claimed; got:\n${forced.stderr}`)
+  assert.ok(existsSync(armPath(repo, 5751)), 'forcing past an overlap never clears the sibling arm — that is disarm\'s job, with its own guard')
+})
+
+test('14) DISJOINT product repos are untouched — two lanes writing different trees both arm', () => {
+  const repo = newRepo()
+  const lane = newLane(repo, 'lane-c')
+  const productA = newRepo('zr-cli-execarm-product-')
+  const productB = newRepo('zr-cli-execarm-product-')
+  writePhaseFile(repo, 5761, { keyFiles: [productKeyFile(productA, join('src', 'a.ts'))] })
+  writePhaseFile(lane, 5762, { keyFiles: [productKeyFile(productB, join('src', 'b.ts'))] })
+  assert.equal(roadmap(repo, 'executor-arm', '5761', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)
+
+  const res = roadmap(lane, 'executor-arm', '5762', '--session', 'sess-2', '--executor-id', 'exec-second')
+  assert.equal(res.status, 0, `two executors on two different trees is the sanctioned parallel path; stderr:\n${res.stderr}`)
+  assert.ok(existsSync(armPath(lane, 5762)), 'the disjoint arm is written')
+  assert.ok(existsSync(armPath(repo, 5761)), 'and the sibling arm is untouched')
+})
+
+test('15) LOCAL-only phases never trip it — "no product repos" is not "the same product repos"', () => {
+  // Nearly every phase in this consumer declares keyFiles in its own repository and derives an
+  // EMPTY product set. An intersection test that treats empty-∩-empty as a hit would refuse the
+  // entire roadmap the moment two lanes were armed at once.
+  const repo = newRepo()
+  const lane = newLane(repo, 'lane-d')
+  writePhaseFile(repo, 5771, { keyFiles: [join(repo, 'roadmap', 'backlog.ts')] })
+  writePhaseFile(lane, 5772, { keyFiles: [join(lane, 'roadmap', 'backlog.ts'), join(lane, 'cli', 'lib', 'x.mjs')] })
+  assert.equal(roadmap(repo, 'executor-arm', '5771', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)
+
+  const res = roadmap(lane, 'executor-arm', '5772', '--session', 'sess-2', '--executor-id', 'exec-second')
+  assert.equal(res.status, 0, `a single-repo phase claims no foreign tree at all; stderr:\n${res.stderr}`)
+  assert.ok(existsSync(armPath(lane, 5772)), 'the local arm is written')
+  assert.ok(existsSync(armPath(repo, 5771)), 'and the sibling local arm is untouched')
+})
+
+test('16) a STALE sibling arm — its phase file is gone — never blocks, and the skip is NAMED on stderr', () => {
+  // The sibling arm outlived the phase file the claim would be derived from, so there is nothing
+  // left to compare. Blocking on that would strand every lane behind the first arm anyone forgot
+  // to sweep; staying silent would make it look like the scan cleared the tree.
+  const repo = newRepo()
+  const lane = newLane(repo, 'lane-e')
+  const product = newRepo('zr-cli-execarm-product-')
+  writePhaseFile(repo, 5781, { keyFiles: [productKeyFile(product, join('src', 'a.ts'))] })
+  writePhaseFile(lane, 5782, { keyFiles: [productKeyFile(product, join('src', 'b.ts'))] })
+  assert.equal(roadmap(repo, 'executor-arm', '5781', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)
+  rmSync(join(repo, 'roadmap', 'phases', 'phase-5781.phase.ts'))
+
+  const res = roadmap(lane, 'executor-arm', '5782', '--session', 'sess-2', '--executor-id', 'exec-second')
+  assert.equal(res.status, 0, `an underivable sibling claim is NO overlap, never a block; stderr:\n${res.stderr}`)
+  assert.ok(existsSync(armPath(lane, 5782)), 'the arm is written')
+  assert.ok(res.stderr.includes('5781'), `the skipped sibling arm is named; got:\n${res.stderr}`)
+  assert.match(res.stderr, /skip|stale|no phase file|unread|missing/i, `and the skip says what it is; got:\n${res.stderr}`)
+})
+
+test('16b) a terminal sibling arm is stale and never blocks an overlapping phase', () => {
+  const repo = newRepo()
+  const product = newRepo('zr-cli-execarm-product-')
+  writePhaseFile(repo, 5783, { status: 'done', keyFiles: [productKeyFile(product, join('src', 'a.ts'))] })
+  writePhaseFile(repo, 5784, { keyFiles: [productKeyFile(product, join('src', 'b.ts'))] })
+  mkdirSync(join(repo, '.building'), { recursive: true })
+  writeFileSync(armPath(repo, 5783), JSON.stringify({ sessionId: 'old', executorId: 'finished', armedAt: isoAgo(60) }) + '\n')
+  const res = roadmap(repo, 'executor-arm', '5784', '--session', 'new', '--executor-id', 'next')
+  assert.equal(res.status, 0, `a terminal phase's fossil arm is not a live product claim; stderr:\n${res.stderr}`)
+  assert.ok(existsSync(armPath(repo, 5784)))
+})
+
+test('16c) safety overlap scans are not truncated at the liveness four-repository cap', () => {
+  const repo = newRepo()
+  const products = Array.from({ length: 5 }, () => newRepo('zr-cli-execarm-product-'))
+  const firstKeys = products.map((product, i) => productKeyFile(product, join('src', `${i}.ts`)))
+  writePhaseFile(repo, 5785, { keyFiles: firstKeys })
+  writePhaseFile(repo, 5786, { keyFiles: [productKeyFile(products[4], join('src', 'shared.ts'))] })
+  assert.equal(roadmap(repo, 'executor-arm', '5785', '--session', 'first', '--executor-id', 'first').status, 0)
+  const res = roadmap(repo, 'executor-arm', '5786', '--session', 'second', '--executor-id', 'second')
+  assert.equal(res.status, 2, `the fifth declared repo remains safety-relevant; stderr:\n${res.stderr}`)
+  assert.ok(res.stderr.includes(products[4]))
+})
+
+test('17) a PRUNED sibling worktree — git still lists it, the disk no longer has it — never blocks, with a stderr note', () => {
+  const repo = newRepo()
+  const lane = newLane(repo, 'lane-f')
+  const product = newRepo('zr-cli-execarm-product-')
+  writePhaseFile(lane, 5791, { keyFiles: [productKeyFile(product, join('src', 'a.ts'))] })
+  writePhaseFile(repo, 5792, { keyFiles: [productKeyFile(product, join('src', 'b.ts'))] })
+  assert.equal(roadmap(lane, 'executor-arm', '5791', '--session', 'sess-1', '--executor-id', 'exec-first').status, 0)
+  rmSync(lane, { recursive: true, force: true }) // the lane is gone; `git worktree list` still reports it, prunable
+
+  const res = roadmap(repo, 'executor-arm', '5792', '--session', 'sess-2', '--executor-id', 'exec-second')
+  assert.equal(res.status, 0, `an unreadable sibling root is skipped, never a block; stderr:\n${res.stderr}`)
+  assert.ok(existsSync(armPath(repo, 5792)), 'the arm is written')
+  assert.ok(res.stderr.includes(lane), `the unreadable root is named; got:\n${res.stderr}`)
+  assert.match(res.stderr, /skip|prun|unread|missing|gone/i, `and the note says what happened to it; got:\n${res.stderr}`)
+})
+
+test('18) an UNREADABLE sibling phase file never collapses to an empty claim silently', () => {
+  const repo = newRepo()
+  const lane = newLane(repo, 'lane-g')
+  const product = newRepo('zr-cli-execarm-product-')
+  writeFileSync(join(lane, 'roadmap', 'phases', 'phase-5793.phase.ts'), 'export default { keyFiles: [\n')
+  mkdirSync(join(lane, '.building'), { recursive: true })
+  writeFileSync(armPath(lane, 5793), JSON.stringify({ sessionId: 'sess-1', executorId: 'exec-first', armedAt: new Date().toISOString() }) + '\n')
+  writeBeacon(lane, 5793, [{ ts: new Date().toISOString(), phase: 5793, event: 'task-start', task: '5793.1' }])
+  writePhaseFile(repo, 5794, { keyFiles: [productKeyFile(product, join('src', 'b.ts'))] })
+
+  const res = roadmap(repo, 'executor-arm', '5794', '--session', 'sess-2', '--executor-id', 'exec-second')
+  assert.equal(res.status, 0, `underivable sibling evidence is a note, not a fabricated conflict; stderr:\n${res.stderr}`)
+  assert.match(res.stderr, /phase 5793.*missing, unreadable, or keyFiles underivable/i, `the failed scan is named; got:\n${res.stderr}`)
 })

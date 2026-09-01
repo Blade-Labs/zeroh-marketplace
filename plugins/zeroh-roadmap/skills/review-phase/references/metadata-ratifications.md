@@ -14,7 +14,9 @@ report - the artifact is what downstream reads.
 - **Licensing**: an external dep/asset names license + placement tier per
   `skills/using-zeroh-roadmap/references/external-assets-licensing.md`; missing, banned-tier, or
   server-side-only license in a shipped client artifact = NEEDS WORK.
-- **`reviewScope`** below `full`: no `keyFiles`/`files[]` path may be a specialist path; the
+- **`reviewScope`** below `full`: no `keyFiles`/`files[]` path may be a specialist path, and no
+  `keyFiles` path may resolve into a foreign product repository (the gate mechanically floors that
+  declared keyFiles case to `full`); the
   rung must fit the diff (`none` = docs/data only; `light` = small/mechanical, never a new
   governed surface/contract/ledger kind/subtle logic); the planner stated WHY. Unjustified low
   rung = NEEDS WORK.

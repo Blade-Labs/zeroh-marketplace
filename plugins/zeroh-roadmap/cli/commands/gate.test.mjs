@@ -403,6 +403,193 @@ test('gate plan — 1661 class: --base binds baseSha to the given sha verbatim (
   assert.deepEqual(r.plan.diff.classes, ['docs'], 'the single attributed file is docs')
 })
 
+// ── cross-repo review floor (19.1): a phase whose PRODUCT code lives in a SIBLING repository
+//    is structurally invisible to the local worktree diff — the derivation reads `light` off the
+//    one bookkeeping file the arc repo carries, while every reviewed line sits in a repo this
+//    diff cannot see. The named repositories are the evidence the floor is honest, so they ride
+//    the notes AND a structured field of the plan JSON, never prose alone.
+
+/**
+ * A SECOND real git repository on disk — the sibling checkout a cross-repo phase writes its
+ * product code into. Its git COMMON-DIR differs from makeRepo()'s, which is the whole reason it
+ * counts as foreign; a linked worktree of the SAME repo (see the trap test below) shares the
+ * common dir and must not. `file()` returns the ABSOLUTE path, the only form a keyFile can take
+ * and still name a repository.
+ */
+function makeProductRepo() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'zr-product-')))
+  bases.push(root)
+  const git = (...a) =>
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8',
+    })
+  git('init', '-q')
+  const file = (rel, body = 'export const product = 1\n') => {
+    const abs = join(root, rel)
+    mkdirSync(dirname(abs), { recursive: true })
+    writeFileSync(abs, body)
+    git('add', '-A')
+    git('commit', '-q', '-m', `seed ${rel}`)
+    return abs
+  }
+  file('README.md', '# product repo\n')
+  return { root, git, file }
+}
+
+/** Every note string of a plan, joined — the honesty record the gate prints. */
+const notesOf = (plan) => (plan?.notes ?? []).join('\n')
+/** The plan JSON with the prose notes emptied: what remains is the STRUCTURED record. */
+const structuredJson = (plan) => JSON.stringify({ ...plan, notes: [] })
+
+test('gate plan — a phase whose keyFiles live in a SIBLING repository floors the DERIVED review scope to full and names that repository', () => {
+  const product = makeProductRepo()
+  const productFile = product.file('src/engine.ts', 'export const engine = 1\n')
+  const repo = makeRepo()
+  repo.writePhase(1901, phaseObj({ phase: 1901, keyFiles: [productFile] }))
+  // The local worktree diff is ONE small bookkeeping file: executable, well under
+  // REVIEW_LIGHT_MAX_LINES, no specialist path — the exact shape that derives `light` today.
+  repo.commit('feat: phase 1901 — bookkeeping', { 'lib/bookkeeping.ts': 'export const a = 1\n' })
+
+  const r = planOf(repo.root, ['1901'])
+  assert.equal(r.code, 0, `an undeclared cross-repo phase is a floor, not a refusal; stderr: ${r.stderr}`)
+  assert.equal(r.plan.reviewScope.derived, 'full', 'the foreign product repo floors the DERIVED rung, not merely the effective one')
+  assert.equal(r.plan.reviewScope.effective, 'full')
+  assert.ok(notesOf(r.plan).includes(product.root), `the foreign repository is named in the notes: ${notesOf(r.plan)}`)
+  assert.ok(
+    structuredJson(r.plan).includes(product.root),
+    'the foreign repository is named in a STRUCTURED field of the plan JSON, not only in the prose notes',
+  )
+  // full review is the point of the floor: Round 0 runs and the light-rung honesty notes are gone.
+  assert.equal(r.plan.agents.round0, 'quality-pass')
+  assert.ok(!notesOf(r.plan).includes('reviewScope light'), 'no light-rung honesty note survives the floor')
+})
+
+test('gate plan — TWO sibling product repositories are BOTH named, in keyFiles declaration order', () => {
+  const first = makeProductRepo()
+  const second = makeProductRepo()
+  const firstFile = first.file('src/one.ts')
+  const secondFile = second.file('src/two.ts')
+  const repo = makeRepo()
+  repo.writePhase(1902, phaseObj({ phase: 1902, keyFiles: [firstFile, secondFile] }))
+  repo.commit('feat: phase 1902 — bookkeeping', { 'lib/bookkeeping.ts': 'export const a = 1\n' })
+
+  const r = planOf(repo.root, ['1902'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.equal(r.plan.reviewScope.effective, 'full')
+  const notes = notesOf(r.plan)
+  const iFirst = notes.indexOf(first.root)
+  const iSecond = notes.indexOf(second.root)
+  assert.ok(iFirst >= 0, `first product repo named: ${notes}`)
+  assert.ok(iSecond >= 0, `second product repo named: ${notes}`)
+  assert.ok(iFirst < iSecond, 'the repositories are named in keyFiles declaration order')
+})
+
+test('gate plan — reviewer evidence names EVERY foreign repo beyond the liveness cap', () => {
+  const products = Array.from({ length: 5 }, () => makeProductRepo())
+  const repo = makeRepo()
+  repo.writePhase(1907, phaseObj({
+    phase: 1907,
+    keyFiles: products.map((product, i) => product.file(`src/${i}.ts`)),
+  }))
+  repo.commit('feat: phase 1907 — bookkeeping', { 'lib/bookkeeping.ts': 'export const a = 1\n' })
+
+  const r = planOf(repo.root, ['1907'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.deepEqual(r.plan.productRepos, products.map((product) => product.root), 'the safety/evidence list is unbounded')
+})
+
+test('gate plan — a DECLARED light reviewScope on a sibling-repo phase is REFUSED with exit 2, naming the repository', () => {
+  const product = makeProductRepo()
+  const productFile = product.file('src/engine.ts')
+  const repo = makeRepo()
+  repo.writePhase(1903, phaseObj({ phase: 1903, reviewScope: 'light', keyFiles: [productFile] }))
+  repo.commit('feat: phase 1903 — bookkeeping', { 'lib/bookkeeping.ts': 'export const a = 1\n' })
+
+  const r = planOf(repo.root, ['1903'])
+  assert.equal(r.code, 2, 'a declared rung below the cross-repo floor is a refusal, never a silent override')
+  assert.ok(r.plan, 'the JSON plan is still printed (refusal is the exit code, not a paragraph)')
+  assert.equal(r.plan.reviewScope.declared, 'light', 'the declaration is recorded verbatim')
+  assert.equal(r.plan.reviewScope.derived, 'full')
+  assert.equal(r.plan.reviewScope.effective, 'full', 'a refusal leaves effective AT the floor (the ## Gate specialists precedent)')
+  assert.match(r.plan.reviewScope.refused ?? '', /light/, 'the refusal quotes the declared rung')
+  assert.ok((r.plan.reviewScope.refused ?? '').includes(product.root), `the refusal names the repository: ${r.plan.reviewScope.refused}`)
+})
+
+test('gate plan — combined specialist and cross-repo floors preserve BOTH refusal reasons', () => {
+  const product = makeProductRepo()
+  const productFile = product.file('src/engine.ts')
+  const repo = makeRepo()
+  repo.writePhase(1906, phaseObj({ phase: 1906, reviewScope: 'light', keyFiles: [productFile] }))
+  repo.commit('feat: phase 1906 — governed spine', { 'src/relay/governed-turn.ts': 'export const governed = 1\n' })
+
+  const r = planOf(repo.root, ['1906'])
+  assert.equal(r.code, 2, 'both hard floors refuse the declared light rung')
+  assert.match(r.plan.reviewScope.refused ?? '', /Gate specialists floor: full/, 'specialist-floor evidence survives')
+  assert.match(r.plan.reviewScope.refused ?? '', /cross-repo floor: full/, 'cross-repo-floor evidence is appended')
+  assert.ok((r.plan.reviewScope.refused ?? '').includes(product.root), 'the cross-repo evidence names the repository')
+})
+
+test('gate plan — a DECLARED full reviewScope on a sibling-repo phase is honored, not refused', () => {
+  const product = makeProductRepo()
+  const productFile = product.file('src/engine.ts')
+  const repo = makeRepo()
+  repo.writePhase(1904, phaseObj({ phase: 1904, reviewScope: 'full', keyFiles: [productFile] }))
+  repo.commit('feat: phase 1904 — bookkeeping', { 'lib/bookkeeping.ts': 'export const a = 1\n' })
+
+  const r = planOf(repo.root, ['1904'])
+  assert.equal(r.code, 0, `declaring AT the floor is no violation; stderr: ${r.stderr}`)
+  assert.equal(r.plan.reviewScope.effective, 'full')
+  assert.equal(r.plan.reviewScope.refused, undefined, 'only a rung BELOW the floor refuses')
+})
+
+test('gate plan — a LOCAL-only phase (relative keyFiles) derives light exactly as before — no cross-repo drift', () => {
+  const repo = makeRepo()
+  repo.writePhase(1905, phaseObj({ phase: 1905, keyFiles: ['lib/bookkeeping.ts'] }))
+  repo.commit('feat: phase 1905 — work', { 'lib/bookkeeping.ts': 'export const a = 1\n' })
+
+  const r = planOf(repo.root, ['1905'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.deepEqual(
+    r.plan.reviewScope,
+    { derived: 'light', declared: null, effective: 'light' },
+    'the common case carries no floorReason and no refusal',
+  )
+  assert.deepEqual(r.plan.agents, { round0: 'skipped — reviewScope light', reviewers: ['code-reviewer'] })
+  assert.ok(notesOf(r.plan).includes('Round 0 skipped — reviewScope light (plan-ratified)'))
+  assert.ok(notesOf(r.plan).includes('1 reviewer — reviewScope light'))
+})
+
+test('gate plan — a LOCAL-only phase whose keyFiles are ABSOLUTE paths inside the worktree still derives light', () => {
+  const repo = makeRepo()
+  const root = realpathSync(repo.root)
+  repo.writePhase(1906, phaseObj({ phase: 1906, keyFiles: [join(root, 'lib', 'bookkeeping.ts')] }))
+  repo.commit('feat: phase 1906 — work', { 'lib/bookkeeping.ts': 'export const a = 1\n' })
+
+  const r = planOf(repo.root, ['1906'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.deepEqual(r.plan.reviewScope, { derived: 'light', declared: null, effective: 'light' })
+  assert.ok(!JSON.stringify(r.plan).includes(root), 'the phase’s OWN repository is never named as a product repo')
+})
+
+test('gate plan — keyFiles in a LINKED WORKTREE of the same repository are not foreign — the rung stays light', () => {
+  const repo = makeRepo()
+  repo.commit('feat: phase 1907 — work', { 'lib/bookkeeping.ts': 'export const a = 1\n' })
+  // A linked worktree has a DIFFERENT toplevel but the SAME git common-dir: comparing toplevels
+  // would call this checkout foreign and floor a phase that is entirely local.
+  const wtBase = mkdtempSync(join(tmpdir(), 'zr-linked-'))
+  bases.push(wtBase)
+  const wt = join(wtBase, 'checkout')
+  repo.git('worktree', 'add', '--detach', '-q', wt, 'HEAD')
+  const wtRoot = realpathSync(wt)
+  repo.writePhase(1907, phaseObj({ phase: 1907, keyFiles: [join(wtRoot, 'lib', 'bookkeeping.ts')] }))
+
+  const r = planOf(repo.root, ['1907'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.deepEqual(r.plan.reviewScope, { derived: 'light', declared: null, effective: 'light' })
+  assert.ok(!JSON.stringify(r.plan).includes(wtRoot), 'a linked worktree of the same repo is never named as a product repo')
+})
+
 // ── gate run — mechanical execution + the GateRunReport ─────────────────────────────
 // A config with runnable fake slot commands (no gate specialists → no floors interfere).
 const RUN_CFG = (over = {}) => ({

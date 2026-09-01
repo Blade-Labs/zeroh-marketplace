@@ -32,11 +32,13 @@
  * staleArms and its definition of stale are CONSUMED by this guard, never changed: the sweep
  * passes force because staleArms has already made the judgement.
  */
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readBeaconLine } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
+import { productRepos } from './product-repos.mjs'
 
 /** The one home for the arm-file path: `roadmap result check` reconciles against the same file. */
 export function armPath(worktree, phase) {
@@ -44,6 +46,74 @@ export function armPath(worktree, phase) {
 }
 
 export const DEFAULT_AGENT_CARD = fileURLToPath(new URL('../../agents/phase-executor.md', import.meta.url))
+
+/** A phase's declared keyFiles; null means the file is absent, unreadable, or its declaration is underivable. */
+export function phaseKeyFiles(worktree, phase) {
+  const file = join(worktree, 'roadmap', 'phases', `phase-${phase}.phase.ts`)
+  if (!existsSync(file)) return null
+  const parsed = scanPhaseFile(file)
+  if (parsed === null) return null
+  if (parsed.keyFiles.length > 0) return parsed.keyFiles
+  let source
+  try {
+    source = readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+  const declaration = source.match(/(?:^|[{,]\s*)keyFiles\s*:\s*\[([\s\S]*?)\]/m)
+  if (!declaration) {
+    return /(?:^|[{,]\s*)keyFiles\s*:/m.test(source) ? null : []
+  }
+  const withoutComments = declaration[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').trim()
+  if (withoutComments.length === 0) return []
+  return null // a declaration the lightweight scanner could not resolve is underivable, never empty
+}
+
+/** Every registered worktree root, including prunable entries, in porcelain order. */
+function worktreeRoots(worktree) {
+  const out = execFileSync('git', ['-C', worktree, 'worktree', 'list', '--porcelain'], {
+    timeout: 15_000,
+    encoding: 'utf8',
+  })
+  return out.split('\n').flatMap((line) => (line.startsWith('worktree ') ? [line.slice('worktree '.length)] : []))
+}
+
+/** Live sibling arms whose derived foreign product trees intersect this phase's trees. */
+export function productRepoOverlaps(worktree, phase, repos) {
+  const overlaps = []
+  const notes = []
+  if (repos.length === 0) return { overlaps, notes }
+  for (const root of worktreeRoots(worktree)) {
+    if (!existsSync(root)) {
+      notes.push(`roadmap executor-arm: skipped missing or pruned sibling worktree ${root}\n`)
+      continue
+    }
+    let arms
+    try {
+      arms = readdirSync(join(root, '.building'))
+    } catch {
+      continue
+    }
+    const stalePhases = new Set(staleArms(root, join(root, 'roadmap', 'phases')).map((arm) => arm.phase))
+    for (const name of arms) {
+      const match = name.match(/^(\d+)-executor\.armed$/)
+      if (!match) continue
+      const siblingPhase = Number(match[1])
+      if (root === worktree && String(siblingPhase) === String(phase)) continue
+      if (stalePhases.has(siblingPhase)) continue
+      if (!liveArm(root, siblingPhase)) continue
+      const siblingKeys = phaseKeyFiles(root, siblingPhase)
+      if (siblingKeys === null) {
+        notes.push(`roadmap executor-arm: skipped sibling phase ${siblingPhase} in ${root} — phase file missing, unreadable, or keyFiles underivable\n`)
+        continue
+      }
+      const siblingRepos = productRepos(siblingKeys, { worktree: root, maxRepos: Infinity })
+      const shared = repos.filter((repo) => siblingRepos.includes(repo))
+      if (shared.length > 0) overlaps.push({ phase: siblingPhase, root, repos: shared })
+    }
+  }
+  return { overlaps, notes }
+}
 
 /**
  * The model alias an agent card DECLARES, or null.

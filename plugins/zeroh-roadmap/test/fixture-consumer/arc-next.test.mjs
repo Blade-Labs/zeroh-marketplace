@@ -143,7 +143,7 @@ test('N7 — blocked: unmet dep, foreign lane, and a malformed member file', () 
 // ── N8/N9 — the stalled-watch-wake fork (the workflow LOOP's reaction is under test) ─────
 /** Build a real fixture repo for a mid-band member + drive arcPlaneWorkflow with a canned
  *  `run` (the CLI decisions) and a two-step `agent` (the watch wake, then a terminal). */
-function driveWorkflow(root, phase, { agentReturns, deps = {}, resultCheckExit = 0 }) {
+function driveWorkflow(root, phase, { agentReturns, deps = {}, resultCheckExit = 0, force } = {}) {
   let laps = 0
   const fakeRun = (cmd, opts = {}) => {
     // ONE phase per drive: a second lap means the first finished, so the arc reads complete.
@@ -157,7 +157,7 @@ function driveWorkflow(root, phase, { agentReturns, deps = {}, resultCheckExit =
   }
   let calls = 0
   const fakeAgent = async () => agentReturns[Math.min(calls++, agentReturns.length - 1)]
-  return { promise: arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, { run: fakeRun, agent: fakeAgent, cwd: root, ...deps }), calls: () => calls }
+  return { promise: arcPlaneWorkflow({ arcId: 'FX', planeName: 'P', ...(force ? { force } : {}) }, { run: fakeRun, agent: fakeAgent, cwd: root, ...deps }), calls: () => calls }
 }
 function beacon(root, phase, event) {
   mkdirSync(join(root, '.building'), { recursive: true })
@@ -276,6 +276,55 @@ test('N12b — the workflow arm records the card alias too: the CLI is not the o
     expected,
     'the workflow-written arm carries the requested alias, so result check has something to reconcile against',
   )
+})
+
+test('N12c — the workflow door refuses a live sibling arm that claims the same foreign product tree', async () => {
+  const product = makeFixtureRepo()
+  mkdirSync(join(product, 'src'), { recursive: true })
+  const shared = join(product, 'src', 'shared.ts')
+  writeFileSync(shared, 'export const shared = true\n')
+  commitAll(product, 'seed: shared product file')
+
+  const root = arcRepo([{ phase: 9801, status: 'in-progress', arcId: 'FX', keyFiles: [shared], tasks: [{ id: '9801.1', done: false }] }])
+  const lane = `${root}-overlap-lane`
+  git(root, 'worktree', 'add', '-q', '-b', 'overlap-lane', lane)
+  writePhaseFile(lane, { phase: 9802, status: 'in-progress', arcId: 'FX', keyFiles: [shared], tasks: [{ id: '9802.1', done: false }] })
+  mkdirSync(join(lane, '.building'), { recursive: true })
+  writeFileSync(armFile(lane, 9802), JSON.stringify({ sessionId: 'sess-other', executorId: 'exec-other', armedAt: new Date().toISOString() }) + '\n')
+  beacon(lane, 9802, { ts: new Date().toISOString(), phase: 9802, event: 'task-start', task: '9802.1' })
+
+  let spawned = 0
+  const result = await driveWorkflow(root, 9801, {
+    agentReturns: [],
+    force: 'recursion',
+    deps: { sessionId: 'sess-12c', agent: async () => { spawned++; return { result: typedResult(9801, 'done') } } },
+  }).promise
+  assert.equal(result.halt, 'blocked')
+  assert.ok(result.evidence?.productRepoOverlap?.includes(lane), JSON.stringify(result.evidence))
+  assert.ok(result.evidence?.productRepoOverlap?.includes(product), JSON.stringify(result.evidence))
+  assert.equal(spawned, 0, 'the second executor is refused before spawn')
+  assert.equal(existsSync(armFile(root, 9801)), false, 'the refused workflow writes no arm')
+})
+
+test('N12d — workflow overlap-scan skip notes are surfaced through its warning channel', async () => {
+  const product = makeFixtureRepo()
+  const shared = join(product, 'shared.ts')
+  writeFileSync(shared, 'shared\n')
+  commitAll(product, 'seed: shared file')
+  const root = arcRepo([{ phase: 9801, status: 'in-progress', arcId: 'FX', keyFiles: [shared], tasks: [{ id: '9801.1', done: false }] }])
+  const lane = `${root}-unreadable-lane`
+  git(root, 'worktree', 'add', '-q', '-b', 'unreadable-lane', lane)
+  writePhaseRaw(lane, 9802, 'export default { keyFiles: [')
+  mkdirSync(join(lane, '.building'), { recursive: true })
+  writeFileSync(armFile(lane, 9802), JSON.stringify({ sessionId: 'sess-other', executorId: 'exec-other', armedAt: new Date().toISOString() }) + '\n')
+  beacon(lane, 9802, { ts: new Date().toISOString(), phase: 9802, event: 'task-start', task: '9802.1' })
+  const warnings = []
+  const result = await driveWorkflow(root, 9801, {
+    agentReturns: [{ result: typedResult(9801, 'done') }],
+    deps: { sessionId: 'sess-12d', warn: (message) => warnings.push(message) },
+  }).promise
+  assert.equal(result.done, true, 'an underivable sibling claim remains non-blocking')
+  assert.match(warnings.join(''), /phase 9802.*missing, unreadable, or keyFiles underivable/i)
 })
 
 test('N13 — a second launch over a standing arm halts blocked, naming the incumbent, and spawns nothing', async () => {
