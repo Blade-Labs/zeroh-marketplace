@@ -14,7 +14,10 @@
  * Each check gets a caught-RED fixture (the finding fires with the right severity)
  * AND a passing-GREEN fixture (the finding is absent). 12.1–12.4 each get their
  * own red+green. Plus: the exit-code pair, the historical-status exemption from
- * check 5, and a fully-clean repo → verdict CLEAN. Run:
+ * check 5, and a fully-clean repo → verdict CLEAN. One section (explanatory-empty
+ * transparency fields, after 12.4) additionally drives scripts/debt-census.mts —
+ * the SAME join 12.3/12.4 reuse — directly, because the exclusion count and the
+ * dangling cause are census output that `audit` only partly surfaces. Run:
  *   node --test cli/commands/audit.test.mjs
  */
 import { test } from 'node:test'
@@ -569,6 +572,185 @@ test('check 12.4 GREEN — a debtResolution matching a real non-"None" field →
   }))
   const { report } = audit(root)
   assert.ok(!has(report, 12, 'MEDIUM'), 'a matched debtResolution → no check-12 MEDIUM')
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// Explanatory-empty transparency fields — the SAME debt-census join checks 12.3/12.4
+// reuse, driven DIRECTLY (scripts/debt-census.mts under the plugin's tsx) so the ledger,
+// its dangling list and its human summary are all observable. audit surfaces only the
+// findings, so the two audit-level cases below anchor what an operator actually sees.
+//
+// The measured problem: the census skips a field only when it is the exact string 'None'.
+// An author writing "None — the guard was already shared" / "Nothing outstanding" / "N/A"
+// is DECLARING no debt, and every one of those became a false OPEN row (and any resolution
+// aimed at one joined misleadingly). The skip must be a whole-word explanatory-empty
+// PREFIX (none|nothing|n/a, case-insensitive, trimmed) — never a substring, so a real debt
+// opening "Nonetheless …" stays debt.
+// ════════════════════════════════════════════════════════════════════════════
+const TSX = join(PLUGIN_ROOT, 'node_modules', '.bin', 'tsx')
+const CENSUS_SCRIPT = join(PLUGIN_ROOT, 'scripts', 'debt-census.mts')
+
+/** Drive the REAL scripts/debt-census.mts over a fixture root → { code, stdout, census }.
+ *  (readFileSync is imported at module scope further down — ESM hoists the binding.) */
+function census(root) {
+  const out = join(mkdtempSync(join(tmpdir(), 'zr-census-')), 'census.json')
+  roots.push(dirname(out))
+  let code = 0
+  let stdout = ''
+  let stderr = ''
+  try {
+    stdout = execFileSync(TSX, [CENSUS_SCRIPT, root, '--json', out], {
+      encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch (err) {
+    code = err.status ?? 1
+    stdout = (err.stdout ?? '').toString()
+    stderr = (err.stderr ?? '').toString()
+  }
+  assert.equal(code, 0, `debt-census exited ${code}; stderr:\n${stderr}`)
+  return { code, stdout, census: JSON.parse(readFileSync(out, 'utf8')) }
+}
+
+/** A transparencyReport carrying ONLY the named debt fields — the unnamed ones are ABSENT
+ *  rather than 'None', so an exclusion COUNT is unambiguous about what it counted. */
+const partialTR = (o) => ({ whatWasDone: 'did the real work', how: 'by doing the thing', ...o })
+const refsOf = (c) => c.entries.map((e) => e.ref)
+
+test('explanatory-empty — none/nothing/n-a fields leave the ledger and are COUNTED as exclusions', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, {
+    status: 'done',
+    tasks: [
+      doneTask('100.1', { transparencyReport: partialTR({
+        compromises: 'None — the guard was already shared',   // em-dash continuation
+        skipped: 'Nothing outstanding',                        // second keyword
+        hardcoded: 'N/A',                                      // bare, no continuation
+        limitations: 'NONE. nothing to carry forward',         // upper case + '.' boundary
+      }) }),
+      doneTask('100.2', { transparencyReport: partialTR({
+        compromises: '   none, nothing was needed here',       // leading whitespace + ',' boundary
+        skipped: 'n/a — this consumer has no such surface',    // lower case n/a
+      }) }),
+      doneTask('100.3', { transparencyReport: partialTR({ compromises: 'cut this corner for now' }) }),
+    ],
+  }))
+  const { census: c, stdout } = census(root)
+  assert.deepEqual(
+    refsOf(c),
+    ['100.3.compromises'],
+    `only the field that SAYS something is debt; got ${JSON.stringify(c.entries.map((e) => [e.ref, e.text]))}`,
+  )
+  assert.equal(c.totals.open, 1, 'six explanatory-empty fields must not inflate the OPEN total')
+  assert.match(
+    stdout,
+    /excluded 6 explanatory-empty field\(s\)/,
+    `all six exclusions must be counted and reported, never silently dropped; summary was:\n${stdout}`,
+  )
+})
+
+test('explanatory-empty — an archived phase whose only debt is explanatory-empty raises no check-12 HIGH', () => {
+  const root = makeRepo()
+  writeArchive(root, '1.0.0', 100, archived(100, '1.0.0', {
+    tasks: [doneTask('100.1', { transparencyReport: partialTR({
+      compromises: 'None — the guard was already shared',
+      skipped: 'Nothing outstanding',
+      hardcoded: 'N/A',
+    }) })],
+  }))
+  const { report } = audit(root)
+  assert.ok(
+    !has(report, 12, 'HIGH'),
+    `an author declaring no debt must not hold the archive open; check-12 findings were ${JSON.stringify(report.findings.filter((f) => f.check === 12))}`,
+  )
+})
+
+test('explanatory-empty — the exclusion line prints only when n > 0 (n === 0 ⇒ absent)', () => {
+  const zeroRoot = makeRepo()
+  writePhase(zeroRoot, 100, basePhase(100, {
+    status: 'done',
+    tasks: [doneTask('100.1', { transparencyReport: partialTR({ compromises: 'cut this corner for now' }) })],
+  }))
+  const zero = census(zeroRoot)
+  assert.equal(zero.census.totals.open, 1, 'the one real debt field is still counted')
+  assert.ok(
+    !/explanatory-empty/.test(zero.stdout),
+    `nothing was excluded (n === 0) so the summary must stay silent; got:\n${zero.stdout}`,
+  )
+
+  const oneRoot = makeRepo()
+  writePhase(oneRoot, 100, basePhase(100, {
+    status: 'done',
+    tasks: [doneTask('100.1', { transparencyReport: partialTR({
+      compromises: 'cut this corner for now',
+      skipped: 'None yet — nothing was skipped here',
+    }) })],
+  }))
+  const one = census(oneRoot)
+  assert.match(
+    one.stdout,
+    /excluded 1 explanatory-empty field\(s\)/,
+    `at exactly one exclusion the line must appear; got:\n${one.stdout}`,
+  )
+})
+
+test('explanatory-empty — the prefix is a WHOLE WORD: Nonetheless / Noneish / Nothingness / N-Applicable stay debt', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, {
+    status: 'done',
+    tasks: [doneTask('100.1', { transparencyReport: partialTR({
+      compromises: 'Nonetheless the shared guard stayed in place here',
+      skipped: 'Noneish coverage was left on the batch path',
+      hardcoded: 'Nothingness crept into the default config',
+      limitations: 'N/Applicable-only routing is still hardwired',
+    }) })],
+  }))
+  const { census: c, stdout } = census(root)
+  assert.deepEqual(
+    refsOf(c),
+    ['100.1.compromises', '100.1.hardcoded', '100.1.limitations', '100.1.skipped'],
+    `a word that merely STARTS with none/nothing/n-a is real debt; got ${JSON.stringify(c.entries.map((e) => [e.ref, e.text]))}`,
+  )
+  assert.equal(c.totals.open, 4, 'all four remain OPEN debt')
+  assert.ok(
+    !/explanatory-empty/.test(stdout),
+    `nothing here is explanatory-empty, so nothing may be reported as excluded; got:\n${stdout}`,
+  )
+})
+
+test('explanatory-empty — a resolution aimed at an excluded field is dangling and names the cause', () => {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, {
+    status: 'done',
+    tasks: [doneTask('100.1', { transparencyReport: partialTR({ compromises: 'None — the guard was already shared' }) })],
+    debtResolutions: [{ ref: '100.1.compromises', status: 'fixed', via: 'abc1234', date: '2026-01-01' }],
+  }))
+  const { census: c } = census(root)
+  assert.equal(
+    c.totals.danglingResolutions,
+    1,
+    `the resolution targets a field the census excluded, so it disposes nothing; dangling was ${JSON.stringify(c.dangling)}`,
+  )
+  assert.equal(c.totals.closed, 0, 'a resolution over an excluded field must never be counted as a CLOSED debt')
+  assert.match(c.dangling[0] ?? '', /100\.1\.compromises/, 'the dangling line must name the offending ref')
+  assert.match(
+    c.dangling[0] ?? '',
+    /excluded as explanatory-empty/,
+    `the dangling line must name the CAUSE, not the generic no-matching-field wording; got: ${c.dangling[0]}`,
+  )
+})
+
+test('explanatory-empty — check 12.4 carries the excluded-field cause to the operator', () => {
+  const root = makeRepo()
+  writeArchive(root, '1.0.0', 100, archived(100, '1.0.0', {
+    tasks: [doneTask('100.1', { transparencyReport: partialTR({ compromises: 'Nothing outstanding' }) })],
+    debtResolutions: [{ ref: '100.1.compromises', status: 'fixed', via: 'abc1234', date: '2026-01-01' }],
+  }))
+  const { report } = audit(root)
+  const twelve = report.findings.filter((f) => f.check === 12)
+  assert.ok(
+    twelve.some((f) => f.severity === 'MEDIUM' && /excluded as explanatory-empty/.test(f.message)),
+    `12.4 must reach the operator with the cause spelled out; check-12 findings were ${JSON.stringify(twelve)}`,
+  )
 })
 
 // ════════════════════════════════════════════════════════════════════════════

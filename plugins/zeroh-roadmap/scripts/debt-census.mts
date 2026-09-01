@@ -61,6 +61,7 @@ if (errors?.length) console.error(`  ⚠ ${errors.length} phase file(s) failed d
 
 const DEBT_FIELDS = ['compromises', 'hardcoded', 'skipped', 'limitations'] as const
 const CLOSING = new Set(['fixed', "won't_fix", 'dismissed'])
+const EXPLANATORY_EMPTY = /^(none|nothing|n\/a)\b[\s.,;:—–-]*/i
 
 type Entry = {
   phase: number
@@ -83,17 +84,24 @@ function censusOf(phaseList: any[], lookupById: Map<number, any>) {
   const entries: Entry[] = []
   const dangling: string[] = []
   let closedCount = 0
+  let excludedCount = 0
   for (const p of phaseList) {
     const resolutions = new Map<string, any>()
     for (const r of p.debtResolutions ?? []) resolutions.set(r.ref, r) // latest disposition wins (one ref)
 
     const seenRefs = new Set<string>()
+    const excludedRefs = new Set<string>()
     for (const t of p.tasks ?? []) {
       if (t.minimal || !t.transparencyReport) continue
       for (const f of DEBT_FIELDS) {
         const v = t.transparencyReport[f]
-        if (!v || String(v).trim() === 'None') continue
         const ref = `${t.id}.${f}`
+        if (!v) continue
+        if (EXPLANATORY_EMPTY.test(String(v).trim())) {
+          excludedRefs.add(ref)
+          excludedCount++
+          continue
+        }
         seenRefs.add(ref)
         const r = resolutions.get(ref)
         if (r && CLOSING.has(r.status)) {
@@ -126,10 +134,17 @@ function censusOf(phaseList: any[], lookupById: Map<number, any>) {
         })
       }
     }
-    for (const ref of resolutions.keys()) if (!seenRefs.has(ref)) dangling.push(`phase ${p.phase}: ${ref} (resolution with no matching non-"None" field)`)
+    for (const ref of resolutions.keys()) {
+      if (seenRefs.has(ref)) continue
+      dangling.push(
+        excludedRefs.has(ref)
+          ? `phase ${p.phase}: ${ref} (matching field was excluded as explanatory-empty)`
+          : `phase ${p.phase}: ${ref} (resolution with no matching non-"None" field)`,
+      )
+    }
   }
   entries.sort((a, b) => a.phase - b.phase || a.ref.localeCompare(b.ref))
-  return { entries, dangling, closedCount }
+  return { entries, dangling, closedCount, excludedCount }
 }
 
 const phaseById = new Map<number, any>(phases.map((p: any) => [p.phase, p]))
@@ -189,6 +204,7 @@ const census = {
     openOperator: byState('OPEN-operator').length,
     resolvable: byState('RESOLVABLE').length,
     closed: closedCount,
+    excludedExplanatoryEmpty: active.excludedCount,
     danglingResolutions: dangling.length,
     followupFilesWithOpenMarkers: followups.length,
     followupOpenMarkerLines: followups.reduce((s, f) => s + f.openMarkers, 0),
@@ -223,6 +239,7 @@ console.log(`debt-census — ${census.phasesScanned} phases scanned (${census.di
 console.log(`  OPEN (undispositioned): ${t.open}`)
 console.log(`  OPEN-planned: ${t.openPlanned}   OPEN-operator: ${t.openOperator}   RESOLVABLE (via-phase done): ${t.resolvable}`)
 console.log(`  CLOSED (fixed/won't_fix/dismissed): ${t.closed}   dangling resolutions: ${t.danglingResolutions}`)
+if (t.excludedExplanatoryEmpty > 0) console.log(`  excluded ${t.excludedExplanatoryEmpty} explanatory-empty field(s)`)
 console.log(`  followups: ${t.followupFilesWithOpenMarkers} file(s) with ${t.followupOpenMarkerLines} open-marker line(s)`)
 console.log(`  top arcs by open debt: ${Object.entries(census.byArc).slice(0, 8).map(([a, n]) => `${a}:${n}`).join('  ')}`)
 console.log(`  ledger: ${jsonOut}`)

@@ -243,7 +243,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/scripts/debt-census.mts'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Debt census now excludes whole-word none, nothing, and n/a explanatory-empty prefixes, reports the exclusion count when nonzero, and labels resolutions aimed at excluded fields as dangling because the field was excluded as explanatory-empty.',
+        how:
+          'The test-engineer role extended the existing audit census fixture rather than minting a new spec or unarmed ratchet artifact. Six explanatory-empty spellings, zero/one count boundaries, four prefix near-misses, archive audit behavior, and active/archive dangling joins established five RED cases. The implementation uses one case-insensitive prefix regex, tracks excluded refs separately from real debt refs, keeps closing counts honest, exposes excludedExplanatoryEmpty in totals, and prints the summary only above zero. Verification passed audit.test 79/79 and the declared-none types slot.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The existing cli/commands/audit.test.mjs census fixture was added to the task diff although files[] named only debt-census.mts; this is the governed unit lane already exercising the active and archive census join. Prefix semantics intentionally follow the recorded incident class and can exclude future prose beginning with “None” even if that prose later describes debt, with the visible count preserving discoverability.',
+      },
     },
   ],
   notes:
@@ -258,6 +270,7 @@ export default definePhase({
     status: 'failed',
     driver: { model: 'gpt-5.6-sol', lane: 'codex' },
     roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
