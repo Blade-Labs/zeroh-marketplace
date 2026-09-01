@@ -399,15 +399,23 @@
       "type": "object",
       "properties": {
         "preReview": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "longRunWrapper": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
