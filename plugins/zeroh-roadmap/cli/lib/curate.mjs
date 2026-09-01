@@ -39,11 +39,14 @@ export class CurateError extends Error {
  */
 function classifySubject(subject, phaseNum) {
   const P = String(phaseNum)
-  const { dash, type } = SUBJECT_GRAMMAR
+  const { dash, type, typePrefix } = SUBJECT_GRAMMAR
   // Every ownership test is ANCHORED to the subject's own prefix: a subject that merely
   // QUOTES the grammar mid-sentence must stay foreign, or the squash rewrites a sibling's
   // commit that happened to mention it.
-  const prefix = '^[a-z]+(\\([^)]*\\))?: '
+  // ONE grammar home: the shared typePrefix, never a local copy — a narrower private fragment
+  // here is the fork this phase's singleSeam exists to close (it missed scoped types the shared
+  // one accepts, so the same subject classified differently depending on which reader asked).
+  const prefix = `^${typePrefix}`
   const isRevert = /^Revert "/.test(subject)
   const inner = isRevert ? subject.slice('Revert "'.length) : subject
   if (new RegExp(`^scratch(\\([^)]*\\))?: phase ${P} ${dash}`).test(inner)) return 'scratch'

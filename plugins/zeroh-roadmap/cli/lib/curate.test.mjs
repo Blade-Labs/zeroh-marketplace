@@ -1274,3 +1274,25 @@ test('curate — corrupt newest gate report aborts before history mutation, nami
     'and no curation block landed in the OLDER report — a squash that did not happen leaves no record saying it did',
   )
 })
+
+// ── Round-5 findings the correctness loop reached its cap on (fixed by the supervising session) ──
+
+test('classifySubject: a scoped type the SHARED grammar accepts is not foreign to curation', () => {
+  // The private prefix fragment this replaced was `^[a-z]+(\([^)]*\))?: ` — narrower than
+  // SUBJECT_GRAMMAR.typePrefix, which also accepts digits, underscores, hyphens and capitals.
+  // A subject the attribution seam calls this phase's own must never read as foreign here: one
+  // grammar, one answer, whichever reader asks.
+  const r = makeRepo()
+  const base = r.commit('docs(roadmap): phase 300 — move to in-progress')
+  r.commit('feat(Web-2_UI): phase 300 — 300.1: a scoped type the shared grammar accepts')
+
+  const range = deriveCurationRange(r.root, 300)
+  assert.equal(
+    range.ok,
+    true,
+    `a type the shared typePrefix accepts must curate, not refuse as foreign — got: ${range.ok === false ? range.reason : 'ok'}`,
+  )
+  assert.equal(range.commits.length, 1, 'the scoped-type task commit belongs to the range')
+  assert.equal(range.commits[0].kind, 'task')
+  assert.ok(base, 'the move-commit anchors the range')
+})

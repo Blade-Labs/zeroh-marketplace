@@ -2035,3 +2035,21 @@ test('deviantGrammarFindings — 16.3: a subject that merely QUOTES the grammar 
     'the WARN teaches the author of a PHASE-OWN commit; a foreign session’s prose gets attributed to nobody',
   )
 })
+
+test('phaseOwnFiles: the commit-header detector is hash-WIDTH agnostic (sha256 repos)', () => {
+  // `%H` is 40 hex under SHA-1 and 64 under SHA-256. A hardcoded {40} drops every header row in
+  // a sha256 repo, so the phase-own set empties and test/review scope under-derives silently —
+  // the one failure shape this whole phase exists to end. Pinned on the SOURCE because a sha256
+  // fixture repo needs host git support the shared box may not carry; the regex is the defect.
+  const src = readFileSync(new URL('./gate.mjs', import.meta.url), 'utf8')
+  assert.doesNotMatch(
+    src,
+    /\[0-9a-f\]\{40\}\\t/,
+    'a fixed 40-hex header match assumes SHA-1 — use a width range so sha256 repos attribute too',
+  )
+  assert.match(
+    src,
+    /\[0-9a-f\]\{40,64\}\\t/,
+    'the header-row detector must accept both hash widths (40 sha1 / 64 sha256) — cli/commands/gate.mjs phaseOwnFiles',
+  )
+})

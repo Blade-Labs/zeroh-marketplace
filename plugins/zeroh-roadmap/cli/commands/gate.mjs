@@ -157,7 +157,10 @@ function phaseOwnFiles(cwd, phaseNum, base) {
   let include = false
   for (const line of out.split('\n')) {
     const tab = line.indexOf('\t')
-    if (/^[0-9a-f]{40}\t/.test(line)) {
+    // Width-agnostic: %H is 40 hex under SHA-1 and 64 under SHA-256, and a hardcoded 40 drops
+    // EVERY header row in a sha256 repo — the phase-own set then silently empties and scope
+    // under-derives with nothing surfacing it.
+    if (/^[0-9a-f]{40,64}\t/.test(line)) {
       include = own.test(line.slice(tab + 1))
     } else if (include && line.trim()) {
       files.add(line.trim())
