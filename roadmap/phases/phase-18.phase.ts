@@ -109,7 +109,19 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/audit.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added one shared text-level schema export inventory and used it in both config check and audit check 16. Missing consumer exports now produce one schemaDrift stderr line per export during config checks and one HIGH audit finding per export, while absent schemas, complete vendored copies, and template re-exports remain silent.',
+        how:
+          'The test-engineer role first added wired subprocess fixtures for stale PhaseEvalRecordShape and DriverShape consumers, healthy vendored and re-export consumers, JSON stream separation, cross-surface parity, and the single-regex-home invariant. The RED run executed 84 tests with 6 new failures and no pre-existing failures. Implementation resolves the canonical template from import.meta.url, extracts export declarations with one regex, follows export-star targets for the established fixture/consumer form, and compares that set with lib/roadmap/schema.ts. GREEN verification was 84/84 tests; the phase types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The inventory is deliberately text-level and recognizes the planned line-oriented declarations plus export-star forwarding; it is not a TypeScript parser. Ten behavioral tests were added across the two planned test files by the required TDD role.',
+      },
     },
     {
       id: '18.2',
@@ -221,7 +233,10 @@ export default definePhase({
     phase: 18,
     status: 'failed',
     driver: { model: 'gpt-5.6-sol', lane: 'codex' },
-    roles: [{ role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' }],
+    roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+    ],
     compromises: [],
     skipped: ['Task 18.1 TDD could not begin because the required test-engineer role was unavailable.'],
     hardcoded: [],

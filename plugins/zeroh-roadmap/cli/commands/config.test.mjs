@@ -183,3 +183,126 @@ test('7) unknown command `roadmap frobnicate` exits 1, stderr mentions unknown c
     `stderr must name the unknown command; got:\n${res.stderr}`,
   )
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+// Schema drift — `config check` is where a consumer LEARNS its schema predates the plugin
+// ════════════════════════════════════════════════════════════════════════════
+// A consumer whose lib/roadmap/schema.ts is missing a shape loses every downstream sample
+// silently (the bridge's shape-parse exits 4 and the record is dropped), and the scorecard then
+// reads as NO DATA instead of as a broken pipe. `roadmap audit` reports it as HIGH; this surface
+// is the one an operator runs while CONFIGURING, so it says the same thing as a line.
+//
+// Fixture form matches cli/commands/audit.test.mjs: lib/roadmap/schema.ts is either the
+// `export * from '<templates>'` re-export (in sync) or a real copy with an export demoted to a
+// plain `const` (stale), plus a node_modules/zod symlink so the file resolves as a consumer's own.
+import { readFileSync, symlinkSync } from 'node:fs'
+
+const PLUGIN_ROOT = join(HERE, '..', '..')
+const SCHEMA = join(PLUGIN_ROOT, 'templates', 'schema.ts')
+const PLUGIN_ZOD = realpathSync(join(PLUGIN_ROOT, 'node_modules', 'zod'))
+
+const DRIFT_SHAPE = 'PhaseEvalRecordShape'
+const NAMES_CONSEQUENCE = /samples?|scorecard/i
+const NAMES_REMEDY = /re-?vendor|re-?sync/i
+
+/** Give `repo` a lib/roadmap/schema.ts (plus the zod symlink a consumer schema resolves through). */
+function putSchema(repo, source) {
+  mkdirSync(join(repo, 'lib', 'roadmap'), { recursive: true })
+  mkdirSync(join(repo, 'node_modules'), { recursive: true })
+  try {
+    symlinkSync(PLUGIN_ZOD, join(repo, 'node_modules', 'zod'), 'dir')
+  } catch {
+    /* already linked */
+  }
+  writeFileSync(join(repo, 'lib', 'roadmap', 'schema.ts'), source)
+}
+
+const inSyncSchema = () => `export * from '${SCHEMA}'\n`
+
+/** templates/schema.ts with `export const <name>` demoted to `const` — the export vanishes while
+ *  every internal reference still resolves, exactly like a consumer that skipped a re-vendor. */
+function staleSchemaSource(name) {
+  const src = readFileSync(SCHEMA, 'utf8')
+  const decl = `export const ${name} = `
+  assert.ok(src.includes(decl), `fixture precondition: templates/schema.ts must export ${name}`)
+  return src.replace(decl, `const ${name} = `)
+}
+
+/** A configured git repo carrying `schemaSource` as its consumer schema. */
+function configuredRepo(schemaSource) {
+  const repo = newRepo()
+  writeConfig(repo, validConfig())
+  putSchema(repo, schemaSource)
+  return repo
+}
+
+test('8) stale consumer schema: `config check` prints a drift line naming the shape, the consequence and the re-vendor remedy', () => {
+  const repo = configuredRepo(staleSchemaSource(DRIFT_SHAPE))
+
+  const res = roadmap(repo, 'config', 'check')
+  const line = res.stderr.split('\n').find((l) => l.includes(DRIFT_SHAPE))
+  assert.ok(
+    line,
+    `stderr must carry a line naming the missing export — without it the operator's only signal is a scorecard that says "no data"; got stderr:\n${res.stderr}`,
+  )
+  assert.match(
+    line,
+    NAMES_CONSEQUENCE,
+    `the line must name the CONSEQUENCE (the samples/scorecard go silent), not just the absent symbol; got: ${line}`,
+  )
+  assert.match(line, NAMES_REMEDY, `and the re-vendor remedy; got: ${line}`)
+  assert.ok(line.includes('lib/roadmap/schema.ts'), `naming the ONE file to re-vendor into; got: ${line}`)
+
+  // The config document itself is VALID — a drifted vendored file is not a ConfigError, and
+  // exit 1 here would fail every gate that runs `config check` on a repo the audit already
+  // reports as BROKEN. The severity call belongs to `roadmap audit` (HIGH → exit 2).
+  assert.equal(res.status, 0, `a valid config with a stale schema still exits 0; stderr:\n${res.stderr}`)
+  assert.match(res.stdout, /config OK/, 'and stdout keeps its one line — narration never bleeds across the streams')
+})
+
+test('9) stale consumer schema + `--json`: the drift line is on stderr, stdout stays PURE JSON', () => {
+  const repo = configuredRepo(staleSchemaSource(DRIFT_SHAPE))
+
+  const res = roadmap(repo, 'config', 'check', '--json')
+  assert.ok(res.stderr.includes(DRIFT_SHAPE), `the warning still fires under --json; got stderr:\n${res.stderr}`)
+
+  let parsed
+  assert.doesNotThrow(() => {
+    parsed = JSON.parse(res.stdout)
+  }, `stdout must be PURE JSON — a warning printed there breaks every caller that pipes this into jq; got:\n${res.stdout}`)
+  assert.equal(parsed.configVersion, 1, 'and the parsed config is unchanged by the warning')
+  assert.equal(res.status, 0)
+})
+
+test('10) in-sync consumer schema: `config check` says nothing about drift, in either output mode', () => {
+  // Silence is half the criterion: a check that warns on a healthy consumer gets muted, and
+  // then the real drift goes past unread. The `export * from` re-export IS the in-sync form.
+  const repo = configuredRepo(inSyncSchema())
+
+  for (const args of [['config', 'check'], ['config', 'check', '--json']]) {
+    const res = roadmap(repo, ...args)
+    assert.equal(res.status, 0, `${args.join(' ')} must exit 0; stderr:\n${res.stderr}`)
+    assert.equal(
+      /predates|re-?vendor|not exported/i.test(res.stderr),
+      false,
+      `${args.join(' ')} warned about a consumer that re-exports the plugin templates verbatim; got stderr:\n${res.stderr}`,
+    )
+  }
+})
+
+test('11) a repo with NO lib/roadmap/schema.ts is not a stale consumer — no drift line, exit 0', () => {
+  // `roadmap init --config` configures a repo BEFORE `init --scaffold` vendors the schema, so
+  // this is the ordinary fresh-consumer state. Reporting "every shape is missing" here would
+  // fire the warning on the one repo that has nothing to re-vendor yet.
+  const repo = newRepo()
+  assert.equal(roadmap(repo, 'init', '--config').status, 0)
+
+  const res = roadmap(repo, 'config', 'check')
+  assert.equal(res.status, 0, `a fresh consumer still checks out; stderr:\n${res.stderr}`)
+  assert.match(res.stdout, /config OK/)
+  assert.equal(
+    /PhaseEvalRecordShape|DriverShape|re-?vendor/i.test(res.stderr),
+    false,
+    `an absent schema is "not vendored yet", not "drifted"; got stderr:\n${res.stderr}`,
+  )
+})

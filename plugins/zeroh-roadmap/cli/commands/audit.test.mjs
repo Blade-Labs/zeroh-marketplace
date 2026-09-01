@@ -1090,3 +1090,215 @@ test('check 15 RED — two audits over the unchanged stray fixture report identi
     'and the lane BRANCH survives: the commits in a stale run lane are unlanded work, and deleting the only ref that reaches them is the data loss the whole rail exists to prevent',
   )
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+// Schema drift — a consumer lib/roadmap/schema.ts that PREDATES a plugin shape
+// ════════════════════════════════════════════════════════════════════════════
+// The failure this catches is silent by construction: the bridge's shape-parse spawn exits 4
+// with "<Shape> not exported ... re-sync lib/roadmap/schema.ts" (cli/lib/tsx-bridge.mjs), every
+// downstream sample is dropped, and the scorecard then reads as NO DATA rather than as a broken
+// pipe. Nothing in the roadmap ever says so out loud, so the two surfaces an operator actually
+// runs — `roadmap audit` and `roadmap config check` — have to say it.
+//
+// Observable behavior only, through the REAL bin (this suite never imports the command source).
+import { readFileSync } from 'node:fs'
+import { relative } from 'node:path'
+import { spawnSync } from 'node:child_process'
+
+/** The two shapes the phase names; a drift in either is the same broken pipe. */
+const DRIFT_SHAPES = ['PhaseEvalRecordShape', 'DriverShape']
+
+/** The consequence, in the phase's own words — a finding that omits it is just a name. */
+const NAMES_CONSEQUENCE = /samples?|scorecard/i
+/** The remedy: re-vendor / re-sync, and the file to re-vendor INTO. */
+const NAMES_REMEDY = /re-?vendor|re-?sync/i
+
+/**
+ * A consumer schema that predates `names`: a REAL copy of templates/schema.ts with each named
+ * `export const <Shape>` demoted to a plain `const`. The export disappears while every internal
+ * reference (DriverShape at :298/:527, PhaseEvalRecordShape at :539) still resolves — which is
+ * exactly the shape of a consumer that skipped a re-vendor, and not a file that fails to load.
+ */
+function staleSchemaSource(...names) {
+  let src = readFileSync(SCHEMA, 'utf8')
+  for (const n of names) {
+    const decl = `export const ${n} = `
+    assert.ok(src.includes(decl), `fixture precondition: templates/schema.ts must export ${n} as \`${decl.trim()}\``)
+    src = src.replace(decl, `const ${n} = `)
+  }
+  return src
+}
+
+/** Overwrite a fixture repo's lib/roadmap/schema.ts with `source`. */
+const putSchema = (root, source) => writeFileSync(join(root, 'lib', 'roadmap', 'schema.ts'), source)
+
+/** An otherwise-CLEAN audit fixture — so anything the audit reports came from the schema. */
+function driftRepo() {
+  const root = makeRepo()
+  writePhase(root, 100, basePhase(100, { kind: 'logic', dependsOn: [] }))
+  writeBacklog(root, [{ phase: 100, name: 'First queued phase here' }])
+  return root
+}
+
+/** Drift findings, however the implementation numbers its check: HIGH + a named shape. */
+const driftFindings = (report) =>
+  report.findings.filter((f) => DRIFT_SHAPES.some((s) => f.message.includes(s)))
+
+test('schema drift RED — a consumer schema missing PhaseEvalRecordShape → HIGH finding, BROKEN, exit 2', () => {
+  const root = driftRepo()
+  putSchema(root, staleSchemaSource('PhaseEvalRecordShape'))
+
+  const { code, report, stderr } = audit(root)
+  assert.ok(report, `the audit must still produce a report over a stale consumer; stderr was:\n${stderr}`)
+
+  const found = driftFindings(report)
+  assert.equal(
+    found.length,
+    1,
+    `exactly one finding must name the missing export — zero is the silent all-clear this check exists to end, and a repeat per call site is noise; findings were:\n${JSON.stringify(report.findings, null, 2)}`,
+  )
+  const f = found[0]
+  assert.equal(
+    f.severity,
+    'HIGH',
+    `a consumer that drops every eval sample is BROKEN, not an issue to get to later — HIGH is what makes the audit refuse; got ${JSON.stringify(f)}`,
+  )
+  assert.match(
+    f.message,
+    NAMES_CONSEQUENCE,
+    `the finding must name the CONSEQUENCE (the samples/scorecard go silent), not just the absent symbol — an operator who only reads "PhaseEvalRecordShape is missing" has no reason to act; got: ${f.message}`,
+  )
+  assert.match(
+    f.message,
+    NAMES_REMEDY,
+    `and the re-vendor remedy, or the finding hands the operator a diagnosis with no fix; got: ${f.message}`,
+  )
+  assert.ok(
+    f.message.includes('lib/roadmap/schema.ts'),
+    `the remedy must name the file to re-vendor INTO — there is exactly one consumer schema seam; got: ${f.message}`,
+  )
+
+  assert.equal(report.verdict, 'BROKEN', `a HIGH finding is BROKEN by the audit's own verdict rule; findings: ${JSON.stringify(report.findings)}`)
+  assert.equal(code, 2, 'and BROKEN exits 2 — the exit code is what stops a /do-phase from running into the dropped samples')
+})
+
+test('schema drift RED — a consumer schema missing DriverShape fires the same way', () => {
+  // The criterion is an OR over two shapes. Testing only the first would leave a one-shape
+  // hardcode passing: the reader must compare an INVENTORY, not look up one known name.
+  const root = driftRepo()
+  putSchema(root, staleSchemaSource('DriverShape'))
+
+  const { code, report } = audit(root)
+  const found = driftFindings(report)
+  assert.equal(found.length, 1, `expected one drift finding naming DriverShape; findings were:\n${JSON.stringify(report.findings, null, 2)}`)
+  assert.ok(found[0].message.includes('DriverShape'), `and it must name the shape that is actually missing; got: ${found[0].message}`)
+  assert.equal(found[0].severity, 'HIGH')
+  assert.equal(code, 2)
+})
+
+test('schema drift GREEN — an in-sync consumer (the `export * from` re-export) reports nothing', () => {
+  // Every other fixture in this file uses this exact schema form, so a reader that cannot see
+  // through `export * from '<templates>/schema.ts'` would turn the whole suite BROKEN. The
+  // re-export IS the in-sync consumer; silence here is the criterion's other direction.
+  const root = driftRepo()
+
+  const { code, report } = audit(root)
+  assert.deepEqual(
+    driftFindings(report),
+    [],
+    `a consumer re-exporting the plugin templates is by definition in sync; got:\n${JSON.stringify(report.findings, null, 2)}`,
+  )
+  assert.equal(report.verdict, 'CLEAN', `and the clean direction stays CLEAN; findings were: ${JSON.stringify(report.findings)}`)
+  assert.equal(code, 0)
+})
+
+test('schema drift GREEN — a VERBATIM copy of templates/schema.ts reports nothing either', () => {
+  // Falsification control for the test above: it proves silence comes from COMPARING exports,
+  // not from "the file is a one-line re-export, so skip it". A vendored copy is the form a real
+  // consumer carries, and it is the form drift actually happens to.
+  const root = driftRepo()
+  putSchema(root, readFileSync(SCHEMA, 'utf8'))
+
+  const { code, report } = audit(root)
+  assert.deepEqual(
+    driftFindings(report),
+    [],
+    `an up-to-date VENDORED copy is in sync; got:\n${JSON.stringify(report.findings, null, 2)}`,
+  )
+  assert.equal(code, 0)
+})
+
+// ── One reader, two surfaces ────────────────────────────────────────────────────────────
+/** A drift fixture that is also a git repo carrying a valid roadmap.config.json — `config
+ *  check` resolves its consumer through gitToplevel(cwd), so it needs both. */
+function twoSurfaceRepo() {
+  const root = driftRepo()
+  writeFileSync(
+    join(root, 'roadmap', 'roadmap.config.json'),
+    JSON.stringify({
+      configVersion: 1,
+      gateCommands: { lint: 'npm run lint', types: 'npm run type-check', unit: 'npm test', integration: 'none', build: 'npm run build', e2e: 'none', emit: 'none' },
+    }, null, 2) + '\n',
+  )
+  execFileSync('git', ['-C', root, 'init', '-q'], { stdio: 'ignore' })
+  return root
+}
+
+test('one inventory reader — audit and `config check` name the SAME missing exports for the same consumer', () => {
+  // Two readers drift: one gets taught about a newly-added shape and the other keeps waving the
+  // same consumer through, so the operator gets a BROKEN audit and a clean config summary (or the
+  // reverse) over one repo. Same input, same answer, or they are not one reader.
+  const root = twoSurfaceRepo()
+  putSchema(root, staleSchemaSource(...DRIFT_SHAPES))
+
+  const auditRes = audit(root)
+  const cfg = spawnSync('node', [BIN, 'config', 'check'], { cwd: root, encoding: 'utf8' })
+
+  const auditNames = DRIFT_SHAPES.filter((s) => auditRes.report.findings.some((f) => f.message.includes(s)))
+  const configNames = DRIFT_SHAPES.filter((s) => cfg.stderr.includes(s))
+
+  assert.deepEqual(
+    auditNames,
+    DRIFT_SHAPES,
+    `both missing exports must be reported, not just the first one found; findings were:\n${JSON.stringify(auditRes.report.findings, null, 2)}`,
+  )
+  assert.deepEqual(
+    configNames,
+    auditNames,
+    `\`config check\` must name exactly what the audit names — one inventory reader, two surfaces.\n  audit:  ${JSON.stringify(auditNames)}\n  config: ${JSON.stringify(configNames)}\n  config stderr was:\n${cfg.stderr}`,
+  )
+
+  // And neither surface may name a shape the consumer DOES export — a reader that reports the
+  // whole plugin inventory on every stale file is as useless as one that reports nothing.
+  for (const [label, text] of [['audit', JSON.stringify(auditRes.report.findings)], ['config check', cfg.stderr]]) {
+    assert.equal(
+      text.includes('PhaseEvalRecordListShape'),
+      false,
+      `${label} named PhaseEvalRecordListShape, which this consumer still exports — the reader must diff the inventory, not dump it; got:\n${text}`,
+    )
+  }
+})
+
+test('the export-scanning regex literal lives in exactly ONE non-test file under cli/', () => {
+  // Two copies of "what an export line looks like" drift the moment one is taught about
+  // `export type` / multi-line declarations: the two surfaces then disagree about the SAME
+  // consumer, which is the parity the test above locks. Zero copies means it is not implemented.
+  const files = execFileSync('find', [join(PLUGIN_ROOT, 'cli'), '-type', 'f', '(', '-name', '*.mjs', '-o', '-name', '*.mts', ')', '!', '-name', '*.test.mjs'], { encoding: 'utf8' })
+    .trim().split('\n').filter(Boolean).sort()
+
+  // A regex LITERAL mentioning `export`, ignoring comment lines (a `//`/`*` line is prose).
+  const EXPORT_RE_LITERAL = /\/(?:[^/\\\n]|\\.)*\bexport\b(?:[^/\\\n]|\\.)*\/[a-z]*/
+  const homes = files.filter((file) =>
+    readFileSync(file, 'utf8').split('\n').some((line) => {
+      const t = line.trim()
+      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return false
+      return EXPORT_RE_LITERAL.test(line)
+    }),
+  ).map((f) => relative(PLUGIN_ROOT, f))
+
+  assert.equal(
+    homes.length,
+    1,
+    `expected exactly ONE home for the export-scanning regex under cli/; found ${homes.length}: ${JSON.stringify(homes)}`,
+  )
+})

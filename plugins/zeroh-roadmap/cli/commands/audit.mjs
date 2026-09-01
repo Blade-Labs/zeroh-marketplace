@@ -30,6 +30,7 @@ import { TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import { censusFollowups } from './followups.mjs'
 import { isTerminalPhaseSource } from '../lib/phasescan.mjs'
 import { surveyLanes } from '../lib/worktree.mjs'
+import { missingSchemaExports } from './config.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -188,6 +189,17 @@ export default async function run(argv) {
       // for it would be the silent all-clear this check exists to end.
       findings.push({ check: 15, severity: 'LOW', phase: null, message: `Lane worktrees could not be surveyed in ${repo} — ${err.message}` })
     }
+  }
+
+  // ── Check 16: consumer schema drift ──────────────────────────────────────
+  for (const name of missingSchemaExports(repo)) {
+    findings.push({
+      check: 16,
+      severity: 'HIGH',
+      phase: null,
+      location: join(repo, 'lib', 'roadmap', 'schema.ts'),
+      message: `${name} is missing from lib/roadmap/schema.ts, so phase eval records cannot emit and scorecard samples go silent — re-vendor the consumer schema from the plugin template.`,
+    })
   }
 
   // ── Verdict + exit (design §2 universal contract) ──────────────────────────

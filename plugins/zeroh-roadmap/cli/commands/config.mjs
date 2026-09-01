@@ -6,6 +6,43 @@
  * stream-separation rule).
  */
 import { loadConfig } from '../lib/config.mjs'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { gitToplevel } from '../lib/gitroot.mjs'
+
+const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const TEMPLATE_SCHEMA = join(PLUGIN_ROOT, 'templates', 'schema.ts')
+const EXPORT_DECLARATION = /^export (?:const|function|type) (\w+)/gm
+
+function exportedNames(file) {
+  const source = readFileSync(file, 'utf8')
+  const names = new Set([...source.matchAll(EXPORT_DECLARATION)].map((match) => match[1]))
+  for (const match of source.matchAll(/^export \* from ['"]([^'"]+)['"]/gm)) {
+    const target = resolve(dirname(file), match[1])
+    if (existsSync(target)) {
+      for (const name of exportedNames(target)) names.add(name)
+    }
+  }
+  return names
+}
+
+/** Return template exports absent from a consumer's vendored schema. */
+export function missingSchemaExports(consumerRoot) {
+  const consumerSchema = join(consumerRoot, 'lib', 'roadmap', 'schema.ts')
+  if (!existsSync(consumerSchema)) return []
+  const expected = exportedNames(TEMPLATE_SCHEMA)
+  const actual = exportedNames(consumerSchema)
+  return [...expected].filter((name) => !actual.has(name))
+}
+
+function reportSchemaDrift(consumerRoot) {
+  for (const name of missingSchemaExports(consumerRoot)) {
+    process.stderr.write(
+      `schemaDrift: ${name} is not exported by lib/roadmap/schema.ts; phase eval records cannot emit and scorecard samples go silent — re-vendor the schema from the plugin template\n`,
+    )
+  }
+}
 
 export default async function run(argv) {
   const sub = argv[0]
@@ -16,6 +53,7 @@ export default async function run(argv) {
   }
 
   const cfg = loadConfig(process.cwd()) // ConfigError → dispatcher exit 1
+  reportSchemaDrift(gitToplevel(process.cwd()))
 
   if (json) {
     process.stdout.write(JSON.stringify(cfg, null, 2) + '\n')
