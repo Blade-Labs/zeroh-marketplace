@@ -47,10 +47,6 @@ export default defineBacklog([
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
   // ── MINESWEEP arc tier (phases 14, 15, 16, 17, 18, 19, 20 — exact claimed numbers; queued 2026-08-31 after all 7 plan reviews returned READY) ──
-  {
-    phase: 19,
-    name: 'Cross-repo gate awareness: productRepos floors review scope, arm-time product-tree overlap refusal',
-  },
   // ── DEFERRED (standing user hold 2026-08-26): do NOT execute until the user asks ──
   {
     phase: 12,
