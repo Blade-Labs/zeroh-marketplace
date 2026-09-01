@@ -125,6 +125,12 @@ test('detectSelfDescope — flags a skipped entry narrowing a task criterion', (
   assert.equal(m.length, 1)
   assert.equal(m[0].kind, 'task')
 })
+test('detectSelfDescope — a substantive sentence beginning with None is never mistaken for empty debt', () => {
+  const result = { skipped: ['None of the configured masking categories are enforced before the model call'] }
+  const m = detectSelfDescope(result, PHASE_DATA)
+  assert.equal(m.length, 1)
+  assert.equal(m[0].kind, 'task')
+})
 test('detectSelfDescope — flags a compromise narrowing an ARC criterion (arcCriteria, the production key)', () => {
   const result = { compromises: ['the land transition is not something a test can replay — it stays narrated in prose'] }
   const m = detectSelfDescope(result, PHASE_DATA)

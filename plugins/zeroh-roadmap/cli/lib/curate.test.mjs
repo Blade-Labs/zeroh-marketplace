@@ -1135,6 +1135,24 @@ test('composeLandedMessage: the body names every squashed task + whatWasDone; a 
   )
 })
 
+test('composeLandedMessage: a substantive compromise beginning with None remains visible', () => {
+  const phaseRecord = {
+    phase: 76,
+    name: 'Keep substantive debt visible',
+    tasks: [{
+      id: '76.1',
+      title: 'Preserve the compromise',
+      transparencyReport: {
+        whatWasDone: 'Implemented the guarded path.',
+        compromises: 'None of the fallback paths handle an empty batch — deferred.',
+      },
+    }],
+  }
+  const group = { commits: [{ kind: 'task', subject: 'fix(core): phase 76 — 76.1 preserve debt' }] }
+
+  assert.match(composeLandedMessage(phaseRecord, group).body, /Compromise: None of the fallback paths/)
+})
+
 test('composeLandedMessage: a multi-group split lists only ITS group’s tasks, matched on the N.x token (76.1 ≠ 76.10)', () => {
   const phaseRecord = {
     phase: 76,

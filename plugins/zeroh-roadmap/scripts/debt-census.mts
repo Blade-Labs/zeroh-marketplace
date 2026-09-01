@@ -3,7 +3,7 @@
  * debt-census — the whole-estate open-debt ledger, derived (never hand-written).
  *
  * Joins the two machine homes of debt across EVERY phase file:
- *   - tasks[].transparencyReport.{compromises,hardcoded,skipped,limitations} ≠ "None"
+ *   - tasks[].transparencyReport.{compromises,hardcoded,skipped,limitations} with substantive debt
  *     (the immutable per-task audit — debt CONTENT)
  *   - phase.debtResolutions[] (debt RESOLUTION; absence of a matching ref = OPEN)
  * plus a lightweight open-marker scan of roadmap/followups/*.md (arc-sweep's
@@ -16,7 +16,7 @@
  *                       (a cheap close: re-dispose as fixed with the phase ref).
  *   OPEN-operator     — status 'operator-pending'; open until disposed post-deploy
  *   CLOSED            — 'fixed' | "won't_fix" | 'dismissed' (counted, not listed)
- * Dangling resolutions (a ref with no matching non-"None" field) are a hygiene
+ * Dangling resolutions (a ref with no matching debt field) are a hygiene
  * finding — they usually mean a task was renumbered after the sweep.
  *
  * Parsing: imports the CONSUMER's lib/roadmap/registry.ts (the same
@@ -139,7 +139,7 @@ function censusOf(phaseList: any[], lookupById: Map<number, any>) {
       dangling.push(
         excludedRefs.has(ref)
           ? `phase ${p.phase}: ${ref} (matching field was excluded as explanatory-empty)`
-          : `phase ${p.phase}: ${ref} (resolution with no matching non-"None" field)`,
+          : `phase ${p.phase}: ${ref} (resolution with no matching debt field)`,
       )
     }
   }

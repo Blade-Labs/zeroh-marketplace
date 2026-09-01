@@ -14,7 +14,6 @@ import { writeFileSync } from 'node:fs'
 
 import { derivePhaseStartSha, phaseOwnPatterns, SUBJECT_GRAMMAR } from './gitscan.mjs'
 import { recordCuration, latestReport } from './gate-report.mjs'
-import { isExplanatoryEmpty } from './transparency.mjs'
 
 const git = (cwd, args, opts = {}) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8', ...opts }).trim()
@@ -232,7 +231,7 @@ export function composeLandedMessage(phaseRecord, group) {
     lines.push(`${task.id} ${task.title}`)
     const report = task.transparencyReport
     if (report?.whatWasDone) lines.push('', report.whatWasDone)
-    if (report?.compromises && !isExplanatoryEmpty(report.compromises)) lines.push('', `Compromise: ${report.compromises}`)
+    if (report?.compromises && report.compromises !== 'None') lines.push('', `Compromise: ${report.compromises}`)
     lines.push('')
   }
   lines.push(TRAILER)

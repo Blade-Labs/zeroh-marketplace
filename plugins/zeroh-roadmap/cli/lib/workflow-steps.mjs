@@ -10,8 +10,6 @@
  * workflows/) does the impure CLI/fs work and feeds these already-fetched values in.
  */
 
-import { isExplanatoryEmpty } from './transparency.mjs'
-
 /** The §4 typed-halt kinds. `stalled`/`exited`/`unobserved` carry the `roadmap watch` verdict JSON
  *  as evidence verbatim; every kind ends the workflow and hands the session the conversation.
  *  `unobserved` (2384.3) is behaviourally a halt like `stalled` but honestly labelled: no life
@@ -108,13 +106,13 @@ function significantWords(text) {
  *  of { text, decisionRef }. The literal "None" and empty inputs yield []. */
 function asEntries(field) {
   if (field == null) return []
-  if (typeof field === 'string') return field.trim() === '' || isExplanatoryEmpty(field) ? [] : [{ text: field, decisionRef: null }]
+  if (typeof field === 'string') return field.trim() === '' || field.trim() === 'None' ? [] : [{ text: field, decisionRef: null }]
   if (!Array.isArray(field)) return []
   const out = []
   for (const e of field) {
     if (e == null) continue
     if (typeof e === 'string') {
-      if (e.trim() === '' || isExplanatoryEmpty(e)) continue
+      if (e.trim() === '' || e.trim() === 'None') continue
       out.push({ text: e, decisionRef: null })
     } else {
       const text = e.text ?? e.description ?? e.item ?? e.note ?? ''
