@@ -689,6 +689,9 @@ const emitFailureLines = (stderr) => stderr.split('\n').filter((l) => /peval|arc
 
 const PLANNER = { model: 'planner-model-x' }
 const DRIVER = { model: 'driver-model-y', lane: 'codex' }
+const INDEPENDENT_ROUND = { round: 1, agent: 'code-reviewer', verdict: 'clean', summary: 'independent review: clean' }
+const recordIndependentRound = (repo, phase) =>
+  runGateCmd(repo.root, [String(phase), '--record-round', JSON.stringify(INDEPENDENT_ROUND)])
 const METRICS = {
   commits: 3,
   linesAdded: 128,
@@ -762,6 +765,7 @@ test('gate run --verify-complete — the refresh adds executionResult.driver + m
   repo.writePhase(1701, phaseObj({ phase: 1701, status: 'in-progress', plannedBy: PLANNER, tasks: [{ id: '1701.1' }, { id: '1701.2' }] }))
   repo.commit('feat: phase 1701 — code', { 'lib/c.ts': 'export const c = 1\n' })
   assert.equal(runGateCmd(repo.root, ['1701']).code, 0)
+  assert.equal(recordIndependentRound(repo, 1701).code, 0, 'precondition: the delegated lane recorded its independent review')
   const atExecute = readRecord(repo.root, 1701)
   assert.equal(atExecute.attribution.plannedBy.model, PLANNER.model)
   assert.equal(atExecute.attribution.driver, undefined, 'precondition: the driver is genuinely absent before the completion')
@@ -776,6 +780,7 @@ test('gate run --verify-complete — the refresh adds executionResult.driver + m
       plannedBy: PLANNER,
       tasks: [{ id: '1701.1' }, { id: '1701.2' }],
       keyFiles: ['lib/c.ts'],
+      gateRounds: [INDEPENDENT_ROUND],
       executionResult: { phase: 1701, status: 'done', driver: DRIVER },
       metrics: METRICS,
     }),
@@ -1011,9 +1016,10 @@ test('gate run --verify-complete — a lane journal beside a phase file with NO 
 
 test('gate run --verify-complete — a phase whose driver AGREES with the journal verifies unchanged', () => {
   const repo = makeRepo(RUN_CFG())
-  repo.writePhase(1612, donePhase(1612, { model: JOURNAL_MODEL, lane: 'codex' }))
+  repo.writePhase(1612, { ...donePhase(1612, { model: JOURNAL_MODEL, lane: 'codex' }), gateRounds: [INDEPENDENT_ROUND] })
   repo.commit('feat: phase 1612 — code', { 'lib/l.ts': 'export const l = 1\n' })
   assert.equal(runGateCmd(repo.root, ['1612']).code, 0)
+  assert.equal(recordIndependentRound(repo, 1612).code, 0, 'precondition: the delegated lane recorded its independent review')
   writeRunJournal(repo.root, [1612])
 
   const r = runGateCmd(repo.root, ['1612', '--verify-complete'])
@@ -1196,10 +1202,12 @@ test('gate run --verify-complete refresh keeps the primary checkout fingerprint'
       ...inFlight,
       status: 'done',
       keyFiles: ['lib/x.ts'],
+      gateRounds: [INDEPENDENT_ROUND],
       executionResult: { phase: 1722, status: 'done', driver: DRIVER },
       metrics: METRICS,
     }),
   )
+  assert.equal(recordIndependentRound({ root: wt.dir }, 1722).code, 0, 'precondition: the delegated lane recorded its independent review')
   const r = runGateIn(wt.dir, ['1722', '--verify-complete'])
   assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `stdout: ${r.stdout} stderr: ${r.stderr}`)
 
