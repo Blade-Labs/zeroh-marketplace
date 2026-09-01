@@ -27,7 +27,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 18,
   name: 'Measurement repairs: schema-drift check, lessons merge-back on land, eval-gap visibility, census noise',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
