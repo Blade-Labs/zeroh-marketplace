@@ -13,7 +13,7 @@
  * whose curation never ran because the canonical-only matchers read them as foreign.
  * Every REFUSE row is a subject the widening must NOT swallow. Tolerance may only grow
  * the match table; it may never touch the refuse table, because the digit boundary
- * (phase 21 never matches phase 214 or phase 121; phase 2 never matches phase 21) is the
+ * (a phase never matches a right-extended or prefixed sibling number) is the
  * property the whole attribution seam stands on, and prose that merely QUOTES the grammar
  * mid-subject must stay foreign or a squash rewrites a sibling session's commit.
  *
@@ -298,8 +298,8 @@ test('7) a deviant-grammar history derives the SAME start SHA as its canonical t
   // Two histories, same shape, same positions — one written in the taught canonical form,
   // one in the recorded deviant forms (D2 scope-carried move commit, D1 + ASCII hyphen,
   // D5 + en dash). Tier 1 (newest move-to-in-progress) must fire in BOTH, so both bases
-  // land on the pre-work commit. Today the deviant twin has no `phase 6100 —` match at
-  // all and derivePhaseStartSha throws GitScanError('no-match').
+  // land on the pre-work commit. Without tolerant attribution, the deviant twin has no
+  // canonical boundary match and derivePhaseStartSha throws GitScanError('no-match').
   const canonical = makeRepo([
     PRE,
     `plan(roadmap): phase 6100 ${EM} move to in-progress`,

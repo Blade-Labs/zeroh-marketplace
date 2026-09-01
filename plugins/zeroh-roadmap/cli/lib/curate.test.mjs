@@ -419,16 +419,16 @@ test('16.3 — the other direction: a SIBLING phase’s subject in every deviant
 
   r.commit('docs(roadmap): phase 725 — move to in-progress')
   r.commit('feat(mudarabah): phase 725 task 725.1 — batch identity + batch rollup')
-  // One rendering per tolerated class, all at phase 726 — a sibling session's real work,
-  // interleaved exactly as it interleaves in a shared checkout.
+  // One rendering per tolerated class proves a sibling session's real work stays foreign
+  // when histories interleave in a shared checkout.
   const sibCanonical = r.commit('docs(roadmap): phase 726 — move to in-progress')
   const sibD1 = r.commit('feat(mudarabah): phase 726 task 726.1 — the sibling’s batch identity')
   const sibD2 = r.commit('fix(phase-726): quality pass — the sibling’s sweep')
   const sibD3 = r.commit('docs(roadmap): mark phase 726 complete')
   const sibD4 = r.commit('feat(mudarabah): phase 726 - the sibling’s hyphen work')
   const sibD5 = r.commit('feat(console): phase 726 726.5 — the sibling’s fifth task')
-  // A longer number that merely STARTS with this phase's digits, and prose that quotes the
-  // grammar mid-subject: neither is phase 725's to rewrite.
+  // A longer number that merely starts with the target digits, and prose that quotes the
+  // grammar mid-subject, are neither one this phase may rewrite.
   const longer = r.commit('feat(mudarabah): phase 7250 task 7250.1 — a longer neighbour, not 725')
   const prose = r.commit('docs(roadmap): flush the lessons about the phase 725 — grammar incident')
   const plain = r.commit('feat(web): the console gains a corpus filter')
@@ -445,8 +445,8 @@ test('16.3 — the other direction: a SIBLING phase’s subject in every deviant
   )
   assert.match(res.reason, /foreign/i)
   assert.ok(res.reason.includes('725'), 'the refusal says whose range it is')
-  // Anti-vacuity: the sibling rows are REAL subjects of the widened grammar (phase 726
-  // owns every one of them), so this refusal cannot pass on strawmen nothing would match.
+  // Anti-vacuity: the sibling matcher owns every row, so refusal cannot pass on strawmen
+  // that no phase would match.
   for (const sha of [sibCanonical, sibD1, sibD2, sibD3, sibD4, sibD5]) {
     assert.equal(phaseOwnPatterns(726).test(r.subject(sha)), true, `fixture bug: phase 726 must own ${r.subject(sha)}`)
   }
