@@ -250,7 +250,7 @@ export function checkPhaseConsistency(parsedPhase, report) {
     report.reviewScope?.effective !== 'none' &&
     !completedBeforeIndependentReview
   const hasIndependentRound = report.agents.some(
-    (round) => round.round >= 1 && !round.agent.toLowerCase().includes('self-review'),
+    (round) => round.round >= 1 && !/self[\s_-]?review/.test(round.agent.toLowerCase()),
   )
   if (delegatedReviewRequired && !hasIndependentRound)
     problems.push(

@@ -108,7 +108,8 @@ export default definePhase({
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
-        limitations: 'None',
+        limitations:
+          'The ratified rule uses the persisted free-text agent label because round model is optional; it rejects normalized self-review spellings but cannot cryptographically prove that a driver did not type an independent-role label. Correctness review also required gate-report and roles ratchet tests beyond the planned prompt files.',
       },
     },
     {

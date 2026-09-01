@@ -747,14 +747,14 @@ const HARNESS_DELIVERY_PREFIX = 'agents/'
 /**
  * Envelope overhead ceiling: generated-prompt bytes ÷ delivered-protocol bytes.
  *
- * The envelope exists to DELIVER the protocol, never to BE it. Phase 17 added a mandatory role
- * independence override and restored the cross-repo/reference clauses after a failed attempt to
- * buy bytes by weakening them. Re-derived at that semantic baseline: 4153 / 16710 = 0.2485. The
- * 0.25 ceiling leaves only ~24 bytes of ratio slack, so future prose still has to earn space while
- * every lane override remains independently asserted below. Envelope bytes also scale with the
- * install root, which the three interpolated absolute paths carry.
+ * The envelope exists to DELIVER the protocol, never to BE it. The RED LINE is the pre-delivery
+ * envelope — the one that PARAPHRASED do-phase instead of handing over its path, `git show
+ * e965f4f~1:cli/commands/codex.mjs` — which measured 3992 / 16693 = 0.2391; a bound above that
+ * would certify the very regression this instrument exists to catch. The bound therefore sits
+ * just under it. Every lane override carries its own assertion below, so compacting may remove
+ * repetition but never semantics. Absolute install paths also contribute to envelope bytes.
  */
-const MAX_ENVELOPE_PROTOCOL_RATIO = 0.25
+const MAX_ENVELOPE_PROTOCOL_RATIO = 0.235
 
 /** The one command a reader runs to re-derive both numbers without trusting this file. */
 const REDERIVE_CMD = [

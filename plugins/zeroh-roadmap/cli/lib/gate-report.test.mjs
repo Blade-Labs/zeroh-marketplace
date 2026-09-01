@@ -670,7 +670,7 @@ test('checkPhaseConsistency — a codex-lane completion with no independent reco
 
   // The report side's `agent` is a free string, so the pre-17.1 laundered spellings must not
   // buy independence just by not matching the enum member exactly.
-  for (const laundered of ['codex-self-review', 'self-review (driver)', 'Self-Review']) {
+  for (const laundered of ['codex-self-review', 'self-review (driver)', 'Self-Review', 'self review', 'self_review', 'selfreview']) {
     const c = laneCase('codex', [{ agent: laundered }])
     assertRefusedForSelfJudge(checkPhaseConsistency(c.phase, c.report), `codex lane, legacy free-string '${laundered}'`)
   }
