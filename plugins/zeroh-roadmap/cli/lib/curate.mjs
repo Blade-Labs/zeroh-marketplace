@@ -180,7 +180,9 @@ function majorityPrefix(commits) {
     const m = /^([a-z]+)\(([a-z0-9-]+)\):/.exec(c.subject)
     if (!m) continue
     types.set(m[1], (types.get(m[1]) ?? 0) + 1)
-    scopes.set(m[2], (scopes.get(m[2]) ?? 0) + 1)
+    // A tolerated D2 `(phase-N)` scope identifies ownership, not the code surface.
+    // It may influence the majority type, but canonical WRITE must never reproduce it.
+    if (!/^phase-\d+$/.test(m[2])) scopes.set(m[2], (scopes.get(m[2]) ?? 0) + 1)
   }
   // Map iteration is insertion-ordered, so a STRICT > keeps the first-seen winner on a tie.
   const pick = (map, fallback) => {

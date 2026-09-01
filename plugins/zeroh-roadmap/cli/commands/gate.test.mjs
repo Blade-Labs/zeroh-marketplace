@@ -1918,6 +1918,7 @@ const deviantSubjects = (n) => [
   { klass: 'D1 `phase N task N.X <dash>`', subject: `feat(mudarabah): phase ${n} task ${n}.1 ${EM} batch identity + batch rollup` },
   { klass: 'D2 scope-carried `(phase-N)`', subject: `fix(phase-${n}): quality pass ${EM} prune comment prose, dedupe the usable-amount check` },
   { klass: 'D4 dash variant', subject: `feat(atlas-web): phase ${n} ${HY} add Library tree` },
+  { klass: 'D4 gate-fix dash variant', subject: `fix(cli): phase ${n} gate R1 ${HY} reviewer findings` },
   { klass: 'D5 `phase N N.X <dash>`', subject: `feat(console): phase ${n} ${n}.5 ${EM} Agent record as the roster detail view` },
 ]
 

@@ -223,7 +223,7 @@ export function deviantGrammarFindings(cwd, phaseNum, base) {
     { name: 'D2 scope-carried (phase-N)', re: new RegExp(`^${type}\\(phase-${P}\\):`) },
     {
       name: 'D4 noncanonical dash',
-      re: new RegExp(`^${typePrefix}phase ${P} (${offDash}|task ${P}\\.[0-9]+ ${offDash}|${P}\\.[0-9]+ ${offDash})`),
+      re: new RegExp(`^${typePrefix}phase ${P} (${offDash}|task ${P}\\.[0-9]+ ${offDash}|${P}\\.[0-9]+ ${offDash}|gate R[0-9]+ ${offDash})`),
     },
     { name: 'D5 phase N N.X', re: new RegExp(`^${typePrefix}phase ${P} ${P}\\.[0-9]+ ${dash}`) },
   ]

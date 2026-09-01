@@ -967,6 +967,27 @@ test('composeLandedMessage: type/scope ties break by FIRST occurrence, and unpar
   )
 })
 
+test('composeLandedMessage: tolerated D2 phase scopes never leak into the canonical landed subject', () => {
+  const group = groupOf([
+    ['feat(cli): phase 10 — 10.1 add the arc lane', 'task'],
+    ['fix(phase-10): quality pass — prune narration', 'task'],
+    ['fix(phase-10): gate R1 — close reviewer findings', 'gate-fix'],
+  ])
+  const phaseRecord = {
+    phase: 10,
+    name: 'Validate the arc lane gate',
+    tasks: [{ id: '10.1', title: 'Add the arc lane', transparencyReport: { whatWasDone: 'wired the lane', compromises: 'None' } }],
+  }
+
+  const out = composeLandedMessage(phaseRecord, group)
+
+  assertSubjectShape(out.subject, 10)
+  assert.ok(
+    out.subject.startsWith('fix(cli): phase 10 — '),
+    `D2 tolerance may vote for type but phase-N is ownership metadata, never a landed code scope: ${out.subject}`,
+  )
+})
+
 test('composeLandedMessage: a 62-word phase name truncates at a WORD boundary, ≤72 chars, em dash intact', () => {
   const rest =
     'irreproachably readable landed commit messages from the phase record and the '
