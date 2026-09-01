@@ -232,5 +232,17 @@ export function checkPhaseConsistency(parsedPhase, report) {
     problems.push(
       `gateRounds count mismatch: the report has ${reportRounds} agent round(s) (round>=1) but the phase records ${phaseRounds}`,
     )
+  const delegatedReviewRequired =
+    parsedPhase?.executionResult?.driver?.lane === 'codex' &&
+    parsedPhase?.reviewScope !== 'none' &&
+    report.reviewScope?.effective !== 'none'
+  const hasIndependentRound = report.agents.some(
+    (round) => round.round >= 1 && !round.agent.toLowerCase().includes('self-review'),
+  )
+  if (delegatedReviewRequired && !hasIndependentRound)
+    problems.push(
+      `no-self-judge rule: codex-lane completion needs an independent recorded round; ` +
+        `record one with gate run ${parsedPhase?.phase ?? report.phase} --record-round (self-review rounds do not satisfy completion)`,
+    )
   return { ok: problems.length === 0, problems }
 }

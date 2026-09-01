@@ -23,6 +23,17 @@
  * unknown key, (b) a round with no model persists no `model` key at all (an attribution nobody
  * supplied must never be invented), and (c) an unusable model (empty string, non-string) is
  * REFUSED at the parse rather than recorded as attribution the evals would go on to read.
+ *
+ * TEST-FIRST for the no-self-judge rule in checkPhaseConsistency (phase 17.2) at the very
+ * bottom: a codex-lane phase whose recorded reviews are empty or all self-review verifies
+ * complete today, so a delegated driver judges its own work (mudarabah2 720's false green,
+ * atlas 33's agents:[] done flip). The properties are (a) a delegated completion needs at
+ * least ONE recorded round (round >= 1) by someone other than the driver, and the refusal
+ * names both the rule and the `gate run <N> --record-round` remedy, (b) the rule is
+ * LANE-scoped — an inline session self-reviewing is the documented boundary, and (c) it is
+ * waived wherever the phase owes no review at all, whether reviewScope none was declared on
+ * the phase or DERIVED by the ladder into the report's effective scope. Each clean direction
+ * carries a positive control, because a rule that never fires would pass them all.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -589,4 +600,136 @@ test('latestReport — a well-formed newest report still returns { path, report 
   assert.equal(latest.path, newest.path, 'and it is the newest run file')
   assert.equal(latest.report.baseSha, 'newest-and-well-formed')
   assert.equal(latest.report.green, true, 'the report comes back parsed through the shape, exactly as before')
+})
+
+// ── the no-self-judge rule at verify-complete (17.2) ─────────────────────────────────
+
+/** A phase file as a delegated lane leaves it: `executionResult.driver` stamped at completion,
+ *  both scopes declared, and `gateRounds` mirroring the report's rounds so the pre-existing
+ *  count/scope clauses stay silent — the ONLY variable under test is reviewer INDEPENDENCE. */
+const lanePhase = (lane, over = {}) => ({
+  phase: 1670,
+  testScope: 'relevant',
+  reviewScope: 'full',
+  gateRounds: [],
+  executionResult: { phase: 1670, status: 'done', driver: { model: 'gpt-5.4-codex', lane } },
+  ...over,
+})
+
+/** A phase/report pair that agrees on everything except who reviewed. `agents` are report-side
+ *  rounds (round defaults to 1); the phase's gateRounds are derived from the same list, because
+ *  a mismatched count would red the pair through the OLD clause and prove nothing about 17.2. */
+const laneCase = (lane, agents, { phase: phaseOver = {}, report: reportOver = {} } = {}) => ({
+  phase: lanePhase(lane, {
+    gateRounds: agents.map((a) => ({ round: a.round ?? 1, agent: a.agent })),
+    ...phaseOver,
+  }),
+  report: baseReport({
+    testScope: { derived: 'relevant', declared: 'relevant', effective: 'relevant' },
+    reviewScope: { derived: 'full', declared: 'full', effective: 'full' },
+    agents: agents.map((a) => ({ round: 1, verdict: 'clean', summary: 's', recordedAt: 't', ...a })),
+    ...reportOver,
+  }),
+})
+
+/** The refusal must be ONE problem, and it must be THIS one. Asserted as a single entry rather
+ *  than "some problem matches": a fixture that also trips the count or scope clause would pass a
+ *  substring check while sending the driver to fix the wrong thing. */
+const assertRefusedForSelfJudge = (result, why) => {
+  assert.equal(result.ok, false, `${why}: the delegated completion must be REFUSED`)
+  assert.equal(
+    result.problems.length,
+    1,
+    `${why}: exactly one problem — the independence rule alone (got: ${JSON.stringify(result.problems)})`,
+  )
+  const [p] = result.problems
+  // The rule it broke: a driver may not be its own reviewer.
+  assert.match(p, /self-review|self-judge/, `${why}: the problem names the no-self-judge rule (got: ${p})`)
+  assert.match(p, /independent/, `${why}: the problem says what is missing — an independent recorded round (got: ${p})`)
+  // The remedy, spelled as the command that fixes it — a refusal with no exit is a dead end.
+  assert.match(p, /gate run[\s\S]*--record-round/, `${why}: the problem names the \`gate run <N> --record-round\` remedy (got: ${p})`)
+}
+
+test('checkPhaseConsistency — a codex-lane completion with no independent recorded round is REFUSED', () => {
+  // atlas 33: done flipped with agents:[] — 0 rounds recorded on BOTH sides, so the count clause
+  // reads "consistent" and nothing else ever looked.
+  const none = laneCase('codex', [])
+  assertRefusedForSelfJudge(checkPhaseConsistency(none.phase, none.report), 'codex lane, zero recorded rounds')
+
+  // mudarabah2 720: a single self-review round — recorded honestly, and still the driver's own
+  // opinion of its own work.
+  const selfOnly = laneCase('codex', [{ agent: 'self-review' }])
+  assertRefusedForSelfJudge(checkPhaseConsistency(selfOnly.phase, selfOnly.report), 'codex lane, one self-review round')
+
+  // More self-review does not add independence.
+  const selfTwice = laneCase('codex', [{ agent: 'self-review' }, { agent: 'self-review', round: 2 }])
+  assertRefusedForSelfJudge(checkPhaseConsistency(selfTwice.phase, selfTwice.report), 'codex lane, two self-review rounds')
+
+  // The report side's `agent` is a free string, so the pre-17.1 laundered spellings must not
+  // buy independence just by not matching the enum member exactly.
+  for (const laundered of ['codex-self-review', 'self-review (driver)', 'Self-Review']) {
+    const c = laneCase('codex', [{ agent: laundered }])
+    assertRefusedForSelfJudge(checkPhaseConsistency(c.phase, c.report), `codex lane, legacy free-string '${laundered}'`)
+  }
+})
+
+test('checkPhaseConsistency — one independent recorded round clears the codex lane', () => {
+  const reviewed = laneCase('codex', [{ agent: 'code-reviewer' }])
+  assert.deepEqual(
+    checkPhaseConsistency(reviewed.phase, reviewed.report).problems,
+    [],
+    'a codex phase with one independent code-reviewer round is clean',
+  )
+
+  // One independent round is the bar — a self-review round alongside it is honest record, not a
+  // disqualification.
+  const mixed = laneCase('codex', [{ agent: 'self-review' }, { agent: 'code-reviewer', round: 2 }])
+  assert.equal(checkPhaseConsistency(mixed.phase, mixed.report).ok, true, 'self-review + one independent round is clean')
+})
+
+test('checkPhaseConsistency — the no-self-judge rule is lane-scoped and waived when review scope is none', () => {
+  // An inline session reviewing its own work is the pre-existing, documented boundary: the rule
+  // keys on the DELEGATED lane.
+  const session = laneCase('session', [{ agent: 'self-review' }])
+  assert.equal(checkPhaseConsistency(session.phase, session.report).ok, true, 'session lane, self-review only, is clean')
+
+  // Declared reviewScope none: the phase was ratified pre-queue as owing no review, so demanding
+  // an independent reviewer would refuse a completion for lacking a round nobody ever planned.
+  const declaredNone = laneCase('codex', [], {
+    phase: { reviewScope: 'none' },
+    report: { reviewScope: { derived: 'none', declared: 'none', effective: 'none' } },
+  })
+  assert.deepEqual(
+    checkPhaseConsistency(declaredNone.phase, declaredNone.report).problems,
+    [],
+    'codex + DECLARED reviewScope none is clean',
+  )
+
+  // Undeclared, but the ladder DERIVED none (a docs-only diff): the report is already in hand at
+  // this seam, so keying on the declared field alone would refuse a phase the ladder itself waived.
+  const derivedNone = laneCase('codex', [], {
+    phase: { reviewScope: undefined },
+    report: { reviewScope: { derived: 'none', declared: null, effective: 'none' } },
+  })
+  assert.deepEqual(
+    checkPhaseConsistency(derivedNone.phase, derivedNone.report).problems,
+    [],
+    'codex + undeclared scope whose report effective is none is clean',
+  )
+
+  // The positive controls, LAST so every clean direction above is actually asserted: the same
+  // records with the exemption removed are refused. Without them, "clean" three times over could
+  // simply mean the rule never fires at all.
+  const sameUnderCodex = laneCase('codex', [{ agent: 'self-review' }])
+  assert.equal(
+    checkPhaseConsistency(sameUnderCodex.phase, sameUnderCodex.report).ok,
+    false,
+    'control: the session record under lane codex IS refused (the clean above is the lane key, not a dead rule)',
+  )
+  const scopeFull = laneCase('codex', [])
+  assert.equal(
+    checkPhaseConsistency(scopeFull.phase, scopeFull.report).ok,
+    false,
+    'control: zero rounds under reviewScope full IS refused (the waivers are the scope value, not the empty agents[])',
+  )
 })

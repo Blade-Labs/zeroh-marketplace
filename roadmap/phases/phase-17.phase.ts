@@ -136,7 +136,18 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['17.1'],
       interfaces: { consumes: ["'self-review' enum member from 17.1"], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added the delegated no-self-judge rule to checkPhaseConsistency: a codex-lane completion with review required now needs at least one round>=1 whose report-side agent identity is not an exact or legacy free-string self-review label. The refusal names both the independence requirement and the record-round command that remedies it.',
+        how:
+          'TDD: the test-engineer added six required directions plus legacy self-review spellings at the pure consistency seam. RED executed 27 tests with 25 passing and the two refusal/control cases failing; GREEN executed all 27 tests successfully. The capped types slot passed as declared-none, and a direct diff assertion confirmed gate.mjs received no caller-side lane logic.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '17.3',
