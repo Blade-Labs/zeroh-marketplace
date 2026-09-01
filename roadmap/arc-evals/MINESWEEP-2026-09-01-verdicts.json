@@ -1,0 +1,50 @@
+{
+  "arcId": "MINESWEEP",
+  "date": "2026-09-01",
+  "judgeModel": "claude-fable-5",
+  "verdicts": [
+    {
+      "criterionId": "stray-lane-visibility",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "Fixture consumer with four sibling `git worktree add` lanes: a dead MERGED run lane (codex/7), a dead unharvested plan lane (codex/plan-8), a journal-less legacy dir, and a LIVE lane whose journal pgid was a genuinely sleeping child (verified alive before AND after). `roadmap audit` printed one Check-15 finding per stray with class + runnable remedy (the run lane's remedy is its landing verb; the plan lane's is its status/close read with inspect-before-remove; the legacy lane's is a two-step inspect-then-remove); --json carried exactly 3 findings and NEVER the live lane — and in a dead-pgid control run the same lane honestly appeared as a 4th stray. `roadmap status` printed 'strays: 3 lane worktree(s) past their done-moment — run `roadmap audit` for each remedy' (4 in the control). Second runs over the unchanged tree: findings JSON byte-identical, status line identical — no flapping. No finding names the live lane or hands a bare removal for undisposed work.",
+      "confidence": "high"
+    },
+    {
+      "criterionId": "plan-lane-close",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "Real fixture worktree pair driven via `codex status 9001 --plan` (dead-pgid journal, CODEX-PLAN.md ending CODEX-RUN-COMPLETE). (a) BEFORE harvest two reads both refused and disposed nothing, the refusal naming the exact cherry-pick — which was then run VERBATIM and worked. (b) After harvest the file was AMENDED on the integration ref (tip blob != lane blob, the A2 harvest-then-amend arm) and the next read closed the lane: plan archived at .building/codex-plan-9001-REPORT.md byte-identical to the lane's CODEX-PLAN.md, worktree GONE, branch GONE, journal stamped archivedAt under its live name. (c) Two post-disposal reads both exit 0, resolve the same journal, serve the archived report — never a missing-journal miss. (d) A HARVESTED lane with a LIVE pgid was read twice and KEPT both times ('in-flight work is never disposed'). All refusals stderr prose with runnable remedies; stdout stays parseable JSON.",
+      "confidence": "high"
+    },
+    {
+      "criterionId": "grammar-tolerant-attribution",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "Fixture history for phase 9021 interleaving all four deviant classes with a prefix-sibling (90211) and a prose mention. `phase curate 9021` on a deviant-only history exits 0 classifying every deviant own (task/task/task/state); on the interleaved history the refusal names ONLY the 3 truly-foreign commits, no deviant listed; second derivation byte-identical both scenarios. Boundary both directions: 9021 never matches 90211, and curate 90211 classifies all phase-9021 deviants + prose as foreign. `gate plan 9021 --json` attributes the deviant commits' files with the 3 foreign files excluded and the note naming the exclusion. Gate-run report notes WARN per tolerated class naming the canonical form (D1/D2/D4); D3 (mark phase N complete) is attributed but deliberately un-WARNED per the recorded arc-level carve-out.",
+      "confidence": "high"
+    },
+    {
+      "criterionId": "pnpm-bootstrap",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "Drove real `roadmap codex run` in four tmp fixture consumers with argv-recording PATH shims (no network). pnpm-lock.yaml -> pnpm install --frozen-lockfile (capbuild-wrapped when capbuild on PATH); package-lock.json -> capbuild npm ci --no-audit --no-fund; neither lockfile -> exit 1 refusal naming BOTH lockfiles with zero installs attempted, and afterwards exactly one worktree-list entry, no codex/ branch, no .building journal; nested web/package-lock.json under a pnpm root -> root pnpm frozen install PLUS its own npm ci with cwd <worktree>/web. No cross-manager fallback in any shim log.",
+      "confidence": "high"
+    },
+    {
+      "criterionId": "delegated-independent-review",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "Three directions through the real CLI on a fresh fixture: codex-lane phase with a green gate report and only a self-review round -> `gate run --verify-complete` exit 2, stderr naming the no-self-judge rule AND the record-round remedy verbatim; one added code-reviewer round (gateRounds count trued) -> exit 0 consistent; identical session-lane phase with only self-review -> exit 0, untouched by the rule. Enum half probed both ways through the installed consumer schema: agent 'self-review' parses, a made-up label refuses. The shipped suites cover both directions plus lane-scoping (gate-report.test.mjs no-self-judge block; gate.test.mjs:719).",
+      "confidence": "high"
+    },
+    {
+      "criterionId": "vacuity-flagged",
+      "status": "met",
+      "tierUsed": "wired",
+      "evidence": "PROBE: gate plan with scoped slots bound to an exit-0-always stub -> exit 0 with 'scoped runner cannot fail on a missing target — a green scoped slot proves nothing (vacuous-green class)' WARNs naming both scoped slots; the honest twin stub (fails on a missing file) -> no WARN, identical exit. LINT: phase validate on a NEW-to-git phase whose verify is `node x.mjs | tail -1` -> WARN citing the azure-2421 incident class with the redirect-and-read-$? remedy, exit 0 unchanged; the $?-judged clean twin -> silent, exit 0. Both checks WARN-only on stderr; every finding cites its incident class and teaches a remedy.",
+      "confidence": "high"
+    }
+  ],
+  "ratifiedDescopes": []
+}
