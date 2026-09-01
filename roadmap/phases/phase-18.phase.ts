@@ -95,7 +95,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/audit.test.mjs',
           description:
-            'Fixture pair: a consumer schema stripped of PhaseEvalRecordShape (the atlas shape, verbatim) fires check 16 HIGH naming that export; the in-sync twin fires nothing; config check mirrors both (its own test in config.test.mjs) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'check 16\' cli/commands/audit.test.mjs && capbuild node --test cli/commands/audit.test.mjs cli/commands/config.test.mjs >/dev/null 2>&1"',
+            'Fixture pair: a consumer schema stripped of PhaseEvalRecordShape (the atlas shape, verbatim) fires check 16 HIGH naming that export; the in-sync twin fires nothing; config check mirrors both (its own test in config.test.mjs) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'schema drift\' cli/commands/audit.test.mjs && capbuild node --test cli/commands/audit.test.mjs cli/commands/config.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -137,7 +137,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/phase.mjs',
           description:
-            'Call it in runLand for the codex-lane path BEFORE disposeSource (order is the safety: copy out first, then dispose — the archiveReviewLane rule), stderr-reporting a non-zero merge count; slot-lane lands share the primary file already (worktree lessons ARE the lane\'s own) — call only when cwd is a journal-confirmed lane; covered in phase.test.mjs (a lane fixture\'s novel lesson line reaches the primary before dispose) → verify: bash -c "grep -qF \'mergeLaneLessons\' plugins/zeroh-roadmap/cli/commands/phase.mjs && grep -qF \'mergeLaneLessons\' plugins/zeroh-roadmap/cli/commands/phase.test.mjs"',
+            'Call it in runLand for the codex-lane path BEFORE disposeSource (order is the safety: copy out first, then dispose — the archiveReviewLane rule), stderr-reporting a non-zero merge count; slot-lane lands share the primary file already (worktree lessons ARE the lane\'s own) — call only when cwd is a journal-confirmed lane; covered in phase.test.mjs (a lane fixture\'s novel lesson line reaches the primary before dispose) → verify: bash -c "grep -qF \'mergeLaneLessons\' plugins/zeroh-roadmap/cli/commands/phase.mjs && grep -qF \'lessons come home\' plugins/zeroh-roadmap/cli/commands/phase.test.mjs"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/landing.mjs',
@@ -194,7 +194,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/status.test.mjs',
           description:
-            'Fixtures: all-done arc without a report shows the marker; the same arc with a dated report does not; an in-progress arc does not; an all-done arc with ONLY a -verdicts.json still shows it (four directions, A6) — eval.mjs summary line covered in eval.test.mjs with a pending-judge fixture report → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'eval: none\' cli/commands/status.test.mjs && grep -qF \'pending-judge —\' cli/commands/eval.test.mjs && capbuild node --test cli/commands/status.test.mjs cli/commands/eval.test.mjs >/dev/null 2>&1"',
+            'Fixtures: all-done arc without a report shows the marker; the same arc with a dated report does not; an in-progress arc does not; an all-done arc with ONLY a -verdicts.json still shows it (four directions, A6) — eval.mjs summary line covered in eval.test.mjs with a pending-judge fixture report → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'eval: none\' cli/commands/status.test.mjs && grep -qF \'the judge pass is outstanding\' cli/commands/eval.test.mjs && capbuild node --test cli/commands/status.test.mjs cli/commands/eval.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
