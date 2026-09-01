@@ -42,6 +42,11 @@
  * what gitToplevel returns inside a linked worktree, and the worktree carries the whole roadmap
  * tree). Push is out of scope for the fixtures: they have no origin remote, so a land that
  * completes locally is a pass.
+ *
+ * TEST-FIRST for `roadmap phase validate <N> --assumptions` (phase 20.4; the flag does not exist
+ * yet → RED until it lands) at the bottom — the door that EXECUTES a plan's attested
+ * `assumptions[].verify` claims instead of trusting them. Its own section header carries the
+ * properties and the pinned seam.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -1600,4 +1605,283 @@ test('phase land — a lesson merge failure keeps the only corpus copy and repor
   assert.ok(existsSync(f.wt), 'the lane holding the unmerged corpus is kept')
   assert.match(err.text, /ENOSPC writing lessons/)
   assert.match(err.text, /recover.*lessons\.jsonl before disposal/i)
+})
+
+// ── roadmap phase validate <N> --assumptions (20.4) ─────────────────────────────────────────
+//
+// TEST-FIRST: `--assumptions` does not exist yet (parseArgs drops the unknown flag, so today the
+// command validates and says nothing) → RED until it lands.
+//
+// A plan's `assumptions[].verify` claims are attested by their AUTHOR and re-run by NOBODY: the
+// tripwire that was meant to fire in the phase's first minute instead fires when execution walks
+// into the stale claim hours later. This flag is the mechanical door — validate EXECUTES them.
+// The properties are the ones an executing door owes:
+//   · it runs from the REPOSITORY TOPLEVEL, not from wherever the operator stood (a verify is
+//     written against repo-relative paths, so cwd is part of the contract, not an accident);
+//   · a failing verify reports the REAL exit code (`STALE (exit 3)`, never a collapsed 1) and the
+//     claim VERBATIM — validate.mjs's own warn lane truncates claims to 40 chars, and a stale
+//     report that copied that would hide which claim died;
+//   · one stale claim never stops the run — every tripwire is executed and reported, so the
+//     operator learns all of them at once instead of one per re-run;
+//   · a verify that outruns the budget is TIMEOUT, never a STALE exit code: a killed child
+//     rendered no verdict at all (the probeScopedSlot rule in cli/lib/slots.mjs);
+//   · and the FLAGLESS face is untouched — same bytes, same exit, and not one verify executed.
+//
+// PINNED SEAM for the implementer: the timeout branch is exercised through an exported
+// `runAssumptions({ cwd, toplevel, phaseNum, loadPhase, timeoutMs, out, err })` — the runCurate /
+// runLand house shape, with the injectable budget probeScopedSlot already uses — because the only
+// other way to cover it is a test that sleeps 120 seconds. The CLI path is a thin wrapper over it,
+// and every OTHER case here drives the REAL bin over a fixture repo.
+//
+// Conventions: no `testConventions` key in this repo — inferred from cli/lib/validate.test.mjs
+// (the real bin driven over a tmp git repo whose phase file is a plain object literal, exit code +
+// stderr asserted), cli/commands/phase.test.mjs above (makeRepo/seedPhase fixtures, spawnSync
+// through BIN, lazily-resolved exports so a missing one is a per-test RED naming the contract) and
+// cli/lib/slots.test.mjs (a hanging command probed under an INJECTED short budget, with elapsed
+// asserted well under the hang).
+
+/** An assumptions entry in the documented shape (claim ≥10 chars, one runnable verify, ESCALATE). */
+const claimOf = (claim, verify) => ({ claim, verify, onFalse: 'ESCALATE' })
+
+/**
+ * A phase fixture at roadmap/phases/phase-<n>.phase.ts. `assumptions === null` omits the key
+ * entirely; `[]` writes it empty. plannedBy is present so the attribution WARN lane stays quiet
+ * and stderr belongs to this feature alone.
+ */
+function writeAssumptionsPhase(root, n, assumptions) {
+  const record = {
+    phase: n,
+    status: 'backlog',
+    plannedBy: { model: 'test-model' },
+    tasks: [],
+    ...(assumptions === null ? {} : { assumptions }),
+  }
+  writeFileSync(phaseFile(root, n), `export default ${JSON.stringify(record, null, 2)}\n`)
+  return phaseFile(root, n)
+}
+
+const phaseValidate = (root, args, cwd = root) =>
+  spawnSync('node', [BIN, 'phase', 'validate', ...args], { cwd, encoding: 'utf8' })
+
+/** The contract fixes the TOKENS and the exit code, not which stream carries them. */
+const both = (res) => `${res.stdout}${res.stderr}`
+
+/** The line a claim was reported on, or null if it was never reported at all. */
+const lineFor = (res, claim) =>
+  both(res)
+    .split('\n')
+    .find((l) => l.includes(claim)) ?? null
+
+test('phase validate --assumptions — every verify that exits 0 reports ok, the run exits 0, and validation still runs', () => {
+  const { root } = makeRepo()
+  const first = 'the validate engine still exports its strict option'
+  const second = 'a second tripwire is executed too, never just the first'
+  writeAssumptionsPhase(root, 9101, [claimOf(first, 'exit 0'), claimOf(second, 'exit 0')])
+
+  const res = phaseValidate(root, ['9101', '--assumptions'])
+
+  assert.equal(res.status, 0, `every green assumption ⇒ exit 0; got ${res.status}:\n${both(res)}`)
+  for (const claim of [first, second]) {
+    const line = lineFor(res, claim)
+    assert.ok(line, `every claim must be REPORTED verbatim — silence is what the flag exists to end; got:\n${both(res)}`)
+    assert.match(line, /\bok\b/, `a verify that exited 0 reports ok; got: ${line}`)
+    assert.doesNotMatch(line, /STALE|TIMEOUT/, `a green claim is never stale or timed out; got: ${line}`)
+  }
+  // The flag adds a door onto validate; it does not replace it. A --assumptions run that skipped
+  // validation would let a structurally broken phase pass on the strength of its tripwires.
+  assert.match(both(res), /— OK/, `validation itself still runs under the flag; got:\n${both(res)}`)
+})
+
+test('phase validate --assumptions — a failing verify is STALE with the REAL exit code, and the run exits 2', () => {
+  const { root } = makeRepo()
+  const three = 'the loader still resolves the phase record through tsx'
+  const seven = 'the gate report directory is still named .gate'
+  writeAssumptionsPhase(root, 9102, [claimOf(three, 'exit 3'), claimOf(seven, 'exit 7')])
+
+  const res = phaseValidate(root, ['9102', '--assumptions'])
+  const out = both(res)
+
+  assert.equal(res.status, 2, `a stale claim exits 2 (a validation-failed verdict), not 0 and not 1; got ${res.status}:\n${out}`)
+  assert.ok(out.includes('STALE (exit 3)'), `the claim's own exit code is the evidence — 3 must survive verbatim; got:\n${out}`)
+  assert.ok(out.includes('STALE (exit 7)'), `and so must 7 — every stale claim is reported, not just the first; got:\n${out}`)
+  // Exit codes never lie: collapsing 3 and 7 into a generic 1 throws away the one signal that
+  // tells "the file moved" apart from "the command is not installed".
+  assert.equal(/STALE \(exit 1\)/.test(out), false, `no stale verdict may be collapsed to a generic exit 1; got:\n${out}`)
+  for (const claim of [three, seven]) {
+    assert.ok(lineFor(res, claim), `the stale claim is listed VERBATIM so the operator knows which one died; got:\n${out}`)
+  }
+})
+
+test('phase validate --assumptions — a stale claim never stops the run: the claims after it are still executed and reported', () => {
+  const { root } = makeRepo()
+  const green = 'the first tripwire holds and stays reported'
+  const stale = 'the second tripwire is the one that went stale'
+  const after = 'the third tripwire runs even though the second failed'
+  writeAssumptionsPhase(root, 9103, [
+    claimOf(green, 'exit 0'),
+    claimOf(stale, 'exit 4'),
+    claimOf(after, 'touch third-ran.marker'),
+  ])
+
+  const res = phaseValidate(root, ['9103', '--assumptions'])
+  const out = both(res)
+
+  assert.equal(res.status, 2, `one stale claim reds the run; got ${res.status}:\n${out}`)
+  // The marker is the proof the third verify really EXECUTED — reporting it without running it
+  // would be the same attestation-without-execution this flag exists to end.
+  assert.equal(
+    existsSync(join(root, 'third-ran.marker')),
+    true,
+    `a stale claim must not short-circuit the ones after it — the operator learns all of them in ONE run; got:\n${out}`,
+  )
+  assert.match(lineFor(res, green) ?? '', /\bok\b/, `the green claim keeps its own verdict; got:\n${out}`)
+  assert.ok(out.includes('STALE (exit 4)'), `the stale claim reports its exit code; got:\n${out}`)
+  assert.match(lineFor(res, after) ?? '', /\bok\b/, `the claim after the stale one reports ok; got:\n${out}`)
+})
+
+test('phase validate --assumptions — a long claim is reported VERBATIM, never truncated to the warn lane’s 40 chars', () => {
+  const { root } = makeRepo()
+  // cli/lib/validate.mjs's verifyPolarityWarnings slices claims to 40 chars for its WARN text; a
+  // stale report that copied that would print two claims identically whenever they share a prefix.
+  const long = 'cli/lib/validate.mjs still exports validateRoadmapFile with the strict option intact'
+  assert.ok(long.length > 40, 'fixture bug: the claim must be longer than the 40-char warn slice')
+  writeAssumptionsPhase(root, 9104, [claimOf(long, 'exit 9')])
+
+  const res = phaseValidate(root, ['9104', '--assumptions'])
+  const out = both(res)
+
+  assert.equal(res.status, 2, `the stale claim reds the run; got ${res.status}:\n${out}`)
+  assert.ok(out.includes(long), `the WHOLE claim must appear — a 40-char slice hides which claim died; got:\n${out}`)
+  assert.ok(out.includes('STALE (exit 9)'), `and it carries its real exit code; got:\n${out}`)
+})
+
+test('phase validate --assumptions — verifies run from the REPOSITORY TOPLEVEL, whatever directory the operator stood in', () => {
+  const { root } = makeRepo()
+  writeFileSync(join(root, 'toplevel-marker.txt'), 'only reachable from the toplevel\n')
+  const atTop = 'the marker file sits at the repository toplevel'
+  const atSubdir = 'the phase file is reachable without its roadmap/phases prefix'
+  writeAssumptionsPhase(root, 9105, [
+    claimOf(atTop, 'test -f toplevel-marker.txt'),
+    claimOf(atSubdir, 'test -f phase-9105.phase.ts'),
+  ])
+
+  // Run from the phases directory: under a cwd-inheriting implementation the two verdicts swap.
+  const res = phaseValidate(root, ['9105', '--assumptions'], join(root, 'roadmap', 'phases'))
+  const out = both(res)
+
+  assert.match(
+    lineFor(res, atTop) ?? '',
+    /\bok\b/,
+    `a toplevel-relative verify must pass when the operator stood in roadmap/phases; got:\n${out}`,
+  )
+  assert.ok(
+    (lineFor(res, atSubdir) ?? '').includes('STALE'),
+    `and a verify that would only pass from the operator's own cwd must go STALE — that is the whole cwd contract; got:\n${out}`,
+  )
+  assert.equal(res.status, 2, `the stale claim still reds the run; got ${res.status}:\n${out}`)
+})
+
+test('phase validate --assumptions — a phase with NO assumptions prints a note and exits 0 (absent key and empty array alike)', () => {
+  for (const [label, assumptions] of [['absent key', null], ['empty array', []]]) {
+    const { root } = makeRepo()
+    writeAssumptionsPhase(root, 9106, assumptions)
+
+    const res = phaseValidate(root, ['9106', '--assumptions'])
+    const out = both(res)
+
+    assert.equal(res.status, 0, `nothing to check is not a failure (${label}); got ${res.status}:\n${out}`)
+    // Silence here reads exactly like "all tripwires held", which is the vacuous-green class: the
+    // operator must hear that this phase attested nothing.
+    assert.match(out, /no assumptions/i, `the ${label} case must SAY there was nothing to run; got:\n${out}`)
+    assert.doesNotMatch(out, /\bSTALE\b|\bTIMEOUT\b/, `and it invents no verdicts (${label}); got:\n${out}`)
+  }
+})
+
+test('phase validate --assumptions — the shipped CLI runs each verify under a real budget: a whole second is not a timeout', () => {
+  const { root } = makeRepo()
+  const slow = 'a real verify may take a moment and still be true'
+  writeAssumptionsPhase(root, 9107, [claimOf(slow, 'sleep 1')])
+
+  const started = Date.now()
+  const res = phaseValidate(root, ['9107', '--assumptions'])
+  const elapsed = Date.now() - started
+  const out = both(res)
+
+  assert.equal(res.status, 0, `a verify that exits 0 after a second is ok; got ${res.status}:\n${out}`)
+  assert.match(lineFor(res, slow) ?? '', /\bok\b/, `the slow-but-true claim reports ok; got:\n${out}`)
+  assert.doesNotMatch(out, /TIMEOUT/, `the per-command budget is 120s, so one second must not trip it; got:\n${out}`)
+  // The wait really happened: without this a default budget of 0 that reported ok would pass.
+  assert.ok(elapsed >= 1000, `the verify was really executed and waited on, took ${elapsed}ms`)
+})
+
+// runAssumptions lands with 20.4. Same lazy resolution as runCurate/runLand above: a missing
+// export must be a per-test RED naming the contract, never a link-time SyntaxError.
+const runAssumptions = (opts) => {
+  assert.equal(
+    typeof phaseCmd.runAssumptions,
+    'function',
+    'cli/commands/phase.mjs must export runAssumptions({ cwd, toplevel, phaseNum, loadPhase, timeoutMs, out, err })',
+  )
+  return phaseCmd.runAssumptions(opts)
+}
+
+test('phase validate --assumptions — a verify that outruns its budget is TIMEOUT, never a STALE exit code, and the run exits 2', async () => {
+  const { root } = makeRepo()
+  const hangs = 'a verify that hangs answers nothing at all'
+  const out = sink()
+  const err = sink()
+
+  const started = Date.now()
+  // The budget is INJECTED (probeScopedSlot's seam): the shipped default is 120s, and a suite that
+  // waited it out would cost two minutes per red.
+  const code = await runAssumptions({
+    cwd: root,
+    toplevel: root,
+    phaseNum: 9108,
+    timeoutMs: 250,
+    loadPhase: () => ({ phase: 9108, assumptions: [claimOf(hangs, 'sleep 30')] }),
+    out,
+    err,
+  })
+  const elapsed = Date.now() - started
+  const text = out.text + err.text
+
+  assert.equal(code, 2, `a timed-out verify is non-ok, so the run exits 2; got ${code}:\n${text}`)
+  assert.ok(text.includes('TIMEOUT'), `the verdict must NAME the timeout; got:\n${text}`)
+  // A killed child's exit (a signal, 124, 143) is not the verify discriminating anything. Reporting
+  // it as STALE (exit k) would hand the operator a code the command never chose.
+  assert.doesNotMatch(text, /STALE/, `a killed verify rendered no exit verdict, so it is never STALE; got:\n${text}`)
+  assert.ok(text.includes(hangs), `and the claim that hung is named; got:\n${text}`)
+  // Bounded well under the stub's 30s sleep: proves the budget was ENFORCED, not waited out.
+  assert.ok(elapsed < 5000, `the budget must be enforced — the run took ${elapsed}ms`)
+})
+
+test('phase validate (FLAGLESS) — byte-identical whether the phase carries assumptions or not, and not one verify is executed', () => {
+  const { root, git } = makeRepo()
+  const never = 'the flagless face must never execute this verify'
+  writeAssumptionsPhase(root, 9109, [claimOf(never, 'touch flagless-ran.marker')])
+
+  const res = phaseValidate(root, ['9109'])
+  const top = git('rev-parse', '--show-toplevel').trim()
+
+  assert.equal(res.status, 0, `the flagless verdict is unchanged; got ${res.status}:\n${both(res)}`)
+  assert.equal(
+    res.stdout,
+    `phase validate: ${join(top, 'roadmap', 'phases', 'phase-9109.phase.ts')} — OK\n`,
+    'the flagless stdout is byte-for-byte the OK line it has always been',
+  )
+  assert.equal(res.stderr, '', `the flagless stderr stays empty; got:\n${res.stderr}`)
+  assert.equal(
+    existsSync(join(root, 'flagless-ran.marker')),
+    false,
+    'the flagless face executed a verify — running commands nobody asked for is a new side effect on the default path',
+  )
+
+  // The twin: the SAME path, the SAME phase number, assumptions removed. Every byte on both
+  // streams and the exit code must match — carrying assumptions changes nothing without the flag.
+  writeAssumptionsPhase(root, 9109, null)
+  const twin = phaseValidate(root, ['9109'])
+  assert.equal(twin.status, res.status, 'the exit code is identical with and without assumptions')
+  assert.equal(twin.stdout, res.stdout, 'stdout is byte-identical with and without assumptions')
+  assert.equal(twin.stderr, res.stderr, 'stderr is byte-identical with and without assumptions')
 })

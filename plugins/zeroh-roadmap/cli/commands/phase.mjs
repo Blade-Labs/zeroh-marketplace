@@ -22,7 +22,7 @@
  * Exit: 0 clean · 1 usage/config/toolchain · 2 validation failed / refused.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { join, relative } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { validateRoadmapFile, renderZodIssues } from '../lib/validate.mjs'
@@ -99,9 +99,91 @@ function parseArgs(argv) {
   const positional = []
   for (const a of argv) {
     if (a === '--json') opts.json = true
+    else if (a === '--assumptions') opts.assumptions = true
     else if (!a.startsWith('--')) positional.push(a)
   }
   return { opts, positional }
+}
+
+const ASSUMPTION_TIMEOUT_MS = 120_000
+
+function executeAssumption(command, { cwd, timeoutMs }) {
+  return new Promise((resolvePromise) => {
+    let timedOut = false
+    let settled = false
+    const child = spawn('bash', ['-c', command], {
+      cwd,
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolvePromise({ ...result, stdout, stderr })
+    }
+    const timer = setTimeout(() => {
+      timedOut = true
+      if (process.platform === 'win32') child.kill('SIGKILL')
+      else {
+        try { process.kill(-child.pid, 'SIGKILL') } catch { child.kill('SIGKILL') }
+      }
+    }, timeoutMs)
+    child.on('error', (error) => finish({ spawnError: error.message }))
+    child.on('close', (code) => {
+      if (timedOut) finish({ timedOut: true })
+      else finish({ exitCode: code ?? 128 })
+    })
+  })
+}
+
+/** Execute every declared assumption tripwire from the repository toplevel. */
+export async function runAssumptions({
+  cwd,
+  toplevel,
+  phaseNum,
+  loadPhase = (phaseFile) => bridgeLoadPhase(phaseFile, toplevel),
+  timeoutMs = ASSUMPTION_TIMEOUT_MS,
+  out = process.stdout,
+  err = process.stderr,
+}) {
+  const phaseFile = join(toplevel, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
+  let phase
+  try {
+    phase = loadPhase(phaseFile)
+  } catch (error) {
+    err.write(`phase validate --assumptions: failed to load phase ${phaseNum}: ${error.message}\n`)
+    return 1
+  }
+  const assumptions = Array.isArray(phase?.assumptions) ? phase.assumptions : []
+  if (assumptions.length === 0) {
+    out.write(`phase validate --assumptions: phase ${phaseNum} has no assumptions to execute\n`)
+    return 0
+  }
+
+  let green = true
+  for (const assumption of assumptions) {
+    const claim = String(assumption?.claim ?? '')
+    const command = String(assumption?.verify ?? '')
+    const result = await executeAssumption(command, { cwd: toplevel, timeoutMs })
+    if (result.timedOut) {
+      green = false
+      out.write(`${claim} — TIMEOUT\n`)
+    } else if (result.spawnError) {
+      green = false
+      out.write(`${claim} — STALE (spawn error: ${result.spawnError})\n`)
+    } else if (result.exitCode !== 0) {
+      green = false
+      out.write(`${claim} — STALE (exit ${result.exitCode})\n`)
+    } else {
+      out.write(`${claim} — ok\n`)
+    }
+  }
+  return green ? 0 : 2
 }
 
 function resolveTarget(arg) {
@@ -533,7 +615,17 @@ export default async function run(argv) {
     }
   }
 
-  if (result.kind === 'ok' || result.kind === 'skip') return 0
+  if (result.kind === 'ok' || result.kind === 'skip') {
+    if (!opts.assumptions) return 0
+    const toplevel = gitToplevel(process.cwd())
+    const phaseNum = /^\d+$/.test(arg) ? Number(arg) : Number(/phase-(\d+)\.phase\.ts$/.exec(target)?.[1])
+    return await runAssumptions({
+      cwd: process.cwd(),
+      toplevel,
+      phaseNum,
+      loadPhase: () => bridgeLoadPhase(target, toplevel),
+    })
+  }
   if (result.kind === 'toolchain-missing') return 1
   return 2 // zod / load-error / errors
 }

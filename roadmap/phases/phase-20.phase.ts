@@ -203,7 +203,18 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/phase.mjs', 'plugins/zeroh-roadmap/cli/commands/phase.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added `phase validate --assumptions` and exported runAssumptions for an injectable timeout seam. After ordinary validation succeeds, every declared verify runs from the repository toplevel under an independent 120-second budget and reports its full claim as ok, STALE with the real exit code, or TIMEOUT; all claims run even after a stale result and any non-ok result exits 2.',
+        how:
+          'The claude-opus-5 test-engineer added nine real-CLI and injected-timeout cases, establishing 38 passing / 8 failing with the flagless regression case already green. The implementation uses captured bash child processes in process groups so timeout cleanup kills descendants, preserves completed exit codes, and leaves the no-flag path byte-identical. The final phase command suite passed 46/46; the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
   ],
   notes:
