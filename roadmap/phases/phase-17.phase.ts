@@ -27,7 +27,106 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 17,
   name: 'Delegated-lane gate integrity: widened round identities, no-self-judge refusal at verify-complete',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-09-01',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1485,
+      total: 1485,
+      notes:
+        'Authoritative final gate: roadmap/.gate/17/run-000008-2026-09-01T10-36-02-748Z.json — GREEN on f430e5d, 1,485/1,485 tests plus schema checks. The later c85d02d changes only transparency placement and a test docblock pointer; its focused roles suite passed 42/42 and phase validation passed.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands; subprocess integration coverage is included in the unit slot.',
+    },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none in gateCommands — no rendered surface.' },
+    build: 'clean',
+    preReview: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Quality pass surfaced prompt fidelity, schema migration, and historical-report compatibility concerns; all were resolved and gated.',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Found the old-report waiver, weakened prompt clauses, fixture capacity bypass, wording, and caller coverage issues; fixed in e2bd12d.',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Found the loosened envelope ratchet, identity-label residual, and legacy self-review variants; fixed or disclosed in f430e5d.',
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Found only misplaced limitations and a misleading ratchet doc pointer; corrected in c85d02d.',
+    },
+    {
+      round: 4,
+      agent: 'code-reviewer',
+      verdict: 'clean',
+      summary: 'Final independent review verified all round-3 corrections and returned no findings.',
+    },
+  ],
+  metrics: {
+    commits: 12,
+    linesAdded: 631,
+    linesRemoved: 29,
+    filesChanged: 12,
+    testsAtStart: 1482,
+    testsAtEnd: 1485,
+    testsAdded: 3,
+    startedAt: '2026-09-01T07:14:45Z',
+    completedAt: '2026-09-01T10:51:57Z',
+    haltCount: 0,
+  },
+  compromises:
+    'None. The free-text reviewer identity residual is an explicit limitation of the ratified design, and curation was deliberately left untouched after its foreign-commit refusal rather than forcing a history rewrite.',
+  executionResult: {
+    phase: 17,
+    status: 'done',
+    driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'software-architect', model: 'gpt-5.6-sol', via: 'native', substituted: { from: 'claude-fable-5', to: 'gpt-5.6-sol', reason: 'unavailable: claude-fable-5 reached its usage limit — re-run at UNREDUCED rigor on gpt-5.6-sol' } },
+      { role: 'software-architect', model: 'gpt-5.6-sol', via: 'native', substituted: { from: 'claude-fable-5', to: 'gpt-5.6-sol', reason: 'unavailable: claude-fable-5 reached its usage limit — re-run at UNREDUCED rigor on gpt-5.6-sol' } },
+      { role: 'software-architect', model: 'gpt-5.6-sol', via: 'native', substituted: { from: 'claude-fable-5', to: 'gpt-5.6-sol', reason: 'unavailable: claude-fable-5 reached its usage limit — re-run at UNREDUCED rigor on gpt-5.6-sol' } },
+      { role: 'software-architect', model: 'gpt-5.6-sol', via: 'native', substituted: { from: 'claude-fable-5', to: 'gpt-5.6-sol', reason: 'unavailable: claude-fable-5 reached its usage limit — re-run at UNREDUCED rigor on gpt-5.6-sol' } },
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'child-cli', substituted: { from: 'claude-fable-5', to: 'claude-opus-5', reason: 'unavailable: claude-fable-5 reached its usage limit — re-run at UNREDUCED rigor on claude-opus-5' } },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'child-cli', substituted: { from: 'claude-fable-5', to: 'claude-opus-5', reason: 'first child remained network-idle without a verdict and was retried at identical rigor' } },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'child-cli', substituted: { from: 'claude-fable-5', to: 'claude-opus-5', reason: 'unavailable: claude-fable-5 reached its usage limit — re-run at UNREDUCED rigor on claude-opus-5' } },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'child-cli', substituted: { from: 'claude-fable-5', to: 'claude-opus-5', reason: 'unavailable: claude-fable-5 reached its usage limit — re-run at UNREDUCED rigor on claude-opus-5' } },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'child-cli', substituted: { from: 'claude-fable-5', to: 'claude-opus-5', reason: 'unavailable: claude-fable-5 reached its usage limit — re-run at UNREDUCED rigor on claude-opus-5' } },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: ['Independent-review enforcement is anchored at 2026-09-01T07:30:27.000Z, with exemptions limited to phases completed before 2026-09-01.'],
+    surfaced: [
+      'Curation dry-run refused because 44e475a uses a non-roadmap phase subject and is classified as foreign; protocol requires leaving the history untouched and recording the limitation.',
+      'Reviewer independence is inferred from a normalized free-text agent label; optional model data cannot prove identity for every historical round.',
+      'The first code-reviewer child stayed network-idle for thirty minutes and returned no verdict; the same role was retried at identical rigor with the explicit agent wrapper.',
+    ],
+    hardStops: [],
+    gateRounds: 5,
+  },
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
