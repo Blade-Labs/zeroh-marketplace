@@ -33,8 +33,9 @@ export class CurateError extends Error {
  *
  * Ownership comes from gitscan's phaseOwnPatterns (canonical + the tolerated legacy
  * classes); the checks here only pick the KIND. The boundary after the phase number is
- * load-bearing everywhere a bare number would collide: phase 21 never matches
- * `phase 214 — …`, and prose that merely mentions "phase 21" stays foreign. Gate fixes
+ * load-bearing everywhere a bare number would collide: a phase number never matches a
+ * LONGER one that starts with the same digits, and prose that merely mentions a phase
+ * number mid-sentence stays foreign. Gate fixes
  * use their own bounded form (`phase N gate R<d>`), the one place with no dash at all.
  */
 function classifySubject(subject, phaseNum) {
