@@ -150,7 +150,18 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['16.1'],
       interfaces: { consumes: ['phaseOwnPatterns(phaseNum) from 16.1'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'derivePhaseStartSha and gate phaseOwnFiles now prefilter with git log -E using phaseOwnPatterns().ere and re-confirm every returned subject with phaseOwnPatterns().test. Start-SHA selection therefore sees tolerated task subjects without accepting a foreign commit whose body merely quotes the grammar, and phase-own file collection associates files only with client-confirmed commit headers.',
+        how:
+          'TDD: the resolved claude-opus-5 test-engineer added canonical/deviant twin histories, bidirectional interleaved-phase fixtures, body-quote exclusions, and source guards. After replacing both fixed-string greps, gitscan passed 9/9 and gate passed 67/67. The first gate run exposed 11 existing environment failures because the plugin-local node_modules link was absent; restoring the worktree-local symlink to the already installed root dependencies made the unchanged cases and the three new cases all green. The types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '16.3',

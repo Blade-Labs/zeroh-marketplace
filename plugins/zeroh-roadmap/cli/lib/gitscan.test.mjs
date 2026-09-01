@@ -31,10 +31,33 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { phaseOwnPatterns } from './gitscan.mjs'
+import { phaseOwnPatterns, derivePhaseStartSha } from './gitscan.mjs'
+
+/**
+ * Source-scan helpers (task 16.2 acceptance 2). PROSE IS NOT CODE: every module here
+ * documents the em-dash rule in its header, so a raw text search would flag the comment
+ * that TEACHES the grammar. `codeOf` strips block + line comments so the scan reads only
+ * what executes; `grepSites` returns the neighbourhood of each `git --grep=` argument, so
+ * the assertion is about what is HANDED TO GIT, not about every string in the file.
+ */
+function codeOf(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .split('\n')
+    .map((l) => l.replace(/(^|[^:])\/\/.*$/, '$1'))
+    .join('\n')
+}
+
+function grepSites(code) {
+  const sites = []
+  const re = /--grep=/g
+  let m
+  while ((m = re.exec(code)) !== null) sites.push(code.slice(Math.max(0, m.index - 320), m.index + 140))
+  return sites
+}
 
 const EM = '—' // — the canonical boundary dash
 const EN = '–' // – D4 variant
@@ -251,4 +274,98 @@ test('6) the SAME ere is accepted by `git log -E --grep`, in ANY locale, and kee
     for (const s of own) assert.ok(matched.includes(s), `[${locale}] git -E must select phase 725's own commit: ${s}`)
     for (const s of foreign) assert.ok(!matched.includes(s), `[${locale}] git -E must not select a foreign commit: ${s}`)
   }
+})
+
+// ────────────────────────────────────────────────────────────────────────────────────────
+// phase 16 task 16.2 — START-SHA DERIVATION must read the SHARED grammar, not a fixed
+// `phase <N> —` string. Tests 7-9 are RED until derivePhaseStartSha binds on
+// phaseOwnPatterns. What a RED means: a deviant-grammar history (the recorded D1/D2/D4/D5
+// classes) derives a DIFFERENT base than its canonical twin, so gate scope and floors
+// under-derive on exactly the histories that already shipped.
+// ────────────────────────────────────────────────────────────────────────────────────────
+
+/** sha of the commit whose SUBJECT is exactly `subject` (fixture bookkeeping, not the SUT). */
+function shaOf(repo, subject) {
+  const rows = repo.git(['log', '--format=%H%x09%s']).trim().split('\n')
+  const row = rows.find((l) => l.slice(l.indexOf('\t') + 1) === subject)
+  assert.ok(row, `fixture is broken: no commit with subject ${JSON.stringify(subject)}`)
+  return row.slice(0, row.indexOf('\t'))
+}
+
+const PRE = 'chore(deps): unrelated pre-work'
+
+test('7) a deviant-grammar history derives the SAME start SHA as its canonical twin', () => {
+  // Two histories, same shape, same positions — one written in the taught canonical form,
+  // one in the recorded deviant forms (D2 scope-carried move commit, D1 + ASCII hyphen,
+  // D5 + en dash). Tier 1 (newest move-to-in-progress) must fire in BOTH, so both bases
+  // land on the pre-work commit. Today the deviant twin has no `phase 6100 —` match at
+  // all and derivePhaseStartSha throws GitScanError('no-match').
+  const canonical = makeRepo([
+    PRE,
+    `plan(roadmap): phase 6100 ${EM} move to in-progress`,
+    `feat(scope): phase 6100 ${EM} 6100.1 alpha`,
+    'feat(sib): sibling module work',
+    `docs(roadmap): phase 6100 ${EM} 6100.2 beta`,
+  ])
+  const deviant = makeRepo([
+    PRE,
+    'plan(phase-6100): move to in-progress', // D2 scope-carried, no dash after the number
+    `feat(scope): phase 6100 task 6100.1 ${HY} alpha`, // D1 + the atlas-30 ASCII hyphen
+    'feat(sib): sibling module work',
+    `docs(roadmap): phase 6100 6100.2 ${EN} beta`, // D5 + en dash
+  ])
+  // Anti-vacuity: pin the canonical answer to a real, independently-computed sha first.
+  assert.equal(
+    derivePhaseStartSha(canonical.root, 6100),
+    shaOf(canonical, PRE),
+    'canonical twin: base = parent of the move-to-in-progress commit',
+  )
+  assert.equal(
+    derivePhaseStartSha(deviant.root, 6100),
+    shaOf(deviant, PRE),
+    'deviant twin: the SAME base — the deviant grammar names the same move commit at the same position',
+  )
+})
+
+test('8) tier 2 — a sibling whose BODY quotes the grammar never becomes the phase’s oldest commit', () => {
+  // No move commit anywhere, so tier 2 (parent of the OLDEST own match) decides. The
+  // sibling sits BEFORE the phase's own work and only QUOTES the grammar in its body, so
+  // the correct base is the sibling commit itself (the parent of the phase's own oldest).
+  // `git log --grep` matches the whole message, so a body-reading matcher would instead
+  // pick the sibling as the oldest match and hand back the pre-work commit — a base one
+  // commit too early, silently widening the range by the sibling's whole diff.
+  const OWN_OLDEST = `feat(scope): phase 6300 task 6300.1 ${HY} the phase's own oldest commit`
+  const SIBLING = 'feat(sib): sibling module work'
+  const repo = makeRepo([
+    PRE,
+    `${SIBLING}\n\nRelated to phase 6300 ${EM} 6300.9 grammar, but not part of that phase.`,
+    OWN_OLDEST,
+    `docs(roadmap): phase 6300 6300.2 ${EN} more work`,
+  ])
+  const derived = derivePhaseStartSha(repo.root, 6300)
+  assert.equal(derived, shaOf(repo, SIBLING), `base = parent of ${JSON.stringify(OWN_OLDEST)}`)
+  assert.notEqual(
+    derived,
+    shaOf(repo, PRE),
+    'the body-quoting sibling must NOT be read as phase-own: attribution reads SUBJECTS',
+  )
+})
+
+test('9) gitscan.mjs carries no fixed-string phase-number/em-dash grep — it binds on the shared matcher', () => {
+  const code = codeOf(readFileSync(new URL('./gitscan.mjs', import.meta.url), 'utf8'))
+  assert.equal(
+    /const\s+\w+\s*=\s*`phase\s+\$\{[^`]*[—–]/.test(code),
+    false,
+    'a `phase ${n} —` grep constant is the D1-D5 blind spot itself — the grammar has ONE home',
+  )
+  for (const site of grepSites(code)) {
+    assert.equal(
+      /phase\s+\$\{\s*\w+\s*\}\s*[—–]/.test(site),
+      false,
+      `a git --grep= fed a fixed phase-number/em-dash string:\n${site}`,
+    )
+    assert.match(site, /'-E'/, `the shared ere is an EXTENDED regex — git needs -E here:\n${site}`)
+  }
+  // Positive pair: the negative above must not be satisfiable by simply deleting the scan.
+  assert.match(code, /phaseOwnPatterns\s*\(/, 'derivePhaseStartSha must call the shared matcher')
 })

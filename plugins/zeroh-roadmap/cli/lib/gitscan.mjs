@@ -72,11 +72,11 @@ export function derivePhaseStartSha(cwd, phaseNum, { base } = {}) {
       return base
     }
   }
-  const grep = `phase ${phaseNum} —` // em-dash boundary
+  const own = phaseOwnPatterns(phaseNum)
   let out
   try {
     // Default (newest-first) order + subjects, so the move-commit set can pick its newest.
-    out = git(cwd, ['log', `--grep=${grep}`, '--format=%H%x09%s'])
+    out = git(cwd, ['log', '-E', `--grep=${own.ere}`, '--format=%H%x09%s'])
   } catch (e) {
     throw new GitScanError('git-error', [`gitscan: git log failed in ${cwd}: ${e.message}`])
   }
@@ -87,6 +87,7 @@ export function derivePhaseStartSha(cwd, phaseNum, { base } = {}) {
       const tab = line.indexOf('\t')
       return { sha: line.slice(0, tab), subject: tab < 0 ? '' : line.slice(tab + 1) }
     })
+    .filter((row) => own.test(row.subject))
   if (rows.length === 0) {
     throw new GitScanError('no-match', [`no commit matching "phase ${phaseNum} —"`])
   }

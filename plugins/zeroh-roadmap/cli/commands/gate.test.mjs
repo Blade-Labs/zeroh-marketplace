@@ -1748,4 +1748,153 @@ test('gate run — the CONSUMER schema home accepts the same widened enum as the
   assert.deepEqual(recorded.map((r) => r.code), [0, 0], `both rounds append; stderr: ${recorded.map((r) => r.stderr).join(' | ')}`)
   assert.deepEqual(latestReportOf(repo.root, 1743).agents.map((a) => a.agent), ['software-architect', 'self-review'])
   assert.equal(verify.code, 0, `two declared rounds, two recorded; stdout: ${verify.stdout} stderr: ${verify.stderr}`)
+// ────────────────────────────────────────────────────────────────────────────────────────
+// phase 16 task 16.2 — the PHASE-OWN FILE SET must read the shared ownership grammar.
+// The seam is the real `gate plan` JSON (the established one in this file): `diff.files` /
+// `diff.classes` / `diff.specialistPaths` are the phase-own set, `foreignCommitsInRange` is
+// its complement over base..HEAD, so between them every file in the range is accounted for
+// in exactly one bucket. What a RED means: a history written in the recorded deviant
+// grammars (D1 `phase N task N.X`, D2 `(phase-N)`, D4 dash variants, D5 `phase N N.X`)
+// attributes FEWER files than its canonical twin, so scope and floors under-derive.
+// ────────────────────────────────────────────────────────────────────────────────────────
+
+const EM = '—'
+const EN = '–'
+const HY = '-'
+
+/** The sibling every fixture carries: foreign work whose BODY quotes the grammar.
+ *  `git log --grep` reads the whole message, so a body-reading matcher swallows this. */
+const bodyQuoter = (n) => `feat(sib): sibling module work\n\nRelated to phase ${n} ${EM} ${n}.9 grammar, but not part of that phase.`
+
+const CANONICAL = (n) => ({
+  move: `plan(roadmap): phase ${n} ${EM} move to in-progress`,
+  alpha: `feat(scope): phase ${n} ${EM} ${n}.1 alpha`,
+  beta: `docs(roadmap): phase ${n} ${EM} ${n}.2 beta`,
+})
+
+/** The same three commits in grammars real executors really shipped (gitscan.test.mjs MATCH). */
+const DEVIANT = (n) => ({
+  move: `plan(phase-${n}): move to in-progress`, //            D2 scope-carried, no dash
+  alpha: `feat(scope): phase ${n} task ${n}.1 ${HY} alpha`, //  D1 + ASCII hyphen
+  beta: `docs(roadmap): phase ${n} ${n}.2 ${EN} beta`, //       D5 + en dash
+})
+
+/** One twin: identical commit positions and an identical file set, differing ONLY in the
+ *  subject grammar. Returns the repo plus the sha the base must derive to. */
+function seedTwin(phaseNum, subjects) {
+  const repo = makeRepo()
+  repo.writePhase(phaseNum, phaseObj({ phase: phaseNum }))
+  repo.commit('chore(deps): unrelated pre-work', { 'lib/pre.ts': 'export const pre = 0\n' })
+  const preSha = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit(subjects.move, { 'roadmap/plan.md': '# plan\n' })
+  repo.commit(subjects.alpha, { 'lib/alpha.ts': 'export const a = 1\n' })
+  repo.commit(bodyQuoter(phaseNum), { 'lib/sibling.ts': 'export const s = 2\n' })
+  repo.commit(subjects.beta, { 'docs/beta.md': '# beta\n' })
+  return { repo, preSha }
+}
+
+/** The grammar-independent projection of a plan: what the phase owns, and what it does not. */
+const attribution = (plan) => ({
+  files: plan.diff.files,
+  classes: [...plan.diff.classes].sort(),
+  specialistPaths: [...plan.diff.specialistPaths].sort(),
+  foreign: [...(plan.foreignCommitsInRange ?? [])].sort(),
+})
+
+test('gate plan — 16.2: a deviant-grammar history derives the same base and phase-own file set as its canonical twin', () => {
+  const canon = seedTwin(6100, CANONICAL(6100))
+  const deviant = seedTwin(6101, DEVIANT(6101))
+
+  const rc = planOf(canon.repo.root, ['6100'])
+  assert.equal(rc.code, 0, rc.stderr)
+  // Anti-vacuity: the canonical twin's answer is pinned ABSOLUTELY first, so the twin
+  // equality below cannot pass by both sides deriving nothing.
+  assert.equal(rc.plan.baseSha, canon.preSha, 'canonical base = parent of the move-to-in-progress commit')
+  assert.deepEqual(attribution(rc.plan), {
+    files: 3,
+    classes: ['docs', 'lib'],
+    specialistPaths: [],
+    foreign: ['lib/sibling.ts'],
+  }, 'canonical: owns move + alpha + beta; the body-quoting sibling is foreign')
+
+  const rd = planOf(deviant.repo.root, ['6101'])
+  assert.equal(rd.code, 0, rd.stderr)
+  assert.equal(rd.plan.baseSha, deviant.preSha, 'deviant base = parent of its D2 move commit — the same position as the twin')
+  assert.deepEqual(
+    attribution(rd.plan),
+    attribution(rc.plan),
+    'the deviant grammar must attribute EXACTLY what the canonical grammar attributes',
+  )
+})
+
+test('gate plan — 16.2: two deviant-grammar phases share a range and attribute only their own files, in both directions', () => {
+  const repo = makeRepo()
+  repo.writePhase(6200, phaseObj({ phase: 6200 }))
+  repo.writePhase(6201, phaseObj({ phase: 6201 }))
+  repo.commit('chore(deps): unrelated pre-work', { 'lib/pre.ts': 'export const pre = 0\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit(`feat(scope): phase 6200 task 6200.1 ${HY} own alpha`, { 'lib/a6200.ts': 'export const a = 1\n' })
+  repo.commit(`docs(roadmap): phase 6201 6201.1 ${EN} own beta`, { 'docs/b6201.md': '# b\n' })
+  repo.commit(bodyQuoter(6200), { 'lib/sibling.ts': 'export const s = 2\n' })
+  repo.commit('docs(roadmap): mark phase 6200 complete', { 'roadmap/state-6200.md': '# done\n' })
+
+  const r0 = planOf(repo.root, ['6200', '--base', base])
+  assert.equal(r0.code, 0, r0.stderr)
+  assert.deepEqual(attribution(r0.plan), {
+    files: 2,
+    classes: ['docs', 'lib'],
+    specialistPaths: [],
+    foreign: ['docs/b6201.md', 'lib/sibling.ts'],
+  }, "6200 owns its D1 commit and its mark-complete commit — never 6201's file, never the body-quoter's")
+
+  const r1 = planOf(repo.root, ['6201', '--base', base])
+  assert.equal(r1.code, 0, r1.stderr)
+  assert.deepEqual(attribution(r1.plan), {
+    files: 1,
+    classes: ['docs'],
+    specialistPaths: [],
+    foreign: ['lib/a6200.ts', 'lib/sibling.ts', 'roadmap/state-6200.md'],
+  }, "6201 owns only its own D5 commit — 6200's files stay foreign in this direction too")
+})
+
+/**
+ * Source-scan helpers (acceptance 2). PROSE IS NOT CODE: gate.mjs documents the em-dash
+ * rule in several comments, so a raw text search would flag the comment that TEACHES the
+ * grammar. `codeOf` strips comments so the scan reads only what executes; `grepSites`
+ * returns the neighbourhood of each `git --grep=` argument, so the assertion is about what
+ * is HANDED TO GIT, not about every string in the file.
+ */
+function codeOf(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .split('\n')
+    .map((l) => l.replace(/(^|[^:])\/\/.*$/, '$1'))
+    .join('\n')
+}
+
+function grepSites(code) {
+  const sites = []
+  const re = /--grep=/g
+  let m
+  while ((m = re.exec(code)) !== null) sites.push(code.slice(Math.max(0, m.index - 320), m.index + 140))
+  return sites
+}
+
+test('gate plan — 16.2: gate.mjs carries no fixed-string phase-number/em-dash grep — it binds on the shared matcher', () => {
+  const code = codeOf(readFileSync(join(HERE, 'gate.mjs'), 'utf8'))
+  assert.equal(
+    /const\s+\w+\s*=\s*`phase\s+\$\{[^`]*[—–]/.test(code),
+    false,
+    'a `phase ${n} —` grep constant is the D1-D5 blind spot itself — the grammar has ONE home',
+  )
+  for (const site of grepSites(code)) {
+    assert.equal(
+      /phase\s+\$\{\s*\w+\s*\}\s*[—–]/.test(site),
+      false,
+      `a git --grep= fed a fixed phase-number/em-dash string:\n${site}`,
+    )
+    assert.match(site, /'-E'/, `the shared ere is an EXTENDED regex — git needs -E here:\n${site}`)
+  }
+  // Positive pair: the negative above must not be satisfiable by deleting the attribution scan.
+  assert.match(code, /phaseOwnPatterns/, 'phaseOwnFiles must bind on the shared gitscan matcher')
 })

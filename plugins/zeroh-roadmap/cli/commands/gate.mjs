@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { findClosedJournal, findJournal, JournalUnreadableError } from '../lib/codex-journal.mjs'
-import { derivePhaseStartSha, GitScanError } from '../lib/gitscan.mjs'
+import { derivePhaseStartSha, GitScanError, phaseOwnPatterns } from '../lib/gitscan.mjs'
 import { bridgeImport, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
   assembleConsumerFingerprint,
@@ -139,14 +139,31 @@ export function deriveBaseSha(cwd, phaseNum, { base } = {}) {
 
 /** Files touched by the PHASE's OWN commits over base..HEAD (the em-dash grep), unique. */
 function phaseOwnFiles(cwd, phaseNum, base) {
-  const grep = `phase ${phaseNum} —`
+  const own = phaseOwnPatterns(phaseNum)
   let out
   try {
-    out = git(cwd, ['log', `--grep=${grep}`, '--name-only', '--format=', `${base}..HEAD`])
+    out = git(cwd, [
+      'log',
+      '-E',
+      `--grep=${own.ere}`,
+      '--name-only',
+      '--format=%H%x09%s',
+      `${base}..HEAD`,
+    ])
   } catch {
     return []
   }
-  return [...new Set(out.split('\n').map((s) => s.trim()).filter(Boolean))]
+  const files = new Set()
+  let include = false
+  for (const line of out.split('\n')) {
+    const tab = line.indexOf('\t')
+    if (/^[0-9a-f]{40}\t/.test(line)) {
+      include = own.test(line.slice(tab + 1))
+    } else if (include && line.trim()) {
+      files.add(line.trim())
+    }
+  }
+  return [...files]
 }
 
 /**
