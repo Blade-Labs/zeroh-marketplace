@@ -1898,3 +1898,132 @@ test('gate plan — 16.2: gate.mjs carries no fixed-string phase-number/em-dash 
   // Positive pair: the negative above must not be satisfiable by deleting the attribution scan.
   assert.match(code, /phaseOwnPatterns/, 'phaseOwnFiles must bind on the shared gitscan matcher')
 })
+
+// ── deviantGrammarFindings — one teaching WARN per tolerated class (phase 16 task 16.3) ─
+/**
+ * TEST-FIRST — RED until 16.3 widens the scan. 16.1/16.2 made the READ tolerant of the five
+ * recorded deviant classes, and tolerance without a word back is how three consumers kept
+ * writing subjects nobody could parse: the scan warns on exactly ONE class today (D5,
+ * `phase N N.X —`, the 1696/1699 form), so the other four now pass through in silence.
+ *
+ * The properties: one WARN per deviant commit in the range, each naming its sha7, quoting
+ * its subject verbatim, and CARRYING the canonical em-dash form (a WARN that only repeats
+ * the subject teaches nothing — note that no deviant rendering below contains
+ * `phase <N> —` itself, so this assertion cannot pass on the echoed subject). Both
+ * directions per class: the taught write forms warn about nothing, a neighbouring phase
+ * number warns nothing here (and still warns for ITSELF — the anti-vacuity half), and a
+ * commit that merely QUOTES the grammar mid-subject is not this phase's to teach.
+ */
+
+/** One single-class rendering per tolerated deviant class, phase number parameterised. */
+const deviantSubjects = (n) => [
+  { klass: 'D1 `phase N task N.X <dash>`', subject: `feat(mudarabah): phase ${n} task ${n}.1 ${EM} batch identity + batch rollup` },
+  { klass: 'D2 scope-carried `(phase-N)`', subject: `fix(phase-${n}): quality pass ${EM} prune comment prose, dedupe the usable-amount check` },
+  { klass: 'D4 dash variant', subject: `feat(atlas-web): phase ${n} ${HY} add Library tree` },
+  { klass: 'D5 `phase N N.X <dash>`', subject: `feat(console): phase ${n} ${n}.5 ${EM} Agent record as the roster detail view` },
+]
+
+/** Commit each subject on its own file; returns the rows with their shas, oldest-first. */
+function seedSubjects(repo, rows, tag) {
+  return rows.map((row, i) => {
+    repo.commit(row.subject, { [`lib/${tag}${i}.ts`]: `export const ${tag}${i} = ${i}\n` })
+    return { ...row, sha: repo.git('rev-parse', 'HEAD').trim() }
+  })
+}
+
+test('deviantGrammarFindings — 16.3: every tolerated deviant class emits its own teaching WARN', () => {
+  const repo = makeRepo()
+  repo.commit(`docs(roadmap): phase 7301 ${EM} move to in-progress`, { 'lib/seed.ts': 'export const s = 0\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  const rows = seedSubjects(repo, deviantSubjects(7301), 'd')
+
+  const findings = deviantGrammarFindings(repo.root, 7301, base)
+
+  assert.equal(findings.length, rows.length, `one WARN per deviant commit; got ${findings.length}:\n${findings.join('\n')}`)
+  for (const row of rows) {
+    const sha7 = row.sha.slice(0, 7)
+    const mine = findings.filter((f) => f.includes(sha7))
+    assert.equal(mine.length, 1, `${row.klass} must warn exactly once (${sha7}): ${row.subject}`)
+    assert.ok(mine[0].includes(row.subject), `${row.klass}'s WARN must quote the subject verbatim: ${mine[0]}`)
+    assert.match(mine[0], /commit grammar/i, `${row.klass}'s WARN must name the finding class: ${mine[0]}`)
+    assert.match(
+      mine[0],
+      new RegExp(`phase (N|7301) ${EM}`),
+      `${row.klass}'s WARN must teach the canonical em-dash form, not just quote the deviant one: ${mine[0]}`,
+    )
+  }
+})
+
+test('deviantGrammarFindings — 16.3: the taught write forms warn about nothing (the batch step’s (k/M) token is not D1)', () => {
+  const repo = makeRepo()
+  repo.commit(`docs(roadmap): phase 7301 ${EM} move to in-progress`, { 'lib/seed.ts': 'export const s = 0\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  const canonical = [
+    `feat(cli): phase 7301 ${EM} 7301.1 the first task`,
+    `chore(repo): phase 7301 task 7301.2 (1/3) ${EM} a batch step lands`,
+    `fix(cli): phase 7301 gate R0 ${EM} quality-pass findings`,
+    `docs(roadmap): phase 7301 ${EM} record the transparency report`,
+    'docs(roadmap): mark phase 7301 complete',
+  ]
+  canonical.forEach((s, i) => repo.commit(s, { [`lib/c${i}.ts`]: `export const c${i} = ${i}\n` }))
+
+  assert.deepEqual(
+    deviantGrammarFindings(repo.root, 7301, base),
+    [],
+    'a phase written entirely in the taught grammar must produce a silent gate — a WARN here is noise on every clean phase',
+  )
+})
+
+test('deviantGrammarFindings — 16.3: overlapping D1 and D4 deviations produce one WARN naming both', () => {
+  const repo = makeRepo()
+  repo.commit(`docs(roadmap): phase 7301 ${EM} move to in-progress`, { 'lib/seed.ts': 'export const s = 0\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.commit(`feat(cli): phase 7301 task 7301.2 ${HY} overlap`, { 'lib/overlap.ts': 'export const overlap = true\n' })
+
+  const findings = deviantGrammarFindings(repo.root, 7301, base)
+  assert.equal(findings.length, 1)
+  assert.match(findings[0], /D1/)
+  assert.match(findings[0], /D4/)
+})
+
+test('deviantGrammarFindings — 16.3: a neighbouring phase number warns nothing here, and still warns for itself', () => {
+  const repo = makeRepo()
+  repo.commit(`docs(roadmap): phase 7301 ${EM} move to in-progress`, { 'lib/seed.ts': 'export const s = 0\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  // 73011 extends this phase's digits to the right, 730 to the left, 7302 is the sibling.
+  const neighbours = [73011, 730, 7302]
+  const seeded = neighbours.map((n) => ({ n, rows: seedSubjects(repo, deviantSubjects(n), `n${n}`) }))
+
+  assert.deepEqual(
+    deviantGrammarFindings(repo.root, 7301, base),
+    [],
+    'no neighbouring phase number may be warned about under 7301 — the digit bound is the property the whole attribution seam stands on',
+  )
+  // Anti-vacuity: those same commits ARE warnable, under their own phase numbers.
+  for (const { n, rows } of seeded) {
+    const own = deviantGrammarFindings(repo.root, n, base)
+    assert.equal(own.length, rows.length, `phase ${n} must warn on its own ${rows.length} deviant commits; got:\n${own.join('\n')}`)
+    for (const row of rows) {
+      assert.ok(own.some((f) => f.includes(row.sha.slice(0, 7))), `phase ${n} must warn on its own ${row.klass}: ${row.subject}`)
+    }
+  }
+})
+
+test('deviantGrammarFindings — 16.3: a subject that merely QUOTES the grammar is not this phase’s to teach', () => {
+  const repo = makeRepo()
+  repo.commit(`docs(roadmap): phase 7301 ${EM} move to in-progress`, { 'lib/seed.ts': 'export const s = 0\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  const quoting = [
+    `docs(skills): document the "phase 7301 7301.5 ${EM}" commit grammar`,
+    `chore(deps): bump zod ${EM} no relation to phase 7301 task 7301.1 ${EM} at all`,
+    'docs(roadmap): explain why we mark phase 7301 complete only after the gate',
+    bodyQuoter(7301),
+  ]
+  quoting.forEach((s, i) => repo.commit(s, { [`lib/q${i}.ts`]: `export const q${i} = ${i}\n` }))
+
+  assert.deepEqual(
+    deviantGrammarFindings(repo.root, 7301, base),
+    [],
+    'the WARN teaches the author of a PHASE-OWN commit; a foreign session’s prose gets attributed to nobody',
+  )
+})

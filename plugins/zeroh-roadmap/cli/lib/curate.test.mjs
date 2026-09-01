@@ -34,6 +34,10 @@
  * task the group swallowed — after curation those task SHAs are gone, so a title missing
  * from the body is work that vanished from history.
  *
+ * TEST-FIRST for classifySubject's D1-D5 tolerance (phase 16 task 16.3), in the middle of
+ * this file: the recorded deviant subjects real executors wrote must curate as their own
+ * phase's work, while the same forms at a SIBLING number stay foreign.
+ *
  * Real seeded git repos (execFileSync git, never a shell string), the makeRepo idiom from
  * cli/commands/gate.test.mjs — the em-dash boundary and revert pairing only mean anything
  * against a real git. The composer is pure, so its records are built inline; one case
@@ -50,6 +54,7 @@ import { join, dirname } from 'node:path'
 import { deriveCurationRange } from './curate.mjs'
 import * as curate from './curate.mjs'
 import { writeReport, latestReport, gateDir } from './gate-report.mjs'
+import { phaseOwnPatterns } from './gitscan.mjs'
 
 const bases = []
 process.on('exit', () => bases.forEach((b) => rmSync(b, { recursive: true, force: true })))
@@ -305,6 +310,146 @@ test('the range is base-EXCLUSIVE: foreign commits under the base are out of sco
     { sha: t1, subject: r.subject(t1), kind: 'task' },
     { sha: t2, subject: r.subject(t2), kind: 'task' },
   ])
+})
+
+// ── the tolerant read: the recorded deviant-grammar ranges (phase 16 task 16.3) ───────
+/**
+ * TEST-FIRST for classifySubject's D1-D5 tolerance — RED until 16.3 lands, because today
+ * every subject below classifies as `null` (foreign) and each range REFUSES ITSELF.
+ *
+ * These are the recorded incidents, verbatim: mudarabah2 wrote `phase N task N.X —` (D1)
+ * and an ASCII hyphen (D4) across ELEVEN phases whose curation therefore never ran;
+ * marketplace 10's squash range was refused by its own gate agent's `fix(phase-10):`
+ * subject (D2); every phase closes with `docs(roadmap): mark phase N complete` (D3), a
+ * subject carrying no dash at all; azure 1696/1699 wrote `phase N N.X —` (D5). 16.1 gave
+ * the read side ONE matcher home (gitscan phaseOwnPatterns) and 16.2 pointed the base and
+ * phase-own-file derivations at it; curation is the third and last reader still on its own
+ * private grammar, and it is the one whose refusal costs a phase its landed history.
+ *
+ * What a RED here means: a subject a real executor really wrote is no longer read as its
+ * own phase's work — or (the tests below the clean ones) tolerance widened past the
+ * boundary and a squash would now rewrite a SIBLING session's commit. The second half is
+ * the one that must never go green by accident, so every foreign row is a rendering of a
+ * class the widened grammar DOES accept — at a phase number that is not this phase's.
+ */
+
+test('16.3 — the mudarabah2 725 incident range curates clean: D1 task subjects, a D4 hyphen and D3 mark-complete are the phase’s OWN work', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  const preBase = r.commit('seed phase-725 file')
+
+  // Verbatim from the recorded mudarabah2 725 history (the move commit stays CLI-canonical).
+  const move = r.commit('docs(roadmap): phase 725 — move to in-progress')
+  const d1a = r.commit('feat(mudarabah): phase 725 task 725.1 — batch identity + batch rollup')
+  const d4 = r.commit('feat(mudarabah): phase 725 task 725.4 - unit-economics panel on Financials')
+  const d1b = r.commit('test(mudarabah): phase 725 task 725.5 — fence the lens out of settlement')
+  const d3 = r.commit('docs(roadmap): mark phase 725 complete')
+
+  const res = deriveCurationRange(r.root, 725)
+
+  assert.equal(res.ok, true, `the eleven-phase mudarabah2 class must curate, not refuse itself: ${JSON.stringify(res.foreign ?? [])}`)
+  assert.equal(res.base, preBase, 'base = the parent of the move-to-in-progress commit')
+  assert.deepEqual(
+    res.commits,
+    [
+      { sha: move, subject: r.subject(move), kind: 'state' },
+      { sha: d1a, subject: r.subject(d1a), kind: 'task' },
+      { sha: d4, subject: r.subject(d4), kind: 'task' },
+      { sha: d1b, subject: r.subject(d1b), kind: 'task' },
+      // Bookkeeping, never work: `state` is what keeps a completion commit out of the
+      // majority type(scope) vote that composes the landed subject.
+      { sha: d3, subject: r.subject(d3), kind: 'state' },
+    ],
+    'D1 and D4 are task work; the dashless completion commit is state',
+  )
+  assert.deepEqual(res.commits.map((c) => c.sha), r.rangeShas(res.base), 'the walk reproduces git’s own range — nothing dropped or invented')
+})
+
+test('16.3 — marketplace 10: the gate agent’s `fix(phase-10):` subject is the phase’s own work, not the refusal that blocked the squash', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  const preBase = r.commit('seed phase-10 file')
+
+  const move = r.commit('docs(roadmap): phase 10 — move to in-progress')
+  const t1 = r.commit('feat(cli): phase 10 — 10.1 the first task')
+  // Verbatim: the quality-pass agent's own subject, the single commit that refused
+  // marketplace 10's whole squash range.
+  const d2 = r.commit('fix(phase-10): quality pass — true up the validate lint-gate and arc-lane comments')
+  const d2Gate = r.commit('fix(phase-10): gate R1 — repair attribution')
+  const done = r.commit('docs(roadmap): mark phase 10 complete')
+
+  const res = deriveCurationRange(r.root, 10)
+
+  assert.equal(res.ok, true, `a gate agent's scope-carried subject must not refuse its own phase: ${JSON.stringify(res.foreign ?? [])}`)
+  assert.equal(res.base, preBase)
+  assert.deepEqual(res.commits.map((c) => c.sha), [move, t1, d2, d2Gate, done], 'the whole range is the phase’s own, oldest-first')
+  const row = (sha) => res.commits.find((c) => c.sha === sha)
+  // Whether a scope-carried subject reads as task or gate-fix is the implementation's call
+  // (both curate identically); that it is WORK — never state, never foreign — is the property.
+  assert.ok(['task', 'gate-fix'].includes(row(d2).kind), `a D2 subject must classify as work, got ${row(d2).kind}`)
+  assert.equal(row(d2Gate).kind, 'gate-fix')
+  assert.equal(row(t1).kind, 'task')
+  assert.equal(row(done).kind, 'state')
+})
+
+test('16.3 — the azure 1699 D5 range curates clean, en dash included', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  const preBase = r.commit('seed phase-1699 file')
+
+  const move = r.commit('docs(roadmap): phase 1699 — move to in-progress')
+  const d5 = r.commit('feat(console): phase 1699 1699.5 — Agent record as the roster detail view')
+  const d5en = r.commit('feat(flags): phase 1699 1699.2 – WORKFORCE_CONSOLE_ENABLED kill-switch')
+
+  const res = deriveCurationRange(r.root, 1699)
+
+  assert.equal(res.ok, true, `the 1696/1699 class must curate: ${JSON.stringify(res.foreign ?? [])}`)
+  assert.equal(res.base, preBase)
+  assert.deepEqual(res.commits, [
+    { sha: move, subject: r.subject(move), kind: 'state' },
+    { sha: d5, subject: r.subject(d5), kind: 'task' },
+    { sha: d5en, subject: r.subject(d5en), kind: 'task' },
+  ])
+})
+
+test('16.3 — the other direction: a SIBLING phase’s subject in every deviant class still refuses the range, naming exactly those commits', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-725 file')
+
+  r.commit('docs(roadmap): phase 725 — move to in-progress')
+  r.commit('feat(mudarabah): phase 725 task 725.1 — batch identity + batch rollup')
+  // One rendering per tolerated class, all at phase 726 — a sibling session's real work,
+  // interleaved exactly as it interleaves in a shared checkout.
+  const sibCanonical = r.commit('docs(roadmap): phase 726 — move to in-progress')
+  const sibD1 = r.commit('feat(mudarabah): phase 726 task 726.1 — the sibling’s batch identity')
+  const sibD2 = r.commit('fix(phase-726): quality pass — the sibling’s sweep')
+  const sibD3 = r.commit('docs(roadmap): mark phase 726 complete')
+  const sibD4 = r.commit('feat(mudarabah): phase 726 - the sibling’s hyphen work')
+  const sibD5 = r.commit('feat(console): phase 726 726.5 — the sibling’s fifth task')
+  // A longer number that merely STARTS with this phase's digits, and prose that quotes the
+  // grammar mid-subject: neither is phase 725's to rewrite.
+  const longer = r.commit('feat(mudarabah): phase 7250 task 7250.1 — a longer neighbour, not 725')
+  const prose = r.commit('docs(roadmap): flush the lessons about the phase 725 — grammar incident')
+  const plain = r.commit('feat(web): the console gains a corpus filter')
+  r.commit('docs(roadmap): mark phase 725 complete')
+
+  const res = deriveCurationRange(r.root, 725)
+
+  assert.equal(res.ok, false, 'a widened read must still refuse a range holding another session’s commits')
+  const expected = [sibCanonical, sibD1, sibD2, sibD3, sibD4, sibD5, longer, prose, plain]
+  assert.deepEqual(
+    res.foreign,
+    expected.map((sha) => ({ sha, subject: r.subject(sha) })),
+    'every foreign commit is named, oldest-first, with its subject — no partial squash, no silent inclusion',
+  )
+  assert.match(res.reason, /foreign/i)
+  assert.ok(res.reason.includes('725'), 'the refusal says whose range it is')
+  // Anti-vacuity: the sibling rows are REAL subjects of the widened grammar (phase 726
+  // owns every one of them), so this refusal cannot pass on strawmen nothing would match.
+  for (const sha of [sibCanonical, sibD1, sibD2, sibD3, sibD4, sibD5]) {
+    assert.equal(phaseOwnPatterns(726).test(r.subject(sha)), true, `fixture bug: phase 726 must own ${r.subject(sha)}`)
+  }
 })
 
 // ── executeCurate: the squash executor (2145.2) ──────────────────────────────────────

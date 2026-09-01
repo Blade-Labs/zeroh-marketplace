@@ -206,14 +206,7 @@ export function untestedGateFixFindings(cwd, phaseNum, base) {
   return findings
 }
 
-/**
- * WARN-only scan for the task-id-before-em-dash commit grammar that silently defeats
- * phase-own attribution (1696/1699 committed `… phase N N.X — …`). The attribution grep
- * `phase <N> —` cannot match that form, so those commits' files fall OUT of the phase-own
- * set and scope/floor under-derive with nothing surfacing it. Conservative on any git
- * failure ([]); exit codes never change (caller appends to report notes / prints them).
- * Correct grammar is `… phase N — N.X …` (em-dash straight after the number).
- */
+/** WARN when a tolerated legacy subject deviates from the canonical write grammar. */
 export function deviantGrammarFindings(cwd, phaseNum, base) {
   let log
   try {
@@ -221,16 +214,29 @@ export function deviantGrammarFindings(cwd, phaseNum, base) {
   } catch {
     return []
   }
-  const re = new RegExp(`phase ${phaseNum} ${phaseNum}\\.\\d+ —`)
+  const P = String(phaseNum)
+  const own = phaseOwnPatterns(P)
+  const typePrefix = '[A-Za-z0-9_-]+(\\([^)]*\\))?: '
+  const checks = [
+    { name: 'D1 phase N task N.X', re: new RegExp(`^${typePrefix}phase ${P} task ${P}\\.[0-9]+ (—|–|-)`) },
+    { name: 'D2 scope-carried (phase-N)', re: new RegExp(`^[A-Za-z0-9_-]+\\(phase-${P}\\):`) },
+    {
+      name: 'D4 noncanonical dash',
+      re: new RegExp(`^${typePrefix}phase ${P} ((–|-)|task ${P}\\.[0-9]+ (–|-)|${P}\\.[0-9]+ (–|-))`),
+    },
+    { name: 'D5 phase N N.X', re: new RegExp(`^${typePrefix}phase ${P} ${P}\\.[0-9]+ (—|–|-)`) },
+  ]
   const findings = []
   for (const line of log.split('\n').filter(Boolean)) {
     const tab = line.indexOf('\t')
     if (tab < 0) continue
     const sha = line.slice(0, tab)
     const subject = line.slice(tab + 1)
-    if (!re.test(subject)) continue
+    if (!own.test(subject)) continue
+    const classes = checks.filter(({ re }) => re.test(subject)).map(({ name }) => name)
+    if (classes.length === 0) continue
     findings.push(
-      `attribution-breaking commit grammar: ${sha.slice(0, 7)} "${subject}" — \`phase N N.X —\` defeats the em-dash phase-own attribution; use "… phase N — N.X …" (1696/1699 class)`,
+      `attribution-breaking commit grammar (${classes.join(' + ')}): ${sha.slice(0, 7)} "${subject}" — use "type(scope): phase N — <imperative summary>"`,
     )
   }
   return findings

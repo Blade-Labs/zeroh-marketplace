@@ -12,7 +12,7 @@
 import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 
-import { derivePhaseStartSha } from './gitscan.mjs'
+import { derivePhaseStartSha, phaseOwnPatterns } from './gitscan.mjs'
 import { recordCuration, latestReport } from './gate-report.mjs'
 
 const git = (cwd, args, opts = {}) =>
@@ -38,23 +38,26 @@ export class CurateError extends Error {
  */
 function classifySubject(subject, phaseNum) {
   const P = String(phaseNum)
+  const dash = '(—|–|-)'
   // Every ownership test is ANCHORED to the subject's own prefix: a subject that merely
   // QUOTES the grammar mid-sentence must stay foreign, or the squash rewrites a sibling's
   // commit that happened to mention it.
   const prefix = '^[a-z]+(\\([^)]*\\))?: '
   const isRevert = /^Revert "/.test(subject)
   const inner = isRevert ? subject.slice('Revert "'.length) : subject
-  if (new RegExp(`^scratch(\\([^)]*\\))?: phase ${P} —`).test(inner)) return 'scratch'
+  if (new RegExp(`^scratch(\\([^)]*\\))?: phase ${P} ${dash}`).test(inner)) return 'scratch'
   if (isRevert) return null // a revert of anything but this phase's scratch work is foreign
   if (new RegExp(`${prefix}phase ${P} gate R\\d+`).test(subject)) return 'gate-fix'
   // The batchMode step grammar (`… phase N task N.X (k/M) — <step>`) carries its boundary
   // in the task token, not the dash phrase.
-  if (new RegExp(`${prefix}phase ${P} task ${P}\\.\\d+ \\(\\d+/\\d+\\) —`).test(subject)) return 'task'
-  if (!new RegExp(`${prefix}phase ${P} —`).test(subject)) return null
+  if (new RegExp(`${prefix}phase ${P} task ${P}\\.\\d+ \\(\\d+/\\d+\\) ${dash}`).test(subject)) return 'task'
+  if (!phaseOwnPatterns(P).test(subject)) return null
+  if (new RegExp(`^[a-z]+\\(phase-${P}\\): gate R\\d+`).test(subject)) return 'gate-fix'
+  if (new RegExp(`^docs\\(roadmap\\): mark phase ${P} complete$`).test(subject)) return 'state'
   if (subject.startsWith('docs(roadmap):')) {
     // The task-id grammar (`N.x`) also appears on roadmap-repo task commits; both kinds
     // curate identically, so 'task' wins only on an explicit task id.
-    return new RegExp(`^docs\\(roadmap\\): phase ${P} — ${P}\\.\\d+`).test(subject) ? 'task' : 'state'
+    return new RegExp(`^docs\\(roadmap\\): phase ${P} ${dash} ${P}\\.\\d+`).test(subject) ? 'task' : 'state'
   }
   return 'task'
 }

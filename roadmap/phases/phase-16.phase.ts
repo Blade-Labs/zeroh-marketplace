@@ -197,7 +197,18 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['16.1'],
       interfaces: { consumes: ['phaseOwnPatterns(phaseNum) from 16.1'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Curation now classifies canonical and tolerated D1-D5 subjects through the shared phaseOwnPatterns matcher while preserving scratch, batch, gate-fix, task, and state distinctions. Gate warnings cover every tolerated noncanonical form (D1, D2, D4, D5), collapse overlapping classes into one finding, and ignore foreign prose and canonical D3 completion commits.',
+        how:
+          'TDD: the resolved claude-opus-5 test-engineer added recorded-incident ranges, sibling and digit-boundary refusals, canonical negatives, and per-class warning fixtures, demonstrating RED in 7 new cases. A Decision Contract resolved the plan wording against the binding grammar: claude-fable-5 was unavailable, so gpt-5.6-sol returned PROCEED_WITH_FIX and kept D3 as canonical state while interpreting warnings as applying to noncanonical D1/D2/D4/D5. The combined scoped suites passed 98/98 after retaining the established warning prefix; the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '16.4',
