@@ -228,17 +228,27 @@ function verifyPolarityWarnings(phase) {
           `so this reds when the claim is TRUE. Compare the count explicitly, e.g. test "$(grep -c x f)" = "0".`,
       )
     }
-    const runnerThroughFilter = /(npm run|pnpm |yarn |tsc\b|capbuild|nx run|vitest|node --test|node |npx |tsx )/.test(cmd) && /\|\s*(head|tail|grep)\b/.test(cmd)
-    const finalPipe = `|${cmd.split(/(?<!\|)\|(?!\|)/).at(-1)}`
-    const grepIsTheAssertion = /^\|\s*grep\s+(?:-[a-zA-Z]*q\b|--quiet\b)/.test(finalPipe) ||
-      (/^\|\s*grep\s+(?:-[a-zA-Z]*c\b|--count\b)/.test(finalPipe) && /(\btest\b|\[|=|-eq|-ne|-gt|-lt)/.test(cmd))
-    if (runnerThroughFilter && !grepIsTheAssertion) {
+    // PER-SEGMENT, never whole-command: a command list judges only its LAST segment's exit,
+    // so a later honest `grep -q ...` would otherwise vouch for an earlier runner pipeline
+    // whose red is already swallowed. Ask the question of each ; && || segment on its own.
+    const segments = cmd.split(/(?:;|&&|\|\|)/)
+    const maskedSegment = segments.some((seg) => {
+      if (!/(npm run|pnpm |yarn |tsc\b|capbuild|nx run|vitest|node --test|node |npx |tsx )/.test(seg)) return false
+      if (!/\|\s*(head|tail|grep)\b/.test(seg)) return false
+      const lastPipe = `|${seg.split(/(?<!\|)\|(?!\|)/).at(-1)}`
+      const grepIsTheAssertion = /^\|\s*grep\s+(?:-[a-zA-Z]*q\b|--quiet\b)/.test(lastPipe) ||
+        (/^\|\s*grep\s+(?:-[a-zA-Z]*c\b|--count\b)/.test(lastPipe) && /(\btest\b|\[|=|-eq|-ne|-gt|-lt)/.test(seg))
+      return !grepIsTheAssertion
+    })
+    if (maskedSegment) {
       out.push(
         `[zeroh-roadmap] WARN phase ${num} ${where}: this judges a build or test run through a pipe, so the ` +
           `exit code is the filter's and a red run reads green (azure 2421 incident class). Redirect to a file and read $?.`,
       )
     }
-    const withoutSearchLiterals = cmd.replace(/\b(?:grep|rg)\b[^;&]*?(["'])\|\|\s*true\1/g, (segment) => segment.replace(/\|\|\s*true/, ''))
+    // A quoted grep/rg PATTERN that merely CONTAINS `|| true` is search text, not a swallow:
+    // strip the whole quoted run before the swallow test.
+    const withoutSearchLiterals = cmd.replace(/\b(?:grep|rg)\b[^;&]*?(["'])[^"']*\|\|\s*true[^"']*\1/g, (segment) => segment.replace(/\|\|\s*true/g, ''))
     if (/\|\|\s*true\b/.test(withoutSearchLiterals)) {
       out.push(
         `[zeroh-roadmap] WARN phase ${num} ${where}: \`|| true\` swallows every failing exit ` +

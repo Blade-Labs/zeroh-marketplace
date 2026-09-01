@@ -676,3 +676,40 @@ test('polarity lint: the pre-existing classes are unchanged by the widening', ()
     assert.ok(stepWarns(r.stderr).length >= 1, `'${cmd}' is an already-caught class and must still WARN; stderr:\n${r.stderr || '(empty)'}`)
   }
 })
+
+
+// ── Round-5 findings the five-round cap stranded (closed by the supervising session) ───────────
+// Both are the anti-vacuity lint being vacuous ITSELF: it judged a whole command by its LAST
+// pipe, so an honest tail clause excused a masked one; and it stripped a quoted search pattern
+// only when the pattern was EXACTLY the swallow literal.
+
+test('polarity lint: a masked runner segment is NOT excused by a later honest grep -q', () => {
+  // A command list judges only its final segment's exit, so the honest `grep -q` cannot vouch
+  // for the swallowed red of the runner clause before it.
+  const desc = 'run then assert → verify: node --test x.test.mjs | tail -1; grep -q needle file'
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(desc))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, 'the polarity lint NEVER blocks')
+  assert.match(
+    r.stderr,
+    /judges a build or test run through a pipe/,
+    'the earlier masked segment must still WARN even though the command ENDS in an honest assertion',
+  )
+})
+
+test('polarity lint: `|| true` inside a quoted search PATTERN is search text, not a swallow', () => {
+  // A plan hunting for the swallow incident class greps for the literal; calling that a swallow
+  // is a false WARN on exactly the work this lint exists to encourage.
+  // Double quotes on purpose: the fixture embeds the description inside a single-quoted JS
+  // literal, so a single-quoted grep pattern would mangle the generated phase file rather than
+  // exercise the lint.
+  const desc = 'prove the class is gone → verify: grep -qF "x || true y" cli/lib/validate.mjs'
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(desc))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0)
+  assert.doesNotMatch(
+    r.stderr,
+    /swallows every failing exit/,
+    'a quoted PATTERN merely CONTAINING the literal must not read as a real swallow',
+  )
+})
