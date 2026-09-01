@@ -267,6 +267,16 @@ test('run: the mission DELIVERS do-phase by path, references included', () => {
     prompt.includes(refs),
     `the prompt must point at the protocol's references/ siblings (${refs}) — a driver that never reads guard-mutation-proof.md runs a thinner protocol; fix cli/commands/codex.mjs buildPrompt`,
   )
+  assert.match(
+    prompt,
+    /including every part it hands to the driver rather than to a supervising session/,
+    'the envelope must explicitly hand the driver the protocol-owned supervisory duties',
+  )
+  assert.match(
+    prompt,
+    /protocol wins/,
+    'the envelope must preserve the protocol as the authority when an override conflicts',
+  )
 
   assert.ok(
     prompt.includes('roadmap/phases/phase-80.phase.ts'),
@@ -2910,10 +2920,10 @@ test('consume-the-plan: a broken plan is refused for being broken FIRST — neve
 
 
 // ── detectInstaller: the install decision, keyed on the LOCKFILE the consumer committed ────────
-// Task 15.1. Today ensureWorktree hardcodes `npm ci`, which means (a) the decision cannot be
-// exercised without a network install, and (b) a pnpm consumer discovers the mismatch only AFTER
-// the worktree and the branch exist. Lifting the decision into a pure function makes both the
-// recipe and its precedence testable from real files in a tmp dir — no spawns, no network.
+// ensureWorktree used to hardcode `npm ci`, which meant (a) the decision could not be exercised
+// without a network install, and (b) a pnpm consumer discovered the mismatch only AFTER the
+// worktree and the branch existed. Holding the decision in a pure function keeps both the recipe
+// and its precedence testable from real files in a tmp dir — no spawns, no network.
 //
 // The four branches are DISTINCT return shapes, and the distinction is load-bearing for 15.2:
 // a recipe means "install with this"; `null` means "a package dir I cannot decide" (the caller
@@ -3078,8 +3088,8 @@ test('detectInstaller: the decision is a pure read — it installs nothing and i
 })
 
 // ── 15.2: ensureWorktree CONSUMES the detector — and an undecidable consumer costs nothing ─────
-// Today the order is inverted: `git worktree add` runs first, then a hardcoded `npm ci`. A pnpm
-// consumer therefore pays a full checkout AND an orphan `codex/<N>` branch for a refusal it was
+// The order used to be inverted: `git worktree add` first, then a hardcoded `npm ci`. A pnpm
+// consumer therefore paid a full checkout AND an orphan `codex/<N>` branch for a refusal it was
 // always going to get (atlas worked around it by pre-creating worktrees by hand). What these tests
 // pin is the ORDER — the decision happens while there is still nothing to clean up — and the
 // per-package-dir recipe, asserted on the argv that was really spawned.

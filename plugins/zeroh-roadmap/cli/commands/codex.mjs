@@ -70,25 +70,26 @@ export { findJournal }
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
 
-const PNPM_INSTALLER = Object.freeze({ bin: 'pnpm', args: Object.freeze(['install', '--frozen-lockfile']) })
-const NPM_INSTALLER = Object.freeze({ bin: 'npm', args: Object.freeze(['ci', '--no-audit', '--no-fund']) })
-
-/** Select the package manager solely from the package directory's committed lockfile. */
+/**
+ * Select the package manager solely from the package directory's committed lockfile — never a
+ * which-probe of whatever happens to be installed on the host. THREE outcomes, which the callers
+ * read apart: a recipe; `null` for a package dir carrying no lockfile (refuse, never guess a
+ * manager); `undefined` for a dir that is not a package at all (skip it silently).
+ */
 export function detectInstaller(dir) {
   if (!existsSync(join(dir, 'package.json'))) return undefined
 
-  const hasPnpmLock = existsSync(join(dir, 'pnpm-lock.yaml'))
   const hasNpmLock = existsSync(join(dir, 'package-lock.json'))
-  if (hasPnpmLock) {
+  if (existsSync(join(dir, 'pnpm-lock.yaml'))) {
     return {
-      bin: PNPM_INSTALLER.bin,
-      args: [...PNPM_INSTALLER.args],
+      bin: 'pnpm',
+      args: ['install', '--frozen-lockfile'],
       ...(hasNpmLock
         ? { reason: 'pnpm-lock.yaml takes precedence over package-lock.json because it is the stricter package-manager claim' }
         : {}),
     }
   }
-  if (hasNpmLock) return { bin: NPM_INSTALLER.bin, args: [...NPM_INSTALLER.args] }
+  if (hasNpmLock) return { bin: 'npm', args: ['ci', '--no-audit', '--no-fund'] }
   return null
 }
 
@@ -133,7 +134,7 @@ export function buildPrompt(root, ids) {
     `Implement ${ids.length > 1 ? `${ids.length} roadmap phases` : 'ONE roadmap phase'} end-to-end as driver of record. Work ONLY in this worktree.`,
     '',
     `YOUR PROTOCOL IS A FILE — read it in full, first, before touching anything: ${RUN_SKILL}`,
-    `PROTOCOL REFERENCES: ${dirname(RUN_SKILL)}/references/ — read when directed; follow end to end. Only the overrides below differ.`,
+    `PROTOCOL REFERENCES: ${dirname(RUN_SKILL)}/references/ — part of the protocol; read when directed. Follow it as written, end to end, including every part it hands to the driver rather than to a supervising session. This envelope only adds targets/overrides; on conflict, the protocol wins.`,
     `THE ROADMAP CLI: node ${ROADMAP_CLI} (bare \`roadmap\` may be absent from PATH — never assume it).`,
     COMMIT_GRAMMAR,
     '',
@@ -744,6 +745,16 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     )
   }
 
+  // (c2) THE ENTITY ITSELF. Every guard above proves the lane is SPENT without ever opening the file
+  // it authored, so a plan that does not parse — or that parses and breaks a phase rule — closes as
+  // consumed. The question is put to the plugin's OWN validator, from the lane worktree whose
+  // install:true toolchain serves the tsx bridge.
+  //
+  // The POSITION is load-bearing in both directions. AFTER the one-file invariant, because that
+  // check's empty-diff arm is the only recovery a never-committed lane is ever given, and
+  // validating first answers it with a parse error about a file that may not be there. BEFORE the
+  // harvest proof, because that refusal hands over a runnable cherry-pick — running it for a plan
+  // that does not validate is what puts the broken file on the integration ref.
   const validation = spawnSync('node', [ROADMAP_CLI, 'phase', 'validate', phaseFile], {
     cwd: wt,
     encoding: 'utf8',

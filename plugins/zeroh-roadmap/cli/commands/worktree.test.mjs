@@ -11,8 +11,9 @@
  *    runs `cd "$(roadmap worktree up)"`, so a prefix, a quote or a trailing banner breaks it),
  *    and a re-run must return the SAME dir with the scratch head UNTOUCHED — an `up` that
  *    resets (or re-creates) would silently eat the half-done phase living in that worktree.
- *    Deps: production installDeps runs `npm ci`, so the fixture repo carries NO package.json
- *    anywhere and the test asserts that shape — nothing installed, exit still 0.
+ *    Deps: production installDeps really installs, so the fixture repo carries NO package.json
+ *    anywhere — a non-package dir is the one shape the detector skips — and the test asserts
+ *    that shape: nothing installed, exit still 0.
  *  - `status` is the leak detector: it prints one row per REGISTRY slot with the claimer pid
  *    and its liveness, and it must NOT prune dead rows (a spawned CLI's pid is dead by the time
  *    the next command runs, and a pruning status would hide exactly the leaked worktrees an
@@ -94,7 +95,8 @@ const configFor = (root) => ({
 /**
  * A configured consumer repo: one seed commit, the integration ref as a NON-checked-out branch
  * (the primary sits elsewhere, exactly as a session's checkout does), and NO package.json in the
- * tree — production installDeps (`npm ci`) must therefore have nothing to do.
+ * tree — production installDeps reads that as a non-package dir and must therefore have nothing
+ * to do (a package.json with no lockfile would REFUSE, not install).
  */
 function makeRepo() {
   const root = mkdtempSync(join(tmpdir(), 'zr-wtcmd-'))
@@ -405,10 +407,10 @@ test('roadmap --help lists every mounted command — a command bin auto-mounts b
 })
 
 // ── 15.2 blast radius: installDeps keys on the SAME detector (singleSeam 3) ────────────────────
-// installDeps here is the SECOND hardcoded `npm ci` site — the comment above it calls itself "the
-// codex-lane install pattern" — and it provisions the very slots `codex run --worktree` reuses.
-// A pnpm consumer running `worktree up` therefore hits the identical doomed install one module
-// over, so fixing only codex.mjs would leave the bug alive at the other call site.
+// installDeps here was the SECOND hardcoded `npm ci` site — it called itself "the codex-lane
+// install pattern" while carrying its own copy of it — and it provisions the very slots
+// `codex run --worktree` reuses. A pnpm consumer running `worktree up` hit the identical doomed
+// install one module over, so fixing only codex.mjs would have left the bug alive here.
 //
 // These run installDeps IN-PROCESS (it is a plain function, not a command) with `npm`, `pnpm` and
 // `capbuild` replaced on PATH by shims that record cwd + argv and exit 0. capbuild is shimmed

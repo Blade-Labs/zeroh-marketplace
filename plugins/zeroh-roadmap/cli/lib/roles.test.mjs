@@ -751,9 +751,13 @@ const HARNESS_DELIVERY_PREFIX = 'agents/'
  * envelope — the one that PARAPHRASED do-phase instead of handing over its path, `git show
  * e965f4f~1:cli/commands/codex.mjs` — which measured 3992 / 16693 = 0.2391; a bound above that
  * would certify the very regression this instrument exists to catch. The bound therefore sits
- * just under it. Every lane override carries its own assertion in cli/commands/codex.test.mjs,
- * so compacting may remove repetition but never semantics. Absolute install paths also
- * contribute to envelope bytes.
+ * just under it, and the lane's own overrides must fit: measured 3744 / 16693 = 0.2243 at the
+ * time of writing. A ceiling with only a sentence of slack stops discriminating and starts
+ * taxing — a genuine new override would red it, and the cheapest green would be deleting a
+ * rule to buy bytes, which is why every lane override carries its own assertion in
+ * cli/commands/codex.test.mjs: compacting may remove repetition, never semantics. The
+ * measurement normalizes the install root, so absolute checkout-path length cannot decide
+ * whether identical prose passes.
  */
 const MAX_ENVELOPE_PROTOCOL_RATIO = 0.235
 
@@ -765,12 +769,13 @@ const REDERIVE_CMD = [
   `import{tmpdir}from'node:os';const r=mkdtempSync(join(tmpdir(),'psr-'));mkdirSync(join(r,'roadmap','phases'),{recursive:true});`,
   `writeFileSync(join(r,'roadmap','phases','phase-1.phase.ts'),'');const d=join(dirname(RUN_SKILL),'references');`,
   `const f=[RUN_SKILL,...readdirSync(d,{recursive:true}).map(x=>join(d,x))].filter(x=>statSync(x).isFile());`,
-  `const p=f.reduce((s,x)=>s+statSync(x).size,0);const e=Buffer.byteLength(buildPrompt(r,['1']),'utf8');`,
+  `const p=f.reduce((s,x)=>s+statSync(x).size,0);const e=Buffer.byteLength(buildPrompt(r,['1']).replaceAll(process.cwd(),'<PLUGIN_ROOT>'),'utf8');`,
   `console.log({envelopeBytes:e,protocolBytes:p,ratio:+(e/p).toFixed(4)})"`,
 ].join('')
 
 /** Plugin-relative, forward-slashed — the two sides derive paths differently, so they only meet here. */
 const pluginRel = (abs) => relative(PLUGIN_ROOT, abs).split(sep).join('/')
+const normalizePluginRoot = (prompt, root = PLUGIN_ROOT) => prompt.split(root).join('<PLUGIN_ROOT>')
 
 /** THE RULE, applied: one mission SKILL.md + every file under its references/ tree. */
 function protocolSetOf(skillRel) {
@@ -799,7 +804,7 @@ const codexSide = () => (_codexSide ??= (() => {
       .map((p) => (isAbsolute(p) ? pluginRel(p) : p))
       .filter((p) => !p.startsWith('..'))
       .sort()
-    return { envelopeBytes: Buffer.byteLength(prompt, 'utf8'), skills, set: [...new Set(skills.flatMap(protocolSetOf))].sort() }
+    return { envelopeBytes: Buffer.byteLength(normalizePluginRoot(prompt), 'utf8'), skills, set: [...new Set(skills.flatMap(protocolSetOf))].sort() }
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -901,4 +906,22 @@ test('envelope overhead is BOUNDED — the prompt delivers the protocol, it does
       + 'Fix cli/commands/codex.mjs buildPrompt: move the prose into skills/do-phase/SKILL.md (or its references/) and hand it over by path, keeping only targets + disposition overrides here. '
       + `Re-derive: ${REDERIVE_CMD}`,
   )
+})
+
+test('envelope overhead normalization is independent of the plugin install-root length', () => {
+  const root = mkdtempSync(join(tmpdir(), 'protocol-root-length-'))
+  try {
+    mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+    writeFileSync(join(root, 'roadmap', 'phases', 'phase-1.phase.ts'), '')
+    const prompt = buildPrompt(root, ['1'])
+    const longerRoot = `${PLUGIN_ROOT}-a-deliberately-longer-install-root`
+    const relocated = prompt.split(PLUGIN_ROOT).join(longerRoot)
+    assert.equal(
+      Buffer.byteLength(normalizePluginRoot(prompt), 'utf8'),
+      Buffer.byteLength(normalizePluginRoot(relocated, longerRoot), 'utf8'),
+      'the same envelope installed at a longer path must consume the same normalized byte budget',
+    )
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
