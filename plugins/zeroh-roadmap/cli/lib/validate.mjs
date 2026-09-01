@@ -228,10 +228,22 @@ function verifyPolarityWarnings(phase) {
           `so this reds when the claim is TRUE. Compare the count explicitly, e.g. test "$(grep -c x f)" = "0".`,
       )
     }
-    if (/(npm run|pnpm |yarn |tsc\b|capbuild|nx run|vitest|node --test)/.test(cmd) && /\|\s*(head|tail|grep)\b/.test(cmd)) {
+    if (/(npm run|pnpm |yarn |tsc\b|capbuild|nx run|vitest|node --test|node |npx |tsx )/.test(cmd) && /\|\s*(head|tail|grep)\b/.test(cmd)) {
       out.push(
         `[zeroh-roadmap] WARN phase ${num} ${where}: this judges a build or test run through a pipe, so the ` +
-          `exit code is the filter's and a red run reads green. Redirect to a file and read $?.`,
+          `exit code is the filter's and a red run reads green (azure 2421 incident class). Redirect to a file and read $?.`,
+      )
+    }
+    if (/\|\|\s*true(?:\s|$|[;)])/.test(cmd)) {
+      out.push(
+        `[zeroh-roadmap] WARN phase ${num} ${where}: \`|| true\` swallows every failing exit ` +
+          `(exit-0-always plan-adversary incident class). Remove the swallow and judge the command directly.`,
+      )
+    }
+    if (/(?:;|&&)\s*(?:echo(?:\s+[^;&|]*)?|true)\s*$/.test(cmd)) {
+      out.push(
+        `[zeroh-roadmap] WARN phase ${num} ${where}: the final bare echo/true replaces the command's verdict ` +
+          `(exit-0-always plan-adversary incident class). Preserve and test the original exit code.`,
       )
     }
     if (/node\s+--test\b/.test(cmd) && /\.tsx?\b/.test(cmd) && !/(--import|--loader|--experimental-strip-types)/.test(cmd)) {

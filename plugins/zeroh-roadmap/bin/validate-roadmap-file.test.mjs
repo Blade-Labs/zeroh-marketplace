@@ -540,3 +540,114 @@ test('attribution lint: a cancelled phase missing BOTH stamps never warns', () =
     assert.doesNotMatch(r.stderr, /WARN phase 9013/, 'a cancelled phase was never executed — nothing to attribute')
   }
 })
+
+// ── widened polarity lint: the three MISSED vacuous classes (task 20.3) ────────────
+//
+// verifyPolarityWarnings caught bare `grep -c`, pipe-judged RUNNERS (npm/pnpm/yarn/tsc/
+// capbuild/nx/vitest/`node --test` left-sides only) and loader-less `node --test` on .ts.
+// Three RECORDED shapes matched no class and shipped:
+//
+//   1. PLAIN RUNNER THROUGH A FILTER PIPE — `node bin/validate-roadmap-file.mjs <path> | tail -1`.
+//      The left side is a plain `node`/`npx`/`tsx` validator, not a package-script runner, so the
+//      runner list never saw it; the exit code is `tail`'s and a schema failure read green.
+//      Incident: azure 2421 — "a validate piped through tail -1 masked a schema failure and the
+//      red phase file got pushed" (phase-20 header; MINESWEEP-execution-prompt §vacuity).
+//   2. SWALLOWED EXIT — `cmd || true`. The clause cannot report anything but success.
+//   3. TRAILING NO-OP — the final element of a `;` / `&&` list is a bare `echo`/`true`, so the
+//      list's exit code is the no-op's. Recorded row: `cmd; echo done`.
+//      2 and 3 are the "Exit-0-always tails" class of the plan adversary catalogue
+//      (skills/review-phase/references/plan-adversary.md §A).
+//
+// CITATION CONTRACT (arc MINESWEEP criterion `vacuity-flagged` bar: "each finding cites the
+// incident class it encodes so the warning teaches"): class 1 names `azure 2421`; classes 2/3
+// name the catalogue class (`exit-0-always`, or `plan-adversary`). Those are the only citations
+// recorded for these shapes in this repo — an implementation citing neither teaches nothing.
+//
+// Each class gets: the recorded shape WARNs · its clean twin is silent · the grandfather rule is
+// untouched (NEW-to-git warns, COMMITTED is exempt), asserted in BOTH directions per class.
+
+/** Recorded shape → clean twin, one row per missed class. */
+const VACUOUS_CLASSES = [
+  {
+    name: 'plain node validator judged through a filter pipe',
+    bad: 'node bin/validate-roadmap-file.mjs roadmap/phases/phase-9000.phase.ts | tail -1',
+    // The SAME validator with its exit code judged directly — the whole difference is the pipe.
+    good: 'node bin/validate-roadmap-file.mjs roadmap/phases/phase-9000.phase.ts',
+    citation: /azure 2421/i,
+  },
+  {
+    name: '`|| true` swallows the exit code',
+    bad: 'node bin/roadmap.mjs phase validate 9000 || true',
+    good: 'node bin/roadmap.mjs phase validate 9000',
+    citation: /exit-0-always|plan-adversary/i,
+  },
+  {
+    name: 'a bare echo as the final list element after `;`',
+    bad: 'node bin/roadmap.mjs phase validate 9000; echo done',
+    // `echo` inside an expected-output ASSERTION, not as the final command: the assertion still
+    // reds on wrong output, so a lint keyed on "mentions echo" false-fires here.
+    good: 'test "$(node bin/roadmap.mjs phase show 9000)" = "$(echo done)"',
+    citation: /exit-0-always|plan-adversary/i,
+  },
+]
+
+/** Every WARN line the polarity lint can raise for the 9008 fixture's single step. The grammar
+ *  and length lints share this label but stay silent here (every fixture carries → verify: and
+ *  sits far under the 700-char cap), so these lines are the polarity lint's alone. */
+const stepWarns = (stderr) => stderr.split('\n').filter((l) => /WARN phase 9008 task 9008\.1 step 1\b/.test(l))
+
+for (const { name, bad, good, citation } of VACUOUS_CLASSES) {
+  test(`polarity lint: ${name} — the recorded shape WARNS with its incident citation`, () => {
+    const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(`do the described thing → verify: ${bad}`))
+    assertGitTracked(f, false) // the lint is authoring-time: this case only proves anything on a NEW file
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+    const warns = stepWarns(r.stderr)
+    assert.equal(warns.length, 1, `expected exactly ONE polarity WARN for '${bad}'; got ${warns.length}. stderr:\n${r.stderr || '(empty)'}`)
+    assert.match(warns[0], /exit/i, 'the WARN says what is wrong: the clause reports the wrong exit code')
+    assert.match(warns[0], citation, `the WARN cites the incident class it encodes (${citation})`)
+  })
+
+  test(`polarity lint: ${name} — the clean twin is SILENT`, () => {
+    const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(`do the described thing → verify: ${good}`))
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `the clean twin parses clean; stderr: ${r.stderr}`)
+    assert.deepEqual(stepWarns(r.stderr), [], `a falsifiable clause draws no polarity WARN: '${good}'`)
+  })
+
+  test(`polarity lint: ${name} — the grandfather rule is untouched (COMMITTED is exempt)`, () => {
+    const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(`do the described thing → verify: ${bad}`), { commit: true })
+    assertGitTracked(f, true)
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `a committed file never REDs; stderr: ${r.stderr}`)
+    assert.deepEqual(stepWarns(r.stderr), [], 'the ~1,100 committed phase files stay exempt — the widening is authoring-time only')
+  })
+}
+
+test('polarity lint: the widened classes also fire through the `roadmap phase validate` face', () => {
+  // The arc criterion names THIS face ("`roadmap phase validate` on a phase whose verify pipes
+  // through `| tail -1` … emits the polarity WARN"); plan-phase Step 4 mandates it, so a face
+  // that swallows the WARN makes the widening unreadable to the planner it exists for.
+  const piped = VACUOUS_CLASSES[0]
+  const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(`do the described thing → verify: ${piped.bad}`))
+  const r = spawnSync('node', [ROADMAP_BIN, 'phase', 'validate', f.path], { encoding: 'utf8', timeout: 120_000 })
+  assert.equal(r.status, 0, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+  assert.equal(stepWarns(r.stderr ?? '').length, 1, `the CLI face prints the same single WARN; stderr:\n${r.stderr || '(empty)'}`)
+  assert.match(r.stdout, /phase validate: .* — OK/, 'and still reports the OK verdict')
+})
+
+test('polarity lint: the pre-existing classes are unchanged by the widening', () => {
+  // A regression net around the three rules that already worked: the widening must ADD classes,
+  // not re-key the ones arc SEODESKFIX paid for.
+  const kept = [
+    'grep -c thing x',
+    'capbuild npm test | tail -20',
+    'node --test bin/thing.test.ts',
+  ]
+  for (const cmd of kept) {
+    const f = writeGitPhase('phase-9008.phase.ts', stepsPhase(`do the described thing → verify: ${cmd}`))
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+    assert.ok(stepWarns(r.stderr).length >= 1, `'${cmd}' is an already-caught class and must still WARN; stderr:\n${r.stderr || '(empty)'}`)
+  }
+})

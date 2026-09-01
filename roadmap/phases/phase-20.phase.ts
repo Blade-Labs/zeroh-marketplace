@@ -168,7 +168,18 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/lib/validate.mjs', 'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Expanded verifyPolarityWarnings to catch plain node/npx/tsx invocations judged through head/tail/grep, any `|| true` exit swallow, and command lists ending in a bare echo/true. Each warning names its recorded incident class, while direct commands, expected-output assertions, and committed phase files remain silent.',
+        how:
+          'The claude-opus-5 test-engineer added table-driven new-file, clean-twin, and grandfathered-file cases and established 32 passing / 4 failing before implementation; the completed validator suite passed 36/36 and the types slot was declared-none. `|| true` polarity guard mutation proof: planted `|| true` into its clean twin → RED (35 pass, 1 fail: unexpected WARN); changed the rule anchor from `true` to `false` → RED (35 pass, 1 fail: expected WARN count 0); decoy direct command and expected-output echo twins → GREEN (36 pass, 0 fail). Each scratch mutation was reverted before this report.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '20.4',
