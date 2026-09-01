@@ -43,6 +43,10 @@ import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
   {
+    phase: 22,
+    name: 'Plan-side integrity: durable review records, citation-integrity WARN, plugin version-drift line',
+  },
+  {
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
@@ -51,6 +55,10 @@ export default defineBacklog([
   {
     phase: 12,
     name: 'DEFERRED — closed-loop trigger design: scheduled detection that authors draft fix proposals',
+  },
+  {
+    phase: 21,
+    name: 'Arc-sweep LOW follow-ups: one worktree enumerator, lockfile-aware tsx hint, envelope colon',
   },
   // Flat form (back-compat):
   // { phase: 1, name: 'Example phase name' },

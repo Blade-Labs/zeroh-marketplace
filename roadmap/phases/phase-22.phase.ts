@@ -41,7 +41,7 @@ export default definePhase({
     'Fleet incident 2026-09-01: Gandalf queued an inline-"reviewed" phase (illumination 1be2812) whose gate then caught 7 findings; atlas 41/77 record 5x invented prose incl. fabricated citations; all fleet sessions run a 0.32.0 cache snapshot while the source is 0.34.0.',
   priority: 'HIGH',
   dependsOn: [17],
-  conflictsWith: [21],
+  conflictsWith: [],
   keyFiles: [
     'plugins/zeroh-roadmap/templates/schema.ts',
     'lib/roadmap/schema.ts',
@@ -70,7 +70,7 @@ export default definePhase({
     },
     {
       claim: 'The installed-cache layout is <configRoot>/plugins/cache/<marketplace>/<plugin>/<version>/ with known_marketplaces.json two levels above cache/, carrying a directory source path (observed live on both configs, 2026-09-01).',
-      verify: 'bash -c "test -f /home/patrik/.claude-b/plugins/known_marketplaces.json && test -d /home/patrik/.claude-b/plugins/cache/zeroh-marketplace/zeroh-roadmap/0.32.0"',
+      verify: 'bash -c "R=${CLAUDE_CONFIG_DIR:-$HOME/.claude}; test -f $R/plugins/known_marketplaces.json && test -d $R/plugins/cache/zeroh-marketplace/zeroh-roadmap"',
       onFalse: 'ESCALATE',
     },
   ],
@@ -93,7 +93,7 @@ export default definePhase({
         },
       ],
       acceptanceCriteria: [
-        'Both homes carry the identical field; a phase recording reviewRecord validates; review-phase\'s queue step names the write; the do-arc measure assert still exits 0 (13257)',
+        'Both homes carry the identical field; a phase recording reviewRecord validates; review-phase\'s queue step names the write; `roadmap measure --flow plan-arc` (the flow that loads review-phase — measure-manifest.json:32) recorded before/after in the transparencyReport with growth ≤ the one sentence (the do-arc assert does not load this file, so its exit 0 is not evidence)',
       ],
       files: [
         'plugins/zeroh-roadmap/templates/schema.ts',
@@ -113,16 +113,16 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/audit.mjs',
           description:
-            "Add git-tier Check 17: for each phase in backlog.ts or status in-progress, evidence = reviewRecord present OR a `docs(roadmap): phase N — address review findings` commit in log; neither → HIGH naming the phase and the remedy (run /review-phase N; a WAIVED review records via:'waived'). Grandfather: phases whose queue commit predates the rule's land date are exempt (the 17.2 cutoff pattern, architect-approved there) → verify: bash -c \"grep -qF 'Check 17' plugins/zeroh-roadmap/cli/commands/audit.mjs\"",
+            "Add git-tier Check 17: for each phase in backlog.ts or status in-progress, evidence = reviewRecord present OR one of the THREE review-commit subjects git log actually carries: `docs(roadmap): phase N — address review findings` (plan-arc, b0d2182), `plan(roadmap): phase N review fixes` and `docs(roadmap): queue phase N` (review-phase SKILL.md:150, 2f76630 / 590cdcc); none → HIGH naming the phase + remedy (run /review-phase N; a WAIVED review records via:'waived'). Grandfather: queue commits before the rule's land date are exempt via a named ISO cutoff constant (the 17.2 pattern, gate-report.mjs:23) → verify: bash -c \"grep -qF 'Check 17' plugins/zeroh-roadmap/cli/commands/audit.mjs\"",
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/audit.test.mjs',
           description:
-            'RED/GREEN fixture pair per the suite pattern: a queued phase with neither evidence fires HIGH; one carrying reviewRecord fires nothing; one with the review-findings commit fires nothing; a pre-cutoff phase fires nothing (four directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'check 17\' cli/commands/audit.test.mjs && capbuild node --test cli/commands/audit.test.mjs >/dev/null 2>&1"',
+            'RED/GREEN fixture pair per the suite pattern: a queued phase with neither evidence fires HIGH; one carrying reviewRecord fires nothing; one with any of the three review-commit subjects fires nothing (table over all three); a pre-cutoff phase fires nothing (four directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'check 17\' cli/commands/audit.test.mjs && capbuild node --test cli/commands/audit.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
-        'The Gandalf shape (queued, no record, no review commit) is a HIGH finding with the runnable remedy; all three evidence forms silence it (four directions tested)',
+        'The Gandalf shape (queued, no record, no review commit) is a HIGH finding with the runnable remedy; reviewRecord, each of the three review-commit subjects, and the pre-cutoff exemption all silence it',
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/audit.mjs', 'plugins/zeroh-roadmap/cli/commands/audit.test.mjs'],
       testMode: 'tdd',
@@ -168,7 +168,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/status.test.mjs',
           description:
-            'Fixture: a fake cache tree (tmp configRoot with plugins/known_marketplaces.json pointing at a tmp source dir at a higher version) with the CLI invoked via a copied bin path under it → the drift line appears with both versions; equal versions → silent; no cache shape → silent (three directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'version-drift\' cli/commands/status.test.mjs && capbuild node --test cli/commands/status.test.mjs >/dev/null 2>&1"',
+            'Export a pure versionDriftLine({ selfPath }) (status.mjs feeds import.meta.url — add the node:url import) so no test copies the plugin tree: fixture = tmp configRoot with plugins/known_marketplaces.json → tmp source dir at a higher version, fake cache selfPath under it → line names both versions; equal versions → silent; selfPath outside */plugins/cache/ → silent (three directions); plus ONE spawned bin/roadmap.mjs status from this checkout asserting the line ABSENT (non-cache door) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'version-drift\' cli/commands/status.test.mjs && capbuild node --test cli/commands/status.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -181,7 +181,7 @@ export default definePhase({
   ],
   notes:
     'interview: skipped — scope is the recorded fleet incident (illumination 1be2812 "reviewed inline"; atlas phase-77 docblock "invented prose five times across four rounds" + its mid-flight-review corrections; the 0.32.0/0.34.0 cache split observed live on both configs 2026-09-01). ' +
-    'conflictsWith 21: both touch validate.mjs\'s WARN section and status.mjs — serialize, never parallel. dependsOn 17: check 17 reuses the 17.2 cutoff grandfathering pattern and the vendor-pair discipline. ' +
+    'conflictsWith: none — phase 21 (after its own review) touches worktree/executor-arm/status/tsx-bridge/codex and their tests; this phase touches schema/review-phase SKILL/audit/validate/status.mjs — status.mjs is the ONE shared file, but 21 edits derive() step (1) and this phase appends an advisory line: disjoint hunks, no serialization needed. dependsOn 17: check 17 reuses the 17.2 cutoff grandfathering pattern and the vendor-pair discipline. ' +
     'reviewScope full. Out of scope, recorded: refreshing the live sessions\' caches is an operator act (hot-swapping the plugin under Gandalf\'s in-flight 6h executor is the exact interference the shared-host rules bar); enforcement of reviewRecord at QUEUE time (a backlog-write refusal) needs a queue-owning verb that does not exist — the audit check is the honest reach of the current architecture. ' +
-    'Verify rehearsal attestation: red-now probes executed 2026-09-01 — reviewRecord 0 hits both homes, Check 17 0 hits, citation 0 hits in validate.mjs, known_marketplaces 0 hits in status.mjs (each step-verify red for exactly what its diff adds); assumption probes all exit 0 including the live cache-layout observation; runner clauses inherit polarity from their grep representatives. Authored with --skip-review: plan unverified, NOT queued — review together with phase 21.',
+    'Verify rehearsal attestation: red-now probes executed 2026-09-01 — reviewRecord 0 hits both homes, Check 17 0 hits, citation 0 hits in validate.mjs, known_marketplaces 0 hits in status.mjs (each step-verify red for exactly what its diff adds); assumption probes all exit 0 including the live cache-layout observation; runner clauses inherit polarity from their grep representatives. Authored with --skip-review; Mode A review EXECUTED 2026-09-01 (claude-fable-5-1, standalone inline): READY after five [FIXED] repairs — (1) conflictsWith [21] rested on a false claim ("both touch validate.mjs"): phase 21 never touches validate.mjs; the only shared file is status.mjs in disjoint hunks — pairing dropped; (2) assumption 3 hard-coded one session\'s config root under /home — re-keyed to ${CLAUDE_CONFIG_DIR:-$HOME/.claude} (both configs carry the layout); (3) 22.1\'s criterion cited the do-arc measure assert, which does not load review-phase (measure-manifest.json:32 puts it in plan-arc) — vacuous, re-keyed to plan-arc; (4) 22.2 keyed review evidence on ONE commit subject while review-phase\'s own two forms (SKILL.md:150) would have read as unreviewed — widened to the three forms git log carries; (5) 22.4\'s test needed a copied plugin tree under a fake cache — replaced by an injected-selfPath seam plus one real non-cache spawn. Ratified: reviewScope full; testMode tdd on all four; userFacing false. The 17.2 cutoff pattern verified real at gate-report.mjs:23.',
 })
