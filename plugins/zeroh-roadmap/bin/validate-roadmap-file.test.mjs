@@ -572,14 +572,14 @@ const VACUOUS_CLASSES = [
   {
     name: 'plain node validator judged through a filter pipe',
     bad: 'node bin/validate-roadmap-file.mjs roadmap/phases/phase-9000.phase.ts | tail -1',
-    // The SAME validator with its exit code judged directly — the whole difference is the pipe.
-    good: 'node bin/validate-roadmap-file.mjs roadmap/phases/phase-9000.phase.ts',
+    // Here grep's match IS the intended verdict, so the filter is an assertion rather than a mask.
+    good: 'node bin/validate-roadmap-file.mjs roadmap/phases/phase-9000.phase.ts | grep -q expected',
     citation: /azure 2421/i,
   },
   {
     name: '`|| true` swallows the exit code',
-    bad: 'node bin/roadmap.mjs phase validate 9000 || true',
-    good: 'node bin/roadmap.mjs phase validate 9000',
+    bad: 'bash -c "node bin/roadmap.mjs phase validate 9000 || true"',
+    good: 'grep -qF "|| true" roadmap/phases/phase-9000.phase.ts',
     citation: /exit-0-always|plan-adversary/i,
   },
   {
@@ -592,7 +592,7 @@ const VACUOUS_CLASSES = [
   },
   {
     name: 'a bare `true` after `;` warns while an `&& echo` tail stays honest',
-    bad: 'node bin/roadmap.mjs phase validate 9000; true',
+    bad: 'bash -c "node bin/roadmap.mjs phase validate 9000; true"',
     good: 'grep -q expected output.txt && echo found',
     citation: /exit-0-always|plan-adversary/i,
   },

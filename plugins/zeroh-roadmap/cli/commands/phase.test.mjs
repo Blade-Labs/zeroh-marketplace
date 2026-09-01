@@ -1781,6 +1781,16 @@ test('phase validate --assumptions — verifies run from the REPOSITORY TOPLEVEL
   assert.equal(res.status, 2, `the stale claim still reds the run; got ${res.status}:\n${out}`)
 })
 
+test('phase validate --json --assumptions — stdout stays one parseable JSON document and the tripwire still runs', () => {
+  const { root } = makeRepo()
+  writeAssumptionsPhase(root, 9109, [claimOf('the JSON-mode tripwire executed', 'touch json-assumption-ran.marker')])
+
+  const res = phaseValidate(root, ['9109', '--json', '--assumptions'])
+  assert.equal(res.status, 0, res.stderr)
+  assert.doesNotThrow(() => JSON.parse(res.stdout), `stdout must be exactly one JSON document; got:\n${res.stdout}`)
+  assert.equal(existsSync(join(root, 'json-assumption-ran.marker')), true, 'suppressing narration must not suppress execution')
+})
+
 test('phase validate --assumptions — a phase with NO assumptions prints a note and exits 0 (absent key and empty array alike)', () => {
   for (const [label, assumptions] of [['absent key', null], ['empty array', []]]) {
     const { root } = makeRepo()

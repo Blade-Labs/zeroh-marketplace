@@ -228,19 +228,22 @@ function verifyPolarityWarnings(phase) {
           `so this reds when the claim is TRUE. Compare the count explicitly, e.g. test "$(grep -c x f)" = "0".`,
       )
     }
-    if (/(npm run|pnpm |yarn |tsc\b|capbuild|nx run|vitest|node --test|node |npx |tsx )/.test(cmd) && /\|\s*(head|tail|grep)\b/.test(cmd)) {
+    const runnerThroughFilter = /(npm run|pnpm |yarn |tsc\b|capbuild|nx run|vitest|node --test|node |npx |tsx )/.test(cmd) && /\|\s*(head|tail|grep)\b/.test(cmd)
+    const grepIsTheAssertion = /\|\s*grep\s+-[a-zA-Z]*q\b/.test(cmd) || (/\|\s*grep\s+-[a-zA-Z]*c\b/.test(cmd) && /(\btest\b|\[|=|-eq|-ne|-gt|-lt)/.test(cmd))
+    if (runnerThroughFilter && !grepIsTheAssertion) {
       out.push(
         `[zeroh-roadmap] WARN phase ${num} ${where}: this judges a build or test run through a pipe, so the ` +
           `exit code is the filter's and a red run reads green (azure 2421 incident class). Redirect to a file and read $?.`,
       )
     }
-    if (/\|\|\s*true(?:\s|$|[;)])/.test(cmd)) {
+    const quotedLiteralSwallow = /\b(?:grep|rg)\b[^;&|]*["']\|\|\s*true["']/.test(cmd)
+    if (/\|\|\s*true\b/.test(cmd) && !quotedLiteralSwallow) {
       out.push(
         `[zeroh-roadmap] WARN phase ${num} ${where}: \`|| true\` swallows every failing exit ` +
           `(exit-0-always plan-adversary incident class). Remove the swallow and judge the command directly.`,
       )
     }
-    if (/;\s*(?:echo(?:\s+[^;&|]*)?|true)\s*$/.test(cmd)) {
+    if (/;\s*(?:echo(?:\s+[^;&|"']*)?|true)\s*["']?\s*$/.test(cmd)) {
       out.push(
         `[zeroh-roadmap] WARN phase ${num} ${where}: the final bare echo/true replaces the command's verdict ` +
           `(exit-0-always plan-adversary incident class). Preserve and test the original exit code.`,

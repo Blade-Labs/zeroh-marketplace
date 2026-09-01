@@ -1,5 +1,5 @@
 /**
- * roadmap phase validate <N|file> [--json] — the CLI face of the roadmap-file validator
+ * roadmap phase validate <N|file> [--json] [--assumptions] — validate and optionally run tripwires
  * (same engine cli/lib/validate.mjs the write-hook calls). Unlike the hook, this is a
  * STRICT context (design §2): tsx absence is exit 1 here, not fail-open.
  *
@@ -532,7 +532,7 @@ export default async function run(argv) {
   if (sub === 'land') return runLandCli(argv.slice(1))
   if (sub !== 'validate') {
     process.stderr.write(
-      'roadmap phase: usage: roadmap phase validate <N|file> [--json] | start <N> | curate <N> [--apply] [--groups "1-3,4-6,7"] | land <N>\n',
+      'roadmap phase: usage: roadmap phase validate <N|file> [--json] [--assumptions] | start <N> | curate <N> [--apply] [--groups "1-3,4-6,7"] | land <N>\n',
     )
     return 1
   }
@@ -588,6 +588,7 @@ export default async function run(argv) {
       toplevel,
       phaseNum,
       loadPhase: () => bridgeLoadPhase(target, toplevel),
+      ...(opts.json ? { out: { write() {} } } : {}),
     })
   }
   if (result.kind === 'toolchain-missing') return 1
