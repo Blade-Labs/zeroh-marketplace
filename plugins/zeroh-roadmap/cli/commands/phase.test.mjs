@@ -1530,3 +1530,51 @@ test('phase land — a journal that cannot be ARCHIVED does not crash a land tha
     `the un-archived journal must be NAMED — \`codex status\` will keep reading it as live until it is renamed by hand; got:\n${err.text}`,
   )
 })
+
+// ── phase land — the lane's lessons come home before the lane is destroyed (18.2) ──────────────
+//
+// A codex lane records its lessons in ITS OWN roadmap/arc-evals/lessons.jsonl, and `phase land`
+// disposes that worktree. The land moves a REF; it does not update the primary checkout's working
+// tree — so even a lane that dutifully committed its lessons leaves the corpus `roadmap eval
+// propose` actually reads (the primary checkout's file) exactly as it found it, and then the
+// directory holding the only other copy is removed.
+
+const LESSONS_REL = join('roadmap', 'arc-evals', 'lessons.jsonl')
+const corpusLinesAt = (root) => readFileSync(join(root, LESSONS_REL), 'utf8').split('\n').filter(Boolean)
+
+/** Write (and commit) a lessons corpus in a checkout. */
+function seedLessonsAt(dir, text, subject) {
+  mkdirSync(join(dir, 'roadmap', 'arc-evals'), { recursive: true })
+  writeFileSync(join(dir, LESSONS_REL), text)
+  gitAt(dir, 'add', '--', LESSONS_REL)
+  gitAt(dir, 'commit', '-q', '-m', subject)
+}
+
+test('phase land — the disposed codex lane’s lessons are MERGED into the primary corpus, not deleted with the worktree', () => {
+  const f = codexLaneFixture(110)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
+  seedLessonsAt(f.root, '{"k":"primary"}\n', 'chore(roadmap): seed the primary lessons corpus')
+  // Committed in the lane on purpose: an UNTRACKED corpus would block the disposal outright, so
+  // this is the well-behaved lane — and it is still the lane whose lessons vanish today.
+  seedLessonsAt(f.wt, '{"k":"primary"}\n{"k":"lane"}\n', `docs(roadmap): phase 110 — record a lesson`)
+
+  const err = sink()
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 110,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+  })
+
+  assert.equal(code, 0, `the land itself succeeds; stderr:\n${err.text}`)
+  assert.notEqual(f.baseTip(), f.seed, 'the integration ref really moved — this is a land, not a refusal')
+  assert.ok(!existsSync(f.wt), 'the lane worktree is GONE, which is precisely why the merge has to happen before the disposal')
+  assert.deepEqual(
+    corpusLinesAt(f.root),
+    ['{"k":"primary"}', '{"k":"lane"}'],
+    'the primary checkout’s corpus — the one `roadmap eval propose` reads — gained the lane’s lesson exactly once, with its own line intact and first',
+  )
+})

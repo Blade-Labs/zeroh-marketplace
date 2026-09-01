@@ -161,7 +161,19 @@ export default definePhase({
       ],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ['mergeLaneLessons(primaryRoot, laneDir) from cli/lib/landing.mjs'] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added mergeLaneLessons as an append-only exact-line union and wired it into both codex-lane landing verbs before worktree disposal. Phase land reports nonzero merge counts on stderr; arc land records a lessons-merge step for every lane.',
+        how:
+          'The test-engineer role established RED through pure corpus fixtures plus real phase-land and injected arc-land disposal seams. The merger preserves existing primary bytes, inserts a separating newline only when required, keeps malformed lines verbatim, creates the primary corpus when absent, deduplicates within and across corpora, and returns the number actually appended. The first GREEN attempt exposed older first-match consumers of the ordered arc record; the call remained before disposal while its evidence record moved after the established disposal outcome. Final verification passed landing.test 52/52, landing-mechanics.test 36/36, phase.test 38/38, and the declared-none types slot.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Whitespace-only lesson lines remain meaningful exact lines; only empty separator lines are ignored. The merge deliberately preserves malformed JSONL instead of parsing or normalizing it.',
+      },
     },
     {
       id: '18.3',
@@ -234,6 +246,7 @@ export default definePhase({
     status: 'failed',
     driver: { model: 'gpt-5.6-sol', lane: 'codex' },
     roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
     ],

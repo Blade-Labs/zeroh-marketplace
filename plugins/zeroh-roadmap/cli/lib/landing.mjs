@@ -15,7 +15,7 @@
  * "An item NOT on this list is NOT a blocker" are the ported law (do-arc Step 8).
  */
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { bridgeImport, bridgeImportMany, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
 import { readSidecar } from './sidecar.mjs'
@@ -36,6 +36,29 @@ export class LandingError extends Error {
 
 const arcFilePath = (repoRoot, arcId) => join(repoRoot, 'roadmap', 'arcs', `${arcId}.arc.ts`)
 const phaseFilePath = (repoRoot, n) => join(repoRoot, 'roadmap', 'phases', `phase-${n}.phase.ts`)
+const lessonsPath = (root) => join(root, 'roadmap', 'arc-evals', 'lessons.jsonl')
+
+/** Merge a lane's append-only lesson corpus into the primary by exact-line identity. */
+export function mergeLaneLessons(primaryRoot, laneDir) {
+  const lanePath = lessonsPath(laneDir)
+  if (!existsSync(lanePath)) return { merged: 0 }
+
+  const primaryPath = lessonsPath(primaryRoot)
+  const primaryText = existsSync(primaryPath) ? readFileSync(primaryPath, 'utf8') : ''
+  const known = new Set(primaryText.split('\n').filter((line) => line.length > 0))
+  const novel = []
+  for (const line of readFileSync(lanePath, 'utf8').split('\n')) {
+    if (line.length === 0 || known.has(line)) continue
+    known.add(line)
+    novel.push(line)
+  }
+  if (novel.length === 0) return { merged: 0 }
+
+  mkdirSync(dirname(primaryPath), { recursive: true })
+  const separator = primaryText.length > 0 && !primaryText.endsWith('\n') ? '\n' : ''
+  appendFileSync(primaryPath, `${separator}${novel.join('\n')}\n`)
+  return { merged: novel.length }
+}
 
 // Use-site default for mergePolicy.staleBaseCeiling (blocker 8, MECHRATCHET rank 6). Applied
 // wherever the ceiling is read so the ENFORCED ceiling and the emitted reconciliation ceiling
@@ -744,10 +767,12 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
     // and while that was prose two fully merged exec lanes squatted slot dirs for weeks.
     for (const laneDir of codexLaneDirs(home, state.members)) {
       let disposedNow = false
+      let lessons = null
       // Isolated PER LANE, inside the outer best-effort block rather than instead of it: one
       // exploding rm must not strand every remaining member's worktree, and the outer catch's
       // "remove the sidecar/claims by hand" would send the operator at the acts that succeeded.
       try {
+        lessons = mergeLaneLessons(home, laneDir.dir)
         const r = dispose(home, laneDir.dir, {
           branch: laneDir.branch,
           integrationRef: baseRef,
@@ -764,9 +789,11 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
           // it there makes the field dead and the leak invisible.
           ...(r.detail ? { detail: r.detail } : {}),
         })
+        record.push({ step: 'lessons-merge', dir: laneDir.dir, merged: lessons.merged })
       } catch (e) {
         const detail = e?.message?.split('\n')[0] ?? String(e)
         record.push({ step: 'codex-lane-dispose', worktree: laneDir.dir, outcome: 'errored', detail })
+        if (lessons) record.push({ step: 'lessons-merge', dir: laneDir.dir, merged: lessons.merged })
         record.push({ step: 'cleanup', warning: `disposing the codex lane ${laneDir.dir} failed (${detail}) — the land itself is complete; remove that worktree by hand` })
         continue
       }

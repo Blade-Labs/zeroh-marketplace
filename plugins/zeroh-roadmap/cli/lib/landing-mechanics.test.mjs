@@ -773,3 +773,98 @@ test('cleanup — a merged lane branch that could not be deleted is NAMED in the
     'the rail reports a leaked merged branch in `detail` on the PASS path — a record that drops it makes the field dead and the leak invisible',
   )
 })
+
+// ── arc land carries each lane's lessons home BEFORE it disposes the lane (18.2) ───────────────
+//
+// The lane records its lessons in ITS OWN roadmap/arc-evals/lessons.jsonl. The disposal above is
+// what deletes that directory, so ordering is the whole property: a merge attempted after the rm
+// reads a path that no longer exists, and the lesson is gone for good.
+
+const LESSONS_REL = join('roadmap', 'arc-evals', 'lessons.jsonl')
+
+/** Write a lessons corpus into any checkout root (primary or lane). */
+function seedLessons(root, text) {
+  mkdirSync(join(root, 'roadmap', 'arc-evals'), { recursive: true })
+  writeFileSync(join(root, LESSONS_REL), text)
+}
+
+const corpusOf = (root) => readFileSync(join(root, LESSONS_REL), 'utf8').split('\n').filter(Boolean)
+
+/** A lane worktree directory beside the primary; `lessons` null ⇒ the lane recorded none. */
+function laneWithLessons(primary, suffix, lessons) {
+  const dir = `${primary}-codex-${suffix}`
+  bases.push(dir)
+  mkdirSync(dir, { recursive: true })
+  if (lessons !== null) seedLessons(dir, lessons)
+  return dir
+}
+
+test('cleanup — arc land MERGES every landed lane’s lessons into the primary corpus, and does it BEFORE that lane is disposed', () => {
+  const primary = makeConsumer()
+  seedLessons(primary, '{"k":"primary"}\n')
+  const laneTen = laneWithLessons(primary, '10', '{"k":"primary"}\n{"k":"lane-10"}\n')
+  const laneEleven = laneWithLessons(primary, '11', '{"k":"lane-11"}\n')
+  seedCodexJournal(primary, [10], laneTen)
+  seedCodexJournal(primary, [11], laneEleven)
+  const { exec } = recordingExec()
+  // The disposal seam reads the PRIMARY corpus at the moment it is called: whatever is not in
+  // there yet has, by then, only one copy left — in the directory this call destroys.
+  const atDisposal = new Map()
+  const rec = disposeRecorder((dir) => {
+    atDisposal.set(dir, readFileSync(join(primary, LESSONS_REL), 'utf8'))
+    return { disposed: true, alreadyDisposed: false, reason: null, detail: null, branchDeleted: true }
+  })
+
+  const res = landArc({
+    repoRoot: primary,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary, { members: [doneMember(10), doneMember(11)] }),
+    dispose: rec.dispose,
+  })
+
+  assert.equal(res.outcome, 'landed')
+  assert.deepEqual(
+    corpusOf(primary),
+    ['{"k":"primary"}', '{"k":"lane-10"}', '{"k":"lane-11"}'],
+    'BOTH lanes’ lessons reached the primary corpus, the primary’s own line intact and first, and its duplicate of lane 10 not doubled',
+  )
+  for (const [dir, lesson] of [[laneTen, 'lane-10'], [laneEleven, 'lane-11']]) {
+    const snapshot = atDisposal.get(dir)
+    assert.ok(snapshot !== undefined, `fixture: ${dir} must have been disposed at all`)
+    assert.ok(
+      snapshot.includes(lesson),
+      `${lesson} was already in the primary corpus when ${dir} was handed to the disposal — a merge sequenced after the rm has nothing left to read; corpus at disposal time was:\n${snapshot}`,
+    )
+  }
+})
+
+test('cleanup — a lane that recorded NO lessons leaves the primary corpus byte-identical and never fails the land', () => {
+  const primary = makeConsumer()
+  seedLessons(primary, '{"k":"primary"}\n')
+  const bytes = readFileSync(join(primary, LESSONS_REL), 'utf8')
+  const bare = laneWithLessons(primary, '12', null)
+  seedCodexJournal(primary, [12], bare)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder()
+
+  const res = landArc({
+    repoRoot: primary,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary, { members: [doneMember(12)] }),
+    dispose: rec.dispose,
+  })
+
+  assert.equal(res.outcome, 'landed', 'an absent lane corpus is an ordinary state, not a cleanup failure')
+  assert.deepEqual(rec.calls.map((c) => c.dir), [bare], 'and the lane is still disposed')
+  assert.equal(readFileSync(join(primary, LESSONS_REL), 'utf8'), bytes, 'the primary corpus is untouched — not even a stray newline')
+  assert.ok(
+    !res.record.some((s) => s.step === 'cleanup' && s.warning),
+    `nothing warned; got:\n${JSON.stringify(res.record, null, 2)}`,
+  )
+})

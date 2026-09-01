@@ -16,6 +16,8 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BLOCKERS, evaluateBlockers, gatherLandingState, buildRunnerSummary, runArcEndSuite, deriveArcSuiteRange, deriveArcSuiteScope } from './landing.mjs'
+import * as landingMod from './landing.mjs'
+import { ARC_EVALS_DIR, LESSONS_FILE } from '../commands/eval.mjs'
 import { IMPACTED_FALLBACK_NOTE } from './slots.mjs'
 import { defaultExec } from './exec.mjs'
 
@@ -538,4 +540,185 @@ test('staleBaseWarning — the ref is NOT baked in: a different baseRef changes 
   const w = warn(175, 250, 'master')
   assert.ok(w.message.includes('git merge origin/master'), `got: ${w.message}`)
   assert.ok(!w.message.includes('origin/develop'), 'no hardcoded develop leaks into another arc\'s remedy')
+})
+
+// ── mergeLaneLessons — a disposed lane's lessons survive into the primary corpus (18.2) ────────
+//
+// A codex lane records its lessons in ITS OWN roadmap/arc-evals/lessons.jsonl (the append-only
+// sidecar cli/commands/eval.mjs writes and `roadmap eval propose` reads). `land` then REMOVES
+// that worktree, and every lesson the lane learned dies with the directory — the corpus the next
+// proposal pass reads never hears them. These tests pin the merge itself; the WIRING of the two
+// land paths is pinned beside the disposal each already performs (cli/lib/landing-mechanics.test.mjs
+// for `arc land`, cli/commands/phase.test.mjs for `phase land`).
+//
+// Run: capbuild node --test cli/lib/landing.test.mjs
+
+// Lazily resolved: a named import of a not-yet-existing export is a link-time SyntaxError that
+// reds the WHOLE file, and a suite that cannot even load says nothing about the contract. Each
+// test must red on its own, naming the signature it wanted (the cli/commands/phase.test.mjs idiom).
+const mergeLaneLessons = (...args) => {
+  assert.equal(
+    typeof landingMod.mergeLaneLessons,
+    'function',
+    'cli/lib/landing.mjs must export mergeLaneLessons(primaryRoot, laneDir) => { merged: number }',
+  )
+  return landingMod.mergeLaneLessons(...args)
+}
+
+/** The corpus path, taken from the CONSTANTS the eval corpus itself uses — a second literal here
+ *  would let the two halves drift and the merge would silently write to a file nobody reads. */
+const lessonsPathOf = (root) => join(root, ...ARC_EVALS_DIR, LESSONS_FILE)
+
+/**
+ * A checkout root carrying a lessons corpus. `contents` null ⇒ no corpus file at all;
+ * `mkdir` true additionally creates the (empty) roadmap/arc-evals directory, so "no file" and
+ * "no directory either" are distinguishable cases rather than one blurred one.
+ */
+function lessonsTree(contents, { mkdir = false } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'zr-lessons-'))
+  bases.push(root)
+  if (contents !== null || mkdir) mkdirSync(join(root, ...ARC_EVALS_DIR), { recursive: true })
+  if (contents !== null) writeFileSync(lessonsPathOf(root), contents)
+  return root
+}
+
+/** Every line of a corpus as its reader sees it: split on \n with ONLY the final empty element
+ *  (the trailing newline) dropped — a blank line in the middle is a real defect and stays visible. */
+function corpusLines(root) {
+  const parts = readFileSync(lessonsPathOf(root), 'utf8').split('\n')
+  if (parts[parts.length - 1] === '') parts.pop()
+  return parts
+}
+
+test('mergeLaneLessons — a lane-only lesson is APPENDED to the primary corpus, after the primary’s own lines, in the lane’s order', () => {
+  const primary = lessonsTree('{"k":"P1"}\n{"k":"P2"}\n')
+  const lane = lessonsTree('{"k":"P1"}\n{"k":"L1"}\n{"k":"L2"}\n')
+  const before = corpusLines(primary)
+
+  const res = mergeLaneLessons(primary, lane)
+
+  const after = corpusLines(primary)
+  assert.deepEqual(
+    after,
+    ['{"k":"P1"}', '{"k":"P2"}', '{"k":"L1"}', '{"k":"L2"}'],
+    'the primary keeps its own lines FIRST and in order; the lane-only lines arrive at the end in the order the lane recorded them',
+  )
+  assert.equal(res.merged, after.length - before.length, 'merged counts exactly the lines that reached the corpus, never the lines it read')
+  assert.equal(res.merged, 2, 'two of the lane’s three lines were new')
+  assert.deepEqual(
+    corpusLines(lane),
+    ['{"k":"P1"}', '{"k":"L1"}', '{"k":"L2"}'],
+    'the lane corpus is READ, never rewritten — the lane is about to be deleted, but not by this function',
+  )
+})
+
+test('mergeLaneLessons — an exact duplicate line never doubles, however many times the lane repeats it', () => {
+  const primary = lessonsTree('{"k":"P1"}\n{"k":"P2"}\n')
+  const lane = lessonsTree('{"k":"P1"}\n{"k":"L1"}\n{"k":"L1"}\n{"k":"P2"}\n{"k":"L1"}\n')
+
+  const res = mergeLaneLessons(primary, lane)
+
+  assert.deepEqual(
+    corpusLines(primary),
+    ['{"k":"P1"}', '{"k":"P2"}', '{"k":"L1"}'],
+    'the two lines the primary already carried are not re-appended, and the lane’s own triple of L1 lands exactly once',
+  )
+  assert.equal(res.merged, 1, 'one line actually reached the corpus')
+})
+
+test('mergeLaneLessons — the duplicate rule is EXACT LINE identity: two different spellings of the same object are two lessons', () => {
+  // Re-serializing to compare would rewrite the operator's own text (and cannot be done at all
+  // for the malformed lines the corpus is required to keep verbatim).
+  const primary = lessonsTree('{"a":1,"b":2}\n')
+  const lane = lessonsTree('{"b":2,"a":1}\n')
+
+  const res = mergeLaneLessons(primary, lane)
+
+  assert.deepEqual(corpusLines(primary), ['{"a":1,"b":2}', '{"b":2,"a":1}'], 'a different line is a different lesson')
+  assert.equal(res.merged, 1)
+})
+
+test('mergeLaneLessons — a SECOND merge of the same lane is a no-op: merged 0 and a byte-identical corpus', () => {
+  const primary = lessonsTree('{"k":"P1"}\n')
+  const lane = lessonsTree('{"k":"L1"}\n{"k":"L2"}\n')
+
+  const first = mergeLaneLessons(primary, lane)
+  const afterFirst = readFileSync(lessonsPathOf(primary), 'utf8')
+  const second = mergeLaneLessons(primary, lane)
+
+  assert.equal(first.merged, 2)
+  assert.equal(second.merged, 0, 'a re-run merges nothing — a retried land must not grow the corpus by one copy per attempt')
+  assert.equal(
+    readFileSync(lessonsPathOf(primary), 'utf8'),
+    afterFirst,
+    'and it rewrites NOTHING: byte-identical, so no reordering, no re-spacing, no extra newline',
+  )
+})
+
+test('mergeLaneLessons — an absent lane corpus (no file, and no directory at all) is merged 0 with the primary untouched, never a throw', () => {
+  const primary = lessonsTree('{"k":"P1"}\n{"k":"P2"}\n')
+  const bytes = readFileSync(lessonsPathOf(primary), 'utf8')
+  const lanes = [
+    lessonsTree(null, { mkdir: true }), // the arc-evals dir exists, the corpus does not
+    lessonsTree(null), // no roadmap/arc-evals at all
+    join(tmpdir(), 'zr-lessons-lane-that-never-existed-18-2'), // the whole lane directory is gone
+  ]
+
+  for (const lane of lanes) {
+    const res = mergeLaneLessons(primary, lane)
+    assert.equal(res.merged, 0, `a lane with nothing to say merges nothing (${lane})`)
+    assert.equal(readFileSync(lessonsPathOf(primary), 'utf8'), bytes, `and the primary corpus is untouched (${lane})`)
+  }
+})
+
+test('mergeLaneLessons — an absent PRIMARY corpus is created, directory and all: a first lesson is not a reason to drop it', () => {
+  for (const primary of [lessonsTree(null), lessonsTree(null, { mkdir: true })]) {
+    const lane = lessonsTree('{"k":"L1"}\n{"k":"L2"}\n')
+
+    const res = mergeLaneLessons(primary, lane)
+
+    assert.equal(res.merged, 2, `both lane lessons are kept (${primary})`)
+    assert.deepEqual(corpusLines(primary), ['{"k":"L1"}', '{"k":"L2"}'], `the corpus was created carrying them (${primary})`)
+  }
+})
+
+test('mergeLaneLessons — malformed and non-JSON lines survive VERBATIM on both sides; the primary is never reformatted', () => {
+  // The corpus is append-only text a human also edits. A merge that parsed it would drop the
+  // half-written line that is often the only record of what went wrong.
+  const messy = 'not json at all\n{"k":"P2"\n   \n{"k":"P3"}\n'
+  const primary = lessonsTree(messy)
+  const lane = lessonsTree('{"k":"P2"\n### a lane note nobody parsed\n')
+
+  const res = mergeLaneLessons(primary, lane)
+
+  assert.deepEqual(
+    corpusLines(primary),
+    ['not json at all', '{"k":"P2"', '   ', '{"k":"P3"}', '### a lane note nobody parsed'],
+    'every original line kept its exact text and position, and the lane’s unparseable note arrived intact',
+  )
+  assert.equal(res.merged, 1, 'the malformed line the primary ALREADY carried is a duplicate like any other')
+})
+
+test('mergeLaneLessons — a primary corpus with NO trailing newline is not glued to the appended line', () => {
+  const primary = lessonsTree('{"k":"P1"}') // hand-edited file, last line unterminated
+  const lane = lessonsTree('{"k":"L1"}\n')
+
+  const res = mergeLaneLessons(primary, lane)
+
+  assert.deepEqual(corpusLines(primary), ['{"k":"P1"}', '{"k":"L1"}'], 'two lines, not one glued `{"k":"P1"}{"k":"L1"}`')
+  assert.equal(res.merged, 1)
+  assert.ok(
+    readFileSync(lessonsPathOf(primary), 'utf8').endsWith('\n'),
+    'and the corpus is left newline-terminated, so the NEXT appender cannot glue either',
+  )
+})
+
+test('mergeLaneLessons — empty lines in the lane corpus are not appended as lessons', () => {
+  const primary = lessonsTree('{"k":"P1"}\n')
+  const lane = lessonsTree('\n{"k":"L1"}\n\n')
+
+  const res = mergeLaneLessons(primary, lane)
+
+  assert.deepEqual(corpusLines(primary), ['{"k":"P1"}', '{"k":"L1"}'], 'the blank line and the trailing newline are separators, not lessons')
+  assert.equal(res.merged, 1)
 })

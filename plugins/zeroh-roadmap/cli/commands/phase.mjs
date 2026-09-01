@@ -33,6 +33,7 @@ import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError }
 import { landPhase, disposeWorktree, isSlotDir, samePath } from '../lib/worktree.mjs'
 import { archiveJournal, findJournal, JournalUnreadableError, RUN_LANE_ARTIFACTS } from '../lib/codex-journal.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
+import { mergeLaneLessons } from '../lib/landing.mjs'
 
 function runStart(argv) {
   const n = argv.find((a) => /^\d+$/.test(a))
@@ -369,6 +370,10 @@ export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = proc
       err.write(`phase land: the local land succeeded but the push failed — push ${baseRef} manually (${e.message})\n`)
       return 2
     }
+  }
+  if (lane) {
+    const { merged } = mergeLaneLessons(lane.root, cwd)
+    if (merged > 0) err.write(`phase land: merged ${merged} lane lesson(s) into the primary corpus\n`)
   }
   disposeSource(lane, { cwd, laneBranch, baseRef, out, err })
   return 0
