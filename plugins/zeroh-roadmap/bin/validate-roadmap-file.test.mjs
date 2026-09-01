@@ -577,9 +577,21 @@ const VACUOUS_CLASSES = [
     citation: /azure 2421/i,
   },
   {
+    name: 'a later tail still owns the verdict after an intermediate grep assertion',
+    bad: 'node bin/validate-roadmap-file.mjs roadmap/phases/phase-9000.phase.ts | grep -q expected | tail -1',
+    good: 'node bin/validate-roadmap-file.mjs roadmap/phases/phase-9000.phase.ts | grep --quiet expected',
+    citation: /azure 2421/i,
+  },
+  {
     name: '`|| true` swallows the exit code',
     bad: 'bash -c "node bin/roadmap.mjs phase validate 9000 || true"',
     good: 'grep -qF "|| true" roadmap/phases/phase-9000.phase.ts',
+    citation: /exit-0-always|plan-adversary/i,
+  },
+  {
+    name: 'a search-pattern literal does not hide a later real `|| true` swallow',
+    bad: 'grep -qF "|| true" cli/lib/validate.mjs && node bin/roadmap.mjs phase validate 9000 || true',
+    good: 'grep -qF "|| true" cli/lib/validate.mjs',
     citation: /exit-0-always|plan-adversary/i,
   },
   {
@@ -594,6 +606,12 @@ const VACUOUS_CLASSES = [
     name: 'a bare `true` after `;` warns while an `&& echo` tail stays honest',
     bad: 'bash -c "node bin/roadmap.mjs phase validate 9000; true"',
     good: 'grep -q expected output.txt && echo found',
+    citation: /exit-0-always|plan-adversary/i,
+  },
+  {
+    name: 'a quoted echo argument remains a trailing no-op',
+    bad: 'bash -c "node bin/roadmap.mjs phase validate 9000; echo \\"done\\""',
+    good: 'test "$(node bin/roadmap.mjs phase show 9000)" = "$(echo done)"',
     citation: /exit-0-always|plan-adversary/i,
   },
 ]

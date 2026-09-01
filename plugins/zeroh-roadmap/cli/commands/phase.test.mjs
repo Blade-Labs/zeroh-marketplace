@@ -1791,6 +1791,27 @@ test('phase validate --json --assumptions — stdout stays one parseable JSON do
   assert.equal(existsSync(join(root, 'json-assumption-ran.marker')), true, 'suppressing narration must not suppress execution')
 })
 
+test('phase validate --json --assumptions — a stale tripwire stays parseable and is named on stderr', () => {
+  const { root } = makeRepo()
+  const claim = 'the JSON-mode stale tripwire remains observable'
+  writeAssumptionsPhase(root, 9110, [claimOf(claim, 'exit 3')])
+
+  const res = phaseValidate(root, ['9110', '--json', '--assumptions'])
+  assert.equal(res.status, 2)
+  assert.doesNotThrow(() => JSON.parse(res.stdout), `stdout must stay one JSON document; got:\n${res.stdout}`)
+  assert.match(res.stderr, new RegExp(claim))
+  assert.match(res.stderr, /STALE \(exit 3\)/)
+})
+
+test('phase validate <relative-file> --assumptions resolves the advertised file form', () => {
+  const { root } = makeRepo()
+  writeAssumptionsPhase(root, 9111, [claimOf('the relative phase path loaded', 'exit 0')])
+
+  const res = phaseValidate(root, ['roadmap/phases/phase-9111.phase.ts', '--assumptions'])
+  assert.equal(res.status, 0, both(res))
+  assert.match(res.stdout, /the relative phase path loaded — ok/)
+})
+
 test('phase validate --assumptions — a phase with NO assumptions prints a note and exits 0 (absent key and empty array alike)', () => {
   for (const [label, assumptions] of [['absent key', null], ['empty array', []]]) {
     const { root } = makeRepo()

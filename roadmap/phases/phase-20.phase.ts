@@ -160,7 +160,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs',
           description:
-            'Table rows per class from the recorded incidents verbatim (the 2421 node|tail form; `cmd || true`; `cmd; echo done`) each WARN on a new-to-git fixture phase; the clean twins (a direct node run; expected-output assertions; and `cmd && echo`, whose short-circuit preserves a failing left-side verdict) do not; committed-to-git files stay exempt (grandfather rule pinned) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'|| true\' bin/validate-roadmap-file.test.mjs && capbuild node --test bin/validate-roadmap-file.test.mjs >/dev/null 2>&1"',
+            'Table rows per class from the recorded incidents verbatim (the 2421 node|tail form; `cmd || true`; `cmd; echo done`) each WARN on a new-to-git fixture phase; the clean twins (grep-q assertions as the final pipeline stage, quoted grep patterns, expected-output assertions, and `cmd && echo`, whose short-circuit preserves a failing left-side verdict) do not; committed-to-git files stay exempt (grandfather rule pinned) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'|| true\' bin/validate-roadmap-file.test.mjs && capbuild node --test bin/validate-roadmap-file.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -172,7 +172,7 @@ export default definePhase({
       doneDate: '2026-09-01',
       transparencyReport: {
         whatWasDone:
-          'Expanded verifyPolarityWarnings to catch plain node/npx/tsx invocations judged through head/tail/grep, any `|| true` exit swallow, and semicolon lists ending in a bare echo/true. Each warning names its recorded incident class, while direct commands, honest `&&` lists, expected-output assertions, and committed phase files remain silent.',
+          'Expanded verifyPolarityWarnings to catch plain node/npx/tsx invocations whose final filter masks their verdict, any real `|| true` exit swallow outside quoted search patterns, and semicolon lists ending in a bare echo/true, including wrapped and quoted forms. Each warning names its incident class, while final grep-q/count assertions, honest `&&` lists, expected-output assertions, quoted search literals, and committed phase files remain silent.',
         how:
           'The claude-opus-5 test-engineer added table-driven new-file, clean-twin, and grandfathered-file cases and established 32 passing / 4 failing before implementation; the completed validator suite passed 36/36 and the types slot was declared-none. `|| true` polarity guard mutation proof: planted `|| true` into its clean twin → RED (35 pass, 1 fail: unexpected WARN); changed the rule anchor from `true` to `false` → RED (35 pass, 1 fail: expected WARN count 0); decoy direct command and expected-output echo twins → GREEN (36 pass, 0 fail). Semicolon-tail polarity guard mutation proof: planted `; echo found` into the honest `&& echo` clean twin → RED (0 pass, 1 fail: unexpected WARN); changed the rule anchor from `;` to `:` → RED (0 pass, 2 fail: expected WARN count 0 for both `; echo` and `; true`); restored `;` bad-shape, `&& echo` clean-twin, and committed-file decoy cases → GREEN (3 pass, 0 fail). Each scratch mutation was reverted before this report.',
         compromises:

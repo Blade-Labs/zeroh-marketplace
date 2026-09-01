@@ -23,7 +23,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { validateRoadmapFile, renderZodIssues } from '../lib/validate.mjs'
 import { runCaptured } from '../lib/exec.mjs'
@@ -156,7 +156,7 @@ function resolveTarget(arg) {
     const toplevel = gitToplevel(process.cwd())
     return join(toplevel, 'roadmap', 'phases', `phase-${arg}.phase.ts`)
   }
-  return arg
+  return resolve(arg)
 }
 
 /** The production phase-record loader: the tsx bridge, consumer-rooted. */
@@ -164,7 +164,7 @@ function bridgeLoadPhase(phaseFile, toplevel) {
   const imp = bridgeImport(phaseFile, { consumerRoot: toplevel })
   if (!imp.ok) {
     if (imp.kind === 'tsx-absent') throw new Error(TSX_ABSENT_HINT)
-    throw new Error(`phase curate: failed to read ${phaseFile}: ${imp.stderr || `bridge ${imp.kind}`}`)
+    throw new Error(`phase validate --assumptions: failed to read ${phaseFile}: ${imp.stderr || `bridge ${imp.kind}`}`)
   }
   return imp.parsed
 }
@@ -588,7 +588,7 @@ export default async function run(argv) {
       toplevel,
       phaseNum,
       loadPhase: () => bridgeLoadPhase(target, toplevel),
-      ...(opts.json ? { out: { write() {} } } : {}),
+      ...(opts.json ? { out: process.stderr } : {}),
     })
   }
   if (result.kind === 'toolchain-missing') return 1
