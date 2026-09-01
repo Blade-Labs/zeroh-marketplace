@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { untestedGateFixFindings, deviantGrammarFindings } from './gate.mjs'
+import { phaseOwnPatterns } from '../lib/gitscan.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_ROOT = join(HERE, '..', '..')
@@ -1963,6 +1964,12 @@ test('deviantGrammarFindings — 16.3: the taught write forms warn about nothing
     'docs(roadmap): mark phase 7301 complete',
   ]
   canonical.forEach((s, i) => repo.commit(s, { [`lib/c${i}.ts`]: `export const c${i} = ${i}\n` }))
+
+  assert.equal(
+    phaseOwnPatterns(7301).test(canonical[2]),
+    true,
+    'the canonical gate-fix row must be phase-own before its silent warning result is meaningful',
+  )
 
   assert.deepEqual(
     deviantGrammarFindings(repo.root, 7301, base),

@@ -22,9 +22,8 @@
  * asserting the colliding rendering IS matched by ITS own phase's pattern, so no refusal
  * row can pass vacuously on a subject nothing would ever match.
  *
- * Deliberately NOT specified here: the em-dash-free gate-fix form (`phase N gate R<d>`)
- * and the revert/scratch policy — neither is one of the canonical/D1-D5 classes this task
- * defines, so this file neither requires nor forbids them (curate.mjs owns that policy).
+ * The canonical gate-fix form (`phase N gate R<d> —`) is phase-owned too. Revert/scratch
+ * policy remains outside this matcher; curate.mjs owns that policy.
  *
  * Run: capbuild node --test cli/lib/gitscan.test.mjs
  */
@@ -73,6 +72,7 @@ const MATCH = [
   // canonical task form (`phase N — N.X …`) — mudarabah2 727
   { phase: 727, klass: 'canonical', subject: `chore(deps): phase 727 ${EM} 727.7 consumer half lands on 0.34.2` },
   { phase: 727, klass: 'canonical', subject: `fix(lens): phase 727 ${EM} 727.3 per-row shed degradation, ordered ref resolution` },
+  { phase: 727, klass: 'canonical gate-fix', subject: `fix(cli): phase 727 gate R0 ${EM} quality-pass findings` },
   // D1 `phase N task N.X <dash>` (no (k/M) token) — the eleven-phase mudarabah2 class
   { phase: 725, klass: 'D1', subject: `feat(mudarabah): phase 725 task 725.1 ${EM} batch identity + batch rollup` },
   { phase: 725, klass: 'D1', subject: `test(mudarabah): phase 725 task 725.5 ${EM} fence the lens out of settlement` },
@@ -129,6 +129,7 @@ const REFUSE = [
 /** Every class as a template, so both directions can be generated per collision pair. */
 const CLASS_FORMS = [
   { klass: 'canonical', render: (n, d) => `feat(scope): phase ${n} ${d} the work` },
+  { klass: 'canonical gate-fix', render: (n, d) => `fix(scope): phase ${n} gate R2 ${d} reviewer findings` },
   { klass: 'D1', render: (n, d) => `feat(mudarabah): phase ${n} task ${n}.4 ${d} the fourth task` },
   { klass: 'D2', render: (n, d) => `fix(phase-${n}): quality pass ${d} prune narration` },
   { klass: 'D3', render: (n) => `docs(roadmap): mark phase ${n} complete` },

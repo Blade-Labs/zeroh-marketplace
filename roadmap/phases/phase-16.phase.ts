@@ -156,7 +156,7 @@ export default definePhase({
         whatWasDone:
           'derivePhaseStartSha and gate phaseOwnFiles now prefilter with git log -E using phaseOwnPatterns().ere and re-confirm every returned subject with phaseOwnPatterns().test. Start-SHA selection therefore sees tolerated task subjects without accepting a foreign commit whose body merely quotes the grammar, and phase-own file collection associates files only with client-confirmed commit headers.',
         how:
-          'TDD: the resolved claude-opus-5 test-engineer added canonical/deviant twin histories, bidirectional interleaved-phase fixtures, body-quote exclusions, and source guards. After replacing both fixed-string greps, gitscan passed 9/9 and gate passed 67/67. The first gate run exposed 11 existing environment failures because the plugin-local node_modules link was absent; restoring the worktree-local symlink to the already installed root dependencies made the unchanged cases and the three new cases all green. The types slot was declared-none and green.',
+          'TDD: the resolved claude-opus-5 test-engineer added canonical/deviant twin histories, bidirectional interleaved-phase fixtures, body-quote exclusions, and source guards. After replacing both fixed-string greps, gitscan passed 9/9 and gate passed 67/67. The first gate run exposed 11 existing environment failures because the plugin-local node_modules link was absent; restoring the worktree-local symlink to the already installed root dependencies made the unchanged cases and the three new cases all green. Guard mutation proof: planted inline `--grep=phase ${n} —` → RED ("a git --grep= fed a fixed phase-number/em-dash string"); renamed phaseOwnPatterns → RED (SyntaxError naming the missing export); lawful second reader using -E + shared ere beside prose quoting the canonical form → GREEN. The types slot was declared-none and green.',
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
@@ -243,7 +243,7 @@ export default definePhase({
         whatWasDone:
           'Added the binding canonical subject grammar to quality-pass, software-developer, and test-engineer so every committing role teaches phase ownership, task form, gate-fix form, and the em-dash boundary. Added measured DIET-LEDGER dispositions for every passage compressed to fund the additions.',
         how:
-          'Compressed only generic framing and examples while preserving every operative rule, then recorded four passage-level dispositions. Measured sizes moved from 5,545 to 5,543 B for quality-pass, 2,179 to 2,177 B for software-developer, and 2,877 to 2,860 B for test-engineer. Per-file grammar greps, the digit-bounded phase-16 ledger grep, size ceilings, git diff hygiene, and the declared-none types slot all passed.',
+          'Compressed only generic framing and examples while preserving every operative rule, then recorded four passage-level dispositions. Measured sizes moved from 5,545 to 5,543 B for quality-pass, 2,179 to 2,176 B for software-developer, and 2,877 to 2,859 B for test-engineer. Per-file grammar greps, the digit-bounded phase-16 ledger grep, size ceilings, git diff hygiene, and the declared-none types slot all passed.',
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
