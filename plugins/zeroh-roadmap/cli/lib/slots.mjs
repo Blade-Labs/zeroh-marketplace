@@ -65,6 +65,79 @@ export function resolveSlot(cfg, slot, sub = {}) {
   return { slot, command: r.cmd }
 }
 
+const VACUITY_PROBE_TARGET = 'roadmap/.gate/__vacuity_probe_does_not_exist__.test.ts'
+const VACUITY_PROBE_TIMEOUT_MS = 120_000
+const VACUOUS_SCOPED_RUNNER_MESSAGE =
+  'scoped runner cannot fail on a missing target — a green scoped slot proves nothing (vacuous-green class)'
+
+/**
+ * Ask a file-scoped slot the minimum useful question: does its real command fail when
+ * handed a target that cannot exist? The command is built by the same substitute()
+ * seam as ordinary slot resolution; an unscoped or unanswerable probe is indeterminate.
+ */
+export async function probeScopedSlot(template, { cwd, timeoutMs = VACUITY_PROBE_TIMEOUT_MS } = {}) {
+  if (template == null || template === 'none') {
+    return { vacuous: null, message: 'not a scoped template' }
+  }
+  if (!template.includes('{files}')) {
+    return { vacuous: null, message: 'not a scoped template' }
+  }
+
+  const substituted = substitute(template, { files: [VACUITY_PROBE_TARGET] })
+  if (substituted.error) {
+    return { vacuous: null, message: `gate cannot run: ${substituted.error}` }
+  }
+  const command = substituted.cmd
+  const startedAt = Date.now()
+
+  return await new Promise((resolvePromise) => {
+    let settled = false
+    let timedOut = false
+    const child = spawn('bash', ['-c', command], {
+      cwd,
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolvePromise({
+        ...result,
+        command,
+        target: VACUITY_PROBE_TARGET,
+        durationMs: Date.now() - startedAt,
+        stdout,
+        stderr,
+      })
+    }
+    const timer = setTimeout(() => {
+      timedOut = true
+      if (process.platform === 'win32') child.kill('SIGKILL')
+      else {
+        try { process.kill(-child.pid, 'SIGKILL') } catch { child.kill('SIGKILL') }
+      }
+    }, timeoutMs)
+
+    child.on('error', (error) => finish({ vacuous: null, message: `probe spawn error: ${error.message}` }))
+    child.on('close', (code) => {
+      if (timedOut) {
+        finish({ vacuous: null, message: `scoped runner probe timed out after ${timeoutMs}ms` })
+        return
+      }
+      const exitCode = code ?? 128
+      finish(exitCode === 0
+        ? { vacuous: true, exitCode, message: VACUOUS_SCOPED_RUNNER_MESSAGE }
+        : { vacuous: false, exitCode })
+    })
+  })
+}
+
 /**
  * The scoped-slot resolution rule (gate-protocol.md:72-81 — the SINGLE seam). `tier` ∈
  * 'unit' | 'integration'. When the consumer has bound `<tier>-scoped`, resolve it with

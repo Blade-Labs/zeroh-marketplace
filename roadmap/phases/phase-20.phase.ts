@@ -96,7 +96,18 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/cli/lib/slots.mjs', 'plugins/zeroh-roadmap/cli/lib/slots.test.mjs'],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ['probeScopedSlot(template, opts) from cli/lib/slots.mjs'] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Exported probeScopedSlot, which substitutes a fixed nonexistent test path through the existing slot-template seam and executes the captured command. Exit zero is reported as a vacuous scoped runner, any completed nonzero exit proves the runner can fail, and missing/unscoped templates, substitution failures, spawn errors, and timeouts remain explicitly indeterminate.',
+        how:
+          'The claude-opus-5 test-engineer first added real executable stub-runner cases and established RED at 34 passing / 11 failing, then added the omitted hanging-runner boundary for 34 passing / 12 failing. The implementation spawns bash in a process group so timeout cleanup also kills descendants, captures stdout/stderr, and returns the substituted command and sentinel target for test evidence. The final scoped suite passed 46/46; the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '20.2',
