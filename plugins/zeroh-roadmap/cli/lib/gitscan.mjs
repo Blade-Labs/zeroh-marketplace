@@ -25,6 +25,34 @@ const git = (cwd, args) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8' }).trim()
 
 /**
+ * Commit-subject ownership grammar shared by git's ERE engine and JavaScript.
+ * Canonical writers use the em dash; readers also recognize recorded legacy forms.
+ */
+export function phaseOwnPatterns(phaseNum) {
+  const phase = String(phaseNum)
+  if (!/^[0-9]+$/.test(phase)) {
+    throw new TypeError(`phase number must contain digits only, got: ${phase}`)
+  }
+
+  const dash = '(—|–|-)'
+  const type = '[A-Za-z0-9_-]+'
+  const ordinaryPrefix = `${type}(\\([^)]*\\))?: `
+  const phasePrefix = `phase ${phase}`
+  const canonicalOrTask =
+    `${phasePrefix} (`
+    + `${dash}`
+    + `|task ${phase}\\.[0-9]+ ${dash}`
+    + `|${phase}\\.[0-9]+ ${dash}`
+    + ')'
+  const scopeCarried = `${type}\\(phase-${phase}\\):`
+  const state = `docs\\(roadmap\\): mark ${phasePrefix} complete$`
+  const ere = `^(${ordinaryPrefix}${canonicalOrTask}|${scopeCarried}|${state})`
+  const subjectPattern = new RegExp(ere)
+
+  return { ere, test: (subject) => subjectPattern.test(subject) }
+}
+
+/**
  * The phase-start SHA, derived by a two-tier rule over commits matching `phase <N> —`
  * (the em-dash boundary). TIER 1: among those matches, the ones whose subject ALSO says
  * "move to in-progress" / "set in-progress" are the move-commit set; when non-empty the

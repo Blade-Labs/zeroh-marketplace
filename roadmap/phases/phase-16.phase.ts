@@ -102,7 +102,18 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/cli/lib/gitscan.mjs', 'plugins/zeroh-roadmap/cli/lib/gitscan.test.mjs'],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ['phaseOwnPatterns(phaseNum) from cli/lib/gitscan.mjs'] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added phaseOwnPatterns(phaseNum) as the single commit-subject ownership grammar. Its one git-ERE/JavaScript-compatible expression recognizes the canonical form and recorded D1-D5 variants, including em/en/ASCII dash alternation, while subject anchoring and mandatory literals after every phase number prevent sibling and prose matches.',
+        how:
+          'TDD: the resolved claude-opus-5 test-engineer wrote six table-driven tests from recorded incident subjects and confirmed RED on the missing export. The implementation validates digit-only phase identifiers, composes one anchored ERE, and closes over the same compiled expression for test(subject). The scoped run passed 6/6, including git log -E checks under the ambient and C locales and bidirectional phase-number collision cases; the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '16.2',
