@@ -19,7 +19,7 @@ SAY SO ("no `testConventions` — inferred from <files>"). Never import a framew
 tests exact boundaries rather than merely "well within" or "well past".
 
 **Commit grammar:** MUST bind subjects: `type(scope): phase N — <what>`; task form
-`phase N — N.X: <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
+`phase N — N.X <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
 
 **What a test is FOR.** Before writing one, name what a RED would mean. *A function's behavior changed* is
 a test. *A data file's contents changed* is not: declarative artifacts (yaml/json/md, images, manifests,

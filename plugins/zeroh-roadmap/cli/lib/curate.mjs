@@ -12,7 +12,7 @@
 import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 
-import { derivePhaseStartSha, phaseOwnPatterns } from './gitscan.mjs'
+import { derivePhaseStartSha, phaseOwnPatterns, SUBJECT_GRAMMAR } from './gitscan.mjs'
 import { recordCuration, latestReport } from './gate-report.mjs'
 
 const git = (cwd, args, opts = {}) =>
@@ -31,14 +31,15 @@ export class CurateError extends Error {
  * Classify one subject against phase N's own commit grammar.
  * Returns 'task' | 'gate-fix' | 'scratch' | 'state' | null (foreign).
  *
- * The em-dash boundary (`phase N —`) is load-bearing everywhere a bare number would
- * collide: `phase 21 —` never matches `phase 214 — …`, and prose that merely mentions
- * "phase 21" (no boundary) stays foreign. Gate fixes use their own bounded form
- * (`phase N gate R<d>`), the one place the landed grammar has no em dash.
+ * Ownership comes from gitscan's phaseOwnPatterns (canonical + the tolerated legacy
+ * classes); the checks here only pick the KIND. The boundary after the phase number is
+ * load-bearing everywhere a bare number would collide: phase 21 never matches
+ * `phase 214 — …`, and prose that merely mentions "phase 21" stays foreign. Gate fixes
+ * use their own bounded form (`phase N gate R<d>`), the one place with no dash at all.
  */
 function classifySubject(subject, phaseNum) {
   const P = String(phaseNum)
-  const dash = '(—|–|-)'
+  const { dash, type } = SUBJECT_GRAMMAR
   // Every ownership test is ANCHORED to the subject's own prefix: a subject that merely
   // QUOTES the grammar mid-sentence must stay foreign, or the squash rewrites a sibling's
   // commit that happened to mention it.
@@ -52,7 +53,7 @@ function classifySubject(subject, phaseNum) {
   // in the task token, not the dash phrase.
   if (new RegExp(`${prefix}phase ${P} task ${P}\\.\\d+ \\(\\d+/\\d+\\) ${dash}`).test(subject)) return 'task'
   if (!phaseOwnPatterns(P).test(subject)) return null
-  if (new RegExp(`^[a-z]+\\(phase-${P}\\): gate R\\d+`).test(subject)) return 'gate-fix'
+  if (new RegExp(`^${type}\\(phase-${P}\\): gate R\\d+`).test(subject)) return 'gate-fix'
   if (new RegExp(`^docs\\(roadmap\\): mark phase ${P} complete$`).test(subject)) return 'state'
   if (subject.startsWith('docs(roadmap):')) {
     // The task-id grammar (`N.x`) also appears on roadmap-repo task commits; both kinds

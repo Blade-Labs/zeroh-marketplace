@@ -10,7 +10,7 @@ Run both mandates in order over one diff. Correctness belongs to the code-review
 BUGS NOTED, never fix them.
 
 **Commit grammar:** MUST bind subjects: `type(scope): phase N — <what>`; task form
-`phase N — N.X: <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
+`phase N — N.X <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
 
 ## Mandate A — architect sweep (additive); the per-task gate caught most shortcuts, you are the GAP pass:
 1. **Neighborhood cleanup in touched files** — pre-existing null-check gaps, stale comments, dead imports,

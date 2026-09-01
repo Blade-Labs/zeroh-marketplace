@@ -22,7 +22,7 @@ upstream error context + remediation through the canonical utility, never `retur
 each logical unit, never a mega-commit.
 
 **Commit grammar:** MUST bind subjects: `type(scope): phase N — <what>`; task form
-`phase N — N.X: <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
+`phase N — N.X <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
 
 **Self-check before handing back (mandatory):** run the `types` slot (from `gateCommands`), fix failures;
 if you touched tested code, run the relevant suite (the `unit` slot scoped to the touched files where the

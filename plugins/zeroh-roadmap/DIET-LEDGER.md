@@ -604,9 +604,11 @@ tokens** against the unchanged `--assert 13257`, exit 0 — 1 token spare.
 ## Committing agent-card grammar — phase 16 task 16.4 (diet-funded)
 
 The binding subject grammar was funded inside each committing card. **Measured (`wc -c`):**
-quality-pass.md **5,545 → 5,543 B**; software-developer.md **2,179 → 2,177 B**;
-test-engineer.md **2,877 → 2,860 B**. No card grew, and both developer/test cards remain
-below the 5,000 B ceiling.
+quality-pass.md **5,545 → 5,542 B**; software-developer.md **2,179 → 2,176 B**;
+test-engineer.md **2,877 → 2,859 B**. No card grew, and both developer/test cards remain
+below the 5,000 B ceiling. (Gate R0 took one more byte off each card, dropping a stray
+colon from the taught task form: `phase N — N.X <what>` is the form do-phase SKILL.md
+binds and every landed subject uses.)
 
 | passage (origin heading/anchor) | disposition | evidence |
 |---|---|---|

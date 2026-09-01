@@ -6,8 +6,9 @@
  * derivePhaseStartSha, so the 1656 em-dash fixture and the 1657 kill/resume fixtures
  * exercise the SAME code.
  *
- * The em-dash boundary (`phase <N> —`) prevents a phase-number prefix collision:
- * resuming 136 must not match 1369's commits (do-phase SKILL.md:127-135).
+ * Ownership is read through phaseOwnPatterns — the ONE home for the subject grammar
+ * (canonical + the recorded legacy classes). The boundary after the phase number
+ * prevents a prefix collision: resuming 136 must not match 1369's commits.
  */
 import { execFileSync } from 'node:child_process'
 
@@ -25,6 +26,20 @@ const git = (cwd, args) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8' }).trim()
 
 /**
+ * The subject-grammar fragments every reader shares, ERE- and JS-compatible. They live
+ * here because curate's classifier and gate's deviant-class scan bind on the same
+ * literals: a second copy is how the grammar forks again.
+ */
+export const SUBJECT_GRAMMAR = {
+  /** em (the canonical boundary) · en · ASCII hyphen — the recorded D4 variants. */
+  dash: '(—|–|-)',
+  /** The conventional-commit type, before any `(scope)`. */
+  type: '[A-Za-z0-9_-]+',
+  /** `type(scope): ` — the ordinary subject prefix. */
+  typePrefix: '[A-Za-z0-9_-]+(\\([^)]*\\))?: ',
+}
+
+/**
  * Commit-subject ownership grammar shared by git's ERE engine and JavaScript.
  * Canonical writers use the em dash; readers also recognize recorded legacy forms.
  */
@@ -34,9 +49,7 @@ export function phaseOwnPatterns(phaseNum) {
     throw new TypeError(`phase number must contain digits only, got: ${phase}`)
   }
 
-  const dash = '(—|–|-)'
-  const type = '[A-Za-z0-9_-]+'
-  const ordinaryPrefix = `${type}(\\([^)]*\\))?: `
+  const { dash, type, typePrefix: ordinaryPrefix } = SUBJECT_GRAMMAR
   const phasePrefix = `phase ${phase}`
   const canonicalOrTask =
     `${phasePrefix} (`
@@ -53,13 +66,14 @@ export function phaseOwnPatterns(phaseNum) {
 }
 
 /**
- * The phase-start SHA, derived by a two-tier rule over commits matching `phase <N> —`
- * (the em-dash boundary). TIER 1: among those matches, the ones whose subject ALSO says
- * "move to in-progress" / "set in-progress" are the move-commit set; when non-empty the
- * base is the PARENT (^) of the NEWEST such commit — this kills the D1 over-broadening
- * where a phase number that appeared in ancient history derived a huge foreign range.
- * TIER 2 (fallback): no move-commit → the PARENT of the OLDEST `phase <N> —` match, the
- * original rule verbatim. `--base` overrides both: it is rev-parsed, falling back to the
+ * The phase-start SHA, derived by a two-tier rule over the commits phaseOwnPatterns(N)
+ * reads as this phase's own (canonical + tolerated legacy forms). TIER 1: among those
+ * matches, the ones whose subject ALSO says "move to in-progress" / "set in-progress"
+ * are the move-commit set; when non-empty the base is the PARENT (^) of the NEWEST such
+ * commit — this kills the D1 over-broadening where a phase number that appeared in
+ * ancient history derived a huge foreign range.
+ * TIER 2 (fallback): no move-commit → the PARENT of the OLDEST own match, the original
+ * rule verbatim. `--base` overrides both: it is rev-parsed, falling back to the
  * literal on a resolve failure. A root commit with no parent falls back to the commit
  * itself. No matching commit ⇒ GitScanError('no-match'); a git failure ⇒
  * GitScanError('git-error'). Returns the resolved SHA string.

@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { findClosedJournal, findJournal, JournalUnreadableError } from '../lib/codex-journal.mjs'
-import { derivePhaseStartSha, GitScanError, phaseOwnPatterns } from '../lib/gitscan.mjs'
+import { derivePhaseStartSha, GitScanError, phaseOwnPatterns, SUBJECT_GRAMMAR } from '../lib/gitscan.mjs'
 import { bridgeImport, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
   assembleConsumerFingerprint,
@@ -137,7 +137,7 @@ export function deriveBaseSha(cwd, phaseNum, { base } = {}) {
   }
 }
 
-/** Files touched by the PHASE's OWN commits over base..HEAD (the em-dash grep), unique. */
+/** Files touched by the PHASE's OWN commits over base..HEAD (phaseOwnPatterns), unique. */
 function phaseOwnFiles(cwd, phaseNum, base) {
   const own = phaseOwnPatterns(phaseNum)
   let out
@@ -216,15 +216,16 @@ export function deviantGrammarFindings(cwd, phaseNum, base) {
   }
   const P = String(phaseNum)
   const own = phaseOwnPatterns(P)
-  const typePrefix = '[A-Za-z0-9_-]+(\\([^)]*\\))?: '
+  const { dash, type, typePrefix } = SUBJECT_GRAMMAR
+  const offDash = '(–|-)' // every dash the read tolerates EXCEPT the canonical em dash
   const checks = [
-    { name: 'D1 phase N task N.X', re: new RegExp(`^${typePrefix}phase ${P} task ${P}\\.[0-9]+ (—|–|-)`) },
-    { name: 'D2 scope-carried (phase-N)', re: new RegExp(`^[A-Za-z0-9_-]+\\(phase-${P}\\):`) },
+    { name: 'D1 phase N task N.X', re: new RegExp(`^${typePrefix}phase ${P} task ${P}\\.[0-9]+ ${dash}`) },
+    { name: 'D2 scope-carried (phase-N)', re: new RegExp(`^${type}\\(phase-${P}\\):`) },
     {
       name: 'D4 noncanonical dash',
-      re: new RegExp(`^${typePrefix}phase ${P} ((–|-)|task ${P}\\.[0-9]+ (–|-)|${P}\\.[0-9]+ (–|-))`),
+      re: new RegExp(`^${typePrefix}phase ${P} (${offDash}|task ${P}\\.[0-9]+ ${offDash}|${P}\\.[0-9]+ ${offDash})`),
     },
-    { name: 'D5 phase N N.X', re: new RegExp(`^${typePrefix}phase ${P} ${P}\\.[0-9]+ (—|–|-)`) },
+    { name: 'D5 phase N N.X', re: new RegExp(`^${typePrefix}phase ${P} ${P}\\.[0-9]+ ${dash}`) },
   ]
   const findings = []
   for (const line of log.split('\n').filter(Boolean)) {

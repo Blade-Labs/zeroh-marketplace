@@ -1861,8 +1861,9 @@ test('gate plan — 16.2: two deviant-grammar phases share a range and attribute
  * Source-scan helpers (acceptance 2). PROSE IS NOT CODE: gate.mjs documents the em-dash
  * rule in several comments, so a raw text search would flag the comment that TEACHES the
  * grammar. `codeOf` strips comments so the scan reads only what executes; `grepSites`
- * returns the neighbourhood of each `git --grep=` argument, so the assertion is about what
- * is HANDED TO GIT, not about every string in the file.
+ * returns the git ARGUMENT ARRAY carrying each `--grep=`, so the assertion is about what
+ * is HANDED TO GIT — a character window around the call also swept in the neighbouring
+ * error text that deliberately TEACHES the canonical form.
  */
 function codeOf(src) {
   return src
@@ -1873,11 +1874,7 @@ function codeOf(src) {
 }
 
 function grepSites(code) {
-  const sites = []
-  const re = /--grep=/g
-  let m
-  while ((m = re.exec(code)) !== null) sites.push(code.slice(Math.max(0, m.index - 320), m.index + 140))
-  return sites
+  return [...code.matchAll(/\[[^\]]*--grep=[^\]]*\]/g)].map((m) => m[0])
 }
 
 test('gate plan — 16.2: gate.mjs carries no fixed-string phase-number/em-dash grep — it binds on the shared matcher', () => {
