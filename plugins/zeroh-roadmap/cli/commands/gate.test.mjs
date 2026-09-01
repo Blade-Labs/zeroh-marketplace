@@ -1749,6 +1749,8 @@ test('gate run — the CONSUMER schema home accepts the same widened enum as the
   assert.deepEqual(recorded.map((r) => r.code), [0, 0], `both rounds append; stderr: ${recorded.map((r) => r.stderr).join(' | ')}`)
   assert.deepEqual(latestReportOf(repo.root, 1743).agents.map((a) => a.agent), ['software-architect', 'self-review'])
   assert.equal(verify.code, 0, `two declared rounds, two recorded; stdout: ${verify.stdout} stderr: ${verify.stderr}`)
+})
+
 // ────────────────────────────────────────────────────────────────────────────────────────
 // phase 16 task 16.2 — the PHASE-OWN FILE SET must read the shared ownership grammar.
 // The seam is the real `gate plan` JSON (the established one in this file): `diff.files` /
