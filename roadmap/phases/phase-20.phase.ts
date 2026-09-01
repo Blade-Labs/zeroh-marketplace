@@ -102,6 +102,14 @@ export default definePhase({
     hardStops: [],
     gateRounds: 6,
   },
+  debtResolutions: [
+    {
+      ref: '20.3.compromises',
+      status: "won't_fix",
+      via: 'arc-sweep ACCEPT, user-ratified 2026-09-01: the narrowing is the semantically CORRECT class — `cmd && echo` short-circuits on failure and preserves the non-zero exit, so the planned broader class would have produced false WARNs on honest verifies',
+      date: '2026-09-01',
+    },
+  ],
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',

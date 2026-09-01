@@ -127,6 +127,14 @@ export default definePhase({
     hardStops: [],
     gateRounds: 5,
   },
+  debtResolutions: [
+    {
+      ref: '17.2.hardcoded',
+      status: "won't_fix",
+      via: 'arc-sweep ACCEPT, user-ratified 2026-09-01: a deliberate grandfathering anchor — without the rule-commit-time cutoff every pre-rule phase would retroactively fail verify-complete; architect-approved at build time',
+      date: '2026-09-01',
+    },
+  ],
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
