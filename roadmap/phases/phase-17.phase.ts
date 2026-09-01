@@ -108,8 +108,7 @@ export default definePhase({
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
-        limitations:
-          'The ratified rule uses the persisted free-text agent label because round model is optional; it rejects normalized self-review spellings but cannot cryptographically prove that a driver did not type an independent-role label. Correctness review also required gate-report and roles ratchet tests beyond the planned prompt files.',
+        limitations: 'None',
       },
     },
     {
@@ -149,7 +148,7 @@ export default definePhase({
         hardcoded:
           'The named enforcement cutoff 2026-09-01T07:30:27.000Z is the phase-17 rule commit time, architect-approved so only phases completed before the rule retain immutable pre-rule gate reports as historical evidence.',
         limitations:
-          'Gate resolution added cli/lib/validate.test.mjs beyond the planned files to prove the shared consistency seam rejects a new completion carrying an old report; the gate command has its own end-to-end refusal coverage.',
+          'Gate resolution added cli/lib/validate.test.mjs beyond the planned files to prove the shared consistency seam rejects a new completion carrying an old report; the gate command has its own end-to-end refusal coverage. The ratified rule uses the persisted free-text agent label because round model is optional; it rejects normalized self-review spellings but cannot cryptographically prove that a driver did not type an independent-role label.',
       },
     },
     {
@@ -184,7 +183,8 @@ export default definePhase({
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
-        limitations: 'None',
+        limitations:
+          'Correctness resolution touched cli/lib/roles.test.mjs outside the planned prompt files to re-derive and preserve the envelope-overhead ratchet while compacting unrelated repetition.',
       },
     },
   ],
