@@ -3319,7 +3319,7 @@ test('15.3 — every lane envelope names the roadmap CLI by ABSOLUTE path, and s
 
 /**
  * The binding subject forms, as an executor must be able to COPY them. The `—` boundary is the
- * load-bearing part (it stops phase 136 matching 1369), so each form is pinned with the em dash
+ * load-bearing part (it prevents prefix-number matches), so each form is pinned with the em dash
  * directly after the number — a prompt that teaches `phase N:` teaches an unparseable subject.
  */
 const COMMIT_GRAMMAR = [
@@ -3390,8 +3390,7 @@ test('15.3 — the READ-ONLY review lane carries no commit grammar, and the run 
 })
 
 // ── 15.5: `plan --arc` is a SUPERVISED act — the refusal teaches the flow, never a traceback ─────
-// Probed 2026-08-31: `roadmap codex plan --arc MINESWEEP` exits 1 through an uncaught
-// buildPlanPrompt throw — "exactly ONE phase number per run (got 7)" over four `at` frames, none of
+// The current path reaches an uncaught buildPlanPrompt count throw over `at` frames, none of
 // which contains the string `--arc`. The operator learns that a counter disagreed, not WHY arc
 // planning is not a lane mission: plan-arc owns the design-first gate, and that gate needs the user,
 // while this lane is no-reachable-user by contract. There IS a supervised path (reserve each number,

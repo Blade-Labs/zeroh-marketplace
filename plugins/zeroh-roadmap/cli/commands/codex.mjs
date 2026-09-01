@@ -133,7 +133,7 @@ export function buildPrompt(root, ids) {
     `Implement ${ids.length > 1 ? `${ids.length} roadmap phases` : 'ONE roadmap phase'} end-to-end as driver of record. Work ONLY in this worktree.`,
     '',
     `YOUR PROTOCOL IS A FILE — read it in full, first, before touching anything: ${RUN_SKILL}`,
-    `Its \`references/\` siblings (in ${dirname(RUN_SKILL)}/references/) are part of the protocol — read each one when it sends you there. Follow it as written, end to end, including every part it hands to the driver rather than to a supervising session. This envelope adds only the targets and the overrides below; where the two disagree, the protocol wins.`,
+    `PROTOCOL REFERENCES: ${dirname(RUN_SKILL)}/references/ — read when directed; follow end to end. Only the overrides below differ.`,
     `THE ROADMAP CLI: node ${ROADMAP_CLI} (bare \`roadmap\` may be absent from PATH — never assume it).`,
     COMMIT_GRAMMAR,
     '',
