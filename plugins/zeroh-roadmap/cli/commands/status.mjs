@@ -218,16 +218,16 @@ function derive(root) {
       note: [progressTxt(id), evalMissing && 'eval: none', `resume: ${r.file}`].filter(Boolean).join(' · '),
     })
   }
+  // No eval marker here: an arc reaches this loop BECAUSE it still has an in-progress
+  // phase, so arcProgress can never report it allDone and the marker is not yet due.
   for (const [arc, phases] of inProgress) {
     if (seen.has(arc)) continue
-    const evalMissing = evalMissingOf(arc)
     rows.push({
       arc,
       state: 'IN-FLIGHT',
       where: '(UNREGISTERED — pre-v0.11 build or skipped Step 3b; likely the MAIN checkout)',
       age: '-',
-      ...(evalMissing ? { evalMissing: true } : {}),
-      note: [progressTxt(arc), evalMissing && 'eval: none', `in-progress: ${phases.join(', ')}`].filter(Boolean).join(' · '),
+      note: [progressTxt(arc), `in-progress: ${phases.join(', ')}`].filter(Boolean).join(' · '),
     })
   }
 

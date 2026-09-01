@@ -279,9 +279,6 @@ function codexLaneSource(cwd, phaseNum) {
     // An unreadable journal is NOT an absent one. Falling through silently hands the operator the
     // isolation message, whose remedy — flip the knob — makes the land succeed and then take the
     // not-a-lane branch, so the worktree is never disposed and nobody learns why.
-    // Returned as a distinct REFUSAL, not as "not a lane": falling through would add the
-    // isolation remedy underneath, and flipping that knob makes the land succeed down the
-    // not-a-lane branch — the worktree then never gets disposed and nobody learns why.
     if (e instanceof JournalUnreadableError) return { unreadable: e.message }
     return null
   }

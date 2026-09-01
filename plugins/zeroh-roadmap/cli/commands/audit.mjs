@@ -1,5 +1,5 @@
 /**
- * roadmap audit [repo-root] [--json] — audit-roadmap's 15 structural checks, mechanized
+ * roadmap audit [repo-root] [--json] — audit-roadmap's 16 structural checks, mechanized
  * (ROADCODE 1659.2, replacing skills/audit-roadmap's hand-run prose). Read-only: never
  * opens source code, never fixes — reports findings + a verdict.
  *
@@ -17,6 +17,8 @@
  *      spent orphans + past-review files (LOW)
  *   15 stray lane worktrees (surveyLanes): a non-live lane past its done-moment — MEDIUM with
  *      that lane's own runnable close, LOW for legacy/unknown. Report-only, never removes.
+ *   16 consumer schema drift: a template export absent from the consumer's vendored
+ *      lib/roadmap/schema.ts (HIGH each) — the same inventory reader `config check` uses.
  *
  * Exit contract (design §2): 0 = CLEAN or HAS ISSUES (MEDIUM/LOW only) · 2 = BROKEN (any
  * CRITICAL/HIGH) · 1 = usage / tsx-absent in this strict context.

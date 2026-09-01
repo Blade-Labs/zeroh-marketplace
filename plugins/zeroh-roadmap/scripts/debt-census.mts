@@ -61,7 +61,7 @@ if (errors?.length) console.error(`  ⚠ ${errors.length} phase file(s) failed d
 
 const DEBT_FIELDS = ['compromises', 'hardcoded', 'skipped', 'limitations'] as const
 const CLOSING = new Set(['fixed', "won't_fix", 'dismissed'])
-const EXPLANATORY_EMPTY = /^(none|nothing|n\/a)\b[\s.,;:—–-]*/i
+const EXPLANATORY_EMPTY = /^(none|nothing|n\/a)\b/i
 
 type Entry = {
   phase: number
