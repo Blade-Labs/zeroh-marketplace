@@ -48,10 +48,6 @@ export default defineBacklog([
   },
   // ── MINESWEEP arc tier (phases 14, 15, 16, 17, 18, 19, 20 — exact claimed numbers; queued 2026-08-31 after all 7 plan reviews returned READY) ──
   {
-    phase: 18,
-    name: 'Measurement repairs: schema-drift check, lessons merge-back on land, eval-gap visibility, census noise',
-  },
-  {
     phase: 19,
     name: 'Cross-repo gate awareness: productRepos floors review scope, arm-time product-tree overlap refusal',
   },
