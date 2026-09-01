@@ -10,7 +10,8 @@
  *
  * checkPhaseConsistency is defined ONCE here and imported by BOTH gate run
  * --verify-complete (1656.5) and phase validate (1656.7) — a done flip can no longer be
- * narrated: it must have a green latest report whose scope + round counts match the file.
+ * narrated: it must have a green latest report whose scope + round counts match the file,
+ * and in the delegated lane one of those rounds must be someone other than the driver.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -204,7 +205,9 @@ export function recordCuration(toplevel, phase, block) {
  * The ONE done-flip consistency checker. Clauses: (i) report green, (ii) report.phase ===
  * phase.phase, (iii) report scope decisions match the phase's DECLARED test/review scope
  * where declared, (iv) count of agents[] rounds with round >= 1 equals the phase's
- * structured gateRounds entries with round >= 1. Returns { ok, problems[] }.
+ * structured gateRounds entries with round >= 1, (v) no-self-judge — a codex-lane completion
+ * that still owes a review carries a round>=1 no self-review label matches. Returns
+ * { ok, problems[] }.
  */
 export function checkPhaseConsistency(parsedPhase, report) {
   const problems = []
