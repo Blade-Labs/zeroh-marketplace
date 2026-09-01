@@ -16,7 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, exist
 import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { untestedGateFixFindings, deviantGrammarFindings } from './gate.mjs'
+import { untestedGateFixFindings, deviantGrammarFindings, annotateScopedProbeWarnings } from './gate.mjs'
 import { phaseOwnPatterns } from '../lib/gitscan.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
