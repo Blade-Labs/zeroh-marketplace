@@ -737,13 +737,22 @@ test('checkPhaseConsistency — the no-self-judge rule is lane-scoped and waived
   )
 })
 
-test('checkPhaseConsistency — historical reports stay evidence while the enforcement boundary is inclusive', () => {
+test('checkPhaseConsistency — only phases completed before enforcement keep historical reports as evidence', () => {
   for (const agents of [[], [{ agent: 'self-review' }]]) {
     const historical = laneCase('codex', agents, {
+      phase: { completedDate: '2026-08-31' },
       report: { startedAt: '2026-09-01T07:30:26.999Z' },
     })
     assert.equal(checkPhaseConsistency(historical.phase, historical.report).ok, true, 'pre-cutoff codex evidence is not retroactively refused')
   }
+
+  const unfinishedWithOldReport = laneCase('codex', [{ agent: 'self-review' }], {
+    report: { startedAt: '2026-09-01T07:30:26.999Z' },
+  })
+  assertRefusedForSelfJudge(
+    checkPhaseConsistency(unfinishedWithOldReport.phase, unfinishedWithOldReport.report),
+    'a new completion cannot inherit an old report waiver',
+  )
 
   const boundary = laneCase('codex', [{ agent: 'self-review' }], {
     report: { startedAt: INDEPENDENT_REVIEW_ENFORCEMENT_AT },

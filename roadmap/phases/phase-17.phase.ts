@@ -146,9 +146,9 @@ export default definePhase({
         compromises: 'None',
         skipped: 'None',
         hardcoded:
-          'The named enforcement cutoff 2026-09-01T07:30:27.000Z is the phase-17 rule commit time, architect-approved so immutable pre-rule gate reports remain historical evidence rather than retroactive failures.',
+          'The named enforcement cutoff 2026-09-01T07:30:27.000Z is the phase-17 rule commit time, architect-approved so only phases completed before the rule retain immutable pre-rule gate reports as historical evidence.',
         limitations:
-          'Gate resolution added cli/lib/validate.test.mjs beyond the planned files to prove both callers share the same pre/post-cutoff behavior; no caller production code changed.',
+          'Gate resolution added cli/lib/validate.test.mjs beyond the planned files to prove the shared consistency seam rejects a new completion carrying an old report; the gate command has its own end-to-end refusal coverage.',
       },
     },
     {

@@ -36,7 +36,7 @@ test('N1 — a fresh fixture arc → action run-phase on the first member', () =
     { phase: 9101, status: 'backlog', arcId: 'FX', tasks: [{ id: '9101.1', done: false }] },
     { phase: 9102, status: 'backlog', arcId: 'FX', tasks: [{ id: '9102.1', done: false }] },
   ])
-  const r = next(root, ['--ignore-capacity'])
+  const r = nextUnder(root, CLEAR)
   assert.equal(r.code, 0)
   assert.equal(r.json.action, 'run-phase')
   assert.equal(r.json.phase, 9101)
@@ -74,7 +74,7 @@ test('N4 — member 1 done with executionResult → run-phase on member 2', () =
     { phase: 9101, status: 'done', arcId: 'FX', tasks: [{ id: '9101.1', done: true }], executionResult: { phase: 9101, status: 'done', gateRounds: 1, hardStops: [] } },
     { phase: 9102, status: 'backlog', arcId: 'FX', tasks: [{ id: '9102.1', done: false }] },
   ])
-  const r = next(root, ['--ignore-capacity'])
+  const r = nextUnder(root, CLEAR)
   assert.equal(r.json.action, 'run-phase')
   assert.equal(r.json.phase, 9102)
 })

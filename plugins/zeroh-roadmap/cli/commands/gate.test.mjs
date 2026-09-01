@@ -528,6 +528,25 @@ test('gate run --verify-complete — exit 2 on a gateRounds mismatch, exit 0 on 
   assert.equal(good.code, 0, good.stderr)
 })
 
+test('gate run --verify-complete — a new codex completion cannot reuse an old report without independent review', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1401, phaseObj({ phase: 1401, status: 'in-progress', reviewScope: 'full' }))
+  repo.commit('feat: phase 1401 — code', { 'lib/review.ts': 'export const reviewed = false\n' })
+  assert.equal(runGateCmd(repo.root, ['1401']).code, 0, 'precondition: the report is green')
+
+  repo.writePhase(1401, phaseObj({
+    phase: 1401,
+    status: 'done',
+    reviewScope: 'full',
+    gateRounds: [],
+    executionResult: { phase: 1401, status: 'done', driver: { model: 'codex-model', lane: 'codex' } },
+  }))
+  const refused = runGateCmd(repo.root, ['1401', '--verify-complete'])
+  assert.equal(refused.code, 2, refused.stdout)
+  assert.match(refused.stderr, /no-self-judge/)
+  assert.match(refused.stderr, /--record-round/)
+})
+
 test('gate run --verify-complete — no report dir exits 1', () => {
   const repo = makeRepo(RUN_CFG())
   repo.writePhase(1500, phaseObj({ phase: 1500 }))

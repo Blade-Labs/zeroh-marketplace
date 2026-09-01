@@ -18,9 +18,10 @@ import { join } from 'node:path'
 import { z } from 'zod'
 
 const RETAIN = 5
-// Reports begun before the no-self-judge rule landed are immutable historical evidence,
-// not delegated completions that can retroactively acquire an independent reviewer.
+// Reports attached to phases completed before the no-self-judge rule landed are immutable
+// historical evidence. A merely old report cannot waive review for a completion happening now.
 const INDEPENDENT_REVIEW_ENFORCEMENT_AT = '2026-09-01T07:30:27.000Z'
+const INDEPENDENT_REVIEW_ENFORCEMENT_DATE = INDEPENDENT_REVIEW_ENFORCEMENT_AT.slice(0, 10)
 
 const ScopeTripleShape = z.object({
   derived: z.string(),
@@ -209,7 +210,8 @@ export function recordCuration(toplevel, phase, block) {
  * phase.phase, (iii) report scope decisions match the phase's DECLARED test/review scope
  * where declared, (iv) count of agents[] rounds with round >= 1 equals the phase's
  * structured gateRounds entries with round >= 1, (v) no-self-judge — a codex-lane completion
- * that still owes a review carries a round>=1 no self-review label matches. Returns
+ * that still owes a review carries at least one round>=1 whose agent label is not a self-review
+ * variant. Returns
  * { ok, problems[] }.
  */
 export function checkPhaseConsistency(parsedPhase, report) {
@@ -238,11 +240,15 @@ export function checkPhaseConsistency(parsedPhase, report) {
     problems.push(
       `gateRounds count mismatch: the report has ${reportRounds} agent round(s) (round>=1) but the phase records ${phaseRounds}`,
     )
+  const completedBeforeIndependentReview =
+    typeof parsedPhase?.completedDate === 'string' &&
+    parsedPhase.completedDate < INDEPENDENT_REVIEW_ENFORCEMENT_DATE &&
+    report.startedAt < INDEPENDENT_REVIEW_ENFORCEMENT_AT
   const delegatedReviewRequired =
     parsedPhase?.executionResult?.driver?.lane === 'codex' &&
     parsedPhase?.reviewScope !== 'none' &&
     report.reviewScope?.effective !== 'none' &&
-    report.startedAt >= INDEPENDENT_REVIEW_ENFORCEMENT_AT
+    !completedBeforeIndependentReview
   const hasIndependentRound = report.agents.some(
     (round) => round.round >= 1 && !round.agent.toLowerCase().includes('self-review'),
   )

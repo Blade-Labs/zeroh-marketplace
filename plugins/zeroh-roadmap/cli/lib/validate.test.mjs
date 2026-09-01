@@ -95,9 +95,16 @@ test('done-flip rule — retained codex reports are bounded by the no-self-judge
     })
 
   const historicalRoot = makeRepo()
-  writePhase(historicalRoot, 2010, selfReviewedPhase(2010))
+  writePhase(historicalRoot, 2010, { ...selfReviewedPhase(2010), completedDate: '2026-08-31' })
   writeReport(historicalRoot, selfReviewedReport(2010, '2026-09-01T07:30:26.999Z'))
   assert.equal(validate(historicalRoot, 2010).code, 0, 'a retained pre-enforcement report remains valid historical evidence')
+
+  const unfinishedRoot = makeRepo()
+  writePhase(unfinishedRoot, 2012, selfReviewedPhase(2012))
+  writeReport(unfinishedRoot, selfReviewedReport(2012, '2026-09-01T07:30:26.999Z'))
+  const unfinished = validate(unfinishedRoot, 2012)
+  assert.equal(unfinished.code, 2, 'a newly completed phase cannot inherit a pre-enforcement report waiver')
+  assert.match(unfinished.stderr, /no-self-judge/)
 
   const currentRoot = makeRepo()
   writePhase(currentRoot, 2011, selfReviewedPhase(2011))
