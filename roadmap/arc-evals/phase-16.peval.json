@@ -1,0 +1,88 @@
+{
+  "phase": 16,
+  "date": "2026-09-01",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 20
+  },
+  "taskCount": 4,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/cli/lib/gitscan.mjs",
+    "plugins/zeroh-roadmap/cli/lib/gitscan.test.mjs",
+    "plugins/zeroh-roadmap/cli/lib/curate.mjs",
+    "plugins/zeroh-roadmap/cli/lib/curate.test.mjs",
+    "plugins/zeroh-roadmap/cli/commands/gate.mjs",
+    "plugins/zeroh-roadmap/cli/commands/gate.test.mjs",
+    "plugins/zeroh-roadmap/agents/quality-pass.md",
+    "plugins/zeroh-roadmap/agents/software-developer.md",
+    "plugins/zeroh-roadmap/agents/test-engineer.md",
+    "plugins/zeroh-roadmap/DIET-LEDGER.md"
+  ],
+  "gate": {
+    "green": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1221801
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 15,
+    "linesAdded": 1104,
+    "linesRemoved": 70,
+    "filesChanged": 11,
+    "testsAtStart": 1515,
+    "testsAtEnd": 1540,
+    "testsAdded": 25,
+    "startedAt": "2026-09-01T07:12:00.000Z",
+    "completedAt": "2026-09-01T12:51:51.000Z",
+    "haltCount": 1
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "claude-fable-5"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "test-engineer": {
+        "model": "claude-opus-5"
+      },
+      "quality-pass": {
+        "model": "claude-opus-5"
+      },
+      "code-reviewer": {
+        "model": "claude-opus-5"
+      }
+    }
+  }
+}

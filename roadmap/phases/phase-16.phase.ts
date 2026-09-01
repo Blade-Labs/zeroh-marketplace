@@ -30,7 +30,103 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 16,
   name: 'Commit-grammar tolerant attribution: one matcher home, widened read, deviant WARNs, grammar in agent cards',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-09-01',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1540,
+      total: 1540,
+      notes:
+        'Authoritative full gate: roadmap/.gate/16/run-000011-2026-09-01T12-51Z — GREEN, 1,540/1,540, on the tree REBASED onto the integration ref (14, 15 and 17 landed underneath). The immediately prior run was RED for two causes, NEITHER a defect in this phase: contract-drift.test.mjs could not import ajv because the lane had replaced the plugin node_modules with a symlink to the root tree (restored to a real install), and one boundary comment illustrated the rule with phase numbers instead of stating it. lint/types/build/integration declared-none; lint-diff and history-comments exit 0.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — the wired subprocess suites in the unit tier drive the real CLI against tmp git repos.',
+    },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none in gateCommands — no rendered surface.' },
+    build: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'One grammar home enforced, guard decoy repaired, envelope trimmed back inside the pinned overhead budget, stale derivation prose corrected (c3a8c67, 1efc424, 25a8393, b7d99df).',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary: 'Attribute canonical gate-fix commits; persist the guard mutation proof; correct card byte counts (bb4d297).',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'WARN on noncanonical gate-fix dashes; prevent D2 scopes leaking into canonical WRITES — read-side tolerance must never widen what the lane writes (94e38b0).',
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary: 'Cover the binding batch grammar and dashless gate-fix subjects; remove a duplicate batch matcher (58814f1).',
+    },
+    {
+      round: 4,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary: 'Preserve roadmap-prefixed task kinds; WARN on off-dash batch subjects (47c4036).',
+    },
+    {
+      round: 5,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Round 5 returned two findings and exhausted the cap; the supervising session closed them rather than deferring the phase (sha-width header match, and the last private prefix fragment forking this phase\'s own grammar seam) with the regression pin neither had (9d51c69), plus two post-rebase repairs (the gate.test.mjs three-way merge and a boundary comment restated as its rule).',
+    },
+  ],
+  metrics: {
+    commits: 15,
+    linesAdded: 1104,
+    linesRemoved: 70,
+    filesChanged: 11,
+    testsAtStart: 1515,
+    testsAtEnd: 1540,
+    testsAdded: 25,
+    startedAt: '2026-09-01T07:12:00.000Z',
+    completedAt: '2026-09-01T12:51:51.000Z',
+    haltCount: 1,
+  },
+  executionResult: {
+    phase: 16,
+    status: 'done',
+    driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
+      {
+        role: 'code-reviewer',
+        model: 'claude-opus-5',
+        via: 'child-cli',
+        substituted: { from: 'claude-fable-5', to: 'claude-opus-5', reason: 'unavailable: the claude-fable-5 firing failed immediately at its usage limit — every correctness round re-resolved at UNREDUCED rigor on claude-opus-5' },
+      },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'The lane exhausted the five-round correctness cap with two findings still open and BLOCKED rather than closing over them. The supervising session took both, because each was small and one was this phase\'s own singleSeam: phaseOwnFiles matched commit-header rows with a hardcoded 40-hex SHA-1 width (a sha256 repo would empty the phase-own set and under-derive scope silently — the exact invisible-attribution failure this phase exists to end), and classifySubject kept a private conventional-prefix fragment narrower than the shared SUBJECT_GRAMMAR.typePrefix, so a scoped type the attribution seam called this phase\'s own could read as FOREIGN to curation. Both gained the regression pin neither had.',
+      'Two repairs followed the rebase onto the landed integration ref, both mine rather than the lane\'s: phases 16 and 17 had each appended a test block at the same file tail and my first resolution cut at the wrong boundary, leaving gate.test.mjs unparseable (caught immediately as a SyntaxError, redone as a real three-way merge against the merge base — both phases\' tests survive); and the envelope trim this lane had made independently was superseded by phase 15\'s landed compaction.',
+      'The lane had replaced the plugin\'s node_modules with a symlink to the root tree, which carries no ajv, so contract-drift.test.mjs could not import at all. An environment gap, not a code defect — restored to a real install before the authoritative gate.',
+    ],
+    hardStops: [],
+    gateRounds: 6,
+  },
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
