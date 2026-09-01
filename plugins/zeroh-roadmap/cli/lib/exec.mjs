@@ -7,8 +7,10 @@
  * Contract: exec(file, args, { cwd?, input? }) → { status, stdout, stderr }. NEVER
  * throws on a non-zero exit — the exit code is DATA the caller branches on (honesty
  * rail: exit codes never lie, so they must be observable, not swallowed as exceptions).
+ * runCaptured is the ASYNC sibling for a CONSUMER-authored shell command — same honesty
+ * rail, plus a budget, because a consumer's own runner may hang.
  */
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 
 // execFileSync's 1 MiB default silently truncates and THEN throws ENOBUFS, which a caller
 // reads as "the command failed" — indistinguishable from "the command found nothing". A git
@@ -32,4 +34,46 @@ export function defaultExec(file, args, { cwd, input, timeout = 120_000, maxBuff
       stderr: e.stderr?.toString?.() ?? String(e.message ?? e),
     }
   }
+}
+
+/**
+ * Run ONE consumer-authored shell command captured, under a hard budget — the seam the gate's
+ * vacuity probe and `phase validate --assumptions` both execute through. The child gets its OWN
+ * process group so a timeout kill takes its descendants with it (a runner that spawned a compiler
+ * otherwise survives its parent and holds the pipes open). The three outcomes stay DISTINCT:
+ * { exitCode } is a command that rendered a verdict, { timedOut } one killed mid-flight, and
+ * { spawnError } one that never started — so a caller can never read an UNANSWERED run as a
+ * verdict (the vacuous-green class). Captured stdout/stderr ride every outcome and never reach the
+ * parent tty. NEVER throws.
+ */
+export function runCaptured(command, { cwd, timeoutMs = 120_000 } = {}) {
+  return new Promise((resolvePromise) => {
+    const startedAt = Date.now()
+    let settled = false
+    let timedOut = false
+    const child = spawn('bash', ['-c', command], {
+      cwd,
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolvePromise({ ...result, durationMs: Date.now() - startedAt, stdout, stderr })
+    }
+    const timer = setTimeout(() => {
+      timedOut = true
+      if (process.platform === 'win32') child.kill('SIGKILL')
+      else {
+        try { process.kill(-child.pid, 'SIGKILL') } catch { child.kill('SIGKILL') }
+      }
+    }, timeoutMs)
+    child.on('error', (error) => finish({ spawnError: error.message }))
+    child.on('close', (code) => finish(timedOut ? { timedOut: true } : { exitCode: code ?? 128 }))
+  })
 }

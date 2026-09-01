@@ -1628,7 +1628,7 @@ test('phase land — a lesson merge failure keeps the only corpus copy and repor
 //   · and the FLAGLESS face is untouched — same bytes, same exit, and not one verify executed.
 //
 // PINNED SEAM for the implementer: the timeout branch is exercised through an exported
-// `runAssumptions({ cwd, toplevel, phaseNum, loadPhase, timeoutMs, out, err })` — the runCurate /
+// `runAssumptions({ toplevel, phaseNum, loadPhase, timeoutMs, out, err })` — the runCurate /
 // runLand house shape, with the injectable budget probeScopedSlot already uses — because the only
 // other way to cover it is a test that sleeps 120 seconds. The CLI path is a thin wrapper over it,
 // and every OTHER case here drives the REAL bin over a fixture repo.
@@ -1820,7 +1820,7 @@ const runAssumptions = (opts) => {
   assert.equal(
     typeof phaseCmd.runAssumptions,
     'function',
-    'cli/commands/phase.mjs must export runAssumptions({ cwd, toplevel, phaseNum, loadPhase, timeoutMs, out, err })',
+    'cli/commands/phase.mjs must export runAssumptions({ toplevel, phaseNum, loadPhase, timeoutMs, out, err })',
   )
   return phaseCmd.runAssumptions(opts)
 }
@@ -1835,7 +1835,6 @@ test('phase validate --assumptions — a verify that outruns its budget is TIMEO
   // The budget is INJECTED (probeScopedSlot's seam): the shipped default is 120s, and a suite that
   // waited it out would cost two minutes per red.
   const code = await runAssumptions({
-    cwd: root,
     toplevel: root,
     phaseNum: 9108,
     timeoutMs: 250,

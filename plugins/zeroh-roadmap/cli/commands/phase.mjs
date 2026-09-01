@@ -22,10 +22,11 @@
  * Exit: 0 clean · 1 usage/config/toolchain · 2 validation failed / refused.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { join, relative } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { validateRoadmapFile, renderZodIssues } from '../lib/validate.mjs'
+import { runCaptured } from '../lib/exec.mjs'
 import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
@@ -107,54 +108,18 @@ function parseArgs(argv) {
 
 const ASSUMPTION_TIMEOUT_MS = 120_000
 
-function executeAssumption(command, { cwd, timeoutMs }) {
-  return new Promise((resolvePromise) => {
-    let timedOut = false
-    let settled = false
-    const child = spawn('bash', ['-c', command], {
-      cwd,
-      detached: process.platform !== 'win32',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', (chunk) => { stdout += chunk })
-    child.stderr.on('data', (chunk) => { stderr += chunk })
-    const finish = (result) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolvePromise({ ...result, stdout, stderr })
-    }
-    const timer = setTimeout(() => {
-      timedOut = true
-      if (process.platform === 'win32') child.kill('SIGKILL')
-      else {
-        try { process.kill(-child.pid, 'SIGKILL') } catch { child.kill('SIGKILL') }
-      }
-    }, timeoutMs)
-    child.on('error', (error) => finish({ spawnError: error.message }))
-    child.on('close', (code) => {
-      if (timedOut) finish({ timedOut: true })
-      else finish({ exitCode: code ?? 128 })
-    })
-  })
-}
-
 /** Execute every declared assumption tripwire from the repository toplevel. */
 export async function runAssumptions({
-  cwd,
   toplevel,
   phaseNum,
-  loadPhase = (phaseFile) => bridgeLoadPhase(phaseFile, toplevel),
+  loadPhase,
   timeoutMs = ASSUMPTION_TIMEOUT_MS,
   out = process.stdout,
   err = process.stderr,
 }) {
-  const phaseFile = join(toplevel, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
   let phase
   try {
-    phase = loadPhase(phaseFile)
+    phase = loadPhase()
   } catch (error) {
     err.write(`phase validate --assumptions: failed to load phase ${phaseNum}: ${error.message}\n`)
     return 1
@@ -169,7 +134,7 @@ export async function runAssumptions({
   for (const assumption of assumptions) {
     const claim = String(assumption?.claim ?? '')
     const command = String(assumption?.verify ?? '')
-    const result = await executeAssumption(command, { cwd: toplevel, timeoutMs })
+    const result = await runCaptured(command, { cwd: toplevel, timeoutMs })
     if (result.timedOut) {
       green = false
       out.write(`${claim} — TIMEOUT\n`)
@@ -620,7 +585,6 @@ export default async function run(argv) {
     const toplevel = gitToplevel(process.cwd())
     const phaseNum = /^\d+$/.test(arg) ? Number(arg) : Number(/phase-(\d+)\.phase\.ts$/.exec(target)?.[1])
     return await runAssumptions({
-      cwd: process.cwd(),
       toplevel,
       phaseNum,
       loadPhase: () => bridgeLoadPhase(target, toplevel),

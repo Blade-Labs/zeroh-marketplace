@@ -13,6 +13,7 @@
  */
 import { spawn } from 'node:child_process'
 import { matchGlob, matchGlobPath } from './ladder.mjs'
+import { runCaptured } from './exec.mjs'
 import { createWriteStream, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -76,66 +77,24 @@ const VACUOUS_SCOPED_RUNNER_MESSAGE =
  * seam as ordinary slot resolution; an unscoped or unanswerable probe is indeterminate.
  */
 export async function probeScopedSlot(template, { cwd, timeoutMs = VACUITY_PROBE_TIMEOUT_MS } = {}) {
-  if (template == null || template === 'none') {
+  // No runner to probe: absent, declared-absent ('none', this module's absence literal), or
+  // not file-scoped — none of which is a verdict about a runner.
+  if (typeof template !== 'string' || template === 'none' || !template.includes('{files}')) {
     return { vacuous: null, message: 'not a scoped template' }
   }
-  if (!template.includes('{files}')) {
-    return { vacuous: null, message: 'not a scoped template' }
-  }
-
   const substituted = substitute(template, { files: [VACUITY_PROBE_TARGET] })
   if (substituted.error) {
     return { vacuous: null, message: `gate cannot run: ${substituted.error}` }
   }
+
   const command = substituted.cmd
-  const startedAt = Date.now()
-
-  return await new Promise((resolvePromise) => {
-    let settled = false
-    let timedOut = false
-    const child = spawn('bash', ['-c', command], {
-      cwd,
-      detached: process.platform !== 'win32',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', (chunk) => { stdout += chunk })
-    child.stderr.on('data', (chunk) => { stderr += chunk })
-
-    const finish = (result) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolvePromise({
-        ...result,
-        command,
-        target: VACUITY_PROBE_TARGET,
-        durationMs: Date.now() - startedAt,
-        stdout,
-        stderr,
-      })
-    }
-    const timer = setTimeout(() => {
-      timedOut = true
-      if (process.platform === 'win32') child.kill('SIGKILL')
-      else {
-        try { process.kill(-child.pid, 'SIGKILL') } catch { child.kill('SIGKILL') }
-      }
-    }, timeoutMs)
-
-    child.on('error', (error) => finish({ vacuous: null, message: `probe spawn error: ${error.message}` }))
-    child.on('close', (code) => {
-      if (timedOut) {
-        finish({ vacuous: null, message: `scoped runner probe timed out after ${timeoutMs}ms` })
-        return
-      }
-      const exitCode = code ?? 128
-      finish(exitCode === 0
-        ? { vacuous: true, exitCode, message: VACUOUS_SCOPED_RUNNER_MESSAGE }
-        : { vacuous: false, exitCode })
-    })
-  })
+  const probed = { command, target: VACUITY_PROBE_TARGET }
+  const r = await runCaptured(command, { cwd, timeoutMs })
+  if (r.spawnError) return { ...probed, ...r, vacuous: null, message: `probe spawn error: ${r.spawnError}` }
+  if (r.timedOut) return { ...probed, ...r, vacuous: null, message: `scoped runner probe timed out after ${timeoutMs}ms` }
+  return r.exitCode === 0
+    ? { ...probed, ...r, vacuous: true, message: VACUOUS_SCOPED_RUNNER_MESSAGE }
+    : { ...probed, ...r, vacuous: false }
 }
 
 /**
