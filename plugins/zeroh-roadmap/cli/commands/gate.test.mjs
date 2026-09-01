@@ -1966,11 +1966,13 @@ test('deviantGrammarFindings — 16.3: the taught write forms warn about nothing
   ]
   canonical.forEach((s, i) => repo.commit(s, { [`lib/c${i}.ts`]: `export const c${i} = ${i}\n` }))
 
-  assert.equal(
-    phaseOwnPatterns(7301).test(canonical[2]),
-    true,
-    'the canonical gate-fix row must be phase-own before its silent warning result is meaningful',
-  )
+  for (const subject of canonical) {
+    assert.equal(
+      phaseOwnPatterns(7301).test(subject),
+      true,
+      `every silent canonical row must first prove it is phase-own: ${subject}`,
+    )
+  }
 
   assert.deepEqual(
     deviantGrammarFindings(repo.root, 7301, base),

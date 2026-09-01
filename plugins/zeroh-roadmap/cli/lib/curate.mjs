@@ -49,9 +49,6 @@ function classifySubject(subject, phaseNum) {
   if (new RegExp(`^scratch(\\([^)]*\\))?: phase ${P} ${dash}`).test(inner)) return 'scratch'
   if (isRevert) return null // a revert of anything but this phase's scratch work is foreign
   if (new RegExp(`${prefix}phase ${P} gate R\\d+`).test(subject)) return 'gate-fix'
-  // The batchMode step grammar (`… phase N task N.X (k/M) — <step>`) carries its boundary
-  // in the task token, not the dash phrase.
-  if (new RegExp(`${prefix}phase ${P} task ${P}\\.\\d+ \\(\\d+/\\d+\\) ${dash}`).test(subject)) return 'task'
   if (!phaseOwnPatterns(P).test(subject)) return null
   if (new RegExp(`^${type}\\(phase-${P}\\): gate R\\d+`).test(subject)) return 'gate-fix'
   if (new RegExp(`^docs\\(roadmap\\): mark phase ${P} complete$`).test(subject)) return 'state'

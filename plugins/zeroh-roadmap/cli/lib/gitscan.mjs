@@ -54,10 +54,11 @@ export function phaseOwnPatterns(phaseNum) {
   const canonicalOrTask =
     `${phasePrefix} (`
     + `${dash}`
+    + `|task ${phase}\\.[0-9]+ \\([0-9]+/[0-9]+\\) ${dash}`
     + `|task ${phase}\\.[0-9]+ ${dash}`
     + `|${phase}\\.[0-9]+ ${dash}`
     + ')'
-  const canonicalGateFix = `${phasePrefix} gate R[0-9]+ ${dash}`
+  const canonicalGateFix = `${phasePrefix} gate R[0-9]+( ${dash})?`
   const scopeCarried = `${type}\\(phase-${phase}\\):`
   const state = `docs\\(roadmap\\): mark ${phasePrefix} complete$`
   const ere = `^(${ordinaryPrefix}(${canonicalOrTask}|${canonicalGateFix})|${scopeCarried}|${state})`

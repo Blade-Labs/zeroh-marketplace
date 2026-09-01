@@ -73,6 +73,8 @@ const MATCH = [
   { phase: 727, klass: 'canonical', subject: `chore(deps): phase 727 ${EM} 727.7 consumer half lands on 0.34.2` },
   { phase: 727, klass: 'canonical', subject: `fix(lens): phase 727 ${EM} 727.3 per-row shed degradation, ordered ref resolution` },
   { phase: 727, klass: 'canonical gate-fix', subject: `fix(cli): phase 727 gate R0 ${EM} quality-pass findings` },
+  { phase: 727, klass: 'canonical dashless gate-fix', subject: 'fix(cli): phase 727 gate R1' },
+  { phase: 727, klass: 'canonical batch step', subject: `chore(repo): phase 727 task 727.7 (1/3) ${EM} consumer half lands` },
   // D1 `phase N task N.X <dash>` (no (k/M) token) — the eleven-phase mudarabah2 class
   { phase: 725, klass: 'D1', subject: `feat(mudarabah): phase 725 task 725.1 ${EM} batch identity + batch rollup` },
   { phase: 725, klass: 'D1', subject: `test(mudarabah): phase 725 task 725.5 ${EM} fence the lens out of settlement` },
@@ -130,6 +132,7 @@ const REFUSE = [
 const CLASS_FORMS = [
   { klass: 'canonical', render: (n, d) => `feat(scope): phase ${n} ${d} the work` },
   { klass: 'canonical gate-fix', render: (n, d) => `fix(scope): phase ${n} gate R2 ${d} reviewer findings` },
+  { klass: 'canonical batch step', render: (n, d) => `chore(repo): phase ${n} task ${n}.2 (1/3) ${d} batch work` },
   { klass: 'D1', render: (n, d) => `feat(mudarabah): phase ${n} task ${n}.4 ${d} the fourth task` },
   { klass: 'D2', render: (n, d) => `fix(phase-${n}): quality pass ${d} prune narration` },
   { klass: 'D3', render: (n) => `docs(roadmap): mark phase ${n} complete` },
