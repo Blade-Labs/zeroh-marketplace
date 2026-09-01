@@ -27,7 +27,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 17,
   name: 'Delegated-lane gate integrity: widened round identities, no-self-judge refusal at verify-complete',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
