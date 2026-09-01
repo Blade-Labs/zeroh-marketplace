@@ -51,10 +51,6 @@ export default defineBacklog([
     phase: 19,
     name: 'Cross-repo gate awareness: productRepos floors review scope, arm-time product-tree overlap refusal',
   },
-  {
-    phase: 20,
-    name: 'Anti-vacuity: scoped-runner cannot-fail probe, widened polarity lint, executable assumption tripwires',
-  },
   // ── DEFERRED (standing user hold 2026-08-26): do NOT execute until the user asks ──
   {
     phase: 12,
