@@ -60,7 +60,7 @@ const done = (n) => ({ phase: n, status: 'done', arcId: 'A', tasks: [{ id: `${n}
 
 test('arc next — exit 0 with a derived run-phase action, JSON on stdout', () => {
   const root = makeRepo('A', { planes: [{ name: 'P', phases: [10] }] }, [backlog(10)])
-  const r = bin(root, ['arc', 'next', 'A', '--json'])
+  const r = bin(root, ['arc', 'next', 'A', '--json', '--ignore-capacity'])
   assert.equal(r.code, 0)
   const pos = JSON.parse(r.stdout)
   assert.equal(pos.action, 'run-phase')
