@@ -177,6 +177,7 @@ export default defineArc({
     },
   ],
   criteriaRatifications: [
+    '2026-09-01: honesty-rail carve-out, recorded at arc level per the whole-arc architect (the phase-16 record carries the substance): deviantGrammarFindings WARNs on tolerated classes D1/D2/D4/D5 but deliberately NOT D3 (`docs(roadmap): mark phase N complete`) — D3 is the protocol\'s own completion-commit form, so warning on it would flag every clean phase\'s own bookkeeping. Decision Contract resolution at phase 16 gate R2 (gpt-5.6-sol substituting for the unavailable fable seat, recorded).',
     '2026-08-31: plan-lane-close signal widened per software-architect amendment A2 (pre-execution, arc status planning): strict byte-equality would refuse the normal harvest-then-amend flow (Mode A repairs edit the harvested file); the proof is now byte-equal at, or in the committed blob history of, the phase file at the integration ref — the content-proof LOCKED intent is preserved, every close remains content-proven.',
   ],
   rejectedAlternatives: [
