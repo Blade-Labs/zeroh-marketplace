@@ -6,7 +6,7 @@
  * stream-separation rule).
  */
 import { loadConfig } from '../lib/config.mjs'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
@@ -22,7 +22,9 @@ function exportedNames(file, seen = new Set()) {
   const names = new Set([...source.matchAll(EXPORT_DECLARATION)].map((match) => match[1]))
   for (const match of source.matchAll(/^export \* from ['"]([^'"]+)['"]/gm)) {
     const bare = resolve(dirname(file), match[1])
-    const target = [bare, `${bare}.ts`, join(bare, 'index.ts')].find((candidate) => existsSync(candidate))
+    const target = [bare, `${bare}.ts`, join(bare, 'index.ts')].find(
+      (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+    )
     if (target) {
       for (const name of exportedNames(target, seen)) names.add(name)
     }

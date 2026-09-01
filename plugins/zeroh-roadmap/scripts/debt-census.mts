@@ -39,6 +39,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { isExplanatoryEmpty } from '../cli/lib/transparency.mjs'
 
 const args = process.argv.slice(2)
 const positional = args.filter((a) => !a.startsWith('--') && !args[args.indexOf(a) - 1]?.startsWith('--'))
@@ -61,7 +62,6 @@ if (errors?.length) console.error(`  ⚠ ${errors.length} phase file(s) failed d
 
 const DEBT_FIELDS = ['compromises', 'hardcoded', 'skipped', 'limitations'] as const
 const CLOSING = new Set(['fixed', "won't_fix", 'dismissed'])
-const EXPLANATORY_EMPTY = /^(none|nothing|n\/a)\b/i
 
 type Entry = {
   phase: number
@@ -97,7 +97,7 @@ function censusOf(phaseList: any[], lookupById: Map<number, any>) {
         const v = t.transparencyReport[f]
         const ref = `${t.id}.${f}`
         if (!v) continue
-        if (EXPLANATORY_EMPTY.test(String(v).trim())) {
+        if (isExplanatoryEmpty(String(v))) {
           excludedRefs.add(ref)
           excludedCount++
           continue

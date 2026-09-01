@@ -24,6 +24,8 @@
  * They are named, documented, and changed deliberately — a change is a baseline reset.
  */
 
+import { isExplanatoryEmpty } from './transparency.mjs'
+
 /** The CLOSED seven, in contract order. Mirrors EvalDimensionKeyShape. */
 export const DIMENSION_KEYS = [
   'code-confidence',
@@ -398,7 +400,7 @@ function judgeDimensions(trace, readable, sentinel) {
     .flatMap((r) => r.rounds)
     .filter((r) => r.verdict !== 'clean').length
 
-  const nonNone = (field) => reports.filter((r) => r[field] && r[field] !== 'None').length
+  const nonNone = (field) => reports.filter((r) => r[field] && !isExplanatoryEmpty(r[field])).length
   const testsAdded = sum(withMetrics.map((p) => p.metrics.testsAdded ?? 0))
   const filesChanged = sum(withMetrics.map((p) => p.metrics.filesChanged ?? 0))
 

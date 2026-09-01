@@ -299,6 +299,14 @@ test('10b) extensionless and cyclic export-star barrels terminate and preserve t
 
   assert.equal(res.status, 0, `a valid cyclic barrel terminates; stderr:\n${res.stderr}`)
   assert.equal(/schemaDrift:/.test(res.stderr), false, `extensionless forwarding preserves the inventory; stderr:\n${res.stderr}`)
+
+  const directoryRepo = configuredRepo("export * from './shapes'\n")
+  const barrelDir = join(directoryRepo, 'lib', 'roadmap', 'shapes')
+  mkdirSync(barrelDir)
+  writeFileSync(join(barrelDir, 'index.ts'), inSyncSchema())
+  const directoryRes = roadmap(directoryRepo, 'config', 'check')
+  assert.equal(directoryRes.status, 0, `a directory barrel resolves index.ts instead of throwing EISDIR; stderr:\n${directoryRes.stderr}`)
+  assert.equal(/schemaDrift:/.test(directoryRes.stderr), false, `the directory barrel preserves the inventory; stderr:\n${directoryRes.stderr}`)
 })
 
 test('11) a repo with NO lib/roadmap/schema.ts is not a stale consumer — no drift line, exit 0', () => {
