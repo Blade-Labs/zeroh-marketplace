@@ -772,6 +772,23 @@ test('gate plan — an HONEST scoped runner is really probed and stays SILENT', 
   assert.equal(repo.calls('honest').length, 1, `the honest runner was actually probed; calls: ${JSON.stringify(repo.calls())}`)
 })
 
+test('gate plan — an UNANSWERABLE scoped probe is NAMED and leaves the plan intact', async () => {
+  const template = 'sleep 1 # {files}'
+  const built = {
+    plan: {
+      slots: [{ slot: 'unit-scoped', command: 'sleep 1 # lib/thing.test.ts' }],
+      notes: [],
+    },
+    refused: false,
+  }
+  await annotateScopedProbeWarnings(built, { gateCommands: { 'unit-scoped': template } }, process.cwd(), { timeoutMs: 25 })
+  assert.equal(built.refused, false, 'an unanswerable probe is diagnostic-only')
+  assert.deepEqual(built.plan.slots, [{ slot: 'unit-scoped', command: 'sleep 1 # lib/thing.test.ts' }], 'the selected slot stays unchanged')
+  assert.equal(built.plan.notes.length, 1)
+  assert.match(built.plan.notes[0], /unit-scoped scoped runner probe unanswerable/i)
+  assert.match(built.plan.notes[0], /timed out after 25ms/i)
+})
+
 test('gate plan — the probe runs ONCE per DISTINCT template, never once per slot', () => {
   const repo = makeStubRepo({ vac: ALWAYS_GREEN }, { 'unit-scoped': 'vac', 'integration-scoped': 'vac' })
   seedScopedPhase(repo, 2003)

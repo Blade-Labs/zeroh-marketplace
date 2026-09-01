@@ -553,8 +553,9 @@ test('attribution lint: a cancelled phase missing BOTH stamps never warns', () =
 //      Incident: azure 2421 — "a validate piped through tail -1 masked a schema failure and the
 //      red phase file got pushed" (phase-20 header; MINESWEEP-execution-prompt §vacuity).
 //   2. SWALLOWED EXIT — `cmd || true`. The clause cannot report anything but success.
-//   3. TRAILING NO-OP — the final element of a `;` / `&&` list is a bare `echo`/`true`, so the
-//      list's exit code is the no-op's. Recorded row: `cmd; echo done`.
+//   3. TRAILING NO-OP — the final element of a `;` list is a bare `echo`/`true`, so the list's
+//      exit code is the no-op's. Recorded row: `cmd; echo done`. An `&&` list is honest because
+//      a failing left side skips the no-op and remains non-zero.
 //      2 and 3 are the "Exit-0-always tails" class of the plan adversary catalogue
 //      (skills/review-phase/references/plan-adversary.md §A).
 //
@@ -587,6 +588,12 @@ const VACUOUS_CLASSES = [
     // `echo` inside an expected-output ASSERTION, not as the final command: the assertion still
     // reds on wrong output, so a lint keyed on "mentions echo" false-fires here.
     good: 'test "$(node bin/roadmap.mjs phase show 9000)" = "$(echo done)"',
+    citation: /exit-0-always|plan-adversary/i,
+  },
+  {
+    name: 'a bare echo after `&&` preserves a failing left-side verdict',
+    bad: 'node bin/roadmap.mjs phase validate 9000; true',
+    good: 'grep -q expected output.txt && echo found',
     citation: /exit-0-always|plan-adversary/i,
   },
 ]

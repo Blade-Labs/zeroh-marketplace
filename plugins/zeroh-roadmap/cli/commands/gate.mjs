@@ -490,12 +490,12 @@ function parseArgs(argv) {
 
 /** Probe only the scoped templates selected by `gate plan`, caching by template while
  * retaining per-slot warnings. `gate run` never calls this helper. */
-async function annotateScopedProbeWarnings(built, cfg, cwd) {
+export async function annotateScopedProbeWarnings(built, cfg, cwd, { timeoutMs } = {}) {
   const probes = new Map()
   for (const slot of built.plan.slots) {
     const template = cfg?.gateCommands?.[slot.slot]
     if (typeof template !== 'string' || !template.includes('{files}')) continue
-    if (!probes.has(template)) probes.set(template, probeScopedSlot(template, { cwd }))
+    if (!probes.has(template)) probes.set(template, probeScopedSlot(template, { cwd, timeoutMs }))
     const result = await probes.get(template)
     if (result.vacuous === true) {
       const warning = `${slot.slot} ${result.message}`

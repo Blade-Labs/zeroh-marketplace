@@ -240,7 +240,7 @@ function verifyPolarityWarnings(phase) {
           `(exit-0-always plan-adversary incident class). Remove the swallow and judge the command directly.`,
       )
     }
-    if (/(?:;|&&)\s*(?:echo(?:\s+[^;&|]*)?|true)\s*$/.test(cmd)) {
+    if (/;\s*(?:echo(?:\s+[^;&|]*)?|true)\s*$/.test(cmd)) {
       out.push(
         `[zeroh-roadmap] WARN phase ${num} ${where}: the final bare echo/true replaces the command's verdict ` +
           `(exit-0-always plan-adversary incident class). Preserve and test the original exit code.`,
