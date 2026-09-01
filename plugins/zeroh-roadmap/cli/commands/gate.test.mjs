@@ -1597,3 +1597,128 @@ test('gate run --verify-complete — an UNREADABLE ARCHIVED journal reds, exactl
   assert.equal(r.code, 2, `an unreadable archived record is not an absent one; stdout: ${r.stdout} stderr: ${r.stderr}`)
   assert.ok(r.stderr.includes(closed), `the file that could not be read must be NAMED; stderr: ${JSON.stringify(r.stderr)}`)
 })
+
+// ── gateRounds `agent` — the members recorded gate reality actually needs ─────────────
+// A phase file records WHO gated it. When the enum omits a role the gate genuinely ran, the
+// only way to record that round is under ANOTHER member's name — the phase then attributes
+// work to an agent that never did it, and no later reader (audit, eval scorecard, reviewer
+// yield) can tell. These drive the WHOLE seam the per-task ritual drives: the phase file goes
+// through `definePhase` (the consumer schema's import-time parse — a plain `export default
+// {…}` fixture never reaches the enum), the round is appended with --record-round, and
+// --verify-complete reconciles the two.
+const CONSUMER_SCHEMA = join(PLUGIN_ROOT, '..', '..', 'lib', 'roadmap', 'schema.ts')
+
+/** The minimal phase document `definePhase` accepts, plus the rounds under test. */
+const enumPhaseObj = (num, gateRounds) => ({
+  phase: num,
+  name: `Enum fixture phase ${num}`,
+  category: 'feature',
+  source: 'phase 17 — gateRounds agent enum',
+  priority: 'MEDIUM',
+  dependsOn: [],
+  conflictsWith: [],
+  keyFiles: ['lib/a.ts'],
+  stakeholderDemo: 'the recorded round names the agent that ran it',
+  tasks: [{ minimal: true, id: `${num}.1`, title: 'seed task', done: true }],
+  status: 'in-progress',
+  gateRounds,
+})
+
+/** Write a phase file that RUNS the consumer schema's import-time Zod parse (the
+ *  fixture-consumer harness `definePhaseSrc` idiom), committed in its own non-phase-tagged
+ *  commit exactly as makeRepo's writePhase does so it never lands in the phase-own diff.
+ *  `schemaFrom` re-points the seeded lib/roadmap/schema.ts at a specific schema HOME. */
+function writeDefinePhase(repo, num, gateRounds, { schemaFrom = join(PLUGIN_ROOT, 'templates', 'schema.ts') } = {}) {
+  writeFileSync(join(repo.root, 'lib', 'roadmap', 'schema.ts'), `export * from '${schemaFrom}'\n`)
+  const body = JSON.stringify(enumPhaseObj(num, gateRounds), null, 2)
+  const rel = join('roadmap', 'phases', `phase-${num}.phase.ts`)
+  writeFileSync(
+    join(repo.root, rel),
+    `import { definePhase } from '../../lib/roadmap/schema.ts'\nexport default definePhase(${body})\n`,
+  )
+  repo.git('add', rel)
+  repo.git('commit', '-q', '-m', `seed phase-${num} file`)
+}
+
+const structuredRound = (round, agent) => ({ round, agent, verdict: 'clean', summary: `${agent} round ${round}: 0 findings` })
+const recordRoundArgs = (num, round, agent) => [String(num), '--record-round', JSON.stringify(structuredRound(round, agent))]
+
+/** Drive one phase end-to-end: green gate run → --record-round per declared round>=1 →
+ *  --verify-complete. Returns the three results so each leg fails with its own message. */
+function driveRounds(repo, num, rounds) {
+  const run = runGateCmd(repo.root, [String(num)])
+  const recorded = rounds.filter((r) => r.round >= 1).map((r) => runGateCmd(repo.root, recordRoundArgs(num, r.round, r.agent)))
+  const verify = runGateCmd(repo.root, [String(num), '--verify-complete'])
+  return { run, recorded, verify }
+}
+
+test('gate run — a software-architect round is recordable AND declarable: it appends, the phase file parses, the counts agree', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  const rounds = [structuredRound(0, 'quality-pass'), structuredRound(1, 'software-architect')]
+  writeDefinePhase(repo, 1740, rounds)
+  repo.commit('feat: phase 1740 — code', { 'lib/a.ts': 'export const a = 1\n' })
+
+  const { run, recorded, verify } = driveRounds(repo, 1740, rounds)
+
+  assert.equal(run.code, 0, `the phase file must READ: a round the enum rejects makes the whole phase unparseable; stderr: ${run.stderr}`)
+  assert.equal(recorded[0].code, 0, `--record-round must append the architect round; stderr: ${recorded[0].stderr}`)
+  const agents = latestReportOf(repo.root, 1740).agents
+  assert.deepEqual(
+    agents.map((a) => a.agent),
+    ['software-architect'],
+    'the report carries the round under the agent that RAN it — never relabelled to a member the enum happens to allow',
+  )
+  assert.equal(verify.code, 0, `phase and report agree on one round>=1; stdout: ${verify.stdout} stderr: ${verify.stderr}`)
+})
+
+test('gate run — a self-review round is recordable AND declarable: it appends, the phase file parses, the counts agree', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  const rounds = [structuredRound(0, 'quality-pass'), structuredRound(1, 'self-review')]
+  writeDefinePhase(repo, 1741, rounds)
+  repo.commit('feat: phase 1741 — code', { 'lib/a.ts': 'export const a = 1\n' })
+
+  const { run, recorded, verify } = driveRounds(repo, 1741, rounds)
+
+  assert.equal(run.code, 0, `the phase file must READ: a round the enum rejects makes the whole phase unparseable; stderr: ${run.stderr}`)
+  assert.equal(recorded[0].code, 0, `--record-round must append the self-review round; stderr: ${recorded[0].stderr}`)
+  assert.deepEqual(
+    latestReportOf(repo.root, 1741).agents.map((a) => a.agent),
+    ['self-review'],
+    'a self-reviewed round is recorded as SELF-review — laundering it as code-reviewer invents an independent pass that never happened',
+  )
+  assert.equal(verify.code, 0, `phase and report agree on one round>=1; stdout: ${verify.stdout} stderr: ${verify.stderr}`)
+})
+
+test('gate run — the five pre-existing enum members still parse and still record (the widening adds, it never swaps)', { timeout: 240_000 }, () => {
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  const legacy = ['quality-pass', 'architect-critique', 'simplifier', 'code-reviewer', 'test-engineer']
+  const rounds = legacy.map((agent, i) => structuredRound(i + 1, agent))
+  writeDefinePhase(repo, 1742, rounds)
+  repo.commit('feat: phase 1742 — code', { 'lib/a.ts': 'export const a = 1\n' })
+
+  const { run, recorded, verify } = driveRounds(repo, 1742, rounds)
+
+  assert.equal(run.code, 0, `every historical member must keep parsing — a phase gated before the widening must not stop reading; stderr: ${run.stderr}`)
+  assert.deepEqual(recorded.map((r) => r.code), [0, 0, 0, 0, 0], `each legacy member still appends; stderr: ${recorded.map((r) => r.stderr).join(' | ')}`)
+  assert.deepEqual(latestReportOf(repo.root, 1742).agents.map((a) => a.agent), legacy, 'all five recorded under their own names, in order')
+  assert.equal(verify.code, 0, `five declared rounds, five recorded; stdout: ${verify.stdout} stderr: ${verify.stderr}`)
+})
+
+test('gate run — the CONSUMER schema home accepts the same widened enum as the plugin template (the two homes are one contract)', { timeout: 240_000 }, () => {
+  // templates/schema.ts is the canonical home; every consumer carries a synced copy at
+  // lib/roadmap/schema.ts, and a real phase file imports THAT one. Widening only the template
+  // leaves this repo's own phase files rejecting the members the CLI happily records — the
+  // split-brain the vendor pair exists to prevent. Same drive, pointed at the second home.
+  assert.ok(existsSync(CONSUMER_SCHEMA), `precondition: the consumer schema home ${CONSUMER_SCHEMA} exists`)
+  const repo = makeRepo(RUN_CFG(), { consumerSchema: true })
+  const rounds = [structuredRound(1, 'software-architect'), structuredRound(2, 'self-review')]
+  writeDefinePhase(repo, 1743, rounds, { schemaFrom: CONSUMER_SCHEMA })
+  repo.commit('feat: phase 1743 — code', { 'lib/a.ts': 'export const a = 1\n' })
+
+  const { run, recorded, verify } = driveRounds(repo, 1743, rounds)
+
+  assert.equal(run.code, 0, `lib/roadmap/schema.ts must accept both new members, exactly as templates/schema.ts does; stderr: ${run.stderr}`)
+  assert.deepEqual(recorded.map((r) => r.code), [0, 0], `both rounds append; stderr: ${recorded.map((r) => r.stderr).join(' | ')}`)
+  assert.deepEqual(latestReportOf(repo.root, 1743).agents.map((a) => a.agent), ['software-architect', 'self-review'])
+  assert.equal(verify.code, 0, `two declared rounds, two recorded; stdout: ${verify.stdout} stderr: ${verify.stderr}`)
+})

@@ -147,8 +147,10 @@ export const StructuredGateRoundShape = z.object({
   /** Which gate agent produced this round — makes "which gates actually ran"
    *  queryable instead of remembered. Optional for pre-v9 rounds.
    *  'quality-pass' is the merged Round-0 agent (v0.15.0); 'architect-critique'
-   *  and 'simplifier' remain valid for phases gated before the merge. */
-  agent: z.enum(['quality-pass', 'architect-critique', 'simplifier', 'code-reviewer', 'test-engineer']).optional(),
+   *  and 'simplifier' remain valid for phases gated before the merge.
+   *  'software-architect' records the Decision-Contract/RESHAPE reviewer.
+   *  'self-review' honestly records a driver reviewing its own work. */
+  agent: z.enum(['quality-pass', 'architect-critique', 'simplifier', 'code-reviewer', 'test-engineer', 'software-architect', 'self-review']).optional(),
   /** The round's outcome at a glance (clean = zero actionable findings). */
   verdict: z.enum(['clean', 'findings-fixed', 'skipped']).optional(),
   findings: z.array(GateFindingShape).default([]),

@@ -98,7 +98,18 @@ export default definePhase({
       ],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ["gateRounds agent enum members 'software-architect', 'self-review'"] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          "Widened StructuredGateRoundShape's agent enum in both the plugin template and consumer schema with the software-architect and self-review identities. Added end-to-end CLI fixtures proving both identities parse and record through their honest names while all five legacy identities remain accepted.",
+        how:
+          'TDD: the test-engineer added four fixture-consumer drives through definePhase, gate run, --record-round, and --verify-complete. RED executed 68 tests with 65 passing and the three new schema directions failing on the old enum; after the identical schema edits, the capped scoped run executed all 68 tests green. The phase types slot also passed as declared-none, and the enum-line diff was empty.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '17.2',
