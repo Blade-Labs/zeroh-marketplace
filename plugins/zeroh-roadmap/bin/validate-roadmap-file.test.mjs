@@ -591,7 +591,7 @@ const VACUOUS_CLASSES = [
     citation: /exit-0-always|plan-adversary/i,
   },
   {
-    name: 'a bare echo after `&&` preserves a failing left-side verdict',
+    name: 'a bare `true` after `;` warns while an `&& echo` tail stays honest',
     bad: 'node bin/roadmap.mjs phase validate 9000; true',
     good: 'grep -q expected output.txt && echo found',
     citation: /exit-0-always|plan-adversary/i,
