@@ -623,3 +623,20 @@ gate to WARN about, and the verbatim marketplace-10 subject whose squash its own
 refused. Corrected to the canonical gate-fix form (round 0 IS the quality pass, per do-phase
 SKILL.md). **Measured:** quality-pass.md 5,542 → 5,543 B, still below the 5,545 B it carried
 at the phase start.
+
+## cli/commands/codex.mjs run envelope — MINESWEEP phases 15/16/17/18 (ratchet-funded)
+
+Not a skill body, so it sits outside the measured do-arc flow; its governing instrument is the
+envelope-overhead ratchet (`cli/lib/roles.test.mjs`, bound 0.235 — deliberately under the 0.2391
+of the pre-delivery envelope that PARAPHRASED do-phase). Four phases added lines to this envelope
+(the absolute CLI path and commit grammar in 15.3, the independence clause in 17.3) and each paid
+for them in the same file. Recorded here because three of the four trimmed the SAME prose
+independently, and a reader comparing them needs to know that is convergence, not duplication.
+**Measured on the landed tree: 3,835 B envelope / 16,710 B protocol = 0.2295.**
+
+| passage (origin) | disposition | evidence |
+|---|---|---|
+| the CROSS-REPO tail repeating bullet 1's "stage explicit paths, never push, never merge, never switch branches" | obsolete-with-evidence(verbatim restatement of the bullet directly above it; every rule survives there) | codex.mjs buildPrompt bullet 1 |
+| the long-form run-tier substitution clause (`…that substitution is PRE-RATIFIED here and is never an escalation`) | obsolete-with-evidence(wording compression; the substitution, its PRE-RATIFIED status and the never-an-escalation rule all survive in the short form) | codex.mjs SHARED HOST bullet |
+| the worktree fence stated twice (intro sentence + bullet 1) | relocated | one statement, in the bullet that owns worktree discipline — the ratchet's own assertions pin both the fence regex and the staging phrase |
+| RESUME RULE / COMMIT TRAILER / ATTRIBUTION long forms | obsolete-with-evidence(pure wording compression: `done: true` + commit-in-log, the trailer, and the driver/lane pair all survive verbatim in meaning) | codex.test.mjs asserts each override individually |
