@@ -712,6 +712,17 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     return keep(`it is DIRTY beyond its own lane artifacts — commit, move or delete this first:\n  ${blocking.join('\n  ')}`)
   }
 
+  const validation = spawnSync('node', [ROADMAP_CLI, 'phase', 'validate', phaseFile], {
+    cwd: wt,
+    encoding: 'utf8',
+  })
+  if (validation.status !== 0) {
+    const diagnostics = `${validation.stderr ?? ''}${validation.stdout ?? ''}`.trim()
+    return keep(
+      `the plan lane authored a file that does not validate as a phase entity:\n${diagnostics || `validator exited ${validation.status ?? 1} without diagnostics`}`,
+    )
+  }
+
   // (c) THE ONE-FILE INVARIANT. THREE dots: `base` is a moving ref the harvest itself advances, so a
   // two-dot tree diff would report every sibling landing as a change this lane made and refuse
   // every harvested plan. The merge-base diff asks only what the LANE did.

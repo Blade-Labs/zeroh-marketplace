@@ -2188,8 +2188,15 @@ test('next-step hint: STDOUT stays byte-compatible — the same object, the same
  * `develop` is the integration ref (integrationRefOf's documented fallback, no config written) and
  * is deliberately NOT the branch the primary has checked out, so the harvest below can advance it
  * the way a supervising session does without touching the primary's HEAD.
+ *
+ * `authored` overrides what the lane COMMITTED as its plan. The default stays the minimal entity
+ * every close test above already pins, and it is load-bearing beyond those tests: it must PASS
+ * `roadmap phase validate`, because the close validates the authored entity (15.4) and a fixture
+ * the validator rejected would refuse every one of them. It carries no `import` for the same
+ * reason the plan file it stands for cannot here — a tmp consumer has no lib/roadmap/schema, and
+ * the validator judges the PARSED entity, so a plain object exercises the real engine end to end.
  */
-function planLane(root, ids, { body = null, startedAt = new Date(Date.now() - 60_000).toISOString(), pgid = 999999999 } = {}) {
+function planLane(root, ids, { body = null, authored = null, startedAt = new Date(Date.now() - 60_000).toISOString(), pgid = 999999999 } = {}) {
   const at = (dir) => (...args) =>
     execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' })
   const git = at(root)
@@ -2208,7 +2215,7 @@ function planLane(root, ids, { body = null, startedAt = new Date(Date.now() - 60
   git('worktree', 'add', '-q', '-b', branch, worktree, 'develop')
   const lgit = at(worktree)
   mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
-  writeFileSync(join(worktree, phaseFile), `export default { id: ${n}, tasks: [] }\n`)
+  writeFileSync(join(worktree, phaseFile), authored ?? `export default { id: ${n}, tasks: [] }\n`)
   lgit('add', phaseFile)
   lgit('commit', '-q', '-m', `plan(${n}): author the phase`)
   const tip = lgit('rev-parse', 'HEAD').trim()
@@ -2739,6 +2746,163 @@ test('next-step hint: a plan lane journalled at a SLOT is promised no close, bec
   )
   assert.ok(existsSync(slot), 'and the slot is untouched — slot retirement is a held human act')
 })
+
+// ── the close VALIDATES the authored entity, through the consumer bridge ───────────────────────
+// Task 15.4. Everything above proves the lane is spent, clean, one-file and harvested — and not one
+// of those guards ever OPENS the file. A plan lane that wrote a broken phase file therefore reports
+// CODEX-RUN-COMPLETE, closes as consumed, and takes its worktree and branch with it; the operator
+// finds out when something downstream trips over the file, with the lane that authored it gone.
+// Nothing downstream catches it mechanically either: `roadmap status` hides parse errors (azure
+// lesson 2329) and the write-hook adapter no-ops as a CLI (2333). The consume-close is the choke
+// point, so the question it must ask is the plugin's OWN `phase validate` — the same engine the
+// write-hook calls — run against the file as the LANE committed it, before the harvest proof.
+//
+// The refusal must carry the validator's real diagnostic, not a paraphrase of it: "the plan does
+// not validate" tells an operator nothing they can act on, and the file is sitting in a worktree
+// this close is about to remove. Every test below therefore runs the real validator ITSELF to learn
+// what it says about its fixture, and demands that exact line back out of the refusal — no coupling
+// to esbuild's or the engine's current wording, and no way for an implementation to pass by
+// swallowing stderr and printing a summary.
+
+/** A plan file with a syntax error — the malformed authored entity, byte-committed by the lane. */
+const brokenPlan = (n) => `export default { phase: ${n}, name: 'broken', tasks: [ }\n`
+
+/**
+ * A plan file that PARSES but breaks a structural phase rule (done-with-open-task). The distinction
+ * matters: a `node --check`, a JSON.parse or a bare import would wave this through, and the seam is
+ * specified as the plugin's validator precisely because the entity's RULES are the question.
+ */
+const openTaskPlan = (n) =>
+  `export default { phase: ${n}, name: 'closes over an open task', status: 'done', tasks: [{ id: '${n}.1', done: false }] }\n`
+
+/** A valid plan: the twin, structured as a real phase entity rather than the minimum fixture. */
+const validPlan = (n) =>
+  `export default {\n`
+  + `  phase: ${n},\n`
+  + `  name: 'the plan this lane was launched to author',\n`
+  + `  status: 'backlog',\n`
+  + `  category: 'feature',\n`
+  + `  tasks: [{ id: '${n}.1', title: 'the one task', done: false }],\n`
+  + `}\n`
+
+/** What the REAL validator says about the file this lane committed, asked exactly where the close asks. */
+function validatorSays(lane) {
+  const r = spawnSync('node', [BIN, 'phase', 'validate', lane.phaseFile], { cwd: lane.worktree, encoding: 'utf8' })
+  return { code: r.status, err: r.stderr }
+}
+
+/** The one diagnostic line an operator needs, lifted from a real validator run so no test hardcodes wording. */
+function diagnosticLine(err, pattern) {
+  const line = err.split('\n').find((l) => pattern.test(l))
+  assert.ok(line, `fixture precondition: the validator must emit a ${pattern} line to demand back — got: ${err}`)
+  return line.trim()
+}
+
+test('consume-the-plan: a harvested lane whose authored file does NOT PARSE refuses, quoting the validator, and keeps the lane', () => {
+  const root = tmpRepo()
+  const lane = planLane(root, [320], { authored: brokenPlan(320) })
+  harvest(lane)
+  assertGroupDead(999999999, 'the plan act has finished')
+
+  // Every OTHER guard is satisfied: dead group, clean tree, one file, blob proven harvested. The
+  // file's contents are the only thing wrong with this lane, so a close here can only be a close
+  // that never opened it.
+  assert.equal(
+    blobAt(root, 'develop', lane.phaseFile),
+    blobAt(lane.worktree, 'HEAD', lane.phaseFile),
+    'precondition: the harvest IS proven — validation is the only guard left that can fire',
+  )
+  const validator = validatorSays(lane)
+  assert.notEqual(validator.code, 0, `precondition: the authored file must really fail \`phase validate\`; got exit ${validator.code} / ${validator.err}`)
+  const diagnostic = diagnosticLine(validator.err, /ERROR:/)
+
+  const { code, out, err } = laneStatus(root, [320], '--plan')
+
+  assert.equal(out?.state, 'complete', `the verdict is still delivered — a refused CLEANUP is not a refused read; stderr: ${err}`)
+  assert.equal(code, 0, `and the read itself still succeeds: refusing to close is a side effect, never a failed status; stderr: ${err}`)
+  assert.match(
+    err,
+    /does not validate as a phase entity/,
+    `a plan that is not a phase entity must NEVER close as consumed — CODEX-RUN-COMPLETE is the lane's own claim, and this close is the only thing that checks it; got: ${err}`,
+  )
+  assert.ok(
+    err.includes(diagnostic),
+    `and the refusal must carry the VALIDATOR's own line — "${diagnostic}" — verbatim: the file is in a worktree this close was about to remove, and an operator told only "it does not validate" has nothing to fix; got: ${err}`,
+  )
+  assertPlanLaneKept(lane, 'the authored file does not parse')
+  assert.equal(
+    readFileSync(join(lane.worktree, lane.phaseFile), 'utf8'),
+    brokenPlan(320),
+    'and the broken file is still there to READ — keeping the lane is the whole point of refusing: the fix happens in this worktree, then the lane closes',
+  )
+})
+
+test('consume-the-plan: the VALID twin still closes — validation refuses broken entities, not the flow', () => {
+  // The other direction of the same guard, and the regression pin on the 14.6 close: a validation
+  // step wired to the wrong file, the wrong cwd or the wrong exit-code reading refuses EVERY lane,
+  // which retires the plan lane's done-moment entirely while looking like a safety improvement.
+  const root = tmpRepo()
+  const lane = planLane(root, [321], { authored: validPlan(321) })
+  harvest(lane)
+  assertGroupDead(999999999, 'the plan act has finished')
+  assert.equal(validatorSays(lane).code, 0, 'precondition: this authored entity really does validate — the twin differs from the case above ONLY in its contents')
+
+  const { code, out, err } = laneStatus(root, [321], '--plan')
+
+  assert.equal(code, 0, `a consumed plan lane exits 0; stderr: ${err}`)
+  assert.equal(out?.state, 'complete', `and still serves the verdict; stderr: ${err}`)
+  assert.doesNotMatch(err, /does not validate as a phase entity/, `a valid entity must not be refused; got: ${err}`)
+  assert.ok(existsSync(lane.archived), `the plan is copied out before the worktree goes — expected ${lane.archived}; stderr: ${err}`)
+  assert.ok(!existsSync(lane.worktree), `and the harvested lane is disposed — ${lane.worktree} must be removed; stderr: ${err}`)
+  assert.ok(!branchResolves(lane), `and ${lane.branch} deleted, exactly as before validation existed; stderr: ${err}`)
+  assert.ok(Number.isFinite(Date.parse(journalOf(lane).archivedAt)), 'and the journal stamped: this lane WAS consumed')
+})
+
+test('consume-the-plan: an entity that parses but breaks a phase RULE is refused too, carrying that rule', () => {
+  // The seam is the plugin's validator, not a syntax check. A phase file can be perfectly valid
+  // JavaScript and still be a broken phase entity — status:'done' over an open task is the
+  // 1281.7/1282.6 defect the engine already names — and a lane that authored one is exactly as
+  // unconsumable as a lane that authored a parse error.
+  const root = tmpRepo()
+  const lane = planLane(root, [322], { authored: openTaskPlan(322) })
+  harvest(lane)
+  assertGroupDead(999999999, 'the plan act has finished')
+  const validator = validatorSays(lane)
+  assert.notEqual(validator.code, 0, `precondition: the rule must really fire; got exit ${validator.code} / ${validator.err}`)
+  const diagnostic = diagnosticLine(validator.err, /done-with-open-task/)
+
+  const { code, err } = laneStatus(root, [322], '--plan')
+
+  assert.equal(code, 0, `the read still succeeds; stderr: ${err}`)
+  assert.match(err, /does not validate as a phase entity/, `an entity the plugin's own validator rejects cannot close as consumed either; got: ${err}`)
+  assert.ok(
+    err.includes(diagnostic),
+    `and the refusal carries the RULE that fired — "${diagnostic}": a close that only reported "invalid" would send an operator to look for a syntax error that is not there; got: ${err}`,
+  )
+  assertPlanLaneKept(lane, 'the authored entity breaks a phase rule')
+})
+
+test('consume-the-plan: a broken plan is refused for being broken FIRST — never sent off to be harvested', () => {
+  // Ordering, and it is not cosmetic. The harvest refusal hands over a runnable
+  // `git cherry-pick <tip>`; run against a lane whose file does not validate, that instruction
+  // lands the broken plan on the integration ref, which is the one outcome this task exists to
+  // prevent. Validation therefore precedes the harvest proof: the operator is told what is wrong
+  // with the file, not how to ship it.
+  const root = tmpRepo()
+  const lane = planLane(root, [323], { authored: brokenPlan(323) })
+  assertGroupDead(999999999, 'the plan act has finished — the harvest is missing AND the file is broken')
+  assert.equal(blobAt(root, 'develop', lane.phaseFile), null, 'precondition: unharvested, so the harvest guard would otherwise be the one to speak')
+
+  const { err } = laneStatus(root, [323], '--plan')
+
+  assert.match(err, /does not validate as a phase entity/, `the file is broken, and that is what an operator must hear about it; got: ${err}`)
+  assert.ok(
+    !err.includes(`cherry-pick ${lane.tip}`),
+    `and must NOT be handed \`git cherry-pick ${lane.tip}\` for a plan that does not validate — the refusal's own recovery would put the broken file on the integration ref; got: ${err}`,
+  )
+  assertPlanLaneKept(lane, 'a broken plan is neither consumed nor harvested')
+})
+
 
 // ── detectInstaller: the install decision, keyed on the LOCKFILE the consumer committed ────────
 // Task 15.1. Today ensureWorktree hardcodes `npm ci`, which means (a) the decision cannot be
