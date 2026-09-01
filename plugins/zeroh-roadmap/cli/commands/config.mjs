@@ -15,33 +15,51 @@ const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const TEMPLATE_SCHEMA = join(PLUGIN_ROOT, 'templates', 'schema.ts')
 const EXPORT_DECLARATION = /^export (?:const|function|type) (\w+)/gm
 
-function exportedNames(file, seen = new Set()) {
-  if (seen.has(file)) return new Set()
+function starTarget(file, specifier) {
+  const bare = resolve(dirname(file), specifier)
+  const sourceSibling = /\.(?:m|c)?js$/.test(bare) ? bare.replace(/\.(m|c)?js$/, (_m, flavor) => `.${flavor ?? ''}ts`) : null
+  return [bare, sourceSibling, `${bare}.ts`, join(bare, 'index.ts')]
+    .filter(Boolean)
+    .find((candidate) => existsSync(candidate) && statSync(candidate).isFile())
+}
+
+function exportInventory(file, seen = new Set()) {
+  if (seen.has(file)) return { names: new Set(), unresolved: [] }
   seen.add(file)
   const source = readFileSync(file, 'utf8')
   const names = new Set([...source.matchAll(EXPORT_DECLARATION)].map((match) => match[1]))
+  const unresolved = []
   for (const match of source.matchAll(/^export \* from ['"]([^'"]+)['"]/gm)) {
-    const bare = resolve(dirname(file), match[1])
-    const target = [bare, `${bare}.ts`, join(bare, 'index.ts')].find(
-      (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
-    )
+    const target = starTarget(file, match[1])
     if (target) {
-      for (const name of exportedNames(target, seen)) names.add(name)
-    }
+      const nested = exportInventory(target, seen)
+      for (const name of nested.names) names.add(name)
+      unresolved.push(...nested.unresolved)
+    } else unresolved.push(`${file}: ${match[1]}`)
   }
-  return names
+  return { names, unresolved }
 }
 
 /** Return template exports absent from a consumer's vendored schema. */
 export function missingSchemaExports(consumerRoot) {
   const consumerSchema = join(consumerRoot, 'lib', 'roadmap', 'schema.ts')
   if (!existsSync(consumerSchema)) return []
-  const expected = exportedNames(TEMPLATE_SCHEMA)
-  const actual = exportedNames(consumerSchema)
-  return [...expected].filter((name) => !actual.has(name))
+  const expected = exportInventory(TEMPLATE_SCHEMA).names
+  const actual = exportInventory(consumerSchema)
+  if (actual.unresolved.length) return []
+  return [...expected].filter((name) => !actual.names.has(name))
+}
+
+/** Return unresolved export-star specifiers instead of misreporting every export as missing. */
+export function unresolvedSchemaExports(consumerRoot) {
+  const consumerSchema = join(consumerRoot, 'lib', 'roadmap', 'schema.ts')
+  return existsSync(consumerSchema) ? exportInventory(consumerSchema).unresolved : []
 }
 
 function reportSchemaDrift(consumerRoot) {
+  for (const target of unresolvedSchemaExports(consumerRoot)) {
+    process.stderr.write(`schemaDrift: could not resolve export-star target ${target}; export inventory is incomplete — repair the consumer schema barrel or re-vendor it\n`)
+  }
   for (const name of missingSchemaExports(consumerRoot)) {
     process.stderr.write(
       `schemaDrift: ${name} is not exported by lib/roadmap/schema.ts; phase eval records cannot emit and scorecard samples go silent — re-vendor the schema from the plugin template\n`,

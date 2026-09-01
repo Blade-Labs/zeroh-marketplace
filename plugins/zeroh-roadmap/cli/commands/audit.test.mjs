@@ -641,6 +641,14 @@ test('explanatory-empty — none/nothing/n-a fields leave the ledger and are COU
     `only the field that SAYS something is debt; got ${JSON.stringify(c.entries.map((e) => [e.ref, e.text]))}`,
   )
   assert.equal(c.totals.open, 1, 'six explanatory-empty fields must not inflate the OPEN total')
+  assert.deepEqual(c.excludedExplanatoryEmpty, [
+    'phase 100: 100.1.compromises',
+    'phase 100: 100.1.hardcoded',
+    'phase 100: 100.1.skipped',
+    'phase 100: 100.1.limitations',
+    'phase 100: 100.2.compromises',
+    'phase 100: 100.2.skipped',
+  ], 'the count remains traceable to every excluded field')
   assert.match(
     stdout,
     /excluded 6 explanatory-empty field\(s\)/,

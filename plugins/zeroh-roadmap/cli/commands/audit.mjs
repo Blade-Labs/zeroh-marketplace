@@ -32,7 +32,7 @@ import { TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import { censusFollowups } from './followups.mjs'
 import { isTerminalPhaseSource } from '../lib/phasescan.mjs'
 import { surveyLanes } from '../lib/worktree.mjs'
-import { missingSchemaExports } from './config.mjs'
+import { missingSchemaExports, unresolvedSchemaExports } from './config.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -194,6 +194,15 @@ export default async function run(argv) {
   }
 
   // ── Check 16: consumer schema drift ──────────────────────────────────────
+  for (const target of unresolvedSchemaExports(repo)) {
+    findings.push({
+      check: 16,
+      severity: 'HIGH',
+      phase: null,
+      location: join(repo, 'lib', 'roadmap', 'schema.ts'),
+      message: `Could not resolve export-star target ${target}; the schema export inventory is incomplete — repair the consumer schema barrel or re-vendor it.`,
+    })
+  }
   for (const name of missingSchemaExports(repo)) {
     findings.push({
       check: 16,

@@ -307,6 +307,21 @@ test('10b) extensionless and cyclic export-star barrels terminate and preserve t
   const directoryRes = roadmap(directoryRepo, 'config', 'check')
   assert.equal(directoryRes.status, 0, `a directory barrel resolves index.ts instead of throwing EISDIR; stderr:\n${directoryRes.stderr}`)
   assert.equal(/schemaDrift:/.test(directoryRes.stderr), false, `the directory barrel preserves the inventory; stderr:\n${directoryRes.stderr}`)
+
+  const jsRepo = configuredRepo("export * from './shapes.js'\n")
+  writeFileSync(join(jsRepo, 'lib', 'roadmap', 'shapes.ts'), inSyncSchema())
+  const jsRes = roadmap(jsRepo, 'config', 'check')
+  assert.equal(jsRes.status, 0, `a NodeNext .js specifier resolves its TypeScript source; stderr:\n${jsRes.stderr}`)
+  assert.equal(/schemaDrift:/.test(jsRes.stderr), false, `the .js barrel preserves the inventory; stderr:\n${jsRes.stderr}`)
+})
+
+test('10c) an unresolved export-star target is named once instead of fabricating every export as missing', () => {
+  const repo = configuredRepo("export * from './missing.js'\n")
+  const res = roadmap(repo, 'config', 'check')
+  const drift = res.stderr.split('\n').filter((line) => line.startsWith('schemaDrift:'))
+  assert.equal(drift.length, 1, `one broken barrel produces one actionable line; got:\n${res.stderr}`)
+  assert.match(drift[0], /could not resolve export-star target.*missing\.js/i)
+  assert.equal(/PhaseEvalRecordShape|DriverShape/.test(drift[0]), false)
 })
 
 test('11) a repo with NO lib/roadmap/schema.ts is not a stale consumer — no drift line, exit 0', () => {

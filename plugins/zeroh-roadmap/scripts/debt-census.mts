@@ -83,6 +83,7 @@ type Entry = {
 function censusOf(phaseList: any[], lookupById: Map<number, any>) {
   const entries: Entry[] = []
   const dangling: string[] = []
+  const excludedExplanatoryEmpty: string[] = []
   let closedCount = 0
   let excludedCount = 0
   for (const p of phaseList) {
@@ -99,6 +100,7 @@ function censusOf(phaseList: any[], lookupById: Map<number, any>) {
         if (!v) continue
         if (isExplanatoryEmpty(String(v))) {
           excludedRefs.add(ref)
+          excludedExplanatoryEmpty.push(`phase ${p.phase}: ${ref}`)
           excludedCount++
           continue
         }
@@ -144,7 +146,7 @@ function censusOf(phaseList: any[], lookupById: Map<number, any>) {
     }
   }
   entries.sort((a, b) => a.phase - b.phase || a.ref.localeCompare(b.ref))
-  return { entries, dangling, closedCount, excludedCount }
+  return { entries, dangling, closedCount, excludedCount, excludedExplanatoryEmpty }
 }
 
 const phaseById = new Map<number, any>(phases.map((p: any) => [p.phase, p]))
@@ -211,6 +213,7 @@ const census = {
   },
   byArc: Object.fromEntries([...byArc.entries()].sort((a, b) => b[1] - a[1])),
   entries,
+  excludedExplanatoryEmpty: active.excludedExplanatoryEmpty,
   dangling,
   followups,
   archive, // null unless --include-archive; additive, never folded into totals/ratchet

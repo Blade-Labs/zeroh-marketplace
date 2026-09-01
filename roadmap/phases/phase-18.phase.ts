@@ -318,6 +318,6 @@ export default definePhase({
     hardcoded: [],
     surfaced: ['claude-fable-5 reviewer quota was exhausted; role resolution substituted claude-opus-5 at unreduced rigor.'],
     hardStops: [],
-    gateRounds: 4,
+    gateRounds: 5,
   },
 })

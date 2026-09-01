@@ -42,6 +42,7 @@ import {
   DECLARED_RESETS,
   DIMENSION_KEYS,
   JUDGE_DIMENSIONS,
+  PENDING_JUDGE_SENTINEL,
 } from '../lib/eval-score.mjs'
 import { computeScorecard, findGateFixCommits } from '../lib/eval-scorecard.mjs'
 import { extractFindings, clusterFindings, consolidateAndWrite, readProposalDocs } from '../lib/eval-propose.mjs'
@@ -1403,10 +1404,10 @@ async function runArcEval(arcId, opts) {
     return 1
   }
 
-  const pendingJudge = Object.values(report.dimensions).filter((dimension) => dimension.sentinel === 'pending-judge').length
+  const pendingJudge = Object.values(report.dimensions).filter((dimension) => dimension.sentinel === PENDING_JUDGE_SENTINEL).length
   if (pendingJudge > 0) {
     process.stderr.write(
-      `${pendingJudge} dimension(s) pending-judge — the eval-arc skill's judge pass (roadmap eval merge-judge --arc ${arcId}) finishes this report\n`,
+      `${pendingJudge} dimension(s) ${PENDING_JUDGE_SENTINEL} — the eval-arc skill's judge pass (roadmap eval merge-judge --arc ${arcId}) finishes this report\n`,
     )
   }
 
