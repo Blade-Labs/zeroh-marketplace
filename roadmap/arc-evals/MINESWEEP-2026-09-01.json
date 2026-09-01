@@ -1,0 +1,274 @@
+{
+  "arcId": "MINESWEEP",
+  "date": "2026-09-01",
+  "judgeModel": "claude-fable-5",
+  "dimensions": {
+    "code-confidence": {
+      "owner": "deterministic",
+      "score": 30.3,
+      "signals": {
+        "gateRoundsMean": 5.1,
+        "gateRunsObserved": 1,
+        "finalRoundCleanRatio": 0,
+        "escapeFixes": 0,
+        "escapeFixesPerPhase": 0,
+        "escapeFixesFileIntersection": 0,
+        "escapeWindow": "tip-anchored",
+        "phasesConsidered": 7
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-14.phase.ts",
+        "roadmap/phases/phase-15.phase.ts",
+        "roadmap/phases/phase-16.phase.ts",
+        "roadmap/phases/phase-17.phase.ts",
+        "roadmap/phases/phase-18.phase.ts",
+        "roadmap/phases/phase-19.phase.ts",
+        "roadmap/phases/phase-20.phase.ts",
+        "roadmap/.gate/14/"
+      ]
+    },
+    "verified-vs-intent": {
+      "owner": "deterministic",
+      "score": 100,
+      "signals": {
+        "verdicts": 6,
+        "met": 6,
+        "gaps": 0,
+        "weightedMetShare": 1,
+        "tierDistribution": "wired:6",
+        "judgeModel": "claude-fable-5"
+      },
+      "sourceRefs": [
+        "roadmap/arc-evals/MINESWEEP-2026-09-01-verdicts.json"
+      ]
+    },
+    "standards-adherence": {
+      "owner": "judge",
+      "score": 88,
+      "signals": {
+        "nonCleanReviewRounds": 4,
+        "compromisesRecorded": 0,
+        "hardcodedRecorded": 1,
+        "skippedRecorded": 0,
+        "transparencyDebtEntries": 2,
+        "sweepVerdict": "green",
+        "confidence": "high"
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-14.phase.ts",
+        "roadmap/phases/phase-15.phase.ts",
+        "roadmap/phases/phase-16.phase.ts",
+        "roadmap/phases/phase-17.phase.ts",
+        "roadmap/phases/phase-18.phase.ts",
+        "roadmap/phases/phase-19.phase.ts",
+        "roadmap/phases/phase-20.phase.ts"
+      ],
+      "evidence": "Sweep green: \"Every model-loaded-prose trim carries its DIET-LEDGER row with live code-side enforcement\" — verified: DIET-LEDGER.md:604 ('Committing agent-card grammar — phase 16 task 16.4 (diet-funded)', measured wc -c 5,545→5,542/5,543 B) and :627 ('cli/commands/codex.mjs run envelope — MINESWEEP phases 15/16/17/18 (ratchet-funded)', measured 3,835/16,710 = 0.2295). Schema vendor pair held per 17.1's line-identical diff verify (phase-17.phase.ts:190). Commit grammar: 66/70 subjects in fb6b9d1..HEAD phase-bound; the two D2 deviants ('fix(phase-17): quality pass — …', 'fix(phase-18): quality pass — …') trace to quality-pass.md's own stale step-5 prescription, which phase 16 gate R0 found and corrected in the same arc (DIET-LEDGER 'protocol step 5 … still prescribed fix(phase-N)'). Every deviation is named and dispositioned: the 17.2 cutoff hardcode and 20.3 narrowing both ACCEPT in the sweep debtDispositions; the 15.1/15.5 test-engineer run-tier deviations and the phase-19 quality-pass shared-host violation ('started an extra full suite and was interrupted', phase-19.phase.ts:84) are recorded in limitations/surfaced rather than found by me in the diff. Refusal texts follow the reason+remedy convention throughout (codex.mjs:151 'commit pnpm-lock.yaml or package-lock.json; nothing was created'). No unnamed compromise surfaced in my diff sampling."
+    },
+    "doc-brevity": {
+      "owner": "judge",
+      "score": 74,
+      "signals": {
+        "transparencyReports": 28,
+        "transparencyChars": 32354,
+        "meanCharsPerReport": 1155.5,
+        "confidence": "medium"
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-14.phase.ts",
+        "roadmap/phases/phase-15.phase.ts",
+        "roadmap/phases/phase-16.phase.ts",
+        "roadmap/phases/phase-17.phase.ts",
+        "roadmap/phases/phase-18.phase.ts",
+        "roadmap/phases/phase-19.phase.ts",
+        "roadmap/phases/phase-20.phase.ts"
+      ],
+      "evidence": "The landed comments are overwhelmingly operative WHY, at their best exemplary one-clause rationale: validate.mjs:231 '// PER-SEGMENT, never whole-command: a command list judges only its LAST segment's exit, so a later honest grep -q would otherwise vouch for an earlier runner pipeline whose red is already swallowed', and detectInstaller's docblock (codex.mjs:~75) states the three-outcome contract in four lines. The history-comments slot did its job in-arc (14 R5 'four dated census comments reworded to their operative why'; 16 R7 'the boundary comment states the rule, not an example'). But the landed state still breaches documentation-rules.md's archaeology rule in places: worktree.mjs:606 'byte-frozen by task 14.1's acceptance criteria' and codex.mjs:627 'THE HARVEST PROOF HAS TWO ARMS (architect amendment A2)' anchor source comments on phase/amendment numbers the rules say belong in the transparencyReport, and surveyLanes carries ~90 comment lines over ~130 code lines (worktree.mjs:361-403 docblock plus 10+ inline paragraphs) — reasoning-dense and reconstruction-worthy, but well past the 'one line' bar and partly restating the remedy strings the code visibly builds. Feeder: 28 transparencyReports at 1,155 mean chars are long but sit in their sanctioned home."
+    },
+    "composability-testability": {
+      "owner": "judge",
+      "score": 90,
+      "signals": {
+        "testsAdded": 209,
+        "filesChanged": 86,
+        "testsPerFileChanged": 2.4,
+        "phasesWithMetrics": 7,
+        "confidence": "high"
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-14.phase.ts",
+        "roadmap/phases/phase-15.phase.ts",
+        "roadmap/phases/phase-16.phase.ts",
+        "roadmap/phases/phase-17.phase.ts",
+        "roadmap/phases/phase-18.phase.ts",
+        "roadmap/phases/phase-19.phase.ts",
+        "roadmap/phases/phase-20.phase.ts"
+      ],
+      "evidence": "Every promised seam has one home with routed consumers, confirmed in the diff: surveyLanes (worktree.mjs:404) feeds audit check 15, the status stray line, and the codex hint path with no second enumeration parser; phaseOwnPatterns (gitscan.mjs:46) replaced both fixed-string greps (the 'const grep = `phase ${phaseNum} —`' lines are gone from gitscan.mjs and gate.mjs per 16.2's negative-grep verifies); detectInstaller (codex.mjs:79) is consumed by ensureWorktree AND commands/worktree.mjs installDeps (singleSeam 3); deleteIfMerged and probeScopedSlot/runAssumptions expose injectable seams (probeScopedSlot takes {cwd, timeoutMs}; runAssumptions exported 'for an injectable timeout seam', 20.4 report). The 209 tests over 86 files (feeder 2.4/file, suite 1,427→1,635) sit on the seams that risk data loss — wired subprocess tests with real git worktrees, live pgids measured twice, and repeated guard-mutation proofs (14.2's planted array-arg probe RED, 15.2's planted hardcoded npm recipe RED, 20.3's re-measured 48/2→50/0). Docked for the architect LOW the sweep records: 'the one new worktree-porcelain parse (executor-arm worktreeRoots)' is a justified-but-real second parse of the same porcelain, deferred to phase 21 rather than closed in-arc."
+    },
+    "speed": {
+      "owner": "deterministic",
+      "score": 9.1,
+      "signals": {
+        "elapsedMinutes": 2781.7,
+        "haltAdjustedMinutes": 438.7,
+        "minutesPerTask": 87.7,
+        "referenceMinutesPerTask": 8,
+        "timedPhases": 7,
+        "interruptedPhases": 5,
+        "basis": "halt-free-phases"
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-14.phase.ts#metrics",
+        "roadmap/phases/phase-15.phase.ts#metrics",
+        "roadmap/phases/phase-16.phase.ts#metrics",
+        "roadmap/phases/phase-17.phase.ts#metrics",
+        "roadmap/phases/phase-18.phase.ts#metrics",
+        "roadmap/phases/phase-19.phase.ts#metrics",
+        "roadmap/phases/phase-20.phase.ts#metrics"
+      ]
+    },
+    "plan-quality": {
+      "owner": "judge",
+      "score": 79,
+      "signals": {
+        "escalations": 0,
+        "checkpoints": 0,
+        "hardStops": 0,
+        "surfaced": 23,
+        "haltCountTotal": 5,
+        "plannedByRecorded": 7,
+        "confidence": "high"
+      },
+      "sourceRefs": [
+        "roadmap/phases/phase-14.phase.ts",
+        "roadmap/phases/phase-15.phase.ts",
+        "roadmap/phases/phase-16.phase.ts",
+        "roadmap/phases/phase-17.phase.ts",
+        "roadmap/phases/phase-18.phase.ts",
+        "roadmap/phases/phase-19.phase.ts",
+        "roadmap/phases/phase-20.phase.ts"
+      ],
+      "evidence": "All plans plannedBy claude-fable-5. What held is substantial: every promise-ledger row in MINESWEEP.arc.ts:57-88 maps to a landed task, all 6 criteria MET at wired tier by the independent panel, zero escalations/hardStops (feeders), and the plans pre-made hard decisions that survived contact (14.6's three-dot merge-base rationale and blob-proof are in the plan text and landed verbatim; 19.2's toplevel-vs-common-dir key). What execution had to change is also real and recorded: phase 18 R5 found 'three STALE VERIFY ANCHORS greping for text no implementation ever wrote — clauses that could never go green and therefore certified nothing … the plan named the behavior wrongly, not the implementation' (phase-18 surfaced); 20.3's planned `;`/`&&` trailing-no-op class was semantically wrong ('cmd && echo short-circuits on failure', sweep ACCEPT); five architect amendments (A2-A6) had to repair plan-level over-specification pre-build (A2: strict byte-equality 'would refuse the NORMAL harvest-then-amend flow', arc criteriaRatifications); and the 15.x plans mandated 'bash scripts/test/run-tier.sh' which this repo does not have — the same exit-127 limitation recorded in all five 15.x transparencyReports, a stale assumption the plan repeated instead of probing once. 14.6 left decisions open the executor had to make (integration-ref fallback, slot refusal — '(1) The integration ref … the plan left open', 14.6 limitations). Right altitude on architecture, under-verified on anchors."
+    }
+  },
+  "ratchet": [
+    {
+      "dimension": "code-confidence",
+      "baseline": null,
+      "value": 30.3,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline"
+    },
+    {
+      "dimension": "verified-vs-intent",
+      "baseline": null,
+      "value": 100,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline"
+    },
+    {
+      "dimension": "standards-adherence",
+      "baseline": null,
+      "value": 88,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline incomparable-judge (1 prior(s) judged by another model, excluded)"
+    },
+    {
+      "dimension": "doc-brevity",
+      "baseline": null,
+      "value": 74,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline incomparable-judge (1 prior(s) judged by another model, excluded)"
+    },
+    {
+      "dimension": "composability-testability",
+      "baseline": null,
+      "value": 90,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline incomparable-judge (1 prior(s) judged by another model, excluded)"
+    },
+    {
+      "dimension": "speed",
+      "baseline": null,
+      "value": 9.1,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline"
+    },
+    {
+      "dimension": "plan-quality",
+      "baseline": null,
+      "value": 79,
+      "delta": null,
+      "regression": false,
+      "note": "no-baseline incomparable-judge (1 prior(s) judged by another model, excluded)"
+    }
+  ],
+  "attribution": {
+    "drivers": [
+      {
+        "model": "claude-opus-5",
+        "lane": "session",
+        "phases": [
+          14
+        ]
+      },
+      {
+        "model": "gpt-5.6-sol",
+        "lane": "codex",
+        "phases": [
+          15,
+          16,
+          17,
+          18,
+          19,
+          20
+        ]
+      }
+    ],
+    "planners": [
+      {
+        "model": "claude-fable-5",
+        "phases": [
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20
+        ]
+      }
+    ],
+    "reviewers": [
+      {
+        "agent": "code-reviewer",
+        "rounds": 4
+      }
+    ]
+  },
+  "profile": "prod-grade",
+  "workflow": {
+    "pluginVersion": "0.34.0",
+    "pluginSha": "4b5f332c49c4-dirty",
+    "protocolLoadTokens": 13256,
+    "profile": "prod-grade"
+  },
+  "fingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 21
+  },
+  "notes": [
+    "no RunnerSummary on disk (roadmap/arc-summaries/ is gitignored by design)",
+    "zero scored escapes on a tip-anchored window — the bounded rule cannot see a post-land fix that names a member phase (such a commit is itself a member and moves the boundary), so this is an UNMEASURED escape rate, not a clean one; the unscored file-intersection figure rides in signals",
+    "scoring-model reset 2026-07-28: the scored escape window now anchors on the dated land record (option C) rather than on the arc's own newest commit. Reports in this corpus — possibly including this one, see its own code-confidence escapeWindow signal — still carry a merge- or tip-anchored window, which could not see a post-land fix at all; those are not comparable to a report scored under the land record",
+    "judgeModel claude-fable-5 differs from the pin claude-sonnet-5 - baseline reset material: judge-owned dimensions in this report are not comparable with priors judged by the pinned model"
+  ]
+}
