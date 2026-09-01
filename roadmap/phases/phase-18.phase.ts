@@ -267,7 +267,7 @@ export default definePhase({
     'Mode A metadata ratifications: testMode tdd stands on all four tasks (18.4\'s test home is the --check ratchet path or a census fixture per its criterion — debt-census.mts today has no test file); reviewScope full stands (landing-path + census semantics); userFacing:false correct (plugin-internal CLI surfaces only).',
   executionResult: {
     phase: 18,
-    status: 'failed',
+    status: 'checkpoint',
     driver: { model: 'gpt-5.6-sol', lane: 'codex' },
     roles: [
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
@@ -275,12 +275,49 @@ export default definePhase({
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+      {
+        role: 'code-reviewer',
+        model: 'claude-opus-5',
+        via: 'child-cli',
+        substituted: {
+          from: 'claude-fable-5',
+          to: 'claude-opus-5',
+          reason: 'claude-fable-5 service quota exhausted; role registry fallback at unreduced rigor',
+        },
+      },
+      {
+        role: 'code-reviewer',
+        model: 'claude-opus-5',
+        via: 'child-cli',
+        substituted: {
+          from: 'claude-fable-5',
+          to: 'claude-opus-5',
+          reason: 'claude-fable-5 service quota exhausted; role registry fallback at unreduced rigor',
+        },
+      },
+      {
+        role: 'code-reviewer',
+        model: 'claude-opus-5',
+        via: 'child-cli',
+        substituted: {
+          from: 'claude-fable-5',
+          to: 'claude-opus-5',
+          reason: 'claude-fable-5 service quota exhausted; role registry fallback at unreduced rigor',
+        },
+      },
     ],
+    checkpoint: {
+      committedSha: 'e77cb70',
+      reason: 'Implementation and four gate-agent rounds are committed; final full mechanical gate, clean review, curation, and completion remain.',
+      resume: 'Run correctness round 4, then the full capped phase gate and finish the completion protocol.',
+    },
     compromises: [],
-    skipped: ['Task 18.1 TDD could not begin because the required test-engineer role was unavailable.'],
+    skipped: [],
     hardcoded: [],
-    surfaced: ['claude-opus-5 reported its weekly usage limit and has no configured fallback tier.'],
+    surfaced: ['claude-fable-5 reviewer quota was exhausted; role resolution substituted claude-opus-5 at unreduced rigor.'],
     hardStops: [],
-    gateRounds: 0,
+    gateRounds: 4,
   },
 })
