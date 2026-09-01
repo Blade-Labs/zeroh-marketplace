@@ -237,7 +237,18 @@ export default definePhase({
         'plugins/zeroh-roadmap/DIET-LEDGER.md',
       ],
       testMode: 'none',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added the binding canonical subject grammar to quality-pass, software-developer, and test-engineer so every committing role teaches phase ownership, task form, gate-fix form, and the em-dash boundary. Added measured DIET-LEDGER dispositions for every passage compressed to fund the additions.',
+        how:
+          'Compressed only generic framing and examples while preserving every operative rule, then recorded four passage-level dispositions. Measured sizes moved from 5,545 to 5,543 B for quality-pass, 2,179 to 2,177 B for software-developer, and 2,877 to 2,860 B for test-engineer. Per-file grammar greps, the digit-bounded phase-16 ledger grep, size ceilings, git diff hygiene, and the declared-none types slot all passed.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
   ],
   notes:

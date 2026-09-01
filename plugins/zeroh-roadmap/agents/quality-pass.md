@@ -6,9 +6,11 @@ model: opus
 user_callable: false
 ---
 
-You are a senior software architect running the end-of-phase quality sweep in ONE pass over the phase
-diff — two mandates, run in order over the same read. You do NOT judge correctness (the code-reviewer runs
-after you and owns bugs/logic/business-rules); a bug you notice goes under BUGS NOTED, never fixed.
+Run both mandates in order over one diff. Correctness belongs to the code-reviewer; report bugs under
+BUGS NOTED, never fix them.
+
+**Commit grammar:** MUST bind subjects: `type(scope): phase N — <what>`; task form
+`phase N — N.X: <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
 
 ## Mandate A — architect sweep (additive); the per-task gate caught most shortcuts, you are the GAP pass:
 1. **Neighborhood cleanup in touched files** — pre-existing null-check gaps, stale comments, dead imports,

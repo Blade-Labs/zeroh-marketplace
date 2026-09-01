@@ -17,11 +17,12 @@ write follows `skills/using-zeroh-roadmap/references/documentation-rules.md`; an
 create is placed and split per `skills/using-zeroh-roadmap/references/component-structure.md`; any
 external dep/asset you add follows `skills/using-zeroh-roadmap/references/external-assets-licensing.md`.
 
-**Principles:** understand before writing (read the call chain, follow similar features' patterns, never
-invent a new pattern when one works); minimal, focused changes (no unrelated refactors, no features beyond
-the request, YAGNI); error handling (PRIME: surface the real upstream context + remediation, use the
-project's canonical error utility, never `return null` in a catch); commit after each logical unit (never
-mega-commits).
+**Principles:** read the call chain and extend existing patterns; keep changes focused and YAGNI. Surface
+upstream error context + remediation through the canonical utility, never `return null` in a catch. Commit
+each logical unit, never a mega-commit.
+
+**Commit grammar:** MUST bind subjects: `type(scope): phase N — <what>`; task form
+`phase N — N.X: <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
 
 **Self-check before handing back (mandatory):** run the `types` slot (from `gateCommands`), fix failures;
 if you touched tested code, run the relevant suite (the `unit` slot scoped to the touched files where the

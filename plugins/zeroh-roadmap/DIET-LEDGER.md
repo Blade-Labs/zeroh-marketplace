@@ -600,3 +600,17 @@ the ROADMAP.md pointer — the entry doc is one hop away via the board), the mir
 (mirror + CLI-wins survive), and the claim bullet (creation-is-the-lock + across-worktrees
 survive). **Measured:** using-zeroh-roadmap 3,478 B → 3,483 B; the do-arc flow **13,256
 tokens** against the unchanged `--assert 13257`, exit 0 — 1 token spare.
+
+## Committing agent-card grammar — phase 16 task 16.4 (diet-funded)
+
+The binding subject grammar was funded inside each committing card. **Measured (`wc -c`):**
+quality-pass.md **5,545 → 5,543 B**; software-developer.md **2,179 → 2,177 B**;
+test-engineer.md **2,877 → 2,860 B**. No card grew, and both developer/test cards remain
+below the 5,000 B ceiling.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| quality-pass opener — senior-role and one-pass framing | obsolete-with-evidence(pure wording compression; both ordered mandates, one-diff scope, correctness ownership, BUGS NOTED, and never-fix survive) | agents/quality-pass.md opener |
+| software-developer §Principles — examples and connective prose | obsolete-with-evidence(pure wording compression; read the call chain, extend patterns, focused/YAGNI scope, contextual canonical errors, never-null catches, and logical-unit commits survive) | agents/software-developer.md §Principles |
+| test-engineer §Coverage targets — expanded category wording | obsolete-with-evidence(pure wording compression; the 90% business/money and 80% auth/security/new-code thresholds survive) | agents/test-engineer.md §Coverage targets |
+| test-engineer §A good test — worked examples | obsolete-with-evidence(generic examples removed; invariants, regression sensitivity, call arguments, and exact-boundary requirements survive) | agents/test-engineer.md §A good test |
