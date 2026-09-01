@@ -217,4 +217,16 @@ export default definePhase({
     'Verify rehearsal attestation: red-now probes executed 2026-08-31 — schemaDrift 0 hits (config/audit), lessons 0 hits (landing/phase), explanatory-empty 0 hits, `pending-judge —` (em-dash form) 0 hits, `eval: none` 0 hits (each step-verify red for exactly what its diff adds); assumption probes all exit 0 (exact-None line present at debt-census.mts:95; export inventory >20 lines); runner clauses inherit polarity from their grep representatives. ' +
     'Review re-rehearsal 2026-08-31 (review-phase Mode A): all 4 assumption probes exit 0; two step verifies were green-now with no red grep representative and were re-keyed — 18.3.3 (both suites pass at HEAD; added `eval: none`/`pending-judge —` greps on the test files, both 0 hits now) and 18.4.2 (schema.test.ts never touches the census; re-keyed to `excluded as explanatory-empty` in debt-census.mts, 0 hits now); assumption-1 pipeline simplified to per-file zero-counts; 18.2.2 verify widened to phase.test.mjs (0 hits now) so both land verbs carry tested coverage. All other step verifies exit 1 at HEAD. NB eval.test.mjs runs ~4 min — budget the 18.3.3 runner accordingly. ' +
     'Mode A metadata ratifications: testMode tdd stands on all four tasks (18.4\'s test home is the --check ratchet path or a census fixture per its criterion — debt-census.mts today has no test file); reviewScope full stands (landing-path + census semantics); userFacing:false correct (plugin-internal CLI surfaces only).',
+  executionResult: {
+    phase: 18,
+    status: 'failed',
+    driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    roles: [{ role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' }],
+    compromises: [],
+    skipped: ['Task 18.1 TDD could not begin because the required test-engineer role was unavailable.'],
+    hardcoded: [],
+    surfaced: ['claude-opus-5 reported its weekly usage limit and has no configured fallback tier.'],
+    hardStops: [],
+    gateRounds: 0,
+  },
 })
