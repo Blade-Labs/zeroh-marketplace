@@ -290,6 +290,17 @@ test('10) in-sync consumer schema: `config check` says nothing about drift, in e
   }
 })
 
+test('10b) extensionless and cyclic export-star barrels terminate and preserve the in-sync inventory', () => {
+  const repo = configuredRepo("export * from './shapes'\n")
+  const schemaDir = join(repo, 'lib', 'roadmap')
+  writeFileSync(join(schemaDir, 'shapes.ts'), `${inSyncSchema()}export * from './schema'\n`)
+
+  const res = roadmap(repo, 'config', 'check')
+
+  assert.equal(res.status, 0, `a valid cyclic barrel terminates; stderr:\n${res.stderr}`)
+  assert.equal(/schemaDrift:/.test(res.stderr), false, `extensionless forwarding preserves the inventory; stderr:\n${res.stderr}`)
+})
+
 test('11) a repo with NO lib/roadmap/schema.ts is not a stale consumer — no drift line, exit 0', () => {
   // `roadmap init --config` configures a repo BEFORE `init --scaffold` vendors the schema, so
   // this is the ordinary fresh-consumer state. Reporting "every shape is missing" here would

@@ -691,7 +691,7 @@ function codexLaneDirs(home, members) {
  * blockers already cleared (landCommand gates it). Returns { outcome, exitCode, record,
  * pushed, pushRefused, summaryPath }. record is the ordered step log the tests replay.
  */
-export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null, dispose = disposeWorktree, archive = archiveJournal }) {
+export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null, dispose = disposeWorktree, archive = archiveJournal, mergeLessons = mergeLaneLessons }) {
   const git = gitLayer(exec)
   const mp = config.mergePolicy
   const primary = mp.primaryCheckout
@@ -767,12 +767,22 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
     // and while that was prose two fully merged exec lanes squatted slot dirs for weeks.
     for (const laneDir of codexLaneDirs(home, state.members)) {
       let disposedNow = false
-      let lessons = null
+      let lessons
+      try {
+        lessons = mergeLessons(home, laneDir.dir)
+      } catch (e) {
+        const detail = e?.message?.split('\n')[0] ?? String(e)
+        record.push({ step: 'lessons-merge', dir: laneDir.dir, outcome: 'errored', detail })
+        record.push({
+          step: 'cleanup',
+          warning: `lane lessons from ${laneDir.dir} were NOT merged (${detail}) — the land itself is complete; recover its roadmap/arc-evals/lessons.jsonl before removing that worktree`,
+        })
+        continue
+      }
       // Isolated PER LANE, inside the outer best-effort block rather than instead of it: one
       // exploding rm must not strand every remaining member's worktree, and the outer catch's
       // "remove the sidecar/claims by hand" would send the operator at the acts that succeeded.
       try {
-        lessons = mergeLaneLessons(home, laneDir.dir)
         const r = dispose(home, laneDir.dir, {
           branch: laneDir.branch,
           integrationRef: baseRef,
@@ -793,7 +803,7 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
       } catch (e) {
         const detail = e?.message?.split('\n')[0] ?? String(e)
         record.push({ step: 'codex-lane-dispose', worktree: laneDir.dir, outcome: 'errored', detail })
-        if (lessons) record.push({ step: 'lessons-merge', dir: laneDir.dir, merged: lessons.merged })
+        record.push({ step: 'lessons-merge', dir: laneDir.dir, merged: lessons.merged })
         record.push({ step: 'cleanup', warning: `disposing the codex lane ${laneDir.dir} failed (${detail}) — the land itself is complete; remove that worktree by hand` })
         continue
       }

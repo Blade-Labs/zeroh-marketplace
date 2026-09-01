@@ -312,7 +312,7 @@ function codexLaneSource(cwd, phaseNum) {
  * after the push, because it removes the very directory the earlier acts run in; and a refusal is
  * reported on stderr with exit 0 intact — the land succeeded, and cleanup reports beside it.
  */
-export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr }) {
+export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr, mergeLessons = mergeLaneLessons }) {
   const lane = codexLaneSource(cwd, phaseNum)
   if (lane?.unreadable) {
     err.write(`phase land: ${lane.unreadable}\n`)
@@ -369,8 +369,16 @@ export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = proc
     }
   }
   if (lane) {
-    const { merged } = mergeLaneLessons(lane.root, cwd)
-    if (merged > 0) err.write(`phase land: merged ${merged} lane lesson(s) into the primary corpus\n`)
+    try {
+      const { merged } = mergeLessons(lane.root, cwd)
+      if (merged > 0) err.write(`phase land: merged ${merged} lane lesson(s) into the primary corpus\n`)
+    } catch (e) {
+      err.write(
+        `phase land: the land is complete, but lane lessons could NOT be merged (${e?.message?.split('\n')[0] ?? e}) — `
+          + `the lane worktree was KEPT; recover its roadmap/arc-evals/lessons.jsonl before disposal\n`,
+      )
+      return 0
+    }
   }
   disposeSource(lane, { cwd, laneBranch, baseRef, out, err })
   return 0

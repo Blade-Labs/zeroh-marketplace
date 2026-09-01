@@ -752,6 +752,35 @@ test('cleanup — a disposed lane whose JOURNAL fails to archive records that, n
   assert.match(warned.warning, /EACCES/, 'naming the real failure')
 })
 
+test('cleanup — a lane lesson merge failure is its own outcome and never disposes the only copy', () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-codex-10`
+  seedCodexJournal(primary, [10], lane)
+  const { exec } = recordingExec()
+  const rec = disposeRecorder()
+
+  const res = landArc({
+    repoRoot: primary,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary),
+    dispose: rec.dispose,
+    mergeLessons: () => { throw new Error('EACCES reading lane lessons') },
+  })
+
+  assert.equal(res.outcome, 'landed')
+  assert.equal(rec.calls.length, 0, 'the lane is kept until its lessons can be recovered')
+  assert.deepEqual(
+    res.record.find((s) => s.step === 'lessons-merge' && s.dir === lane),
+    { step: 'lessons-merge', dir: lane, outcome: 'errored', detail: 'EACCES reading lane lessons' },
+  )
+  const warning = res.record.find((s) => s.step === 'cleanup' && /NOT merged/.test(s.warning ?? ''))
+  assert.match(warning?.warning ?? '', /recover.*lessons\.jsonl before removing/i)
+  assert.equal(res.record.some((s) => s.step === 'codex-lane-dispose' && s.worktree === lane), false)
+})
+
 test('cleanup — a merged lane branch that could not be deleted is NAMED in the land record', () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10`

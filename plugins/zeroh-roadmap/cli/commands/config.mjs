@@ -15,13 +15,16 @@ const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const TEMPLATE_SCHEMA = join(PLUGIN_ROOT, 'templates', 'schema.ts')
 const EXPORT_DECLARATION = /^export (?:const|function|type) (\w+)/gm
 
-function exportedNames(file) {
+function exportedNames(file, seen = new Set()) {
+  if (seen.has(file)) return new Set()
+  seen.add(file)
   const source = readFileSync(file, 'utf8')
   const names = new Set([...source.matchAll(EXPORT_DECLARATION)].map((match) => match[1]))
   for (const match of source.matchAll(/^export \* from ['"]([^'"]+)['"]/gm)) {
-    const target = resolve(dirname(file), match[1])
-    if (existsSync(target)) {
-      for (const name of exportedNames(target)) names.add(name)
+    const bare = resolve(dirname(file), match[1])
+    const target = [bare, `${bare}.ts`, join(bare, 'index.ts')].find((candidate) => existsSync(candidate))
+    if (target) {
+      for (const name of exportedNames(target, seen)) names.add(name)
     }
   }
   return names

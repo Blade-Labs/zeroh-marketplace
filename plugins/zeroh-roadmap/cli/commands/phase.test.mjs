@@ -1578,3 +1578,26 @@ test('phase land — the disposed codex lane’s lessons are MERGED into the pri
     'the primary checkout’s corpus — the one `roadmap eval propose` reads — gained the lane’s lesson exactly once, with its own line intact and first',
   )
 })
+
+test('phase land — a lesson merge failure keeps the only corpus copy and reports recovery after the ref lands', () => {
+  const f = codexLaneFixture(111)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 111,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+    mergeLessons: () => { throw new Error('ENOSPC writing lessons') },
+  })
+
+  assert.equal(code, 0, `the completed land keeps its verdict; stderr:\n${err.text}`)
+  assert.deepEqual(f.baseSubjects(), f.expectedBaseSubjects(), 'the integration ref already moved')
+  assert.ok(existsSync(f.wt), 'the lane holding the unmerged corpus is kept')
+  assert.match(err.text, /ENOSPC writing lessons/)
+  assert.match(err.text, /recover.*lessons\.jsonl before disposal/i)
+})
