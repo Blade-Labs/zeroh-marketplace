@@ -30,7 +30,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 16,
   name: 'Commit-grammar tolerant attribution: one matcher home, widened read, deviant WARNs, grammar in agent cards',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
