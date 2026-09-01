@@ -27,7 +27,78 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 15,
   name: 'Codex lane hardening: lockfile-keyed bootstrap, absolute CLI + grammar in envelopes, plan post-run validation, plan --arc refusal',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-09-01',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1515,
+      total: 1515,
+      notes:
+        'Authoritative full gate: roadmap/.gate/15/run-000017-2026-09-01T11-59Z — GREEN, 1,515/1,515, on the tree REBASED onto the integration ref (phases 14 and 17 landed underneath). Two earlier RED runs are superseded and neither was a defect in this phase: the first measured a half-rebased tree (the rebase had stalled on a conflict), and both inherited the box\'s ambient capacity — `arc next` correctly answers blocked once executors busy >= maxExecutors, so the fixture tests asserting run-phase red on a busy host (24/26 unpinned vs 26/26 with the capacity seam pinned through CAPBUILD_PASS_ENV, same tree). lint/types/build/integration declared-none; lint-diff and history-comments exit 0.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — the wired subprocess suites in the unit tier drive the real CLI against tmp git repos and real worktrees.',
+    },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none in gateCommands — no rendered surface.' },
+    build: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Envelope-overhead budget breached by the new CLI-path and commit-grammar lines, plus stale historical comments; closed by compacting envelope restatement rather than deleting rules (d28de84, e7de5a2).',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'SUBSTITUTED reviewer (claude-fable-5 hit its limit; ran on claude-opus-5 at unreduced rigor). Eight findings, one HIGH: the envelope ratchet was green in the lane and would red ON MERGE, because the integration ref had advanced underneath it. Also: every non-zero validator exit read as a bad authored entity when exit 1 means toolchain-missing; the plan --arc refusal sat below a throw that still printed the traceback it replaces; the remedy named a bare `roadmap` in the very release that teaches it may be absent from PATH; the installer precedence reason reached no operator; validation.error was dropped; the post-creation refusal had no test (8b167d0).',
+    },
+  ],
+  metrics: {
+    commits: 9,
+    linesAdded: 1309,
+    linesRemoved: 34,
+    filesChanged: 7,
+    testsAtStart: 1485,
+    testsAtEnd: 1515,
+    testsAdded: 30,
+    startedAt: '2026-08-31T22:10:36.000Z',
+    completedAt: '2026-09-01T11:59:37.000Z',
+    haltCount: 1,
+  },
+  executionResult: {
+    phase: 15,
+    status: 'done',
+    driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    roles: [
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
+      {
+        role: 'code-reviewer',
+        model: 'claude-opus-5',
+        via: 'child-cli',
+        substituted: { from: 'claude-fable-5', to: 'claude-opus-5', reason: 'unavailable: the claude-fable-5 firing exited with "You have reached your Fable 5 limit" before reviewing — re-run at UNREDUCED rigor on claude-opus-5' },
+      },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'The lane BLOCKED at its correctness round rather than self-judging: its configured code-reviewer resolved to claude-fable-5 and that firing died on its model limit. The supervising session ran the same role on claude-opus-5 at unreduced rigor and recorded the substitution — no round was skipped and none was filled by the driver itself.',
+      'The reviewer HIGH would have escaped a lane-local gate entirely: the envelope-overhead ratchet was green in the lane and red ON MERGE, because the integration ref advanced underneath it. Fixed by deleting envelope restatement (never a rule); two assertions pinned wording the cuts touched, and both rules survive relocated into the bullet that owns them.',
+      'Two RED gates preceded the green one and NEITHER was a defect in this phase: one ran against a half-rebased tree after the rebase stalled on a conflict, and both inherited ambient box capacity — `arc next` answers blocked once executors busy >= maxExecutors, so fixture tests asserting run-phase red on a busy host. Proven, not assumed: 24/26 unpinned vs 26/26 with the capacity seam pinned, same tree. The pin only lands through CAPBUILD_PASS_ENV, because capbuild runs a sanitized unit that strips the variable.',
+      'The rebase onto the landed integration ref took three conflicts, each resolved on its merits: lessons.jsonl is append-only so both sides kept (deduped); the envelope docblock had been compacted independently by phase 17, so both meanings were merged; and the prompt bullets took 17\'s landed wording, with all three of this phase\'s semantic fixes verified present afterwards.',
+    ],
+    hardStops: [],
+    gateRounds: 2,
+  },
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
