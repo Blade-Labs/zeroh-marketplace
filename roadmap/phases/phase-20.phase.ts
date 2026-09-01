@@ -133,7 +133,18 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['20.1'],
       interfaces: { consumes: ['probeScopedSlot(template, opts) from 20.1'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Gate plan now probes every selected file-scoped slot template before emitting its JSON. Results are cached by exact raw template, while vacuous results produce a warning and per-slot plan note and indeterminate results produce a per-slot unanswerable note; gate run never invokes the probe and verdict codes are unchanged.',
+        how:
+          'The claude-opus-5 test-engineer added four fixture-consumer cases using real shell stubs and established four new RED failures beyond an environment-only baseline. The plan-only dispatcher awaits a small annotation helper after buildPlan, reads each selected slot raw binding from gateCommands, and memoizes its probe promise. After restoring the ignored plugin-local zod resolution seam to the existing root install, the complete gate command suite passed 68/68; the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '20.3',

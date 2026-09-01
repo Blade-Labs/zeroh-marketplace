@@ -666,6 +666,144 @@ test('gate plan — a -spec SOURCE module selects its colocated .test.ts, and ne
   }
 })
 
+// ── the vacuous-scoped-runner probe at PLAN time (task 20.2) ─────────────────────────
+//
+// `gate plan` is where a SCOPED tier is chosen OVER the full suite, so it is the one place
+// that can ask whether the scoped runner it just picked is able to fail at all. A runner
+// that exits 0 on a target that cannot exist certifies every phase it scopes having run
+// nothing. slots.probeScopedSlot (task 20.1) asks the question; these pin that the PLAN
+// asks it: a vacuous runner NAMED (per slot, exit semantics untouched), an honest one
+// silent, and — because the probe costs a real process — one probe per DISTINCT template,
+// never one per slot.
+
+/** The stub that CANNOT fail — green whatever target it is handed (the vacuous runner). */
+const ALWAYS_GREEN = 'echo "0 tests found, nothing to do"; exit 0'
+/** The stub that discriminates — red iff a target it was handed does not exist. */
+const HONEST = 'for f in "$@"; do [ -e "$f" ] || { echo "no such test file: $f" >&2; exit 1; }; done; exit 0'
+/** Every stub invocation APPENDS one `<name> <argv>` line here — the probe's spawn count is
+ *  then a fact on disk. (slots.test.mjs's stubEstate OVERWRITES its argv file; the contract
+ *  under test here is a COUNT, so this one accumulates.) */
+const CALL_LOG = 'probe-calls.log'
+
+/**
+ * A fixture consumer whose scoped tiers are REAL stub runners. `bodies` maps a stub NAME to
+ * its sh source; `binds` maps a scoped slot to a stub name — so two slots can share ONE
+ * template byte-for-byte, or carry their own. Stub paths are ABSOLUTE: the invocation count
+ * must never depend on the probe's cwd. Stubs + the rewritten config land in a NON
+ * phase-tagged commit, so they stay out of every phase-own diff.
+ */
+function makeStubRepo(bodies, binds) {
+  const repo = makeRepo()
+  const logPath = join(repo.root, CALL_LOG)
+  const templates = {}
+  for (const [name, body] of Object.entries(bodies)) {
+    const stub = join(repo.root, `${name}-stub.sh`)
+    writeFileSync(
+      stub,
+      `#!/bin/sh\nprintf '%s %s\\n' ${JSON.stringify(name)} "$*" >> ${JSON.stringify(logPath)}\n${body}\n`,
+      { mode: 0o755 },
+    )
+    templates[name] = `sh ${stub} {files}`
+  }
+  const gateCommands = { ...CONFIG.gateCommands }
+  for (const [slot, name] of Object.entries(binds)) gateCommands[slot] = templates[name]
+  writeFileSync(join(repo.root, 'roadmap', 'roadmap.config.json'), JSON.stringify({ ...CONFIG, gateCommands }))
+  repo.commit('chore: seed the scoped-runner stubs', {}) // NO em-dash → never phase-own
+  return {
+    ...repo,
+    templates,
+    /** Invocation lines, all of them or just one stub's. */
+    calls: (name) =>
+      (existsSync(logPath) ? readFileSync(logPath, 'utf8').split('\n').filter(Boolean) : []).filter(
+        (l) => name == null || l.startsWith(`${name} `),
+      ),
+  }
+}
+
+/** A phase whose OWN diff carries a test file, so the scoped tiers really resolve. */
+function seedScopedPhase(repo, num) {
+  repo.writePhase(num, phaseObj({ phase: num, testScope: 'scoped' }))
+  repo.commit(`feat: phase ${num} — code + its test`, {
+    'lib/thing.ts': 'export const t = 1\n',
+    'lib/thing.test.ts': "import { test } from 'node:test'\ntest('t', () => {})\n",
+  })
+}
+
+const slotRow = (plan, slot) => plan.slots.find((s) => s.slot === slot)
+/** The plan's vacuity naming — the notes channel every other named gate decision uses
+ *  (the empty-scope skip above is the precedent). */
+const vacuityNotes = (plan) => plan.notes.filter((n) => /vacuous/i.test(n))
+
+test('gate plan — a VACUOUS scoped runner is NAMED per slot, and the plan\'s exit semantics are unchanged', () => {
+  const repo = makeStubRepo({ vac: ALWAYS_GREEN }, { 'unit-scoped': 'vac', 'integration-scoped': 'vac' })
+  seedScopedPhase(repo, 2001)
+  const r = planOf(repo.root, ['2001'])
+  // Unchanged exit semantics: a vacuous runner is a DIAGNOSIS, not a refusal — naming it must
+  // not move the plan off 0 (a probe that can red the gate is a probe that gets deleted).
+  assert.equal(r.code, 0, `naming a vacuous runner must not change the exit code; stderr: ${r.stderr}`)
+  const row = slotRow(r.plan, 'unit-scoped')
+  assert.ok(row, `fixture: the scoped tier must be planned; got ${JSON.stringify(r.plan.slots.map((s) => s.slot))}`)
+  assert.equal(row.refused, undefined, 'the vacuous tier is still planned, never refused')
+  assert.equal(
+    row.command,
+    repo.templates.vac.replace('{files}', row.files.join(' ')),
+    'the slot command stays the consumer binding, verbatim — the probe never rewrites it',
+  )
+  const named = vacuityNotes(r.plan)
+  assert.ok(
+    named.some((n) => n.includes('unit-scoped')),
+    `the vacuous unit tier must be named; notes: ${JSON.stringify(r.plan.notes)}`,
+  )
+  assert.ok(
+    named.some((n) => n.includes('integration-scoped')),
+    `and the vacuous integration tier too — naming is per SLOT, the operator fixes a binding: ${JSON.stringify(r.plan.notes)}`,
+  )
+})
+
+test('gate plan — an HONEST scoped runner is really probed and stays SILENT', () => {
+  const repo = makeStubRepo({ honest: HONEST }, { 'unit-scoped': 'honest', 'integration-scoped': 'honest' })
+  seedScopedPhase(repo, 2002)
+  const r = planOf(repo.root, ['2002'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.ok(slotRow(r.plan, 'unit-scoped'), `fixture: the scoped tier must be planned; got ${JSON.stringify(r.plan.slots.map((s) => s.slot))}`)
+  assert.deepEqual(vacuityNotes(r.plan), [], `an honest runner earns no note; notes: ${JSON.stringify(r.plan.notes)}`)
+  // The silence is an ANSWERED question, not an unasked one: without this a plan that never
+  // probes at all passes the assertion above.
+  assert.equal(repo.calls('honest').length, 1, `the honest runner was actually probed; calls: ${JSON.stringify(repo.calls())}`)
+})
+
+test('gate plan — the probe runs ONCE per DISTINCT template, never once per slot', () => {
+  const repo = makeStubRepo({ vac: ALWAYS_GREEN }, { 'unit-scoped': 'vac', 'integration-scoped': 'vac' })
+  seedScopedPhase(repo, 2003)
+  const r = planOf(repo.root, ['2003'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.ok(slotRow(r.plan, 'integration-scoped'), 'fixture: BOTH scoped tiers are planned, sharing one template')
+  assert.equal(
+    repo.calls().length,
+    1,
+    `two slots bound to ONE template ⇒ exactly one probe process; calls: ${JSON.stringify(repo.calls())}`,
+  )
+  // …and that single probe still names both tiers: per-TEMPLATE probing, per-SLOT naming.
+  assert.equal(vacuityNotes(r.plan).length, 2, `both vacuous tiers named; notes: ${JSON.stringify(r.plan.notes)}`)
+})
+
+test('gate plan — DISTINCT scoped templates are each probed once; only the vacuous one is named', () => {
+  const repo = makeStubRepo({ vac: ALWAYS_GREEN, honest: HONEST }, { 'unit-scoped': 'vac', 'integration-scoped': 'honest' })
+  seedScopedPhase(repo, 2004)
+  const r = planOf(repo.root, ['2004'])
+  assert.equal(r.code, 0, r.stderr)
+  assert.notEqual(repo.templates.vac, repo.templates.honest, 'fixture: the two tiers carry DIFFERENT templates')
+  assert.equal(repo.calls('vac').length, 1, `the vacuous template probed once; calls: ${JSON.stringify(repo.calls())}`)
+  assert.equal(repo.calls('honest').length, 1, `the honest template probed once too; calls: ${JSON.stringify(repo.calls())}`)
+  const named = vacuityNotes(r.plan)
+  assert.ok(named.some((n) => n.includes('unit-scoped')), `the vacuous tier is named; notes: ${JSON.stringify(r.plan.notes)}`)
+  assert.equal(
+    named.some((n) => n.includes('integration-scoped')),
+    false,
+    `the honest tier is NEVER named — a note on an honest runner is the noise that gets the probe ignored; notes: ${JSON.stringify(r.plan.notes)}`,
+  )
+})
+
 test('gate plan — the guard-mutation-proof obligation rides notes on EVERY plan, whatever the kind', () => {
   // The plan is what the do-arc session echoes verbatim, so an obligation put here reaches that
   // lane and stays only while a test pins it. (renderGatePlan does NOT render notes into the

@@ -31,7 +31,7 @@ import {
   EXECUTABLE_EXTS,
   isTestFile,
 } from '../lib/ladder.mjs'
-import { resolveSlot, resolveScopedOrFallback, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings } from '../lib/slots.mjs'
+import { resolveSlot, resolveScopedOrFallback, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings, probeScopedSlot } from '../lib/slots.mjs'
 import {
   writeReport,
   latestReport,
@@ -488,6 +488,25 @@ function parseArgs(argv) {
   return { opts, positional }
 }
 
+/** Probe only the scoped templates selected by `gate plan`, caching by template while
+ * retaining per-slot warnings. `gate run` never calls this helper. */
+async function annotateScopedProbeWarnings(built, cfg, cwd) {
+  const probes = new Map()
+  for (const slot of built.plan.slots) {
+    const template = cfg?.gateCommands?.[slot.slot]
+    if (typeof template !== 'string' || !template.includes('{files}')) continue
+    if (!probes.has(template)) probes.set(template, probeScopedSlot(template, { cwd }))
+    const result = await probes.get(template)
+    if (result.vacuous === true) {
+      const warning = `${slot.slot} ${result.message}`
+      built.plan.notes.push(warning)
+      process.stderr.write(`warning: ${warning}\n`)
+    } else if (result.vacuous === null) {
+      built.plan.notes.push(`${slot.slot} scoped runner probe unanswerable — ${result.message}`)
+    }
+  }
+}
+
 /** Dispatch: `gate plan <phase>` | `gate run <phase>` (run lands in 1656.5). */
 export default async function run(argv) {
   const sub = argv[0]
@@ -525,6 +544,7 @@ export default async function run(argv) {
       const { loadConfig } = await import('../lib/config.mjs')
       const cfg = loadConfig(process.cwd())
       built = buildPlan(process.cwd(), phaseNum, { ...opts, cfg })
+      await annotateScopedProbeWarnings(built, cfg, gitToplevel(process.cwd()))
     } catch (e) {
       if (e instanceof GateError) {
         for (const l of e.lines) process.stderr.write(l + '\n')
