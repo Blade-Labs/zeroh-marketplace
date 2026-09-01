@@ -29,7 +29,29 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 14,
   name: 'Lane lifecycle accounting: inventory classifier, audit/status surfacing, plan-lane close, branch-delete gap',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-08-31',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1473,
+      total: 1473,
+      notes:
+        'Authoritative full gate: roadmap/.gate/14/run-000015-2026-08-31T22-23Z — GREEN, 1,473/1,473 (983s unit slot), on the FINAL tree after the R5 history-comments fix. The immediately prior full run (run-000011) was RED on history-comments alone: four comments narrating the dated census, reworded to their operative why. 46 tests added over the 1,427 baseline. lint/types/build/integration declared-none; lint-diff and history-comments exit 0.',
+    },
+    integrationTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — the wired subprocess suites inside the unit tier (worktree, audit, status, codex) drive the real CLI end to end against tmp git repos and real worktrees.',
+    },
+    e2eTests: {
+      passed: 0,
+      total: 0,
+      notes: 'declared-none in gateCommands — this consumer is a CLI plugin with no UI surface; the CLI-driving subprocess suites in the unit tier are the end-to-end coverage.',
+    },
+    build: 'clean',
+  },
   plannedBy: { model: 'claude-fable-5' },
   category: 'fix',
   kind: 'hardening',
@@ -317,6 +339,74 @@ export default definePhase({
       },
     },
   ],
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Merged architect/quality pass: HIGH — surveyLanes trusted its caller root and a linked-worktree invocation classified the PRIMARY checkout as a stray whose remedy would delete the main checkout; now resolves via mainCheckout once for all consumers. LOW — archivePlanLane branch delete never retried; a consumed lane carrying an undeleted branch is now re-entered on later reads (commit 0ef157c).',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Eight findings, no CRITICAL/HIGH: prunable-entry remedy exited 128 as printed (now the prune itself, branch preserved); stale-plan/review remedy gated on a verdict a sentinel-less lane never reaches (now names both outcomes); close no longer blockable by the launcher-created brief copy (journal.carriedIn) (commit b5a2ed5).',
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Seven findings confirming R1 and catching what R1 introduced: guards (c)/(d) re-pointed at refs/heads/codex-plan/<ids> could prove one ref and force-remove another (detached/re-branched lane) — reverted to HEAD, the thing actually removed (commit 5dff180).',
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Stop-ship: two HIGHs introduced by R2 — the missing-directory hint fired on every SUCCESSFUL close ("prune what was just pruned, read the branch just deleted"); archivedAt now separates the two missing-directory meanings, liveness asked first, test-pinned both gates (commit 5f769a8).',
+    },
+    {
+      round: 4,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Stop-ship lifted, recordables closed instead of recorded: survey failures now travel on text AND --json; the empty-diff probe no longer reads "file exists at HEAD" as "this lane authored it" (commit e361c6c). A later mechanical slot round (history-comments) reworded four dated census comments to their operative why (commit R5, no agent).',
+    },
+  ],
+  metrics: {
+    commits: 18,
+    linesAdded: 3378,
+    linesRemoved: 174,
+    filesChanged: 12,
+    testsAtStart: 1427,
+    testsAtEnd: 1473,
+    testsAdded: 46,
+    startedAt: '2026-08-31T15:50:30.000Z',
+    completedAt: '2026-08-31T22:06:22.000Z',
+    haltCount: 1,
+  },
+  executionResult: {
+    phase: 14,
+    status: 'done',
+    driver: { model: 'claude-opus-5', lane: 'session' },
+    roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'native' },
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'native' },
+      { role: 'code-reviewer', model: 'claude-opus-5', via: 'native' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'The phase-executor (claude-opus-5, session lane) died on a harness session limit AFTER all six tasks and gate rounds R0-R4 were committed, before the completion edits — the supervising session (claude-fable-5) finished the gate: fixed the red history-comments slot (four dated census comments reworded to their operative why, commit R5), re-ran the full gate, and reconstructed this record from the arm\'s recorded alias, the round commits, and the gate logs. haltCount 1 records that death; driver stays the executor of record.',
+      'Round-count note: gateRounds[] carries the five recorded agent rounds (R0-R4); the R5 history-comments fix was a mechanical slot repair with no agent review, recorded inside the R4 summary rather than as a phantom round.',
+    ],
+    hardStops: [],
+    gateRounds: 5,
+  },
   notes:
     'interview: skipped — arc member; scope from the MINESWEEP arc interview record (user mandate 2026-08-31) and its LOCKED decisions. ' +
     'reviewScope full (new seam surveyLanes + a disposal-adjacent write path). ' +
