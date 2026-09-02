@@ -24,7 +24,70 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 21,
   name: 'Arc-sweep LOW follow-ups: one worktree enumerator, lockfile-aware tsx hint, envelope colon',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-09-02',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1700,
+      total: 1700,
+      notes:
+        'Authoritative full gate: roadmap/.gate/21/run-000004-2026-09-02T06-33-50-788Z.json — GREEN, 1,700/1,700. lint/types/build/integration declared-none; lint-diff and history-comments exited 0.',
+    },
+    integrationTests: { passed: 0, total: 0, notes: 'declared-none in gateCommands.' },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none; no rendered surface.' },
+    build: 'clean',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Restored status best-effort enumeration, removed a stale parser comment, and corrected two verification clauses in 2366c7d; focused affected tests passed 106/106.',
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'clean',
+      summary:
+        'Independent correctness review found no defects; three focused batches passed 104/104, 75/75, and 224/224.',
+    },
+  ],
+  metrics: {
+    commits: 5,
+    linesAdded: 383,
+    linesRemoved: 44,
+    filesChanged: 10,
+    testsAtStart: 1693,
+    testsAtEnd: 1700,
+    testsAdded: 7,
+    startedAt: '2026-09-02T05:53:21.000Z',
+    completedAt: '2026-09-02T06:53:59.000Z',
+  },
+  executionResult: {
+    phase: 21,
+    status: 'done',
+    driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    roles: [
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'The quality-pass child initially piped one auxiliary focused run through tail, then reran it unpiped; only the unpiped 195/195 result was used.',
+      'The protocol-owned phase-start command emitted no co-author trailer, and the curation composer emitted its fixed generic Claude trailer; neither exposes a lane-specific trailer override.',
+      'The final derived gate elevated the plan note\'s light review expectation to full review because this consumer has no cadence ladder configured; the stricter derived cell was executed.',
+    ],
+    hardStops: [],
+    gateRounds: 2,
+  },
   plannedBy: { model: 'claude-fable-5' },
   reviewRecord: { date: '2026-09-01', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'refactor',
