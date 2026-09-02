@@ -202,7 +202,16 @@ export default definePhase({
       batchMode: true,
       testMode: 'none',
       dependsOn: ['26.2'],
-      done: false,
+      transparencyReport: {
+        whatWasDone: 'Applied the ratified diet across five skills and four role cards, preserved model-policy and spawn-site contracts, added local on-demand references, and ratcheted the do-arc ceiling to 10,788 tokens.',
+        how: 'Reused the last independently gated concise forms as the mechanical base, recorded the 2026-09 dispositions, restored post-diet role anchors until roles.test passed 61/61, and rebased budget-coupled proposal fixtures to the exact 43,139-byte measurement.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'The concise forms intentionally preserve operative rules while moving detail to references; the end-of-phase plugin gate remains responsible for detecting any integration regression outside the focused roles and proposal suites.',
+      },
+      done: true,
+      doneDate: '2026-09-02',
     },
     {
       id: '26.4',
