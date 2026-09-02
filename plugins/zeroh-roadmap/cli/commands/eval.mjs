@@ -46,6 +46,7 @@ import {
 } from '../lib/eval-score.mjs'
 import { computeScorecard, findGateFixCommits } from '../lib/eval-scorecard.mjs'
 import { extractFindings, clusterFindings, consolidateAndWrite, readProposalDocs } from '../lib/eval-propose.mjs'
+import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
 
 /** The two recorders, keyed by subcommand: which consumer shape validates, which suffix lands. */
 const RECORDERS = {
@@ -53,8 +54,9 @@ const RECORDERS = {
   'record-verdicts': { shape: 'ArcVerdictsFileShape', suffix: 'verdicts', what: 'intent verdicts' },
 }
 
-/** The archive home — committed by design (see the module docblock). */
-export const ARC_EVALS_DIR = ['roadmap', 'arc-evals']
+/** The archive home — committed by design (see the module docblock). A FUNCTION of the
+ *  consumer root, not a constant: the root itself is discovered (cli/lib/roadmap-root.mjs). */
+export const arcEvalsDir = (toplevel) => join(roadmapRoot(toplevel), 'arc-evals')
 
 function printZodIssues(issues) {
   for (const iss of issues ?? []) {
@@ -181,7 +183,7 @@ export default async function run(argv) {
     return 2
   }
 
-  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const dir = arcEvalsDir(toplevel)
   const outPath = join(dir, `${opts.arc}-${parsed.date}-${recorder.suffix}.json`)
   if (existsSync(outPath) && !opts.force) {
     process.stderr.write(
@@ -239,10 +241,10 @@ async function runRestamp(opts) {
     return 1
   }
 
-  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const dir = arcEvalsDir(toplevel)
   const say = (line) => process.stdout.write(line + '\n')
   if (!existsSync(dir)) {
-    say(`roadmap eval restamp: no ${ARC_EVALS_DIR.join('/')} directory — nothing to restamp`)
+    say(`roadmap eval restamp: no ${dir} directory — nothing to restamp`)
     return 0
   }
 
@@ -330,7 +332,7 @@ async function runTrend(opts) {
     return 1
   }
 
-  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const dir = arcEvalsDir(toplevel)
   const say = (line) => process.stdout.write(line + '\n')
   // The SAME reader the ratchet uses: one definition of "a report", so the page and the
   // baseline can never disagree about which files count.
@@ -687,7 +689,7 @@ async function runMergeJudge(opts) {
     return 2
   }
 
-  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const dir = arcEvalsDir(toplevel)
   const reportPath = opts.report ? opts.report : newestReportPath(dir, String(opts.arc))
   if (!reportPath || !existsSync(reportPath)) {
     process.stderr.write(
@@ -869,7 +871,7 @@ async function runLesson(opts, positional) {
     return 1
   }
 
-  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const dir = arcEvalsDir(toplevel)
   const outPath = join(dir, LESSONS_FILE)
   try {
     mkdirSync(dir, { recursive: true })
@@ -922,7 +924,7 @@ async function runScorecard(opts) {
   const say = (line) => (opts.json ? process.stderr : process.stdout).write(line + '\n')
   const dateDefaulted = !opts.date
   const date = opts.date ?? new Date().toISOString().slice(0, 10)
-  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const dir = arcEvalsDir(toplevel)
 
   const traces = []
   for (const arcId of arcsWithReports(dir)) {
@@ -1066,7 +1068,7 @@ async function runPropose(opts) {
   // document stays pipeable into jq without a stripping step.
   const say = (line) => (opts.json ? process.stderr : process.stdout).write(line + '\n')
 
-  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const dir = arcEvalsDir(toplevel)
   const proposalsDir = join(dir, PROPOSALS_SUBDIR)
 
   // The SAME reader the ratchet and the trend page use: one definition of "a report".
@@ -1094,7 +1096,7 @@ async function runPropose(opts) {
     say(`${LESSONS_FILE}: ${lessons.length} lesson(s)`)
   }
 
-  const clustered = clusterFindings(extractFindings(reports, lessons))
+  const clustered = clusterFindings(extractFindings(reports, lessons, { rootRel: roadmapRootRel(toplevel) }))
 
   // Under --dry-run the fs seam reads the world and writes none of it. mkdir is a no-op too.
   const noop = () => {}
@@ -1114,7 +1116,7 @@ async function runPropose(opts) {
         if (!checked.ok) throw new ProposalRefused(doc.id, checked.res)
         return checked.parsed
       },
-    })
+    }, roadmapRootRel(toplevel))
   } catch (e) {
     if (!(e instanceof ProposalRefused)) throw e
     if (e.res.kind === 'tsx-absent') {
@@ -1317,7 +1319,7 @@ async function runArcEval(arcId, opts) {
     return 0
   }
 
-  const dir = join(toplevel, ...ARC_EVALS_DIR)
+  const dir = arcEvalsDir(toplevel)
   const outPath = join(dir, `${arcId}-${date}.json`)
   if (existsSync(outPath) && !opts.force) {
     process.stderr.write(
@@ -1327,7 +1329,7 @@ async function runArcEval(arcId, opts) {
     return 2
   }
 
-  const scored = scoreArcTrace(collected.trace, { backfill: Boolean(opts.backfill) })
+  const scored = scoreArcTrace(collected.trace, { backfill: Boolean(opts.backfill), rootRel: roadmapRootRel(toplevel) })
   const stampWarnings = []
   const workflow = assembleWorkflowStamp({ warn: (l) => stampWarnings.push(l) })
   const draft = {

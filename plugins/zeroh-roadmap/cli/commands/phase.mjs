@@ -35,6 +35,7 @@ import { landPhase, disposeWorktree, isSlotDir, samePath } from '../lib/worktree
 import { archiveJournal, findJournal, JournalUnreadableError, RUN_LANE_ARTIFACTS } from '../lib/codex-journal.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
 import { mergeLaneLessons } from '../lib/landing.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 function runStart(argv) {
   const n = argv.find((a) => /^\d+$/.test(a))
@@ -43,7 +44,7 @@ function runStart(argv) {
     return 1
   }
   const toplevel = gitToplevel(process.cwd())
-  const file = join(toplevel, 'roadmap', 'phases', `phase-${n}.phase.ts`)
+  const file = join(roadmapRoot(toplevel), 'phases', `phase-${n}.phase.ts`)
   if (!existsSync(file)) {
     process.stderr.write(`roadmap phase start: no such file: ${file}\n`)
     return 1
@@ -154,7 +155,7 @@ export async function runAssumptions({
 function resolveTarget(arg) {
   if (/^\d+$/.test(arg)) {
     const toplevel = gitToplevel(process.cwd())
-    return join(toplevel, 'roadmap', 'phases', `phase-${arg}.phase.ts`)
+    return join(roadmapRoot(toplevel), 'phases', `phase-${arg}.phase.ts`)
   }
   return resolve(arg)
 }
@@ -252,7 +253,7 @@ export function runCurate({
   }
   const nonEmpty = buckets.filter((b) => b.length > 0)
 
-  const phaseFile = join(toplevel, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
+  const phaseFile = join(roadmapRoot(toplevel), 'phases', `phase-${phaseNum}.phase.ts`)
   const record = loadPhase(phaseFile)
   const groups = nonEmpty.map((commits) => ({ commits, message: composeLandedMessage(record, { commits }) }))
 

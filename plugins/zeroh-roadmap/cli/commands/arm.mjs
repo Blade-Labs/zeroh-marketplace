@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { armSidecar, writeArcMode, readSidecar, LaneHeldError } from '../lib/sidecar.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 function parse(argv) {
   const opts = {}
@@ -63,7 +64,7 @@ export default async function run(argv) {
     throw e
   }
 
-  if (opts.inline) writeArcMode(join(gitToplevel(cwd), 'roadmap'))
+  if (opts.inline) writeArcMode(roadmapRoot(gitToplevel(cwd)))
 
   if (res.warned) {
     process.stderr.write(

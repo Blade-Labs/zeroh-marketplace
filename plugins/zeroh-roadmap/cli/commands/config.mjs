@@ -10,6 +10,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
+import { consumerSchemaPath } from '../lib/roadmap-root.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const TEMPLATE_SCHEMA = join(PLUGIN_ROOT, 'templates', 'schema.ts')
@@ -42,8 +43,14 @@ function exportInventory(file, seen = new Set()) {
 
 /** Return template exports absent from a consumer's vendored schema. */
 export function missingSchemaExports(consumerRoot) {
-  const consumerSchema = join(consumerRoot, 'lib', 'roadmap', 'schema.ts')
-  if (!existsSync(consumerSchema)) return []
+  // A repo with no vendored schema at EITHER seam has no drift to report — the resolver's
+  // schema-missing throw is that answer, not an error this reader should propagate.
+  let consumerSchema
+  try {
+    consumerSchema = consumerSchemaPath(consumerRoot)
+  } catch {
+    return []
+  }
   const expected = exportInventory(TEMPLATE_SCHEMA).names
   const actual = exportInventory(consumerSchema)
   if (actual.unresolved.length) return []
@@ -52,8 +59,11 @@ export function missingSchemaExports(consumerRoot) {
 
 /** Return unresolved export-star specifiers instead of misreporting every export as missing. */
 export function unresolvedSchemaExports(consumerRoot) {
-  const consumerSchema = join(consumerRoot, 'lib', 'roadmap', 'schema.ts')
-  return existsSync(consumerSchema) ? exportInventory(consumerSchema).unresolved : []
+  try {
+    return exportInventory(consumerSchemaPath(consumerRoot)).unresolved
+  } catch {
+    return []
+  }
 }
 
 function reportSchemaDrift(consumerRoot) {

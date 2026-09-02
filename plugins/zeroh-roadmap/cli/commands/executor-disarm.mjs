@@ -13,11 +13,12 @@
 import { join } from 'node:path'
 import { disarmExecutor, staleArms } from '../lib/executor-arm.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 export default async function run(argv) {
   const worktree = gitToplevel(process.cwd())
   if (argv.includes('--sweep')) {
-    const stale = staleArms(worktree, join(worktree, 'roadmap', 'phases'))
+    const stale = staleArms(worktree, join(roadmapRoot(worktree), 'phases'))
     if (stale.length === 0) {
       process.stderr.write('roadmap executor-disarm: sweep — no stale arms\n')
       return 0

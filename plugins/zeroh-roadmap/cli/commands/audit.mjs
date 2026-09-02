@@ -35,6 +35,7 @@ import { censusFollowups } from './followups.mjs'
 import { isTerminalPhaseSource } from '../lib/phasescan.mjs'
 import { surveyLanes } from '../lib/worktree.mjs'
 import { missingSchemaExports, unresolvedSchemaExports } from './config.mjs'
+import { roadmapRoot, roadmapRootRel, consumerSchemaPath } from '../lib/roadmap-root.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -61,15 +62,16 @@ function gitLines(repo, args) {
 }
 
 function queueEntryAddedAt(repo, phase) {
+  const backlog = `${roadmapRootRel(repo)}/backlog.ts`
   const pattern = `phase[[:space:]]*:[[:space:]]*${phase}([^0-9]|$)`
   const addedLine = new RegExp(`^\\+.*\\bphase\\s*:\\s*${phase}(?:\\D|$)`)
   const removedLine = new RegExp(`^-.*\\bphase\\s*:\\s*${phase}(?:\\D|$)`)
   let addedAt
   let present = false
-  for (const row of gitLines(repo, ['log', '--reverse', '--format=%H%x09%aI', '-G', pattern, '--', 'roadmap/backlog.ts'])) {
+  for (const row of gitLines(repo, ['log', '--reverse', '--format=%H%x09%aI', '-G', pattern, '--', backlog])) {
     const [commit, date] = row.split('\t')
     if (!commit || !date) continue
-    const patch = gitLines(repo, ['show', '--format=', '--unified=0', commit, '--', 'roadmap/backlog.ts'])
+    const patch = gitLines(repo, ['show', '--format=', '--unified=0', commit, '--', backlog])
     const added = patch.some((line) => !line.startsWith('+++') && addedLine.test(line))
     const removed = patch.some((line) => !line.startsWith('---') && removedLine.test(line))
     if (added && !present) addedAt = date
@@ -81,11 +83,11 @@ function queueEntryAddedAt(repo, phase) {
 export default async function run(argv) {
   const json = argv.includes('--json')
   const repo = resolve(argv.find((a) => !a.startsWith('--')) ?? '.')
-  const roadmap = join(repo, 'roadmap')
+  const roadmap = roadmapRoot(repo)
   const phasesDir = join(roadmap, 'phases')
 
   if (!existsSync(phasesDir)) {
-    process.stderr.write(`roadmap audit: no roadmap/phases at ${repo}\n`)
+    process.stderr.write(`roadmap audit: no ${phasesDir}\n`)
     return 1
   }
 
@@ -235,7 +237,7 @@ export default async function run(argv) {
       check: 16,
       severity: 'HIGH',
       phase: null,
-      location: join(repo, 'lib', 'roadmap', 'schema.ts'),
+      location: consumerSchemaPath(repo),
       message: `Could not resolve export-star target ${target}; the schema export inventory is incomplete — repair the consumer schema barrel or re-vendor it.`,
     })
   }
@@ -244,7 +246,7 @@ export default async function run(argv) {
       check: 16,
       severity: 'HIGH',
       phase: null,
-      location: join(repo, 'lib', 'roadmap', 'schema.ts'),
+      location: consumerSchemaPath(repo),
       message: `${name} is missing from lib/roadmap/schema.ts, so phase eval records cannot emit and scorecard samples go silent — re-vendor the consumer schema from the plugin template.`,
     })
   }

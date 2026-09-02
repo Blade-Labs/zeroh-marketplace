@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { loadConfig, ConfigError } from '../lib/config.mjs'
 import { deriveArcPosition, DeriveError } from '../lib/derive.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 const firstPositional = (rest) => rest.find((a) => !a.startsWith('--'))
 const flagVal = (rest, name) => {
@@ -132,7 +133,7 @@ async function recordValidate(rest) {
     process.stderr.write(`roadmap arc record-validate: ${e.message}\n`)
     return 1
   }
-  const dir = join(toplevel, 'roadmap', '.gate', `arc-${arcId}`)
+  const dir = join(roadmapRoot(toplevel), '.gate', `arc-${arcId}`)
   mkdirSync(dir, { recursive: true })
   const artifact = { arcId, verdict, at: new Date().toISOString(), ...(note ? { note } : {}) }
   writeFileSync(join(dir, 'validate.json'), JSON.stringify(artifact, null, 2) + '\n')

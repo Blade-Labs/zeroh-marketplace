@@ -17,7 +17,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BLOCKERS, evaluateBlockers, gatherLandingState, buildRunnerSummary, runArcEndSuite, deriveArcSuiteRange, deriveArcSuiteScope } from './landing.mjs'
 import * as landingMod from './landing.mjs'
-import { ARC_EVALS_DIR, LESSONS_FILE } from '../commands/eval.mjs'
+import { arcEvalsDir, LESSONS_FILE } from '../commands/eval.mjs'
 import { IMPACTED_FALLBACK_NOTE } from './slots.mjs'
 import { defaultExec } from './exec.mjs'
 
@@ -567,7 +567,7 @@ const mergeLaneLessons = (...args) => {
 
 /** The corpus path, taken from the CONSTANTS the eval corpus itself uses — a second literal here
  *  would let the two halves drift and the merge would silently write to a file nobody reads. */
-const lessonsPathOf = (root) => join(root, ...ARC_EVALS_DIR, LESSONS_FILE)
+const lessonsPathOf = (root) => join(arcEvalsDir(root), LESSONS_FILE)
 
 /**
  * A checkout root carrying a lessons corpus. `contents` null ⇒ no corpus file at all;
@@ -577,7 +577,7 @@ const lessonsPathOf = (root) => join(root, ...ARC_EVALS_DIR, LESSONS_FILE)
 function lessonsTree(contents, { mkdir = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'zr-lessons-'))
   bases.push(root)
-  if (contents !== null || mkdir) mkdirSync(join(root, ...ARC_EVALS_DIR), { recursive: true })
+  if (contents !== null || mkdir) mkdirSync(arcEvalsDir(root), { recursive: true })
   if (contents !== null) writeFileSync(lessonsPathOf(root), contents)
   return root
 }

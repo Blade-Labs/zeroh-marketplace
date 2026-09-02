@@ -42,6 +42,7 @@ import {
   AgentRoundInputShape,
   GateReportUnreadableError,
 } from '../lib/gate-report.mjs'
+import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
 
 /**
  * Leave the per-phase eval record beside the gate's own artifacts — the measurement pipe's
@@ -343,9 +344,9 @@ const compactSlot = (r) => {
  */
 export function buildPlan(cwd, phaseNum, opts = {}) {
   const toplevel = gitToplevel(cwd)
-  const mode = opts.mode ?? (existsSync(join(toplevel, 'roadmap', '.arc-mode')) ? 'arc' : 'inline')
+  const mode = opts.mode ?? (existsSync(join(roadmapRoot(toplevel), '.arc-mode')) ? 'arc' : 'inline')
 
-  const phaseFile = join(toplevel, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
+  const phaseFile = join(roadmapRoot(toplevel), 'phases', `phase-${phaseNum}.phase.ts`)
   if (!existsSync(phaseFile)) throw new GateError(1, [`gate plan: no phase file at ${phaseFile}`])
   const imp = bridgeImport(phaseFile, { consumerRoot: toplevel })
   if (!imp.ok) {
@@ -743,7 +744,7 @@ export async function runGate(phaseNum, opts) {
       )
       return 1
     }
-    const phaseFile = join(toplevel, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
+    const phaseFile = join(roadmapRoot(toplevel), 'phases', `phase-${phaseNum}.phase.ts`)
     const imp = bridgeImport(phaseFile, { consumerRoot: toplevel })
     if (!imp.ok) {
       if (imp.kind === 'tsx-absent') process.stderr.write(TSX_ABSENT_HINT + '\n')
@@ -891,7 +892,7 @@ export async function runGate(phaseNum, opts) {
         maxBuffer: 64 * 1024 * 1024,
       })
       const foreign = new Set(plan.foreignCommitsInRange ?? [])
-      findings = historyCommentFindings(diffText).filter((f) => !foreign.has(f.file))
+      findings = historyCommentFindings(diffText, roadmapRootRel(toplevel)).filter((f) => !foreign.has(f.file))
     } catch (e) {
       scanErr = e.message
     }

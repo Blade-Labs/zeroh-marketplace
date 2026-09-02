@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { isTerminalPhaseSource } from '../lib/phasescan.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 const STATUSES = new Set(['live', 'parked', 'superseded', 'spent'])
 const emptySummary = () => ({
@@ -90,7 +91,7 @@ function ageDays(repo, absoluteFile) {
 
 /** One metering home shared by the census command and audit check 14. */
 export function censusFollowups(repo = process.cwd()) {
-  const roadmap = join(repo, 'roadmap')
+  const roadmap = roadmapRoot(repo)
   const dir = join(roadmap, 'followups')
   const followupFiles = existsSync(dir)
     ? readdirSync(dir)

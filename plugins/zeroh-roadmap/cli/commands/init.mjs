@@ -13,6 +13,7 @@ import { existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 const SCAFFOLD_SH = fileURLToPath(new URL('../../scripts/scaffold-roadmap.sh', import.meta.url))
 const SCHEMA_ABS = fileURLToPath(new URL('../roadmap.config.schema.json', import.meta.url))
@@ -41,7 +42,7 @@ export default async function run(argv) {
   }
 
   if (both || wantConfig) {
-    const configPath = join(toplevel, 'roadmap', 'roadmap.config.json')
+    const configPath = join(roadmapRoot(toplevel), 'roadmap.config.json')
     if (existsSync(configPath)) {
       process.stderr.write(
         `roadmap init: ${configPath} already exists — refusing to clobber a consumer's config\n`,

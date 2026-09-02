@@ -62,6 +62,7 @@ import {
   LANES, prevReportName, journalPath, journalDeclineReason,
   JournalUnreadableError, findJournal, findClosedJournal,
 } from '../lib/codex-journal.mjs'
+import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
 
 // The journal mechanics live in cli/lib/codex-journal.mjs; `findJournal` alone is re-exported
 // because codex.test.mjs pins it as a contract OF THIS MODULE — `codex status` and the gate
@@ -124,7 +125,7 @@ const ROLE_BINDINGS = fileURLToPath(new URL('../../MULTI-DRIVER.md', import.meta
  * instead of models.
  */
 export function buildPrompt(root, ids) {
-  const phaseFiles = ids.map((n) => `roadmap/phases/phase-${n}.phase.ts`)
+  const phaseFiles = ids.map((n) => `${roadmapRootRel(root)}/phases/phase-${n}.phase.ts`)
   for (const f of phaseFiles) {
     if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
   }
@@ -165,7 +166,7 @@ const REVIEW_SKILL = fileURLToPath(new URL('../../skills/review-phase/SKILL.md',
  * briefings instead of models.
  */
 function buildReviewPrompt(root, ids, { doc, focus } = {}) {
-  const phaseFiles = ids.map((n) => `roadmap/phases/phase-${n}.phase.ts`)
+  const phaseFiles = ids.map((n) => `${roadmapRootRel(root)}/phases/phase-${n}.phase.ts`)
   for (const f of phaseFiles) {
     if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
   }
@@ -216,7 +217,7 @@ function buildPlanPrompt(root, ids, { brief } = {}) {
   }
   const briefPath = join(root, brief)
   if (!existsSync(briefPath) || !statSync(briefPath).isFile()) throw new Error(`plan lane: brief missing (or not a file): ${brief}`)
-  const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
+  const phaseFile = `${roadmapRootRel(root)}/phases/phase-${ids[0]}.phase.ts`
   if (existsSync(join(root, phaseFile))) {
     throw new Error(
       `plan lane: ${phaseFile} already exists \u2014 this lane authors a NEWLY reserved number, so an existing file means the wrong number was passed. `
@@ -526,7 +527,7 @@ function planCodex(root, ids, argv) {
 
   // --base may carry a phase file the primary checkout does not. Checked from the PRIMARY, before
   // the worktree and its dependency install, so a taken number costs no install and leaves no orphan branch.
-  const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
+  const phaseFile = `${roadmapRootRel(root)}/phases/phase-${ids[0]}.phase.ts`
   if (spawnSync('git', ['cat-file', '-e', `${base}:${phaseFile}`], { cwd: root }).status === 0) {
     process.stderr.write(
       `roadmap codex: ${phaseFile} already exists on ${base} — this lane authors a newly reserved number. `
@@ -644,7 +645,7 @@ function archivePlanLane(root, jPath, journal, reportPath) {
   const ids = (journal.phases ?? []).map(String)
   const branch = `codex-plan/${ids.join('-')}`
   const base = journal.base ?? 'develop'
-  const phaseFile = `roadmap/phases/phase-${ids[0]}.phase.ts`
+  const phaseFile = `${roadmapRootRel(root)}/phases/phase-${ids[0]}.phase.ts`
   // stderr, never stdout: stdout is the parsed stream every poll loop reads.
   const keep = (reason) => {
     process.stderr.write(`roadmap codex: the plan lane at ${wt} was KEPT — ${reason}\n`)
@@ -1005,7 +1006,7 @@ function statusCodex(root, ids, lane = 'run') {
 
 /** --arc <ID>: resolve the arc's member phases (planes order) so a whole arc delegates as one run. */
 function arcPhases(root, arcId) {
-  const src = readFileSync(join(root, 'roadmap', 'arcs', `${arcId}.arc.ts`), 'utf8')
+  const src = readFileSync(join(roadmapRoot(root), 'arcs', `${arcId}.arc.ts`), 'utf8')
   const ids = [...src.matchAll(/phases:\s*\[([\d,\s]+)\]/g)].flatMap((m) => m[1].match(/\d+/g) ?? [])
   if (ids.length === 0) throw new Error(`no member phases found in arc ${arcId}`)
   return ids
@@ -1016,7 +1017,7 @@ export default async function run(argv) {
   const ai = argv.indexOf('--arc')
   const root = gitToplevel(process.cwd())
   const arcId = ai >= 0 ? argv[ai + 1] : undefined
-  if (ai >= 0 && (!arcId || arcId.startsWith('--') || !existsSync(join(root, 'roadmap', 'arcs', `${arcId}.arc.ts`)))) {
+  if (ai >= 0 && (!arcId || arcId.startsWith('--') || !existsSync(join(roadmapRoot(root), 'arcs', `${arcId}.arc.ts`)))) {
     process.stderr.write(`roadmap codex: --arc needs a valid arc id (roadmap/arcs/<ID>.arc.ts not found for '${arcId ?? ''}')\n`)
     return 1
   }

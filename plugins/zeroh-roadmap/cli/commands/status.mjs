@@ -17,13 +17,15 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { scanProgress, scanPhaseFile } from '../lib/phasescan.mjs'
 import { arcProgress } from '../lib/derive.mjs'
 import { lastEvent, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN, WORK_EVENTS } from '../lib/beacon.mjs'
 import { staleArms } from '../lib/executor-arm.mjs'
 import { listWorktrees, surveyLanes } from '../lib/worktree.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
+import { gitToplevel } from '../lib/gitroot.mjs'
 
 const git = (args, cwd) => {
   try {
@@ -136,11 +138,22 @@ function derive(root) {
   // 3) Pause handoffs
   const resumes = new Map() // arcId -> {file, headline}
   const arcsDir = join(root, 'arcs')
+  // Display paths open from the consumer root, so they must be spelled from the REAL root in
+  // use (which an explicit argument may override), not from a candidate name.
+  const repoRel = (p) => {
+    try {
+      return relative(gitToplevel(root), p)
+    } catch {
+      // Not a repo (status accepts a bare roadmap directory): there is no repo-relative answer,
+      // so spell it from the root's own name — what the pre-resolver code printed verbatim.
+      return join(basename(root), relative(root, p))
+    }
+  }
   if (existsSync(arcsDir)) {
     for (const f of readdirSync(arcsDir).filter((f) => f.endsWith('-RESUME.md'))) {
       const id = f.replace(/-RESUME\.md$/, '')
       const headline = readFileSync(join(arcsDir, f), 'utf8').split('\n')[0].replace(/^#\s*/, '')
-      resumes.set(id, { file: `roadmap/arcs/${f}`, headline })
+      resumes.set(id, { file: repoRel(join(arcsDir, f)), headline })
     }
   }
 
@@ -151,8 +164,8 @@ function derive(root) {
   const inProgress = local.inProgress
   const progressOf = (id, worktree) => {
     const dir =
-      worktree && existsSync(join(worktree, 'roadmap', 'phases'))
-        ? join(worktree, 'roadmap', 'phases')
+      worktree && existsSync(join(roadmapRoot(worktree), 'phases'))
+        ? join(roadmapRoot(worktree), 'phases')
         : join(root, 'phases')
     return arcProgress(dir, id)
   }
@@ -199,7 +212,7 @@ function derive(root) {
   }
   const staleArmsOf = (wt) => {
     try {
-      return staleArms(wt, join(wt, 'roadmap', 'phases')).map((s) => s.file)
+      return staleArms(wt, join(roadmapRoot(wt), 'phases')).map((s) => s.file)
     } catch {
       return []
     }
@@ -225,7 +238,7 @@ function derive(root) {
     const wt = resolve(s.worktree ?? '')
     const gone = !worktrees.has(wt)
     const age = gone ? { txt: '-', stale: false, flag: '' } : livenessOf(id, wt)
-    const lanePhases = gone || !existsSync(join(wt, 'roadmap', 'phases')) ? join(root, 'phases') : join(wt, 'roadmap', 'phases')
+    const lanePhases = gone || !existsSync(join(roadmapRoot(wt), 'phases')) ? join(root, 'phases') : join(roadmapRoot(wt), 'phases')
     const diverged = divergedOf(id, lanePhases)
     const armFiles = gone ? [] : staleArmsOf(wt)
     const evalMissing = evalMissingOf(id, gone ? undefined : wt)
@@ -318,7 +331,7 @@ function derive(root) {
     }
   }
 
-  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes, strayError, worktreeError, pluginDrift }
+  return { derivedAt, repo, backlogRef: repoRel(join(root, 'backlog.ts')), rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes, strayError, worktreeError, pluginDrift }
 }
 
 function printHuman(m) {
@@ -338,13 +351,24 @@ function printHuman(m) {
   if (m.strayLanes > 0) out.push(`\n  strays: ${m.strayLanes} lane worktree(s) past their done-moment — run \`roadmap audit\` for each remedy`)
   out.push(`\nOther worktrees on disk (context — may be unrelated to arcs):`)
   for (const { path, branch } of m.otherWorktrees) out.push(`  ${path} @ ${branch}`)
-  out.push(`\nDecisions (priorities, release gates): roadmap/backlog.ts header board.`)
+  out.push(`\nDecisions (priorities, release gates): ${m.backlogRef} header board.`)
   process.stdout.write(out.join('\n') + '\n')
+}
+
+/** The root a bare `roadmap status` reads: the consumer's resolved root, or — outside a repo,
+ *  where status still accepts a bare roadmap directory — the candidate under cwd. */
+function defaultRoadmapRoot(cwd) {
+  try {
+    return roadmapRoot(gitToplevel(cwd))
+  } catch {
+    return roadmapRoot(cwd)
+  }
 }
 
 export default async function run(argv) {
   const json = argv.includes('--json')
-  const root = resolve(argv.find((a) => !a.startsWith('--')) ?? 'roadmap')
+  const explicit = argv.find((a) => !a.startsWith('--'))
+  const root = explicit ? resolve(explicit) : defaultRoadmapRoot(process.cwd())
   if (!existsSync(join(root, 'phases'))) {
     process.stderr.write(`arc-status: no roadmap at ${root} (pass the roadmap root as arg)\n`)
     return 1

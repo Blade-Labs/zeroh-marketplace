@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { readSidecar, removeSidecar, pauseSidecar, clearArcMode, releaseClaims } from '../lib/sidecar.mjs'
 import { gitToplevel, gitCommonDir } from '../lib/gitroot.mjs'
 import { scanPhaseFile } from '../lib/phasescan.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 function landedNumbers(roadmapRoot) {
   const phasesDir = join(roadmapRoot, 'phases')
@@ -65,9 +66,9 @@ export default async function run(argv) {
   }
 
   removeSidecar(cwd, arcId)
-  const roadmapRoot = join(gitToplevel(cwd), 'roadmap')
-  clearArcMode(roadmapRoot)
-  const released = releaseLandedClaims(cwd, roadmapRoot)
+  const root = roadmapRoot(gitToplevel(cwd))
+  clearArcMode(root)
+  const released = releaseLandedClaims(cwd, root)
   process.stderr.write(
     `roadmap disarm: arc ${arcId} disarmed${released.length ? `; released landed claims ${released.join(', ')}` : ''}\n`,
   )

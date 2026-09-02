@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path'
 import { gitCommonDir } from '../lib/gitroot.mjs'
 import { maxDeclaredPhase, maxRemotePhase } from '../lib/phasescan.mjs'
 import { defaultExec } from '../lib/exec.mjs'
+import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 const RUNAWAY = 1_000_000
 
@@ -29,6 +30,15 @@ function maxClaim(dir) {
   return max
 }
 
+/** The root a flagless `roadmap claim` reads — the same rule `roadmap status` applies. */
+function defaultRoadmapRoot(cwd) {
+  try {
+    return roadmapRoot(gitToplevel(cwd))
+  } catch {
+    return roadmapRoot(cwd)
+  }
+}
+
 export default async function run(argv) {
   let count = 1
   const positional = []
@@ -43,7 +53,7 @@ export default async function run(argv) {
       positional.push(argv[i])
     }
   }
-  const root = resolve(positional[0] ?? 'roadmap')
+  const root = positional[0] ? resolve(positional[0]) : defaultRoadmapRoot(process.cwd())
   const phasesDir = join(root, 'phases')
   if (!existsSync(phasesDir)) {
     process.stderr.write(`roadmap claim: no such dir: ${phasesDir}\n`)
