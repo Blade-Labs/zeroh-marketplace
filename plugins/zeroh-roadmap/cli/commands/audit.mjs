@@ -247,7 +247,7 @@ export default async function run(argv) {
       severity: 'HIGH',
       phase: null,
       location: consumerSchemaPath(repo),
-      message: `${name} is missing from lib/roadmap/schema.ts, so phase eval records cannot emit and scorecard samples go silent — re-vendor the consumer schema from the plugin template.`,
+      message: `${name} is missing from the consumer schema, so phase eval records cannot emit and scorecard samples go silent — re-vendor ${consumerSchemaPath(repo)} from the plugin template.`,
     })
   }
 

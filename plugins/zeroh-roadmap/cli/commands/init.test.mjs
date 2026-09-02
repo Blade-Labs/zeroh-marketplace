@@ -117,8 +117,8 @@ test('3) `init --scaffold` execs scaffold-roadmap.sh — schema.ts + roadmap/pha
   const res = roadmap(repo, 'init', '--scaffold')
   assert.equal(res.status, 0, `init --scaffold must exit 0; stderr:\n${res.stderr}`)
 
-  // Phase 24: the scaffolded seam moved to <root>/lib/ — the location consumerSchemaPath()
-  // resolves FIRST, and the only one reachable by a relative import with no tsconfig alias.
+  // The scaffolded seam sits at <root>/lib/ — the location consumerSchemaPath() resolves
+  // FIRST, and the only one reachable by a relative import with no tsconfig alias.
   const schemaTs = join(repo, 'roadmap', 'lib', 'schema.ts')
   assert.ok(existsSync(schemaTs), 'scaffold created roadmap/lib/schema.ts')
 
@@ -213,10 +213,10 @@ test('5) a SECOND init --scaffold is idempotent and never claims the example arc
 })
 
 // ─────────────────────────────────────────────────────────────────────────────────────
-// Phase 24 — a consumer can be scaffolded ANYWHERE (--root) and into a repo with NO
-// `@/` tsconfig alias. The resolver (cli/lib/roadmap-root.mjs, phase 23) already answers
-// "where is the roadmap?" and "where is the schema?"; these tests pin the SCAFFOLD and
-// `init` to the same two answers, and pin the templates to relative imports.
+// A consumer can be scaffolded ANYWHERE (--root) and into a repo with NO `@/` tsconfig
+// alias. cli/lib/roadmap-root.mjs already answers "where is the roadmap?" and "where is
+// the schema?"; these tests pin the SCAFFOLD and `init` to the same two answers, and pin
+// the templates to relative imports.
 //
 // Everything below drives the REAL bin/roadmap.mjs and the REAL scripts/scaffold-roadmap.sh
 // over real git fixtures. provisionTsx/installConsumerSchema are reused from the
@@ -351,6 +351,14 @@ test('7) `init --root docs/roadmap` lands the WHOLE consumer under docs/roadmap 
   )
 })
 
+test('7b) `init --config --root` writes directly into the selected root before it is discoverable', () => {
+  const repo = newRepo()
+  const res = roadmap(repo, 'init', '--config', '--root', 'ops/roadmap')
+  assert.equal(res.status, 0, `config-only init must exit 0; stderr:\n${res.stderr}`)
+  assert.ok(existsSync(join(repo, 'ops', 'roadmap', 'roadmap.config.json')))
+  assert.equal(existsSync(join(repo, 'roadmap')), false, 'config-only --root must not create the default root')
+})
+
 test('8) a phase file under `--root docs/roadmap` validates through the tsx bridge with NO tsconfig alias', () => {
   const repo = scaffoldedConsumer('docs/roadmap')
   const n = 9241
@@ -398,7 +406,7 @@ test('9) …and in that SAME repo a phase importing `@/lib/roadmap/schema` does 
 test('10) the LEGACY lib/roadmap/schema.ts seam still validates a phase file — every existing consumer is that repo', () => {
   const repo = newRepo()
   mkdirSync(join(repo, 'roadmap', 'phases'), { recursive: true })
-  installConsumerSchema(repo) // <repo>/lib/roadmap/schema.ts — the pre-phase-24 layout, verbatim
+  installConsumerSchema(repo) // <repo>/lib/roadmap/schema.ts — the LEGACY layout, verbatim
   provisionTsx(repo)
   assert.equal(
     existsSync(join(repo, 'roadmap', 'lib')),
@@ -416,8 +424,8 @@ test('10) the LEGACY lib/roadmap/schema.ts seam still validates a phase file —
   assert.equal(
     v.status,
     0,
-    `the legacy seam must keep validating — breaking it breaks every consumer scaffolded before ` +
-      `phase 24; stderr:\n${v.stderr}`,
+    `the legacy seam must keep validating — breaking it breaks every consumer scaffolded ` +
+      `before the seam moved under the root; stderr:\n${v.stderr}`,
   )
 })
 

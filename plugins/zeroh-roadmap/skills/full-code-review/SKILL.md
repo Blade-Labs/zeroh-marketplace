@@ -59,8 +59,8 @@ User instructions: $ARGUMENTS
 ## Phase 1 — Discovery
 
 1. Run the consumer-override check above. Then confirm roadmap infrastructure:
-   `roadmap status` and `<root>/roadmap.config.json`. If there is no `roadmap/`
-   directory, still audit and report, but skip Phase 5 and name that gap to the
+   `roadmap status` and `<root>/roadmap.config.json`. If there is no discovered
+   root (`roadmap status` fails), still audit and report, but skip Phase 5 and name that gap to the
    user — never invent a phase number (honor-system).
 2. Read the consumer's CLAUDE.md conventions and the `reviewFocus` classes in
    `<root>/roadmap.config.json`. Those repo-specific finding classes PREPEND
@@ -125,7 +125,7 @@ you did not run — record those as `not-run`, name the pipeline that owns them
 ## Phase 5 — Remediation phase (automatic — do not ask)
 
 Creating the phase is mandatory and needs no permission (honor-system). Skip
-only when Phase 1 found no `roadmap/`, and say so.
+only when Phase 1 found no discovered root, and say so.
 
 1. `roadmap claim` reserves the phase number — CLI-enforced atomic monotonic
    reservation. Never reuse a historical number and never compute max+1 by hand.

@@ -18,7 +18,7 @@
  *   gitShim(root)           → a PATH `git` shim recording every argv (push-discipline proof)
  *   installConsumerSchema / provisionTsx  (called by makeFixtureRepo; exported for assertions)
  *
- * LAYOUT (phase 23). The roadmap root is DISCOVERED, not pinned, so a fixture consumer is
+ * LAYOUT. The roadmap root is DISCOVERED, not pinned, so a fixture consumer is
  * built under `opts.layout`:
  *   'toplevel' (default, unchanged) — `<repo>/roadmap/…` + the LEGACY seam `<repo>/lib/roadmap/schema.ts`
  *   'docs'                          — `<repo>/docs/roadmap/…` + the ROOT-FIRST seam `<root>/lib/schema.ts`,
@@ -57,7 +57,7 @@ process.on('exit', () => {
   for (const b of bases) rmSync(b, { recursive: true, force: true })
 })
 
-// ── layout (phase 23: the root is DISCOVERED) ────────────────────────────────────────
+// ── layout (the root is DISCOVERED) ────────────────────────────────────────
 /** Every layout this harness can build, and the candidate directories each one MARKS. */
 export const LAYOUT_ROOTS = {
   toplevel: ['roadmap'],
@@ -189,7 +189,7 @@ function installRegistryStub(root, layout = 'toplevel') {
  * can touch specialist vs plain paths. opts.seedCommit=false leaves the tree UNCOMMITTED (a
  * suite that needs the phase-start SHA to be a specific later commit seeds its own).
  *
- * opts.layout (phase 23) selects WHERE the records and the schema seam live — 'toplevel'
+ * opts.layout selects WHERE the records and the schema seam live — 'toplevel'
  * (default, byte-identical to what every existing suite gets), 'docs', or 'both'. Under
  * 'docs' the repo carries NO `<root>/lib/` and no tsconfig, so a phase file's relative
  * `../lib/schema` import is the ONLY way the seam can resolve. Under 'both' the toplevel
@@ -202,10 +202,9 @@ export function makeFixtureRepo(opts = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'zr-fx-')))
   bases.push(root)
   layouts.set(root, layout)
-  // The PRIMARY root is the one the records go in; 'both' additionally MARKS the other.
-  const primaryRel = LAYOUT_ROOTS[layout][0]
-  const primary = join(root, ...primaryRel.split('/'))
-  mkdirSync(join(primary, 'phases'), { recursive: true })
+  // The PRIMARY root is the one the records go in; 'both' additionally MARKS the other (the
+  // config + phases/ loop below marks every one of them, primary included).
+  const primary = join(root, ...LAYOUT_ROOTS[layout][0].split('/'))
   mkdirSync(join(primary, 'arcs'), { recursive: true })
   mkdirSync(join(root, 'bin'), { recursive: true })
   mkdirSync(join(root, 'src', 'spine'), { recursive: true })

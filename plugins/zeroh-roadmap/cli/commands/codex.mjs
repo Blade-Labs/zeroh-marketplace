@@ -1018,7 +1018,7 @@ export default async function run(argv) {
   const root = gitToplevel(process.cwd())
   const arcId = ai >= 0 ? argv[ai + 1] : undefined
   if (ai >= 0 && (!arcId || arcId.startsWith('--') || !existsSync(join(roadmapRoot(root), 'arcs', `${arcId}.arc.ts`)))) {
-    process.stderr.write(`roadmap codex: --arc needs a valid arc id (roadmap/arcs/<ID>.arc.ts not found for '${arcId ?? ''}')\n`)
+    process.stderr.write(`roadmap codex: --arc needs a valid arc id (${roadmapRootRel(root)}/arcs/<ID>.arc.ts not found for '${arcId ?? ''}')\n`)
     return 1
   }
   // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).

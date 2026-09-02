@@ -1,22 +1,21 @@
 #!/usr/bin/env node
 /**
- * layout-docs.test.mjs — the DISCOVERED-root wired tier (ROADCODE phase 23, task 23.6).
+ * layout-docs.test.mjs — the DISCOVERED-root wired tier.
  *
- * Phase 23 made the roadmap root discovered instead of pinned (cli/lib/roadmap-root.mjs:
+ * The roadmap root is DISCOVERED, not pinned (cli/lib/roadmap-root.mjs:
  * ROOT_CANDIDATES = ['roadmap', 'docs/roadmap'], marker = roadmap.config.json | phases/,
  * ROADMAP_ROOT overrides, both marked = a named refusal). Nothing in the fixture-consumer
  * tier has ever run against the SECOND candidate, so every existing suite would stay green
  * if discovery silently kept answering `<repo>/roadmap` forever. This suite drives the REAL
  * bin/roadmap.mjs over a consumer whose whole roadmap lives at `<repo>/docs/roadmap` — with
- * NO `<repo>/lib/` and no tsconfig alias anywhere — through the seven directions of the
- * phase-23 acceptance criterion:
+ * NO `<repo>/lib/` and no tsconfig alias anywhere — through seven directions:
  *
  *   D1 status (no root argument)  · D2 phase validate over a `../lib/schema` import
  *   D3a audit CLEAN + read from the docs root · D3b check 16 names the DOCS seam on drift
  *   D4 gate plan · D5 claim · D6 ROADMAP_ROOT at a THIRD directory wins over both candidates
  *   D7 both roots marked ⇒ ONE named refusal at status, phase validate and audit
  *
- * House rules (identical to the nine sibling suites): the CLI's exit code + its machine
+ * House rules (identical to the sibling suites): the CLI's exit code + its machine
  * fields are the contract — no cli/lib internals are imported, and prose is asserted ONLY
  * where the criterion demands a NAMED message (D3b's located finding, D7's refusal). Every
  * direction carries its anti-vacuity assertion: a docs-layout run that found NOTHING must
@@ -39,7 +38,7 @@ const DOCS_ROOT = (repo) => join(repo, 'docs', 'roadmap')
 const LEGACY_SEAM = (repo) => join(repo, 'lib', 'roadmap', 'schema.ts')
 
 /**
- * The layout root the harness reports (task 23.6's `roadmapDir(root)`), reached through the
+ * The layout root the harness reports (`roadmapDir(root)`), reached through the
  * namespace: a named import of a not-yet-existing export fails the whole MODULE link and
  * would collapse seven independent directions into one unreadable error, so each direction
  * reds on its own with the contract line it needs.
@@ -48,7 +47,7 @@ function roadmapDir(repo) {
   assert.equal(
     typeof harness.roadmapDir,
     'function',
-    'harness.mjs must export roadmapDir(root) → the absolute layout root (task 23.6 contract)',
+    'harness.mjs must export roadmapDir(root) → the absolute layout root (the harness contract)',
   )
   return harness.roadmapDir(repo)
 }

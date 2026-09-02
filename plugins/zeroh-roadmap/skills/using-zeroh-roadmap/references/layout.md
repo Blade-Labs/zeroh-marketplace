@@ -6,8 +6,8 @@ file's import, or diagnosing a refusal.
 
 ## The root
 
-Two candidates, in precedence order: `roadmap/` at the git toplevel (what every consumer built
-before 0.36 has) and `docs/roadmap/` (for a repo that keeps its workflows as sibling doc folders).
+Two candidates, in precedence order: `roadmap/` at the git toplevel (what every existing consumer
+has) and `docs/roadmap/` (for a repo that keeps its workflows as sibling doc folders).
 
 - A candidate is the root when it carries a MARKER: `roadmap.config.json` or `phases/`. An
   existing but unmarked directory is not one — a repo with a prose `docs/roadmap/` folder keeps

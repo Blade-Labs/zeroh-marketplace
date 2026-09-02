@@ -65,9 +65,10 @@ const phaseSource = (num) =>
 function makeRepo(phaseNum, commitDates, opts = {}) {
   const root = mkdtempSync(join(tmpdir(), 'zr-metrics-'))
   bases.push(root)
-  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  const rootRel = opts.rootRel ?? 'roadmap'
+  mkdirSync(join(root, rootRel, 'phases'), { recursive: true })
   writeFileSync(join(root, 'CLAUDE.md'), CLAUDE_MD)
-  const phaseFile = join(root, 'roadmap', 'phases', `phase-${phaseNum}.phase.ts`)
+  const phaseFile = join(root, rootRel, 'phases', `phase-${phaseNum}.phase.ts`)
   writeFileSync(phaseFile, (opts.phaseSource ?? phaseSource)(phaseNum))
 
   const git = (args, env = {}) =>
@@ -115,9 +116,22 @@ function makeRepo(phaseNum, commitDates, opts = {}) {
   return { root, phaseFile }
 }
 
-function runCollector(root, args) {
-  return execFileSync(TSX, [SCRIPT, ...args], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+function runCollector(root, args, env = {}) {
+  return execFileSync(TSX, [SCRIPT, ...args], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env } })
 }
+
+test('root discovery finds docs/roadmap and ROADMAP_ROOT overrides candidates', () => {
+  const docs = makeRepo(9010, ['2026-01-02T03:04:05Z'], { rootRel: 'docs/roadmap', anchor: '2026-01-02T03:00:00Z' })
+  runCollector(docs.root, ['9010', '--historical'])
+  assert.match(readFileSync(docs.phaseFile, 'utf8'), /metrics:\s*\{/)
+  runCollector(docs.root, ['9010', '--historical'], { ROADMAP_ROOT: '' })
+  mkdirSync(join(docs.root, 'roadmap', 'phases'), { recursive: true })
+  assert.throws(() => runCollector(docs.root, ['9010', '--historical']), /ambiguous roadmap root/)
+
+  const custom = makeRepo(9011, ['2026-01-02T03:04:05Z'], { rootRel: 'ops/roadmap', anchor: '2026-01-02T03:00:00Z' })
+  runCollector(custom.root, ['9011', '--historical'], { ROADMAP_ROOT: 'ops/roadmap' })
+  assert.match(readFileSync(custom.phaseFile, 'utf8'), /metrics:\s*\{/)
+})
 
 /** The metrics block by BRACE MATCHING — the same reason the script does it that way: a lazy
  *  regex against a ONE-LINE block runs past it into the next object. */

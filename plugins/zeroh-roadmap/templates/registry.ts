@@ -24,7 +24,6 @@ import {
  *  on this exact prefix to keep duplicates exit-1 while quarantining parse
  *  failures — a shared constant so the wording cannot drift into a silent
  *  fatal→warning downgrade. */
-
 export const DUPLICATE_PHASE_NUMBER_PREFIX = 'Duplicate phase number'
 
 /**
@@ -41,7 +40,6 @@ export function roadmapRoot(cwd: string = process.cwd()): string {
   const marked = ROADMAP_ROOT_CANDIDATES.filter((c) => fs.existsSync(path.resolve(cwd, c, 'phases')))
   return path.resolve(cwd, marked[0] ?? ROADMAP_ROOT_CANDIDATES[0])
 }
-
 
 export interface DiscoveryResult {
   phases: Phase[]

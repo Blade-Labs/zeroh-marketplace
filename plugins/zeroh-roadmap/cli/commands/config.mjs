@@ -11,6 +11,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { consumerSchemaPath } from '../lib/roadmap-root.mjs'
+import { BridgeError } from '../lib/bridge-error.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const TEMPLATE_SCHEMA = join(PLUGIN_ROOT, 'templates', 'schema.ts')
@@ -48,7 +49,8 @@ export function missingSchemaExports(consumerRoot) {
   let consumerSchema
   try {
     consumerSchema = consumerSchemaPath(consumerRoot)
-  } catch {
+  } catch (error) {
+    if (!(error instanceof BridgeError && error.kind === 'schema-missing')) throw error
     return []
   }
   const expected = exportInventory(TEMPLATE_SCHEMA).names
@@ -61,7 +63,8 @@ export function missingSchemaExports(consumerRoot) {
 export function unresolvedSchemaExports(consumerRoot) {
   try {
     return exportInventory(consumerSchemaPath(consumerRoot)).unresolved
-  } catch {
+  } catch (error) {
+    if (!(error instanceof BridgeError && error.kind === 'schema-missing')) throw error
     return []
   }
 }

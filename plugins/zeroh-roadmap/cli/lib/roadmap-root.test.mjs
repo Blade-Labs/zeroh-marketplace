@@ -319,8 +319,7 @@ const ROOT_MEMBERS = ['backlog.ts', 'phases', 'arc-evals', 'arcs', 'archive', '.
  *  materializes, freezes or describes), not root RESOLUTIONS: respelling them through the
  *  resolver would rewrite the fixture instead of following the root. Same boundary
  *  cli/lib/worktree.test.mjs pluginSources() already draws for its own scan tripwire.
- *  Excluded, but NOT trusted — the exclusion's premise is PROVEN by the test below.
- *  (PRIME RULE 1 architect ruling, phase 23 task 23.2.) */
+ *  Excluded, but NOT trusted — the exclusion's premise is PROVEN by the test below. */
 const SCAN_EXCLUDED_DIRS = ['cli/testdata/']
 const isScanExcluded = (rel) => SCAN_EXCLUDED_DIRS.some((d) => rel.startsWith(d))
 
@@ -416,12 +415,11 @@ test('roadmap-root.mjs: it is the ONLY home of the root literals left in non-tes
   // The other half of the exemption: the PATH form. The home does NOT carry that shape, and must
   // not — it returns a ROOT and callers join members onto it, so a 'roadmap/phases' string inside
   // roadmap-root.mjs would be a value nothing reads, a literal planted only to satisfy this block.
-  // (Ruled by a PRIME RULE 1 architect call, phase 23 task 23.2: the original text anchor here was
-  // unsatisfiable by any correct implementation, and a guard that reds on lawful code gets deleted
-  // by the next person along with its real coverage.) What has to be true is stronger and
-  // behavioral: every path-form string the scan strips from a call site must be REBUILDABLE from
-  // the module, per member, under BOTH layouts — otherwise the stripped sites have nowhere to go
-  // and the scan above is buying a regression.
+  // A text anchor here would be unsatisfiable by any correct implementation, and a guard that
+  // reds on lawful code gets deleted by the next person along with its real coverage. What has
+  // to be true is stronger and behavioral: every path-form string the scan strips from a call
+  // site must be REBUILDABLE from the module, per member, under BOTH layouts — otherwise the
+  // stripped sites have nowhere to go and the scan above is buying a regression.
   const plainTree = newTree()
   writeAt([plainTree, 'roadmap', 'roadmap.config.json'])
   const docsTree = newTree()

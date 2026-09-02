@@ -14,7 +14,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, writeFileSync, mkdirSync } from 'node:fs'
-import { join, dirname, relative } from 'node:path'
+import { join, dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { roadmapRoot, resetRoadmapRootCache } from '../lib/roadmap-root.mjs'
@@ -60,7 +60,7 @@ export default async function run(argv) {
   }
 
   if (both || wantConfig) {
-    const configPath = join(roadmapRoot(toplevel), 'roadmap.config.json')
+    const configPath = join(root ? resolve(toplevel, root) : roadmapRoot(toplevel), 'roadmap.config.json')
     if (existsSync(configPath)) {
       process.stderr.write(
         `roadmap init: ${configPath} already exists — refusing to clobber a consumer's config\n`,

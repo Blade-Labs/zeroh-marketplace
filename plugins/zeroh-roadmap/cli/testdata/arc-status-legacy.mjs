@@ -4,7 +4,7 @@
 // Its INDEPENDENCE is the point: cli/commands/status.parity.test.mjs diffs `roadmap status` against
 // it, and status.mjs:154 is the SAME join(worktree, roadmap, phases) site as :119 below — respelling
 // both through cli/lib/roadmap-root.mjs would compare the resolver against itself. Do not convert it,
-// do not import plugin lib code here (phase 23.2 architect ruling); exemption proven in
+// do not import plugin lib code here; the exemption is proven in
 // cli/lib/roadmap-root.test.mjs.
 /**
  * arc-status — derive the LIVE multi-session lane state. Never hand-written,
