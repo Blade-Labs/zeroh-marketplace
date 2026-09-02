@@ -39,7 +39,7 @@
  * Pattern: zeroh2 golden shapes (heuristic — ZeroH-originated construct).
  */
 
-import { defineBacklog } from '@/lib/roadmap/schema'
+import { defineBacklog } from './lib/schema'
 
 export default defineBacklog([
   // Flat form (back-compat):

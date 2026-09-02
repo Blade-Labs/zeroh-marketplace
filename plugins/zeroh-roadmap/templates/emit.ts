@@ -6,7 +6,7 @@
  * consumed by `scripts/generate-changelog-md.ts`.
  *
  * Usage:
- *   npx tsx lib/roadmap/emit.ts
+ *   npx tsx <roadmap-root>/lib/emit.ts
  */
 
 import { execSync } from 'node:child_process'

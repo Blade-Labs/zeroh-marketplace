@@ -16,7 +16,7 @@
  * the user, pick the cheapest tier that can honestly judge each).
  */
 
-import { defineArc } from '@/lib/roadmap/schema'
+import { defineArc } from '../lib/schema'
 
 export default defineArc({
   id: 'A',

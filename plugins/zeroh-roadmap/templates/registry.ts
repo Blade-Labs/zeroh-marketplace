@@ -24,7 +24,24 @@ import {
  *  on this exact prefix to keep duplicates exit-1 while quarantining parse
  *  failures — a shared constant so the wording cannot drift into a silent
  *  fatal→warning downgrade. */
+
 export const DUPLICATE_PHASE_NUMBER_PREFIX = 'Duplicate phase number'
+
+/**
+ * The consumer's roadmap root, discovered — the ONE file that cannot import the plugin's
+ * cli/lib/roadmap-root.mjs (this is consumer-side scaffolded code), so its three rules are
+ * restated here and nowhere else: ROADMAP_ROOT wins; else the first candidate carrying a
+ * phases/ directory; else the default. Keep in step with ROOT_CANDIDATES in the plugin.
+ */
+const ROADMAP_ROOT_CANDIDATES = ['roadmap', 'docs/roadmap']
+
+export function roadmapRoot(cwd: string = process.cwd()): string {
+  const override = process.env.ROADMAP_ROOT
+  if (override) return path.isAbsolute(override) ? override : path.resolve(cwd, override)
+  const marked = ROADMAP_ROOT_CANDIDATES.filter((c) => fs.existsSync(path.resolve(cwd, c, 'phases')))
+  return path.resolve(cwd, marked[0] ?? ROADMAP_ROOT_CANDIDATES[0])
+}
+
 
 export interface DiscoveryResult {
   phases: Phase[]
@@ -46,7 +63,7 @@ export interface ResultDiscoveryResult {
  * Each file must `export default definePhase({...})`.
  */
 export async function discoverPhases(
-  rootDir: string = path.resolve(process.cwd(), 'roadmap/phases'),
+  rootDir: string = path.join(roadmapRoot(), 'phases'),
 ): Promise<DiscoveryResult> {
   const files = fs
     .readdirSync(rootDir)
@@ -109,7 +126,7 @@ export async function discoverPhases(
  * Reuses `discoverPhases` so discovery/validation lives in one place.
  */
 export async function discoverResults(
-  rootDir: string = path.resolve(process.cwd(), 'roadmap/phases'),
+  rootDir: string = path.join(roadmapRoot(), 'phases'),
 ): Promise<ResultDiscoveryResult> {
   const { phases, errors } = await discoverPhases(rootDir)
   const results = phases
@@ -132,7 +149,7 @@ export async function discoverResults(
  * — arcs are optional.
  */
 export async function discoverArcs(
-  rootDir: string = path.resolve(process.cwd(), 'roadmap/arcs'),
+  rootDir: string = path.join(roadmapRoot(), 'arcs'),
 ): Promise<ArcDiscoveryResult> {
   if (!fs.existsSync(rootDir)) {
     return { arcs: [], errors: [] }

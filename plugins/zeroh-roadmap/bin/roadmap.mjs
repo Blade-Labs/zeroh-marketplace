@@ -24,7 +24,7 @@ import { ConfigError } from '../cli/lib/config.mjs'
 // moment its module lands.
 const TREE = {
   config: { phase: 1655, sub: ['check'], desc: 'load + validate roadmap.config.json; print resolved bindings' },
-  init: { phase: 1655, sub: ['--config', '--scaffold'], desc: 'scaffold roadmap/ + config.json' },
+  init: { phase: 1655, sub: ['--config', '--scaffold', '--root <dir>'], desc: 'scaffold the roadmap root + config.json' },
   status: { phase: 1655, sub: ['[root]', '--json'], desc: 'derive the live lane table (absorbs arc-status.mjs)' },
   claim: { phase: 1655, sub: ['[root]', '--count N'], desc: 'atomically reserve the next phase number(s)' },
   arm: { phase: 1655, sub: ['<arcId>', '--inline', '--note', '--base-ref', '--mode'], desc: 'write the .building sidecar; refuse a taken lane' },

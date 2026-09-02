@@ -299,7 +299,19 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['23.1'],
       interfaces: { consumes: ['roadmapRoot(dir) from 23.1'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'scaffold-roadmap.sh takes --root <dir> (default roadmap) and writes schema/registry/emit to <root>/lib/ plus ROADMAP.md, backlog.ts, phases/ and arcs/ under <root>; it REFUSES (exit 1, naming both) when the project already carries a marked root under the other candidate. templates/backlog.ts imports ./lib/schema and example.arc.ts ../lib/schema, so no tsconfig paths alias is required of a consumer; templates/registry.ts discovers its own root (ROADMAP_ROOT, else the first candidate carrying phases/, else the default). roadmap init [--root <dir>] forwards it and writes the config under roadmapRoot(toplevel), resolved AFTER scaffolding.',
+        how:
+          'TDD: zeroh-roadmap:test-engineer wrote 8 new tests plus three forced adjustments to existing ones, RED at 4 pass / 9 fail against the untouched tree. The load-bearing pair is 8 and 9: a phase file importing ../lib/schema validates through the tsx bridge in a repo with no alias, AND a phase file importing @/lib/roadmap/schema in that SAME repo does not — without the negative control the first would also pass in a repo that happened to have an alias configured. Test 10 is the regression guard that matters most: a repo carrying only the legacy lib/roadmap/schema.ts still validates, because every existing consumer is that repo. GREEN 13/13, and 58/58 across init, the fixture-consumer lifecycle, harness smoke, contract drift, emit-manifests and config; the tsx typed tier (scripts/schema.test.ts) passes with 0 failures. registry.ts is the ONE file that restates the resolver rules instead of importing them — it is consumer-side scaffolded code that cannot reach into the plugin — and its docblock says so. init resets the resolver memo after scaffolding, because a root resolved before the scaffold created it would send the config to the pre-scaffold answer.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'bin/roadmap.mjs\'s TREE entry for init was updated so --root appears in --help; it is outside the planned files[] and is one line of help text. The scaffold refusal probes the OTHER candidate only, not an arbitrary --root value: `--root ops/roadmap` into a repo that already has roadmap/ is allowed, and that repo is then unresolvable by discovery without ROADMAP_ROOT. Accepting an off-candidate root at all is what the ROADMAP_ROOT override exists for, so this is a real edge the resolver already answers, but the scaffold does not warn about it. templates/registry.ts now restates the candidate order and the phases/ marker; nothing mechanically pins that restatement to ROOT_CANDIDATES — the same twin-drift limitation 23.3 records for the shell helper, now with a third copy.',
+      },
     },
     {
       id: '23.5',
