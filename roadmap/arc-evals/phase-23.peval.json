@@ -4,7 +4,7 @@
   "consumerFingerprint": {
     "repo": "zeroh-marketplace",
     "language": "typescript",
-    "corpusSize": 23
+    "corpusSize": 24
   },
   "taskCount": 6,
   "keyFiles": [
