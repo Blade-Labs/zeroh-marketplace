@@ -91,7 +91,7 @@
   "workflow": {
     "pluginVersion": "0.18.1",
     "pluginSha": "bbbb11112222",
-    "protocolLoadTokens": 13957,
+    "protocolLoadTokens": 14039,
     "profile": "prod-grade"
   },
   "fingerprint": {

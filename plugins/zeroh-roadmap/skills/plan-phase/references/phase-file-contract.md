@@ -4,7 +4,7 @@ The literal authoring contract for `<root>/phases/phase-<N>.phase.ts`. `roadmap 
 parses and emits against this shape; treat a validate failure as a contract violation to fix, never
 to waive.
 
-Paths here are written `<root>/…` on purpose: the roadmap root is DISCOVERED, so a bare `roadmap/…` is wrong in half the consumers. The rule lives in `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`). A phase file imports the schema RELATIVELY — `import { definePhase } from
+Write `<root>/…`, never a bare `roadmap/…`: the roadmap root is DISCOVERED. Rule: `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`). A phase file imports the schema RELATIVELY — `import { definePhase } from
 '../lib/schema'` — never through a `@/` tsconfig alias, which most consumers do not define. A
 consumer still carrying the legacy toplevel schema seam keeps its existing imports; both resolve.
 

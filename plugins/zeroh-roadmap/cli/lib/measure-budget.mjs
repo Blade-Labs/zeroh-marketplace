@@ -7,5 +7,10 @@
  *
  * The value is the ENFORCED one: what `roadmap measure --flow do-arc --assert <N>` exits 0 against.
  * Strictly greater is a breach; sitting exactly on the budget is within it.
+ *
+ * 13257 → 13339 by operator ruling 2026-09-02 (phase 23 task 23.5 escalation, option 1): the
+ * router's one Layout rule is a CORRECTNESS fix, not accretion — without it half of consumers read
+ * paths that do not exist there — so the +82 is re-ratcheted rather than dieted away. One-off; the
+ * standing zero-growth bar of 2026-08-24 is unchanged.
  */
-export const PROTOCOL_LOAD_BUDGET_TOKENS = 13257
+export const PROTOCOL_LOAD_BUDGET_TOKENS = 13339

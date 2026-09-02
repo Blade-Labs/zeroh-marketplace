@@ -9,7 +9,7 @@ metadata:
 
 # Plan Phase: Author a Known Diff
 
-Paths here are written `<root>/…` on purpose: the roadmap root is DISCOVERED, so a bare `roadmap/…` is wrong in half the consumers. The rule lives in `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
+Write `<root>/…`, never a bare `roadmap/…`: the roadmap root is DISCOVERED. Rule: `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
 
 **Trigger:** `plan phase for X`, `/plan-phase`, `/create-phase`, `/new-phase`. Input: a bug report,
 feature request, review finding, broad goal, or a `<root>/followups/<arcId>.md item K` reference

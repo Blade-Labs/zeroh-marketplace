@@ -9,7 +9,7 @@ metadata:
 
 # Plan Arc - Arc Planning Protocol
 
-Paths here are written `<root>/…` on purpose: the roadmap root is DISCOVERED, so a bare `roadmap/…` is wrong in half the consumers. The rule lives in `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
+Write `<root>/…`, never a bare `roadmap/…`: the roadmap root is DISCOVERED. Rule: `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
 
 Turn "plan arc X" into a queued, executor-ready arc: the `Arc` entity, the design-first
 gate with the user, decisions complete, every phase planned against the confirmed design,

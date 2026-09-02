@@ -9,7 +9,7 @@ metadata:
 
 # Review Phase - Verification Protocol
 
-Paths here are written `<root>/…` on purpose: the roadmap root is DISCOVERED, so a bare `roadmap/…` is wrong in half the consumers. The rule lives in `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
+Write `<root>/…`, never a bare `roadmap/…`: the roadmap root is DISCOVERED. Rule: `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
 
 **Trigger:** `review phase N`, `/review-phase N`, `review arc <ID>` (arc entity + every member;
 Step H runs ONCE at arc level). A trailing prompt = extra checks AFTER the protocol, EXCEPT a

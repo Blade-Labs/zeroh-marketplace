@@ -29,7 +29,8 @@
         { "path": "skills/plan-arc/references/design-gate.md", "why": "plan-arc:69 — the design-first gate contracts live in references/design-gate.md" },
         { "path": "skills/plan-arc/references/ux-craft.md", "why": "design-gate:59 — the craft bar names references/ux-craft.md for a surface arc" },
         { "path": "skills/plan-phase/SKILL.md", "why": "plan-arc:12,59 — plans each member phase by looping plan-phase" },
-        { "path": "skills/review-phase/SKILL.md", "why": "plan-arc:12 — fans out plan-quality review (review-phase Mode A) across members" }
+        { "path": "skills/review-phase/SKILL.md", "why": "plan-arc:12 — fans out plan-quality review (review-phase Mode A) across members" },
+        { "path": "skills/using-zeroh-roadmap/references/layout.md", "why": "plan-arc:12 + plan-phase:12 + review-phase:12 — the `<root>/…` cite each planning skill opens with; writing a phase file's import (`../lib/schema`) and reading a root refusal are plan-arc acts, so the mechanics load here" }
       ]
     }
   }

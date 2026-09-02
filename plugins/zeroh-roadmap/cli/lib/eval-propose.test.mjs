@@ -365,7 +365,7 @@ test('extractFindings + clusterFindings — two independent runs over the same c
 // ── 8. the protocol-load budget boundary ──────────────────────────────────────────────
 
 test('extractFindings — protocolLoadTokens EXACTLY at the budget is within budget, and a report with no workflow block contributes nothing', () => {
-  assert.equal(PROTOCOL_LOAD_BUDGET_TOKENS, 13257, 'the budget cli/lib/measure-budget.mjs holds, which is the number the measure gate asserts')
+  assert.equal(PROTOCOL_LOAD_BUDGET_TOKENS, 13339, 'the budget cli/lib/measure-budget.mjs holds, which is the number the measure gate asserts')
 
   const wf = (protocolLoadTokens) => ({ pluginVersion: '0.18.0', pluginSha: 'eeee11112222', protocolLoadTokens, profile: 'prod-grade' })
   const atBudget = extractFindings(

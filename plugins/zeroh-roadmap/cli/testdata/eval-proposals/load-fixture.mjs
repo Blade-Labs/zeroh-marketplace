@@ -18,7 +18,7 @@
  *   recurring-lesson-key        cli/lib/eval-score.mjs (plugin home),      roadmap/backlog.ts
  *                               skills/do-arc/skill.md (plugin home),
  *                               src/relay/governed-turn.ts (consumer home)
- *   protocol-load-over-budget   prod-grade at 13258 and 13957              fast-lane at 15757 in CHARLIE
+ *   protocol-load-over-budget   prod-grade at 13340 and 14039              fast-lane at 15839 in CHARLIE
  *
  * The deliberate NON producers, which are the whole point of the boundary tests:
  *   - standards-adherence carries `pending-judge` in CHARLIE and DELTA, on the SAME dimension the
@@ -26,7 +26,7 @@
  *     the sentinel would take the cluster with it and be caught.
  *   - composability-testability scores EXACTLY 70 in DELTA and ECHO: the low-score threshold is
  *     strict, so two reports at the boundary must still emit nothing.
- *   - DELTA's protocolLoadTokens is EXACTLY 13257 (the budget — cli/lib/measure-budget.mjs) and
+ *   - DELTA's protocolLoadTokens is EXACTLY 13339 (the budget — cli/lib/measure-budget.mjs) and
  *     ECHO carries no `workflow` block at all, so neither may feed the prod-grade cluster.
  *   - lessons 4 and 5 share the bare backticked token `capbuild`, which has no '/' and therefore
  *     no derivable home: two findings, no cluster, one skippedNoLane.

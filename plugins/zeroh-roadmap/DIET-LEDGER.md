@@ -34,7 +34,8 @@ outputs. The measured do-arc protocol load vs the ~49k baseline is recorded here
 > **Measured (phase 1659.8, `roadmap measure --flow do-arc`):** **8,233 tokens** (32,924 B over 6
 > model-loaded files) — an **~83% cut**, well under the budget (`roadmap measure --flow do-arc
 > --assert <budget>` exits 0). The budget is the MEASURED load at the last ratification —
-> **13,257 tokens** (2026-08-24, phase 1 task 1.4) — held in ONE place —
+> **13,339 tokens** (2026-09-02, phase 23 task 23.5, operator re-ratchet; 13,257 from 2026-08-24,
+> phase 1 task 1.4) — held in ONE place —
 > `cli/lib/measure-budget.mjs` `PROTOCOL_LOAD_BUDGET_TOKENS`, read by the measure gate
 > (cli/commands/measure.test.mjs) and by the ELICIT pass (cli/lib/eval-propose.mjs); it was
 > 12,000 → 12,500 by user ruling 2026-07-27 (phase 1995 escalation) before the 2026-08-24 ruling
@@ -658,3 +659,56 @@ mechanics (candidates, markers, the refusal, the schema seam, scaffolding) decom
 | the intro's `A bare repo → roadmap init scaffolds roadmap/ + roadmap.config.json — the ONLY sanctioned initialization path` | relocated | absorbed verbatim in meaning into the Layout rule three lines below, which also carries the `--root` flag the old sentence could not express |
 | the routing table's `roadmap/ROADMAP.md` and the coordination board's `roadmap/backlog.ts` as literal paths | enforced-by-code(cli/lib/roadmap-root.mjs + the scan tripwire in cli/lib/roadmap-root.test.mjs) | both are now `<root>/…`; the root they resolve against is what the resolver returns, and no non-test source under cli/ or hooks/ may spell it |
 | the layout MECHANICS (candidate order, markers, the ambiguity refusal, the schema seam, `roadmap init --root`) | relocated(`skills/using-zeroh-roadmap/references/layout.md`) | never in a model-loaded body before this phase; written straight into the on-demand reference and cited from the router, the routed-to standards list, README.md and CLAUDE.md |
+
+## Operator ruling 2026-09-02 — re-ratchet 13,257 → 13,339 (phase 23 task 23.5)
+
+**Ruling, verbatim:** "Re-ratchet the budget to 13,339." Option 1 of the 23.5 escalation, and the
+software-architect's recommendation. The reasoning it turns on: the router's Layout rule is a
+**correctness fix, not accretion** — without it half of consumers (every `docs/roadmap/` layout)
+read paths that do not exist there, so the flow is not carrying more protocol, it is carrying
+protocol that is now *true*. A one-off, against the section directly above which shows the diet
+funding was ~20 tokens against a rule needing ~85. The standing zero-growth bar of 2026-08-24 is
+UNCHANGED: from 13,339 the next byte still reds the gate.
+
+**Measured, before → after (`roadmap measure`):**
+
+| flow | before (pre-23.5) | after | delta | assert |
+|---|---:|---:|---:|---|
+| do-arc | 13,256 | **13,339** | +83 | `--assert 13339` exits 0 (sitting exactly on it, zero headroom) |
+| do-phase | 5,990 | **5,989** | −1 | none |
+| plan-arc (5 metered files) | 16,335 | 16,452 | +117 | none |
+| plan-arc (honest, layout.md metered) | 16,335 | **17,059** | +724 | none |
+
+The budget moves +82 (13,257 → 13,339); the do-arc FLOW moves +83 (13,256 → 13,339), because the
+tree sat one token under its ceiling before this phase. Both numbers are real and they are not the
+same number.
+
+**The metering gap this pass closes (the phase-2422 error, not repeated).**
+`skills/using-zeroh-roadmap/references/layout.md` is cited from `plan-phase`, `plan-arc`,
+`review-phase` and `phase-file-contract.md`. Writing a phase file's schema import IS a plan-arc
+act, so the reference is a genuine conditional load in that flow and was missing from
+`cli/measure-manifest.json`. Row added; **plan-arc now measures honestly at 17,059 tokens /
+68,232 B.** plan-arc carries no assert — this is DISCLOSURE, and the alternative (leaving it
+unmetered because no gate would have caught it) is exactly what 2422 got wrong.
+
+Observed and NOT acted on, so the next diet lane can: `skills/using-zeroh-roadmap/SKILL.md` is
+ALWAYS ACTIVE and therefore loads in a planning session too, yet appears only in the do-arc flow's
+file list. Metering it into plan-arc as well would be honest; it is a manifest-scoping decision
+this phase's ruling did not cover.
+
+**Repayment, and its limit.** The `<root>/…` cite sentence 23.5 introduced was restated VERBATIM
+in four planning files. Folded to one short imperative form (232 B → 164 B, −68 B × 4). It repays
+into plan-arc, NOT into do-arc: none of those four files is in the do-arc flow, so no amount of
+folding there could have funded the +82 — which is itself part of why the ruling was the right
+call rather than a diet.
+
+| passage (origin) | disposition | evidence |
+|---|---|---|
+| `Paths here are written `<root>/…` on purpose: … so a bare `roadmap/…` is wrong in half the consumers. The rule lives in …` × 4 (plan-arc:12, plan-phase:12, review-phase:12, phase-file-contract:7) | obsolete-with-evidence(wording compression to an imperative; every operative element survives — write `<root>/…`, never a bare `roadmap/…`, the root is DISCOVERED, the rule home, the mechanics home) | the four cite sites, now 164 B each; plan-arc flow 16,503 → 16,452 over the three metered ones |
+
+**Budget-coupled fixtures re-based by +82**, following the 2026-08-24 precedent's shape, so every
+boundary property survives: `ALPHA` 13,258 → 13,340 and `BRAVO` 13,957 → 14,039 (the two
+prod-grade OVER-budget reports), `CHARLIE` 15,757 → 15,839 (the fast-lane singleton), `DELTA`
+13,257 → 13,339 (EXACTLY at budget — the report that must NOT be a finding). `load-fixture.mjs`'s
+docblock table and its exactly-at-budget note carry the new numbers; `eval-propose.test.mjs:368`'s
+pinned literal is 13,339.
