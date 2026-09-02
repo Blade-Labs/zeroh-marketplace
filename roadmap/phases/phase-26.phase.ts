@@ -120,7 +120,16 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/DIET-PLAN-2026-09.md'],
       testMode: 'none',
-      done: false,
+      transparencyReport: {
+        whatWasDone: 'Mapped every Markdown paragraph across the five target skills and four agent cards, with per-file counts, dispositions, evidence, projections, and architect ratification.',
+        how: 'Enumerated blank-line-delimited source blocks, recorded one row per block, then incorporated the resolved claude-fable-5 Decision Contract review as binding row overrides, clause splits, evidence rules, and measured-flow arithmetic.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'The projection remains a pre-edit byte estimate; task 26.3 must replace it with exact roadmap measure output and may not invent cuts if the 15% floor is missed.',
+      },
+      done: true,
+      doneDate: '2026-09-02',
     },
     {
       id: '26.2',
