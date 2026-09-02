@@ -33,6 +33,7 @@ export default definePhase({
   name: 'Driver-native roles: modelPolicy.builderModel, the sol alias, arc delegation to the codex lane',
   status: 'backlog',
   plannedBy: { model: 'claude-fable-5-1' },
+  reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'feature',
   kind: 'logic',
   source:
@@ -110,13 +111,13 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/config.mjs',
           description:
-            "ModelPolicyShape gains `builderModel: z.string().optional()` with the docblock: leads BUILDER-class chains exactly as judgeModel leads judge chains; an alias (MODEL_ALIASES) or a model id; absent = today's behaviour. Regenerate cli/roadmap.config.schema.json with `node cli/generate-config-schema.mjs` (the config.test drift subtest deep-equals it) → verify: bash -c \"grep -qF 'builderModel' plugins/zeroh-roadmap/cli/lib/config.mjs && grep -qF 'builderModel' plugins/zeroh-roadmap/cli/roadmap.config.schema.json && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/config.test.mjs >/dev/null 2>&1\"",
+            "ModelPolicyShape gains `builderModel: z.string().optional()` with the docblock: leads BUILDER-class chains exactly as judgeModel leads judge chains; an alias (MODEL_ALIASES) or a model id; absent = today's behaviour. Regenerate cli/roadmap.config.schema.json with `node cli/generate-config-schema.mjs` (the config.test drift subtest deep-equals it); `roadmap config check` (cli/commands/config.mjs:107) prints `judge=… builder=…` → verify: bash -c \"grep -qF 'builderModel' plugins/zeroh-roadmap/cli/lib/config.mjs && grep -qF 'builderModel' plugins/zeroh-roadmap/cli/roadmap.config.schema.json && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/config.test.mjs >/dev/null 2>&1\"",
         },
       ],
       acceptanceCriteria: [
         'A config carrying { judgeModel: "sol", builderModel: "sol" } parses; one carrying builderModel: 42 reds naming the field; the committed schema JSON equals the regenerated one',
       ],
-      files: ['plugins/zeroh-roadmap/cli/lib/config.mjs', 'plugins/zeroh-roadmap/cli/lib/config.test.mjs', 'plugins/zeroh-roadmap/cli/roadmap.config.schema.json'],
+      files: ['plugins/zeroh-roadmap/cli/lib/config.mjs', 'plugins/zeroh-roadmap/cli/lib/config.test.mjs', 'plugins/zeroh-roadmap/cli/roadmap.config.schema.json', 'plugins/zeroh-roadmap/cli/commands/config.mjs'],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ['RoadmapConfig.modelPolicy.builderModel'] },
       done: false,
@@ -193,7 +194,7 @@ export default definePhase({
         {
           file: 'roadmap/roadmap.config.json',
           description:
-            'modelPolicy becomes { "judgeModel": "sol", "builderModel": "sol" }; `roadmap config check` exits 0; live probes recorded in the transparencyReport: `roadmap role resolve quality-pass --driver codex` → gpt-5.6-sol (native), `roadmap role resolve code-reviewer --driver codex` → gpt-5.6-sol (native), `roadmap role resolve software-architect --driver claude` → gpt-5.6-sol (child-cli) with the fable→sol→opus chain intact behind the lead → verify: bash -c "grep -qF \'\\"builderModel\\": \\"sol\\"\' roadmap/roadmap.config.json && out=$(node plugins/zeroh-roadmap/bin/roadmap.mjs role resolve quality-pass --driver codex 2>&1) && case \\"$out\\" in *\'gpt-5.6-sol (native)\'*) exit 0;; *) echo \\"$out\\"; exit 1;; esac"',
+            'modelPolicy becomes { "judgeModel": "sol", "builderModel": "sol" }; `roadmap config check` exits 0; live probes recorded in the transparencyReport: `role resolve quality-pass --driver codex` → gpt-5.6-sol (native); `code-reviewer --driver codex` → native; `software-architect --driver claude` → gpt-5.6-sol (child-cli), the fable→sol→opus chain intact behind the lead → verify: bash -c "grep -qF \'\\"builderModel\\": \\"sol\\"\' roadmap/roadmap.config.json && out=$(node plugins/zeroh-roadmap/bin/roadmap.mjs role resolve quality-pass --driver codex 2>&1) && case \\"$out\\" in *\'gpt-5.6-sol (native)\'*) exit 0;; *) echo \\"$out\\"; exit 1;; esac"',
         },
       ],
       acceptanceCriteria: [
@@ -211,5 +212,5 @@ export default definePhase({
     'Recorded decision: with both keys at sol, codex builds AND reviews. The no-self-judge rule (gate-report.mjs INDEPENDENT_REVIEW_ENFORCEMENT_AT, phase 17.2) keys on the recorded agent label, not the model family; a native codex subagent under the code-reviewer label satisfies it, and MULTI-DRIVER §1 forbids only the INLINE fallback for roles whose card forbids grading its own work. The owner accepted that trade on 2026-09-02. ' +
     'conflictsWith 23: both edit skills/do-arc/SKILL.md and both spend the do-arc load budget (23 re-ratcheted it to 13,339 under the operator ruling; 24.4 asserts that figure) — serialize behind 23. ' +
     'Out of scope, recorded: a codex-family driver for do-phase INLINE in a Claude session (the session is the driver; builderModel routes its spawned roles to codex children, which is the intended reach); a roles-table reorder (a second tier on builder roles is a user ruling per roles.test.mjs:105 — not needed when config leads the chain); re-verifying the codex driver registry entry (roadmap driver verify codex) — its native-subagent capability is already the recorded evidence. ' +
-    'Verify rehearsal attestation: assumption probes executed 2026-09-02 at plan time — no sol alias (0 hits), builderModel 0 files, the judge-only lead literal present, the claude driver default + missing --driver codex both present (all exit 0). Step verifies red-now via their grep halves (no sol alias, no builderModel anywhere, no --driver codex, no codex run --arc in do-arc, config still fable); runner clauses inherit polarity from the grep representatives.',
+    'Verify rehearsal attestation: assumption probes executed 2026-09-02 at plan time — no sol alias (0 hits), builderModel 0 files, the judge-only lead literal present, the claude driver default + missing --driver codex both present (all exit 0). Step verifies red-now via their grep halves (no sol alias, no builderModel anywhere, no --driver codex, no codex run --arc in do-arc, config still fable); runner clauses inherit polarity from the grep representatives. Mode A review EXECUTED 2026-09-02 (claude-fable-5-1, standalone inline): READY after two [FIXED] repairs — the config-check printout (cli/commands/config.mjs:107) joins 24.2 as the one other code consumer of judgeModel; the 24.5 step trimmed under the cap. Blast radius probed: eval.mjs/eval-score.mjs judgeModel is the eval-judge pin, a different concept, untouched; prose homes citing judgeModel for judge spawns stay correct. Ratified: testMode none on 24.5; userFacing false. Placement: HIGH, conflictsWith 23 (in progress at index 0) forces one entry between → 3 of 4.',
 })
