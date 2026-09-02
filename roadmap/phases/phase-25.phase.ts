@@ -128,7 +128,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/templates/schema.ts',
           description:
-            "StructuredGateRoundShape.verdict enum (templates/schema.ts:160) gains 'fixed-closed'; mirror line-identically in lib/roadmap/schema.ts (vendor-pair). gate-report.mjs checkPhaseConsistency (:212-256) gains rule (vi): a `fixed-closed` terminal round must carry findings all MEDIUM/LOW and each with fixedInCommit, and a report whose last round is `findings-fixed` with a CRITICAL/HIGH finding is not complete → verify: bash -c \"grep -qF 'fixed-closed' plugins/zeroh-roadmap/templates/schema.ts && diff <(grep -n 'fixed-closed' plugins/zeroh-roadmap/templates/schema.ts | cut -d: -f2-) <(grep -n 'fixed-closed' lib/roadmap/schema.ts | cut -d: -f2-) >/dev/null && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/gate-report.test.mjs >/dev/null 2>&1\"",
+            "StructuredGateRoundShape.verdict (templates/schema.ts:160) gains 'fixed-closed'; mirror line-identically in lib/roadmap/schema.ts (vendor-pair). checkPhaseConsistency (gate-report.mjs:212-256) gains rule (vi): a `fixed-closed` terminal round carries only MEDIUM/LOW findings, each with fixedInCommit; a terminal `findings-fixed` round holding a CRITICAL/HIGH is not complete → verify: bash -c \"grep -qF 'fixed-closed' plugins/zeroh-roadmap/templates/schema.ts && diff <(grep -n 'fixed-closed' plugins/zeroh-roadmap/templates/schema.ts | cut -d: -f2-) <(grep -n 'fixed-closed' lib/roadmap/schema.ts | cut -d: -f2-) >/dev/null && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/gate-report.test.mjs >/dev/null 2>&1\"",
         },
       ],
       acceptanceCriteria: [
@@ -154,7 +154,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/skills/do-phase/SKILL.md',
           description:
-            'The gate paragraph (do-phase SKILL.md:110-121): the loop is driven by `roadmap gate round-brief <N>` — continue / close / clean / cap — with the executor recording every round\'s typed findings via --record-round; "cap 5" stays as the ceiling. agents/phase-executor.md:63-67 cites the same verb; the codex lane inherits through do-phase. Measures: do-phase total recorded before/after; `roadmap measure --flow do-arc --assert 13339` exits 0, DIET-LEDGER row for any trim → verify: bash -c "grep -qF \'round-brief\' plugins/zeroh-roadmap/skills/do-phase/SKILL.md && grep -qF \'round-brief\' plugins/zeroh-roadmap/agents/phase-executor.md && cd plugins/zeroh-roadmap && node bin/roadmap.mjs measure --flow do-arc --assert 13339 >/dev/null 2>&1"',
+            'The gate paragraph (do-phase SKILL.md:110-121): the loop is driven by `roadmap gate round-brief <N>` — continue / close / clean / cap — the executor recording each round\'s typed findings via --record-round; "cap 5" stays the ceiling. phase-executor.md:63-67 cites the same verb; the codex lane inherits via do-phase. Measures: do-phase total before/after; `roadmap measure --flow do-arc --assert 13339` exits 0; DIET-LEDGER row for any trim → verify: bash -c "grep -qF \'round-brief\' plugins/zeroh-roadmap/skills/do-phase/SKILL.md && grep -qF \'round-brief\' plugins/zeroh-roadmap/agents/phase-executor.md && cd plugins/zeroh-roadmap && node bin/roadmap.mjs measure --flow do-arc --assert 13339 >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
