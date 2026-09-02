@@ -19,7 +19,7 @@ defects; report any unrun member as unrun, never silently skip.
    earlier task changes out from under it.
 
 4. **No duplicate coverage** (BLOCKER at queue time): re-run Step 0's probe against the moved
-   tree: `grep -rln -F '<central symbol>' roadmap/phases roadmap/backlog.ts`. Another phase or
+   tree: `grep -rln -F '<central symbol>' <root>/phases <root>/backlog.ts`. Another phase or
    queued item already covering the work: STOP, do not queue, hand the ruling to the user; a
    third duplicate in the queue is strictly worse than no phase.
 

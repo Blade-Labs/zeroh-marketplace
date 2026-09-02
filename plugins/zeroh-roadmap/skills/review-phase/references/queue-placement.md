@@ -7,17 +7,17 @@ another on an unexplained FIFO jump.
 ## Index counting (disqualifier class)
 
 A cited position that does not match the file is a disqualifier, not a rounding error. Positions
-count entries of the EXPORTED ARRAY in `roadmap/backlog.ts` ONLY. The docblock near the top of
+count entries of the EXPORTED ARRAY in `<root>/backlog.ts` ONLY. The docblock near the top of
 that file carries EXAMPLE entry rows that look identical to real rows and are NOT queue entries
 (the round-1 loss: six positions each off by one after counting a doc-comment example as a row).
 
 Derive every index mechanically, from the raw file, in this session:
 
-1. Locate the array open: `grep -nF "export const" roadmap/backlog.ts` and take the backlog
+1. Locate the array open: `grep -nF "export const" <root>/backlog.ts` and take the backlog
    array's line number, `<start>`.
-2. Locate the target row: `grep -nF "phase: <N>" roadmap/backlog.ts`. A hit ABOVE `<start>` is
+2. Locate the target row: `grep -nF "phase: <N>" <root>/backlog.ts`. A hit ABOVE `<start>` is
    docblock text - discard it; the entry's line is `<hit>`.
-3. Count entries in between: `sed -n '<start>,<hit>p' roadmap/backlog.ts | grep -cF "phase:"`
+3. Count entries in between: `sed -n '<start>,<hit>p' <root>/backlog.ts | grep -cF "phase:"`
    (fixed-string, bounded to the one file; never a wildcard regex on this shared host).
 4. Compute TOTAL the same way with `<hit>` = end of file, and state every position as
    `K of TOTAL`. The checksum catches the off-by-one a single count hides.

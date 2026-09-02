@@ -9,8 +9,10 @@ metadata:
 
 # Plan Phase: Author a Known Diff
 
+Paths here are written `<root>/…` on purpose: the roadmap root is DISCOVERED, so a bare `roadmap/…` is wrong in half the consumers. The rule lives in `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
+
 **Trigger:** `plan phase for X`, `/plan-phase`, `/create-phase`, `/new-phase`. Input: a bug report,
-feature request, review finding, broad goal, or a `roadmap/followups/<arcId>.md item K` reference
+feature request, review finding, broad goal, or a `<root>/followups/<arcId>.md item K` reference
 (arc-sweep's deferred blueprint: read the item, it IS the plan input).
 **Flag:** `--skip-review` skips Step 7 for a WIP plan you know is unfinished; the report must then
 say "plan unverified, not queued".
@@ -43,7 +45,7 @@ mid-execution — a nameable unmade decision is this skill's failure: make it or
 ## PRIME RULE 3: PLANNING NEVER MUTATES THE SHARED TREE BEYOND ITS OWN ARTIFACT
 
 The planning act edits exactly its roadmap artifact: the new phase file (or, when Step 0 routes
-there, an existing `roadmap/phases/` file). It NEVER edits `roadmap/backlog.ts` (honor-system;
+there, an existing `<root>/phases/` file). It NEVER edits `<root>/backlog.ts` (honor-system;
 queueing is review-phase's act), never applies the diff-to-be to the shared checkout, never
 `git reset`/`git stash`/`git clean` sibling state, never `git add -A`. Probe experiments that need
 a mutated file run against scratch copies in the session scratchpad or a throwaway
@@ -59,7 +61,7 @@ Skip ONLY by recording `interview: skipped — <why>` in the phase file's `notes
 phase cites the parent arc's interview instead of re-interviewing.
 Genuinely user-owned forks are asked as AskUserQuestion options, never open-ended.
 **Duplicate probe, every request, before claiming:** run
-`grep -rln -F '<central symbol or topic>' roadmap/phases roadmap/backlog.ts` (fixed strings,
+`grep -rln -F '<central symbol or topic>' <root>/phases <root>/backlog.ts` (fixed strings,
 bounded paths) and skim `roadmap status`. A member phase of an arc ALSO runs
 `grep -F 'rejectedAlternatives'` on the parent `.arc.ts` and reads the hits before authoring —
 never re-propose a listed option. Existing coverage found: do NOT author a duplicate and
@@ -105,7 +107,7 @@ task carries its change through to an observable its `→ verify:` names (detail
 `references/phase-file-contract.md` §Ordering).
 
 **Cite the recorded timing reference class, never clock-feel.** Read
-`roadmap/arc-evals/timing-stats.json` and annotate the docblock with the cohort (task-count band ×
+`<root>/arc-evals/timing-stats.json` and annotate the docblock with the cohort (task-count band ×
 surface, where surface = any `keyFiles` path matching `web/`, `office/` or `spa/`, the table's own
 heuristic; name it as one). Always the class AND its N:
 `timing: band 4-6 × surface:false, N=8, median 60.8 min, p80 83.3 min`. No matching cohort,
@@ -199,7 +201,7 @@ Immediately run `/review-phase N` against the committed phase (Mode A, since sta
 **This pass is EXECUTED, never "reviewed inline"** (standing user ruling: every authored phase
 gets an explicit review pass); make its evidence git-visible: fix each finding and commit the
 repairs SEPARATELY as `docs(roadmap): phase N — address review findings`, so anyone can
-corroborate the pass from history. READY → Mode A Step 8 queues the phase in `roadmap/backlog.ts`
+corroborate the pass from history. READY → Mode A Step 8 queues the phase in `<root>/backlog.ts`
 at the position reasoned from `priority` + `dependsOn` + `conflictsWith`; report "queued at index
 K". NEEDS WORK/BLOCKER → fix, commit, do NOT loop; the phase is NOT queued until a clean
 re-review. A duplicate collision surfacing here (Step 0's probe re-run against the moved tree) is

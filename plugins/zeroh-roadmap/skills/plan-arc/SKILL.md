@@ -9,6 +9,8 @@ metadata:
 
 # Plan Arc - Arc Planning Protocol
 
+Paths here are written `<root>/…` on purpose: the roadmap root is DISCOVERED, so a bare `roadmap/…` is wrong in half the consumers. The rule lives in `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
+
 Turn "plan arc X" into a queued, executor-ready arc: the `Arc` entity, the design-first
 gate with the user, decisions complete, every phase planned against the confirmed design,
 every promise mapped to a task, review fanned out, validated, queued as one arc tier,
@@ -35,7 +37,7 @@ A littered sandbox: preserve it on a branch, `roadmap worktree reset --base <ref
 
 ## Step 1: Author the Arc entity
 
-Write `roadmap/arcs/<id>.arc.ts` with `defineArc` BEFORE any phase is planned (template:
+Write `<root>/arcs/<id>.arc.ts` with `defineArc` BEFORE any phase is planned (template:
 arc-integrity.md §0; zod `.parse()` + `crossValidate` enforce the shape and planes/phases
 drift). Decide WITH the user: `planes`, `singleSeams`, `honestyRails`,
 `acceptanceCriteria`, `baseRef`; fill `planes[].phases` in Step 2a.
@@ -56,7 +58,7 @@ consequence. Overriding a legal call "for quality" is the violation, not a favor
 
 **Size the phase count** per plan-phase "Phase granularity" (gate + executor cost is
 per-phase; consolidate 2-3-task phases before reserving; size against
-`roadmap/arc-evals/timing-stats.json` medians).
+`<root>/arc-evals/timing-stats.json` medians).
 
 **Elicit `acceptanceCriteria` - never invent, never dilute.** Author them WITH the user
 in user-outcome terms, before the build (grading against planner-invented criteria is
@@ -137,7 +139,7 @@ Loop `plan-phase` over the reserved numbers in dependency / plane order:
 - Pass the explicit phase number; pass **`--skip-review`** (reviews batch in Step 3). Set
   each phase's **`arcId`** and **`plannedBy: { model: <your own model id> }`**.
 - **Copy vocabulary, never coin it:** every enum-valued field (phase status, task status,
-  gate results) takes a value from the `z.enum` unions in `lib/roadmap/schema.ts` or from
+  gate results) takes a value from the `z.enum` unions in `<root>/lib/schema.ts` or from
   a schema-valid queued phase at HEAD; a guessed word fails `roadmap phase validate`
   and ships an unexecutable queue.
 - **Plan AGAINST the confirmed design.** Each task cites the designRef `ref` + `summary`
@@ -177,8 +179,8 @@ packet from arc-integrity.md §4, each returning one READY / NEEDS WORK / BLOCKE
   refusal condition.
 
 **Edit confinement (honor-system, checked after the fact):** each reviewer edits ONLY its
-own `roadmap/phases/phase-<N>.phase.ts` - never `roadmap/backlog.ts`, never a sibling.
-After the fan-out run `git status --porcelain roadmap/backlog.ts roadmap/phases/`; revert
+own `<root>/phases/phase-<N>.phase.ts` - never `<root>/backlog.ts`, never a sibling.
+After the fan-out run `git status --porcelain <root>/backlog.ts <root>/phases/`; revert
 any out-of-scope touch and redo that phase's review serially.
 
 ## Step 4: Validate with the consumer's own tooling, then queue serially
@@ -192,7 +194,7 @@ that phase, re-validate; never queue around it.
 - the arc's bar, honesty rails, design refs, research basis; the ONE home of arc
 rationale and the file do-arc reads before driving.
 
-After ALL reviews return, you ALONE write `roadmap/backlog.ts` - serially, one pass -
+After ALL reviews return, you ALONE write `<root>/backlog.ts` - serially, one pass -
 placing READY phases as a single arc tier, respecting the dependency floor + priority
 (review-phase Mode A Step 8). **Label the tier with the arc + its EXACT claimed
 numbers**; use an `N-M` range only when every number in the span belongs to THIS arc -

@@ -9,6 +9,8 @@ metadata:
 
 # Review Phase - Verification Protocol
 
+Paths here are written `<root>/…` on purpose: the roadmap root is DISCOVERED, so a bare `roadmap/…` is wrong in half the consumers. The rule lives in `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
+
 **Trigger:** `review phase N`, `/review-phase N`, `review arc <ID>` (arc entity + every member;
 Step H runs ONCE at arc level). A trailing prompt = extra checks AFTER the protocol, EXCEPT a
 placement-only ask, which NARROWS scope (Step 8). Cross-repo: read the other repo by full path.
@@ -30,8 +32,8 @@ ratified/user-locked decisions are checked for DRIFT only, never relitigated (ho
   the durable code token (`grep -F` on the symbol/status code/config key, bounded dirs) PLUS
   one alternate phrasing for prose carriers; only then declare closed, probes recorded.
 - **Negative claims** ("nothing queued", "no other caller"): assertable only with the executed
-  probe list naming every searched location - queue negatives search `roadmap/backlog.ts`,
-  `release/activation.json`, AND `roadmap/followups/`. An unprobed negative is a CONCERN.
+  probe list naming every searched location - queue negatives search `<root>/backlog.ts`,
+  `release/activation.json`, AND `<root>/followups/`. An unprobed negative is a CONCERN.
 - **Line cites**: re-verify every `file:line` in the report against HEAD immediately before
   emitting (re-open the file at that offset); one stale cite discredits the rest.
 - **Gap calibration**: probe whether CURRENT data/state can trigger each same-pattern gap
@@ -41,7 +43,7 @@ Evidence of use: commits `48c726155`/`dd5a17218`/`11ce678f9`; themes mined 2026-
 
 ## Step 0 - Mode by `status`
 
-Read `roadmap/phases/phase-N.phase.ts`. `backlog` → Mode A. `done`/`in-progress` → Mode B
+Read `<root>/phases/phase-N.phase.ts`. `backlog` → Mode A. `done`/`in-progress` → Mode B
 (in-progress = audit the `done:true` tasks; the rest flagged unaudited, NO grade token).
 `historical`/`cancelled` → terminal, NOT reviewable (predates gate discipline) - say so, STOP.
 
@@ -136,7 +138,7 @@ Commit plan edits with EXPLICIT paths only (shared checkout - `git add -A` is ho
 
 Auto-repaired findings never block queueing; open report-only findings do (surface → owner →
 re-review → queue). Derive EVERY cited index per `references/queue-placement.md`: positions
-count ONLY exported-array entries in `roadmap/backlog.ts` (docblock example rows are NOT rows -
+count ONLY exported-array entries in `<root>/backlog.ts` (docblock example rows are NOT rows -
 miscounting is a disqualifier class); two independent probes + a `K of TOTAL` checksum. Apply
 the rules in this exact order, naming each in the report:
 1. **Dependency floor** - after every `dependsOn` phase: lowest index = `max(depIndex)+1`; a dep

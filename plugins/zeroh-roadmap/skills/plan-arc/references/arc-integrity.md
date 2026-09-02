@@ -2,18 +2,18 @@
 
 Templates and evidence behind plan-arc Steps 1 (entity + judge-state), 1c, 2c, 3 and 4.
 Every rail here exists because a real arc shipped without it; the provenance files live in
-the consumer's `roadmap/arc-evals/` and are cited per section. Read the section at the
+the consumer's `<root>/arc-evals/` and are cited per section. Read the section at the
 step that cites it - this file is not a linear read.
 
 ## §0. Arc entity template (cited from Step 1)
 
-Author `roadmap/arcs/<id>.arc.ts` from this shape. Every enum-valued field in the roadmap
-corpus takes its value from the `z.enum` unions in `lib/roadmap/schema.ts` or a
+Author `<root>/arcs/<id>.arc.ts` from this shape. Every enum-valued field in the roadmap
+corpus takes its value from the `z.enum` unions in `<root>/lib/schema.ts` or a
 schema-valid file at HEAD, never a guessed word - `roadmap phase validate` rejects
 guesses, and a guessed status ships an unexecutable queue:
 
 ```ts
-import { defineArc } from '@/lib/roadmap/schema'
+import { defineArc } from '../lib/schema'
 
 export default defineArc({
   id: '<id>',
@@ -49,7 +49,7 @@ criterion, ask the three probes and write the answer into the `signal` text:
 A criterion that is only true cold passes planning and fails production: BRAINVIEW's
 geometry criteria were authored cold-layout-only; the shipped fix was inert at real prod
 density and the gap surfaced only at validation
-(`roadmap/arc-evals/BRAINVIEW-2026-08-12.json`, the arc-eval minimum for both
+(`<root>/arc-evals/BRAINVIEW-2026-08-12.json`, the arc-eval minimum for both
 plan-quality and verified-vs-intent in the 16-report mining window ending 2026-08-12).
 
 ## §2. Decision-completeness sweep (cited from Step 1c)
@@ -69,11 +69,11 @@ Every row lands in exactly ONE bucket: `LOCKED DECISIONS` (interview output - go
 it now if missing) · `designRefs` (gate output) · `DEFERRED - <owner> decides at <named
 point>` (an explicit hand-off, never an implicit gap). Provenance: EVALCORE escalated the
 same unmade decision twice inside one task, stalling the executor both times
-(`roadmap/arc-evals/EVALCORE-2026-07-28.json`).
+(`<root>/arc-evals/EVALCORE-2026-07-28.json`).
 
 ## §3. Promise ledger (cited from Step 2c)
 
-Write the ledger as a comment block in `roadmap/arcs/<id>.arc.ts`, one row per promise.
+Write the ledger as a comment block in `<root>/arcs/<id>.arc.ts`, one row per promise.
 Row sources, exhaustively: every `acceptanceCriteria[].id` · every `designRefs[].ref` ·
 every `honestyRails[]` entry · every `singleSeams[]` entry · every LOCKED DECISION that
 implies a build change · **every item/outcome the user's request states, quoted
@@ -102,17 +102,17 @@ row class exists to catch; a deferral of the literal ask to an out-of-scope foll
 needs the user's approval, not a ledger footnote.
 
 Queue-time check (put it in the Step 4 closing report): `grep -c UNMAPPED
-roadmap/arcs/<id>.arc.ts` returns 0. Provenance: FLUENTFRONT - a set every member phase's
+<root>/arcs/<id>.arc.ts` returns 0. Provenance: FLUENTFRONT - a set every member phase's
 docblock claimed to append to shipped EMPTY; every phase passed its gate and only
-validate-arc caught the unkept promise (`roadmap/arc-evals/FLUENTFRONT-2026-07-23.json`).
+validate-arc caught the unkept promise (`<root>/arc-evals/FLUENTFRONT-2026-07-23.json`).
 
 ## §4. Reviewer packet (cited from Step 3)
 
 Give each review agent this packet verbatim, with the placeholders filled:
 
 ```
-PHASE UNDER REVIEW: roadmap/phases/phase-<N>.phase.ts   - edit ONLY this file.
-ARC (read-only): roadmap/arcs/<id>.arc.ts. Your ledger rows: <rows naming phase N>.
+PHASE UNDER REVIEW: <root>/phases/phase-<N>.phase.ts   - edit ONLY this file.
+ARC (read-only): <root>/arcs/<id>.arc.ts. Your ledger rows: <rows naming phase N>.
 
 LANE A - spec compliance (mechanical; any miss = NEEDS WORK, fabricated evidence = BLOCKER):
  A1 Ledger coverage: each of your ledger rows is implemented by a named task in THIS phase.
@@ -129,13 +129,13 @@ LANE A - spec compliance (mechanical; any miss = NEEDS WORK, fabricated evidence
     gateSpecialists keyFile and not the arc keystone; a skip is recorded, never silent.
 
 RETURN: verdict READY | NEEDS WORK | BLOCKER, findings, and the Lane A command log.
-NEVER touch roadmap/backlog.ts or another phase's file - the orchestrator's git-status
+NEVER touch <root>/backlog.ts or another phase's file - the orchestrator's git-status
 sweep reverts violations and redoes the review serially.
 ```
 
 Provenance for A3: UCAUDIT queued 20 phases of which 8 carried verifies that could not
 fail - exit-0-always pipelines or prose where a command belonged
-(`roadmap/arc-evals/UCAUDIT-2026-08-02.json`); two standing consumer memory rulings say
+(`<root>/arc-evals/UCAUDIT-2026-08-02.json`); two standing consumer memory rulings say
 the same ("a tripwire must fail ONLY when its claim is false - run it both directions").
 Provenance for A2: FLUENTFRONT's tripwire false-negative came from a case-variant symbol
 name, which case-insensitive grep masked.
@@ -155,14 +155,14 @@ count and every tool verdict in it is pasted command output (Evidence discipline
   Would have failed on: a load-bearing sweep row (§2) with no bucket.
 - Promise ledger: <n> rows, all mapped (user-ask rows quoted verbatim; REFRAMED mappings
   listed here for the user).
-  Would have failed on: grep -c UNMAPPED roadmap/arcs/<id>.arc.ts  ≠ 0
+  Would have failed on: grep -c UNMAPPED <root>/arcs/<id>.arc.ts  ≠ 0
 - Validation: roadmap phase validate <N|file> on every member phase + the .arc.ts;
   each exit code + output line pasted VERBATIM below - never summarized as "accepted".
   Would have failed on: any exit 2, or a validation claim with no pasted run.
 - Reviews: <k> READY (queued), <m> NEEDS WORK / BLOCKER (NOT queued - findings above).
   Lane A ran <j> verify falsification probes; every one produced its red.
   Lane B: <ran on p phases | band-skipped (<reason>) per phase - list each>.
-- Queued: one arc tier "<arc> (phases <exact claimed numbers>)" in roadmap/backlog.ts -
+- Queued: one arc tier "<arc> (phases <exact claimed numbers>)" in <root>/backlog.ts -
   OR: NOT queued - review pending (<reason Lane B could not run>).
   Would have failed on: crossValidate rejecting planes↔phases drift at import, or a
   range-style label spanning numbers another arc claimed.
