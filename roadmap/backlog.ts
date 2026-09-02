@@ -43,10 +43,6 @@ import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
   {
-    phase: 25,
-    name: 'Gate loop convergence: persisted reviewer findings, severity-gated stop, delta-only later rounds, eval slices',
-  },
-  {
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
