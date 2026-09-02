@@ -16,7 +16,7 @@ import { definePhase } from '@/lib/roadmap/schema'
  * ## Hypotheses
  * 1. CONFIRMED — no discovery exists: `ROADMAP_ROOT` has 0 hits under cli/, hooks/, bin/;
  *    config.mjs:211 joins `'roadmap'` onto the toplevel; tsx-bridge.mjs:448 joins
- *    `'lib', 'roadmap', 'schema.ts'` onto the consumer root; status.mjs:346 defaults its root
+ *    `'lib', 'roadmap', 'schema.ts'` onto the consumer root; status.mjs:347 defaults its root
  *    argument to the bare string `'roadmap'`.
  * 2. CONFIRMED — the literal is spread, not centralized: 10 files under cli/lib, 15 under
  *    cli/commands, 2 hooks (executor-result-guard.mjs:334, session-lane-check.mjs:28), 1 shell
@@ -34,6 +34,7 @@ export default definePhase({
   name: 'Roadmap root discovery: docs/roadmap as a second home, schema seam under the root, ROADMAP_ROOT override',
   status: 'backlog',
   plannedBy: { model: 'claude-fable-5-1' },
+  reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'refactor',
   kind: 'hardening',
   source:
@@ -104,7 +105,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/tsx-bridge.mjs',
           description:
-            'consumerSchemaPath (tsx-bridge.mjs:447-455) delegates to roadmap-root.mjs and stays exported from here (eval.mjs, gate.mjs, result.mjs import it from this module — no caller edits) → verify: bash -c "! grep -qF \\"join(consumerRoot, \'lib\', \'roadmap\', \'schema\\" plugins/zeroh-roadmap/cli/lib/tsx-bridge.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/tsx-bridge.test.mjs >/dev/null 2>&1"',
+            'consumerSchemaPath (tsx-bridge.mjs:447-455) delegates to roadmap-root.mjs and stays exported from here (gate.mjs, eval.mjs, result.mjs, eval-collect.mjs and landing.mjs import it from this module — no caller edits) → verify: bash -c "! grep -qF \\"join(consumerRoot, \'lib\', \'roadmap\', \'schema\\" plugins/zeroh-roadmap/cli/lib/tsx-bridge.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/tsx-bridge.test.mjs >/dev/null 2>&1"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/config.mjs',
@@ -147,7 +148,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/status.mjs',
           description:
-            'cli/commands group (15 files: audit, arm, disarm, init, watch, eval, arc, claim, codex, executor-disarm, gate, status, config, followups, phase): same substitution, both forms; status.mjs:346 defaults its root ARGUMENT to `roadmapRoot(gitToplevel(cwd))` (bare candidate when cwd is not a repo) so `roadmap status` with no argument finds docs/roadmap; init.mjs:44 writes the config under the resolved root → verify: bash -c "test \\"$(grep -lE \\"\'roadmap[\'/]\\" plugins/zeroh-roadmap/cli/commands/*.mjs | grep -v test | wc -l)\\" = \\"0\\" && cd plugins/zeroh-roadmap && capbuild node --test cli/commands/status.test.mjs cli/commands/init.test.mjs cli/commands/audit.test.mjs >/dev/null 2>&1"',
+            'cli/commands group (15 files: audit, arm, disarm, init, watch, eval, arc, claim, codex, executor-disarm, gate, status, config, followups, phase): same substitution, both forms; status.mjs:347 defaults its root ARGUMENT to `roadmapRoot(gitToplevel(cwd))` (bare candidate when cwd is not a repo) so `roadmap status` with no argument finds docs/roadmap; init.mjs:44 writes the config under the resolved root → verify: bash -c "test \\"$(grep -lE \\"\'roadmap[\'/]\\" plugins/zeroh-roadmap/cli/commands/*.mjs | grep -v test | wc -l)\\" = \\"0\\" && cd plugins/zeroh-roadmap && capbuild node --test cli/commands/status.test.mjs cli/commands/init.test.mjs cli/commands/audit.test.mjs >/dev/null 2>&1"',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/audit-checks.mts',
@@ -346,5 +347,5 @@ export default definePhase({
     'interview: conducted in-session 2026-09-02 — scope ruled by the owner: two sibling homes under docs/ (docs/superpowers/ stays superpowers\' own, untouched; docs/roadmap/ is the roadmap\'s), discovery rather than a config key (the config lives inside the root it would name), default layout unchanged for every existing consumer. Technical decisions made here, not deferred: candidate order roadmap → docs/roadmap; markers = roadmap.config.json or phases/; ambiguity is a refusal, never a silent pick; schema seam root-first then legacy; new consumers import the schema relatively so no tsconfig alias is required (zeroh\'s tsconfig.base.json has none). ' +
     'userFacing false: plugin/CLI internals, no product surface, no flag. testScope/reviewScope undeclared (diff-derived; 23.2 and 23.5 are batchMode by file count, mechanical substitutions under a guard). Version bump to 0.36.0 is the next release act, not a task here. ' +
     'Out of scope, recorded: migrating THIS repo from lib/roadmap to roadmap/lib (legacy seam stays recognized; a later chore); zeroh-side adoption (un-ignore docs/superpowers, add tsx+zod devDeps at the workspace root, map gateCommands to Nx targets) belongs to the zeroh repo, not the plugin; scripts/migrate/audit.ts and scripts/debt-census.mts keep their literals (migration/estate tooling run against this repo\'s legacy layout, outside the guard\'s scan scope by design). ' +
-    'Verify rehearsal attestation: assumption probes executed 2026-09-02 at plan time — ROADMAP_ROOT 0 files; config.mjs join literal present; tsx-bridge join literal present; both template alias imports present; beacon registry literal present (all exit 0). Step verifies red-now via their grep halves (no roadmap-root.mjs, no --root in scaffold, alias imports present, registry literal present, path claims present in skills); runner clauses inherit polarity from the grep representatives.',
+    'Verify rehearsal attestation: assumption probes executed 2026-09-02 at plan time — ROADMAP_ROOT 0 files; config.mjs join literal present; tsx-bridge join literal present; both template alias imports present; beacon registry literal present (all exit 0). Step verifies red-now via their grep halves (no roadmap-root.mjs, no --root in scaffold, alias imports present, registry literal present, path claims present in skills); runner clauses inherit polarity from the grep representatives. Mode A review EXECUTED 2026-09-02 (claude-fable-5-1, standalone inline): READY after two [FIXED] repairs — status.mjs anchor trued 346→347; the consumerSchemaPath importer list completed (gate, eval, result, eval-collect, landing). Ratified: batchMode on 23.2/23.5 (mechanical substitutions under a guard), testMode none on 23.5 (prose), userFacing false. Placement: HIGH with no deps ahead of the two LOW entries → 1 of 3.',
 })
