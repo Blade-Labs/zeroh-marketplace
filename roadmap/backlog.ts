@@ -43,6 +43,10 @@ import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
   {
+    phase: 27,
+    name: 'Curate stops at the integration ref: published commits are never squashed',
+  },
+  {
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
