@@ -1,0 +1,96 @@
+{
+  "phase": 25,
+  "date": "2026-09-02",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 26
+  },
+  "taskCount": 4,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/cli/lib/gate-report.mjs",
+    "plugins/zeroh-roadmap/cli/lib/gate-report.test.mjs",
+    "plugins/zeroh-roadmap/cli/commands/gate.mjs",
+    "plugins/zeroh-roadmap/cli/commands/gate.test.mjs",
+    "plugins/zeroh-roadmap/templates/schema.ts",
+    "lib/roadmap/schema.ts",
+    "plugins/zeroh-roadmap/agents/code-reviewer.md",
+    "plugins/zeroh-roadmap/skills/do-phase/SKILL.md",
+    "plugins/zeroh-roadmap/agents/phase-executor.md",
+    "plugins/zeroh-roadmap/cli/lib/eval-collect.mjs",
+    "plugins/zeroh-roadmap/cli/lib/eval-score.mjs",
+    "plugins/zeroh-roadmap/cli/lib/eval-scorecard.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 1,
+      "MEDIUM": 1,
+      "LOW": 1
+    },
+    "roundsLowOnly": 1,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1576058
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 1,
+    "linesAdded": 639,
+    "linesRemoved": 61,
+    "filesChanged": 18,
+    "testsAtStart": 1823,
+    "testsAtEnd": 1834,
+    "testsAdded": 11,
+    "startedAt": "2026-09-02T21:59:56.000Z",
+    "completedAt": "2026-09-02T22:58:28.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "claude-fable-5-1"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "test-engineer": {
+        "model": "gpt-5.6-sol"
+      },
+      "quality-pass": {
+        "model": "gpt-5.6-sol"
+      },
+      "code-reviewer": {
+        "model": "gpt-5.6-sol"
+      }
+    }
+  }
+}
