@@ -162,7 +162,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/measure-budget.mjs',
           description:
-            'PROTOCOL_LOAD_BUDGET_TOKENS ratchets DOWN to the measured post-diet do-arc total (the only legal downward move), with the budget-coupled eval-proposal fixtures re-based as the 2026-08-24 pass did; do-phase and plan-arc totals recorded before/after in the ledger roll-up; roles.test envelope ratchet green → verify: bash -c "! grep -qF \'PROTOCOL_LOAD_BUDGET_TOKENS = 13339\' plugins/zeroh-roadmap/cli/lib/measure-budget.mjs && cd plugins/zeroh-roadmap && node bin/roadmap.mjs measure --flow do-arc --assert $(grep -oE \'PROTOCOL_LOAD_BUDGET_TOKENS = [0-9]+\' cli/lib/measure-budget.mjs | grep -oE \'[0-9]+$\') >/dev/null 2>&1"',
+            'PROTOCOL_LOAD_BUDGET_TOKENS ratchets DOWN to the measured post-diet do-arc total (the only legal downward move), with the budget-coupled eval-proposal fixtures re-based as the 2026-08-24 pass did; do-phase and plan-arc totals recorded before/after in the ledger roll-up; roles.test envelope ratchet green → verify: bash -c "! grep -qF \'PROTOCOL_LOAD_BUDGET_TOKENS = 13339\' plugins/zeroh-roadmap/cli/lib/measure-budget.mjs && cd plugins/zeroh-roadmap && n=$(grep -oE \'PROTOCOL_LOAD_BUDGET_TOKENS = [0-9]+\' cli/lib/measure-budget.mjs) && node bin/roadmap.mjs measure --flow do-arc --assert ${n##* } >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
