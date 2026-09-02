@@ -20,8 +20,9 @@
  * phase files for git, backlog phase set for the check-4 escalation, status counts).
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { roadmapRoot, consumerSchemaPath } from './lib/roadmap-root.mjs'
 
 type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 interface Finding {
@@ -33,10 +34,21 @@ interface Finding {
 }
 
 const repo = process.argv[2] ?? '.'
-const roadmap = join(repo, 'roadmap')
+const roadmap = roadmapRoot(repo)
 const phasesDir = join(roadmap, 'phases')
 const archiveDir = join(roadmap, 'archive')
-const registryPath = join(repo, 'lib', 'roadmap', 'registry.ts')
+// The registry sits beside the schema, at whichever seam this consumer vendored — the new
+// <root>/lib/ one or the legacy <repo>/lib/roadmap/ one. Derived, never spelled twice. No seam
+// at all is the same answer the registry check below gives: not a consumer, exit 4.
+function resolveRegistryPath(): string {
+  try {
+    return join(dirname(consumerSchemaPath(repo)), 'registry.ts')
+  } catch (e) {
+    process.stderr.write(`audit-checks: ${(e as Error).message}\n`)
+    process.exit(4)
+  }
+}
+const registryPath = resolveRegistryPath()
 
 if (!existsSync(registryPath)) {
   process.stderr.write(`audit-checks: no consumer registry at ${registryPath}\n`)
@@ -134,7 +146,7 @@ if (existsSync(backlogPath)) {
     const tiers = bl?.tiers ?? (Array.isArray(bl) ? [{ items: bl }] : [])
     backlogPhases = tiers.flatMap((t: any) => (t.items ?? []).map((i: any) => i.phase)).filter((n: any) => typeof n === 'number')
   } catch (e) {
-    add({ check: 'discovery', severity: 'HIGH', phase: null, message: `roadmap/backlog.ts failed to load: ${(e as Error).message}` })
+    add({ check: 'discovery', severity: 'HIGH', phase: null, message: `${backlogPath} failed to load: ${(e as Error).message}` })
   }
 }
 

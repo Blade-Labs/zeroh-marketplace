@@ -36,6 +36,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { appendExecutorEvent } from '../cli/lib/beacon.mjs'
 import { ownPhaseFromTranscript } from './spawn-phase.mjs'
+import { roadmapRoot } from '../cli/lib/roadmap-root.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
 
@@ -331,7 +332,7 @@ function main() {
   }
 
   // (2) phase file already status done WITH executionResult persisted.
-  const phaseFile = join(worktree, 'roadmap', 'phases', `phase-${phase}.phase.ts`)
+  const phaseFile = join(roadmapRoot(worktree), 'phases', `phase-${phase}.phase.ts`)
   let phaseSrc = null
   if (existsSync(phaseFile)) {
     try {

@@ -314,6 +314,16 @@ import * as roadmapRootModule from './roadmap-root.mjs'
  *  usage line in. */
 const ROOT_MEMBERS = ['backlog.ts', 'phases', 'arc-evals', 'arcs', 'archive', '.gate', 'roadmap.config.json']
 
+/** Directories under cli/ that are TEST MATERIAL, not shipped code — fixture corpora, fixture
+ *  builders and frozen oracles. Their root literals are fixture FACTS (the layout a fixture
+ *  materializes, freezes or describes), not root RESOLUTIONS: respelling them through the
+ *  resolver would rewrite the fixture instead of following the root. Same boundary
+ *  cli/lib/worktree.test.mjs pluginSources() already draws for its own scan tripwire.
+ *  Excluded, but NOT trusted — the exclusion's premise is PROVEN by the test below.
+ *  (PRIME RULE 1 architect ruling, phase 23 task 23.2.) */
+const SCAN_EXCLUDED_DIRS = ['cli/testdata/']
+const isScanExcluded = (rel) => SCAN_EXCLUDED_DIRS.some((d) => rel.startsWith(d))
+
 /** ROOT_MEMBERS as a regex alternation — escaped here so the list above stays readable and stays
  *  usable as real path segments below. */
 const memberAlt = () => ROOT_MEMBERS.map((m) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
@@ -327,9 +337,10 @@ const argvForm = () => /(['"`])(?:docs\/)?roadmap\1\s*[,)]/g
 const pathForm = () => new RegExp(`(['"\`])(?:docs/)?roadmap/(?:${memberAlt()})`, 'g')
 
 /**
- * Every non-test .mjs/.mts under cli/ (recursively: lib/, commands/, testdata/, testdata/eval-arc/,
- * and cli/*.mts) and under hooks/, as { rel, src }. scripts/ is OUT of scope by plan ruling —
- * migration and estate tooling there keeps its literals.
+ * Every non-test .mjs/.mts under cli/ (recursively) and under hooks/, as { rel, src }. scripts/ is
+ * OUT of scope by plan ruling — migration and estate tooling there keeps its literals. The walk
+ * deliberately still RETURNS the SCAN_EXCLUDED_DIRS entries: the scan filters them out, and the
+ * exclusion-proof test below needs to read them.
  */
 function rootLiteralSources() {
   const pluginRoot = new URL('../../', import.meta.url)
@@ -351,7 +362,7 @@ test('roadmap-root.mjs: it is the ONLY home of the root literals left in non-tes
   // The acceptance criterion as a grep the conversion cannot half-do. A consumer laid out under
   // docs/roadmap/ reads as "no roadmap" at every site that spells the root itself, so the count
   // of such sites has to be checkable — and stay at one — rather than surveyed by hand once.
-  const sources = rootLiteralSources()
+  const sources = rootLiteralSources().filter((s) => !isScanExcluded(s.rel))
   const names = new Set(sources.map((s) => s.rel))
   const known = ['cli/lib/derive.mjs', 'cli/commands/status.mjs', 'hooks/session-lane-check.mjs', 'cli/audit-checks.mts']
   const missing = known.filter((k) => !names.has(k))
@@ -555,4 +566,71 @@ test('roadmapRootRel — an AMBIGUOUS tree THROWS RoadmapRootError, it never gue
   withRoadmapRootEnv(join(dir, 'docs', 'roadmap'), () => {
     assert.equal(roadmapRootRel(dir), 'docs/roadmap', 'and the advertised remedy resolves it here too')
   })
+})
+
+/**
+ * Every source under bin/, cli/, hooks/ and scripts/ INCLUDING tests — the wider sweep the
+ * exclusion proof needs (it has to ask which files reach into cli/testdata/, and the answer is
+ * only meaningful if test files are in the question).
+ */
+function allPluginSources() {
+  const pluginRoot = new URL('../../', import.meta.url)
+  const out = []
+  const walk = (rel) => {
+    for (const e of readdirSync(new URL(rel, pluginRoot), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (e.isDirectory()) walk(`${rel}${e.name}/`)
+      else if (/\.(m[jt]s|sh)$/.test(e.name)) out.push({ rel: `${rel}${e.name}`, src: readFileSync(new URL(`${rel}${e.name}`, pluginRoot), 'utf8') })
+    }
+  }
+  for (const d of ['bin/', 'cli/', 'hooks/', 'scripts/']) walk(d)
+  return out
+}
+
+test('the cli/testdata/ scan exclusion is PROVEN, not asserted', () => {
+  // An exemption nobody re-checks becomes an allow-list. Each assertion below kills the
+  // exclusion the day its own justification dies, so it can never quietly outlive its reason.
+  const all = allPluginSources()
+  const excluded = rootLiteralSources().filter((s) => isScanExcluded(s.rel))
+
+  // (a) non-vacuous — a directory the walk never reaches is a stale entry, not an exclusion.
+  assert.ok(
+    excluded.length > 0,
+    `SCAN_EXCLUDED_DIRS names ${SCAN_EXCLUDED_DIRS.join(', ')}, but the walk found no source under it — ` +
+      'delete the entry rather than carrying a directory that no longer exists',
+  )
+
+  // (b) not an empty exemption — the same rule this file applies to roadmap-root.mjs itself.
+  assert.ok(
+    excluded.some(({ src }) => [...src.matchAll(argvForm()), ...src.matchAll(pathForm())].length > 0),
+    'no excluded file carries a root literal any more — the exclusion buys nothing and must be ' +
+      'DELETED, so the scan covers cli/testdata/ like everything else',
+  )
+
+  // (c) the premise: "it is test material" is only true while nothing shipped reaches into it.
+  const shipped = all.filter((f) => !/\.test\.m[jt]s$/.test(f.rel) && !isScanExcluded(f.rel) && /testdata\//.test(f.src))
+  assert.deepEqual(
+    shipped.map((f) => f.rel),
+    [],
+    `cli/testdata/ is excluded from the scan because only tests reach it. These NON-test files ` +
+      `reference it, so that premise is false and the exclusion must be re-earned or dropped: ` +
+      `${shipped.map((f) => f.rel).join(', ')}`,
+  )
+
+  // (d) the freeze pin — arc-status-legacy.mjs is exempt because it is a FROZEN parity oracle
+  // that `roadmap status` is diffed against. Both halves of that reason are pinned: lose the
+  // freeze marker, or stop diffing against it, and this REDs.
+  const legacy = excluded.find((f) => f.rel === 'cli/testdata/arc-status-legacy.mjs')
+  assert.ok(legacy, 'cli/testdata/arc-status-legacy.mjs is gone — remove its exemption reasoning with it')
+  assert.match(
+    legacy.src,
+    /FROZEN FOR PARITY/,
+    'arc-status-legacy.mjs no longer declares itself FROZEN FOR PARITY — convert it or delete it, ' +
+      'but do not leave it silently exempt from the scan',
+  )
+  const parity = readFileSync(new URL('../commands/status.parity.test.mjs', import.meta.url), 'utf8')
+  assert.ok(
+    parity.includes("'arc-status-legacy.mjs'"),
+    'status.parity.test.mjs no longer diffs against arc-status-legacy.mjs — an oracle nothing ' +
+      'compares against is dead code, not an exemption',
+  )
 })

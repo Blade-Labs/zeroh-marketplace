@@ -1,6 +1,11 @@
 #!/usr/bin/env node
-// FROZEN FOR PARITY (ROADCODE 1655) — VERBATIM pre-shim body of scripts/arc-status.mjs;
-// the status-parity test diffs `roadmap status` against THIS. Deleted with the shims at 1661.
+// FROZEN FOR PARITY (ROADCODE 1655) — VERBATIM pre-shim body of scripts/arc-status.mjs; that file
+// was deleted with the shims, so this is the only surviving copy outside git history.
+// Its INDEPENDENCE is the point: cli/commands/status.parity.test.mjs diffs `roadmap status` against
+// it, and status.mjs:154 is the SAME join(worktree, roadmap, phases) site as :119 below — respelling
+// both through cli/lib/roadmap-root.mjs would compare the resolver against itself. Do not convert it,
+// do not import plugin lib code here (phase 23.2 architect ruling); exemption proven in
+// cli/lib/roadmap-root.test.mjs.
 /**
  * arc-status — derive the LIVE multi-session lane state. Never hand-written,
  * so it cannot go stale: reads the machine truth and prints the table the

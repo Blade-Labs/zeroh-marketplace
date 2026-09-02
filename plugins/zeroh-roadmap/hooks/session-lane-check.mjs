@@ -13,6 +13,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { roadmapRoot } from '../cli/lib/roadmap-root.mjs'
 
 const STALL_MIN = 20 // matches beacon.ALIVE_MAX_MIN (kept inline: the hook must never throw on an import)
 
@@ -25,7 +26,7 @@ try {
   } catch {
     process.exit(0) // not a repo — nothing to check
   }
-  const registry = join(top, 'roadmap', 'arcs', '.building')
+  const registry = join(roadmapRoot(top), 'arcs', '.building')
   if (!existsSync(registry)) process.exit(0)
   const hints = []
   for (const f of readdirSync(registry).filter((f) => f.endsWith('.json'))) {
