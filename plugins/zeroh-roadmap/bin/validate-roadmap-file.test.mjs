@@ -735,6 +735,11 @@ test('polarity lint: `|| true` inside a quoted search PATTERN is search text, no
 const CITED_REAL = 'cli/lib/really-cited.mjs'
 const CITED_INVENTED = 'src/lint/foo.test.ts'
 const CITED_TO_CREATE = 'src/lint/to-be-created.ts'
+/** A real file that exists only UNDER a plugin directory — the repo's dominant verify idiom
+ *  `cd plugins/x && <runner> cli/lib/y.test.mjs` cites it relative to that `cd`. */
+const CITED_NESTED_DIR = 'plugins/fixture-plugin'
+const CITED_NESTED = 'cli/lib/nested-cited.mjs'
+const CITED_NESTED_INVENTED = 'cli/lib/nested-invented.mjs'
 
 /** Prose slots the lint reads. Defaults keep every OTHER lint quiet (the step carries
  *  → verify: with a falsifiable clause; the description sits far under the 700 cap). */
@@ -764,7 +769,9 @@ function writeCitationPhase(body, { commit = false } = {}) {
   gitInit(base)
   mkdirSync(join(base, dirname(CITED_REAL)), { recursive: true })
   writeFileSync(join(base, CITED_REAL), '// a real file, cited honestly\n')
-  execFileSync('git', ['-C', base, 'add', CITED_REAL], { stdio: 'ignore' })
+  mkdirSync(join(base, CITED_NESTED_DIR, dirname(CITED_NESTED)), { recursive: true })
+  writeFileSync(join(base, CITED_NESTED_DIR, CITED_NESTED), '// a real file under a plugin dir\n')
+  execFileSync('git', ['-C', base, 'add', CITED_REAL, join(CITED_NESTED_DIR, CITED_NESTED)], { stdio: 'ignore' })
   execFileSync('git', ['-C', base, 'commit', '-qm', 'seed the real cited file'], { stdio: 'ignore' })
   if (commit) {
     execFileSync('git', ['-C', base, 'add', 'roadmap/phases/phase-9014.phase.ts'], { stdio: 'ignore' })
@@ -861,6 +868,38 @@ test('citation lint: a `:line` suffix does not hide an INVENTED path', () => {
   const warns = citationWarns(r.stderr)
   assert.equal(warns.length, 1, `expected exactly ONE citation WARN; got ${warns.length}. stderr:\n${r.stderr || '(empty)'}`)
   assert.ok(warns[0].includes(CITED_INVENTED), `the WARN names the invented anchor; got: ${warns[0]}`)
+})
+
+test('citation lint: a path cited relative to a `cd <dir> &&` in the same prose resolves under that dir — SILENT when real', () => {
+  // The dominant step-verify idiom in this repo: `cd plugins/zeroh-roadmap && <runner> cli/lib/x.test.mjs`.
+  // Read repo-relative, every such honest citation is "invented"; phase 21's plan alone drew six.
+  const f = writeCitationPhase(citationPhase({ desc: `cd ${CITED_NESTED_DIR} && capbuild node --test ${CITED_NESTED} → verify: grep -n thing x` }))
+  assertGitTracked(f, false)
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `stderr: ${r.stderr}`)
+  assertCitationSilent(r.stderr, CITED_NESTED, "a path that exists under the prose's own cd-directory is not invented")
+})
+
+test('citation lint: the `cd <dir>` resolution does not hide an INVENTED path under that dir', () => {
+  const f = writeCitationPhase(citationPhase({ desc: `cd ${CITED_NESTED_DIR} && capbuild node --test ${CITED_NESTED_INVENTED} → verify: grep -n thing x` }))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+  const warns = citationWarns(r.stderr)
+  assert.equal(warns.length, 1, `expected exactly ONE citation WARN for '${CITED_NESTED_INVENTED}'; got ${warns.length}. stderr:\n${r.stderr || '(empty)'}`)
+  assert.ok(warns[0].includes(CITED_NESTED_INVENTED), `the WARN names the invented anchor; got: ${warns[0]}`)
+})
+
+test("citation lint: a citation that is the TAIL of a files[] entry (the plugin-relative spelling of a planned file) is SILENT", () => {
+  const f = writeCitationPhase(
+    citationPhase({
+      problem: `the fixture problem statement will pin the new suite at ${CITED_NESTED_INVENTED} once it exists`,
+      files: `['${CITED_NESTED_DIR}/${CITED_NESTED_INVENTED}']`,
+    }),
+  )
+  assertGitTracked(f, false)
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `stderr: ${r.stderr}`)
+  assertCitationSilent(r.stderr, CITED_NESTED_INVENTED, 'a planned file cited by its plugin-relative tail is the same planned file')
 })
 
 for (const prose of ['https://zod.dev/docs/invented-api.md', 'webdocs/invented-widget.ts']) {

@@ -256,7 +256,7 @@ const aux = {
   statusCounts,
   archiveExists,
   backlogPhases,
-  reviewedPhases: activePhases.filter((p: any) => p.reviewRecord).map((p: any) => p.phase),
+  reviewVerdicts: Object.fromEntries(activePhases.filter((p: any) => p.reviewRecord).map((p: any) => [p.phase, p.reviewRecord.verdict])),
   inProgress: activePhases
     .filter((p: any) => p.status === 'in-progress')
     .map((p: any) => ({ phase: p.phase, file: join(phasesDir, `phase-${p.phase}.phase.ts`) })),

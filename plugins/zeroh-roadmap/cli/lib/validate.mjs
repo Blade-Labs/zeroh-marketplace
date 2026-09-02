@@ -210,18 +210,37 @@ function citationIntegrityWarnings(phase, normalizedPath) {
   const citations = new Set(
     prose.flatMap((text) => text.match(/(?<![\w./-])(?:src|cli|lib|scripts|plugins|roadmap|docs|web)\/[\w./-]+\.\w+/g) ?? []),
   )
+  // The repo's dominant verify idiom is `cd plugins/x && <runner> cli/lib/y.test.mjs`: the cited
+  // path is relative to that `cd`, not to the repo root. Every `cd <dir> &&` in the prose is a
+  // second root to resolve under — an invented path under that dir still WARNs.
+  const cdRoots = new Set(
+    prose.flatMap((text) => [...text.matchAll(/\bcd\s+([\w./-]+)\s*&&/g)].map((m) => m[1].replace(/\/+$/, ''))),
+  )
+  // A planned file cited by its tail (`cli/lib/new.test.mjs` for a files[] entry
+  // `plugins/x/cli/lib/new.test.mjs`) is the same planned file.
+  const isPlanned = (cited) => planned.has(cited) || [...planned].some((file) => file.endsWith(`/${cited}`))
+  const existsAtHead = (path) => {
+    execFileSync('git', ['-C', repo, 'cat-file', '-e', `HEAD:${path}`], { stdio: 'ignore', timeout: 10_000 })
+    return true
+  }
   const out = []
   for (const citedPath of citations) {
-    if (planned.has(citedPath)) continue
+    if (isPlanned(citedPath)) continue
     try {
-      execFileSync('git', ['-C', repo, 'cat-file', '-e', `HEAD:${citedPath}`], {
-        stdio: 'ignore',
-        timeout: 10_000,
-      })
-      continue
+      if (existsAtHead(citedPath)) continue
     } catch (err) {
       if (err?.code === 'ENOENT') return []
     }
+    let underCd = false
+    for (const dir of cdRoots) {
+      try {
+        underCd = existsAtHead(`${dir}/${citedPath}`)
+        break
+      } catch (err) {
+        if (err?.code === 'ENOENT') return []
+      }
+    }
+    if (underCd) continue
     out.push(
       `[zeroh-roadmap] WARN phase ${phase?.phase ?? '?'}: citation '${citedPath}' does not exist at HEAD `
         + 'and is not declared in this phase\'s files[] — verify the anchor (atlas-41 invented-prose incident class)',

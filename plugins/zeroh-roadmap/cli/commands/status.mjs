@@ -36,13 +36,15 @@ const git = (args, cwd) => {
 const fmtMin = (m) => (m < 60 ? `${Math.round(m)}m` : m < 2880 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`)
 
 /** Return the cache/source version advisory for a running cached plugin, else null. */
-export function versionDriftLine({ selfPath }) {
-  const match = resolve(selfPath).match(
-    /^(.*[\\/]plugins)[\\/]cache[\\/]([^\\/]+)[\\/]([^\\/]+)[\\/]([^\\/]+)(?:[\\/]|$)/,
-  )
-  if (!match) return null
-  const [, pluginsRoot, marketplace, plugin, cacheVersionDir] = match
+export function versionDriftLine({ selfPath } = {}) {
+  // Everything — the path shape included — sits inside the try: the seam's contract is
+  // best-effort, and a non-string selfPath from any future caller is silence, not a TypeError.
   try {
+    const match = resolve(selfPath).match(
+      /^(.*[\\/]plugins)[\\/]cache[\\/]([^\\/]+)[\\/]([^\\/]+)[\\/]([^\\/]+)(?:[\\/]|$)/,
+    )
+    if (!match) return null
+    const [, pluginsRoot, marketplace, plugin, cacheVersionDir] = match
     const cacheRoot = join(pluginsRoot, 'cache', marketplace, plugin, cacheVersionDir)
     const running = JSON.parse(readFileSync(join(cacheRoot, '.claude-plugin', 'plugin.json'), 'utf8'))
     const marketplaces = JSON.parse(readFileSync(join(pluginsRoot, 'known_marketplaces.json'), 'utf8'))

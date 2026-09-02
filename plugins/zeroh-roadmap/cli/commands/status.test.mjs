@@ -1270,3 +1270,19 @@ test('31) a DETACHED worktree still reads `(detached)` in otherWorktrees — the
     `and the printed line stays byte-identical to the parity oracle's "  <path> @ (detached)"; got:\n${human.stdout}`,
   )
 })
+
+test("29) a missing or non-string selfPath is silent and never throws — best-effort is the seam's CONTRACT, not just its registry doors", () => {
+  // Production always passes fileURLToPath(import.meta.url); the exported seam still promises
+  // "never a failure", and a resolve() outside the try was a TypeError waiting for any other caller.
+  for (const [name, args] of [
+    ['no selfPath', {}],
+    ['undefined selfPath', { selfPath: undefined }],
+    ['numeric selfPath', { selfPath: 42 }],
+  ]) {
+    let line = 'unset'
+    assert.doesNotThrow(() => {
+      line = drift(args)
+    }, `${name} must not throw`)
+    assert.equal(line, null, `${name} is silent; got ${JSON.stringify(line)}`)
+  }
+})

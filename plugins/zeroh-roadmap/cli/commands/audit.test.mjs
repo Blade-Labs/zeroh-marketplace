@@ -1576,29 +1576,89 @@ test('unreviewed queue RED — prose mentioning reviewRecord is not durable evid
   assert.equal(code, 2)
 })
 
-// The three subjects the review rounds actually land under. A phase reviewed before
-// reviewRecord existed carries its evidence ONLY here, so each must silence the finding
-// on its own — one missing form re-breaks every phase reviewed the old way.
-for (const subject of [
+/** Reviewed BEFORE the cutoff (subjects back-dated), queued AFTER it (today). This is the ONLY
+ *  shape where a commit subject still carries the evidence: the review predates the durable
+ *  record, the queue postdates the rule. Its queue commit uses the queue subject itself, so the
+ *  fixture also proves that a post-cutoff queue subject vouches for nothing. */
+function reviewedEarlyQueuedLate(n, subjects, { extraPhases = [] } = {}) {
+  const root = makeRepo()
+  for (const m of [n, ...extraPhases]) {
+    const phase = basePhase(m)
+    delete phase.reviewRecord
+    writePhase(root, m, phase)
+  }
+  writeBacklog(root, [])
+  gitCommitSubjects(root, subjects, '2026-08-15T12:00:00Z')
+  writeBacklog(root, [n, ...extraPhases].map((m) => ({ phase: m, name: `Queued phase number ${m}` })))
+  execFileSync('git', ['-C', root, 'add', 'roadmap/backlog.ts'], { stdio: 'ignore' })
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', `docs(roadmap): queue phase ${n}`], { stdio: 'ignore' })
+  return root
+}
+
+// The subjects the review rounds landed under BEFORE reviewRecord existed. A phase reviewed
+// the old way carries its evidence ONLY here, so each must silence the finding on its own —
+// but only when the commit predates the cutoff: after it, review-phase writes the durable
+// record, and every one of these subjects (the queue subject above all — it is what an
+// UNREVIEWED queue writes too) is just a commit anyone can make.
+const HISTORICAL_REVIEW_SUBJECTS = [
   'docs(roadmap): phase 100 — address review findings',
   'plan(roadmap): phase 100 review fixes',
   'docs(roadmap): queue phase 100',
+  'plan(roadmap): queue phase 100 (handoff skill) behind the tier',
   'docs(roadmap): phase 100 — address review findings (two fixes)',
   'plan(roadmap): phase 100 review fixes — step under char cap',
-]) {
-  test(`unreviewed queue GREEN — the commit subject "${subject}" is qualifying review evidence`, () => {
-    const root = queuedRepo(100, { subjects: ['chore: unrelated work landed here', subject] })
+]
+for (const subject of HISTORICAL_REVIEW_SUBJECTS) {
+  test(`unreviewed queue GREEN — the PRE-cutoff subject "${subject}" is qualifying review evidence for a phase queued after it`, () => {
+    const root = reviewedEarlyQueuedLate(100, ['chore: unrelated work landed here', subject])
     const { code, report } = audit(root)
     assert.deepEqual(unreviewed(report, 100), [], `"${subject}" must silence the unreviewed-queue finding`)
     assert.equal(report.verdict, 'CLEAN', `findings were:\n${JSON.stringify(report.findings, null, 2)}`)
     assert.equal(code, 0)
   })
+
+  test(`unreviewed queue RED — the same subject "${subject}" landed AFTER the cutoff is not evidence: the record is`, () => {
+    // The Gandalf shape exactly: skip the review, follow the SKILL's queue instruction, and the
+    // queue commit's own subject would have silenced the check forever.
+    const root = queuedRepo(100, { subjects: ['chore: unrelated work landed here', subject] })
+    const { code, report } = audit(root)
+    assert.equal(unreviewed(report, 100).length, 1, `a post-cutoff "${subject}" must NOT vouch; findings:\n${JSON.stringify(report.findings, null, 2)}`)
+    assert.equal(code, 2)
+  })
 }
 
+test('unreviewed queue RED — a reviewRecord whose verdict is not READY does not earn the queue', () => {
+  // backlog.ts's own docblock: review-phase queues ONLY on READY. A queued NEEDS_WORK record is a
+  // stronger violation than a missing one — the reviewer said no and the phase was queued anyway.
+  for (const verdict of ['NEEDS_WORK', 'BLOCKER']) {
+    const root = queuedRepo(100, {
+      phase: { reviewRecord: { date: '2026-09-01', model: 'fable', verdict, via: 'executed' } },
+    })
+    const { code, report } = audit(root)
+    const hits = unreviewed(report, 100)
+    assert.equal(hits.length, 1, `a ${verdict} record must not silence the finding; findings:\n${JSON.stringify(report.findings, null, 2)}`)
+    assert.ok(hits[0].message.includes(verdict), `the finding names the non-READY verdict; got: ${hits[0].message}`)
+    assert.equal(code, 2)
+  }
+})
+
+test('unreviewed queue — git unusable at the root degrades to ONE LOW, never a false BROKEN', () => {
+  // Check 7 already degrades to "unknown age" here. Reading git's silence as guilt would tell
+  // the operator not to run /do-phase on every queued phase without once mentioning git.
+  const root = makeRepo()
+  const phase = basePhase(100)
+  delete phase.reviewRecord
+  writePhase(root, 100, phase)
+  writeBacklog(root, [{ phase: 100, name: 'Queued phase number 100' }])
+  const { code, report } = audit(root)
+  assert.deepEqual(unreviewed(report, 100), [], `no git → no HIGH; findings:\n${JSON.stringify(report.findings, null, 2)}`)
+  const skipped = report.findings.filter((f) => f.severity === 'LOW' && /git/i.test(f.message) && /review/i.test(f.message))
+  assert.equal(skipped.length, 1, `exactly one LOW naming git as the reason the review check was skipped; findings:\n${JSON.stringify(report.findings, null, 2)}`)
+  assert.equal(code, 0)
+})
+
 test('unreviewed queue GREEN — a multi-phase review-fixes subject vouches for each exact listed phase', () => {
-  const root = queuedRepo(100, {
-    subjects: ['plan(roadmap): phases 100+101 review fixes — queued 100 at 1 of 2, 101 at 2 of 2'],
-  })
+  const root = reviewedEarlyQueuedLate(100, ['plan(roadmap): phases 100+101 review fixes — queued 100 at 1 of 2, 101 at 2 of 2'])
   const { code, report } = audit(root)
   assert.deepEqual(unreviewed(report, 100), [])
   assert.equal(code, 0)
@@ -1607,15 +1667,7 @@ test('unreviewed queue GREEN — a multi-phase review-fixes subject vouches for 
 test('unreviewed queue — the phase number in a review commit is EXACT: "phase 1000" clears 1000 and leaves 100 unreviewed', () => {
   // A substring/prefix match on the number would let one phase's review round vouch for a
   // different phase — silently, and exactly in the direction that lets unreviewed work run.
-  const root = makeRepo()
-  const phase100 = basePhase(100)
-  const phase1000 = basePhase(1000)
-  delete phase100.reviewRecord
-  delete phase1000.reviewRecord
-  writePhase(root, 100, phase100)
-  writePhase(root, 1000, phase1000)
-  writeBacklog(root, [{ phase: 100, name: 'Queued phase number 100' }, { phase: 1000, name: 'Queued phase number 1000' }])
-  gitCommitSubjects(root, ['docs(roadmap): phase 1000 — address review findings'])
+  const root = reviewedEarlyQueuedLate(1000, ['docs(roadmap): phase 1000 — address review findings'], { extraPhases: [100] })
   const { code, report } = audit(root)
   assert.deepEqual(unreviewed(report, 1000), [], 'phase 1000 has its own review commit')
   assert.equal(unreviewed(report, 100).length, 1, `phase 100 was never reviewed — "phase 1000" must not vouch for it; findings:\n${JSON.stringify(report.findings, null, 2)}`)

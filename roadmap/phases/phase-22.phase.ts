@@ -55,6 +55,14 @@ export default definePhase({
     { round: 3, agent: 'code-reviewer', verdict: 'findings-fixed', summary: 'Verification, fixture-vacuity, and queue chronology defects closed in 8611ee4.' },
     { round: 4, agent: 'code-reviewer', verdict: 'findings-fixed', summary: 'Queue-move and subject-fixture defects closed in db70725.' },
     { round: 5, agent: 'code-reviewer', verdict: 'findings-fixed', summary: 'Schema review-waiver documentation closed in da07372; correctness cap exhausted.' },
+    {
+      round: 6,
+      agent: 'code-reviewer',
+      model: 'claude-fable-5-1',
+      verdict: 'findings-fixed',
+      summary:
+        'Supervising-session review after the cap: post-cutoff commit subjects (the queue subject above all) no longer count as review evidence — the record alone does; only a READY reviewRecord earns the queue; unusable git degrades to one LOW instead of a false BROKEN; the plan(roadmap) queue-subject variant is recognized; the citation lint resolves `cd <dir> &&`-relative and files[]-tail citations; versionDriftLine keeps its best-effort contract for a non-string selfPath. RED 10 → GREEN 103/103, 66/66, 31/31; mutation proofs re-quoted against the final suites.',
+    },
   ],
   metrics: {
     commits: 12,
@@ -81,6 +89,7 @@ export default definePhase({
       { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
       { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
       { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5-1', via: 'native' },
     ],
     compromises: [],
     skipped: [],
@@ -92,7 +101,7 @@ export default definePhase({
       'The protocol-owned curation composer emitted its fixed generic Claude trailer; the lane-specific Claude Fable 5 trailer could not be injected without overriding the required curation act.',
     ],
     hardStops: [],
-    gateRounds: 6,
+    gateRounds: 7,
   },
   plannedBy: { model: 'claude-fable-5' },
   reviewRecord: { date: '2026-09-01', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
@@ -206,7 +215,7 @@ export default definePhase({
         whatWasDone:
           'Added audit Check 17 for queued and in-progress phases without durable or commit-backed plan-review evidence, with an ISO cutoff for historical phases and a runnable review remedy.',
         how:
-          'The claude-opus-5 test-engineer established 3 RED failures across an eight-case matrix. The implementation recognizes reviewRecord and all three historical review subjects with exact phase-number matching, and grandfathers phase files created before 2026-09-01. The final audit suite passed 87/87 and the types slot was declared-none. Check 17 mutation proof: emptying the guarded phase set produced RED with 3 failures; drifting reviewRecord to reviewEvidence produced RED with the durable-record fixture raising HIGH; the legal phase-1000 review-subject decoy stayed GREEN while phase 100 remained flagged.',
+          'The claude-opus-5 test-engineer established 3 RED failures across an eight-case matrix. The implementation recognizes reviewRecord and all three historical review subjects with exact phase-number matching, and grandfathers phase files created before 2026-09-01. The final audit suite passed 87/87 and the types slot was declared-none. Check 17 mutation proof (re-quoted at gate R6 against the final 103-case suite): disabling the per-phase finding loop produced RED with 13 failures; drifting the historical subject scan to read past the cutoff (the R6 HIGH re-introduced) produced RED with 6 failures; the legal phase-1000 review-subject decoy and the pre-cutoff grandfather stayed GREEN.',
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
@@ -242,7 +251,7 @@ export default definePhase({
         whatWasDone:
           'Added a new-file citation-integrity warning that checks repo-relative paths in task problems, step descriptions, and phase notes against HEAD while allowing files the phase plans to create.',
         how:
-          'The claude-opus-5 test-engineer established 4 RED failures and seven silent guard directions. The implementation extracts and de-duplicates supported repo-path shapes, treats line suffixes as non-semantic, verifies paths with git cat-file, and retains the authoring-only grandfather rule. The final validator suite passed 61/61 and the types slot was declared-none. Citation guard mutation proof: disabling the lint produced RED with 3 focused failures; drifting the task problem anchor to issue produced RED with 1 focused failure; committed real-path and planned-file decoys stayed GREEN 2/2.',
+          'The claude-opus-5 test-engineer established 4 RED failures and seven silent guard directions. The implementation extracts and de-duplicates supported repo-path shapes, treats line suffixes as non-semantic, verifies paths with git cat-file, and retains the authoring-only grandfather rule. The final validator suite passed 61/61 and the types slot was declared-none. Citation guard mutation proof (re-quoted at gate R6 against the final 66-case suite): disabling the lint produced RED with 5 failures; drifting the `cd <dir>` resolution to accept any path produced RED with 1 failure; the real-path, planned-file, files[]-tail and cd-relative-real decoys stayed GREEN.',
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',

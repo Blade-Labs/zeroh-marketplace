@@ -40,10 +40,15 @@ const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const PLAN_REVIEW_EVIDENCE_CUTOFF = '2026-09-01T00:00:00Z'
 
+// The subjects review rounds landed under BEFORE reviewRecord existed (task 22.1). They are
+// HISTORICAL evidence only — read from commits that predate PLAN_REVIEW_EVIDENCE_CUTOFF. After
+// the cutoff the durable record is the sole evidence: the queue subject in particular is what an
+// UNREVIEWED queue writes too (review-phase SKILL.md Step 8 names it as the queue commit), so
+// crediting it post-cutoff would silence the exact shape this check exists to catch.
 const REVIEW_SUBJECTS = [
   /^docs\(roadmap\): phase (\d+) — address review findings(?:\s+.*)?$/,
   /^plan\(roadmap\): phase (\d+) review fixes(?:\s+.*)?$/,
-  /^docs\(roadmap\): queue phase (\d+)(?:\s+.*)?$/,
+  /^(?:docs|plan)\(roadmap\): queue phase (\d+)(?:\s+.*)?$/,
 ]
 const MULTI_PHASE_REVIEW_SUBJECT = /^plan\(roadmap\): phases (\d+(?:\+\d+)*) review fixes(?: — .*)?$/
 
@@ -246,9 +251,34 @@ export default async function run(argv) {
 
   // ── Check 17: queued/in-progress phases without plan-review evidence ──────
   const reviewRequired = new Set([...backlogSet, ...(aux.inProgress ?? []).map((p) => p.phase)])
-  const reviewedPhases = new Set(aux.reviewedPhases ?? [])
-  // Whole-history subject scan — skipped when nothing is queued or in flight.
-  for (const subject of reviewRequired.size ? gitLines(repo, ['log', '--format=%s']) : []) {
+  // Both halves of this check read git (queue dates for the grandfather rule, historical review
+  // subjects). Unusable git is ONE LOW naming the cause, never a HIGH per phase: the check-7
+  // precedent ("unknown age") — reading git's silence as guilt would flip the verdict to BROKEN
+  // and tell the operator not to run /do-phase without once mentioning git.
+  const reviewVerdicts = aux.reviewVerdicts ?? {}
+  // A durable record earns the queue ONLY at READY — backlog.ts's own docblock: review-phase
+  // queues a phase only when the verdict is READY, so a queued NEEDS_WORK/BLOCKER record is a
+  // louder violation than a missing one.
+  const reviewedPhases = new Set(
+    Object.entries(reviewVerdicts).filter(([, verdict]) => verdict === 'READY').map(([phase]) => Number(phase)),
+  )
+  // git is consulted only for phases a READY record does not already cover.
+  const needsGit = [...reviewRequired].filter((phase) => !reviewedPhases.has(phase))
+  const gitUsable = needsGit.length === 0 || gitLines(repo, ['rev-parse', '--git-dir']).length > 0
+  if (!gitUsable) {
+    findings.push({
+      check: 17,
+      severity: 'LOW',
+      phase: null,
+      location: repo,
+      message: `Plan-review evidence check skipped: git is unusable at ${repo}, so queue dates and review commits cannot be read — ${needsGit.length} queued/in-progress phase(s) without a READY reviewRecord left unjudged.`,
+    })
+  }
+  // Historical subject scan, bounded to commits BEFORE the cutoff (see REVIEW_SUBJECTS).
+  const historical = gitUsable && needsGit.length
+    ? gitLines(repo, ['log', `--before=${PLAN_REVIEW_EVIDENCE_CUTOFF}`, '--format=%s'])
+    : []
+  for (const subject of historical) {
     for (const pattern of REVIEW_SUBJECTS) {
       const match = subject.match(pattern)
       if (match) reviewedPhases.add(Number(match[1]))
@@ -256,17 +286,20 @@ export default async function run(argv) {
     const multi = subject.match(MULTI_PHASE_REVIEW_SUBJECT)
     if (multi) for (const phase of multi[1].split('+')) reviewedPhases.add(Number(phase))
   }
-  for (const phase of reviewRequired) {
+  for (const phase of gitUsable ? reviewRequired : []) {
     const phaseFile = join(phasesDir, `phase-${phase}.phase.ts`)
     if (reviewedPhases.has(phase)) continue
     const queuedAt = queueEntryAddedAt(repo, phase)
     if (queuedAt && Date.parse(queuedAt) < Date.parse(PLAN_REVIEW_EVIDENCE_CUTOFF)) continue
+    const verdict = reviewVerdicts[phase]
     findings.push({
       check: 17,
       severity: 'HIGH',
       phase,
       location: phaseFile,
-      message: `Phase ${phase} is queued or in-progress without plan-review evidence. Run /review-phase ${phase}; a user-waived review records reviewRecord via:'waived'.`,
+      message: verdict
+        ? `Phase ${phase} is queued or in-progress with a reviewRecord verdict of ${verdict} — only READY earns the queue. Re-run /review-phase ${phase} and queue on a READY record.`
+        : `Phase ${phase} is queued or in-progress without plan-review evidence. Run /review-phase ${phase}; a user-waived review records reviewRecord via:'waived'.`,
     })
   }
 
