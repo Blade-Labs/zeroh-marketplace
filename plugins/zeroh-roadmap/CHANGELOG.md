@@ -3,6 +3,21 @@
 Reconstructed 2026-08-26 (phase 13.7) from the committed record trail; maintained forward.
 One entry per minor: the shipped surface, not the story.
 
+## 0.36.0 — 2026-09-02
+- Roadmap root discovery (phase 23): the data root is `roadmap/` or `docs/roadmap/` (first with a
+  marker; `ROADMAP_ROOT` overrides; both = refused by name); the schema seam lives at
+  `<root>/lib/schema.ts` for new consumers (legacy `lib/roadmap/schema.ts` still recognized);
+  `scaffold-roadmap.sh --root` / `roadmap init --root`; templates import the schema relatively;
+  one Layout rule in the router (`references/layout.md`), every skill cites it.
+- Model policy per role (phase 24): `modelPolicy` presets `claude` / `codex` / `codex-full`,
+  per-repo `default` + `roles` map, `sol` alias for the codex model; per-run `--models` on
+  `roadmap arm` and `roadmap codex run`, recorded on the sidecar, the lane journal and
+  `executionResult.modelPolicy`; `roadmap role resolve --driver --models`; do-arc delegates the
+  arc to the codex lane when the executor resolves there; `arc-eval-judge` pinned to sonnet and
+  refuses any override. This consumer runs preset `codex`.
+- Budget ruling (phase 23.5): the do-arc protocol-load ceiling moves 13,257 → 13,339 to carry
+  the Layout rule (DIET-LEDGER).
+
 ## 0.35.0 — 2026-09-02
 - MINESWEEP arc (phases 14-20, landed 2026-09-01; sweep green, intent validation 6/6, eval
   finalized): the mined failure classes closed.
