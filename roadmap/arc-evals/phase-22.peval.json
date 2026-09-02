@@ -1,0 +1,86 @@
+{
+  "phase": 22,
+  "date": "2026-09-02",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 22
+  },
+  "taskCount": 4,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/templates/schema.ts",
+    "lib/roadmap/schema.ts",
+    "plugins/zeroh-roadmap/skills/review-phase/SKILL.md",
+    "plugins/zeroh-roadmap/cli/commands/audit.mjs",
+    "plugins/zeroh-roadmap/cli/commands/audit.test.mjs",
+    "plugins/zeroh-roadmap/cli/lib/validate.mjs",
+    "plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs",
+    "plugins/zeroh-roadmap/cli/commands/status.mjs",
+    "plugins/zeroh-roadmap/cli/commands/status.test.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1298731
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 12,
+    "linesAdded": 976,
+    "linesRemoved": 25,
+    "filesChanged": 16,
+    "testsAtStart": 1635,
+    "testsAtEnd": 1693,
+    "testsAdded": 58,
+    "startedAt": "2026-09-01T21:06:29.000Z",
+    "completedAt": "2026-09-02T05:51:36.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "claude-fable-5"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "quality-pass": {
+        "model": "claude-opus-5"
+      },
+      "software-architect": {
+        "model": "claude-fable-5"
+      },
+      "code-reviewer": {
+        "model": "claude-fable-5"
+      }
+    }
+  }
+}
