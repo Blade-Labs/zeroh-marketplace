@@ -1,0 +1,89 @@
+{
+  "phase": 23,
+  "date": "2026-09-02",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 23
+  },
+  "taskCount": 6,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/cli/lib/roadmap-root.mjs",
+    "plugins/zeroh-roadmap/cli/lib/roadmap-root.test.mjs",
+    "plugins/zeroh-roadmap/cli/lib/config.mjs",
+    "plugins/zeroh-roadmap/cli/lib/tsx-bridge.mjs",
+    "plugins/zeroh-roadmap/cli/lib/derive.mjs",
+    "plugins/zeroh-roadmap/cli/commands/status.mjs",
+    "plugins/zeroh-roadmap/cli/commands/init.mjs",
+    "plugins/zeroh-roadmap/cli/audit-checks.mts",
+    "plugins/zeroh-roadmap/hooks/beacon-stamp.sh",
+    "plugins/zeroh-roadmap/scripts/scaffold-roadmap.sh",
+    "plugins/zeroh-roadmap/templates/backlog.ts",
+    "plugins/zeroh-roadmap/templates/registry.ts",
+    "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/SKILL.md",
+    "plugins/zeroh-roadmap/README.md",
+    "plugins/zeroh-roadmap/test/fixture-consumer/harness.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1703806
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 1,
+    "linesAdded": 2714,
+    "linesRemoved": 375,
+    "filesChanged": 91,
+    "testsAtStart": 1693,
+    "testsAtEnd": 1766,
+    "testsAdded": 73,
+    "startedAt": "2026-09-02T10:07:01.000Z",
+    "completedAt": "2026-09-02T17:09:01.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "claude-fable-5-1"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "quality-pass": {
+        "model": "claude-opus-5"
+      },
+      "code-reviewer": {
+        "model": "claude-fable-5"
+      }
+    }
+  }
+}
