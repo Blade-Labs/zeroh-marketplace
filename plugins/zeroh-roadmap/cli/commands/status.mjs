@@ -24,7 +24,7 @@ import { arcProgress } from '../lib/derive.mjs'
 import { lastEvent, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN, WORK_EVENTS } from '../lib/beacon.mjs'
 import { staleArms } from '../lib/executor-arm.mjs'
 import { listWorktrees, surveyLanes } from '../lib/worktree.mjs'
-import { roadmapRoot } from '../lib/roadmap-root.mjs'
+import { roadmapRoot, defaultRoadmapRoot } from '../lib/roadmap-root.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
 
 const git = (args, cwd) => {
@@ -353,16 +353,6 @@ function printHuman(m) {
   for (const { path, branch } of m.otherWorktrees) out.push(`  ${path} @ ${branch}`)
   out.push(`\nDecisions (priorities, release gates): ${m.backlogRef} header board.`)
   process.stdout.write(out.join('\n') + '\n')
-}
-
-/** The root a bare `roadmap status` reads: the consumer's resolved root, or — outside a repo,
- *  where status still accepts a bare roadmap directory — the candidate under cwd. */
-function defaultRoadmapRoot(cwd) {
-  try {
-    return roadmapRoot(gitToplevel(cwd))
-  } catch {
-    return roadmapRoot(cwd)
-  }
 }
 
 export default async function run(argv) {

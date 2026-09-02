@@ -28,6 +28,7 @@
 import { existsSync } from 'node:fs'
 import { join, resolve, relative, isAbsolute, sep } from 'node:path'
 import { BridgeError } from './bridge-error.mjs'
+import { gitToplevel } from './gitroot.mjs'
 
 /** The root homes, in PRECEDENCE order. Extending this list extends discovery everywhere. */
 export const ROOT_CANDIDATES = ['roadmap', 'docs/roadmap']
@@ -94,6 +95,29 @@ function probe(dir) {
     ])
   }
   return marked[0] ?? resolve(dir, ROOT_CANDIDATES[0])
+}
+
+/**
+ * The root a FLAGLESS `roadmap status` / `roadmap claim` reads: the consumer's resolved root.
+ * Outside a git repo — where both commands still accept a bare roadmap directory — the
+ * candidate under `cwd`.
+ *
+ * ONLY the not-a-repo case falls back. A RoadmapRootError must ESCAPE: falling back on an
+ * ambiguous tree would resolve `<cwd>/roadmap` and silently pick one of the two roots the
+ * refusal exists to prevent — and from a SUBDIRECTORY it would invent a root that is not
+ * there at all.
+ * @param {string} cwd
+ * @returns {string} an ABSOLUTE directory path
+ * @throws {RoadmapRootError} kind 'ambiguous', unchanged, from either branch
+ */
+export function defaultRoadmapRoot(cwd) {
+  let toplevel
+  try {
+    toplevel = gitToplevel(cwd)
+  } catch {
+    return roadmapRoot(cwd)
+  }
+  return roadmapRoot(toplevel)
 }
 
 /**

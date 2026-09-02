@@ -18,6 +18,7 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ConfigError } from '../cli/lib/config.mjs'
+import { RoadmapRootError } from '../cli/lib/roadmap-root.mjs'
 
 // The full §2 command tree. `phase` is the owning phase and `arc` the arc that owns it
 // (default ROADCODE); `sub` lists subcommands for --help. A command becomes MOUNTED the
@@ -90,7 +91,10 @@ async function main() {
 try {
   process.exit(await main())
 } catch (e) {
-  if (e instanceof ConfigError) {
+  // Both carry messageLines and both are REFUSALS the operator can act on — an ambiguous
+  // root reached through any door (status, audit, claim, gate…) must read as one named
+  // message with its remedy, never as a stack trace the reader has to decode.
+  if (e instanceof ConfigError || e instanceof RoadmapRootError) {
     for (const line of e.messageLines) process.stderr.write(line + '\n')
     process.exit(1)
   }

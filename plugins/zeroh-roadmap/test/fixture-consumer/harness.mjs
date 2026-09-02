@@ -10,12 +10,25 @@
  * under test is the exit-coded CLI surface a non-Claude executor also drives.
  *
  *   makeFixtureRepo(opts)   → root  (base scaffold + git init + initial commit)
+ *   roadmapDir(root)        → the absolute root THAT repo's layout puts the records under
  *   runCli(root, args, env) → { code, stdout, stderr, json }
  *   writePhaseFile / writeArcFile / commitAll / commitPaths / gitLog
  *   readSlotLog(root)       → the fake-slot JSONL records ({ slot, argv, ts })
  *   makeIsolatedArc(root,…) → the isolated-branch two-checkout topology (arc-land)
  *   gitShim(root)           → a PATH `git` shim recording every argv (push-discipline proof)
  *   installConsumerSchema / provisionTsx  (called by makeFixtureRepo; exported for assertions)
+ *
+ * LAYOUT (phase 23). The roadmap root is DISCOVERED, not pinned, so a fixture consumer is
+ * built under `opts.layout`:
+ *   'toplevel' (default, unchanged) — `<repo>/roadmap/…` + the LEGACY seam `<repo>/lib/roadmap/schema.ts`
+ *   'docs'                          — `<repo>/docs/roadmap/…` + the ROOT-FIRST seam `<root>/lib/schema.ts`,
+ *                                     and NO `<repo>/lib/` and no tsconfig at all
+ *   'both'                          — both candidates MARKED, the ambiguity refusal's fixture
+ * Every path helper (`roadmapDir`, `writePhaseFile`, `writeArcFile`, `writePhaseRaw`, the
+ * `definePhaseSrc` import specifier) reads the layout back from the repo it is handed, so a
+ * suite never carries it around. `runCli` defaults ROADMAP_CONFIG ONLY for 'toplevel': that
+ * env var WINS over discovery in loadConfig, so defaulting it in a docs fixture would test
+ * the harness instead of the resolver. A caller-supplied env still wins in every layout.
  *
  * Teardown is the executor-liveness.test.mjs idiom: a process-exit rmSync over every tmp dir
  * this module created — no scratch repo survives the suite (the 1660.8 residue-delta gate).
@@ -44,6 +57,44 @@ process.on('exit', () => {
   for (const b of bases) rmSync(b, { recursive: true, force: true })
 })
 
+// ── layout (phase 23: the root is DISCOVERED) ────────────────────────────────────────
+/** Every layout this harness can build, and the candidate directories each one MARKS. */
+export const LAYOUT_ROOTS = {
+  toplevel: ['roadmap'],
+  docs: ['docs/roadmap'],
+  both: ['roadmap', 'docs/roadmap'],
+}
+/** repo → layout. Set by makeFixtureRepo so the path helpers need no extra argument. */
+const layouts = new Map()
+
+/** The layout `root` was built with ('toplevel' for a repo this module did not build). */
+export const layoutOf = (root) => layouts.get(root) ?? 'toplevel'
+
+/**
+ * The absolute directory THIS repo's layout puts the roadmap records under.
+ * 'both' deliberately THROWS rather than pick one — the whole point of that fixture is that
+ * two marked roots have no single answer, and a harness that guessed would hide the refusal
+ * the suite is asserting.
+ * @param {string} root
+ * @returns {string}
+ */
+export function roadmapDir(root) {
+  const layout = layoutOf(root)
+  if (layout === 'both') {
+    throw new Error(`roadmapDir(${root}): layout 'both' marks ${LAYOUT_ROOTS.both.join(' and ')} — there is no single root, name one explicitly`)
+  }
+  return join(root, ...LAYOUT_ROOTS[layout][0].split('/'))
+}
+
+/** Where THIS layout vendors the consumer schema: root-first under 'docs', legacy otherwise. */
+const seamPath = (root, layout = layoutOf(root)) =>
+  layout === 'docs'
+    ? join(root, 'docs', 'roadmap', 'lib', 'schema.ts')
+    : join(root, 'lib', 'roadmap', 'schema.ts')
+
+/** The specifier a phase/arc file under `<layoutRoot>/phases` uses to reach that seam. */
+const seamSpecifier = (layout) => (layout === 'docs' ? '../lib/schema.ts' : '../../lib/roadmap/schema.ts')
+
 const gitId = ['-c', 'user.email=fixture@test', '-c', 'user.name=fixture']
 /** git in `root`, returning trimmed stdout (throws on non-zero — a seed step must not fail silently). */
 export function git(root, ...args) {
@@ -63,12 +114,13 @@ export function plainSrc(obj) {
 }
 
 /** A definePhase(...) source that DOES run the consumer schema's import-time Zod parse (so
- *  `roadmap phase validate` catches a shape error). Imports the INSTALLED consumer schema by
- *  relative path (roadmap/phases → ../../lib/roadmap/schema.ts), exactly as a real phase file
- *  cites its `@/lib/roadmap/schema` alias — the same seam, resolved for a bare fixture. */
-export function definePhaseSrc(obj) {
+ *  `roadmap phase validate` catches a shape error). Imports the INSTALLED consumer schema
+ *  RELATIVELY, which is the whole point: no tsconfig `paths` alias is required of a consumer.
+ *  The specifier follows the LAYOUT — `../../lib/roadmap/schema.ts` from `<repo>/roadmap/phases`,
+ *  `../lib/schema.ts` from `<repo>/docs/roadmap/phases`. */
+export function definePhaseSrc(obj, { layout = 'toplevel' } = {}) {
   const body = JSON.stringify(obj, null, 2).replace(/"([\w$]+)":/g, '$1:').replace(/"/g, "'")
-  return `import { definePhase } from '../../lib/roadmap/schema.ts'\nexport default definePhase(${body})\n`
+  return `import { definePhase } from '${seamSpecifier(layout)}'\nexport default definePhase(${body})\n`
 }
 
 export const defaultConfig = (root) => ({
@@ -92,10 +144,11 @@ export const defaultConfig = (root) => ({
   gateSpecialists: [{ paths: ['src/spine/**'], agent: '.claude/agents/spine-reviewer.md' }],
 })
 
-/** Copy templates/schema.ts VERBATIM to <root>/lib/roadmap/schema.ts (pre-made decision 1 —
- *  the cmp against templates/schema.ts is a standing assertion; never a hand-written stub). */
-export function installConsumerSchema(root) {
-  const dest = join(root, 'lib', 'roadmap', 'schema.ts')
+/** Copy templates/schema.ts VERBATIM to this layout's seam (pre-made decision 1 — the cmp
+ *  against templates/schema.ts is a standing assertion; never a hand-written stub). Legacy
+ *  `<root>/lib/roadmap/schema.ts` by default, root-first `<root>/lib/schema.ts` under 'docs'. */
+export function installConsumerSchema(root, layout = 'toplevel') {
+  const dest = seamPath(root, layout)
   mkdirSync(dirname(dest), { recursive: true })
   cpSync(TEMPLATES_SCHEMA, dest)
   return dest
@@ -114,12 +167,18 @@ export function provisionTsx(root) {
 
 /** The consumer registry stub the REAL debt-census.mts (invoked via the tsx bridge) reads to
  *  report an empty (swept) slice over a bare scratch repo — the census is exercised with fakes
- *  in derive.test.mjs; here it runs for real and honestly finds nothing. */
-function installRegistryStub(root) {
+ *  in derive.test.mjs; here it runs for real and honestly finds nothing. It sits BESIDE the
+ *  seam, because cli/audit-checks.mts resolves it as dirname(consumerSchemaPath(repo))/registry.ts.
+ *  It must export everything that module destructures — discoverPhases, discoverArcs AND
+ *  crossValidate — or `roadmap audit` dies at exit 1 with "crossValidate is not a function"
+ *  instead of running its checks. */
+function installRegistryStub(root, layout = 'toplevel') {
   writeFileSync(
-    join(root, 'lib', 'roadmap', 'registry.ts'),
-    'export async function discoverPhases() { return { phases: [], errors: [] } }\n'
-      + 'export async function discoverArcs() { return { arcs: [] } }\n',
+    join(dirname(seamPath(root, layout)), 'registry.ts'),
+    'export const DUPLICATE_PHASE_NUMBER_PREFIX = \'Duplicate phase number\'\n'
+      + 'export async function discoverPhases() { return { phases: [], errors: [] } }\n'
+      + 'export async function discoverArcs() { return { arcs: [] } }\n'
+      + 'export function crossValidate() { return [] }\n',
   )
 }
 
@@ -129,17 +188,33 @@ function installRegistryStub(root) {
  * installed schema + tsx/zod; bin/fake-slot.sh; a src/spine/ file + a plain src file so a diff
  * can touch specialist vs plain paths. opts.seedCommit=false leaves the tree UNCOMMITTED (a
  * suite that needs the phase-start SHA to be a specific later commit seeds its own).
+ *
+ * opts.layout (phase 23) selects WHERE the records and the schema seam live — 'toplevel'
+ * (default, byte-identical to what every existing suite gets), 'docs', or 'both'. Under
+ * 'docs' the repo carries NO `<root>/lib/` and no tsconfig, so a phase file's relative
+ * `../lib/schema` import is the ONLY way the seam can resolve. Under 'both' the toplevel
+ * scaffold is built in full and `docs/roadmap/` is MARKED beside it (its own config + phases/),
+ * which is the ambiguity the resolver must refuse rather than silently pick between.
  */
 export function makeFixtureRepo(opts = {}) {
+  const layout = opts.layout ?? 'toplevel'
+  if (!(layout in LAYOUT_ROOTS)) throw new Error(`makeFixtureRepo: unknown layout '${layout}' (want ${Object.keys(LAYOUT_ROOTS).join(' | ')})`)
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'zr-fx-')))
   bases.push(root)
-  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
-  mkdirSync(join(root, 'roadmap', 'arcs'), { recursive: true })
+  layouts.set(root, layout)
+  // The PRIMARY root is the one the records go in; 'both' additionally MARKS the other.
+  const primaryRel = LAYOUT_ROOTS[layout][0]
+  const primary = join(root, ...primaryRel.split('/'))
+  mkdirSync(join(primary, 'phases'), { recursive: true })
+  mkdirSync(join(primary, 'arcs'), { recursive: true })
   mkdirSync(join(root, 'bin'), { recursive: true })
   mkdirSync(join(root, 'src', 'spine'), { recursive: true })
 
-  installConsumerSchema(root)
-  installRegistryStub(root)
+  // 'both' vendors the seam the same way 'toplevel' does — the ambiguity is refused before
+  // any door reaches a seam, so a second copy would be scaffolding nothing reads.
+  const seamLayout = layout === 'docs' ? 'docs' : 'toplevel'
+  installConsumerSchema(root, seamLayout)
+  installRegistryStub(root, seamLayout)
   provisionTsx(root)
 
   cpSync(FAKE_SLOT, join(root, 'bin', 'fake-slot.sh'))
@@ -150,28 +225,34 @@ export function makeFixtureRepo(opts = {}) {
 
   const config = { ...defaultConfig(root), ...(opts.config ?? {}) }
   if (opts.config?.gateCommands) config.gateCommands = { ...defaultConfig(root).gateCommands, ...opts.config.gateCommands }
-  writeFileSync(join(root, 'roadmap', 'roadmap.config.json'), JSON.stringify(config, null, 2) + '\n')
+  const configJson = JSON.stringify(config, null, 2) + '\n'
+  for (const rel of LAYOUT_ROOTS[layout]) {
+    const dir = join(root, ...rel.split('/'))
+    mkdirSync(join(dir, 'phases'), { recursive: true })
+    writeFileSync(join(dir, 'roadmap.config.json'), configJson)
+  }
 
   git(root, 'init', '-q', '-b', config.mergePolicy?.baseRef ?? 'develop')
   if (opts.seedCommit !== false) commitAll(root, 'seed: fixture consumer scaffold')
   return root
 }
 
-/** Write a phase file. kind 'plain' (default) or 'define' (import-time Zod via definePhase). */
+/** Write a phase file UNDER THIS REPO'S LAYOUT root. kind 'plain' (default) or 'define'
+ *  (import-time Zod via definePhase, through the specifier that layout's seam needs). */
 export function writePhaseFile(root, phaseObj, { kind = 'plain' } = {}) {
   const n = phaseObj.phase
-  const p = join(root, 'roadmap', 'phases', `phase-${n}.phase.ts`)
-  writeFileSync(p, kind === 'define' ? definePhaseSrc(phaseObj) : plainSrc(phaseObj))
+  const p = join(roadmapDir(root), 'phases', `phase-${n}.phase.ts`)
+  writeFileSync(p, kind === 'define' ? definePhaseSrc(phaseObj, { layout: layoutOf(root) }) : plainSrc(phaseObj))
   return p
 }
 /** Write a raw source string as a phase file (for the deliberately-broken/malformed cases). */
 export function writePhaseRaw(root, n, src) {
-  const p = join(root, 'roadmap', 'phases', `phase-${n}.phase.ts`)
+  const p = join(roadmapDir(root), 'phases', `phase-${n}.phase.ts`)
   writeFileSync(p, src)
   return p
 }
 export function writeArcFile(root, arcObj) {
-  const p = join(root, 'roadmap', 'arcs', `${arcObj.id}.arc.ts`)
+  const p = join(roadmapDir(root), 'arcs', `${arcObj.id}.arc.ts`)
   writeFileSync(p, plainSrc(arcObj))
   return p
 }
@@ -179,10 +260,13 @@ export function writeArcFile(root, arcObj) {
 /** Run the REAL bin/roadmap.mjs in `root`. Returns { code, stdout, stderr, json } (json =
  *  parsed stdout — attempted whenever stdout looks like JSON, so a suite reads machine fields,
  *  never prose). FIXTURE_SLOT_LOG + ROADMAP_CONFIG default into the env; caller env wins. */
-export function runCli(root, args, env = {}, { input } = {}) {
+export function runCli(root, args, env = {}, { input, cwd } = {}) {
+  // ROADMAP_CONFIG WINS over root discovery in loadConfig, so it is defaulted ONLY for the
+  // 'toplevel' layout (where it has always been, keeping every sibling suite byte-identical).
+  // Under 'docs'/'both' the resolver must be what answers, or the suite tests this harness.
   const fullEnv = {
     ...process.env,
-    ROADMAP_CONFIG: join(root, 'roadmap', 'roadmap.config.json'),
+    ...(layoutOf(root) === 'toplevel' ? { ROADMAP_CONFIG: join(root, 'roadmap', 'roadmap.config.json') } : {}),
     FIXTURE_SLOT_LOG: join(root, '.fixture-slots.jsonl'),
     ...env,
   }
@@ -190,7 +274,9 @@ export function runCli(root, args, env = {}, { input } = {}) {
   // exposes stderr on the thrown error object, silently dropping advisory lines on success —
   // the phase-11 --ignore-capacity override note was the first assertion to need them).
   const r = spawnSync('node', [BIN, ...args], {
-    cwd: root, encoding: 'utf8', timeout: 120_000,
+    // `cwd` defaults to the repo root; a suite overrides it to prove a flagless command
+    // resolves against the git TOPLEVEL rather than against wherever it was invoked.
+    cwd: cwd ?? root, encoding: 'utf8', timeout: 120_000,
     stdio: [input != null ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     ...(input != null ? { input } : {}), env: fullEnv,
   })
@@ -226,7 +312,7 @@ export function makeIsolatedArc(root, { arcId = 'FX', member = 9301, arcBranch =
   writeArcFile(root, { id: arcId, baseRef: 'develop', planes: [{ name: 'P', phases: [member] }], acceptanceCriteria: [{ id: 'c1', job: 'the fixture arc job', surfaces: ['plugin'], signal: 'observable', tier: 'wired', bar: 'good enough to judge' }] })
   writePhaseFile(root, { phase: member, status: 'done', arcId, kind: 'logic', tasks: [{ id: `${member}.1`, done: true }], executionResult: { phase: member, status: 'done', gateRounds: 1, hardStops: [] } })
   if (Object.keys(extraConfig).length) {
-    const cfgPath = join(root, 'roadmap', 'roadmap.config.json')
+    const cfgPath = join(roadmapDir(root), 'roadmap.config.json')
     const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'))
     cfg.mergePolicy = { ...cfg.mergePolicy, ...extraConfig }
     writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n')
@@ -237,7 +323,7 @@ export function makeIsolatedArc(root, { arcId = 'FX', member = 9301, arcBranch =
   const wt = realpathSync(mkdtempSync(join(tmpdir(), 'zr-fx-wt-')))
   bases.push(wt)
   git(root, 'worktree', 'add', '-q', wt, arcBranch)
-  const buildingDir = join(root, 'roadmap', 'arcs', '.building')
+  const buildingDir = join(roadmapDir(root), 'arcs', '.building')
   mkdirSync(buildingDir, { recursive: true })
   writeFileSync(join(buildingDir, `${arcId}.json`), JSON.stringify({ arcId, worktree: wt, branch: arcBranch }))
   return { root, worktree: wt, arcBranch, arcId, member }

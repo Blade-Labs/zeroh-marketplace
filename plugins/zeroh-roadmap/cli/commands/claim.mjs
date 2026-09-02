@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path'
 import { gitCommonDir } from '../lib/gitroot.mjs'
 import { maxDeclaredPhase, maxRemotePhase } from '../lib/phasescan.mjs'
 import { defaultExec } from '../lib/exec.mjs'
-import { roadmapRoot } from '../lib/roadmap-root.mjs'
+import { defaultRoadmapRoot } from '../lib/roadmap-root.mjs'
 
 const RUNAWAY = 1_000_000
 
@@ -28,15 +28,6 @@ function maxClaim(dir) {
     }
   }
   return max
-}
-
-/** The root a flagless `roadmap claim` reads — the same rule `roadmap status` applies. */
-function defaultRoadmapRoot(cwd) {
-  try {
-    return roadmapRoot(gitToplevel(cwd))
-  } catch {
-    return roadmapRoot(cwd)
-  }
 }
 
 export default async function run(argv) {
