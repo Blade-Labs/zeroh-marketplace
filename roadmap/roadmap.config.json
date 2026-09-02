@@ -17,7 +17,7 @@
     }
   },
   "modelPolicy": {
-    "judgeModel": "fable"
+    "preset": "codex"
   },
   "designHomes": {
     "architecture": {

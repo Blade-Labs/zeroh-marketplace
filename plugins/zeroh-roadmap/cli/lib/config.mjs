@@ -17,6 +17,8 @@ import { execFileSync } from 'node:child_process'
 import { z } from 'zod'
 import { gitToplevel } from './gitroot.mjs'
 import { roadmapRoot, RoadmapRootError } from './roadmap-root.mjs'
+import { MODEL_PRESETS, PINNED_ROLES, ROLES } from './roles.mjs'
+import { MODEL_ALIASES } from './drivers.mjs'
 
 /** Typed load failure. kind ∈ 'absent' | 'invalid' | 'unreadable' | 'ambiguous'. */
 export class ConfigError extends Error {
@@ -83,7 +85,29 @@ const MergePolicyShape = z.strictObject({
 })
 
 const ModelPolicyShape = z.strictObject({
-  judgeModel: z.string(),
+  preset: z.enum(Object.keys(MODEL_PRESETS)).optional(),
+  default: z.enum(Object.keys(MODEL_ALIASES)).optional(),
+  roles: z.record(z.string(), z.enum(Object.keys(MODEL_ALIASES))).optional(),
+  judgeModel: z.enum(Object.keys(MODEL_ALIASES)).optional(),
+}).superRefine((policy, ctx) => {
+  for (const roleId of Object.keys(policy.roles ?? {})) {
+    if (!Object.hasOwn(ROLES, roleId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['roles', roleId],
+        message: `unknown role '${roleId}' — known roles: ${Object.keys(ROLES).join(', ')}`,
+      })
+    }
+  }
+  for (const roleId of PINNED_ROLES) {
+    if (policy.roles && Object.hasOwn(policy.roles, roleId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['roles', roleId],
+        message: `${roleId} is pinned to ${ROLES[roleId].tierChain[0]} and cannot be overridden`,
+      })
+    }
+  }
 })
 
 const GateSpecialistShape = z.strictObject({

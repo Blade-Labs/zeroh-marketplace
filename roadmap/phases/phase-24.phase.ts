@@ -36,7 +36,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 24,
   name: 'Model policy per role: presets, per-repo defaults, per-run --models override, recorded snapshot, sonnet judge pinned',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5-1' },
   reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'feature',
@@ -113,7 +113,18 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/cli/lib/drivers.mjs', 'plugins/zeroh-roadmap/cli/lib/drivers.test.mjs', 'plugins/zeroh-roadmap/cli/lib/roles.mjs', 'plugins/zeroh-roadmap/cli/lib/roles.test.mjs'],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ['MODEL_PRESETS', 'PINNED_ROLES', 'PinnedRoleError', 'resolveRole opts.policy', 'MODEL_ALIASES.sol'] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'Added the sol configuration alias, immutable claude/codex/codex-full presets, the pinned-role contract, and per-role policy leads in resolveRole. Expanded the driver and resolver matrices to cover every preset, driver, role, precedence rung, pin refusal, legacy judge lead, and unavailable-lead substitution.',
+        how:
+          'The independent test-engineer first added Node test-runner cases and established RED (12 baseline driver assertions passed; the sol assertions and missing resolver exports failed). The resolver expands presets into copies, layers explicit keys, rejects a pinned role key across the whole policy, normalises aliases, deduplicates the led tier chain, and retains the existing reach/substitution walk. GREEN ran 75 scoped tests with a nonzero count; the types slot was declared-none and green. MODEL_ALIASES↔MODEL_IDS guard: planted MUTATION_GHOST model id → RED (1 failed, “every model id … exactly one alias”); renamed MODEL_ALIASES export → RED loudly (SyntaxError naming missing export); decoy unrelated model-label constant → GREEN (14/14). PINNED_ROLES↔PINNED_JUDGE_MODEL guard: planted code-reviewer as a second pin → RED (7 failures); renamed PINNED_JUDGE_MODEL export → RED loudly (SyntaxError naming missing export); decoy non-pinned role constant → GREEN (61/61). Every scratch mutation was reverted before this report update.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '24.2',
@@ -139,7 +150,18 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['24.1'],
       interfaces: { consumes: ['MODEL_PRESETS from 24.1', 'resolveRole opts.policy from 24.1'], produces: ['RoadmapConfig.modelPolicy.{preset,default,roles}', 'policyFromArg', 'mergePolicy'] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'Expanded modelPolicy config to optional preset/default/roles/legacy judgeModel keys, validated role identifiers and the pinned judge, regenerated the JSON schema, added shared --models parsing and provenance-aware merging, wired the role verb to both repo and invocation policies, and printed the effective policy from config check.',
+        how:
+          'The independent test-engineer established RED in 22 behavior cases across config and the wired CLI. The implementation uses MODEL_PRESETS and ROLES as validation vocabularies, nonempty model spellings, one policyFromArg parser for preset or comma-pair syntax, and a key-wise mergePolicy that stamps table/config/invocation source without mutating inputs. GREEN ran 74 scoped tests with a nonzero count; both consumed identifiers were located in runtime code and the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '24.3',
@@ -165,7 +187,19 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['24.2'],
       interfaces: { consumes: ['policyFromArg from 24.2', 'mergePolicy from 24.2'], produces: ['PhaseExecutionResult.modelPolicy', 'sidecar.modelPolicy'] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'Added the optional provenance-stamped modelPolicy snapshot to both PhaseExecutionResult schema homes, stamped the same shape into arc sidecars and Codex run journals, accepted --models on arm and codex run, and taught the lane prompt the exact codex-driver resolver call and execution-result stamp.',
+        how:
+          'The independent test-engineer added nine wired cases and established RED while the 125-case baseline remained green. Arm and Codex load the repo policy with absent-config tolerance, parse invocation policy through the shared seam, merge and validate before creating lane artifacts, and pass the snapshot through the existing writers. The schema test validates the real arm stamp through both schema homes. GREEN ran 134 scoped tests plus two envelope-ratchet tests with nonzero counts; both consumed interfaces were located, the vendor schema excerpts matched, and the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Schema-home coverage lives in the existing arm-disarm test file because the task listed no dedicated schema test home; it validates the real stamped artifact against both homes rather than duplicating a schema-only fixture.',
+      },
     },
     {
       id: '24.4',
@@ -190,7 +224,18 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/MULTI-DRIVER.md', 'plugins/zeroh-roadmap/skills/do-arc/SKILL.md', 'plugins/zeroh-roadmap/DIET-LEDGER.md'],
       testMode: 'none',
       dependsOn: ['24.3'],
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'Documented the three presets, precedence, policy keys, legacy judge lead, and pinned eval judge in MULTI-DRIVER §1; extended do-arc with --models arming and a single resolver-driven Codex whole-arc delegation branch; recorded every protocol compression in DIET-LEDGER.',
+        how:
+          'The role-binding home now presents one compact preset table and the resolver signature with policy. Do-arc resolves phase-executor before its existing band route, delegates once when the resolved model is Codex, and otherwise retains the inline/Agent path. Existing executor-arm prose was compressed without dropping its command, inputs, exclusivity, attribution, preflight, or liveness contracts. The prescribed grep checks passed, the measured flow is exactly 13,339 tokens, and the types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '24.5',
@@ -210,7 +255,21 @@ export default definePhase({
       files: ['roadmap/roadmap.config.json'],
       testMode: 'none',
       dependsOn: ['24.2'],
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      decisionRef:
+        'Software-architect Decision Contract, 2026-09-02: PROCEED_WITH_FIX. During a self-hosting schema change the worktree CLI is the gate authority until landing; preserve worktree gate run 000005 and record the pre-phase primary-CLI rejection as bootstrap evidence, without touching primary.',
+      transparencyReport: {
+        whatWasDone:
+          'Changed this consumer from the legacy judge-only lead to preset codex and verified the effective default plus the codex-full invocation override through the live resolver.',
+        how:
+          'Config check printed source=config,preset=codex. Default probes resolved quality-pass to gpt-5.6-sol native, software-architect to claude-fable-5 child-cli, and arc-eval-judge to sonnet; codex-full kept quality-pass native, moved architect to sol native, and kept the judge on sonnet. Audit reported only the pre-existing unrelated stray roadcode worktree LOW. Architect-approved worktree gate run 000005 was GREEN with types declared-none.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Bootstrap deviation: the envelope absolute CLI points to primary at the phase-23 head, whose pre-phase schema rejected preset with “modelPolicy.judgeModel: Invalid input: expected string, received undefined” and “modelPolicy: Unrecognized key: preset”. The worktree implementation under test printed modelPolicy {source: config, preset: codex}, config OK, and gate run 000005 GREEN with types declared-none. Per the architect ruling, the worktree CLI is authoritative for this self-hosting schema change until landing; primary was not touched.',
+      },
     },
   ],
   notes:

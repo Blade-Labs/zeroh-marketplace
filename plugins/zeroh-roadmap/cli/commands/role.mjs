@@ -10,13 +10,13 @@
  *
  * Returns its exit code to the dispatcher — never hard-exits (testability seam).
  */
-import { loadConfig } from '../lib/config.mjs'
-import { resolveRole, RoleUnjudgedError } from '../lib/roles.mjs'
+import { ConfigError, loadConfig } from '../lib/config.mjs'
+import { mergePolicy, policyFromArg, resolveRole, RoleUnjudgedError } from '../lib/roles.mjs'
 
 export default async function run(argv) {
   const sub = argv[0]
   if (sub !== 'resolve') {
-    process.stderr.write("roadmap role: usage: roadmap role resolve <role> [--driver <id>] [--json]\n")
+    process.stderr.write("roadmap role: usage: roadmap role resolve <role> [--driver <id>] [--models <policy>] [--json]\n")
     return 1
   }
   const rest = argv.slice(1)
@@ -30,22 +30,31 @@ export default async function run(argv) {
     return 1
   }
   const driverId = di >= 0 ? driverValue : 'claude'
-  const roleId = rest.find((a, i) => !a.startsWith('--') && (di < 0 || i !== di + 1))
+  const mi = rest.indexOf('--models')
+  const modelsValue = mi >= 0 ? rest[mi + 1] : undefined
+  if (mi >= 0 && (modelsValue === undefined || modelsValue.startsWith('--'))) {
+    process.stderr.write("roadmap role: --models needs a value. Usage: roadmap role resolve <role> [--driver <id>] [--models <policy>] [--json]\n")
+    return 1
+  }
+  const roleId = rest.find((a, i) => !a.startsWith('--') && (di < 0 || i !== di + 1) && (mi < 0 || i !== mi + 1))
   if (!roleId) {
     process.stderr.write("roadmap role: usage: roadmap role resolve <role> [--driver <id>] [--json]\n")
     return 1
   }
 
-  let judgeModel
+  let repoPolicy
   try {
-    judgeModel = loadConfig(process.cwd()).modelPolicy?.judgeModel
-  } catch {
-    judgeModel = undefined // an unconfigured estate resolves on chain defaults; the verb still answers
+    repoPolicy = loadConfig(process.cwd()).modelPolicy
+  } catch (error) {
+    if (!(error instanceof ConfigError) || error.kind !== 'absent') throw error
+    repoPolicy = undefined // an unconfigured estate resolves on chain defaults; the verb still answers
   }
 
   let resolved
   try {
-    resolved = resolveRole(roleId, driverId, { judgeModel })
+    const invocation = mi >= 0 ? policyFromArg(modelsValue) : undefined
+    const policy = mergePolicy(repoPolicy, invocation)
+    resolved = resolveRole(roleId, driverId, { policy })
   } catch (e) {
     if (e instanceof RoleUnjudgedError) {
       process.stderr.write(`roadmap role: ${e.message}\n`)

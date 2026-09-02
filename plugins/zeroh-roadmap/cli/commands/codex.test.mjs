@@ -3734,3 +3734,157 @@ test('plan close: a toolchain gap is reported as one, never as an invalid author
     'a spawn that never ran leaves its cause in error.message; dropping it makes the refusal undebuggable — cli/commands/codex.mjs',
   )
 })
+
+// ── the per-run model policy (phase 24.3): --models travels into the lane ──────────────────────
+// The codex lane is the other carrier of "do arc with codex". Two things must survive the launch,
+// and neither does today: the JOURNAL is the only durable record of the policy a detached run was
+// launched under (the session that typed it is gone by the time the report lands), and the PROMPT
+// is the only place the driver learns which policy to resolve its roles against — codex.mjs:152
+// hands over MULTI-DRIVER §1 and the resolver's NAME, so a codex driver reading that table today
+// resolves for the CLAUDE driver (role.mjs defaults --driver claude) and seats Opus for every
+// builder role, which is the exact waste phase 24 exists to end.
+//
+// The library is the one truth for the expected snapshot (the cli/commands/role.test.mjs idiom):
+// arm, `codex run` and the verb all parse through policyFromArg/mergePolicy. Each case also pins
+// the concrete answer, so a launcher and a library that agreed on the wrong policy still red.
+
+/** A minimal §1-valid config (7 core gateCommands slots) + an optional `modelPolicy` block. */
+function writeCodexConfig(root, modelPolicy) {
+  mkdirSync(join(root, 'roadmap'), { recursive: true })
+  const cfg = {
+    configVersion: 1,
+    gateCommands: { lint: 'none', types: 'none', unit: 'none', integration: 'none', build: 'none', e2e: 'none', emit: 'none' },
+  }
+  if (modelPolicy !== undefined) cfg.modelPolicy = modelPolicy
+  writeFileSync(join(root, 'roadmap', 'roadmap.config.json'), JSON.stringify(cfg, null, 2) + '\n')
+}
+
+/** Launch the run lane over a premade worktree; returns the parsed journal. */
+function runLaneJournal(root, id, ...extra) {
+  const worktree = join(root, `wt-run-${id}`)
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', String(id), '--worktree', worktree, ...extra], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, `the run lane must launch for its journal to exist; stderr:\n${r.stderr}`)
+  return JSON.parse(readFileSync(join(root, '.building', `codex-${id}.json`), 'utf8'))
+}
+
+test('24.3 — `codex run --models codex-full` JOURNALS the policy it launched under, alongside everything already journalled', async () => {
+  const { mergePolicy, policyFromArg } = await import('../lib/roles.mjs')
+  const root = tmpRepo()
+  writePhase(root, 240)
+  const want = mergePolicy(undefined, policyFromArg('codex-full'))
+  assert.deepEqual(
+    want,
+    { source: 'invocation', preset: 'codex-full' },
+    'fixture guard: the shared seam reads `--models codex-full` as the codex-full preset named BY THE RUN',
+  )
+
+  const j = runLaneJournal(root, 240, '--models', 'codex-full')
+  assert.deepEqual(
+    j.modelPolicy,
+    want,
+    'a detached run outlives the session that launched it — the journal is the ONLY record of which policy was in ' +
+      'force, and without it the CODEX-REPORT audit and the eval scorecard cannot tell a codex-full arc from a ' +
+      'default one; fix cli/commands/codex.mjs (parse --models through policyFromArg + mergePolicy, journal it)',
+  )
+  // Additive: the key JOINS the journal — everything the poller and the gate reconcile read survives.
+  assert.deepEqual(j.phases, ['240'])
+  assert.equal(j.lane, 'run')
+  assert.equal(j.driver?.model, DRIVERS.codex.model, 'the launch attribution is untouched by the policy stamp')
+  assert.equal(j.report, 'CODEX-REPORT.md')
+  assert.ok(Number.isInteger(j.pgid), 'the liveness probe still has its pgid')
+  assert.ok(Number.isFinite(Date.parse(j.startedAt)), 'the freshness guard still has a parseable startedAt')
+})
+
+test('24.3 — the run prompt names the policy in force AND the EXACT resolver call, for the codex driver', () => {
+  const root = tmpRepo()
+  writePhase(root, 241)
+  const worktree = join(root, 'wt-run-241')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '241', '--worktree', worktree, '--models', 'codex-full'], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-241-prompt.txt'), 'utf8')
+
+  assert.match(
+    prompt,
+    /--driver codex/,
+    'the envelope must send the driver to the resolver for ITS OWN driver: `roadmap role resolve` defaults to ' +
+      '--driver claude (cli/commands/role.mjs), so a codex lane resolving without it is told how a CLAUDE session ' +
+      'would reach each role — child-cli Opus for every builder seam; fix cli/commands/codex.mjs buildPrompt',
+  )
+  assert.match(
+    prompt,
+    /role resolve [^\n]*--driver codex[^\n]*--models codex-full/,
+    'the envelope must carry the resolver call COMPLETE and runnable — the role, the driver and the policy as the ' +
+      'operator typed it. A driver handed the policy but not the call, or the call but not the policy, resolves ' +
+      'the committed table and the whole --models argument evaporates; fix cli/commands/codex.mjs buildPrompt',
+  )
+  assert.match(
+    prompt,
+    /executionResult\.modelPolicy/,
+    'the envelope must tell the driver to STAMP the policy into its result — the phase record is where the ' +
+      'scorecard reads it back from, and a lane that only resolves roles records which models ran but never ' +
+      'which policy asked for them; fix cli/commands/codex.mjs buildPrompt',
+  )
+  assert.ok(
+    prompt.includes('codex-full'),
+    `the effective policy must appear VERBATIM in the envelope, not merely be implied by a flag the driver never saw; got prompt:\n${prompt}`,
+  )
+})
+
+test('24.3 — with NO --models the lane journals the policy actually in force: source config, or table on an empty config', async () => {
+  const { mergePolicy } = await import('../lib/roles.mjs')
+  const configured = tmpRepo()
+  writePhase(configured, 242)
+  writeCodexConfig(configured, { preset: 'codex' })
+  const fromConfig = mergePolicy({ preset: 'codex' }, undefined)
+  assert.equal(fromConfig.source, 'config', 'fixture guard: a repo default in force is recorded as config')
+  assert.deepEqual(
+    runLaneJournal(configured, 242).modelPolicy,
+    fromConfig,
+    'the repo modelPolicy is what runs when the invocation names nothing — the journal must say so, whole ' +
+      '(preset included), and label its source config; fix cli/commands/codex.mjs',
+  )
+
+  const bare = tmpRepo() // no roadmap.config.json at all
+  writePhase(bare, 243)
+  assert.deepEqual(
+    runLaneJournal(bare, 243).modelPolicy,
+    { source: 'table' },
+    'a consumer that declared no policy runs the committed roles table — recorded as table, never omitted, and ' +
+      'never a launch that FAILS over a config the repo never had; fix cli/commands/codex.mjs',
+  )
+})
+
+test('24.3 — the run prompt freezes an explicit config policy instead of re-reading mutable config', () => {
+  const root = tmpRepo()
+  writePhase(root, 246)
+  writeCodexConfig(root, { default: 'sol', roles: { 'software-architect': 'fable' } })
+  const worktree = join(root, 'wt-run-246')
+  const env = fakeLaunchEnv(root, worktree)
+  const r = spawnSync('node', [BIN, 'codex', 'run', '246', '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  assert.equal(r.status, 0, r.stderr)
+  const prompt = readFileSync(join(root, '.building', 'codex-246-prompt.txt'), 'utf8')
+  assert.match(prompt, /--models default=sol,software-architect=fable/)
+  assert.doesNotMatch(prompt, /--models claude/)
+})
+
+test('24.3 — a PINNED or unspellable --models refuses the launch: nothing journalled, nothing prompted, nothing spawned', () => {
+  // The refusal has to precede launch(): a detached run started under a policy the operator was
+  // just told is illegal cannot be recalled, and its journal would claim the lane for hours.
+  const root = tmpRepo()
+  writePhase(root, 244)
+  const worktree = join(root, 'wt-run-244')
+  const env = fakeLaunchEnv(root, worktree)
+  const pinned = spawnSync('node', [BIN, 'codex', 'run', '244', '--worktree', worktree, '--models', 'arc-eval-judge=sol'], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(pinned.status, 0, `moving the pinned judge must REFUSE the lane; stdout:\n${pinned.stdout}\nstderr:\n${pinned.stderr}`)
+  assert.ok(pinned.stderr.includes('arc-eval-judge'), `the refusal must NAME the pinned role; got stderr:\n${pinned.stderr}`)
+  assert.ok(!existsSync(join(root, '.building', 'codex-244.json')), 'a refused launch must journal nothing')
+  assert.ok(!existsSync(join(root, '.building', 'codex-244-prompt.txt')), 'and must write no prompt for a run that never started')
+
+  const unknown = spawnSync('node', [BIN, 'codex', 'run', '244', '--worktree', worktree, '--models', 'gpt'], { cwd: root, encoding: 'utf8', env })
+  assert.notEqual(unknown.status, 0, `an unknown preset must REFUSE the lane; stderr:\n${unknown.stderr}`)
+  assert.ok(unknown.stderr.includes('gpt'), `the refusal must name the offender; got stderr:\n${unknown.stderr}`)
+  assert.doesNotMatch(unknown.stderr, /^\s+at .*:\d+:\d+\)?$/m, `a policy refusal must not expose a stack frame; got stderr:\n${unknown.stderr}`)
+  assert.ok(!existsSync(join(root, '.building', 'codex-244.json')), 'an unparseable policy journals nothing either')
+})

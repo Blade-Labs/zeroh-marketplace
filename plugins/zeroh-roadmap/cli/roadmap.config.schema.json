@@ -203,13 +203,48 @@
     "modelPolicy": {
       "type": "object",
       "properties": {
+        "preset": {
+          "type": "string",
+          "enum": [
+            "claude",
+            "codex",
+            "codex-full"
+          ]
+        },
+        "default": {
+          "type": "string",
+          "enum": [
+            "fable",
+            "sonnet",
+            "opus",
+            "sol"
+          ]
+        },
+        "roles": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "fable",
+              "sonnet",
+              "opus",
+              "sol"
+            ]
+          }
+        },
         "judgeModel": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "fable",
+            "sonnet",
+            "opus",
+            "sol"
+          ]
         }
       },
-      "required": [
-        "judgeModel"
-      ],
       "additionalProperties": false
     },
     "gateSpecialists": {
@@ -399,23 +434,15 @@
       "type": "object",
       "properties": {
         "preReview": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "string",
+            "null"
           ]
         },
         "longRunWrapper": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "string",
+            "null"
           ]
         }
       },

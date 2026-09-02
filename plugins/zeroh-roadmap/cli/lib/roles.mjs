@@ -34,6 +34,25 @@ export class RoleUnjudgedError extends Error {
   }
 }
 
+/** An explicit policy attempted to move a role whose model is a stable evaluation baseline. */
+export class PinnedRoleError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'PinnedRoleError'
+  }
+}
+
+export const PINNED_ROLES = Object.freeze(['arc-eval-judge'])
+
+export const MODEL_PRESETS = Object.freeze({
+  claude: Object.freeze({}),
+  codex: Object.freeze({
+    default: SOL,
+    roles: Object.freeze({ 'software-architect': FABLE }),
+  }),
+  'codex-full': Object.freeze({ default: SOL }),
+})
+
 export const ROLES = Object.freeze({
   'software-architect': Object.freeze({
     id: 'software-architect',
@@ -141,6 +160,111 @@ function resolveRoleEntry(id) {
   return entry
 }
 
+/** Normalise a configured alias while leaving an already-canonical model id untouched. */
+function normaliseModel(model) {
+  return model != null && Object.hasOwn(MODEL_ALIASES, model) ? MODEL_ALIASES[model] : model
+}
+
+/** Expand a preset first, then layer explicit policy keys over it without mutating either. */
+function expandPolicy(policy = {}) {
+  if (policy.preset != null && !Object.hasOwn(MODEL_PRESETS, policy.preset)) {
+    throw new Error(`unknown model preset '${policy.preset}' — legal presets: ${Object.keys(MODEL_PRESETS).join(', ')}`)
+  }
+  const preset = policy.preset == null ? {} : MODEL_PRESETS[policy.preset]
+  const expanded = {
+    ...preset,
+    ...policy,
+    roles: { ...(preset.roles ?? {}), ...(policy.roles ?? {}) },
+  }
+  const pinnedOverride = PINNED_ROLES.find((id) => Object.hasOwn(expanded.roles, id))
+  if (pinnedOverride) {
+    throw new PinnedRoleError(
+      `role '${pinnedOverride}' is pinned to ${ROLES[pinnedOverride].tierChain[0]} and cannot be named in modelPolicy.roles`,
+    )
+  }
+  return expanded
+}
+
+/** The configured lead for a role, or undefined when the committed role table leads. */
+export function leadFor(role, policy = {}) {
+  const expanded = expandPolicy(policy)
+  if (PINNED_ROLES.includes(role.id)) return undefined
+  if (Object.hasOwn(expanded.roles, role.id)) {
+    return normaliseModel(expanded.roles[role.id])
+  }
+  if (role.class === 'judge' && expanded.judgeModel != null) return normaliseModel(expanded.judgeModel)
+  return normaliseModel(expanded.default)
+}
+
+/** Parse the operator spelling accepted by every --models surface. */
+export function policyFromArg(text) {
+  if (Object.hasOwn(MODEL_PRESETS, text)) return { preset: text }
+  if (!text.includes('=')) {
+    throw new Error(`unknown model preset '${text}' — legal presets: ${Object.keys(MODEL_PRESETS).join(', ')}`)
+  }
+  const policy = { roles: {} }
+  for (const pair of text.split(',')) {
+    const separator = pair.indexOf('=')
+    const key = separator < 0 ? pair : pair.slice(0, separator)
+    const value = separator < 0 ? '' : pair.slice(separator + 1)
+    if (!Object.hasOwn(MODEL_ALIASES, value)) {
+      throw new Error(`unknown model alias '${value}' — legal aliases: ${Object.keys(MODEL_ALIASES).join(', ')}`)
+    }
+    if (key === 'default') policy.default = value
+    else {
+      if (!Object.hasOwn(ROLES, key)) {
+        throw new Error(`unknown role '${key}' — known roles: ${Object.keys(ROLES).join(', ')}`)
+      }
+      policy.roles[key] = value
+    }
+  }
+  if (Object.keys(policy.roles).length === 0) delete policy.roles
+  // Validate cross-policy invariants, including the pinned-role refusal, at the parsing door.
+  expandPolicy(policy)
+  return policy
+}
+
+/** Serialize an effective snapshot into the invocation grammar, so a detached lane never
+ * re-reads a changed repository policy while it is running. */
+export function policyToArg(policy = {}) {
+  const explicitKeys = policy.default != null || policy.judgeModel != null || Object.keys(policy.roles ?? {}).length > 0
+  if (policy.preset && !explicitKeys) return policy.preset
+  if (!explicitKeys) return 'claude'
+
+  const aliasFor = (model) => {
+    const normalised = normaliseModel(model)
+    return Object.entries(MODEL_ALIASES).find(([, id]) => id === normalised)?.[0] ?? normalised
+  }
+  const pairs = []
+  const expanded = expandPolicy(policy)
+  if (expanded.default != null) pairs.push(`default=${aliasFor(expanded.default)}`)
+  for (const [role, model] of Object.entries(expanded.roles)) pairs.push(`${role}=${aliasFor(model)}`)
+  if (expanded.judgeModel != null) {
+    for (const role of Object.values(ROLES)) {
+      if (role.class === 'judge' && !PINNED_ROLES.includes(role.id) && !Object.hasOwn(expanded.roles, role.id)) {
+        pairs.push(`${role.id}=${aliasFor(expanded.judgeModel)}`)
+      }
+    }
+  }
+  return pairs.join(',')
+}
+
+/** Merge the repo policy with a per-invocation override and stamp its provenance. */
+export function mergePolicy(repo, invocation) {
+  const repoPolicy = repo && Object.keys(repo).length > 0 ? repo : undefined
+  const invocationPolicy = invocation && Object.keys(invocation).length > 0 ? invocation : undefined
+  const basePolicy = invocationPolicy?.preset ? undefined : repoPolicy
+  const merged = {
+    ...(basePolicy ?? {}),
+    ...(invocationPolicy ?? {}),
+    roles: { ...(basePolicy?.roles ?? {}), ...(invocationPolicy?.roles ?? {}) },
+  }
+  if (Object.keys(merged.roles).length === 0) delete merged.roles
+  const source = invocationPolicy ? 'invocation' : repoPolicy ? 'config' : 'table'
+  expandPolicy(merged)
+  return { source, ...merged }
+}
+
 /**
  * How `driverId` reaches a model that `runnerId` runs — 'native' | 'child-cli' | 'inline', or
  * null when this driver cannot reach that runner at all (an UNREACHABLE tier, which the walk
@@ -187,7 +311,7 @@ function forcedDown({ forceUnavailable, env }) {
  *
  * @param {string} roleId
  * @param {string} driverId
- * @param {{ forceUnavailable?: string[]|string, judgeModel?: string, env?: Record<string,string>,
+ * @param {{ forceUnavailable?: string[]|string, judgeModel?: string, policy?: object, env?: Record<string,string>,
  *           drivers?: object, modelDrivers?: Record<string,string> }} [opts]
  * @returns {{ role: string, model: string, mode: 'native'|'child-cli'|'inline',
  *             substituted?: { from: string, to: string, reason: string } }}
@@ -209,10 +333,10 @@ export function resolveRole(roleId, driverId, opts = {}) {
   // Consumers configure the harness ALIAS (`modelPolicy.judgeModel: 'fable'`), so normalise
   // through MODEL_ALIASES first: prepending the raw alias would record the configured judge as
   // substituted away from itself, for want of a driver that runs a word rather than a model.
-  const asked = opts.judgeModel != null && Object.hasOwn(MODEL_ALIASES, opts.judgeModel)
-    ? MODEL_ALIASES[opts.judgeModel]
-    : opts.judgeModel
-  const chain = role.class === 'judge' && asked ? [asked, ...role.tierChain] : [...role.tierChain]
+  const policy = { ...(opts.policy ?? {}) }
+  if (opts.judgeModel != null) policy.judgeModel = opts.judgeModel
+  const asked = leadFor(role, policy)
+  const chain = asked ? [...new Set([asked, ...role.tierChain])] : [...role.tierChain]
 
   const skipped = []
   for (const model of chain) {

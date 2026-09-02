@@ -110,6 +110,7 @@ export function armSidecar(cwd, arcId, opts) {
     mode: opts.mode ?? 'mixed',
     ...(opts.note ? { note: opts.note } : {}),
     ...(opts.paused ? { paused: true } : {}),
+    ...(opts.modelPolicy ? { modelPolicy: opts.modelPolicy } : {}),
     pid: process.pid,
     sessionHint: opts.sessionHint ?? null,
     armedAt: new Date().toISOString(),

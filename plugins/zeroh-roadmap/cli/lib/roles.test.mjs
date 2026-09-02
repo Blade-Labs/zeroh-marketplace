@@ -12,13 +12,17 @@
  *  3. UNJUDGED — every tier down is a named RoleUnjudgedError, never a quiet skip.
  *  4. judgeModel — the consumer's override prepends for JUDGE-class roles and is IGNORED for
  *     BUILDER-class roles (review-phase's HOME rule: judge seams only).
- *  5. REACH — `mode` is native | child-cli | inline, derived from the driver registry; inline
+ *  5. POLICY — a consumer's modelPolicy LEADS a role's chain: preset (claude|codex|codex-full),
+ *     per-repo default, per-role pick, legacy judgeModel — precedence roles[id] > judgeModel
+ *     (judge seams) > default, with `arc-eval-judge` PINNED to sonnet: presets and defaults
+ *     pass it by, an explicit override is REFUSED (PinnedRoleError).
+ *  6. REACH — `mode` is native | child-cli | inline, derived from the driver registry; inline
  *     is first-class and RECORDED, never indistinguishable from native.
- *  6. REFUSAL — unknown role / unknown driver throw naming the offending id and the known set.
- *  7. NO ROT — every agentCard and every spawnSite path exists on disk, spawnSites MENTION the
+ *  7. REFUSAL — unknown role / unknown driver throw naming the offending id and the known set.
+ *  8. NO ROT — every agentCard and every spawnSite path exists on disk, spawnSites MENTION the
  *     role (inventory as evidence), roles map 1:1 onto agents/*.md, and the chain has exactly
  *     one home (the two prose files may not restate it).
- *  8. PROTOCOL PARITY — the codex envelope and the claude manifest deliver the SAME protocol set
+ *  9. PROTOCOL PARITY — the codex envelope and the claude manifest deliver the SAME protocol set
  *     (SKILL.md + its references/ tree; agents/*.md cards excluded by a NAMED, PRINTED rule), and
  *     the envelope's byte overhead over that protocol is bounded. MEASURED, with the re-derivation
  *     command printed alongside the numbers (POLYSEAT no-claude-privilege).
@@ -41,7 +45,8 @@ import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildPrompt } from '../commands/codex.mjs'
 import { DRIVERS, MODEL_ALIASES, MODEL_DRIVERS, MODEL_IDS } from './drivers.mjs'
-import { ROLES, RoleUnjudgedError, reachMode, resolveRole } from './roles.mjs'
+import { PINNED_JUDGE_MODEL } from '../commands/eval.mjs'
+import { MODEL_PRESETS, PINNED_ROLES, PinnedRoleError, ROLES, RoleUnjudgedError, reachMode, resolveRole } from './roles.mjs'
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../../', import.meta.url))
 const read = (rel) => readFileSync(join(PLUGIN_ROOT, rel), 'utf8')
@@ -51,8 +56,16 @@ const OPUS = MODEL_IDS.OPUS
 const SONNET = MODEL_IDS.SONNET
 const SOL = MODEL_IDS.SOL
 
-/** The harness alias vocabulary a card may carry -> the registry model id it means. */
+/** The harness alias vocabulary a CARD may carry -> the registry model id it means. */
 const ALIAS_TO_MODEL = { fable: FABLE, opus: OPUS, sonnet: SONNET }
+
+/**
+ * The full registry alias vocabulary: the card aliases PLUS `sol`, the config-only spelling of
+ * the codex model. A card's frontmatter is a Claude-harness fail-safe and can never carry `sol`
+ * (nothing in that harness would run it), but a consumer's modelPolicy must be able to name it —
+ * without the alias, "run the builders on codex" is inexpressible.
+ */
+const EXPECTED_ALIASES = { ...ALIAS_TO_MODEL, sol: SOL }
 
 /** Written out in full — the expectation must not be rebuilt from the table under test. */
 const EXPECTED_CHAINS = {
@@ -141,9 +154,15 @@ test("each card's frontmatter model alias and its chain HEAD are one decision �
 test('the registry OWNS the alias vocabulary this fixture spells out — one map, not two', () => {
   assert.deepEqual(
     { ...MODEL_ALIASES },
-    ALIAS_TO_MODEL,
-    'MODEL_ALIASES in cli/lib/drivers.mjs must equal the alias map written out above: a card frontmatter and a consumer modelPolicy.judgeModel both carry aliases, and resolveRole normalises through the registry copy — a drift here means one of the two readers resolves a word no driver runs',
+    EXPECTED_ALIASES,
+    'MODEL_ALIASES in cli/lib/drivers.mjs must equal the alias map written out above: a card frontmatter, a consumer modelPolicy and a --models argument all carry aliases, and resolveRole normalises through the registry copy — a drift here means one of those readers resolves a word no driver runs',
   )
+  for (const alias of Object.keys(ALIAS_TO_MODEL)) {
+    assert.ok(
+      Object.hasOwn(MODEL_ALIASES, alias),
+      `alias '${alias}' is carried by an agent card's frontmatter — dropping it from MODEL_ALIASES strands that card's fail-safe`,
+    )
+  }
 })
 
 test('every tier named in every chain is a model some registered driver can run', () => {
@@ -352,9 +371,9 @@ test('a 1-entry chain with its only tier down is UNJUDGED too — no borrowing a
 
 // ── 4. judgeModel — JUDGE-CLASS ONLY ──────────────────────────────────────────────────
 
-test('judgeModel prepends to the chain for EVERY judge-class role', () => {
+test('judgeModel prepends to the chain for every unpinned judge-class role', () => {
   assert.ok(JUDGE_ROLES.length >= 4, `fixture precondition: expected the judge seams, got ${JUDGE_ROLES.join(', ')}`)
-  for (const id of JUDGE_ROLES) {
+  for (const id of JUDGE_ROLES.filter((roleId) => !PINNED_ROLES.includes(roleId))) {
     const res = resolveRole(id, 'claude', { judgeModel: FABLE, env: {} })
     assert.equal(
       res.model,
@@ -431,7 +450,352 @@ test('a judgeModel no registered driver can run is UNAVAILABLE, not a crash and 
   assert.ok(res.substituted.reason.includes(PHANTOM), `reason must name the unroutable model: ${res.substituted.reason}`)
 })
 
-// ── 5. REACH — mode is native | child-cli | inline ────────────────────────────────────
+// ── 5. POLICY — presets, per-role leads, per-repo defaults, and the ONE pinned role ───
+
+/**
+ * The three named presets, spelled out as RESOLUTIONS rather than as a copy of MODEL_PRESETS:
+ * every cell is `[roleId, model, mode]` for that preset under that driver. Written out in full —
+ * a table rebuilt from the constant under test would assert nothing.
+ *
+ * Under driver `codex` the codex model is reached NATIVELY (DRIVERS.codex declares
+ * subagents: 'native'); under driver `claude` the very same policy reaches it as a headless
+ * child, because the claude entry spawns children but never natively. arc-eval-judge is sonnet
+ * in every column: it is PINNED (the eval trend's baseline judge).
+ */
+const PRESET_MATRIX = {
+  codex: {
+    codex: [
+      ['arc-eval-judge', SONNET, 'child-cli'],
+      ['code-reviewer', SOL, 'native'],
+      ['intent-validator', SOL, 'native'],
+      ['phase-executor', SOL, 'native'],
+      ['quality-pass', SOL, 'native'],
+      ['software-architect', FABLE, 'child-cli'],
+      ['software-developer', SOL, 'native'],
+      ['test-engineer', SOL, 'native'],
+      ['ux-designer', SOL, 'native'],
+    ],
+    claude: [
+      ['arc-eval-judge', SONNET, 'child-cli'],
+      ['code-reviewer', SOL, 'child-cli'],
+      ['intent-validator', SOL, 'child-cli'],
+      ['phase-executor', SOL, 'child-cli'],
+      ['quality-pass', SOL, 'child-cli'],
+      ['software-architect', FABLE, 'child-cli'],
+      ['software-developer', SOL, 'child-cli'],
+      ['test-engineer', SOL, 'child-cli'],
+      ['ux-designer', SOL, 'child-cli'],
+    ],
+  },
+  'codex-full': {
+    codex: [
+      ['arc-eval-judge', SONNET, 'child-cli'],
+      ['code-reviewer', SOL, 'native'],
+      ['intent-validator', SOL, 'native'],
+      ['phase-executor', SOL, 'native'],
+      ['quality-pass', SOL, 'native'],
+      ['software-architect', SOL, 'native'],
+      ['software-developer', SOL, 'native'],
+      ['test-engineer', SOL, 'native'],
+      ['ux-designer', SOL, 'native'],
+    ],
+    claude: [
+      ['arc-eval-judge', SONNET, 'child-cli'],
+      ['code-reviewer', SOL, 'child-cli'],
+      ['intent-validator', SOL, 'child-cli'],
+      ['phase-executor', SOL, 'child-cli'],
+      ['quality-pass', SOL, 'child-cli'],
+      ['software-architect', SOL, 'child-cli'],
+      ['software-developer', SOL, 'child-cli'],
+      ['test-engineer', SOL, 'child-cli'],
+      ['ux-designer', SOL, 'child-cli'],
+    ],
+  },
+}
+
+test('MODEL_PRESETS is exactly the three ruled names, frozen, and every model it names is routable', () => {
+  assert.deepEqual(
+    Object.keys(MODEL_PRESETS).sort(),
+    ['claude', 'codex', 'codex-full'],
+    'the preset vocabulary is a user ruling (phase 24 source, MULTI-DRIVER.md §1): claude / codex / codex-full — a fourth name is a new ruling, not a refactor (cli/lib/roles.mjs)',
+  )
+  assert.equal(Object.isFrozen(MODEL_PRESETS), true, 'MODEL_PRESETS must be Object.freeze()d — a caller must not be able to redefine a preset at runtime')
+  assert.deepEqual(
+    MODEL_PRESETS.claude,
+    {},
+    "preset 'claude' IS the roles table as it stands — an empty policy, so naming it can never change an answer (cli/lib/roles.mjs)",
+  )
+  for (const [name, preset] of Object.entries(MODEL_PRESETS)) {
+    assert.equal(Object.isFrozen(preset), true, `preset '${name}' must be frozen too`)
+    const named = [preset.default, ...Object.values(preset.roles ?? {})].filter((m) => m != null)
+    for (const model of named) {
+      assert.ok(
+        Object.hasOwn(MODEL_DRIVERS, model) || Object.hasOwn(MODEL_ALIASES, model),
+        `preset '${name}' names '${model}', which is neither a routable model id nor a harness alias — every preset value must resolve (cli/lib/drivers.mjs MODEL_DRIVERS / MODEL_ALIASES)`,
+      )
+    }
+    for (const roleId of Object.keys(preset.roles ?? {})) {
+      assert.ok(Object.hasOwn(ROLES, roleId), `preset '${name}' names role '${roleId}', which has no ROLES entry`)
+    }
+  }
+})
+
+test('PINNED_ROLES is exactly arc-eval-judge, and its pin IS the model the eval scorer compares against', () => {
+  assert.deepEqual(
+    [...PINNED_ROLES],
+    ['arc-eval-judge'],
+    'exactly one role is pinned (owner ruling 2026-09-02): arc-eval-judge, the baseline the eval trend compares against — pinning a second seam, or unpinning this one, is a user ruling (cli/lib/roles.mjs)',
+  )
+  for (const id of PINNED_ROLES) {
+    assert.ok(Object.hasOwn(ROLES, id), `pinned role '${id}' has no ROLES entry — a pin on a role that does not exist protects nothing`)
+    assert.equal(
+      ROLES[id].tierChain.length,
+      1,
+      `${id}: a pinned role's chain is the pin — a second tier would mean the "pinned" model can be walked away from`,
+    )
+  }
+  assert.equal(
+    ROLES['arc-eval-judge'].tierChain[0],
+    PINNED_JUDGE_MODEL,
+    "the pinned chain head and cli/commands/eval.mjs PINNED_JUDGE_MODEL are ONE decision: the scorer flags every verdict off that model as baseline-reset material, so a drift here silently rebases the eval trend",
+  )
+  assert.equal(ROLES['arc-eval-judge'].tierChain[0], SONNET, 'the pin is sonnet (owner ruling) — fix cli/lib/roles.mjs, never this fixture')
+})
+
+test('PinnedRoleError is a named Error subclass a caller can catch by name', () => {
+  const err = new PinnedRoleError('x')
+  assert.ok(err instanceof Error, 'PinnedRoleError must extend Error')
+  assert.equal(err.name, 'PinnedRoleError', 'the name is the catch handle the config check and the --models parse switch on — set it in the constructor')
+})
+
+for (const [presetName, byDriver] of Object.entries(PRESET_MATRIX)) {
+  for (const [driverId, rows] of Object.entries(byDriver)) {
+    test(`preset '${presetName}' under driver '${driverId}' — the exact model and reach for every role`, () => {
+      assert.equal(
+        rows.length,
+        Object.keys(ROLES).length,
+        `this table must cover EVERY role under preset '${presetName}' — a new role needs its cell written out here deliberately`,
+      )
+      for (const [roleId, model, mode] of rows) {
+        assert.deepEqual(
+          resolveRole(roleId, driverId, { policy: { preset: presetName }, env: {} }),
+          { role: roleId, model, mode },
+          `preset '${presetName}': ${roleId} under driver '${driverId}' must be ${model} via ${mode} — fix the lead in cli/lib/roles.mjs (MODEL_PRESETS/leadFor) or the reach in cli/lib/drivers.mjs roleCapabilities`,
+        )
+      }
+    })
+  }
+}
+
+test("preset 'claude', an empty policy, and NO policy at all are one answer — today's table, unchanged", () => {
+  for (const roleId of Object.keys(ROLES)) {
+    for (const driverId of Object.keys(DRIVERS)) {
+      const today = { role: roleId, model: EXPECTED_CHAINS[roleId][0], mode: 'child-cli' }
+      assert.deepEqual(
+        resolveRole(roleId, driverId, { env: {} }),
+        today,
+        `${roleId}/${driverId}: no policy must resolve exactly as it did before the policy seam existed`,
+      )
+      for (const policy of [{ preset: 'claude' }, {}, { roles: {} }]) {
+        assert.deepEqual(
+          resolveRole(roleId, driverId, { policy, env: {} }),
+          today,
+          `${roleId}/${driverId} under policy ${JSON.stringify(policy)}: a policy that names no lead must not change a single answer — a preset/default that leaks here silently re-routes every repo that never opted in`,
+        )
+      }
+    }
+  }
+})
+
+test('a per-role lead beats the default and wins for THAT ROLE ONLY — both spelled as harness aliases', () => {
+  const policy = { default: 'sol', roles: { 'test-engineer': 'opus' } }
+  assert.deepEqual(
+    resolveRole('test-engineer', 'codex', { policy, env: {} }),
+    { role: 'test-engineer', model: OPUS, mode: 'child-cli' },
+    "roles['test-engineer'] must beat the default: the whole point of a per-role policy is \"codex builders, but this one on opus\" (cli/lib/roles.mjs leadFor)",
+  )
+  for (const roleId of ['quality-pass', 'software-developer', 'code-reviewer', 'software-architect']) {
+    assert.deepEqual(
+      resolveRole(roleId, 'codex', { policy, env: {} }),
+      { role: roleId, model: SOL, mode: 'native' },
+      `${roleId}: a per-role lead for ANOTHER role must not leak — every unnamed role falls to the default`,
+    )
+  }
+  assert.deepEqual(
+    resolveRole('arc-eval-judge', 'codex', { policy, env: {} }),
+    { role: 'arc-eval-judge', model: SONNET, mode: 'child-cli' },
+    'the pinned role ignores the default like every other override — the eval baseline is not a default (cli/lib/roles.mjs PINNED_ROLES)',
+  )
+  assert.deepEqual(
+    resolveRole('test-engineer', 'codex', { policy: { default: SOL, roles: { 'test-engineer': OPUS } }, env: {} }),
+    resolveRole('test-engineer', 'codex', { policy, env: {} }),
+    'a policy written in ALIASES and the same policy written in model ids are one input — normalise both lead paths through MODEL_ALIASES (cli/lib/roles.mjs)',
+  )
+})
+
+test('an explicit policy key layers OVER the preset it names — the preset is expanded first, not last', () => {
+  const policy = { preset: 'codex-full', default: 'opus' }
+  assert.deepEqual(
+    resolveRole('quality-pass', 'codex', { policy, env: {} }),
+    { role: 'quality-pass', model: OPUS, mode: 'child-cli' },
+    "an explicit `default` must win over the preset's own default — otherwise a repo can name a preset but never adjust it (cli/lib/roles.mjs, precedence: invocation keys > preset > table)",
+  )
+})
+
+test('the lead precedence is roles[id] > judgeModel (judge seams only) > default — every rung proven', () => {
+  const both = { default: 'sol', judgeModel: 'fable' }
+  assert.equal(
+    resolveRole('code-reviewer', 'codex', { policy: both, env: {} }).model,
+    FABLE,
+    'a JUDGE seam takes the legacy judgeModel over the default — that key exists to route judges specifically (cli/lib/roles.mjs leadFor)',
+  )
+  assert.deepEqual(
+    resolveRole('quality-pass', 'codex', { policy: both, env: {} }),
+    { role: 'quality-pass', model: SOL, mode: 'native' },
+    "a BUILDER seam never sees judgeModel (review-phase's HOME rule) — it takes the default",
+  )
+  assert.equal(
+    resolveRole('code-reviewer', 'codex', { policy: { ...both, roles: { 'code-reviewer': 'opus' } }, env: {} }).model,
+    OPUS,
+    'a per-role lead is the most specific rung and beats judgeModel too — the unit of choice is the ROLE',
+  )
+})
+
+test('policy.judgeModel and the legacy top-level opts.judgeModel are ONE input, judge seams only', () => {
+  for (const id of JUDGE_ROLES) {
+    assert.deepEqual(
+      resolveRole(id, 'claude', { policy: { judgeModel: 'fable' }, env: {} }),
+      resolveRole(id, 'claude', { judgeModel: 'fable', env: {} }),
+      `${id}: a consumer that still passes judgeModel at the top level must resolve exactly as one that passes it inside the policy — the legacy spelling keeps working (cli/lib/roles.mjs)`,
+    )
+  }
+  for (const id of BUILDER_ROLES) {
+    assert.deepEqual(
+      resolveRole(id, 'claude', { policy: { judgeModel: 'fable' }, env: {} }),
+      resolveRole(id, 'claude', { env: {} }),
+      `${id}: judgeModel inside a policy is still judge-class ONLY — a builder must be untouched by it`,
+    )
+  }
+})
+
+test('the pinned role resolves to its pin under EVERY preset and EVERY default, on both drivers', () => {
+  const POLICIES = [
+    { preset: 'claude' },
+    { preset: 'codex' },
+    { preset: 'codex-full' },
+    { default: 'sol' },
+    { default: 'opus' },
+    { default: 'fable' },
+    { judgeModel: 'fable' },
+    { preset: 'codex-full', default: 'opus' },
+  ]
+  for (const policy of POLICIES) {
+    for (const driverId of Object.keys(DRIVERS)) {
+      assert.deepEqual(
+        resolveRole('arc-eval-judge', driverId, { policy, env: {} }),
+        { role: 'arc-eval-judge', model: SONNET, mode: 'child-cli' },
+        `policy ${JSON.stringify(policy)} under '${driverId}': arc-eval-judge is PINNED to ${SONNET} — a preset or default that reaches it rebases the eval trend against a different judge, silently (cli/lib/roles.mjs PINNED_ROLES)`,
+      )
+    }
+  }
+  // The pin's exact boundary: every broad policy lead is ignored and an explicit roles entry is REFUSED.
+  assert.equal(
+    resolveRole('arc-eval-judge', 'claude', { policy: { judgeModel: 'fable' }, env: {} }).model,
+    SONNET,
+    'the legacy judgeModel cannot move the pinned eval baseline any more than preset/default can',
+  )
+})
+
+test('naming the pinned role in policy.roles THROWS PinnedRoleError — refused loudly, never quietly ignored', () => {
+  for (const asked of ['fable', 'sol', OPUS]) {
+    assert.throws(
+      () => resolveRole('arc-eval-judge', 'codex', { policy: { roles: { 'arc-eval-judge': asked } }, env: {} }),
+      (err) => {
+        assert.ok(err instanceof PinnedRoleError, `asked '${asked}': a pinned override must throw PinnedRoleError, got ${err?.name}: ${err?.message}`)
+        assert.ok(err.message.includes('arc-eval-judge'), `message must name the pinned role: ${err.message}`)
+        assert.ok(err.message.includes(SONNET), `message must name the model the role is pinned to: ${err.message}`)
+        return true
+      },
+      `an explicit roles['arc-eval-judge'] = '${asked}' must be REFUSED, not silently dropped — a consumer who asked and was ignored believes a different judge ran (cli/lib/roles.mjs)`,
+    )
+  }
+  // The refusal is about the ROLE being asked for, not about which role is being resolved:
+  // a policy carrying the illegal key must not quietly serve some other role either.
+  assert.throws(
+    () => resolveRole('quality-pass', 'codex', { policy: { default: 'sol', roles: { 'arc-eval-judge': 'sol' } }, env: {} }),
+    PinnedRoleError,
+    'a policy that names the pinned role is malformed as a whole — resolving any role under it must refuse, so the bad key cannot ride along unnoticed',
+  )
+})
+
+test('a policy naming an unknown preset throws, naming the offending name and every legal one', () => {
+  for (const bad of ['gpt', 'codex_full', 'constructor', 'toString']) {
+    assert.throws(
+      () => resolveRole('quality-pass', 'codex', { policy: { preset: bad }, env: {} }),
+      (err) => {
+        assert.ok(err instanceof Error, `preset '${bad}': threw a non-Error: ${String(err)}`)
+        assert.ok(err.message.includes(bad), `message must name the offending preset: ${err.message}`)
+        for (const name of Object.keys(MODEL_PRESETS)) {
+          assert.ok(err.message.includes(name), `message must name legal preset '${name}': ${err.message}`)
+        }
+        return true
+      },
+      `preset '${bad}' is not a preset — refuse it naming the legal set, and guard the lookup with Object.hasOwn so a prototype member is not a preset (cli/lib/roles.mjs)`,
+    )
+  }
+})
+
+test('a policy lead that is UNAVAILABLE falls to the card tier and records substituted.from = the LEAD', () => {
+  const res = resolveRole('quality-pass', 'codex', {
+    policy: { preset: 'codex' },
+    forceUnavailable: [SOL],
+    env: {},
+  })
+  assert.equal(res.model, OPUS, `a downed lead must fall to the role's own card tier at unreduced rigor, got ${res.model}`)
+  assert.equal(res.mode, 'child-cli', 'the fallback tier is reached however the registry says — opus is a headless child from codex')
+  assert.deepEqual(
+    Object.keys(res).sort(),
+    ['mode', 'model', 'role', 'substituted'],
+    'a non-lead resolution carries exactly role/model/mode/substituted (cli/lib/roles.mjs resolveRole)',
+  )
+  assert.equal(
+    res.substituted.from,
+    SOL,
+    'from is the head that was ASKED for — with a policy in play that head is the policy lead, not the card tier; recording the card tier would erase the fact that the repo asked for codex and did not get it',
+  )
+  assert.equal(res.substituted.to, OPUS)
+  assert.ok(res.substituted.reason.includes(SOL), `reason must name the skipped lead: ${res.substituted.reason}`)
+})
+
+test('a policy lead that EQUALS the card tier records NO substitution — nothing was substituted', () => {
+  const res = resolveRole('quality-pass', 'claude', { policy: { default: 'opus' }, env: {} })
+  assert.deepEqual(
+    res,
+    { role: 'quality-pass', model: OPUS, mode: 'child-cli' },
+    'leading a chain with the model already at its head must not manufacture a substitution record — the scorecard would read a fallback that never happened',
+  )
+  assert.equal(Object.hasOwn(res, 'substituted'), false, 'substituted must be ABSENT, not undefined')
+})
+
+test('resolveRole mutates neither the policy it is handed nor MODEL_PRESETS', () => {
+  const presetsBefore = JSON.stringify(MODEL_PRESETS)
+  const policy = Object.freeze({ preset: 'codex', default: 'sol', roles: Object.freeze({ 'test-engineer': 'opus' }) })
+  const first = resolveRole('test-engineer', 'codex', { policy, env: {} })
+  const second = resolveRole('test-engineer', 'codex', { policy, env: {} })
+  assert.deepEqual(first, second, 'two resolutions of the same frozen policy must agree — an in-place expansion of the preset would make the second call read a policy the first one rewrote')
+  assert.deepEqual(
+    { ...policy },
+    { preset: 'codex', default: 'sol', roles: { 'test-engineer': 'opus' } },
+    "resolveRole must expand the preset into a COPY — the caller's policy is what gets recorded in the phase record, and it must not change under it",
+  )
+  assert.equal(
+    JSON.stringify(MODEL_PRESETS),
+    presetsBefore,
+    'preset expansion must never write back into MODEL_PRESETS — a layered explicit key would then leak into every later resolution in the process',
+  )
+})
+
+// ── 6. REACH — mode is native | child-cli | inline ────────────────────────────────────
 
 test("mode is 'native' ONLY when the resolved model's runner IS the driver and that driver declares subagents: 'native'", () => {
   assert.equal(
@@ -559,7 +923,7 @@ test('every resolution reports a mode from the closed set — an unknown mode is
   }
 })
 
-// ── 6. REFUSAL — unknown ids name the known set ───────────────────────────────────────
+// ── 7. REFUSAL — unknown ids name the known set ───────────────────────────────────────
 
 test('an unknown roleId throws naming the offending id AND every known role id', () => {
   const known = Object.keys(ROLES)
@@ -609,7 +973,7 @@ test("an unknown driverId propagates the registry's OWN throw naming every known
   )
 })
 
-// ── 7. NO ROT — the table is evidence, and the chain has exactly one home ─────────────
+// ── 8. NO ROT — the table is evidence, and the chain has exactly one home ─────────────
 
 test('ROLES and its entries are genuinely frozen — write attempts do not take', () => {
   const before = Object.keys(ROLES).sort()
@@ -716,7 +1080,7 @@ test('the tier chain has exactly ONE home — neither prose file restates it, an
   }
 })
 
-// ── 8. PROTOCOL PARITY — the two drivers' protocol sets, MEASURED ─────────────────────
+// ── 9. PROTOCOL PARITY — the two drivers' protocol sets, MEASURED ─────────────────────
 
 /**
  * POLYSEAT's `no-claude-privilege` criterion forbids benefiting claude by supporting its protocol

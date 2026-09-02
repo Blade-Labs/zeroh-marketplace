@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
+import { MODEL_PRESETS } from './roles.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MOD = join(HERE, 'config.mjs')
@@ -631,4 +632,157 @@ test('capacity: zero rejects, one parses (positive-integer boundary — a zero b
   writeConfig(repo2, validConfig({ capacity: { memPerExecutorMb: 1 } }))
   const cfg = loadConfig(join(repo2, 'roadmap'))
   assert.equal(cfg.capacity.memPerExecutorMb, 1)
+})
+
+// ── modelPolicy (phase 24.2) — preset, default lead, per-role map ───────────────────────
+// The resolver already ANSWERS to `{ preset, default, roles, judgeModel }` (task 24.1,
+// cli/lib/roles.mjs leadFor); until this shape opens, no repo can WRITE one — ModelPolicyShape
+// is `{ judgeModel: z.string() }` and STRICT, so every key below is an "Unrecognized key" today
+// and `{}` fails for want of judgeModel. What these cases enforce is the loader contract the
+// rest of the phase leans on: round-trip identity (loadConfig invents nothing, so the block a
+// repo wrote is exactly the policy arm/codex-run later record as in force — task 24.3) and a
+// NAMED refusal at the dotted path for every malformed spelling.
+
+const PRESET_NAMES = Object.keys(MODEL_PRESETS)
+
+test('modelPolicy: EVERY preset the resolver ships is spellable in config, and round-trips verbatim', () => {
+  assert.deepEqual(
+    PRESET_NAMES,
+    ['claude', 'codex', 'codex-full'],
+    'fixture guard: the three ruled presets (cli/lib/roles.mjs MODEL_PRESETS) are what a config may name',
+  )
+  for (const preset of PRESET_NAMES) {
+    const repo = newRepo()
+    const input = validConfig({ modelPolicy: { preset } })
+    writeConfig(repo, input)
+    assert.deepEqual(
+      loadConfig(repo),
+      input,
+      `preset '${preset}' must parse and round-trip byte-faithful — a preset the RESOLVER honors but ` +
+        `the LOADER rejects is a policy no consumer can ever opt into (cli/lib/config.mjs ModelPolicyShape)`,
+    )
+  }
+})
+
+test('modelPolicy: an UNKNOWN preset is refused at modelPolicy.preset, naming every legal preset', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ modelPolicy: { preset: 'gpt' } }))
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  const line = err.messageLines.find((l) => /^modelPolicy\.preset:\s/.test(l))
+  assert.ok(
+    line,
+    `expected a "modelPolicy.preset: <message>" dotted-path line — the operator must be told WHICH key ` +
+      `is wrong, not that the block as a whole is; got:\n${err.messageLines.join('\n')}`,
+  )
+  for (const preset of PRESET_NAMES) {
+    assert.ok(
+      line.includes(preset),
+      `the refusal must list the legal preset '${preset}' — a typo'd preset is a one-word fix and the ` +
+        `message is the only place the legal set is written down; got:\n${line}`,
+    )
+  }
+})
+
+test('modelPolicy: every key is OPTIONAL — an empty block parses as "the roles table, unchanged"', () => {
+  const repo = newRepo()
+  const input = validConfig({ modelPolicy: {} })
+  writeConfig(repo, input)
+  assert.deepEqual(
+    loadConfig(repo),
+    input,
+    '`{}` is the table (cli/lib/roles.mjs: an empty policy leads nothing) — requiring any key would ' +
+      'force a repo that only wants ONE of preset/default/roles to invent the others',
+  )
+})
+
+test('modelPolicy: preset + default + roles + legacy judgeModel coexist in ONE block, round-tripped verbatim', () => {
+  const repo = newRepo()
+  const input = validConfig({
+    modelPolicy: {
+      preset: 'codex',
+      default: 'sol',
+      roles: { 'software-architect': 'fable', 'test-engineer': 'opus' },
+      judgeModel: 'fable',
+    },
+  })
+  writeConfig(repo, input)
+  const cfg = loadConfig(repo)
+  assert.deepEqual(
+    cfg,
+    input,
+    'the four keys are one policy object handed to resolveRole whole — a loader that dropped, ' +
+      'reordered or defaulted any of them would silently re-route roles the repo never named',
+  )
+  assert.deepEqual(
+    cfg.modelPolicy.roles,
+    input.modelPolicy.roles,
+    'the per-role map is a free record of role-id → model spelling; nothing in the loader may prune it',
+  )
+})
+
+test('modelPolicy: the LEGACY judgeModel-only block still parses (every shipped consumer config spells it)', () => {
+  const repo = newRepo()
+  const input = validConfig({ modelPolicy: { judgeModel: 'fable' } })
+  writeConfig(repo, input)
+  assert.deepEqual(
+    loadConfig(repo),
+    input,
+    'judgeModel is the key every consumer already carries — opening the shape must not break it',
+  )
+})
+
+test('modelPolicy stays STRICT: an unknown key inside the block is refused, naming the offender', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ modelPolicy: { preset: 'codex', builderModel: 'sol' } }))
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^modelPolicy:\s/.test(l) && l.includes('builderModel')),
+    `a typo'd policy key must be an ERROR that names it, never a silent no-op that leaves the repo ` +
+      `on Opus believing it opted into codex; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
+test('modelPolicy.roles: a non-string lead is refused at its OWN dotted path (role id included)', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ modelPolicy: { roles: { 'software-developer': 5 } } }))
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^modelPolicy\.roles\.software-developer:\s/.test(l)),
+    `expected a "modelPolicy.roles.software-developer: <message>" line — the map's VALUES are model ` +
+      `spellings, and the failing entry must be named; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
+test('modelPolicy.default: an empty-string lead is refused rather than read as "no lead"', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ modelPolicy: { default: '' } }))
+  const err = loadErr(repo)
+  assert.ok(err instanceof ConfigError)
+  assert.equal(err.kind, 'invalid')
+  assert.ok(
+    err.messageLines.some((l) => /^modelPolicy\.default:\s/.test(l)),
+    `'' is not a model — it must fail the parse, not reach leadFor as a falsy lead that resolves to ` +
+      `the table while the repo believes it set a default; got:\n${err.messageLines.join('\n')}`,
+  )
+})
+
+test('modelPolicy model values use the alias vocabulary — typos fail at their own paths', () => {
+  const cases = [
+    [{ default: 'gpt' }, 'modelPolicy.default'],
+    [{ judgeModel: 'gpt' }, 'modelPolicy.judgeModel'],
+    [{ roles: { 'software-developer': 'gpt' } }, 'modelPolicy.roles.software-developer'],
+  ]
+  for (const [modelPolicy, path] of cases) {
+    const repo = newRepo()
+    writeConfig(repo, validConfig({ modelPolicy }))
+    const err = loadErr(repo)
+    assert.ok(err instanceof ConfigError)
+    assert.ok(err.messageLines.some((line) => line.startsWith(`${path}:`) && line.includes('sol')), err.message)
+  }
 })

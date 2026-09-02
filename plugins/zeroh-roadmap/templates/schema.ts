@@ -303,6 +303,14 @@ export const PhaseExecutionResultShape = z.object({
    *  collector can SEE, never a silent zero. Capture only in this arc; the cross-actor
    *  comparisons are EVALLOOP's job. */
   driver: DriverShape.optional(),
+  /** The effective role-model policy and where it came from, captured at launch time. */
+  modelPolicy: z.object({
+    source: z.enum(['invocation', 'config', 'table']),
+    preset: z.string().min(1).optional(),
+    default: z.string().min(1).optional(),
+    roles: z.record(z.string(), z.string().min(1)).optional(),
+    judgeModel: z.string().min(1).optional(),
+  }).optional(),
   /** WHICH model filled each protocol role, and HOW that role was fulfilled. The role resolver
    *  is the only writer; nothing writes this yet. `via` records resolveRole's `mode` return —
    *  same three values, so an inline fulfillment is never indistinguishable from a native one.

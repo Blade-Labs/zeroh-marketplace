@@ -19,31 +19,30 @@ do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime.
 
 ## Trigger
 
-`do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`. Optional `--inline` /
-`--recursion` force every phase's band; `--pause-after <N>` stops after phase N.
+`do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`. Options: `--models
+<claude|codex|codex-full|pairs>`, `--inline` / `--recursion` force every band, and
+`--pause-after <N>` stops after phase N.
 
 ## Run it
 
-1. `roadmap arm <id>` — claim the lane (refuses a lane a sibling already holds); `roadmap
-   status` shows live lanes. TaskCreate one task per member phase (`Phase <N> — <plane>`),
+1. `roadmap arm <id> [--models <arg>]` — claim lane (refuses siblings); `roadmap
+   status` shows lanes. TaskCreate one task per member phase (`Phase <N> — <plane>`),
    ticked in_progress/completed as each phase runs — the user's arc progress view.
 2. **The loop** (repeat until the plane's phases are exhausted):
-   1. `roadmap arc next <id> --json` → the ONE next action. `complete` → done. `blocked` /
+   1. `roadmap arc next <id> --json` → the next action. `complete` → done. `blocked` /
       `sweep` / `validate` / `land` → the matching branch below. `run-phase`/`resume-phase` →
       continue.
    2. `roadmap gate plan <phase> --json` — echo the band + scopes to the user.
-   3. Band `trivial`/`heavy` (or `--inline`) → the inline handoff below. Band `mid` → spawn
-      ONE `phase-executor` subagent: prompt = the phase file + the gate plan + the arc's
-      execution-prompt doc; result schema from `roadmap contract show --json-schema`. BEFORE
-      the spawn, arm the Stop-hook guard: `roadmap executor-arm <phase> --session <YOUR
-      SESSION ID> --executor-id <ID>` (session = the session-scoped dir name in your
-      transcript/scratchpad paths; ID = one you mint, unique per spawn) — the CLI refuses an
-      unbound arm, and a foreign session is never guarded. `--executor-id` is what makes the
-      arm EXCLUSIVE. The spawn prompt NEVER asserts the executor's model id — the executor
-      stamps its own; the arm records the card's requested alias and `roadmap result check`
-      reconciles the two by family. READ the cross-repo preflight line the
-      arm prints before spawning: a keyFile fresher than a few minutes means someone is
-      already writing there. Liveness =
+   3. `roadmap role resolve phase-executor --driver claude [--models <arg>]` resolves the executor.
+      A codex result delegates the arc: `roadmap codex run --arc <ID> --base <ref> [--models
+      <arg>]`; audit CODEX-REPORT per the codex-delegation section, never spawning a Claude Agent.
+      Otherwise, `trivial`/`heavy` (or `--inline`) → inline handoff; `mid` → arm the Stop-hook, then spawn ONE `phase-executor`:
+      `roadmap executor-arm <phase> --session <SESSION ID> --executor-id <unique ID>`. Session is
+      the session-dir name in transcript paths; executor-id makes the arm exclusive. The CLI
+      refuses unbound/foreign-session guards. Prompt with the phase, gate plan, arc execution doc,
+      and `roadmap contract show --json-schema`; never assert its model — it self-stamps, while
+      the arm records the requested alias and `roadmap result check` reconciles family. Read the
+      arm's cross-repo preflight: a recently changed keyFile means an active writer. Liveness =
       `roadmap watch <id> --once --json` SPOT-CHECKS on each executor notification and before
       every resume decision — never a long-lived background `watch` daemon.
    4. On return: `roadmap result check --phase <phase>` over the returned JSON (parse or

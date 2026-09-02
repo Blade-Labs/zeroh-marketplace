@@ -55,7 +55,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitToplevel } from '../lib/gitroot.mjs'
-import { integrationRefOf, loadConfig } from '../lib/config.mjs'
+import { ConfigError, integrationRefOf, loadConfig } from '../lib/config.mjs'
 import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
 import { disposeWorktree, groupAlive, isSlotDir } from '../lib/worktree.mjs'
 import {
@@ -63,6 +63,7 @@ import {
   JournalUnreadableError, findJournal, findClosedJournal,
 } from '../lib/codex-journal.mjs'
 import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
+import { mergePolicy, policyFromArg, policyToArg } from '../lib/roles.mjs'
 
 // The journal mechanics live in cli/lib/codex-journal.mjs; `findJournal` alone is re-exported
 // because codex.test.mjs pins it as a contract OF THIS MODULE — `codex status` and the gate
@@ -124,7 +125,7 @@ const ROLE_BINDINGS = fileURLToPath(new URL('../../MULTI-DRIVER.md', import.meta
  * the same one — a per-lane copy would leave the scorecard's per-model cells comparing briefings
  * instead of models.
  */
-export function buildPrompt(root, ids) {
+export function buildPrompt(root, ids, { modelPolicy = { source: 'table' }, modelsArg = 'claude' } = {}) {
   const phaseFiles = ids.map((n) => `${roadmapRootRel(root)}/phases/phase-${n}.phase.ts`)
   for (const f of phaseFiles) {
     if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
@@ -149,7 +150,7 @@ export function buildPrompt(root, ids) {
     '- End every commit with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.',
     '- NO REACHABLE USER in this lane. Any protocol step that resolves to "stop and ask the user" — an escalating verdict, a failed `assumptions[]` check, a post-and-wait instruction — ENDS this run instead: write the report below with the question and its options, end it with CODEX-RUN-BLOCKED, and stop. Never wait for an answer that cannot come.',
     '- ALREADY IN YOUR WORKTREE and branch: skip worktree setup/reset and landing. Never claim a second slot.',
-    `- FILL PROTOCOL ROLES rather than substituting yourself for them: the table in ${ROLE_BINDINGS} §1 (resolveRole in cli/lib/roles.mjs) names the model and how to reach it — spawn it natively when it is yours, else as a headless child (Claude family: \`claude -p [--agents <json>]\`). Record every firing; a role you fill yourself is recorded inline and labelled your own, never as a review that did not run. Reviews recorded as \`self-review\` never satisfy completion — a codex-lane phase needs at least one independent recorded round, and \`--verify-complete\` refuses without it.`,
+    `- FILL PROTOCOL ROLES via \`roadmap role resolve <role> --driver codex --models ${modelsArg}\` (resolveRole) under ${JSON.stringify(modelPolicy)}; stamp \`executionResult.modelPolicy\`. Spawn it natively or as a headless child (Claude: \`claude -p\`). Record every firing. Reviews recorded as \`self-review\` never satisfy completion — a codex-lane phase needs at least one independent recorded round, and \`--verify-complete\` refuses without it.`,
     '- ATTRIBUTION: stamp `executionResult.driver` as `{ model: <your model id>, lane: "codex" }`; it must match the launcher journal.',
     '',
     `WHEN FINISHED (or blocked): write ${LANES.run.report} in the worktree root (do NOT commit it) with per-task commit sha + the verify commands run and their outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
@@ -362,7 +363,7 @@ function preserveStaleReport(worktree, reportName) {
  * id (the DriverShape lane vocabulary) — deliberately not this function's `lane`, which is the
  * run/plan/review mission.
  */
-function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null }) {
+function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null, modelPolicy }) {
   const building = join(root, '.building')
   const stem = `${LANES[lane].prefix}${ids.join('-')}`
   const promptPath = join(building, `${stem}-prompt.txt`)
@@ -387,7 +388,7 @@ function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null }) {
       // nothing else can recover it: the copy lands untracked at a path only the launcher knew, and
       // a done-moment that cannot name it refuses on the launcher's own artifact — the same trap
       // RUN_LANE_ARTIFACTS exists to stop for CODEX-REPORT.md. Absent when nothing was carried in.
-      { phases: ids, lane, driver: driverStamp(entry), report: LANES[lane].report, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString() },
+      { phases: ids, lane, driver: driverStamp(entry), report: LANES[lane].report, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, ...(modelPolicy ? { modelPolicy } : {}), ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString() },
       null,
       2,
     ) + '\n',
@@ -456,6 +457,26 @@ function runCodex(root, ids, argv) {
   const bi = argv.indexOf('--base')
   const base = bi >= 0 ? argv[bi + 1] : 'develop'
   const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-${ids.join('-')}`
+  const mi = argv.indexOf('--models')
+  const modelsArg = mi >= 0 ? argv[mi + 1] : undefined
+  if (mi >= 0 && (modelsArg === undefined || modelsArg.startsWith('--'))) {
+    process.stderr.write('roadmap codex: --models needs a value\n')
+    return 1
+  }
+  let repoPolicy
+  try {
+    repoPolicy = loadConfig(root).modelPolicy
+  } catch (error) {
+    if (!(error instanceof ConfigError) || error.kind !== 'absent') throw error
+  }
+  let modelPolicy
+  try {
+    modelPolicy = mergePolicy(repoPolicy, mi >= 0 ? policyFromArg(modelsArg) : undefined)
+  } catch (error) {
+    process.stderr.write(`roadmap codex: ${error.message}\n`)
+    return 1
+  }
+  const resolverArg = policyToArg(modelPolicy)
   const building = join(root, '.building')
   mkdirSync(building, { recursive: true })
   const jPath = journalPath(root, ids, 'run')
@@ -468,9 +489,9 @@ function runCodex(root, ids, argv) {
 
   // buildPrompt can still throw (a renamed/renumbered phase file) — resolve it BEFORE
   // touching the previous run's hand-off, so a failed relaunch destroys no evidence.
-  const prompt = buildPrompt(root, ids)
+  const prompt = buildPrompt(root, ids, { modelPolicy, modelsArg: resolverArg })
   preserveStaleReport(worktree, LANES.run.report)
-  return launch(root, ids, 'run', { worktree, base, prompt })
+  return launch(root, ids, 'run', { worktree, base, prompt, modelPolicy })
 }
 
 /**
@@ -1022,7 +1043,7 @@ export default async function run(argv) {
     return 1
   }
   // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).
-  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
+  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc', '--models'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
   // BEFORE the member list is resolved: arcPhases throws on an arc file with no parseable
   // `phases:`, and a traceback is the exact outcome this refusal exists to replace.
   if (sub === 'plan' && arcId) {

@@ -111,6 +111,7 @@ export const MODEL_ALIASES = Object.freeze({
   fable: MODEL_IDS.FABLE,
   sonnet: MODEL_IDS.SONNET,
   opus: MODEL_IDS.OPUS,
+  sol: MODEL_IDS.SOL,
 })
 
 /**

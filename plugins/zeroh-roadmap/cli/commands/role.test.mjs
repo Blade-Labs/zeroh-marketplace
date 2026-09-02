@@ -44,7 +44,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { MODEL_ALIASES, MODEL_IDS } from '../lib/drivers.mjs'
-import { FORCE_UNAVAILABLE_ENV, ROLES, RoleUnjudgedError, resolveRole } from '../lib/roles.mjs'
+import { FORCE_UNAVAILABLE_ENV, MODEL_PRESETS, ROLES, RoleUnjudgedError, resolveRole } from '../lib/roles.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url)) // cli/commands/
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -442,4 +442,346 @@ test('11) UNJUDGED: every tier forced down is exit 2, carrying the error\'s own 
     '',
     `no tier ran, so no resolution may be printed on stdout — a model id here would seat a judge that was never reachable; got stdout:\n${human.stdout}`,
   )
+})
+
+// ── the model policy seam (phase 24.2) ──────────────────────────────────────────────────
+// 24.1 gave the LIBRARY a policy (`resolveRole(role, driver, { policy })`, presets, per-role
+// leads, the arc-eval-judge pin). 24.2 gives the OPERATOR two doors onto it and this suite owns
+// both: the repo's `modelPolicy` block (whole, not judgeModel alone) and `--models <preset|pairs>`
+// on the verb, invocation winning. Today `--models` is an unrecognized token the arg walk skips,
+// so every case below resolves the table instead — RED with the real answer printed.
+//
+// policyFromArg/mergePolicy are asserted here too, in-process: cli/lib/roles.test.mjs is not a
+// file of task 24.2, and these two functions are the verb's own parsing/merge seam. They are
+// reached through a DYNAMIC import so a missing export fails its own case with a named message
+// rather than link-erroring the whole file and hiding the eleven cases above.
+
+const ROLES_MOD = join(HERE, '..', 'lib', 'roles.mjs')
+
+/** The 24.2 policy helpers, each asserted present before use (a named RED, never `undefined is not a function`). */
+async function policyLib() {
+  const mod = await import(ROLES_MOD)
+  for (const name of ['policyFromArg', 'mergePolicy']) {
+    assert.equal(
+      typeof mod[name],
+      'function',
+      `cli/lib/roles.mjs must export ${name}() (task 24.2) — the verb, arm and codex run all parse ` +
+        `--models through the SAME function; got ${typeof mod[name]}`,
+    )
+  }
+  return mod
+}
+
+/** Spawn any `roadmap` subcommand (not just `role`) inside `repo` — same env discipline as role(). */
+function cli(repo, args, { force } = {}) {
+  const env = { ...process.env }
+  if (force !== undefined) env[FORCE_UNAVAILABLE_ENV] = force.join(',')
+  return spawnSync('node', [BIN, ...args], { cwd: repo, encoding: 'utf8', env })
+}
+
+/** A tmp repo whose config carries `modelPolicy` VERBATIM (absent entirely when undefined). */
+function newPolicyRepo(modelPolicy) {
+  const repo = newRepo()
+  const cfg = configWith()
+  if (modelPolicy !== undefined) cfg.modelPolicy = modelPolicy
+  writeFileSync(join(repo, 'roadmap', 'roadmap.config.json'), JSON.stringify(cfg, null, 2) + '\n')
+  return repo
+}
+
+/** The resolution the CLI must reproduce for a POLICY (the library is the one truth, as in expected()). */
+function expectedUnder(roleId, { driver = 'claude', policy, force } = {}) {
+  return resolveRole(roleId, driver, { policy, forceUnavailable: force ?? [], env: {} })
+}
+
+const PINNED_JUDGE = ROLES['arc-eval-judge'].tierChain[0] // claude-sonnet-5 — the eval trend baseline
+
+test('12) --models on an EMPTY-config repo: `resolve quality-pass --driver codex --models codex` is gpt-5.6-sol (native)', () => {
+  // The phase's headline: a repo that has opted into nothing at all still runs a codex arc when
+  // the RUN says so. quality-pass carries a 1-entry [OPUS] chain, so without the flag reaching
+  // the resolver this is claude-opus-5 (child-cli) — the exact waste 24 exists to end.
+  const repo = newPolicyRepo(undefined)
+  const want = expectedUnder('quality-pass', { driver: 'codex', policy: { preset: 'codex' } })
+  assert.equal(want.model, SOL, 'fixture guard: preset codex leads a builder seam with the codex model')
+  assert.equal(want.mode, 'native', 'fixture guard: the codex driver runs its own model as a native subagent')
+
+  const json = cli(repo, ['role', 'resolve', 'quality-pass', '--driver', 'codex', '--models', 'codex', '--json'])
+  assert.equal(json.status, 0, `a resolvable role exits 0; stdout:\n${json.stdout}\nstderr:\n${json.stderr}`)
+  assert.deepEqual(
+    parseStdout(json),
+    want,
+    '--models <preset> must reach resolveRole as the policy — an empty repo config must not erase it',
+  )
+
+  const human = cli(repo, ['role', 'resolve', 'quality-pass', '--driver', 'codex', '--models', 'codex'])
+  assert.equal(human.status, 0, `a resolvable role exits 0; stdout:\n${human.stdout}\nstderr:\n${human.stderr}`)
+  assert.ok(
+    human.stdout.includes(`${SOL} (native)`),
+    `the human line must read "${SOL} (native)" — task 24.5's live probe greps this verbatim; got stdout:\n${human.stdout}`,
+  )
+})
+
+test('13) PRECEDENCE: --models beats the repo modelPolicy, for the role the two policies disagree on', () => {
+  // preset codex keeps the architect on fable; codex-full moves it to sol. Same repo, same role,
+  // same driver — only the flag differs, so a command that read the config and ignored the flag
+  // (or vice versa) reds on one leg or the other.
+  const repo = newPolicyRepo({ preset: 'codex' })
+  const fromConfig = expectedUnder('software-architect', { driver: 'codex', policy: { preset: 'codex' } })
+  const fromFlag = expectedUnder('software-architect', { driver: 'codex', policy: { preset: 'codex-full' } })
+  assert.equal(fromConfig.model, FABLE, 'fixture guard: preset codex keeps the architect on fable')
+  assert.equal(fromFlag.model, SOL, 'fixture guard: preset codex-full moves the architect to the codex model')
+
+  const configured = cli(repo, ['role', 'resolve', 'software-architect', '--driver', 'codex', '--json'])
+  const overridden = cli(repo, ['role', 'resolve', 'software-architect', '--driver', 'codex', '--models', 'codex-full', '--json'])
+  assert.equal(configured.status, 0, `stdout:\n${configured.stdout}\nstderr:\n${configured.stderr}`)
+  assert.equal(overridden.status, 0, `stdout:\n${overridden.stdout}\nstderr:\n${overridden.stderr}`)
+  assert.deepEqual(
+    parseStdout(configured),
+    fromConfig,
+    'with no flag the REPO policy is in force, whole (preset included) — not judgeModel alone',
+  )
+  assert.deepEqual(
+    parseStdout(overridden),
+    fromFlag,
+    'the invocation wins over the repo default (MULTI-DRIVER §1: --models > modelPolicy > table)',
+  )
+})
+
+test('14) CONFIG: a repo `modelPolicy.preset` alone re-routes a BUILDER seam — judgeModel is no longer the only key read', () => {
+  const codexRepo = newPolicyRepo({ preset: 'codex' })
+  const bareRepo = newPolicyRepo(undefined)
+  const want = expectedUnder('quality-pass', { driver: 'codex', policy: { preset: 'codex' } })
+  const table = expectedUnder('quality-pass', { driver: 'codex' })
+  assert.notEqual(want.model, table.model, 'fixture guard: the two configs must disagree for this contrast to mean anything')
+
+  const configured = cli(codexRepo, ['role', 'resolve', 'quality-pass', '--driver', 'codex', '--json'])
+  const unconfigured = cli(bareRepo, ['role', 'resolve', 'quality-pass', '--driver', 'codex', '--json'])
+  assert.equal(configured.status, 0, `stdout:\n${configured.stdout}\nstderr:\n${configured.stderr}`)
+  assert.equal(unconfigured.status, 0, `stdout:\n${unconfigured.stdout}\nstderr:\n${unconfigured.stderr}`)
+  assert.deepEqual(
+    parseStdout(configured),
+    want,
+    'a repo that declared preset codex gets a codex quality-pass with NO flag — that is what "per-repo default" means',
+  )
+  assert.deepEqual(
+    parseStdout(unconfigured),
+    table,
+    'and a repo that declared nothing is untouched: the committed roles table, byte for byte',
+  )
+})
+
+test('15) --models PAIRS: `default=sol,software-architect=fable` resolves both roles the pairs describe', () => {
+  const repo = newPolicyRepo(undefined)
+  const policy = { default: 'sol', roles: { 'software-architect': 'fable' } }
+  for (const roleId of ['quality-pass', 'software-architect']) {
+    const want = expectedUnder(roleId, { driver: 'codex', policy })
+    const res = cli(repo, ['role', 'resolve', roleId, '--driver', 'codex', '--models', 'default=sol,software-architect=fable', '--json'])
+    assert.equal(res.status, 0, `${roleId}: stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+    assert.deepEqual(
+      parseStdout(res),
+      want,
+      `${roleId}: the pair spelling must parse to the same policy as the object — "codex builders with a ` +
+        `fable architect" is the combination the phase exists to express`,
+    )
+  }
+})
+
+test('16) --models UNKNOWN preset: exit 1 naming the offender and every legal preset, no stack trace', () => {
+  const repo = newPolicyRepo(undefined)
+  const res = cli(repo, ['role', 'resolve', 'quality-pass', '--driver', 'codex', '--models', 'gpt'])
+  assert.equal(res.status, 1, `an unspellable policy is a usage error (exit 1); stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+  assert.ok(res.stderr.includes('gpt'), `the error must NAME the offender; got stderr:\n${res.stderr}`)
+  for (const preset of Object.keys(MODEL_PRESETS)) {
+    assert.ok(
+      res.stderr.includes(preset),
+      `the error must list the legal preset '${preset}' — the operator typed one word and needs the ` +
+        `other three; got stderr:\n${res.stderr}`,
+    )
+  }
+  assertNoStackTrace(res)
+  assert.equal(res.stdout.trim(), '', `nothing resolved, so nothing may be printed on stdout; got stdout:\n${res.stdout}`)
+})
+
+test('17) --models WITHOUT a value is USAGE, never a resolve against a policy named "undefined"', () => {
+  for (const args of [
+    ['role', 'resolve', 'quality-pass', '--models'],
+    ['role', 'resolve', 'quality-pass', '--models', '--json'],
+  ]) {
+    const res = cli(newPolicyRepo(undefined), args)
+    const where = `args ${JSON.stringify(args)}`
+    assert.equal(res.status, 1, `${where}: a missing flag value is usage (exit 1); stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+    assert.match(res.stderr, /--models needs a value/, `${where}: the command's OWN usage line; got stderr:\n${res.stderr}`)
+    assertNoStackTrace(res)
+    assert.equal(res.stdout.trim(), '', `${where}: no verdict is emitted`)
+  }
+})
+
+test('18) the --models VALUE is never mistaken for the role id, whatever the flag order', () => {
+  // `--models codex` before the role would make 'codex' the first non-flag token. The verb already
+  // skips --driver's value the same way (case 9b's sibling); a policy value that shadows the role
+  // resolves the wrong seam, or reds as an unknown role the operator never typed.
+  const repo = newPolicyRepo(undefined)
+  const res = cli(repo, ['role', 'resolve', '--models', 'codex', 'quality-pass', '--driver', 'codex', '--json'])
+  assert.equal(res.status, 0, `the role is still 'quality-pass'; stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+  const body = parseStdout(res)
+  assert.equal(body.role, 'quality-pass', `the flag VALUE is not a role id; got:\n${res.stdout}`)
+  assert.deepEqual(
+    body,
+    expectedUnder('quality-pass', { driver: 'codex', policy: { preset: 'codex' } }),
+    'flag order must not change the answer',
+  )
+})
+
+test('19) the PIN refused at --models: naming arc-eval-judge exits 1 naming the role, no stack trace', () => {
+  const repo = newPolicyRepo(undefined)
+  const res = cli(repo, ['role', 'resolve', 'quality-pass', '--driver', 'codex', '--models', 'arc-eval-judge=sol'])
+  assert.equal(
+    res.status,
+    1,
+    `a policy that moves the pinned judge is REFUSED, never quietly served for some other role; stdout:\n${res.stdout}\nstderr:\n${res.stderr}`,
+  )
+  assert.ok(res.stderr.includes('arc-eval-judge'), `the refusal must NAME the pinned role; got stderr:\n${res.stderr}`)
+  assertNoStackTrace(res)
+  assert.equal(res.stdout.trim(), '', `nothing resolved, so nothing may be printed on stdout; got stdout:\n${res.stdout}`)
+})
+
+test('20) the PIN refused at `config check`: a repo naming arc-eval-judge in modelPolicy.roles reds, naming the pin', () => {
+  // The eval trend is only comparable while every arc was judged by the same model
+  // (cli/commands/eval.mjs PINNED_JUDGE_MODEL). A repo that re-pointed it must be told at the
+  // door — config check is where a consumer learns its own policy is illegal.
+  const repo = newPolicyRepo({ roles: { 'arc-eval-judge': 'sol' } })
+  const res = cli(repo, ['config', 'check'])
+  assert.equal(res.status, 1, `an illegal policy fails config check; stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+  assert.ok(res.stderr.includes('arc-eval-judge'), `the refusal must NAME the pinned role; got stderr:\n${res.stderr}`)
+  assert.ok(
+    res.stderr.includes(PINNED_JUDGE),
+    `the refusal must name the model the role is pinned TO (${PINNED_JUDGE}) — the operator's next ` +
+      `question is "pinned to what?"; got stderr:\n${res.stderr}`,
+  )
+  assertNoStackTrace(res)
+  assert.ok(!res.stdout.includes('config OK'), `a refused config is never OK; got stdout:\n${res.stdout}`)
+})
+
+test('21) `config check` on a preset policy exits 0 and NAMES the effective policy, not judge= alone', () => {
+  const repo = newPolicyRepo({ preset: 'codex' })
+  const res = cli(repo, ['config', 'check'])
+  assert.equal(res.status, 0, `a legal policy passes; stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+  assert.ok(res.stdout.includes('config OK'), `the verdict rides stdout; got stdout:\n${res.stdout}`)
+  const line = res.stderr.split('\n').find((l) => /modelPolicy/.test(l))
+  assert.ok(line, `the resolved-bindings summary must carry a modelPolicy line; got stderr:\n${res.stderr}`)
+  assert.ok(
+    line.includes('codex'),
+    `the summary must name the policy IN FORCE ('codex') — printing judge= alone hides which model ` +
+      `every builder seam will actually spawn; got:\n${line}`,
+  )
+})
+
+// ── policyFromArg / mergePolicy — the shared --models parsing + merge seam ──────────────
+
+test('22) policyFromArg: every preset NAME parses to that preset, proven through the resolutions it produces', async () => {
+  const { policyFromArg } = await policyLib()
+  for (const preset of Object.keys(MODEL_PRESETS)) {
+    for (const roleId of ['quality-pass', 'software-architect', 'test-engineer']) {
+      assert.deepEqual(
+        expectedUnder(roleId, { driver: 'codex', policy: policyFromArg(preset) }),
+        expectedUnder(roleId, { driver: 'codex', policy: { preset } }),
+        `${roleId} under '${preset}': the parsed arg and the written policy are ONE input — arm, codex ` +
+          `run and the verb all go through this function, so a divergence here re-routes a whole arc`,
+      )
+    }
+  }
+})
+
+test('23) policyFromArg: comma pairs carry a default AND per-role leads, equal to the written policy', async () => {
+  const { policyFromArg } = await policyLib()
+  const parsed = policyFromArg('default=sol,software-architect=fable,test-engineer=opus')
+  const written = { default: 'sol', roles: { 'software-architect': 'fable', 'test-engineer': 'opus' } }
+  for (const roleId of ['quality-pass', 'software-architect', 'test-engineer']) {
+    assert.deepEqual(
+      expectedUnder(roleId, { driver: 'codex', policy: parsed }),
+      expectedUnder(roleId, { driver: 'codex', policy: written }),
+      `${roleId}: 'default=' is the DEFAULT lead and every other pair is a per-role lead`,
+    )
+  }
+  assert.equal(
+    expectedUnder('quality-pass', { driver: 'codex', policy: parsed }).model,
+    SOL,
+    'fixture guard: the pairs must actually move a role, or this case proves nothing',
+  )
+})
+
+test('24) policyFromArg: an unknown preset, role or alias each throw NAMING the offender and the legal set', async () => {
+  const { policyFromArg } = await policyLib()
+
+  const preset = thrownMessage(() => policyFromArg('gpt'))
+  assert.ok(preset.includes('gpt'), `the preset error names the offender; got: ${preset}`)
+  for (const name of Object.keys(MODEL_PRESETS)) {
+    assert.ok(preset.includes(name), `the preset error lists '${name}'; got: ${preset}`)
+  }
+
+  const roleMsg = thrownMessage(() => policyFromArg('no-such-role=sol'))
+  assert.ok(roleMsg.includes('no-such-role'), `the role error names the offender; got: ${roleMsg}`)
+  for (const known of Object.keys(ROLES)) {
+    assert.ok(roleMsg.includes(known), `the role error names the whole known set (missing '${known}'); got: ${roleMsg}`)
+  }
+
+  const aliasMsg = thrownMessage(() => policyFromArg('software-developer=gpt-4'))
+  assert.ok(aliasMsg.includes('gpt-4'), `the alias error names the offender; got: ${aliasMsg}`)
+  for (const alias of Object.keys(MODEL_ALIASES)) {
+    assert.ok(aliasMsg.includes(alias), `the alias error lists the spellable model '${alias}'; got: ${aliasMsg}`)
+  }
+})
+
+test('25) mergePolicy: source is invocation > config > table, and it describes where the policy CAME FROM', async () => {
+  const { mergePolicy } = await policyLib()
+
+  for (const [repo, invocation] of [[undefined, undefined], [{}, {}], [{}, undefined], [undefined, {}]]) {
+    assert.equal(
+      mergePolicy(repo, invocation).source,
+      'table',
+      `repo ${JSON.stringify(repo)} + invocation ${JSON.stringify(invocation)}: nothing was named, so the ` +
+        `committed roles table is what runs — an empty object must not be recorded as a choice anyone made`,
+    )
+  }
+
+  const fromConfig = mergePolicy({ preset: 'codex' }, undefined)
+  assert.equal(fromConfig.source, 'config', 'the repo default in force is recorded as config')
+  assert.equal(fromConfig.preset, 'codex', 'and the policy itself rides the same object (task 24.3 stamps it whole)')
+
+  const fromInvocation = mergePolicy({ preset: 'codex' }, { preset: 'codex-full' })
+  assert.equal(fromInvocation.source, 'invocation', 'a run that named a policy is recorded as invocation')
+  assert.equal(fromInvocation.preset, 'codex-full', 'and the invocation key wins over the repo one')
+
+  const presetOverride = mergePolicy(
+    { default: 'opus', roles: { 'software-architect': 'fable' }, judgeModel: 'fable' },
+    { preset: 'codex-full' },
+  )
+  assert.deepEqual(
+    presetOverride,
+    { source: 'invocation', preset: 'codex-full' },
+    'a named invocation preset is the whole policy: no repo lead may survive and outrank that preset',
+  )
+})
+
+test('26) mergePolicy: the invocation wins KEY BY KEY — repo keys it does not name survive', async () => {
+  const { mergePolicy } = await policyLib()
+  const merged = mergePolicy({ judgeModel: 'fable', default: 'opus' }, { default: 'sol' })
+  assert.equal(merged.default, 'sol', 'the named key is overridden')
+  assert.equal(
+    merged.judgeModel,
+    'fable',
+    "a repo key the run never mentioned must survive the merge — `--models default=sol` says nothing " +
+      'about the judge lead, and silently dropping it re-routes every judge seam in the arc',
+  )
+  assert.equal(merged.source, 'invocation', 'the run still named part of the policy')
+})
+
+test('27) mergePolicy mutates neither argument — the repo config is read many times per run', async () => {
+  const { mergePolicy } = await policyLib()
+  const repo = { preset: 'codex', roles: { 'test-engineer': 'opus' } }
+  const invocation = { preset: 'codex-full' }
+  const repoCopy = structuredClone(repo)
+  const invocationCopy = structuredClone(invocation)
+  mergePolicy(repo, invocation)
+  assert.deepEqual(repo, repoCopy, 'the loaded config object must come back unchanged')
+  assert.deepEqual(invocation, invocationCopy, 'and so must the parsed --models policy')
 })

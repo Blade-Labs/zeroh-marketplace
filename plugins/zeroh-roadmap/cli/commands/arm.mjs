@@ -13,6 +13,8 @@ import { join } from 'node:path'
 import { armSidecar, writeArcMode, readSidecar, LaneHeldError } from '../lib/sidecar.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { roadmapRoot } from '../lib/roadmap-root.mjs'
+import { ConfigError, loadConfig } from '../lib/config.mjs'
+import { mergePolicy, policyFromArg } from '../lib/roles.mjs'
 
 function parse(argv) {
   const opts = {}
@@ -23,6 +25,10 @@ function parse(argv) {
     else if (a === '--note') opts.note = argv[++i]
     else if (a === '--base-ref') opts.baseRef = argv[++i]
     else if (a === '--mode') opts.mode = argv[++i]
+    else if (a === '--models') {
+      opts.modelsSeen = true
+      opts.models = argv[++i]
+    }
     else if (!a.startsWith('--')) positional.push(a)
   }
   return { opts, positional }
@@ -30,12 +36,29 @@ function parse(argv) {
 
 export default async function run(argv) {
   const { opts, positional } = parse(argv)
+  if (opts.modelsSeen && (opts.models === undefined || opts.models.startsWith('--'))) {
+    process.stderr.write('roadmap arm: --models needs a value\n')
+    return 1
+  }
   const arcId = positional[0]
   if (!arcId) {
     process.stderr.write('roadmap arm: usage: roadmap arm <arcId> [--inline] [--note <txt>] [--base-ref <ref>] [--mode <band>]\n')
     return 1
   }
   const cwd = process.cwd()
+  let repoPolicy
+  try {
+    repoPolicy = loadConfig(cwd).modelPolicy
+  } catch (error) {
+    if (!(error instanceof ConfigError) || error.kind !== 'absent') throw error
+  }
+  let modelPolicy
+  try {
+    modelPolicy = mergePolicy(repoPolicy, opts.modelsSeen ? policyFromArg(opts.models) : undefined)
+  } catch (error) {
+    process.stderr.write(`roadmap arm: ${error.message}\n`)
+    return 1
+  }
   let branch = ''
   try {
     branch = execFileSync('git', ['-C', cwd, 'branch', '--show-current'], { timeout: 10_000, encoding: 'utf8' }).trim()
@@ -53,6 +76,7 @@ export default async function run(argv) {
       baseRef: opts.baseRef, // never guess the arc file's baseRef here — 1657's tsx bridge owns that
       mode: opts.mode ?? 'mixed',
       note: opts.note,
+      modelPolicy,
     })
   } catch (e) {
     if (e instanceof LaneHeldError) {

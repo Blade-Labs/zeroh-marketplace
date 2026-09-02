@@ -2,8 +2,9 @@
 /**
  * Fixtures for cli/lib/drivers.mjs. Pins the codex launch inputs against a LITERAL fixture
  * of the spawn argv (written out in full — never rebuilt from the registry's own data, which
- * would assert nothing), the refusal on an unregistered id, the host-stamped provenance
- * shape, and the ratchet holding every model-specific argv inside the registry.
+ * would assert nothing), the alias vocabulary a consumer's config spells models with, the
+ * refusal on an unregistered id, the host-stamped provenance shape, and the ratchet holding
+ * every model-specific argv inside the registry.
  * Run: node --test cli/lib/drivers.test.mjs
  */
 import { test } from 'node:test'
@@ -11,7 +12,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DRIVERS, resolveDriver, launchArgv, driverStamp } from './drivers.mjs'
+import { DRIVERS, MODEL_ALIASES, MODEL_DRIVERS, MODEL_IDS, resolveDriver, launchArgv, driverStamp } from './drivers.mjs'
 
 // ── criterion 1: the extraction reproduces today's spawn inputs byte-for-byte ─────────
 test("launchArgv('codex') plus the entry's bin reproduce today's spawn inputs exactly", () => {
@@ -64,6 +65,46 @@ test('driverStamp on an entry declaring NO model records model: null explicitly,
   assert.equal(stamp.lane, 'claude')
   assert.equal(stamp.model, null, 'an unpinned model is RECORDED as unrecorded, never guessed')
   assert.ok('model' in stamp, 'present-and-null — an omitted key is indistinguishable from a forgotten stamp')
+})
+
+// ── the alias vocabulary: every bindable model is NAMEABLE from a consumer's config ────
+test("MODEL_ALIASES.sol names the codex pinned model — the CONFIG spelling of the one id no alias could reach", () => {
+  assert.equal(
+    MODEL_ALIASES.sol,
+    'gpt-5.6-sol',
+    "a consumer's modelPolicy can only ever carry an ALIAS, so an unaliased model is a model no repo can ask for — add sol: MODEL_IDS.SOL to MODEL_ALIASES in cli/lib/drivers.mjs",
+  )
+  assert.equal(
+    MODEL_ALIASES.sol,
+    resolveDriver('codex').model,
+    'the sol alias and the codex entry\'s pinned model are one value — a divergence lets a policy name a model no launcher will pin',
+  )
+})
+
+test('every model id the plugin binds carries exactly one alias — an unnameable model is unaskable', () => {
+  assert.deepEqual(
+    [...new Set(Object.values(MODEL_ALIASES))].sort(),
+    Object.values(MODEL_IDS).sort(),
+    'MODEL_ALIASES must cover MODEL_IDS one-for-one: a model id with no alias cannot be spelled in roadmap.config.json or --models, and an alias naming an id outside MODEL_IDS names a model this plugin never binds (cli/lib/drivers.mjs)',
+  )
+  assert.equal(
+    Object.keys(MODEL_ALIASES).length,
+    Object.keys(MODEL_IDS).length,
+    'two aliases for one model id would give the same policy two spellings and the recorded snapshot two readings',
+  )
+})
+
+test('every alias resolves to a model some registered driver actually runs', () => {
+  for (const [alias, model] of Object.entries(MODEL_ALIASES)) {
+    assert.ok(
+      Object.hasOwn(MODEL_DRIVERS, model),
+      `alias '${alias}' names '${model}', which routes to no driver — route it in MODEL_DRIVERS or stop aliasing it (cli/lib/drivers.mjs)`,
+    )
+    assert.ok(
+      Object.hasOwn(DRIVERS, MODEL_DRIVERS[model]),
+      `alias '${alias}' routes to driver '${MODEL_DRIVERS[model]}', which is not a registered entry — a policy naming '${alias}' would resolve to an empty slot`,
+    )
+  }
 })
 
 // ── criterion 2: an unregistered id REFUSES, naming the known set ─────────────────────

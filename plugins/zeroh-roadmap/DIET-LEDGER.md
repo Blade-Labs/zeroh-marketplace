@@ -712,3 +712,10 @@ prod-grade OVER-budget reports), `CHARLIE` 15,757 → 15,839 (the fast-lane sing
 13,257 → 13,339 (EXACTLY at budget — the report that must NOT be a finding). `load-fixture.mjs`'s
 docblock table and its exactly-at-budget note carry the new numbers; `eval-propose.test.mjs:368`'s
 pinned literal is 13,339.
+## do-arc model-policy routing — phase 24.4
+
+| Original location + phrase | Disposition | New location |
+|---|---|---|
+| do-arc Trigger — separate prose for optional band flags | superseded-with-equivalent(compacted into the options sentence while retaining both flags and their force-every-band meaning) | do-arc Trigger |
+| do-arc Step 1 — "a lane a sibling already holds" | superseded-with-equivalent("a sibling's lane" preserves the ownership/refusal rule) | do-arc Step 1 |
+| do-arc loop Step 3 — expanded executor arm/spawn explanation | superseded-with-equivalent(the compact paragraph retains ordering, exact commands/inputs, session and exclusive-id meanings, refusal scope, attribution reconciliation, preflight interpretation, and liveness handoff) | do-arc loop Step 3 |

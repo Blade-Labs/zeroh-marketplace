@@ -13,6 +13,12 @@
  * cli/commands/config.test.mjs + cli/lib/sidecar.test.mjs (mkdtempSync + realpathSync
  * + process.on('exit') cleanup; REAL `git init` / `git worktree add`, no mocking).
  *
+ * The phase-24.3 block at the foot of the file is TEST-FIRST too, against the same wired seam:
+ * `roadmap arm <arc> --models <preset|pairs>` must parse through the shared policyFromArg/
+ * mergePolicy seam and stamp the resulting snapshot — provenance included — into the sidecar,
+ * and that snapshot must validate as a phase record's `executionResult.modelPolicy` in BOTH
+ * schema homes (the templates/ original and the consumer's vendored copy).
+ *
  * Run: node --test cli/commands/arm-disarm.test.mjs
  */
 import { test } from 'node:test'
@@ -23,13 +29,16 @@ import {
   mkdirSync,
   writeFileSync,
   readFileSync,
+  readdirSync,
   existsSync,
   rmSync,
   realpathSync,
+  symlinkSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { MODEL_PRESETS, ROLES, mergePolicy, policyFromArg } from '../lib/roles.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url)) // cli/commands/
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -288,4 +297,258 @@ test('11) a broken seam never blinds arm SILENTLY: the arm succeeds and the seam
   const r = armWithSeam(newRepo(), 'CAPZ', '{"memAvailableMb": 64000}')
   assert.equal(r.status, 0, 'advisory failure never fails the arm')
   assert.match(r.stderr, /ZEROH_ROADMAP_CAPACITY_PROBES/, `the operator's broken knob is named:\n${r.stderr}`)
+})
+
+// ── the per-run model policy (phase 24.3): --models travels into the sidecar ──────────────
+// 24.2 gave `roadmap role resolve` a --models door and the shared policyFromArg/mergePolicy
+// seam. 24.3 gives the ARC LANE one: "do arc with codex" is ARMED, and the policy the run was
+// armed with must survive the session that typed it — the sidecar is the only record that does.
+// Today arm.mjs parses --inline/--note/--base-ref/--mode only (arm.mjs:22-25) and armSidecar
+// stamps mode/note/baseRef (sidecar.mjs:109-111), so every case below reds: the flag is skipped
+// as an unknown token, its VALUE lands in the positional list, and no sidecar carries a policy.
+//
+// The library is the one truth for the expected snapshot (the cli/commands/role.test.mjs idiom):
+// arm, `codex run` and the verb all parse through policyFromArg/mergePolicy, so a second merge
+// written into arm.mjs re-routes a whole arc without ever disagreeing with itself. Each case
+// ALSO pins the concrete answer, so a command and a library that agreed on the wrong policy red.
+
+const PINNED_JUDGE = ROLES['arc-eval-judge'].tierChain[0] // claude-sonnet-5 — the eval trend baseline
+
+/** The sidecar filenames registered under the MAIN checkout — evidence for a WRONG-arc failure. */
+function buildingNames(repo) {
+  const dir = join(repo, 'roadmap', 'arcs', '.building')
+  return existsSync(dir) ? readdirSync(dir) : ['(no .building dir — nothing was armed at all)']
+}
+
+/** A minimal §1-valid config (7 core gateCommands slots) + an optional `modelPolicy` block,
+ *  written into the roadmap root newRepo() already creates. Absent modelPolicy = an empty policy. */
+function writeConfig(repo, modelPolicy) {
+  const cfg = {
+    configVersion: 1,
+    gateCommands: { lint: 'none', types: 'none', unit: 'none', integration: 'none', build: 'none', e2e: 'none', emit: 'none' },
+  }
+  if (modelPolicy !== undefined) cfg.modelPolicy = modelPolicy
+  writeFileSync(join(repo, 'roadmap', 'roadmap.config.json'), JSON.stringify(cfg, null, 2) + '\n')
+}
+
+test('12) arm --models codex stamps the invocation policy into the sidecar, and stamps nothing else away', () => {
+  const repo = newRepo()
+  const want = mergePolicy(undefined, policyFromArg('codex'))
+  assert.deepEqual(
+    want,
+    { source: 'invocation', preset: 'codex' },
+    'fixture guard: the shared seam must read `--models codex` as the codex preset named BY THE RUN — if this ' +
+      'ever changes, the sidecar contract below is being pinned against the wrong object',
+  )
+
+  const res = roadmap(repo, 'arm', 'ARC', '--models', 'codex')
+  assert.equal(res.status, 0, `arm --models must be accepted, not refused as an unknown flag; stderr:\n${res.stderr}`)
+
+  const s = readSidecar(repo, 'ARC')
+  assert.deepEqual(
+    s.modelPolicy,
+    want,
+    'the armed lane must carry the policy it was armed with — a snapshot the arm drops leaves the scorecard unable ' +
+      'to tell a codex arc from a claude one, and the executor with nothing to resolve roles against; fix ' +
+      'cli/commands/arm.mjs (parse --models through policyFromArg + mergePolicy) and cli/lib/sidecar.mjs (stamp it)',
+  )
+
+  // Additive: the key JOINS the sidecar — everything status, disarm and the beacon read survives.
+  assert.equal(s.arcId, 'ARC')
+  assert.equal(s.worktree, resolve(repo), 'worktree = the arm cwd, resolved')
+  assert.equal(s.branch, 'develop')
+  assert.equal(s.mode, 'mixed', 'the default mode is untouched by a policy stamp')
+  assert.ok(Number.isInteger(s.pid) && s.pid > 0, 'the liveness probe still has its pid')
+  assert.ok(typeof s.armedAt === 'string' && !Number.isNaN(Date.parse(s.armedAt)), 'the stamp still carries an ISO armedAt')
+})
+
+test('13) the --models VALUE is never mistaken for the ARC ID, whatever the flag order', () => {
+  // arm's parser pushes every non-`--` token onto `positional` and takes positional[0] as the arc.
+  // A --models whose value is not CONSUMED therefore arms an arc literally named `codex` — a lane
+  // registered under a name no one typed, which `status` then shows and `disarm <ID>` cannot find.
+  const repo = newRepo()
+  const res = roadmap(repo, 'arm', '--models', 'codex', 'ARC')
+  assert.equal(res.status, 0, `the arc id is still ARC; stderr:\n${res.stderr}`)
+  assert.ok(
+    existsSync(sidecarPath(repo, 'ARC')),
+    `flag order must not change WHICH arc is armed; the sidecar for ARC is missing — the .building dir holds ${JSON.stringify(buildingNames(repo))}`,
+  )
+  assert.ok(
+    !existsSync(sidecarPath(repo, 'codex')),
+    "the policy VALUE was armed as an arc id — arm.mjs must CONSUME --models' value the way --note and --mode consume theirs",
+  )
+  assert.deepEqual(readSidecar(repo, 'ARC').modelPolicy, mergePolicy(undefined, policyFromArg('codex')))
+})
+
+test('14) with NO --models the sidecar records the policy actually in force: source config, or table on an empty config', () => {
+  // The provenance is the point: a phase run under a repo DEFAULT and one run under a per-run
+  // OVERRIDE are different data points, and "no flag" must never be recorded as a choice someone
+  // made — nor left blank, which is indistinguishable from an arm that predates the snapshot.
+  const configured = newRepo()
+  writeConfig(configured, { preset: 'codex' })
+  assert.equal(roadmap(configured, 'arm', 'ARC').status, 0)
+  const fromConfig = mergePolicy({ preset: 'codex' }, undefined)
+  assert.equal(fromConfig.source, 'config', 'fixture guard: a repo default in force is recorded as config')
+  assert.deepEqual(
+    readSidecar(configured, 'ARC').modelPolicy,
+    fromConfig,
+    'the repo modelPolicy is what runs when the invocation names nothing — the sidecar must say so, whole ' +
+      '(preset included), and label its source config; fix cli/commands/arm.mjs',
+  )
+
+  const empty = newRepo()
+  writeConfig(empty, undefined)
+  assert.equal(roadmap(empty, 'arm', 'ARC').status, 0)
+  assert.deepEqual(
+    readSidecar(empty, 'ARC').modelPolicy,
+    { source: 'table' },
+    'a consumer that declared no policy runs the committed roles table — recorded as table, never as an empty ' +
+      'config anyone chose, and never omitted; fix cli/commands/arm.mjs',
+  )
+
+  const unconfigured = newRepo() // no roadmap.config.json at all — the pre-config estate
+  assert.equal(
+    roadmap(unconfigured, 'arm', 'ARC').status,
+    0,
+    'an unconfigured consumer still arms: loading the policy must tolerate an ABSENT config (the ' +
+      'cli/commands/role.mjs precedent), never fail the arm over a file the repo never had',
+  )
+  assert.deepEqual(readSidecar(unconfigured, 'ARC').modelPolicy, { source: 'table' })
+})
+
+test('15) an unspellable or PINNED --models refuses the arm outright — exit 1, no lane registered', () => {
+  // A refusal that armed anyway would leave the lane HELD (every later attempt from another
+  // worktree earns the exit-2 foreign refusal) under a policy the operator was just told is illegal.
+  const pinned = newRepo()
+  const res = roadmap(pinned, 'arm', 'ARC', '--models', 'arc-eval-judge=sol')
+  assert.equal(res.status, 1, `moving the pinned judge is a usage refusal (exit 1); stdout:\n${res.stdout}\nstderr:\n${res.stderr}`)
+  assert.ok(res.stderr.includes('arc-eval-judge'), `the refusal must NAME the pinned role; got stderr:\n${res.stderr}`)
+  assert.ok(
+    res.stderr.includes(PINNED_JUDGE),
+    `the refusal must name the model the role is pinned TO (${PINNED_JUDGE}) — the eval trend is only comparable ` +
+      `while every arc was judged by it (cli/commands/eval.mjs PINNED_JUDGE_MODEL); got stderr:\n${res.stderr}`,
+  )
+  assert.doesNotMatch(res.stderr, /^\s+at .*:\d+:\d+\)?$/m, `a refusal is a diagnosis, never a stack trace; got stderr:\n${res.stderr}`)
+  assert.ok(!existsSync(sidecarPath(pinned, 'ARC')), 'a refused arm must register NO lane — the sidecar is a claim on the arc')
+
+  const unknown = newRepo()
+  const bad = roadmap(unknown, 'arm', 'ARC', '--models', 'gpt')
+  assert.equal(bad.status, 1, `an unknown preset is a usage refusal; stderr:\n${bad.stderr}`)
+  assert.ok(bad.stderr.includes('gpt'), `the refusal must name the offender; got stderr:\n${bad.stderr}`)
+  for (const preset of Object.keys(MODEL_PRESETS)) {
+    assert.ok(bad.stderr.includes(preset), `the refusal must list the legal preset '${preset}'; got stderr:\n${bad.stderr}`)
+  }
+  assert.ok(!existsSync(sidecarPath(unknown, 'ARC')), 'an unparseable policy must register no lane either')
+
+  const novalue = newRepo()
+  const missing = roadmap(novalue, 'arm', 'ARC', '--models')
+  assert.equal(missing.status, 1, `a missing flag value is usage, never an arm under a policy named "undefined"; stderr:\n${missing.stderr}`)
+  assert.match(missing.stderr, /--models/, `the usage line must name the flag whose value is missing; got stderr:\n${missing.stderr}`)
+  assert.ok(!existsSync(sidecarPath(novalue, 'ARC')), 'and it registers no lane')
+})
+
+// ── the recorded snapshot is ONE shape in three places: sidecar, journal, phase record ────────
+// The object arm stamps into the sidecar is the same object a phase record carries as
+// executionResult.modelPolicy (the executor stamps it from the lane it was armed in). Validating
+// the ACTUAL stamp — never a hand-written twin — is what catches the real regression: a stamp
+// shape the record schema then rejects, discovered at `result check` time, one arc later.
+//
+// BOTH homes, because they are a VENDOR PAIR (templates/schema.ts is what a consumer installs as
+// its lib/roadmap/schema.ts): an edit landing in one only passes here in one only. And the
+// positive leg asserts the ECHOED PARSE, not the exit code: PhaseExecutionResultShape is a
+// non-strict z.object, so an UNKNOWN modelPolicy key exits 0 today and is silently stripped —
+// exit 0 alone would pass on nothing.
+
+const PLUGIN_ROOT = resolve(HERE, '..', '..')
+const CONSUMER_ROOT = resolve(PLUGIN_ROOT, '..', '..')
+const SCHEMA_HOMES = {
+  'plugins/zeroh-roadmap/templates/schema.ts': join(PLUGIN_ROOT, 'templates', 'schema.ts'),
+  'lib/roadmap/schema.ts': join(CONSUMER_ROOT, 'lib', 'roadmap', 'schema.ts'),
+}
+/** tsx for the bridge: the plugin's own devDependency, else the consumer checkout's. */
+const TSX_CANDIDATES = [join(PLUGIN_ROOT, 'node_modules', '.bin', 'tsx'), join(CONSUMER_ROOT, 'node_modules', '.bin', 'tsx')]
+
+/** A tmp consumer whose lib/roadmap/schema.ts RE-EXPORTS one schema home — the
+ *  cli/commands/result.test.mjs makeConsumer idiom, so `result check` validates through THAT home. */
+function schemaConsumer(homePath) {
+  const root = newTmp('zr-cli-armdis-schema-')
+  mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
+  writeFileSync(join(root, 'lib', 'roadmap', 'schema.ts'), `export * from '${homePath}'\n`)
+  const tsx = TSX_CANDIDATES.find((p) => existsSync(p))
+  if (tsx) {
+    mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true })
+    symlinkSync(tsx, join(root, 'node_modules', '.bin', 'tsx'))
+  }
+  git(root, 'init', '-q')
+  return root
+}
+
+/** `roadmap result check <file>` inside a schema consumer: 0 valid · 2 invalid · 1 toolchain. */
+function resultCheck(consumer, result) {
+  const f = join(consumer, 'result.json')
+  writeFileSync(f, JSON.stringify(result))
+  const r = spawnSync('node', [BIN, 'result', 'check', f], { cwd: consumer, encoding: 'utf8', timeout: 180_000 })
+  return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+}
+
+const A_RESULT = { phase: 9001, status: 'done', gateRounds: 1, compromises: [], skipped: [], hardcoded: [], surfaced: [], hardStops: [] }
+
+test('16) the snapshot arm stamps is a VALID executionResult.modelPolicy in BOTH schema homes, and an invented one is refused', () => {
+  const repo = newRepo()
+  assert.equal(roadmap(repo, 'arm', 'ARC', '--models', 'codex').status, 0)
+  const stamped = readSidecar(repo, 'ARC').modelPolicy
+  assert.ok(
+    stamped && typeof stamped === 'object',
+    'precondition: case 12 owns the stamp — with no sidecar policy written there is nothing to validate here',
+  )
+
+  for (const [home, path] of Object.entries(SCHEMA_HOMES)) {
+    assert.ok(existsSync(path), `precondition: the ${home} schema home must exist for this leg to mean anything`)
+    const consumer = schemaConsumer(path)
+
+    const ok = resultCheck(consumer, { ...A_RESULT, modelPolicy: stamped })
+    assert.notEqual(
+      ok.code,
+      1,
+      `${home}: exit 1 is a TOOLCHAIN failure (tsx/zod could not run), not a verdict on the record — install the ` +
+        `consumer checkout's dependencies and re-run; stderr:\n${ok.stderr}`,
+    )
+    assert.equal(ok.code, 0, `${home}: a record carrying the policy arm just stamped must VALIDATE; stderr:\n${ok.stderr}`)
+    assert.deepEqual(
+      JSON.parse(ok.stdout).modelPolicy,
+      stamped,
+      `${home}: the parsed record came back WITHOUT modelPolicy — a non-strict z.object silently strips keys it does ` +
+        'not know, so exit 0 proves nothing here; PhaseExecutionResultShape must DECLARE modelPolicy ' +
+        '{ source: enum(invocation|config|table), preset?, default?, roles? }',
+    )
+
+    const legacy = { source: 'config', judgeModel: 'fable' }
+    const legacyOk = resultCheck(consumer, { ...A_RESULT, modelPolicy: legacy })
+    assert.equal(legacyOk.code, 0, `${home}: the supported legacy judge lead must remain recordable; stderr:\n${legacyOk.stderr}`)
+    assert.deepEqual(
+      JSON.parse(legacyOk.stdout).modelPolicy,
+      legacy,
+      `${home}: schema parsing must not silently strip the legacy judgeModel from the launch snapshot`,
+    )
+
+    const invented = resultCheck(consumer, { ...A_RESULT, modelPolicy: { ...stamped, source: 'guessed' } })
+    assert.equal(
+      invented.code,
+      2,
+      `${home}: a source outside invocation|config|table must be REFUSED (exit 2) — an unconstrained provenance is a ` +
+        `provenance the scorecard cannot slice; stdout:\n${invented.stdout}\nstderr:\n${invented.stderr}`,
+    )
+    assert.ok(
+      invented.stderr.includes('modelPolicy'),
+      `${home}: the refusal must name the offending path (modelPolicy.source); got stderr:\n${invented.stderr}`,
+    )
+
+    const sourceless = resultCheck(consumer, { ...A_RESULT, modelPolicy: { preset: 'codex' } })
+    assert.equal(
+      sourceless.code,
+      2,
+      `${home}: a snapshot with no \`source\` must be refused — a policy that cannot say whether it came from the ` +
+        `invocation, the config or the table is exactly what this record exists to disambiguate; stdout:\n${sourceless.stdout}`,
+    )
+  }
 })

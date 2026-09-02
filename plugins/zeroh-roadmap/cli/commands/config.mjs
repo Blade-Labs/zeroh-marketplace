@@ -6,6 +6,7 @@
  * stream-separation rule).
  */
 import { loadConfig } from '../lib/config.mjs'
+import { mergePolicy } from '../lib/roles.mjs'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -107,7 +108,8 @@ export default async function run(argv) {
   } else {
     process.stderr.write('  mergePolicy   (absent → hold-for-user)\n')
   }
-  if (cfg.modelPolicy) process.stderr.write(`  modelPolicy   judge=${cfg.modelPolicy.judgeModel}\n`)
+  const modelPolicy = mergePolicy(cfg.modelPolicy)
+  process.stderr.write(`  modelPolicy   ${JSON.stringify(modelPolicy)}\n`)
   process.stdout.write('config OK\n')
   return 0
 }

@@ -31,10 +31,8 @@ this plugin says **role**.
 { id, agentCard, spawnSites, class: 'judge'|'builder', tierChain, inlineFallbackLegal }
 ```
 
-- **`class`** decides who may be re-routed: a consumer's `modelPolicy.judgeModel`
-  (`roadmap.config.json`) overrides **judge-class roles only** — a role returning a verdict on
-  work it did not produce. Builder-class roles (`phase-executor`, `software-developer`,
-  `test-engineer`, `quality-pass`, `ux-designer`) ignore it.
+- **`class`** distinguishes judge and builder seams. The legacy `modelPolicy.judgeModel` leads
+  judge-class roles only; per-role policy can lead either class.
 - **`tierChain`** is model ids best-first. Only `software-architect` carries a real chain —
   **`claude-fable-5` → `gpt-5.6-sol` → `claude-opus-5`** (user ruling 2026-08-23, verbatim
   order), the plugin's highest-judgment seam. Every other role carries a 1-entry chain equal to
@@ -47,8 +45,22 @@ this plugin says **role**.
 
 ### The resolver
 
-`resolveRole(roleId, driverId, { forceUnavailable, judgeModel, env })` returns
+`resolveRole(roleId, driverId, { policy, forceUnavailable, judgeModel, env })` returns
 `{ role, model, mode, substituted? }`.
+
+Policy precedence is invocation `--models` > repository `modelPolicy` > the roles table. Within
+a policy, `roles[id]` > legacy `judgeModel` for judge roles > `default`; explicit keys layer over
+the named preset.
+
+| preset | default | role exception |
+|---|---|---|
+| `claude` | roles table | — |
+| `codex` | `gpt-5.6-sol` | `software-architect` → `claude-fable-5` |
+| `codex-full` | `gpt-5.6-sol` | — |
+
+`PINNED_ROLES` contains `arc-eval-judge`: it always resolves to sonnet under presets/defaults,
+and any `roles` override is refused. This preserves the eval trend's `PINNED_JUDGE_MODEL`
+baseline. Config and pair syntax accept model aliases; the resolver records canonical model ids.
 
 - **The resolver drives the chain itself.** No harness fallback flag is a substitute: `claude
   --fallback-model` is single-hop and claude-family-only, so it can never reach `gpt-5.6-sol`.
