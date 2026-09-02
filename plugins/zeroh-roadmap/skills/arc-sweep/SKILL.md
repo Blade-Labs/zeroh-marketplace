@@ -9,22 +9,26 @@ metadata:
 
 # Arc Sweep — Pre-Merge Debt + Whole-Arc Review
 
-**Not this skill:** `release-sweep` owns pre-release followup triage and archive; arc-sweep owns pre-merge arc debt.
-
-After `do-arc` builds every phase, `arc-sweep` disposes debt, runs ONE whole-arc architect, and
-**reports merge-readiness — it never lands the merge.** Under `do-arc`, Step 8 owns integration after
-validate-arc PASS + clean sweep + green suite + no blocker; standalone `/arc-sweep` holds for the user's go.
+`arc-sweep` is the closing ritual of `do-arc`: after an arc's phases are built but before merge, it
+(1) disposes every accumulated debt item, (2) runs ONE architect over the whole-arc diff as a single
+system, and (3) **reports merge-readiness — it never lands the merge.** Landing authority: **under
+`do-arc`**, do-arc Step 8 owns it (auto-integrate on validate-arc PASS + sweep clean + arc-end suite
+green + no blocker); **standalone** (`/arc-sweep`), hold for the user's go.
 
 **Read `skills/release-sweep/SKILL.md` FIRST.** arc-sweep reuses release-sweep's debt-disposition
 vocabulary and `debtResolutions[]` persistence verbatim — never a parallel taxonomy.
 
-arc-sweep is NOT `full-code-review` — it is a lighter, seam-specific architect pass.
+**When vs release-sweep:** arc-sweep runs **pre-merge** on an unversioned arc; release-sweep runs
+**pre-archive** on versioned phases. Same persistence target (`debtResolutions[]`). arc-sweep is NOT
+`full-code-review` (the 8-agent pre-prod audit) — it is a lighter, seam-specific architect pass.
 
 ## Step 1: Consolidated debt sweep
 
-Use `do-arc`'s complete `PhaseExecutionResult[]`; if missing/short, call `discoverResults()` to re-read
-`phase.executionResult`. Also run `roadmap debt census` and re-read free-text compromises. Never
-dispose a truncated set.
+**Hand-in (the inputs).** The `PhaseExecutionResult` roll-up arrives two ways: (1) the in-context array
+`do-arc` hands in (fast path, use when complete); (2) `discoverResults()` re-reads `phase.executionResult`
+from disk (the system of record) — use it when the array is missing or short (a resumed / compacted
+arc), never dispose a truncated set. `roadmap debt census` surfaces the same estate slice. The
+free-text `compromises` strings are also re-read from the phase files. Aggregate all of it.
 
 **Disposition → persistence (mechanical — read the row):**
 
@@ -35,13 +39,9 @@ dispose a truncated set.
 | PLAN-PHASE / **DESCOPE** | dropped, user-ratified (even autonomous) | ONE entry + `Arc.descopes[]` | `"won't_fix"` | `'descope — ratified by … (≥20 chars)'` |
 | ACCEPT (won't fix) | correct boundary, reason ≥20 chars | ONE entry | `"won't_fix"` | the reason |
 | ACCEPT (dismiss) | never was debt | ONE entry | `'dismissed'` | the reason |
-| OPERATOR-PENDING | deploy/operator action, not code | ONE entry (+ `<root>/followups/<arcId>.md`) | `'operator-pending'` | runbook / DEPLOY.md anchor |
+| OPERATOR-PENDING | deploy/operator action, not code | ONE entry (+ `roadmap/followups/<arcId>.md`) | `'operator-pending'` | runbook / DEPLOY.md anchor |
 
 (`limitations` never enter this table — see below.)
-
-Whenever OPERATOR-PENDING creates a NEW `<root>/followups/<arcId>.md`, prepend the `status` + `trigger`
-frontmatter from `skills/release-sweep/references/followup-contract.md`; a headerless birth violates
-this rule. The same header rule covers every followup write named below.
 
 **Disposition mode — read `mergePolicy` from `roadmap.config.json` first.** Under do-arc AND
 `mergePolicy.arcIntegration: 'autonomous'`, dispose each item YOURSELF by the table — no per-item
@@ -62,41 +62,49 @@ status, via, date }`); an autonomous disposition writes the SAME entry, marking 
   never a merely-authored follow-up.
 - **PLAN-PHASE** — a real follow-up; **IN-ARC is the DEFAULT**:
   - **IN-ARC (default)** — author the phase NOW (`plan-phase`, stamp `arcId`, claim a number, append
-    to `planes`) → `{ status: 'planned', via: 'phase-<N>' }`. **do-arc loops back into the phase loop and
-    EXECUTES it before the close-out sweep/validate**; on completion the entry flips `'planned'` → `'fixed'`. Authoring
+    to `planes`) → `{ status: 'planned', via: 'phase-<N>' }`. **do-arc loops back to Step 4 and
+    EXECUTES it before Step 7/8**; on completion the entry flips `'planned'` → `'fixed'`. Authoring
     alone is NOT resolution.
   - **DESCOPE** — drop it. Requires **explicit user ratification EVEN in autonomous mode**. Record
     BOTH `{ status: "won't_fix", via: 'descope — ratified by <who> <when>' }` AND a typed
     `Arc.descopes[]` `{ item, ratifiedBy, ratifiedAt }` — durable and typed, never buried in prose.
-- **OPERATOR-PENDING** — detail in `<root>/followups/<arcId>.md`. **Exempt from the
-  openFollowups budget** but counted + listed in the RunnerSummary notes; stays OPEN until a
-  later release-sweep disposes it post-deploy.
+- **ACCEPT** == release-sweep **(w) Won't fix** (reason ≥20 chars → `"won't_fix"`) or **(d) Dismiss**
+  (never-was-debt → `'dismissed'`).
+- **OPERATOR-PENDING** — a required **deploy/operator action, not code**. Writes `{ status:
+  'operator-pending', via: '<runbook / DEPLOY.md anchor>' }` so deploy debt is schema-visible, detail
+  in `roadmap/followups/<arcId>.md`. **Exempt from the openFollowups budget** but counted + listed in
+  the RunnerSummary notes; stays OPEN until a later release-sweep disposes it post-deploy.
+
+`ref`/`status`/`via`/`date`, the ≥20-char `won't_fix` reason, and the dismissed-ratio nudge are
+release-sweep's — do not redefine them.
 
 **`limitations` are out of scope — by design.** The roll-up carries `compromises`/`skipped`/
 `hardcoded` but NOT `limitations` (a permanent design constraint, not deferred work) — **release-sweep**
 disposes those pre-archive. To avoid a silent hole, arc-sweep re-reads each phase's `limitations` and
 LISTS any present in the Step-3 report under "deferred to release-sweep".
 
-**No summary file.** Keep the audit trail in `debtResolutions[]` + transparency reports and the chat
-report ephemeral. `<root>/followups/<arcId>.md` holds only OPERATOR-PENDING detail + ratified-descope rationale.
+**No summary file.** Like release-sweep, arc-sweep NEVER writes a persisted summary — `debtResolutions[]`
++ the transparency reports ARE the audit trail; the merge-readiness report is EPHEMERAL chat only.
+`roadmap/followups/<arcId>.md` holds ONLY OPERATOR-PENDING detail + ratified-descope rationale.
 
 ## Step 2: Whole-arc cross-phase review (against singleSeams + designRefs)
 
+A per-phase gate sees only its own diff — it CANNOT catch a seam one phase quietly forked (3 hardcodes
+that should be 1 config; a shared type two phases redefined). **Only a whole-arc view catches a forked
+seam** — that is this step's whole job.
+
 Run ONE `zeroh-roadmap:software-architect` over `git diff <arc.baseRef>..HEAD` and judge it as **a
 single system** against `arc.singleSeams`: for each seam, did any consumer fork it, or is it a single
-implementation across the arc? **Spawn it with `model` per the `modelPolicy.judgeModel` home (MULTI-DRIVER.md §1)** — this whole-arc architect is a JUDGE.
+implementation across the arc? **Spawn it with `model` per the `modelPolicy.judgeModel` home statement
+(review-phase SKILL.md)** — this whole-arc architect is a JUDGE.
 
 **Design-conformance — judge against `arc.designRefs` too.** Read the arc's confirmed `designRefs` and
 judge whether the build implements each: a `reused` pattern genuinely followed (not re-invented), a
 `designed` pattern matching what was extended in the doc, a `ux` designRef's surface matching the
 confirmed preview — layout AND interactions/motion (hover/focus, transitions, animations: same or
-unambiguously better, never flattened — skills/validate-arc/references/parity-rubric.md, Interaction & motion). **The design is
+unambiguously better, never flattened — references/parity-rubric.md, Interaction & motion). **The design is
 the spec** — drift from a confirmed designRef is a finding, disposed like any other (RESOLVE-NOW if
 cheap, else PLAN-PHASE). No `designRefs` (mechanical arc) → skip explicitly, never silent.
-**Supersession:** the architect also asks whether this arc's build made a PRIOR arc's designRef
-claim false (same-seam refs — grep `<root>/arcs/`). A contradiction is a FINDING disposed through
-the Step-1 table; its disposition stamps the old entry's `supersededBy`, and the report names each
-stamp.
 
 **Ledger-audit clause (when the arc trims plugin/skill prose).** If the arc diff deletes or compresses
 model-loaded skill/agent prose, the sweep verifies EVERY such deletion in the diff carries a
@@ -107,23 +115,12 @@ trimmed passage with no ledger row is a sweep failure, not a style nit.
 Apply any **RESOLVE-NOW** fixes the architect identifies and **re-gate each** to its phase's `kind`;
 author **PLAN-PHASE** follow-ups for real debt that should not block the merge.
 
-## Step 2.5: Estate ratchets — the whole-tree conformance pack, ONCE per arc
+## Step 3: Report merge-readiness (ephemeral, chat only)
 
-When the consumer binds `gateCommands.ratchets`, run it **FOREGROUND** after the whole-arc review.
-A red run is a sweep FINDING disposed through the Step-1 table like any other, with
-**RESOLVE-NOW as the default**.
-No binding → record the named skip (`ratchets: not bound in gateCommands — estate ratchets skipped`)
-in the Step-3 report; never a silent pass.
-
-## Step 3: Record, then report merge-readiness
-
-Assemble ONE `SweepReportShape` document (the shape's own docblocks define every field): `arcId` +
-the `date` you ran; Step 2.5 as `estateRatchets`; each member phase as `phaseGates`; the Step-1
-table as `debtDispositions` (with its `debtResolutions[]` refs); the whole-arc seam +
-design-conformance call as `architectVerdict`; `limitations` as `deferredToReleaseSweep`; the call
-as `overall` + `blockers`. Pipe it through `roadmap eval record-sweep --arc <ID>`. A refusal is a
-sweep BLOCKER — a sweep whose own report will not parse does not report green.
-
-THEN render the chat report FROM that document: it is a PROJECTION, so a fact not in the file does
-not exist for any later eval. **arc-sweep never merges — it reports.** Under `do-arc`, hand it
-back; standalone, hold for the user's go.
+Aggregate: **per-phase gate status** (every member `done`, passing gate); **debt dispositions** (counts
+by RESOLVE-NOW / PLAN-PHASE IN-ARC vs DESCOPE / ACCEPT / OPERATOR-PENDING + the `debtResolutions[]`
+refs); **whole-arc architect verdict** (seam single-vs-forked + design-conformance, or "no designRefs";
++ the ledger-audit result when prose was trimmed); **deferred to release-sweep** (`limitations`);
+**overall** (green / blocked + any OPERATOR-PENDING deploy actions). **arc-sweep never merges — it
+reports.** Under `do-arc`, hand it back; standalone, hold for the user's go.
+</content>

@@ -1,6 +1,6 @@
 ---
 name: "Do Arc"
-description: "Execute a whole arc end to end: drive the per-plane CLI loop, own the halts it hands back, sweep + validate in-session, and land via the CLI."
+description: "Execute a whole arc end to end: launch one per-plane workflow at a time, own the halts it hands back, sweep + validate in-session, and land via the CLI."
 user-invocable: true
 metadata:
   keywords: do arc, execute arc, run arc, arc
@@ -9,141 +9,75 @@ metadata:
 
 # Do Arc — Arc Orchestration
 
-`do-arc` ships an Arc by driving ONE deterministic loop per plane. Every transition is a
-`roadmap` CLI call and every non-done path a TYPED halt: you own the conversation and the
-judgment, the CLI owns the mechanics. Invoke the CLI as `roadmap <cmd>`
+`do-arc` ships an Arc by launching ONE small workflow per plane. Every transition is a
+`roadmap` CLI call and every non-done path a TYPED halt the workflow hands back: you own the
+conversation and the judgment, the CLI owns the mechanics. Invoke the CLI as `roadmap <cmd>`
 (fallback `node ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`).
-
-You drive the loop INLINE with Bash CLI calls + one subagent spawn per executor-band phase —
-do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime.
 
 ## Trigger
 
-`do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`. Options: `--models
-<claude|codex|codex-full|pairs>`, `--inline` / `--recursion` force every band, and
-`--pause-after <N>` stops after phase N.
+`do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`. Optional `--inline` /
+`--recursion` force every phase's band; `--pause-after <N>` stops after phase N.
 
 ## Run it
 
-1. `roadmap arm <id> [--models <arg>]` — claim lane (refuses siblings); `roadmap
-   status` shows lanes. TaskCreate one task per member phase (`Phase <N> — <plane>`),
-   ticked in_progress/completed as each phase runs — the user's arc progress view.
-2. **The loop** (repeat until the plane's phases are exhausted):
-   1. `roadmap arc next <id> --json` → the next action. `complete` → done. `blocked` /
-      `sweep` / `validate` / `land` → the matching branch below. `run-phase`/`resume-phase` →
-      continue.
-   2. `roadmap gate plan <phase> --json` — echo the band + scopes to the user.
-   3. `roadmap role resolve phase-executor --driver claude [--models <arg>]` resolves the executor.
-      A codex result delegates the arc: `roadmap codex run --arc <ID> --base <ref> [--models
-      <arg>]`; audit CODEX-REPORT per the codex-delegation section, never spawning a Claude Agent.
-      Otherwise, `trivial`/`heavy` (or `--inline`) → inline handoff; `mid` → arm the Stop-hook, then spawn ONE `phase-executor`:
-      `roadmap executor-arm <phase> --session <SESSION ID> --executor-id <unique ID>`. Session is
-      the session-dir name in transcript paths; executor-id makes the arm exclusive. The CLI
-      refuses unbound/foreign-session guards. Prompt with the phase, gate plan, arc execution doc,
-      and `roadmap contract show --json-schema`; never assert its model — it self-stamps, while
-      the arm records the requested alias and `roadmap result check` reconciles family. Read the
-      arm's cross-repo preflight: a recently changed keyFile means an active writer. Liveness =
-      `roadmap watch <id> --once --json` SPOT-CHECKS on each executor notification and before
-      every resume decision — never a long-lived background `watch` daemon.
-   4. On return: `roadmap result check --phase <phase>` over the returned JSON (parse or
-      die — never trust prose), then `roadmap executor-disarm <phase>` (`roadmap
-      executor-disarm --sweep` at arc start clears stale leftovers). When NO
-      result came back the disarm REFUSES (exit 2) and prints the beacon evidence.
-      `--force` is a deliberate act taken only after READING that evidence, never on a
-      STALLED verdict alone.
-      `status` ≠ `done` → the halt branch below. Criterion-narrowing compromise → the
-      self-descope branch. Else `roadmap gate run <phase> --verify-complete`, groom the
-      backlog entry, run the `emit` slot, and loop.
-   **Control returns to you between planes** — checkpoints, pauses, and user rulings live
-   there.
+1. `roadmap arm <id>` — claim the lane (refuses a lane a sibling already holds); `roadmap
+   status` shows live lanes.
+2. For each plane in the arc's `planes`, in order: launch `workflows/arc-plane.workflow.mjs`
+   with `{ arcId, planeName, force? }` (`force` from `--inline`/`--recursion`). The workflow
+   drives every member phase of that plane through the CLI and RETURNS at the plane boundary
+   or the moment anything needs you. **Control returns to you between planes** — checkpoints,
+   pauses, and user rulings live there.
+3. Act on the return, then launch the next plane (or run the terminal handoff).
 
-## The loop's non-done exits — you own them
+The workflow re-derives position from disk on every call (`roadmap arc next`), so relaunching
+it always fast-forwards past committed work — it never re-runs a completed phase.
 
-- **Inline handoff** (a trivial/heavy band phase, or `--inline`) → run THAT phase inline
+## What the workflow hands back — you own it
+
+- **`{ planeDone }`** → launch the next plane.
+- **`{ handoffInline }`** (a trivial/heavy band phase, or `--inline`) → run THAT phase inline
   yourself via `do-phase` in arc-mode under the **inline-supervised** rules: you drive
   `software-developer`/`test-engineer` per task while owning every commit, `transparencyReport`,
   and the gate (the one sanctioned per-task fork — an executor never offloads its own tasks).
-  Then continue the loop.
-- **`sweep` / `validate` / `land` from `arc next`** → the judgment-heavy terminals run
-  in-session (below).
+  Then relaunch the plane workflow to continue.
+- **`{ handoff: sweep | validate | land }`** → the judgment-heavy terminals run in-session
+  (below).
 - **A typed halt** — surface it, never narrate past it:
   - `escalated` → post the architect's `question` + `options` to the user and WAIT.
   - `self-descope` → the evidence names a compromise/skipped that NARROWS a task or arc
     acceptanceCriterion. The bounce-vs-ratify call is yours with the user: **bounce** the phase
     (redo with the criterion honored) or record a user-ratified `Arc.descopes` item. Never wave
-    it through.
-  - `checkpoint` → the executor's honest unbounded-work hand-off:
-    verify `checkpoint.committedSha` resolves on disk (`git cat-file -t <sha>`), then respawn the
-    phase-executor UNCONDITIONALLY with the checkpoint verbatim in the spawn prompt — resume is
-    lossless from disk, and the respawned executor's first act is the on-wake drill over
-    `checkpoint.watch`. Bound: THREE consecutive checkpoints with no new commit between them →
-    escalate to the user with the beacon trail. A committedSha that does
-    not resolve → treat as `failed`.
+    it through — this is the arc face of the executor's never-rule 1.
   - `blocked` → surface the reason (unmet dep, foreign lane), resolve it, relaunch.
-  - `stalled` / `exited` → the evidence IS the `roadmap watch --once` verdict JSON. If the executor
-    is addressable, `SendMessage` it once with that evidence; otherwise respawn it mid-phase. Still stuck after a
-    bounded wait → escalate to the user. Never restart committed work.
-  - `unobserved` (watch exit 5, verdict UNOBSERVED) → no life signal could be PROBED, which is not
-    death: never respawn on it — supply `--transcript-dir` or check the executor's own
-    task-notification channel first. An executor
-    expected to run past ~30min gets periodic `roadmap watch --once` spot-checks, and forensics read
-    that verdict evidence, never `ls` on a tasks symlink.
+  - `stalled` / `exited` → the evidence IS the `roadmap watch` verdict JSON. If the executor
+    session is addressable, `SendMessage` it once with that evidence; otherwise relaunch the
+    plane workflow (resume is free — re-derivation from disk makes a respawn lossless). Still
+    stuck after a bounded wait → escalate to the user. Never restart committed work.
 
 ## Terminal handoffs (in-session)
 
 1. **sweep** → run the `arc-sweep` skill (disposes the batched per-phase debt, judges the arc
    against its `singleSeams` / `honestyRails` / `designRefs`). If it authors an IN-ARC
-   follow-up phase, re-enter the loop — `arc next` re-resolves the plane from disk and picks
-   it up automatically. A SECOND sweep over a loop-back phase may only
+   follow-up phase, relaunch a plane workflow covering it — the workflow's per-iteration plane
+   re-resolution picks it up automatically. A SECOND sweep over a loop-back phase may only
    ACCEPT / DESCOPE / OPERATOR-PENDING — never author again.
 2. **validate** → run `validate-arc <id>`, then `roadmap arc record-validate <id> --verdict
-   <PASS|GAPS|no-op>` (stamps the verdict artifact `arc land` reads). GAPS → per
-   `mergePolicy.gapsCorrection`: `autonomous` → run validate-arc's corrective loop UNATTENDED
-   (plan → do → re-validate until PASS; the judge's PASS is the approval; re-record the
-   verdict), then land; `hold`/absent → surface the gaps and PAUSE for the user's go. Bound
-   exhaustion or a descope-shaped gap ALWAYS stops for the user.
-3. **land** → `roadmap arc land <id>` — the ONE landing engine (cheap blockers first, then
-   the arc-end suite, the final blocker check, backlog regroom, RunnerSummary, and the
-   autonomous push per the consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user ·
-   2 = blocker; surface the blocker JSON on any non-zero exit — a `roadmap arc land: <id> —
-   <verdict> (exit N)` line also lands on stderr — never trust a pipeline's exit code over
-   that line. `baseRef → master` is NEVER
-   part of landing — a release is a held human act. A user instruction to
-   review-before-merge always overrides autonomy.
-   **Suite scope**: `mergePolicy.arcEndSuite` applies to EVERY integration model —
-   `impacted` = the arc's own touched-file scope; `defer-ci` (or `--defer-suite`) skips
-   local suites; CI is the full-suite gate. Both are recorded honestly in the RunnerSummary
-   (`fullSuiteGreen: false` + reason) — never claim a green you did not run.
-   **Already landed** (hand-land): an arc tip already an ancestor of `baseRef` with every
-   member done → `arc land` completes the BOOKKEEPING only (cleanup, RunnerSummary, push
-   policy), exit 0, no suite. Re-run `arc land` after any hand-land so the books never rot.
-   **Contended primary**: parked off `baseRef` no longer refuses a fast-forward arc — ref
-   surgery (`git fetch . <arc>:<baseRef>`; git itself refuses non-FF/checked-out targets)
-   lands it without touching the sibling's tree. A true (non-FF) merge still waits.
-   **Base drift**: a moved `baseRef` whose incoming delta overlaps NONE of the arc's files is
-   auto-reconciled (baseRef merged into the arc branch) before anything expensive — no
-   blocker, no re-run. Overlapping files hold blocker 7/8 honestly. A stale base beyond
-   `mergePolicy.staleBaseCeiling` commits (default 100) with overlap is refused (exit 2) with
-   the both-sides-changed file list as the mandatory reconciliation output; `--force-stale`
-   ACKNOWLEDGES it (clears that blocker alone, never a conflict) after you have read and
-   reconciled that list — which is still emitted under the acknowledgment.
-   **`--detach` for a long land** (the arc-end suite can outlive a session): the CLI
-   self-daemonizes, records `{pid, step, exitCode}` in `.building/<ID>-land.json`, and returns
-   immediately with the journal + log paths. Re-running `arc land` (or `arc next`) reads that
-   journal instead of starting a duplicate: a LIVE run reports its step and refuses to double-run,
-   a FINISHED one reports its exit and clears, a dead-pid-no-exit journal is named STALE and
-   cleared before retrying. Never hand-roll setsid/sentinel/Monitor for a land again.
-4. **eval (Step 9)** — `roadmap eval <id>`, spawn `arc-eval-judge`, pipe its verdict to
-   `roadmap eval merge-judge --arc <id>`; echo REGRESSION rows in the close-out. Never un-lands.
+   <PASS|GAPS|no-op>` (stamps the verdict artifact `arc land` reads). GAPS → surface the gaps
+   and PAUSE for the user's go before any corrective phase.
+3. **land** → `roadmap arc land <id>` — the ONE landing engine (preconditions, arc-end suite,
+   the blocker check, backlog regroom, RunnerSummary, and the autonomous push per the
+   consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user · 2 = blocker; surface the
+   blocker JSON on any non-zero exit. `baseRef → master` is NEVER part of landing — a release
+   is a held human act. A user instruction to review-before-merge always overrides autonomy.
 
 ## Pause & resume
 
-Pause anywhere; `roadmap arc next` resumes from disk. Keep optional arc-loop notes in
-`<root>/arcs/<ID>-RESUME.md`; route cross-session residue through `handoff`, never both.
+Pause is free — stop anywhere; no state lives in the workflow. Resume is always the same act:
+relaunch the plane workflow. `roadmap arc next` fast-forwards from disk. A
+`roadmap/arcs/<ID>-RESUME.md` is optional human notes, never load-bearing.
 
 ## Execution-prompt doc
 
-`<root>/arc-prompts/<id>-execution-prompt.md` is authored at arc-planning time, not here — read
-it for the arc's bar, honesty rails, and design refs before driving. Filename drift: glob
-`<root>/arc-prompts/*<id>*` before concluding it is missing; truly absent, drive from the Arc
-entity's `honestyRails` / `designRefs` / `acceptanceCriteria` instead.
+`roadmap/arc-prompts/<id>-execution-prompt.md` is generated by **`plan-arc`**, not here — read
+it for the arc's bar, honesty rails, and design refs before driving.

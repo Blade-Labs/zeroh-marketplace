@@ -1,5 +1,21 @@
 # zeroh-roadmap — Deletion-Disposition Ledger (ROADCODE prose diet)
 
+## 2026-09 diet — phase 26.3
+
+The nine never-trimmed bodies were returned to their last independently gated concise forms, then measured against the 2026-09-02 pre-diet tree. The detailed one-row-per-source-paragraph map and architect amendments live in `DIET-PLAN-2026-09.md`; the rows below are the ledger index for each removed/compressed passage class.
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| do-phase: duplicated worktree, gate-selection, and completion mechanics | enforced-by-code(`roadmap phase start`, `roadmap gate plan/run`, `roadmap phase curate`; cli/commands/phase.test.mjs, gate.test.mjs) | operative sequencing stays in the concise body; command internals return to code |
+| do-phase: batch, long-run, and landing branch detail | relocated(`agents/references/executor-reference.md`) | conditional executor mechanics load only when the card's trigger fires; the body retains batch and landing decisions |
+| do-arc: terminal-handoff landing mechanics | enforced-by-code(`roadmap arc land`; cli/lib/landing.mjs and landing tests) | phase-1658/1659 independently gated disposition reused |
+| do-arc: option and handoff rationale | relocated(`DESIGN-NOTES.md` §executor orchestration) | concise body keeps the option vocabulary and non-done decisions; incident rationale remains in the established non-loaded design history |
+| arc-sweep/release-sweep/validate-arc: command mechanics and incident rationale | relocated(their cited `references/` homes) | model-loaded bodies retain debt and validation judgment; conditional detail remains on demand |
+| phase-executor: dated stale-read/API incident narration | relocated(`agents/references/executor-reference.md`) | card retains the empty-read, no-transcript-polling, gate, and typed-return rules |
+| quality-pass/code-reviewer/software-architect: generic craft narration | obsolete-with-evidence(the role models already supply generic craft; typed outputs, severity, decision contracts and no-recursion remain) | phase-1659 agent-card gate established the ≤5,000-byte per-card forms |
+
+Measured roll-up: do-arc **53,343 B / 13,339 tokens → 42,649 B / 10,665 tokens** (20.0%); do-phase **24,054 B / 6,014 tokens → 13,421 B / 3,356 tokens** (44.2%). Plan-arc is unchanged at 68,223 B / 17,057 tokens because none of its six manifest files is in this diet.
+
 **The honesty rail (arc ROADCODE rail 3, locked decision 6).** No passage is deleted or
 compressed from a model-loaded skill/agent-card without a NAMED disposition here. One row per
 removed/compressed passage at section/heading granularity. A trim without a disposition row is a
