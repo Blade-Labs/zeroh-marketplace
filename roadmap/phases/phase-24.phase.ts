@@ -1,72 +1,74 @@
 import { definePhase } from '@/lib/roadmap/schema'
 
 /**
- * Driver-native role filling — a consumer can point EVERY protocol role at codex.
+ * Model policy per role — the consumer chooses who fills every role, per repo and per run.
  *
- * Owner ruling 2026-09-02 ("use codex for full arc/phases work"): a codex lane should build,
- * test, quality-pass, review and complete a phase itself, never shelling out to Claude
- * children. Twice on 2026-09-01/02 a lane sat blocked for hours because the quality-pass
- * role is pinned to claude-opus-5 and that allowance ran out. Today the only re-route a
- * consumer owns is `modelPolicy.judgeModel`, judge-class roles only (MULTI-DRIVER.md §1), and
- * even that cannot name the codex model — `MODEL_ALIASES` knows fable/sonnet/opus. This phase
- * adds the symmetric `modelPolicy.builderModel`, the `sol` alias, teaches do-arc to delegate a
- * whole arc to the codex lane when its executor resolves there, and flips THIS consumer.
+ * Owner ruling 2026-09-02 (reasoned in-session): the unit of choice is the ROLE. Any role
+ * (developer, test-engineer, architect, quality-pass, code-reviewer, intent-validator,
+ * executor) may be filled by any registered model in any combination; a repo carries a
+ * default policy in roadmap.config.json; a single run ("do arc with codex") overrides it;
+ * every firing AND the policy in force are recorded so the scorecard can compare
+ * combinations with data. Exactly one role stays pinned: `arc-eval-judge` = sonnet, the
+ * baseline the eval trend compares against (eval.mjs:613 PINNED_JUDGE_MODEL). Three named
+ * presets spell the defaults everywhere the same way: `claude` (the roles table as it is),
+ * `codex` (everything sol, architect fable), `codex-full` (everything sol). Motive: two
+ * lanes (codex-22-21, codex-23) sat blocked on the claude-opus-5 allowance with all tasks
+ * done because quality-pass is pinned to Opus while codex tokens went unused.
  *
  * ## Hypotheses
- * 1. CONFIRMED — builder roles have no consumer re-route: resolveRole leads the chain with
- *    `judgeModel` only when `role.class === 'judge'` (roles.mjs:215); every builder role
- *    (phase-executor, software-developer, test-engineer, quality-pass, ux-designer) carries a
- *    1-entry chain `[OPUS]` (roles.mjs:80-140) that roles.test.mjs:105 pins as the ruled state.
- * 2. CONFIRMED — the codex model is registered but unnameable from config: `MODEL_IDS.SOL`
- *    routes to the codex driver (drivers.mjs:124) whose capabilities are `subagents: 'native'`
- *    (drivers.mjs:60), yet `MODEL_ALIASES` (drivers.mjs:110-114) has no alias for it, so
- *    `modelPolicy.judgeModel: 'sol'` would be passed through as an unknown id.
- * 3. REFUTED — "the lane already resolves roles for its own driver": `roadmap role resolve`
- *    defaults `driverId` to 'claude' (role.mjs:13) and the codex run prompt (codex.mjs:152)
- *    names the resolver without the `--driver codex` flag, so a lane asking the verb is told
- *    how a CLAUDE session would reach the role.
+ * 1. CONFIRMED — the only consumer re-route is class-wide and judge-only: resolveRole leads a
+ *    chain with `judgeModel` when `role.class === 'judge'` (roles.mjs:215); builder roles carry
+ *    1-entry `[OPUS]` chains (roles.mjs:80-140) that roles.test.mjs:105 pins; nothing per-role.
+ * 2. CONFIRMED — the codex model is registered (MODEL_IDS.SOL → driver codex, drivers.mjs:124,
+ *    `subagents: 'native'` at :60) but unnameable from config: MODEL_ALIASES (drivers.mjs:110-114)
+ *    knows fable/sonnet/opus only.
+ * 3. CONFIRMED — nothing carries a per-run override: `roadmap arm` parses --inline/--note/
+ *    --base-ref/--mode (arm.mjs:22-25) and the sidecar stamps mode/note/baseRef
+ *    (sidecar.mjs:109-111); `codex run` takes --worktree/--base (codex.mjs:455-456);
+ *    PhaseExecutionResultShape records `roles[]` firings (templates/schema.ts:312) but no
+ *    policy snapshot.
+ * 4. REFUTED — "the lane resolves roles for its own driver": `roadmap role resolve` defaults
+ *    driverId to 'claude' (role.mjs:13) and the run prompt (codex.mjs:152) names the resolver
+ *    without `--driver codex`.
  *
  * timing: band 4-6 × surface:false, N=4, median 148.8 min, p80 196.4 min
  */
 export default definePhase({
   phase: 24,
-  name: 'Driver-native roles: modelPolicy.builderModel, the sol alias, arc delegation to the codex lane',
+  name: 'Model policy per role: presets, per-repo defaults, per-run --models override, recorded snapshot, sonnet judge pinned',
   status: 'backlog',
   plannedBy: { model: 'claude-fable-5-1' },
-  reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'feature',
   kind: 'logic',
   source:
-    'Owner ruling 2026-09-02: "use codex for full arc/phases work". Two lane blocks on the claude-opus-5 allowance (codex-22-21 on 2026-09-01T22:17Z; codex-23 on 2026-09-02T14:2xZ) while every task was done and only the Opus-pinned quality-pass round was owed.',
+    'Owner ruling 2026-09-02 15:12-15:19Z: run a full arc with codex, with claude, or any mix per role; repo default in roadmap.config.json, per-run override at spawn ("do arc with codex"), all recorded for later evaluation; arc-eval-judge stays sonnet everywhere. Priority: Anthropic tokens are burning on roles codex could fill.',
   priority: 'HIGH',
   dependsOn: [],
   conflictsWith: [23],
   keyFiles: [
     'plugins/zeroh-roadmap/cli/lib/drivers.mjs',
-    'plugins/zeroh-roadmap/cli/lib/drivers.test.mjs',
     'plugins/zeroh-roadmap/cli/lib/roles.mjs',
     'plugins/zeroh-roadmap/cli/lib/roles.test.mjs',
     'plugins/zeroh-roadmap/cli/lib/config.mjs',
-    'plugins/zeroh-roadmap/cli/lib/config.test.mjs',
     'plugins/zeroh-roadmap/cli/roadmap.config.schema.json',
     'plugins/zeroh-roadmap/cli/commands/role.mjs',
+    'plugins/zeroh-roadmap/cli/commands/arm.mjs',
+    'plugins/zeroh-roadmap/cli/lib/sidecar.mjs',
     'plugins/zeroh-roadmap/cli/commands/codex.mjs',
+    'plugins/zeroh-roadmap/templates/schema.ts',
+    'lib/roadmap/schema.ts',
     'plugins/zeroh-roadmap/MULTI-DRIVER.md',
     'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
     'roadmap/roadmap.config.json',
   ],
   stakeholderDemo:
-    'With modelPolicy { judgeModel: "sol", builderModel: "sol" } a codex lane resolves quality-pass, test-engineer and code-reviewer to gpt-5.6-sol NATIVE and finishes a phase with no Claude child in the chain; a Claude session with the same config reaches them as codex children; an unset builderModel leaves every existing consumer exactly as today; do-arc hands a whole arc to `roadmap codex run --arc` when its executor resolves to the codex model.',
+    'zeroh (empty policy) runs claude by default; `do arc <ID> --models codex` there gives a codex developer, tester, quality-pass and reviewer with a fable architect; atlas sets preset codex-full and every arc is codex end to end; in every case each phase record carries the policy in force plus every firing, and arc-eval-judge resolves to sonnet no matter what the policy says.',
   userFacing: false,
   assumptions: [
     {
-      claim: 'MODEL_ALIASES carries no alias for the codex model.',
-      verify: 'bash -c "test \\"$(grep -cE \'^\\s*sol:\' plugins/zeroh-roadmap/cli/lib/drivers.mjs)\\" = \\"0\\""',
-      onFalse: 'ESCALATE',
-    },
-    {
-      claim: 'ModelPolicyShape knows judgeModel only; no builderModel exists anywhere in the plugin.',
-      verify: 'bash -c "test \\"$(grep -rl builderModel plugins/zeroh-roadmap/cli plugins/zeroh-roadmap/skills plugins/zeroh-roadmap/MULTI-DRIVER.md | wc -l)\\" = \\"0\\""',
+      claim: 'No per-role policy, preset, or codex alias exists anywhere in the plugin runtime.',
+      verify:
+        'bash -c "test \\"$(grep -rlE \'MODEL_PRESETS|builderModel|modelPolicy\\\\.roles|--models\' plugins/zeroh-roadmap/cli plugins/zeroh-roadmap/hooks | wc -l)\\" = \\"0\\" && test \\"$(grep -cE \'^\\\\s*sol:\' plugins/zeroh-roadmap/cli/lib/drivers.mjs)\\" = \\"0\\""',
       onFalse: 'ESCALATE',
     },
     {
@@ -80,137 +82,141 @@ export default definePhase({
         'bash -c "grep -qF \\"const driverId = di >= 0 ? driverValue : \'claude\'\\" plugins/zeroh-roadmap/cli/commands/role.mjs && ! grep -qF -- \'--driver codex\' plugins/zeroh-roadmap/cli/commands/codex.mjs"',
       onFalse: 'ESCALATE',
     },
+    {
+      claim: 'The eval judge pin is a single constant equal to the arc-eval-judge chain head.',
+      verify: 'bash -c "grep -qF \\"PINNED_JUDGE_MODEL = \'claude-sonnet-5\'\\" plugins/zeroh-roadmap/cli/commands/eval.mjs && grep -qF \'tierChain: Object.freeze([SONNET])\' plugins/zeroh-roadmap/cli/lib/roles.mjs"',
+      onFalse: 'ESCALATE',
+    },
   ],
   tasks: [
     {
       id: '24.1',
-      title: 'The sol alias: modelPolicy can name the codex model',
+      title: 'Presets, the sol alias, and a per-role policy in the resolver — the sonnet judge pinned',
       problem:
-        "MODEL_ALIASES (drivers.mjs:110-114) maps fable/sonnet/opus only, so a consumer writing modelPolicy.judgeModel: 'sol' is passed the raw string through resolveRole's alias normalisation (roles.mjs:212-214) and gets 'nothing runs it'.",
+        "resolveRole (roles.mjs:212-215) prepends `judgeModel` for judge-class roles only; there is no per-role lead, no default lead, no preset, and MODEL_ALIASES cannot even spell the codex model — so \"codex developer with a fable architect\" is inexpressible.",
       steps: [
         {
           file: 'plugins/zeroh-roadmap/cli/lib/drivers.mjs',
           description:
-            "Add `sol: MODEL_IDS.SOL` to MODEL_ALIASES with the docblock rule: an alias is a CONFIG spelling (modelPolicy), not a card frontmatter alias — cards stay Claude-harness aliases and roles.test's card↔chain-head check is unchanged. drivers.test.mjs + roles.test.mjs:143 alias-map expectations gain the entry → verify: bash -c \"grep -qE '^\\\\s*sol: MODEL_IDS.SOL' plugins/zeroh-roadmap/cli/lib/drivers.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/drivers.test.mjs cli/lib/roles.test.mjs >/dev/null 2>&1\"",
+            "MODEL_ALIASES gains `sol: MODEL_IDS.SOL` (a CONFIG spelling; cards keep Claude-harness aliases, so roles.test's card↔chain-head check is untouched); drivers.test.mjs + roles.test.mjs:143 alias-map expectations gain the entry → verify: bash -c \"grep -qE '^\\\\s*sol: MODEL_IDS.SOL' plugins/zeroh-roadmap/cli/lib/drivers.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/drivers.test.mjs >/dev/null 2>&1\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/roles.mjs',
+          description:
+            "Export `MODEL_PRESETS = { claude: {}, codex: { default: SOL, roles: { 'software-architect': FABLE } }, 'codex-full': { default: SOL } }`, `PINNED_ROLES = ['arc-eval-judge']`, and `leadFor(role, policy)`: `policy.roles[id]` ?? (class judge ? policy.judgeModel : undefined) ?? `policy.default` ?? none; a pinned role ignores `default` and THROWS PinnedRoleError when `roles` names it. resolveRole opts gain `policy` (`{ preset?, default?, roles?, judgeModel? }`, preset expanded first, explicit keys layered on top); the led chain is `[lead, ...tierChain]`, alias-normalised; a walk down still records `substituted` from the lead. ROLES entries and the 1-entry-chain rule stay untouched → verify: bash -c \"grep -qF 'MODEL_PRESETS' plugins/zeroh-roadmap/cli/lib/roles.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/roles.test.mjs >/dev/null 2>&1\"",
         },
       ],
       acceptanceCriteria: [
-        "resolveRole('code-reviewer', 'codex', { judgeModel: 'sol' }) returns { model: 'gpt-5.6-sol', mode: 'native' }; the same under driver 'claude' returns mode 'child-cli'; roles.test's frontmatter↔chain-head test is untouched and green",
+        "roles.test matrix, every cell asserted: preset codex under driver codex → quality-pass/test-engineer/code-reviewer gpt-5.6-sol NATIVE and software-architect claude-fable-5 child-cli; preset codex-full → architect gpt-5.6-sol native; preset claude / empty policy → today's answers byte-for-byte; the same policies under driver claude → codex models reach as child-cli; roles['test-engineer']='opus' over default sol wins for that role only; legacy judgeModel still leads judge roles; arc-eval-judge → claude-sonnet-5 under every preset and default, and roles['arc-eval-judge'] throws PinnedRoleError naming the pin; a led model forced unavailable falls to the card tier with substituted.from = the lead",
       ],
-      files: ['plugins/zeroh-roadmap/cli/lib/drivers.mjs', 'plugins/zeroh-roadmap/cli/lib/drivers.test.mjs', 'plugins/zeroh-roadmap/cli/lib/roles.test.mjs'],
+      files: ['plugins/zeroh-roadmap/cli/lib/drivers.mjs', 'plugins/zeroh-roadmap/cli/lib/drivers.test.mjs', 'plugins/zeroh-roadmap/cli/lib/roles.mjs', 'plugins/zeroh-roadmap/cli/lib/roles.test.mjs'],
       testMode: 'tdd',
-      interfaces: { consumes: [], produces: ["MODEL_ALIASES.sol"] },
+      interfaces: { consumes: [], produces: ['MODEL_PRESETS', 'PINNED_ROLES', 'PinnedRoleError', 'resolveRole opts.policy', 'MODEL_ALIASES.sol'] },
       done: false,
     },
     {
       id: '24.2',
-      title: 'modelPolicy.builderModel: the config key, validated, in the generated schema',
+      title: 'modelPolicy in config: preset, default, roles — validated, generated, printed, parsed from --models',
       problem:
-        'ModelPolicyShape (config.mjs:86) is `{ judgeModel: z.string() }` with additionalProperties false in the generated JSON schema, so a consumer cannot declare a builder re-route at all — config check reds the key.',
+        'ModelPolicyShape (config.mjs:86) is `{ judgeModel: z.string() }` and the generated schema forbids other keys, so no repo can declare a preset or a per-role map; nothing parses a `--models` argument.',
       steps: [
         {
           file: 'plugins/zeroh-roadmap/cli/lib/config.mjs',
           description:
-            "ModelPolicyShape gains `builderModel: z.string().optional()` with the docblock: leads BUILDER-class chains exactly as judgeModel leads judge chains; an alias (MODEL_ALIASES) or a model id; absent = today's behaviour. Regenerate cli/roadmap.config.schema.json with `node cli/generate-config-schema.mjs` (the config.test drift subtest deep-equals it); `roadmap config check` (cli/commands/config.mjs:107) prints `judge=… builder=…` → verify: bash -c \"grep -qF 'builderModel' plugins/zeroh-roadmap/cli/lib/config.mjs && grep -qF 'builderModel' plugins/zeroh-roadmap/cli/roadmap.config.schema.json && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/config.test.mjs >/dev/null 2>&1\"",
+            "ModelPolicyShape → `{ preset?: enum(keys of MODEL_PRESETS), default?: string, roles?: record(roleId → string), judgeModel?: string (legacy, judge-class lead) }` — all optional, `{}` = the table. Regenerate cli/roadmap.config.schema.json (`node cli/generate-config-schema.mjs`; config.test's drift subtest deep-equals it); `roadmap config check` (cli/commands/config.mjs:107) prints the effective policy per role class instead of `judge=` alone → verify: bash -c \"grep -qF 'preset' plugins/zeroh-roadmap/cli/lib/config.mjs && grep -qF 'preset' plugins/zeroh-roadmap/cli/roadmap.config.schema.json && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/config.test.mjs >/dev/null 2>&1\"",
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/roles.mjs',
+          description:
+            "`policyFromArg(text)`: a preset name, or comma pairs `role=alias` with `default=alias` allowed (`codex`, `default=sol,software-architect=fable`); unknown role/preset/alias → a named error listing the legal ones. `mergePolicy(repo, invocation)`: invocation keys win, `source` recorded as 'invocation' | 'config' | 'table'. The role verb: `--models <arg>` and `--driver <id>` both accepted, the effective policy loaded from config and merged → verify: bash -c \"grep -qF 'policyFromArg' plugins/zeroh-roadmap/cli/lib/roles.mjs && grep -qF -- '--models' plugins/zeroh-roadmap/cli/commands/role.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/commands/role.test.mjs >/dev/null 2>&1\"",
         },
       ],
       acceptanceCriteria: [
-        'A config carrying { judgeModel: "sol", builderModel: "sol" } parses; one carrying builderModel: 42 reds naming the field; the committed schema JSON equals the regenerated one',
+        'A config with { preset: "codex" } parses; { preset: "gpt" } reds naming the three presets; { roles: { "arc-eval-judge": "sol" } } reds at config check naming the pin; `roadmap role resolve quality-pass --driver codex --models codex` prints gpt-5.6-sol (native) on a repo whose config is empty; the schema JSON equals its regeneration',
       ],
-      files: ['plugins/zeroh-roadmap/cli/lib/config.mjs', 'plugins/zeroh-roadmap/cli/lib/config.test.mjs', 'plugins/zeroh-roadmap/cli/roadmap.config.schema.json', 'plugins/zeroh-roadmap/cli/commands/config.mjs'],
+      files: ['plugins/zeroh-roadmap/cli/lib/config.mjs', 'plugins/zeroh-roadmap/cli/lib/config.test.mjs', 'plugins/zeroh-roadmap/cli/roadmap.config.schema.json', 'plugins/zeroh-roadmap/cli/commands/config.mjs', 'plugins/zeroh-roadmap/cli/lib/roles.mjs', 'plugins/zeroh-roadmap/cli/commands/role.mjs', 'plugins/zeroh-roadmap/cli/commands/role.test.mjs'],
       testMode: 'tdd',
-      interfaces: { consumes: [], produces: ['RoadmapConfig.modelPolicy.builderModel'] },
+      dependsOn: ['24.1'],
+      interfaces: { consumes: ['MODEL_PRESETS from 24.1', 'resolveRole opts.policy from 24.1'], produces: ['RoadmapConfig.modelPolicy.{preset,default,roles}', 'policyFromArg', 'mergePolicy'] },
       done: false,
     },
     {
       id: '24.3',
-      title: 'resolveRole leads builder chains with builderModel; the role verb reads both keys and takes --driver',
+      title: 'The per-run override travels: arm and codex run take --models; sidecar, journal and phase record carry the snapshot',
       problem:
-        "resolveRole (roles.mjs:212-215) prepends the asked model for judge-class roles only; role.mjs:22 loads judgeModel alone and defaults driverId to 'claude' (role.mjs:13), so a codex lane asking `roadmap role resolve quality-pass` is told 'claude-opus-5 (child-cli)' — the Claude answer.",
+        '"do arc with codex" has no carrier: arm.mjs:22-25 parses no --models, sidecar.mjs:109-111 stamps mode/note/baseRef only, codex.mjs:455-456 takes --worktree/--base only, and PhaseExecutionResultShape (templates/schema.ts:294) records firings but never the policy that was in force.',
       steps: [
         {
-          file: 'plugins/zeroh-roadmap/cli/lib/roles.mjs',
+          file: 'plugins/zeroh-roadmap/templates/schema.ts',
           description:
-            "resolveRole opts gain `builderModel`; the chain is `[asked, ...tierChain]` where asked = judgeModel for class 'judge' and builderModel for class 'builder' (alias-normalised exactly like judgeModel). A led chain that walks down still records `substituted` from the LED head. ROLES entries and roles.test's 1-entry-chain rule stay untouched — the lead is config, never a table edit → verify: bash -c \"grep -qF 'builderModel' plugins/zeroh-roadmap/cli/lib/roles.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/roles.test.mjs >/dev/null 2>&1\"",
+            "PhaseExecutionResultShape gains optional `modelPolicy: { source: enum(['invocation','config','table']), preset?, default?, roles? }`; the arc sidecar (validated in sidecar.mjs, no schema-home shape) carries the same object. Mirror line-identically in lib/roadmap/schema.ts in the same commit (vendor-pair) → verify: bash -c \"grep -qF 'modelPolicy' plugins/zeroh-roadmap/templates/schema.ts && diff <(grep -A 6 'modelPolicy: z' plugins/zeroh-roadmap/templates/schema.ts) <(grep -A 6 'modelPolicy: z' lib/roadmap/schema.ts) >/dev/null\"",
         },
         {
-          file: 'plugins/zeroh-roadmap/cli/commands/role.mjs',
+          file: 'plugins/zeroh-roadmap/cli/commands/arm.mjs',
           description:
-            'The verb loads modelPolicy.{judgeModel,builderModel} and passes both; `--driver` keeps its claude default (a Claude session is the common caller) and the usage line documents `--driver codex`. role.test.mjs: matrix over {driver claude|codex} × {builderModel unset|sol} × {quality-pass, test-engineer, code-reviewer, software-architect} → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'builderModel\' cli/commands/role.mjs && capbuild node --test cli/commands/role.test.mjs >/dev/null 2>&1"',
+            "`roadmap arm <arc> --models <arg>` parses via policyFromArg, merges with the repo config and stamps `modelPolicy` (with source) into the sidecar; `roadmap codex run … --models <arg>` does the same into the lane journal, and both lane prompts name the effective policy verbatim with the instruction: pass it to `roadmap role resolve <role> --driver codex --models <arg>` and stamp `executionResult.modelPolicy` from it; arm-disarm.test / codex.test cover the stamp and the prompt line → verify: bash -c \"grep -qF -- '--models' plugins/zeroh-roadmap/cli/commands/arm.mjs && grep -qF -- '--models' plugins/zeroh-roadmap/cli/commands/codex.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/commands/arm-disarm.test.mjs cli/commands/codex.test.mjs >/dev/null 2>&1\"",
         },
       ],
       acceptanceCriteria: [
-        "Under driver codex with builderModel sol: quality-pass and test-engineer resolve to gpt-5.6-sol NATIVE; under driver claude: gpt-5.6-sol CHILD-CLI; builderModel unset: unchanged (claude-opus-5); sol forced unavailable: falls to the card tier with substituted { from: gpt-5.6-sol }; judge roles ignore builderModel and builder roles ignore judgeModel (both directions asserted)",
+        'arm --models codex writes modelPolicy { source: invocation, preset: codex } into the sidecar and refuses --models naming arc-eval-judge; codex run --models codex-full journals it and its prompt carries the exact resolver call; a phase record carrying executionResult.modelPolicy validates in both schema homes; an absent --models records the config policy with source config (or table when the config is empty); the envelope-overhead ratchet stays green',
       ],
-      files: ['plugins/zeroh-roadmap/cli/lib/roles.mjs', 'plugins/zeroh-roadmap/cli/lib/roles.test.mjs', 'plugins/zeroh-roadmap/cli/commands/role.mjs', 'plugins/zeroh-roadmap/cli/commands/role.test.mjs'],
+      files: ['plugins/zeroh-roadmap/templates/schema.ts', 'lib/roadmap/schema.ts', 'plugins/zeroh-roadmap/cli/commands/arm.mjs', 'plugins/zeroh-roadmap/cli/commands/arm-disarm.test.mjs', 'plugins/zeroh-roadmap/cli/lib/sidecar.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
       testMode: 'tdd',
-      dependsOn: ['24.1', '24.2'],
-      interfaces: { consumes: ['MODEL_ALIASES.sol from 24.1', 'RoadmapConfig.modelPolicy.builderModel from 24.2'], produces: ['resolveRole opts.builderModel'] },
+      dependsOn: ['24.2'],
+      interfaces: { consumes: ['policyFromArg from 24.2', 'mergePolicy from 24.2'], produces: ['PhaseExecutionResult.modelPolicy', 'sidecar.modelPolicy'] },
       done: false,
     },
     {
       id: '24.4',
-      title: 'The lane asks as itself; do-arc delegates the arc when its executor resolves to codex; one home documents the rule',
+      title: 'do-arc routes by the resolved executor; MULTI-DRIVER §1 is the one home of presets, precedence and the pin',
       problem:
-        'codex.mjs:152 tells the lane to fill roles per the resolver but never says `--driver codex`, so a lane that asks the verb gets the Claude answer; do-arc always spawns a phase-executor Agent even when the consumer has routed that role to codex; MULTI-DRIVER.md §1 (the ONE home) states the judgeModel rule only.',
+        'do-arc always spawns a Claude phase-executor Agent (SKILL.md:36) and its arm step (SKILL.md:27) knows no --models; MULTI-DRIVER.md §1 documents judgeModel only. Without the routing rule a codex policy still runs the executor on Opus.',
       steps: [
-        {
-          file: 'plugins/zeroh-roadmap/cli/commands/codex.mjs',
-          description:
-            'Both lane prompts (run :152, plan :248) name the exact verb `roadmap role resolve <role> --driver codex` and add: a role that resolves to your own model is filled NATIVELY (your subagent), recorded via native — never inline unless the resolver says inline. codex.test.mjs pins the literal in both prompts; the envelope-overhead ratchet (roles.test.mjs MAX_ENVELOPE_PROTOCOL_RATIO) must stay green → verify: bash -c "grep -qF -- \'--driver codex\' plugins/zeroh-roadmap/cli/commands/codex.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/commands/codex.test.mjs cli/lib/roles.test.mjs >/dev/null 2>&1"',
-        },
         {
           file: 'plugins/zeroh-roadmap/MULTI-DRIVER.md',
           description:
-            '§1 `class` bullet becomes the two-key rule: judgeModel leads judge chains, builderModel leads builder chains, both optional, alias or id, `sol` = the codex model; the resolver signature line adds builderModel. One paragraph, no restatement elsewhere → verify: bash -c "grep -qF \'builderModel\' plugins/zeroh-roadmap/MULTI-DRIVER.md && grep -qF \'builderModel\' plugins/zeroh-roadmap/cli/lib/roles.mjs"',
+            '§1 gains: the three presets as a table, the precedence line (invocation --models > repo modelPolicy > roles table), the per-role/default keys, the legacy judgeModel note, and the pin (`arc-eval-judge` = sonnet, refused in any override — the eval trend baseline, eval.mjs PINNED_JUDGE_MODEL). The resolver signature line adds `policy`. No other file restates it → verify: bash -c "grep -qF \'codex-full\' plugins/zeroh-roadmap/MULTI-DRIVER.md && grep -qF \'PINNED_ROLES\' plugins/zeroh-roadmap/MULTI-DRIVER.md"',
         },
         {
           file: 'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
           description:
-            "Step 1 gains ONE sentence: when `roadmap role resolve phase-executor` returns the codex model, delegate the whole arc via `roadmap codex run --arc <ID> --base <integration ref>` (the existing lane) and audit its CODEX-REPORT per the codex-delegation section — never an Agent spawn of a Claude executor. Cite MULTI-DRIVER §1; `roadmap measure --flow do-arc --assert 13339` stays green, funded in-file if needed with a DIET-LEDGER row → verify: bash -c \"grep -qF 'codex run --arc' plugins/zeroh-roadmap/skills/do-arc/SKILL.md && cd plugins/zeroh-roadmap && node bin/roadmap.mjs measure --flow do-arc --assert 13339 >/dev/null 2>&1\"",
+            'Trigger line accepts `--models <preset|pairs>`; Step 1 arms with it; the loop step 3 gains ONE sentence: when `roadmap role resolve phase-executor --driver claude --models <arg>` returns the codex model, delegate the whole arc via `roadmap codex run --arc <ID> --base <ref> --models <arg>` and audit its CODEX-REPORT per the codex-delegation section — never an Agent spawn of a Claude executor. `roadmap measure --flow do-arc --assert 13339` stays green (fund in-file + DIET-LEDGER row if needed) → verify: bash -c "grep -qF \'codex run --arc\' plugins/zeroh-roadmap/skills/do-arc/SKILL.md && cd plugins/zeroh-roadmap && node bin/roadmap.mjs measure --flow do-arc --assert 13339 >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
-        'Both lane prompts carry the exact verb with --driver codex (test-pinned); do-arc names the delegation branch once; MULTI-DRIVER §1 is the only prose home of the two-key rule; the do-arc measure assert holds',
+        'MULTI-DRIVER §1 is the only prose home of presets/precedence/pin (grep for codex-full across skills/agents finds only the do-arc trigger line and MULTI-DRIVER); do-arc names the delegation branch once; the do-arc measure assert holds',
       ],
-      files: [
-        'plugins/zeroh-roadmap/cli/commands/codex.mjs',
-        'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
-        'plugins/zeroh-roadmap/MULTI-DRIVER.md',
-        'plugins/zeroh-roadmap/skills/do-arc/SKILL.md',
-        'plugins/zeroh-roadmap/DIET-LEDGER.md',
-      ],
-      testMode: 'tdd',
-      dependsOn: ['24.3'],
-      interfaces: { consumes: ['resolveRole opts.builderModel from 24.3'], produces: [] },
-      done: false,
-    },
-    {
-      id: '24.5',
-      title: 'This consumer routes every role to codex; the live resolver agrees',
-      problem:
-        'roadmap/roadmap.config.json:19-21 carries judgeModel: fable only; until it names sol for both classes, the next codex lane blocks on the Opus allowance exactly as codex-22-21 and codex-23 did.',
-      steps: [
-        {
-          file: 'roadmap/roadmap.config.json',
-          description:
-            'modelPolicy becomes { "judgeModel": "sol", "builderModel": "sol" }; `roadmap config check` exits 0; live probes recorded in the transparencyReport: `role resolve quality-pass --driver codex` → gpt-5.6-sol (native); `code-reviewer --driver codex` → native; `software-architect --driver claude` → gpt-5.6-sol (child-cli), the fable→sol→opus chain intact behind the lead → verify: bash -c "grep -qF \'\\"builderModel\\": \\"sol\\"\' roadmap/roadmap.config.json && out=$(node plugins/zeroh-roadmap/bin/roadmap.mjs role resolve quality-pass --driver codex 2>&1) && case \\"$out\\" in *\'gpt-5.6-sol (native)\'*) exit 0;; *) echo \\"$out\\"; exit 1;; esac"',
-        },
-      ],
-      acceptanceCriteria: [
-        'config check green; the three live resolutions above hold; `roadmap audit` stays CLEAN apart from pre-existing findings; the independence rule (gate-report.mjs no-self-judge, phase 17.2) is untouched — a codex-spawned reviewer is a recorded native firing under a distinct role label, which is the ruling the owner made',
-      ],
-      files: ['roadmap/roadmap.config.json'],
+      files: ['plugins/zeroh-roadmap/MULTI-DRIVER.md', 'plugins/zeroh-roadmap/skills/do-arc/SKILL.md', 'plugins/zeroh-roadmap/DIET-LEDGER.md'],
       testMode: 'none',
       dependsOn: ['24.3'],
       done: false,
     },
+    {
+      id: '24.5',
+      title: 'This consumer defaults to preset codex; the live resolver and config check agree',
+      problem:
+        'roadmap/roadmap.config.json:19-21 carries judgeModel: fable only, so the next codex lane here still shells out to Opus for quality-pass and test-engineer.',
+      steps: [
+        {
+          file: 'roadmap/roadmap.config.json',
+          description:
+            'modelPolicy becomes { "preset": "codex" } (codex builders and reviewers, fable architect, sonnet judge); `roadmap config check` exits 0 and prints the effective policy; live probes recorded in the transparencyReport: quality-pass --driver codex → gpt-5.6-sol (native); software-architect --driver codex → claude-fable-5 (child-cli); arc-eval-judge --driver codex → claude-sonnet-5; the same three with `--models codex-full` → architect gpt-5.6-sol native, judge still sonnet → verify: bash -c "grep -qF \'\\"preset\\": \\"codex\\"\' roadmap/roadmap.config.json && out=$(node plugins/zeroh-roadmap/bin/roadmap.mjs role resolve quality-pass --driver codex 2>&1) && case \\"$out\\" in *\'gpt-5.6-sol (native)\'*) exit 0;; *) echo \\"$out\\"; exit 1;; esac"',
+        },
+      ],
+      acceptanceCriteria: [
+        'config check green with the printed policy; the six live resolutions hold; `roadmap audit` stays CLEAN apart from pre-existing findings',
+      ],
+      files: ['roadmap/roadmap.config.json'],
+      testMode: 'none',
+      dependsOn: ['24.2'],
+      done: false,
+    },
   ],
   notes:
-    'interview: conducted in-session 2026-09-02 — the owner ruled "use codex for full arc/phases work" after two lanes blocked on the Opus allowance; the shape (a builderModel key symmetric to judgeModel, a sol alias, do-arc delegation, this consumer flipped) is the planner\'s technical decision, made here: config-led chains keep the roles table and its 1-entry rule as the ruled default, so every other consumer is unchanged. ' +
-    'userFacing false: plugin/CLI internals and this repo\'s own config; no product surface, no flag. testMode none on 24.5: a JSON config edit whose proof is the live resolver probes and config check. ' +
-    'Recorded decision: with both keys at sol, codex builds AND reviews. The no-self-judge rule (gate-report.mjs INDEPENDENT_REVIEW_ENFORCEMENT_AT, phase 17.2) keys on the recorded agent label, not the model family; a native codex subagent under the code-reviewer label satisfies it, and MULTI-DRIVER §1 forbids only the INLINE fallback for roles whose card forbids grading its own work. The owner accepted that trade on 2026-09-02. ' +
-    'conflictsWith 23: both edit skills/do-arc/SKILL.md and both spend the do-arc load budget (23 re-ratcheted it to 13,339 under the operator ruling; 24.4 asserts that figure) — serialize behind 23. ' +
-    'Out of scope, recorded: a codex-family driver for do-phase INLINE in a Claude session (the session is the driver; builderModel routes its spawned roles to codex children, which is the intended reach); a roles-table reorder (a second tier on builder roles is a user ruling per roles.test.mjs:105 — not needed when config leads the chain); re-verifying the codex driver registry entry (roadmap driver verify codex) — its native-subagent capability is already the recorded evidence. ' +
-    'Verify rehearsal attestation: assumption probes executed 2026-09-02 at plan time — no sol alias (0 hits), builderModel 0 files, the judge-only lead literal present, the claude driver default + missing --driver codex both present (all exit 0). Step verifies red-now via their grep halves (no sol alias, no builderModel anywhere, no --driver codex, no codex run --arc in do-arc, config still fable); runner clauses inherit polarity from the grep representatives. Mode A review EXECUTED 2026-09-02 (claude-fable-5-1, standalone inline): READY after two [FIXED] repairs — the config-check printout (cli/commands/config.mjs:107) joins 24.2 as the one other code consumer of judgeModel; the 24.5 step trimmed under the cap. Blast radius probed: eval.mjs/eval-score.mjs judgeModel is the eval-judge pin, a different concept, untouched; prose homes citing judgeModel for judge spawns stay correct. Ratified: testMode none on 24.5; userFacing false. Placement: HIGH, conflictsWith 23 (in progress at index 0) forces one entry between → 3 of 4.',
+    'interview: conducted in-session 2026-09-02 15:12-15:19Z — the owner ruled the role as the unit of choice, per-repo defaults plus a per-run override, everything recorded, arc-eval-judge pinned to sonnet everywhere (the eval trend baseline and the one cross-family reading when builders and reviewers share a family); the three presets and the precedence order are the planner\'s technical shape, made here. Supersedes the first draft of this phase (class-wide judgeModel/builderModel keys — too coarse to express "codex developer with a fable architect"). ' +
+    'userFacing false: plugin/CLI internals and this repo\'s config; no product surface, no flag. testMode none on 24.4 (prose + measure) and 24.5 (a JSON edit proven by live resolver probes and config check). ' +
+    'Recorded decision: under preset codex or codex-full, codex reviews codex. The no-self-judge rule (gate-report.mjs, phase 17.2) keys on the recorded role label; a native codex subagent under the code-reviewer label satisfies it; MULTI-DRIVER §1 forbids only the INLINE fallback for roles whose card forbids grading its own work. The owner accepted the trade on 2026-09-02; the recorded snapshot + firings are what lets the scorecard show whether it costs quality. ' +
+    'conflictsWith 23: both edit skills/do-arc/SKILL.md and both spend the do-arc load budget (23 re-ratcheted it to 13,339; 24.4 asserts that figure) — serialize behind 23. ' +
+    'Out of scope, recorded: a roles-table reorder (the config leads the chain; the table stays the ruled default per roles.test.mjs:105); re-verifying the codex driver entry (roadmap driver verify codex); a scorecard slice by modelPolicy.preset (the snapshot lands here; the projection is eval work once records exist); the do-phase inline path in a Claude session already spawns roles by the resolver, so it inherits the policy with no prose change. ' +
+    'Verify rehearsal attestation: assumption probes executed 2026-09-02 at plan time — MODEL_PRESETS/builderModel/roles-map/--models 0 files and no sol alias; the judge-only lead literal present; the claude driver default present and --driver codex absent from codex.mjs; the sonnet pin constant and the arc-eval-judge chain head both present (all exit 0). Step verifies red-now via their grep halves (no sol alias, no MODEL_PRESETS, no preset key in config or schema, no --models in arm/codex/role, no modelPolicy in the schemas, no codex-full in MULTI-DRIVER, no codex run --arc in do-arc, config still judgeModel fable); runner clauses inherit polarity from the grep representatives.',
 })
