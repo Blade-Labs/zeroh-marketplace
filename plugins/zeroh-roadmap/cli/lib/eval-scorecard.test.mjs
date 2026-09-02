@@ -141,7 +141,7 @@ function metricsOf(cell, label) {
   return cell.metrics
 }
 
-const DRIVER_METRIC_KEYS = ['escapeFixesPerPhase', 'gateRoundsMean', 'haltRate', 'minutesPerTask']
+const DRIVER_METRIC_KEYS = ['escapeFixesPerPhase', 'gateRoundsMean', 'haltRate', 'lowOnlyRoundShare', 'minutesPerTask']
 const REVIEWER_METRIC_KEYS = ['catches', 'falsePositives', 'misses', 'recall']
 
 function assertMetricKeys(cell, expected, label) {
@@ -220,7 +220,7 @@ test('computeScorecard — the floor bites EXACTLY at nFloor: n-1 abstains, n sc
 })
 
 // ── 2. a scored driver cell ───────────────────────────────────────────────────────────
-test('computeScorecard — a 6-phase driver cell computes all four metrics as NUMBERS', () => {
+test('computeScorecard — a 6-phase driver cell computes recorded metrics and abstains on absent severity', () => {
   const phases = nPhases(6, (i) => ({ phase: 9200 + i, gateRounds: 2, haltCount: 0, minutes: 30, taskCount: 3 }))
   const sc = computeScorecard([mkTrace(phases, { escapeFixes: [escapeFix('fix(cli): phase 9203 gate R1 — an escape')] })], [])
 
@@ -229,10 +229,11 @@ test('computeScorecard — a 6-phase driver cell computes all four metrics as NU
   assert.equal(cell.samples, 6)
 
   const m = cell.metrics
-  for (const key of DRIVER_METRIC_KEYS) {
+  for (const key of DRIVER_METRIC_KEYS.filter((key) => key !== 'lowOnlyRoundShare')) {
     assert.equal(typeof m[key], 'number', `${key} is a real number when every input is present`)
     assert.ok(Number.isFinite(m[key]), `${key} is finite`)
   }
+  assertSentinel(m.lowOnlyRoundShare, 'no-finding-severity', 'legacy rounds carry no severity evidence')
   assert.equal(m.gateRoundsMean, 2, 'six phases at 2 recorded gate rounds')
   assert.equal(m.escapeFixesPerPhase, 1 / 6, 'one attributed escape over six phases')
   assert.equal(m.haltRate, 0, 'six phases recorded haltCount 0 — a MEASURED zero, unlike the sentinel case')
@@ -377,6 +378,32 @@ test('computeScorecard — NO recorded gate rounds anywhere sentinels gateRounds
   const sc = computeScorecard([mkTrace(nPhases(6, () => ({ gateRounds: null })))], [])
   const m = metricsOf(driverCell(sc, { model: DRIVER_A.model }), 'the driver cell under test')
   assertSentinel(m.gateRoundsMean, 'no-gate-rounds', 'gateRoundsMean with nothing recorded')
+})
+
+test('computeScorecard — lowOnlyRoundShare measures recorded low-only rounds and is explanatory beside the other metrics', () => {
+  const phases = nPhases(5, (i) => ({
+    phase: 9750 + i,
+    gateRounds: 2,
+    rounds: [
+      {
+        round: 1,
+        agent: 'code-reviewer',
+        verdict: 'findings-fixed',
+        findings: i < 2 ? { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 1 } : { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 0 },
+      },
+      { round: 2, agent: 'code-reviewer', verdict: 'fixed-closed', findings: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 } },
+    ],
+  }))
+  const metrics = metricsOf(driverCell(computeScorecard([mkTrace(phases)], []), { model: DRIVER_A.model }), 'severity-aware driver')
+
+  assert.equal(metrics.lowOnlyRoundShare, 2 / 5, 'two low-only rounds among five rounds carrying findings')
+  assert.equal(metrics.gateRoundsMean, 2, 'the explanatory column does not replace existing gate-round measurement')
+})
+
+test('computeScorecard — lowOnlyRoundShare abstains for a cell fed only by legacy rounds', () => {
+  const cell = driverCell(computeScorecard([mkTrace(nPhases(5, (i) => ({ phase: 9770 + i })))], []), { model: DRIVER_A.model })
+  const metrics = metricsOf(cell, 'legacy-only driver')
+  assertSentinel(metrics.lowOnlyRoundShare, 'no-finding-severity', 'legacy rounds carry no severity evidence')
 })
 
 // ── 7. haltRate ───────────────────────────────────────────────────────────────────────

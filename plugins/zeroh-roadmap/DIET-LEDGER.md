@@ -719,3 +719,13 @@ pinned literal is 13,339.
 | do-arc Trigger — separate prose for optional band flags | superseded-with-equivalent(compacted into the options sentence while retaining both flags and their force-every-band meaning) | do-arc Trigger |
 | do-arc Step 1 — "a lane a sibling already holds" | superseded-with-equivalent("a sibling's lane" preserves the ownership/refusal rule) | do-arc Step 1 |
 | do-arc loop Step 3 — expanded executor arm/spawn explanation | superseded-with-equivalent(the compact paragraph retains ordering, exact commands/inputs, session and exclusive-id meanings, refusal scope, attribution reconciliation, preflight interpretation, and liveness handoff) | do-arc loop Step 3 |
+
+## Gate convergence scope and stop rules — phase 25.3
+
+Measured: do-phase skill 12,217 → 12,219 B; do-phase flow 5,989 → 6,014 tokens; do-arc remains
+exactly 13,339 tokens (assert passes).
+
+| Original location + phrase | Disposition | New location |
+|---|---|---|
+| do-phase gate paragraph — expanded kind ladder, round numbering, attribution, verify and arc caveats | superseded-with-equivalent(compacted while preserving every kind, cap, model attribution, done guard, docs-only and arc-scope rule) | do-phase gate paragraph, now also carrying round-brief decisions |
+| phase-executor gate paragraph — repeated record-round attribution explanation | superseded-with-equivalent(compacted beside its new round-brief citation) | phase-executor gate paragraph |

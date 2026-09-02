@@ -622,6 +622,13 @@ function runGateCmd(root, args) {
   })
   return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
 }
+function runGateSubcommand(root, subcommand, args) {
+  const r = spawnSync('node', [BIN, 'gate', subcommand, ...args], {
+    cwd: root, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ROADMAP_CONFIG: join(root, 'roadmap', 'roadmap.config.json') },
+  })
+  return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+}
 const latestReportOf = (root, phase) => {
   const dir = join(root, 'roadmap', '.gate', String(phase))
   const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort()
@@ -699,6 +706,62 @@ test('gate run --record-round — appends to the SAME report file', () => {
   const after = readdirSync(join(repo.root, 'roadmap', '.gate', '1300')).filter((f) => f.endsWith('.json')).length
   assert.equal(after, before, 'no new run file — appended to the latest')
   assert.equal(latestReportOf(repo.root, 1300).agents.length, 1)
+})
+
+test('gate run --record-round — an unknown finding severity exits 2 and names the complete allowed set', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1301, phaseObj({ phase: 1301 }))
+  repo.commit('feat: phase 1301 — code', { 'lib/finding.ts': 'export const finding = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1301']).code, 0, 'precondition: a report exists to append to')
+
+  const round = {
+    round: 1,
+    agent: 'code-reviewer',
+    verdict: 'findings-fixed',
+    summary: 'one invalidly classified finding',
+    findings: [{
+      file: 'lib/finding.ts',
+      severity: 'URGENT',
+      description: 'the severity is outside the governed review vocabulary',
+    }],
+    sha: '1234567890abcdef',
+  }
+  const refused = runGateCmd(repo.root, ['1301', '--record-round', JSON.stringify(round)])
+
+  assert.equal(refused.code, 2, `a malformed record-round payload is a usage refusal; stderr: ${refused.stderr}`)
+  assert.match(refused.stderr, /findings\.0\.severity/, 'the refusal identifies the invalid field')
+  for (const severity of ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'])
+    assert.match(refused.stderr, new RegExp(`\\b${severity}\\b`), `the remedy names allowed severity ${severity}`)
+  assert.equal(latestReportOf(repo.root, 1301).agents.length, 0, 'the refused round does not mutate gate evidence')
+})
+
+// A correctness loop must terminate from structured findings, not from reviewer prose or
+// merely from whether the array is empty. These six directions pin every boundary in the
+// loop contract, including the finite cap and additive compatibility for pre-findings reports.
+test('gate round-brief — derives all six correctness-loop directions from the latest recorded round', () => {
+  const cases = [
+    ['HIGH remains open', 1, 'findings-fixed', [{ file: 'lib/x.ts', severity: 'HIGH', description: 'a high severity defect remains open' }], 'continue'],
+    ['MEDIUM is fixed', 1, 'findings-fixed', [{ file: 'lib/x.ts', severity: 'MEDIUM', description: 'a medium defect was repaired', fixedInCommit: 'abcdef1' }], 'close'],
+    ['LOW is fixed', 1, 'findings-fixed', [{ file: 'lib/x.ts', severity: 'LOW', description: 'a low defect was repaired', fixedInCommit: 'abcdef1' }], 'close'],
+    ['empty clean round', 1, 'clean', [], 'clean'],
+    ['round five is the cap', 5, 'findings-fixed', [{ file: 'lib/x.ts', severity: 'HIGH', description: 'a high severity defect remains at the cap' }], 'cap'],
+    ['legacy findings-fixed without findings', 1, 'findings-fixed', [], 'continue'],
+  ]
+
+  for (const [why, round, verdict, findings, direction] of cases) {
+    const repo = makeRepo(RUN_CFG())
+    const phase = 1350 + cases.findIndex((entry) => entry[0] === why)
+    repo.writePhase(phase, phaseObj({ phase }))
+    repo.commit(`feat: phase ${phase} — code`, { [`lib/${phase}.ts`]: 'export const value = 1\n' })
+    assert.equal(runGateCmd(repo.root, [String(phase)]).code, 0, `${why}: precondition gate run`)
+    assert.equal(runGateCmd(repo.root, [String(phase), '--record-round', JSON.stringify({
+      round, agent: 'code-reviewer', verdict, summary: why, findings,
+    })]).code, 0, `${why}: precondition round recording`)
+
+    const brief = runGateSubcommand(repo.root, 'round-brief', [String(phase)])
+    assert.equal(brief.code, 0, `${why}: ${brief.stderr}`)
+    assert.equal(brief.stdout.trim(), direction, `${why}: exact machine-readable direction`)
+  }
 })
 
 test('gate run --verify-complete — exit 2 on a gateRounds mismatch, exit 0 on the coherent twin', () => {

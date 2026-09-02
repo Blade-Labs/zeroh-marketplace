@@ -62,8 +62,10 @@ After the last task run the `kind`-selected gate — `roadmap gate plan <N>` →
 agent chain it names — FOREGROUND to exit code, beaconing each stage via
 `roadmap beacon gate-stage-start|gate-stage-end --phase <N> --detail <stage>`. The ONE terminal
 beacon event is `phase-complete` (the closed vocabulary refuses variants). Record each agent round into
-the report with `gate run <N> --record-round <json>` as it finishes — the json carries `"model"`: your own model id, the reviewer attribution the evals slice by (else `--verify-complete`
-refuses the done flip). Then in ONE continuous execution set the completion fields +
+the report with `gate run <N> --record-round <json>` as it finishes; drive correctness rounds with
+`gate round-brief <N> --json` (continue/close/clean/cap, delta scope and prior-finding closure as
+do-phase defines). The json carries `"model"`: the reviewing model id, or `--verify-complete`
+refuses the done flip. Then in ONE continuous execution set the completion fields +
 `executionResult` (including `driver`: your own model id + lane), commit, run `gate run <N>
 --verify-complete`, and return. SKIP grooming/emit/push
 — the workflow serializes those.

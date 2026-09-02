@@ -15,13 +15,14 @@
       "lane": "codex",
       "taskCountBand": "4-6",
       "surface": false,
-      "samples": 7,
+      "samples": 8,
       "abstained": false,
       "metrics": {
         "gateRoundsMean": 5,
         "escapeFixesPerPhase": "scan-unavailable",
         "haltRate": 0.8,
-        "minutesPerTask": 73.82976190476191
+        "lowOnlyRoundShare": "no-finding-severity",
+        "minutesPerTask": 68.50438596491229
       }
     },
     {
@@ -43,6 +44,7 @@
         "gateRoundsMean": 4.4,
         "escapeFixesPerPhase": "scan-unavailable",
         "haltRate": 0.2,
+        "lowOnlyRoundShare": "no-finding-severity",
         "minutesPerTask": 39.84166666666667
       }
     },
@@ -82,6 +84,7 @@
         "gateRoundsMean": 4.666666666666667,
         "escapeFixesPerPhase": "scan-unavailable",
         "haltRate": 0.7142857142857143,
+        "lowOnlyRoundShare": "no-finding-severity",
         "minutesPerTask": 60.345238095238095
       }
     },
@@ -102,6 +105,7 @@
         "gateRoundsMean": 4.75,
         "escapeFixesPerPhase": "scan-unavailable",
         "haltRate": 0.2,
+        "lowOnlyRoundShare": "no-finding-severity",
         "minutesPerTask": 35.86145833333333
       }
     },
@@ -123,24 +127,16 @@
       "model": "claude-fable-5-1",
       "taskCountBand": "4-6",
       "surface": false,
-      "samples": 1,
+      "samples": 2,
       "abstained": true
     }
   ],
-  "reviewers": [
-    {
-      "agent": "code-reviewer",
-      "taskCountBand": "4-6",
-      "surface": false,
-      "samples": 4,
-      "abstained": true
-    }
-  ],
+  "reviewers": [],
   "notes": [
     "cells are cohort-scoped (task-count band × surface) because assignment is NOT random — no figure here is comparable across cohorts",
     "planner cells measure the EXECUTION of phases that planner planned — plan quality shows through the executor, never directly",
     "the surface axis is the timing table's HEURISTIC over each phase keyFiles (web/, office/, spa/ paths), not a declared field",
     "cells under 5 samples ABSTAIN and carry no metrics — an abstained cell is not a zero score",
-    "sources: 2 arc trace(s) and 9 phase record(s) fed these cells (12 record(s) suppressed as already covered by an arc trace) — phase records carry no escape scan, so every cell they touch reads escapeFixesPerPhase 'scan-unavailable', never 0; reviewer cells are fed by arc traces alone"
+    "sources: 2 arc trace(s) and 10 phase record(s) fed these cells (12 record(s) suppressed as already covered by an arc trace) — phase records carry no escape scan, so every cell they touch reads escapeFixesPerPhase 'scan-unavailable', never 0; reviewer cells are fed by arc traces alone"
   ]
 }

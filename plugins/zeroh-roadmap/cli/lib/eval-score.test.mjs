@@ -163,6 +163,21 @@ test('scoreArcTrace — the fully-recorded fixture scores all three deterministi
   }
 })
 
+test('scoreArcTrace — fixed-closed is converged alongside clean, and low-only evidence never changes the score', () => {
+  const fixedClosed = traceFor()
+  const run = byNum(fixedClosed, 9001).gateRuns[0]
+  run.rounds[run.rounds.length - 1].verdict = 'fixed-closed'
+  run.rounds[0].findings = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 1 }
+
+  const withoutLowOnly = structuredClone(fixedClosed)
+  delete withoutLowOnly.phases.find((p) => p.phase === 9001).gateRuns[0].rounds[0].findings
+
+  const a = scoreArcTrace(fixedClosed).dimensions['code-confidence']
+  const b = scoreArcTrace(withoutLowOnly).dimensions['code-confidence']
+  assert.equal(a.signals.finalRoundCleanRatio, 1, 'fixed-closed is a converged terminal verdict, just like clean')
+  assert.equal(a.score, b.score, 'low-only review share is explanation only and never enters code-confidence scoring')
+})
+
 // ── 2. the judge four ─────────────────────────────────────────────────────────────────
 test('scoreArcTrace — the four judge dimensions are pending-judge with their FEEDERS precomputed', () => {
   const { dimensions } = scoreArcTrace(traceFor())

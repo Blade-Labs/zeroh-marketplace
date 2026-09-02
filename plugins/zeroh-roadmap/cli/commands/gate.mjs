@@ -61,7 +61,7 @@ import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
  * `date` comes from the run report's own `startedAt`, never a fresh clock read: the record
  * dates the RUN it describes, which is a fact already on disk.
  */
-export function emitPhaseEvalRecord(toplevel, phaseNum, { parsed, report }) {
+export function emitPhaseEvalRecord(toplevel, phaseNum, { parsed, report, findingsRecorded = false }) {
   const path = phaseEvalRecordPath(toplevel, phaseNum)
   try {
     const schemaPath = consumerSchemaPath(toplevel)
@@ -70,6 +70,8 @@ export function emitPhaseEvalRecord(toplevel, phaseNum, { parsed, report }) {
       parsed,
       green: report.green,
       slots: report.slots,
+      agents: report.agents,
+      findingsRecorded,
       // A linked codex worktree is the SAME repository as the checkout it was cut from, so its
       // identity comes from the primary checkout; the corpus facts still come from `toplevel`.
       // Placement is unaffected — the record lands beside this checkout's own gate artifacts.
@@ -529,12 +531,13 @@ export async function annotateScopedProbeWarnings(built, cfg, cwd, { timeoutMs }
   }
 }
 
-/** Dispatch: `gate plan <phase>` | `gate run <phase>` (run lands in 1656.5). */
+/** Dispatch: `gate plan <phase>` | `gate run <phase>` | `gate round-brief <phase>`. */
 export default async function run(argv) {
   const sub = argv[0]
   if (sub === '--help' || sub === '-h' || !sub) {
     process.stdout.write('roadmap gate plan <phase> [--base <sha>] [--mode inline|arc] [--sequence-member] [--json]\n')
     process.stdout.write('roadmap gate run  <phase> [--base <sha>] [--slots a,b] [--record-round <json>] [--verify-complete] [--json]\n')
+    process.stdout.write('roadmap gate round-brief <phase> [--json]\n')
     return sub ? 0 : 1
   }
   const { opts, positional } = parseArgs(argv.slice(1))
@@ -584,7 +587,44 @@ export default async function run(argv) {
 
   if (sub === 'run') return runGate(phaseNum, opts)
 
-  process.stderr.write(`roadmap gate: unknown subcommand '${sub}' (plan | run)\n`)
+  if (sub === 'round-brief') {
+    let latest
+    try {
+      latest = latestReport(gitToplevel(process.cwd()), phaseNum)
+    } catch (e) {
+      process.stderr.write(`roadmap gate round-brief: ${e.message}\n`)
+      return 1
+    }
+    if (!latest) {
+      process.stderr.write(`roadmap gate round-brief: no gate report exists for phase ${phaseNum}\n`)
+      return 1
+    }
+    const correctnessRounds = latest.report.agents.filter((round) => round.round >= 1)
+    const last = correctnessRounds.at(-1)
+    if (!last) {
+      process.stderr.write(`roadmap gate round-brief: phase ${phaseNum} has no recorded correctness round\n`)
+      return 1
+    }
+    const blocking = last.findings.some((finding) => finding.severity === 'CRITICAL' || finding.severity === 'HIGH')
+    const legacyUnknown = last.verdict === 'findings-fixed' && last.findings.length === 0
+    const rule = correctnessRounds.length >= 5 || last.round >= 5
+      ? 'cap'
+      : last.verdict === 'clean'
+        ? 'clean'
+        : blocking || legacyUnknown
+          ? 'continue'
+          : 'close'
+    const brief = {
+      nextRound: last.round + 1,
+      rule,
+      sinceSha: last.sha ?? null,
+      priorFindings: last.findings,
+    }
+    process.stdout.write(opts.json ? `${JSON.stringify(brief)}\n` : `${rule}\n`)
+    return 0
+  }
+
+  process.stderr.write(`roadmap gate: unknown subcommand '${sub}' (plan | run | round-brief)\n`)
   return 1
 }
 
@@ -732,7 +772,14 @@ export async function runGate(phaseNum, opts) {
       process.stderr.write(`gate run --record-round: ${e instanceof GateReportUnreadableError ? `${e.name}: ` : ''}${e.message}\n`)
       return 2
     }
-    process.stdout.write(`recorded round ${check.data.round} (${check.data.agent}: ${check.data.verdict})\n`)
+    const counts = Object.fromEntries(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((severity) => [
+      severity,
+      check.data.findings.filter((finding) => finding.severity === severity).length,
+    ]))
+    process.stdout.write(
+      `recorded round ${check.data.round} (${check.data.agent}: ${check.data.verdict}; C/H/M/L = `
+        + `${counts.CRITICAL}/${counts.HIGH}/${counts.MEDIUM}/${counts.LOW})\n`,
+    )
     return 0
   }
 
@@ -791,7 +838,11 @@ export async function runGate(phaseNum, opts) {
           `${phaseEvalRecordPath(toplevel, phaseNum)} was NOT refreshed from it — a filtered run ` +
           `is not a sample; re-run the full gate\n`,
       )
-    else emitPhaseEvalRecord(toplevel, phaseNum, { parsed: imp.parsed, report: latest.report })
+    else emitPhaseEvalRecord(toplevel, phaseNum, {
+      parsed: imp.parsed,
+      report: latest.report,
+      findingsRecorded: latest.findingsRecorded,
+    })
     // Attribution is reconciled against the launcher BEFORE the consistency verdict, and both
     // report: a misattributed completion and an inconsistent one are separate failures, and
     // hiding one behind the other costs a round to discover.

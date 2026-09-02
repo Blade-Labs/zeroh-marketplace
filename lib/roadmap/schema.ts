@@ -157,7 +157,7 @@ export const StructuredGateRoundShape = z.object({
    *  'self-review' honestly records a driver reviewing its own work. */
   agent: z.enum(['quality-pass', 'architect-critique', 'simplifier', 'code-reviewer', 'test-engineer', 'software-architect', 'self-review']).optional(),
   /** The round's outcome at a glance (clean = zero actionable findings). */
-  verdict: z.enum(['clean', 'findings-fixed', 'skipped']).optional(),
+  verdict: z.enum(['clean', 'findings-fixed', 'fixed-closed', 'skipped']).optional(),
   findings: z.array(GateFindingShape).default([]),
   summary: z.string().min(5).optional(),
 })
@@ -514,6 +514,13 @@ export const PhaseEvalRecordShape = z.strictObject({
    *  zero there would invent a pass. */
   gate: z.strictObject({
     green: z.boolean(),
+    findingsBySeverity: z.strictObject({
+      CRITICAL: z.number().int().nonnegative(),
+      HIGH: z.number().int().nonnegative(),
+      MEDIUM: z.number().int().nonnegative(),
+      LOW: z.number().int().nonnegative(),
+    }).optional(),
+    roundsLowOnly: z.number().int().nonnegative().optional(),
     slots: z
       .array(
         z.strictObject({

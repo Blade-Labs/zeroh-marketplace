@@ -14,6 +14,7 @@
  * and in the delegated lane one of those rounds must be someone other than the driver.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { roadmapRoot } from './roadmap-root.mjs'
@@ -41,6 +42,16 @@ const SlotRowShape = z.object({
   declaredAbsent: z.boolean().optional(),
 })
 
+export const GateFindingRecordShape = z.object({
+  file: z.string().min(1),
+  line: z.number().int().positive().optional(),
+  severity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']),
+  confidence: z.number().int().min(80).max(100).optional(),
+  description: z.string().min(10),
+  fixedInCommit: z.string().min(7).optional(),
+  agent: z.string().min(1).optional(),
+})
+
 const AgentRoundShape = z.object({
   round: z.number().int(),
   agent: z.string(),
@@ -48,6 +59,8 @@ const AgentRoundShape = z.object({
   summary: z.string(),
   // WHO ran the round — reviewer attribution for the evals; absent = unrecorded, never invented.
   model: z.string().min(1).optional(),
+  findings: z.array(GateFindingRecordShape).default([]),
+  sha: z.string().min(7).optional(),
   recordedAt: z.string(),
 })
 
@@ -90,6 +103,7 @@ export const AgentRoundInputShape = z.object({
   verdict: z.string(),
   summary: z.string(),
   model: z.string().min(1).optional(),
+  findings: z.array(GateFindingRecordShape).default([]),
 })
 
 export function gateDir(toplevel, phase) {
@@ -175,7 +189,10 @@ export function latestReport(toplevel, phase) {
     const detail = parsed.error.issues.map((i) => `${(i.path ?? []).join('.') || '(root)'}: ${i.message}`).join('; ')
     throw new GateReportUnreadableError(path, new Error(detail))
   }
-  return { path, report: parsed.data }
+  const findingsRecorded = Array.isArray(raw.agents)
+    ? raw.agents.map((round) => Object.hasOwn(round, 'findings'))
+    : []
+  return { path, report: parsed.data, findingsRecorded }
 }
 
 /** Append an agent round to the LATEST report (no new run file). Returns the updated
@@ -186,7 +203,11 @@ export function appendAgentRound(toplevel, phase, roundInput) {
   const round = AgentRoundInputShape.parse(roundInput)
   const updated = {
     ...latest.report,
-    agents: [...latest.report.agents, { ...round, recordedAt: new Date().toISOString() }],
+    agents: [...latest.report.agents, {
+      ...round,
+      sha: execFileSync('git', ['-C', toplevel, 'rev-parse', 'HEAD'], { timeout: 10_000, encoding: 'utf8' }).trim(),
+      recordedAt: new Date().toISOString(),
+    }],
   }
   const validated = GateRunReportShape.parse(updated)
   writeFileSync(latest.path, JSON.stringify(validated, null, 2) + '\n')
@@ -258,5 +279,23 @@ export function checkPhaseConsistency(parsedPhase, report) {
       `no-self-judge rule: codex-lane completion needs an independent recorded round; ` +
         `record one with gate run ${parsedPhase?.phase ?? report.phase} --record-round (self-review rounds do not satisfy completion)`,
     )
+  const terminalRound = report.agents.filter((round) => round.round >= 1).at(-1)
+  if (terminalRound?.verdict === 'findings-fixed') {
+    const openBlocking = terminalRound.findings.filter(
+      (finding) => finding.severity === 'CRITICAL' || finding.severity === 'HIGH',
+    )
+    if (openBlocking.length > 0)
+      problems.push(
+        `terminal findings-fixed round has open ${openBlocking.map((finding) => finding.severity).join('/')} finding(s); `
+          + 'CRITICAL/HIGH findings require another correctness round',
+      )
+  }
+  if (terminalRound?.verdict === 'fixed-closed') {
+    const invalid = terminalRound.findings.filter(
+      (finding) => !['MEDIUM', 'LOW'].includes(finding.severity) || !finding.fixedInCommit,
+    )
+    if (terminalRound.findings.length === 0 || invalid.length > 0)
+      problems.push('terminal fixed-closed round must contain at least one MEDIUM/LOW finding and every finding must name fixedInCommit')
+  }
   return { ok: problems.length === 0, problems }
 }

@@ -39,6 +39,7 @@ const SENTINEL = {
   noHaltEvidence: 'no-halt-evidence',
   noTimestamps: 'no-timestamps',
   noFindings: 'no-findings',
+  noFindingSeverity: 'no-finding-severity',
 }
 
 /** NUL joins composite keys because it cannot occur in any half — a printable separator would
@@ -261,6 +262,16 @@ function driverMetrics(cell) {
   // the driver by dividing its real rework over a larger denominator.
   const gateRoundsMean = recordedRounds.length === 0 ? SENTINEL.noGateRounds : sum(recordedRounds) / recordedRounds.length
 
+  const severityRounds = phases.flatMap((phase) =>
+    (phase.gateRuns ?? []).flatMap((run) => (run.rounds ?? []).filter((round) => {
+      const counts = round.findings
+      return counts && sum(Object.values(counts)) > 0
+    })),
+  )
+  const lowOnlyRoundShare = severityRounds.length === 0
+    ? SENTINEL.noFindingSeverity
+    : severityRounds.filter((round) => round.findings.CRITICAL === 0 && round.findings.HIGH === 0).length / severityRounds.length
+
   const escapeFixesPerPhase = cell.scanDegraded
     ? SENTINEL.scanUnavailable
     : sum(cell.phases.map((p) => p.escapes)) / cell.phases.length
@@ -283,7 +294,7 @@ function driverMetrics(cell) {
         // zero tasks would divide by zero and read as infinitely slow.
         sum(haltFree.map((p) => spanMinutes(p.metrics))) / sum(haltFree.map((p) => Math.max(1, p.taskCount ?? 0)))
 
-  return { gateRoundsMean, escapeFixesPerPhase, haltRate, minutesPerTask }
+  return { gateRoundsMean, escapeFixesPerPhase, haltRate, lowOnlyRoundShare, minutesPerTask }
 }
 
 /**

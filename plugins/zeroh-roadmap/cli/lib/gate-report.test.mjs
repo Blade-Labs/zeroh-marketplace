@@ -37,6 +37,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, existsSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -67,6 +68,10 @@ const bases = []
 process.on('exit', () => bases.forEach((b) => rmSync(b, { recursive: true, force: true })))
 const tmpRoot = () => {
   const d = mkdtempSync(join(tmpdir(), 'zr-report-'))
+  execFileSync('git', ['init', '-q'], { cwd: d })
+  writeFileSync(join(d, 'seed.txt'), 'seed\n')
+  execFileSync('git', ['add', 'seed.txt'], { cwd: d })
+  execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'seed'], { cwd: d })
   bases.push(d)
   return d
 }
@@ -188,6 +193,86 @@ test('checkPhaseConsistency — the four clauses, red and green', () => {
   assert.match(checkPhaseConsistency(phase, scopeBad).problems.join(' '), /scope mismatch/)
   // (iv) gateRounds count mismatch (report has 0 round>=1, phase has 1)
   assert.match(checkPhaseConsistency(phase, { ...good, agents: [] }).problems.join(' '), /gateRounds count mismatch/)
+})
+
+test('checkPhaseConsistency — refuses findings-fixed terminal evidence with an open CRITICAL or HIGH finding', () => {
+  for (const severity of ['CRITICAL', 'HIGH']) {
+    const phase = {
+      phase: 1670,
+      status: 'done',
+      reviewScope: 'full',
+      gateRounds: [{ round: 1, verdict: 'findings-fixed' }],
+      executionResult: { driver: { model: 'codex', lane: 'session' } },
+    }
+    const report = baseReport({
+      reviewScope: { derived: 'full', declared: 'full', effective: 'full' },
+      agents: [{
+        round: 1,
+        agent: 'code-reviewer',
+        verdict: 'findings-fixed',
+        summary: `${severity} remains open`,
+        findings: [findingRecord({ severity, fixedInCommit: undefined })],
+        sha: sha('a'),
+        recordedAt: '2026-09-02T10:00:00.000Z',
+      }],
+    })
+
+    const result = checkPhaseConsistency(phase, report)
+    assert.equal(result.ok, false, `${severity} terminal finding must block the done flip`)
+    assert.match(result.problems.join(' '), new RegExp(`${severity}.*open|open.*${severity}`, 'i'))
+  }
+})
+
+test('checkPhaseConsistency — accepts fixed-closed terminal evidence when every MEDIUM and LOW finding names its fix commit', () => {
+  const phase = {
+    phase: 1670,
+    status: 'done',
+    reviewScope: 'full',
+    gateRounds: [{ round: 1, verdict: 'fixed-closed' }],
+    executionResult: { driver: { model: 'codex', lane: 'session' } },
+  }
+  const report = baseReport({
+    reviewScope: { derived: 'full', declared: 'full', effective: 'full' },
+    agents: [{
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'fixed-closed',
+      summary: 'all non-blocking findings fixed',
+      findings: [
+        findingRecord({ severity: 'MEDIUM', fixedInCommit: 'abcdef1' }),
+        findingRecord({ severity: 'LOW', fixedInCommit: 'abcdef2' }),
+      ],
+      sha: sha('b'),
+      recordedAt: '2026-09-02T10:00:00.000Z',
+    }],
+  })
+
+  assert.deepEqual(checkPhaseConsistency(phase, report), { ok: true, problems: [] })
+})
+
+test('checkPhaseConsistency — refuses fixed-closed with no finding to close', () => {
+  const phase = {
+    phase: 1670,
+    status: 'done',
+    reviewScope: 'full',
+    gateRounds: [{ round: 1, verdict: 'fixed-closed' }],
+    executionResult: { driver: { model: 'codex', lane: 'session' } },
+  }
+  const report = baseReport({
+    reviewScope: { derived: 'full', declared: 'full', effective: 'full' },
+    agents: [{
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'fixed-closed',
+      summary: 'nothing was actually closed',
+      findings: [],
+      sha: sha('c'),
+      recordedAt: '2026-09-02T10:00:00.000Z',
+    }],
+  })
+  const result = checkPhaseConsistency(phase, report)
+  assert.equal(result.ok, false)
+  assert.match(result.problems.join(' '), /at least one MEDIUM\/LOW finding/)
 })
 
 // ── the curation block + recordCuration (2145.4) ─────────────────────────────────────
@@ -334,7 +419,7 @@ test('the round shapes CARRY a model through the parse (an unmodelled key would 
   const parsed = GateRunReportShape.parse(baseReport({ agents: [recordedRound({ model: 'claude-x' })] }))
   assert.deepEqual(
     parsed.agents[0],
-    recordedRound({ model: 'claude-x' }),
+    recordedRound({ model: 'claude-x', findings: [] }),
     'the round round-trips field for field — the model is not stripped between write and read',
   )
 })
@@ -449,6 +534,57 @@ test('appendAgentRound — a round with an unusable model is refused BEFORE the 
 
 // ── latestReport over an UNREADABLE newest run file (phase 9.2) ───────────────────────
 //
+const findingRecord = (over = {}) => ({
+  file: 'cli/lib/gate-report.mjs',
+  line: 42,
+  severity: 'HIGH',
+  confidence: 95,
+  description: 'the persisted reviewer round drops its actionable finding details',
+  fixedInCommit: 'abcdef1234567',
+  agent: 'code-reviewer',
+  ...over,
+})
+
+test('appendAgentRound — findings survive and the recording HEAD sha is stamped on disk and parsed read', () => {
+  const root = tmpRoot()
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
+  writeReport(root, baseReport())
+  const input = roundInput({ findings: [findingRecord()] })
+  const parsedInput = AgentRoundInputShape.parse(input)
+  assert.deepEqual(parsedInput.findings, input.findings, 'the INPUT shape carries every finding field')
+
+  const returned = appendAgentRound(root, 1670, input)
+  assert.deepEqual(returned.agents[0].findings, input.findings, 'the append result carries the findings')
+  assert.equal(returned.agents[0].sha, head, 'the append result stamps the repository HEAD')
+
+  const raw = rawRun(root, 1670, runFileNames(root, 1670)[0])
+  assert.deepEqual(raw.agents[0].findings, input.findings, 'the persisted JSON retains every finding detail')
+  assert.equal(raw.agents[0].sha, head, 'the persisted JSON retains the recording sha')
+  const latest = latestReport(root, 1670)
+  const reread = latest.report.agents[0]
+  assert.deepEqual(reread.findings, input.findings, 'the REPORT shape does not strip findings on re-read')
+  assert.equal(reread.sha, head, 'the REPORT shape does not strip sha on re-read')
+  assert.deepEqual(latest.findingsRecorded, [true], 'the raw report proves findings per round, even when empty')
+})
+
+test('GateRunReportShape — a pre-findings round still parses without inventing findings or sha', () => {
+  const parsed = GateRunReportShape.parse(baseReport({ agents: [recordedRound()] }))
+  assert.deepEqual(parsed.agents[0].findings, [], 'legacy evidence receives the additive empty default')
+  assert.equal(parsed.agents[0].sha, undefined, 'legacy evidence is not assigned an invented sha')
+  assert.equal(parsed.agents[0].summary, '0 findings', 'the pre-existing round otherwise parses unchanged')
+})
+
+test('latestReport — preserves raw absence when a legacy round receives the findings default', () => {
+  const root = tmpRoot()
+  const written = writeReport(root, baseReport())
+  const legacy = baseReport({ agents: [recordedRound()] })
+  writeFileSync(written.path, JSON.stringify(legacy, null, 2) + '\n')
+
+  const latest = latestReport(root, 1670)
+  assert.deepEqual(latest.report.agents[0].findings, [], 'the compatibility default still applies')
+  assert.deepEqual(latest.findingsRecorded, [false], 'raw absence survives beside the parsed default')
+})
+
 // TEST-FIRST for GateReportUnreadableError. latestReport() answers ONE question — "what is
 // this phase's newest gate report?" — and today it answers `null` to two utterly different
 // worlds: there is no evidence, and the evidence on disk cannot be read. Every caller

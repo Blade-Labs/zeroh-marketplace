@@ -108,17 +108,17 @@ subject; that detail lives in the body and the gate report).
 
 ## The gate (after the last task)
 
-`roadmap gate plan <N>` prints the resolved cell (slots, scopes, floors, agent chain) for the
-`kind`: mockup = lint+types; logic = Round 0 quality pass → Rounds 1..N correctness loop (cap 5);
-hardening adds the closure integration rerun; release adds the e2e slot. Run `roadmap gate run
-<N>` for the mechanical half, then the agent chain the plan names. **Record EACH agent round
-into the gate report** as it finishes: `roadmap gate run <N> --record-round
-'{"round":R,"agent":"code-reviewer","verdict":"clean","model":"<your model id>","summary":"…"}'` (round 0 = the
-quality pass, rounds ≥1 = each correctness loop; `model` is the reviewer-attribution the
-evals slice by — stamp it). `--verify-complete` (below) REFUSES a done
-flip whose latest report carries no recorded agent round. A docs-only diff skips the quality
-pass. Under arc-mode the gate runs only phase-relevant SCOPED
-tests — the full suite defers to the arc end.
+`roadmap gate plan <N>` resolves the `kind` cell: mockup = lint+types;
+logic = Round 0 quality pass → correctness loop (cap 5); hardening adds closure integration;
+release adds e2e. Run `roadmap gate run <N>`, then its agent chain. Record EACH round
+with typed findings: `roadmap gate run <N> --record-round
+'{"round":R,"agent":"code-reviewer","verdict":"clean","model":"<model>","summary":"…","findings":[]}'`
+(0 = quality; ≥1 = correctness; stamp the reviewing model). After each correctness round run
+`roadmap gate round-brief <N> --json`: `continue` reviews only `sinceSha..HEAD` plus closure of
+`priorFindings`; `close` means fix every MEDIUM/LOW finding, add each `fixedInCommit`, record
+`fixed-closed`, and stop; `clean` stops; `cap` stops at five. `--verify-complete` refuses missing
+round evidence or an open CRITICAL/HIGH terminal round. Docs-only skips quality. Arc-mode runs
+scoped tests; the full suite waits for arc end.
 
 **Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
 confirmed design is a CONTRACT. Apply `skills/validate-arc/references/parity-rubric.md` with FRESH

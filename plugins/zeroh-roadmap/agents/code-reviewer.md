@@ -32,6 +32,11 @@ not counts) · contract/boundary discipline (shapes `.parse()`'d at the seam, ne
 consumer of a changed contract updated — grep the old shape) · convention adherence (the consumer's
 CLAUDE.md Conventions/Don't).
 
+**Round scope.** Round 1 reviews the phase diff. For round ≥2, read `roadmap gate round-brief
+<N> --json`: review `git diff <sinceSha>..HEAD`, then re-read every `priorFindings` location and
+report it closed or still-open (a still-open finding keeps its severity). Do not raise a fresh
+finding on code untouched since `sinceSha` unless it is CRITICAL.
+
 **New guards — audit the evidence, never re-derive it.** A NEW guard in the diff (a check whose subject
 is the tree's SHAPE: ratchet, conformance/lockstep assertion, scan- or grep-shaped tripwire, lint rule,
 schema gate — NOT an ordinary TDD behavior test, which carries its proof by construction) owed a quoted

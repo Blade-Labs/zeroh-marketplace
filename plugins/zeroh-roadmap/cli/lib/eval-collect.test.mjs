@@ -542,7 +542,13 @@ test('summarizeGateRuns — rounds and slotFailures per phase; an absent .gate d
  * to every downstream consumer that checks presence.
  */
 const MODEL_RUN = 'run-000002-2026-07-16T12-00-00-000Z.json'
-const MODEL_ROUND = { round: 0, agent: 'quality-pass', verdict: 'clean', model: 'claude-opus-5' }
+const MODEL_ROUND = {
+  round: 0,
+  agent: 'quality-pass',
+  verdict: 'clean',
+  model: 'claude-opus-5',
+  findings: { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 1 },
+}
 const PLAIN_ROUND = { round: 1, agent: 'code-reviewer', verdict: 'clean' }
 
 /**
@@ -564,7 +570,18 @@ const modelRoundFixture = () => {
     reviewScope: { derived: 'full', declared: null, effective: 'full' },
     slots: [{ slot: 'lint', command: 'npm run lint', exitCode: 0, durationMs: 1200, logPath: null }],
     agents: [
-      { ...MODEL_ROUND, summary: 'no simplifications owed', recordedAt: '2026-07-16T12:05:00.000Z' },
+      {
+        round: MODEL_ROUND.round,
+        agent: MODEL_ROUND.agent,
+        verdict: MODEL_ROUND.verdict,
+        model: MODEL_ROUND.model,
+        summary: 'two findings recorded',
+        findings: [
+          { file: 'src/a.ts', severity: 'HIGH', description: 'a high severity behavior regression' },
+          { file: 'src/b.ts', severity: 'LOW', description: 'a low severity behavior regression' },
+        ],
+        recordedAt: '2026-07-16T12:05:00.000Z',
+      },
       { ...PLAIN_ROUND, summary: '0 findings', recordedAt: '2026-07-16T12:20:00.000Z' },
     ],
     green: true,
@@ -597,6 +614,11 @@ test('collectArcTrace — a round records the MODEL that ran it, all the way ont
   )
   assert.equal(run.rounds[0].agent, 'quality-pass', 'the ROLE still travels — the model is additional, not a replacement')
   assert.equal(run.rounds[0].verdict, 'clean')
+  assert.deepEqual(
+    run.rounds[0].findings,
+    { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 1 },
+    'the round projects severity evidence without copying finding prose into the eval trace',
+  )
 })
 
 test('collectArcTrace — a round with no recorded model carries NO model key (never a stub)', () => {
@@ -984,6 +1006,8 @@ const FULL_ROUNDS = [
   { round: 0, agent: 'quality-pass', verdict: 'clean', model: 'claude-opus-5' },
   { round: 1, agent: 'code-reviewer', verdict: 'findings-fixed' },
 ]
+const ZERO_FINDINGS = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
+const PROJECTED_FULL_ROUNDS = FULL_ROUNDS.map((round) => ({ ...round, findings: ZERO_FINDINGS }))
 
 test('summarizeGateRuns — excludes slotFilter reports (a subset check is not a gate round)', () => {
   const root = gateScratch()
@@ -1021,15 +1045,16 @@ test('summarizeGateRuns — excludes slotFilter reports (a subset check is not a
   assert.deepEqual(
     out,
     [
-      { startedAt: '2026-07-16T10:00:00.000Z', green: true, rounds: FULL_ROUNDS, slotFailures: 0 },
+      { startedAt: '2026-07-16T10:00:00.000Z', green: true, rounds: PROJECTED_FULL_ROUNDS, terminal: 'open', slotFailures: 0 },
       {
         startedAt: '2026-07-16T11:00:00.000Z',
         green: false,
-        rounds: [{ round: 2, agent: 'code-reviewer', verdict: 'clean' }],
+        rounds: [{ round: 2, agent: 'code-reviewer', verdict: 'clean', findings: ZERO_FINDINGS }],
+        terminal: 'clean',
         slotFailures: 1,
       },
     ],
-    'the projected shape of a full run is byte-identical to today — startedAt/green/rounds/slotFailures, nothing added',
+    'the projected shape adds only severity counts and the terminal classification to full runs',
   )
 
   // A filtered run's reviewer round is a round about a SUBSET, not a round about the phase.
@@ -1056,7 +1081,7 @@ test('summarizeGateRuns — the newest filtered report is still excluded, and so
   assert.equal(out.length, 1, `only the one full run survives; got ${JSON.stringify(out)}`)
   assert.deepEqual(
     out,
-    [{ startedAt: '2026-07-17T09:30:00.000Z', green: true, rounds: FULL_ROUNDS, slotFailures: 0 }],
+    [{ startedAt: '2026-07-17T09:30:00.000Z', green: true, rounds: PROJECTED_FULL_ROUNDS, terminal: 'open', slotFailures: 0 }],
     'the newest run being a --slots subset does not make it the phase gate round — the full run in the middle is',
   )
   assert.equal(
@@ -1077,11 +1102,11 @@ test('summarizeGateRuns — an all-full corpus is unchanged; an all-filtered one
   assert.deepEqual(
     summarizeGateRuns(full, 7003),
     [
-      { startedAt: '2026-07-18T09:00:00.000Z', green: true, rounds: [{ round: 0, agent: 'code-reviewer', verdict: 'clean' }], slotFailures: 0 },
-      { startedAt: '2026-07-18T10:00:00.000Z', green: true, rounds: [{ round: 1, agent: 'code-reviewer', verdict: 'clean' }], slotFailures: 0 },
-      { startedAt: '2026-07-18T11:00:00.000Z', green: true, rounds: [{ round: 2, agent: 'code-reviewer', verdict: 'clean' }], slotFailures: 0 },
+      { startedAt: '2026-07-18T09:00:00.000Z', green: true, rounds: [{ round: 0, agent: 'code-reviewer', verdict: 'clean', findings: ZERO_FINDINGS }], terminal: 'open', slotFailures: 0 },
+      { startedAt: '2026-07-18T10:00:00.000Z', green: true, rounds: [{ round: 1, agent: 'code-reviewer', verdict: 'clean', findings: ZERO_FINDINGS }], terminal: 'clean', slotFailures: 0 },
+      { startedAt: '2026-07-18T11:00:00.000Z', green: true, rounds: [{ round: 2, agent: 'code-reviewer', verdict: 'clean', findings: ZERO_FINDINGS }], terminal: 'clean', slotFailures: 0 },
     ],
-    'POSITIVE CONTROL: with no filtered report in the dir, every run is emitted exactly as today',
+    'POSITIVE CONTROL: with no filtered report in the dir, every run gains the new evidence consistently',
   )
   // The shipped corpus too — the real report bytes, not this file's dialect.
   assert.equal(summarizeGateRuns(fixture(), 9001).length, 1, 'the shipped model-less corpus is untouched by the filter')
@@ -1135,6 +1160,68 @@ const assembleArgs = (phase, parsed) => ({
   slots: [{ slot: 'lint', exitCode: 0, durationMs: 1200 }],
   fingerprint: { repo: 'zr-evalfix', language: 'typescript', corpusSize: 12 },
   date: '2026-08-20',
+})
+
+const finding = (severity, description) => ({ file: 'src/collector.ts', severity, description })
+
+test('assemblePhaseEvalRecord — recorded gate findings project severity counts and low-only rounds', { timeout: 120_000 }, () => {
+  const root = fixture()
+  const args = {
+    ...assembleArgs(8825, { tasks: [{ id: '25.4' }], keyFiles: ['src/collector.ts'] }),
+    agents: [
+      {
+        round: 1,
+        agent: 'code-reviewer',
+        verdict: 'findings-fixed',
+        findings: [finding('HIGH', 'a high severity projection regression'), finding('LOW', 'a low severity companion finding')],
+      },
+      {
+        round: 2,
+        agent: 'code-reviewer',
+        verdict: 'fixed-closed',
+        findings: [finding('LOW', 'the only finding in this round is low severity')],
+      },
+      { round: 3, agent: 'quality-pass', verdict: 'clean', findings: [] },
+    ],
+    findingsRecorded: [true, true, true],
+  }
+
+  const { record } = assemblePhaseEvalRecord(args)
+  assert.deepEqual(record.gate.findingsBySeverity, { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 2 })
+  assert.equal(record.gate.roundsLowOnly, 1, 'only a non-empty round whose every finding is LOW counts as low-only')
+
+  const parsedBack = assertValidatesAsRecord(root, record, 'severity evidence must survive the real peval contract')
+  assert.deepEqual(parsedBack.gate.findingsBySeverity, record.gate.findingsBySeverity)
+  assert.equal(parsedBack.gate.roundsLowOnly, 1)
+})
+
+test('assemblePhaseEvalRecord — a legacy call with no recorded rounds omits severity fields instead of minting zeroes', () => {
+  const { record } = assemblePhaseEvalRecord(assembleArgs(8826, { tasks: [{ id: '25.4' }], keyFiles: ['src/collector.ts'] }))
+  assert.equal('findingsBySeverity' in record.gate, false, 'absence is not an all-zero severity report')
+  assert.equal('roundsLowOnly' in record.gate, false, 'absence is not zero low-only review work')
+})
+
+test('assemblePhaseEvalRecord — legacy rounds whose findings were defaulted during parse stay absent, not zero', () => {
+  const { record } = assemblePhaseEvalRecord({
+    ...assembleArgs(8827, { tasks: [{ id: '25.4' }], keyFiles: ['src/collector.ts'] }),
+    agents: [{ round: 1, agent: 'code-reviewer', verdict: 'findings-fixed', findings: [] }],
+    findingsRecorded: [false],
+  })
+  assert.equal('findingsBySeverity' in record.gate, false, 'defaulted findings are not recorded evidence')
+  assert.equal('roundsLowOnly' in record.gate, false, 'defaulted findings do not mint a zero metric')
+})
+
+test('assemblePhaseEvalRecord — mixed legacy and findings-bearing rounds project only recorded evidence', () => {
+  const { record } = assemblePhaseEvalRecord({
+    ...assembleArgs(8828, { tasks: [{ id: '25.4' }], keyFiles: ['src/collector.ts'] }),
+    agents: [
+      { round: 1, agent: 'code-reviewer', verdict: 'findings-fixed', findings: [] },
+      { round: 2, agent: 'code-reviewer', verdict: 'fixed-closed', findings: [finding('LOW', 'recorded low finding')] },
+    ],
+    findingsRecorded: [false, true],
+  })
+  assert.deepEqual(record.gate.findingsBySeverity, { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 1 })
+  assert.equal(record.gate.roundsLowOnly, 1)
 })
 
 /** Round-trip an assembled record through the CONSUMER's REAL PhaseEvalRecordShape, over the

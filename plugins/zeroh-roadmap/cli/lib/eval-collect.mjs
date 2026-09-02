@@ -398,7 +398,7 @@ export function projectRoleModels(phase, roles) {
  * record can drop an ambiguous role (projectRoleModels), and a caller that could not SAY so
  * would be dropping it in silence. Warnings never fail anything — the caller prints them.
  */
-export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerprint, date }) {
+export function assemblePhaseEvalRecord({ phase, parsed, green, slots, agents, findingsRecorded = [], fingerprint, date }) {
   const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : []
   const record = {
     phase,
@@ -423,6 +423,22 @@ export function assemblePhaseEvalRecord({ phase, parsed, green, slots, fingerpri
         }
       }),
     },
+  }
+  const evidencedRounds = Array.isArray(agents)
+    ? agents.filter((_, index) => findingsRecorded[index] === true)
+    : []
+  if (evidencedRounds.length > 0) {
+    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
+    let roundsLowOnly = 0
+    for (const round of evidencedRounds) {
+      const findings = Array.isArray(round.findings) ? round.findings : []
+      for (const finding of findings)
+        if (Object.hasOwn(counts, finding.severity)) counts[finding.severity] += 1
+      if (findings.length > 0 && findings.every((finding) => finding.severity === 'MEDIUM' || finding.severity === 'LOW'))
+        roundsLowOnly += 1
+    }
+    record.gate.findingsBySeverity = counts
+    record.gate.roundsLowOnly = roundsLowOnly
   }
   if (parsed?.metrics) record.metrics = parsed.metrics
   const attribution = {}
@@ -484,7 +500,27 @@ export function summarizeGateRuns(repoRoot, phaseNum) {
     out.push({
       startedAt: report.startedAt,
       green: report.green,
-      rounds: report.agents.map((a) => ({ round: a.round, agent: a.agent, verdict: a.verdict, ...(a.model ? { model: a.model } : {}) })),
+      rounds: report.agents.map((a, index) => {
+        const findings = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
+        for (const finding of a.findings) findings[finding.severity] += 1
+        const recordedFindings = Object.hasOwn(read.value.agents?.[index] ?? {}, 'findings')
+        return {
+          round: a.round,
+          agent: a.agent,
+          verdict: a.verdict,
+          ...(recordedFindings ? { findings } : {}),
+          ...(a.model ? { model: a.model } : {}),
+        }
+      }),
+      ...(report.agents.some((_, index) => Object.hasOwn(read.value.agents?.[index] ?? {}, 'findings')) ? { terminal: (() => {
+        const correctness = report.agents.filter((a) => a.round >= 1)
+        const last = correctness.at(-1)
+        if (!last) return 'open'
+        if (correctness.length >= 5 || last.round >= 5) return 'cap'
+        if (last.verdict === 'clean') return 'clean'
+        if (last.verdict === 'fixed-closed') return 'fixed-closed'
+        return 'open'
+      })() } : {}),
       // A slot with no exitCode did not RUN (skipped/declared-absent); only a recorded
       // non-zero exit is a failure. Counting a skip as a failure would invent a red.
       slotFailures: report.slots.filter((s) => typeof s.exitCode === 'number' && s.exitCode !== 0).length,

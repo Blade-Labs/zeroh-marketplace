@@ -250,7 +250,7 @@ function scoreCodeConfidence(trace, readable, rootRel) {
       : mean(runs.map((r) => new Set(r.rounds.filter((x) => x.round >= 1).map((x) => x.round)).size))
 
   const runsWithRounds = runs.filter((r) => r.rounds.length > 0)
-  const cleanFinal = runsWithRounds.filter((r) => r.rounds[r.rounds.length - 1].verdict === 'clean').length
+  const cleanFinal = runsWithRounds.filter((r) => ['clean', 'fixed-closed'].includes(r.rounds[r.rounds.length - 1].verdict)).length
   // No runs to read ⇒ no trajectory evidence ⇒ no trajectory penalty. Assuming "unclean"
   // would invent a failure; assuming "clean" would invent a success. Neither is applied.
   const trajectoryPenalty =
