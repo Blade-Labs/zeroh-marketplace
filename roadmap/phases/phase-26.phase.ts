@@ -44,7 +44,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 26,
   name: 'Protocol diet with a ruler: trim map, adherence scorer, the trims, and a two-driver execution trial',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5-1' },
   reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'refactor',
