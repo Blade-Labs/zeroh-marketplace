@@ -9,11 +9,11 @@ Route context into typed roadmap artifacts before writing `.building/HANDOFF.md`
 
 Ground this workflow in the 2026-08-23 session-continuity survey that established the three routing cases handled here; `evals/evals.json` records those three cases as scenarios.
 
-Not this skill: `do-arc` owns execution-loop pauses and its optional `roadmap/arcs/<ID>-RESUME.md` notes; `handoff` owns cross-session context routing and `.building/HANDOFF.md`. Never duplicate residue between them.
+Not this skill: `do-arc` owns execution-loop pauses and its optional `<root>/arcs/<ID>-RESUME.md` notes; `handoff` owns cross-session context routing and `.building/HANDOFF.md`. Never duplicate residue between them.
 
 ## 1. Inspect the repository
 
-1. Run `roadmap status` and inspect the active `roadmap/phases/phase-<N>.phase.ts` and `roadmap/arcs/<ID>.arc.ts` files named by it.
+1. Run `roadmap status` and inspect the active `<root>/phases/phase-<N>.phase.ts` and `<root>/arcs/<ID>.arc.ts` files named by it.
 2. Run `git status --short` and `git rev-parse HEAD`; record uncommitted paths and the exact HEAD SHA.
 3. If a phase file already carries the doing, state, or next action, refuse to duplicate those facts in `.building/HANDOFF.md`. Say which phase owns them, then continue only with context that has no typed home.
 4. If `roadmap status` fails or a named roadmap file is unreadable, STOP and report the failing command; do not invent repository state.

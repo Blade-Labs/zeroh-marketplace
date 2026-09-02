@@ -5,7 +5,7 @@ a charter plus its repo-specific sources — the agent derives the concrete
 checklist from the consumer, never from another project's residue. Every agent
 also gets the shared preamble from SKILL.md Phase 2 (read + trace, finding
 format, 80% confidence bar) and the consumer's `reviewFocus` classes from
-`roadmap/roadmap.config.json`, which prepend and outrank everything here.
+`<root>/roadmap.config.json`, which prepend and outrank everything here.
 
 ## 1. Security & auth
 

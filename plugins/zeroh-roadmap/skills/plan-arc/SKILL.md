@@ -190,7 +190,7 @@ any out-of-scope touch and redo that phase's review serially.
 unpasted "the validator accepted it" is fabricated evidence. Any exit 2 -> fix, re-review
 that phase, re-validate; never queue around it.
 
-**Author the execution prompt** (pre-queue): `roadmap/arc-prompts/<id>-execution-prompt.md`
+**Author the execution prompt** (pre-queue): `<root>/arc-prompts/<id>-execution-prompt.md`
 - the arc's bar, honesty rails, design refs, research basis; the ONE home of arc
 rationale and the file do-arc reads before driving.
 

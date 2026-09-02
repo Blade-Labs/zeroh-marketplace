@@ -83,7 +83,7 @@ this run's findings; never mutate or renumber prior rounds or prior findings.
 Rules:
 - `findings` counts are sums over `findingsList` — recompute, never hand-edit.
 - `gateTests` entries come from actually running the consumer's `gateCommands`
-  slots (`roadmap/roadmap.config.json`); take counts from the runner's own
+  slots (`<root>/roadmap.config.json`); take counts from the runner's own
   summary output or log artifacts. Absent slot or failed run → `"not-run"` plus
   a note naming why. Never invent a count.
 - `resolution` stays `null` only until remediation; afterwards every entry is

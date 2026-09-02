@@ -1,8 +1,8 @@
 # Remediation Phase File
 
-Write `roadmap/phases/phase-<N>.phase.ts` (`<N>` from `roadmap claim`). Match
-the `definePhase` import style of an existing file in `roadmap/phases/` — the
-schema module is `lib/roadmap/schema.ts` but consumers alias it differently.
+Write `<root>/phases/phase-<N>.phase.ts` (`<N>` from `roadmap claim`). Match
+the `definePhase` import style of an existing file in `<root>/phases/` — the
+schema module is `<root>/lib/schema.ts` but consumers alias it differently.
 
 ```typescript
 import { definePhase } from '<match existing phase files>'
@@ -39,11 +39,11 @@ export default definePhase({
       problem:
         'Remediation counts as complete only when independently re-verified: gate green plus a clean re-review.',
       steps: [
-        { file: 'roadmap/roadmap.config.json', description: 'Run the gateCommands slots (roadmap gate run <N>)' },
+        { file: '<root>/roadmap.config.json', description: 'Run the gateCommands slots (roadmap gate run <N>)' },
         { file: 'reviews/', description: 'Re-run full-code-review; require zero critical/high findings' },
       ],
       acceptanceCriteria: ['All gate slots pass', 'Re-review reports zero critical/high findings'],
-      files: ['roadmap/roadmap.config.json'],
+      files: ['<root>/roadmap.config.json'],
       done: false,
     },
   ],
@@ -59,14 +59,14 @@ export default definePhase({
 - Size limits are schema-enforced, not stylistic: `roadmap phase validate <N>`
   refuses tasks with more than 6 steps or 10 files unless `batchMode: true`,
   and `acceptanceCriteria` caps at 4 per task (`PhaseTaskShape`,
-  `lib/roadmap/schema.ts`). Split tasks rather than reaching for batchMode.
+  `<root>/lib/schema.ts`). Split tasks rather than reaching for batchMode.
 - Every step description starts with its FCR id — the id chain from report to
   record to task is the audit trail.
 
 ## Commit
 
 ```bash
-git add roadmap/phases/phase-<N>.phase.ts
+git add <root>/phases/phase-<N>.phase.ts
 git commit -m "docs(roadmap): phase <N> — code review remediation from <YYYY-MM-DD> audit"
 ```
 

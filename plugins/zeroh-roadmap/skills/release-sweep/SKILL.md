@@ -19,9 +19,9 @@ release-sweep [<version> | --arc <id> | --all-done] [--archive]
 ```
 
 - `<version>` — bare semver (no `v` prefix); omitted with no selector → prompt, never infer it.
-- `--arc <id>` — sweep done phases matching `arcId`; archive under `roadmap/archive/arc-<id>/`.
+- `--arc <id>` — sweep done phases matching `arcId`; archive under `<root>/archive/arc-<id>/`.
 - `--all-done` — sweep all done/historical phases. Use `roadmap debt census` + `dispose` for bulk;
-  archive by version, or under `roadmap/archive/untagged/`.
+  archive by version, or under `<root>/archive/untagged/`.
 - `--archive` — after resolution, `git mv` the selected `done` phases into their archive dir. Refuses if
   any open debt remains. Without it, review-only.
 
@@ -43,7 +43,7 @@ strongly recommended before archive.
 
 ### Step 1 — Locate done phases
 Find the version's phase files (`roadmap debt census` slices this, or `grep -lE "version:
-['\"]<version>['\"]" roadmap/phases/*.phase.ts`) and **filter to `status: 'done'` only**. Surface a
+['\"]<version>['\"]" <root>/phases/*.phase.ts`) and **filter to `status: 'done'` only**. Surface a
 non-done match as a warning and EXCLUDE it (prevents `--archive` from `git mv`-ing in-progress/backlog
 phases out of the active queue). Zero done matches → surface and stop.
 
@@ -85,9 +85,9 @@ archive naming the count; if clean, proceed.
 
 ### Step 5 — Archive (only if `--archive` and zero open) — the git-mv mechanics (PROSE-carried; NOT in `roadmap debt`)
 ```bash
-mkdir -p roadmap/archive/<version>
+mkdir -p <root>/archive/<version>
 for N in <phase-numbers>; do
-  src="roadmap/phases/phase-${N}.phase.ts"; dst="roadmap/archive/<version>/phase-${N}.phase.ts"
+  src="<root>/phases/phase-${N}.phase.ts"; dst="<root>/archive/<version>/phase-${N}.phase.ts"
   if [ ! -f "$src" ] && [ -f "$dst" ]; then echo "Already archived: phase-${N}"; continue; fi   # re-runnable skip guard
   if [ -f "$src" ] && [ -f "$dst" ]; then echo "CONFLICT: both exist — investigate"; exit 1; fi  # conflict is FATAL, never overwrite
   git mv "$src" "$dst"

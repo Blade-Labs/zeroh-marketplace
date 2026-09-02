@@ -7,8 +7,8 @@
 
 ## How This Works
 
-- **"Do phase N"** = read `roadmap/phases/phase-N.phase.ts`, execute all tasks, run the Validation Gate below.
-- Phase files are TypeScript using `definePhase()` from `lib/roadmap/schema.ts`.
+- **"Do phase N"** = read `<root>/phases/phase-N.phase.ts`, execute all tasks, run the Validation Gate below.
+- Phase files are TypeScript using `definePhase()` from `<root>/lib/schema.ts`.
 - **Status transitions:** Edit the `status` field (`'backlog'` → `'in-progress'` → `'done'`). Terminal statuses: `'done'`, `'cancelled'`, and `'historical'` (a phase that completed before the current gate-discipline schema — parses loose, accepted as-recorded; the sanctioned alternative to backfilling a legacy phase that can't meet the strict done gate). Terminal phases are not executed and are removed from the backlog.
 - **Task tracking:** Each task has a `done: boolean` field. Set `done: true` and add `doneDate` when complete. Commit after each task.
 - **Phase sizing:** One phase = one feature a stakeholder could demo. Target ≤5 key files and ≤300 lines of diff.

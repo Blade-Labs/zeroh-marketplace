@@ -59,11 +59,11 @@ User instructions: $ARGUMENTS
 ## Phase 1 — Discovery
 
 1. Run the consumer-override check above. Then confirm roadmap infrastructure:
-   `roadmap status` and `roadmap/roadmap.config.json`. If there is no `roadmap/`
+   `roadmap status` and `<root>/roadmap.config.json`. If there is no `roadmap/`
    directory, still audit and report, but skip Phase 5 and name that gap to the
    user — never invent a phase number (honor-system).
 2. Read the consumer's CLAUDE.md conventions and the `reviewFocus` classes in
-   `roadmap/roadmap.config.json`. Those repo-specific finding classes PREPEND
+   `<root>/roadmap.config.json`. Those repo-specific finding classes PREPEND
    every agent mission and outrank generic checks (rule owned by
    `../code-review/SKILL.md`).
 3. Read prior records: `reviews/*.md` reports and `reviews/releases/v*-review.json`.
@@ -129,11 +129,11 @@ only when Phase 1 found no `roadmap/`, and say so.
 
 1. `roadmap claim` reserves the phase number — CLI-enforced atomic monotonic
    reservation. Never reuse a historical number and never compute max+1 by hand.
-2. Write `roadmap/phases/phase-<N>.phase.ts` per
+2. Write `<root>/phases/phase-<N>.phase.ts` per
    `references/remediation-phase.md`. `definePhase` `.parse()`s at import, so a
    malformed task fails loudly; check with `roadmap phase validate <N>`.
 3. Commit (explicit paths only — shared trees):
-   `git add roadmap/phases/phase-<N>.phase.ts && git commit -m "docs(roadmap): phase <N> — code review remediation from <date> audit"`
+   `git add <root>/phases/phase-<N>.phase.ts && git commit -m "docs(roadmap): phase <N> — code review remediation from <date> audit"`
 
 ## Phase 6 — Persist the run
 
@@ -142,7 +142,7 @@ only when Phase 1 found no `roadmap/`, and say so.
    ADDITIONAL round per `references/report-and-record.md`. Prior rounds are
    never overwritten (honor-system; derived views render every round).
 3. Record gate counts by actually running the consumer's `gateCommands` slots
-   from `roadmap/roadmap.config.json` (`unit` and `integration` at minimum) and
+   from `<root>/roadmap.config.json` (`unit` and `integration` at minimum) and
    taking counts from the runner's own output artifacts. A slot that is absent
    or will not run is a named gap in the record (`"status": "not-run"` + note),
    never an invented number (honor-system).

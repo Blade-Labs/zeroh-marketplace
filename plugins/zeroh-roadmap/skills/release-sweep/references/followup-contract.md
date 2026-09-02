@@ -1,6 +1,6 @@
 # Followup File Contract
 
-This contract governs the file-based lifecycle of `roadmap/followups/*.md`. It is a sibling of,
+This contract governs the file-based lifecycle of `<root>/followups/*.md`. It is a sibling of,
 and must never be merged with, the debt-record-scoped `openFollowups` census in
 `cli/lib/landing.mjs:106`.
 

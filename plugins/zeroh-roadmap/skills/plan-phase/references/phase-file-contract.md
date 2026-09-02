@@ -69,7 +69,7 @@ flag applies; the claim never lives only in the chat report.
 
 ## `testScope` / `reviewScope`
 
-`testScope` (only when the consumer config sets `testCadence`; roadmap/roadmap.config.json does):
+`testScope` (only when the consumer config sets `testCadence`; <root>/roadmap.config.json does):
 `static` / `scoped` (list `scopedTests`) / `relevant` / `full`. Asymmetric by design: a declared
 value may only RAISE the floor derived from the actual diff, never lower it; a `gateSpecialists`
 path floors to `relevant`. Declare it for a known data/docs-shaped phase.

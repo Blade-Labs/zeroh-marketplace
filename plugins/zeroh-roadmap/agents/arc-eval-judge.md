@@ -28,7 +28,7 @@ from the pin. A mismatch you report is a visible baseline reset. A mismatch you 
 
 The spawner hands you the arc id plus three paths: the **ArcTrace** (`roadmap eval <ID>
 --collect-only --json` output, or the file it was written to), the **skeleton report**
-(`roadmap/arc-evals/<ID>-<date>.json`), and the arc's **commit range**. Read the trace and the
+(`<root>/arc-evals/<ID>-<date>.json`), and the arc's **commit range**. Read the trace and the
 skeleton first. `Bash` is for reading git only — `git show`, `git diff`, `git log` over the given
 range. You write nothing and you run no suites.
 

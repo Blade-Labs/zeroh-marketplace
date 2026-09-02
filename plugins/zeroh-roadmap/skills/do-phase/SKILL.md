@@ -51,7 +51,7 @@ status field.
 
 For each task in order:
 1. **Implement `steps`** (`interfaces.consumes`: `grep -F` each terminal identifier,
-   `roadmap/phases`+`.gate` excluded; miss ⇒ escalate naming it). testMode semantics:
+   `<root>/phases`+`.gate` excluded; miss ⇒ escalate naming it). testMode semantics:
    `skills/using-zeroh-roadmap/references/test-worthiness.md`. An external dep/asset is verified
    against its planned license per
    `skills/using-zeroh-roadmap/references/external-assets-licensing.md` BEFORE it is
@@ -151,12 +151,12 @@ model id>, lane: 'session' | 'codex' }`) — in BOTH modes; `driver` lets the ev
 attribute the outcome, absent scores as unrecorded. Then `roadmap gate run <N>
 --verify-complete` (phase ↔ gate-report consistency — a done phase can no longer be narrated).
 
-**Arc-mode** (iff `roadmap/.arc-mode` exists — read via `roadmap status` — OR this session IS a
+**Arc-mode** (iff `<root>/.arc-mode` exists — read via `roadmap status` — OR this session IS a
 phase-executor): commit the phase and **return the PhaseExecutionResult you persisted**
 (`status` done/escalated/failed; map the roll-up). SKIP grooming, the emit slot, and the push —
 the workflow serializes those.
 
-**Standalone** (no arc-mode): after the completion commit, groom `roadmap/backlog.ts` (remove this
+**Standalone** (no arc-mode): after the completion commit, groom `<root>/backlog.ts` (remove this
 phase's entry + any single-phase narrative naming only it), run the `emit` slot, then push per the
 consumer's `mergePolicy` (workflow serialization covers arc-mode only). **Worktree lane:** `roadmap
 phase land <N>` REPLACES the bare push — it lands the curated commits on the integration branch

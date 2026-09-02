@@ -140,11 +140,11 @@ do NOT hand `workflows/arc-plane.workflow.mjs` to a workflow runtime.
 ## Pause & resume
 
 Pause anywhere; `roadmap arc next` resumes from disk. Keep optional arc-loop notes in
-`roadmap/arcs/<ID>-RESUME.md`; route cross-session residue through `handoff`, never both.
+`<root>/arcs/<ID>-RESUME.md`; route cross-session residue through `handoff`, never both.
 
 ## Execution-prompt doc
 
-`roadmap/arc-prompts/<id>-execution-prompt.md` is authored at arc-planning time, not here — read
+`<root>/arc-prompts/<id>-execution-prompt.md` is authored at arc-planning time, not here — read
 it for the arc's bar, honesty rails, and design refs before driving. Filename drift: glob
-`roadmap/arc-prompts/*<id>*` before concluding it is missing; truly absent, drive from the Arc
+`<root>/arc-prompts/*<id>*` before concluding it is missing; truly absent, drive from the Arc
 entity's `honestyRails` / `designRefs` / `acceptanceCriteria` instead.

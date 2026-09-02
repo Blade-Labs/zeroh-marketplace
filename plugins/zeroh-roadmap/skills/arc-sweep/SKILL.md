@@ -35,11 +35,11 @@ dispose a truncated set.
 | PLAN-PHASE / **DESCOPE** | dropped, user-ratified (even autonomous) | ONE entry + `Arc.descopes[]` | `"won't_fix"` | `'descope — ratified by … (≥20 chars)'` |
 | ACCEPT (won't fix) | correct boundary, reason ≥20 chars | ONE entry | `"won't_fix"` | the reason |
 | ACCEPT (dismiss) | never was debt | ONE entry | `'dismissed'` | the reason |
-| OPERATOR-PENDING | deploy/operator action, not code | ONE entry (+ `roadmap/followups/<arcId>.md`) | `'operator-pending'` | runbook / DEPLOY.md anchor |
+| OPERATOR-PENDING | deploy/operator action, not code | ONE entry (+ `<root>/followups/<arcId>.md`) | `'operator-pending'` | runbook / DEPLOY.md anchor |
 
 (`limitations` never enter this table — see below.)
 
-Whenever OPERATOR-PENDING creates a NEW `roadmap/followups/<arcId>.md`, prepend the `status` + `trigger`
+Whenever OPERATOR-PENDING creates a NEW `<root>/followups/<arcId>.md`, prepend the `status` + `trigger`
 frontmatter from `skills/release-sweep/references/followup-contract.md`; a headerless birth violates
 this rule. The same header rule covers every followup write named below.
 
@@ -68,7 +68,7 @@ status, via, date }`); an autonomous disposition writes the SAME entry, marking 
   - **DESCOPE** — drop it. Requires **explicit user ratification EVEN in autonomous mode**. Record
     BOTH `{ status: "won't_fix", via: 'descope — ratified by <who> <when>' }` AND a typed
     `Arc.descopes[]` `{ item, ratifiedBy, ratifiedAt }` — durable and typed, never buried in prose.
-- **OPERATOR-PENDING** — detail in `roadmap/followups/<arcId>.md`. **Exempt from the
+- **OPERATOR-PENDING** — detail in `<root>/followups/<arcId>.md`. **Exempt from the
   openFollowups budget** but counted + listed in the RunnerSummary notes; stays OPEN until a
   later release-sweep disposes it post-deploy.
 
@@ -78,7 +78,7 @@ disposes those pre-archive. To avoid a silent hole, arc-sweep re-reads each phas
 LISTS any present in the Step-3 report under "deferred to release-sweep".
 
 **No summary file.** Keep the audit trail in `debtResolutions[]` + transparency reports and the chat
-report ephemeral. `roadmap/followups/<arcId>.md` holds only OPERATOR-PENDING detail + ratified-descope rationale.
+report ephemeral. `<root>/followups/<arcId>.md` holds only OPERATOR-PENDING detail + ratified-descope rationale.
 
 ## Step 2: Whole-arc cross-phase review (against singleSeams + designRefs)
 
@@ -94,7 +94,7 @@ unambiguously better, never flattened — skills/validate-arc/references/parity-
 the spec** — drift from a confirmed designRef is a finding, disposed like any other (RESOLVE-NOW if
 cheap, else PLAN-PHASE). No `designRefs` (mechanical arc) → skip explicitly, never silent.
 **Supersession:** the architect also asks whether this arc's build made a PRIOR arc's designRef
-claim false (same-seam refs — grep `roadmap/arcs/`). A contradiction is a FINDING disposed through
+claim false (same-seam refs — grep `<root>/arcs/`). A contradiction is a FINDING disposed through
 the Step-1 table; its disposition stamps the old entry's `supersededBy`, and the report names each
 stamp.
 

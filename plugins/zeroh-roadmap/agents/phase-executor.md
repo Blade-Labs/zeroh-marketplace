@@ -45,7 +45,7 @@ one commit:
    identifier alone: owner qualifier, arg list, and provenance suffix all stripped
    (`ArcShape.rejectedAlternatives (templates/schema.ts)` → `rejectedAlternatives`,
    `makeWorkIqClient(fetch?) from 12.1` → `makeWorkIqClient`) — against the source tree,
-   NEVER `roadmap/phases` or `roadmap/.gate` (the declaration self-matches there); a miss =
+   NEVER `<root>/phases` or `<root>/.gate` (the declaration self-matches there); a miss =
    the sibling's `produces` never landed → return `status: "escalated"` naming the symbol,
    NEVER re-derive it locally. Then implement `steps` (TDD via
    `test-engineer` for `testMode` tdd/e2e). A NEW guard (a check that
