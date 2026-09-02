@@ -33,8 +33,9 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 22,
   name: 'Plan-side integrity: durable review records, citation-integrity WARN, plugin version-drift line',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
+  reviewRecord: { date: '2026-09-01', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'fix',
   kind: 'hardening',
   source:
@@ -102,7 +103,18 @@ export default definePhase({
       ],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ['PhaseShape.reviewRecord'] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          "Added the optional reviewRecord contract to both schema homes and taught review-phase to persist an executed or waived verdict before queueing.",
+        how:
+          'The claude-opus-5 test-engineer added six schema checks spanning both homes and demonstrated five RED failures before implementation. The schema now requires date, model, the READY/NEEDS_WORK/BLOCKER verdict enum, and executed/waived provenance while remaining optional for historical phases. The scoped schema run passed with 0 failures; the types slot was declared-none. plan-arc measured 65,155 bytes before and 65,335 after, a single 180-byte sentence increase.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '22.2',
@@ -118,7 +130,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/audit.test.mjs',
           description:
-            'RED/GREEN fixture pair per the suite pattern: a queued phase with neither evidence fires HIGH; one carrying reviewRecord fires nothing; one with any of the three review-commit subjects fires nothing (table over all three); a pre-cutoff phase fires nothing (four directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'check 17\' cli/commands/audit.test.mjs && capbuild node --test cli/commands/audit.test.mjs >/dev/null 2>&1"',
+            'RED/GREEN fixture pair per the suite pattern: a queued phase with neither evidence fires HIGH; one carrying reviewRecord fires nothing; one with any of the three review-commit subjects fires nothing (table over all three); a pre-cutoff phase fires nothing (four directions) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'unreviewed queue\' cli/commands/audit.test.mjs && capbuild node --test cli/commands/audit.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -128,7 +140,19 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['22.1'],
       interfaces: { consumes: ['PhaseShape.reviewRecord from 22.1'], produces: [] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added audit Check 17 for queued and in-progress phases without durable or commit-backed plan-review evidence, with an ISO cutoff for historical phases and a runnable review remedy.',
+        how:
+          'The claude-opus-5 test-engineer established 3 RED failures across an eight-case matrix. The implementation recognizes reviewRecord and all three historical review subjects with exact phase-number matching, and grandfathers phase files created before 2026-09-01. The final audit suite passed 87/87 and the types slot was declared-none. Check 17 mutation proof: emptying the guarded phase set produced RED with 3 failures; drifting reviewRecord to reviewEvidence produced RED with the durable-record fixture raising HIGH; the legal phase-1000 review-subject decoy stayed GREEN while phase 100 remained flagged.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The planned verify named a nonexistent lowercase check-id literal; gate Round 2 re-keyed it to the suite\'s intentional observable-contract label, unreviewed queue.',
+      },
     },
     {
       id: '22.3',
@@ -152,7 +176,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/lib/validate.mjs', 'plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added a new-file citation-integrity warning that checks repo-relative paths in task problems, step descriptions, and phase notes against HEAD while allowing files the phase plans to create.',
+        how:
+          'The claude-opus-5 test-engineer established 4 RED failures and seven silent guard directions. The implementation extracts and de-duplicates supported repo-path shapes, treats line suffixes as non-semantic, verifies paths with git cat-file, and retains the authoring-only grandfather rule. The final validator suite passed 61/61 and the types slot was declared-none. Citation guard mutation proof: disabling the lint produced RED with 3 focused failures; drifting the task problem anchor to issue produced RED with 1 focused failure; committed real-path and planned-file decoys stayed GREEN 2/2.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Scans parsed prose only (notes, tasks[].problem, tasks[].steps[].description) per the ratified step scope; the raw leading docblock is not scanned — see the out-of-scope record in notes.',
+      },
     },
     {
       id: '22.4',
@@ -168,7 +204,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/status.test.mjs',
           description:
-            'Export a pure versionDriftLine({ selfPath }) (status.mjs feeds import.meta.url — add the node:url import) so no test copies the plugin tree: fixture = tmp configRoot with plugins/known_marketplaces.json → tmp source dir at a higher version, fake cache selfPath under it → line names both versions; equal versions → silent; selfPath outside */plugins/cache/ → silent (three directions); plus ONE spawned bin/roadmap.mjs status from this checkout asserting the line ABSENT (non-cache door) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'version-drift\' cli/commands/status.test.mjs && capbuild node --test cli/commands/status.test.mjs >/dev/null 2>&1"',
+            'Export a pure versionDriftLine({ selfPath }) (status.mjs feeds import.meta.url — add the node:url import) so no test copies the plugin tree: fixture = tmp configRoot with plugins/known_marketplaces.json → tmp source dir at a higher version, fake cache selfPath under it → line names both versions; equal versions → silent; selfPath outside */plugins/cache/ → silent (three directions); plus ONE spawned bin/roadmap.mjs status from this checkout asserting the line ABSENT (non-cache door) → verify: bash -c "cd plugins/zeroh-roadmap && grep -qF \'versionDriftLine\' cli/commands/status.test.mjs && capbuild node --test cli/commands/status.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: [
@@ -176,12 +212,24 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/cli/commands/status.mjs', 'plugins/zeroh-roadmap/cli/commands/status.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-01',
+      transparencyReport: {
+        whatWasDone:
+          'Added a pure cache/source version-drift derivation and surfaced its advisory on both human and JSON status output only when the running cached plugin differs from its directory source.',
+        how:
+          'The claude-opus-5 test-engineer established 6 RED failures covering drift, equality, non-cache paths, unreadable registries, checkout silence, and both output surfaces. versionDriftLine resolves the running manifest, marketplace directory registry, marketplace plugin source, and source manifest with best-effort null behavior. The full status suite passed 29/29 and the types slot was declared-none.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The planned test verify named a hyphenated version-drift literal absent from the suite; gate Round 3 re-keyed it to the exported seam name, versionDriftLine.',
+      },
     },
   ],
   notes:
     'interview: skipped — scope is the recorded fleet incident (illumination 1be2812 "reviewed inline"; atlas phase-77 docblock "invented prose five times across four rounds" + its mid-flight-review corrections; the 0.32.0/0.34.0 cache split observed live on both configs 2026-09-01). ' +
     'conflictsWith: none — phase 21 (after its own review) touches worktree/executor-arm/status/tsx-bridge/codex and their tests; this phase touches schema/review-phase SKILL/audit/validate/status.mjs — status.mjs is the ONE shared file, but 21 edits derive() step (1) and this phase appends an advisory line: disjoint hunks, no serialization needed. dependsOn 17: check 17 reuses the 17.2 cutoff grandfathering pattern and the vendor-pair discipline. ' +
-    'reviewScope full. Out of scope, recorded: refreshing the live sessions\' caches is an operator act (hot-swapping the plugin under Gandalf\'s in-flight 6h executor is the exact interference the shared-host rules bar); enforcement of reviewRecord at QUEUE time (a backlog-write refusal) needs a queue-owning verb that does not exist — the audit check is the honest reach of the current architecture. ' +
+    'reviewScope full. Out of scope, recorded: refreshing the live sessions\' caches is an operator act (hot-swapping the plugin under Gandalf\'s in-flight 6h executor is the exact interference the shared-host rules bar); enforcement of reviewRecord at QUEUE time (a backlog-write refusal) needs a queue-owning verb that does not exist — the audit check is the honest reach of the current architecture; docblock/ledger citation scanning (the atlas incidents\' literal location) needs a raw-text extractor plus a path-perspective rule — 4 plugin-relative docblock citations in the existing corpus (e.g. phase-14\'s cli/commands/phase.mjs) false-WARN under the repo-relative HEAD check — a followup if docblock invention recurs in this consumer. ' +
     'Verify rehearsal attestation: red-now probes executed 2026-09-01 — reviewRecord 0 hits both homes, Check 17 0 hits, citation 0 hits in validate.mjs, known_marketplaces 0 hits in status.mjs (each step-verify red for exactly what its diff adds); assumption probes all exit 0 including the live cache-layout observation; runner clauses inherit polarity from their grep representatives. Authored with --skip-review; Mode A review EXECUTED 2026-09-01 (claude-fable-5-1, standalone inline): READY after five [FIXED] repairs — (1) conflictsWith [21] rested on a false claim ("both touch validate.mjs"): phase 21 never touches validate.mjs; the only shared file is status.mjs in disjoint hunks — pairing dropped; (2) assumption 3 hard-coded one session\'s config root under /home — re-keyed to ${CLAUDE_CONFIG_DIR:-$HOME/.claude} (both configs carry the layout); (3) 22.1\'s criterion cited the do-arc measure assert, which does not load review-phase (measure-manifest.json:32 puts it in plan-arc) — vacuous, re-keyed to plan-arc; (4) 22.2 keyed review evidence on ONE commit subject while review-phase\'s own two forms (SKILL.md:150) would have read as unreviewed — widened to the three forms git log carries; (5) 22.4\'s test needed a copied plugin tree under a fake cache — replaced by an injected-selfPath seam plus one real non-cache spawn. Ratified: reviewScope full; testMode tdd on all four; userFacing false. The 17.2 cutoff pattern verified real at gate-report.mjs:23.',
 })

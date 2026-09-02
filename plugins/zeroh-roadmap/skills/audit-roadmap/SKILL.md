@@ -1,6 +1,6 @@
 ---
 name: "Audit Roadmap"
-description: "Read-only structural audit across roadmap state and the vendored schema (16 checks). Reports findings only — never fixes."
+description: "Read-only structural audit across roadmap state and the vendored schema (17 checks). Reports findings only — never fixes."
 user-invocable: true
 metadata:
   keywords: audit, roadmap, consistency, check, health, drift
@@ -10,7 +10,7 @@ metadata:
 
 **Trigger:** `audit roadmap`, `/audit-roadmap`, `check roadmap consistency`, `roadmap health check`.
 
-The 16 structural checks are CODE. Run them:
+The 17 structural checks are CODE. Run them:
 
 ```bash
 roadmap audit          # human report grouped by severity
@@ -25,7 +25,9 @@ Checks (all mechanical, over phase files + backlog + archive, plus the vendored 
 integrity (status/version/debt) · 13 limitations disposed pre-archive · 14 followup hygiene ·
 15 stray lane worktrees (report-only: a non-live lane past its done-moment, MEDIUM with that
 lane's own runnable close, LOW for a journal-less or unreadable one) · 16 consumer schema export
-drift (HIGH when the vendored schema lacks a canonical template export). Plus arc↔phase consistency.
+drift (HIGH when the vendored schema lacks a canonical template export) · 17 queued/in-progress
+phase with no plan-review evidence (HIGH: no `reviewRecord` and no review commit; phases created
+before the rule's cutoff are exempt). Plus arc↔phase consistency.
 
 **Verdict + exit:** `BROKEN` (exit 2) = any CRITICAL/HIGH — do NOT run `/do-phase` or cut a
 release until they clear. `HAS ISSUES` (exit 0) = MEDIUM/LOW only. `CLEAN` (exit 0) = none.

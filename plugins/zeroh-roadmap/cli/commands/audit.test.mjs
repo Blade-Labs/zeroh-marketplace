@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Fixtures for `roadmap audit` — the 16 structural checks over a roadmap — driven
+ * Fixtures for `roadmap audit` — the 17 structural checks over a roadmap — driven
  * through the REAL bin/roadmap.mjs against tmp fixture repos. Observable behavior
  * ONLY: exit codes + --json output (this suite never imports the command source).
  *
@@ -122,7 +122,16 @@ const has = (report, check, severity) =>
   report.findings.some((f) => f.check === check && f.severity === severity)
 
 // ── phase / task builders ────────────────────────────────────────────────────
-const basePhase = (n, o = {}) => ({ phase: n, name: 'Phase named here', status: 'backlog', kind: 'logic', arcId: null, tasks: [], ...o })
+const basePhase = (n, o = {}) => ({
+  phase: n,
+  name: 'Phase named here',
+  status: 'backlog',
+  kind: 'logic',
+  arcId: null,
+  tasks: [],
+  reviewRecord: { date: '2026-09-01', model: 'fable', verdict: 'READY', via: 'executed' },
+  ...o,
+})
 const doneTask = (id, o = {}) => ({ id, title: 'Task title here now', done: true, ...o })
 const openTask = (id, o = {}) => ({ id, title: 'Task title here now', done: false, ...o })
 const cleanTR = (o = {}) => ({ whatWasDone: 'did the real work', how: 'by doing the thing', compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'None', ...o })
@@ -233,7 +242,7 @@ const phaseLines = (n, status, tail) => `export default {
   name: 'Phase named right here',
   status: '${status}',
   kind: 'logic',
-  arcId: null,
+  arcId: null, reviewRecord: { date: '2026-09-01', model: 'fable', verdict: 'READY', via: 'executed' },
   tasks: [],
 ${tail}}
 `
@@ -1491,4 +1500,204 @@ test('the export-scanning regex literal lives in exactly ONE non-test file under
     1,
     `expected exactly ONE home for the export-scanning regex under cli/; found ${homes.length}: ${JSON.stringify(homes)}`,
   )
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// Plan-review evidence — a QUEUED phase with no independent review is BROKEN
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Every other check above asks whether the roadmap's DATA is coherent. This one asks
+// whether the queue is EARNED: a phase reaches /do-phase only through the backlog, and
+// nothing in the catalogue refuses an entry that no independent reviewer ever looked at.
+// The evidence is either durable (PhaseShape.reviewRecord, task 22.1) or historical (a
+// commit whose subject records the review round). Absent both, the phase is queued on
+// nobody's word, and the finding must hand the operator the runnable repair rather than
+// a description of one.
+//
+// The check id is deliberately NOT pinned by these tests — they assert the observable
+// contract (severity, which phase, and a runnable remedy in the message), the way an
+// operator reads the report.
+
+/** Commit the fixture's roadmap+lib under the given subjects, optionally back-dated. */
+function gitCommitSubjects(root, subjects, date) {
+  const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' }
+  if (date) {
+    env.GIT_AUTHOR_DATE = date
+    env.GIT_COMMITTER_DATE = date
+  }
+  const git = (...a) => execFileSync('git', ['-C', root, ...a], { stdio: 'ignore', env })
+  git('init', '-q')
+  git('add', 'roadmap', 'lib') // explicit paths — `git add -A` is hook-blocked on this host
+  for (const s of subjects) git('commit', '-q', '--allow-empty', '-m', s)
+}
+
+/** A git-backed repo with phase n queued in the backlog and the given commit history. */
+function queuedRepo(n, { phase = {}, subjects = ['chore: unrelated work landed here'], date } = {}) {
+  const root = makeRepo()
+  const queuedPhase = basePhase(n, phase)
+  if (!Object.hasOwn(phase, 'reviewRecord')) delete queuedPhase.reviewRecord
+  writePhase(root, n, queuedPhase)
+  writeBacklog(root, [{ phase: n, name: `Queued phase number ${n}` }])
+  gitCommitSubjects(root, subjects, date)
+  return root
+}
+
+/** The unreviewed-queue findings for phase n: HIGH, phase-attributed, remedy-bearing. */
+const unreviewed = (report, n) =>
+  report.findings.filter((f) => f.severity === 'HIGH' && f.phase === n && f.message.includes('/review-phase'))
+
+test('unreviewed queue RED — a queued phase with no reviewRecord and no review commit → HIGH naming a runnable /review-phase N, exit 2', () => {
+  const root = queuedRepo(100)
+  const { code, report } = audit(root)
+  assert.equal(code, 2, 'an unreviewed queue entry is BROKEN — /do-phase must not run')
+  assert.equal(report.verdict, 'BROKEN')
+  const hits = unreviewed(report, 100)
+  assert.equal(hits.length, 1, `expected exactly one unreviewed-queue HIGH for phase 100; findings were:\n${JSON.stringify(report.findings, null, 2)}`)
+  assert.ok(
+    hits[0].message.includes('/review-phase 100'),
+    `the remedy must be the runnable command for THIS phase, not prose; message was: ${hits[0].message}`,
+  )
+})
+
+test('unreviewed queue GREEN — a reviewRecord on the queued phase silences the finding, CLEAN', () => {
+  const root = queuedRepo(100, {
+    phase: { reviewRecord: { date: '2026-08-30', model: 'fable', verdict: 'READY', via: 'executed' } },
+  })
+  const { code, report } = audit(root)
+  assert.deepEqual(unreviewed(report, 100), [], 'durable review evidence is the primary silencer')
+  assert.equal(report.verdict, 'CLEAN', `an otherwise-clean reviewed queue must audit CLEAN; findings:\n${JSON.stringify(report.findings, null, 2)}`)
+  assert.equal(code, 0)
+})
+
+test('unreviewed queue RED — prose mentioning reviewRecord is not durable evidence', () => {
+  const root = queuedRepo(100, { phase: { notes: 'A later task will add reviewRecord: after review.' } })
+  const { code, report } = audit(root)
+  assert.equal(unreviewed(report, 100).length, 1, 'only the parsed top-level field is evidence')
+  assert.equal(code, 2)
+})
+
+// The three subjects the review rounds actually land under. A phase reviewed before
+// reviewRecord existed carries its evidence ONLY here, so each must silence the finding
+// on its own — one missing form re-breaks every phase reviewed the old way.
+for (const subject of [
+  'docs(roadmap): phase 100 — address review findings',
+  'plan(roadmap): phase 100 review fixes',
+  'docs(roadmap): queue phase 100',
+  'docs(roadmap): phase 100 — address review findings (two fixes)',
+  'plan(roadmap): phase 100 review fixes — step under char cap',
+]) {
+  test(`unreviewed queue GREEN — the commit subject "${subject}" is qualifying review evidence`, () => {
+    const root = queuedRepo(100, { subjects: ['chore: unrelated work landed here', subject] })
+    const { code, report } = audit(root)
+    assert.deepEqual(unreviewed(report, 100), [], `"${subject}" must silence the unreviewed-queue finding`)
+    assert.equal(report.verdict, 'CLEAN', `findings were:\n${JSON.stringify(report.findings, null, 2)}`)
+    assert.equal(code, 0)
+  })
+}
+
+test('unreviewed queue GREEN — a multi-phase review-fixes subject vouches for each exact listed phase', () => {
+  const root = queuedRepo(100, {
+    subjects: ['plan(roadmap): phases 100+101 review fixes — queued 100 at 1 of 2, 101 at 2 of 2'],
+  })
+  const { code, report } = audit(root)
+  assert.deepEqual(unreviewed(report, 100), [])
+  assert.equal(code, 0)
+})
+
+test('unreviewed queue — the phase number in a review commit is EXACT: "phase 1000" clears 1000 and leaves 100 unreviewed', () => {
+  // A substring/prefix match on the number would let one phase's review round vouch for a
+  // different phase — silently, and exactly in the direction that lets unreviewed work run.
+  const root = makeRepo()
+  const phase100 = basePhase(100)
+  const phase1000 = basePhase(1000)
+  delete phase100.reviewRecord
+  delete phase1000.reviewRecord
+  writePhase(root, 100, phase100)
+  writePhase(root, 1000, phase1000)
+  writeBacklog(root, [{ phase: 100, name: 'Queued phase number 100' }, { phase: 1000, name: 'Queued phase number 1000' }])
+  gitCommitSubjects(root, ['docs(roadmap): phase 1000 — address review findings'])
+  const { code, report } = audit(root)
+  assert.deepEqual(unreviewed(report, 1000), [], 'phase 1000 has its own review commit')
+  assert.equal(unreviewed(report, 100).length, 1, `phase 100 was never reviewed — "phase 1000" must not vouch for it; findings:\n${JSON.stringify(report.findings, null, 2)}`)
+  assert.equal(code, 2)
+})
+
+test('unreviewed queue GREEN — an unqueued phase is not judged: no backlog entry, no finding', () => {
+  // The queue is what grants execution, so the queue is the whole scope. A backlog-status
+  // phase nobody queued is a draft, and a HIGH on every draft would train the operator to
+  // ignore the check.
+  const root = makeRepo()
+  const phase = basePhase(100)
+  delete phase.reviewRecord
+  writePhase(root, 100, phase)
+  writeBacklog(root, [])
+  gitCommitSubjects(root, ['chore: unrelated work landed here'])
+  const { code, report } = audit(root)
+  assert.deepEqual(unreviewed(report, 100), [], 'an unqueued phase carries no review obligation')
+  assert.equal(code, 0)
+})
+
+test('unreviewed queue — the cutoff exemption is DATED: the same fixture queued long ago is exempt, queued now is HIGH', () => {
+  // Grandfathering: phases queued before the review-evidence rule existed cannot produce
+  // evidence retroactively, so the check must not condemn them. The fixtures differ ONLY in
+  // when their history was written — the ancient one predates any plausible named cutoff,
+  // the current one postdates it — so the exemption has to be date-driven, not merely
+  // "this repo has git history".
+  const ancient = queuedRepo(100, { subjects: ['docs(roadmap): plan phase 100 as drafted'], date: '2019-05-05T12:00:00Z' })
+  const current = queuedRepo(100, { subjects: ['docs(roadmap): plan phase 100 as drafted'] })
+
+  const before = audit(ancient)
+  assert.deepEqual(unreviewed(before.report, 100), [], `a phase queued before the cutoff is exempt; findings:\n${JSON.stringify(before.report.findings, null, 2)}`)
+  assert.equal(before.code, 0)
+
+  const after = audit(current)
+  assert.equal(unreviewed(after.report, 100).length, 1, 'the same phase queued today is not exempt')
+  assert.equal(after.code, 2)
+})
+
+test('unreviewed queue — the cutoff compares ISO instants rather than timezone-bearing strings', () => {
+  const actuallyAfter = queuedRepo(100, {
+    subjects: ['docs(roadmap): plan phase 100 as drafted'],
+    date: '2026-08-31T20:30:00-05:00',
+  })
+  const after = audit(actuallyAfter)
+  assert.equal(unreviewed(after.report, 100).length, 1, '01:30Z is after the cutoff despite its Aug-31 local date')
+
+  const actuallyBefore = queuedRepo(100, {
+    subjects: ['docs(roadmap): plan phase 100 as drafted'],
+    date: '2026-09-01T01:30:00+02:00',
+  })
+  const before = audit(actuallyBefore)
+  assert.deepEqual(unreviewed(before.report, 100), [], '23:30Z is before the cutoff despite its Sep-1 local date')
+})
+
+test('unreviewed queue RED — an old draft queued after the cutoff is not grandfathered', () => {
+  const root = makeRepo()
+  const phase = basePhase(100)
+  delete phase.reviewRecord
+  writePhase(root, 100, phase)
+  writeBacklog(root, [])
+  gitCommitSubjects(root, ['docs(roadmap): draft phase 100'], '2019-05-05T12:00:00Z')
+
+  writeBacklog(root, [{ phase: 100, name: 'Queued much later' }])
+  execFileSync('git', ['-C', root, 'add', 'roadmap/backlog.ts'], { stdio: 'ignore' })
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'docs(roadmap): queue old draft now'], { stdio: 'ignore' })
+
+  const { code, report } = audit(root)
+  assert.equal(unreviewed(report, 100).length, 1, 'grandfathering follows queue entry, not phase-file age')
+  assert.equal(code, 2)
+})
+
+test('unreviewed queue GREEN — editing a pre-cutoff queue line does not reset its grandfather date', () => {
+  const root = queuedRepo(100, {
+    subjects: ['docs(roadmap): plan phase 100 as drafted'],
+    date: '2019-05-05T12:00:00Z',
+  })
+  writeBacklog(root, [{ phase: 100, name: 'Renamed after the cutoff' }])
+  execFileSync('git', ['-C', root, 'add', 'roadmap/backlog.ts'], { stdio: 'ignore' })
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'docs(roadmap): rename queued phase'], { stdio: 'ignore' })
+
+  const { code, report } = audit(root)
+  assert.deepEqual(unreviewed(report, 100), [], 'a line rewrite is not a new queue addition')
+  assert.equal(code, 0)
 })

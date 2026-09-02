@@ -147,7 +147,7 @@ the rules in this exact order, naming each in the report:
    equal-tier entry is a violation unless rule 1 or 2 forces it (name the forcing rule + entries).
 4. **Already listed?** Validate against 1-3; propose + apply any move EXPLICITLY in the report -
    never silently reorder (honor-system; the backlog docblock names this skill as the only queue writer).
-Commit with the fix commit or `docs(roadmap): queue phase N`. Output
+Before queueing, write `reviewRecord` with the date, judge model, verdict, and `via: 'executed'` onto the phase; a user `--skip-review` records `via: 'waived'` in the report line. Commit with the fix commit or `docs(roadmap): queue phase N`. Output
 `QUEUED at K | ALREADY at K | MOVED K1→K2 | NOT QUEUED` + reasoning, positions as `K of TOTAL`.
 **Placement-only / `--no-queue`:** validate 1-3, report the correct position WITHOUT editing
 `backlog.ts`; confine output per `references/queue-placement.md` (no holistic/phase-verdict tokens; every proposal UNAPPLIED).

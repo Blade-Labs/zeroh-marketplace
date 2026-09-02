@@ -26,6 +26,7 @@ export default definePhase({
   name: 'Arc-sweep LOW follow-ups: one worktree enumerator, lockfile-aware tsx hint, envelope colon',
   status: 'backlog',
   plannedBy: { model: 'claude-fable-5' },
+  reviewRecord: { date: '2026-09-01', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'refactor',
   kind: 'hardening',
   source:

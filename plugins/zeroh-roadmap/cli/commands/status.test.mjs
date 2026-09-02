@@ -963,3 +963,257 @@ test('24) siblings in roadmap/arc-evals/ are NOT reports — verdicts, sweep, an
     `the marker must survive every sibling artifact; got:\n${human.stdout}`,
   )
 })
+
+// ── stale plugin-cache version drift (task 22.4) ──────────────────────────────────────
+//
+// A session can be RUNNING `~/.claude/plugins/cache/<mkt>/<plugin>/<ver>/…` — the snapshot
+// Claude installed — while the marketplace's DIRECTORY source on the same disk already carries a
+// newer version. Every command then behaves like the older plugin and nothing on any surface says
+// so. `status` is the command every protocol entry already runs, so it is the surfacing seam; the
+// derivation is a PURE `versionDriftLine({ selfPath })` so both the drift and the silence can be
+// proven over fixtures instead of over whatever this box happens to have installed.
+//
+// Same additive-divergence discipline as postMergeRedLine/strayLanes: absent whenever its
+// condition is, so a non-cache checkout (this one) sees ZERO output change on both surfaces and
+// status.parity.test.mjs stays byte-identical.
+//
+// The export is loaded DYNAMICALLY: a static named import of a binding status.mjs does not export
+// yet is a link-time SyntaxError that takes all 24 cases above down with it, so the TDD red would
+// name nothing. This way each case below reds on its own claim.
+import { cpSync, readFileSync } from 'node:fs'
+
+const statusModule = await import('./status.mjs')
+
+/** Call the export under test, failing with the CONTRACT when it is missing rather than
+ *  "versionDriftLine is not a function" thrown from somewhere inside a case. */
+function drift(args) {
+  assert.equal(
+    typeof statusModule.versionDriftLine,
+    'function',
+    `status.mjs must EXPORT a pure versionDriftLine({ selfPath }) — status wires its advisory through it, and a seam only status can reach cannot be proven over a fixture; got exports ${Object.keys(statusModule)}`,
+  )
+  return statusModule.versionDriftLine(args)
+}
+
+/** Both manifests a plugin tree carries, agreeing — the cached snapshot's own version is a fact
+ *  about the tree, not about the directory it was unpacked into. */
+function writePluginManifests(dir, name, version) {
+  mkdirSync(join(dir, '.claude-plugin'), { recursive: true })
+  writeFileSync(join(dir, '.claude-plugin', 'plugin.json'), JSON.stringify({ name, version, description: 'fixture' }, null, 2) + '\n')
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version, private: true }, null, 2) + '\n')
+}
+
+/**
+ * A hermetic mirror of a real `~/.claude/plugins` install root:
+ *
+ *   <home>/plugins/known_marketplaces.json      → { <mkt>: { source: { source: 'directory', path } } }
+ *   <home>/plugins/cache/<mkt>/<plugin>/<ver>/  → the INSTALLED snapshot (what a session runs)
+ *   <home>/plugins/cached/<plugin>/<ver>/       → a near-miss sibling: NOT the cache dir
+ *   <src>/.claude-plugin/marketplace.json       → the directory source's manifest
+ *   <src>/plugins/<plugin>/                     → the source tree, at its own version
+ *
+ * Shapes are copied from this box's real files (registry entry, marketplace `source: './plugins/x'`).
+ * `registry: false` omits the registry file; `registryBody` writes arbitrary bytes instead.
+ */
+function cacheEstate({
+  cachedVersion = '0.18.0',
+  sourceVersion = '0.34.0',
+  plugin = 'zeroh-roadmap',
+  marketplace = 'zeroh-marketplace',
+  registry = true,
+  registryBody = null,
+} = {}) {
+  const home = newTmp('zr-status-drift-')
+  const pluginsRoot = join(home, 'plugins')
+  const srcDir = join(home, 'marketplace-src')
+
+  const srcPlugin = join(srcDir, 'plugins', plugin)
+  writePluginManifests(srcPlugin, plugin, sourceVersion)
+  mkdirSync(join(srcDir, '.claude-plugin'), { recursive: true })
+  writeFileSync(
+    join(srcDir, '.claude-plugin', 'marketplace.json'),
+    JSON.stringify({ name: marketplace, plugins: [{ name: plugin, source: `./plugins/${plugin}`, category: 'development' }] }, null, 2) + '\n',
+  )
+  mkdirSync(join(srcPlugin, 'cli', 'commands'), { recursive: true })
+
+  const cacheDir = join(pluginsRoot, 'cache', marketplace, plugin, cachedVersion)
+  writePluginManifests(cacheDir, plugin, cachedVersion)
+  mkdirSync(join(cacheDir, 'cli', 'commands'), { recursive: true })
+
+  // The near-miss: same depth, same manifests, one letter of directory name apart. A substring
+  // test for 'plugins/cache' answers "inside the cache" here, and it is not.
+  const nearMiss = join(pluginsRoot, 'cached', plugin, cachedVersion)
+  writePluginManifests(nearMiss, plugin, cachedVersion)
+  mkdirSync(join(nearMiss, 'cli', 'commands'), { recursive: true })
+
+  if (registry || registryBody !== null) {
+    writeFileSync(
+      join(pluginsRoot, 'known_marketplaces.json'),
+      registryBody ??
+        JSON.stringify(
+          {
+            [marketplace]: {
+              source: { source: 'directory', path: srcDir },
+              installLocation: srcDir,
+              lastUpdated: '2026-08-30T00:00:00.000Z',
+              autoUpdate: true,
+            },
+          },
+          null,
+          2,
+        ) + '\n',
+    )
+  }
+
+  return {
+    cacheDir,
+    cachedSelfPath: join(cacheDir, 'cli', 'commands', 'status.mjs'),
+    sourceSelfPath: join(srcPlugin, 'cli', 'commands', 'status.mjs'),
+    nearMissSelfPath: join(nearMiss, 'cli', 'commands', 'status.mjs'),
+  }
+}
+
+test('25) cached snapshot older than its directory source → ONE line naming BOTH versions', () => {
+  const est = cacheEstate({ cachedVersion: '0.18.0', sourceVersion: '0.34.0' })
+
+  const line = drift({ selfPath: est.cachedSelfPath })
+  assert.equal(
+    typeof line,
+    'string',
+    `a session running 0.18.0 while the source carries 0.34.0 is the whole gap — the advisory must be a string; got ${JSON.stringify(line)}`,
+  )
+  assert.ok(
+    line.includes('0.18.0'),
+    `the line must name the version this session is RUNNING — without it the operator cannot tell whether the restart already happened; got: ${line}`,
+  )
+  assert.ok(
+    line.includes('0.34.0'),
+    `and the version waiting in the directory source — a line that names only one version says "something is stale" and nothing actionable; got: ${line}`,
+  )
+  assert.equal(line.includes('\n'), false, `ONE bounded line, like every other status advisory; got: ${JSON.stringify(line)}`)
+  assert.ok(line.length <= 300, `and bounded in width — status advisories never dump a payload; got ${line.length} chars: ${line}`)
+})
+
+test('26) equal versions → silent: the cache IS the source, and there is nothing to restart for', () => {
+  const est = cacheEstate({ cachedVersion: '0.34.0', sourceVersion: '0.34.0' })
+
+  // Guard: the fixture differs from case 25 ONLY in the source version, so a line here would be
+  // the advisory firing on the mere fact of running from the cache.
+  const drifted = cacheEstate({ cachedVersion: '0.34.0', sourceVersion: '0.35.0' })
+  assert.equal(typeof drift({ selfPath: drifted.cachedSelfPath }), 'string', 'fixture guard: this shape DOES drift when the source moves ahead')
+
+  assert.ok(
+    !drift({ selfPath: est.cachedSelfPath }),
+    `an up-to-date cache must be silent — an advisory every session prints unconditionally is noise the operator learns to skip past; got ${JSON.stringify(drift({ selfPath: est.cachedSelfPath }))}`,
+  )
+})
+
+test('27) a selfPath outside plugins/cache is silent — even beside a registry that IS drifting', () => {
+  const est = cacheEstate({ cachedVersion: '0.18.0', sourceVersion: '0.34.0' })
+  // Guard: the drift is real in this very estate — the silence below is about the PATH.
+  assert.equal(typeof drift({ selfPath: est.cachedSelfPath }), 'string', 'fixture guard: this estate drifts when asked from the cache path')
+
+  assert.ok(
+    !drift({ selfPath: est.sourceSelfPath }),
+    `a session running the directory source itself IS the newest version — telling it to update is a false alarm on every dev checkout; got ${JSON.stringify(drift({ selfPath: est.sourceSelfPath }))}`,
+  )
+  assert.ok(
+    !drift({ selfPath: est.nearMissSelfPath }),
+    `and plugins/cached/… is not plugins/cache/… — a substring match on the path invents a cached version out of an unrelated directory; got ${JSON.stringify(drift({ selfPath: est.nearMissSelfPath }))}`,
+  )
+})
+
+test('28) a cache path with no registry, or an unreadable one, is silent and never throws', () => {
+  const missing = cacheEstate({ registry: false })
+  const corrupt = cacheEstate({ registryBody: '{ not json' })
+
+  for (const [name, est] of [
+    ['absent', missing],
+    ['unparseable', corrupt],
+  ]) {
+    let line
+    assert.doesNotThrow(() => {
+      line = drift({ selfPath: est.cachedSelfPath })
+    }, `an ${name} known_marketplaces.json must not throw — status wires this advisory into every run, and an advisory that can crash the command is worse than the drift it reports`)
+    assert.ok(!line, `and it must stay silent rather than guess: got ${JSON.stringify(line)} for the ${name} registry`)
+  }
+})
+
+test('29) ONE spawned status from THIS checkout — a non-cache path prints no advisory on either stream', () => {
+  const selfPath = join(HERE, 'status.mjs')
+  const pluginRoot = join(HERE, '..', '..')
+  const ownVersion = JSON.parse(readFileSync(join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8')).version
+
+  // Guards: this checkout really is the non-cache case, and the pure derivation agrees.
+  assert.doesNotMatch(
+    selfPath,
+    /[\\/]plugins[\\/]cache[\\/]/,
+    `precondition: the suite must be running from a directory checkout, not an installed snapshot; selfPath was ${selfPath}`,
+  )
+  assert.ok(!drift({ selfPath }), `precondition: the pure derivation must be silent here; got ${JSON.stringify(drift({ selfPath }))}`)
+
+  const res = status(emptyEstate())
+  assert.equal(res.status, 0, `status must exit 0; stderr:\n${res.stderr}`)
+  const streams = bothStreams(res)
+  assert.doesNotMatch(
+    streams,
+    new RegExp(ownVersion.replace(/\./g, '\\.')),
+    `a drift line names versions, so this checkout's own version ${ownVersion} must appear NOWHERE in a run that has nothing to report — on stdout OR stderr (the phase-11 lesson); got:\n${streams}`,
+  )
+  assert.doesNotMatch(
+    streams,
+    /drift|newer version|stale plugin/i,
+    `and no fragment of the advisory survives either — the human table is parity-pinned byte-compatible with the legacy scripts/arc-status.mjs; got:\n${streams}`,
+  )
+})
+
+/**
+ * The same plugin tree, planted at a REAL cache path `<tmp>/plugins/cache/<mkt>/<plugin>/<ver>/`
+ * with its manifests rewritten to that version, beside a registry pointing at a directory source
+ * one minor ahead. Spawning THIS copy's bin is the only way to observe the wiring: `selfPath` is
+ * the running module's own location, so a fixture argument cannot fake it.
+ */
+function plantedCacheCheckout({ cachedVersion = '0.18.0', sourceVersion = '0.34.0' } = {}) {
+  const est = cacheEstate({ cachedVersion, sourceVersion })
+  cpSync(join(HERE, '..', '..'), est.cacheDir, { recursive: true })
+  writePluginManifests(est.cacheDir, 'zeroh-roadmap', cachedVersion) // the snapshot's version, not the source's
+  return { est, bin: join(est.cacheDir, 'bin', 'roadmap.mjs') }
+}
+
+/** Every string leaf of a parsed --json payload — "the machine shape exposes it" without pinning
+ *  WHICH key carries it (warnings, a dedicated field) ahead of the implementation. */
+function stringLeaves(value, out = []) {
+  if (typeof value === 'string') out.push(value)
+  else if (Array.isArray(value)) for (const v of value) stringLeaves(v, out)
+  else if (value && typeof value === 'object') for (const v of Object.values(value)) stringLeaves(v, out)
+  return out
+}
+
+test('30) status run FROM a stale cache path surfaces the advisory on BOTH surfaces, verbatim', () => {
+  const { est, bin } = plantedCacheCheckout({ cachedVersion: '0.18.0', sourceVersion: '0.34.0' })
+  const { root } = strayEstate()
+
+  // The expected text is the PURE function's own answer for that path — the wiring claim is
+  // "status prints what versionDriftLine returns", not a second copy of the sentence.
+  const expected = drift({ selfPath: join(est.cacheDir, 'cli', 'commands', 'status.mjs') })
+  assert.equal(typeof expected, 'string', 'fixture guard: the planted checkout must be a drifting one')
+
+  const human = spawnSync('node', [bin, 'status', root], { encoding: 'utf8' })
+  assert.equal(human.status, 0, `a stale cache is a REPORT, not an error — status must still exit 0; stderr:\n${human.stderr}`)
+  assert.equal(
+    countOf(bothStreams(human), expected),
+    1,
+    `the text surface must carry the advisory exactly once — twice tells the operator there are two drifts; got stdout:\n${human.stdout}\nstderr:\n${human.stderr}`,
+  )
+
+  const json = spawnSync('node', [bin, 'status', root, '--json'], { encoding: 'utf8' })
+  assert.equal(json.status, 0, `status --json must exit 0 over a stale cache; stderr:\n${json.stderr}`)
+  let parsed
+  assert.doesNotThrow(() => {
+    parsed = JSON.parse(json.stdout)
+  }, `stdout must stay PURE JSON with the advisory present; got:\n${json.stdout}`)
+  assert.ok(
+    stringLeaves(parsed).some((s) => s.includes(expected)),
+    `and the machine shape must expose it too — an advisory only the human table carries is invisible to every scripted consumer; got:\n${JSON.stringify(parsed, null, 2)}`,
+  )
+})

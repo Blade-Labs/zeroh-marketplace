@@ -654,6 +654,14 @@ const BasePhaseFields = {
    *  it, "which planner produces plans that execute cleanly" is unanswerable after the fact.
    *  Optional/additive so every historical phase file keeps parsing. */
   plannedBy: z.object({ model: z.string().min(1) }).optional(),
+  /** Durable plan-review evidence. `via: 'executed'` is written only after Mode A actually runs;
+   *  `via: 'waived'` records a user `--skip-review` decision with the report line. */
+  reviewRecord: z.object({
+    date: z.string().min(8),
+    model: z.string().min(2),
+    verdict: z.enum(['READY', 'NEEDS_WORK', 'BLOCKER']),
+    via: z.enum(['executed', 'waived']),
+  }).optional(),
   /** Changelog category — determines release note section */
   category: z.enum(['feature', 'fix', 'refactor', 'test', 'docs', 'infra', 'spike']),
   /** Phase kind — drives gate selection in do-phase.

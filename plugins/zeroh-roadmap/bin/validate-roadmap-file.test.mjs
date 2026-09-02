@@ -713,3 +713,161 @@ test('polarity lint: `|| true` inside a quoted search PATTERN is search text, no
     'a quoted PATTERN merely CONTAINING the literal must not read as a real swallow',
   )
 })
+
+// ── citation-integrity lint (task 22.3) — WARN-level, NEW-to-git phase files only ──
+//
+// Atlas 41 recorded five invented-prose incidents whose fabricated repo-relative path
+// segments parsed, validated, and lied: prose is free text, so `src/lint/foo.test.ts`
+// reads exactly like a real anchor to every later human and every planner grep. The
+// PATH is the mechanically checkable part (line numbers drift legally — a `:42` suffix
+// is stripped before the existence check).
+//
+// CITATION CONTRACT, as the other lints carry: the WARN names BOTH the invented anchor
+// (so the fix is one grep away) and the `atlas-41` incident class (so the warning
+// teaches what it is protecting against). These tests key their silence assertions on
+// that class name, which makes a WARN that forgets the citation indistinguishable from
+// a lint that fired for the wrong reason — deliberately.
+//
+// Four directions, exactly as the grandfathered lints above: invented WARNs · real is
+// silent · to-be-created (the phase's own files[]) is silent · COMMITTED is exempt. A
+// WARN never moves the exit code.
+
+const CITED_REAL = 'cli/lib/really-cited.mjs'
+const CITED_INVENTED = 'src/lint/foo.test.ts'
+const CITED_TO_CREATE = 'src/lint/to-be-created.ts'
+
+/** Prose slots the lint reads. Defaults keep every OTHER lint quiet (the step carries
+ *  → verify: with a falsifiable clause; the description sits far under the 700 cap). */
+const citationPhase = ({ problem, desc, notes, files } = {}) => `${IMPORT}
+export default definePhase({
+  phase: 9014, name: 'fixture citation integrity phase', status: 'backlog',
+  plannedBy: { model: 'fixture-model' },
+  category: 'infra', kind: 'logic', source: 'fixture source', priority: 'LOW',
+  dependsOn: [], conflictsWith: [], keyFiles: ['x'], stakeholderDemo: 'a fixture outcome demoable',${
+    notes ? `\n  notes: '${notes}',` : ''
+  }
+  tasks: [{ id: '9014.1', title: 'the fixture task title', problem: '${
+    problem ?? 'the fixture problem statement is intentionally long'
+  }', steps: [{ file: 'x', description: '${
+    desc ?? 'do the described thing → verify: grep -n thing x'
+  }' }], acceptanceCriteria: ['it works as specified'], files: ${files ?? "['x']"}, testMode: 'none', done: false }],
+})
+`
+
+/**
+ * A roadmap tree whose HEAD already carries ONE real cited file, so "absent" means absent
+ * and not merely "this repo has no commits". The phase file itself is left NEW to git
+ * unless `commit`, which is the grandfather direction.
+ */
+function writeCitationPhase(body, { commit = false } = {}) {
+  const { path, base } = writeRoadmapFile('phase-9014.phase.ts', body)
+  gitInit(base)
+  mkdirSync(join(base, dirname(CITED_REAL)), { recursive: true })
+  writeFileSync(join(base, CITED_REAL), '// a real file, cited honestly\n')
+  execFileSync('git', ['-C', base, 'add', CITED_REAL], { stdio: 'ignore' })
+  execFileSync('git', ['-C', base, 'commit', '-qm', 'seed the real cited file'], { stdio: 'ignore' })
+  if (commit) {
+    execFileSync('git', ['-C', base, 'add', 'roadmap/phases/phase-9014.phase.ts'], { stdio: 'ignore' })
+    execFileSync('git', ['-C', base, 'commit', '-qm', 'seed'], { stdio: 'ignore' })
+  }
+  return { path, base }
+}
+
+/** The stderr lines this lint owns: its contract names the atlas-41 incident class, so a
+ *  line citing that class is this lint's and no other's. */
+const citationWarns = (stderr) => stderr.split('\n').filter((l) => /atlas[\s_-]?41/i.test(l))
+
+/** Silence, asserted twice over: the incident class is unmentioned AND the cited path is
+ *  never echoed back — so a WARN that forgot its citation cannot read as silence. */
+function assertCitationSilent(stderr, cited, why) {
+  assert.deepEqual(citationWarns(stderr), [], why)
+  assert.ok(!stderr.includes(cited), `${why} — but stderr names '${cited}':\n${stderr || '(empty)'}`)
+}
+
+/** The three prose homes the lint reads, each carrying ONE citation of `p`. */
+const PROSE_HOMES = [
+  { where: 'task problem', slots: (p) => ({ problem: `the fixture problem is anchored at ${p} which the reader will chase` }) },
+  { where: 'step description', slots: (p) => ({ desc: `follow the pattern at ${p} → verify: grep -n thing x` }) },
+  { where: 'phase notes', slots: (p) => ({ notes: `prior art for this shape lives at ${p}` }) },
+]
+
+for (const { where, slots } of PROSE_HOMES) {
+  test(`citation lint: an INVENTED path in ${where} WARNs naming the anchor and the atlas-41 class`, () => {
+    const f = writeCitationPhase(citationPhase(slots(CITED_INVENTED)))
+    assertGitTracked(f, false) // authoring-time lint: this case only proves anything on a NEW file
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+    const warns = citationWarns(r.stderr)
+    assert.equal(
+      warns.length,
+      1,
+      `expected exactly ONE citation WARN for '${CITED_INVENTED}' in ${where}; got ${warns.length}. stderr:\n${r.stderr || '(empty)'}`,
+    )
+    assert.ok(warns[0].includes(CITED_INVENTED), `the WARN names the invented anchor; got: ${warns[0]}`)
+    assert.match(warns[0], /WARN phase 9014\b/, 'the WARN names the offending phase')
+  })
+
+  test(`citation lint: a REAL path in ${where} is SILENT`, () => {
+    const f = writeCitationPhase(citationPhase(slots(CITED_REAL)))
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `the honest twin parses clean; stderr: ${r.stderr}`)
+    assertCitationSilent(r.stderr, CITED_REAL, `a path that really exists draws no WARN (${where})`)
+  })
+}
+
+test("citation lint: a path listed in the task's own files[] (to-be-created) is SILENT", () => {
+  // A plan legitimately cites the file it is about to write; WARNing there would fire on
+  // every well-formed phase in the repo and the lint would be turned off within a day.
+  const f = writeCitationPhase(
+    citationPhase({
+      problem: `the fixture problem statement will create ${CITED_TO_CREATE} as part of this task`,
+      files: `['${CITED_TO_CREATE}']`,
+    }),
+  )
+  assertGitTracked(f, false)
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `stderr: ${r.stderr}`)
+  assertCitationSilent(r.stderr, CITED_TO_CREATE, 'a cited path the phase declares it will create is not invented')
+})
+
+test('citation lint: a COMMITTED phase file citing an invented path is GRANDFATHERED', () => {
+  const f = writeCitationPhase(citationPhase(PROSE_HOMES[0].slots(CITED_INVENTED)), { commit: true })
+  assertGitTracked(f, true)
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `a committed file never REDs; stderr: ${r.stderr}`)
+  assertCitationSilent(r.stderr, CITED_INVENTED, 'the ~1,100 committed phase files stay exempt — this is authoring-time only')
+})
+
+test('citation lint: an invented citation exits EXACTLY as its honest twin does', () => {
+  const invented = runValidatorCaptured(writeCitationPhase(citationPhase(PROSE_HOMES[0].slots(CITED_INVENTED))).path)
+  const honest = runValidatorCaptured(writeCitationPhase(citationPhase(PROSE_HOMES[0].slots(CITED_REAL))).path)
+  assert.equal(invented.code, honest.code, `a WARN never changes the exit code; stderr: ${invented.stderr}`)
+  assert.equal(honest.code, 0, `and the honest twin is a clean pass; stderr: ${honest.stderr}`)
+})
+
+test('citation lint: a `:line` suffix is stripped — a real path with a drifted line stays SILENT', () => {
+  // Lines move legally with every edit; the PATH inventing is the disease. A lint that reds
+  // on a stale line number is noise that gets suppressed, taking the path check with it.
+  const f = writeCitationPhase(citationPhase(PROSE_HOMES[0].slots(`${CITED_REAL}:999`)))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `stderr: ${r.stderr}`)
+  assertCitationSilent(r.stderr, CITED_REAL, 'an out-of-range line on a REAL path is drift, not invention')
+})
+
+test('citation lint: a `:line` suffix does not hide an INVENTED path', () => {
+  const f = writeCitationPhase(citationPhase(PROSE_HOMES[0].slots(`${CITED_INVENTED}:42`)))
+  const r = runValidatorCaptured(f.path)
+  assert.equal(r.code, 0, `a WARN never changes the exit code; stderr: ${r.stderr}`)
+  const warns = citationWarns(r.stderr)
+  assert.equal(warns.length, 1, `expected exactly ONE citation WARN; got ${warns.length}. stderr:\n${r.stderr || '(empty)'}`)
+  assert.ok(warns[0].includes(CITED_INVENTED), `the WARN names the invented anchor; got: ${warns[0]}`)
+})
+
+for (const prose of ['https://zod.dev/docs/invented-api.md', 'webdocs/invented-widget.ts']) {
+  test(`citation lint: a path-like fragment inside ${prose} is SILENT`, () => {
+    const f = writeCitationPhase(citationPhase(PROSE_HOMES[0].slots(prose)))
+    const r = runValidatorCaptured(f.path)
+    assert.equal(r.code, 0, `stderr: ${r.stderr}`)
+    assert.deepEqual(citationWarns(r.stderr), [], `a longer token or URL is not a repo-relative citation: ${r.stderr}`)
+  })
+}

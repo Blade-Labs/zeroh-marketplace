@@ -1,5 +1,5 @@
 /**
- * roadmap audit [repo-root] [--json] — audit-roadmap's 16 structural checks, mechanized
+ * roadmap audit [repo-root] [--json] — audit-roadmap's 17 structural checks, mechanized
  * (ROADCODE 1659.2, replacing skills/audit-roadmap's hand-run prose). Read-only: never
  * opens source code, never fixes — reports findings + a verdict.
  *
@@ -19,6 +19,8 @@
  *      that lane's own runnable close, LOW for legacy/unknown. Report-only, never removes.
  *   16 consumer schema drift: a template export absent from the consumer's vendored
  *      lib/roadmap/schema.ts (HIGH each) — the same inventory reader `config check` uses.
+ *   17 queued/in-progress phase without durable or commit-backed plan-review evidence (HIGH),
+ *      with phases created before the evidence rule grandfathered.
  *
  * Exit contract (design §2): 0 = CLEAN or HAS ISSUES (MEDIUM/LOW only) · 2 = BROKEN (any
  * CRITICAL/HIGH) · 1 = usage / tsx-absent in this strict context.
@@ -36,6 +38,40 @@ import { missingSchemaExports, unresolvedSchemaExports } from './config.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+const PLAN_REVIEW_EVIDENCE_CUTOFF = '2026-09-01T00:00:00Z'
+
+const REVIEW_SUBJECTS = [
+  /^docs\(roadmap\): phase (\d+) — address review findings(?:\s+.*)?$/,
+  /^plan\(roadmap\): phase (\d+) review fixes(?:\s+.*)?$/,
+  /^docs\(roadmap\): queue phase (\d+)(?:\s+.*)?$/,
+]
+const MULTI_PHASE_REVIEW_SUBJECT = /^plan\(roadmap\): phases (\d+(?:\+\d+)*) review fixes(?: — .*)?$/
+
+function gitLines(repo, args) {
+  try {
+    return execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim().split('\n').filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+function queueEntryAddedAt(repo, phase) {
+  const pattern = `phase[[:space:]]*:[[:space:]]*${phase}([^0-9]|$)`
+  const addedLine = new RegExp(`^\\+.*\\bphase\\s*:\\s*${phase}(?:\\D|$)`)
+  const removedLine = new RegExp(`^-.*\\bphase\\s*:\\s*${phase}(?:\\D|$)`)
+  let addedAt
+  let present = false
+  for (const row of gitLines(repo, ['log', '--reverse', '--format=%H%x09%aI', '-G', pattern, '--', 'roadmap/backlog.ts'])) {
+    const [commit, date] = row.split('\t')
+    if (!commit || !date) continue
+    const patch = gitLines(repo, ['show', '--format=', '--unified=0', commit, '--', 'roadmap/backlog.ts'])
+    const added = patch.some((line) => !line.startsWith('+++') && addedLine.test(line))
+    const removed = patch.some((line) => !line.startsWith('---') && removedLine.test(line))
+    if (added && !present) addedAt = date
+    present = added || (present && !removed)
+  }
+  return addedAt
+}
 
 export default async function run(argv) {
   const json = argv.includes('--json')
@@ -104,12 +140,7 @@ export default async function run(argv) {
   // ── Check 7: stale in-progress phases (git staleness > 30 days) ────────────
   const now = Date.now() / 1000
   for (const ip of aux.inProgress ?? []) {
-    let ts = ''
-    try {
-      ts = execFileSync('git', ['-C', repo, 'log', '-n', '1', '--format=%ct', '--grep', `phase ${ip.phase}`], { encoding: 'utf8' }).trim()
-    } catch {
-      /* no git / no history */
-    }
+    const ts = gitLines(repo, ['log', '-n', '1', '--format=%ct', '--grep', `phase ${ip.phase}`])[0] ?? ''
     if (!ts) {
       findings.push({ check: 7, severity: 'LOW', phase: ip.phase, message: `Phase ${ip.phase} is in-progress but has no related commit history (unknown age). Resume, or set status: 'cancelled'.` })
     } else {
@@ -210,6 +241,32 @@ export default async function run(argv) {
       phase: null,
       location: join(repo, 'lib', 'roadmap', 'schema.ts'),
       message: `${name} is missing from lib/roadmap/schema.ts, so phase eval records cannot emit and scorecard samples go silent — re-vendor the consumer schema from the plugin template.`,
+    })
+  }
+
+  // ── Check 17: queued/in-progress phases without plan-review evidence ──────
+  const reviewRequired = new Set([...backlogSet, ...(aux.inProgress ?? []).map((p) => p.phase)])
+  const reviewedPhases = new Set(aux.reviewedPhases ?? [])
+  // Whole-history subject scan — skipped when nothing is queued or in flight.
+  for (const subject of reviewRequired.size ? gitLines(repo, ['log', '--format=%s']) : []) {
+    for (const pattern of REVIEW_SUBJECTS) {
+      const match = subject.match(pattern)
+      if (match) reviewedPhases.add(Number(match[1]))
+    }
+    const multi = subject.match(MULTI_PHASE_REVIEW_SUBJECT)
+    if (multi) for (const phase of multi[1].split('+')) reviewedPhases.add(Number(phase))
+  }
+  for (const phase of reviewRequired) {
+    const phaseFile = join(phasesDir, `phase-${phase}.phase.ts`)
+    if (reviewedPhases.has(phase)) continue
+    const queuedAt = queueEntryAddedAt(repo, phase)
+    if (queuedAt && Date.parse(queuedAt) < Date.parse(PLAN_REVIEW_EVIDENCE_CUTOFF)) continue
+    findings.push({
+      check: 17,
+      severity: 'HIGH',
+      phase,
+      location: phaseFile,
+      message: `Phase ${phase} is queued or in-progress without plan-review evidence. Run /review-phase ${phase}; a user-waived review records reviewRecord via:'waived'.`,
     })
   }
 

@@ -62,6 +62,10 @@ import {
   ImportanceRulingsTableShape,
   ProposalShape,
 } from '../templates/schema'
+// The SECOND schema home — the consumer copy the CLI validates every phase file
+// through (cli/lib/tsx-bridge.mjs seam 3). Imported so the vendor-pair discipline
+// is a behavioral check over both homes, not a byte diff of one.
+import { definePhase as definePhaseConsumerHome } from '../../../lib/roadmap/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
 
 let failures = 0
@@ -798,6 +802,123 @@ check('plannedBy: a phase WITH plannedBy parses; a historical phase WITHOUT it s
   )
   const without = definePhase({ ...basePhase, status: 'backlog', category: 'feature' } as never)
   assertEq((without as { plannedBy?: unknown }).plannedBy, undefined, 'absent plannedBy is absent')
+})
+
+// ── reviewRecord — the durable Mode A verdict ──────────────────────────────
+//
+// The record makes executed and waived review evidence machine-readable. Its
+// contract rejects laundering vocabulary, and both schema homes must carry it
+// because consumer-side readers do not load the plugin template directly.
+
+/** The two homes the vendor-pair discipline keeps in lock-step. */
+const SCHEMA_HOMES: Array<[string, (input: never) => unknown]> = [
+  ['templates/schema.ts', definePhase as (input: never) => unknown],
+  ['lib/roadmap/schema.ts', definePhaseConsumerHome as (input: never) => unknown],
+]
+
+/** The record an actually-run Mode A pass writes before it queues. */
+const EXECUTED_REVIEW = {
+  date: '2026-09-01',
+  model: 'claude-fable-5-1',
+  verdict: 'READY',
+  via: 'executed',
+}
+
+/** Parse a backlog phase carrying `reviewRecord` through one schema home. */
+function phaseWithReview(
+  define: (input: never) => unknown,
+  reviewRecord: unknown,
+): { reviewRecord?: unknown } {
+  return define({
+    ...basePhase,
+    status: 'backlog',
+    category: 'feature',
+    reviewRecord,
+  } as never) as { reviewRecord?: unknown }
+}
+
+check('reviewRecord: an executed Mode A verdict round-trips ALL four fields, in BOTH schema homes', () => {
+  for (const [home, define] of SCHEMA_HOMES) {
+    const p = phaseWithReview(define, EXECUTED_REVIEW)
+    assertEq(p.reviewRecord, EXECUTED_REVIEW, `${home}: the whole record survives the parse`)
+  }
+})
+
+check('reviewRecord: optional — a phase without one still parses in both homes', () => {
+  for (const [home, define] of SCHEMA_HOMES) {
+    const p = define({ ...basePhase, status: 'backlog', category: 'feature' } as never) as {
+      reviewRecord?: unknown
+    }
+    assertEq(p.reviewRecord, undefined, `${home}: absent reviewRecord stays absent`)
+  }
+})
+
+check('reviewRecord: a --skip-review waiver records via:"waived"; all three verdict rungs parse', () => {
+  for (const [home, define] of SCHEMA_HOMES) {
+    for (const verdict of ['READY', 'NEEDS_WORK', 'BLOCKER']) {
+      const parsed = phaseWithReview(define, { ...EXECUTED_REVIEW, verdict, via: 'waived' })
+      assertEq(
+        (parsed.reviewRecord as { verdict?: string; via?: string })?.verdict,
+        verdict,
+        `${home}: verdict ${verdict} under a waiver`,
+      )
+      assertEq(
+        (parsed.reviewRecord as { via?: string })?.via,
+        'waived',
+        `${home}: via waived is a recordable value`,
+      )
+    }
+  }
+})
+
+check('reviewRecord: the laundering vocabulary is REJECTED — verdict "CLEAN", via "inline"', () => {
+  for (const [home, define] of SCHEMA_HOMES) {
+    assertThrows(
+      () => phaseWithReview(define, { ...EXECUTED_REVIEW, verdict: 'CLEAN' }),
+      `${home}: a verdict outside the enum`,
+    )
+    assertThrows(
+      () => phaseWithReview(define, { ...EXECUTED_REVIEW, via: 'inline' }),
+      `${home}: via "inline" — the exact word the incident commit used`,
+    )
+  }
+})
+
+check('reviewRecord: every field is REQUIRED once the record is present', () => {
+  for (const [home, define] of SCHEMA_HOMES) {
+    for (const key of ['date', 'model', 'verdict', 'via']) {
+      const partial: Record<string, string> = { ...EXECUTED_REVIEW }
+      delete partial[key]
+      assertThrows(() => phaseWithReview(define, partial), `${home}: a record missing ${key}`)
+    }
+  }
+})
+
+check('reviewRecord: length floors are exact — date 8 and model 2 accept, 7 and 1 reject', () => {
+  for (const [home, define] of SCHEMA_HOMES) {
+    assertEq(
+      (phaseWithReview(define, { ...EXECUTED_REVIEW, date: '20260901' }).reviewRecord as {
+        date?: string
+      })?.date,
+      '20260901',
+      `${home}: an 8-char date sits ON the floor, not under it`,
+    )
+    assertThrows(
+      () => phaseWithReview(define, { ...EXECUTED_REVIEW, date: '2026-9-' }),
+      `${home}: a 7-char date`,
+    )
+    assertEq(
+      (phaseWithReview(define, { ...EXECUTED_REVIEW, model: 'k2' }).reviewRecord as {
+        model?: string
+      })?.model,
+      'k2',
+      `${home}: a 2-char model id sits ON the floor`,
+    )
+    assertThrows(
+      () => phaseWithReview(define, { ...EXECUTED_REVIEW, model: 'k' }),
+      `${home}: a 1-char model id`,
+    )
+  }
 })
 
 check('arc descopes + criteriaRatifications: accepted; a descope missing ratifiedBy rejects', () => {

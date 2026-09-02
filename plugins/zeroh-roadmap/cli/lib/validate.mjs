@@ -82,7 +82,12 @@ export function validateRoadmapFile(absPath, { strict = false } = {}) {
   const warnings = isPhase && parsed
     ? [
         ...(isNewToGit(normalized)
-          ? [...stepVerifyGrammarWarnings(parsed), ...verifyPolarityWarnings(parsed), ...stepDescriptionLengthWarnings(parsed)]
+          ? [
+              ...stepVerifyGrammarWarnings(parsed),
+              ...verifyPolarityWarnings(parsed),
+              ...stepDescriptionLengthWarnings(parsed),
+              ...citationIntegrityWarnings(parsed, normalized),
+            ]
           : []),
         ...driverLaneWarnings(parsed),
         ...attributionWarnings(parsed),
@@ -177,6 +182,50 @@ function stepDescriptionLengthWarnings(phase) {
           `narration; rationale lives in the designRef/execution prompt (plan-phase step contract)`,
       )
     }
+  }
+  return out
+}
+
+/** WARN when new phase prose cites a repo path that neither exists at HEAD nor is planned. */
+function citationIntegrityWarnings(phase, normalizedPath) {
+  let repo
+  try {
+    repo = gitToplevel(dirname(normalizedPath))
+  } catch {
+    return []
+  }
+  const planned = new Set(
+    (Array.isArray(phase?.tasks) ? phase.tasks : [])
+      .flatMap((task) => Array.isArray(task?.files) ? task.files : [])
+      .filter((file) => typeof file === 'string'),
+  )
+  const prose = [
+    typeof phase?.notes === 'string' ? phase.notes : '',
+    ...(Array.isArray(phase?.tasks) ? phase.tasks.flatMap((task) => [
+      typeof task?.problem === 'string' ? task.problem : '',
+      ...(Array.isArray(task?.steps) ? task.steps.map((step) =>
+        typeof step?.description === 'string' ? step.description : '') : []),
+    ]) : []),
+  ]
+  const citations = new Set(
+    prose.flatMap((text) => text.match(/(?<![\w./-])(?:src|cli|lib|scripts|plugins|roadmap|docs|web)\/[\w./-]+\.\w+/g) ?? []),
+  )
+  const out = []
+  for (const citedPath of citations) {
+    if (planned.has(citedPath)) continue
+    try {
+      execFileSync('git', ['-C', repo, 'cat-file', '-e', `HEAD:${citedPath}`], {
+        stdio: 'ignore',
+        timeout: 10_000,
+      })
+      continue
+    } catch (err) {
+      if (err?.code === 'ENOENT') return []
+    }
+    out.push(
+      `[zeroh-roadmap] WARN phase ${phase?.phase ?? '?'}: citation '${citedPath}' does not exist at HEAD `
+        + 'and is not declared in this phase\'s files[] — verify the anchor (atlas-41 invented-prose incident class)',
+    )
   }
   return out
 }

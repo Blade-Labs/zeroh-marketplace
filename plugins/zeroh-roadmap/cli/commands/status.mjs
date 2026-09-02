@@ -18,6 +18,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { scanProgress, scanPhaseFile } from '../lib/phasescan.mjs'
 import { arcProgress } from '../lib/derive.mjs'
 import { lastEvent, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN, WORK_EVENTS } from '../lib/beacon.mjs'
@@ -33,6 +34,35 @@ const git = (args, cwd) => {
 }
 
 const fmtMin = (m) => (m < 60 ? `${Math.round(m)}m` : m < 2880 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`)
+
+/** Return the cache/source version advisory for a running cached plugin, else null. */
+export function versionDriftLine({ selfPath }) {
+  const match = resolve(selfPath).match(
+    /^(.*[\\/]plugins)[\\/]cache[\\/]([^\\/]+)[\\/]([^\\/]+)[\\/]([^\\/]+)(?:[\\/]|$)/,
+  )
+  if (!match) return null
+  const [, pluginsRoot, marketplace, plugin, cacheVersionDir] = match
+  try {
+    const cacheRoot = join(pluginsRoot, 'cache', marketplace, plugin, cacheVersionDir)
+    const running = JSON.parse(readFileSync(join(cacheRoot, '.claude-plugin', 'plugin.json'), 'utf8'))
+    const marketplaces = JSON.parse(readFileSync(join(pluginsRoot, 'known_marketplaces.json'), 'utf8'))
+    const registryEntry = marketplaces?.[marketplace]
+    if (registryEntry?.source?.source !== 'directory' || typeof registryEntry.source.path !== 'string') return null
+    const marketplaceRoot = registryEntry.source.path
+    const marketplaceManifest = JSON.parse(
+      readFileSync(join(marketplaceRoot, '.claude-plugin', 'marketplace.json'), 'utf8'),
+    )
+    const sourceEntry = marketplaceManifest?.plugins?.find((entry) => entry?.name === plugin)
+    if (typeof sourceEntry?.source !== 'string') return null
+    const source = JSON.parse(
+      readFileSync(join(marketplaceRoot, sourceEntry.source, '.claude-plugin', 'plugin.json'), 'utf8'),
+    )
+    if (!running?.version || !source?.version || running.version === source.version) return null
+    return `plugin: running ${running.version} from cache, source is ${source.version} — update via /plugin`
+  } catch {
+    return null
+  }
+}
 
 /**
  * Read the consumer's async post-merge sweep marker and return ONE bounded banner
@@ -60,6 +90,7 @@ function postMergeRedLine(root) {
 
 function derive(root) {
   const derivedAt = new Date().toISOString()
+  const pluginDrift = versionDriftLine({ selfPath: fileURLToPath(import.meta.url) })
 
   // 1) Worktrees on disk (repo of the roadmap root)
   const repo = git(['rev-parse', '--show-toplevel'], root) || resolve(root, '..')
@@ -273,7 +304,7 @@ function derive(root) {
     }
   }
 
-  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes, strayError }
+  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes, strayError, pluginDrift }
 }
 
 function printHuman(m) {
@@ -281,6 +312,7 @@ function printHuman(m) {
   if (m.strayError) process.stderr.write(`  ⚠ ${m.strayError}\n`)
   const out = []
   out.push(`arc-status — derived ${m.derivedAt} (repo ${m.repo})\n`)
+  if (m.pluginDrift) out.push(`  ⚠ ${m.pluginDrift}\n`)
   if (m.postMergeRed) out.push(`  ⚠ ${m.postMergeRed}\n`)
   if (m.rows.length === 0) out.push('No arcs building, paused, or in-flight. All lanes free.')
   for (const r of m.rows) {
@@ -309,6 +341,7 @@ export default async function run(argv) {
       ...(model.noArcId.length ? [`in-progress phase(s) with NO arcId: ${model.noArcId.join(', ')}`] : []),
       ...(model.postMergeRed ? [model.postMergeRed] : []),
       ...(model.strayError ? [model.strayError] : []),
+      ...(model.pluginDrift ? [model.pluginDrift] : []),
     ]
     // Box capacity rides the --json machine shape ONLY (phase 11) — the human table is
     // parity-pinned byte-compatible and never carries it.
