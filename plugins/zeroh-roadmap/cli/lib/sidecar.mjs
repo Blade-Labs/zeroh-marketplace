@@ -15,6 +15,7 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { mainCheckout, gitCommonDir } from './gitroot.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 /** A lane already armed by a DIFFERENT worktree — never overwrite it. */
 export class LaneHeldError extends Error {
@@ -29,7 +30,7 @@ export class LaneHeldError extends Error {
 
 /** The MAIN-checkout sidecar registry for the repo containing cwd. */
 export function buildingDir(cwd) {
-  return join(mainCheckout(cwd), 'roadmap', 'arcs', '.building')
+  return join(roadmapRoot(mainCheckout(cwd)), 'arcs', '.building')
 }
 
 function sidecarPath(cwd, arcId) {

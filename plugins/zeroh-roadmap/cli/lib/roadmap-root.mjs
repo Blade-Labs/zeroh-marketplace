@@ -21,7 +21,7 @@
  *    exactly what it answered before this module existed.
  */
 import { existsSync } from 'node:fs'
-import { join, resolve, isAbsolute } from 'node:path'
+import { join, resolve, relative, isAbsolute, sep } from 'node:path'
 import { BridgeError } from './bridge-error.mjs'
 
 /** The root homes, in PRECEDENCE order. Extending this list extends discovery everywhere. */
@@ -89,6 +89,19 @@ function probe(dir) {
     ])
   }
   return marked[0] ?? resolve(dir, ROOT_CANDIDATES[0])
+}
+
+/**
+ * The same answer spelled RELATIVE to `dir`, POSIX-separated and with no trailing slash —
+ * what git pathspecs (`git log -- <rel>/backlog.ts`), diff-path prefix tests and the
+ * repo-relative provenance strings cited in eval reports all need. Throws exactly where
+ * roadmapRoot throws: an ambiguous tree must never be handed a guessed pathspec.
+ * @param {string} dir
+ * @returns {string} e.g. 'roadmap' or 'docs/roadmap'
+ */
+export function roadmapRootRel(dir) {
+  const rel = relative(dir, roadmapRoot(dir))
+  return sep === '/' ? rel : rel.split(sep).join('/')
 }
 
 /**

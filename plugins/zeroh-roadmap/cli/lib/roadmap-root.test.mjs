@@ -308,9 +308,15 @@ import { resolve } from 'node:path'
 // down with it. The RED must be "this one export is missing", not "the module is gone".
 import * as roadmapRootModule from './roadmap-root.mjs'
 
-/** The root members a `roadmap/<member>` string can name. Deliberately CLOSED: broadening it
- *  to "any roadmap/…" would drag codex.mjs's prose `--doc roadmap/<name>.md` usage line in. */
-const ROOT_MEMBERS = ['backlog\\.ts', 'phases', 'arc-evals', 'arcs', 'archive', '\\.gate', 'roadmap\\.config\\.json']
+/** The root members a `roadmap/<member>` string can name — PLAIN names: the vocabulary the path
+ *  form is built from AND the vocabulary call sites concatenate onto roadmapRootRel(). Deliberately
+ *  CLOSED: broadening it to "any roadmap/…" would drag codex.mjs's prose `--doc roadmap/<name>.md`
+ *  usage line in. */
+const ROOT_MEMBERS = ['backlog.ts', 'phases', 'arc-evals', 'arcs', 'archive', '.gate', 'roadmap.config.json']
+
+/** ROOT_MEMBERS as a regex alternation — escaped here so the list above stays readable and stays
+ *  usable as real path segments below. */
+const memberAlt = () => ROOT_MEMBERS.map((m) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
 
 /** The argv form: a QUOTED root segment handed to join/resolve — `join(x, 'roadmap', …)`,
  *  `resolve(argv[0] ?? 'roadmap')`. Fresh regex per call: /g carries lastIndex. */
@@ -318,7 +324,7 @@ const argvForm = () => /(['"`])(?:docs\/)?roadmap\1\s*[,)]/g
 
 /** The path form: one QUOTED string that STARTS at the root and names a known member —
  *  'roadmap/backlog.ts', `roadmap/arc-evals/lessons.jsonl`, 'roadmap/.gate/'. */
-const pathForm = () => new RegExp(`(['"\`])(?:docs/)?roadmap/(?:${ROOT_MEMBERS.join('|')})`, 'g')
+const pathForm = () => new RegExp(`(['"\`])(?:docs/)?roadmap/(?:${memberAlt()})`, 'g')
 
 /**
  * Every non-test .mjs/.mts under cli/ (recursively: lib/, commands/, testdata/, testdata/eval-arc/,
@@ -396,13 +402,37 @@ test('roadmap-root.mjs: it is the ONLY home of the root literals left in non-tes
     'the home carries the ARGV form (the quoted root segment) — an exempt file with none of the literals it ' +
       'is exempt for is an empty exemption',
   )
-  assert.match(
-    home,
-    new RegExp(pathForm().source),
-    'the home carries the PATH form too (a quoted `roadmap/<member>` naming one of ' +
-      `${ROOT_MEMBERS.length} known members) — both shapes are what the scan flags everywhere else, so both ` +
-      'must live here; a home that owns only half of them leaves the other half homeless',
-  )
+  // The other half of the exemption: the PATH form. The home does NOT carry that shape, and must
+  // not — it returns a ROOT and callers join members onto it, so a 'roadmap/phases' string inside
+  // roadmap-root.mjs would be a value nothing reads, a literal planted only to satisfy this block.
+  // (Ruled by a PRIME RULE 1 architect call, phase 23 task 23.2: the original text anchor here was
+  // unsatisfiable by any correct implementation, and a guard that reds on lawful code gets deleted
+  // by the next person along with its real coverage.) What has to be true is stronger and
+  // behavioral: every path-form string the scan strips from a call site must be REBUILDABLE from
+  // the module, per member, under BOTH layouts — otherwise the stripped sites have nowhere to go
+  // and the scan above is buying a regression.
+  const plainTree = newTree()
+  writeAt([plainTree, 'roadmap', 'roadmap.config.json'])
+  const docsTree = newTree()
+  writeAt([docsTree, 'docs', 'roadmap', 'roadmap.config.json'])
+  for (const member of ROOT_MEMBERS) {
+    assert.equal(
+      `${roadmapRootRel(plainTree)}/${member}`,
+      `roadmap/${member}`,
+      `the path form 'roadmap/${member}' must respell as roadmapRootRel(dir) + '/${member}' — a member ` +
+        `the scan strips from every call site but the module cannot reproduce is a homeless literal`,
+    )
+    assert.equal(
+      `${roadmapRootRel(docsTree)}/${member}`,
+      `docs/roadmap/${member}`,
+      `and it must FOLLOW the resolved root: the whole point of the strip is that '${member}' moves with it`,
+    )
+    assert.equal(
+      join(roadmapRoot(docsTree), member),
+      join(docsTree, 'docs', 'roadmap', member),
+      `the ABSOLUTE spelling too — join(roadmapRoot(dir), '${member}') is the other replacement idiom`,
+    )
+  }
 })
 
 // ── roadmapRootRel: the repo-relative spelling (git pathspecs, diff prefixes, provenance) ──

@@ -48,6 +48,7 @@ import { scanPhaseFile } from './phasescan.mjs'
 import { productRepos, newestKeyFileAgeMin } from './product-repos.mjs'
 import { mainCheckout } from './gitroot.mjs'
 import { readTranscriptHead, isExecutorHead } from './agent-transcript.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 const ACTIVITY_COMMIT_MAX_MIN = 15
 const ACTIVITY_FILE_MAX_MIN = 10
@@ -134,7 +135,7 @@ export async function readLiveness({ sidecarPath, transcriptDir = null, env = pr
   // unknown as foreign would silently blind the arc to its own beacon, trading a false ALIVE for a
   // false STALLED. Unknown therefore stays adopted, exactly as before this filter existed, and only
   // a beacon we can PROVE belongs elsewhere is skipped.
-  const phasesDirs = [...new Set([join(worktree, 'roadmap', 'phases'), join(dirname(registryDir), '..', 'phases')])]
+  const phasesDirs = [...new Set([join(roadmapRoot(worktree), 'phases'), join(dirname(registryDir), '..', 'phases')])]
   // Per phase: 'ours' | 'foreign' | 'unknown'. A phase file that PARSES but declares no arcId is
   // 'foreign' rather than 'unknown', because an arc only ever executes phases carrying its arcId
   // (that is how membership is derived), so an arcless phase beacon is a standalone do-phase run

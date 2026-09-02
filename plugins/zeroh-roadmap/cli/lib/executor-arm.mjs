@@ -39,6 +39,7 @@ import { readBeaconLine } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
 import { productRepos } from './product-repos.mjs'
 import { listWorktrees } from './worktree.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 /** The one home for the arm-file path: `roadmap result check` reconciles against the same file. */
 export function armPath(worktree, phase) {
@@ -49,7 +50,7 @@ export const DEFAULT_AGENT_CARD = fileURLToPath(new URL('../../agents/phase-exec
 
 /** A phase's declared keyFiles; null means the file is absent, unreadable, or its declaration is underivable. */
 export function phaseKeyFiles(worktree, phase) {
-  const file = join(worktree, 'roadmap', 'phases', `phase-${phase}.phase.ts`)
+  const file = join(roadmapRoot(worktree), 'phases', `phase-${phase}.phase.ts`)
   if (!existsSync(file)) return null
   const parsed = scanPhaseFile(file)
   if (parsed === null) return null
@@ -90,7 +91,7 @@ export function productRepoOverlaps(worktree, phase, repos) {
     } catch {
       continue
     }
-    const stalePhases = new Set(staleArms(root, join(root, 'roadmap', 'phases')).map((arm) => arm.phase))
+    const stalePhases = new Set(staleArms(root, join(roadmapRoot(root), 'phases')).map((arm) => arm.phase))
     for (const name of arms) {
       const match = name.match(/^(\d+)-executor\.armed$/)
       if (!match) continue

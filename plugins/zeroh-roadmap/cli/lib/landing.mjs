@@ -22,6 +22,7 @@ import { readSidecar } from './sidecar.mjs'
 import { readValidateVerdict, runDebtCensus, DeriveError } from './derive.mjs'
 import { derivePhaseStartSha, GitScanError } from './gitscan.mjs'
 import { defaultExec } from './exec.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 /** A typed landing failure. kind ∈ 'tsx-absent' | 'load' | 'usage'. */
 export class LandingError extends Error {
@@ -34,9 +35,9 @@ export class LandingError extends Error {
   }
 }
 
-const arcFilePath = (repoRoot, arcId) => join(repoRoot, 'roadmap', 'arcs', `${arcId}.arc.ts`)
-const phaseFilePath = (repoRoot, n) => join(repoRoot, 'roadmap', 'phases', `phase-${n}.phase.ts`)
-const lessonsPath = (root) => join(root, 'roadmap', 'arc-evals', 'lessons.jsonl')
+const arcFilePath = (repoRoot, arcId) => join(roadmapRoot(repoRoot), 'arcs', `${arcId}.arc.ts`)
+const phaseFilePath = (repoRoot, n) => join(roadmapRoot(repoRoot), 'phases', `phase-${n}.phase.ts`)
+const lessonsPath = (root) => join(roadmapRoot(root), 'arc-evals', 'lessons.jsonl')
 
 /** Merge a lane's append-only lesson corpus into the primary by exact-line identity. */
 export function mergeLaneLessons(primaryRoot, laneDir) {
@@ -643,11 +644,11 @@ Promise.all([import('file://' + schemaPath), import('node:fs')]).then(([m, fs]) 
 /** Write the RunnerSummary keyed (never overwritten) + the latest pointer. */
 function writeRunnerSummary(repoRoot, summary) {
   const day = new Date().toISOString().slice(0, 10)
-  const dir = join(repoRoot, 'roadmap', 'arc-summaries')
+  const dir = join(roadmapRoot(repoRoot), 'arc-summaries')
   mkdirSync(dir, { recursive: true })
   const keyed = join(dir, `${summary.arcId}-${day}.json`)
   if (!existsSync(keyed)) writeFileSync(keyed, JSON.stringify(summary, null, 2) + '\n') // keyed history is never overwritten
-  writeFileSync(join(repoRoot, 'roadmap', 'arc-summary.json'), JSON.stringify(summary, null, 2) + '\n')
+  writeFileSync(join(roadmapRoot(repoRoot), 'arc-summary.json'), JSON.stringify(summary, null, 2) + '\n')
   return keyed
 }
 
@@ -759,7 +760,7 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
       record.push({ step: 'worktree-remove', worktree: state.sidecar.worktree })
     }
     removeSidecar(home, arcId)
-    rmSync(join(home, 'roadmap', 'arcs', `${arcId}-RESUME.md`), { force: true })
+    rmSync(join(roadmapRoot(home), 'arcs', `${arcId}-RESUME.md`), { force: true })
     releaseClaims(home, state.members.map((m) => m.num))
     record.push({ step: 'cleanup', removed: ['.building sidecar', 'RESUME.md', 'claims'] })
     // Every landed member's codex lane, through the SAME rail the phase land uses. This is the

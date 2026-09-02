@@ -30,6 +30,7 @@ import { derivePhaseStartSha, GitScanError } from './gitscan.mjs'
 import { readSidecar } from './sidecar.mjs'
 import { classifyBand } from './ladder.mjs'
 import { defaultExec } from './exec.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 /** A typed derivation failure. kind ∈ 'tsx-absent' | 'load' | 'malformed-artifact'. */
 export class DeriveError extends Error {
@@ -43,8 +44,8 @@ export class DeriveError extends Error {
 }
 
 const pluginRoot = () => resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const arcFilePath = (repoRoot, arcId) => join(repoRoot, 'roadmap', 'arcs', `${arcId}.arc.ts`)
-const phaseFilePath = (repoRoot, n) => join(repoRoot, 'roadmap', 'phases', `phase-${n}.phase.ts`)
+const arcFilePath = (repoRoot, arcId) => join(roadmapRoot(repoRoot), 'arcs', `${arcId}.arc.ts`)
+const phaseFilePath = (repoRoot, n) => join(roadmapRoot(repoRoot), 'phases', `phase-${n}.phase.ts`)
 
 /** Typed read of a roadmap file through the consumer tsx — STRICT (tsx absent ⇒ loud). */
 function typedRead(path, repoRoot) {
@@ -61,7 +62,7 @@ function typedRead(path, repoRoot) {
 
 /** roadmap/.gate/arc-<arcId>/validate.json → { arcId, verdict, at, note? } | null. Strict parse. */
 export function readValidateVerdict(repoRoot, arcId) {
-  const p = join(repoRoot, 'roadmap', '.gate', `arc-${arcId}`, 'validate.json')
+  const p = join(roadmapRoot(repoRoot), '.gate', `arc-${arcId}`, 'validate.json')
   if (!existsSync(p)) return null
   let raw
   try {
@@ -131,7 +132,7 @@ export function debtCensusJson(repoRoot, { includeArchive = false, exec = defaul
 
 /** roadmap/arc-summary.json (the latest pointer) iff it names THIS arc. */
 function readArcSummary(repoRoot, arcId) {
-  const p = join(repoRoot, 'roadmap', 'arc-summary.json')
+  const p = join(roadmapRoot(repoRoot), 'arc-summary.json')
   if (!existsSync(p)) return null
   try {
     const s = JSON.parse(readFileSync(p, 'utf8'))

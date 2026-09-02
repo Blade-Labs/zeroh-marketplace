@@ -24,6 +24,7 @@ import { z } from 'zod'
 import { liveArm, staleArms } from './executor-arm.mjs'
 import { gitToplevel } from './gitroot.mjs'
 import { loadConfig } from './config.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 /** Policy defaults, grounded in the shared dev box's contract (capbuild MemoryMax 6G);
  *  every field overridable per box via roadmap.config.json `capacity`. */
@@ -82,7 +83,7 @@ export const defaultProbes = {
     // fail CLOSED on stale evidence. staleArms is the staleness oracle — subtract its set.
     const stale = new Set()
     try {
-      for (const s of staleArms(toplevel, join(toplevel, 'roadmap', 'phases'))) stale.add(s.file)
+      for (const s of staleArms(toplevel, join(roadmapRoot(toplevel), 'phases'))) stale.add(s.file)
     } catch {
       /* no oracle → fall back to liveArm alone (conservative) */
     }

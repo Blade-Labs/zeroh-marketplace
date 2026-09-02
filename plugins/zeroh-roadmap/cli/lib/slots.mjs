@@ -16,6 +16,7 @@ import { matchGlob, matchGlobPath } from './ladder.mjs'
 import { runCaptured } from './exec.mjs'
 import { createWriteStream, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { roadmapRootRel, ROOT_CANDIDATES } from './roadmap-root.mjs'
 
 /** The scoped-slot fallback note — gate-protocol.md:72-81, VERBATIM. Defined ONCE;
  *  callers machine-emit it into the GateRunReport. Never restated. */
@@ -66,7 +67,9 @@ export function resolveSlot(cfg, slot, sub = {}) {
   return { slot, command: r.cmd }
 }
 
-const VACUITY_PROBE_TARGET = 'roadmap/.gate/__vacuity_probe_does_not_exist__.test.ts'
+/** A target that CANNOT exist, inside the consumer's own gate dir so a runner that globs the
+ *  repo still resolves it the way it resolves a real scoped target. */
+const vacuityProbeTarget = (cwd) => `${roadmapRootRel(cwd)}/.gate/__vacuity_probe_does_not_exist__.test.ts`
 const VACUITY_PROBE_TIMEOUT_MS = 120_000
 const VACUOUS_SCOPED_RUNNER_MESSAGE =
   'scoped runner cannot fail on a missing target — a green scoped slot proves nothing (vacuous-green class)'
@@ -82,13 +85,14 @@ export async function probeScopedSlot(template, { cwd, timeoutMs = VACUITY_PROBE
   if (typeof template !== 'string' || template === 'none' || !template.includes('{files}')) {
     return { vacuous: null, message: 'not a scoped template' }
   }
-  const substituted = substitute(template, { files: [VACUITY_PROBE_TARGET] })
+  const probeTarget = vacuityProbeTarget(cwd)
+  const substituted = substitute(template, { files: [probeTarget] })
   if (substituted.error) {
     return { vacuous: null, message: `gate cannot run: ${substituted.error}` }
   }
 
   const command = substituted.cmd
-  const probed = { command, target: VACUITY_PROBE_TARGET }
+  const probed = { command, target: probeTarget }
   const r = await runCaptured(command, { cwd, timeoutMs })
   if (r.spawnError) return { ...probed, ...r, vacuous: null, message: `probe spawn error: ${r.spawnError}` }
   if (r.timedOut) return { ...probed, ...r, vacuous: null, message: `scoped runner probe timed out after ${timeoutMs}ms` }
@@ -216,7 +220,7 @@ const HISTORY_COMMENT_RE = /\bphase[- ]?\d{3,4}\b|\b20\d{2}-\d{2}-\d{2}\b|\bv\d+
  * lines never match (a version literal in code is data, not narration); removed/context
  * lines are invisible. Pure over the diff text — no filesystem, no git.
  */
-export function historyCommentFindings(diffText) {
+export function historyCommentFindings(diffText, roadmapRel = ROOT_CANDIDATES[0]) {
   const findings = []
   let file = null
   let exempt = false
@@ -224,7 +228,7 @@ export function historyCommentFindings(diffText) {
   for (const raw of String(diffText).split('\n')) {
     if (raw.startsWith('+++ ')) {
       file = raw.replace(/^\+\+\+ (b\/)?/, '').trim()
-      exempt = file.startsWith('roadmap/') || file === '/dev/null'
+      exempt = file.startsWith(`${roadmapRel}/`) || file === '/dev/null'
       continue
     }
     const hunk = raw.match(/^@@ -\d+(?:,\d+)? \+(\d+)/)

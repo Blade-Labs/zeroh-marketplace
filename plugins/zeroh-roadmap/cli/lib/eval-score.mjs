@@ -24,6 +24,11 @@
  * They are named, documented, and changed deliberately — a change is a baseline reset.
  */
 
+// The repo-relative root, for the provenance strings a sentinel cites when it found nothing to
+// read. ROOT_CANDIDATES[0] is the resolver's OWN default (what roadmapRoot returns on an
+// unmarked tree), never a second spelling of it; the command layer passes the resolved root.
+import { ROOT_CANDIDATES } from './roadmap-root.mjs'
+
 /** The CLOSED seven, in contract order. Mirrors EvalDimensionKeyShape. */
 export const DIMENSION_KEYS = [
   'code-confidence',
@@ -183,7 +188,7 @@ const round1 = (n) => Math.round(n * 10) / 10
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length
 const sum = (xs) => xs.reduce((a, b) => a + b, 0)
 
-const phaseRef = (n) => `roadmap/phases/phase-${n}.phase.ts`
+const phaseRef = (rootRel, n) => `${rootRel}/phases/phase-${n}.phase.ts`
 
 /** A dimension that could not be computed: the named sentinel and NO number beside it. */
 const sentinelDimension = (owner, sentinel, signals, sourceRefs) => ({ owner, sentinel, signals, sourceRefs })
@@ -214,12 +219,12 @@ export function spanMinutes(metrics) {
  * phase, so the signal is the arc's OWN rework that escaped the gate rather than every fix
  * that later brushed a file the arc touched.
  */
-function scoreCodeConfidence(trace, readable) {
+function scoreCodeConfidence(trace, readable, rootRel) {
   const runs = readable.flatMap((p) => p.gateRuns ?? [])
   const recorded = readable.filter((p) => typeof p.executionResult?.gateRounds === 'number')
   const sourceRefs = [
-    ...readable.map((p) => phaseRef(p.phase)),
-    ...readable.filter((p) => (p.gateRuns ?? []).length > 0).map((p) => `roadmap/.gate/${p.phase}/`),
+    ...readable.map((p) => phaseRef(rootRel, p.phase)),
+    ...readable.filter((p) => (p.gateRuns ?? []).length > 0).map((p) => `${rootRel}/.gate/${p.phase}/`),
   ]
   // An empty escape list counts as evidence ONLY when the scan actually ran. A failed scan
   // that reported zero would RAISE this score, turning a broken git read into a reward.
@@ -232,7 +237,7 @@ function scoreCodeConfidence(trace, readable) {
       'deterministic',
       'no-gate-records',
       { phasesConsidered: readable.length, escapeFixes: escapeScanRan ? escapeCount : 'scan-unavailable' },
-      sourceRefs.length > 0 ? sourceRefs : ['roadmap/.gate/'],
+      sourceRefs.length > 0 ? sourceRefs : [`${rootRel}/.gate/`],
     )
 
   // Recorded gateRounds is the phase's own claim; the .gate run files are the corroboration.
@@ -276,7 +281,7 @@ function scoreCodeConfidence(trace, readable) {
       escapeWindow: trace.git?.escapeWindow ?? 'unrecorded',
       phasesConsidered: readable.length,
     },
-    sourceRefs: sourceRefs.length > 0 ? sourceRefs : ['roadmap/.gate/'],
+    sourceRefs: sourceRefs.length > 0 ? sourceRefs : [`${rootRel}/.gate/`],
   }
 }
 
@@ -287,12 +292,12 @@ function scoreCodeConfidence(trace, readable) {
  * score is the weighted met share. Weighting the DENOMINATOR the same way is what keeps a
  * weak-evidence arc from scoring high just by asking easy questions.
  */
-function scoreVerifiedVsIntent(trace) {
+function scoreVerifiedVsIntent(trace, rootRel) {
   if (!trace.verdicts)
-    return sentinelDimension('deterministic', 'no-verdicts-file', { verdicts: 0 }, ['roadmap/arc-evals/ (no verdicts file)'])
+    return sentinelDimension('deterministic', 'no-verdicts-file', { verdicts: 0 }, [`${rootRel}/arc-evals/ (no verdicts file)`])
 
   const verdicts = trace.verdicts.verdicts ?? []
-  const ref = `roadmap/arc-evals/${trace.arcId}-${trace.verdicts.date}-verdicts.json`
+  const ref = `${rootRel}/arc-evals/${trace.arcId}-${trace.verdicts.date}-verdicts.json`
   if (verdicts.length === 0)
     return sentinelDimension('deterministic', 'no-verdicts-file', { verdicts: 0 }, [ref])
 
@@ -347,11 +352,11 @@ function scoreVerifiedVsIntent(trace) {
  * every timed phase recorded a halt there is nothing halt-free left to score, so the
  * elapsed view is used and the fallback is named in the signals rather than hidden.
  */
-function scoreSpeed(readable) {
+function scoreSpeed(readable, rootRel) {
   const timed = readable.filter((p) => spanMinutes(p.metrics) !== null)
-  const refs = timed.map((p) => `${phaseRef(p.phase)}#metrics`)
+  const refs = timed.map((p) => `${phaseRef(rootRel, p.phase)}#metrics`)
   if (timed.length === 0)
-    return sentinelDimension('deterministic', 'no-timestamps', { timedPhases: 0 }, ['roadmap/phases/ (no phase records a time axis)'])
+    return sentinelDimension('deterministic', 'no-timestamps', { timedPhases: 0 }, [`${rootRel}/phases/ (no phase records a time axis)`])
 
   const elapsedMinutes = sum(timed.map((p) => spanMinutes(p.metrics)))
   const haltFree = timed.filter((p) => !(p.metrics.haltCount > 0))
@@ -388,8 +393,8 @@ function scoreSpeed(readable) {
  * counts of things already recorded — they are inputs to a judgement, never a judgement, which
  * is why a backfill keeps every one of them and changes only which sentinel sits beside them.
  */
-function judgeDimensions(trace, readable, sentinel) {
-  const refs = readable.map((p) => phaseRef(p.phase))
+function judgeDimensions(trace, readable, sentinel, rootRel) {
+  const refs = readable.map((p) => phaseRef(rootRel, p.phase))
   const results = readable.map((p) => p.executionResult).filter(Boolean)
   const reports = readable.flatMap((p) => p.transparency ?? [])
   const withMetrics = readable.filter((p) => p.metrics)
@@ -467,7 +472,7 @@ function judgeDimensions(trace, readable, sentinel) {
  * folding an unreadable phase in as zeros would invent data, and dropping it silently would
  * quietly improve every average it should have dragged down.
  */
-export function scoreArcTrace(trace, { backfill = false } = {}) {
+export function scoreArcTrace(trace, { backfill = false, rootRel = ROOT_CANDIDATES[0] } = {}) {
   const notes = []
   // Named in notes rather than left to be inferred from the sentinel: the sentinel says a
   // dimension is unjudged, the note says WHY it will stay that way and what it cost.
@@ -510,10 +515,10 @@ export function scoreArcTrace(trace, { backfill = false } = {}) {
     )
 
   const dimensions = {
-    'code-confidence': scoreCodeConfidence(trace, readable),
-    'verified-vs-intent': scoreVerifiedVsIntent(trace),
-    ...judgeDimensions(trace, readable, backfill ? BACKFILL_SENTINEL : PENDING_JUDGE_SENTINEL),
-    speed: scoreSpeed(readable),
+    'code-confidence': scoreCodeConfidence(trace, readable, rootRel),
+    'verified-vs-intent': scoreVerifiedVsIntent(trace, rootRel),
+    ...judgeDimensions(trace, readable, backfill ? BACKFILL_SENTINEL : PENDING_JUDGE_SENTINEL, rootRel),
+    speed: scoreSpeed(readable, rootRel),
   }
   // Rebuild in contract order: the report's key order IS part of the archive's readability.
   const ordered = {}

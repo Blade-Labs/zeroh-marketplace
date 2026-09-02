@@ -24,6 +24,7 @@
  * proposal (arc EVALLOOP: a lane-less proposal is not ready).
  */
 import { PENDING_JUDGE_SENTINEL } from './eval-score.mjs'
+import { ROOT_CANDIDATES } from './roadmap-root.mjs'
 import { PROTOCOL_LOAD_BUDGET_TOKENS } from './measure-budget.mjs'
 
 /** Below this a dimension is a recurring weak spot. Strict: a score sitting exactly on the
@@ -31,9 +32,12 @@ import { PROTOCOL_LOAD_BUDGET_TOKENS } from './measure-budget.mjs'
  *  manufacture findings out of noise. */
 export const LOW_SCORE_THRESHOLD = 70
 
-/** The corpus home, repo-relative, so every citation opens from the consumer root. */
-const ARC_EVALS_DIR = 'roadmap/arc-evals'
-const LESSONS_PATH = `${ARC_EVALS_DIR}/lessons.jsonl`
+/** The corpus home, repo-relative, so every citation opens from the consumer root. Taken from
+ *  the resolved root rather than spelled here: a docs/roadmap consumer cites its own paths.
+ *  ROOT_CANDIDATES[0] is the resolver's OWN default (what an unmarked tree resolves to), and
+ *  the command layer passes the real one. */
+const arcEvalsDir = (rootRel) => `${rootRel}/arc-evals`
+const lessonsPath = (rootRel) => `${arcEvalsDir(rootRel)}/lessons.jsonl`
 
 /** Where a proposal's home repo is, per finding class. `recurring-lesson-key` is absent on
  *  purpose: its lane comes from the KEY, not the class, and a default here would hand every
@@ -73,7 +77,7 @@ const PATH_TOKEN_RE = /(^|[\s(])([A-Za-z0-9_.@-]*\/[A-Za-z0-9_./@-]+)/
  * cli/commands/eval.mjs — as the ONE definition of "a report" instead of forking a second one
  * that also carries filenames.
  */
-const reportPath = (r) => `${ARC_EVALS_DIR}/${r.arcId}-${r.date}.json`
+const reportPath = (rootRel, r) => `${arcEvalsDir(rootRel)}/${r.arcId}-${r.date}.json`
 
 /** Slug for a proposal id: the ProposalShape id regex is /^[a-z0-9-]+$/, so every other
  *  character folds to a hyphen. Stable over a cluster key, which is what makes a re-run land on
@@ -110,13 +114,13 @@ export function extractLessonKey(text) {
  * @param {object[]} reports parsed arc-eval reports, as `readPriorReports` returns them
  * @param {object[]} lessons parsed lesson records from the sidecar (absent sidecar => [])
  */
-export function extractFindings(reports, lessons) {
+export function extractFindings(reports, lessons, { rootRel = ROOT_CANDIDATES[0] } = {}) {
   const findings = []
   const add = (findingClass, clusterKey, file, jsonPath, excerpt) =>
     findings.push({ findingClass, clusterKey, evidence: { file, jsonPath, excerpt } })
 
   for (const r of reports ?? []) {
-    const file = reportPath(r)
+    const file = reportPath(rootRel, r)
 
     r.ratchet?.forEach((row, i) => {
       if (row?.regression !== true || !row.dimension) return
@@ -177,7 +181,7 @@ export function extractFindings(reports, lessons) {
     // than one that admits it cannot say. The fallback holds only for a caller that filtered
     // nothing, which is the fixture case.
     const line = Number.isInteger(l?.sourceLine) && l.sourceLine > 0 ? l.sourceLine : i + 1
-    add('recurring-lesson-key', key, LESSONS_PATH, `lines[${line}]`, String(l.text))
+    add('recurring-lesson-key', key, lessonsPath(rootRel), `lines[${line}]`, String(l.text))
   })
 
   return findings
@@ -246,17 +250,17 @@ const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length
  *  input has to come from the cluster's own citations rather than from a re-filter of the corpus:
  *  a reader checking the number opens exactly those files, and a second filtering rule here could
  *  disagree with the one that built the evidence. */
-function citedReports(cluster, reports) {
+function citedReports(cluster, reports, rootRel) {
   const cited = new Set(cluster.evidence.map((e) => e.file))
-  return (reports ?? []).filter((r) => cited.has(reportPath(r)))
+  return (reports ?? []).filter((r) => cited.has(reportPath(rootRel, r)))
 }
 
 /** The protocol-load measurements behind a protocol-load cluster, read STRUCTURALLY off the cited
  *  reports. Both the satisfaction ratio and the proposal's reductionTarget derive from this one
  *  reading: two derivations of one number could disagree, and a number a reader recomputes from
  *  the citations has to be the number the document carries. */
-const citedProtocolLoadTokens = (cluster, reports) =>
-  citedReports(cluster, reports)
+const citedProtocolLoadTokens = (cluster, reports, rootRel) =>
+  citedReports(cluster, reports, rootRel)
     .map((r) => r.workflow?.protocolLoadTokens)
     .filter((t) => typeof t === 'number')
 
@@ -272,7 +276,7 @@ const clusterDimension = (cluster) =>
  * substitute a zero for an absent measurement: a zero reads as "measured, and terrible", which
  * would float exactly the proposals nobody has evidence for to the top of the queue.
  */
-function measureSatisfaction(cluster, reports) {
+function measureSatisfaction(cluster, reports, rootRel) {
   const all = reports ?? []
   const dimension = clusterDimension(cluster)
 
@@ -281,7 +285,7 @@ function measureSatisfaction(cluster, reports) {
     return { satisfaction: null, satisfactionSource: SATISFACTION_UNMEASURED }
 
   if (cluster.findingClass === 'protocol-load-over-budget') {
-    const measured = citedProtocolLoadTokens(cluster, all)
+    const measured = citedProtocolLoadTokens(cluster, all, rootRel)
     if (measured.length === 0) return { satisfaction: null, satisfactionSource: SATISFACTION_UNMEASURED }
     const measuredMean = mean(measured)
     // Clamped at 1 before scaling: a load UNDER budget is fully satisfied and no more than fully.
@@ -324,7 +328,7 @@ function measureSatisfaction(cluster, reports) {
  * it. An unmeasured satisfaction contributes nothing at all — exactly importance, never importance
  * doubled — which is what stops an unmeasurable class out-ranking a measured one on nothing.
  */
-export function computeOpportunity(cluster, reports) {
+export function computeOpportunity(cluster, reports, rootRel = ROOT_CANDIDATES[0]) {
   const ruling = IMPORTANCE_RULINGS.rulings.find((r) => r.findingClass === cluster.findingClass)
   if (!ruling)
     // Unreachable while the table and FindingClassShape stay closed over the same enum — which is
@@ -335,7 +339,7 @@ export function computeOpportunity(cluster, reports) {
         'must carry exactly one row per finding class',
     )
 
-  const { satisfaction, satisfactionSource } = measureSatisfaction(cluster, reports)
+  const { satisfaction, satisfactionSource } = measureSatisfaction(cluster, reports, rootRel)
   return {
     importance: ruling.importance,
     satisfaction,
@@ -385,8 +389,8 @@ function stableJson(value) {
  * acts, and a pass able to mint them would be a pass able to approve its own proposals — the
  * proposer-is-never-the-actor rail, expressed as the one value this code may write.
  */
-export function buildProposal(cluster, reports, nowIso) {
-  const opportunity = computeOpportunity(cluster, reports)
+export function buildProposal(cluster, reports, nowIso, rootRel = ROOT_CANDIDATES[0]) {
+  const opportunity = computeOpportunity(cluster, reports, rootRel)
   const doc = {
     id: proposalId(cluster),
     findingClass: cluster.findingClass,
@@ -413,7 +417,7 @@ export function buildProposal(cluster, reports, nowIso) {
       // The MEAN of the cited measurements, rounded to a whole token. Derived from the cluster's
       // own citations, so the figure a reader recomputes from the evidence is the figure here —
       // and it is TOKENS, never a currency estimate the corpus cannot support.
-      measuredTokens: Math.round(mean(citedProtocolLoadTokens(cluster, reports))),
+      measuredTokens: Math.round(mean(citedProtocolLoadTokens(cluster, reports, rootRel))),
       budgetTokens: PROTOCOL_LOAD_BUDGET_TOKENS,
       ledger: DIET_LEDGER,
     }
@@ -490,7 +494,7 @@ export function readProposalDocs(fs, proposalsDir) {
  * the fs seam. A validation failure therefore leaves the directory exactly as it found it, rather
  * than half a run's worth of files and one exception.
  */
-export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
+export function consolidateAndWrite(clusters, reports, proposalsDir, deps, rootRel = ROOT_CANDIDATES[0]) {
   if (!deps || typeof deps !== 'object') throw new Error('eval-propose: consolidateAndWrite requires a deps object carrying fs, now and validate')
   for (const name of ['fs', 'now', 'validate'])
     if (!deps[name]) throw new Error(`eval-propose: consolidateAndWrite requires an injected '${name}' — there is no safe default for it`)
@@ -594,7 +598,7 @@ export function consolidateAndWrite(clusters, reports, proposalsDir, deps) {
       continue
     }
 
-    const fresh = buildProposal(cluster, reports, nowIso)
+    const fresh = buildProposal(cluster, reports, nowIso, rootRel)
     if (!existing) {
       if (!stage(`${proposalsDir}/${id}.json`, fresh, false)) continue
       created += 1

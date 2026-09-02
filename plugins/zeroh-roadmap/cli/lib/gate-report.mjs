@@ -16,6 +16,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 const RETAIN = 5
 // Reports attached to phases completed before the no-self-judge rule landed are immutable
@@ -92,7 +93,7 @@ export const AgentRoundInputShape = z.object({
 })
 
 export function gateDir(toplevel, phase) {
-  return join(toplevel, 'roadmap', '.gate', String(phase))
+  return join(roadmapRoot(toplevel), '.gate', String(phase))
 }
 
 function runFiles(dir) {
@@ -104,7 +105,7 @@ function runFiles(dir) {
 }
 
 function ensureSelfGitignore(toplevel) {
-  const gateRoot = join(toplevel, 'roadmap', '.gate')
+  const gateRoot = join(roadmapRoot(toplevel), '.gate')
   mkdirSync(gateRoot, { recursive: true })
   const gi = join(gateRoot, '.gitignore')
   if (!existsSync(gi)) writeFileSync(gi, '*\n')

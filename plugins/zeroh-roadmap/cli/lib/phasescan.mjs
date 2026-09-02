@@ -7,6 +7,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { defaultExec } from './exec.mjs'
+import { roadmapRootRel } from './roadmap-root.mjs'
 
 const STATUS_RE = /status:\s*'([a-z-]+)'/
 const DECLARED_RE = /(?:^|[{,])\s*phase:\s*(\d+)\s*,/m
@@ -236,7 +237,7 @@ export function maxRemotePhase(repoRoot, upstreamRef, exec = defaultExec) {
   if (!upstreamRef) return 0
   let res
   try {
-    res = exec('git', ['ls-tree', '-r', '--name-only', upstreamRef, 'roadmap/phases'], { cwd: repoRoot })
+    res = exec('git', ['ls-tree', '-r', '--name-only', upstreamRef, `${roadmapRootRel(repoRoot)}/phases`], { cwd: repoRoot })
   } catch {
     return 0 // a spawn failure is not a claim failure
   }

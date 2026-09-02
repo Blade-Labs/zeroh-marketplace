@@ -30,6 +30,7 @@ import { defaultExec } from './exec.mjs'
 import { GateRunReportShape } from './gate-report.mjs'
 import { flowTokens } from '../commands/measure.mjs'
 import { bridgeImport, bridgeImportMany, bridgeParseShape, consumerSchemaPath } from './tsx-bridge.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -116,7 +117,7 @@ export function assembleConsumerFingerprint(toplevel, { identityRoot = toplevel 
       : 'unknown'
   let corpusSize = 0
   try {
-    corpusSize = readdirSync(join(toplevel, 'roadmap', 'phases')).filter((f) => /^phase-.*\.phase\.ts$/.test(f)).length
+    corpusSize = readdirSync(join(roadmapRoot(toplevel), 'phases')).filter((f) => /^phase-.*\.phase\.ts$/.test(f)).length
   } catch {
     corpusSize = 0 // an absent phases dir is an empty corpus, not a failure
   }
@@ -159,7 +160,7 @@ function pevalSample(record) {
 }
 
 /**
- * Read every `roadmap/arc-evals/*.peval.json` into per-phase samples. `validate` defaults to
+ * Read every `*.peval.json` under the root's `arc-evals/` into per-phase samples. `validate` defaults to
  * the real bridge validator; injection exists for tests, never to skip validation.
  *
  * TWO PASSES, on the ERROR path only. The batch is validated once; when zod names offending
@@ -174,7 +175,7 @@ function pevalSample(record) {
  */
 export function readPhaseEvalSamples(repoRoot, { validate = phaseEvalValidator(repoRoot) } = {}) {
   const warnings = []
-  const dir = join(repoRoot, 'roadmap', 'arc-evals')
+  const dir = join(roadmapRoot(repoRoot), 'arc-evals')
   if (!existsSync(dir)) return { samples: [], warnings }
   let entries
   try {
@@ -261,8 +262,8 @@ const FIX_SUBJECT_RE = /^fix[(:]/
 /** The dated-artifact filename axis: <ARCID>-<YYYY-MM-DD>[-<suffix>].json. */
 const DATE_RE = '(\\d{4}-\\d{2}-\\d{2})'
 
-const arcFilePath = (repoRoot, arcId) => join(repoRoot, 'roadmap', 'arcs', `${arcId}.arc.ts`)
-const phaseFilePath = (repoRoot, n) => join(repoRoot, 'roadmap', 'phases', `phase-${n}.phase.ts`)
+const arcFilePath = (repoRoot, arcId) => join(roadmapRoot(repoRoot), 'arcs', `${arcId}.arc.ts`)
+const phaseFilePath = (repoRoot, n) => join(roadmapRoot(repoRoot), 'phases', `phase-${n}.phase.ts`)
 
 /** Regex-escape an arc id so an id containing regex metacharacters cannot widen the match. */
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -320,7 +321,7 @@ export const PEVAL_NAME_RE = /^phase-(\d+)\.peval\.json$/
 /** Where one phase's record lives. ONE home for the convention, so the gate writer and the
  *  scorecard reader cannot drift into two spellings of the same path. */
 export const phaseEvalRecordPath = (repoRoot, phase) =>
-  join(repoRoot, 'roadmap', 'arc-evals', `phase-${phase}.peval.json`)
+  join(roadmapRoot(repoRoot), 'arc-evals', `phase-${phase}.peval.json`)
 
 /** Did this gate row execute a command? The gate marks a declared-absent slot with a flag but a
  *  SKIPPED one only by its synthetic `(skipped: …)` command string, so both spellings are read
@@ -456,7 +457,7 @@ function readJson(path) {
  * `.typed-cache/` mirror under roadmap/.gate/ can never be read as a run.
  */
 export function summarizeGateRuns(repoRoot, phaseNum) {
-  const dir = join(repoRoot, 'roadmap', '.gate', String(phaseNum))
+  const dir = join(roadmapRoot(repoRoot), '.gate', String(phaseNum))
   if (!existsSync(dir)) return []
   let files
   try {
@@ -747,7 +748,7 @@ export function collectArcTrace(
   // Resolved BEFORE the git facts, not with the other artifact reads below: the RunnerSummary's
   // filename date is the land record the escape window anchors on (option C), so the collector
   // must know it before it derives a boundary. The one resolution feeds both uses.
-  const summaryDated = newestArtifactDated(join(repoRoot, 'roadmap', 'arc-summaries'), arcId, null)
+  const summaryDated = newestArtifactDated(join(roadmapRoot(repoRoot), 'arc-summaries'), arcId, null)
 
   const trace = {
     arcId,
@@ -763,7 +764,7 @@ export function collectArcTrace(
   delete trace.git.arcFiles
   if (trace.git.landedAt === undefined) delete trace.git.landedAt
 
-  const evalsDir = join(repoRoot, 'roadmap', 'arc-evals')
+  const evalsDir = join(roadmapRoot(repoRoot), 'arc-evals')
   for (const [field, suffix] of [
     ['sweep', 'sweep'],
     ['verdicts', 'verdicts'],
