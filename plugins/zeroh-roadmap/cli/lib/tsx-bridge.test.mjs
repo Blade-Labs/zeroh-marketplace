@@ -26,6 +26,18 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCHEMA = join(HERE, '..', '..', 'templates', 'schema.ts')
 
+/**
+ * 21.2 — the ONE written-down form of the tsx-absent remedy. The consumer's install is
+ * keyed by its COMMITTED lockfile, so the hint must carry BOTH recipes; a bare `npm ci`
+ * sends every pnpm consumer into the doomed install the arc's lockfile ruling retired.
+ * Pinned VERBATIM on purpose: a substring match would let the pnpm half rot back out
+ * silently, which is exactly how the bare-npm-ci wording survived that ruling.
+ */
+const EXPECTED_TSX_ABSENT_HINT =
+  'fresh worktrees have no node_modules — install in the consumer checkout with the recipe its ' +
+  'committed lockfile selects: pnpm-lock.yaml → pnpm install --frozen-lockfile, ' +
+  'package-lock.json → npm ci (worktree node_modules are NOT shared)'
+
 const bases = []
 process.on('exit', () => bases.forEach((b) => rmSync(b, { recursive: true, force: true })))
 
@@ -92,10 +104,39 @@ test('bridgeEval — runs an inline script and returns its stdout', () => {
 })
 
 test('TSX_ABSENT_HINT — the verbatim worktree-hazard line (string-pinned)', () => {
-  assert.equal(
+  assert.equal(TSX_ABSENT_HINT, EXPECTED_TSX_ABSENT_HINT)
+})
+
+test('TSX_ABSENT_HINT — names BOTH committed-lockfile recipes, each keyed to its own lockfile', () => {
+  // pnpm consumers are the ones the old wording stranded: their recipe must be present AND
+  // attached to the lockfile that selects it, not merely mentioned somewhere in the line.
+  const pnpmLock = TSX_ABSENT_HINT.indexOf('pnpm-lock.yaml')
+  const pnpmRecipe = TSX_ABSENT_HINT.indexOf('pnpm install --frozen-lockfile')
+  assert.ok(pnpmLock >= 0, 'the hint must name pnpm-lock.yaml as a decider')
+  assert.ok(pnpmRecipe >= 0, 'the hint must name pnpm install --frozen-lockfile')
+  assert.ok(pnpmLock < pnpmRecipe, 'the pnpm recipe must READ as selected by pnpm-lock.yaml')
+
+  const npmLock = TSX_ABSENT_HINT.indexOf('package-lock.json')
+  const npmRecipe = TSX_ABSENT_HINT.indexOf('npm ci')
+  assert.ok(npmLock >= 0, 'the hint must name package-lock.json as a decider')
+  assert.ok(npmRecipe >= 0, 'the hint must still name npm ci for a package-lock.json consumer')
+  assert.ok(npmLock < npmRecipe, 'npm ci must READ as selected by package-lock.json')
+})
+
+test('TSX_ABSENT_HINT — no bare generic npm-ci remedy survives', () => {
+  assert.doesNotMatch(
     TSX_ABSENT_HINT,
-    'fresh worktrees have no node_modules — run npm ci in the consumer checkout (worktree node_modules are NOT shared)',
+    /run npm ci in the consumer checkout/,
+    'the retired unconditional remedy must be gone, not merely supplemented',
   )
+  assert.equal(
+    TSX_ABSENT_HINT.split('npm ci').length - 1,
+    1,
+    'npm ci may appear exactly once — as the package-lock.json branch, never as a second bare remedy',
+  )
+  // The worktree hazard is why the line exists at all; the reword must not drop it.
+  assert.match(TSX_ABSENT_HINT, /fresh worktrees have no node_modules/)
+  assert.match(TSX_ABSENT_HINT, /worktree node_modules are NOT shared/)
 })
 
 // ── 1719.3 — resolved binary + content-keyed cache ────────────────────────────────────
@@ -170,7 +211,10 @@ test('bridgeEval — exit 4 with unresolvable modules on an UNINSTALLED consumer
   const res = bridgeEval(root, 'S', { exec: () => { throw err }, pluginTsx: '/nonexistent/plugin-tsx' })
   assert.equal(res.ok, false)
   assert.equal(res.kind, 'tsx-absent', 'an uninstalled tree cannot validate — toolchain-missing, never a file verdict')
-  assert.match(res.stderr, /run npm ci in the consumer checkout/)
+  assert.ok(
+    res.stderr.includes(EXPECTED_TSX_ABSENT_HINT),
+    'the EMITTED remedy is the lockfile-keyed line verbatim — the pin travels with what users read',
+  )
 })
 
 test('bridgeEval — exit 4 with unresolvable modules on an INSTALLED consumer is a genuine load error', () => {

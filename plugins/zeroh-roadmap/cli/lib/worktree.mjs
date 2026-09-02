@@ -18,6 +18,17 @@ import { mainCheckout } from './gitroot.mjs'
 const git = (cwd, args) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 60_000, encoding: 'utf8' }).trim()
 
+/** Every registered worktree, in git's porcelain order. */
+export function listWorktrees(root) {
+  return git(root, ['worktree', 'list', '--porcelain'])
+    .split('\n\n')
+    .flatMap((block) => {
+      const dir = /^worktree (.+)$/m.exec(block)?.[1]
+      if (!dir) return []
+      return [{ dir, branch: /^branch refs\/heads\/(.+)$/m.exec(block)?.[1] ?? null }]
+    })
+}
+
 /** A typed worktree-lane failure. */
 export class WorktreeError extends Error {
   constructor(message) {
@@ -275,14 +286,7 @@ export function landPhase(worktreeDir, baseRef, { retries = 3, onRetry, beforeSw
 
 /** The path of the worktree that has baseRef CHECKED OUT, or null. */
 function checkoutOf(worktreeDir, baseRef) {
-  const rows = git(worktreeDir, ['worktree', 'list', '--porcelain']).split('\n\n')
-  for (const row of rows) {
-    if (row.includes(`branch refs/heads/${baseRef}`)) {
-      const m = /^worktree (.+)$/m.exec(row)
-      if (m) return m[1]
-    }
-  }
-  return null
+  return listWorktrees(worktreeDir).find(({ branch }) => branch === baseRef)?.dir ?? null
 }
 
 /**
@@ -473,12 +477,7 @@ export function surveyLanes(anyRoot) {
     byDir.set(key, { path, journal: value, lane, closed })
   }
 
-  const lanes = []
-  for (const block of git(root, ['worktree', 'list', '--porcelain']).split('\n\n')) {
-    const dir = /^worktree (.+)$/m.exec(block)?.[1]
-    if (!dir || samePath(dir, root) || isSlotDir(root, dir)) continue
-    lanes.push({ dir, branch: /^branch refs\/heads\/(.+)$/m.exec(block)?.[1] ?? null })
-  }
+  const lanes = listWorktrees(root).filter(({ dir }) => !samePath(dir, root) && !isSlotDir(root, dir))
   // An unreadable journal naming NO surveyed tree could still be any of theirs, so it downgrades
   // every unmatched lane to `unknown` rather than letting one read as `legacy` — a truncated
   // journal cut BEFORE its worktree field is exactly the file that cannot name itself.

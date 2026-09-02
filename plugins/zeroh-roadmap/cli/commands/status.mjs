@@ -23,7 +23,7 @@ import { scanProgress, scanPhaseFile } from '../lib/phasescan.mjs'
 import { arcProgress } from '../lib/derive.mjs'
 import { lastEvent, ALIVE_MAX_MIN, GATE_QUIET_MAX_MIN, WORK_EVENTS } from '../lib/beacon.mjs'
 import { staleArms } from '../lib/executor-arm.mjs'
-import { surveyLanes } from '../lib/worktree.mjs'
+import { listWorktrees, surveyLanes } from '../lib/worktree.mjs'
 
 const git = (args, cwd) => {
   try {
@@ -92,13 +92,17 @@ function derive(root) {
   const derivedAt = new Date().toISOString()
   const pluginDrift = versionDriftLine({ selfPath: fileURLToPath(import.meta.url) })
 
-  // 1) Worktrees on disk (repo of the roadmap root)
+  // 1) Worktrees on disk (repo of the roadmap root). listWorktrees THROWS where the inline parse
+  // this replaced rode the error-swallowing git() above; status never fails on a derivation (the
+  // postMergeRedLine and surveyLanes precedents), and a non-repo root is the ordinary case here —
+  // so an unenumerable repo stays the empty inventory it has always been, silently, because the
+  // human table is parity-pinned byte-compatible with the legacy scripts/arc-status.mjs.
   const repo = git(['rev-parse', '--show-toplevel'], root) || resolve(root, '..')
-  const worktrees = new Map() // path -> branch
-  for (const block of git(['worktree', 'list', '--porcelain'], repo).split('\n\n')) {
-    const path = block.match(/^worktree (.+)$/m)?.[1]
-    const branch = block.match(/^branch refs\/heads\/(.+)$/m)?.[1] ?? '(detached)'
-    if (path) worktrees.set(resolve(path), branch)
+  let worktrees = new Map() // path -> branch
+  try {
+    worktrees = new Map(listWorktrees(repo).map(({ dir, branch }) => [resolve(dir), branch ?? '(detached)']))
+  } catch {
+    // the empty inventory above stands — the Map is only assigned once the enumeration succeeds
   }
 
   // 2) Build registrations — deliberately NOT sidecar.listSidecars(): that reader silently
@@ -281,8 +285,8 @@ function derive(root) {
   // 8) Stray lane worktrees — the count only, from the ONE classifier (surveyLanes). status is
   // the command every protocol entry already runs, so it is the automatic surfacing seam for lane
   // trees that outlived their run; the per-lane class and remedy stay with `roadmap
-  // audit` check 15, which this line points at rather than restating. The pre-existing porcelain
-  // parse at (1) is sidecar correlation and predates the seam — this appends, it does not fork it.
+  // audit` check 15, which this line points at rather than restating. Step (1) reads the same
+  // enumerator (listWorktrees) for sidecar correlation — this appends to it, it does not fork it.
   // ZERO is silence, not a zero: the human table is parity-pinned byte-compatible with the legacy
   // scripts/arc-status.mjs, so a lanes-free estate must see no output change at all (the
   // postMergeRedLine precedent — the additive divergence is absent whenever the condition is).

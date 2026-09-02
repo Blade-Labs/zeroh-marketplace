@@ -3331,12 +3331,25 @@ test('15.3 — every lane envelope names the roadmap CLI by ABSOLUTE path, and s
  * The binding subject forms, as an executor must be able to COPY them. The `—` boundary is the
  * load-bearing part (it prevents prefix-number matches), so each form is pinned with the em dash
  * directly after the number — a prompt that teaches `phase N:` teaches an unparseable subject.
+ *
+ * 21.3 re-keys the TASK form to the colonless one the 16.4 agent cards teach. Attribution is
+ * indifferent (gitscan.mjs phaseOwnPatterns binds on `phase N —`, and the colon sits OUTSIDE that
+ * bound prefix), which is exactly why the drift survived: nothing downstream reds on it. Two taught
+ * forms for one act is the drift the grammar seam exists to end, so the pin is the CARDS' form,
+ * matched with its `<what>` tail attached — a bare `phase N — N.X` prefix test would accept the
+ * colon right back.
  */
+const TAUGHT_TASK_FORM = 'phase N — N.X <what>'
+/** The same form as a matcher — derived from the literal, so the two can never drift apart. */
+const TAUGHT_TASK_FORM_RE = new RegExp(TAUGHT_TASK_FORM.replaceAll('.', '\\.'))
+/** The colon form, as a REFUSAL: a teaching surface still carrying it IS the second grammar. */
+const COLON_TASK_FORM_RE = /N\.X:/
+
 const COMMIT_GRAMMAR = [
   {
     form: 'task',
-    re: /phase N — N\.X:/,
-    why: 'a task commit without `phase N — N.X:` is invisible to the unverified-done check and to curation — the mudarabah2 shape: 11 phases whose curation never ran',
+    re: TAUGHT_TASK_FORM_RE,
+    why: `a task commit without \`${TAUGHT_TASK_FORM}\` is invisible to the unverified-done check and to curation — the mudarabah2 shape: 11 phases whose curation never ran`,
   },
   {
     form: 'gate fix',
@@ -3368,7 +3381,7 @@ test('15.3 — the COMMITTING lanes (run, plan) are taught the binding subject g
         `the ${lane} envelope never names the ${form} subject form (${re}) — ${why}; fix cli/commands/codex.mjs ${builder}`,
       )
     }
-    const grammarLine = prompt.split('\n').find((l) => /N\.X:/.test(l))
+    const grammarLine = prompt.split('\n').find((l) => TAUGHT_TASK_FORM_RE.test(l))
     assert.match(
       grammarLine ?? '',
       /bind/i,
@@ -3397,6 +3410,94 @@ test('15.3 — the READ-ONLY review lane carries no commit grammar, and the run 
       `the review lane is REPORT-ONLY and never commits: handing it the ${form} subject form briefs it for the one act the lane exists to forbid, and the existing "implementation grammar must not leak into a review" guard is what that costs; fix cli/commands/codex.mjs buildReviewPrompt`,
     )
   }
+})
+
+// ── 21.3: ONE taught task-subject form ─────────────────────────────────────────────────
+// The envelope teaches `phase N — N.X: <what>`; the 16.4 agent cards (software-developer,
+// test-engineer, quality-pass) teach `phase N — N.X <what>`. Attribution accepts both, so the two
+// forms have coexisted with nothing downstream reding — which is precisely why a test has to. The
+// cards are the SOURCE (three of them agree, and they are the surface a spawned role reads), so the
+// envelope moves to them, not the other way round.
+//
+// Both directions are pinned: the cards must still say it (a precondition, or the identity claim
+// below is a comparison against whatever the cards happen to hold), and no committing surface may
+// still say the colon form.
+
+/** The 16.4 cards that carry a commit-grammar block — the source of the one taught form. */
+const GRAMMAR_CARDS = ['agents/software-developer.md', 'agents/test-engineer.md', 'agents/quality-pass.md']
+const PLUGIN_ROOT = join(HERE, '..', '..')
+
+test('21.3 — the envelope teaches the CARDS’ task-subject form, and no surface teaches a second one', () => {
+  for (const card of GRAMMAR_CARDS) {
+    const text = readFileSync(join(PLUGIN_ROOT, card), 'utf8')
+    assert.ok(
+      text.includes(`\`${TAUGHT_TASK_FORM}\``),
+      `precondition: ${card} is one of the three sources of the one taught task form, and it no longer contains \`${TAUGHT_TASK_FORM}\` — `
+        + 'if the CARDS moved, this whole block is comparing the envelope against a form nobody teaches; re-decide which surface is the source before touching cli/commands/codex.mjs',
+    )
+    assert.doesNotMatch(
+      text,
+      COLON_TASK_FORM_RE,
+      `${card} has grown the colon task form — the cards are the source, so a second grammar HERE re-opens the drift 21.3 closes from the other end`,
+    )
+  }
+
+  const root = tmpRepo()
+  writePhase(root, 213)
+  const brief = writeBrief(root)
+  const lanes = [
+    ['run', 'buildPrompt', lanePrompt(root, ['run', '213'], 'codex-213')],
+    ['plan', 'buildPlanPrompt', lanePrompt(root, ['plan', '214', '--brief', brief], 'codex-plan-214')],
+  ]
+
+  for (const [lane, builder, prompt] of lanes) {
+    assert.ok(
+      prompt.includes(TAUGHT_TASK_FORM),
+      `the ${lane} envelope does not teach \`${TAUGHT_TASK_FORM}\` VERBATIM — a driver told one form by its envelope and another by the card of every role it spawns `
+        + `writes whichever it saw last; fix cli/commands/codex.mjs ${builder} (COMMIT_GRAMMAR)`,
+    )
+    assert.doesNotMatch(
+      prompt,
+      COLON_TASK_FORM_RE,
+      `the ${lane} envelope still teaches the colon form \`phase N — N.X: <what>\` alongside the cards’ colonless one. Attribution binds on \`phase N —\` and accepts BOTH `
+        + '(cli/lib/gitscan.mjs phaseOwnPatterns), so nothing else will ever red on this — the two taught forms just keep producing two commit histories for one act; '
+        + `fix cli/commands/codex.mjs ${builder}: delete the colon from COMMIT_GRAMMAR’s task form`,
+    )
+  }
+})
+
+/**
+ * The pre-21.3 envelope grammar line, verbatim (cli/commands/codex.mjs:115 before this task).
+ * Kept as the BASELINE, not as the expectation: the assertion below is that the shipped line is
+ * this literal minus exactly one byte — the colon — and nothing else moved.
+ */
+const PRE_21_3_GRAMMAR_LINE =
+  'COMMIT GRAMMAR (BINDING — attribution binds on `phase N —`): task `type(scope): phase N — N.X: <what>`; '
+  + 'gate fix `fix(scope): phase N gate RX — <what>`; state `docs(roadmap): phase N — <desc>`.'
+/** The same line with the task colon dropped — derived, so the diff this test demands IS one byte. */
+const GRAMMAR_LINE = PRE_21_3_GRAMMAR_LINE.replace('N.X: <what>', 'N.X <what>')
+
+test('21.3 — the colon drop is RATCHET-NEUTRAL: one byte deleted, no prose bought, no reason lost', () => {
+  const root = tmpRepo()
+  writePhase(root, 215)
+  const prompt = lanePrompt(root, ['run', '215'], 'codex-215')
+  const line = prompt.split('\n').find((l) => l.startsWith('COMMIT GRAMMAR'))
+
+  assert.ok(line, 'the run envelope carries no COMMIT GRAMMAR line at all — deleting the teaching is the one fix this task must never accept; fix cli/commands/codex.mjs buildPrompt')
+  assert.equal(
+    Buffer.byteLength(line, 'utf8'),
+    Buffer.byteLength(PRE_21_3_GRAMMAR_LINE, 'utf8') - 1,
+    'the grammar line must land EXACTLY one byte shorter than the pre-21.3 line. Envelope bytes are rationed by the overhead ceiling '
+      + '(MAX_ENVELOPE_PROTOCOL_RATIO in cli/lib/roles.test.mjs, measured at 0.2243 against a 0.235 bound): funding a one-character alignment with a sentence of new prose '
+      + 'spends headroom the next genuine lane override needs, and buying headroom by deleting a rule is the failure that ratchet exists to make expensive. '
+      + `Got ${Buffer.byteLength(line, 'utf8')}B: ${line}`,
+  )
+  assert.equal(
+    line,
+    GRAMMAR_LINE,
+    'the grammar line must be the pre-21.3 literal with the task colon removed and NOTHING else — the reason clause (`attribution binds on \\`phase N —\\``) and the gate-fix '
+      + 'and roadmap-state forms are each pinned by their own assertion above, and a reworded line quietly re-decides all three; fix cli/commands/codex.mjs COMMIT_GRAMMAR',
+  )
 })
 
 // ── 15.5: `plan --arc` is a SUPERVISED act — the refusal teaches the flow, never a traceback ─────

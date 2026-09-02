@@ -112,7 +112,7 @@ function repoRelative(root, p, flag) {
 /** The run protocol is the do-phase SKILL, resolved from THIS file so a plugin move follows. */
 export const RUN_SKILL = fileURLToPath(new URL('../../skills/do-phase/SKILL.md', import.meta.url))
 const ROADMAP_CLI = fileURLToPath(new URL('../../bin/roadmap.mjs', import.meta.url))
-const COMMIT_GRAMMAR = 'COMMIT GRAMMAR (BINDING — attribution binds on `phase N —`): task `type(scope): phase N — N.X: <what>`; gate fix `fix(scope): phase N gate RX — <what>`; state `docs(roadmap): phase N — <desc>`.'
+const COMMIT_GRAMMAR = 'COMMIT GRAMMAR (BINDING — attribution binds on `phase N —`): task `type(scope): phase N — N.X <what>`; gate fix `fix(scope): phase N gate RX — <what>`; state `docs(roadmap): phase N — <desc>`.'
 
 /** The role bindings the run lane's fill-a-role override sends the driver to, same resolution. */
 const ROLE_BINDINGS = fileURLToPath(new URL('../../MULTI-DRIVER.md', import.meta.url))

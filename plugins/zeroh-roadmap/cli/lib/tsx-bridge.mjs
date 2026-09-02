@@ -20,7 +20,9 @@ import { fileURLToPath } from 'node:url'
 
 /** The VERBATIM worktree-hazard line a strict context prints on tsx-absent. */
 export const TSX_ABSENT_HINT =
-  'fresh worktrees have no node_modules — run npm ci in the consumer checkout (worktree node_modules are NOT shared)'
+  'fresh worktrees have no node_modules — install in the consumer checkout with the recipe its ' +
+  'committed lockfile selects: pnpm-lock.yaml → pnpm install --frozen-lockfile, ' +
+  'package-lock.json → npm ci (worktree node_modules are NOT shared)'
 
 /** A typed bridge failure. kind ∈ 'tsx-absent' | 'schema-missing' | 'zod' | 'load' | 'eval-error'. */
 export class BridgeError extends Error {

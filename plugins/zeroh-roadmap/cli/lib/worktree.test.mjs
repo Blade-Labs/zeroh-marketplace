@@ -69,7 +69,7 @@ import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, isAbsolute, resolve, basename } from 'node:path'
 
@@ -1892,4 +1892,109 @@ test('surveyLanes: a PRUNABLE entry whose journal will not READ is unknown, neve
   )
   assert.equal(realOf(row.journalPath), realOf(jPath), 'and the row names the unreadable journal, so an operator can go read it')
   assert.match(row.remedy, /worktree prune/, `the directory is still gone, so the ACT is still the prune; got: ${row.remedy}`)
+})
+
+// ── listWorktrees (21.1) ──────────────────────────────────────────────────────
+// Four readers grew their OWN parse of `git worktree list --porcelain` block output —
+// checkoutOf and surveyLanes here, worktreeRoots in executor-arm.mjs, derive() step (1) in
+// commands/status.mjs. Four copies of one grammar is four places for the same porcelain change
+// to be half-fixed, and the detached case is exactly where they already disagree: two of them
+// spell "no branch" as null, one as the literal '(detached)', one drops the branch entirely.
+// So the enumerator is ONE exported function returning ONE shape — { dir, branch: string|null } —
+// and each consumer keeps its own FILTERING on top of it (checkoutOf picks the block holding a
+// ref, surveyLanes keeps its primary/slot exclusions, worktreeRoots filters nothing, status maps
+// null to its parity-pinned '(detached)' label). The shape is the contract; the filtering is not.
+const listWorktrees = async (...args) =>
+  (await resolveExport('listWorktrees', 'listWorktrees(root) → [{ dir, branch: string|null }]'))(...args)
+
+/** The entry for a dir, by RESOLVED path and never by index — porcelain order is git's call. */
+function entryFor(entries, dir, why) {
+  const seen = entries.map((e) => `${e?.dir} [${JSON.stringify(e?.branch)}]`).join(', ')
+  const hits = entries.filter((e) => realOf(e?.dir) === realOf(dir))
+  assert.equal(hits.length, 1, `${why}: exactly ONE entry per registered worktree — expected one for ${dir}, got ${hits.length}; entries were: ${seen}`)
+  return hits[0]
+}
+
+test('listWorktrees: every registered worktree as { dir, branch }, branch null on a DETACHED one', async () => {
+  const r = surveyRepo()
+  const attached = laneAt(r, 'codex-51', { branch: 'codex/51' })
+  const detached = laneAt(r, 'codex-review-52')
+
+  const entries = await listWorktrees(r.root)
+
+  assert.ok(Array.isArray(entries), `listWorktrees returns an ARRAY of entries; got ${JSON.stringify(entries)}`)
+  assert.deepEqual(
+    entries.map((e) => realOf(e?.dir)),
+    r.worktrees().map(realOf),
+    'it enumerates EVERY worktree git lists — primary included, nothing filtered — in porcelain order, because the consumer that wants none of it filtered (executor-arm worktreeRoots) reads this list directly',
+  )
+  for (const e of entries) {
+    assert.deepEqual(
+      Object.keys(e).sort(),
+      ['branch', 'dir'],
+      `each entry is exactly { dir, branch } — the shared shape three consumers destructure; got ${JSON.stringify(e)}`,
+    )
+    assert.ok(isAbsolute(e.dir), `dir is ABSOLUTE, as git prints it — a relative path resolves against whichever cwd the caller happens to hold; got ${JSON.stringify(e.dir)}`)
+    assert.ok(
+      e.branch === null || (typeof e.branch === 'string' && e.branch.length > 0),
+      `branch is a non-empty short name or null, never undefined and never '' ; got ${JSON.stringify(e)}`,
+    )
+  }
+  assert.equal(
+    entryFor(entries, attached, 'the attached lane').branch,
+    'codex/51',
+    "branch is the SHORT name: checkoutOf compares against a caller's baseRef and surveyLanes pastes it into a `git branch -D`, so a `refs/heads/` prefix would break both",
+  )
+  assert.equal(
+    entryFor(entries, detached, 'the detached lane').branch,
+    null,
+    'a --detach worktree reports branch NULL — "detached"/"HEAD"/"(detached)"/undefined each become a bogus branch argument downstream; status is the one consumer that wants a label, and mapping null → \'(detached)\' is ITS job',
+  )
+})
+
+/** Every non-test .mjs under cli/lib and cli/commands, as { rel, src } — the acceptance criterion's scope. */
+function pluginSources() {
+  const out = []
+  for (const dir of ['lib', 'commands']) {
+    const base = new URL(dir === 'lib' ? './' : '../commands/', import.meta.url)
+    for (const f of readdirSync(base).sort()) {
+      if (!f.endsWith('.mjs') || f.endsWith('.test.mjs')) continue
+      out.push({ rel: `cli/${dir}/${f}`, src: readFileSync(new URL(f, base), 'utf8') })
+    }
+  }
+  return out
+}
+
+test('listWorktrees: it is the ONLY porcelain worktree-list parse left in non-test plugin code', async () => {
+  // The acceptance criterion, as a grep the refactor cannot half-do: one enumerator means the
+  // argv appears in exactly one place, and that place is listWorktrees' own body. A second copy
+  // anywhere under cli/lib or cli/commands is the drift this task exists to end.
+  const PORCELAIN_ARGV = /(['"`])worktree\1\s*,\s*(['"`])list\2\s*,\s*(['"`])--porcelain\3/g
+  const sources = pluginSources()
+  assert.ok(
+    sources.length > 20 && sources.some((s) => s.rel === 'cli/lib/worktree.mjs') && sources.some((s) => s.rel === 'cli/commands/status.mjs'),
+    `scan guard: the sweep must actually reach the plugin's sources — a readdir that found ${sources.length} files with the known parsers missing would make every assertion below vacuously green`,
+  )
+
+  const hits = sources.flatMap(({ rel, src }) => [...src.matchAll(PORCELAIN_ARGV)].map(() => rel))
+  assert.deepEqual(
+    hits,
+    ['cli/lib/worktree.mjs'],
+    `exactly ONE porcelain worktree-list parse may remain, in cli/lib/worktree.mjs; found ${hits.length} across ${[...new Set(hits)].join(', ') || 'nothing'} — each extra copy is a consumer that re-parses the block grammar instead of consuming listWorktrees`,
+  )
+
+  const src = readFileSync(new URL('./worktree.mjs', import.meta.url), 'utf8')
+  const anchor = src.indexOf('export function listWorktrees')
+  assert.notEqual(
+    anchor,
+    -1,
+    'anchor NOT FOUND: cli/lib/worktree.mjs must declare `export function listWorktrees` — an unresolved anchor is not "the parse is in the right place", it is a check that never ran',
+  )
+  const close = src.indexOf('\n}', anchor)
+  assert.notEqual(close, -1, 'anchor UNTERMINATED: no module-level closing brace after listWorktrees, so its body could not be sliced')
+  assert.match(
+    src.slice(anchor, close),
+    new RegExp(PORCELAIN_ARGV.source), // a fresh, NON-global copy: assert.match runs .test(), and a /g regex carries lastIndex between calls
+    'and the surviving parse lives INSIDE listWorktrees — one left in checkoutOf or surveyLanes while listWorktrees delegates elsewhere would pass the count above while keeping the private grammar',
+  )
 })

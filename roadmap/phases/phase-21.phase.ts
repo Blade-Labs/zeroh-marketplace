@@ -24,7 +24,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 21,
   name: 'Arc-sweep LOW follow-ups: one worktree enumerator, lockfile-aware tsx hint, envelope colon',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   reviewRecord: { date: '2026-09-01', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'refactor',
@@ -100,7 +100,18 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/status.test.mjs',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'Added one exported listWorktrees porcelain parser and routed checkoutOf, surveyLanes, executor-arm worktreeRoots, and status through it without changing their consumer-specific filtering or labels.',
+        how:
+          'The independent claude-opus-5 test-engineer added two RED tests: the missing exported shape and the four-parser inventory failed while the detached-status compatibility guard stayed green. The implementation returns every registered worktree as { dir, branch: string|null }; status alone maps null to its established detached label. The focused worktree, status, and executor-arm suites passed 106/106; the types slot was declared-none.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '21.2',
@@ -116,13 +127,25 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/tsx-bridge.test.mjs',
           description:
-            'Re-pin the VERBATIM string test (:94-97 asserts the full old literal) and the stderr regex (:173 matches /run npm ci in the consumer checkout/) to the new lockfile-keyed wording — the pin is the point, so it moves WITH the string, never loosens to a substring → verify: bash -c "! grep -qF \'run npm ci in the consumer checkout\' plugins/zeroh-roadmap/cli/lib/tsx-bridge.test.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/tsx-bridge.test.mjs >/dev/null 2>&1"',
+            'Re-pin the VERBATIM string test (:94-97 asserts the full old literal) and the stderr regex (:173 matches /run npm ci in the consumer checkout/) to the new lockfile-keyed wording — the pin is the point, so it moves WITH the string, never loosens to a substring → verify: bash -c "grep -qF \'assert.doesNotMatch\' plugins/zeroh-roadmap/cli/lib/tsx-bridge.test.mjs && grep -qF \'frozen-lockfile\' plugins/zeroh-roadmap/cli/lib/tsx-bridge.test.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/lib/tsx-bridge.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: ['The hint names both lockfile-keyed recipes; no bare npm ci prose remains in tsx-bridge.mjs or its test; tsx-bridge suite green'],
       files: ['plugins/zeroh-roadmap/cli/lib/tsx-bridge.mjs', 'plugins/zeroh-roadmap/cli/lib/tsx-bridge.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'Replaced the unconditional npm-ci remediation with one lockfile-keyed hint naming the pnpm and npm frozen-install recipes.',
+        how:
+          'The independent claude-opus-5 test-engineer moved the full literal pin and added recipe-order and emitted-stderr coverage, producing 4 RED failures before implementation. The final tsx-bridge suite passed 28/28 and the types slot was declared-none.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The original step verify required the retired npm-ci phrase to be absent even from its negative assertion; gate Round 0 re-keyed it to the explicit doesNotMatch guard and lockfile wording.',
+      },
     },
     {
       id: '21.3',
@@ -138,13 +161,25 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs',
           description:
-            'Re-key the 15.3 grammar pins to the colonless form: the test-local COMMIT_GRAMMAR table\'s task re (:3338, keyed on the colon) and the grammarLine finder (:3377, /N\\.X:/) would both red the envelope edit; both move to the dash-bound form the attribution regex binds on (gitscan.mjs:54-64) → verify: bash -c "! grep -qF \'.X:/\' plugins/zeroh-roadmap/cli/commands/codex.test.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
+            'Re-key the 15.3 grammar pins to the colonless form: the test-local COMMIT_GRAMMAR table\'s task re (:3338, keyed on the colon) and the grammarLine finder (:3377, /N\\.X:/) would both red the envelope edit; both move to the dash-bound form the attribution regex binds on (gitscan.mjs:54-64) → verify: bash -c "grep -qF \"TAUGHT_TASK_FORM = \'phase N — N.X <what>\'\" plugins/zeroh-roadmap/cli/commands/codex.test.mjs && grep -qF \'COLON_TASK_FORM_RE\' plugins/zeroh-roadmap/cli/commands/codex.test.mjs && cd plugins/zeroh-roadmap && capbuild node --test cli/commands/codex.test.mjs >/dev/null 2>&1"',
         },
       ],
       acceptanceCriteria: ['grep finds one taught task-subject form across envelope + cards + the codex test pins; roles/codex suites green'],
       files: ['plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'Aligned the Codex execution envelope with the agent cards by removing the task-subject colon while retaining the attribution-bound prefix and all other grammar.',
+        how:
+          'The independent claude-opus-5 test-engineer re-keyed the grammar pins and added a one-byte ratchet assertion, producing 4 RED failures before the one-character implementation edit. The focused codex and role suites passed 157/157, including the envelope-overhead ratchet; the types slot was declared-none.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The original step verify required the colon token to be absent even from its negative regex; gate Round 0 re-keyed it to the shared colonless-form constant and explicit colon-form refusal.',
+      },
     },
   ],
   notes:

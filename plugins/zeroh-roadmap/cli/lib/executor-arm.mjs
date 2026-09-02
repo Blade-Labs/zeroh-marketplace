@@ -32,13 +32,13 @@
  * staleArms and its definition of stale are CONSUMED by this guard, never changed: the sweep
  * passes force because staleArms has already made the judgement.
  */
-import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readBeaconLine } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
 import { productRepos } from './product-repos.mjs'
+import { listWorktrees } from './worktree.mjs'
 
 /** The one home for the arm-file path: `roadmap result check` reconciles against the same file. */
 export function armPath(worktree, phase) {
@@ -71,11 +71,7 @@ export function phaseKeyFiles(worktree, phase) {
 
 /** Every registered worktree root, including prunable entries, in porcelain order. */
 function worktreeRoots(worktree) {
-  const out = execFileSync('git', ['-C', worktree, 'worktree', 'list', '--porcelain'], {
-    timeout: 15_000,
-    encoding: 'utf8',
-  })
-  return out.split('\n').flatMap((line) => (line.startsWith('worktree ') ? [line.slice('worktree '.length)] : []))
+  return listWorktrees(worktree).map(({ dir }) => dir)
 }
 
 /** Live sibling arms whose derived foreign product trees intersect this phase's trees. */

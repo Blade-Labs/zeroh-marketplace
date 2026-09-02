@@ -1217,3 +1217,56 @@ test('30) status run FROM a stale cache path surfaces the advisory on BOTH surfa
     `and the machine shape must expose it too — an advisory only the human table carries is invisible to every scripted consumer; got:\n${JSON.stringify(parsed, null, 2)}`,
   )
 })
+
+/**
+ * A REAL detached worktree at a sibling path (`git worktree add --detach`) — the porcelain block
+ * with NO `branch` line, which is the one shape the four independent parsers spell differently.
+ * Swept by the suite's exit hook, like laneWorktree.
+ */
+function detachedWorktree(repoDir, suffix) {
+  const dir = `${repoDir}-${suffix}`
+  tmps.push(dir)
+  const added = gitIn(repoDir, 'worktree', 'add', '-q', '--detach', dir, 'HEAD')
+  assert.equal(added.status, 0, `fixture bug: git must create the detached worktree ${dir}; stderr:\n${added.stderr}`)
+  const listed = gitIn(repoDir, 'worktree', 'list', '--porcelain').stdout
+  const block = listed.split('\n\n').find((b) => b.includes(`worktree ${dir}`)) ?? ''
+  assert.ok(block, `fixture bug: git must KNOW ${dir}; list was:\n${listed}`)
+  assert.doesNotMatch(
+    block,
+    /^branch /m,
+    `fixture bug: the block must carry NO branch line — that absence IS the detached case under test; block was:\n${block}`,
+  )
+  return dir
+}
+
+test('31) a DETACHED worktree still reads `(detached)` in otherWorktrees — the human line and --json alike', () => {
+  // status is the one consumer that wants a LABEL where the shared enumerator reports null, and
+  // its human table is parity-pinned byte-compatible with the legacy scripts/arc-status.mjs. So
+  // routing derive() step (1) through listWorktrees must map null → '(detached)' at the status
+  // boundary; a raw null would print `<path> @ null` and hand every --json consumer a new type.
+  const { repoDir, root } = strayEstate()
+  const dir = detachedWorktree(repoDir, 'detached-31')
+
+  const json = status(root, '--json')
+  assert.equal(json.status, 0, `status --json must exit 0 over a detached worktree; stderr:\n${json.stderr}`)
+  const parsed = JSON.parse(json.stdout)
+  const rows = parsed.otherWorktrees.filter((w) => realpathSync(w.path) === realpathSync(dir))
+  assert.equal(
+    rows.length,
+    1,
+    `the detached worktree appears exactly once in otherWorktrees; got ${JSON.stringify(parsed.otherWorktrees, null, 2)}`,
+  )
+  assert.equal(
+    rows[0].branch,
+    '(detached)',
+    `a worktree on no branch is labelled '(detached)' — null, undefined or 'HEAD' would each be a shape change for every scripted reader; got ${JSON.stringify(rows[0])}`,
+  )
+
+  const human = status(root)
+  assert.equal(human.status, 0, `the human table must exit 0 too; stderr:\n${human.stderr}`)
+  assert.equal(
+    countOf(human.stdout, `${dir} @ (detached)`),
+    1,
+    `and the printed line stays byte-identical to the parity oracle's "  <path> @ (detached)"; got:\n${human.stdout}`,
+  )
+})
