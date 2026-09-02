@@ -30,6 +30,7 @@ export default definePhase({
   name: 'Curate stops at the integration ref: published commits are never squashed',
   status: 'backlog',
   plannedBy: { model: 'claude-fable-5-1' },
+  reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'fix',
   kind: 'hardening',
   source:
@@ -108,5 +109,5 @@ export default definePhase({
   ],
   notes:
     'interview: skipped — the phase is the verbatim incident of 2026-09-02 (recorded in the session handoff and the phase-23 landing), planned by the supervising session to resolve the codex-26 lane\'s blocking question (option 1: two reviewed READY phases for the 26.4 trial). Two tasks below the floor for a nameable reason: one guard plus its end-to-end proof; padding would invent work. userFacing false: plugin CLI internals. ' +
-    'Verify rehearsal attestation: assumption probes executed 2026-09-02 at plan time — the two-arg signature present, merge-base 0 hits in curate.mjs, the bare call present in phase.mjs (all exit 0). Step verifies red-now via their grep halves (no merge-base, no integrationRef argument on the curate call — the land path\'s own uses of the word are why the verify pins the call form, no \'already on\' in lifecycle.test); runner clauses inherit polarity from the grep representatives.',
+    'Verify rehearsal attestation: assumption probes executed 2026-09-02 at plan time — the two-arg signature present, merge-base 0 hits in curate.mjs, the bare call present in phase.mjs (all exit 0). Step verifies red-now via their grep halves (no merge-base, no integrationRef argument on the curate call — the land path\'s own uses of the word are why the verify pins the call form, no \'already on\' in lifecycle.test); runner clauses inherit polarity from the grep representatives. Mode A review EXECUTED 2026-09-02 (claude-fable-5-1, standalone inline): deriveCurationRange re-read (curate.mjs, base = phase start, foreign-only refusal), the curate call site and the land path\'s integrationRefOf use re-read (phase.mjs:377); [FIXED] the 27.2 verify grepped a word the land path already carries — pinned to the call form. Ratified: 2-task floor exception, testMode tdd both, userFacing false. Placement: HIGH, no deps or conflicts → 1 of 4.',
 })
