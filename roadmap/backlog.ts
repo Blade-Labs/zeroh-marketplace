@@ -43,10 +43,6 @@ import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
   {
-    phase: 23,
-    name: 'Roadmap root discovery: docs/roadmap as a second home, schema seam under the root, ROADMAP_ROOT override',
-  },
-  {
     phase: 7,
     name: 'Graft measured trial — integration, footprint proof, before/after instrument',
   },
