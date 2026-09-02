@@ -14,7 +14,7 @@ The nine never-trimmed bodies were returned to their last independently gated co
 | phase-executor: dated stale-read/API incident narration | relocated(`agents/references/executor-reference.md`) | card retains the empty-read, no-transcript-polling, gate, and typed-return rules |
 | quality-pass/code-reviewer/software-architect: generic craft narration | obsolete-with-evidence(the role models already supply generic craft; typed outputs, severity, decision contracts and no-recursion remain) | phase-1659 agent-card gate established the ≤5,000-byte per-card forms |
 
-Measured roll-up: do-arc **53,343 B / 13,339 tokens → 42,649 B / 10,665 tokens** (20.0%); do-phase **24,054 B / 6,014 tokens → 13,421 B / 3,356 tokens** (44.2%). Plan-arc is unchanged at 68,223 B / 17,057 tokens because none of its six manifest files is in this diet.
+Measured roll-up: do-arc **53,343 B / 13,339 tokens → 43,139 B / 10,788 tokens** (19.1%); do-phase **24,054 B / 6,014 tokens → 13,665 B / 3,417 tokens** (43.2%). Plan-arc is unchanged at 68,223 B / 17,057 tokens because none of its six manifest files is in this diet.
 
 **The honesty rail (arc ROADCODE rail 3, locked decision 6).** No passage is deleted or
 compressed from a model-loaded skill/agent-card without a NAMED disposition here. One row per

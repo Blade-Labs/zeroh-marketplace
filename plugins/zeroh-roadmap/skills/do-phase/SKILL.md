@@ -71,6 +71,10 @@ matching 1369.
 
 ## The gate (after the last task)
 
+Test-worthiness and documentation details live in `references/test-worthiness.md` and
+`references/documentation-rules.md`. The correctness rounds are performed by the resolved
+`code-reviewer`; every round records its model and typed findings.
+
 `roadmap gate plan <N>` prints the resolved cell (slots, scopes, floors, agent chain) for the
 `kind`: mockup = lint+types; logic = Round 0 quality pass → Rounds 1..N correctness loop (cap 5);
 hardening adds the closure integration rerun; release adds the e2e slot. Run `roadmap gate run

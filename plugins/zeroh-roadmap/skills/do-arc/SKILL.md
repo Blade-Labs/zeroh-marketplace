@@ -9,6 +9,10 @@ metadata:
 
 # Do Arc — Arc Orchestration
 
+The terminal evaluation uses the resolved `arc-eval-judge`; its pin and substitutions come from
+`MULTI-DRIVER.md` through the role resolver.
+Phase work resolves `phase-executor`, `software-developer`, and `test-engineer` through that same home.
+
 `do-arc` ships an Arc by launching ONE small workflow per plane. Every transition is a
 `roadmap` CLI call and every non-done path a TYPED halt the workflow hands back: you own the
 conversation and the judgment, the CLI owns the mechanics. Invoke the CLI as `roadmap <cmd>`
