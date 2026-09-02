@@ -3,8 +3,8 @@
 # registered arc worktree, so an executor emits a positive heartbeat it cannot
 # forget (the one-commit-per-task ritual carries it — it is not the executor's job).
 #
-# The beacon is append-only JSONL at <main-checkout>/roadmap/arcs/.building/
-# <ARC-ID>-executor.jsonl, read by scripts/executor-liveness.mjs and arc-status.mjs.
+# The beacon is append-only JSONL at <resolved-root>/arcs/.building/<ARC-ID>-executor.jsonl,
+# read by scripts/executor-liveness.mjs and arc-status.mjs.
 #
 # REGISTRY DISCOVERY (the trap): the .building sidecars live ONLY in the MAIN
 # checkout — the dir is gitignored, so a worktree's own roadmap/arcs/.building/ is
@@ -13,6 +13,9 @@
 #
 # NEVER blocks: a beacon failure must not fail a commit — always exit 0, log stamp
 # errors to stderr only. Fires on git commit; every other command exits 0 fast.
+
+# shellcheck source=lib/roadmap-root.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/roadmap-root.sh"
 
 INPUT=$(cat)
 CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -67,7 +70,12 @@ fi
 # Main checkout = parent of the git COMMON dir (shared by every worktree).
 common=$(git -C "$target" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
 main=$(dirname "$common")
-registry="$main/roadmap/arcs/.building"
+# The root is DISCOVERED, not pinned (hooks/lib/roadmap-root.sh, the shell twin of
+# cli/lib/roadmap-root.mjs) — a docs/roadmap consumer's executors would otherwise stamp into a
+# directory nothing reads. An ambiguous tree returns non-zero after one stderr line: fail soft,
+# never a guessed root and never a failed commit.
+root=$(roadmap_root "$main") || exit 0
+registry="$root/arcs/.building"
 [ -d "$registry" ] || exit 0
 
 realtarget=$(realpath "$target" 2>/dev/null) || realtarget="$target"

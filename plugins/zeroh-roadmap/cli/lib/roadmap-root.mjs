@@ -19,6 +19,11 @@
  *    consumer's records go quietly unread.
  *  - neither marked → the default first candidate, so a fresh or non-consumer tree answers
  *    exactly what it answered before this module existed.
+ *
+ * SHELL TWIN: hooks/lib/roadmap-root.sh implements the same three rules for the hooks, which
+ * cannot afford to spawn node on every tool call. A change here is a change there. It differs in
+ * FORM only on ambiguity — it returns non-zero after one stderr line instead of throwing, because
+ * a hook must never block a session — and in neither case does either twin GUESS a root.
  */
 import { existsSync } from 'node:fs'
 import { join, resolve, relative, isAbsolute, sep } from 'node:path'

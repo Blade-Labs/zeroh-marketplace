@@ -249,7 +249,19 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-roadmap/hooks/lib/roadmap-root.sh', 'plugins/zeroh-roadmap/hooks/beacon-stamp.sh', 'plugins/zeroh-roadmap/hooks/beacon-stamp.test.mjs'],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'New hooks/lib/roadmap-root.sh defines roadmap_root <dir>: ROADMAP_ROOT wins (absolute as-is, relative against <dir>, never probed), else the candidates roadmap then docs/roadmap taking the first that carries roadmap.config.json or phases/, else <dir>/roadmap. beacon-stamp.sh sources it and builds registry from the resolved root instead of the pinned $main/roadmap/arcs/.building. hooks/beacon-stamp.test.mjs is new — the hook had no suite of its own.',
+        how:
+          'TDD: zeroh-roadmap:test-engineer wrote the 9 tests first against the contract only, driving the REAL hook via bash with the JSON payload on stdin and asserting on exit codes and files. RED was 5 pass / 4 fail — the four failures being the docs layout, the ambiguity refusal and both ROADMAP_ROOT forms; the five that passed are today behaviour and the fail-soft guarantees, kept deliberately as regression pins. GREEN is 9/9, and 134/134 across all four hook suites plus roadmap-root and liveness. The one difference in FORM from the mjs twin is the ambiguity path: the CLI throws, the hook returns non-zero after one stderr line and the caller maps that to a silent exit 0, because a beacon failure must never fail the commit that carried it. Neither twin guesses a root. The docblock in cli/lib/roadmap-root.mjs now names the shell twin, so a reader changing one is told about the other.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'The candidate order and markers are stated TWICE — once in cli/lib/roadmap-root.mjs, once in the shell twin — because a PostToolUse hook that fires on every Bash call cannot afford to spawn node to ask. Both docblocks say so and point at each other, but nothing MECHANICALLY pins them together: a candidate added to ROOT_CANDIDATES without the same edit in roadmap-root.sh would leave hooks resolving a root the CLI does not. A cross-twin ratchet (parse the shell candidate list, compare with ROOT_CANDIDATES) is the honest fix and is not in this phase.',
+      },
     },
     {
       id: '23.4',
