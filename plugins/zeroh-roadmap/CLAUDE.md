@@ -8,10 +8,12 @@ The skill catalog (auto-loaded) is the source of truth for what skills exist and
 
 Plugin content via `${CLAUDE_PLUGIN_ROOT}/templates/` and `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 
-User-repo artifacts:
-- Schema: `lib/roadmap/schema.ts`
-- Backlog: `roadmap/backlog.ts` (ordered queue — first entry is next)
-- Phases: `roadmap/phases/*.phase.ts`
+User-repo artifacts. The roadmap ROOT is discovered, not fixed — see the Layout rule in
+`skills/using-zeroh-roadmap/SKILL.md` (mechanics in its `references/layout.md`). Write `<root>/…`,
+never a bare `roadmap/…`:
+- Schema: `<root>/lib/schema.ts` (legacy `lib/roadmap/schema.ts` still recognized)
+- Backlog: `<root>/backlog.ts` (ordered queue — first entry is next)
+- Phases: `<root>/phases/*.phase.ts`
 - Review reports: `reviews/releases/v*-review.json`
 - Dashboard: `reviews/dashboard/index.html`
 

@@ -8,8 +8,12 @@ disable-model-invocation: false
 
 Route ALL development work through the phase system — never create files/schemas/structure
 ad hoc (honor-system). Invoke the CLI as `roadmap <cmd>` (fallback `node
-${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` scaffolds
-`roadmap/` + `roadmap.config.json` — the ONLY sanctioned initialization path.
+${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`).
+
+**Layout — the ONE rule about paths.** The root is DISCOVERED (`roadmap/` or `docs/roadmap/`;
+`ROADMAP_ROOT` overrides; both = refused), so **write `<root>/…`, never a bare `roadmap/…`** — a
+path asserted as fact is wrong in the other layout. `roadmap init [--root <dir>]` is the ONLY
+sanctioned initialization path. Mechanics: `references/layout.md`.
 
 ## Routing — what the user says → what you invoke
 
@@ -24,7 +28,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`). A bare repo → `roadmap init` sc
 | release sweep, resolve release debts | **release-sweep** — manual-only; ask the user to run `/release-sweep` |
 | validate arc, intent validation | **validate-arc** |
 | arc landed / eval the arc | **eval-arc** (do-arc Step 9 auto-runs it) |
-| show roadmap, backlog | `roadmap status` + `roadmap/ROADMAP.md` |
+| show roadmap, backlog | `roadmap status` + `<root>/ROADMAP.md` |
 | what's next, next phase | `roadmap status` → **do-phase** |
 | code review (a diff) | the `code-reviewer` agent / the built-in review command |
 | full code review, pre-release review | **full-code-review** |
@@ -39,8 +43,8 @@ dispatch plus the coordination below.
 
 ## Multi-session coordination (shared repos)
 
-- The COORDINATION BOARD is `roadmap/backlog.ts`'s header (lane map + release plan) —
-  read it FIRST on "what next".
+- The COORDINATION BOARD is `<root>/backlog.ts`'s header (lane map + release plan) — read it
+  FIRST on "what next".
 - `roadmap claim` BEFORE authoring a phase number (CLI-enforced: creation is the lock
   across worktrees).
 - `roadmap status` shows live lanes; `roadmap arm <id>` claims an arc lane (CLI-enforced:
@@ -60,3 +64,4 @@ skill has not already:
 - Splitting or placing a UI component (at planning time) → `references/component-structure.md`
 - Introducing any external package/font/icon/image/snippet/model → `references/external-assets-licensing.md`
 - Running this protocol on a non-Claude harness (Codex) → `references/codex-tools.md`
+- Scaffolding a consumer, writing a phase file's import, or a root refusal → `references/layout.md`

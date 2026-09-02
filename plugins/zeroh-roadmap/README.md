@@ -92,15 +92,20 @@ Each release produces `reviews/releases/v{version}-review.json` — gate results
 
 ## What gets created in your project
 
-On first use, the plugin scaffolds:
+`roadmap init [--root <dir>]` scaffolds the tree below under `<root>` — `roadmap` by default,
+`docs/roadmap` for a repo that keeps its workflows as sibling doc folders. The root is then
+DISCOVERED, never configured (`ROADMAP_ROOT` overrides; a repo carrying both candidates is
+refused by name). Existing consumers with the legacy toplevel `lib/roadmap/schema.ts` seam are
+untouched — it stays recognized. Full rules:
+`skills/using-zeroh-roadmap/references/layout.md`.
 
 | Path | Purpose |
 |------|---------|
-| `lib/roadmap/schema.ts` | `definePhase()` + `defineBacklog()` with Zod validation (flat or tiered backlog input — see `roadmap/backlog.ts`) |
-| `lib/roadmap/registry.ts` | Phase discovery (glob + dynamic import + duplicate detection) |
-| `lib/roadmap/emit.ts` | Changelog emission from `.phase.ts` files |
-| `roadmap/phases/` | Where `.phase.ts` files live |
-| `roadmap/ROADMAP.md` | Gate protocol + git strategy |
+| `<root>/lib/schema.ts` | `definePhase()` + `defineBacklog()` with Zod validation (flat or tiered backlog input — see `<root>/backlog.ts`) |
+| `<root>/lib/registry.ts` | Phase discovery (glob + dynamic import + duplicate detection) |
+| `<root>/lib/emit.ts` | Changelog emission from `.phase.ts` files |
+| `<root>/phases/` | Where `.phase.ts` files live (each imports `../lib/schema`) |
+| `<root>/ROADMAP.md` | Gate protocol + git strategy |
 | `reviews/releases/` | Release review report JSONs |
 | `scripts/pre-review.sh` | Automated checks (catches 40% of findings before agents) |
 | `scripts/collect-phase-metrics.ts` | Git stats + gate results collector |

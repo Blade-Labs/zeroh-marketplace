@@ -640,3 +640,21 @@ independently, and a reader comparing them needs to know that is convergence, no
 | the long-form run-tier substitution clause (`…that substitution is PRE-RATIFIED here and is never an escalation`) | obsolete-with-evidence(wording compression; the substitution, its PRE-RATIFIED status and the never-an-escalation rule all survive in the short form) | codex.mjs SHARED HOST bullet |
 | the worktree fence stated twice (intro sentence + bullet 1) | relocated | one statement, in the bullet that owns worktree discipline — the ratchet's own assertions pin both the fence regex and the staging phrase |
 | RESUME RULE / COMMIT TRAILER / ATTRIBUTION long forms | obsolete-with-evidence(pure wording compression: `done: true` + commit-in-log, the trailer, and the driver/lane pair all survive verbatim in meaning) | codex.test.mjs asserts each override individually |
+
+## skills/using-zeroh-roadmap/SKILL.md — the Layout rule (phase 23 task 23.5)
+
+Phase 23 makes the roadmap root DISCOVERABLE, which turns every stated path in every skill from a
+fact into a guess. The fix is one rule in the always-active router — but the router is inside the
+measured `do-arc` flow, whose budget allows zero growth, and the plan's assumed funding ("trim the
+router's own restated path list") is worth ~20 tokens against a rule that needs ~85. So the rule
+is split the way the standing bar prescribes: the OPERATIVE sentence stays in the router, the
+mechanics (candidates, markers, the refusal, the schema seam, scaffolding) decompose into
+`references/layout.md`, which is on-demand and outside every measured flow.
+
+**Measured:** `skills/using-zeroh-roadmap/SKILL.md` 871 → 956 tokens (3,483 → 3,823 B).
+
+| passage (origin) | disposition | evidence |
+|---|---|---|
+| the intro's `A bare repo → roadmap init scaffolds roadmap/ + roadmap.config.json — the ONLY sanctioned initialization path` | relocated | absorbed verbatim in meaning into the Layout rule three lines below, which also carries the `--root` flag the old sentence could not express |
+| the routing table's `roadmap/ROADMAP.md` and the coordination board's `roadmap/backlog.ts` as literal paths | enforced-by-code(cli/lib/roadmap-root.mjs + the scan tripwire in cli/lib/roadmap-root.test.mjs) | both are now `<root>/…`; the root they resolve against is what the resolver returns, and no non-test source under cli/ or hooks/ may spell it |
+| the layout MECHANICS (candidate order, markers, the ambiguity refusal, the schema seam, `roadmap init --root`) | relocated(`skills/using-zeroh-roadmap/references/layout.md`) | never in a model-loaded body before this phase; written straight into the on-demand reference and cited from the router, the routed-to standards list, README.md and CLAUDE.md |
