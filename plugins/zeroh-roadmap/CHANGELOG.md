@@ -3,7 +3,7 @@
 Reconstructed 2026-08-26 (phase 13.7) from the committed record trail; maintained forward.
 One entry per minor: the shipped surface, not the story.
 
-## 0.35.0 — 2026-09-01
+## 0.35.0 — 2026-09-02
 - MINESWEEP arc (phases 14-20, landed 2026-09-01; sweep green, intent validation 6/6, eval
   finalized): the mined failure classes closed.
   - Lane lifecycle (14): stray-lane inventory classifier (`surveyLanes`), `roadmap audit` check 15 +
