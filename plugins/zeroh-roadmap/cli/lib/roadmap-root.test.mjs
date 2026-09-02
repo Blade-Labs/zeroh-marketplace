@@ -297,3 +297,232 @@ test('consumerSchemaPath — neither seam → BridgeError kind schema-missing na
       `into a path the resolver may not even consult; got:\n${text}`,
   )
 })
+
+// ── the scan tripwire + roadmapRootRel ─────────────────────────────────────────────────
+// Added below the file's original 15 tests (untouched). The extra fs/path names live in
+// their own import so the block above stays exactly as it was written.
+import { readdirSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+// A NAMESPACE import on purpose: roadmapRootRel does not exist yet, and a static NAMED
+// import of a missing export is a link error that would take all 15 green tests above
+// down with it. The RED must be "this one export is missing", not "the module is gone".
+import * as roadmapRootModule from './roadmap-root.mjs'
+
+/** The root members a `roadmap/<member>` string can name. Deliberately CLOSED: broadening it
+ *  to "any roadmap/…" would drag codex.mjs's prose `--doc roadmap/<name>.md` usage line in. */
+const ROOT_MEMBERS = ['backlog\\.ts', 'phases', 'arc-evals', 'arcs', 'archive', '\\.gate', 'roadmap\\.config\\.json']
+
+/** The argv form: a QUOTED root segment handed to join/resolve — `join(x, 'roadmap', …)`,
+ *  `resolve(argv[0] ?? 'roadmap')`. Fresh regex per call: /g carries lastIndex. */
+const argvForm = () => /(['"`])(?:docs\/)?roadmap\1\s*[,)]/g
+
+/** The path form: one QUOTED string that STARTS at the root and names a known member —
+ *  'roadmap/backlog.ts', `roadmap/arc-evals/lessons.jsonl`, 'roadmap/.gate/'. */
+const pathForm = () => new RegExp(`(['"\`])(?:docs/)?roadmap/(?:${ROOT_MEMBERS.join('|')})`, 'g')
+
+/**
+ * Every non-test .mjs/.mts under cli/ (recursively: lib/, commands/, testdata/, testdata/eval-arc/,
+ * and cli/*.mts) and under hooks/, as { rel, src }. scripts/ is OUT of scope by plan ruling —
+ * migration and estate tooling there keeps its literals.
+ */
+function rootLiteralSources() {
+  const pluginRoot = new URL('../../', import.meta.url)
+  const out = []
+  const walk = (rel) => {
+    for (const e of readdirSync(new URL(rel, pluginRoot), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (e.isDirectory()) walk(`${rel}${e.name}/`)
+      else if (/\.m[jt]s$/.test(e.name) && !/\.test\.m[jt]s$/.test(e.name)) {
+        out.push({ rel: `${rel}${e.name}`, src: readFileSync(new URL(`${rel}${e.name}`, pluginRoot), 'utf8') })
+      }
+    }
+  }
+  walk('cli/')
+  walk('hooks/')
+  return out
+}
+
+test('roadmap-root.mjs: it is the ONLY home of the root literals left in non-test cli/ and hooks/ code', () => {
+  // The acceptance criterion as a grep the conversion cannot half-do. A consumer laid out under
+  // docs/roadmap/ reads as "no roadmap" at every site that spells the root itself, so the count
+  // of such sites has to be checkable — and stay at one — rather than surveyed by hand once.
+  const sources = rootLiteralSources()
+  const names = new Set(sources.map((s) => s.rel))
+  const known = ['cli/lib/derive.mjs', 'cli/commands/status.mjs', 'hooks/session-lane-check.mjs', 'cli/audit-checks.mts']
+  const missing = known.filter((k) => !names.has(k))
+  assert.ok(
+    sources.length >= 30 && missing.length === 0,
+    `scan guard: the sweep must actually reach the plugin's sources — it enumerated ${sources.length} ` +
+      `non-test files and did not see ${missing.join(', ') || '(nothing)'}. A readdir that walked the wrong ` +
+      `directory, or one that found nothing, would make the assertion below vacuously green: an empty ` +
+      `flagged set deepEquals nothing and every literal in the tree would ship unnoticed`,
+  )
+
+  const found = []
+  for (const { rel, src } of sources) {
+    const shapes = [...src.matchAll(argvForm()), ...src.matchAll(pathForm())].map((m) => m[0])
+    if (shapes.length > 0) found.push({ rel, shapes: [...new Set(shapes)] })
+  }
+  const hits = found.map((f) => f.rel)
+  const detail = found.map((f) => `  ${f.rel} — ${f.shapes.join(' ')}`).join('\n')
+  assert.deepEqual(
+    hits,
+    ['cli/lib/roadmap-root.mjs'],
+    `cli/lib/roadmap-root.mjs is the ONLY home the roadmap data root may be spelled as a literal in; ` +
+      `${hits.length} file(s) under cli/ or hooks/ still spell it themselves:\n${detail}\n` +
+      `Each one reads a docs/roadmap consumer as "no roadmap" — join onto roadmapRoot(dir) / ` +
+      `roadmapRootRel(dir) instead. (Only QUOTED occurrences are flagged: the docs/roadmap prose in ` +
+      `gate.mjs and slots.mjs is not a literal and is not the target.)`,
+  )
+
+  // The exemption is only sound while the exempt file is a REAL home. An entry pointing at a
+  // module that no longer carries the literals is a stale allow-list, not a passing invariant.
+  const home = readFileSync(new URL('./roadmap-root.mjs', import.meta.url), 'utf8')
+  assert.match(
+    home,
+    /export const ROOT_CANDIDATES/,
+    'anchor NOT FOUND: cli/lib/roadmap-root.mjs must declare `export const ROOT_CANDIDATES` — the allow-listed ' +
+      'home has to be the module that actually owns the candidate list, or the exemption above exempts nothing',
+  )
+  for (const candidate of ROOT_CANDIDATES) {
+    assert.ok(
+      home.includes(`'${candidate}'`) || home.includes(`"${candidate}"`) || home.includes(`\`${candidate}\``),
+      `the home must spell every ROOT_CANDIDATES entry as a literal; '${candidate}' is not written in ` +
+        `roadmap-root.mjs — a candidate assembled elsewhere is a second home the scan above cannot see`,
+    )
+  }
+  assert.match(
+    home,
+    new RegExp(argvForm().source),
+    'the home carries the ARGV form (the quoted root segment) — an exempt file with none of the literals it ' +
+      'is exempt for is an empty exemption',
+  )
+  assert.match(
+    home,
+    new RegExp(pathForm().source),
+    'the home carries the PATH form too (a quoted `roadmap/<member>` naming one of ' +
+      `${ROOT_MEMBERS.length} known members) — both shapes are what the scan flags everywhere else, so both ` +
+      'must live here; a home that owns only half of them leaves the other half homeless',
+  )
+})
+
+// ── roadmapRootRel: the repo-relative spelling (git pathspecs, diff prefixes, provenance) ──
+
+/**
+ * roadmapRootRel, or a NAMED failure. Git pathspecs (`git log -- roadmap/backlog.ts`),
+ * diff-prefix tests (`file.startsWith('roadmap/')`) and provenance strings cited in eval
+ * reports all need the root RELATIVE to the repo, not the absolute path roadmapRoot returns.
+ */
+function roadmapRootRel(dir) {
+  assert.equal(
+    typeof roadmapRootModule.roadmapRootRel,
+    'function',
+    'cli/lib/roadmap-root.mjs must export roadmapRootRel(dir): the resolved root as a repo-relative POSIX ' +
+      'path. Without it every pathspec site keeps its own literal and the scan tripwire above can never go green',
+  )
+  return roadmapRootModule.roadmapRootRel(dir)
+}
+
+/** Call roadmapRootRel expecting a throw; return the caught error. */
+function relErr(dir) {
+  try {
+    roadmapRootRel(dir)
+  } catch (e) {
+    return e
+  }
+  return assert.fail('expected roadmapRootRel to throw, it returned')
+}
+
+test('roadmapRootRel — the marked root, repo-relative and POSIX: "roadmap" / "docs/roadmap", no ./ and no trailing slash', () => {
+  const plain = newTree()
+  writeAt([plain, 'roadmap', 'roadmap.config.json'])
+  assert.equal(roadmapRootRel(plain), 'roadmap')
+
+  const docs = newTree()
+  mkdirp(docs, 'docs', 'superpowers')
+  writeAt([docs, 'docs', 'roadmap', 'roadmap.config.json'])
+  const rel = roadmapRootRel(docs)
+  assert.equal(rel, 'docs/roadmap')
+  assert.equal(`${rel}/backlog.ts`, 'docs/roadmap/backlog.ts', 'a pathspec is built by concatenation — `git log -- <rel>/backlog.ts`')
+  assert.ok(!rel.endsWith('/'), `no trailing slash: "docs/roadmap/" + "/backlog.ts" is a pathspec git matches nothing against; got ${JSON.stringify(rel)}`)
+  assert.ok(!rel.startsWith('./'), `no "./" prefix: git ls-tree and startsWith() diff tests both compare against bare repo paths; got ${JSON.stringify(rel)}`)
+  assert.ok(!rel.startsWith('/'), `relative, not absolute — that is what roadmapRoot is for; got ${JSON.stringify(rel)}`)
+  assert.ok(!rel.includes('\\'), `POSIX separators only: git speaks "/" in pathspecs on every platform; got ${JSON.stringify(rel)}`)
+})
+
+test('roadmapRootRel — EVERY ROOT_CANDIDATES entry: the rel is exactly the root roadmapRoot resolved, spelled from dir', () => {
+  // The two functions must never disagree: a caller that stats roadmapRoot() and pathspecs
+  // roadmapRootRel() would otherwise read one root and write about another.
+  for (const candidate of ROOT_CANDIDATES) {
+    const dir = newTree()
+    writeAt([dir, ...candidate.split('/'), 'roadmap.config.json'])
+    const rel = roadmapRootRel(dir)
+    assert.equal(rel, candidate, `candidate ${candidate} must come back as its own repo-relative spelling`)
+    assert.equal(resolve(dir, rel), roadmapRoot(dir), `resolve(dir, rel) must land on exactly what roadmapRoot(dir) returns for ${candidate}`)
+  }
+})
+
+test('roadmapRootRel — NO marker → "roadmap": the pathspec every consumer has today, unchanged', () => {
+  const bare = newTree()
+  assert.equal(roadmapRootRel(bare), ROOT_CANDIDATES[0])
+  assert.equal(roadmapRootRel(bare), 'roadmap')
+
+  const empty = newTree()
+  mkdirp(empty, 'roadmap')
+  mkdirp(empty, 'docs', 'roadmap') // an unmarked prose folder is not a marker here either
+  assert.equal(roadmapRootRel(empty), 'roadmap')
+})
+
+test('roadmapRootRel — ROADMAP_ROOT wins here too, relative or absolute, and is NOT probed', () => {
+  const dir = newTree()
+  writeAt([dir, 'roadmap', 'roadmap.config.json']) // a real marked candidate to beat
+
+  withRoadmapRootEnv(join('docs', 'plan', 'roadmap'), () => {
+    assert.equal(roadmapRootRel(dir), 'docs/plan/roadmap', 'a relative override comes back as itself, still relative')
+  })
+  withRoadmapRootEnv(join(dir, 'docs', 'roadmap'), () => {
+    assert.equal(roadmapRootRel(dir), 'docs/roadmap', 'an absolute override INSIDE dir is spelled back relative to dir')
+  })
+  withRoadmapRootEnv(join(dir, 'not', 'created', 'yet'), () => {
+    assert.equal(
+      roadmapRootRel(dir),
+      'not/created/yet',
+      'and the override is not probed for existence — `roadmap init` scaffolds into a root that does not exist yet',
+    )
+  })
+})
+
+test('roadmapRootRel — an ABSOLUTE ROADMAP_ROOT OUTSIDE dir yields an honest ../ path, not a pretend-inside one', () => {
+  // Silently returning the basename ("external-roadmap") would make `git log -- external-roadmap`
+  // match nothing in this repo and report the file as untouched — a clean answer about a root
+  // that was never read.
+  const parent = newTree()
+  const dir = join(parent, 'repo')
+  mkdirp(dir)
+  const outside = join(parent, 'external-roadmap')
+  writeAt([outside, 'roadmap.config.json'])
+
+  withRoadmapRootEnv(outside, () => {
+    const rel = roadmapRootRel(dir)
+    assert.equal(rel, '../external-roadmap')
+    assert.ok(rel.startsWith('../'), `an out-of-tree root must SAY it is out of tree; got ${JSON.stringify(rel)}`)
+    assert.equal(resolve(dir, rel), outside, 'and it still resolves back to the root roadmapRoot returns')
+    assert.equal(resolve(dir, rel), roadmapRoot(dir))
+  })
+})
+
+test('roadmapRootRel — an AMBIGUOUS tree THROWS RoadmapRootError, it never guesses a pathspec', () => {
+  const dir = newTree()
+  writeAt([dir, 'roadmap', 'roadmap.config.json'])
+  mkdirp(dir, 'docs', 'roadmap', 'phases')
+
+  const err = relErr(dir)
+  assert.ok(err instanceof RoadmapRootError, `expected RoadmapRootError; got ${err && err.name}: ${err && err.message}`)
+  assert.equal(err.kind, 'ambiguous', 'the relative spelling refuses on exactly the same terms as the absolute one — a pathspec is where a silent guess does its damage quietly')
+  const text = err.messageLines.join('\n')
+  assert.ok(text.includes(join(dir, 'roadmap')) && text.includes(join(dir, 'docs', 'roadmap')), `the refusal must name both candidates; got:\n${text}`)
+  assert.ok(text.includes('ROADMAP_ROOT'), `and the remedy; got:\n${text}`)
+
+  withRoadmapRootEnv(join(dir, 'docs', 'roadmap'), () => {
+    assert.equal(roadmapRootRel(dir), 'docs/roadmap', 'and the advertised remedy resolves it here too')
+  })
+})
