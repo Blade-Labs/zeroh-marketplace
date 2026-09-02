@@ -37,7 +37,37 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 25,
   name: 'Gate loop convergence: persisted reviewer findings, severity-gated stop, delta-only later rounds, eval slices',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-09-02',
+  gate: {
+    lint: 'clean', typeCheck: 'clean',
+    unitTests: { passed: 1834, total: 1834, notes: 'Full gate roadmap/.gate/25/run-000005-2026-09-02T22-45-40-310Z.json was GREEN; both post-review focused runs also passed.' },
+    integrationTests: { passed: 0, total: 0, notes: 'declared-none for this consumer.' },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none; no rendered surface.' }, build: 'clean',
+  },
+  gateRounds: [
+    { round: 0, agent: 'quality-pass', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Preserved absent severity evidence on legacy reviewer rounds.' },
+    { round: 1, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'fixed-closed', summary: 'Closed mixed-report evidence and empty fixed-closed edge cases.' },
+  ],
+  metrics: { commits: 1, linesAdded: 639, linesRemoved: 61, filesChanged: 18, testsAtStart: 1823, testsAtEnd: 1834, testsAdded: 11, startedAt: '2026-09-02T21:59:56.000Z', completedAt: '2026-09-02T22:58:28.000Z' },
+  compromises: 'No unratified implementation compromise remains; all quality and correctness findings were fixed and recorded.',
+  executionResult: {
+    phase: 25, status: 'done', driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    modelPolicy: { source: 'config', preset: 'codex' },
+    roles: [
+      { role: 'test-engineer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'test-engineer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'test-engineer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'quality-pass', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+    ],
+    compromises: [], skipped: [], hardcoded: [],
+    surfaced: [
+      'The absolute primary-checkout CLI predates phase 25 and cannot dispatch round-brief or retain typed findings, so those self-hosting operations used the worktree CLI under test; the primary checkout was untouched.',
+      'The first scoped RED run found plugin-local dependencies absent; npm install restored the manifest-declared ignored node_modules before verification.',
+    ],
+    hardStops: [], gateRounds: 2,
+  },
   plannedBy: { model: 'claude-fable-5-1' },
   reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'feature',
