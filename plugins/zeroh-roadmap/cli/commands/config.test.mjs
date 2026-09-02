@@ -124,7 +124,7 @@ test('3) unconfigured repo: `config check` exits 1 with the VERBATIM absence lin
   const res = roadmap(repo, 'config', 'check')
   assert.equal(res.status, 1, `absence is a usage/config error → exit 1; stderr:\n${res.stderr}`)
   const expected =
-    `roadmap: no roadmap/roadmap.config.json at ${repo} — this consumer is not configured. Scaffold one: roadmap init --config`
+    `roadmap: no roadmap.config.json at ${join(repo, 'roadmap', 'roadmap.config.json')} — this consumer is not configured. Scaffold one: roadmap init --config`
   assert.ok(
     res.stderr.includes(expected),
     `stderr must contain the verbatim absence line.\nexpected substring:\n${expected}\ngot stderr:\n${res.stderr}`,

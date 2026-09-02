@@ -17,6 +17,8 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { BridgeError } from './bridge-error.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 
 /** The VERBATIM worktree-hazard line a strict context prints on tsx-absent. */
 export const TSX_ABSENT_HINT =
@@ -24,16 +26,11 @@ export const TSX_ABSENT_HINT =
   'committed lockfile selects: pnpm-lock.yaml → pnpm install --frozen-lockfile, ' +
   'package-lock.json → npm ci (worktree node_modules are NOT shared)'
 
-/** A typed bridge failure. kind ∈ 'tsx-absent' | 'schema-missing' | 'zod' | 'load' | 'eval-error'. */
-export class BridgeError extends Error {
-  constructor(kind, messageLines, extra = {}) {
-    super(messageLines.join('\n'))
-    this.name = 'BridgeError'
-    this.kind = kind
-    this.messageLines = messageLines
-    Object.assign(this, extra)
-  }
-}
+// BridgeError is DECLARED in ./bridge-error.mjs and re-exported here unchanged: roadmap-root.mjs
+// throws it while this module consumes roadmap-root.mjs, so one home for the class keeps the two
+// from importing each other. Every existing importer of BridgeError keeps this module as its door.
+export { BridgeError } from './bridge-error.mjs'
+export { consumerSchemaPath } from './roadmap-root.mjs'
 
 // The import-parse one-liner (validate-roadmap-file.mjs:38-49, verbatim behavior):
 // import the target by absolute file:// URL, unwrap ONE CJS↔ESM default layer, print
@@ -267,7 +264,7 @@ export function bridgeParseShapeJson(consumerRoot, schemaPath, shapeName, inputJ
 // roadmap/.gate/.gitignore). Every disk op is try/catch: a cache failure is a MISS, never
 // an error. Only ok results are cached.
 const typedCache = new Map()
-const typedCacheDir = (consumerRoot) => join(consumerRoot, 'roadmap', '.gate', '.typed-cache')
+const typedCacheDir = (consumerRoot) => join(roadmapRoot(consumerRoot), '.gate', '.typed-cache')
 
 // The plugin's own schema definition file — folded into every cache key so a re-vendored /
 // edited schema invalidates prior parses (the parsed value is schema-dependent, not just
@@ -301,7 +298,7 @@ function readTypedCacheDisk(consumerRoot, hash) {
 
 function writeTypedCacheDisk(consumerRoot, hash, parsed) {
   try {
-    if (!existsSync(join(consumerRoot, 'roadmap'))) return // only mirror inside a real consumer
+    if (!existsSync(roadmapRoot(consumerRoot))) return // only mirror inside a real consumer
     const dir = typedCacheDir(consumerRoot)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, `${hash}.json`), JSON.stringify(parsed))
@@ -439,17 +436,8 @@ export function bridgeImportMany(paths, { consumerRoot, timeout, exec, cache = t
   return { ok: true, byPath }
 }
 
-/**
- * <consumerRoot>/lib/roadmap/schema.ts — the ONE consumer schema seam-3 validates
- * through. Existence-checked: a non-consumer tree throws BridgeError('schema-missing')
- * for the caller to map to exit 1.
- */
-export function consumerSchemaPath(consumerRoot) {
-  const p = join(consumerRoot, 'lib', 'roadmap', 'schema.ts')
-  if (!existsSync(p)) {
-    throw new BridgeError('schema-missing', [
-      `roadmap: no consumer schema at ${p} — this repo is not a roadmap consumer (expected lib/roadmap/schema.ts)`,
-    ])
-  }
-  return p
-}
+// The ONE consumer schema seam-3 validates through, resolved by roadmap-root.mjs (root-first
+// <root>/lib/schema.ts, then the legacy <consumerRoot>/lib/roadmap/schema.ts) and existence-
+// checked there — a non-consumer tree throws BridgeError('schema-missing') for the caller to
+// map to exit 1. Re-exported from HERE because gate, eval, result, eval-collect and landing all
+// import it from this module; the resolver moved, the door did not.

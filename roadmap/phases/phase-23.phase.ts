@@ -126,7 +126,19 @@ export default definePhase({
       ],
       testMode: 'tdd',
       interfaces: { consumes: [], produces: ['roadmapRoot(dir)', 'consumerSchemaPath(dir)', 'ROOT_CANDIDATES', 'RoadmapRootError'] },
-      done: false,
+      done: true,
+      doneDate: '2026-09-02',
+      transparencyReport: {
+        whatWasDone:
+          'New cli/lib/roadmap-root.mjs is the one resolver: ROOT_CANDIDATES = [roadmap, docs/roadmap], roadmapRoot(dir) (ROADMAP_ROOT override -> marked candidate -> ambiguous refusal -> default first candidate), consumerSchemaPath(dir) (root-first <root>/lib/schema.ts, then the legacy <dir>/lib/roadmap/schema.ts, else BridgeError schema-missing naming BOTH), RoadmapRootError and resetRoadmapRootCache. tsx-bridge.mjs now delegates consumerSchemaPath and keeps exporting it (gate, eval, result, eval-collect and landing import it from there unchanged); its typed-cache dir and consumer probe ride roadmapRoot too. config.mjs resolves roadmap.config.json under roadmapRoot(toplevel), maps an ambiguous root to ConfigError(ambiguous) carrying the resolver text, and names the RESOLVED path in the absent message.',
+        how:
+          'TDD: zeroh-roadmap:test-engineer authored cli/lib/roadmap-root.test.mjs first from the acceptance criteria and type signatures only (never the steps) - 15 tests, RED at 0 pass / 1 fail with ERR_MODULE_NOT_FOUND on cli/lib/roadmap-root.mjs. Then the implementation, GREEN at 94/94 across roadmap-root + tsx-bridge + config (lib and commands) suites. The override is checked BEFORE the ambiguity probe so the remedy the refusal advertises is actually takeable, and an existing-but-unmarked directory is deliberately not a marker (markers are roadmap.config.json or phases/) so a repo with a prose docs/roadmap/ folder keeps reading its real roadmap/. Resolutions memoize on (dir, ROADMAP_ROOT) - keying on dir alone would hand a later caller an answer the current override never authorized.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'Two files outside the planned files[] were touched, both forced by the plan and neither a scope change. (1) cli/lib/bridge-error.mjs is NEW: consumerSchemaPath must throw BridgeError (every caller tests `e instanceof BridgeError`) while tsx-bridge.mjs must consume roadmapRoot, so declaring the class in either module would make the two import each other; the class moved to its own dependency-free module and tsx-bridge.mjs re-exports it unchanged, so no importer or instanceof check moved. (2) cli/commands/config.test.mjs asserts the same absent-config line verbatim as cli/lib/config.test.mjs, so naming the RESOLVED path (a step-3 requirement) had to update both. Under TDD the test file cli/lib/roadmap-root.test.mjs is part of the diff and was already planned in files[].',
+      },
     },
     {
       id: '23.2',

@@ -125,7 +125,7 @@ test('4) absence → ConfigError kind absent with the verbatim scaffold line', (
   assert.ok(err instanceof ConfigError)
   assert.equal(err.kind, 'absent')
   const expected =
-    `roadmap: no roadmap/roadmap.config.json at ${repo} — this consumer is not configured. Scaffold one: roadmap init --config`
+    `roadmap: no roadmap.config.json at ${join(repo, 'roadmap', 'roadmap.config.json')} — this consumer is not configured. Scaffold one: roadmap init --config`
   assert.ok(
     err.messageLines.includes(expected),
     `messageLines must contain the verbatim scaffold line; got:\n${err.messageLines.join('\n')}`,

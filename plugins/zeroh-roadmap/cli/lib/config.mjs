@@ -16,8 +16,9 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { z } from 'zod'
 import { gitToplevel } from './gitroot.mjs'
+import { roadmapRoot, RoadmapRootError } from './roadmap-root.mjs'
 
-/** Typed load failure. kind ∈ 'absent' | 'invalid' | 'unreadable'. */
+/** Typed load failure. kind ∈ 'absent' | 'invalid' | 'unreadable' | 'ambiguous'. */
 export class ConfigError extends Error {
   constructor(kind, messageLines) {
     super(messageLines.join('\n'))
@@ -208,7 +209,16 @@ export function integrationRefOf(config) {
  */
 export function loadConfig(cwd, opts = {}) {
   const toplevel = gitToplevel(cwd)
-  const configPath = process.env.ROADMAP_CONFIG || join(toplevel, 'roadmap', 'roadmap.config.json')
+  // The config lives INSIDE the root it would otherwise have to name, so the root is
+  // DISCOVERED (roadmap-root.mjs), never configured. ROADMAP_CONFIG still wins outright —
+  // fixtures and tests point it at an explicit file.
+  let configPath
+  try {
+    configPath = process.env.ROADMAP_CONFIG || join(roadmapRoot(toplevel), 'roadmap.config.json')
+  } catch (e) {
+    if (e instanceof RoadmapRootError) throw new ConfigError('ambiguous', e.messageLines)
+    throw e
+  }
 
   let raw
   try {
@@ -216,7 +226,7 @@ export function loadConfig(cwd, opts = {}) {
   } catch (e) {
     if (e && e.code === 'ENOENT') {
       const lines = [
-        `roadmap: no roadmap/roadmap.config.json at ${toplevel} — this consumer is not configured. Scaffold one: roadmap init --config`,
+        `roadmap: no roadmap.config.json at ${configPath} — this consumer is not configured. Scaffold one: roadmap init --config`,
       ]
       if (opts.baseRef && baseTipHasConfig(toplevel, opts.baseRef)) {
         lines.push(
