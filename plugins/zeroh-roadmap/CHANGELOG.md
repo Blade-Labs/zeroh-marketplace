@@ -3,6 +3,15 @@
 Reconstructed 2026-08-26 (phase 13.7) from the committed record trail; maintained forward.
 One entry per minor: the shipped surface, not the story.
 
+## 0.37.0 — 2026-09-02
+- Gate loop convergence (phase 25): the reviewer's typed findings (severity, confidence, file,
+  fixing commit) and the recording sha persist on every round; `roadmap gate round-brief <N>`
+  decides continue / close / clean / cap from the recorded severities — only CRITICAL/HIGH
+  continue the loop, MEDIUM/LOW are fixed and recorded as `fixed-closed`; later rounds review
+  the delta since the previous round plus the closure of prior findings; the eval records and
+  scorecard carry findings by severity and the rounds-on-low-only share. First data point: phase
+  25's own gate closed in two rounds (0/1/1/1).
+
 ## 0.36.0 — 2026-09-02
 - Roadmap root discovery (phase 23): the data root is `roadmap/` or `docs/roadmap/` (first with a
   marker; `ROADMAP_ROOT` overrides; both = refused by name); the schema seam lives at
