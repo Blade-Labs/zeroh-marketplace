@@ -60,6 +60,10 @@ export default defineBacklog([
     phase: 12,
     name: 'DEFERRED — closed-loop trigger design: scheduled detection that authors draft fix proposals',
   },
+  {
+    phase: 26,
+    name: 'Protocol diet with a ruler: trim map, adherence scorer, the trims, and a two-driver execution trial',
+  },
   // Flat form (back-compat):
   // { phase: 1, name: 'Example phase name' },
   //
