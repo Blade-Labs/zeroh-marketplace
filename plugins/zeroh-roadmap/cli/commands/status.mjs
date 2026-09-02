@@ -101,10 +101,18 @@ function derive(root) {
   // human table is parity-pinned byte-compatible with the legacy scripts/arc-status.mjs.
   const repo = git(['rev-parse', '--show-toplevel'], root) || resolve(root, '..')
   let worktrees = new Map() // path -> branch
+  let worktreeError = null
   try {
     worktrees = new Map(listWorktrees(repo).map(({ dir, branch }) => [resolve(dir), branch ?? '(detached)']))
-  } catch {
-    // the empty inventory above stands — the Map is only assigned once the enumeration succeeds
+  } catch (e) {
+    // The empty inventory above stands — the Map is only assigned once the enumeration succeeds.
+    // A root with no repo around it is the ordinary silent case (the parity-pinned table). An
+    // enumeration that fails INSIDE a resolved repo (a wedged `git worktree list`, ENOBUFS on a
+    // huge estate) is the surprising one, and it travels exactly like strayError at (8): stderr
+    // for the human, `warnings` for the machine — an empty "other worktrees" over a failure would
+    // be the silent all-clear this file's own doctrine forbids.
+    // git's own last line is the reason; the execFileSync preamble repeats the argv the message already names.
+    if (existsSync(join(repo, '.git'))) worktreeError = `worktrees could not be enumerated in ${repo} — ${String(e.message).trim().split('\n').pop()}`
   }
 
   // 2) Build registrations — deliberately NOT sidecar.listSidecars(): that reader silently
@@ -310,12 +318,13 @@ function derive(root) {
     }
   }
 
-  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes, strayError, pluginDrift }
+  return { derivedAt, repo, rows: rows.sort((a, b) => a.arc.localeCompare(b.arc)), otherWorktrees, noArcId, unreadableSidecars, postMergeRed, strayLanes, strayError, worktreeError, pluginDrift }
 }
 
 function printHuman(m) {
   for (const w of m.unreadableSidecars) process.stderr.write(`  ⚠ ${w}\n`)
   if (m.strayError) process.stderr.write(`  ⚠ ${m.strayError}\n`)
+  if (m.worktreeError) process.stderr.write(`  ⚠ ${m.worktreeError}\n`)
   const out = []
   out.push(`arc-status — derived ${m.derivedAt} (repo ${m.repo})\n`)
   if (m.pluginDrift) out.push(`  ⚠ ${m.pluginDrift}\n`)
@@ -347,6 +356,7 @@ export default async function run(argv) {
       ...(model.noArcId.length ? [`in-progress phase(s) with NO arcId: ${model.noArcId.join(', ')}`] : []),
       ...(model.postMergeRed ? [model.postMergeRed] : []),
       ...(model.strayError ? [model.strayError] : []),
+      ...(model.worktreeError ? [model.worktreeError] : []),
       ...(model.pluginDrift ? [model.pluginDrift] : []),
     ]
     // Box capacity rides the --json machine shape ONLY (phase 11) — the human table is

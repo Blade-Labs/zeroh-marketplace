@@ -1286,3 +1286,37 @@ test("29) a missing or non-string selfPath is silent and never throws — best-e
     assert.equal(line, null, `${name} is silent; got ${JSON.stringify(line)}`)
   }
 })
+
+test('30) a `git worktree list` failure INSIDE a resolved repo is surfaced on stderr and --json warnings — never an empty inventory that reads as all-clear', () => {
+  // Step (1) rides listWorktrees, which THROWS where the inline parse it replaced swallowed. A
+  // root with no repo around it stays silent (parity), but a wedged enumeration inside a real
+  // repo must travel like strayError at (8). Simulated with a PATH shim: real git for everything
+  // except `worktree list`, which fails the way a wedged index or an ENOBUFS would.
+  const root = mkdtempSync(join(tmpdir(), 'zr-status-wedge-'))
+  process.on('exit', () => rmSync(root, { recursive: true, force: true }))
+  spawnSync('git', ['-C', root, 'init', '-q'], { encoding: 'utf8' })
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  const shimDir = join(root, 'shim')
+  mkdirSync(shimDir)
+  const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim()
+  writeFileSync(
+    join(shimDir, 'git'),
+    `#!/bin/sh\nfor a in "$@"; do [ "$a" = "worktree" ] && WT=1; [ "$a" = "list" ] && LS=1; done\nif [ -n "$WT" ] && [ -n "$LS" ]; then echo "fatal: simulated wedge" >&2; exit 128; fi\nexec ${realGit} "$@"\n`,
+    { mode: 0o755 },
+  )
+  const env = { ...process.env, PATH: `${shimDir}:${process.env.PATH}` }
+  delete env.ROADMAP_CONFIG
+  delete env.ZEROH_ROADMAP_CAPACITY_PROBES
+
+  const human = spawnSync('node', [BIN, 'status', join(root, 'roadmap')], { encoding: 'utf8', env })
+  assert.equal(human.status, 0, `status never FAILS on a derivation; stderr: ${human.stderr}`)
+  assert.match(human.stderr, /⚠ worktrees could not be enumerated in \S+ — fatal: simulated wedge$/m, `the human sees WHY the inventory is empty, as ONE line carrying git's reason; stderr:\n${human.stderr || '(empty)'}`)
+
+  const machine = spawnSync('node', [BIN, 'status', join(root, 'roadmap'), '--json'], { encoding: 'utf8', env })
+  assert.equal(machine.status, 0, machine.stderr)
+  const parsed = JSON.parse(machine.stdout)
+  assert.ok(
+    parsed.warnings.some((w) => /worktrees could not be enumerated/.test(w)),
+    `--json warnings must carry the enumeration failure — an empty otherWorktrees with warnings: [] is the silent all-clear; got ${JSON.stringify(parsed.warnings)}`,
+  )
+})

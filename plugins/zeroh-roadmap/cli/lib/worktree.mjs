@@ -284,8 +284,10 @@ export function landPhase(worktreeDir, baseRef, { retries = 3, onRetry, beforeSw
   }
 }
 
-/** The path of the worktree that has baseRef CHECKED OUT, or null. */
-function checkoutOf(worktreeDir, baseRef) {
+/** The path of the worktree that has baseRef CHECKED OUT, or null. EXACT ref equality: the
+ *  substring form this replaced let `main-primary` answer for `main`, and advanceBase would then
+ *  fast-forward the wrong checkout. Exported for that pin alone. */
+export function checkoutOf(worktreeDir, baseRef) {
   return listWorktrees(worktreeDir).find(({ branch }) => branch === baseRef)?.dir ?? null
 }
 

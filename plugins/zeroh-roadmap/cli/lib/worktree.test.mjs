@@ -1998,3 +1998,23 @@ test('listWorktrees: it is the ONLY porcelain worktree-list parse left in non-te
     'and the surviving parse lives INSIDE listWorktrees — one left in checkoutOf or surveyLanes while listWorktrees delegates elsewhere would pass the count above while keeping the private grammar',
   )
 })
+
+test('checkoutOf: EXACT ref equality — a prefix-colliding sibling branch never answers for the base', async () => {
+  // landPhase's advanceBase runs `merge --ff-only` IN the checkout that holds baseRef. The
+  // substring match listWorktrees replaced would have returned the `develop-primary` checkout
+  // for `develop` and fast-forwarded the wrong tree; nothing pinned the fix, so this does.
+  const { checkoutOf, samePath } = await load()
+  const r = makeRepo()
+  r.commit('seed')
+  const primaryBranch = r.branch()
+  r.git('branch', '-m', `${primaryBranch}-primary`)
+  r.git('branch', primaryBranch)
+  const wtDir = `${r.root}-wt-1`
+  r.git('worktree', 'add', '-q', wtDir, primaryBranch)
+
+  const hit = checkoutOf(r.root, primaryBranch)
+  assert.ok(hit && samePath(hit, wtDir), `the worktree holding "${primaryBranch}" is the answer; got ${hit}`)
+  const sibling = checkoutOf(r.root, `${primaryBranch}-primary`)
+  assert.ok(sibling && samePath(sibling, r.root), `the primary holds "${primaryBranch}-primary"; got ${sibling}`)
+  assert.equal(checkoutOf(r.root, primaryBranch.slice(0, -1)), null, "a prefix of a checked-out branch is nobody's checkout")
+})

@@ -54,6 +54,14 @@ export default definePhase({
       summary:
         'Independent correctness review found no defects; three focused batches passed 104/104, 75/75, and 224/224.',
     },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      model: 'claude-fable-5-1',
+      verdict: 'findings-fixed',
+      summary:
+        'Supervising-session review: a failed worktree enumeration inside a resolved repo now travels on stderr and --json warnings like strayError (a non-repo root stays silent for parity); checkoutOf\'s exact-ref semantics are exported and pinned against a prefix-colliding branch; the three new shape guards carry their mutation proofs; the 15s→60s enumeration timeout widening is recorded. GREEN 48/48, 32/32.',
+    },
   ],
   metrics: {
     commits: 5,
@@ -76,6 +84,7 @@ export default definePhase({
       { role: 'test-engineer', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'quality-pass', model: 'claude-opus-5', via: 'child-cli' },
       { role: 'code-reviewer', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'claude-fable-5-1', via: 'native' },
     ],
     compromises: [],
     skipped: [],
@@ -86,7 +95,7 @@ export default definePhase({
       'The final derived gate elevated the plan note\'s light review expectation to full review because this consumer has no cadence ladder configured; the stricter derived cell was executed.',
     ],
     hardStops: [],
-    gateRounds: 2,
+    gateRounds: 3,
   },
   plannedBy: { model: 'claude-fable-5' },
   reviewRecord: { date: '2026-09-01', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
@@ -173,7 +182,8 @@ export default definePhase({
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
-        limitations: 'None',
+        limitations:
+          'checkoutOf moved from a substring match (`branch refs/heads/<base>` inside the block) to exact ref equality, so a prefix-colliding sibling such as develop-primary no longer answers for develop — a latent wrong-checkout fast-forward in advanceBase, retired here and pinned at gate R2 (checkoutOf exported for that test alone). The shared enumerator rides worktree.mjs\'s 60s git timeout where the inline status/executor-arm parses used 15s — a deliberate widening, recorded rather than special-cased. Scan-guard mutation proof (gate R2): a second porcelain argv appended to executor-arm.mjs produced RED 1/48; removing it restored GREEN 48/48.',
       },
     },
     {
@@ -241,7 +251,7 @@ export default definePhase({
         skipped: 'None',
         hardcoded: 'None',
         limitations:
-          'The original step verify required the colon token to be absent even from its negative regex; gate Round 0 re-keyed it to the shared colonless-form constant and explicit colon-form refusal.',
+          'The original step verify required the colon token to be absent even from its negative regex; gate Round 0 re-keyed it to the shared colonless-form constant and explicit colon-form refusal. Guard mutation proofs (gate R2): re-teaching the colon form in agents/quality-pass.md produced RED 1/114 on the cards-lockstep test; one extra byte on the COMMIT GRAMMAR line produced RED 1/114 on the ratchet test; each restore returned GREEN 114/114.',
       },
     },
   ],
