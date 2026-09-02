@@ -155,7 +155,16 @@ export default definePhase({
       testMode: 'tdd',
       dependsOn: ['26.1'],
       interfaces: { consumes: ['AgentRoundShape.findings from 25.1'], produces: ['scoreAdherence', 'roadmap eval adherence'] },
-      done: false,
+      transparencyReport: {
+        whatWasDone: 'Added a twelve-check adherence scorer, single-phase and date-slice CLI modes, fixture coverage in both directions with legacy abstention, and the pre-trim ten-phase baseline.',
+        how: 'The native gpt-5.6-sol test-engineer authored the RED suite first (14 tests, all failing on the absent module); implementation then read phase, beacon, Git, gate, curation and lesson evidence. Mutation proof for the adherence tree guard: removed transparency `how` from the complete fixture → RED (`six-field-transparency-reports` passed false); renamed the check-id anchor → RED (`adherence: unknown check id six-field-transparency-reports`); restored legal complete fixture → GREEN (1/1).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'Historical artifacts absent from the current worktree cannot be reconstructed, so the baseline names their failed checks; no claude-opus-5 run appears in the last-ten slice and its mean is unrecorded.',
+      },
+      done: true,
+      doneDate: '2026-09-02',
     },
     {
       id: '26.3',

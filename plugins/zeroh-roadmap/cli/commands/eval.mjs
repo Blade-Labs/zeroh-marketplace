@@ -47,6 +47,7 @@ import {
 import { computeScorecard, findGateFixCommits } from '../lib/eval-scorecard.mjs'
 import { extractFindings, clusterFindings, consolidateAndWrite, readProposalDocs } from '../lib/eval-propose.mjs'
 import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
+import { scoreAdherence } from '../lib/adherence.mjs'
 
 /** The two recorders, keyed by subcommand: which consumer shape validates, which suffix lands. */
 const RECORDERS = {
@@ -85,6 +86,7 @@ function parseArgs(argv) {
     const a = argv[i]
     if (a === '--arc') opts.arc = argv[++i]
     else if (a === '--date') opts.date = argv[++i]
+    else if (a === '--since') opts.since = argv[++i]
     else if (a === '--force') opts.force = true
     else if (a === '--collect-only') opts.collectOnly = true
     else if (a === '--backfill') opts.backfill = true
@@ -107,6 +109,7 @@ const USAGE =
   '  roadmap eval restamp [--json]                           (additively re-stamps existing reports; never re-scores)\n' +
   '  roadmap eval lesson "<text>" [--phase N] [--writer <actor-id>]  (appends one lesson to the committed sidecar)\n' +
   '  roadmap eval scorecard [--date <YYYY-MM-DD>] [--json]   (regenerates the per-actor scorecard projection)\n' +
+  '  roadmap eval adherence <N> [--json] | --since <YYYY-MM-DD> [--json]\n' +
   '  roadmap eval propose [--json] [--dry-run]               (clusters the corpus into ratify-only proposals under roadmap/arc-evals/proposals/)\n'
 
 export default async function run(argv) {
@@ -123,6 +126,7 @@ export default async function run(argv) {
     if (sub === 'restamp') return runRestamp(opts)
     if (sub === 'lesson') return runLesson(opts, positional)
     if (sub === 'scorecard') return runScorecard(opts)
+    if (sub === 'adherence') return runAdherence(opts, positional.slice(1))
     if (sub === 'propose') return runPropose(opts)
     // Anything that is not one of the literal subcommands above is an ARC ID. The literals are
     // checked FIRST so a future arc called `record-sweep` or `lesson` could never shadow one.
@@ -204,6 +208,54 @@ export default async function run(argv) {
     `${overwriting ? 'OVERWROTE (--force)' : 'wrote'} ${outPath} — ${recorder.what} for arc ${opts.arc} (${parsed.date})\n`,
   )
   return 0
+}
+
+function adherencePhaseNumbers(toplevel, since) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(since ?? '')) throw new Error('--since must be YYYY-MM-DD')
+  const dir = join(roadmapRoot(toplevel), 'phases')
+  return readdirSync(dir)
+    .map((name) => name.match(/^phase-(\d+)\.phase\.ts$/))
+    .filter(Boolean)
+    .map((match) => Number(match[1]))
+    .filter((phase) => {
+      const source = readFileSync(join(dir, `phase-${phase}.phase.ts`), 'utf8')
+      const done = /status:\s*['"]done['"]|"status"\s*:\s*"done"/.test(source)
+      const date = source.match(/completedDate:\s*['"](\d{4}-\d{2}-\d{2})['"]|"completedDate"\s*:\s*"(\d{4}-\d{2}-\d{2})"/)?.slice(1).find(Boolean)
+      return done && date && date >= since
+    })
+    .sort((a, b) => a - b)
+}
+
+function renderAdherence(rows) {
+  const lines = ['phase\tdriver\tscore\tfailed checks']
+  for (const result of rows) {
+    const driver = result.driver ? `${result.driver.model}/${result.driver.lane}` : 'unrecorded'
+    const score = result.score == null ? 'n/a' : result.score.toFixed(3)
+    const failed = result.checks.filter((check) => check.applicable && !check.passed).map((check) => check.id).join(', ') || 'none'
+    lines.push(`${result.phase}\t${driver}\t${score}\t${failed}`)
+  }
+  return lines.join('\n') + '\n'
+}
+
+function runAdherence(opts, positional) {
+  let toplevel
+  try { toplevel = gitToplevel(process.cwd()) } catch (error) {
+    process.stderr.write(`roadmap eval adherence: ${error.message}\n`)
+    return 1
+  }
+  let phases
+  try {
+    if (opts.since) phases = adherencePhaseNumbers(toplevel, opts.since)
+    else if (/^\d+$/.test(positional[0] ?? '')) phases = [Number(positional[0])]
+    else throw new Error('pass a phase number or --since <YYYY-MM-DD>')
+    const rows = phases.map((phase) => scoreAdherence(toplevel, phase))
+    const output = opts.since ? rows : rows[0]
+    process.stdout.write(opts.json ? JSON.stringify(output, null, 2) + '\n' : renderAdherence(rows))
+    return 0
+  } catch (error) {
+    process.stderr.write(`roadmap eval adherence: ${error.message}\n`)
+    return 1
+  }
 }
 
 // ── `roadmap eval trend` — the across-arcs line the ratchet exists to draw ─────────────

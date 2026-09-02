@@ -263,3 +263,22 @@ The architect confirmed that all source paragraphs are accounted for, but reject
 The pre-diet do-arc manifest is 53,343 bytes, approximately 13,339 tokens at the repository estimator's four-bytes-per-token bridge. The original relocation rows remove 3,187 loaded bytes. The clause-level terminal-handoff mechanics remove approximately 3,500 more; executor incident/rationale clauses and other amended clause splits must contribute at least 1,315 measured bytes. Thus the actionable cut floor is 8,002 bytes (`53,343 × 15%`, rounded up), projecting no more than 45,341 loaded bytes or approximately 11,336 tokens. Phase 26.3 must replace estimates with `roadmap measure` output and ratchet the constant to that exact measured total; missing the floor is an escalation, not permission to invent cuts.
 
 New `references/protocol-details.md` and `agents/references/*-details.md` files are **on-demand and off-manifest**: they contain branch-specific mechanics or incident provenance and are cited only at their trigger. Any reference needed on every standard flow is standard-path and must be added to the manifest, consuming its projected saving. The unchanged in-flow `using-zeroh-roadmap` body and existing references total 7,608 bytes and are included in the 53,343-byte baseline even though this phase does not map them.
+
+## Baseline
+
+Captured before any trim with `roadmap eval adherence --since 2026-08-31 --json`; the date returned phases 14–25, and the table below takes the last ten landed phases, 16–25, in phase order. These runs predate durable beacon/gate-report retention in this worktree, so absent retained artifacts score as failures rather than fabricated passes.
+
+| phase | driver | score | failed checks |
+|---:|---|---:|---|
+| 16 | gpt-5.6-sol / codex | 0.583 | tripwires-ran, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 17 | gpt-5.6-sol / codex | 0.583 | tripwires-ran, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 18 | gpt-5.6-sol / codex | 0.583 | tripwires-ran, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 19 | gpt-5.6-sol / codex | 0.500 | tripwires-ran, one-commit-per-task, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 20 | gpt-5.6-sol / codex | 0.583 | tripwires-ran, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 21 | gpt-5.6-sol / codex | 0.500 | tripwires-ran, one-commit-per-task, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 22 | gpt-5.6-sol / codex | 0.500 | tripwires-ran, one-commit-per-task, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 23 | gpt-5.6-sol / codex | 0.583 | tripwires-ran, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 24 | gpt-5.6-sol / codex | 0.500 | tripwires-ran, one-commit-per-task, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+| 25 | gpt-5.6-sol / codex | 0.500 | tripwires-ran, one-commit-per-task, gate-rounds-carry-model, guard-mutation-proofs-quoted, curation-evidence, verify-complete-passed |
+
+Per-driver mean: **gpt-5.6-sol / codex = 0.542 (n=10)**. No claude-opus-5 phase falls within the last-ten slice, so its historical mean is unrecorded; the trial reports that absence rather than inventing a comparison.

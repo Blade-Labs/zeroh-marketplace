@@ -42,6 +42,7 @@ import { SCORECARD_N_FLOOR } from '../lib/eval-scorecard.mjs'
 import { readPriorReports } from './eval.mjs'
 import { phaseEvalRecordPath } from '../lib/eval-collect.mjs'
 import { buildEvalFixture, ARC_ID } from '../testdata/eval-arc/build-fixture.mjs'
+import { makeFixtureRepo, writePhaseFile, commitAll, runCli, git } from '../../test/fixture-consumer/harness.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_ROOT = join(HERE, '..', '..')
@@ -51,6 +52,30 @@ const PLUGIN_ZOD = realpathSync(join(PLUGIN_ROOT, 'node_modules', 'zod'))
 
 const bases = []
 process.on('exit', () => bases.forEach((b) => rmSync(b, { recursive: true, force: true })))
+
+test('eval adherence — a phase number scores exactly that one phase as JSON', () => {
+  const root = makeFixtureRepo()
+  writePhaseFile(root, { phase: 81, status: 'done', completedDate: '2026-09-02', tasks: [], executionResult: { status: 'done', driver: { model: 'codex', lane: 'codex' }, roles: [] } })
+  writePhaseFile(root, { phase: 82, status: 'done', completedDate: '2026-09-02', tasks: [], executionResult: { status: 'done', driver: { model: 'claude', lane: 'session' }, roles: [] } })
+  commitAll(root, 'docs(roadmap): seed phases for adherence')
+  const result = runCli(root, ['eval', 'adherence', '81', '--json'])
+  assert.equal(result.code, 0, result.stdout + result.stderr)
+  assert.equal(result.json.phase, 81)
+  assert.equal(result.json.driver.model, 'codex')
+  assert.ok(Array.isArray(result.json.checks))
+})
+
+test('eval adherence --since — scores only completed phases on/after the date, oldest first', () => {
+  const root = makeFixtureRepo()
+  writePhaseFile(root, { phase: 80, status: 'done', completedDate: '2026-08-31', tasks: [], executionResult: { status: 'done', driver: { model: 'old', lane: 'session' }, roles: [] } })
+  writePhaseFile(root, { phase: 83, status: 'done', completedDate: '2026-09-01', tasks: [], executionResult: { status: 'done', driver: { model: 'codex', lane: 'codex' }, roles: [] } })
+  commitAll(root, 'docs(roadmap): mark phase 83 complete')
+  writePhaseFile(root, { phase: 84, status: 'done', completedDate: '2026-09-02', tasks: [], executionResult: { status: 'done', driver: { model: 'claude', lane: 'session' }, roles: [] } })
+  commitAll(root, 'docs(roadmap): mark phase 84 complete')
+  const result = runCli(root, ['eval', 'adherence', '--since', '2026-09-01', '--json'])
+  assert.equal(result.code, 0, result.stdout + result.stderr)
+  assert.deepEqual(result.json.map((row) => row.phase), [83, 84])
+})
 
 /** A git-inited tmp consumer with the re-export schema + a zod symlink. */
 function makeConsumer() {
