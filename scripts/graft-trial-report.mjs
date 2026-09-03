@@ -116,21 +116,17 @@ export function buildTrialReport(repoRoot, { cut }) {
         || Number(a.surface) - Number(b.surface),
     )
 
-  return { cells, warnings: unmatchedCohortNotes(cells) }
-}
-
-/** A cohort present in only one arm can never be compared, whatever its n. Saying so is
- *  what keeps a reader from mistaking a lone populated cell for a result. */
-function unmatchedCohortNotes(cells) {
   const cohorts = new Map()
   for (const c of cells) {
     const key = `${c.band} ${c.surface}`
     if (!cohorts.has(key)) cohorts.set(key, { band: c.band, surface: c.surface, arms: new Set() })
     cohorts.get(key).arms.add(c.arm)
   }
-  return [...cohorts.values()]
+  const warnings = [...cohorts.values()]
     .filter((c) => c.arms.size < 2)
     .map((c) => `cohort ${c.band}/${c.surface}: ${[...c.arms][0]} arm only, nothing to compare against`)
+
+  return { cells, warnings }
 }
 
 /** Render the report. An abstaining cell shows `ABSTAIN(n=<k>)` and NO metric numbers —
