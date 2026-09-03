@@ -16,7 +16,7 @@ Verify with `codex debug prompt-input`: every skill below appears in the model-v
 with its description and file path. An installed-plugin listing proves installation, not
 surfacing.
 
-## What is surfaced (v0.37.0)
+## What is surfaced (v0.38.0)
 
 **13 skills** + the always-active bootstrap `using-zeroh-roadmap`:
 

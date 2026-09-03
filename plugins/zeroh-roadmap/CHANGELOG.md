@@ -3,6 +3,21 @@
 Reconstructed 2026-08-26 (phase 13.7) from the committed record trail; maintained forward.
 One entry per minor: the shipped surface, not the story.
 
+## 0.38.0 — 2026-09-03
+- Protocol diet with a ruler (phase 26): a per-paragraph trim map with a named disposition and
+  evidence for every passage of the nine never-trimmed skills and cards (DIET-PLAN-2026-09.md);
+  `roadmap eval adherence <N> [--json] [--since <date>]` scores any landed phase's protocol
+  adherence from its own records (ten checks, driver-attributed); the trims landed and
+  `PROTOCOL_LOAD_BUDGET_TOKENS` ratcheted down to the measured do-arc load (11,065 tokens,
+  −17.1%); a two-driver execution trial (opus 5 vs gpt-5.6-sol on phases 27 and 7) recorded in
+  DIET-TRIAL-2026-09.md with the restore rule applied once. The consumer schema now keeps
+  gate-round model attribution instead of stripping it.
+- Curate stops at the integration ref (phase 27): `roadmap phase curate` clamps its range to the
+  merge-base with the integration branch, so commits already published there are never squashed.
+- Graft measured trial (phase 7) landed as the opus-driven trial arm.
+- The guard-mutation reference no longer claims correctness rounds are uncapped; the round-brief
+  cap rules every round.
+
 ## 0.37.0 — 2026-09-02
 - Gate loop convergence (phase 25): the reviewer's typed findings (severity, confidence, file,
   fixing commit) and the recording sha persist on every round; `roadmap gate round-brief <N>`
