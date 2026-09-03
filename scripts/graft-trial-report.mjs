@@ -85,8 +85,12 @@ export function buildTrialReport(repoRoot, { cut, exclude = [] }) {
   const gates = readGatesByPhase(join(roadmapRoot(repoRoot), 'arc-evals'))
 
   const buckets = new Map()
+  const dropped = new Set()
   for (const sample of samples) {
-    if (excluded.has(sample.phase)) continue
+    if (excluded.has(sample.phase)) {
+      dropped.add(sample.phase)
+      continue
+    }
     const arm = sample.phase <= cut ? 'baseline' : 'treatment'
     const band = bandFor(sample.taskCount)
     const surface = surfaceOf(sample)
@@ -140,9 +144,16 @@ export function buildTrialReport(repoRoot, { cut, exclude = [] }) {
     .map((c) => `cohort ${c.band}/${c.surface}: ${[...c.arms][0]} arm only, nothing to compare against`)
 
   // An exclusion that is not printed is indistinguishable from a corpus that never held
-  // the phase — the reader must be able to see which records were dropped and why.
+  // the phase. Report what was DROPPED, not what was asked for: a requested phase with no
+  // record is routine here (phase 26's record does not exist yet) but reporting it as
+  // excluded would claim a subtraction that never happened.
   if (excluded.size > 0) {
-    warnings.unshift(`excluded from both arms: phase ${[...excluded].sort((a, b) => a - b).join(', ')}`)
+    const asc = (s) => [...s].sort((a, b) => a - b).join(', ')
+    const absent = [...excluded].filter((p) => !dropped.has(p))
+    warnings.unshift(
+      `excluded from both arms: ${dropped.size > 0 ? `phase ${asc(dropped)}` : 'nothing matched'}`
+        + (absent.length > 0 ? ` (requested ${asc(excluded)}; no record in this corpus for ${asc(absent)})` : ''),
+    )
   }
 
   return { cells, warnings }
@@ -179,9 +190,25 @@ export function main(argv) {
   }
   const cut = Number(argv[cutIdx + 1])
   const root = rootIdx === -1 ? process.cwd() : argv[rootIdx + 1]
-  const exclude = excludeIdx === -1
-    ? []
-    : String(argv[excludeIdx + 1] ?? '').split(',').filter(Boolean).map(Number)
+
+  // `--exclude` must FAIL, never fail open: a missing or malformed value silently
+  // reinstates the transition phases, and the run would print a contaminated median under
+  // a command line that looks like it asked for a clean one.
+  let exclude = []
+  if (excludeIdx !== -1) {
+    const raw = argv[excludeIdx + 1]
+    // A FLAG-shaped value is a usage error too: `--exclude --root <path>` would otherwise
+    // eat the next flag and reinstate every phase.
+    const parts = raw === undefined || raw.startsWith('--') ? [] : raw.split(',')
+    if (parts.length === 0 || parts.some((p) => p.trim() === '')) {
+      process.stderr.write(
+        `graft-trial-report: --exclude needs a comma-separated list of phase numbers, got ${raw === undefined ? '(nothing)' : JSON.stringify(raw)}\n`,
+      )
+      return 2
+    }
+    exclude = parts.map(Number)
+  }
+
   process.stdout.write(`${formatTrialReport(buildTrialReport(root, { cut, exclude }))}\n`)
   return 0
 }

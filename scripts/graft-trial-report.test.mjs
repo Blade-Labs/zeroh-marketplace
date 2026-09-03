@@ -206,6 +206,41 @@ test('an exclusion is reported, never silently applied', (t) => {
   assert.equal(main(['--cut', '25', '--exclude', '7,26', '--root', root]), 0)
 })
 
+test('a malformed --exclude FAILS rather than silently reinstating the phases', (t) => {
+  const { root, evalDir } = fixture(t)
+  for (let i = 0; i < SCORECARD_N_FLOOR; i += 1) writeRecord(evalDir, record(11 + i))
+  writeRecord(evalDir, record(7))
+
+  // Each of these once produced exclude=[] and exited 0, printing the contaminated cell
+  // under a command line that reads as though it asked for a clean one.
+  for (const argv of [
+    ['--cut', '25', '--exclude', '--root', root],
+    ['--cut', '25', '--exclude', '', '--root', root],
+    ['--cut', '25', '--exclude', '7,', '--root', root],
+    ['--cut', '25', '--exclude', '7,,26', '--root', root],
+  ]) {
+    assert.equal(main(argv), 2, `${argv.join(' ')} must be a usage error, never a silent no-op`)
+  }
+  assert.equal(main(['--cut', '25', '--exclude', '7', '--root', root]), 0, 'the well-formed form still works')
+})
+
+test('the exclusion note reports what was DROPPED, never merely what was asked for', (t) => {
+  const { root, evalDir } = fixture(t)
+  writeRecord(evalDir, record(7))
+
+  const present = formatTrialReport(buildTrialReport(root, { cut: 25, exclude: [7] }))
+  assert.match(present, /excluded from both arms: phase 7$/m)
+
+  // Phase 26 is legitimately absent today (its record does not exist yet), so requesting it
+  // must not claim a subtraction that never happened.
+  const partly = formatTrialReport(buildTrialReport(root, { cut: 25, exclude: [7, 26] }))
+  assert.match(partly, /excluded from both arms: phase 7 \(requested 7, 26; no record in this corpus for 26\)/)
+
+  const none = formatTrialReport(buildTrialReport(root, { cut: 25, exclude: [999] }))
+  assert.match(none, /excluded from both arms: nothing matched \(requested 999; no record in this corpus for 999\)/)
+  assert.doesNotMatch(none, /excluded from both arms: phase 999/)
+})
+
 test('a non-integer exclusion is refused rather than silently ignored', (t) => {
   const { root, evalDir } = fixture(t)
   writeRecord(evalDir, record(7))
