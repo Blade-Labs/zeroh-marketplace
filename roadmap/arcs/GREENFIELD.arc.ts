@@ -72,6 +72,7 @@ import { defineArc } from '@/lib/roadmap/schema'
  * archetype manifest heading contract       | singleSeam  | 31.1 (defines it) — 31.2–31.6 conform
  * stack ADR text owned by stack-decision    | singleSeam  | 30.2 (called by 29.x and 33.x, never restated)
  * pointer keys = zeroh-roadmap config shapes| singleSeam  | 32.3
+ * one missing-home remedy (layout.md)     | singleSeam  | 34.1 (the only remedy text; six sites carry a pointer clause + ratchet test)
  * USER ASK: "questionnaire of what this project is about" | request | 29.2 (PRD interview reference, one question at a time)
  * USER ASK: "suggested tech stack, pros cons"              | request | 30.1 + 30.2
  * USER ASK: "reusability of components"                    | request | 30.1 (reuse row per mobile option) + 30.3 (shared tokens web+mobile)
