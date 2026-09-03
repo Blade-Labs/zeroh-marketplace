@@ -6,6 +6,9 @@ ranking anonymized deliverables. The original run prompt (the method spec, for r
 vendored verbatim at `GAUNTLET-PROMPT.md`; the enforceable output is
 `SKILL-AUTHORING-STANDARD.md` — every new or edited skill must pass it.
 
+Successor campaign: `GAUNTLET-2.0.md` (2026-09, protocol diet with a ruler — per-paragraph trim map,
+adherence scorer, two-driver execution trial; shipped as v0.38.0).
+
 ## Verdicts
 
 | outcome | skills |
