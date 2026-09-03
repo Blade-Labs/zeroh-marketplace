@@ -65,7 +65,7 @@ export default definePhase({
       id: '31.1',
       title: 'Define the manifest contract and author the web archetype',
       problem:
-        'greenfield-init has no single machine-readable-by-convention manifest contract and no web recipe joining the source-checked Next.js/shadcn commands to phase 30’s token and registry decisions.',
+        'greenfield-init lacks the web recipe. create-next-app, shadcn, and Tailwind are MIT (npm view probes) and tier `Allowed anywhere` under external-assets-licensing.md §The tiers, including in the shipped web client.',
       steps: [
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/README.md',
@@ -75,12 +75,17 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md',
           description:
-            'Write the web contract. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md\',\'utf8\'),r=/^## Generator[\\s\\S]*^## Post-steps[\\s\\S]*^## File tree[\\s\\S]*```[^\\n]*\\n[^`\\n]+[\\s\\S]*^## Conventions delta[\\s\\S]*^## testConventions[\\s\\S]*^## designHomes[\\s\\S]*^## Verify\\s*\\n+`[^`]+`/m;if(!r.test(s)||(s.match(/^## /gm)||[]).length!==7||![\'npx create-next-app@^16\',\'components.json\',\'registries\',\'Playwright\',\'references/design-system.md\'].every(x=>s.includes(x))||/observed:|2026-09-03/.test(s))process.exit(1)"',
+            'Assert web sources and license. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md\',\'utf8\'),a=[\'npx create-next-app@^16\',\'https://nextjs.org/docs/app/api-reference/cli/create-next-app\',\'https://ui.shadcn.com/docs/installation/next\',\'https://tailwindcss.com/docs/installation/framework-guides/nextjs\',\'MIT\',\'Allowed anywhere\',\'components.json\',\'registries\',\'Playwright\'];if(a.some(x=>!s.includes(x)))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md',
+          description:
+            'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*npx\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
         {
           file: 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md',
           description:
-            'Create the six dated evidence rows with commands, result/remedy, and box. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),a=[\'web\',\'android\',\'flutter\',\'expo\',\'nx-monorepo\',\'library-cli\'];for(const x of a){const m=s.match(new RegExp(\'^\\\\|(?=[^\\n]*\\\\b\'+x+\'\\\\b)(?=[^\\n]*2026-09-03)[^\\n]+\',\'gm\'))||[];if(m.length!==1||!m[0].includes([\'android\',\'flutter\'].includes(x)?\'generator absent —\':\'exit 0\'))process.exit(1)}if(![\'Generator command\',\'Verify command\',\'Box\'].every(x=>s.includes(x)))process.exit(1)"',
+            'Assert six complete evidence rows. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),a=[\'web\',\'android\',\'flutter\',\'expo\',\'nx-monorepo\',\'library-cli\'],r=s.split(/\\r?\\n/).filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]&&!/archetype/i.test(x[0])&&!/^[-:]+$/.test(x[0]));if(r.length!==6)process.exit(1);for(const n of a){const z=r.filter(x=>x[0]===n);if(z.length!==1||z[0].length!==6||!/^2026-09-03$/.test(z[0][1])||!/(npx|flutter|gradle)/.test(z[0][2])||!/(test|node|bash|gradlew)/.test(z[0][3])||!/(exit 0|generator absent —)/.test(z[0][4])||!z[0][5])process.exit(1)}"',
         },
       ],
       acceptanceCriteria: [
@@ -105,12 +110,17 @@ export default definePhase({
       id: '31.2',
       title: 'Author the native Android archetype',
       problem:
-        'The six-archetype promise lacks a native Android manifest with an explicitly selected compatibility floor, Kotlin/Compose/Material 3 structure, and honest generator-availability evidence.',
+        'The native Android recipe is missing. The Android/Gradle project template is Apache-2.0 and tier `Allowed anywhere` under external-assets-licensing.md §The tiers, including in the shipped Android client (Gradle upstream LICENSE probe).',
       steps: [
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md',
           description:
-            'Write the Android contract. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md\')+\'\',r=/^## Generator[\\s\\S]*^## Post-steps[\\s\\S]*^## File tree[\\s\\S]*```[^\\n]*\\n[^`\\n]+[\\s\\S]*^## Conventions delta[\\s\\S]*^## testConventions[\\s\\S]*^## designHomes[\\s\\S]*^## Verify\\s*\\n+`[^`]+`/m,a=[\'Android Studio\',\'minSdk = 23\',\'selected floor\',\'./gradlew test\',\'./gradlew connectedAndroidTest\',\'app/build.gradle.kts\',\'AndroidManifest.xml\'];if(!r.test(s)||(s.match(/^## /gm)||[]).length!==7||!a.every(x=>s.includes(x))||/observed:|2026-09-03|AndroidX minSdk 23 default/.test(s))process.exit(1)"',
+            'Assert Android sources and license. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md\',\'utf8\'),a=[\'https://developer.android.com/develop/ui/compose/setup-app\',\'https://developer.android.com/build\',\'https://developer.android.com/jetpack/androidx/releases/compose-material3\',\'https://developer.android.com/guide/topics/manifest/uses-sdk-element\',\'Apache-2.0\',\'Allowed anywhere\',\'minSdk = 23\',\'selected floor\',\'./gradlew test\',\'./gradlew connectedAndroidTest\'];if(a.some(x=>!s.includes(x))||/AndroidX minSdk 23 default/.test(s))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md',
+          description:
+            'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*gradle\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
       ],
       acceptanceCriteria: [
@@ -128,12 +138,17 @@ export default definePhase({
       id: '31.3',
       title: 'Author the Flutter archetype',
       problem:
-        'The Flutter option has no executable manifest tying `flutter create` and the current shadcn_flutter package to the shared token vocabulary without claiming an unavailable local tool ran.',
+        'The Flutter option is missing. Flutter is BSD-3-Clause and shadcn_flutter is MIT (Flutter LICENSE and pub.dev license probes); both are tier `Allowed anywhere` under external-assets-licensing.md §The tiers in the shipped client.',
       steps: [
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md',
           description:
-            'Write the Flutter contract. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md\',\'utf8\'),r=/^## Generator[\\s\\S]*^## Post-steps[\\s\\S]*^## File tree[\\s\\S]*```[^\\n]*\\n[^`\\n]+[\\s\\S]*^## Conventions delta[\\s\\S]*^## testConventions[\\s\\S]*^## designHomes[\\s\\S]*^## Verify\\s*\\n+`[^`]+`/m,a=[\'flutter create\',\'shadcn_flutter: ^0.0.54\',\'flutter test\',\'pubspec.yaml\',\'lib/main.dart\',\'test/widget_test.dart\',\'references/design-system.md\'];if(!r.test(s)||(s.match(/^## /gm)||[]).length!==7||!a.every(x=>s.includes(x))||/observed:|2026-09-03/.test(s))process.exit(1)"',
+            'Assert Flutter sources and licenses. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md\',\'utf8\'),a=[\'https://docs.flutter.dev/reference/create-new-app\',\'https://pub.dev/packages/shadcn_flutter\',\'flutter create\',\'shadcn_flutter: ^0.0.54\',\'BSD-3-Clause\',\'MIT\',\'Allowed anywhere\',\'flutter test\',\'pubspec.yaml\',\'lib/main.dart\',\'test/widget_test.dart\',\'references/design-system.md\'];if(a.some(x=>!s.includes(x)))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md',
+          description:
+            'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*flutter\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
       ],
       acceptanceCriteria: [
@@ -151,12 +166,17 @@ export default definePhase({
       id: '31.4',
       title: 'Author the Expo archetype',
       problem:
-        'The Expo option lacks a source-checked manifest for create-expo-app, React Native Reusables, shared token pointers, and a falsifiable generated-tree contract.',
+        'The Expo option is missing. create-expo-app is BSD-3-Clause and @react-native-reusables/cli is MIT (npm view probes); both are tier `Allowed anywhere` under external-assets-licensing.md §The tiers in the shipped client.',
       steps: [
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md',
           description:
-            'Write the Expo contract. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md\',\'utf8\'),h=\'Generator,Post-steps,File tree,Conventions delta,testConventions,designHomes,Verify\'.split(\',\'),a=[\'npx create-expo-app@^4\',\'npx @react-native-reusables/cli@^0.7\',\'package.json\',\'app.json\',\'references/design-system.md\'];let p=-1;if(h.some(x=>(p=s.indexOf(\'## \'+x,p+1))<0)||(s.match(/^## /gm)||[]).length!==7||!a.every(x=>s.includes(x))||!/## File tree[\\s\\S]*```[^\\n]*\\n[^`\\n]+/.test(s)||!/## Verify\\s*\\n+`[^`]+`/.test(s)||/observed:|2026-09-03/.test(s))process.exit(1)"',
+            'Assert Expo sources and licenses. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md\',\'utf8\'),a=[\'https://docs.expo.dev/get-started/create-a-project/\',\'https://github.com/mrzachnugent/react-native-reusables\',\'npx create-expo-app@^4\',\'npx @react-native-reusables/cli@^0.7\',\'BSD-3-Clause\',\'MIT\',\'Allowed anywhere\',\'package.json\',\'app.json\',\'references/design-system.md\'];if(a.some(x=>!s.includes(x)))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md',
+          description:
+            'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*npx\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
       ],
       acceptanceCriteria: [
@@ -174,12 +194,17 @@ export default definePhase({
       id: '31.5',
       title: 'Author the zeroh-proven Nx monorepo archetype',
       problem:
-        'A generic Nx starter would omit the structures proven in `/home/patrik/zeroh`: five-axis dependency tags, catalog-emitting first-party generators, synchronized solution references, and explicit no-op targets.',
+        'The Nx recipe must preserve the proven zeroh seams. create-nx-workspace is MIT (npm view probe) and tier `Allowed anywhere` under external-assets-licensing.md §The tiers as repository tooling.',
       steps: [
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
           description:
-            'Write the Nx contract. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md\',\'utf8\'),h=\'Generator,Post-steps,File tree,Conventions delta,testConventions,designHomes,Verify\'.split(\',\'),a=[\'npx create-nx-workspace@^23\',\'depConstraints\',\'generators.json\',\'emitted/repo-catalog.json\',\'nx:noop\',\'affected -t lint,typecheck,test,build\'];let p=-1;if(h.some(x=>(p=s.indexOf(\'## \'+x,p+1))<0)||(s.match(/^## /gm)||[]).length!==7||!a.every(x=>s.includes(x))||!/## File tree[\\s\\S]*```[^\\n]*\\n[^`\\n]+/.test(s)||!/## Verify\\s*\\n+`[^`]+`/.test(s)||/observed:|2026-09-03/.test(s))process.exit(1)"',
+            'Assert Nx source and license. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md\',\'utf8\'),a=[\'https://nx.dev/getting-started/installation\',\'npx create-nx-workspace@^23\',\'MIT\',\'Allowed anywhere\',\'depConstraints\',\'generators.json\',\'emitted/repo-catalog.json\',\'nx:noop\',\'affected -t lint,typecheck,test,build\'];if(a.some(x=>!s.includes(x)))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
+          description:
+            'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*npx\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
@@ -202,12 +227,17 @@ export default definePhase({
       id: '31.6',
       title: 'Author the publish-ready TypeScript library/CLI archetype',
       problem:
-        'The final v1 archetype lacks a concrete package layout that separates library exports from the executable entry point and proves both without inventing a bespoke generator.',
+        'The library/CLI recipe is missing. Vite, tsup, and Vitest are MIT (npm view probes) and tier `Allowed anywhere` under external-assets-licensing.md §The tiers as repository tooling and published package code.',
       steps: [
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md',
           description:
-            'Write the library/CLI contract. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md\',\'utf8\'),h=\'Generator,Post-steps,File tree,Conventions delta,testConventions,designHomes,Verify\'.split(\',\'),a=[\'npm create vite@^8\',\'tsup: ^8.5\',\'exports\',\'bin\',\'files\',\'dts\',\'node --test\',\'--help\',\'tsup.config.ts\'];let p=-1;if(h.some(x=>(p=s.indexOf(\'## \'+x,p+1))<0)||(s.match(/^## /gm)||[]).length!==7||!a.every(x=>s.includes(x))||!/## File tree[\\s\\S]*```[^\\n]*\\n[^`\\n]+/.test(s)||!/## Verify\\s*\\n+`[^`]+`/.test(s)||/observed:|2026-09-03/.test(s))process.exit(1)"',
+            'Assert library sources and licenses. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md\',\'utf8\'),a=[\'https://vite.dev/guide/\',\'https://tsup.egoist.dev/\',\'https://nodejs.org/api/test.html\',\'npx create-vite@^8\',\'tsup: ^8.5\',\'vitest: ^\',\'MIT\',\'Allowed anywhere\',\'exports\',\'bin\',\'files\',\'dts\'];if(a.some(x=>!s.includes(x)))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md',
+          description:
+            'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*npx\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
       ],
       acceptanceCriteria: [
@@ -223,5 +253,5 @@ export default definePhase({
     },
   ],
   notes:
-    'interview: skipped — this is GREENFIELD arc member phase 31; the arc entity records the 2026-09-03 interview and six-archetype ruling. userFacing false: these are model-loaded reference manifests with no direct rendered or runtime user surface, so no feature flag applies. reviewScope none: the diff is documentation-only declarative reference content; schema validation and command/source rehearsal are higher-value than an implementation review chain. Documentation standard: plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/documentation-rules.md. Planned phase paths from dependencies are intentionally cited before phases 29/30 land. Orchestrator ruling: manifests remain timeless, cite package caret ranges, and contain only an exit-code command under Verify; plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md solely owns dated observations. Expo and library/CLI require scratch generation plus their manifest Verify on this box, matching web and Nx; unavailable Android/Flutter generators record an install remedy. Step verifies rehearse red-now because every target is absent, and each asserts the complete ordered-heading/content/tree/Verify contract its task creates. Assumption probes exited 0. External sources live in each manifest. Out of scope: scripts/CLI implementation, a seventh archetype, and phase 30 token-contract text. Review repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): ordered seven-heading checks; complete per-manifest contract checks; timeless manifests with one dated evidence record; Android minSdk claim narrowed; valid shadcn_flutter YAML; Expo and library/CLI scratch generation plus Verify required; metadata ratifications retained.',
+    'interview: skipped — this is GREENFIELD arc member phase 31; the arc entity records the 2026-09-03 interview and six-archetype ruling. userFacing false: these are model-loaded reference manifests with no direct rendered or runtime user surface, so no feature flag applies. reviewScope none: the diff is documentation-only declarative reference content; schema validation and command/source rehearsal are higher-value than an implementation review chain. Documentation standard: plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/documentation-rules.md. Planned phase paths from dependencies are intentionally cited before phases 29/30 land. Orchestrator ruling: manifests remain timeless, cite package caret ranges, and contain only an exit-code command under Verify; plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md solely owns dated observations. Expo and library/CLI require scratch generation plus their manifest Verify on this box, matching web and Nx; unavailable Android/Flutter generators record an install remedy. Step verifies rehearse red-now because every target is absent, and each asserts the complete ordered-heading/content/tree/Verify contract its task creates. Assumption probes exited 0. External sources live in each manifest. Out of scope: scripts/CLI implementation, a seventh archetype, and phase 30 token-contract text.\nMetadata ratifications 2026-09-03: 31.1: create-next-app MIT + shadcn MIT + tailwindcss MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.2: Android/Gradle template Apache-2.0 → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.3: flutter BSD-3-Clause + shadcn_flutter MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.4: create-expo-app BSD-3-Clause + @react-native-reusables/cli MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.5: create-nx-workspace MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.6: vite MIT + tsup MIT + vitest MIT → Allowed anywhere.\nReview repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): ordered seven-heading checks; complete per-manifest contract checks; timeless manifests with one dated evidence record; Android minSdk claim narrowed; valid shadcn_flutter YAML; Expo and library/CLI scratch generation plus Verify required.\nReview repairs round 2 2026-09-03: ratified every external license and placement tier; required official source and license text; enforced complete timeless manifest sections; parsed six evidence rows structurally.',
 })
