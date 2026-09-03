@@ -727,6 +727,66 @@ test('findJournal: a review journal never answers for lane run, and a miss is nu
   assert.equal(mod.findJournal(root, [99], 'run'), null, 'no journal covers 99 — a miss is null, never a nearby journal')
 })
 
+test('findJournal: worktree discrimination resolves each arm of the same phase while the legacy lookup keeps exact-name priority', async () => {
+  const { findJournal } = await import('../lib/codex-journal.mjs')
+  const root = tmpRepo()
+  const armA = writeJournal(root, [7])
+  const armB = { ...armA, worktree: join(root, 'wt-7-opus'), driver: { model: 'claude-opus-5', lane: 'session' } }
+  mkdirSync(armB.worktree, { recursive: true })
+  writeFileSync(join(root, '.building', 'codex-7.opus.json'), JSON.stringify(armB) + '\n')
+
+  assert.equal(findJournal(root, [7], 'run', { worktree: armA.worktree }).journal.worktree, armA.worktree)
+  const foundB = findJournal(root, [7], 'run', { worktree: armB.worktree })
+  assert.equal(foundB.path, join(root, '.building', 'codex-7.opus.json'))
+  assert.equal(foundB.journal.worktree, armB.worktree)
+  assert.equal(
+    findJournal(root, [7], 'run').path,
+    join(root, '.building', 'codex-7.json'),
+    'without the option the exact-path journal retains its historical priority',
+  )
+})
+
+test('labeled run journals participate in both live and closed lookup grammars', async () => {
+  const mod = await import('../lib/codex-journal.mjs')
+  const root = tmpRepo()
+  const worktree = join(root, 'wt-8-opus')
+  mkdirSync(worktree, { recursive: true })
+  const journal = { phases: ['8'], lane: 'run', worktree, startedAt: new Date().toISOString() }
+  const live = join(root, '.building', 'codex-8.opus.json')
+  writeFileSync(live, JSON.stringify(journal) + '\n')
+
+  assert.equal(mod.journalPath(root, [8], 'run', { label: 'opus' }), live)
+  assert.equal(mod.findJournal(root, [8], 'run', { worktree }).path, live)
+  rmSync(live)
+  const closed = join(root, '.building', 'codex-8.opus.closed.json')
+  writeFileSync(closed, JSON.stringify(journal) + '\n')
+  assert.equal(mod.findClosedJournal(root, [8], 'run', { worktree }).path, closed)
+})
+
+test('codex run --label names the journal, hand-off report and log for that arm', () => {
+  const root = tmpRepo()
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  writeFileSync(join(root, 'roadmap', 'phases', 'phase-79.phase.ts'), 'export default {}\n')
+  const worktree = join(root, 'wt-79-opus')
+  mkdirSync(worktree)
+  const fakeBin = join(root, 'fakebin-label')
+  mkdirSync(fakeBin)
+  writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nexit 0\n')
+  chmodSync(join(fakeBin, 'codex'), 0o755)
+
+  const r = spawnSync('node', [BIN, 'codex', 'run', '79', '--label', 'opus', '--worktree', worktree], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+  })
+  assert.equal(r.status, 0, r.stderr)
+  const path = join(root, '.building', 'codex-79.opus.json')
+  const journal = JSON.parse(readFileSync(path, 'utf8'))
+  assert.equal(journal.report, 'CODEX-REPORT.opus.md')
+  assert.equal(journal.log, join(root, '.building', 'codex-79.opus.log'))
+  assert.match(readFileSync(journal.prompt, 'utf8'), /write CODEX-REPORT\.opus\.md/)
+})
+
 test('findJournal: a journal that EXISTS and will not parse THROWS — never reported as "no journal"', async () => {
   const mod = await import('./codex.mjs')
   const root = tmpRepo()

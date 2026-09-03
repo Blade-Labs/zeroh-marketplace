@@ -48,6 +48,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { MODEL_IDS } from './drivers.mjs'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -1310,6 +1311,12 @@ test('composeLandedMessage: the Co-Authored-By trailer is the LAST non-empty lin
   assert.equal(lastNonEmptyLine(out.body), trailers[0], 'the trailer is the LAST non-empty line — git only reads trailers at the end')
   assert.ok(lines.indexOf(trailers[0]) > 0, 'the trailer follows the body content, it is not the whole body')
   assert.ok(out.body.includes('did the second thing'), 'the trailer rule must not have swallowed the content')
+})
+
+test('composeLandedMessage: executionResult driver model owns the trailer', () => {
+  const phaseRecord = { phase: 28, name: 'Driver attribution', executionResult: { driver: { model: MODEL_IDS.SOL, lane: 'codex' } }, tasks: [{ id: '28.5', title: 'trailer', transparencyReport: { whatWasDone: 'mapped it', compromises: 'None' } }] }
+  const group = { commits: [{ kind: 'task', subject: 'feat(cli): phase 28 — 28.5 trailer', sha: 'a'.repeat(40) }] }
+  assert.ok(composeLandedMessage(phaseRecord, group).body.endsWith(`Co-Authored-By: Codex ${MODEL_IDS.SOL} <noreply@openai.com>`))
 })
 
 // ── curate over an UNREADABLE gate report (phase 9.2) ────────────────────────────────

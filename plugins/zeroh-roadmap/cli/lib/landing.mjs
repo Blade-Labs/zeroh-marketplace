@@ -15,7 +15,7 @@
  * "An item NOT on this list is NOT a blocker" are the ported law (do-arc Step 8).
  */
 import { spawn } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { bridgeImport, bridgeImportMany, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
 import { readSidecar } from './sidecar.mjs'
@@ -59,6 +59,48 @@ export function mergeLaneLessons(primaryRoot, laneDir) {
   const separator = primaryText.length > 0 && !primaryText.endsWith('\n') ? '\n' : ''
   appendFileSync(primaryPath, `${separator}${novel.join('\n')}\n`)
   return { merged: novel.length }
+}
+
+/** Carry a lane's gate reports and executor beacon into the primary before disposal. */
+export function carryLaneEvidence(primaryRoot, laneDir, phaseNum) {
+  const laneGateDir = join(roadmapRoot(laneDir), '.gate', String(phaseNum))
+  const primaryGateDir = join(roadmapRoot(primaryRoot), '.gate', String(phaseNum))
+  let reports = 0
+  let kept = 0
+  if (existsSync(laneGateDir)) {
+    const names = readdirSync(laneGateDir).filter((name) => /^run-.*\.json$/.test(name))
+    for (const name of names) {
+      const destination = join(primaryGateDir, name)
+      if (existsSync(destination)) {
+        kept += 1
+        continue
+      }
+      mkdirSync(primaryGateDir, { recursive: true })
+      copyFileSync(join(laneGateDir, name), destination)
+      reports += 1
+    }
+  }
+
+  const laneBeacon = join(laneDir, '.building', `${phaseNum}-executor.jsonl`)
+  let beaconLines = 0
+  if (existsSync(laneBeacon)) {
+    const primaryBeacon = join(primaryRoot, '.building', `${phaseNum}-executor.jsonl`)
+    const primaryText = existsSync(primaryBeacon) ? readFileSync(primaryBeacon, 'utf8') : ''
+    const known = new Set(primaryText.split('\n').filter(Boolean))
+    const novel = []
+    for (const line of readFileSync(laneBeacon, 'utf8').split('\n')) {
+      if (!line || known.has(line)) continue
+      known.add(line)
+      novel.push(line)
+    }
+    if (novel.length > 0) {
+      mkdirSync(dirname(primaryBeacon), { recursive: true })
+      const separator = primaryText.length > 0 && !primaryText.endsWith('\n') ? '\n' : ''
+      appendFileSync(primaryBeacon, `${separator}${novel.join('\n')}\n`)
+      beaconLines = novel.length
+    }
+  }
+  return { reports, kept, beaconLines }
 }
 
 // Use-site default for mergePolicy.staleBaseCeiling (blocker 8, MECHRATCHET rank 6). Applied

@@ -1629,6 +1629,53 @@ test('phase land — a lesson merge failure keeps the only corpus copy and repor
   assert.match(err.text, /recover.*lessons\.jsonl before disposal/i)
 })
 
+test('phase land — reports carried gate and beacon counts with the primary checkout path', () => {
+  const f = codexLaneFixture(112)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
+  const out = sink()
+  const err = sink()
+  const calls = []
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 112,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out,
+    err,
+    mergeLessons: () => ({ merged: 0 }),
+    carryEvidence: (...args) => { calls.push(args); return { reports: 2, kept: 1, beaconLines: 3 } },
+  })
+
+  assert.equal(code, 0, `the land succeeds; stderr:\n${err.text}`)
+  assert.deepEqual(calls, [[f.root, f.wt, 112]], 'the carry seam receives primary, lane and phase before disposal')
+  assert.match(out.text, /carried 2 gate report\(s\), 3 beacon line\(s\)/)
+  assert.ok(out.text.includes(f.root), `the message names the primary path; got:\n${out.text}`)
+})
+
+test('phase land — a throwing evidence carry leaves exit 0 and reports the failure on stderr', () => {
+  const f = codexLaneFixture(113)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
+  const err = sink()
+
+  const code = runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 113,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err,
+    mergeLessons: () => ({ merged: 0 }),
+    carryEvidence: () => { throw new Error('EIO carrying lane evidence') },
+  })
+
+  assert.equal(code, 0, `the already-completed land keeps exit 0; stderr:\n${err.text}`)
+  assert.match(err.text, /EIO carrying lane evidence/)
+  assert.match(err.text, /evidence|carry/i)
+})
+
 // ── roadmap phase validate <N> --assumptions (20.4) ─────────────────────────────────────────
 //
 // TEST-FIRST: `--assumptions` does not exist yet (parseArgs drops the unknown flag, so today the

@@ -294,7 +294,8 @@ function driverMetrics(cell) {
         // zero tasks would divide by zero and read as infinitely slow.
         sum(haltFree.map((p) => spanMinutes(p.metrics))) / sum(haltFree.map((p) => Math.max(1, p.taskCount ?? 0)))
 
-  return { gateRoundsMean, escapeFixesPerPhase, haltRate, lowOnlyRoundShare, minutesPerTask }
+  const roundsPastCap = sum(phases.map((p) => p.roundsPastCap ?? 0))
+  return { gateRoundsMean, escapeFixesPerPhase, haltRate, lowOnlyRoundShare, roundsPastCap, minutesPerTask }
 }
 
 /**

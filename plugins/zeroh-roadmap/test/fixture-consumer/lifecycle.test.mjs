@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeFixtureRepo, runCli, writePhaseFile, commitPaths, readSlotLog, git } from './harness.mjs'
 import { SCOPED_FALLBACK_NOTE } from '../../cli/lib/slots.mjs'
@@ -53,6 +53,29 @@ test('L1 — two `roadmap claim` calls return distinct consecutive numbers with 
   assert.equal(nb, na + 1, 'the second claim is exactly one higher')
   const claimsDir = join(root, '.git', 'zeroh-roadmap-claims')
   assert.ok(existsSync(join(claimsDir, `${na}.claim`)) && existsSync(join(claimsDir, `${nb}.claim`)), 'both claim files exist')
+})
+
+test('session worktree journal lets phase land fast-forward, dispose, and archive the lane', () => {
+  const root = makeFixtureRepo()
+  const phase = 9019
+  seedPhase(root, { phase, status: 'in-progress', arcId: 'FX', kind: 'logic', tasks: [{ id: `${phase}.1`, done: true }] })
+  const lane = `${root}-session-${phase}`
+  try {
+    git(root, 'worktree', 'add', '-q', '-b', `session/${phase}`, lane, 'HEAD')
+    const armed = runCli(root, ['executor-arm', String(phase), '--session', 'fixture-session', '--worktree', lane])
+    assert.equal(armed.code, 0, armed.stderr)
+    writeFileSync(join(lane, 'session-work.txt'), 'session lane work\n')
+    commitPaths(lane, `feat(cli): phase ${phase} — ${phase}.1 session work`, ['session-work.txt'])
+    writeFileSync(join(lane, 'CODEX-REPORT.md'), 'CODEX-RUN-COMPLETE\n')
+    const land = runCli(lane, ['phase', 'land', String(phase)])
+    assert.equal(land.code, 0, land.stderr)
+    assert.equal(existsSync(lane), false)
+    const closed = join(root, '.building', `codex-${phase}.closed.json`)
+    assert.ok(existsSync(closed))
+    assert.equal(JSON.parse(readFileSync(closed, 'utf8')).closedBy, 'phase land')
+  } finally {
+    rmSync(lane, { recursive: true, force: true })
+  }
 })
 
 // ── L2 — phase validate green on well-formed, exit 2 on malformed ───────────────────────

@@ -19,10 +19,15 @@
  *
  * Returns its exit code to the dispatcher — never hard-exits the process.
  */
-import { existsSync } from 'node:fs'
-import { armExecutor, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps } from '../lib/executor-arm.mjs'
-import { gitToplevel } from '../lib/gitroot.mjs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { join } from 'node:path'
+import { armExecutor, armPath, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps } from '../lib/executor-arm.mjs'
+import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { productRepos, newestKeyFileAgeMin } from '../lib/product-repos.mjs'
+import { journalPath, writeJournal } from '../lib/codex-journal.mjs'
+import { MODEL_ALIASES } from '../lib/drivers.mjs'
+import { policyFromArg, resolveRole } from '../lib/roles.mjs'
 
 /** One line naming the derived product repos + newest declared keyFile age; best-effort. */
 function preflightLine(keyFiles, repos, underivable = false) {
@@ -51,13 +56,19 @@ export default async function run(argv) {
   const executorId = rawExecutorId?.startsWith('--') ? undefined : rawExecutorId
   const force = argv.includes('--force')
   const ci = argv.indexOf('--agent-card')
+  const wi = argv.indexOf('--worktree')
+  const requestedWorktree = wi >= 0 ? argv[wi + 1] : undefined
+  const li = argv.indexOf('--label')
+  const label = li >= 0 ? argv[li + 1] : undefined
+  const mi = argv.indexOf('--models')
+  const models = mi >= 0 ? argv[mi + 1] : undefined
   const rawCard = ci >= 0 ? argv[ci + 1] : undefined
   // `--agent-card --force` means the path was OMITTED. Falling back to the DEFAULT card there
   // would record the default's alias against an executor the caller meant to point elsewhere,
   // and result check would then red an honest return — so a flag-shaped value is a usage error.
   const cardMissing = ci >= 0 && (rawCard === undefined || rawCard.startsWith('--'))
   const cardPath = rawCard && !rawCard.startsWith('--') ? rawCard : DEFAULT_AGENT_CARD
-  if (!phase || !session || session.startsWith('--') || cardMissing) {
+  if (!phase || !session || session.startsWith('--') || cardMissing || (wi >= 0 && (!requestedWorktree || requestedWorktree.startsWith('--'))) || (li >= 0 && (!label || !/^[a-z0-9]+$/.test(label) || label === 'closed')) || (mi >= 0 && (!models || models.startsWith('--')))) {
     process.stderr.write(
       'roadmap executor-arm: usage: roadmap executor-arm <N> --session <id> [--executor-id <id>]'
         + ' [--agent-card <path>] [--force] (an unbound arm is never written)\n',
@@ -65,7 +76,14 @@ export default async function run(argv) {
     return 1
   }
   const expectedModelAlias = cardModelAlias(cardPath)
-  const worktree = gitToplevel(process.cwd())
+  const currentRoot = gitToplevel(process.cwd())
+  const worktree = requestedWorktree ?? currentRoot
+  const primary = requestedWorktree ? mainCheckout(currentRoot) : null
+  const laneJournal = requestedWorktree ? journalPath(primary, [phase], 'run', { label }) : null
+  if (laneJournal && existsSync(laneJournal)) {
+    process.stderr.write(`roadmap executor-arm: live lane journal already exists at ${laneJournal}\n`)
+    return 2
+  }
   // ONE derivation of the declared keyFiles, shared by the overlap claim below and the preflight
   // line at the end: an unreadable phase file yields no claim rather than an error, because
   // missing evidence is not evidence of a conflict (and the preflight was never a gate).
@@ -102,10 +120,37 @@ export default async function run(argv) {
     }
     process.stderr.write(`${message}. --force overrides the overlap; both arms remain recorded.\n`)
   }
+  let journal
+  if (requestedWorktree) {
+    let modelPolicy
+    try { modelPolicy = models ? policyFromArg(models) : undefined } catch (err) {
+      process.stderr.write(`roadmap executor-arm: ${err.message}\n`)
+      return 1
+    }
+    const resolvedModel = modelPolicy
+      ? resolveRole('phase-executor', 'claude', { policy: modelPolicy }).model
+      : MODEL_ALIASES[expectedModelAlias] ?? expectedModelAlias ?? 'unresolved'
+    let base
+    try { base = execFileSync('git', ['-C', worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() } catch (err) {
+      process.stderr.write(`roadmap executor-arm: cannot read target worktree HEAD (${err.message})\n`)
+      return 1
+    }
+    journal = {
+      phases: [Number(phase)], lane: 'run',
+      driver: { model: resolvedModel, lane: 'session' },
+      worktree, base,
+      pgid: null, startedAt: new Date().toISOString(), ...(modelPolicy ? { modelPolicy } : {}),
+    }
+  }
   let p
+  const priorArmPath = armPath(worktree, phase)
+  const priorArm = existsSync(priorArmPath) ? readFileSync(priorArmPath) : null
   try {
     p = armExecutor(worktree, phase, session, { executorId, expectedModelAlias, force })
+    if (journal) writeJournal(primary, journal, { label })
   } catch (err) {
+    if (p && priorArm) writeFileSync(p, priorArm)
+    else if (p) rmSync(p, { force: true })
     process.stderr.write(`roadmap executor-arm: ${err.message}\n`)
     return 2
   }

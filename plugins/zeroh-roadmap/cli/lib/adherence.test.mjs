@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
@@ -69,6 +69,12 @@ function report(root, phase, overrides = {}) {
     curation: { squashedCount: 1, landedSubjects: [`feat(cli): phase ${phase} — fixture`], redProofs: [] },
     ...overrides,
   }, null, 2))
+}
+
+function phaseEval(root, phase, gate) {
+  const dir = join(roadmapDir(root), 'arc-evals')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, `phase-${phase}.peval.json`), JSON.stringify({ phase, gate }, null, 2) + '\n')
 }
 
 function phaseFixture({ phase = 7026, legacy = false, omit } = {}) {
@@ -193,4 +199,62 @@ test('scoreAdherence — a phase predating the conventions abstains instead of t
     const applicable = result.checks.filter((c) => c.applicable)
     assert.equal(result.score, applicable.length ? applicable.filter((c) => c.passed).length / applicable.length : null)
   }
+})
+
+test('scoreAdherence — committed peval evidence backs curation and verify-complete when checkout-local evidence is gone', async () => {
+  const scoreAdherence = await scorer()
+  const phase = 7030
+  const root = phaseFixture({ phase })
+  rmSync(join(roadmapDir(root), '.gate', String(phase)), { recursive: true })
+  rmSync(join(root, '.building', `${phase}-executor.jsonl`))
+  phaseEval(root, phase, { curated: true, verifyComplete: 'passed' })
+
+  const checks = scoreAdherence(root, phase).checks
+  assert.deepEqual(
+    Object.fromEntries(['curation-evidence', 'verify-complete-passed'].map((id) => {
+      const check = checks.find((row) => row.id === id)
+      return [id, { applicable: check.applicable, passed: check.passed }]
+    })),
+    {
+      'curation-evidence': { applicable: true, passed: true },
+      'verify-complete-passed': { applicable: true, passed: true },
+    },
+  )
+  const tripwires = checks.find((row) => row.id === 'tripwires-ran')
+  assert.deepEqual({ applicable: tripwires.applicable, passed: tripwires.passed }, { applicable: false, passed: false })
+  assert.match(tripwires.evidence, /beacon absent.*checkout-local.*land carries it since phase 28/i)
+})
+
+test('scoreAdherence — a present gate report is authoritative over contradictory peval stamps', async () => {
+  const scoreAdherence = await scorer()
+  const phase = 7031
+  const root = phaseFixture({ phase })
+  phaseEval(root, phase, { curated: true, verifyComplete: 'passed' })
+  report(root, phase, { curation: undefined, notes: ['ordinary green gate run'] })
+
+  const checks = scoreAdherence(root, phase).checks
+  assert.equal(checks.find((row) => row.id === 'curation-evidence').passed, false)
+  assert.equal(checks.find((row) => row.id === 'verify-complete-passed').passed, false)
+})
+
+test('scoreAdherence — a curated task may use its recorded commit sha when curation removed the task subject', async () => {
+  const scoreAdherence = await scorer()
+  const phase = 7032
+  const root = phaseFixture({ phase })
+  const path = join(roadmapDir(root), 'phases', `phase-${phase}.phase.ts`)
+  const plan = JSON.parse(readFileSync(path, 'utf8').replace(/^export default /, ''))
+  plan.tasks[0].id = `${phase}.9`
+  plan.tasks[0].commit = git(root, 'rev-parse', 'HEAD')
+  writePhaseFile(root, plan)
+  commitAll(root, `docs(roadmap): phase ${phase} — record curated task sha`)
+
+  assert.equal(scoreAdherence(root, phase).checks.find((row) => row.id === 'one-commit-per-task').passed, true)
+  delete plan.tasks[0].commit
+  writePhaseFile(root, plan)
+  commitAll(root, `docs(roadmap): phase ${phase} — remove curated task sha`)
+  assert.equal(
+    scoreAdherence(root, phase).checks.find((row) => row.id === 'one-commit-per-task').passed,
+    false,
+    'without either a recorded sha or a matching task subject the check fails',
+  )
 })

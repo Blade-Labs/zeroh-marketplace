@@ -29,6 +29,53 @@ const tsSrc = (obj) =>
   'export default ' + JSON.stringify(obj, null, 2).replace(/"([\w$]+)":/g, '$1:').replace(/"/g, "'") + '\n'
 const CONFIG = { configVersion: 1, gateCommands: { lint: 'l', types: 't', unit: 'u', integration: 'i', build: 'b', e2e: 'none', emit: 'e' }, mergePolicy: { arcIntegration: 'autonomous', maxOpenFollowups: 0, autonomousPushRefs: ['develop'], primaryCheckout: '/nope' } }
 
+// Lazy resolution keeps the missing test-first export a focused RED instead of preventing the
+// rest of this mature suite from loading.
+const carryLaneEvidence = (...args) => {
+  assert.equal(typeof landingMod.carryLaneEvidence, 'function', 'landing.mjs must export carryLaneEvidence(primaryRoot, laneDir, phaseNum)')
+  return landingMod.carryLaneEvidence(...args)
+}
+
+test('carryLaneEvidence — carries novel gate reports and beacon lines without overwriting primary evidence', () => {
+  const primary = mkdtempSync(join(tmpdir(), 'zr-evidence-primary-'))
+  const lane = mkdtempSync(join(tmpdir(), 'zr-evidence-lane-'))
+  bases.push(primary, lane)
+  const phaseNum = 2801
+  const primaryGate = join(primary, 'roadmap', '.gate', String(phaseNum))
+  const laneGate = join(lane, 'roadmap', '.gate', String(phaseNum))
+  mkdirSync(primaryGate, { recursive: true })
+  mkdirSync(laneGate, { recursive: true })
+  const keptBytes = '{"owner":"primary","must":"survive byte-identical"}\n'
+  writeFileSync(join(primaryGate, 'run-1.json'), keptBytes)
+  writeFileSync(join(laneGate, 'run-1.json'), '{"owner":"lane","must":"not overwrite"}\n')
+  writeFileSync(join(laneGate, 'run-2.json'), '{"owner":"lane","round":2}\n')
+  mkdirSync(join(primary, '.building'), { recursive: true })
+  mkdirSync(join(lane, '.building'), { recursive: true })
+  const shared = '{"event":"executor-start","task":"28.1"}'
+  const second = '{"event":"test-red","task":"28.1"}'
+  const third = '{"event":"test-green","task":"28.1"}'
+  writeFileSync(join(primary, '.building', `${phaseNum}-executor.jsonl`), `${shared}\n`)
+  writeFileSync(join(lane, '.building', `${phaseNum}-executor.jsonl`), `${shared}\n${second}\n${third}\n`)
+
+  const result = carryLaneEvidence(primary, lane, phaseNum)
+
+  assert.deepEqual(result, { reports: 1, kept: 1, beaconLines: 2 })
+  assert.equal(readFileSync(join(primaryGate, 'run-1.json'), 'utf8'), keptBytes, 'same-named primary report remains byte-identical')
+  assert.equal(readFileSync(join(primaryGate, 'run-2.json'), 'utf8'), '{"owner":"lane","round":2}\n', 'the novel report is copied byte-for-byte')
+  assert.deepEqual(
+    readFileSync(join(primary, '.building', `${phaseNum}-executor.jsonl`), 'utf8').trim().split('\n'),
+    [shared, second, third],
+    'the existing beacon line stays first and only missing exact lines append',
+  )
+})
+
+test('carryLaneEvidence — a lane with no gate directory or beacon carries zero and does not throw', () => {
+  const primary = mkdtempSync(join(tmpdir(), 'zr-evidence-primary-empty-'))
+  const lane = mkdtempSync(join(tmpdir(), 'zr-evidence-lane-empty-'))
+  bases.push(primary, lane)
+  assert.deepEqual(carryLaneEvidence(primary, lane, 2802), { reports: 0, kept: 0, beaconLines: 0 })
+})
+
 function makeRepo(arcId, arc, phases) {
   const root = mkdtempSync(join(tmpdir(), 'zr-land-'))
   bases.push(root)

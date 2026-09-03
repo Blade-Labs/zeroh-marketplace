@@ -22,6 +22,7 @@ import {
   assembleConsumerFingerprint,
   assemblePhaseEvalRecord,
   phaseEvalRecordPath,
+  CORRECTNESS_ROUND_CAP,
 } from '../lib/eval-collect.mjs'
 import {
   gateCell,
@@ -71,6 +72,7 @@ export function emitPhaseEvalRecord(toplevel, phaseNum, { parsed, report, findin
       green: report.green,
       slots: report.slots,
       agents: report.agents,
+      report,
       findingsRecorded,
       // A linked codex worktree is the SAME repository as the checkout it was cut from, so its
       // identity comes from the primary checkout; the corpus facts still come from `toplevel`.
@@ -506,6 +508,7 @@ function parseArgs(argv) {
     else if (a === '--json') opts.json = true
     else if (a === '--slots') opts.slots = argv[++i]
     else if (a === '--record-round') opts.recordRound = argv[++i]
+    else if (a === '--cap-override') opts.capOverride = argv[++i] ?? ''
     else if (a === '--verify-complete') opts.verifyComplete = true
     else if (!a.startsWith('--')) positional.push(a)
   }
@@ -536,7 +539,7 @@ export default async function run(argv) {
   const sub = argv[0]
   if (sub === '--help' || sub === '-h' || !sub) {
     process.stdout.write('roadmap gate plan <phase> [--base <sha>] [--mode inline|arc] [--sequence-member] [--json]\n')
-    process.stdout.write('roadmap gate run  <phase> [--base <sha>] [--slots a,b] [--record-round <json>] [--verify-complete] [--json]\n')
+    process.stdout.write('roadmap gate run  <phase> [--base <sha>] [--slots a,b] [--record-round <json>] [--cap-override <reason>] [--verify-complete] [--json]\n')
     process.stdout.write('roadmap gate round-brief <phase> [--json]\n')
     return sub ? 0 : 1
   }
@@ -607,7 +610,7 @@ export default async function run(argv) {
     }
     const blocking = last.findings.some((finding) => finding.severity === 'CRITICAL' || finding.severity === 'HIGH')
     const legacyUnknown = last.verdict === 'findings-fixed' && last.findings.length === 0
-    const rule = correctnessRounds.length >= 5 || last.round >= 5
+    const rule = correctnessRounds.length >= CORRECTNESS_ROUND_CAP || last.round >= CORRECTNESS_ROUND_CAP
       ? 'cap'
       : last.verdict === 'clean'
         ? 'clean'
@@ -653,8 +656,9 @@ function driverReconcile(cwd, fallbackRoot, phaseNum, parsed) {
     root = fallbackRoot
   }
   let found
+  const worktree = cwd === root ? undefined : cwd
   try {
-    found = findJournal(root, [phaseNum], 'run')
+    found = findJournal(root, [phaseNum], 'run', { worktree })
   } catch (e) {
     if (!(e instanceof JournalUnreadableError)) throw e
     // An unreadable journal is not an absent one: passing it as "inline session" would drop the
@@ -666,12 +670,15 @@ function driverReconcile(cwd, fallbackRoot, phaseNum, parsed) {
   // reconcile for it would mean every gate re-run after a delegated phase lands stops checking
   // the phase file's claim, silently, exactly where the claim is least likely to be self-checked.
   try {
-    if (!found) found = findClosedJournal(root, [phaseNum], 'run', { strict: true })
+    if (!found) found = findClosedJournal(root, [phaseNum], 'run', { strict: true, worktree })
   } catch (e) {
     if (!(e instanceof JournalUnreadableError)) throw e
     return { problems: [`phase ${phaseNum} attribution could NOT be reconciled: ${e.message}`], notes: [] }
   }
-  if (!found) return { problems: [], notes: [] }
+  if (!found) return {
+    problems: [],
+    notes: worktree ? [`phase ${phaseNum} driver UNRECONCILED — no run journal names worktree ${worktree}; treating it as an inline session`] : [],
+  }
   const j = found.journal.driver
   if (!j) return { problems: [], notes: [] }
   const where = `${found.path} (startedAt ${found.journal.startedAt ?? 'unrecorded'})`
@@ -750,6 +757,14 @@ export async function runGate(phaseNum, opts) {
         process.stderr.write(`gate run --record-round: ${iss.path.join('.') || '(root)'}: ${iss.message}\n`)
       return 2
     }
+    if (opts.capOverride != null && (!opts.capOverride.trim() || opts.capOverride.startsWith('--'))) {
+      process.stderr.write('gate run --record-round: --cap-override requires a non-empty reason\n')
+      return 2
+    }
+    if (check.data.round > CORRECTNESS_ROUND_CAP && !opts.capOverride) {
+      process.stderr.write(`gate run --record-round: correctness round cap is ${CORRECTNESS_ROUND_CAP}; pass --cap-override "<reason>" to record round ${check.data.round}\n`)
+      return 2
+    }
     try {
       // The same rule the --verify-complete refresh already applies: a --slots report covers
       // that subset alone. A round recorded there is not a round about the PHASE — and since
@@ -765,7 +780,7 @@ export async function runGate(phaseNum, opts) {
         )
         return 2
       }
-      appendAgentRound(toplevel, phaseNum, check.data)
+      appendAgentRound(toplevel, phaseNum, { ...check.data, ...(opts.capOverride ? { capOverride: opts.capOverride } : {}) })
     } catch (e) {
       // The CLASS is named as well as the message: "no report yet" and "the report on disk will
       // not read" send the reader to opposite remedies, and only one of them is a corruption.

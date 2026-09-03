@@ -523,6 +523,9 @@ export const PhaseEvalRecordShape = z.strictObject({
       LOW: z.number().int().nonnegative(),
     }).optional(),
     roundsLowOnly: z.number().int().nonnegative().optional(),
+    roundsPastCap: z.number().int().nonnegative().optional(),
+    curated: z.boolean().optional(),
+    verifyComplete: z.literal('passed').optional(),
     slots: z
       .array(
         z.strictObject({

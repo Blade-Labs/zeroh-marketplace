@@ -21,6 +21,13 @@
  */
 import { DRIVERS, MODEL_ALIASES, MODEL_IDS, MODEL_DRIVERS, resolveDriver } from './drivers.mjs'
 
+export function driverTrailer(model) {
+  if (/^(?:gpt|sol)/i.test(model ?? '')) return `Co-Authored-By: Codex ${model} <noreply@openai.com>`
+  const m = /^claude-(opus|sonnet|fable|haiku)-(\d+)(?:-(\d+))?$/.exec(model ?? '')
+  if (m) return `Co-Authored-By: Claude ${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? `.${m[3]}` : ''} <noreply@anthropic.com>`
+  return 'Co-Authored-By: Claude <noreply@anthropic.com>'
+}
+
 const { FABLE, SONNET, OPUS, SOL } = MODEL_IDS
 
 /** The env var that forces a tier down, so the no-rigor-loss rail can be falsified on demand. */

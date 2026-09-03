@@ -95,6 +95,37 @@ test('1) executor-arm --executor-id records the id in the arm file', () => {
   assert.equal(rec.executorId, 'exec-1', 'the executor identity is what makes exclusivity meaningful')
 })
 
+test('executor-arm --worktree writes a lane journal with session driver and resolved model', () => {
+  const repo = newRepo()
+  writePhaseFile(repo, 2380)
+  git(repo, 'add', 'roadmap')
+  git(repo, 'commit', '-qm', 'seed phase')
+  const lane = `${repo}-session-2380`
+  tmps.push(lane)
+  git(repo, 'worktree', 'add', '-q', '-b', 'session/2380', lane, 'HEAD')
+  const res = roadmap(repo, 'executor-arm', '2380', '--session', 'sess-a', '--worktree', lane)
+  assert.equal(res.status, 0, res.stderr)
+  const journal = JSON.parse(readFileSync(join(repo, '.building', 'codex-2380.json'), 'utf8'))
+  assert.equal(journal.worktree, lane)
+  assert.equal(journal.driver.lane, 'session')
+  assert.equal(typeof journal.driver.model, 'string')
+  assert.ok(journal.driver.model.length > 0)
+})
+
+test('executor-arm labels allow two same-phase worktree arms; an unlabeled live name refuses', () => {
+  const repo = newRepo()
+  writePhaseFile(repo, 2381)
+  const laneA = join(repo, 'lane-a'); const laneB = join(repo, 'lane-b')
+  mkdirSync(laneA); mkdirSync(laneB)
+  assert.equal(roadmap(repo, 'executor-arm', '2381', '--session', 'a', '--worktree', laneA, '--label', 'opus').status, 0)
+  assert.equal(roadmap(repo, 'executor-arm', '2381', '--session', 'b', '--worktree', laneB, '--label', 'fable').status, 0)
+  assert.ok(existsSync(join(repo, '.building', 'codex-2381.opus.json')))
+  assert.ok(existsSync(join(repo, '.building', 'codex-2381.fable.json')))
+  assert.equal(roadmap(repo, 'executor-arm', '2382', '--session', 'a', '--worktree', laneA).status, 0)
+  const second = roadmap(repo, 'executor-arm', '2382', '--session', 'b', '--worktree', laneB)
+  assert.equal(second.status, 2)
+})
+
 test('2) executor-arm prints the CROSS-REPO PREFLIGHT: the derived product repo and the newest keyFile age', () => {
   // D6: no CLI can compute "newer than YOUR spawn" (that fact lives only in the agent's head), so
   // the CLI carries its half as OUTPUT — the orchestrator sees the tell before it spawns.

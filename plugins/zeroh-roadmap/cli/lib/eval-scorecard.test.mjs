@@ -72,6 +72,7 @@ function mkPhase(o = {}) {
     if (o.gateRounds !== null) er.gateRounds = o.gateRounds ?? 1
     p.executionResult = er
   }
+  if (typeof o.roundsPastCap === 'number') p.roundsPastCap = o.roundsPastCap
   if (o.metrics !== null) {
     const m = { startedAt: o.startedAt ?? T0 }
     if (o.minutes !== null) m.completedAt = new Date(Date.parse(o.startedAt ?? T0) + (o.minutes ?? 30) * 60_000).toISOString()
@@ -141,7 +142,7 @@ function metricsOf(cell, label) {
   return cell.metrics
 }
 
-const DRIVER_METRIC_KEYS = ['escapeFixesPerPhase', 'gateRoundsMean', 'haltRate', 'lowOnlyRoundShare', 'minutesPerTask']
+const DRIVER_METRIC_KEYS = ['escapeFixesPerPhase', 'gateRoundsMean', 'haltRate', 'lowOnlyRoundShare', 'minutesPerTask', 'roundsPastCap']
 const REVIEWER_METRIC_KEYS = ['catches', 'falsePositives', 'misses', 'recall']
 
 function assertMetricKeys(cell, expected, label) {
@@ -378,6 +379,14 @@ test('computeScorecard — NO recorded gate rounds anywhere sentinels gateRounds
   const sc = computeScorecard([mkTrace(nPhases(6, () => ({ gateRounds: null })))], [])
   const m = metricsOf(driverCell(sc, { model: DRIVER_A.model }), 'the driver cell under test')
   assertSentinel(m.gateRoundsMean, 'no-gate-rounds', 'gateRoundsMean with nothing recorded')
+})
+
+test('computeScorecard — roundsPastCap sums the recorded excess correctness rounds per driver', () => {
+  const sc = computeScorecard([
+    mkTrace(nPhases(5, (i) => ({ roundsPastCap: i < 2 ? 1 : 0 }))),
+  ], [])
+  const m = metricsOf(driverCell(sc, { model: DRIVER_A.model }), 'the driver cell under test')
+  assert.equal(m.roundsPastCap, 2)
 })
 
 test('computeScorecard — lowOnlyRoundShare measures recorded low-only rounds and is explanatory beside the other metrics', () => {

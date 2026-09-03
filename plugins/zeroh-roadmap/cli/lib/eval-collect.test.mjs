@@ -1224,6 +1224,39 @@ test('assemblePhaseEvalRecord — mixed legacy and findings-bearing rounds proje
   assert.equal(record.gate.roundsLowOnly, 1)
 })
 
+test('assemblePhaseEvalRecord — counts recorded correctness rounds past the shared cap', () => {
+  const agents = Array.from({ length: 8 }, (_, round) => ({ round, agent: 'code-reviewer', verdict: 'clean', findings: [] }))
+  const { record } = assemblePhaseEvalRecord({
+    ...assembleArgs(8831, { tasks: [{ id: '28.6' }], keyFiles: [] }),
+    agents,
+    findingsRecorded: agents.map(() => true),
+  })
+  assert.equal(record.gate.roundsPastCap, 2)
+})
+
+test('assemblePhaseEvalRecord — projects curation and verify-complete evidence from the gate report', () => {
+  const { record } = assemblePhaseEvalRecord({
+    ...assembleArgs(8829, { tasks: [{ id: '28.2' }], keyFiles: ['src/collector.ts'] }),
+    report: {
+      curation: { squashedCount: 3, landedSubjects: ['feat(cli): phase 28 — fixture'], redProofs: [] },
+      notes: ['gate run --verify-complete passed'],
+    },
+  })
+
+  assert.equal(record.gate.curated, true, 'the committed projection remembers that the source report carried curation evidence')
+  assert.equal(record.gate.verifyComplete, 'passed', 'the committed projection remembers the successful verify-complete note')
+})
+
+test('assemblePhaseEvalRecord — absent report evidence stays absent rather than minting negative stamps', () => {
+  const { record } = assemblePhaseEvalRecord({
+    ...assembleArgs(8830, { tasks: [{ id: '28.2' }], keyFiles: ['src/collector.ts'] }),
+    report: { notes: ['ordinary green gate run'] },
+  })
+
+  assert.equal('curated' in record.gate, false)
+  assert.equal('verifyComplete' in record.gate, false)
+})
+
 /** Round-trip an assembled record through the CONSUMER's REAL PhaseEvalRecordShape, over the
  *  same tsx bridge production validates with. The shape is strict at every level, so this is
  *  what proves the PROJECTION (`{ model }` only) rather than a restatement of it here. */

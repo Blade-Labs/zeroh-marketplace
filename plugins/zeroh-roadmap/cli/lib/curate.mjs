@@ -14,6 +14,7 @@ import { writeFileSync } from 'node:fs'
 
 import { derivePhaseStartSha, phaseOwnPatterns, SUBJECT_GRAMMAR } from './gitscan.mjs'
 import { recordCuration, latestReport } from './gate-report.mjs'
+import { driverTrailer } from './roles.mjs'
 
 const git = (cwd, args, opts = {}) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8', ...opts }).trim()
@@ -225,7 +226,6 @@ export function executeCurate(cwd, plan, evidence) {
 }
 
 const SUBJECT_MAX = 72
-const TRAILER = 'Co-Authored-By: Claude <noreply@anthropic.com>'
 
 /** Majority vote over the WORK commits' `type(scope):` prefixes — task and gate-fix rows
  *  only (state bookkeeping, scratch/revert pairs and unparseable subjects never vote);
@@ -285,6 +285,8 @@ export function composeLandedMessage(phaseRecord, group) {
     if (report?.compromises && report.compromises !== 'None') lines.push('', `Compromise: ${report.compromises}`)
     lines.push('')
   }
-  lines.push(TRAILER)
+  const roundModels = (phaseRecord.gateRounds ?? []).map((round) => round.model).filter(Boolean)
+  const majorityModel = roundModels.sort((a, b) => roundModels.filter((m) => m === b).length - roundModels.filter((m) => m === a).length)[0]
+  lines.push(driverTrailer(phaseRecord.executionResult?.driver?.model ?? majorityModel ?? null))
   return { subject, body: lines.join('\n') }
 }

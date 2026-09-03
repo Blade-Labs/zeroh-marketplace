@@ -32,9 +32,9 @@ import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
 import { landPhase, disposeWorktree, isSlotDir, samePath } from '../lib/worktree.mjs'
-import { archiveJournal, findJournal, JournalUnreadableError, RUN_LANE_ARTIFACTS } from '../lib/codex-journal.mjs'
+import { archiveJournal, findJournal, JournalUnreadableError, prevReportName, RUN_LANE_ARTIFACTS } from '../lib/codex-journal.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
-import { mergeLaneLessons } from '../lib/landing.mjs'
+import { carryLaneEvidence, mergeLaneLessons } from '../lib/landing.mjs'
 import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 function runStart(argv) {
@@ -332,7 +332,7 @@ function codexLaneSource(cwd, phaseNum) {
   if (samePath(root, cwd)) return null
   let found
   try {
-    found = findJournal(root, [phaseNum], 'run')
+    found = findJournal(root, [phaseNum], 'run', { worktree: cwd })
   } catch (e) {
     // An unreadable journal is NOT an absent one. Falling through silently hands the operator the
     // isolation message, whose remedy — flip the knob — makes the land succeed and then take the
@@ -370,7 +370,7 @@ function codexLaneSource(cwd, phaseNum) {
  * after the push, because it removes the very directory the earlier acts run in; and a refusal is
  * reported on stderr with exit 0 intact — the land succeeded, and cleanup reports beside it.
  */
-export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr, mergeLessons = mergeLaneLessons }) {
+export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr, mergeLessons = mergeLaneLessons, carryEvidence = carryLaneEvidence }) {
   const lane = codexLaneSource(cwd, phaseNum)
   if (lane?.unreadable) {
     err.write(`phase land: ${lane.unreadable}\n`)
@@ -437,6 +437,12 @@ export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = proc
       )
       return 0
     }
+    try {
+      const { reports, beaconLines } = carryEvidence(lane.root, cwd, phaseNum)
+      out.write(`carried ${reports} gate report(s), ${beaconLines} beacon line(s) into ${lane.root}\n`)
+    } catch (e) {
+      err.write(`phase land: evidence carry failed (${e?.message?.split('\n')[0] ?? e})\n`)
+    }
   }
   disposeSource(lane, { cwd, laneBranch, baseRef, out, err })
   return 0
@@ -470,7 +476,7 @@ function disposeSource(lane, { cwd, laneBranch, baseRef, out, err }) {
     r = disposeWorktree(lane.root, cwd, {
       branch: laneBranch,
       integrationRef: baseRef,
-      allowUntracked: RUN_LANE_ARTIFACTS,
+      allowUntracked: [...new Set([...RUN_LANE_ARTIFACTS, lane.journal?.report, lane.journal?.report ? prevReportName(lane.journal.report) : null].filter(Boolean))],
       pgid: lane.journal?.pgid ?? null,
     })
   } catch (e) {

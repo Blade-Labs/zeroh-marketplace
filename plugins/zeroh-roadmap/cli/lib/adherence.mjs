@@ -48,6 +48,12 @@ function latestGateReport(toplevel, phase) {
   return file ? JSON.parse(readFileSync(join(dir, file), 'utf8')) : null
 }
 
+function phaseEval(toplevel, phase) {
+  const path = join(roadmapRoot(toplevel), 'arc-evals', `phase-${phase}.peval.json`)
+  if (!existsSync(path)) return null
+  try { return JSON.parse(readFileSync(path, 'utf8')) } catch { return null }
+}
+
 function eventsFor(toplevel, phase) {
   const path = join(toplevel, '.building', `${phase}-executor.jsonl`)
   if (!existsSync(path)) return []
@@ -97,6 +103,7 @@ function row(id, applicable, passed, evidence) {
 export function scoreAdherence(toplevel, phase) {
   const { value: plan, path } = readPhase(toplevel, phase)
   const report = latestGateReport(toplevel, phase)
+  const peval = phaseEval(toplevel, phase)
   const events = eventsFor(toplevel, phase)
   const modern = String(plan.completedDate ?? plan.created ?? '') >= CONVENTIONS_AT
   const taskStarts = events.filter((event) => event.event === 'task-start')
@@ -108,7 +115,9 @@ export function scoreAdherence(toplevel, phase) {
   const transparencyOk = doneTasks.every((task) => SIX_FIELDS.every((field) => typeof task.transparencyReport?.[field] === 'string'))
   const rounds = plan.gateRounds ?? []
   const mutationProof = doneTasks.every((task) => quotesMutationProof(task) || declaresNoGuard(task))
-  const verifyPassed = (report?.notes ?? []).some((note) => /verify-complete passed/i.test(note))
+  const verifyPassed = report
+    ? (report.notes ?? []).some((note) => /verify-complete passed/i.test(note))
+    : peval?.gate?.verifyComplete === 'passed'
   const selfReviewFree = rounds.some((round) => round.round >= 1 && !/self[- ]?review/i.test(round.agent ?? ''))
   const originalVerifies = verifyClauses(baselinePhaseSource(toplevel, path, phase))
   const currentVerifies = verifyClauses(readFileSync(path, 'utf8'))
@@ -123,9 +132,9 @@ export function scoreAdherence(toplevel, phase) {
   const lessons = lessonPaths.filter(existsSync).map((lessonPath) => readFileSync(lessonPath, 'utf8')).join('\n')
 
   const checks = [
-    row('tripwires-ran', modern, executorStart >= 0 && firstTask > executorStart,
-      taskStarts.length ? `executor-start index ${executorStart}; first task-start index ${firstTask}` : 'no task-start beacon recorded'),
-    row('one-commit-per-task', modern, doneTasks.length === tasks.length && doneTasks.every((task) => log.split('\n').some((subject) => subject.includes(`phase ${phase} — ${task.id}`))),
+    row('tripwires-ran', modern && events.length > 0, executorStart >= 0 && firstTask > executorStart,
+      events.length === 0 ? 'beacon absent (checkout-local; land carries it since phase 28)' : taskStarts.length ? `executor-start index ${executorStart}; first task-start index ${firstTask}` : 'no task-start beacon recorded'),
+    row('one-commit-per-task', modern, doneTasks.length === tasks.length && doneTasks.every((task) => typeof task.commit === 'string' || log.split('\n').some((subject) => subject.includes(`phase ${phase} — ${task.id}`))),
       `${doneTasks.length}/${tasks.length} task(s) done; matching task subjects inspected in git log`),
     row('six-field-transparency-reports', modern, transparencyOk,
       transparencyOk ? 'all done tasks carry all six fields' : 'one or more done tasks lack a transparency field'),
@@ -135,8 +144,8 @@ export function scoreAdherence(toplevel, phase) {
       `${rounds.length} phase gate round(s) inspected for typed findings arrays`),
     row('guard-mutation-proofs-quoted', modern, mutationProof,
       mutationProof ? 'every task declares no new guard or quotes planted RED, anchor-drift RED, and decoy GREEN evidence' : 'one or more tasks lack both a no-new-guard declaration and a complete three-drive mutation proof'),
-    row('curation-evidence', modern, Boolean(report?.curation),
-      report?.curation ? 'latest gate report carries curation evidence' : 'latest gate report lacks curation evidence'),
+    row('curation-evidence', modern, report ? Boolean(report.curation) : peval?.gate?.curated === true,
+      report?.curation ? 'latest gate report carries curation evidence' : peval?.gate?.curated === true && !report ? 'committed peval carries curation evidence' : 'latest gate report lacks curation evidence'),
     row('verify-complete-passed', modern, verifyPassed,
       verifyPassed ? 'latest gate notes record verify-complete passed' : 'latest gate notes do not record verify-complete'),
     row('no-self-review-round', modern, selfReviewFree,

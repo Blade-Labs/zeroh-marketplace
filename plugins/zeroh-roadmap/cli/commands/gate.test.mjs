@@ -708,6 +708,22 @@ test('gate run --record-round — appends to the SAME report file', () => {
   assert.equal(latestReportOf(repo.root, 1300).agents.length, 1)
 })
 
+test('gate run --record-round enforces correctness cap unless a named override is recorded', () => {
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(1302, phaseObj({ phase: 1302 }))
+  repo.commit('feat: phase 1302 — code', { 'lib/cap.ts': 'export const cap = 1\n' })
+  assert.equal(runGateCmd(repo.root, ['1302']).code, 0)
+  const payload = (round) => JSON.stringify({ round, agent: 'code-reviewer', verdict: 'clean', summary: `round ${round}`, findings: [] })
+  assert.equal(runGateCmd(repo.root, ['1302', '--record-round', payload(5)]).code, 0, 'round at cap records normally')
+  const refused = runGateCmd(repo.root, ['1302', '--record-round', payload(6)])
+  assert.equal(refused.code, 2)
+  assert.match(refused.stderr, /cap.*5/i)
+  assert.match(refused.stderr, /--cap-override.*reason/i)
+  const allowed = runGateCmd(repo.root, ['1302', '--record-round', payload(6), '--cap-override', 'security review requested one more pass'])
+  assert.equal(allowed.code, 0, allowed.stderr)
+  assert.equal(latestReportOf(repo.root, 1302).agents.at(-1).capOverride, 'security review requested one more pass')
+})
+
 test('gate run --record-round — an unknown finding severity exits 2 and names the complete allowed set', () => {
   const repo = makeRepo(RUN_CFG())
   repo.writePhase(1301, phaseObj({ phase: 1301 }))
@@ -1530,7 +1546,7 @@ test('gate run --verify-complete inside a LINKED codex worktree — the journal 
   assert.equal(runGateIn(worktree, ['1614']).code, 0, 'precondition: the code gate runs in the worktree')
   assert.equal(existsSync(join(worktree, 'roadmap', '.gate', '1614')), true, 'precondition: the report the verify reads is the worktree\'s own')
 
-  const jPath = writeRunJournal(repo.root, [1614])
+  const jPath = writeRunJournal(repo.root, [1614], { worktree })
   assert.equal(existsSync(join(worktree, '.building')), false, 'precondition: the journal exists ONLY under the primary checkout')
 
   const r = runGateIn(worktree, ['1614', '--verify-complete'])
@@ -1538,6 +1554,32 @@ test('gate run --verify-complete inside a LINKED codex worktree — the journal 
   assert.ok(r.stderr.includes(JOURNAL_MODEL), `the journal's truth is named; stderr: ${JSON.stringify(r.stderr)}`)
   assert.ok(r.stderr.includes(CLAIMED_MODEL), `the file's claim is named beside it; stderr: ${JSON.stringify(r.stderr)}`)
   assert.ok(r.stderr.includes(jPath), `the PRIMARY checkout's journal path is named (${jPath}); stderr: ${JSON.stringify(r.stderr)}`)
+})
+
+test('gate run --verify-complete in worktree B ignores phase-matching journal A, then reconciles against B when present', { timeout: 240_000 }, () => {
+  const phase = 1620
+  const repo = makeRepo(RUN_CFG())
+  repo.writePhase(phase, { ...donePhase(phase, { model: CLAIMED_MODEL, lane: 'session' }), gateRounds: [INDEPENDENT_ROUND] })
+  repo.commit(`feat: phase ${phase} — code`, { 'lib/worktree-b.ts': 'export const b = 1\n' })
+  const worktreeB = `${repo.root}-codex-${phase}-b`
+  bases.push(worktreeB)
+  repo.git('worktree', 'add', '-q', '-b', `codex/${phase}-b`, worktreeB, 'HEAD')
+  assert.equal(runGateIn(worktreeB, [String(phase)]).code, 0)
+  assert.equal(recordIndependentRound({ ...repo, root: worktreeB }, phase).code, 0)
+
+  const worktreeA = `${repo.root}-codex-${phase}-a`
+  writeRunJournal(repo.root, [phase], { worktree: worktreeA, driver: { model: JOURNAL_MODEL, lane: 'codex' } })
+  const inline = runGateIn(worktreeB, [String(phase), '--verify-complete'])
+  assert.equal(inline.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `journal A is not launcher truth for worktree B; stderr: ${inline.stderr}`)
+  assert.ok(!inline.stderr.includes(JOURNAL_MODEL), `the unrelated arm is ignored, not reconciled; stderr: ${inline.stderr}`)
+
+  const journalB = join(repo.root, '.building', `codex-${phase}-999.json`)
+  writeFileSync(
+    journalB,
+    JSON.stringify({ phases: [String(phase)], lane: 'run', worktree: worktreeB, startedAt: JOURNAL_STARTED_AT, driver: { model: CLAIMED_MODEL, lane: 'session' } }) + '\n',
+  )
+  const reconciled = runGateIn(worktreeB, [String(phase), '--verify-complete'])
+  assert.equal(reconciled.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `the matching B journal reconciles cleanly; stderr: ${reconciled.stderr}`)
 })
 
 // ── the eval record's CONSUMER IDENTITY seen from a linked worktree ───────────────────

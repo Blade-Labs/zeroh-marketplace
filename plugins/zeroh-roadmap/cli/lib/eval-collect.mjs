@@ -32,6 +32,8 @@ import { flowTokens } from '../commands/measure.mjs'
 import { bridgeImport, bridgeImportMany, bridgeParseShape, consumerSchemaPath } from './tsx-bridge.mjs'
 import { roadmapRoot } from './roadmap-root.mjs'
 
+export const CORRECTNESS_ROUND_CAP = 5
+
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 /**
@@ -156,6 +158,7 @@ function pevalSample(record) {
   if (record.metrics) sample.metrics = record.metrics
   if (record.attribution?.driver) sample.driver = record.attribution.driver
   if (record.attribution?.plannedBy) sample.plannedBy = record.attribution.plannedBy
+  if (typeof record.gate?.roundsPastCap === 'number') sample.roundsPastCap = record.gate.roundsPastCap
   return sample
 }
 
@@ -398,7 +401,7 @@ export function projectRoleModels(phase, roles) {
  * record can drop an ambiguous role (projectRoleModels), and a caller that could not SAY so
  * would be dropping it in silence. Warnings never fail anything — the caller prints them.
  */
-export function assemblePhaseEvalRecord({ phase, parsed, green, slots, agents, findingsRecorded = [], fingerprint, date }) {
+export function assemblePhaseEvalRecord({ phase, parsed, green, slots, agents, findingsRecorded = [], fingerprint, date, report }) {
   const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : []
   const record = {
     phase,
@@ -424,6 +427,8 @@ export function assemblePhaseEvalRecord({ phase, parsed, green, slots, agents, f
       }),
     },
   }
+  if (report?.curation) record.gate.curated = true
+  if ((report?.notes ?? []).some((note) => /verify-complete passed/i.test(note))) record.gate.verifyComplete = 'passed'
   const evidencedRounds = Array.isArray(agents)
     ? agents.filter((_, index) => findingsRecorded[index] === true)
     : []
@@ -439,6 +444,7 @@ export function assemblePhaseEvalRecord({ phase, parsed, green, slots, agents, f
     }
     record.gate.findingsBySeverity = counts
     record.gate.roundsLowOnly = roundsLowOnly
+    record.gate.roundsPastCap = evidencedRounds.filter((round) => round.round > CORRECTNESS_ROUND_CAP).length
   }
   if (parsed?.metrics) record.metrics = parsed.metrics
   const attribution = {}

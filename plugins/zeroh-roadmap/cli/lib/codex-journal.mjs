@@ -7,8 +7,8 @@
  * lib→command dependency inversion. Bodies and docblocks moved verbatim, a MOVE not a rewrite;
  * every consumer — the launcher included — imports the names from HERE, so there is one home.
  */
-import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 /**
  * One entry per mission. Adding a lane is adding an entry here — the launcher, the liveness guard,
@@ -16,7 +16,7 @@ import { join } from 'node:path'
  * launcher. `flag` is how `status` is pointed at the lane (the run lane is the default, hence null).
  */
 export const LANES = {
-  run: { prefix: 'codex-', report: 'CODEX-REPORT.md', journalRe: /^codex-[\d-]+\.json$/, closedRe: /^codex-[\d-]+\.closed\.json$/, flag: null },
+  run: { prefix: 'codex-', report: 'CODEX-REPORT.md', journalRe: /^codex-[\d-]+(?:\.(?!closed\.)[a-z0-9]+)?\.json$/, closedRe: /^codex-[\d-]+(?:\.[a-z0-9]+)?\.closed\.json$/, flag: null },
   review: { prefix: 'codex-review-', report: 'CODEX-REVIEW.md', journalRe: /^codex-review-[\d-]+\.json$/, closedRe: /^codex-review-[\d-]+\.closed\.json$/, flag: '--review' },
   plan: { prefix: 'codex-plan-', report: 'CODEX-PLAN.md', journalRe: /^codex-plan-[\d-]+\.json$/, closedRe: /^codex-plan-[\d-]+\.closed\.json$/, flag: '--plan' },
 }
@@ -32,9 +32,18 @@ export const prevReportName = (report) => report.replace(/\.md$/, '.prev.md')
  */
 export const RUN_LANE_ARTIFACTS = [LANES.run.report, prevReportName(LANES.run.report)]
 
-export function journalPath(root, ids, lane = 'run') {
-  return join(root, '.building', `${LANES[lane].prefix}${ids.join('-')}.json`)
+export function journalPath(root, ids, lane = 'run', { label } = {}) {
+  return join(root, '.building', `${LANES[lane].prefix}${ids.join('-')}${label ? `.${label}` : ''}.json`)
 }
+
+export function writeJournal(root, journal, { label } = {}) {
+  const path = journalPath(root, journal.phases, journal.lane ?? 'run', { label })
+  mkdirSync(join(root, '.building'), { recursive: true })
+  writeFileSync(path, JSON.stringify(journal, null, 2) + '\n')
+  return path
+}
+
+const matchesWorktree = (journal, worktree) => !worktree || (journal?.worktree && resolve(journal.worktree) === resolve(worktree))
 
 /** A journal that EXISTS and cannot be read as one — it will not parse, or it parses to
  *  something that is not a journal object. Never folded into "no journal": an absent journal
@@ -87,7 +96,7 @@ export function journalDeclineReason(value) {
  * Scoping matters because nothing prunes .building, so one truncated journal would otherwise
  * block the reconcile for every phase in the checkout, including inline ones.
  */
-export function findJournal(root, ids, lane = 'run') {
+export function findJournal(root, ids, lane = 'run', { worktree } = {}) {
   const wanted = ids.map(String)
   const failures = []
   const read = (p, candidate) => {
@@ -108,7 +117,7 @@ export function findJournal(root, ids, lane = 'run') {
   const exact = journalPath(root, ids, lane)
   if (existsSync(exact)) {
     const journal = read(exact, true)
-    if (journal) return { path: exact, journal }
+    if (journal && matchesWorktree(journal, worktree)) return { path: exact, journal }
   }
   const dir = join(root, '.building')
   for (const f of existsSync(dir) ? readdirSync(dir) : []) {
@@ -118,7 +127,7 @@ export function findJournal(root, ids, lane = 'run') {
     const named = f.match(/\d+/g) ?? []
     const journal = read(path, wanted.every((n) => named.includes(n)))
     const phases = (journal?.phases ?? []).map(String)
-    if (journal && wanted.every((n) => phases.includes(n))) return { path, journal }
+    if (journal && wanted.every((n) => phases.includes(n)) && matchesWorktree(journal, worktree)) return { path, journal }
   }
   if (failures.length > 0) throw new JournalUnreadableError(failures)
   return null
@@ -160,7 +169,7 @@ export function archiveJournal(journalPath, journal, closedBy) {
  * write is not atomic, so a crash mid-write produces exactly that file, and answering null would
  * let landing a delegated phase turn a loud guard quiet. `strict` throws JournalUnreadableError.
  */
-export function findClosedJournal(root, ids, lane = 'run', { strict = false } = {}) {
+export function findClosedJournal(root, ids, lane = 'run', { strict = false, worktree } = {}) {
   const wanted = ids.map(String)
   const failures = []
   const read = (p, candidate) => {
@@ -181,7 +190,7 @@ export function findClosedJournal(root, ids, lane = 'run', { strict = false } = 
   const exact = journalPath(root, ids, lane).replace(/\.json$/, '.closed.json')
   if (existsSync(exact)) {
     const journal = read(exact, true)
-    if (journal) return { path: exact, journal }
+    if (journal && matchesWorktree(journal, worktree)) return { path: exact, journal }
   }
   const dir = join(root, '.building')
   for (const f of existsSync(dir) ? readdirSync(dir) : []) {
@@ -194,7 +203,7 @@ export function findClosedJournal(root, ids, lane = 'run', { strict = false } = 
     const named = f.match(/\d+/g) ?? []
     const journal = read(path, wanted.every((n) => named.includes(n)))
     const phases = (journal?.phases ?? []).map(String)
-    if (journal && wanted.every((n) => phases.includes(n))) return { path, journal }
+    if (journal && wanted.every((n) => phases.includes(n)) && matchesWorktree(journal, worktree)) return { path, journal }
   }
   if (strict && failures.length > 0) throw new JournalUnreadableError(failures)
   return null

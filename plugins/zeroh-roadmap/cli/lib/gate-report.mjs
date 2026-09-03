@@ -61,6 +61,7 @@ const AgentRoundShape = z.object({
   model: z.string().min(1).optional(),
   findings: z.array(GateFindingRecordShape).default([]),
   sha: z.string().min(7).optional(),
+  capOverride: z.string().min(1).optional(),
   recordedAt: z.string(),
 })
 
@@ -104,6 +105,7 @@ export const AgentRoundInputShape = z.object({
   summary: z.string(),
   model: z.string().min(1).optional(),
   findings: z.array(GateFindingRecordShape).default([]),
+  capOverride: z.string().min(1).optional(),
 })
 
 export function gateDir(toplevel, phase) {

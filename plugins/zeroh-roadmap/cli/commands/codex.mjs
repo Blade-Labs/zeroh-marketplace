@@ -60,10 +60,10 @@ import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
 import { disposeWorktree, groupAlive, isSlotDir } from '../lib/worktree.mjs'
 import {
   LANES, prevReportName, journalPath, journalDeclineReason,
-  JournalUnreadableError, findJournal, findClosedJournal,
+  JournalUnreadableError, findJournal, findClosedJournal, writeJournal,
 } from '../lib/codex-journal.mjs'
 import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
-import { mergePolicy, policyFromArg, policyToArg } from '../lib/roles.mjs'
+import { driverTrailer, mergePolicy, policyFromArg, policyToArg } from '../lib/roles.mjs'
 
 // The journal mechanics live in cli/lib/codex-journal.mjs; `findJournal` alone is re-exported
 // because codex.test.mjs pins it as a contract OF THIS MODULE — `codex status` and the gate
@@ -125,7 +125,7 @@ const ROLE_BINDINGS = fileURLToPath(new URL('../../MULTI-DRIVER.md', import.meta
  * the same one — a per-lane copy would leave the scorecard's per-model cells comparing briefings
  * instead of models.
  */
-export function buildPrompt(root, ids, { modelPolicy = { source: 'table' }, modelsArg = 'claude' } = {}) {
+export function buildPrompt(root, ids, { modelPolicy = { source: 'table' }, modelsArg = 'claude', reportName = LANES.run.report, laneModel = driverStamp(resolveDriver('codex')).model } = {}) {
   const phaseFiles = ids.map((n) => `${roadmapRootRel(root)}/phases/phase-${n}.phase.ts`)
   for (const f of phaseFiles) {
     if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
@@ -147,13 +147,13 @@ export function buildPrompt(root, ids, { modelPolicy = { source: 'table' }, mode
     '- CROSS-REPO PHASES: a plan naming paths in ANOTHER checkout (a different git toplevel) means what it says — commit the PRODUCT work in that other checkout on its current branch, while every roadmap-state commit (the phase file, gate artifacts) stays in THIS worktree. There too: stage explicit paths, never push, never merge, never switch branches.',
     '- RESUME: `done: true` plus its commit in git log is FINISHED — skip it; resume at the first unfinished task, never redo or amend.',
     `- SHARED HOST (~5 AI sessions on 16 GB — breaking these can freeze the box): wrap every suite / type-check / build as \`capbuild <cmd>\`; ${existsSync(join(root, 'scripts/test/run-tier.sh')) ? 'scoped tiers run EXACTLY `bash scripts/test/run-tier.sh <slot> <files…>`' : 'this consumer has NO scripts/test/run-tier.sh (checked at launch), so scoped tiers run the consumer\u2019s own bound test command from roadmap.config.json gateCommands, narrowed to the touched project, under capbuild — that substitution is PRE-RATIFIED here and is never an escalation'}; never pipe tier output through tail/head/grep; no dev servers; no full-suite run outside the gate slot naming one.`,
-    '- End every commit with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.',
+    `- End every commit with \`${driverTrailer(laneModel)}\`.`,
     '- NO REACHABLE USER in this lane. Any protocol step that resolves to "stop and ask the user" — an escalating verdict, a failed `assumptions[]` check, a post-and-wait instruction — ENDS this run instead: write the report below with the question and its options, end it with CODEX-RUN-BLOCKED, and stop. Never wait for an answer that cannot come.',
     '- ALREADY IN YOUR WORKTREE and branch: skip worktree setup/reset and landing. Never claim a second slot.',
     `- FILL PROTOCOL ROLES via \`roadmap role resolve <role> --driver codex --models ${modelsArg}\` (resolveRole) under ${JSON.stringify(modelPolicy)}; stamp \`executionResult.modelPolicy\`. Spawn it natively or as a headless child (Claude: \`claude -p\`). Record every firing. Reviews recorded as \`self-review\` never satisfy completion — a codex-lane phase needs at least one independent recorded round, and \`--verify-complete\` refuses without it.`,
     '- ATTRIBUTION: stamp `executionResult.driver` as `{ model: <your model id>, lane: "codex" }`; it must match the launcher journal.',
     '',
-    `WHEN FINISHED (or blocked): write ${LANES.run.report} in the worktree root (do NOT commit it) with per-task commit sha + the verify commands run and their outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
+    `WHEN FINISHED (or blocked): write ${reportName} in the worktree root (do NOT commit it) with per-task commit sha + the verify commands run and their outcomes + gate results + any deviation, ending with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED).`,
   ].join('\n')
 }
 
@@ -363,9 +363,9 @@ function preserveStaleReport(worktree, reportName) {
  * id (the DriverShape lane vocabulary) — deliberately not this function's `lane`, which is the
  * run/plan/review mission.
  */
-function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null, modelPolicy }) {
+function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null, modelPolicy, label, reportName = LANES[lane].report }) {
   const building = join(root, '.building')
-  const stem = `${LANES[lane].prefix}${ids.join('-')}`
+  const stem = `${LANES[lane].prefix}${ids.join('-')}${label ? `.${label}` : ''}`
   const promptPath = join(building, `${stem}-prompt.txt`)
   writeFileSync(promptPath, prompt)
   const logPath = join(building, `${stem}.log`)
@@ -380,18 +380,14 @@ function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null, mod
   )
   child.unref()
 
-  const jPath = journalPath(root, ids, lane)
-  writeFileSync(
-    jPath,
-    JSON.stringify(
+  const jPath = journalPath(root, ids, lane, { label })
+  writeJournal(root,
       // `carriedIn` is the repo-relative path carryIn() copied INTO the worktree, recorded because
       // nothing else can recover it: the copy lands untracked at a path only the launcher knew, and
       // a done-moment that cannot name it refuses on the launcher's own artifact — the same trap
       // RUN_LANE_ARTIFACTS exists to stop for CODEX-REPORT.md. Absent when nothing was carried in.
-      { phases: ids, lane, driver: driverStamp(entry), report: LANES[lane].report, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, ...(modelPolicy ? { modelPolicy } : {}), ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString() },
-      null,
-      2,
-    ) + '\n',
+      { phases: ids, lane, driver: driverStamp(entry), report: reportName, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, ...(modelPolicy ? { modelPolicy } : {}), ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString() },
+    { label },
   )
   const poll = `roadmap codex status ${ids[0]}${LANES[lane].flag ? ` ${LANES[lane].flag}` : ''}`
   process.stderr.write(`roadmap codex: launched pgid ${child.pid} in ${worktree} — journal ${jPath}, log ${logPath}. Poll: ${poll}\n`)
@@ -457,6 +453,13 @@ function runCodex(root, ids, argv) {
   const bi = argv.indexOf('--base')
   const base = bi >= 0 ? argv[bi + 1] : 'develop'
   const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-${ids.join('-')}`
+  const li = argv.indexOf('--label')
+  const label = li >= 0 ? argv[li + 1] : undefined
+  if (li >= 0 && (!label || !/^[a-z0-9]+$/.test(label) || label === 'closed')) {
+    process.stderr.write('roadmap codex: --label needs lowercase letters/digits and cannot be closed\n')
+    return 1
+  }
+  const reportName = label ? `CODEX-REPORT.${label}.md` : LANES.run.report
   const mi = argv.indexOf('--models')
   const modelsArg = mi >= 0 ? argv[mi + 1] : undefined
   if (mi >= 0 && (modelsArg === undefined || modelsArg.startsWith('--'))) {
@@ -479,7 +482,7 @@ function runCodex(root, ids, argv) {
   const resolverArg = policyToArg(modelPolicy)
   const building = join(root, '.building')
   mkdirSync(building, { recursive: true })
-  const jPath = journalPath(root, ids, 'run')
+  const jPath = journalPath(root, ids, 'run', { label })
 
   const refused = refuseIfLive(root, ids, 'run', worktree, jPath, "; the prompt's resume rule skips already-done tasks")
   if (refused !== 0) return refused
@@ -489,9 +492,9 @@ function runCodex(root, ids, argv) {
 
   // buildPrompt can still throw (a renamed/renumbered phase file) — resolve it BEFORE
   // touching the previous run's hand-off, so a failed relaunch destroys no evidence.
-  const prompt = buildPrompt(root, ids, { modelPolicy, modelsArg: resolverArg })
-  preserveStaleReport(worktree, LANES.run.report)
-  return launch(root, ids, 'run', { worktree, base, prompt, modelPolicy })
+  const prompt = buildPrompt(root, ids, { modelPolicy, modelsArg: resolverArg, reportName })
+  preserveStaleReport(worktree, reportName)
+  return launch(root, ids, 'run', { worktree, base, prompt, modelPolicy, label, reportName })
 }
 
 /**
@@ -1043,7 +1046,7 @@ export default async function run(argv) {
     return 1
   }
   // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).
-  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc', '--models'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
+  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc', '--models', '--label'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
   // BEFORE the member list is resolved: arcPhases throws on an arc file with no parseable
   // `phases:`, and a traceback is the exact outcome this refusal exists to replace.
   if (sub === 'plan' && arcId) {

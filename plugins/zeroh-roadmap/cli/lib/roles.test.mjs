@@ -39,6 +39,14 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { driverTrailer } from './roles.mjs'
+
+test('driverTrailer maps Claude families, Codex ids, and the generic fallback', () => {
+  assert.equal(driverTrailer('claude-opus-5'), 'Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>')
+  assert.equal(driverTrailer('claude-fable-5-1'), 'Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>')
+  assert.equal(driverTrailer(MODEL_IDS.SOL), `Co-Authored-By: Codex ${MODEL_IDS.SOL} <noreply@openai.com>`)
+  assert.equal(driverTrailer(null), 'Co-Authored-By: Claude <noreply@anthropic.com>')
+})
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
