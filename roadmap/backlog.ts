@@ -42,14 +42,6 @@
 import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
-  {
-    phase: 27,
-    name: 'Curate stops at the integration ref: published commits are never squashed',
-  },
-  {
-    phase: 7,
-    name: 'Graft measured trial — integration, footprint proof, before/after instrument',
-  },
   // ── MINESWEEP arc tier (phases 14, 15, 16, 17, 18, 19, 20 — exact claimed numbers; queued 2026-08-31 after all 7 plan reviews returned READY) ──
   // ── DEFERRED (standing user hold 2026-08-26): do NOT execute until the user asks ──
   {
