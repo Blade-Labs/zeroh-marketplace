@@ -98,7 +98,19 @@ export default definePhase({
       ],
       files: ['package.json', 'package-lock.json', '.gitignore'],
       testMode: 'none',
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          "'@nanonets/graft': '0.12.0' is an exact-pinned root devDependency (no caret, no global install), committed with package-lock.json; `npx graft --version` prints 0.12.0 and node_modules/@nanonets/graft/package.json agrees. The structural build ran under capbuild and produced graft/ — wiring: 2551 nodes (2112 function, 261 file, 87 type, 51 method, 23 class, 17 interface), 6859 edges, 261 cards [javascript, python, typescript]; parsed 261 of 261 files, 0 replayed from cache. MEASURED FOOTPRINT, verbatim: `Elapsed (wall clock) time (h:mm:ss or m:ss): 0:19.367` / `Maximum resident set size (kbytes): 484696` / `User time (seconds): 20.73` / `System time (seconds): 0.84` / `Exit status: 0`; `du -sh graft/` = `19M\tgraft/`. RESIDENCY: post-build `pgrep -fa graft` printed nothing, `pgrep-exit=1` — zero resident processes, no daemon. graft auto-appended `/graft/` to .gitignore (`git check-ignore -q graft` exits 0, git status shows no graft/ path). deepPassVerdict=skipped-no-key. TELEMETRY, verbatim from `npx graft telemetry`: `telemetry: off — this build has no telemetry key (a fork, or a local npm run build); nothing can be sent` — the npm artifact cannot phone home, so nothing needed disabling.",
+        how:
+          "Two environment facts diverged from plan time and both were handled without narrowing the criterion. (a) GNU time is NOT installed on this host (`/usr/bin/time` absent; only bash's builtin, which reports no MaxRSS), so `capbuild /usr/bin/time -v npx graft build .` exited 127. The measurement was taken instead through `resource.getrusage(RUSAGE_CHILDREN)` in a 12-line python3 wrapper that formats GNU time's own labels — the same kernel counters GNU time reads for Elapsed and Maximum resident set size — so the numbers above are the instrument the step asked for, not a weaker proxy. (b) The step's residency verb `pgrep -fa graft` SELF-MATCHES: the probing shell's argv contains the pattern, so run inline it can never be empty (it returned the Claude bash wrapper's own command line). The probe was re-run from a script file at a path containing no 'graft' substring, which is the only way that assertion can be honest; flushed as a durable lesson (`roadmap eval lesson`, phase 7). Deep pass: neither ANTHROPIC_API_KEY nor OPENROUTER_API_KEY is set in this session's environment, and per notes decision 2 no key is provisioned for it — hence skipped-no-key, structural build only. Latest on npm is now 0.16.0 (graft says so on every run); the plan's exact 0.12.0 pin is kept deliberately — the trial measures the version it pre-registered, and 0.12.0 is still published.",
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          "`graft build` writes a THIRD root file the plan did not foresee: `.ignore` (contents: a comment plus `!graft/`, `graft/.cache/`, `graft/.graph/`) whose only effect is to re-admit the gitignored graft/ tree to ripgrep. It was read before any staging (benign: no shell, no network, no path outside this repo) and is gitignored rather than committed, so the trial's committed footprint stays exactly the three files the plan named and is reversible by deleting graft/ + .ignore; if Graft is adopted, committing .ignore becomes the right call. Footprint is measured for THIS repo only (261 files, 2551 nodes) — 19M/484MB/19s does not extrapolate to a large consumer, and the build is on-demand, so a repo that rebuilds often pays that RSS repeatedly on a 31GB shared box. The --deep LLM pass is UNMEASURED here: no key, so nothing is known about its cost, latency or footprint.",
+      },
+      done: true,
+      doneDate: '2026-09-03',
     },
     {
       id: '7.2',
