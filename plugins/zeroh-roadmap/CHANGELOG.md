@@ -3,6 +3,12 @@
 Reconstructed 2026-08-26 (phase 13.7) from the committed record trail; maintained forward.
 One entry per minor: the shipped surface, not the story.
 
+## 0.39.1 — 2026-09-03
+- Docs only: `GAUNTLET-2.0.md` (the protocol-diet campaign record: trim-map statistics, trims,
+  two-driver trial, lessons 7–12) and `GAUNTLET-2.0.html` (the visual before/after diff, per-passage
+  trim map with architect rulings, and evaluation evidence) with its rebuild kit under
+  `scripts/gauntlet-2.0/`; `GAUNTLET-2026-08.md` links forward to it.
+
 ## 0.39.0 — 2026-09-03
 - Lane evidence survives the land (phase 28): `roadmap phase land` carries the lane's gate
   reports and executor beacon into the primary checkout before disposing the worktree, and the
