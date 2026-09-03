@@ -202,20 +202,24 @@ function strayTokens(argv) {
 }
 
 /**
- * One occurrence per flag, and its value is never flag-shaped. `--exclude 7 --exclude 26`
- * reads as asking for both, but a first-match lookup honours only one — the same fail-open
- * class as a missing value, and on the same field.
+ * One occurrence per flag. `--exclude 7 --exclude 26` reads as asking for both, but a
+ * first-match lookup honours only one — the same fail-open class as a missing value, and
+ * on the same field.
+ *
+ * `opaque` says whether a flag-shaped value is legal. It is for `--root`, whose value is a
+ * path and could genuinely be named `--repo`; it is not for the numeric flags, where a
+ * flag-shaped value is always a swallowed neighbour (`--exclude --root <path>`).
  *
  * @returns {{ value?: string, absent?: true, error?: string }}
  */
-function flagValue(argv, flag) {
+function flagValue(argv, flag, { opaque = false } = {}) {
   const hits = argv.flatMap((a, i) => (a === flag ? [i] : []))
   if (hits.length > 1) {
     return { error: `${flag} given ${hits.length} times — pass ONE value (comma-separated where a list is allowed)` }
   }
   if (hits.length === 0) return { absent: true }
   const value = argv[hits[0] + 1]
-  if (value === undefined || value.startsWith('--')) {
+  if (value === undefined || (!opaque && value.startsWith('--'))) {
     return { error: `${flag} needs a value, got ${value === undefined ? '(nothing)' : JSON.stringify(value)}` }
   }
   return { value }
@@ -231,7 +235,11 @@ export function main(argv) {
     return 2
   }
 
-  const read = { cut: flagValue(argv, '--cut'), root: flagValue(argv, '--root'), exclude: flagValue(argv, '--exclude') }
+  const read = {
+    cut: flagValue(argv, '--cut'),
+    root: flagValue(argv, '--root', { opaque: true }),
+    exclude: flagValue(argv, '--exclude'),
+  }
   for (const r of Object.values(read)) {
     if (r.error) {
       process.stderr.write(`graft-trial-report: ${r.error}\n${USAGE}\n`)
@@ -256,9 +264,11 @@ export function main(argv) {
   let exclude = []
   if (!read.exclude.absent) {
     const parts = read.exclude.value.split(',')
-    if (parts.some((p) => p.trim() === '')) {
+    // Validate HERE, not by letting buildTrialReport throw: a usage mistake owes the caller
+    // a usage error and exit 2, never an uncaught stack trace and exit 1.
+    if (parts.some((p) => p.trim() === '' || !Number.isInteger(Number(p)) || Number(p) <= 0)) {
       process.stderr.write(
-        `graft-trial-report: --exclude needs a comma-separated list of phase numbers, got ${JSON.stringify(read.exclude.value)}\n`,
+        `graft-trial-report: --exclude needs a comma-separated list of positive phase numbers, got ${JSON.stringify(read.exclude.value)}\n${USAGE}\n`,
       )
       return 2
     }

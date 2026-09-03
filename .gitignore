@@ -3,7 +3,7 @@ node_modules/
 .playwright-mcp/
 .vibe/
 
-# graft's local graph cache — regenerable, not committed (run `graft build`).
+# graft's local graph cache — regenerable, not committed (rebuild with `capbuild npx graft build .`).
 /graft/
 
 # graft writes this so ripgrep still searches the (gitignored) graft/ cache — local, like the cache.

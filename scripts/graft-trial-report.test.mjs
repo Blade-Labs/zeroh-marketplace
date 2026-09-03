@@ -259,6 +259,32 @@ test('a non-positive cut is refused — phase ids are positive by contract', (t)
   assert.throws(() => buildTrialReport(root, { cut: 25, exclude: [-3] }), /--exclude takes positive integer/)
 })
 
+test('a bad --exclude value is a usage error, not an uncaught throw', (t) => {
+  const { root, evalDir } = fixture(t)
+  writeRecord(evalDir, record(7))
+
+  // These reached buildTrialReport and escaped as a stack trace with exit 1; a usage
+  // mistake owes the caller exit 2 and the usage line.
+  for (const bad of ['nope', '-3', '2.5', '0']) {
+    assert.equal(main(['--cut', '25', '--exclude', bad, '--root', root]), 2, `--exclude ${bad}`)
+  }
+})
+
+test('--root accepts a flag-shaped path while the numeric flags still refuse one', (t) => {
+  const { root, evalDir } = fixture(t)
+  writeRecord(evalDir, record(7))
+  // A directory may legitimately be named like a flag; a numeric flag's value never can,
+  // where a flag-shaped token is always a swallowed neighbour.
+  const odd = join(root, '--repo')
+  mkdirSync(join(odd, 'roadmap', 'arc-evals'), { recursive: true })
+  mkdirSync(join(odd, 'lib', 'roadmap'), { recursive: true })
+  symlinkSync(CONSUMER_SCHEMA, join(odd, 'lib', 'roadmap', 'schema.ts'))
+  writeRecord(join(odd, 'roadmap', 'arc-evals'), record(9))
+
+  assert.equal(main(['--cut', '25', '--root', odd]), 0, 'a flag-shaped path is a legal --root value')
+  assert.equal(main(['--cut', '25', '--exclude', '--root', odd]), 2, 'but a numeric flag must not swallow its neighbour')
+})
+
 test('the exclusion note reports what was DROPPED, never merely what was asked for', (t) => {
   const { root, evalDir } = fixture(t)
   writeRecord(evalDir, record(7))
