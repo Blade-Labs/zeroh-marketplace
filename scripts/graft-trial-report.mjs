@@ -177,39 +177,59 @@ export function formatTrialReport(report) {
   return lines.join('\n')
 }
 
+const USAGE = 'usage: graft-trial-report.mjs --cut <phaseNumber> [--exclude <n,n>] [--root <path>]'
+
+/**
+ * One occurrence per flag, and its value is never flag-shaped. `--exclude 7 --exclude 26`
+ * reads as asking for both, but a first-match lookup honours only one — the same fail-open
+ * class as a missing value, and on the same field.
+ *
+ * @returns {{ value?: string, absent?: true, error?: string }}
+ */
+function flagValue(argv, flag) {
+  const hits = argv.flatMap((a, i) => (a === flag ? [i] : []))
+  if (hits.length > 1) {
+    return { error: `${flag} given ${hits.length} times — pass ONE value (comma-separated where a list is allowed)` }
+  }
+  if (hits.length === 0) return { absent: true }
+  const value = argv[hits[0] + 1]
+  if (value === undefined || value.startsWith('--')) {
+    return { error: `${flag} needs a value, got ${value === undefined ? '(nothing)' : JSON.stringify(value)}` }
+  }
+  return { value }
+}
+
 /** CLI entry: `--cut <phaseNumber>` (required), `--exclude <n,n>` and `--root <path>`. */
 export function main(argv) {
-  const cutIdx = argv.indexOf('--cut')
-  const rootIdx = argv.indexOf('--root')
-  const excludeIdx = argv.indexOf('--exclude')
-  if (cutIdx === -1 || argv[cutIdx + 1] === undefined) {
-    process.stderr.write(
-      'usage: graft-trial-report.mjs --cut <phaseNumber> [--exclude <n,n>] [--root <path>]\n',
-    )
+  const read = { cut: flagValue(argv, '--cut'), root: flagValue(argv, '--root'), exclude: flagValue(argv, '--exclude') }
+  for (const r of Object.values(read)) {
+    if (r.error) {
+      process.stderr.write(`graft-trial-report: ${r.error}\n${USAGE}\n`)
+      return 2
+    }
+  }
+  if (read.cut.absent) {
+    process.stderr.write(`${USAGE}\n`)
     return 2
   }
-  const cut = Number(argv[cutIdx + 1])
-  const root = rootIdx === -1 ? process.cwd() : argv[rootIdx + 1]
 
-  // `--exclude` must FAIL, never fail open: a missing or malformed value silently
-  // reinstates the transition phases, and the run would print a contaminated median under
-  // a command line that looks like it asked for a clean one.
+  // `--exclude` must FAIL, never fail open: a malformed value silently reinstates the
+  // transition phases, and the run would print a contaminated median under a command line
+  // that looks like it asked for a clean one.
   let exclude = []
-  if (excludeIdx !== -1) {
-    const raw = argv[excludeIdx + 1]
-    // A FLAG-shaped value is a usage error too: `--exclude --root <path>` would otherwise
-    // eat the next flag and reinstate every phase.
-    const parts = raw === undefined || raw.startsWith('--') ? [] : raw.split(',')
-    if (parts.length === 0 || parts.some((p) => p.trim() === '')) {
+  if (!read.exclude.absent) {
+    const parts = read.exclude.value.split(',')
+    if (parts.some((p) => p.trim() === '')) {
       process.stderr.write(
-        `graft-trial-report: --exclude needs a comma-separated list of phase numbers, got ${raw === undefined ? '(nothing)' : JSON.stringify(raw)}\n`,
+        `graft-trial-report: --exclude needs a comma-separated list of phase numbers, got ${JSON.stringify(read.exclude.value)}\n`,
       )
       return 2
     }
     exclude = parts.map(Number)
   }
 
-  process.stdout.write(`${formatTrialReport(buildTrialReport(root, { cut, exclude }))}\n`)
+  const root = read.root.absent ? process.cwd() : read.root.value
+  process.stdout.write(`${formatTrialReport(buildTrialReport(root, { cut: Number(read.cut.value), exclude }))}\n`)
   return 0
 }
 

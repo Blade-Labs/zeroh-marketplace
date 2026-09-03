@@ -224,6 +224,18 @@ test('a malformed --exclude FAILS rather than silently reinstating the phases', 
   assert.equal(main(['--cut', '25', '--exclude', '7', '--root', root]), 0, 'the well-formed form still works')
 })
 
+test('a repeated option is refused rather than honouring one occurrence', (t) => {
+  const { root, evalDir } = fixture(t)
+  writeRecord(evalDir, record(7))
+  writeRecord(evalDir, record(26))
+
+  // Reads as asking for both, but a first-match lookup drops only phase 7 and exits 0 —
+  // the fail-open class again, on the same field.
+  assert.equal(main(['--cut', '25', '--exclude', '7', '--exclude', '26', '--root', root]), 2)
+  assert.equal(main(['--cut', '25', '--cut', '7', '--root', root]), 2)
+  assert.equal(main(['--cut', '25', '--exclude', '7,26', '--root', root]), 0, 'the single comma-separated form is the supported one')
+})
+
 test('the exclusion note reports what was DROPPED, never merely what was asked for', (t) => {
   const { root, evalDir } = fixture(t)
   writeRecord(evalDir, record(7))

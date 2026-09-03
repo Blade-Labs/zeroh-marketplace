@@ -132,7 +132,7 @@ zero — the instrument reuses the scorecard's own conventions rather than inven
 |---|---|
 | median `spanMinutes` | the primary endpoint. Null for a record without `startedAt` (phase 6 today); such a record stays out of the median. |
 | `haltCount` | optional under the honest-absent convention. Present in 17/23 baseline records (1–5, 8–11, 13–20), absent in 6 (6, 21–25). A record without it stays OUT of the halt denominator, never enters as 0; an arm with no halt evidence prints `no-halt-evidence`. |
-| gate slot `durationMs` | carried only by the `unit` slot in these records, so that is the slot compared. |
+| gate slot `durationMs` | two slots carry it in these records — `unit` and `history-comments` — but `history-comments` is `0` in every one, so `unit` is the only slot with real elapsed work and is the one compared. |
 | `gate.green` rate | `true` in all 23 baseline records, so "green rate does not regress" means treatment must also be 100 % at n >= 5. |
 
 **Instrument note:** `readPhaseEvalSamples` returns projections that drop `gate` and `date`, so
