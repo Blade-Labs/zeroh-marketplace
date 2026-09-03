@@ -71,24 +71,23 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md',
           description:
-            'Author matrices: web (Next.js/shadcn, Vite/React, Remix); mobile (Flutter/shadcn_flutter, Kotlin/Compose/Material 3, Expo/React Native); monorepo (Nx, Turborepo, pnpm); library/CLI (tsdown/tsup, Vitest/node:test); API backend (NestJS, Hono, Fastify). Rows use `option | pros | cons | better when | component reuse | source`; gate backend on an API answer → verify: grep -F -q "Flutter + shadcn_flutter" plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md && grep -F -q "Kotlin + Compose + Material 3" plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md && grep -F -q "Expo + React Native" plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md',
+            'Author five matrices; gate backend on an API answer. Use `option | pros | cons | better when | component reuse | source`; every row ends in a URL or `package:<name>` → verify: awk -F\'|\' \"{for(i=2;i<8;i++)gsub(/^ +| +\\$/,\\\"\\\",\\$i)} \\$2\\$3\\$4\\$5\\$6\\$7==\\\"optionprosconsbetter whencomponent reusesource\\\"{h++;a=1;next} a&&/^\\|/&&\\$2!~/^---/{for(i=2;i<7;i++)if(!length(\\$i))exit 1;if(NF!=8||\\$7!~/^(https?:\\/\\/|package:)/)exit 1;r++;if(\\$2~/Flutter|Kotlin|Expo/)m++} !/^\\|/{a=0} END{exit !(h==5&&r==14&&m==3)}\" plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
           description:
-            'Define triggers `which stack`, `tech stack`, `mobile stack`; load matrices, preselect no mobile winner, ask one question, and write the approved ADR with dated ruling. Declare `greenfield-init` and `brownfield-audit` boundaries; output `{ adrPath, rulingLine }` → verify: grep -F -q "which stack" plugins/zeroh-greenfield/skills/stack-decision/SKILL.md && grep -F -q "greenfield-init" plugins/zeroh-greenfield/skills/stack-decision/SKILL.md && grep -F -q "brownfield-audit" plugins/zeroh-greenfield/skills/stack-decision/SKILL.md && grep -F -q "adrPath" plugins/zeroh-greenfield/skills/stack-decision/SKILL.md && grep -F -q "rulingLine" plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
+            'Define triggers and exact one-question/no-preselection sentences. Emit a dated ruling and `{ adrPath, rulingLine }`; declare greenfield-init ownership and cite phase 33 for brownfield-audit → verify: node -e "const f=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md\',\'utf8\');for(const s of [\'which stack\',\'tech stack\',\'mobile stack\',\'Ask exactly one selection question per applicable matrix.\',\'Do not preselect any option before the user\\\'s answer.\',\'<YYYY-MM-DD>: <selected option> — <reason>\',\'greenfield-init\',\'phase 33 owns the brownfield-audit caller-side boundary\',\'adrPath\',\'rulingLine\'])if(!f.includes(s))process.exit(1)"',
         },
       ],
       acceptanceCriteria: [
-        "`grep -F -q` succeeds for all three mandated mobile option names, and each of those table rows contains all six row fields plus a fetched source URL.",
+        'All five tables have the exact six-column header; all 14 option rows fill every column and end in a URL or package name; exactly three are the mandated mobile options.',
         'The skill asks exactly one selection question per applicable matrix, records no mobile winner before that answer, and emits the literal `adrPath` and `rulingLine` fields.',
-        'Both caller boundaries are stated in stack-decision and in the phase-29 caller skills; the caller receives ADR output rather than duplicating matrix text.',
+        'stack-decision declares its own boundary with greenfield-init (created by phase 29) and cites phase 33 for brownfield-audit, which phase 33 creates after depending on phase 30; each caller receives ADR output rather than matrix copies.',
       ],
       files: [
         'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
         'plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md',
         'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
-        'plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md',
       ],
       testMode: 'none',
       interfaces: {
@@ -111,12 +110,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/templates/docs/adr/0001-tech-stack.md',
           description:
-            'Create the tech-stack ADR template under `skills/using-zeroh-roadmap/references/documentation-rules.md`: Status, Date, Context, Options, Ruling, Consequences, and Revisit when. Options accepts rows copied without source loss from `matrices.md`, including `better when`; Ruling holds `<YYYY-MM-DD>: <selected option> — <reason>` and states that this expensive-to-reverse stack boundary warrants a standalone ADR → verify: grep -F -q "## Revisit when" plugins/zeroh-greenfield/templates/docs/adr/0001-tech-stack.md && grep -F -q "<YYYY-MM-DD>: <selected option>" plugins/zeroh-greenfield/templates/docs/adr/0001-tech-stack.md',
+            'Create the tech-stack ADR per the documentation-rules path; order Status → Date → Context → Options → Ruling → Consequences → Revisit when and retain sourced rows plus dated ruling → verify: node -e "const f=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/templates/docs/adr/0001-tech-stack.md\',\'utf8\'),h=[\'Status\',\'Date\',\'Context\',\'Options\',\'Ruling\',\'Consequences\',\'Revisit when\'];let p=-1;for(const x of h){const n=f.indexOf(\'## \'+x);if(n<=p)process.exit(1);p=n}for(const s of [\'| option | pros | cons | better when | component reuse | source |\',\'<YYYY-MM-DD>: <selected option> — <reason>\'])if(!f.includes(s))process.exit(1)"',
         },
         {
           file: 'plugins/zeroh-greenfield/templates/docs/adr/0002-design-system.md',
           description:
-            'Create the matching design-system ADR template with the same sections and row-preservation contract, plus `<binding design system path or Blade pointer>` and the dated ruling. State that the costly cross-surface token/component boundary warrants the record, while actual Blade tokens remain in zeroh-design-owned files → verify: grep -F -q "## Revisit when" plugins/zeroh-greenfield/templates/docs/adr/0002-design-system.md && grep -F -q "<binding design system path or Blade pointer>" plugins/zeroh-greenfield/templates/docs/adr/0002-design-system.md',
+            'Create the design-system ADR with ordered headings, sourced rows, dated ruling, Blade pointer, and exact `stores pointers only` rule → verify: node -e "const f=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/templates/docs/adr/0002-design-system.md\',\'utf8\'),h=[\'Status\',\'Date\',\'Context\',\'Options\',\'Ruling\',\'Consequences\',\'Revisit when\'];let p=-1;for(const x of h){const n=f.indexOf(\'## \'+x);if(n<=p)process.exit(1);p=n}for(const s of [\'| option | pros | cons | better when | component reuse | source |\',\'<YYYY-MM-DD>: <selected option> — <reason>\',\'<binding design system path or Blade pointer>\',\'stores pointers only\'])if(!f.includes(s))process.exit(1)"',
         },
       ],
       acceptanceCriteria: [
@@ -144,22 +143,22 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
           description:
-            'Define non-Blade web: shadcn/ui plus Tailwind v4 CSS-first (`@theme inline`, no `tailwind.config`); record `shadcn init` settings and healthy registry namespaces copied by exact name+URL from the fetched index. Cite the shadcn components.json, namespace, Tailwind-v4, and directory docs → verify: grep -F -q "registries" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md && grep -F -q "@theme inline" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md && grep -F -q "https://ui.shadcn.com/r/registries.json" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
+            'Define shadcn/ui, Tailwind v4, components.json init values, exact no-config rule, and two fetched namespace rows; cite official sources → verify: node -e "const f=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md\',\'utf8\');for(const s of [\'components.json init values\',\'@theme inline\',\'Do not create tailwind.config.\',\'https://ui.shadcn.com/docs/components-json\',\'https://ui.shadcn.com/docs/registry/namespace\',\'https://ui.shadcn.com/r/registries.json\'])if(!f.includes(s))process.exit(1);if((f.match(/^\\| @[^|]+ \\| https?:\\/\\/[^|]+ \\|$/gm)||[]).length<2)process.exit(1)"',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
           description:
-            'Define one token source projected to CSS variables and shadcn slots, with a byte guard derived from the zeroh `TOKEN-CONTRACT.md` and `theme-presets.ts`; record fonts, palette, spacing as ux-canon inputs. Cite beautifului.dev/license as MIT copy-paste primitives and a source, not a registry → verify: grep -F -q "TOKEN-CONTRACT.md" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md && grep -F -q "theme-presets.ts" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md && grep -F -q "source, not a registry" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
+            'Define token projection with a byte-difference guard and ux-canon inputs. Classify beautifului.dev client material as `Allowed anywhere` per the licensing policy path; cite it as source-not-registry → verify: node -e "const f=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md\',\'utf8\');for(const s of [\'TOKEN-CONTRACT.md\',\'theme-presets.ts\',\'byte-difference guard\',\'fonts | palette | spacing | ux-canon\',\'beautifului.dev/license\',\'Allowed anywhere\',\'plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/external-assets-licensing.md\',\'source, not a registry\'])if(!f.includes(s))process.exit(1)"',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
           description:
-            'Map the approved mobile stack to shadcn_flutter with shared web token names, Compose Material 3 with translated color/typography/shape tokens, or react-native-reusables, retaining the official/package source for each mapping and the same ux-canon fonts/palette/spacing inputs → verify: grep -F -q "shadcn_flutter" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md && grep -F -q "Material 3" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md && grep -F -q "react-native-reusables" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
+            'Map each approved mobile stack to its binding and source: shadcn_flutter with shared web token names; Compose Material 3 with translated color/typography/shape; react-native-reusables with shared semantic names. Each row maps fonts/palette/spacing into ux-canon → verify: awk -F\'|\' \"BEGIN{n=0} /shadcn_flutter|Material 3|react-native-reusables/{if(NF<6||\\$0!~/https?:\\/\\/|package:/||\\$0!~/ux-canon/||\\$0!~/font/||\\$0!~/palette/||\\$0!~/spacing/)exit 1;n++} END{exit !(n==3)}\" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
           description:
-            'For Blade, call `zeroh-design:blade-design` Path 2 to materialise DESIGN.md, PRINCIPLES.md, globals.css; greenfield writes only bindingDesignSystem, ux-canon, and ADR pointers. If absent, print the install command and STOP before tokens → verify: grep -F -q "zeroh-design:blade-design" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md && grep -F -q "/plugin install zeroh-design@zeroh-marketplace" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md && grep -F -q "designHomes.ux.bindingDesignSystem" plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md',
+            'For Blade, call `zeroh-design:blade-design` Path 2; permit greenfield to write exactly the bindingDesignSystem, ux-canon, and ADR pointer classes, never token values. If absent, print the install command and STOP before tokens → verify: node -e "const f=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md\',\'utf8\');for(const s of [\'zeroh-design:blade-design\',\'Path 2\',\'/plugin install zeroh-design@zeroh-marketplace\',\'STOP before tokens\',\'designHomes.ux.bindingDesignSystem\',\'ux-canon pointer\',\'ADR pointer\',\'never token values\'])if(!f.includes(s))process.exit(1)"',
         },
       ],
       acceptanceCriteria: [
@@ -185,18 +184,17 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
           description:
-            'Score the finished skill rule-by-rule against `plugins/zeroh-roadmap/SKILL-AUTHORING-STANDARD.md` R1–R28, use PASS/FAIL/N-A plus evidence for every row, fix each FAIL in the skill or matrices reference, and record the final zero-unfixed-FAIL table in task 30.4 transparencyReport beside phase 29\'s skill grades. Re-run R17 against both callers and R21 against every cited URL/path → verify: test "$(sed -n \'/^---$/,/^---$/!p\' plugins/zeroh-greenfield/skills/stack-decision/SKILL.md | wc -l)" -le 200 && grep -F -q "Not this skill:" plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
+            'Score R1–R28, fix every FAIL, and record evidence in task 30.4 transparencyReport. Enforce the ≤100-line cap, one-level reference, greenfield-init boundary, phase-33 citation, and R21 resolution → verify: task 30.4 transparencyReport contains exactly 28 labeled PASS/FAIL/N-A rows, zero FAILs, the measured body count at most 100, one-level `references/matrices.md` load, resolved URL/path results, `Not this skill:`, greenfield-init ownership, and `phase 33 owns the brownfield-audit caller-side boundary`',
         },
       ],
       acceptanceCriteria: [
         'Task 30.4 transparencyReport contains 28 labeled verdict rows with evidence and zero unfixed FAILs.',
-        'The finished workflow body is at most 200 lines; its matrix is loaded from the cited one-level reference; every URL/path resolves; both phase-29 caller boundaries assign ADR prose to stack-decision.',
+        'The finished reference body is at most 100 lines; matrices load from one cited reference level; every URL/path resolves; stack-decision and phase-29 greenfield-init assign ADR prose to stack-decision, while phase 33 owns the later brownfield caller-side check.',
       ],
       files: [
         'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
         'plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md',
         'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
-        'plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md',
       ],
       testMode: 'none',
       dependsOn: ['30.1', '30.2', '30.3'],
@@ -208,5 +206,5 @@ export default definePhase({
     },
   ],
   notes:
-    'interview: skipped — GREENFIELD.arc.ts records the parent arc interview and dated user rulings on 2026-09-03; this member implements its decisions plane. userFacing false: these are model-loaded skills and consumer-dropped templates, with no application runtime surface, so no feature flag applies. testMode none for all tasks under skills/using-zeroh-roadmap/references/test-worthiness.md: markdown skills/templates are declarative artifacts; exact step greps and the R1–R28 review are their checks. reviewScope full because this phase introduces a new callable skill and cross-skill output seam. Timing cohort read from roadmap/arc-evals/timing-stats.json. Plan-time source probes on 2026-09-03: HTTP 200 for Next.js, Vite, Remix, Nx, Turborepo, pnpm workspaces, NestJS, Hono, Fastify, shadcn Tailwind-v4/components.json/namespace/registry index, pub.dev shadcn_flutter, Android Compose Material 3, Expo create-project, registry.directory docs, and beautifului.dev/license; npm exposed @react-native-reusables/cli while react-native-reusables.com DNS returned no host, so the plan requires the npm/GitHub source rather than that dead domain. The fetched shadcn registry index contained healthy named entries including @1st-pouf, @23rd, @7ovr, @8bitcn, @aceternity, @ai-elements, and @assistant-ui; execution selects at least two fitting entries by exact fetched name+URL and records the fetch evidence, with no invented namespace. Assumption probes all exited 0: the arc one-owner line, Blade Path 2 plus globals.css contract, both absolute zeroh prior-art files, and R1/R28 quality-bar anchors. Verify rehearsal: every step verify exited non-zero now because phase 29 has not yet produced plugins/zeroh-greenfield; each failure was the exact planned file absence. No negative grep is used. Duplicate probes for stack-decision and design-system.md returned no hits in roadmap/phases or backlog.ts before authoring and are re-run at closure.',
+    'interview: skipped — GREENFIELD.arc.ts records the parent arc interview and dated user rulings on 2026-09-03; this member implements its decisions plane. userFacing false: these are model-loaded skills and consumer-dropped templates, with no application runtime surface, so no feature flag applies. testMode none for all tasks under skills/using-zeroh-roadmap/references/test-worthiness.md: markdown skills/templates are declarative artifacts; exact structural checks and the R1–R28 review are their checks. reviewScope full because this phase introduces a new callable skill and cross-skill output seam. Timing cohort read from roadmap/arc-evals/timing-stats.json. Plan-time source probes on 2026-09-03: HTTP 200 for Next.js, Vite, Remix, Nx, Turborepo, pnpm workspaces, NestJS, Hono, Fastify, shadcn Tailwind-v4/components.json/namespace/registry index, pub.dev shadcn_flutter, Android Compose Material 3, Expo create-project, registry.directory docs, and beautifului.dev/license; npm exposed @react-native-reusables/cli while react-native-reusables.com DNS returned no host, so the plan requires the npm/GitHub source rather than that dead domain. The fetched shadcn registry index contained healthy named entries including @1st-pouf, @23rd, @7ovr, @8bitcn, @aceternity, @ai-elements, and @assistant-ui; execution selects at least two fitting entries by exact fetched name+URL and records the fetch evidence, with no invented namespace. Assumption probes all exited 0: the arc one-owner line, Blade Path 2 plus globals.css contract, both absolute zeroh prior-art files, and R1/R28 quality-bar anchors. Verify rehearsal: every step verify exits non-zero before phase 29 produces plugins/zeroh-greenfield; each failure is the target file absence removed by the planned work. No negative grep is used. Phase 30 declares only its side of the greenfield-init boundary; phase 33 creates brownfield-audit after depending on phase 30 and owns that caller-side boundary. Review repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): removed the phase-30/33 boundary cycle; made matrix, question, ADR, design binding, and scorecard checks structural; named beautifului-derived client material tier Allowed anywhere.',
 })
