@@ -133,7 +133,7 @@ export default defineArc({
     'Nothing is written to the consumer before an approval line: every PRD, ADR, standards file, pointer and generator run is presented (what, where, why) and approved first; brownfield lists the gap table and waits.',
     'Never author a second home for a fact: an existing standards doc, token contract or architecture topic is indexed and linked, never restated; a Blade brand hands tokens to zeroh-design and writes pointers only.',
     'Conventions land once: AGENTS.md is the home; CLAUDE.md and other harness files import or point, never copy.',
-    'No invented stacks, registries or numbers: every option row in a decision matrix cites a real source (package, registry, doc); every archetype manifest carries a verify command, and the dated observed result of running it on this box lives in the plugin's VERIFY-RECORD-2026-09.md (manifests stay timeless).',
+    'No invented stacks, registries or numbers: every option row in a decision matrix cites a real source (package, registry, doc); every archetype manifest carries a verify command, and the dated observed result of running it on this box lives in the plugin\'s VERIFY-RECORD-2026-09.md (manifests stay timeless).',
     'Absent tools are said, never worked around: zeroh-design or zeroh-roadmap not installed → name the install command and stop that branch; never inline what the sibling owns.',
   ],
   acceptanceCriteria: [
