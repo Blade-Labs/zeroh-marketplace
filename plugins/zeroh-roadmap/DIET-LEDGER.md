@@ -2,6 +2,18 @@
 
 ## 2026-09 diet — phase 26.3
 
+### Trial restores — trial/27-opus @ 7b237a9 gate run-000003
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| adherence: copied export-declaration regex in `cli/lib/adherence.mjs` | reverted-with-evidence | trial/27-opus gate exposed the duplicate home; the scorer now consumes `EXPORT_DECLARATION` from `cli/commands/config.mjs` |
+| do-phase: six keep-marked execution anchors omitted by the concise form | reverted-with-evidence | trial/27-opus gate proved the lane/body ownership guard red; lesson, decisionRef, recorded rounds, mutation proof, curation, and Codex delegation anchors are restored |
+| quality-pass: keep-marked task-subject commit grammar | reverted-with-evidence | trial/27-opus gate proved the three-card grammar invariant red; `quality-pass.md` again carries the card form already present in the developer and test-engineer cards |
+
+Post-restore measured roll-up: do-arc **44,246 B / 11,065 tokens** (17.1% below the 13,339-token
+pre-diet ceiling); do-phase **14,772 B / 3,694 tokens**; plan-arc **68,223 B / 17,057 tokens**.
+The enforced do-arc ceiling equals the final measured trial tree.
+
 The nine never-trimmed bodies were returned to their last independently gated concise forms, then measured against the 2026-09-02 pre-diet tree. The detailed one-row-per-source-paragraph map and architect amendments live in `DIET-PLAN-2026-09.md`; the rows below are the ledger index for each removed/compressed passage class.
 
 | passage (origin heading/anchor) | disposition | evidence |

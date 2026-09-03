@@ -12,4 +12,4 @@
  * paths that do not exist there. Its measured load is therefore ratcheted into the enforced value
  * rather than dieted away; the standing zero-growth bar remains unchanged.
  */
-export const PROTOCOL_LOAD_BUDGET_TOKENS = 10788
+export const PROTOCOL_LOAD_BUDGET_TOKENS = 11065

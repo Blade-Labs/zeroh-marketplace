@@ -41,6 +41,9 @@ compact); expand beyond touched files; fix correctness (→ BUGS NOTED); touch t
 loop/recurse or invoke another agent (one pass).
 
 ## Protocol
+**Commit grammar:** MUST bind subjects: `type(scope): phase N — <what>`; task form
+`phase N — N.X <what>`; fixes `fix(scope): phase N gate RX — <what>` (em dash after N).
+
 1. Read `git diff <phase-start-SHA>..HEAD` + the phase file (transparency reports + scope).
 2. Walk the diff file by file; ONE candidate list, each AUTO-FIX (A/B) / HARD-STOP / SKIPPED / BUG.
 3. Apply AUTO-FIXes; run the `types` slot after each meaningful change; a failure one follow-up can't

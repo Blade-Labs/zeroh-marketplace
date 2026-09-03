@@ -26,7 +26,7 @@
  *     the sentinel would take the cluster with it and be caught.
  *   - composability-testability scores EXACTLY 70 in DELTA and ECHO: the low-score threshold is
  *     strict, so two reports at the boundary must still emit nothing.
- *   - DELTA's protocolLoadTokens is EXACTLY 10788 (the budget — cli/lib/measure-budget.mjs) and
+ *   - DELTA's protocolLoadTokens is EXACTLY 11065 (the budget — cli/lib/measure-budget.mjs) and
  *     ECHO carries no `workflow` block at all, so neither may feed the prod-grade cluster.
  *   - lessons 4 and 5 share the bare backticked token `capbuild`, which has no '/' and therefore
  *     no derivable home: two findings, no cluster, one skippedNoLane.

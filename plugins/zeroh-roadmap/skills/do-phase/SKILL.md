@@ -58,9 +58,13 @@ in a final commit. A step red twice running → STOP.
 
 ## Transparency contract (per task)
 
+**Durable-lesson moment** — an error you recovered, a user correction, or a surprising
+re-derivation is flushed immediately with `roadmap eval lesson "<text>" --writer <model> --phase N`.
+
 Persist all six fields — `whatWasDone`, `how` (real content), and
 `compromises`/`skipped`/`hardcoded`/`limitations` (the literal `"None"`, or ≥10 chars of substance
 — `"n/a"`/`"tbd"` fail parse). Echo the four debt lines ONLY when not `"None"`.
+A non-`"None"` `compromises` or `skipped` also requires `decisionRef` naming the ratifying verdict.
 
 ## Commit grammar (BINDING — the CLI parses these subjects)
 
@@ -82,6 +86,9 @@ hardening adds the closure integration rerun; release adds the e2e slot. Run `ro
 quality pass. Under arc-mode the gate runs only phase-relevant SCOPED tests — the full suite
 defers to the arc end.
 
+Record every review with `roadmap gate run <N> --record-round '<typed JSON>'`. A new tree guard
+follows `references/guard-mutation-proof.md`.
+
 **Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
 confirmed design is a CONTRACT. Apply the canonical `skills/validate-arc/references/parity-rubric.md`
 with FRESH eyes (a spawned vision judge, never the implementer) — render via `live-ui`, screenshot
@@ -94,6 +101,12 @@ nothing to fix` if empty); the full report stays in the transcript.
 
 **Sub-agent rule:** gate agents run synchronously; only the architect and `test-engineer` may
 absorb phase work — never another phase-executor, `Explore`, or a fork for a "too-big" task.
+
+## Curate the landed history
+
+After the gate is green and before completion, run `roadmap phase curate <N>` as a dry run, inspect
+its range and groups, then apply it. A foreign-commit refusal is recorded as a limitation; never
+rewrite another session's commit.
 
 ## Complete + return
 
@@ -109,3 +122,10 @@ slot, and the push — the do-arc workflow serializes those.
 **Standalone** (no arc-mode): after the completion commit, groom `roadmap/backlog.ts` (remove this
 phase's entry + any single-phase narrative naming only it), run the `emit` slot, then push per the
 consumer's `mergePolicy` (workflow serialization covers arc-mode only).
+
+## Codex delegation lane
+
+Launch delegated work through `roadmap codex run`, never a hand-built command. A delegated phase
+still performs every task and gate; a `codex-self-review` round must be labeled honestly and does
+not replace the independent recorded correctness round. Codex never lands, merges, pushes, edits
+the primary checkout, or grooms the backlog; the supervising session audits and integrates.

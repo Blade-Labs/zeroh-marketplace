@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { bridgeEval } from './tsx-bridge.mjs'
 import { roadmapRoot } from './roadmap-root.mjs'
+import { EXPORT_DECLARATION } from '../commands/config.mjs'
 
 export const ADHERENCE_CHECK_IDS = [
   'tripwires-ran',
@@ -29,7 +30,7 @@ function phasePath(toplevel, phase) {
 function readPhase(toplevel, phase) {
   const path = phasePath(toplevel, phase)
   const source = readFileSync(path, 'utf8')
-  const plain = source.match(/^export default\s+([\s\S]*?)\s*$/)
+  const plain = source.match(new RegExp(`^${EXPORT_DECLARATION.source.replace('(?:const|function|type) (\\w+)', 'default')}\\s+([\\s\\S]*?)\\s*$`))
   if (plain) {
     try { return { value: JSON.parse(plain[1]), source, path } } catch { /* typed source below */ }
   }

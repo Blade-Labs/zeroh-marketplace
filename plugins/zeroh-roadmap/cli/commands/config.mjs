@@ -16,7 +16,7 @@ import { BridgeError } from '../lib/bridge-error.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const TEMPLATE_SCHEMA = join(PLUGIN_ROOT, 'templates', 'schema.ts')
-const EXPORT_DECLARATION = /^export (?:const|function|type) (\w+)/gm
+export const EXPORT_DECLARATION = /^export (?:const|function|type) (\w+)/gm
 
 function starTarget(file, specifier) {
   const bare = resolve(dirname(file), specifier)
