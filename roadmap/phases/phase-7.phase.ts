@@ -21,7 +21,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 7,
   name: 'Graft measured trial — integration, footprint proof, before/after instrument',
-  status: 'in-progress',
+  status: 'done',
   plannedBy: { model: 'claude-fable-5' },
   category: 'spike',
   kind: 'logic',
@@ -70,6 +70,262 @@ export default definePhase({
   ],
   notes:
     "PRE-MADE DECISIONS: (1) Install = exact-pinned devDependency at repo root ('@nanonets/graft': '0.12.0', no caret, no global install — shared host), invoked via npx; package-lock.json is committed with it (currently untracked from the tsx/zod install; folding it in makes the pin reproducible). (2) Structural build only is mandatory; the --deep LLM pass is gated on an ALREADY-PRESENT key (ANTHROPIC_API_KEY or OPENROUTER_API_KEY) — never provision one for it; observed vocabulary in the transparencyReport, one line exactly: deepPassVerdict=<ran|skipped-no-key|failed:reason> (angle-bracket form HERE deliberately, so the verify grep matches only a really-recorded verdict, never this plan text; 'failed:reason' is the honest escape when a key exists but the pass errors). (3) TRIAL DESIGN = before/after with cohort matching, not randomized A/B: baseline arm = peval records of phases whose gate ran before the 7.2 wiring commit (the POLYSEAT members), treatment arm = phases after; cut recorded as the 7.2 sha + phase number in the experiment doc. The ordering confound (learning effects, phase mix) is NAMED in the doc and mitigated by bandFor×surfaceOf cohort matching, never claimed eliminated. (4) Compared metrics come ONLY from PhaseEvalRecordShape: median spanMinutes(startedAt→completedAt), haltCount, gate slot durationMs, gate.green rate. Session token spend is NOT in the record and is named UNMEASURED in the doc — no cost claim can come out of this trial. (5) Decision bar pre-registered in the doc: adoption is proposed only if treatment median spanMinutes improves >=20% in >=1 cohort with N >= SCORECARD_N_FLOOR per arm AND green rate does not regress; below floor = extend, never rank. The spike itself renders NO verdict. (6) The report script REUSES plugin helpers (readPhaseEvalSamples, bandFor, surfaceOf, spanMinutes, SCORECARD_N_FLOOR) — a second metrics dialect is the drift this repo's singleSeam discipline exists to kill. (7) The root-level script test is NOT covered by the phase gate's unit slot (which runs only the plugin suite via 'cd plugins/zeroh-roadmap && capbuild npm test') — the step verifies carry it; acceptable for a spike, revisit if the script graduates into the plugin. (8) graft init review-before-commit: every file it writes is READ before staging; a hook making network calls or writing outside the repo is an ESCALATE, not a commit. userFacing false: developer tooling only, no product surface, no flag applies. NAMED RISK (review, 2026-08-23): this repo is a small mjs codebase — Graft's value proposition targets large-repo exploration, so the trial signal may stay under the N-floor or under-represent the effect; that outcome reads EXTEND-OR-MOVE (a larger consumer is a separate operator decision under the no-other-repos fence), never a negative verdict. REVIEW RATIFICATIONS (Mode A, 2026-08-23): testMode none on 7.1-7.3 ratified (install/wiring/doc tasks, no executable logic authored), tdd on 7.4 ratified; no testScope/reviewScope declared — diff-derived floors stand; userFacing false ratified with the rationale above.",
+  completedDate: '2026-09-03',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: { passed: 1854, total: 1854, notes: 'the whole plugin suite via the consumer unit slot, unchanged by this phase (no plugin file is touched); the 17-case root instrument suite rides outside it per notes decision 7 and is 17/17' },
+    integrationTests: { passed: 0, total: 0, notes: "declared-none in this consumer's gateCommands; the fixture-consumer tier inside the unit slot IS the integration level" },
+    e2eTests: { passed: 0, total: 0, notes: 'no e2e slot — a spike over a CLI plugin, no UI surface' },
+    build: 'clean',
+    notes:
+      'lint/types/build are declared-none in this consumer; the binding mechanical slots are unit, lint-diff and history-comments, all exit 0 in run-000005-2026-09-03T04-39-15-037Z.json (green, unfiltered, carrying all six recorded rounds). The unit slot is the plugin suite ONLY: per notes decision 7 the 17-case root suite this phase adds (scripts/graft-trial-report.test.mjs) is NOT covered by it, so it was run separately under capbuild after every single gate fix. Both suites were re-run at the final HEAD, AFTER all five gate-fix commits, and are green: plugin 1854/1854 and root instrument 17/17. That confirmation run was executed directly rather than through `roadmap gate run`, deliberately: a fresh full run writes a new report with agents:[] and becomes the latest, which would have orphaned the six recorded rounds and broken the verify-complete round-count check. The gate fixes touch only scripts/, roadmap/, .claude/ and .gitignore, none of which the plugin suite exercises. Beyond the suites the instrument was driven live at both cuts and across a 21-form CLI matrix: 17 malformed forms all exit 2, 4 legal forms all exit 0.',
+  },
+  gateRounds: [
+    {
+      round: 0,
+      agent: 'quality-pass',
+      verdict: 'findings-fixed',
+      summary:
+        'Merged architect+simplify sweep over the 13-file diff. Mandate A found nothing: all four transparencyReports already carried \'None\' on compromises/skipped/hardcoded, and the third-party graft-init files were left structurally unchanged per scope. Mandate B deleted one thing: the single-use unmatchedCohortNotes helper, inlined into buildTrialReport (-7/+3) with repo-wide grep evidence that only its definition and sole call site existed. No hard-stops, no surfaced migrations, no bugs noted. Committed 552cbc2.',
+      findings: [],
+    },
+    {
+      round: 1,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'One HIGH, reproduced against the live corpus before acceptance: the slicer aggregated the transition phases GRAFT-TRIAL.md excludes. Once this phase\'s own gate wrote phase-7.peval.json the canonical run reported baseline n=18 with phase 7 inside and unitSlotMedianMs had already drifted 1278386 to 1285496; peval records are tracked, so it would have shipped. Fixed in 12ae8c0 with an exclude option applied before bucketing. This SUPERSEDED the earlier software-architect ruling that exclusion be eye-enforced, which predated any contaminating record.',
+      findings: [
+        {
+          file: 'scripts/graft-trial-report.mjs',
+          line: 76,
+          severity: 'HIGH',
+          confidence: 99,
+          agent: 'code-reviewer',
+          fixedInCommit: '12ae8c0',
+          description:
+            'buildTrialReport aggregated every peval record including the transition phases (7 and 26) excluded from both arms by the pre-registered protocol, so the canonical run reported baseline n=18 and a median moved by a phase belonging to neither arm. Printing member phase ids per cell does not let a reader subtract a contaminating phase back out of an aggregate.',
+        },
+      ],
+    },
+    {
+      round: 2,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Round 1 CONFIRMED CLOSED. One new HIGH, in the R1 fix itself, both halves reproduced first: --exclude failed OPEN (a missing value, empty string, or trailing/doubled comma parsed to the empty list and exited 0, silently reinstating the contaminated n=18 under a command line reading as though it asked for a clean one), and the note printed the phases REQUESTED rather than dropped, so --exclude 999 claimed a subtraction it never made. Fixed in 14d8718.',
+      findings: [
+        {
+          file: 'scripts/graft-trial-report.mjs',
+          line: 184,
+          severity: 'HIGH',
+          confidence: 98,
+          agent: 'code-reviewer',
+          fixedInCommit: '14d8718',
+          description:
+            '--exclude parsing failed open: a missing value, empty string, or trailing/doubled comma yielded an empty exclusion list and exit 0, restoring the contaminated baseline the R1 fix existed to remove; separately the note reported requested rather than actually-dropped phases. Fixed by making every malformed form a usage error and reporting dropped phases with requested-but-absent named separately.',
+        },
+      ],
+    },
+    {
+      round: 3,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Round 2 CONFIRMED CLOSED. One HIGH and one LOW, both reproduced. The HIGH is the same fail-open class a third time: a repeated option was silently honoured once, because flags were looked up with argv.indexOf, so --exclude 7 --exclude 26 exited 0 having applied only phase 7. The LOW: GRAFT-TRIAL.md claimed durationMs is carried only by the unit slot; history-comments carries it in all 24 records. Both fixed in c7d2d77, the doc claim also corrected in the 7.3 transparencyReport that repeated it.',
+      findings: [
+        {
+          file: 'scripts/graft-trial-report.mjs',
+          line: 184,
+          severity: 'HIGH',
+          confidence: 96,
+          agent: 'code-reviewer',
+          fixedInCommit: 'c7d2d77',
+          description:
+            'A repeated option was silently accepted with only the first occurrence honoured, so --exclude 7 --exclude 26 exited 0 having dropped only phase 7, reinstating a transition phase under a command line that asked for both. Fixed with one flag-reading helper that refuses a repeated flag, applied to every option.',
+        },
+        {
+          file: 'roadmap/experiments/GRAFT-TRIAL.md',
+          line: 135,
+          severity: 'LOW',
+          confidence: 100,
+          agent: 'code-reviewer',
+          fixedInCommit: 'c7d2d77',
+          description:
+            'The compared-metrics table claimed gate slot durationMs is carried only by the unit slot; history-comments carries it in all 24 records. The comparison is still right (history-comments is 0 everywhere) but the stated justification was false.',
+        },
+      ],
+    },
+    {
+      round: 4,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'Round 3 CONFIRMED CLOSED. Five findings, each reproduced. HIGH: the CLI never verified argv was fully consumed, so a misspelled flag was silently dropped and --exlude 7 exited 0 printing the contaminated n=18. MEDIUM: --cut accepted non-positive and non-integer values, so --cut -1 exited 0 labelling the whole corpus treatment, although phase ids are positive by contract. Three LOW: the 7.3 report repeated the durationMs error; the 7.4 report had gone stale against its own code (no exclude, 7 tests where there were 13, limitations still denying the flag); and the graft SKILL.md contradicted its own host-rule header by promising automatic refresh, which under GRAFT_NO_REFRESH=1 would have had agents trusting stale spans. All fixed in 09f6426.',
+      findings: [
+        {
+          file: 'scripts/graft-trial-report.mjs',
+          line: 203,
+          severity: 'HIGH',
+          confidence: 99,
+          agent: 'code-reviewer',
+          fixedInCommit: '09f6426',
+          description:
+            'The CLI never verified that every argv token was consumed, so an unknown option or stray positional was silently ignored; a misspelled --exclude exited 0 and reintroduced the transition phases into the reported aggregates. Fixed by rejecting any token not belonging to a recognised flag/value pair.',
+        },
+        {
+          file: 'scripts/graft-trial-report.mjs',
+          line: 67,
+          severity: 'MEDIUM',
+          confidence: 98,
+          agent: 'code-reviewer',
+          fixedInCommit: '09f6426',
+          description:
+            '--cut accepted non-positive integers although phase identifiers are positive by contract, so --cut -1 exited 0 and misleadingly classified the entire corpus as treatment. Refused now at the CLI and in buildTrialReport, along with non-integer cuts and non-positive exclusions.',
+        },
+        {
+          file: 'roadmap/phases/phase-7.phase.ts',
+          line: 172,
+          severity: 'LOW',
+          confidence: 100,
+          agent: 'code-reviewer',
+          fixedInCommit: '09f6426',
+          description:
+            'Task 7.3 transparencyReport repeated the false claim that gate slot durationMs is carried only by the unit slot.',
+        },
+        {
+          file: 'roadmap/phases/phase-7.phase.ts',
+          line: 211,
+          severity: 'LOW',
+          confidence: 100,
+          agent: 'code-reviewer',
+          fixedInCommit: '09f6426',
+          description:
+            'Task 7.4 transparencyReport was stale against the delivered code: it omitted the exclude option, claimed seven tests where there were thirteen, and its limitations still stated that no --exclude flag exists.',
+        },
+        {
+          file: '.claude/skills/graft/SKILL.md',
+          line: 81,
+          severity: 'LOW',
+          confidence: 99,
+          agent: 'code-reviewer',
+          fixedInCommit: '09f6426',
+          description:
+            'The skill contradicted its own host-rule header: section 6 stated that every tool refreshes the graph before answering and that no build is needed after editing, false under GRAFT_NO_REFRESH=1 and liable to make an agent trust stale graph spans.',
+        },
+      ],
+    },
+    {
+      round: 5,
+      agent: 'code-reviewer',
+      verdict: 'findings-fixed',
+      summary:
+        'The CAP round. All five Round 4 findings CONFIRMED CLOSED. Five LOW, each reproduced: a bad --exclude value escaped as an uncaught throw with exit 1 instead of a usage error; flagValue refused every --prefixed value including a legitimate --root path named like a flag; the 7.3 report still described the superseded eye-enforced exclusion and cited a stale doc line count; the 7.4 report recorded its live smoke under --cut 25, which no longer yields the n=17 output quoted beside it; and the .gitignore comment still told readers to run a bare graft build. All fixed in 95059e2. The reviewer judged the argument parser not correct as a whole before the two parser fixes here; with them every input class is closed. NO INDEPENDENT ROUND VERIFIES THESE FIXES — see executionResult.limitations.',
+      findings: [
+        {
+          file: 'scripts/graft-trial-report.mjs',
+          line: 218,
+          severity: 'LOW',
+          confidence: 99,
+          agent: 'code-reviewer',
+          fixedInCommit: '95059e2',
+          description:
+            'A non-numeric or non-positive --exclude value was passed through and let buildTrialReport throw an uncaught stack trace with exit 1 instead of the parser\'s usage error and exit 2. The list is validated in main now, as --cut already was.',
+        },
+        {
+          file: 'scripts/graft-trial-report.mjs',
+          line: 218,
+          severity: 'LOW',
+          confidence: 98,
+          agent: 'code-reviewer',
+          fixedInCommit: '95059e2',
+          description:
+            'flagValue rejected every value beginning with --, including a legitimate --root path such as a directory named --repo. Flag-shaped values are accepted now where the value is opaque (--root) and still refused for the numeric flags, where such a token is always a swallowed neighbour.',
+        },
+        {
+          file: 'roadmap/phases/phase-7.phase.ts',
+          line: 172,
+          severity: 'LOW',
+          confidence: 100,
+          agent: 'code-reviewer',
+          fixedInCommit: '95059e2',
+          description:
+            'Task 7.3 transparencyReport still stated that transition phases are excluded by the analysis plan rather than an instrument flag and that adding --exclude had been ruled out, and cited a stale line count for the experiment doc.',
+        },
+        {
+          file: 'roadmap/phases/phase-7.phase.ts',
+          line: 211,
+          severity: 'LOW',
+          confidence: 97,
+          agent: 'code-reviewer',
+          fixedInCommit: '95059e2',
+          description:
+            'Task 7.4 transparencyReport attributed its recorded clean n=17 output to --cut 25, but that invocation now includes phase 7 and yields a contaminated n=18; the quoted output comes from the canonical --cut 25 --exclude 7,26 run.',
+        },
+        {
+          file: '.gitignore',
+          line: 6,
+          severity: 'LOW',
+          confidence: 99,
+          agent: 'code-reviewer',
+          fixedInCommit: '95059e2',
+          description:
+            'The graft-cache comment instructed readers to run a bare graft build, contradicting the binding host rule and the corrected graft skill, both of which require capbuild npx graft build .',
+        },
+      ],
+    },
+  ],
+  metrics: {
+    commits: 13,
+    linesAdded: 1721,
+    linesRemoved: 5,
+    filesChanged: 13,
+    testsAtStart: 1854,
+    testsAtEnd: 1871,
+    testsAdded: 17,
+    // Commit-derived, not hand-invented: author dates of the move-to-in-progress commit (084e874)
+    // and of this completion commit. linesAdded/Removed/filesChanged are the c73f694..95059e2 range,
+    // i.e. everything except this completion commit's own edit to this file. commits counts the 12
+    // landed task/gate commits plus this one. haltCount is 0 and EVIDENCED: no executionResult
+    // checkpoint or escalation, and no resume beacon in .building/7-executor.jsonl.
+    startedAt: '2026-09-03T03:21:05Z',
+    completedAt: '2026-09-03T05:42:48Z',
+    haltCount: 0,
+  },
+  compromises: 'None',
+  executionResult: {
+    phase: 7,
+    status: 'done',
+    driver: { model: 'claude-opus-5', lane: 'session' },
+    roles: [
+      { role: 'software-architect', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'test-engineer', model: 'gpt-5.6-sol', via: 'child-cli' },
+      { role: 'quality-pass', model: 'gpt-5.6-sol', via: 'child-cli' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'child-cli' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'ROLE FIRING COUNTS (the roles[] shape carries one entry per binding, not per spawn): software-architect fired TWICE (the graft-wiring Decision Contract at task 7.2, and the trial-cut design at task 7.3), test-engineer ONCE (task 7.4 TDD, contract-only brief), quality-pass ONCE (gate round 0), code-reviewer FIVE times (gate rounds 1-5). Every firing was a real spawn; all eleven were recorded live in .building/7-executor.jsonl via gate-stage beacons.',
+      'The phase\'s own eval record roadmap/arc-evals/phase-7.peval.json is written by --verify-complete and is committed with this completion, exactly as the other 23 records are. It is a BASELINE record and the pre-registered protocol excludes it from both arms as a transition phase — that exclusion is now enforced by the instrument (--exclude 7,26), not by the reader.',
+      'A software-architect ruling was OVERTURNED at the gate and the supersession is recorded in both places it was stated. The architect ruled at 7.3 that transition-phase exclusion needed no --exclude flag because member-phase lists made it eye-checkable. Gate round 1 falsified that once this phase\'s own record landed: the contamination was real (baseline n=18, unitSlotMedianMs drifted 1278386 to 1285496) and a member list cannot let a reader subtract a phase back out of a median. The ruling was made before any contaminating record existed; the reviewer had evidence the architect could not have had.',
+      'The graft-init wiring committed here is a NAMED DEVIATION from stock graft and is pre-registered as such in GRAFT-TRIAL.md section 1: no Stop hook, GRAFT_NO_REFRESH=1, builds only via capbuild npx graft build . Graft\'s auto-refresh mechanism is therefore OUT OF SCOPE for the trial, and any adoption proposal owes a separate decision on how to cap it on this host. Stock was not merely inconvenient but unmergeable: mergePolicy.primaryCheckout is the fleet\'s shared checkout, and stock arms a detached uncapped ~485 MB rebuild per dirtying turn outside capbuild.',
+      'This spike delivers NO adoption verdict, by design. The treatment arm is EMPTY today and the pre-registered bar cannot be evaluated until at least five treatment phases of 4-6 tasks exist. The live canonical run is all-baseline with every cohort abstaining or unmatched.',
+      'Reviewer INFO, outside this phase\'s scope and unfixed: plugins/zeroh-roadmap/agents/code-reviewer.md cites plugins/zeroh-roadmap/skills/code-review/SKILL.md as the single home of the severity rubric, but that file does not exist at HEAD or at the phase-start sha. Every round used the generic focus list. This is a protocol-doc defect in the plugin under trial, not in this phase\'s diff; the supervising phase-26 session may want it.',
+    ],
+    hardStops: [],
+    limitations: [
+      'ROUND 5 WAS THE CAP, so its five LOW fixes carry NO independent review round. They were verified by this executor instead: the full 21-form CLI matrix (17 malformed forms exit 2, 4 legal forms exit 0, including the step\'s own --cut 7 verify), the 17-case suite green, a grep sweep for every stale claim the round named (test count, doc line count, durationMs wording, bare-build references), and a phase validate. That is the executor\'s own verification, not an independent one, and it is owed a fresh read at the arc sweep.',
+      'HISTORY STAYS GRANULAR: `roadmap phase curate 7` was dry-run and inspected, and deliberately NOT applied. Its default plan squashes all 12 commits into one, which would rewrite 2b8e87f — the sha GRAFT-TRIAL.md pre-registers as the trial\'s CUT EVENT — leaving the trial\'s central pin dangling, and would orphan the fixedInCommit sha named in all six recorded gate rounds. Its generated subject also carries a `Co-Authored-By: Claude` trailer rather than this driver\'s required one. Same disposition and the same reasoning as phase 6. The landed history is already one commit per task, one per gate round, correct grammar throughout, so curation\'s purpose is met without the cost.',
+      'The trial\'s own design weakness, stated in the doc rather than fixed because this design cannot fix it: the arms are SEQUENTIAL, so everything that changed over the same period (the protocol itself, the executing models, plan quality, phase mix) is confounded with the treatment, and cohort matching controls phase size only. No result from this trial can be read as causal. The surface half of the cohort key is additionally degenerate here (false for all 23 records), so half the pre-registered matching does nothing.',
+      'Footprint is measured for THIS repo only (261 files, 2551 nodes): 19.4s / 484696 kB / 19M does not extrapolate to a large consumer, and the --deep LLM pass is entirely UNMEASURED (no key, and none provisioned per notes decision 2). Session token spend is not in PhaseEvalRecordShape at all, so no cost claim in either direction can ever come out of this trial.',
+      'GRAFT_NO_REFRESH is proven at the GRAFT seam (a two-arm mtime experiment: switch on, no rebuild; switch off, graft prints \'refreshed the graph\') but not at the HARNESS seam — settings.json `env` only reaches a session started after this commit, so that Claude Code injects it into hook subprocesses is taken from documented behaviour, not measured here. Two independent layers cover the gap meanwhile (.mcp.json carries the env itself; the SKILL.md host rule tells any agent to build only via capbuild), but the first session to open this repo should confirm it.',
+      'The instrument has no way to know which phases are transition phases — the canonical `--exclude 7,26` is supplied by the caller and recorded in the doc. A future reader who runs a bare `--cut 25` gets a contaminated aggregate at exit 0. Every malformed form now fails loudly, but a well-formed command with the wrong cut or a forgotten --exclude cannot be detected by the tool.',
+    ],
+    gateRounds: 5,
+  },
   tasks: [
     {
       id: '7.1',
