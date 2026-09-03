@@ -22,7 +22,7 @@ const CHECKS = [
 
 const fullTransparency = {
   whatWasDone: 'implemented the complete fixture behavior',
-  how: 'used the fixture repository and its observable records',
+  how: 'guard proof: planted violation → RED; anchor drift → RED; decoy → GREEN',
   compromises: 'None',
   skipped: 'None',
   hardcoded: 'None',
@@ -65,7 +65,7 @@ function report(root, phase, overrides = {}) {
     slots: [{ slot: 'unit', exitCode: 0 }],
     agents: [{ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: 'independent review is clean', model: 'review-model', findings: [], recordedAt: '2026-09-02T10:02:00.000Z' }],
     green: true,
-    notes: ['gate run --verify-complete passed', 'MUTATION PROOF: baseline red; mutated guard green; restored green'],
+    notes: ['gate run --verify-complete passed', 'mutation proof reminder: planted RED, anchor drift RED, decoy GREEN'],
     curation: { squashedCount: 1, landedSubjects: [`feat(cli): phase ${phase} — fixture`], redProofs: [] },
     ...overrides,
   }, null, 2))
@@ -81,7 +81,13 @@ function phaseFixture({ phase = 7026, legacy = false, omit } = {}) {
   if (omit === 'gate-rounds-carry-model') delete obj.gateRounds[0].model
   if (omit === 'rounds-carry-findings') delete obj.gateRounds[0].findings
   if (omit === 'no-self-review-round') obj.gateRounds[0].agent = 'self-review'
+  if (omit === 'guard-mutation-proofs-quoted') task.transparencyReport.how = 'gate notes mention mutation proof, red, and green'
+  if (omit === 'plan-verify-clauses-unchanged') obj.limitations = 'verify-complete remains limited for unrelated reasons'
   writePhaseFile(root, obj)
+  commitAll(root, `docs(roadmap): phase ${phase} — plan fixture`)
+  writeFileSync(join(roadmapDir(root), 'backlog.ts'), `export default [${phase}]\n`)
+  commitAll(root, `docs(roadmap): queue phase ${phase}`)
+  writeFileSync(join(root, 'task.txt'), 'task evidence\n')
   commitAll(root, `feat(cli): phase ${phase} — ${phase}.1 fixture task`)
   const phasePath = join(roadmapDir(root), 'phases', `phase-${phase}.phase.ts`)
   if (omit === 'one-commit-per-task') {
@@ -101,10 +107,10 @@ function phaseFixture({ phase = 7026, legacy = false, omit } = {}) {
   const reportOverrides = {}
   if (omit === 'curation-evidence') reportOverrides.curation = undefined
   if (omit === 'verify-complete-passed') reportOverrides.notes = ['ordinary green run only']
-  if (omit === 'guard-mutation-proofs-quoted') reportOverrides.notes = ['gate run --verify-complete passed']
   report(root, phase, reportOverrides)
   if (omit === 'plan-verify-clauses-unchanged') {
     writeFileSync(phasePath, readFileSync(phasePath, 'utf8') + '// verify: changed after queue\n')
+    commitAll(root, `docs(roadmap): phase ${phase} — rewrite verify clause without limitation`)
   }
   return root
 }
@@ -127,6 +133,53 @@ for (const id of CHECKS) {
     assert.ok(check.evidence, 'a failure names the evidence that is absent or invalid')
   })
 }
+
+test('scoreAdherence — every task must carry a mutation proof or an explicit no-new-guard declaration', async () => {
+  const scoreAdherence = await scorer()
+  const root = phaseFixture()
+  const phasePath = join(roadmapDir(root), 'phases', 'phase-7026.phase.ts')
+  const plan = JSON.parse(readFileSync(phasePath, 'utf8').replace(/^export default /, ''))
+  plan.tasks.push({ id: '7026.2', done: true, transparencyReport: { ...fullTransparency, how: 'implemented ordinary behavior' } })
+  writePhaseFile(root, plan)
+  commitAll(root, 'feat(cli): phase 7026 — 7026.2 second fixture task')
+  assert.equal(scoreAdherence(root, 7026).checks.find((row) => row.id === 'guard-mutation-proofs-quoted').passed, false)
+  plan.tasks[1].transparencyReport.how = 'implemented ordinary behavior; no new guard was introduced'
+  writePhaseFile(root, plan)
+  commitAll(root, 'docs(roadmap): phase 7026 — declare second task guard applicability')
+  assert.equal(scoreAdherence(root, 7026).checks.find((row) => row.id === 'guard-mutation-proofs-quoted').passed, true)
+})
+
+test('scoreAdherence — a newer colliding phase queue cannot replace the exact queue baseline', async () => {
+  const scoreAdherence = await scorer()
+  const root = phaseFixture({ phase: 7 })
+  const phasePath = join(roadmapDir(root), 'phases', 'phase-7.phase.ts')
+  writeFileSync(phasePath, readFileSync(phasePath, 'utf8') + '// verify: changed after the exact phase-7 queue\n')
+  commitAll(root, 'docs(roadmap): phase 7 — rewrite verify after queue')
+  writeFileSync(join(roadmapDir(root), 'backlog.ts'), 'export default [70]\n')
+  commitAll(root, 'docs(roadmap): queue phase 70')
+  assert.equal(scoreAdherence(root, 7).checks.find((row) => row.id === 'plan-verify-clauses-unchanged').passed, false)
+})
+
+test('scoreAdherence — clause fingerprints authorize only the changed verify clauses they name', async () => {
+  const scoreAdherence = await scorer()
+  const root = phaseFixture()
+  const phasePath = join(roadmapDir(root), 'phases', 'phase-7026.phase.ts')
+  writeFileSync(phasePath, readFileSync(phasePath, 'utf8') + '// verify: authorized post-queue rewrite\n')
+  commitAll(root, 'docs(roadmap): phase 7026 — rewrite verify with authorization pending')
+  const failed = scoreAdherence(root, 7026).checks.find((row) => row.id === 'plan-verify-clauses-unchanged')
+  assert.equal(failed.passed, false)
+  const keys = failed.evidence.match(/verify-rewrite:[a-f0-9]{12}/g)
+  assert.equal(keys.length, 1)
+  const plan = JSON.parse(readFileSync(phasePath, 'utf8').replace(/^export default /, '').replace(/\/\/ verify: authorized post-queue rewrite\n$/, ''))
+  plan.limitations = `Authorized rewrite ${keys[0]}`
+  writePhaseFile(root, plan)
+  writeFileSync(phasePath, readFileSync(phasePath, 'utf8') + '// verify: different post-queue rewrite\n')
+  commitAll(root, 'docs(roadmap): phase 7026 — authorize exact verify rewrite')
+  assert.equal(scoreAdherence(root, 7026).checks.find((row) => row.id === 'plan-verify-clauses-unchanged').passed, false, 'a different changed clause cannot reuse the prior fingerprint')
+  writeFileSync(phasePath, readFileSync(phasePath, 'utf8').replace('// verify: different post-queue rewrite', '// verify: authorized post-queue rewrite'))
+  commitAll(root, 'docs(roadmap): phase 7026 — restore authorized verify rewrite')
+  assert.equal(scoreAdherence(root, 7026).checks.find((row) => row.id === 'plan-verify-clauses-unchanged').passed, true)
+})
 
 test('scoreAdherence — a phase predating the conventions abstains instead of throwing or failing', async () => {
   const scoreAdherence = await scorer()

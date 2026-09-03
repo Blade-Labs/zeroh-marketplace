@@ -858,6 +858,10 @@ export async function runGate(phaseNum, opts) {
       for (const p of result.problems) process.stderr.write(`  - ${p}\n`)
     }
     if (misattributed.length > 0 || !result.ok) return 2
+    if (!latest.report.notes.some((note) => /verify-complete passed/i.test(note))) {
+      latest.report.notes.push('gate run --verify-complete passed')
+      writeFileSync(latest.path, JSON.stringify(latest.report, null, 2) + '\n')
+    }
     process.stdout.write(`phase ${phaseNum} consistent with the latest green gate report\n`)
     return 0
   }

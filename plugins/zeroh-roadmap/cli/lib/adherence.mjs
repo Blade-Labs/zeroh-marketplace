@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { bridgeEval } from './tsx-bridge.mjs'
 import { roadmapRoot } from './roadmap-root.mjs'
@@ -57,6 +58,37 @@ function git(toplevel, args) {
   try { return execFileSync('git', ['-C', toplevel, ...args], { encoding: 'utf8' }).trim() } catch { return '' }
 }
 
+function baselinePhaseSource(toplevel, path, phase) {
+  const queueSubject = `docs(roadmap): queue phase ${phase}`
+  const queued = git(toplevel, ['log', '--format=%H%x1f%s'])
+    .split('\n').map((line) => line.split('\x1f')).find(([, subject]) => subject === queueSubject)?.[0]
+  if (queued) return git(toplevel, ['show', `${queued}:${path.slice(toplevel.length + 1)}`])
+  const commits = git(toplevel, ['log', '--diff-filter=A', '--format=%H', '--', path]).split('\n').filter(Boolean)
+  const first = commits.at(-1)
+  return first ? git(toplevel, ['show', `${first}:${path.slice(toplevel.length + 1)}`]) : ''
+}
+
+function verifyClauses(source) {
+  return source.split('\n').filter((line) => line.includes('verify:')).map((line) => line.trim()).sort()
+}
+
+function verifyRewriteKey(clause) {
+  return `verify-rewrite:${createHash('sha256').update(clause).digest('hex').slice(0, 12)}`
+}
+
+function quotesMutationProof(task) {
+  const how = task.transparencyReport?.how ?? ''
+  const redDrives = how.match(/[^.;]*(?:→|->)\s*RED\b/gi) ?? []
+  const greenDrives = how.match(/[^.;]*(?:→|->)\s*GREEN\b/gi) ?? []
+  return redDrives.some((drive) => /remove|plant|mutat|reintroduc/i.test(drive))
+    && redDrives.some((drive) => /anchor|rename|move/i.test(drive))
+    && greenDrives.some((drive) => /decoy/i.test(drive))
+}
+
+function declaresNoGuard(task) {
+  return /\bno new (?:shape |conformance )?guard (?:was )?introduced\b/i.test(task.transparencyReport?.how ?? '')
+}
+
 function row(id, applicable, passed, evidence) {
   if (!ADHERENCE_CHECK_IDS.includes(id)) throw new Error(`adherence: unknown check id ${id}`)
   return { id, applicable, passed: applicable && passed, evidence }
@@ -67,7 +99,6 @@ export function scoreAdherence(toplevel, phase) {
   const report = latestGateReport(toplevel, phase)
   const events = eventsFor(toplevel, phase)
   const modern = String(plan.completedDate ?? plan.created ?? '') >= CONVENTIONS_AT
-  const applicable = (id) => modern || id === '__always'
   const taskStarts = events.filter((event) => event.event === 'task-start')
   const executorStart = events.findIndex((event) => event.event === 'executor-start')
   const firstTask = events.findIndex((event) => event.event === 'task-start')
@@ -76,38 +107,45 @@ export function scoreAdherence(toplevel, phase) {
   const doneTasks = tasks.filter((task) => task.done)
   const transparencyOk = doneTasks.every((task) => SIX_FIELDS.every((field) => typeof task.transparencyReport?.[field] === 'string'))
   const rounds = plan.gateRounds ?? []
-  const mutationProof = (report?.notes ?? []).some((note) => /mutation proof/i.test(note) && /red/i.test(note) && /green/i.test(note))
+  const mutationProof = doneTasks.every((task) => quotesMutationProof(task) || declaresNoGuard(task))
   const verifyPassed = (report?.notes ?? []).some((note) => /verify-complete passed/i.test(note))
   const selfReviewFree = rounds.some((round) => round.round >= 1 && !/self[- ]?review/i.test(round.agent ?? ''))
-  const phaseDiff = git(toplevel, ['diff', '--', path])
+  const originalVerifies = verifyClauses(baselinePhaseSource(toplevel, path, phase))
+  const currentVerifies = verifyClauses(readFileSync(path, 'utf8'))
+  const changedVerifies = [...new Set([...originalVerifies, ...currentVerifies])]
+    .filter((clause) => !originalVerifies.includes(clause) || !currentVerifies.includes(clause))
+  const verifiesChanged = changedVerifies.length > 0
+  const limitations = [plan.limitations, ...tasks.map((task) => task.transparencyReport?.limitations)].filter(Boolean).join('\n')
+  const changedVerifyKeys = changedVerifies.map(verifyRewriteKey)
+  const verifyRewriteJustified = changedVerifyKeys.every((key) => limitations.includes(key))
   const resumeOrEscalated = events.some((event) => ['resume', 'escalated'].includes(event.event))
   const lessonPaths = [join(roadmapRoot(toplevel), 'arc-evals', 'lessons.jsonl'), join(roadmapRoot(toplevel), 'lessons.jsonl')]
   const lessons = lessonPaths.filter(existsSync).map((lessonPath) => readFileSync(lessonPath, 'utf8')).join('\n')
 
   const checks = [
-    row('tripwires-ran', applicable('tripwires-ran'), executorStart >= 0 && firstTask > executorStart,
+    row('tripwires-ran', modern, executorStart >= 0 && firstTask > executorStart,
       taskStarts.length ? `executor-start index ${executorStart}; first task-start index ${firstTask}` : 'no task-start beacon recorded'),
-    row('one-commit-per-task', applicable('one-commit-per-task'), doneTasks.length === tasks.length && doneTasks.every((task) => log.split('\n').some((subject) => subject.includes(`phase ${phase} — ${task.id}`))),
+    row('one-commit-per-task', modern, doneTasks.length === tasks.length && doneTasks.every((task) => log.split('\n').some((subject) => subject.includes(`phase ${phase} — ${task.id}`))),
       `${doneTasks.length}/${tasks.length} task(s) done; matching task subjects inspected in git log`),
-    row('six-field-transparency-reports', applicable('six-field-transparency-reports'), transparencyOk,
+    row('six-field-transparency-reports', modern, transparencyOk,
       transparencyOk ? 'all done tasks carry all six fields' : 'one or more done tasks lack a transparency field'),
-    row('gate-rounds-carry-model', applicable('gate-rounds-carry-model'), rounds.length > 0 && rounds.every((round) => typeof round.model === 'string' && round.model.length > 0),
+    row('gate-rounds-carry-model', modern, rounds.length > 0 && rounds.every((round) => typeof round.model === 'string' && round.model.length > 0),
       `${rounds.length} phase gate round(s) inspected for model attribution`),
-    row('rounds-carry-findings', applicable('rounds-carry-findings'), rounds.length > 0 && rounds.every((round) => Array.isArray(round.findings)),
+    row('rounds-carry-findings', modern, rounds.length > 0 && rounds.every((round) => Array.isArray(round.findings)),
       `${rounds.length} phase gate round(s) inspected for typed findings arrays`),
-    row('guard-mutation-proofs-quoted', applicable('guard-mutation-proofs-quoted'), mutationProof,
-      mutationProof ? 'gate notes quote RED/mutated/GREEN mutation evidence' : 'gate notes contain no complete mutation proof'),
-    row('curation-evidence', applicable('curation-evidence'), Boolean(report?.curation),
+    row('guard-mutation-proofs-quoted', modern, mutationProof,
+      mutationProof ? 'every task declares no new guard or quotes planted RED, anchor-drift RED, and decoy GREEN evidence' : 'one or more tasks lack both a no-new-guard declaration and a complete three-drive mutation proof'),
+    row('curation-evidence', modern, Boolean(report?.curation),
       report?.curation ? 'latest gate report carries curation evidence' : 'latest gate report lacks curation evidence'),
-    row('verify-complete-passed', applicable('verify-complete-passed'), verifyPassed,
+    row('verify-complete-passed', modern, verifyPassed,
       verifyPassed ? 'latest gate notes record verify-complete passed' : 'latest gate notes do not record verify-complete'),
-    row('no-self-review-round', applicable('no-self-review-round'), selfReviewFree,
+    row('no-self-review-round', modern, selfReviewFree,
       selfReviewFree ? 'at least one independent correctness round is recorded' : 'no independent correctness round is recorded'),
-    row('plan-verify-clauses-unchanged', applicable('plan-verify-clauses-unchanged'), !/^\+.*verify:/m.test(phaseDiff) || /verify/i.test(String(plan.limitations ?? '')),
-      phaseDiff ? 'working-tree phase diff inspected for unnamed verify-clause rewrites' : 'phase file has no uncommitted verify-clause rewrite'),
-    row('lessons-flushed', applicable('lessons-flushed'), !resumeOrEscalated || new RegExp(`"phase"\\s*:\\s*${phase}\\b`).test(lessons),
+    row('plan-verify-clauses-unchanged', modern, !verifiesChanged || verifyRewriteJustified,
+      verifiesChanged ? `${changedVerifies.length} changed committed verify clause(s) require limitation citations: ${changedVerifyKeys.join(', ')}` : 'committed phase verify clauses match their queue version'),
+    row('lessons-flushed', modern, !resumeOrEscalated || new RegExp(`"phase"\\s*:\\s*${phase}\\b`).test(lessons),
       resumeOrEscalated ? 'resume/escalated beacon requires a phase-attributed lesson' : 'no resume/escalated beacon created a lesson obligation'),
-    row('execution-result-roles-recorded', applicable('execution-result-roles-recorded'), Array.isArray(plan.executionResult?.roles),
+    row('execution-result-roles-recorded', modern, Array.isArray(plan.executionResult?.roles),
       Array.isArray(plan.executionResult?.roles) ? `${plan.executionResult.roles.length} role firing(s) recorded` : 'executionResult.roles is absent'),
   ]
   const scored = checks.filter((check) => check.applicable)

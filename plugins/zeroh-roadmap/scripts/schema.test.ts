@@ -641,11 +641,21 @@ check('v9: structured gate round with agent enum + verdict parses; bad agent rej
   const round = StructuredGateRoundShape.parse({
     round: 1,
     agent: 'code-reviewer',
+    model: 'gpt-5.6-sol',
     verdict: 'clean',
     findings: [],
     summary: 'Round 1: 0 findings — gate clean',
   })
   assertEq(round.agent, 'code-reviewer', 'agent recorded')
+  assertEq(round.model, 'gpt-5.6-sol', 'reviewer model attribution survives parsing')
+  const consumerRound = definePhaseConsumerHome({
+    ...basePhase,
+    status: 'in-progress',
+    category: 'test',
+    kind: 'logic',
+    gateRounds: [round],
+  }).gateRounds?.[0]
+  assertEq(typeof consumerRound === 'object' ? consumerRound.model : undefined, 'gpt-5.6-sol', 'consumer phase parsing preserves reviewer model attribution')
   assertThrows(
     () => StructuredGateRoundShape.parse({ round: 1, agent: 'not-an-agent' }),
     'unknown gate agent',

@@ -796,6 +796,7 @@ test('gate run --verify-complete — a new codex completion cannot reuse an old 
   assert.equal(refused.code, 2, refused.stdout)
   assert.match(refused.stderr, /no-self-judge/)
   assert.match(refused.stderr, /--record-round/)
+  assert.ok(!latestReportOf(repo.root, 1401).notes.includes('gate run --verify-complete passed'), 'a consistency refusal records no success note')
 })
 
 test('gate run --verify-complete — no report dir exits 1', () => {
@@ -831,6 +832,10 @@ test('gate run --verify-complete — a DONE phase with no executionResult.driver
   const r = runGateCmd(repo.root, ['1600', '--verify-complete'])
   assert.equal(r.code, VERIFY_COMPLETE_CONSISTENT_EXIT, `consistency decides the exit code; stderr: ${r.stderr}`)
   assert.match(r.stdout, /phase 1600 consistent with the latest green gate report/, 'the consistency verdict still prints')
+  assert.ok(latestReportOf(repo.root, 1600).notes.includes('gate run --verify-complete passed'), 'successful consistency is persisted for adherence scoring')
+  const repeated = runGateCmd(repo.root, ['1600', '--verify-complete'])
+  assert.equal(repeated.code, VERIFY_COMPLETE_CONSISTENT_EXIT, repeated.stderr)
+  assert.equal(latestReportOf(repo.root, 1600).notes.filter((note) => note === 'gate run --verify-complete passed').length, 1, 'repeat verification keeps one canonical note')
   const hits = driverAbsentLines(r.stdout)
   assert.equal(hits.length, 1, `exactly one unrecorded-driver warning (never one per task); stdout: ${r.stdout}`)
   assert.match(hits[0], /^warning: /, 'it joins the existing warn-only stdout lane')
@@ -1420,6 +1425,7 @@ test('gate run --verify-complete — a phase claiming a DIFFERENT driver than th
   assert.ok(r.stderr.includes(CLAIMED_MODEL), `the file's claim is named BESIDE it — a reader must not have to open the journal; stderr: ${JSON.stringify(r.stderr)}`)
   assert.ok(r.stderr.includes(jPath), `the journal that decided it is named (${jPath}); stderr: ${JSON.stringify(r.stderr)}`)
   assert.ok(r.stderr.includes(JOURNAL_STARTED_AT), `the journal's startedAt places the run in time; stderr: ${JSON.stringify(r.stderr)}`)
+  assert.ok(!latestReportOf(repo.root, 1610).notes.includes('gate run --verify-complete passed'), 'an attribution refusal records no success note')
 })
 
 test('gate run --verify-complete — a lane journal beside a phase file with NO executionResult.driver exits 2, not a warning', () => {

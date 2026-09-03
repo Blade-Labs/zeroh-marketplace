@@ -156,6 +156,8 @@ export const StructuredGateRoundShape = z.object({
    *  'software-architect' records the Decision-Contract/RESHAPE reviewer.
    *  'self-review' honestly records a driver reviewing its own work. */
   agent: z.enum(['quality-pass', 'architect-critique', 'simplifier', 'code-reviewer', 'test-engineer', 'software-architect', 'self-review']).optional(),
+  /** Exact model id returned by role resolution; required by current protocol, optional for legacy rounds. */
+  model: z.string().min(1).optional(),
   /** The round's outcome at a glance (clean = zero actionable findings). */
   verdict: z.enum(['clean', 'findings-fixed', 'fixed-closed', 'skipped']).optional(),
   findings: z.array(GateFindingShape).default([]),

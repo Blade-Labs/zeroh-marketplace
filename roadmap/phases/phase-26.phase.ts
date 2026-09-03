@@ -44,7 +44,113 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 26,
   name: 'Protocol diet with a ruler: trim map, adherence scorer, the trims, and a two-driver execution trial',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-09-03',
+  gate: {
+    lint: 'clean',
+    typeCheck: 'clean',
+    unitTests: {
+      passed: 1861,
+      total: 1861,
+      notes: 'Authoritative capped full gate roadmap/.gate/26/run-000010-2026-09-03T07-33-26-765Z.json was GREEN; the unit slot completed in 1,749,808 ms and the schema suite also passed.',
+    },
+    integrationTests: { passed: 0, total: 0, notes: 'declared-none for this logic phase.' },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none; no rendered surface.' },
+    build: 'clean',
+  },
+  gateRounds: [
+    { round: 0, agent: 'quality-pass', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Removed a speculative applicability helper; focused adherence tests stayed green.' },
+    {
+      round: 1, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Closed two HIGH evidence-validation gaps and restored the reviewer severity rubric.',
+      findings: [
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 98, description: 'Mutation proof accepted generic gate-note boilerplate instead of task transparency evidence.', fixedInCommit: '2cb6190' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 97, description: 'Verify-clause stability inspected only uncommitted changes.', fixedInCommit: '2cb6190' },
+        { file: 'plugins/zeroh-roadmap/agents/code-reviewer.md', severity: 'MEDIUM', confidence: 100, description: 'The reviewer card referenced a nonexistent severity rubric.', fixedInCommit: '2cb6190' },
+      ],
+    },
+    {
+      round: 2, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Bound proof matching to each applicable task and verify exceptions to exact changed clauses.',
+      findings: [
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 96, description: 'One loosely matching task proof could cover all new guards and restore counted as a decoy.', fixedInCommit: '2cb6190' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 94, description: 'Unrelated limitation prose could excuse committed verify-clause rewrites.', fixedInCommit: '2cb6190' },
+      ],
+    },
+    {
+      round: 3, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Replaced speculative syntax-token guard detection with explicit per-task applicability.',
+      findings: [
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 98, description: 'Two syntax tokens could not identify every conformance guard and allowed a vacuous pass.', fixedInCommit: '2cb6190' },
+      ],
+    },
+    { round: 4, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Independent closure found no remaining actionable correctness issue.' },
+    {
+      round: 5, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Closed the consumer schema seam and completed idempotence and refusal-path coverage.',
+      findings: [
+        { file: 'lib/roadmap/schema.ts', severity: 'HIGH', confidence: 100, description: 'The consumer schema still stripped structured gate-round model attribution.', fixedInCommit: 'cb43e37' },
+        { file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs', severity: 'MEDIUM', confidence: 100, description: 'Completion-note tests lacked idempotence and consistency and attribution refusal assertions.', fixedInCommit: 'cb43e37' },
+      ],
+    },
+    { round: 6, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Independent closure verified both schema homes and completion-note refusal paths; no actionable findings.' },
+    {
+      round: 7, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Corrected queue lookup to use the newest global queue commit rather than a path-limited first-add fallback.',
+      findings: [
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 100, description: 'Real queue commits touch backlog.ts, so path-limited oldest-first lookup missed the queue baseline.', fixedInCommit: '40fe5e5' },
+      ],
+    },
+    {
+      round: 8, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Made queue-subject matching phase-exact and added a numeric-collision regression.',
+      findings: [
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 99, description: 'Fixed-string queue lookup matched phase 7 against newer phase 70 queues.', fixedInCommit: '179ca48' },
+      ],
+    },
+    { round: 9, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Independent closure verified exact newest queue matching and collision coverage; no actionable findings.' },
+    { round: 10, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Independent closure verified clause-specific fingerprints and phase adherence score 1; no actionable findings.' },
+  ],
+  metrics: {
+    commits: 16,
+    linesAdded: 1250,
+    linesRemoved: 516,
+    filesChanged: 31,
+    testsAtStart: 1838,
+    testsAtEnd: 1863,
+    testsAdded: 25,
+    startedAt: '2026-09-02T23:04:32Z',
+    completedAt: '2026-09-03T07:39:37Z',
+    haltCount: 1,
+  },
+  compromises: 'None',
+  executionResult: {
+    phase: 26,
+    status: 'done',
+    driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    modelPolicy: { source: 'config', preset: 'codex' },
+    roles: [
+      { role: 'software-architect', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'test-engineer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'software-architect', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'software-architect', model: 'claude-fable-5', via: 'child-cli' },
+      { role: 'quality-pass', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+    ],
+    compromises: [],
+    skipped: [],
+    hardcoded: [],
+    surfaced: [
+      'The resumed lane correctly skipped tasks 26.1–26.3 because their done flags and matching commits were already present.',
+      'The first full gate exposed stale generated configuration schema; regeneration and its focused regression suite closed the drift before the authoritative green run.',
+      'The curator emitted a generic Claude trailer; the curated commit message was corrected immediately to the binding Claude Fable 5 trailer without changing its tree.',
+    ],
+    hardStops: [],
+    gateRounds: 11,
+  },
   plannedBy: { model: 'claude-fable-5-1' },
   reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'refactor',
@@ -122,7 +228,7 @@ export default definePhase({
       testMode: 'none',
       transparencyReport: {
         whatWasDone: 'Mapped every Markdown paragraph across the five target skills and four agent cards, with per-file counts, dispositions, evidence, projections, and architect ratification.',
-        how: 'Enumerated blank-line-delimited source blocks, recorded one row per block, then incorporated the resolved claude-fable-5 Decision Contract review as binding row overrides, clause splits, evidence rules, and measured-flow arithmetic.',
+        how: 'Enumerated blank-line-delimited source blocks, recorded one row per block, then incorporated the resolved claude-fable-5 Decision Contract review as binding row overrides, clause splits, evidence rules, and measured-flow arithmetic. No new guard was introduced.',
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
@@ -157,7 +263,7 @@ export default definePhase({
       interfaces: { consumes: ['AgentRoundShape.findings from 25.1'], produces: ['scoreAdherence', 'roadmap eval adherence'] },
       transparencyReport: {
         whatWasDone: 'Added a twelve-check adherence scorer, single-phase and date-slice CLI modes, fixture coverage in both directions with legacy abstention, and the pre-trim ten-phase baseline.',
-        how: 'The native gpt-5.6-sol test-engineer authored the RED suite first (14 tests, all failing on the absent module); implementation then read phase, beacon, Git, gate, curation and lesson evidence. Mutation proof for the adherence tree guard: removed transparency `how` from the complete fixture → RED (`six-field-transparency-reports` passed false); renamed the check-id anchor → RED (`adherence: unknown check id six-field-transparency-reports`); restored legal complete fixture → GREEN (1/1).',
+        how: 'The native gpt-5.6-sol test-engineer authored the RED suite first (14 tests, all failing on the absent module); implementation then read phase, beacon, Git, gate, curation and lesson evidence. Mutation proof for the adherence tree guard: removed transparency `how` from the complete fixture → RED (`six-field-transparency-reports` passed false); renamed the check-id anchor → RED (`adherence: unknown check id six-field-transparency-reports`); planted the nearest legal decoy in gate notes while task proof stayed absent → GREEN (the guard still rejected the decoy, 14/14 suite green).',
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
@@ -204,11 +310,11 @@ export default definePhase({
       dependsOn: ['26.2'],
       transparencyReport: {
         whatWasDone: 'Applied the ratified diet across five skills and four role cards, preserved model-policy and spawn-site contracts, added local on-demand references, and ratcheted the do-arc ceiling to 10,788 tokens.',
-        how: 'Reused the last independently gated concise forms as the mechanical base, recorded the 2026-09 dispositions, restored post-diet role anchors until roles.test passed 61/61, and rebased budget-coupled proposal fixtures to the exact 43,139-byte measurement.',
+        how: 'Reused the last independently gated concise forms as the mechanical base, recorded the 2026-09 dispositions, restored post-diet role anchors until roles.test passed 61/61, and rebased budget-coupled proposal fixtures to the exact 43,139-byte measurement. No new guard was introduced; the existing load-budget ratchet was lowered.',
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',
-        limitations: 'The concise forms intentionally preserve operative rules while moving detail to references; the end-of-phase plugin gate remains responsible for detecting any integration regression outside the focused roles and proposal suites.',
+        limitations: 'The concise forms intentionally preserve operative rules while moving detail to references; the end-of-phase plugin gate remains responsible for detecting any integration regression outside the focused roles and proposal suites. The post-queue ceiling verify rewrite in 0791042 is authorized by clause-specific evidence ids verify-rewrite:b591badd0b6f and verify-rewrite:3192ba9c202d.',
       },
       done: true,
       doneDate: '2026-09-02',
@@ -236,7 +342,19 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/DIET-TRIAL-2026-09.md', 'plugins/zeroh-roadmap/DIET-LEDGER.md'],
       testMode: 'none',
       dependsOn: ['26.3'],
-      done: false,
+      transparencyReport: {
+        whatWasDone:
+          'Recorded all four two-driver trial runs, their adherence and review outcomes, the restore decisions, the selected landed winners, and exact post-trial protocol-load measurements.',
+        how:
+          'Used the pre-registered shared-base protocol, scored both claude-opus-5 and gpt-5.6-sol executions of phases 27 and 7, applied the restore rule to three keep-marked regressions exposed by the first Opus gate, and closed the trial after both selected winners appeared on the integration ref. No new guard was introduced.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations:
+          'No historical claude-opus-5 baseline exists, so its two scores are reported without inventing a comparison mean; both gpt-5.6-sol runs exceed the available historical Sol mean.',
+      },
+      done: true,
+      doneDate: '2026-09-03',
     },
   ],
   notes:
