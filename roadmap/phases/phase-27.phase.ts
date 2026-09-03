@@ -28,7 +28,37 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 27,
   name: 'Curate stops at the integration ref: published commits are never squashed',
-  status: 'in-progress',
+  status: 'done',
+  completedDate: '2026-09-03',
+  gate: {
+    lint: 'clean', typeCheck: 'clean',
+    unitTests: { passed: 1861, total: 1861, notes: 'Authoritative full gate roadmap/.gate/27/run-000003-2026-09-03T04-44-48-561Z.json was GREEN; the capped unit slot completed in 1,970,229 ms.' },
+    integrationTests: { passed: 10, total: 10, notes: 'Hardening closure used the fixture-consumer lifecycle suite; the full gate also included it.' },
+    e2eTests: { passed: 0, total: 0, notes: 'declared-none; no rendered surface.' }, build: 'clean',
+  },
+  gateRounds: [
+    { round: 0, agent: 'quality-pass', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Closed ancestry-ordering and real phase-land lifecycle proof gaps.' },
+    { round: 1, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', summary: 'Both prior MEDIUM findings independently verified closed; no new correctness findings.' },
+  ],
+  metrics: { commits: 1, linesAdded: 266, linesRemoved: 14, filesChanged: 8, testsAtStart: 1854, testsAtEnd: 1861, testsAdded: 7, startedAt: '2026-09-03T03:19:04.731Z', completedAt: '2026-09-03T04:45:57.000Z' },
+  compromises: 'No unratified implementation compromise remains; both quality findings were fixed and independently re-reviewed.',
+  executionResult: {
+    phase: 27, status: 'done', driver: { model: 'gpt-5.6-sol', lane: 'codex' },
+    modelPolicy: { source: 'config', preset: 'codex' },
+    roles: [
+      { role: 'test-engineer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'test-engineer', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'quality-pass', model: 'gpt-5.6-sol', via: 'native' },
+      { role: 'code-reviewer', model: 'gpt-5.6-sol', via: 'native' },
+    ],
+    compromises: [], skipped: [], hardcoded: [],
+    surfaced: [
+      'The plugin-local dependency link was absent in this lane; a temporary ignored symlink to the existing installed dependency tree was retained through scoped verification and the authoritative full gate.',
+      'The full gate exceeded the execution transport lifetime twice; the final single capped run was detached from that transport and monitored to its green report without running a duplicate.',
+      'The curation composer emits a generic Claude trailer, so the generated curated commit message was immediately corrected to the binding Claude Fable 5 trailer without changing its tree.',
+    ],
+    hardStops: [], gateRounds: 2,
+  },
   plannedBy: { model: 'claude-fable-5-1' },
   reviewRecord: { date: '2026-09-02', model: 'claude-fable-5-1', verdict: 'READY', via: 'executed' },
   category: 'fix',
@@ -80,7 +110,7 @@ export default definePhase({
       interfaces: { consumes: [], produces: ['deriveCurationRange opts.integrationRef', 'range.published', 'range.noop'] },
       transparencyReport: {
         whatWasDone: 'Made curation integration-aware so history already reachable from the local or origin integration ref is reported as published and excluded from rewriting, including a named all-published no-op.',
-        how: 'The independent gpt-5.6-sol test-engineer added four real-Git cases and established RED at 31 pass / 3 fail. The implementation compares each available integration merge-base by its distance to HEAD, keeps the later boundary, enumerates phase history between the original phase base and that boundary as published, and preserves the exact legacy result shape when integrationRef is omitted. GREEN ran 34/34 tests; the types slot was declared-none and green.',
+        how: 'The independent gpt-5.6-sol test-engineer added four real-Git cases and established RED at 31 pass / 3 fail. The implementation compares available integration merge-bases by ancestry, refuses incomparable published boundaries, enumerates phase history between the original phase base and the selected boundary as published, and preserves the exact legacy result shape when integrationRef is omitted. GREEN ran 34/34 tests; the gate review added a divergent-history regression, and the types slot was declared-none and green.',
         compromises: 'None',
         skipped: 'None',
         hardcoded: 'None',

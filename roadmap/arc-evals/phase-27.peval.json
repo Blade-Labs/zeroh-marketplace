@@ -1,0 +1,88 @@
+{
+  "phase": 27,
+  "date": "2026-09-03",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 27
+  },
+  "taskCount": 2,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/cli/lib/curate.mjs",
+    "plugins/zeroh-roadmap/cli/lib/curate.test.mjs",
+    "plugins/zeroh-roadmap/cli/commands/phase.mjs",
+    "plugins/zeroh-roadmap/test/fixture-consumer/harness.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 2,
+      "LOW": 0
+    },
+    "roundsLowOnly": 1,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1970229
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 1,
+    "linesAdded": 266,
+    "linesRemoved": 14,
+    "filesChanged": 8,
+    "testsAtStart": 1854,
+    "testsAtEnd": 1861,
+    "testsAdded": 7,
+    "startedAt": "2026-09-03T03:19:04.731Z",
+    "completedAt": "2026-09-03T04:45:57.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "claude-fable-5-1"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "test-engineer": {
+        "model": "gpt-5.6-sol"
+      },
+      "quality-pass": {
+        "model": "gpt-5.6-sol"
+      },
+      "code-reviewer": {
+        "model": "gpt-5.6-sol"
+      }
+    }
+  }
+}
