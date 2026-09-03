@@ -3,6 +3,21 @@
 Reconstructed 2026-08-26 (phase 13.7) from the committed record trail; maintained forward.
 One entry per minor: the shipped surface, not the story.
 
+## 0.39.0 — 2026-09-03
+- Lane evidence survives the land (phase 28): `roadmap phase land` carries the lane's gate
+  reports and executor beacon into the primary checkout before disposing the worktree, and the
+  adherence scorer falls back to the committed eval record (curation and verify-complete stamps,
+  per-task landed commit shas) when the checkout-local twin is absent — landed lane phases no
+  longer fail `tripwires-ran` / `curation-evidence` / `verify-complete-passed` by construction.
+- Journals discriminate on worktree: `findJournal` skips a journal recorded for another
+  directory, journal filenames admit an arm label (`codex-<N>.<label>.json`, `codex run --label`),
+  and `executor-arm --worktree <dir>` writes a lane-shaped journal so a session-run worktree arm
+  reconciles at verify-complete and lands with `phase land`.
+- The Co-Authored-By trailer names the actual driver (`driverTrailer` in roles.mjs; curate and
+  the codex prompt share it).
+- `gate run --record-round` past the correctness cap refuses without `--cap-override <reason>`;
+  the eval record and scorecard carry `roundsPastCap`.
+
 ## 0.38.0 — 2026-09-03
 - Protocol diet with a ruler (phase 26): a per-paragraph trim map with a named disposition and
   evidence for every passage of the nine never-trimmed skills and cards (DIET-PLAN-2026-09.md);
