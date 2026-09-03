@@ -446,6 +446,28 @@ test('phase curate — the DRY RUN prints the base, every classified commit and 
   assert.equal(r.status(), preStatus, 'index and worktree are untouched')
 })
 
+test('phase curate — dry run names commits already published on the configured integration ref and excludes them from the plan', () => {
+  const r = makeCurateRepo(85)
+  const move = r.commit('docs(roadmap): phase 85 — move to in-progress')
+  const task = r.commit('feat(cli): phase 85 — 85.1 publish the task')
+  r.git('branch', 'integration')
+  const gate = r.commit('fix(cli): phase 85 gate R0 — lane-only repair')
+  const record = recordOf(85, 'Leave published work alone', [
+    { id: '85.1', title: 'Publish the task', transparencyReport: { whatWasDone: 'published once', compromises: 'None' } },
+  ])
+  const out = sink()
+  const err = sink()
+
+  const code = runCurate({ cwd: r.root, toplevel: r.root, phaseNum: 85, integrationRef: 'integration', loadPhase: () => record, out, err })
+
+  assert.equal(code, 0, `mixed published/lane history plans cleanly; stderr:\n${err.text}`)
+  assert.match(out.text, /2 commits? already on integration — left out of the curation range/)
+  assert.ok(out.text.includes(gate.slice(0, 7)), 'the lane-only gate fix remains in the curation plan')
+  for (const sha of [move, task]) {
+    assert.ok(!out.text.includes(`${sha.slice(0, 7)} `), `published commit ${sha.slice(0, 7)} is not printed as curatable`)
+  }
+})
+
 test('phase curate --apply — lands ONE curated commit over the base, tree-identical, and names the tip it landed', () => {
   const r = makeCurateRepo(81)
   r.commit('docs(roadmap): phase 81 — move to in-progress')

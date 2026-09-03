@@ -174,3 +174,48 @@ test('L9 — a scoped run substitutes {files} verbatim into the fake-slot argv (
   assert.ok(scoped, `the unit-scoped slot ran: ${JSON.stringify(readSlotLog(root).map((s) => s.slot))}`)
   assert.ok(scoped.argv.includes('src/feature.test.ts'), `{files} substituted verbatim: ${JSON.stringify(scoped.argv)}`)
 })
+
+test('L10 — mixed-driver curation leaves published commits in place and the lane lands by fast-forward', () => {
+  const root = makeFixtureRepo({
+    config: {
+      executionIsolation: 'worktree',
+      mergePolicy: { arcIntegration: 'autonomous', maxOpenFollowups: 0, autonomousPushRefs: ['develop'], primaryCheckout: '/tmp/fixture-primary' },
+    },
+  })
+  const phase = 9100
+  seedPhase(root, {
+    phase,
+    status: 'in-progress',
+    name: 'Mixed driver fast-forward fixture',
+    category: 'test',
+    source: 'fixture-consumer',
+    priority: 'LOW',
+    dependsOn: [],
+    conflictsWith: [],
+    keyFiles: ['src/plain.ts'],
+    stakeholderDemo: 'published work is not rewritten',
+    kind: 'logic',
+    tasks: [{ minimal: true, id: `${phase}.1`, title: 'publish task work', done: true, transparencyReport: { whatWasDone: 'published task work', how: 'fixture commit', compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'None' } }],
+  })
+  writeFileSync(join(root, 'src', 'published.ts'), 'export const published = true\n')
+  commitPaths(root, `feat(cli): phase ${phase} — ${phase}.1 publish task work`, ['src/published.ts'])
+  const publishedTip = git(root, 'rev-parse', 'HEAD')
+  git(root, 'switch', '-q', '-c', `lane-${phase}`)
+  writeFileSync(join(root, 'src', 'lane-fix.ts'), 'export const laneFix = true\n')
+  commitPaths(root, `fix(cli): phase ${phase} gate R0 — lane-only repair`, ['src/lane-fix.ts'])
+
+  const gate = runCli(root, ['gate', 'run', String(phase)])
+  assert.equal(gate.code, 0, `the fixture gate must be green before curation; stderr:\n${gate.stderr}`)
+  const dry = runCli(root, ['phase', 'curate', String(phase)])
+  assert.equal(dry.code, 0, `mixed-driver dry run succeeds; stderr:\n${dry.stderr}`)
+  assert.match(dry.stdout, /2 commits? already on develop — left out of the curation range/)
+  const apply = runCli(root, ['phase', 'curate', String(phase), '--apply'])
+  assert.equal(apply.code, 0, `mixed-driver curation applies; stderr:\n${apply.stderr}`)
+
+  const curatedTip = git(root, 'rev-parse', 'HEAD')
+  assert.equal(git(root, 'rev-parse', `${curatedTip}^`), publishedTip, 'the curated lane commit is parented directly on the published tip')
+  const land = runCli(root, ['phase', 'land', String(phase)])
+  assert.equal(land.code, 0, `the shipped phase land command succeeds; stderr:\n${land.stderr}`)
+  assert.equal(git(root, 'rev-parse', 'develop'), curatedTip, 'the integration ref advances to the curated tip by fast-forward')
+  assert.equal(git(root, 'rev-list', '--merges', `${publishedTip}..develop`), '', 'landing introduces no merge commit')
+})

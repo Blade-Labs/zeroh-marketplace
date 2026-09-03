@@ -324,6 +324,102 @@ test('the range is base-EXCLUSIVE: foreign commits under the base are out of sco
   ])
 })
 
+// ── integration-aware range: published phase history is never rewritten (phase 27.1) ──
+
+test('27.1 — phase commits already on the integration ref are published, leaving only lane gate fixes curatable', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-27 file')
+  const move = r.commit('docs(roadmap): phase 27 — move to in-progress')
+  const t1 = r.commit('feat(cli): phase 27 — 27.1 stop curation at the integration ref')
+  const t2 = r.commit('test(cli): phase 27 — 27.2 prove the lane lands fast-forward')
+  r.git('branch', 'develop')
+  const gate0 = r.commit('fix(cli): phase 27 gate R0 — close quality findings')
+  const gate1 = r.commit('fix(cli): phase 27 gate R1 — close correctness findings')
+  const out = deriveCurationRange(r.root, 27, { integrationRef: 'develop' })
+
+  assert.equal(out.ok, true)
+  assert.equal(out.base, t2, 'the integration merge-base, not phase start, is the rewrite boundary')
+  assert.deepEqual(out.commits, [
+    { sha: gate0, subject: r.subject(gate0), kind: 'gate-fix' },
+    { sha: gate1, subject: r.subject(gate1), kind: 'gate-fix' },
+  ])
+  assert.deepEqual(out.published, [move, t1, t2].map((sha) => ({ sha, subject: r.subject(sha) })))
+  assert.equal(out.noop, undefined, 'unpublished gate fixes still require curation')
+})
+
+test('27.1 — an entirely published phase range is a named no-op', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-27 file')
+  const move = r.commit('docs(roadmap): phase 27 — move to in-progress')
+  const task = r.commit('feat(cli): phase 27 — 27.1 stop curation at the integration ref')
+  r.git('branch', 'develop')
+  const out = deriveCurationRange(r.root, 27, { integrationRef: 'develop' })
+
+  assert.equal(out.ok, true)
+  assert.equal(out.base, task)
+  assert.deepEqual(out.commits, [])
+  assert.deepEqual(out.published, [move, task].map((sha) => ({ sha, subject: r.subject(sha) })))
+  assert.equal(out.noop, 'every commit is already on develop')
+})
+
+test('27.1 — omitting integrationRef preserves the phase-start-to-HEAD range', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  const preBase = r.commit('seed phase-27 file')
+  const move = r.commit('docs(roadmap): phase 27 — move to in-progress')
+  const task = r.commit('feat(cli): phase 27 — 27.1 stop curation at the integration ref')
+  r.git('branch', 'develop')
+  const gate = r.commit('fix(cli): phase 27 gate R0 — close quality findings')
+  const out = deriveCurationRange(r.root, 27)
+
+  assert.equal(out.ok, true)
+  assert.equal(out.base, preBase)
+  assert.deepEqual(out.commits.map((row) => row.sha), [move, task, gate])
+  assert.equal(out.published, undefined)
+  assert.equal(out.noop, undefined)
+})
+
+test('27.1 — origin integration progress outranks a stale local integration ref', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-27 file')
+  const move = r.commit('docs(roadmap): phase 27 — move to in-progress')
+  const t1 = r.commit('feat(cli): phase 27 — 27.1 first published task')
+  r.git('branch', 'develop')
+  const t2 = r.commit('test(cli): phase 27 — 27.2 remotely published task')
+  r.git('update-ref', 'refs/remotes/origin/develop', t2)
+  const gate = r.commit('fix(cli): phase 27 gate R0 — lane-only repair')
+  const out = deriveCurationRange(r.root, 27, { integrationRef: 'develop' })
+
+  assert.equal(out.ok, true)
+  assert.equal(out.base, t2, 'origin/develop raises the boundary above stale local develop')
+  assert.deepEqual(out.commits, [{ sha: gate, subject: r.subject(gate), kind: 'gate-fix' }])
+  assert.deepEqual(out.published, [move, t1, t2].map((sha) => ({ sha, subject: r.subject(sha) })))
+})
+
+test('27.1 — divergent local and origin integration boundaries refuse instead of choosing by distance', () => {
+  const r = makeRepo()
+  r.commit('root: seed the tree')
+  r.commit('seed phase-27 file')
+  r.commit('docs(roadmap): phase 27 — move to in-progress')
+  const fork = r.head()
+  const local = r.commit('feat(cli): phase 27 — 27.1 locally published task')
+  r.git('branch', 'develop', local)
+  r.git('checkout', '-q', '-b', 'remote-side', fork)
+  const remote = r.commit('test(cli): phase 27 — 27.2 remotely published task')
+  r.git('update-ref', 'refs/remotes/origin/develop', remote)
+  r.git('checkout', '-q', '-b', 'lane', local)
+  r.git('merge', '--no-ff', '-m', 'fix(cli): phase 27 gate R0 — combine divergent publication tips', remote)
+
+  const out = deriveCurationRange(r.root, 27, { integrationRef: 'develop' })
+
+  assert.equal(out.ok, false)
+  assert.deepEqual(out.foreign, [])
+  assert.match(out.reason, /incomparable published boundaries/)
+})
+
 // ── the tolerant read: the recorded deviant-grammar ranges (phase 16 task 16.3) ───────
 /**
  * TEST-FIRST for classifySubject's D1-D5 tolerance — RED until 16.3 lands, because today

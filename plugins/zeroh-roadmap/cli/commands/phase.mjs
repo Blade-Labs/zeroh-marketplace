@@ -194,17 +194,27 @@ export function runCurate({
   cwd,
   toplevel,
   phaseNum,
+  integrationRef,
   apply = false,
   groupsSpec = null,
   loadPhase = (phaseFile) => bridgeLoadPhase(phaseFile, toplevel),
   out = process.stdout,
   err = process.stderr,
 }) {
-  const range = deriveCurationRange(cwd, phaseNum)
+  const range = deriveCurationRange(cwd, phaseNum, integrationRef ? { integrationRef } : undefined)
   if (!range.ok) {
     err.write(`${range.reason}\n`)
     for (const f of range.foreign) err.write(`  foreign: ${f.sha} ${f.subject}\n`)
     return 2
+  }
+  if (range.published?.length > 0) {
+    out.write(
+      `${range.published.length} commit${range.published.length === 1 ? '' : 's'} already on ${integrationRef} — left out of the curation range\n`,
+    )
+  }
+  if (range.noop) {
+    out.write(`${range.noop}\n`)
+    return 0
   }
 
   let ranges
@@ -523,7 +533,8 @@ function runCurateCli(argv) {
   }
   const apply = argv.includes('--apply')
   const toplevel = gitToplevel(process.cwd())
-  return runCurate({ cwd: toplevel, toplevel, phaseNum: Number(n), apply, groupsSpec })
+  const integrationRef = integrationRefOf(loadConfig(toplevel))
+  return runCurate({ cwd: toplevel, toplevel, phaseNum: Number(n), integrationRef, apply, groupsSpec })
 }
 
 export default async function run(argv) {

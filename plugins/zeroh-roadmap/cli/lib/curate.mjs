@@ -76,8 +76,52 @@ function classifySubject(subject, phaseNum) {
  * with EVERY foreign commit named. The range is base-EXCLUSIVE — whatever sits at or
  * below the derived base is out of scope by construction.
  */
-export function deriveCurationRange(cwd, phaseNum) {
-  const base = derivePhaseStartSha(cwd, phaseNum)
+export function deriveCurationRange(cwd, phaseNum, { integrationRef } = {}) {
+  const phaseBase = derivePhaseStartSha(cwd, phaseNum)
+  let base = phaseBase
+  const isAncestor = (ancestor, descendant) => {
+    try {
+      git(cwd, ['merge-base', '--is-ancestor', ancestor, descendant])
+      return true
+    } catch {
+      return false
+    }
+  }
+  if (integrationRef) {
+    const refs = [integrationRef, `origin/${integrationRef}`]
+    for (const ref of refs) {
+      try {
+        git(cwd, ['rev-parse', '--verify', `${ref}^{commit}`])
+      } catch {
+        continue
+      }
+      const mergeBase = git(cwd, ['merge-base', 'HEAD', ref])
+      // Only a boundary on or above the phase start can remove phase work from the
+      // rewrite range. Compare candidates by ancestry, never by commit counts: after
+      // a merge, two side-branch ancestors of HEAD can have misleading distances.
+      if (!isAncestor(phaseBase, mergeBase)) continue
+      if (isAncestor(base, mergeBase)) {
+        base = mergeBase
+      } else if (!isAncestor(mergeBase, base)) {
+        return {
+          ok: false,
+          reason: `refusing to curate phase ${phaseNum}: ${integrationRef} and origin/${integrationRef} yield incomparable published boundaries ${base.slice(0, 7)} and ${mergeBase.slice(0, 7)}`,
+          foreign: [],
+        }
+      }
+    }
+  }
+
+  let published
+  if (integrationRef && base !== phaseBase) {
+    const out = git(cwd, ['rev-list', '--reverse', '--format=%H%x09%s', `${phaseBase}..${base}`])
+    published = []
+    for (const line of out.split('\n')) {
+      if (!line || line.startsWith('commit ')) continue
+      const tab = line.indexOf('\t')
+      published.push({ sha: line.slice(0, tab), subject: line.slice(tab + 1) })
+    }
+  }
   const out = git(cwd, ['rev-list', '--reverse', '--format=%H%x09%s', `${base}..HEAD`])
   const commits = []
   const foreign = []
@@ -97,7 +141,14 @@ export function deriveCurationRange(cwd, phaseNum) {
       foreign,
     }
   }
-  return { ok: true, base, commits }
+  if (!integrationRef) return { ok: true, base, commits }
+  return {
+    ok: true,
+    base,
+    commits,
+    published: published ?? [],
+    ...(commits.length === 0 ? { noop: `every commit is already on ${integrationRef}` } : {}),
+  }
 }
 
 /**
