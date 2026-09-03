@@ -1,0 +1,401 @@
+<title>Protocol Diet Diff</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F6F7F4; --paper-2:#EEF0EC; --ink:#1C201E; --ink-2:#4A524E; --slate:#69736E; --line:#D7DBD6;
+  --accent:#1D6B60; --accent-soft:#DDEDE9;
+  --del-fg:#8E3324; --del-bg:#F9E7E2; --del-bar:#C9553F;
+  --add-fg:#256B42; --add-bg:#E3F2E7; --add-bar:#3E9A62;
+  --warn-fg:#7A5A12; --warn-bg:#F6ECD2;
+  --ctx:#3A403D; --gutter:#9AA39E;
+  --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141817; --paper-2:#1C2120; --ink:#E4E7E2; --ink-2:#B4BBB6; --slate:#8E9893; --line:#2C3331;
+    --accent:#5FB8A6; --accent-soft:#1E3430;
+    --del-fg:#F0A091; --del-bg:#3A1F1A; --del-bar:#C9553F;
+    --add-fg:#9BD9B1; --add-bg:#1B3325; --add-bar:#3E9A62;
+    --warn-fg:#E4C77A; --warn-bg:#3A3018;
+    --ctx:#C7CDC8; --gutter:#5E6764;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141817; --paper-2:#1C2120; --ink:#E4E7E2; --ink-2:#B4BBB6; --slate:#8E9893; --line:#2C3331;
+  --accent:#5FB8A6; --accent-soft:#1E3430;
+  --del-fg:#F0A091; --del-bg:#3A1F1A; --del-bar:#C9553F;
+  --add-fg:#9BD9B1; --add-bg:#1B3325; --add-bar:#3E9A62;
+  --warn-fg:#E4C77A; --warn-bg:#3A3018;
+  --ctx:#C7CDC8; --gutter:#5E6764;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45}
+header{padding:22px 28px 0;border-bottom:1px solid var(--line)}
+.hrow{display:flex;flex-wrap:wrap;align-items:flex-end;gap:18px 36px}
+h1{font-family:var(--serif);font-weight:500;font-size:26px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--slate);margin:4px 0 0;max-width:64ch}
+.sub code,code{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+.totals{display:flex;gap:28px;margin-left:auto;font-variant-numeric:tabular-nums}
+.tot{display:flex;flex-direction:column;gap:2px}
+.tot .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.tot .v{font-size:20px;font-weight:500}
+.tot .v small{font-size:12px;color:var(--slate);font-weight:400;margin-left:4px}
+.tabs{display:flex;gap:4px;margin-top:16px}
+.tabs button{border:0;background:transparent;font:inherit;font-size:13.5px;color:var(--ink-2);padding:9px 14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent);font-weight:500}
+.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.app{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 140px)}
+.app.norail{grid-template-columns:1fr}
+.app.norail nav{display:none}
+nav{border-right:1px solid var(--line);padding:14px 0;background:var(--paper-2)}
+.grp{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);padding:10px 18px 6px}
+.file{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--ink);cursor:pointer;padding:9px 18px;font:inherit;border-left:3px solid transparent}
+.file:hover{background:var(--paper)}
+.file[aria-current="true"]{background:var(--paper);border-left-color:var(--accent)}
+.file:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.file .n{display:flex;justify-content:space-between;align-items:baseline;font-weight:500}
+.file .d{font-variant-numeric:tabular-nums;font-size:12px;color:var(--slate)}
+.file .d.neg{color:var(--del-fg)} .file .d.pos{color:var(--add-fg)}
+.bar{position:relative;height:6px;margin-top:6px;background:var(--line);border-radius:1px;overflow:hidden}
+.bar .before{position:absolute;inset:0;background:var(--del-bar);opacity:.35}
+.bar .after{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+.bar .grow{position:absolute;left:0;top:0;bottom:0;background:var(--add-bar);opacity:.55}
+main{padding:0;min-width:0}
+.toolbar{position:sticky;top:0;z-index:2;background:var(--paper);border-bottom:1px solid var(--line);padding:12px 22px;display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center}
+.toolbar h2{font-family:var(--mono);font-weight:500;font-size:14px;margin:0;color:var(--ink)}
+.stat{font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:13px}
+.stat b{font-weight:500;color:var(--ink)}
+.stat .rm{color:var(--del-fg)} .stat .ad{color:var(--add-fg)}
+.seg{margin-left:auto;display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;padding:5px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.diff{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+td{padding:0 12px;vertical-align:top;white-space:pre-wrap;word-break:break-word}
+td.g{width:44px;min-width:44px;text-align:right;color:var(--gutter);user-select:none;padding-right:8px;white-space:nowrap;font-size:11px}
+td.s{width:16px;min-width:16px;padding:0 0 0 6px;color:var(--gutter);user-select:none}
+tr.del td{background:var(--del-bg)} tr.del td.t,tr.del td.s{color:var(--del-fg)}
+tr.add td{background:var(--add-bg)} tr.add td.t,tr.add td.s{color:var(--add-fg)}
+tr.ctx td.t{color:var(--ctx)}
+tr.gap td{background:var(--paper-2);color:var(--slate);font-family:var(--sans);font-size:12px;padding:6px 12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+table.sbs td.t{width:50%}
+table.sbs td.l.del{background:var(--del-bg);color:var(--del-fg)}
+table.sbs td.r.add{background:var(--add-bg);color:var(--add-fg)}
+table.sbs td.empty{background:var(--paper-2)}
+table.sbs td.sep{width:1px;min-width:1px;padding:0;background:var(--line)}
+.legend{padding:10px 22px 26px;color:var(--slate);font-size:12.5px;display:flex;gap:18px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+/* prose panes */
+.pane{padding:20px 26px 40px;max-width:1100px}
+.pane h3{font-family:var(--serif);font-weight:500;font-size:19px;margin:28px 0 8px;text-wrap:balance}
+.pane h3:first-child{margin-top:4px}
+.pane p{max-width:72ch;margin:6px 0 10px;color:var(--ink-2)}
+.pane p strong{color:var(--ink);font-weight:500}
+.pane ul{max-width:76ch;color:var(--ink-2);padding-left:20px;margin:6px 0 12px}
+.pane li{margin:4px 0}
+table.data{font-family:var(--sans);font-size:13px;font-variant-numeric:tabular-nums;margin:8px 0 14px}
+table.data th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);font-weight:500;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.data td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:normal;vertical-align:top}
+table.data td.num{text-align:right;white-space:nowrap}
+table.data td.mono{font-family:var(--mono);font-size:12px}
+.wrap{overflow-x:auto}
+.chip{display:inline-block;font-size:11px;font-weight:500;letter-spacing:.03em;padding:1px 7px;border-radius:3px;white-space:nowrap;border:1px solid transparent}
+.chip.keep{background:var(--accent-soft);color:var(--accent)}
+.chip.relocate{background:var(--warn-bg);color:var(--warn-fg)}
+.chip.enforced{background:var(--add-bg);color:var(--add-fg)}
+.chip.obsolete,.chip.reverted{background:var(--del-bg);color:var(--del-fg)}
+.chip.cls{background:transparent;border-color:var(--line);color:var(--ink-2)}
+.score{display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;align-items:center;max-width:720px;margin:8px 0 14px}
+.score .lab{font-size:13px;color:var(--ink-2);white-space:nowrap}
+.score .trk{position:relative;height:12px;background:var(--paper-2);border:1px solid var(--line)}
+.score .fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+.score .fill.opus{background:var(--slate)}
+.score .mark{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--del-bar)}
+.score .val{font-variant-numeric:tabular-nums;font-size:13px;min-width:44px;text-align:right}
+.ceil{display:flex;flex-direction:column;gap:8px;max-width:560px;margin:8px 0 14px}
+.ceil .row{display:grid;grid-template-columns:150px 1fr 90px;gap:12px;align-items:center;font-size:13px}
+.ceil .trk{height:14px;background:var(--paper-2);border:1px solid var(--line);position:relative}
+.ceil .fill{position:absolute;left:0;top:0;bottom:0;background:var(--del-bar);opacity:.5}
+.ceil .fill.now{background:var(--accent);opacity:1}
+.ceil .val{text-align:right;font-variant-numeric:tabular-nums}
+.callout{border-left:3px solid var(--warn-fg);background:var(--warn-bg);padding:10px 14px;max-width:76ch;margin:10px 0 14px;color:var(--ink)}
+.callout p{color:var(--ink);margin:2px 0}
+.counts{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.counts span{font-size:12.5px;color:var(--ink-2)}
+details{margin:8px 0 14px;max-width:1100px}
+summary{cursor:pointer;color:var(--accent);font-weight:500}
+@media (max-width:800px){.app{grid-template-columns:1fr}nav{border-right:0;border-bottom:1px solid var(--line)}.totals{margin-left:0}}
+</style>
+
+<header>
+  <div class="hrow">
+    <div>
+      <h1>Protocol Diet Diff</h1>
+      <p class="sub">Gauntlet 2.0 (phase 26, v0.38.0): what was cut from the model-loaded skill bodies, why each passage was kept or cut, and the evidence that the trimmed protocol executes no worse. Pre-diet <code>c1c4edf</code> against the landed tree <code>189599e</code>.</p>
+    </div>
+    <div class="totals" id="totals"></div>
+  </div>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="t-diff" aria-selected="true">Diff</button>
+    <button role="tab" id="t-map" aria-selected="false">Trim map: why each passage</button>
+    <button role="tab" id="t-eval" aria-selected="false">Evaluation: how we know</button>
+  </div>
+</header>
+
+<div class="app" id="app">
+  <nav id="nav" aria-label="Skill bodies"></nav>
+  <main>
+    <section id="s-diff">
+      <div class="toolbar">
+        <h2 id="fname"></h2>
+        <span class="stat" id="fstat"></span>
+        <div class="seg" role="group" aria-label="View">
+          <button id="v-unified" aria-pressed="true">Unified</button>
+          <button id="v-sbs" aria-pressed="false">Side by side</button>
+          <button id="v-full" aria-pressed="false">Full text</button>
+        </div>
+      </div>
+      <div class="diff" id="diff"></div>
+      <div class="legend">
+        <span><i style="background:var(--del-bar)"></i>removed from the loaded body</span>
+        <span><i style="background:var(--add-bar)"></i>added (concise form, re-cites, restores)</span>
+        <span>Context collapsed to 3 lines around each change in Unified; Full text shows the whole body.</span>
+      </div>
+    </section>
+
+    <section id="s-map" hidden>
+      <div class="toolbar"><h2 id="mname"></h2><span class="stat" id="mstat"></span></div>
+      <div class="pane" id="map"></div>
+    </section>
+
+    <section id="s-eval" hidden>
+      <div class="pane" id="eval"></div>
+    </section>
+  </main>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script id="evaldata" type="application/json">__EVAL__</script>
+<script>
+(function(){
+  var DATA = JSON.parse(document.getElementById('data').textContent);
+  var EV = JSON.parse(document.getElementById('evaldata').textContent);
+  var view = 'unified', current = 0, tab = 'diff';
+  try { var s = localStorage.getItem('pdd-view'); if (s) view = s; } catch(e){}
+  var fmt = function(n){ return n.toLocaleString('en-US'); };
+  var pct = function(a,b){ var d=(b-a)/a*100; return (d>0?'+':'−') + Math.abs(d).toFixed(1) + '%'; };
+  var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var md = function(s){ return esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>'); };
+
+  var tb = DATA.reduce(function(s,d){return s+d.bytesBefore;},0), ta = DATA.reduce(function(s,d){return s+d.bytesAfter;},0);
+  var tr = DATA.reduce(function(s,d){return s+d.removed;},0), tad = DATA.reduce(function(s,d){return s+d.added;},0);
+  document.getElementById('totals').innerHTML =
+    '<div class="tot"><span class="k">Bytes before</span><span class="v">'+fmt(tb)+'</span></div>' +
+    '<div class="tot"><span class="k">Bytes after</span><span class="v">'+fmt(ta)+'<small>'+pct(tb,ta)+'</small></span></div>' +
+    '<div class="tot"><span class="k">Lines</span><span class="v"><span style="color:var(--del-fg)">−'+fmt(tr)+'</span> <span style="color:var(--add-fg)">+'+fmt(tad)+'</span></span></div>';
+
+  var maxB = Math.max.apply(null, DATA.map(function(d){return Math.max(d.bytesBefore,d.bytesAfter);}));
+  var nav = document.getElementById('nav'), lastKind = null;
+  DATA.forEach(function(d,i){
+    if (d.kind !== lastKind){ var g=document.createElement('div'); g.className='grp'; g.textContent = d.kind==='skill'?'Skills':'Agent cards'; nav.appendChild(g); lastKind=d.kind; }
+    var b = document.createElement('button'); b.className='file'; b.setAttribute('aria-current', i===0?'true':'false');
+    var delta = d.bytesAfter - d.bytesBefore, cls = delta<0?'neg':(delta>0?'pos':'');
+    var wb = d.bytesBefore/maxB*100, wa = d.bytesAfter/maxB*100;
+    b.innerHTML = '<div class="n"><span>'+d.name+'</span><span class="d '+cls+'">'+pct(d.bytesBefore,d.bytesAfter)+'</span></div>' +
+      '<div class="bar"><div class="before" style="width:'+wb+'%"></div>' + (delta>0?'<div class="grow" style="width:'+wa+'%"></div>':'') + '<div class="after" style="width:'+Math.min(wa,wb)+'%"></div></div>';
+    b.addEventListener('click', function(){ select(i); });
+    nav.appendChild(b);
+  });
+
+  function row(cls, ln, rn, sign, text){
+    return '<tr class="'+cls+'"><td class="g">'+(ln||'')+'</td><td class="g">'+(rn||'')+'</td><td class="s">'+sign+'</td><td class="t">'+esc(text)+'</td></tr>';
+  }
+  function unified(d, full){
+    var out = [], CTX = 3, ops = d.ops, a = d.a, b = d.b;
+    ops.forEach(function(op, k){
+      var t=op[0], i1=op[1], i2=op[2], j1=op[3], j2=op[4];
+      if (t==='equal'){
+        var n = i2-i1;
+        if (full || n <= CTX*2){ for (var x=0;x<n;x++) out.push(row('ctx', i1+x+1, j1+x+1, ' ', a[i1+x])); }
+        else {
+          var head = k===0?0:CTX, tail = k===ops.length-1?0:CTX;
+          for (var x=0;x<head;x++) out.push(row('ctx', i1+x+1, j1+x+1, ' ', a[i1+x]));
+          var hidden = n-head-tail;
+          if (hidden>0) out.push('<tr class="gap"><td colspan="4">… '+hidden+' unchanged line'+(hidden===1?'':'s')+'</td></tr>');
+          for (var x=n-tail;x<n;x++) out.push(row('ctx', i1+x+1, j1+x+1, ' ', a[i1+x]));
+        }
+      } else {
+        for (var x=i1;x<i2;x++) out.push(row('del', x+1, '', '−', a[x]));
+        for (var y=j1;y<j2;y++) out.push(row('add', '', y+1, '+', b[y]));
+      }
+    });
+    return '<table>'+out.join('')+'</table>';
+  }
+  function sbs(d){
+    var out=[], a=d.a, b=d.b, CTX=3, ops=d.ops;
+    function pair(lc, ln, lt, rc, rn, rt){
+      return '<tr><td class="g">'+(ln||'')+'</td><td class="t l '+lc+'">'+(lt===null?'':esc(lt))+'</td><td class="sep"></td><td class="g">'+(rn||'')+'</td><td class="t r '+rc+'">'+(rt===null?'':esc(rt))+'</td></tr>';
+    }
+    ops.forEach(function(op,k){
+      var t=op[0], i1=op[1], i2=op[2], j1=op[3], j2=op[4];
+      if (t==='equal'){
+        var n=i2-i1, head=k===0?0:CTX, tail=k===ops.length-1?0:CTX;
+        if (n<=CTX*2){ head=n; tail=0; }
+        for (var x=0;x<head;x++) out.push(pair('', i1+x+1, a[i1+x], '', j1+x+1, a[i1+x]));
+        var hidden=n-head-tail;
+        if (hidden>0) out.push('<tr class="gap"><td colspan="5">… '+hidden+' unchanged lines</td></tr>');
+        for (var x=n-tail;x<n;x++) out.push(pair('', i1+x+1, a[i1+x], '', j1+x+1, a[i1+x]));
+      } else {
+        var m = Math.max(i2-i1, j2-j1);
+        for (var x=0;x<m;x++){
+          var li=i1+x, rj=j1+x;
+          out.push(pair(li<i2?'del':'empty', li<i2?li+1:'', li<i2?a[li]:null, rj<j2?'add':'empty', rj<j2?rj+1:'', rj<j2?b[rj]:null));
+        }
+      }
+    });
+    return '<table class="sbs">'+out.join('')+'</table>';
+  }
+
+  function dispClass(s){
+    s = s.toLowerCase();
+    if (s.indexOf('reverted')===0) return 'reverted';
+    if (s.indexOf('relocate')===0) return 'relocate';
+    if (s.indexOf('enforced')===0) return 'enforced';
+    if (s.indexOf('obsolete')===0) return 'obsolete';
+    return 'keep';
+  }
+  function renderMap(d){
+    var rows = EV.trim[d.path.replace('plugins/zeroh-roadmap/','')] || [];
+    document.getElementById('mname').textContent = d.path.replace('plugins/zeroh-roadmap/','');
+    var c = {}; rows.forEach(function(r){ var k=dispClass(r.disp); c[k]=(c[k]||0)+1; });
+    document.getElementById('mstat').innerHTML = rows.length ? rows.length+' passages mapped · '+Object.keys(c).map(function(k){return '<span class="chip '+k+'">'+k+' '+c[k]+'</span>';}).join(' ') : 'not mapped';
+    var host = document.getElementById('map');
+    if (!rows.length){ host.innerHTML = '<p>'+d.name+' was kept whole in Gauntlet 1.0 and was not in the 2.0 map, so it has no rows. The diet did not touch it.</p>'; return; }
+    var h = '<p>One row per paragraph or bullet of the pre-diet body, in source order. <strong>Class</strong> says what kind of knowledge the passage carries; <strong>disposition</strong> says what happened to it and the evidence that justifies it. A <em>keep</em> row stays in the loaded body (possibly in a shorter concise form); <em>relocate</em> moves it to an on-demand reference cited at the firing point; <em>enforced-by-code</em> is valid only with a named command and test path.</p>';
+    h += '<div class="wrap"><table class="data"><tr><th>#</th><th>Passage (opening words)</th><th>Class</th><th>Disposition</th><th>Evidence</th></tr>';
+    rows.forEach(function(r){
+      var k = dispClass(r.disp);
+      h += '<tr><td class="num">'+r.n+'</td><td class="mono">'+md(r.anchor)+'</td><td><span class="chip cls">'+esc(r.cls)+'</span></td><td><span class="chip '+k+'">'+k+'</span>'+(r.disp.length>k.length+2?'<div style="font-size:12px;color:var(--slate);margin-top:3px">'+md(r.disp)+'</div>':'')+'</td><td>'+md(r.ev)+'</td></tr>';
+    });
+    h += '</table></div>';
+    var mine = EV.amend.filter(function(a){ return a.row.toLowerCase().indexOf(d.name.toLowerCase())===0; });
+    if (mine.length){
+      h += '<h3>Architect amendments on this body ('+mine.length+')</h3><p>The map went to the software-architect role (claude-fable-5, one firing over the whole map). It returned PROCEED_WITH_FIX with binding overrides; these apply to this body and win over the generated row.</p>';
+      h += '<div class="wrap"><table class="data"><tr><th>Row</th><th>Class</th><th>Ruling</th><th>Why</th></tr>';
+      mine.forEach(function(a){ h += '<tr><td>'+md(a.row)+'</td><td><span class="chip cls">'+esc(a.cls)+'</span></td><td>'+md(a.disp)+'</td><td>'+md(a.why)+'</td></tr>'; });
+      h += '</table></div>';
+    }
+    host.innerHTML = h;
+  }
+
+  function scoreBars(rows, baseline){
+    var h = '<div class="score">';
+    rows.forEach(function(r){
+      var w = r.score*100, isOpus = /opus/.test(r.driver);
+      h += '<span class="lab">'+esc(r.label)+'</span><div class="trk"><div class="fill'+(isOpus?' opus':'')+'" style="width:'+w+'%"></div>'+(baseline?'<div class="mark" style="left:'+(baseline*100)+'%" title="sol baseline mean"></div>':'')+'</div><span class="val">'+r.score.toFixed(3)+'</span>';
+    });
+    return h+'</div>';
+  }
+  function renderEval(){
+    var host = document.getElementById('eval');
+    var h = '';
+    h += '<h3>The question, and why it is not "which rewrite wins"</h3>';
+    h += '<p>Gauntlet 1.0 (August 2026) already answered the rewrite question for these bodies: every one of them <strong>beat its own rewrite</strong> in blind competitive trials and was kept. Gauntlet 2.0 therefore did not produce competing variations of a skill. It asked a narrower question of each kept original: <strong>which sentences carry weight, and can the rest leave the loaded body without changing how a phase executes?</strong> The test of "better" is not a judged preference between two texts; it is that the trimmed protocol, run end to end on real backlog phases, scores no worse on a mechanical adherence ruler than the untrimmed one did.</p>';
+    h += '<div class="wrap"><table class="data"><tr><th></th><th>Gauntlet 1.0 — 2026-08</th><th>Gauntlet 2.0 — 2026-09</th></tr>' +
+      '<tr><td>Question</td><td>Is a rewrite better than the original?</td><td>Which passages of a kept original are load-bearing?</td></tr>' +
+      '<tr><td>Variations</td><td>Original vs one or more rewrites per skill, anonymised</td><td>One concise form per body; no with/without pair (owner ruling: decide by evidence, test by execution)</td></tr>' +
+      '<tr><td>Judge</td><td>Blind judges ranking deliverables on sealed held-out tasks</td><td><code>roadmap eval adherence</code>: twelve mechanical checks on the phase\'s own records</td></tr>' +
+      '<tr><td>Trial</td><td>Frozen contracts, benchmark suites</td><td>Two real phases × two drivers, executed to a green gate on the trimmed tree</td></tr>' +
+      '<tr><td>Guard</td><td>Losing rewrite discarded</td><td>Restore rule: any check the driver baseline passed but an arm fails restores the passage</td></tr>' +
+      '<tr><td>Ceiling</td><td>none</td><td>Load budget ratchets down to the measured post-diet total</td></tr></table></div>';
+
+    h += '<h3>Gauntlet 1.0 verdicts (the variation trials these bodies already went through)</h3>';
+    h += '<div class="wrap"><table class="data"><tr><th>Outcome</th><th>Skills</th></tr>';
+    EV.g1.forEach(function(v){ h += '<tr><td>'+md(v.outcome)+'</td><td>'+md(v.skills)+'</td></tr>'; });
+    h += '</table></div><p>The six "original kept" bodies plus the four agent cards (never in 1.0) are exactly the 2.0 map. 1.0\'s lesson that ~40% of rewrites that read better were regressions only a trial caught is why 2.0 refused to cut on inspection and refused to skip the execution trial.</p>';
+
+    h += '<h3>How each cut was decided</h3>';
+    h += '<p>Every paragraph of the nine bodies got a class and a disposition with evidence (the Trim map tab, per body). The rule for a cut: <strong>a passage may leave the loaded body only if a named command plus implementation/test path enforces it, or an on-demand reference already holds it and the body cites that reference where it fires.</strong> Anything else is keep. The architect ratified the map with 14 binding amendments, rejecting four generic "enforced by tests" rows and the asserted 15% projection; the cut floor had to be derived in bytes (53,343 B pre-diet manifest → cut floor 8,002 B → projected ≤ 11,336 tokens) and then replaced by measurement.</p>';
+    var tot = {}, n = 0; Object.keys(EV.trim).forEach(function(f){ EV.trim[f].forEach(function(r){ var k=dispClass(r.disp); tot[k]=(tot[k]||0)+1; n++; }); });
+    h += '<div class="counts"><span><strong>'+n+'</strong> passages mapped</span>' + Object.keys(tot).map(function(k){ return '<span class="chip '+k+'">'+k+' '+tot[k]+'</span>'; }).join('') + '</div>';
+    h += '<p>'+Math.round(tot.keep/n*100)+'% keep. The byte saving did not come from deleting rules; it came from rewriting kept paragraphs to their operative core and moving incident narration and branch mechanics to the on-demand ladder.</p>';
+    h += '<details><summary>All 14 architect amendments</summary><div class="wrap"><table class="data"><tr><th>Row</th><th>Class</th><th>Ruling</th><th>Why</th></tr>';
+    EV.amend.forEach(function(a){ h += '<tr><td>'+md(a.row)+'</td><td><span class="chip cls">'+esc(a.cls)+'</span></td><td>'+md(a.disp)+'</td><td>'+md(a.why)+'</td></tr>'; });
+    h += '</table></div></details>';
+
+    h += '<h3>The ruler: adherence baseline before any trim</h3>';
+    h += '<p><code>roadmap eval adherence</code> scores a landed phase from its own records on twelve checks (tripwires ran, one commit per task, six-field transparency reports, gate rounds carry model, rounds carry findings, guard mutation proofs quoted, curation evidence, verify-complete passed, no self-review round, plan verify clauses unchanged, lessons flushed, execution-result roles recorded). Captured on the last ten landed phases before the diet, all gpt-5.6-sol on codex lanes.</p>';
+    var mean = EV.baseline.reduce(function(s,r){return s+r.score;},0)/EV.baseline.length;
+    h += scoreBars(EV.baseline.map(function(r){ return {label:'phase '+r.phase+' · sol', score:r.score, driver:r.driver}; }), mean);
+    h += '<p><strong>Sol baseline mean '+mean.toFixed(3)+'</strong> (n='+EV.baseline.length+', range '+Math.min.apply(null,EV.baseline.map(function(r){return r.score;})).toFixed(3)+'–'+Math.max.apply(null,EV.baseline.map(function(r){return r.score;})).toFixed(3)+'). No claude-opus-5 phase existed in the slice; its baseline is recorded as absent, not invented.</p>';
+
+    h += '<h3>The execution trial: two phases × two drivers on the trimmed tree</h3>';
+    h += '<p>Protocol fixed before any run. Phases 27 (curate range safety) and 7 (measured Graft spike) — both reviewed READY — each executed once by claude-opus-5 (headless phase-executor in an isolated worktree) and once by gpt-5.6-sol (codex lane), all four arms from one base on the trimmed tree. First green arm per phase is landed; the loser is scored and discarded. The red line is the sol baseline mean.</p>';
+    h += scoreBars(EV.trial.map(function(r){ return {label:'phase '+r.phase+' · '+(/opus/.test(r.driver)?'opus 5':'sol'), score:r.score, driver:r.driver}; }), mean);
+    h += '<div class="wrap"><table class="data"><tr><th>Phase</th><th>Driver</th><th>Adherence</th><th>Failed checks</th><th>Gate rounds</th><th>Findings</th><th>Min / task</th></tr>';
+    EV.trial.forEach(function(r){ h += '<tr><td class="num">'+r.phase+'</td><td>'+esc(r.driver)+'</td><td class="num">'+r.score.toFixed(3)+'</td><td class="mono">'+esc(r.failed)+'</td><td class="num">'+r.rounds+'</td><td>'+md(r.findings)+'</td><td class="num">'+r.minPerTask.toFixed(1)+'</td></tr>'; });
+    h += '</table></div>';
+    h += '<ul><li><strong>Both sol arms (0.667) beat the sol baseline (0.542)</strong> on the trimmed protocol: the diet did not degrade adherence for the driver that has a baseline.</li>' +
+      '<li>Opus arms scored 0.583 and 0.750, reported without a comparison.</li>' +
+      '<li>Sol closed every gate in 2 rounds; opus took 6 on both phases and surfaced more typed findings. That is a driver difference, not a diet effect, and it is why the round cap (phase 25) and its enforcement (phase 28) exist.</li>' +
+      '<li>Winners landed: phase 27 → sol arm, phase 7 → opus arm. Losers kept as branches <code>trial/27-opus</code> and <code>codex/7</code>.</li></ul>';
+
+    h += '<h3>What the trial caught: the restore rule fired once</h3>';
+    h += '<p>The first arm (27 / opus) finished its tasks and then its mechanical gate exposed three regressions in untouched tests. The architect classified all three as keep-marked passages cut contrary to the ratified map. They were restored (commit <code>fbfb5d9</code>) before any other arm launched, each with a ledger row naming the gate run that caught it.</p>';
+    h += '<div class="wrap"><table class="data"><tr><th>Passage</th><th>Disposition</th><th>Evidence</th></tr>';
+    EV.restores.slice(0,3).forEach(function(r){ h += '<tr><td>'+md(r.passage)+'</td><td><span class="chip reverted">reverted-with-evidence</span></td><td>'+md(r.ev)+'</td></tr>'; });
+    h += '</table></div><p>This is Gauntlet 1.0\'s central lesson reproduced under a different method: a trim that read clean and passed the map was still a regression that only execution found.</p>';
+
+    h += '<h3>The ceiling</h3>';
+    h += '<p>Loaded bytes on the do-arc path (the always-loaded orchestration flow), measured by <code>roadmap measure</code>. The enforced budget moved to the exact post-trial total, so any prose growth on that path now reds the guard.</p>';
+    h += '<div class="ceil"><div class="row"><span>before diet</span><div class="trk"><div class="fill" style="width:100%"></div></div><span class="val">13,339 tok</span></div>' +
+      '<div class="row"><span>after diet + restores</span><div class="trk"><div class="fill now" style="width:'+(11065/13339*100)+'%"></div></div><span class="val">11,065 tok</span></div></div>' +
+      '<p>−17.1% on do-arc; do-phase 3,694 tokens; plan-arc 17,057 tokens (both measured, not budgeted).</p>';
+
+    h += '<h3>What this evidence does not say</h3>';
+    h += '<div class="callout"><p><strong>The scores are under-estimates, uniformly.</strong> Three of the twelve checks read gate reports and executor beacons that live only in the lane worktree, which landing deletes, so every codex-lane phase failed them by construction; a fourth read task subjects that curation squashes. The ranking holds because the blind spot hit every arm the same way; the absolute numbers do not. Phase 28 (v0.39.0) fixed retention; re-baseline before the next diet.</p></div>';
+    h += '<ul><li><strong>No competing variations in 2.0.</strong> Each body has one concise form. The owner ruled out a with/without pair; the map plus the execution trial is the evidence. If a future diet wants variants, 1.0\'s blind-trial kit is the method.</li>' +
+      '<li><strong>First green wins, not best score.</strong> The landed arm per phase was the first to reach a green gate; adherence was recorded for all four but did not pick the winner.</li>' +
+      '<li><strong>n = 4 arms.</strong> Enough to catch a regression (it did) and to show sol did not drop below its baseline; not enough to rank drivers.</li>' +
+      '<li><strong>Phase 26\'s own gate ran 11 rounds against a cap of 5</strong> because one reference sentence said rounds stay uncapped. Fixed in prose (<code>595d853</code>) and by mechanism in phase 28.</li></ul>';
+    host.innerHTML = h;
+  }
+
+  function select(i){
+    current=i;
+    Array.prototype.forEach.call(nav.querySelectorAll('.file'), function(el,k){ el.setAttribute('aria-current', k===i?'true':'false'); });
+    var d=DATA[i];
+    document.getElementById('fname').textContent = d.path.replace('plugins/zeroh-roadmap/','');
+    document.getElementById('fstat').innerHTML = '<b>'+fmt(d.bytesBefore)+'</b> → <b>'+fmt(d.bytesAfter)+'</b> B · '+d.linesBefore+' → '+d.linesAfter+' lines · <span class="rm">−'+d.removed+'</span> <span class="ad">+'+d.added+'</span>';
+    var host=document.getElementById('diff');
+    if (d.removed===0 && d.added===0){ host.innerHTML='<p style="padding:22px;color:var(--slate)">Unchanged by the diet — kept in Gauntlet 1.0, not mapped in 2.0.</p>'; }
+    else host.innerHTML = view==='sbs' ? sbs(d) : unified(d, view==='full');
+    renderMap(d);
+  }
+  function setView(v){
+    view=v; try{ localStorage.setItem('pdd-view', v); }catch(e){}
+    ['unified','sbs','full'].forEach(function(k){ document.getElementById('v-'+k).setAttribute('aria-pressed', k===v?'true':'false'); });
+    select(current);
+  }
+  function setTab(t){
+    tab=t;
+    ['diff','map','eval'].forEach(function(k){
+      document.getElementById('t-'+k).setAttribute('aria-selected', k===t?'true':'false');
+      document.getElementById('s-'+k).hidden = k!==t;
+    });
+    document.getElementById('app').className = 'app' + (t==='eval'?' norail':'');
+    window.scrollTo(0,0);
+  }
+  document.getElementById('v-unified').addEventListener('click', function(){ setView('unified'); });
+  document.getElementById('v-sbs').addEventListener('click', function(){ setView('sbs'); });
+  document.getElementById('v-full').addEventListener('click', function(){ setView('full'); });
+  document.getElementById('t-diff').addEventListener('click', function(){ setTab('diff'); });
+  document.getElementById('t-map').addEventListener('click', function(){ setTab('map'); });
+  document.getElementById('t-eval').addEventListener('click', function(){ setTab('eval'); });
+  renderEval();
+  setView(view);
+})();
+</script>

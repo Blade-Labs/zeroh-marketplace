@@ -229,6 +229,10 @@ halt (the trial's restore), gate 11 rounds (see lesson 6). Wall clock 2026-09-02
 
 ## Re-run kit
 
+- **Visual report:** `GAUNTLET-2.0.html` (self-contained; open in a browser) — the per-body
+  before/after diff, the per-passage trim map with dispositions and architect rulings, and the
+  evaluation evidence (baseline, trial, restores, ceiling, caveats). Rebuild from the repo with
+  `python3 scripts/gauntlet-2.0/build.py` (diffs `c1c4edf` → `189599e`; reads the DIET-* records).
 - Map grammar and evidence rule: `DIET-PLAN-2026-09.md` §Evidence rule; ledger row grammar:
   `DIET-LEDGER.md`.
 - Scorer: `roadmap eval adherence <N> --json`; baseline: `--since <date>` (re-baseline after
