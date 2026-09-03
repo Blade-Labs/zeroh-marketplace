@@ -21,7 +21,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 7,
   name: 'Graft measured trial — integration, footprint proof, before/after instrument',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'claude-fable-5' },
   category: 'spike',
   kind: 'logic',
