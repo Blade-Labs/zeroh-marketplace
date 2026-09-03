@@ -42,6 +42,31 @@
 import { defineBacklog } from '@/lib/roadmap/schema'
 
 export default defineBacklog([
+  // ── GREENFIELD arc tier (phases 29, 30, 31, 32, 33, 34 — exact claimed numbers; queued 2026-09-03 after all 6 plan reviews returned CLEAN; HIGH, ahead of the deferred LOW phase 12) ──
+  {
+    phase: 29,
+    name: 'zeroh-greenfield skeleton, initialization interview, and consumer templates',
+  },
+  {
+    phase: 30,
+    name: 'Stack decisions, ADR templates, and design-system bindings for zeroh-greenfield',
+  },
+  {
+    phase: 31,
+    name: 'Six source-checked archetype manifests for greenfield-init',
+  },
+  {
+    phase: 32,
+    name: 'Author standards once, enforce README catalog currency, and wire roadmap-native pointers',
+  },
+  {
+    phase: 33,
+    name: 'Brownfield gap audit, harness and README reconciliation, and zeroh-shaped oracle fixture',
+  },
+  {
+    phase: 34,
+    name: 'GREENFIELD keystone: missing-home remedy, packaging, skill grades, and dry-run evidence',
+  },
   // ── MINESWEEP arc tier (phases 14, 15, 16, 17, 18, 19, 20 — exact claimed numbers; queued 2026-08-31 after all 7 plan reviews returned READY) ──
   // ── DEFERRED (standing user hold 2026-08-26): do NOT execute until the user asks ──
   {
