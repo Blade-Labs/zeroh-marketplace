@@ -60,8 +60,10 @@ For each NEW guard in the diff:
   choice, and confirm it matches the quote. A quote that does not reproduce is a finding about the
   guard AND about the report.
 
-Rounds stay uncapped: round 1 keeps finding real product bugs, and this protocol buys its latency
-back by moving guard-debugging into the build window, not by cutting review short.
+This protocol does NOT lift the correctness loop's round cap: `roadmap gate round-brief <N>`
+rules continue / close / clean / cap for every round, guard repairs included (phase 26's gate
+read the previous wording as "uncapped" and ran 11 rounds). It buys its latency back by moving
+guard-debugging into the build window, not by cutting review short.
 
 ## Provenance
 
