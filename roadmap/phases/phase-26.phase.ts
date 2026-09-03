@@ -63,58 +63,58 @@ export default definePhase({
     {
       round: 1, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Closed two HIGH evidence-validation gaps and restored the reviewer severity rubric.',
       findings: [
-        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 98, description: 'Mutation proof accepted generic gate-note boilerplate instead of task transparency evidence.', fixedInCommit: '2cb6190' },
-        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 97, description: 'Verify-clause stability inspected only uncommitted changes.', fixedInCommit: '2cb6190' },
-        { file: 'plugins/zeroh-roadmap/agents/code-reviewer.md', severity: 'MEDIUM', confidence: 100, description: 'The reviewer card referenced a nonexistent severity rubric.', fixedInCommit: '2cb6190' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 98, description: 'Mutation proof accepted generic gate-note boilerplate instead of task transparency evidence.', fixedInCommit: '1e552f3' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 97, description: 'Verify-clause stability inspected only uncommitted changes.', fixedInCommit: '1e552f3' },
+        { file: 'plugins/zeroh-roadmap/agents/code-reviewer.md', severity: 'MEDIUM', confidence: 100, description: 'The reviewer card referenced a nonexistent severity rubric.', fixedInCommit: '1e552f3' },
       ],
     },
     {
       round: 2, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Bound proof matching to each applicable task and verify exceptions to exact changed clauses.',
       findings: [
-        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 96, description: 'One loosely matching task proof could cover all new guards and restore counted as a decoy.', fixedInCommit: '2cb6190' },
-        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 94, description: 'Unrelated limitation prose could excuse committed verify-clause rewrites.', fixedInCommit: '2cb6190' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 96, description: 'One loosely matching task proof could cover all new guards and restore counted as a decoy.', fixedInCommit: '1e552f3' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 94, description: 'Unrelated limitation prose could excuse committed verify-clause rewrites.', fixedInCommit: '1e552f3' },
       ],
     },
     {
       round: 3, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Replaced speculative syntax-token guard detection with explicit per-task applicability.',
       findings: [
-        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 98, description: 'Two syntax tokens could not identify every conformance guard and allowed a vacuous pass.', fixedInCommit: '2cb6190' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 98, description: 'Two syntax tokens could not identify every conformance guard and allowed a vacuous pass.', fixedInCommit: '1e552f3' },
       ],
     },
     { round: 4, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Independent closure found no remaining actionable correctness issue.' },
     {
       round: 5, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Closed the consumer schema seam and completed idempotence and refusal-path coverage.',
       findings: [
-        { file: 'lib/roadmap/schema.ts', severity: 'HIGH', confidence: 100, description: 'The consumer schema still stripped structured gate-round model attribution.', fixedInCommit: 'cb43e37' },
-        { file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs', severity: 'MEDIUM', confidence: 100, description: 'Completion-note tests lacked idempotence and consistency and attribution refusal assertions.', fixedInCommit: 'cb43e37' },
+        { file: 'lib/roadmap/schema.ts', severity: 'HIGH', confidence: 100, description: 'The consumer schema still stripped structured gate-round model attribution.', fixedInCommit: '1e552f3' },
+        { file: 'plugins/zeroh-roadmap/cli/commands/gate.test.mjs', severity: 'MEDIUM', confidence: 100, description: 'Completion-note tests lacked idempotence and consistency and attribution refusal assertions.', fixedInCommit: '1e552f3' },
       ],
     },
     { round: 6, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Independent closure verified both schema homes and completion-note refusal paths; no actionable findings.' },
     {
       round: 7, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Corrected queue lookup to use the newest global queue commit rather than a path-limited first-add fallback.',
       findings: [
-        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 100, description: 'Real queue commits touch backlog.ts, so path-limited oldest-first lookup missed the queue baseline.', fixedInCommit: '40fe5e5' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 100, description: 'Real queue commits touch backlog.ts, so path-limited oldest-first lookup missed the queue baseline.', fixedInCommit: '1e552f3' },
       ],
     },
     {
       round: 8, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'findings-fixed', summary: 'Made queue-subject matching phase-exact and added a numeric-collision regression.',
       findings: [
-        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 99, description: 'Fixed-string queue lookup matched phase 7 against newer phase 70 queues.', fixedInCommit: '179ca48' },
+        { file: 'plugins/zeroh-roadmap/cli/lib/adherence.mjs', severity: 'HIGH', confidence: 99, description: 'Fixed-string queue lookup matched phase 7 against newer phase 70 queues.', fixedInCommit: '1e552f3' },
       ],
     },
     { round: 9, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Independent closure verified exact newest queue matching and collision coverage; no actionable findings.' },
     { round: 10, agent: 'code-reviewer', model: 'gpt-5.6-sol', verdict: 'clean', findings: [], summary: 'Independent closure verified clause-specific fingerprints and phase adherence score 1; no actionable findings.' },
   ],
   metrics: {
-    commits: 16,
-    linesAdded: 1250,
-    linesRemoved: 516,
-    filesChanged: 31,
+    commits: 9,
+    linesAdded: 1454,
+    linesRemoved: 510,
+    filesChanged: 32,
     testsAtStart: 1838,
     testsAtEnd: 1863,
     testsAdded: 25,
     startedAt: '2026-09-02T23:04:32Z',
-    completedAt: '2026-09-03T07:39:37Z',
+    completedAt: '2026-09-03T08:07:45Z',
     haltCount: 1,
   },
   compromises: 'None',
