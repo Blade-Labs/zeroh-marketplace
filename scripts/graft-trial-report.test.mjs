@@ -236,6 +236,29 @@ test('a repeated option is refused rather than honouring one occurrence', (t) =>
   assert.equal(main(['--cut', '25', '--exclude', '7,26', '--root', root]), 0, 'the single comma-separated form is the supported one')
 })
 
+test('a stray or misspelled argument is refused, never silently dropped', (t) => {
+  const { root, evalDir } = fixture(t)
+  for (let i = 0; i < SCORECARD_N_FLOOR; i += 1) writeRecord(evalDir, record(11 + i))
+  writeRecord(evalDir, record(7))
+
+  // `--exlude` once parsed as nothing at all: exit 0, phase 7 back in the aggregate.
+  assert.equal(main(['--cut', '25', '--exlude', '7', '--root', root]), 2, 'a misspelled flag is not silence')
+  assert.equal(main(['--cut', '25', '--root', root, 'extra']), 2, 'a stray positional is not silence')
+  assert.equal(main(['--cut', '25', '--exclude', '7', '--root', root]), 0)
+})
+
+test('a non-positive cut is refused — phase ids are positive by contract', (t) => {
+  const { root, evalDir } = fixture(t)
+  writeRecord(evalDir, record(7))
+
+  // `--cut -1` labelled the entire corpus treatment and exited 0.
+  for (const bad of ['-1', '0', '2.5']) {
+    assert.equal(main(['--cut', bad, '--root', root]), 2, `--cut ${bad} must be a usage error`)
+  }
+  assert.throws(() => buildTrialReport(root, { cut: 0 }), /--cut must be a positive integer/)
+  assert.throws(() => buildTrialReport(root, { cut: 25, exclude: [-3] }), /--exclude takes positive integer/)
+})
+
 test('the exclusion note reports what was DROPPED, never merely what was asked for', (t) => {
   const { root, evalDir } = fixture(t)
   writeRecord(evalDir, record(7))
@@ -259,7 +282,7 @@ test('a non-integer exclusion is refused rather than silently ignored', (t) => {
 
   assert.throws(
     () => buildTrialReport(root, { cut: 25, exclude: ['7'] }),
-    /--exclude takes integer phase numbers/,
+    /--exclude takes positive integer phase numbers/,
     'a string phase id would silently match nothing and quietly re-contaminate the arm',
   )
 })

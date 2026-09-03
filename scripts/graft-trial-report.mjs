@@ -64,12 +64,15 @@ function readGatesByPhase(evalDir) {
  * @throws {Error} naming every offending file, on any unreadable or invalid record.
  */
 export function buildTrialReport(repoRoot, { cut, exclude = [] }) {
-  if (!Number.isInteger(cut)) {
-    throw new Error(`graft-trial-report: --cut must be an integer phase number, got ${cut}`)
+  // Phase ids are positive by contract (PhaseEvalRecordShape.phase is .positive()), so a
+  // non-positive cut cannot describe a real boundary — it would silently label the whole
+  // corpus one arm.
+  if (!Number.isInteger(cut) || cut <= 0) {
+    throw new Error(`graft-trial-report: --cut must be a positive integer phase number, got ${cut}`)
   }
   for (const p of exclude) {
-    if (!Number.isInteger(p)) {
-      throw new Error(`graft-trial-report: --exclude takes integer phase numbers, got ${p}`)
+    if (!Number.isInteger(p) || p <= 0) {
+      throw new Error(`graft-trial-report: --exclude takes positive integer phase numbers, got ${p}`)
     }
   }
   const excluded = new Set(exclude)
@@ -179,6 +182,25 @@ export function formatTrialReport(report) {
 
 const USAGE = 'usage: graft-trial-report.mjs --cut <phaseNumber> [--exclude <n,n>] [--root <path>]'
 
+const KNOWN_FLAGS = ['--cut', '--exclude', '--root']
+
+/**
+ * Every token must belong to a recognised flag/value pair. Without this a typo
+ * (`--exlude 7,26`) is silently dropped and the run prints the contaminated aggregate
+ * under a command line that reads as though it asked for a clean one — the fail-open
+ * class this CLI has now produced three times.
+ */
+function strayTokens(argv) {
+  const consumed = new Set()
+  argv.forEach((a, i) => {
+    if (KNOWN_FLAGS.includes(a)) {
+      consumed.add(i)
+      consumed.add(i + 1)
+    }
+  })
+  return argv.filter((_, i) => !consumed.has(i))
+}
+
 /**
  * One occurrence per flag, and its value is never flag-shaped. `--exclude 7 --exclude 26`
  * reads as asking for both, but a first-match lookup honours only one — the same fail-open
@@ -201,6 +223,14 @@ function flagValue(argv, flag) {
 
 /** CLI entry: `--cut <phaseNumber>` (required), `--exclude <n,n>` and `--root <path>`. */
 export function main(argv) {
+  const stray = strayTokens(argv)
+  if (stray.length > 0) {
+    process.stderr.write(
+      `graft-trial-report: unrecognised argument(s) ${stray.map((t) => JSON.stringify(t)).join(', ')}\n${USAGE}\n`,
+    )
+    return 2
+  }
+
   const read = { cut: flagValue(argv, '--cut'), root: flagValue(argv, '--root'), exclude: flagValue(argv, '--exclude') }
   for (const r of Object.values(read)) {
     if (r.error) {
@@ -210,6 +240,13 @@ export function main(argv) {
   }
   if (read.cut.absent) {
     process.stderr.write(`${USAGE}\n`)
+    return 2
+  }
+  const cut = Number(read.cut.value)
+  if (!Number.isInteger(cut) || cut <= 0) {
+    process.stderr.write(
+      `graft-trial-report: --cut must be a positive integer phase number, got ${JSON.stringify(read.cut.value)}\n${USAGE}\n`,
+    )
     return 2
   }
 
@@ -229,7 +266,7 @@ export function main(argv) {
   }
 
   const root = read.root.absent ? process.cwd() : read.root.value
-  process.stdout.write(`${formatTrialReport(buildTrialReport(root, { cut: Number(read.cut.value), exclude }))}\n`)
+  process.stdout.write(`${formatTrialReport(buildTrialReport(root, { cut, exclude }))}\n`)
   return 0
 }
 

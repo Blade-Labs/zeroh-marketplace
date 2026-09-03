@@ -78,17 +78,20 @@ hotspots, straight from the wiring graph.
   or ask your way through every subsystem it lists. `--max-dirs N` widens it.
 
 ### 6 · Lifecycle: `graft build` / `graft check`
-Every tool above refreshes the graph itself before answering, so what those tools
-return always describes the code as it is right now — including edits you just made
-and have not committed. You do **not** need to run `build` after editing.
+**This repo runs with `GRAFT_NO_REFRESH=1`** (see the host rule at the top), so the
+paragraph graft ships here — that every tool refreshes the graph before answering and
+you never need to build after editing — is **NOT true on this box**. Stock graft would
+spawn an uncapped ~485 MB rebuild from a query or a turn-end hook, which a shared
+31 GB machine running ~6 sessions cannot absorb.
 
-One caveat, if you `grep` the markdown under `graft/` directly: those cards are a
-projection, rebuilt at the end of the turn rather than on each query, so after an edit
-they can lag. The tools above never do — prefer them, and treat a card's spans as
-stale if you have edited that file this turn.
+What actually holds here:
 
-`build` is for the LLM layer (`--deep` adds a concept map; skip unless asked);
-`check` fails when `graft/` is stale, for CI.
+- Every answer comes from the **last explicit build**. Nothing rebuilds implicitly.
+- After editing, the graph is stale until someone rebuilds. Treat any span for a file
+  you have edited this session as stale — that applies to the tools above, not just to
+  the markdown cards under `graft/`.
+- `graft check` tells you whether `graft/` is stale. Use it when accuracy matters.
+- Rebuild ONLY as `capbuild npx graft build .` — never bare, never `--deep`.
 
 ## Scenarios: the shortest path through a coding task
 
@@ -123,7 +126,7 @@ you already know where you're working, narrow with `graft ask "<task>" --in <sco
   fell short: weak hits, a truncated span, or a need to be exhaustive.
 - If graft names a path that isn't on disk, its index is ahead of your checkout
   (a branch switch or unpulled move). Don't read the missing file — `graft grep`
-  the symbol to find where it lives now, or run `graft build` to refresh.
+  the symbol to find where it lives now, or run `capbuild npx graft build .` to refresh.
 
 ## Report what graft saved, every turn
 Each retrieval tool **opens** its output with a `[graft] tokens saved ≈ N` line:
