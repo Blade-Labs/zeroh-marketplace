@@ -19,7 +19,7 @@ export default definePhase({
   category: 'feature',
   kind: 'logic',
   source:
-    'GREENFIELD arc plane `archetypes`; roadmap/arc-prompts/GREENFIELD-execution-prompt.md §Design items 3–4 and §Research digest; .building/greenfield-briefs/31.md; user ruling 2026-09-03 that v1 ships all six archetypes.',
+    'GREENFIELD arc plane `archetypes`; roadmap/arc-prompts/GREENFIELD-execution-prompt.md §Design items 3–4 and §Research digest; user ruling 2026-09-03 that v1 ships all six archetypes.',
   priority: 'HIGH',
   dependsOn: [29, 30],
   conflictsWith: [],
@@ -85,14 +85,14 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md',
           description:
-            'Assert six complete evidence rows. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),a=[\'web\',\'android\',\'flutter\',\'expo\',\'nx-monorepo\',\'library-cli\'],r=s.split(/\\r?\\n/).filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]&&!/archetype/i.test(x[0])&&!/^[-:]+$/.test(x[0]));if(r.length!==6)process.exit(1);for(const n of a){const z=r.filter(x=>x[0]===n);if(z.length!==1||z[0].length!==6||!/^2026-09-03$/.test(z[0][1])||!/(npx|flutter|gradle)/.test(z[0][2])||!/(test|node|bash|gradlew)/.test(z[0][3])||!/(exit 0|generator absent —)/.test(z[0][4])||!z[0][5])process.exit(1)}"',
+            'Run web.md\'s Verify in a scratch directory; create the five-column evidence table and write only the web row. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),l=s.split(/\\r?\\n/),h=\'| archetype | date | command | observed | box |\',q=l.filter(x=>x===h),r=l.filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]!==\'archetype\'&&!/^[-:]+$/.test(x[0]));if(q.length!==1||r.length!==1||r[0].length!==5||r[0][0]!==\'web\'||!/^2026-09-03$/.test(r[0][1])||!r[0][2]||r[0][3]!==\'exit 0\'||!r[0][4])process.exit(1)"',
         },
       ],
       acceptanceCriteria: [
         'The README and web manifest each contain the seven required headings exactly once and in contract order; `web.md` cites `references/design-system.md` rather than copying its token contract.',
         '`web.md` cites create-next-app with a caret range and its Verify checks package.json, src/app/page.tsx and src/app/globals.css; the dated evidence row records the generator and Verify exit 0.',
         '`web.md` names the official Next.js and shadcn sources, Tailwind v4 CSS-first output, a concrete namespaced registry mapping, Playwright test convention, and the Flag-first delivery citation for generated consumer conventions.',
-        '`VERIFY-RECORD-2026-09.md` has exactly one archetype row for each of the six manifests, with date, commands, observed result or absent-generator remedy, and box.',
+        '`VERIFY-RECORD-2026-09.md` has the exact archetype/date/command/observed/box header and exactly one five-cell data row, for web, with date, non-empty command and box, and observed `exit 0`.',
       ],
       files: [
         'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/README.md',
@@ -122,13 +122,18 @@ export default definePhase({
           description:
             'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*gradle\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
+        {
+          file: 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md',
+          description:
+            'Run this manifest\'s Verify in a scratch directory and append its android row to VERIFY-RECORD-2026-09.md. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),r=s.split(/\\r?\\n/).filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]===\'android\');if(r.length!==1||r[0].length!==5||!/^2026-09-03$/.test(r[0][1])||!r[0][2]||!(r[0][3]===\'exit 0\'||/^generator absent — \\S/.test(r[0][3]))||!r[0][4])process.exit(1)"',
+        },
       ],
       acceptanceCriteria: [
         '`android.md` contains the seven headings in contract order and cites Android Developers for Kotlin-only Compose setup, Gradle KTS, Material 3, and API-level compatibility; minSdk 23 is explicitly this archetype’s selected floor, not a claimed AndroidX default.',
         'Its Verify checks executable `./gradlew` plus app/build.gradle.kts and app/src/main/AndroidManifest.xml; the Android evidence row records the absent generator and an install command.',
         'The conventions delta and literal testConventions distinguish local JUnit (`./gradlew test`) from device Compose tests (`./gradlew connectedAndroidTest`).',
       ],
-      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md'],
+      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md', 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md'],
       testMode: 'none',
       done: false,
       dependsOn: ['31.1'],
@@ -150,13 +155,18 @@ export default definePhase({
           description:
             'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*flutter\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
+        {
+          file: 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md',
+          description:
+            'Run this manifest\'s Verify in a scratch directory and append its flutter row to VERIFY-RECORD-2026-09.md. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),r=s.split(/\\r?\\n/).filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]===\'flutter\');if(r.length!==1||r[0].length!==5||!/^2026-09-03$/.test(r[0][1])||!r[0][2]||!(r[0][3]===\'exit 0\'||/^generator absent — \\S/.test(r[0][3]))||!r[0][4])process.exit(1)"',
+        },
       ],
       acceptanceCriteria: [
         '`flutter.md` contains all seven headings in order, cites the official Flutter create command and pub.dev `shadcn_flutter: ^0.0.54`, and cites rather than restates phase 30’s token contract.',
         'Its Verify checks pubspec.yaml, lib/main.dart, and test/widget_test.dart; the Flutter evidence row records the absent generator with the official SDK install remedy.',
         'The literal testConventions value is `flutter test`, and designHomes bind both architecture and UX homes produced by greenfield-init.',
       ],
-      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md'],
+      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md', 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md'],
       testMode: 'none',
       done: false,
       dependsOn: ['31.1'],
@@ -178,13 +188,18 @@ export default definePhase({
           description:
             'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*npx\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
+        {
+          file: 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md',
+          description:
+            'Run this manifest\'s Verify in a scratch directory and append its expo row to VERIFY-RECORD-2026-09.md. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),r=s.split(/\\r?\\n/).filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]===\'expo\');if(r.length!==1||r[0].length!==5||!/^2026-09-03$/.test(r[0][1])||!r[0][2]||r[0][3]!==\'exit 0\'||!r[0][4])process.exit(1)"',
+        },
       ],
       acceptanceCriteria: [
         '`expo.md` contains the seven headings in contract order and cites the official Expo SDK 57 generator and React Native Reusables CLI rather than the nonexistent unscoped npm package.',
         'Its Verify checks package.json, app.json, and the generated app directory; the evidence row records successful create-expo-app scratch generation and the manifest Verify exit 0.',
         'Shared token work is a citation to phase 30’s design-system reference; the manifest does not create a second token owner.',
       ],
-      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md'],
+      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md', 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md'],
       testMode: 'none',
       done: false,
       dependsOn: ['31.1'],
@@ -211,13 +226,18 @@ export default definePhase({
           description:
             'Add both language options, five exclusions, and Verify paths including absent libs/. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md\',\'utf8\'),a=[\'TypeScript + Python (uv)\',\'Not generalized from zeroh\',\'CODEOWNERS\',\'tsdown\',\'three test runners\',\'radix-nova\',\'.building/\',\'nx.json\',\'package.json\',\'tsconfig.base.json\',\'packages/\',\'libs/\'];if(!a.every(x=>s.includes(x))||!/libs[^\\n]*(absent|not exist)|! -e libs/.test(s))process.exit(1)"',
         },
+        {
+          file: 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md',
+          description:
+            'Run this manifest\'s Verify in a scratch directory and append its nx-monorepo row to VERIFY-RECORD-2026-09.md. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),r=s.split(/\\r?\\n/).filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]===\'nx-monorepo\');if(r.length!==1||r[0].length!==5||!/^2026-09-03$/.test(r[0][1])||!r[0][2]||r[0][3]!==\'exit 0\'||!r[0][4])process.exit(1)"',
+        },
       ],
       acceptanceCriteria: [
         '`nx-monorepo.md` contains all seven headings in contract order, uses a caret Nx range, and Verify requires nx.json, package.json, tsconfig.base.json and packages/ present with libs/ absent; the evidence row records its green scratch run.',
         'The manifest maps each prior-art seam to a concrete output: five tag axes + depConstraints, first-party generators.json, emitted/repo-catalog.json shape consumed by the README check, no base paths + Nx-synced solution tsconfig, affected four-target gate, and nx:noop.',
         'The TypeScript/Python choice is an option row inside this manifest, and all five zeroh-local exclusions are explicit.',
       ],
-      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md'],
+      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md', 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md'],
       testMode: 'none',
       done: false,
       dependsOn: ['31.1'],
@@ -239,13 +259,19 @@ export default definePhase({
           description:
             'Shape. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md\')+\'\',h=\'Generator|Post-steps|File tree|Conventions delta|testConventions|designHomes|Verify\',m=[...s.matchAll(/^## (.+)$/gm)],b=n=>s.slice(m[n].index,m[n+1]?.index),f=x=>[...x.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)],t=f(b(2)),v=f(b(6));if(m.map(x=>x[1]).join(\'|\')!==h||!/```[^\\n]*\\n\\s*npx\\b/.test(b(0))||!(t[0]?.[1].trim().split(\'\\n\').length>=5)||(b(4).match(/`[^`]+`|\"[^\"]+\"/g)||[]).length<2||!b(5).includes(\'designHomes.ux.canon\')||v.length!==1||/\\n/.test(v[0][1].trim())||/observed:|20\\d\\d-\\d\\d-\\d\\d/.test(b(6)))throw 0"',
         },
+        {
+          file: 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md',
+          description:
+            'Run this manifest\'s Verify in a scratch directory and append its library-cli row to VERIFY-RECORD-2026-09.md. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),r=s.split(/\\r?\\n/).filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]===\'library-cli\');if(r.length!==1||r[0].length!==5||!/^2026-09-03$/.test(r[0][1])||!r[0][2]||r[0][3]!==\'exit 0\'||!r[0][4])process.exit(1)"',
+        },
       ],
       acceptanceCriteria: [
         '`library-cli.md` contains all seven headings in contract order, anchors Vite and tsup with caret ranges, and uses Node’s documented built-in test runner; the evidence row records the generator and Verify run.',
         'The documented package.json contract exposes library imports through `exports`, the executable through `bin`, limits publishing with `files`, and emits JavaScript plus declarations from tsup.',
         'Its Verify checks package.json, both named source entry modules and tsup.config.ts; its testConventions include `node --test` plus a built CLI `--help` smoke command.',
+        'node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md\',\'utf8\'),a=[\'web\',\'android\',\'flutter\',\'expo\',\'nx-monorepo\',\'library-cli\'],r=s.split(/\\r?\\n/).filter(x=>/^\\|/.test(x)).map(x=>x.split(\'|\').slice(1,-1).map(y=>y.trim())).filter(x=>x[0]!==\'archetype\'&&!/^[-:]+$/.test(x[0]));if(r.length!==6||a.some(n=>r.filter(x=>x[0]===n).length!==1)||r.some(x=>x.length!==5||!x[1]||!x[2]||!x[3]||!x[4]))process.exit(1)"',
       ],
-      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md'],
+      files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md', 'plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md'],
       testMode: 'none',
       done: false,
       dependsOn: ['31.1'],
@@ -253,5 +279,5 @@ export default definePhase({
     },
   ],
   notes:
-    'interview: skipped — this is GREENFIELD arc member phase 31; the arc entity records the 2026-09-03 interview and six-archetype ruling. userFacing false: these are model-loaded reference manifests with no direct rendered or runtime user surface, so no feature flag applies. reviewScope none: the diff is documentation-only declarative reference content; schema validation and command/source rehearsal are higher-value than an implementation review chain. Documentation standard: plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/documentation-rules.md. Planned phase paths from dependencies are intentionally cited before phases 29/30 land. Orchestrator ruling: manifests remain timeless, cite package caret ranges, and contain only an exit-code command under Verify; plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md solely owns dated observations. Expo and library/CLI require scratch generation plus their manifest Verify on this box, matching web and Nx; unavailable Android/Flutter generators record an install remedy. Step verifies rehearse red-now because every target is absent, and each asserts the complete ordered-heading/content/tree/Verify contract its task creates. Assumption probes exited 0. External sources live in each manifest. Out of scope: scripts/CLI implementation, a seventh archetype, and phase 30 token-contract text.\nMetadata ratifications 2026-09-03: 31.1: create-next-app MIT + shadcn MIT + tailwindcss MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.2: Android/Gradle template Apache-2.0 → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.3: flutter BSD-3-Clause + shadcn_flutter MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.4: create-expo-app BSD-3-Clause + @react-native-reusables/cli MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.5: create-nx-workspace MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.6: vite MIT + tsup MIT + vitest MIT → Allowed anywhere.\nReview repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): ordered seven-heading checks; complete per-manifest contract checks; timeless manifests with one dated evidence record; Android minSdk claim narrowed; valid shadcn_flutter YAML; Expo and library/CLI scratch generation plus Verify required.\nReview repairs round 2 2026-09-03: ratified every external license and placement tier; required official source and license text; enforced complete timeless manifest sections; parsed six evidence rows structurally.',
+    'interview: skipped — this is GREENFIELD arc member phase 31; the arc entity records the 2026-09-03 interview and six-archetype ruling. userFacing false: these are model-loaded reference manifests with no direct rendered or runtime user surface, so no feature flag applies. reviewScope none: the diff is documentation-only declarative reference content; schema validation and command/source rehearsal are higher-value than an implementation review chain. Documentation standard: plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/documentation-rules.md. Planned phase paths from dependencies are intentionally cited before phases 29/30 land. Orchestrator ruling: manifests remain timeless, cite package caret ranges, and contain only an exit-code command under Verify; plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md solely owns dated observations. Expo and library/CLI require scratch generation plus their manifest Verify on this box, matching web and Nx; unavailable Android/Flutter generators record an install remedy. Step verifies rehearse red-now because every target is absent, and each asserts the complete ordered-heading/content/tree/Verify contract its task creates. Assumption probes exited 0. External sources live in each manifest. Out of scope: scripts/CLI implementation, a seventh archetype, and phase 30 token-contract text.\nMetadata ratifications 2026-09-03: 31.1: create-next-app MIT + shadcn MIT + tailwindcss MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.2: Android/Gradle template Apache-2.0 → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.3: flutter BSD-3-Clause + shadcn_flutter MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.4: create-expo-app BSD-3-Clause + @react-native-reusables/cli MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.5: create-nx-workspace MIT → Allowed anywhere.\nMetadata ratifications 2026-09-03: 31.6: vite MIT + tsup MIT + vitest MIT → Allowed anywhere.\nReview repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): ordered seven-heading checks; complete per-manifest contract checks; timeless manifests with one dated evidence record; Android minSdk claim narrowed; valid shadcn_flutter YAML; Expo and library/CLI scratch generation plus Verify required.\nReview repairs round 2 2026-09-03: ratified every external license and placement tier; required official source and license text; enforced complete timeless manifest sections; parsed six evidence rows structurally.\nReview repairs round 3 2026-09-03: evidence-row ownership follows manifest ownership; 31.1 creates the five-column schema and web row only; 31.2–31.6 append and structurally verify their own rows; 31.6 gates the final six-row aggregate; scratch row assertions exited red=1 and green=0.',
 })
