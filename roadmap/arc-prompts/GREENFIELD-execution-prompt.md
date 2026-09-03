@@ -56,7 +56,13 @@ viky-agent-2 roadmap.config.json designHomes + docs/ux-canon.md, the zeroh monor
    (commit grammar + the four documentation rules).
 3. **Archetype manifests** under `skills/greenfield-init/references/archetypes/<name>.md`, one
    fixed heading order: Generator · Post-steps · File tree · Conventions delta ·
-   testConventions · designHomes · Verify (with the observed result and date). Six in v1:
+   testConventions · designHomes · Verify. Manifests are TIMELESS reference docs
+   (documentation-rules.md): `## Verify` carries the exit-code command only, versions as caret
+   ranges. The dated observed results (date · command · observed exit/result or `generator
+   absent — <install command>` · box) live in ONE evidence record, `VERIFY-RECORD-2026-09.md`
+   at the plugin root: the web row is written by the task that authors the contract, every
+   other archetype task appends its own row after running its manifest's Verify (ratified
+   2026-09-03 on the phase-31 review QUESTION). Six in v1:
    `web` (create-next-app + `shadcn init` + registries + tokens with a byte-check guard),
    `flutter` (`flutter create` + shadcn_flutter), `android` (Gradle/Compose/Material 3),
    `expo` (create-expo-app + react-native-reusables or equivalent, cited), `nx-monorepo`

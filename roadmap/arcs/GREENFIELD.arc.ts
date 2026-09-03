@@ -133,7 +133,7 @@ export default defineArc({
     'Nothing is written to the consumer before an approval line: every PRD, ADR, standards file, pointer and generator run is presented (what, where, why) and approved first; brownfield lists the gap table and waits.',
     'Never author a second home for a fact: an existing standards doc, token contract or architecture topic is indexed and linked, never restated; a Blade brand hands tokens to zeroh-design and writes pointers only.',
     'Conventions land once: AGENTS.md is the home; CLAUDE.md and other harness files import or point, never copy.',
-    'No invented stacks, registries or numbers: every option row in a decision matrix cites a real source (package, registry, doc); every archetype manifest carries a verify command that was run on this box at plan time and its observed result.',
+    'No invented stacks, registries or numbers: every option row in a decision matrix cites a real source (package, registry, doc); every archetype manifest carries a verify command, and the dated observed result of running it on this box lives in the plugin's VERIFY-RECORD-2026-09.md (manifests stay timeless).',
     'Absent tools are said, never worked around: zeroh-design or zeroh-roadmap not installed → name the install command and stop that branch; never inline what the sibling owns.',
   ],
   acceptanceCriteria: [
@@ -169,9 +169,9 @@ export default defineArc({
       job: 'templates for android app, web app, cross-platform, monorepo nx and so on (user verbatim, 2026-09-03)',
       surfaces: ['console'],
       signal:
-        'each of the six archetype manifests (web, flutter, android, expo, nx-monorepo, library-cli) carries a Generator command and a Verify command; running the Verify on this box in a scratch directory yields the manifest\'s documented file tree (the manifest\'s `Verify` observed-result line matches), judged for all six after the manifests landed and again after any manifest edit',
+        'each of the six archetype manifests (web, flutter, android, expo, nx-monorepo, library-cli) carries a Generator command and a Verify command; running the Verify on this box in a scratch directory yields the manifest\'s documented file tree and matches that archetype\'s row in VERIFY-RECORD-2026-09.md (date · command · observed · box), judged for all six after the manifests landed and again after any manifest edit',
       tier: 'wired',
-      bar: 'six green verifies; a manifest whose generator is not installed on the box records `observed: generator absent — <install command>` rather than a claimed pass',
+      bar: 'six green verifies; an archetype whose generator is not installed on the box records `generator absent — <install command>` in its VERIFY-RECORD row rather than a claimed pass',
     },
     {
       id: 'readme-current',
@@ -191,6 +191,9 @@ export default defineArc({
       tier: 'wired',
       bar: 'six pointer clauses + one owner section, guarded by a test; behaviour unchanged when greenfield is not installed',
     },
+  ],
+  criteriaRatifications: [
+    '2026-09-03 (planning, phase-31 review QUESTION): six-archetypes signal/bar re-homed the dated observed results from the manifests to VERIFY-RECORD-2026-09.md — manifests stay timeless per documentation-rules.md; the honesty rail and execution prompt §Design item 3 were amended in the same commit.',
   ],
   status: 'planning',
 })
