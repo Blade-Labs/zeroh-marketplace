@@ -35,6 +35,9 @@ import { defineArc } from '@/lib/roadmap/schema'
  *   proved; the design-system default ships tokens projected with a byte-check guard; the
  *   Nx manifest carries a language-axis option (TypeScript + Python/uv) instead of a seventh
  *   archetype (rejectedAlternatives: seven-skills, conventions-in-claude-md, readme-as-prose).
+ * - 2026-09-03 (ruling on the phase-32 review question): "skills + templates only" governs the PLUGIN's
+ *   runtime shape; a file the plugin DROPS INTO THE CONSUMER and that runs there (the README catalog
+ *   check script, precedent plugins/zeroh-design/themes/*/setup.sh) is a TEMPLATE, not plugin code.
  * - 2026-09-03: codex manifest is hand-written in the zeroh-sdd shape (no package.json, so
  *   emit-manifests cannot cover it); marketplace entry category "development".
  *
