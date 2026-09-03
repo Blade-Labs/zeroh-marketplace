@@ -75,7 +75,7 @@ viky-agent-2 roadmap.config.json designHomes + docs/ux-canon.md, the zeroh monor
 4. **Design system.** Web default: shadcn/ui + Tailwind v4 (CSS-first, no tailwind.config),
    tokens as one source projected to CSS variables and shadcn slots with a byte-check test,
    `registries` key in components.json naming the chosen open registries (registry.directory
-   entries; beautifului.dev is MIT copy-paste primitives, cited as a source, not a registry).
+   entries, e.g. Magic UI; beautifului.dev is MIT AI-interface primitives, cited as a copy-paste source — it also serves shadcn registry items, so a consumer may select it as a registry entry).
    Mobile per chosen stack: shadcn_flutter (shared token names with web), Material 3 tokens
    (translated), react-native-reusables. Blade brand → hand off to `zeroh-design:blade-design`
    Path 2 and write pointers only (theme in ux-canon, `designHomes.ux.bindingDesignSystem`,
@@ -109,7 +109,7 @@ viky-agent-2 roadmap.config.json designHomes + docs/ux-canon.md, the zeroh monor
   namespaced registries in components.json, installed as `shadcn add @name/component`;
   `shadcn add <url>` for a single item.
 - beautifului.dev: MIT, copy-paste AI-interface primitives (approval cards, streaming text,
-  chat composer); no CLI or registry endpoint found on 2026-09-03 (docs URL 404).
+  chat composer). Corrected 2026-09-03 (phase-31 review round 8): beautifului.dev DOES expose shadcn registry items (probe 2026-09-03: https://www.beautifului.dev/r/button.json → HTTP 200, type registry:ui; an earlier probe of a non-existent item name returned 404 and was misread as 'no registry').
 - Flutter: shadcn_flutter (84 components on shadcn tokens; Android/iOS/web/desktop; adoptable
   inside MaterialApp), forui (lighter shadcn-inspired). Native: Compose + Material 3 tokens.
   Cross-platform: Expo + react-native-reusables (shadcn port).
