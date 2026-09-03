@@ -80,13 +80,22 @@ evidence of the anomaly.
 
 ### Transition phases — EXCLUDED from both arms
 
-Neither is a clean member of either arm; the instrument has no `--exclude` flag, so exclusion is
-enforced by this analysis plan and made checkable by the instrument printing member phase
-numbers per cell.
+Neither is a clean member of either arm, so both are dropped before any aggregate is computed.
+**The canonical invocation is therefore:**
+
+```
+node scripts/graft-trial-report.mjs --cut 25 --exclude 7,26
+```
+
+The exclusion is enforced by the instrument, not by the reader. Naming the phases in each cell's
+member list is necessary but not sufficient: a reader can see a contaminating phase in the list
+and still have no way to subtract it back out of the median — and the median is what the decision
+bar is read off. The instrument prints which phases it dropped, so an exclusion can never be
+confused with a corpus that never held them.
 
 - **Phase 7** — straddles the cut (7.1/7.2 before the wiring, 7.3/7.4 after) and its gate runs in
-  a session that started before the commit, so the hooks and env never reached it. Lands in
-  baseline under `--cut 25`. **Drop it.**
+  a session that started before the commit, so the hooks and env never reached it. Without the
+  flag it lands in baseline under `--cut 25`. **Drop it.**
 - **Phase 26** — the parent of this trial; its early tasks completed pre-wiring. Its record will
   arrive after the cut and be labelled treatment. **Drop it.**
 

@@ -172,6 +172,51 @@ test('formatted cells print their member phases for transition-phase auditabilit
   assert.match(rendered, /treatment[^\n]*26|26[^\n]*treatment/i)
 })
 
+test('excluded transition phases leave BOTH arms and the aggregates they would have moved', (t) => {
+  const { root, evalDir } = fixture(t)
+  // Four clean baseline members plus the transition phase, so including phase 7 both
+  // lifts the cell over the floor AND moves the median — the contamination this flag exists
+  // to stop. Spans: 20,30,40,50 clean (median 35) and 300 for the transition phase.
+  const spans = [20, 30, 40, 50]
+  spans.forEach((mins, i) => writeRecord(evalDir, record(11 + i, {
+    metrics: { completedAt: `2026-08-01T${String(10 + Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}:00.000Z` },
+  })))
+  writeRecord(evalDir, record(7, { metrics: { completedAt: '2026-08-01T15:00:00.000Z' } }))
+
+  const contaminated = buildTrialReport(root, { cut: 25 })
+  const dirty = contaminated.cells.find((c) => c.arm === 'baseline' && !c.abstain)
+  assert.equal(dirty.n, SCORECARD_N_FLOOR, 'the transition phase is what carries this cell over the floor')
+  assert.ok(dirty.phases.includes(7))
+
+  const clean = buildTrialReport(root, { cut: 25, exclude: [7] })
+  const cell7 = clean.cells.find((c) => c.arm === 'baseline')
+  assert.ok(!cell7.phases.includes(7), 'an excluded phase is dropped before bucketing')
+  assert.equal(cell7.n, spans.length)
+  assert.equal(cell7.abstain, true, 'dropping it puts the cell back under the floor, so it must abstain')
+  assert.notDeepEqual(clean.cells, contaminated.cells, 'exclusion must actually change the aggregates')
+})
+
+test('an exclusion is reported, never silently applied', (t) => {
+  const { root, evalDir } = fixture(t)
+  writeRecord(evalDir, record(7))
+  writeRecord(evalDir, record(26))
+
+  const rendered = formatTrialReport(buildTrialReport(root, { cut: 25, exclude: [26, 7] }))
+  assert.match(rendered, /excluded from both arms: phase 7, 26/)
+  assert.equal(main(['--cut', '25', '--exclude', '7,26', '--root', root]), 0)
+})
+
+test('a non-integer exclusion is refused rather than silently ignored', (t) => {
+  const { root, evalDir } = fixture(t)
+  writeRecord(evalDir, record(7))
+
+  assert.throws(
+    () => buildTrialReport(root, { cut: 25, exclude: ['7'] }),
+    /--exclude takes integer phase numbers/,
+    'a string phase id would silently match nothing and quietly re-contaminate the arm',
+  )
+})
+
 test('CLI smoke exits zero when every treatment cohort abstains', (t) => {
   const { root, evalDir } = fixture(t)
   for (let i = 0; i < SCORECARD_N_FLOOR; i += 1) writeRecord(evalDir, record(501 + i))

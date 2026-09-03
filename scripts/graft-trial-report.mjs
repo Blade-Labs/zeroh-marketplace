@@ -50,6 +50,12 @@ function readGatesByPhase(evalDir) {
  * `> cut` is treatment (GRAFT-TRIAL.md section 3 explains why the cut is a phase number
  * and which sha it stands for).
  *
+ * `exclude` drops phases from BOTH arms before any aggregate is computed — the protocol's
+ * transition phases, which straddle the cut and belong to neither. Listing them in the
+ * rendered cell is not enough: a reader can see a contaminating phase in the member list
+ * but cannot subtract it back out of a median, and the median is what the decision bar is
+ * read off.
+ *
  * A record the reader could not validate ABORTS the run naming the file. The scorecard
  * degrades gracefully because a missing sample only widens its error bars; a trial arm
  * silently missing a phase would move the very number the decision bar is read off, so
@@ -57,10 +63,16 @@ function readGatesByPhase(evalDir) {
  *
  * @throws {Error} naming every offending file, on any unreadable or invalid record.
  */
-export function buildTrialReport(repoRoot, { cut }) {
+export function buildTrialReport(repoRoot, { cut, exclude = [] }) {
   if (!Number.isInteger(cut)) {
     throw new Error(`graft-trial-report: --cut must be an integer phase number, got ${cut}`)
   }
+  for (const p of exclude) {
+    if (!Number.isInteger(p)) {
+      throw new Error(`graft-trial-report: --exclude takes integer phase numbers, got ${p}`)
+    }
+  }
+  const excluded = new Set(exclude)
 
   const { samples, warnings: readWarnings } = readPhaseEvalSamples(repoRoot)
   if (readWarnings.length > 0) {
@@ -74,6 +86,7 @@ export function buildTrialReport(repoRoot, { cut }) {
 
   const buckets = new Map()
   for (const sample of samples) {
+    if (excluded.has(sample.phase)) continue
     const arm = sample.phase <= cut ? 'baseline' : 'treatment'
     const band = bandFor(sample.taskCount)
     const surface = surfaceOf(sample)
@@ -126,6 +139,12 @@ export function buildTrialReport(repoRoot, { cut }) {
     .filter((c) => c.arms.size < 2)
     .map((c) => `cohort ${c.band}/${c.surface}: ${[...c.arms][0]} arm only, nothing to compare against`)
 
+  // An exclusion that is not printed is indistinguishable from a corpus that never held
+  // the phase — the reader must be able to see which records were dropped and why.
+  if (excluded.size > 0) {
+    warnings.unshift(`excluded from both arms: phase ${[...excluded].sort((a, b) => a - b).join(', ')}`)
+  }
+
   return { cells, warnings }
 }
 
@@ -147,17 +166,23 @@ export function formatTrialReport(report) {
   return lines.join('\n')
 }
 
-/** CLI entry: `--cut <phaseNumber>` (required), `--root <path>` (defaults to cwd). */
+/** CLI entry: `--cut <phaseNumber>` (required), `--exclude <n,n>` and `--root <path>`. */
 export function main(argv) {
   const cutIdx = argv.indexOf('--cut')
   const rootIdx = argv.indexOf('--root')
+  const excludeIdx = argv.indexOf('--exclude')
   if (cutIdx === -1 || argv[cutIdx + 1] === undefined) {
-    process.stderr.write('usage: graft-trial-report.mjs --cut <phaseNumber> [--root <path>]\n')
+    process.stderr.write(
+      'usage: graft-trial-report.mjs --cut <phaseNumber> [--exclude <n,n>] [--root <path>]\n',
+    )
     return 2
   }
   const cut = Number(argv[cutIdx + 1])
   const root = rootIdx === -1 ? process.cwd() : argv[rootIdx + 1]
-  process.stdout.write(`${formatTrialReport(buildTrialReport(root, { cut }))}\n`)
+  const exclude = excludeIdx === -1
+    ? []
+    : String(argv[excludeIdx + 1] ?? '').split(',').filter(Boolean).map(Number)
+  process.stdout.write(`${formatTrialReport(buildTrialReport(root, { cut, exclude }))}\n`)
   return 0
 }
 
