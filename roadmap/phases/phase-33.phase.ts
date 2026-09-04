@@ -151,7 +151,12 @@ export default definePhase({
         consumes: ['templates/scripts/check-readme-catalog.mjs from phase 32'],
         produces: ['Brownfield README reconciliation contract'],
       },
-      done: false,
+      done: true,
+      transparencyReport: {
+        whatWasDone: 'Authored the README catalog reconciliation contract.',
+        how: 'The reference reuses phase 32’s checker for both initial red and final green, gates additions on catalog-entry-plus-existing-root, and makes orphan removal approval-gated. Its sole-comparator acceptance check passed.',
+        compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'The reference delegates all catalog comparison behavior to the shipped checker.',
+      },
     },
     {
       id: '33.4',
