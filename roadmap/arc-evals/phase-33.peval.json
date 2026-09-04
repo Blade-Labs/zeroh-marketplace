@@ -1,0 +1,88 @@
+{
+  "phase": 33,
+  "date": "2026-09-04",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 34
+  },
+  "taskCount": 4,
+  "keyFiles": [
+    "plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md",
+    "plugins/zeroh-greenfield/skills/brownfield-audit/references/marker-table.md",
+    "plugins/zeroh-greenfield/skills/brownfield-audit/references/harness-files.md",
+    "plugins/zeroh-greenfield/skills/brownfield-audit/references/readme-reconcile.md",
+    "plugins/zeroh-greenfield/fixtures/zeroh-shaped/",
+    "plugins/zeroh-greenfield/fixtures/README.md"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 6,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1865100
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 8,
+    "linesAdded": 163,
+    "linesRemoved": 24,
+    "filesChanged": 24,
+    "testsAtStart": 1834,
+    "testsAtEnd": 1834,
+    "testsAdded": 0,
+    "startedAt": "2026-09-04T20:22:00.000Z",
+    "completedAt": "2026-09-04T21:05:29.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "gpt-5.6-sol"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "quality-pass": {
+        "model": "gpt-5.6-sol"
+      },
+      "code-reviewer": {
+        "model": "gpt-5.6-sol"
+      }
+    }
+  }
+}
