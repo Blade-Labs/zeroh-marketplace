@@ -169,7 +169,8 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md'],
       testMode: 'none',
-      done: false,
+      done: true,
+      transparencyReport: { whatWasDone: 'Documented safe roadmap-native pointer merging and seven gate slots for all six archetypes.', how: 'The contract gates plugin availability, distinguishes absent and present config branches, preserves existing keys, maps only supported pointer vocabulary, and validates both paths.', compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Commands remain explicit placeholders when manifests do not prescribe the slot.' },
       interfaces: {
         consumes: ['phase 31 ## testConventions', 'phase 31 ## designHomes', 'phase 31 ## Verify'],
         produces: ['pointers.md wiring contract'],
