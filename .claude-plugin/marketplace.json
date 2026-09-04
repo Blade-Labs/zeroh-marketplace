@@ -32,6 +32,13 @@
       "tags": ["roadmap", "phases", "shapes", "gates", "review", "changelog"]
     },
     {
+      "name": "zeroh-greenfield",
+      "description": "Approval-gated project initialization and brownfield standards gap filling for new and existing repositories",
+      "source": "./plugins/zeroh-greenfield",
+      "category": "development",
+      "tags": ["greenfield", "brownfield", "project-init", "standards", "roadmap"]
+    },
+    {
       "name": "zeroh-disclosure",
       "description": "Pre-submit PII shield for Claude Code — detects sensitive data in prompts, blocks submission with a deterministically tokenized rewrite, signs SD-JWT receipts, and optionally anchors them to Hedera HCS",
       "source": "./plugins/zeroh-disclosure",

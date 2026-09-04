@@ -159,7 +159,12 @@ export default definePhase({
       ],
       files: ['.claude-plugin/marketplace.json', 'plugins/zeroh-greenfield/.codex-plugin/plugin.json', 'plugins/zeroh-greenfield/README.md'],
       testMode: 'none',
-      done: false,
+      done: true,
+      transparencyReport: {
+        whatWasDone: 'Published zeroh-greenfield through the Claude marketplace and Codex manifest and documented install and ownership boundaries.',
+        how: 'The marketplace has one development entry with the five ordered tags; the package-less Codex manifest matches the Claude identity fields, exports the skills directory, declares no hooks, and names all four capabilities. README install sections are ordered Claude then Codex, followed by exactly three ownership rows. All three acceptance checks passed.',
+        compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Installation itself is not performed in this packaging task.',
+      },
       interfaces: { consumes: ['zeroh-greenfield .claude-plugin/plugin.json from 29.1'], produces: ['zeroh-greenfield marketplace entry', 'zeroh-greenfield Codex manifest'] },
     },
     {

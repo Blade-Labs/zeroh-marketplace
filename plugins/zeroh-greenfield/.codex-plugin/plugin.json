@@ -1,0 +1,35 @@
+{
+  "name": "zeroh-greenfield",
+  "version": "1.0.0",
+  "description": "Approval-gated project initialization and brownfield standards gap filling for new and existing repositories.",
+  "category": "development",
+  "author": {
+    "name": "Blade Labs",
+    "url": "https://blade-labs.com"
+  },
+  "repository": "https://github.com/Blade-Labs/zeroh-marketplace",
+  "license": "Apache-2.0",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ZeroH Greenfield",
+    "shortDescription": "Approval-gated setup and brownfield gap filling",
+    "longDescription": "Route new and established repositories through sourced stack decisions, approved project-home creation, and gap-only brownfield reconciliation.",
+    "developerName": "Blade Labs",
+    "category": "Coding",
+    "capabilities": [
+      "using-zeroh-greenfield",
+      "greenfield-init",
+      "brownfield-audit",
+      "stack-decision"
+    ],
+    "websiteURL": "https://github.com/Blade-Labs/zeroh-marketplace/tree/main/plugins/zeroh-greenfield",
+    "privacyPolicyURL": "https://blade-labs.com/privacy",
+    "termsOfServiceURL": "https://blade-labs.com/terms",
+    "defaultPrompt": [
+      "Use using-zeroh-greenfield to route this repository setup.",
+      "Use greenfield-init for a new repository or brownfield-audit for an established one."
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}
