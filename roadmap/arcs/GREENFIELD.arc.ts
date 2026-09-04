@@ -37,12 +37,12 @@ import { defineArc } from '@/lib/roadmap/schema'
  *   archetype (rejectedAlternatives: seven-skills, conventions-in-claude-md, readme-as-prose).
  * - 2026-09-03 (ruling on the phase-32 review question): "skills + templates only" governs the PLUGIN's
  *   runtime shape; a file the plugin DROPS INTO THE CONSUMER and that runs there (the README catalog
- * - 2026-09-04: generated repositories use affected-first local verification. Nx consumers
- *   receive distinct full, file-scoped, and arc-impacted roadmap gate bindings; phase work
- *   never maps `unit` to an unqualified workspace sweep. Unknown impact and changes to test,
- *   runner, workspace, lockfile, or root configuration fail toward the full tier. CI/release
- *   remains the authoritative broad backstop (rejectedAlternative: full-suite-every-phase).
  *   check script, precedent plugins/zeroh-design/themes/<theme>/setup.sh) is a TEMPLATE, not plugin code.
+ * - 2026-09-04: generated repositories use affected-first local verification. Nx consumers
+ *   receive distinct full, file-scoped, project-affected, and arc-impacted roadmap gate bindings;
+ *   phase work never maps `unit` to an unqualified workspace sweep. Unknown impact and changes to
+ *   test, runner, workspace, lockfile, or root configuration fail toward the full tier. Generated
+ *   guidance names CI/release as the required consumer backstop (rejectedAlternative: full-suite-every-phase).
  * - 2026-09-03: codex manifest is hand-written in the zeroh-sdd shape (no package.json, so
  *   emit-manifests cannot cover it); marketplace entry category "development".
  *
@@ -134,7 +134,7 @@ export default defineArc({
     'One router: skills/using-zeroh-greenfield/SKILL.md is the only dispatch table (trigger → skill); no other skill re-lists triggers.',
     'One archetype manifest contract: the fixed heading order (Generator · Post-steps · File tree · Conventions delta · testConventions · designHomes · Verify) is defined once and every manifest conforms; a manifest missing a heading is invalid.',
     'One ADR author: stack-decision owns the tech-stack and design-system ADR text; greenfield-init and brownfield-audit call it and never restate a matrix.',
-    'One pointer vocabulary: every key greenfield writes into roadmap.config.json is a key zeroh-roadmap\'s config schema accepts (designHomes.architecture.{home,extendProtocol}, designHomes.ux.{canon,bindingDesignSystem,qualityExemplar}, testConventions[], gateCommands.*); no greenfield-only key.',
+    'One pointer vocabulary: every key greenfield writes into roadmap.config.json is a key zeroh-roadmap\'s config schema accepts (designHomes.*, testConventions[], testCadence.*, gateCommands.*); no greenfield-only key.',
     'One missing-home remedy: using-zeroh-roadmap/references/layout.md §Missing homes is the only place that names the remedy; the six sites carry a one-clause pointer, never the remedy text.',
   ],
   honestyRails: [
@@ -202,12 +202,12 @@ export default defineArc({
     },
     {
       id: 'affected-first-verification',
-      job: 'local and phase verification runs only tests affected by the change while full regression remains an explicit CI/release safety boundary (user ruling, 2026-09-04)',
+      job: 'local and phase verification runs tests affected by the change while generated guidance names CI/release as the required full-regression backstop (user ruling, 2026-09-04)',
       surfaces: ['console'],
       signal:
-        'the Nx archetype emits distinct lint, types, build, full unit, unit-scoped `{files}`, and unit-impacted `{range}` bindings; fixture runs prove a leaf-project edit avoids a workspace sweep, arc input selects the union of affected projects, a nonexistent target reds, and unsafe or unparseable scope selects the full unit tier with a recorded reason',
+        'the Nx archetype emits testCadence.enabled plus distinct lint, types, build, full unit, unit-scoped `{files}`, unit-affected `{files}`, and unit-impacted `{range}` bindings; end-to-end roadmap fixture runs prove a leaf source without a colocated test uses the affected-project slot, arc input selects the union of affected projects, a nonexistent target reds, and unsafe or unparseable scope selects the full unit tier with a recorded reason',
       tier: 'wired',
-      bar: 'no duplicated combined affected command across gate slots; no run-many/full unit command during an ordinary scoped phase; every unsafe or indeterminate selection fails toward the full tier; CI/release full-suite guidance remains explicit',
+      bar: 'roadmap gate plan/run activates affected bindings; no duplicated combined command; ordinary source changes avoid full unit; every unsafe or indeterminate selection fails toward full; generated testCadence guidance explicitly requires CI/release full regression',
     },
   ],
   criteriaRatifications: [
