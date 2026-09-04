@@ -11,7 +11,7 @@ export default definePhase({
   phase: 34,
   name: 'GREENFIELD keystone: packaging, dry-run evidence, and shard-ready delivery',
   plannedBy: { model: 'gpt-5.6-sol' },
-  status: 'backlog',
+  status: 'in-progress',
   category: 'feature',
   kind: 'hardening',
   source:
