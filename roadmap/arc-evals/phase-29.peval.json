@@ -1,0 +1,90 @@
+{
+  "phase": 29,
+  "date": "2026-09-04",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 34
+  },
+  "taskCount": 3,
+  "keyFiles": [
+    "plugins/zeroh-greenfield/.claude-plugin/plugin.json",
+    "plugins/zeroh-greenfield/README.md",
+    "plugins/zeroh-greenfield/LICENSE.txt",
+    "plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/prd-interview.md",
+    "plugins/zeroh-greenfield/templates/"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "curated": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1800723
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 1,
+    "linesAdded": 519,
+    "linesRemoved": 10,
+    "filesChanged": 16,
+    "testsAtStart": 1885,
+    "testsAtEnd": 1885,
+    "testsAdded": 0,
+    "startedAt": "2026-09-04T12:08:57.000Z",
+    "completedAt": "2026-09-04T12:54:52.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "gpt-5.6-sol"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "quality-pass": {
+        "model": "gpt-5.6-sol"
+      },
+      "code-reviewer": {
+        "model": "gpt-5.6-sol"
+      }
+    }
+  }
+}
