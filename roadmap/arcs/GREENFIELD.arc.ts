@@ -42,7 +42,11 @@ import { defineArc } from '@/lib/roadmap/schema'
  *   receive distinct full, file-scoped, project-affected, and arc-impacted roadmap gate bindings;
  *   phase work never maps `unit` to an unqualified workspace sweep. Unknown impact and changes to
  *   test, runner, workspace, lockfile, or root configuration fail toward the full tier. Generated
- *   guidance names CI/release as the required consumer backstop (rejectedAlternative: full-suite-every-phase).
+ *   CI/release is the required consumer backstop (rejectedAlternative: full-suite-every-phase).
+ * - 2026-09-04: CI and release strategy are GREENFIELD outputs from day one. PRs run affected
+ *   validation; main/nightly run deterministic configurable full-suite shards whose reports and
+ *   coverage merge before floors; releases promote the exact already-tested content-addressed
+ *   artifact rather than rebuilding (rejectedAlternative: late-monolithic-release-suite).
  * - 2026-09-03: codex manifest is hand-written in the zeroh-sdd shape (no package.json, so
  *   emit-manifests cannot cover it); marketplace entry category "development".
  *
@@ -67,6 +71,7 @@ import { defineArc } from '@/lib/roadmap/schema'
  * promise                                   | kind        | fulfilled by
  * standards-first                           | criterion   | 29.2 (greenfield-init approval gate) + 33.1 (brownfield gap table + approval) + 34.4 + 34.5 (dry runs)
  * tradeoffs-not-defaults                    | criterion   | 30.1 (stack-decision matrices) + 30.2 (ADR template with "better when" row)
+ * shard-ready-delivery                      | criterion   | 34.6 (CI shard planner, workflows, evidence aggregation, artifact promotion)
  * beautiful-by-default                      | criterion   | 30.3 (design-system reference) + 31.1 (web archetype manifest) + 32.3 (pointer wiring) + 34.4 + 34.5
  * six-archetypes                            | criterion   | 31.1–31.6 (one manifest per archetype, each with a verify command run on this box)
  * readme-current                            | criterion   | 32.2 (README template + catalog check) + 33.3 (brownfield README reconcile) + 34.5
@@ -89,6 +94,7 @@ import { defineArc } from '@/lib/roadmap/schema'
  * USER ASK: "file structure convention, use or suggest best structure" | request | 31.1–31.6 (file tree per manifest) + 33.1 (brownfield keeps the existing one)
  * USER ASK: "update readme even if needed so it is up to date" | request | 32.2 + 33.3
  * USER ASK: "first time use perhaps offer to do this set up" | request | 34.1
+ * USER ASK: "from day one build for sharding / parallel execution; CI and release strategy" | request | 34.6
  * USER ASK: "PRD what the project is about if it is completely from scratch" | request | 29.2 + 29.3 (PRD template)
  * USER ASK: "templates for android app, web app, cross-platform, monorepo nx" | request | 31.2 (Android) 31.1 (web) 31.4 (Expo) 31.5 (Nx)
  * USER ASK: "add new plugin to our marketplace"            | request | 34.2 (marketplace entry + codex manifest)
@@ -124,6 +130,7 @@ export default defineArc({
     { option: 'skills-plus-cli', why: 'User ruling 2026-09-03: skills and templates only; a Node CLI would make the plugin a package with tests and a release cadence of its own.', decidedBy: 'user', decidedAt: '2026-09-03' },
     { option: 'flutter-default', why: 'User ruling 2026-09-03: never default the mobile stack; present all three with trade-offs and "better when", the user decides.', decidedBy: 'user', decidedAt: '2026-09-03' },
     { option: 'three-archetype-v1', why: 'User ruling 2026-09-03: v1 ships all six archetypes.', decidedBy: 'user', decidedAt: '2026-09-03' },
+    { option: 'late-monolithic-release-suite', why: 'User ruling 2026-09-04: establish deterministic parallel shards, evidence aggregation, and build-once promotion at project creation so suite growth changes shard count rather than delivery architecture.', decidedBy: 'user', decidedAt: '2026-09-04' },
     { option: 'seven-skills', why: 'Architect 2026-09-03 under the phase-26 load-budget lesson: PRD interview, design system and archetype scaffold are steps of greenfield-init, loaded as references at their step; only "which mobile stack" earns standalone activation.', decidedBy: 'software-architect (claude-fable-5)', decidedAt: '2026-09-03' },
     { option: 'conventions-in-claude-md', why: 'zeroh sweep 2026-09-03: five near-duplicate harness files and an Nx-generated CLAUDE.md block; one harness-neutral home (AGENTS.md) imported by CLAUDE.md upholds the POLYSEAT no-Claude-privilege ruling.', decidedBy: 'supervising session (claude-fable-5-1) from the zeroh sweep', decidedAt: '2026-09-03' },
     { option: 'readme-as-prose', why: 'zeroh sweep 2026-09-03: the README catalog omits 5 of 19 projects despite a "keep in sync" instruction; currency must be a catalog-backed check.', decidedBy: 'supervising session (claude-fable-5-1) from the zeroh sweep', decidedAt: '2026-09-03' },
@@ -208,6 +215,15 @@ export default defineArc({
         'the Nx archetype emits testCadence.enabled plus distinct lint, types, build, full unit, unit-scoped `{files}`, unit-affected `{files}`, and unit-impacted `{range}` bindings; end-to-end roadmap fixture runs prove a leaf source without a colocated test uses the affected-project slot, arc input selects the union of affected projects, a nonexistent target reds, and unsafe or unparseable scope selects the full unit tier with a recorded reason',
       tier: 'wired',
       bar: 'roadmap gate plan/run activates affected bindings; no duplicated combined command; ordinary source changes avoid full unit; every unsafe or indeterminate selection fails toward full; generated testCadence guidance explicitly requires CI/release full regression',
+    },
+    {
+      id: 'shard-ready-delivery',
+      job: 'from day one, broad CI is parallelizable and release promotes exactly what the full suite proved (user ruling, 2026-09-04)',
+      surfaces: ['console'],
+      signal:
+        'a generated scratch Nx repository has an affected PR workflow and full main/nightly workflow whose stable configurable shard manifest assigns every project/spec exactly once, uploads compact results on red or green, merges reports and coverage before floors, and publishes one content-addressed build artifact; release requires the aggregate for the same commit and promotes that digest without rebuilding',
+      tier: 'wired',
+      bar: 'shard count 1 and greater are valid without workflow redesign; omissions, duplicates, incomplete reports, coverage/test-count regression, stale commit, skipped credentials, digest mismatch, or release rebuild are red; permissions and retention are bounded',
     },
   ],
   criteriaRatifications: [

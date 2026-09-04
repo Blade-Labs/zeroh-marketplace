@@ -6,7 +6,7 @@ import { definePhase } from '@/lib/roadmap/schema'
  * phase 31 supplies the six archetype manifests; this phase teaches greenfield-init how to fill
  * those contracts without duplicating facts or writing before approval.
  *
- * timing: band 4-6 × surface:false, N=4, median 148.8 min, p80 196.4 min
+ * timing: band 4-6 × surface:false, N=5; recalibrate after the source-aware gate task lands
  */
 export default definePhase({
   phase: 32,
@@ -17,7 +17,7 @@ export default definePhase({
   category: 'feature',
   kind: 'logic',
   source:
-    'roadmap/arc-prompts/GREENFIELD-execution-prompt.md §Design item 5 (standards + pointers), the GREENFIELD promise ledger, and greenfield brief 32; user rulings: conventions land once in AGENTS.md, harness files point rather than copy, and README currency is catalog-checked rather than promised in prose.',
+    'roadmap/arc-prompts/GREENFIELD-execution-prompt.md §Design item 5, the GREENFIELD promise ledger, greenfield brief 32, and the 2026-09-04 affected-first ruling; conventions land once, README currency is checked, and source-aware Nx gates fail toward full.',
   priority: 'HIGH',
   dependsOn: [29, 31],
   conflictsWith: [],
@@ -34,9 +34,20 @@ export default definePhase({
     'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md',
     'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
     'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md',
+    'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
+    'plugins/zeroh-roadmap/cli/lib/config.mjs',
+    'plugins/zeroh-roadmap/cli/lib/config.test.mjs',
+    'plugins/zeroh-roadmap/cli/commands/config.test.mjs',
+    'plugins/zeroh-roadmap/cli/lib/slots.mjs',
+    'plugins/zeroh-roadmap/cli/lib/slots.test.mjs',
+    'plugins/zeroh-roadmap/cli/commands/gate.mjs',
+    'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
+    'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs',
   ],
   stakeholderDemo:
-    'In an approved scratch consumer, AGENTS.md is the sole conventions home, CLAUDE.md imports it, roadmap config check resolves the manifest-derived design and test pointers, and the README catalog check passes when current but reports both a missing project row and a nonexistent extra row.',
+    'In an approved scratch Nx consumer, roadmap config check resolves testCadence and distinct full/scoped/affected/impacted gates; a leaf source runs only affected projects, unsafe scope visibly falls back full, and the standards plus README invariants remain green.',
   userFacing: false,
   reviewScope: 'full',
   assumptions: [
@@ -154,23 +165,23 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
           description:
-            "Add one slot/command/source table per archetype with seven non-empty gate rows. → verify: node -e \"F=require('fs'),D='plugins/zeroh-greenfield/skills/greenfield-init/references/',P=F.readFileSync(D+'pointers.md','utf8'),S='build e2e emit integration lint types unit';for(N of'web flutter android expo nx-monorepo library-cli'.split(' ')){Q=new RegExp('^### '+N+'$','gm');if((P.match(Q)||[]).length!=1)throw 0;B=P.slice(P.search(Q)).split(/\\n### /)[0];R=[...B.matchAll(/^\\|\\s*(\\w+)\\s*\\|\\s*([^|]+?)\\s*\\|\\s*([^|]+?)\\s*\\|$/gm)].filter(X=>X[1]!='slot');if(B.split('| slot | command | source |').length!=2||R.length!=7||R.map(X=>X[1]).sort().join(' ')!=S||R.some(X=>!X[2].trim()))throw 0}\"",
+            "Add one slot/command/source table per archetype with all seven non-empty required base gate rows and schema-supported optional rows. → verify: node -e \"F=require('fs'),D='plugins/zeroh-greenfield/skills/greenfield-init/references/',P=F.readFileSync(D+'pointers.md','utf8'),S='build e2e emit integration lint types unit';for(N of'web flutter android expo nx-monorepo library-cli'.split(' ')){Q=new RegExp('^### '+N+'$','gm');if((P.match(Q)||[]).length!=1)throw 0;B=P.slice(P.search(Q)).split(/\\n### /)[0];R=[...B.matchAll(/^\\|\\s*(\\w+)\\s*\\|\\s*([^|]+?)\\s*\\|\\s*([^|]+?)\\s*\\|$/gm)].filter(X=>X[1]!='slot');if(B.split('| slot | command | source |').length!=2||R.length<7||S.split(' ').some(Z=>!R.some(X=>X[1]==Z))||R.some(X=>!X[2].trim()))throw 0}\"",
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
           description:
-            "Bind sources to manifest headings or `placeholder`. → verify: node -e \"process.chdir('plugins/zeroh-greenfield/skills/greenfield-init/references');F=require('fs'),C=require('child_process'),P=F.readFileSync('pointers.md')+'';for(N of'web flutter android expo nx-monorepo library-cli'.split(' ')){B=P.slice(P.indexOf('### '+N)).split(/\\n### /)[0];M=F.readFileSync('archetypes/'+N+'.md')+'';R=[...B.matchAll(/^\\|\\s*\\w+\\s*\\|\\s*([^|]+?)\\s*\\|\\s*(## testConventions|## Post-steps|placeholder)\\s*\\|$/gm)];if(R.length!=7)throw 0;for(X of R)if(X[2]!='placeholder'&&(!M.split(X[2])[1]?.split(/^## /m)[0].includes(X[1].trim())||C.spawnSync('grep',['-Fq',X[1].trim(),'archetypes/'+N+'.md']).status))throw 0}\"",
+            "Bind sources to manifest headings or `placeholder`. → verify: node -e \"process.chdir('plugins/zeroh-greenfield/skills/greenfield-init/references');F=require('fs'),C=require('child_process'),P=F.readFileSync('pointers.md')+'';for(N of'web flutter android expo nx-monorepo library-cli'.split(' ')){B=P.slice(P.indexOf('### '+N)).split(/\\n### /)[0];M=F.readFileSync('archetypes/'+N+'.md')+'';R=[...B.matchAll(/^\\|\\s*\\w+\\s*\\|\\s*([^|]+?)\\s*\\|\\s*(## testConventions|## Post-steps|placeholder)\\s*\\|$/gm)];if(R.length<7)throw 0;for(X of R)if(X[2]!='placeholder'&&(!M.split(X[2])[1]?.split(/^## /m)[0].includes(X[1].trim())||C.spawnSync('grep',['-Fq',X[1].trim(),'archetypes/'+N+'.md']).status))throw 0}\"",
         },
       ],
       acceptanceCriteria: [
         "node -e \"const s=require('fs').readFileSync('plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md','utf8'),h=['## Tool gate','## Config branch','## Merge manifest pointers','## Validate'],p=h.map(x=>s.indexOf(x));if(p.some(x=>x<0)||p.some((x,i)=>i&&x<=p[i-1])||!s.includes('roadmap config check'))process.exit(1)\"",
         "node -e \"const s=require('fs').readFileSync('plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md','utf8'),a=['absent','roadmap init','present','never run','MERGE only missing keys','preserv','designHomes.architecture.home','designHomes.architecture.extendProtocol','designHomes.ux.canon','designHomes.ux.qualityExemplar','designHomes.ux.copyRules','designHomes.ux.bindingDesignSystem','testConventions','gateCommands.lint','gateCommands.types','gateCommands.unit','gateCommands.integration','gateCommands.build','gateCommands.e2e','gateCommands.emit'];if(a.some(x=>!s.includes(x)))process.exit(1)\"",
-        "node -e \"process.chdir('plugins/zeroh-greenfield/skills/greenfield-init/references');F=require('fs'),C=require('child_process'),P=F.readFileSync('pointers.md')+'',S='build e2e emit integration lint types unit';for(N of'web flutter android expo nx-monorepo library-cli'.split(' ')){Q=new RegExp('^### '+N+'$','gm');if((P.match(Q)||[]).length!=1)throw 0;B=P.slice(P.search(Q)).split(/\\n### /)[0];M=F.readFileSync('archetypes/'+N+'.md')+'';R=[...B.matchAll(/^\\|\\s*(\\w+)\\s*\\|\\s*([^|]+?)\\s*\\|\\s*(## testConventions|## Post-steps|placeholder)\\s*\\|$/gm)];if(B.split('| slot | command | source |').length!=2||R.length!=7||R.map(X=>X[1]).sort().join(' ')!=S||R.some(X=>!X[2].trim()))throw 0;for(X of R)if(X[3]!='placeholder'&&(!M.split(X[3])[1]?.split(/^## /m)[0].includes(X[2].trim())||C.spawnSync('grep',['-Fq','--',X[2].trim(),'archetypes/'+N+'.md']).status))throw 0}\"",
+        "node -e \"process.chdir('plugins/zeroh-greenfield/skills/greenfield-init/references');F=require('fs'),C=require('child_process'),P=F.readFileSync('pointers.md')+'',S='build e2e emit integration lint types unit';for(N of'web flutter android expo nx-monorepo library-cli'.split(' ')){Q=new RegExp('^### '+N+'$','gm');if((P.match(Q)||[]).length!=1)throw 0;B=P.slice(P.search(Q)).split(/\\n### /)[0];M=F.readFileSync('archetypes/'+N+'.md')+'';R=[...B.matchAll(/^\\|\\s*(\\w+)\\s*\\|\\s*([^|]+?)\\s*\\|\\s*(## testConventions|## Post-steps|placeholder)\\s*\\|$/gm)];if(B.split('| slot | command | source |').length!=2||R.length<7||S.split(' ').some(Z=>!R.some(X=>X[1]==Z))||R.some(X=>!X[2].trim()))throw 0;for(X of R)if(X[3]!='placeholder'&&(!M.split(X[3])[1]?.split(/^## /m)[0].includes(X[2].trim())||C.spawnSync('grep',['-Fq','--',X[2].trim(),'archetypes/'+N+'.md']).status))throw 0}\"",
       ],
       files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md'],
       testMode: 'none',
       done: true,
-      transparencyReport: { whatWasDone: 'Documented safe roadmap-native pointer merging and seven gate slots for all six archetypes.', how: 'The contract gates plugin availability, distinguishes absent and present config branches, preserves existing keys, maps only supported pointer vocabulary, and validates both paths.', compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Commands remain explicit placeholders when manifests do not prescribe the slot.' },
+      transparencyReport: { whatWasDone: 'Documented safe roadmap-native pointer merging and seven required base gate slots plus schema-supported optional slots for the selected archetype.', how: 'The contract gates plugin availability, distinguishes absent and present config branches, preserves existing keys, maps only supported pointer vocabulary, and validates both paths.', compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Commands remain explicit placeholders when manifests do not prescribe the slot.' },
       interfaces: {
         consumes: ['phase 31 ## testConventions', 'phase 31 ## designHomes', 'phase 31 ## Verify'],
         produces: ['pointers.md wiring contract'],
@@ -224,12 +235,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/slots.mjs',
           description:
-            'Add the single unit-affected/integration-affected resolver seam with verbatim `{files}` substitution and byte-identical full fallback. Extend config/schema bindings, and make gate relevant scope pass living phase-own files while scoped scope retains exact/colocated tests. An empty or unsafe affected selection must resolve full, never skip or fabricate a filter. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'Add the single unit-affected/integration-affected resolver seam with verbatim `{files}` substitution and byte-identical full fallback. Extend config/schema bindings, and make gate relevant scope pass living phase-own files while scoped scope retains exact/colocated tests. An empty or unsafe affected selection must resolve full, never skip or fabricate a filter. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/cli/lib/config.test.mjs plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/cli/lib/landing.test.mjs plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
           description:
-            'Implement the dependency-free consumer selector shared by affected and impacted bindings. Translate explicit files and @manifest to `npm exec nx affected -t test -- --files=...`; validate and split base..head into --base/--head; reject nonexistent scoped targets; inspect range files for unsafe paths; and fail toward `npm exec nx run-many -t test` on missing, malformed, git-failed, or unsafe scope. Emit selected tier and reason before execution. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'Implement the dependency-free consumer selector shared by affected and impacted bindings. Translate explicit files and @manifest to `npm exec -- nx affected -t test --files=...`; validate and split base..head into --base/--head; reject nonexistent scoped targets; inspect range files for unsafe paths; and fail toward `npm exec -- nx run-many -t test` on missing, malformed, git-failed, or unsafe scope. Emit selected tier and reason before execution. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
@@ -243,19 +254,23 @@ export default definePhase({
         },
       ],
       acceptanceCriteria: [
-        'capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        'capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/cli/lib/config.test.mjs plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/cli/lib/landing.test.mjs plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         'A real roadmap gate plan/run with testCadence.enabled selects unit-affected for a leaf source without a colocated test, unit-scoped for exact tests, and full unit for unsafe or indeterminate input; arc resolution substitutes both @manifest and validated base..head forms.',
         'The Nx pointer table binds unit, unit-scoped, unit-affected, and unit-impacted distinctly; lint/types/build each own one target; generated guidance requires the full unit binding in CI/release.',
         'The transparency report records the pre-implementation RED and post-implementation GREEN; a nonexistent scoped target cannot report green.',
       ],
       files: [
         'plugins/zeroh-roadmap/cli/roadmap.config.schema.json',
-        'plugins/zeroh-roadmap/templates/schema.ts',
+        'plugins/zeroh-roadmap/cli/lib/config.mjs',
+        'plugins/zeroh-roadmap/cli/lib/config.test.mjs',
+        'plugins/zeroh-roadmap/cli/commands/config.test.mjs',
         'plugins/zeroh-roadmap/cli/lib/slots.mjs',
         'plugins/zeroh-roadmap/cli/lib/slots.test.mjs',
         'plugins/zeroh-roadmap/cli/commands/gate.mjs',
         'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
         'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs',
         'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
         'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
         'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',

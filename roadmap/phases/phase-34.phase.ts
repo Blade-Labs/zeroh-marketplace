@@ -5,17 +5,17 @@ import { definePhase } from '@/lib/roadmap/schema'
  * four model-loaded entry points, and records honest end-to-end evidence from empty and mature
  * repositories. Phases 29-33 create every consumed plugin path before this final plane runs.
  *
- * timing: band 4-6 × surface:false, N=4, median 148.8 min, p80 196.4 min
+ * timing: band 4-6 × surface:false, N=6; recalibrate after CI/release generation lands
  */
 export default definePhase({
   phase: 34,
-  name: 'GREENFIELD keystone: missing-home remedy, packaging, skill grades, and dry-run evidence',
+  name: 'GREENFIELD keystone: packaging, dry-run evidence, and shard-ready delivery',
   plannedBy: { model: 'gpt-5.6-sol' },
   status: 'backlog',
   category: 'feature',
   kind: 'hardening',
   source:
-    'GREENFIELD arc plane seam-packaging-validation; roadmap/arc-prompts/GREENFIELD-execution-prompt.md §Design items 7-8 and .building/greenfield-briefs/34.md.',
+    'GREENFIELD arc plane seam-packaging-validation; execution prompt §Design items 7-8; brief 34; and the 2026-09-04 ruling that greenfield establishes affected PR, sharded full CI, and build-once release strategy.',
   priority: 'HIGH',
   arcId: 'GREENFIELD',
   dependsOn: [29, 30, 31, 32, 33],
@@ -28,10 +28,15 @@ export default definePhase({
     'plugins/zeroh-greenfield/README.md',
     'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md',
     'plugins/zeroh-greenfield/dry-runs/34.4-scripted-answers.md',
+    'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
+    'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
+    'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
+    'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
+    'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
     'plugins/zeroh-greenfield/DRYRUN-2026-09.md',
   ],
   stakeholderDemo:
-    'A missing roadmap design or test home names zeroh-greenfield as the one setup remedy, and installable Claude/Codex packaging plus dated empty- and brownfield-run evidence proves the four-skill workflow.',
+    'An approved scratch repo proves the four-skill workflow, affected local gates, deterministic full-suite shards with merged evidence, and an exact-commit content-addressed artifact promoted through release without rebuilding.',
   userFacing: false,
   reviewScope: 'full',
   assumptions: [
@@ -272,8 +277,61 @@ export default definePhase({
       dependsOn: ['34.4'],
       interfaces: { consumes: ['machine-bound native-host dry-run evidence'], produces: ['GREENFIELD behavioral conformance evidence'] },
     },
+    {
+      id: '34.6',
+      title: 'Generate a shard-ready CI and artifact-promotion release baseline',
+      problem:
+        'Affected local gates recover iteration speed only if broad regression moves to a trustworthy automated boundary. A late monolithic suite recreates Mudarabah-style release latency and flake pressure; GREENFIELD must establish deterministic sharding, complete evidence, and build-once promotion before the estate grows.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+          description:
+            'TDD first: render the selected archetype into a scratch consumer and fail until workflows prove PR affected validation, main/nightly full validation, configurable deterministic shards, one-shard validity, no missing/duplicate test units, always-uploaded shard reports, merged coverage before floors, explicit retry/flaky classification, least-privilege permissions, concurrency semantics, and build-once artifact identity through release. Record RED. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
+          description:
+            'Define the generator-neutral strategy using Azure precedents: affected required PR gate; full sharded main/nightly backstop; release gate consumes the same reports; immutable build artifact is promoted rather than rebuilt; post-merge watch remains visible; retries never erase first-attempt failure; secrets and deployment environments are opt-in. Contrast Mudarabah’s manually partitioned E2E suites as a useful taxonomy but not a complete CI contract. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
+          description:
+            'Generate a dependency-free stable shard planner over sorted project/spec identities with configurable shard count and deterministic balanced assignment. Emit a machine-readable manifest and fail on empty identity, duplicates, omissions, or invalid shard count; shard count 1 must preserve the same contract. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
+          description:
+            'Generate the approved archetype CI workflow: pull requests run affected lint/type/test/build with pinned base/head; main, schedule, and explicit full dispatch create the shard matrix, run every shard independently, upload compact reports on success or failure, merge reports/coverage, enforce completeness/count/coverage floors, and publish one content-addressed build artifact. Cancellation may supersede stale PR runs but never main/release evidence. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
+          description:
+            'Generate a manual/tag release workflow that requires the full-suite aggregate for the exact commit, verifies artifact digest/provenance, promotes that existing artifact through an environment gate, emits release notes, and cannot silently skip absent credentials or rebuild different bytes. Keep provider deployment steps as explicit approved placeholders. Then run GREEN and record workflow/parser exits. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        'PR workflow runs affected validation with explicit base/head; main/nightly/full dispatch runs a complete deterministic shard set and merges evidence before enforcing test-count and coverage floors.',
+        'Every shard uploads compact diagnostics under failure; retries preserve and classify the first failure; one shard is valid and increasing shard count requires no workflow redesign.',
+        'Release verifies the exact full-suite commit and promotes the content-addressed build artifact without rebuilding; missing evidence, digest mismatch, skipped credentials, duplicate/missing shard identities, or incomplete aggregation is red. Templates use least privilege, pinned action majors, bounded retention, PR-only cancellation, and no provider secret/deployment default.',
+      ],
+      files: [
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
+        'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
+        'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
+        'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: false,
+      dependsOn: ['34.5'],
+      interfaces: {
+        consumes: ['32.5 affected/full gate bindings', 'selected archetype testConventions', '34.4 machine-bound dry-run fixture'],
+        produces: ['shard-ready CI baseline', 'build-once artifact promotion release baseline'],
+      },
+    },
   ],
-  reviewRecord: { date: '2026-09-04', model: 'gpt-5.6-sol', verdict: 'READY', via: 'executed' },
+  reviewRecord: { date: '2026-09-04', model: 'pending-software-architect-review', verdict: 'NEEDS_WORK', via: 'executed' },
   notes:
     '## Hypotheses\n1. CONFIRMED — The six absent-home sites stop or go silent without naming a remedy because no protocol file owns remedy text. Evidence: plugins/zeroh-roadmap/skills/plan-arc/references/design-gate.md:94; plugins/zeroh-roadmap/skills/plan-arc/SKILL.md:91; plugins/zeroh-roadmap/agents/ux-designer.md:17; plugins/zeroh-roadmap/agents/software-architect.md:44; plugins/zeroh-roadmap/agents/test-engineer.md:14; plugins/zeroh-roadmap/skills/test-strategy/SKILL.md:16.\n2. REFUTED — The README first-session claim is implemented by a hook. Evidence: plugins/zeroh-roadmap/hooks/hooks.json has SessionStart only for session-lane-check.mjs and no scaffold action.\ninterview: skipped — arc member; GREENFIELD.arc.ts records every 2026-09-03 user ruling. userFacing false re-ratified by the GREENFIELD orchestrator ruling 2026-09-03: installable operator guidance is visible but is not a consumer runtime surface, so no flag applies. Full review is required because model-loaded protocols and a guard change. decisionRef: \'GREENFIELD orchestrator ruling 2026-09-03 — protocol-anchor ratchet, tdd\'. The ratchet is the house protocol-anchor pattern: a node:test file under plugins/zeroh-roadmap/cli/lib reads the seven protocol files and asserts one owner heading plus six pointer clauses; testMode tdd is ratified. testMode TDD for 34.4–34.5 is ratified: machine receipts, native-host evidence, negative behavior, semantic parity, and mutations are executable contracts; DRYRUN-2026-09.md is only their projection. A failed dry run escalates with transcript and blocks phase completion. Out of scope: skill-body changes beyond fixes needed for all R1-R28 grades to PASS. Planned phase-29–33 paths are consumed only after dependency order makes them real. Review repairs round 2 2026-09-03 (orchestrator, mechanical): 34.3 grade checker asserts the exact ordered R1..R28 id vector per skill; 34.1 test verifies run through the host capbuild wrapper. Review repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): added mandatory hypotheses; ratified the protocol-anchor TDD seam; asserted every packaging field and ownership boundary; asserted four skill summaries, 112 verdict rows, byte/token equality, and caps; made four real native-host arms with inherited authority, machine receipts, behavioral mutations, config and idempotence proof the completion bar.',
 })
