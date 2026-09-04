@@ -13,10 +13,10 @@ Map commands to `gateCommands.lint`, `gateCommands.types`, `gateCommands.unit`, 
 | --- | --- | --- |
 | lint | placeholder lint | placeholder |
 | types | placeholder types | placeholder |
-| unit | placeholder unit | placeholder |
+| unit | npm test | ## testConventions |
 | integration | placeholder integration | placeholder |
 | build | placeholder build | placeholder |
-| e2e | placeholder e2e | placeholder |
+| e2e | npx playwright test | ## testConventions |
 | emit | placeholder emit | placeholder |
 
 ### flutter
@@ -24,8 +24,8 @@ Map commands to `gateCommands.lint`, `gateCommands.types`, `gateCommands.unit`, 
 | --- | --- | --- |
 | lint | placeholder lint | placeholder |
 | types | placeholder types | placeholder |
-| unit | placeholder unit | placeholder |
-| integration | placeholder integration | placeholder |
+| unit | flutter test | ## testConventions |
+| integration | flutter test integration_test | ## testConventions |
 | build | placeholder build | placeholder |
 | e2e | placeholder e2e | placeholder |
 | emit | placeholder emit | placeholder |
@@ -35,8 +35,8 @@ Map commands to `gateCommands.lint`, `gateCommands.types`, `gateCommands.unit`, 
 | --- | --- | --- |
 | lint | placeholder lint | placeholder |
 | types | placeholder types | placeholder |
-| unit | placeholder unit | placeholder |
-| integration | placeholder integration | placeholder |
+| unit | ./gradlew test | ## testConventions |
+| integration | ./gradlew connectedAndroidTest | ## testConventions |
 | build | placeholder build | placeholder |
 | e2e | placeholder e2e | placeholder |
 | emit | placeholder emit | placeholder |
@@ -46,20 +46,20 @@ Map commands to `gateCommands.lint`, `gateCommands.types`, `gateCommands.unit`, 
 | --- | --- | --- |
 | lint | placeholder lint | placeholder |
 | types | placeholder types | placeholder |
-| unit | placeholder unit | placeholder |
+| unit | npm test | ## testConventions |
 | integration | placeholder integration | placeholder |
-| build | placeholder build | placeholder |
+| build | npx expo export | ## testConventions |
 | e2e | placeholder e2e | placeholder |
 | emit | placeholder emit | placeholder |
 
 ### nx-monorepo
 | slot | command | source |
 | --- | --- | --- |
-| lint | placeholder lint | placeholder |
-| types | placeholder types | placeholder |
-| unit | placeholder unit | placeholder |
+| lint | npx nx affected -t lint,typecheck,test,build | ## testConventions |
+| types | npx nx affected -t lint,typecheck,test,build | ## testConventions |
+| unit | npx nx run-many -t test | ## testConventions |
 | integration | placeholder integration | placeholder |
-| build | placeholder build | placeholder |
+| build | npx nx affected -t lint,typecheck,test,build | ## testConventions |
 | e2e | placeholder e2e | placeholder |
 | emit | placeholder emit | placeholder |
 
@@ -68,8 +68,8 @@ Map commands to `gateCommands.lint`, `gateCommands.types`, `gateCommands.unit`, 
 | --- | --- | --- |
 | lint | placeholder lint | placeholder |
 | types | placeholder types | placeholder |
-| unit | placeholder unit | placeholder |
-| integration | placeholder integration | placeholder |
+| unit | node --test | ## testConventions |
+| integration | node dist/cli.js --help | ## testConventions |
 | build | placeholder build | placeholder |
 | e2e | placeholder e2e | placeholder |
 | emit | placeholder emit | placeholder |
