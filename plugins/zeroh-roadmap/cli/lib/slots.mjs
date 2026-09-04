@@ -26,6 +26,7 @@ export const SCOPED_FALLBACK_NOTE = 'scoped slot missing — ran full suite'
 /** The impacted-slot fallback note — the SCOPED_FALLBACK_NOTE sibling for the {range}
  *  arc-end path (decision 2). Defined ONCE; callers machine-emit it. Never restated. */
 export const IMPACTED_FALLBACK_NOTE = 'impacted slot missing — ran full suite'
+export const AFFECTED_FALLBACK_NOTE = 'affected slot missing — ran full suite'
 export const SCOPE_MANIFEST_PROTOCOL = 'scope-manifest-json-v1'
 
 /** Create the only scope artifact accepted by generated commands. */
@@ -183,7 +184,7 @@ export function resolveAffectedOrFallback(cfg, tier, manifest) {
   const full = cfg?.gateCommands?.[tier]
   if (full == null) return { slot: tier, refused: refusal(tier) }
   if (full === 'none') return { slot: tier, declaredAbsent: true, scoped: false }
-  return { slot: tier, command: full, note: 'affected slot missing — ran full suite', scoped: false }
+  return { slot: tier, command: full, note: AFFECTED_FALLBACK_NOTE, scoped: false }
 }
 
 /** The named hygiene skip — a consumer without the lint-diff binding gets this OBJECT in the

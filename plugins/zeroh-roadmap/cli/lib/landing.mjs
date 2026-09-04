@@ -460,7 +460,6 @@ export function evaluateBlockers(state) {
 // structurally-impossible forbidden push, the RunnerSummary, exits 0/3/2.
 // ─────────────────────────────────────────────────────────────────────────────
 import { rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { resolveSlot, resolveImpactedOrFallback, createScopeManifest, runSlot } from './slots.mjs'
 import { sweepOrphanCapbuildUnits } from './orphan-sweep.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
