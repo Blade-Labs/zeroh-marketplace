@@ -1,0 +1,1 @@
+{"projects":[{"name":"web","path":"apps/web"},{"name":"api","path":"apps/api"},{"name":"admin","path":"apps/admin"},{"name":"shared","path":"packages/shared"},{"name":"ui","path":"packages/ui"},{"name":"generators","path":"packages/generators"}]}

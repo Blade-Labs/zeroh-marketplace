@@ -210,7 +210,12 @@ export default definePhase({
       testMode: 'none',
       batchMode: true,
       interfaces: { consumes: [], produces: ['fixtures/zeroh-shaped', 'Expected brownfield gap table'] },
-      done: false,
+      done: true,
+      transparencyReport: {
+        whatWasDone: 'Created the capped zeroh-shaped brownfield fixture and five-column expected gap-table oracle.',
+        how: 'The fixture has six real project roots, a four-row README with both omissions and an orphan, duplicated harness conventions with a generated Nx block, registry-free component configs, absent gap homes, and a stale reference to a nonexistent package. The oracle maps every planned condition across present, partial, missing, and stale states. All four acceptance commands passed.',
+        compromises: 'None', skipped: 'None', hardcoded: 'Fixture-only deterministic names and paths are intentional oracle data.', limitations: 'The fixture models structure only and deliberately contains no application sources.',
+      },
     },
   ],
   reviewRecord: { date: '2026-09-04', model: 'gpt-5.6-sol', verdict: 'READY', via: 'executed' },
