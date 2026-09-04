@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 
 const args = process.argv.slice(2)
 if (args.includes('--help')) {
@@ -28,7 +28,7 @@ else {
         const parsed = JSON.parse(readFileSync(resolve(catalogPath), 'utf8'))
         projects = Array.isArray(parsed) ? parsed : parsed.projects
         if (!Array.isArray(projects)) throw new Error('shape')
-        for (const project of projects) if (!project?.name || !project?.root || !existsSync(resolve(dirname(resolve(catalogPath)), project.root))) throw new Error(`nonexistent catalog root: ${project?.root}`)
+        for (const project of projects) if (!project?.name || !project?.root || !existsSync(resolve(project.root))) throw new Error(`nonexistent catalog root: ${project?.root}`)
       } else if (projectRoot) {
         const root = resolve(projectRoot)
         if (!existsSync(root)) throw new Error('nonexistent project root')
