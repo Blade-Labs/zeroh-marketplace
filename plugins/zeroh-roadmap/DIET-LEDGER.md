@@ -1,5 +1,13 @@
 # zeroh-roadmap — Deletion-Disposition Ledger (ROADCODE prose diet)
 
+## 2026-09 missing-home routing — phase 34.1
+
+| passage (origin heading/anchor) | disposition | evidence |
+|---|---|---|
+| six model-loaded missing-home branches | no trim — additive remedy pointer | one canonical `layout.md §Missing homes` owner; `protocol-refs.test.mjs` enforces one pointer per caller |
+
+Post-edit do-arc measurement: **44,246 B / 11,065 tokens** (ceiling 11,065).
+
 ## 2026-09 diet — phase 26.3
 
 ### Trial restores — trial/27-opus @ 7b237a9 gate run-000003

@@ -41,6 +41,6 @@ file to create/modify, interface + signatures, connection points, and the test-c
 **Architecture reference — the `designHomes` config-read.** The consumer's canonical architecture docs are
 bound in the **`designHomes`** key of `roadmap.config.json` (both modes). Resolve the domain you're deciding
 in against it and READ the named page before recommending or ruling — its patterns outrank generic instinct.
-Absent key → say so and fall back to the repo's CLAUDE.md architecture sections + nearest existing patterns.
+Absent key → say so and fall back to the repo's CLAUDE.md architecture sections + nearest existing patterns. (remedy: using-zeroh-roadmap/references/layout.md §Missing homes)
 Never cite a doc path you have not confirmed exists.
 </content>

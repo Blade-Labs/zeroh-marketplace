@@ -91,7 +91,7 @@ An arc with `ux` designRefs but no conformance criteria is malformed - validate-
 
 The plugin owns the **gate**; the consumer owns the **homes**. Neither the architecture doc set nor the UX canon path is hardcoded here - read both from the `designHomes` key in the consumer's `roadmap.config.json` (the same consumer-agnostic seam the `validationTiers` bindings use). Two optional `ux` fields shape the canon further: `bindingDesignSystem` names the consumer's binding design system + its prototype-transcription doctrine pointer, which the `ux-designer` must honor as the identity to match; `superseded` names an exemplar kept as history only - never a judge.
 
-**Absent key → fail loud, don't guess.** If the gate fires but `designHomes` is absent, surface that and STOP - no home to search, and guessing a doc path is exactly what the seam exists to prevent (mirrors the absent-`validationTiers` gap rule - never a silent pass). Honor-system stop: nothing blocks the guess mechanically, which is why the STOP is written here.
+**Absent key → fail loud, don't guess.** If the gate fires but `designHomes` is absent, surface that and STOP - no home to search, and guessing a doc path is exactly what the seam exists to prevent (mirrors the absent-`validationTiers` gap rule - never a silent pass). Honor-system stop: nothing blocks the guess mechanically, which is why the STOP is written here. (remedy: using-zeroh-roadmap/references/layout.md §Missing homes)
 
 ## 5. Apply-arc template - implementing a RATIFIED prototype
 

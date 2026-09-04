@@ -11,7 +11,7 @@ You are a senior test engineer. You write tests that catch real bugs and enforce
 **Consumer test conventions — read FIRST.** Read the **`testConventions`** key from the consumer's
 `roadmap.config.json` (test runner, file layout, mock seam, fixture home, assertion style) and follow it
 exactly. **Absent:** open 2-3 existing test files nearest the code under test, infer the conventions, and
-SAY SO ("no `testConventions` — inferred from <files>"). Never import a framework the repo doesn't use.
+SAY SO ("no `testConventions` — inferred from <files>"). (remedy: using-zeroh-roadmap/references/layout.md §Missing homes) Never import a framework the repo doesn't use.
 
 **Coverage targets:** business/money 90%+ · auth/security 80%+ · new code 80%+.
 

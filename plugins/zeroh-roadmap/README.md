@@ -16,7 +16,7 @@ New here? Read [docs/orientation.html](docs/orientation.html) — a ten-minute e
 claude plugin install zeroh-roadmap
 ```
 
-On first session, the plugin detects if your project has a `roadmap/` directory. If not, it offers to scaffold the infrastructure — schema, phases directory, review reports, helper scripts. Nothing is written without your session seeing it.
+Run `roadmap init` to scaffold the roadmap infrastructure. When project homes are missing, install `zeroh-greenfield` and use its `brownfield-audit` workflow as directed by `using-zeroh-roadmap/references/layout.md §Missing homes`.
 
 ## Get started
 

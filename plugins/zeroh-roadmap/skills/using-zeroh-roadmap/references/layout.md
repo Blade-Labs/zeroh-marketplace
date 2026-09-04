@@ -41,3 +41,9 @@ tsconfig `paths` alias.
 defaults to `roadmap`. The scaffold refuses, naming both, rather than create a second root beside
 an existing one. `--root` is deliberately NOT a config key: the config lives inside the root it
 would have to name.
+
+## Missing homes
+
+Keep each caller's documented STOP or inference behavior. If zeroh-greenfield is not installed,
+use `/plugin install zeroh-greenfield@zeroh-marketplace`; then delegate home authoring and
+roadmap pointer writes to `brownfield-audit`. Never create or author missing homes inline.

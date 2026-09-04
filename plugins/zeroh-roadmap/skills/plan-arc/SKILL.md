@@ -88,7 +88,7 @@ its designRef and runs NO fresh UX sub-gate; plan mechanically per design-gate.m
 
 **(2) Architecture sub-gate** - fires on a new pattern/tool/seam. Read the doc home from
 the `designHomes` key in the consumer's `roadmap.config.json` (`roadmap config check`
-prints resolved bindings); **absent key -> surface it and STOP the gate** (honor-system
+prints resolved bindings); **absent key -> surface it and STOP the gate** (remedy: using-zeroh-roadmap/references/layout.md §Missing homes) (honor-system
 stop). Then per design-gate.md §2: spawn the `software-architect` agent to search the doc
 home AND the prior-arc record and recommend reuse-or-design with a named "prior art:"
 line (`none found` is legal; silence is not a search). The orchestrator owns every write

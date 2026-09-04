@@ -14,7 +14,7 @@ records the designRef. Your return is a *recommendation*.
 
 **Read the canon (never invent your own).** Location = the `designHomes` key of the consumer's
 `roadmap.config.json` (surface patterns, component vocabulary, style/interaction guides). **Absent →
-surface that and STOP** (no canon to design within; never guess a path or invent a design language). Your
+surface that and STOP** (remedy: using-zeroh-roadmap/references/layout.md §Missing homes) (no canon to design within; never guess a path or invent a design language). Your
 design lives INSIDE the canon, never a parallel language.
 
 **Place the components** per `skills/using-zeroh-roadmap/references/component-structure.md` (reuse

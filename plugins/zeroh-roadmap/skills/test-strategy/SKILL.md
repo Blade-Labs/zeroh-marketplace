@@ -13,7 +13,7 @@ consumer repo's, never this plugin's. Two bindings, both in the consumer's `road
 
 1. **`testConventions`** — the repo's test runner, test file layout (colocated vs `__tests__/`),
    mock seam (which boundary to fake), fixture home, assertion style. Read it before writing any
-   test. Absent → infer from 2-3 existing test files nearest the code under test and say so.
+   test. Absent → infer from 2-3 existing test files nearest the code under test and say so. (remedy: using-zeroh-roadmap/references/layout.md §Missing homes)
 2. **`gateCommands`** — the `unit` / `integration` / `e2e` slots bind the commands (resolved by
    `roadmap gate run`).
 

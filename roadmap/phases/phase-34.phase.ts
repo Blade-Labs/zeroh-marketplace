@@ -118,7 +118,16 @@ export default definePhase({
         'plugins/zeroh-roadmap/DIET-LEDGER.md',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-04',
+      transparencyReport: {
+        whatWasDone: 'Added one missing-home remedy owner, routed all six existing STOP/infer branches to it, corrected the README scaffold claim, and ratcheted the protocol references.',
+        how: 'TDD RED: protocol-refs reported `owner heading must resolve exactly once` with 0 !== 1; GREEN: 1/1 passed. `missing-home remedy` ratchet mutation proof: planted a missing pointer in agents/test-engineer.md → RED (`must carry exactly one canonical remedy pointer`, 0 !== 1); renamed `## Missing homes` → RED (`owner heading must resolve exactly once`, 0 !== 1); decoy `(Existing configured homes remain authoritative.)` under the owner → GREEN (1/1). Restored every mutation before the final GREEN. Post-edit do-arc measured 44,246 bytes / 11,065 tokens and passed the 11,065 ceiling.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
       interfaces: { produces: ['layout.md §Missing homes', 'protocol-refs ratchet'], consumes: [] },
     },
     {
