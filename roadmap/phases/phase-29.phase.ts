@@ -9,7 +9,7 @@ export default definePhase({
   phase: 29,
   name: 'zeroh-greenfield skeleton, initialization interview, and consumer templates',
   plannedBy: { model: 'gpt-5.6-sol' },
-  status: 'backlog',
+  status: 'in-progress',
   category: 'feature',
   kind: 'logic',
   source:
@@ -99,7 +99,18 @@ export default definePhase({
         consumes: [],
         produces: ['using-zeroh-greenfield dispatch table', 'zeroh-greenfield plugin manifest'],
       },
-      done: false,
+      done: true,
+      doneDate: '2026-09-04',
+      transparencyReport: {
+        whatWasDone:
+          'Created the skills-only zeroh-greenfield plugin manifest, Apache-2.0 license, concise README, and the single trigger router for initialization, brownfield audits, and stack decisions.',
+        how:
+          'Mirrored the existing zeroh-design manifest and license conventions, retained the fuller package metadata needed by the planned Codex manifest, and made the router choose brownfield behavior whenever any repository marker exists. All five task checks passed, and the phase types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '29.2',
@@ -144,7 +155,18 @@ export default definePhase({
           'references/pointers.md',
         ],
       },
-      done: false,
+      done: true,
+      doneDate: '2026-09-04',
+      transparencyReport: {
+        whatWasDone:
+          'Authored the seven-field, one-question-at-a-time PRD interview and the complete greenfield-init workflow from interview through artifact-based completion.',
+        how:
+          'The workflow loads references only at their owning steps, delegates stack decisions, lists every proposed write or generator in an Artifact/Target/Reason table, and requires the exact approval response before any mutation. It stops with explicit sibling install remedies and verifies the archetype, README catalog, and roadmap configuration. All three task checks passed; the phase types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
     {
       id: '29.3',
@@ -214,7 +236,18 @@ export default definePhase({
           'templates/CONTRIBUTING.md',
         ],
       },
-      done: false,
+      done: true,
+      doneDate: '2026-09-04',
+      transparencyReport: {
+        whatWasDone:
+          'Created the eight consumer-dropped templates for the conventions home, harness adapter, PRD, architecture and UX indexes, code style, contribution rules, and repository catalog.',
+        how:
+          'Kept every variable value as an explicit angle-bracket placeholder, made AGENTS.md the only convention home, reduced CLAUDE.md to its import and harness slot, and shaped the documentation as concise indexes and contracts. All six task checks passed; the phase types slot was declared-none and green.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
     },
   ],
   reviewRecord: { date: '2026-09-04', model: 'gpt-5.6-sol', verdict: 'READY', via: 'executed' },
