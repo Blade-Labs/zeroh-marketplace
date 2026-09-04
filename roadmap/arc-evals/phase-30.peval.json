@@ -1,0 +1,88 @@
+{
+  "phase": 30,
+  "date": "2026-09-04",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 34
+  },
+  "taskCount": 3,
+  "keyFiles": [
+    "plugins/zeroh-greenfield/skills/stack-decision/SKILL.md",
+    "plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md",
+    "plugins/zeroh-greenfield/templates/docs/adr/0001-tech-stack.md",
+    "plugins/zeroh-greenfield/templates/docs/adr/0002-design-system.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 1,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "curated": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1971641
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 1,
+    "linesAdded": 238,
+    "linesRemoved": 4,
+    "filesChanged": 7,
+    "testsAtStart": 1885,
+    "testsAtEnd": 1885,
+    "testsAdded": 0,
+    "startedAt": "2026-09-04T13:30:39.000Z",
+    "completedAt": "2026-09-04T14:10:18.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "gpt-5.6-sol"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "quality-pass": {
+        "model": "gpt-5.6-sol"
+      },
+      "code-reviewer": {
+        "model": "gpt-5.6-sol"
+      }
+    }
+  }
+}
