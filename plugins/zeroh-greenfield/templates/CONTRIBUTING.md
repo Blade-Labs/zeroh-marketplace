@@ -2,7 +2,7 @@
 
 ## Commits
 
-Use `type(scope): imperative summary` and keep the subject to 72 characters.
+Use `<type>(<scope>): <imperative summary>` and keep the subject concise.
 
 ## Documentation
 
@@ -10,3 +10,7 @@ Use `type(scope): imperative summary` and keep the subject to 72 characters.
 - No duplication
 - Timeless
 - Current
+
+Follow `documentation-rules.md` for the explanations behind these linked rules.
+Create a standalone decision record for a boundary or security decision, or any
+choice expensive to reverse.

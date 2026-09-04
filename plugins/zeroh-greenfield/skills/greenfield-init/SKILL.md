@@ -23,7 +23,6 @@ Load these references in order and assemble a complete proposal:
 1. `references/design-system.md` for the design-system choice or sibling handoff.
 2. `references/archetypes/<name>.md` for the chosen generator and file shape.
 3. `references/standards.md` for repository conventions and documentation.
-4. `references/pointers.md` for roadmap-owned configuration keys.
 
 Present every proposed operation in this exact table:
 
@@ -57,6 +56,19 @@ Execute only the approved rows, in order:
 2. Write `docs/PRD.md` and the stack/design decision records.
 3. Write standards, architecture and UX indexes, and harness adapters.
 4. Reconcile `README.md` with the generated tree.
+
+## Structure
+
+Populate README structure from the selected manifest's `## File tree` and
+approved `## Generator` and `## Post-steps` outputs.
+
+## Commands
+
+Populate README commands from the selected manifest's `## Verify` and test
+conventions. Copy templates/scripts/check-readme-catalog.mjs into the consumer at scripts/check-readme-catalog.mjs.
+Run the selected manifest's exact checker command.
+Record its exit code before Done.
+
 5. Run `roadmap init` before editing any roadmap pointer.
 6. Apply only the keys from `references/pointers.md`.
 
