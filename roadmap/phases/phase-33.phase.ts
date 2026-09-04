@@ -123,7 +123,12 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-greenfield/skills/brownfield-audit/references/harness-files.md'],
       testMode: 'none',
-      done: false,
+      done: true,
+      transparencyReport: {
+        whatWasDone: 'Authored the brownfield-only harness reconciliation contract.',
+        how: 'The reference delegates shared invariants, inventories every common harness surface, requires exact pre-approval pointer diffs, preserves unique guidance, and byte-compares generated marker blocks including Nx regions. Both structural acceptance checks passed.',
+        compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Actual repository diffs remain approval-gated runtime work.',
+      },
     },
     {
       id: '33.3',
