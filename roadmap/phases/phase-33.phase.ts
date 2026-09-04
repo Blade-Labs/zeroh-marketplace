@@ -10,7 +10,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 33,
   name: 'Brownfield gap audit, harness and README reconciliation, and zeroh-shaped oracle fixture',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'gpt-5.6-sol' },
   category: 'feature',
   kind: 'logic',
