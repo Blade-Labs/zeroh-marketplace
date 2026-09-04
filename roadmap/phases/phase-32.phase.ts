@@ -11,7 +11,7 @@ import { definePhase } from '@/lib/roadmap/schema'
 export default definePhase({
   phase: 32,
   name: 'Author standards once, enforce README catalog currency, and wire roadmap-native pointers',
-  status: 'backlog',
+  status: 'in-progress',
   plannedBy: { model: 'gpt-5.6-sol' },
   arcId: 'GREENFIELD',
   category: 'feature',
