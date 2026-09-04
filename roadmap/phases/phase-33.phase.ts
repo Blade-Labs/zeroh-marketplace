@@ -98,7 +98,12 @@ export default definePhase({
         ],
         produces: ['zeroh-greenfield:brownfield-audit', 'Brownfield gap-table contract'],
       },
-      done: false,
+      done: true,
+      transparencyReport: {
+        whatWasDone: 'Authored the ordered brownfield audit workflow and its total eight-row marker contract.',
+        how: 'The workflow separates read-only detection from gap-only proposals, records approval before any write, links existing homes, names sibling-plugin STOP branches, and requires a final evidence artifact. The marker reference gives every required artefact a non-empty evidence glob and interpretation. Structural acceptance checks and phase validation passed.',
+        compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Behavioral dry-run proof is intentionally owned by phase 34.4.',
+      },
     },
     {
       id: '33.2',
