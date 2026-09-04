@@ -37,6 +37,9 @@ export default definePhase({
     'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
     'plugins/zeroh-roadmap/cli/lib/config.mjs',
     'plugins/zeroh-roadmap/cli/lib/config.test.mjs',
+    'plugins/zeroh-roadmap/cli/roadmap.config.schema.json',
+    'plugins/zeroh-roadmap/cli/commands/config.mjs',
+    'plugins/zeroh-roadmap/cli/lib/gate-report.mjs',
     'plugins/zeroh-roadmap/cli/commands/config.test.mjs',
     'plugins/zeroh-roadmap/cli/lib/slots.mjs',
     'plugins/zeroh-roadmap/cli/lib/slots.test.mjs',
@@ -223,54 +226,56 @@ export default definePhase({
     },
     {
       id: '32.5',
-      title: 'Generate affected-first roadmap gates with an honest full-suite fallback',
+      title: 'Generate affected-first roadmap gates with safe scope manifests and full fallback',
       problem:
-        'Roadmap relevant scope currently receives only test files, so changed source files without colocated tests can skip runtime verification. GREENFIELD also omits testCadence.enabled and maps its Nx unit slot to a workspace-wide sweep. The generated contract needs one source-aware affected seam plus safe full fallback.',
+        'Roadmap relevant scope currently sees only test files, so source changes can skip runtime verification. GREENFIELD also omits testCadence, lacks installed-version compatibility, and would expose phase filenames to shell interpolation. The contract needs one source-aware, manifest-safe seam that fails toward full.',
       steps: [
         {
           file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
           description:
-            'TDD first: add failing end-to-end gate-plan/run and arc-resolver cases around a tiny Nx-shaped consumer with a fake Nx executable. Prove testCadence activation; leaf source without colocated tests reaches unit-affected with the complete phase-own file set; scoped tests reach unit-scoped; @manifest and base..head reach unit-impacted; nonexistent scoped targets red; and root, lockfile, workspace, test-config, selector, empty, malformed, or git-failure inputs select full with a named reason. Record RED before implementation. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'TDD first through real gate plan/run and landing homes: leaf source without colocated tests reaches unit-affected; exact tests reach unit-scoped; arc @manifest/range reaches unit-impacted; full fallback is byte-identical. Cover deleted files, empty scope, alias/report serialization, manifest cleanup, old capability response, Git failure, and adversarial filenames containing whitespace, leading dash, quotes, dollar/substitution, semicolon, and newline. Record RED. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/slots.mjs',
           description:
-            'Add the single unit-affected/integration-affected resolver seam with verbatim `{files}` substitution and byte-identical full fallback. Extend config/schema bindings, and make gate relevant scope pass living phase-own files while scoped scope retains exact/colocated tests. An empty or unsafe affected selection must resolve full, never skip or fabricate a filter. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/cli/lib/config.test.mjs plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/cli/lib/landing.test.mjs plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'Add strict unit-affected/integration-affected config keys and one safe scope-manifest protocol: gate owns a temporary JSON manifest of validated living phase-own paths, substitutes only a validated quoted `@manifest` token through `{manifest}`, and always cleans it. Existing `{files}` consumers remain compatible, but GREENFIELD-generated scoped/affected commands use manifests. Relevant receives all phase-own paths; scoped receives exact/colocated tests; missing/malformed/unsafe scope or manifest failure resolves byte-identical full. Update slot aliases, reports, parser/schema, and tests. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/cli/lib/config.test.mjs plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/cli/lib/landing.test.mjs plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/commands/config.mjs',
+          description:
+            'Add a read-only `roadmap config capabilities --json` contract reporting configVersion and accepted gate slots. Greenfield probes it before proposing affected keys; missing unit-affected/unit-impacted/{manifest} support prints the exact marketplace update command and STOPs before consumer writes. Test current and legacy capability fixtures. → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
           description:
-            'Implement the dependency-free consumer selector shared by affected and impacted bindings. Translate explicit files and @manifest to `npm exec -- nx affected -t test --files=...`; validate and split base..head into --base/--head; reject nonexistent scoped targets; inspect range files for unsafe paths; and fail toward `npm exec -- nx run-many -t test` on missing, malformed, git-failed, or unsafe scope. Emit selected tier and reason before execution. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'Implement the dependency-free selector over one roadmap-owned @JSON manifest or a validated base..head input. Convert manifest paths to exact `npm exec -- nx affected -t test --files=...` argv without shell re-parsing; inspect range files before selection; and use `npm exec -- nx run-many -t test` on missing, malformed, Git-failed, or unsafe root/workspace/lock/test-runner scope. Emit machine-readable tier/reason/argv, reject nonexistent exact-test targets, and pin argv in fake-Nx assertions. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
           description:
-            'Generate testCadence.enabled with a CI/release full-suite backstop while preserving existing values. Map Nx rows one-to-one: lint/types/build each own one affected target; unit is the full fallback; unit-scoped consumes `{files}`; unit-affected consumes complete phase-own `{files}`; unit-impacted consumes `{range}`. Copy the selector before config validation and never duplicate a combined command. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
-        },
-        {
-          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
-          description:
-            'Document the executable local/phase/arc cadence, distinct commands, full-tier escalation paths, and consumer responsibility to run the full unit command in CI/release. Then run the integration suite GREEN and record the prior RED plus final command exits. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'After the capability probe and approval, merge testCadence.enabled plus distinct unit full, unit-scoped `{manifest}`, unit-affected `{manifest}`, and unit-impacted `{range}` bindings while preserving existing values. Lint/types/build own one affected target each. Update the seven-required-base-row invariant to admit and validate only schema-supported optional rows; copy the selector before config check. Record RED/GREEN and supersede the stale four-task eval. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
       ],
       acceptanceCriteria: [
         'capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/cli/lib/config.test.mjs plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/cli/lib/landing.test.mjs plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
-        'A real roadmap gate plan/run with testCadence.enabled selects unit-affected for a leaf source without a colocated test, unit-scoped for exact tests, and full unit for unsafe or indeterminate input; arc resolution substitutes both @manifest and validated base..head forms.',
-        'The Nx pointer table binds unit, unit-scoped, unit-affected, and unit-impacted distinctly; lint/types/build each own one target; generated guidance requires the full unit binding in CI/release.',
-        'The transparency report records the pre-implementation RED and post-implementation GREEN; a nonexistent scoped target cannot report green.',
+        'Real gate plan/run selects affected for leaf source, scoped for exact tests, impacted for arc inputs, and byte-identical full for unsafe/indeterminate scope; reports, aliases, deleted paths, and manifest cleanup are proven.',
+        'No consumer filename is shell-interpolated: generated bindings receive only a validated @manifest token; adversarial filenames cannot split argv or execute; nonexistent exact targets cannot green.',
+        'A legacy roadmap capability probe STOPs before writes with an upgrade remedy; current config accepts every generated key; prior task 32.3 still requires seven base rows and validates only supported optional rows.',
       ],
       files: [
         'plugins/zeroh-roadmap/cli/roadmap.config.schema.json',
         'plugins/zeroh-roadmap/cli/lib/config.mjs',
         'plugins/zeroh-roadmap/cli/lib/config.test.mjs',
+        'plugins/zeroh-roadmap/cli/commands/config.mjs',
         'plugins/zeroh-roadmap/cli/commands/config.test.mjs',
         'plugins/zeroh-roadmap/cli/lib/slots.mjs',
         'plugins/zeroh-roadmap/cli/lib/slots.test.mjs',
         'plugins/zeroh-roadmap/cli/commands/gate.mjs',
         'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
-        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/gate-report.mjs',
         'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
         'plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
         'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
         'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
@@ -279,8 +284,8 @@ export default definePhase({
       done: false,
       dependsOn: ['32.3'],
       interfaces: {
-        consumes: ['zeroh-roadmap test-scope ladder', 'phase-own file derivation', 'Nx affected project graph'],
-        produces: ['source-aware unit-affected gate seam', 'generated affected-first Nx selector', 'safe full-tier fallback'],
+        consumes: ['roadmap test-scope ladder', 'phase-own files', 'Nx affected graph'],
+        produces: ['manifest-safe source-aware gate seam', 'read-only compatibility capability', 'generated affected-first Nx selector'],
       },
     },
   ],

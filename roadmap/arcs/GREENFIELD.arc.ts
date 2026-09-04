@@ -71,11 +71,11 @@ import { defineArc } from '@/lib/roadmap/schema'
  * promise                                   | kind        | fulfilled by
  * standards-first                           | criterion   | 29.2 (greenfield-init approval gate) + 33.1 (brownfield gap table + approval) + 34.4 + 34.5 (dry runs)
  * tradeoffs-not-defaults                    | criterion   | 30.1 (stack-decision matrices) + 30.2 (ADR template with "better when" row)
- * shard-ready-delivery                      | criterion   | 34.6 (CI shard planner, workflows, evidence aggregation, artifact promotion)
+ * shard-ready-delivery                      | criterion   | 34.6 (six adapters + CI evidence/artifact protocol) + 34.7 (approval-gated install + final native proof)
  * beautiful-by-default                      | criterion   | 30.3 (design-system reference) + 31.1 (web archetype manifest) + 32.3 (pointer wiring) + 34.4 + 34.5
  * six-archetypes                            | criterion   | 31.1–31.6 (one manifest per archetype, each with a verify command run on this box)
  * readme-current                            | criterion   | 32.2 (README template + catalog check) + 33.3 (brownfield README reconcile) + 34.5
- * affected-first-verification               | criterion   | 32.5 (Nx tier bindings + selector template) + 34.4 + 34.5 (native and mutation proof)
+ * affected-first-verification               | criterion   | 32.5 (Nx tier bindings + safe selector) + 34.7 (final native and mutation proof)
  * roadmap-offers-setup                      | criterion   | 34.1 (layout.md §Missing homes + six pointer clauses + ratchet test)
  * execution-prompt §Design                  | designRef   | 29.1 (plugin skeleton + router) + 29.3 (templates dir split) + 34.1 (routing seam)
  * "conventions land once, one owner"        | honestyRail | 32.1 (AGENTS.md home, CLAUDE.md @import) + 33.2 (harness-file reconciliation)
@@ -221,7 +221,7 @@ export default defineArc({
       job: 'from day one, broad CI is parallelizable and release promotes exactly what the full suite proved (user ruling, 2026-09-04)',
       surfaces: ['console'],
       signal:
-        'a generated scratch Nx repository has an affected PR workflow and full main/nightly workflow whose stable configurable shard manifest assigns every project/spec exactly once, uploads compact results on red or green, merges reports and coverage before floors, and publishes one content-addressed build artifact; release requires the aggregate for the same commit and promotes that digest without rebuilding',
+        'a generated scratch repository for each of the six archetype adapters has an affected PR workflow and full main/nightly workflow whose stable configurable shard manifest assigns every atomic identity exactly once, uploads compact results on red or green, merges reports and coverage before floors, and publishes one content-addressed build artifact; release requires the aggregate for the same commit and promotes that digest without rebuilding',
       tier: 'wired',
       bar: 'shard count 1 and greater are valid without workflow redesign; omissions, duplicates, incomplete reports, coverage/test-count regression, stale commit, skipped credentials, digest mismatch, or release rebuild are red; permissions and retention are bounded',
     },

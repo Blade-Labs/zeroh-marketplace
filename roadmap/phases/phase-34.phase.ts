@@ -5,7 +5,7 @@ import { definePhase } from '@/lib/roadmap/schema'
  * four model-loaded entry points, and records honest end-to-end evidence from empty and mature
  * repositories. Phases 29-33 create every consumed plugin path before this final plane runs.
  *
- * timing: band 4-6 × surface:false, N=6; recalibrate after CI/release generation lands
+ * timing: band 4-6 × surface:false, N=7; recalibrate after CI/release generation lands
  */
 export default definePhase({
   phase: 34,
@@ -33,6 +33,8 @@ export default definePhase({
     'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
     'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
     'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+    'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+    'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
     'plugins/zeroh-greenfield/DRYRUN-2026-09.md',
   ],
   stakeholderDemo:
@@ -279,41 +281,41 @@ export default definePhase({
     },
     {
       id: '34.6',
-      title: 'Generate a shard-ready CI and artifact-promotion release baseline',
+      title: 'Specify and mutation-prove six-archetype sharded CI plus exact-artifact release',
       problem:
-        'Affected local gates recover iteration speed only if broad regression moves to a trustworthy automated boundary. A late monolithic suite recreates Mudarabah-style release latency and flake pressure; GREENFIELD must establish deterministic sharding, complete evidence, and build-once promotion before the estate grows.',
+        'A generic workflow over ambiguous project/spec identities cannot guarantee exact-once execution or apply honestly across Nx, web, Expo, Flutter, Gradle Android, and library/CLI estates. CI needs one lifecycle with explicit archetype inventory/executor/report adapters and a complete evidence-to-artifact protocol.',
       steps: [
         {
           file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
           description:
-            'TDD first: render the selected archetype into a scratch consumer and fail until workflows prove PR affected validation, main/nightly full validation, configurable deterministic shards, one-shard validity, no missing/duplicate test units, always-uploaded shard reports, merged coverage before floors, explicit retry/flaky classification, least-privilege permissions, concurrency semantics, and build-once artifact identity through release. Record RED. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'TDD first with an executable simulated CI/fan-in/release harness. Plant missing, duplicate, red, retried, quarantined, malformed, stale-SHA, expired, ambiguous-producer, coverage-floor, test-count, report-digest, inventory-digest, build-digest, tag-SHA, and rebuild mutations. Validate workflow YAML with a real parser and actionlint when available; unavailable tooling is classified, never green. Record RED. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
           description:
-            'Define the generator-neutral strategy using Azure precedents: affected required PR gate; full sharded main/nightly backstop; release gate consumes the same reports; immutable build artifact is promoted rather than rebuilt; post-merge watch remains visible; retries never erase first-attempt failure; secrets and deployment environments are opt-in. Contrast Mudarabah’s manually partitioned E2E suites as a useful taxonomy but not a complete CI contract. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'Define the shared lifecycle and six adapter rows. Each archetype owns exactly one atomic identity type, canonical inventory command, shard argv, JUnit/coverage format, merge command, and build command: Nx projects; web/Expo test files plus Playwright specs; Flutter test files; Android Gradle modules/tasks; library/CLI node:test files. Unsupported tooling is proposed as unavailable with an install remedy, never counted green. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
           description:
-            'Generate a dependency-free stable shard planner over sorted project/spec identities with configurable shard count and deterministic balanced assignment. Emit a machine-readable manifest and fail on empty identity, duplicates, omissions, or invalid shard count; shard count 1 must preserve the same contract. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'Implement versioned deterministic planning over one adapter’s normalized disjoint identities. Sort and reject duplicates; count-balance with an explicit deterministic default weight; define Windows separator normalization, renamed/deleted identities, count=1, count>units with no emitted empty shards, permutation stability, manifest digest, and exact-once union proof between inventory and executed reports. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
           description:
-            'Generate the approved archetype CI workflow: pull requests run affected lint/type/test/build with pinned base/head; main, schedule, and explicit full dispatch create the shard matrix, run every shard independently, upload compact reports on success or failure, merge reports/coverage, enforce completeness/count/coverage floors, and publish one content-addressed build artifact. Cancellation may supersede stale PR runs but never main/release evidence. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'Generate PR affected validation and authoritative main/manual-full validation; nightly diagnoses but cannot become an ambiguous release producer. Full runs create shards, preserve first attempts, allow only bounded infrastructure retry, classify rerun-pass as blocking flaky, require quarantine owner/reason/expiry, always upload compact reports, merge canonical path-remapped coverage once, verify inventory/test-count/floors via approved baseline changes, then emit an attested evidence manifest `{sha,tree,suiteManifestDigest,shardReports,coverageDigest,buildDigest,producerRunId,expiresAt}`. Pin third-party actions to full commit SHA with version comments; use job-level least privilege, no fork secrets, bounded retention, and PR-only cancellation. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
           description:
-            'Generate a manual/tag release workflow that requires the full-suite aggregate for the exact commit, verifies artifact digest/provenance, promotes that existing artifact through an environment gate, emits release notes, and cannot silently skip absent credentials or rebuild different bytes. Keep provider deployment steps as explicit approved placeholders. Then run GREEN and record workflow/parser exits. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'Resolve a tag/manual input to exact SHA; locate exactly one unexpired authoritative evidence manifest for that SHA; verify tree, inventory, shard-report, coverage, build, producer-run, and artifact digests; download and promote those bytes through a protected environment with deploy-job-only OIDC; never build. Missing credentials/evidence, multiple producers, digest drift, stale tag, or skipped promotion is red. Provider deployment remains an approved placeholder. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
       ],
       acceptanceCriteria: [
         'capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
-        'PR workflow runs affected validation with explicit base/head; main/nightly/full dispatch runs a complete deterministic shard set and merges evidence before enforcing test-count and coverage floors.',
-        'Every shard uploads compact diagnostics under failure; retries preserve and classify the first failure; one shard is valid and increasing shard count requires no workflow redesign.',
-        'Release verifies the exact full-suite commit and promotes the content-addressed build artifact without rebuilding; missing evidence, digest mismatch, skipped credentials, duplicate/missing shard identities, or incomplete aggregation is red. Templates use least privilege, pinned action majors, bounded retention, PR-only cancellation, and no provider secret/deployment default.',
+        'Every one of six archetype adapters defines one disjoint identity inventory and exact argv/report/coverage/build contract; shard count 1 and >units are valid, and the executed union equals inventory exactly once.',
+        'Required-test retries cannot erase first failure; bounded infra retry and quarantine metadata/expiry are enforced; malformed/partial reports, coverage or count regression, and unapproved baseline changes are red.',
+        'Exactly one authoritative same-SHA unexpired evidence manifest binds full-suite inventory/reports/coverage to one content-addressed build; release verifies all links and promotes without rebuilding under least privilege and immutable action pins.',
       ],
       files: [
         'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
@@ -321,14 +323,65 @@ export default definePhase({
         'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
         'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
         'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md',
       ],
       testMode: 'tdd',
       done: false,
       dependsOn: ['34.5'],
-      interfaces: {
-        consumes: ['32.5 affected/full gate bindings', 'selected archetype testConventions', '34.4 machine-bound dry-run fixture'],
-        produces: ['shard-ready CI baseline', 'build-once artifact promotion release baseline'],
-      },
+      interfaces: { consumes: ['32.5 safe affected/full bindings', 'six archetype manifests'], produces: ['six-adapter shard contract', 'authoritative CI evidence manifest', 'build-once release protocol'] },
+    },
+    {
+      id: '34.7',
+      title: 'Wire delivery into approval-gated init and re-prove final native trees',
+      problem:
+        'Delivery templates are not a GREENFIELD feature until the init workflow proposes, selects, writes, preserves, and verifies them. Earlier native receipts predate CI/release output, so final evidence must be regenerated after delivery wiring.',
+      steps: [
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+          description:
+            'Before writes, ask CI provider/release-environment questions and present the selected adapter, exact paths, lifecycle, secret placeholders, and preservation plan for approval. After approval, copy/fill the shard planner and workflows, merge rather than overwrite existing workflows, record commands, then validate. Brownfield collisions STOP for an explicit merge decision. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
+          description:
+            'Bind the selected archetype adapter and CI/release files into the existing proposal/copy/validate order; ensure README commands and testCadence backstop point at generated workflow names. A second run proposes and writes nothing. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/dry-runs/empty/receipt.json',
+          description:
+            'Rerun real Claude-native and Codex-native empty fixtures after 34.6/34.7. Receipts must include selected adapter, workflow/parser exits, shard manifest/evidence schema digests, approval-before-first-write, final tree, and second-run no-op. Failed or unavailable arms remain blocking. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/dry-runs/brownfield/receipt.json',
+          description:
+            'Rerun both native hosts on a brownfield fixture with an existing CI workflow. Prove byte preservation before explicit merge approval, bounded merged diff after approval, no secret defaults, valid delivery evidence, and idempotent second run. Regenerate DRYRUN-2026-09.md solely from receipts. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'CI provider, archetype adapter, workflow paths, release environment, and collision behavior are proposed before any write; existing workflows are never overwritten without explicit merge approval.',
+        'Claude and Codex final empty/brownfield receipts include CI/release outputs and machine validation, preserve approved boundaries, and have identical idempotent second-run trees.',
+        'All shard/fan-in/release mutations remain red through the actual generated workflow and selected adapter; unavailable external validation is explicit and blocks a green claim.',
+        'The stale phase-32 peval is regenerated with five tasks/current keyFiles and the final phase/arc reports supersede every pre-amendment gate artifact.',
+      ],
+      files: [
+        'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
+        'plugins/zeroh-greenfield/dry-runs/empty/receipt.json',
+        'plugins/zeroh-greenfield/dry-runs/brownfield/receipt.json',
+        'plugins/zeroh-greenfield/DRYRUN-2026-09.md',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: false,
+      dependsOn: ['34.6'],
+      interfaces: { consumes: ['34.6 delivery templates and mutation harness', '34.4 native receipt protocol'], produces: ['approval-gated delivery installation', 'final native GREENFIELD evidence'] },
     },
   ],
   reviewRecord: { date: '2026-09-04', model: 'pending-software-architect-review', verdict: 'NEEDS_WORK', via: 'executed' },
