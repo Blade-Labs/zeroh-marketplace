@@ -293,7 +293,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
           description:
-            'Define the shared lifecycle and six adapter rows. Each archetype owns exactly one atomic identity type, canonical inventory command, shard argv, JUnit/coverage format, merge command, and build command: Nx projects; web/Expo test files plus Playwright specs; Flutter test files; Android Gradle modules/tasks; library/CLI node:test files. Unsupported tooling is proposed as unavailable with an install remedy, never counted green. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'Define the shared lifecycle and six adapter rows. Every atomic key is the tagged union `{runner, canonicalPathOrLeafTask}`. Web and Expo keep separately inventoried unit and Playwright populations, each exact-once; Flutter and library/CLI use canonical test-file keys; Nx uses leaf project-target keys; Android enumerates leaf test tasks only and rejects aggregate or dependency-overlapping tasks. Each adapter owns inventory argv, shard argv, JUnit/coverage format, merge, and build. Unsupported tooling is unavailable with an install remedy, never green. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',

@@ -35,6 +35,7 @@ export default definePhase({
     'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
     'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md',
     'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
+        'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
     'plugins/zeroh-roadmap/cli/lib/config.mjs',
     'plugins/zeroh-roadmap/cli/lib/config.test.mjs',
     'plugins/zeroh-roadmap/cli/roadmap.config.schema.json',
@@ -46,6 +47,7 @@ export default definePhase({
     'plugins/zeroh-roadmap/cli/commands/gate.mjs',
     'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
     'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        'plugins/zeroh-roadmap/cli/lib/landing.mjs',
         'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
         'plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs',
   ],
@@ -238,17 +240,27 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/slots.mjs',
           description:
-            'Add strict unit-affected/integration-affected config keys and one safe scope-manifest protocol: gate owns a temporary JSON manifest of validated living phase-own paths, substitutes only a validated quoted `@manifest` token through `{manifest}`, and always cleans it. Existing `{files}` consumers remain compatible, but GREENFIELD-generated scoped/affected commands use manifests. Relevant receives all phase-own paths; scoped receives exact/colocated tests; missing/malformed/unsafe scope or manifest failure resolves byte-identical full. Update slot aliases, reports, parser/schema, and tests. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/cli/lib/config.test.mjs plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/cli/lib/landing.test.mjs plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'Add strict unit-affected/integration-affected config keys and one versioned `scope-manifest-json-v1` protocol for phase and arc: gate and landing own temporary JSON manifests of validated living paths, substitute only a validated quoted `@manifest` token through `{manifest}`, and always clean it. Existing `{files}` consumers remain compatible, but GREENFIELD-generated scoped/affected commands use manifests. Relevant receives all phase-own paths; scoped receives exact/colocated tests; missing/malformed/unsafe scope or manifest failure resolves byte-identical full. Update slot aliases, reports, parser/schema, and tests. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/slots.test.mjs plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/cli/lib/config.test.mjs plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/cli/lib/landing.test.mjs plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/commands/config.mjs',
           description:
-            'Add a read-only `roadmap config capabilities --json` contract reporting configVersion and accepted gate slots. Greenfield probes it before proposing affected keys; missing unit-affected/unit-impacted/{manifest} support prints the exact marketplace update command and STOPs before consumer writes. Test current and legacy capability fixtures. → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'Add a read-only `roadmap config capabilities --json` contract reporting configVersion, accepted gate slots, and scopeManifestProtocol. Greenfield probes it before proposing affected keys; missing unit-affected/unit-impacted/{manifest} support prints the exact marketplace update command and STOPs before consumer writes. Test current and legacy capability fixtures. → verify: capbuild node --test plugins/zeroh-roadmap/cli/commands/config.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
           description:
-            'Implement the dependency-free selector over one roadmap-owned @JSON manifest or a validated base..head input. Convert manifest paths to exact `npm exec -- nx affected -t test --files=...` argv without shell re-parsing; inspect range files before selection; and use `npm exec -- nx run-many -t test` on missing, malformed, Git-failed, or unsafe root/workspace/lock/test-runner scope. Emit machine-readable tier/reason/argv, reject nonexistent exact-test targets, and pin argv in fake-Nx assertions. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+            'Implement the dependency-free selector over one roadmap-owned scope-manifest-json-v1 @JSON manifest or a validated base..head input. Convert manifest paths to exact `npm exec -- nx affected -t test --files=...` argv without shell re-parsing; inspect range files before selection; and use `npm exec -- nx run-many -t test` on missing, malformed, Git-failed, or unsafe root/workspace/lock/test-runner scope. Emit machine-readable tier/reason/argv, reject nonexistent exact-test targets, and pin argv in fake-Nx assertions. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+          description:
+            'Move roadmap availability and `roadmap config capabilities --json` into the first read-only preflight, before proposal, approval, generator, standards, README, or any other consumer write. Absent command, nonzero/malformed response, protocol version below `scope-manifest-json-v1`, or missing required slots prints the exact marketplace upgrade command and STOPs with zero writes. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
+          description:
+            'Own the exact distinct full, scoped-manifest, affected-manifest, and impacted command strings plus local/phase/arc/full-CI cadence under testConventions. Pointer rows must be derived from this heading, never placeholder text, and every command uses the selected npm package manager form. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
@@ -273,10 +285,12 @@ export default definePhase({
         'plugins/zeroh-roadmap/cli/commands/gate.mjs',
         'plugins/zeroh-roadmap/cli/commands/gate.test.mjs',
         'plugins/zeroh-roadmap/cli/lib/gate-report.mjs',
+        'plugins/zeroh-roadmap/cli/lib/landing.mjs',
         'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
         'plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs',
         'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
         'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
+        'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
         'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
         'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
       ],
