@@ -213,7 +213,7 @@ export default definePhase({
       done: true,
       transparencyReport: {
         whatWasDone: 'Created the capped zeroh-shaped brownfield fixture and five-column expected gap-table oracle.',
-        how: 'The fixture has six real project roots, a four-row README with both omissions and an orphan, duplicated harness conventions with a generated Nx block, registry-free component configs, absent gap homes, and a stale reference to a nonexistent package. The oracle maps every planned condition across present, partial, missing, and stale states. All four acceptance commands passed.',
+        how: 'The fixture has six real project roots, a checker-compatible four-row README with both omissions and an orphan, duplicated harness conventions with a generated Nx block, registry-free component configs, absent gap homes, and a stale reference to a nonexistent package. The eight-row oracle maps exactly one row per marker and covers present, partial, missing, and stale states. All four acceptance commands passed. Independent review caught and drove repairs for the README markers/shape, catalog root key, and oracle cardinality; the real checker now reaches the intended missing/orphan red rather than a malformed-input error.',
         compromises: 'None', skipped: 'None', hardcoded: 'Fixture-only deterministic names and paths are intentional oracle data.', limitations: 'The fixture models structure only and deliberately contains no application sources.',
       },
     },

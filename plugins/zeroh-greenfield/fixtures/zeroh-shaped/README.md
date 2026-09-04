@@ -1,8 +1,10 @@
 # Established workspace
 
-| Project | Root |
-| --- | --- |
-| web | apps/web |
-| api | apps/api |
-| admin | apps/admin |
-| orphan | apps/orphan |
+<!-- repo-catalog:start -->
+| Project | Path | Purpose |
+| --- | --- | --- |
+| web | apps/web | web application |
+| api | apps/api | API application |
+| admin | apps/admin | admin application |
+| orphan | apps/orphan | stale catalog row |
+<!-- repo-catalog:end -->
