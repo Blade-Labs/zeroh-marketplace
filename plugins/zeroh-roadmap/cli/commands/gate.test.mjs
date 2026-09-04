@@ -85,6 +85,10 @@ function makeRepo(configOverride, opts = {}) {
   const commit = (msg, files) => {
     for (const [rel, body] of Object.entries(files)) {
       const abs = join(root, rel)
+      if (body === null) {
+        rmSync(abs, { force: true })
+        continue
+      }
       mkdirSync(dirname(abs), { recursive: true })
       writeFileSync(abs, body)
     }
@@ -983,6 +987,29 @@ test('gate plan — mixed source and exact-test changes select affected with the
     assert.ok(row, `${slot} must replace scoped selection for a mixed diff`)
     assert.deepEqual(row.files.sort(), ['src/leaf.ts', 'src/other.test.ts'])
   }
+})
+
+test('gate plan — a deleted executable mixed with an exact test falls back to the full tier byte-identically', () => {
+  const cfg = {
+    ...CONFIG,
+    gateCommands: {
+      ...CONFIG.gateCommands,
+      'unit-scoped': 'node scoped.mjs {files}',
+      'unit-affected': "node selector.mjs '{manifest}'",
+    },
+  }
+  const repo = makeRepo(cfg)
+  repo.writePhase(5009, phaseObj({ phase: 5009, testScope: 'relevant' }))
+  repo.commit('seed executable', { 'src/deleted.ts': 'export const deleted = 1\n' })
+  repo.commit('feat: phase 5009 — delete source and add test', {
+    'src/deleted.ts': null,
+    'src/other.test.ts': 'export const covered = true\n',
+  })
+  const r = planOf(repo.root, ['5009'])
+  assert.equal(r.code, 0, r.stderr)
+  const unit = r.plan.slots.find((candidate) => candidate.slot === 'unit')
+  assert.ok(unit, JSON.stringify(r.plan.slots))
+  assert.equal(unit.command, cfg.gateCommands.unit)
 })
 
 // ── the vacuous-scoped-runner probe at PLAN time (task 20.2) ─────────────────────────

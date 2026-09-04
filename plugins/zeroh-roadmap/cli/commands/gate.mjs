@@ -419,9 +419,13 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
     const stem = file.replace(/\.[^./]+$/, '')
     return !COLOCATED_TEST_EXTS.some((ext) => existsSync(join(toplevel, stem + ext)))
   })
+  const hasDeletedExecutable = ownFiles.some((file) => isExecutable(file) && !existsSync(join(toplevel, file)))
   const emptyScopeSkip = []
   if (wantsTests && testScope.effective !== 'static' && !testScope.refused) {
     if (testScope.effective === 'full') {
+      slots.push(compactSlot(resolveSlot(opts.cfg, 'unit')))
+      slots.push(compactSlot(resolveSlot(opts.cfg, 'integration')))
+    } else if (hasDeletedExecutable) {
       slots.push(compactSlot(resolveSlot(opts.cfg, 'unit')))
       slots.push(compactSlot(resolveSlot(opts.cfg, 'integration')))
     } else if (testFiles.length > 0 && !hasUncoveredSource) {
