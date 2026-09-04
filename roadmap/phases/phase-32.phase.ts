@@ -83,7 +83,8 @@ export default definePhase({
       ],
       files: ['plugins/zeroh-greenfield/skills/greenfield-init/references/standards.md'],
       testMode: 'none',
-      done: false,
+      done: true,
+      transparencyReport: { whatWasDone: 'Created the approval-gated standards and harness-pointer authoring contract.', how: 'Assigned conventions solely to AGENTS.md, preserved generated blocks, and bound code style, architecture, and UX sources.', compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Declarative template guidance only.' },
       interfaces: {
         consumes: ['phase 29 standards-template section contracts', 'phase 31 ## Conventions delta'],
         produces: ['standards.md authoring contract'],
