@@ -288,7 +288,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
           description:
-            'TDD first with an executable simulated CI/fan-in/release harness. Plant missing, duplicate, red, retried, quarantined, malformed, stale-SHA, expired, ambiguous-producer, coverage-floor, test-count, report-digest, inventory-digest, build-digest, tag-SHA, and rebuild mutations. Validate workflow YAML with a real parser and actionlint when available; unavailable tooling is classified, never green. Record RED. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'TDD first with an executable simulated CI/fan-in/release harness. Plant missing, duplicate, red, retried, quarantined, malformed, stale-SHA, expired, ambiguous-producer, coverage-floor, test-count, report-digest, inventory-digest, build-digest, tag-SHA, and rebuild mutations. Mandatory validation uses the repository-pinned js-yaml parser plus executable workflow simulations; actionlint runs as an optional extra diagnostic and its path/version or absence is recorded without weakening mandatory evidence. Record RED. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
@@ -365,7 +365,7 @@ export default definePhase({
       acceptanceCriteria: [
         'CI provider, archetype adapter, workflow paths, release environment, and collision behavior are proposed before any write; existing workflows are never overwritten without explicit merge approval.',
         'Claude and Codex final empty/brownfield receipts include CI/release outputs and machine validation, preserve approved boundaries, and have identical idempotent second-run trees.',
-        'All shard/fan-in/release mutations remain red through the actual generated workflow and selected adapter; unavailable external validation is explicit and blocks a green claim.',
+        'All shard/fan-in/release mutations remain red through mandatory js-yaml parsing and executable generated-workflow simulations; optional actionlint path/version or absence is recorded and cannot substitute for or weaken those checks.',
         'The stale phase-32 peval is regenerated with five tasks/current keyFiles and the final phase/arc reports supersede every pre-amendment gate artifact.',
       ],
       files: [
