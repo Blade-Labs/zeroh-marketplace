@@ -1,0 +1,88 @@
+{
+  "phase": 31,
+  "date": "2026-09-04",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 34
+  },
+  "taskCount": 6,
+  "keyFiles": [
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/README.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md",
+    "plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 2,
+      "MEDIUM": 1,
+      "LOW": 0
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "curated": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1969933
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 1,
+    "linesAdded": 327,
+    "linesRemoved": 7,
+    "filesChanged": 9,
+    "testsAtStart": 1885,
+    "testsAtEnd": 1885,
+    "testsAdded": 0,
+    "startedAt": "2026-09-04T14:45:50.000Z",
+    "completedAt": "2026-09-04T16:11:04.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "gpt-5.6-sol"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "code-reviewer": {
+        "model": "gpt-5.6-sol"
+      }
+    }
+  }
+}
