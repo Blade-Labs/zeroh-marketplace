@@ -461,7 +461,7 @@ export function evaluateBlockers(state) {
 // ─────────────────────────────────────────────────────────────────────────────
 import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { resolveSlot, resolveImpactedOrFallback, runSlot } from './slots.mjs'
+import { resolveSlot, resolveImpactedOrFallback, createScopeManifest, runSlot } from './slots.mjs'
 import { sweepOrphanCapbuildUnits } from './orphan-sweep.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
@@ -558,10 +558,9 @@ export function deriveArcSuiteScope(worktree, memberNums, exec = defaultExec) {
     if (r.status !== 0) return null // cannot enumerate a member commit ⇒ no scope
     for (const f of r.stdout.split('\n').map((s) => s.trim()).filter(Boolean)) files.add(f)
   }
-  const first = shas.values().next().value
-  const manifest = join(tmpdir(), `roadmap-arc-scope-${process.pid}-${first.slice(0, 8)}.txt`)
-  writeFileSync(manifest, [...files].sort().join('\n') + '\n')
-  return { filesFrom: manifest, fileCount: files.size, commitCount: shas.size }
+  const manifest = createScopeManifest(worktree, [...files])
+  if (manifest == null) return null
+  return { filesFrom: manifest.path, fileCount: manifest.paths.length, commitCount: shas.size, cleanup: manifest.cleanup }
 }
 
 export function deriveArcSuiteRange(worktree, memberNums, exec = defaultExec) {
@@ -1086,6 +1085,7 @@ export async function landCommand(rest) {
     suite = { slots: [], suiteGreen: null, ran: false, mode: 'defer-ci', range: null, note: 'arc-end suite deferred to CI (arcEndSuite defer-ci / --defer-suite) — the release pipeline is the full-suite gate' }
     state.suiteGreen = null
   } else {
+    let suiteScopeCleanup = null
     if (suiteMode === 'impacted') {
       const wt = state.sidecar?.worktree ?? toplevel
       // Prefer the arc's OWN file scope (subject-matched member commits → `@manifest`);
@@ -1094,6 +1094,7 @@ export async function landCommand(rest) {
       const scope = deriveArcSuiteScope(wt, state.members.map((m) => m.num))
       if (scope !== null) {
         suiteRange = `@${scope.filesFrom}`
+        suiteScopeCleanup = scope.cleanup
         state.suiteScope = { fileCount: scope.fileCount, commitCount: scope.commitCount }
       } else {
         suiteRange = deriveArcSuiteRange(wt, state.members.map((m) => m.num))
@@ -1101,7 +1102,11 @@ export async function landCommand(rest) {
       }
     }
     if (process.env.ZEROH_LAND_DETACHED) writeLandJournal(detachHome, arcId, { step: 'arc-end suite' })
-    suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e, mode: effectiveMode, range: suiteRange })
+    try {
+      suite = await runArcEndSuite({ config: cfg, cwd: state.sidecar?.worktree ?? toplevel, includeE2e, mode: effectiveMode, range: suiteRange })
+    } finally {
+      suiteScopeCleanup?.()
+    }
     state.suiteGreen = suite.suiteGreen
 
     // Post-suite drift re-probe: the base may move DURING a long suite. Zero overlap ⇒

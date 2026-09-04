@@ -937,6 +937,30 @@ test('gate plan — a -spec SOURCE module selects its colocated .test.ts, and ne
   }
 })
 
+test('gate plan — relevant leaf source without tests selects affected via a quoted manifest, never interpolates its filename', () => {
+  const cfg = {
+    ...CONFIG,
+    gateCommands: {
+      ...CONFIG.gateCommands,
+      'unit-affected': "node selector.mjs '{manifest}'",
+      'integration-affected': "node selector.mjs '{manifest}'",
+    },
+  }
+  const repo = makeRepo(cfg)
+  repo.writePhase(5007, phaseObj({ phase: 5007, testScope: 'relevant' }))
+  const source = 'src/leaf.ts'
+  repo.commit('feat: phase 5007 — leaf source', { [source]: 'export const leaf = 1\n' })
+  const r = planOf(repo.root, ['5007'])
+  assert.equal(r.code, 0, r.stderr)
+  for (const slot of ['unit-affected', 'integration-affected']) {
+    const row = r.plan.slots.find((candidate) => candidate.slot === slot)
+    assert.ok(row, `${slot} selected; plan=${JSON.stringify(r.plan.slots)} scope=${JSON.stringify(r.plan.testScope)}`)
+    assert.match(row.command, /^node selector\.mjs '@\/tmp\/roadmap-scope-[^/]+\/scope\.json'$/)
+    assert.equal(row.command.includes(source), false, 'consumer filename never enters shell command text')
+    assert.deepEqual(row.files, [source], 'report preserves the selected source path')
+  }
+})
+
 // ── the vacuous-scoped-runner probe at PLAN time (task 20.2) ─────────────────────────
 //
 // `gate plan` is where a SCOPED tier is chosen OVER the full suite, so it is the one place

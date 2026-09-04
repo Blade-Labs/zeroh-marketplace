@@ -39,8 +39,16 @@ dependencies explicit. Repository metadata is emitted, and the README checks
 the catalog rather than duplicating it.
 
 ## testConventions
-Run `npx nx affected -t lint,typecheck,test,build` for changed projects and
-`npx nx run-many -t test` for the explicit workspace unit sweep.
+Copy `templates/scripts/run-nx-test-tier.mjs` to `scripts/run-nx-test-tier.mjs`.
+
+- Full: `node scripts/run-nx-test-tier.mjs invalid`
+- Scoped manifest: `node scripts/run-nx-test-tier.mjs '{manifest}'`
+- Affected manifest: `node scripts/run-nx-test-tier.mjs '{manifest}'`
+- Impacted range: `node scripts/run-nx-test-tier.mjs '{range}'`
+
+Local exact tests use scoped manifests, phase source changes use affected manifests,
+arc inputs use impacted ranges, and CI runs the full workspace sweep. The selector
+invokes `npm exec -- nx` with an argv array and fails toward `run-many -t test`.
 
 ## designHomes
 Set `designHomes.architecture.home` to `docs/architecture.md` and

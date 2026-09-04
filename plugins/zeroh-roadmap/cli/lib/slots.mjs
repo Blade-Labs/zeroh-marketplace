@@ -14,8 +14,9 @@
 import { spawn } from 'node:child_process'
 import { matchGlob, matchGlobPath } from './ladder.mjs'
 import { runCaptured } from './exec.mjs'
-import { createWriteStream, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { roadmapRootRel, ROOT_CANDIDATES } from './roadmap-root.mjs'
 
 /** The scoped-slot fallback note — gate-protocol.md:72-81, VERBATIM. Defined ONCE;
@@ -25,6 +26,27 @@ export const SCOPED_FALLBACK_NOTE = 'scoped slot missing — ran full suite'
 /** The impacted-slot fallback note — the SCOPED_FALLBACK_NOTE sibling for the {range}
  *  arc-end path (decision 2). Defined ONCE; callers machine-emit it. Never restated. */
 export const IMPACTED_FALLBACK_NOTE = 'impacted slot missing — ran full suite'
+export const SCOPE_MANIFEST_PROTOCOL = 'scope-manifest-json-v1'
+
+/** Create the only scope artifact accepted by generated commands. */
+export function createScopeManifest(cwd, paths) {
+  const root = resolve(cwd)
+  if (!Array.isArray(paths) || paths.length === 0) return null
+  const living = []
+  for (const path of paths) {
+    if (typeof path !== 'string' || path.length === 0 || path.includes('\0') || path.includes('\n') || isAbsolute(path)) return null
+    const absolute = resolve(root, path)
+    if (relative(root, absolute).startsWith('..') || !existsSync(absolute)) continue
+    living.push(path)
+  }
+  if (living.length === 0) return null
+  const dir = mkdtempSync(join(tmpdir(), 'roadmap-scope-'))
+  const file = join(dir, 'scope.json')
+  writeFileSync(file, JSON.stringify({ protocol: SCOPE_MANIFEST_PROTOCOL, paths: [...new Set(living)].sort() }) + '\n')
+  const cleanup = () => rmSync(dir, { recursive: true, force: true })
+  process.once('exit', cleanup)
+  return { protocol: SCOPE_MANIFEST_PROTOCOL, path: file, token: `@${file}`, paths: living, cleanup }
+}
 
 const refusal = (slot) =>
   `gate cannot run: gateCommands.${slot} missing in roadmap/roadmap.config.json — add it`
@@ -35,7 +57,7 @@ const refusal = (slot) =>
  * owns quoting). A placeholder present in the template but given no value is an ERROR
  * (never run a command with the literal braces still in it). Returns { cmd } | { error }.
  */
-function substitute(template, { files, range, base }) {
+function substitute(template, { files, range, base, manifest }) {
   let cmd = template
   if (cmd.includes('{files}')) {
     if (files == null) return { error: `slot template has a {files} placeholder but no files were provided` }
@@ -48,6 +70,14 @@ function substitute(template, { files, range, base }) {
   if (cmd.includes('{base}')) {
     if (base == null) return { error: `slot template has a {base} placeholder but no base was provided` }
     cmd = cmd.split('{base}').join(String(base))
+  }
+  if (cmd.includes('{manifest}')) {
+    if (manifest == null) return { error: 'slot template has a {manifest} placeholder but no @manifest was provided' }
+    if (!/^@[A-Za-z0-9_./-]+$/.test(String(manifest)) ||
+        !(template.includes("'{manifest}'") || template.includes('"{manifest}"'))) {
+      return { error: 'slot {manifest} requires one validated @manifest token in a quoted placeholder' }
+    }
+    cmd = cmd.split('{manifest}').join(String(manifest))
   }
   return { cmd }
 }
@@ -141,6 +171,19 @@ export function resolveImpactedOrFallback(cfg, tier, range) {
   if (full === 'none') return { slot: tier, declaredAbsent: true, scoped: false }
   // BYTE-IDENTICAL to the full binding — no substitution, no invented filter.
   return { slot: tier, command: full, note: IMPACTED_FALLBACK_NOTE, scoped: false }
+}
+
+/** Source-aware sibling of scoped/impacted resolution. The caller owns the manifest. */
+export function resolveAffectedOrFallback(cfg, tier, manifest) {
+  const slot = `${tier}-affected`
+  const template = cfg?.gateCommands?.[slot]
+  if (template != null && template !== 'none') {
+    return { ...resolveSlot(cfg, slot, { manifest }), scoped: true }
+  }
+  const full = cfg?.gateCommands?.[tier]
+  if (full == null) return { slot: tier, refused: refusal(tier) }
+  if (full === 'none') return { slot: tier, declaredAbsent: true, scoped: false }
+  return { slot: tier, command: full, note: 'affected slot missing — ran full suite', scoped: false }
 }
 
 /** The named hygiene skip — a consumer without the lint-diff binding gets this OBJECT in the

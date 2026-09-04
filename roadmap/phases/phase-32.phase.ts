@@ -294,7 +294,18 @@ export default definePhase({
         'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-04',
+      transparencyReport: {
+        whatWasDone:
+          'Added source-aware affected gate slots, a versioned JSON scope-manifest protocol shared by phase and arc execution, a read-only roadmap capability contract, and the consumer-dropped Nx tier selector plus greenfield preflight and pointer bindings.',
+        how:
+          'The independent test-engineer established RED at 94/95 before implementation. The completed seven-file acceptance run passed 300/300 under capbuild; the phase types slot was declared-none and green. Existing {files} bindings remain compatible, while generated commands accept only a quoted {manifest} carrying an opaque @manifest token and unsafe, empty, missing, or indeterminate scope falls back to the byte-identical full command. The gate-slot strictness guard mutation proof was: planted supported typo unit-affectd → RED with “expected loadConfig to throw, it returned”; renamed unit-affected anchor to unit-source → RED naming unrecognized key unit-affected; restored legal unit-affected/integration-affected rows → GREEN (1/1).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
       dependsOn: ['32.3'],
       interfaces: {
         consumes: ['roadmap test-scope ladder', 'phase-own files', 'Nx affected graph'],

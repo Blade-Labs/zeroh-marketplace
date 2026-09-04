@@ -58,10 +58,19 @@ test("resolveSlot — a slot bound to the literal 'none' is declaredAbsent, not 
   assert.deepEqual(resolveSlot(CFG, 'e2e'), { slot: 'e2e', declaredAbsent: true })
 })
 
-test('resolveSlot — {files} substitutes VERBATIM, no quoting even with shell-meta chars', () => {
+test('resolveSlot — legacy {files} substitution remains compatible', () => {
   const r = resolveSlot(CFG, 'integration-scoped', { files: ['a;b.itest.ts', 'c d.itest.ts'] })
-  // slots.mjs adds NOTHING — the shell-meta ; and the space arrive raw (the template author owns quoting)
   assert.equal(r.command, 'bash scripts/test/run-tier.sh integration-scoped a;b.itest.ts c d.itest.ts')
+})
+
+test('resolveSlot — {manifest} accepts only a validated token in a quoted placeholder', () => {
+  const cfg = { gateCommands: { safe: "node runner.mjs '{manifest}'", unsafe: 'node runner.mjs {manifest}' } }
+  assert.equal(resolveSlot(cfg, 'safe', { manifest: '@/tmp/roadmap-scope.json' }).command, "node runner.mjs '@/tmp/roadmap-scope.json'")
+  for (const [slot, manifest] of [['safe', '/tmp/raw.json'], ['safe', '@/tmp/a.json; touch PWNED'], ['unsafe', '@/tmp/a.json']]) {
+    const r = resolveSlot(cfg, slot, { manifest })
+    assert.match(r.refused, /@manifest/i)
+    assert.equal(r.command, undefined)
+  }
 })
 
 test('resolveSlot — {range} substitutes verbatim', () => {

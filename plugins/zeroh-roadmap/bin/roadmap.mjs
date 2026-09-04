@@ -24,7 +24,7 @@ import { RoadmapRootError } from '../cli/lib/roadmap-root.mjs'
 // (default ROADCODE); `sub` lists subcommands for --help. A command becomes MOUNTED the
 // moment its module lands.
 const TREE = {
-  config: { phase: 1655, sub: ['check'], desc: 'load + validate roadmap.config.json; print resolved bindings' },
+  config: { phase: 1655, sub: ['check', 'capabilities --json'], desc: 'load bindings or report read-only protocol capabilities' },
   init: { phase: 1655, sub: ['--config', '--scaffold', '--root <dir>'], desc: 'scaffold the roadmap root + config.json' },
   status: { phase: 1655, sub: ['[root]', '--json'], desc: 'derive the live lane table (absorbs arc-status.mjs)' },
   claim: { phase: 1655, sub: ['[root]', '--count N'], desc: 'atomically reserve the next phase number(s)' },

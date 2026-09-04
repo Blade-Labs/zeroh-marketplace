@@ -119,6 +119,20 @@ test('2) `config check --json` — pure JSON on stdout, narration on stderr, exi
   assert.notEqual(parsed.gateCommands, null)
 })
 
+test('2b) `config capabilities --json` is read-only and reports the manifest protocol and generated slots', () => {
+  const repo = newRepo()
+  const before = execFileSync('git', ['-C', repo, 'status', '--porcelain'], { encoding: 'utf8' })
+  const res = roadmap(repo, 'config', 'capabilities', '--json')
+  assert.equal(res.status, 0, res.stderr)
+  const parsed = JSON.parse(res.stdout)
+  assert.equal(parsed.configVersion, 1)
+  assert.equal(parsed.scopeManifestProtocol, 'scope-manifest-json-v1')
+  for (const slot of ['unit-scoped', 'unit-affected', 'integration-affected', 'unit-impacted']) {
+    assert.ok(parsed.slots.includes(slot), `${slot} is advertised`)
+  }
+  assert.equal(execFileSync('git', ['-C', repo, 'status', '--porcelain'], { encoding: 'utf8' }), before)
+})
+
 test('3) unconfigured repo: `config check` exits 1 with the VERBATIM absence line on stderr', () => {
   const repo = newRepo() // no config written
   const res = roadmap(repo, 'config', 'check')

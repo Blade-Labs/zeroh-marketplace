@@ -401,6 +401,35 @@ test('11c) hygiene slots are OPTIONAL yet strictness holds — an unknown gateCo
   assert.equal(err.kind, 'invalid')
 })
 
+test('11d) gateCommands keeps seven required base rows and accepts exactly the supported optional rows', () => {
+  const supported = [
+    'lint-diff',
+    'types-web',
+    'ratchets',
+    'unit-scoped',
+    'integration-scoped',
+    'unit-impacted',
+    'integration-impacted',
+    'unit-affected',
+    'integration-affected',
+  ]
+  const repo = newRepo()
+  const cfg = validConfig()
+  for (const key of supported) cfg.gateCommands[key] = `node runner.mjs ${key}`
+  writeConfig(repo, cfg)
+  const loaded = loadConfig(repo)
+  assert.equal(Object.keys(loaded.gateCommands).length, 16, 'seven base rows plus nine supported optionals')
+  assert.deepEqual(Object.keys(loaded.gateCommands).slice(0, 7), Object.keys(validConfig().gateCommands))
+
+  const badRepo = newRepo()
+  const bad = validConfig()
+  bad.gateCommands['unit-affectd'] = 'nx affected --target=test'
+  writeConfig(badRepo, bad)
+  const err = loadErr(badRepo)
+  assert.ok(err instanceof ConfigError)
+  assert.ok(err.messageLines.some((line) => /gateCommands\.unit-affectd|unrecognized/i.test(line)))
+})
+
 test('12) gateConditionalSlots — a bound array of {whenDiffMatches, slot} entries parses', () => {
   const repo = newRepo()
   writeConfig(

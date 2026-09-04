@@ -84,8 +84,20 @@ function reportSchemaDrift(consumerRoot) {
 export default async function run(argv) {
   const sub = argv[0]
   const json = argv.includes('--json')
+  if (sub === 'capabilities') {
+    if (!json) {
+      process.stderr.write('roadmap config capabilities: --json is required\n')
+      return 1
+    }
+    process.stdout.write(JSON.stringify({
+      configVersion: 1,
+      slots: ['lint', 'types', 'unit', 'integration', 'build', 'e2e', 'emit', 'unit-scoped', 'integration-scoped', 'unit-affected', 'integration-affected', 'unit-impacted', 'integration-impacted', 'lint-diff', 'types-web', 'ratchets'],
+      scopeManifestProtocol: 'scope-manifest-json-v1',
+    }) + '\n')
+    return 0
+  }
   if (sub !== 'check') {
-    process.stderr.write(`roadmap config: unknown subcommand '${sub ?? ''}' (expected: check)\n`)
+    process.stderr.write(`roadmap config: unknown subcommand '${sub ?? ''}' (expected: check|capabilities)\n`)
     return 1
   }
 

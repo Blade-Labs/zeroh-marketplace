@@ -11,7 +11,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -341,8 +341,11 @@ test('deriveArcSuiteScope — unions ONLY the member commits\' files into an @ma
   const scope = deriveArcSuiteScope(root, [10], defaultExec)
   assert.ok(scope !== null, 'scope derives')
   assert.equal(scope.commitCount, 2)
-  const listed = readFileSync(scope.filesFrom, 'utf8').split('\n').filter(Boolean)
-  assert.deepEqual(listed, ['mine-a.txt', 'mine-b.txt'], 'only the member commits\' files — the sibling commit is excluded')
+  const manifest = JSON.parse(readFileSync(scope.filesFrom, 'utf8'))
+  assert.equal(manifest.protocol, 'scope-manifest-json-v1')
+  assert.deepEqual(manifest.paths, ['mine-a.txt', 'mine-b.txt'], 'only the member commits\' files — the sibling commit is excluded')
+  scope.cleanup()
+  assert.equal(existsSync(scope.filesFrom), false, 'the landing owner removes its temporary manifest')
   // no member commit matches ⇒ null (the caller falls back to the contiguous range)
   assert.equal(deriveArcSuiteScope(root, [9999], defaultExec), null)
 })

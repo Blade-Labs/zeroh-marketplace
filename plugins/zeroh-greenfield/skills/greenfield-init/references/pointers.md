@@ -1,5 +1,6 @@
 ## Tool gate
-If zeroh-roadmap is absent, print `/plugin install zeroh-roadmap@zeroh-marketplace` and STOP.
+The skill's first preflight must prove `scope-manifest-json-v1` plus scoped,
+affected, and impacted slots before this reference is used.
 
 ## Config branch
 If roadmap config is absent, run `roadmap init`; if present, never run init. In both branches MERGE only missing keys and preserve every existing key.
@@ -62,6 +63,13 @@ Map commands to `gateCommands.lint`, `gateCommands.types`, `gateCommands.unit`, 
 | build | npx nx affected -t lint,typecheck,test,build | ## testConventions |
 | e2e | placeholder e2e | placeholder |
 | emit | placeholder emit | placeholder |
+
+Add `testCadence.enabled: true` and these optional Nx bindings without replacing an
+existing value: `unit-scoped` and `unit-affected` are `node
+scripts/run-nx-test-tier.mjs '{manifest}'`; `unit-impacted` is `node
+scripts/run-nx-test-tier.mjs '{range}'`. Copy the selector before `roadmap config
+check`. The seven base rows remain required; only schema-supported optional rows may
+be merged.
 
 ### library-cli
 | slot | command | source |

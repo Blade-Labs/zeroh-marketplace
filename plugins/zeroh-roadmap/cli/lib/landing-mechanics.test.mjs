@@ -282,8 +282,8 @@ test('arc land command — direct + arcEndSuite impacted runs the impacted slots
   assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
   // the impacted stub ran with the ARC-SCOPE manifest substituted verbatim (the member-commit
   // file union — sharper than the contiguous <sha>..HEAD range, which is now the fallback)
-  assert.match(r.stdout, /IMPACTED_UNIT_RAN @\S+roadmap-arc-scope-\S+/, 'unit-impacted ran with the arc-scope @manifest')
-  assert.match(r.stdout, /IMPACTED_INT_RAN @\S+roadmap-arc-scope-\S+/, 'integration-impacted ran with the arc-scope @manifest')
+  assert.match(r.stdout, /IMPACTED_UNIT_RAN @\S+roadmap-scope-\S+\/scope\.json/, 'unit-impacted ran with the JSON arc-scope @manifest')
+  assert.match(r.stdout, /IMPACTED_INT_RAN @\S+roadmap-scope-\S+\/scope\.json/, 'integration-impacted ran with the JSON arc-scope @manifest')
   assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN/, 'the full unit slot did NOT run')
   const summary = JSON.parse(readFileSync(join(root, 'roadmap', 'arc-summary.json'), 'utf8'))
   assert.equal(summary.gateSignals.fullSuiteGreen, false, 'an impacted landing never claims a full green')
@@ -298,7 +298,7 @@ test('arc land command — ISOLATED model HONORS arcEndSuite impacted (direct-on
   // echoing slots interleave with the emitted JSON line — extract the JSON object line
   const out = JSON.parse(r.stdout.split('\n').find((l) => l.trimStart().startsWith('{')))
   assert.equal(out.suite.mode, 'impacted', 'an isolated landing honors arcEndSuite: impacted')
-  assert.match(r.stdout, /IMPACTED_UNIT_RAN @\S+roadmap-arc-scope-\S+/, 'the impacted slot ran with the arc-scope @manifest')
+  assert.match(r.stdout, /IMPACTED_UNIT_RAN @\S+roadmap-scope-\S+\/scope\.json/, 'the impacted slot ran with the JSON arc-scope @manifest')
   assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN/, 'the full unit slot did NOT run for an isolated arc')
 })
 

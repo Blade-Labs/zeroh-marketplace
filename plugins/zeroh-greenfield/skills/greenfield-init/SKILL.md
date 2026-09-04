@@ -8,6 +8,16 @@ description: Interview for and execute an approval-gated new-repository setup wi
 Use this workflow only after `using-zeroh-greenfield` finds no brownfield
 markers. Load each reference only at the step that names it.
 
+## Read-only compatibility preflight
+
+Before the interview, proposal, approval request, generator, or any consumer write,
+require `roadmap` and run `roadmap config capabilities --json`. The response must be
+valid JSON with `configVersion: 1`, `scopeManifestProtocol:
+"scope-manifest-json-v1"`, and slots `unit-scoped`, `unit-affected`, and
+`unit-impacted`. If the command is absent, exits nonzero, returns malformed or older
+capabilities, print `/plugin install zeroh-roadmap@zeroh-marketplace` and STOP with
+zero consumer writes.
+
 ## Interview
 
 Load `references/prd-interview.md`. Ask one question at a time and retain
@@ -42,9 +52,7 @@ STOP before any write or generator run unless that exact response follows the
 complete proposal. Do not interpret partial agreement as approval. Record the
 approved plan and response in `docs/PRD.md §Decisions` during execution.
 
-If the roadmap sibling is absent, show
-`/plugin install zeroh-roadmap@zeroh-marketplace` and STOP that branch. If a
-Blade brand requires the design sibling and it is absent, show
+If a Blade brand requires the design sibling and it is absent, show
 `/plugin install zeroh-design@zeroh-marketplace` and STOP that branch. Do not
 substitute either sibling's work.
 

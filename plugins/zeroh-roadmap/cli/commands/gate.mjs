@@ -33,7 +33,7 @@ import {
   EXECUTABLE_EXTS,
   isTestFile,
 } from '../lib/ladder.mjs'
-import { resolveSlot, resolveScopedOrFallback, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings, probeScopedSlot } from '../lib/slots.mjs'
+import { resolveSlot, resolveScopedOrFallback, resolveAffectedOrFallback, createScopeManifest, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings, probeScopedSlot } from '../lib/slots.mjs'
 import {
   writeReport,
   latestReport,
@@ -393,7 +393,8 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   // ── slots — the non-test frame from the cell + test slots per effective testScope ──
   const cell = gateCell(kind, mode, opts.cfg)
   const nonTest = cell.slots.filter((s) => s !== 'unit' && s !== 'integration')
-  const wantsTests = cell.slots.includes('unit') || cell.slots.includes('integration') || cell.scopedTests
+  const wantsTests = cell.slots.includes('unit') || cell.slots.includes('integration') || cell.scopedTests ||
+    (testScope.effective !== 'static' && testScope.effective !== 'full')
   const slots = []
   for (const s of nonTest) slots.push(compactSlot(resolveSlot(opts.cfg, s)))
   // Per-phase hygiene (1792.1): the diff-scoped consumer lint, {base}-substituted; an unbound
@@ -419,8 +420,23 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
       slots.push(compactSlot(resolveSlot(opts.cfg, 'unit')))
       slots.push(compactSlot(resolveSlot(opts.cfg, 'integration')))
     } else if (testFiles.length > 0) {
-      slots.push(compactSlot({ ...resolveScopedOrFallback(opts.cfg, 'unit', testFiles), files: testFiles }))
-      slots.push(compactSlot({ ...resolveScopedOrFallback(opts.cfg, 'integration', testFiles), files: testFiles }))
+      const manifest = createScopeManifest(toplevel, testFiles)
+      for (const tier of ['unit', 'integration']) {
+        const template = opts.cfg?.gateCommands?.[`${tier}-scoped`]
+        const resolved = manifest && template?.includes('{manifest}')
+          ? resolveSlot(opts.cfg, `${tier}-scoped`, { manifest: manifest.token })
+          : resolveScopedOrFallback(opts.cfg, tier, testFiles)
+        slots.push(compactSlot({ ...resolved, files: testFiles }))
+      }
+    } else if (livingOwnFiles.some(isExecutable) || (ownFiles.length > 0 && livingOwnFiles.length === 0)) {
+      const manifest = createScopeManifest(toplevel, livingOwnFiles)
+      if (manifest) {
+        slots.push(compactSlot({ ...resolveAffectedOrFallback(opts.cfg, 'unit', manifest.token), files: livingOwnFiles }))
+        slots.push(compactSlot({ ...resolveAffectedOrFallback(opts.cfg, 'integration', manifest.token), files: livingOwnFiles }))
+      } else {
+        slots.push(compactSlot(resolveSlot(opts.cfg, 'unit')))
+        slots.push(compactSlot(resolveSlot(opts.cfg, 'integration')))
+      }
     } else {
       // An EMPTY scoped selection is a skip, not a refusal: running a scoped tier with no
       // files exits 2 and paints the whole gate RED over nothing (the 1737 gate run-000001
@@ -905,11 +921,11 @@ export async function runGate(phaseNum, opts) {
   const slotMatches = (resolved) => {
     if (!wanted) return true
     if (wanted.has(resolved)) return true
-    const base = resolved.replace(/-(scoped|impacted)$/, '')
+    const base = resolved.replace(/-(scoped|affected|impacted)$/, '')
     return base !== resolved && wanted.has(base)
   }
   if (wanted) {
-    const matchable = new Set(plan.slots.map((s) => s.slot).flatMap((n) => [n, n.replace(/-(scoped|impacted)$/, '')]))
+    const matchable = new Set(plan.slots.map((s) => s.slot).flatMap((n) => [n, n.replace(/-(scoped|affected|impacted)$/, '')]))
     if (cfg.exec?.preReview) matchable.add('preReview')
     matchable.add('history-comments')
     const unmatched = [...wanted].filter((w) => !matchable.has(w))
