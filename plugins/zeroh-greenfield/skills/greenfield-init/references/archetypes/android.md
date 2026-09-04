@@ -39,5 +39,5 @@ mapping from `references/design-system.md`.
 
 ## Verify
 ```sh
-test -x ./gradlew && test -f app/build.gradle.kts && test -f app/src/main/AndroidManifest.xml
+test -x ./gradlew && test -f app/build.gradle.kts && test -f app/src/main/AndroidManifest.xml && node scripts/check-readme-catalog.mjs --project-root .
 ```

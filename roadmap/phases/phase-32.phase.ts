@@ -128,7 +128,8 @@ export default definePhase({
         'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md',
       ],
       testMode: 'none',
-      done: false,
+      done: true,
+      transparencyReport: { whatWasDone: 'Added the bounded README catalog and dependency-free bidirectional checker, then wired all six manifest Verify sections.', how: 'The checker accepts catalog and project-root modes, validates shapes and duplicates, and names missing/orphan rows.', compromises: 'No plugin test harness exists; behavior is exercised by scratch probes and phase 34.', decisionRef: 'GREENFIELD orchestrator ruling 2026-09-03 — skills+templates-only plugin ships no test harness; proof = plan-time two-way probe + phase 34.4 dry run', skipped: 'None', hardcoded: 'None', limitations: 'Purpose text remains intentionally human-authored.' },
       interfaces: {
         consumes: ['phase 31 ## Post-steps', 'phase 31 ## File tree', 'phase 31 ## Verify'],
         produces: ['README repo-catalog table', 'check-readme-catalog.mjs'],

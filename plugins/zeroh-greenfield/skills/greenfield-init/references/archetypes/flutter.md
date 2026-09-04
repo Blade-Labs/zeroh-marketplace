@@ -35,5 +35,5 @@ Set `designHomes.architecture.home` to `docs/architecture.md` and
 
 ## Verify
 ```sh
-test -f pubspec.yaml && test -f lib/main.dart && test -f test/widget_test.dart
+test -f pubspec.yaml && test -f lib/main.dart && test -f test/widget_test.dart && node scripts/check-readme-catalog.mjs --project-root .
 ```

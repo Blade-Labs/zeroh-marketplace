@@ -38,5 +38,5 @@ Set `designHomes.architecture.home` to `docs/architecture.md` and
 
 ## Verify
 ```sh
-test -f my-lib/package.json && test -f my-lib/src/index.ts && test -f my-lib/src/cli.ts && test -f my-lib/tsup.config.ts && (cd my-lib && npm run build && node --test && node dist/cli.js --help)
+test -f my-lib/package.json && test -f my-lib/src/index.ts && test -f my-lib/src/cli.ts && test -f my-lib/tsup.config.ts && (cd my-lib && npm run build && node --test && node dist/cli.js --help && node scripts/check-readme-catalog.mjs --project-root .)
 ```

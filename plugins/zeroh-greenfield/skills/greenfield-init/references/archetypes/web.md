@@ -36,5 +36,5 @@ Set `designHomes.architecture.home` to `docs/architecture.md` and
 
 ## Verify
 ```sh
-test -f my-app/package.json && test -f my-app/src/app/page.tsx && test -f my-app/src/app/globals.css
+test -f my-app/package.json && test -f my-app/src/app/page.tsx && test -f my-app/src/app/globals.css && (cd my-app && node scripts/check-readme-catalog.mjs --project-root .)
 ```

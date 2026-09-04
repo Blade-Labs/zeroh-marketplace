@@ -48,5 +48,5 @@ Set `designHomes.architecture.home` to `docs/architecture.md` and
 
 ## Verify
 ```sh
-test -f my-workspace/nx.json && test -f my-workspace/package.json && test -f my-workspace/tsconfig.base.json && test -d my-workspace/packages/ && (cd my-workspace && test ! -e libs)
+test -f my-workspace/nx.json && test -f my-workspace/package.json && test -f my-workspace/tsconfig.base.json && test -d my-workspace/packages/ && (cd my-workspace && test ! -e libs && node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json)
 ```
