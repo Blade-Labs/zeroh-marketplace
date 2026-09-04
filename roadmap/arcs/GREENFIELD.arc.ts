@@ -37,6 +37,11 @@ import { defineArc } from '@/lib/roadmap/schema'
  *   archetype (rejectedAlternatives: seven-skills, conventions-in-claude-md, readme-as-prose).
  * - 2026-09-03 (ruling on the phase-32 review question): "skills + templates only" governs the PLUGIN's
  *   runtime shape; a file the plugin DROPS INTO THE CONSUMER and that runs there (the README catalog
+ * - 2026-09-04: generated repositories use affected-first local verification. Nx consumers
+ *   receive distinct full, file-scoped, and arc-impacted roadmap gate bindings; phase work
+ *   never maps `unit` to an unqualified workspace sweep. Unknown impact and changes to test,
+ *   runner, workspace, lockfile, or root configuration fail toward the full tier. CI/release
+ *   remains the authoritative broad backstop (rejectedAlternative: full-suite-every-phase).
  *   check script, precedent plugins/zeroh-design/themes/<theme>/setup.sh) is a TEMPLATE, not plugin code.
  * - 2026-09-03: codex manifest is hand-written in the zeroh-sdd shape (no package.json, so
  *   emit-manifests cannot cover it); marketplace entry category "development".
@@ -65,6 +70,7 @@ import { defineArc } from '@/lib/roadmap/schema'
  * beautiful-by-default                      | criterion   | 30.3 (design-system reference) + 31.1 (web archetype manifest) + 32.3 (pointer wiring) + 34.4 + 34.5
  * six-archetypes                            | criterion   | 31.1–31.6 (one manifest per archetype, each with a verify command run on this box)
  * readme-current                            | criterion   | 32.2 (README template + catalog check) + 33.3 (brownfield README reconcile) + 34.5
+ * affected-first-verification               | criterion   | 32.5 (Nx tier bindings + selector template) + 34.4 + 34.5 (native and mutation proof)
  * roadmap-offers-setup                      | criterion   | 34.1 (layout.md §Missing homes + six pointer clauses + ratchet test)
  * execution-prompt §Design                  | designRef   | 29.1 (plugin skeleton + router) + 29.3 (templates dir split) + 34.1 (routing seam)
  * "conventions land once, one owner"        | honestyRail | 32.1 (AGENTS.md home, CLAUDE.md @import) + 33.2 (harness-file reconciliation)
@@ -86,6 +92,7 @@ import { defineArc } from '@/lib/roadmap/schema'
  * USER ASK: "PRD what the project is about if it is completely from scratch" | request | 29.2 + 29.3 (PRD template)
  * USER ASK: "templates for android app, web app, cross-platform, monorepo nx" | request | 31.2 (Android) 31.1 (web) 31.4 (Expo) 31.5 (Nx)
  * USER ASK: "add new plugin to our marketplace"            | request | 34.2 (marketplace entry + codex manifest)
+ * USER ASK: "only run affected test suite not full"         | request | 32.5 (generated local/phase/arc cadence) + 34.5 (fallback mutation proof)
  */
 export default defineArc({
   id: 'GREENFIELD',
@@ -121,6 +128,7 @@ export default defineArc({
     { option: 'conventions-in-claude-md', why: 'zeroh sweep 2026-09-03: five near-duplicate harness files and an Nx-generated CLAUDE.md block; one harness-neutral home (AGENTS.md) imported by CLAUDE.md upholds the POLYSEAT no-Claude-privilege ruling.', decidedBy: 'supervising session (claude-fable-5-1) from the zeroh sweep', decidedAt: '2026-09-03' },
     { option: 'readme-as-prose', why: 'zeroh sweep 2026-09-03: the README catalog omits 5 of 19 projects despite a "keep in sync" instruction; currency must be a catalog-backed check.', decidedBy: 'supervising session (claude-fable-5-1) from the zeroh sweep', decidedAt: '2026-09-03' },
     { option: 'inline-brand-tokens', why: 'Architect 2026-09-03: tokens have one owner (zeroh-design); greenfield writes pointers, never a second copy.', decidedBy: 'software-architect (claude-fable-5)', decidedAt: '2026-09-03' },
+    { option: 'full-suite-every-phase', why: 'User ruling 2026-09-04 after the GREENFIELD phase-30 gate measured roughly 33 minutes: use related/file-scoped tests during implementation and phase gates, impacted tests at arc landing, and reserve the full sweep for unsafe-to-scope changes plus CI/release backstops.', decidedBy: 'user', decidedAt: '2026-09-04' },
   ],
   singleSeams: [
     'One router: skills/using-zeroh-greenfield/SKILL.md is the only dispatch table (trigger → skill); no other skill re-lists triggers.',
@@ -135,6 +143,7 @@ export default defineArc({
     'Conventions land once: AGENTS.md is the home; CLAUDE.md and other harness files import or point, never copy.',
     'No invented stacks, registries or numbers: every option row in a decision matrix cites a real source (package, registry, doc); every archetype manifest carries a verify command, and the dated observed result of running it on this box lives in the plugin\'s VERIFY-RECORD-2026-09.md (manifests stay timeless).',
     'Absent tools are said, never worked around: zeroh-design or zeroh-roadmap not installed → name the install command and stop that branch; never inline what the sibling owns.',
+    'Affected never means guessed: generated scoped and impacted commands consume the roadmap-provided files/range through one selector seam; missing, malformed, or unsafe scope selects the full tier and records why. A file-scoped command must red on a nonexistent target.',
   ],
   acceptanceCriteria: [
     {
@@ -190,6 +199,15 @@ export default defineArc({
         'in a consumer whose roadmap.config.json lacks designHomes, plan-arc\'s design gate and the ux-designer agent still stop, and their stop text names the remedy from layout.md §Missing homes (zeroh-greenfield, the brownfield-audit skill, the install command); a ratchet test in zeroh-roadmap\'s suite fails if any of the six sites loses its pointer clause or the section is renamed; judged after the phase lands and after the next zeroh-roadmap release',
       tier: 'wired',
       bar: 'six pointer clauses + one owner section, guarded by a test; behaviour unchanged when greenfield is not installed',
+    },
+    {
+      id: 'affected-first-verification',
+      job: 'local and phase verification runs only tests affected by the change while full regression remains an explicit CI/release safety boundary (user ruling, 2026-09-04)',
+      surfaces: ['console'],
+      signal:
+        'the Nx archetype emits distinct lint, types, build, full unit, unit-scoped `{files}`, and unit-impacted `{range}` bindings; fixture runs prove a leaf-project edit avoids a workspace sweep, arc input selects the union of affected projects, a nonexistent target reds, and unsafe or unparseable scope selects the full unit tier with a recorded reason',
+      tier: 'wired',
+      bar: 'no duplicated combined affected command across gate slots; no run-many/full unit command during an ordinary scoped phase; every unsafe or indeterminate selection fails toward the full tier; CI/release full-suite guidance remains explicit',
     },
   ],
   criteriaRatifications: [

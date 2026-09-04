@@ -210,8 +210,54 @@ export default definePhase({
       done: true,
       transparencyReport: { whatWasDone: 'Finished the contributor contract and made manifest-derived README construction and catalog verification explicit.', how: 'The contribution template links the documentation rules and durable-decision bar; greenfield-init now orders standards, README structure, commands, checker copy/run/evidence, pointers, and Done.', compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'None' },
     },
+    {
+      id: '32.5',
+      title: 'Generate affected-first roadmap gates with an honest full-suite fallback',
+      problem:
+        'The Nx manifest currently maps one combined affected command into three slots and maps unit to a workspace-wide run-many sweep. That duplicates work and makes every ordinary phase pay the full-suite tax even though zeroh-roadmap already supports unit-scoped and unit-impacted bindings.',
+      steps: [
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
+          description:
+            'Define distinct affected lint/types/build commands; full unit as safe fallback and CI/release backstop; and file-scoped phase plus range/manifest-impacted arc commands through one selector. Name root config, workspace metadata, lockfiles, test configuration, and the selector itself as full-tier escalation paths. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md\',\'utf8\'),a=[\'affected -t lint\',\'affected -t typecheck\',\'affected -t build\',\'run-many -t test\',\'unit-scoped\',\'unit-impacted\',\'{files}\',\'{range}\',\'full tier\',\'CI/release\'];if(a.some(x=>!s.includes(x)))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
+          description:
+            'Add the dependency-free consumer selector shared by scoped and impacted bindings. Accept an explicit mode plus roadmap substitution, translate files or @manifest/range into Nx affected selection, reject nonexistent scoped targets, and fail toward `nx run-many -t test` for missing/malformed input or unsafe root/test-infrastructure paths. Emit selected tier and reason before execution. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
+          description:
+            'Map Nx rows one-to-one: lint/types/build each own only their target, unit owns the full fallback, unit-scoped consumes `{files}`, and unit-impacted consumes `{range}`. Require copying the selector template before config validation; never duplicate the combined lint,typecheck,test,build command. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+          description:
+            'TDD a tiny Nx-shaped fixture with a fake Nx recorder: leaf files select affected mode without run-many; @manifest and base..head inputs translate deterministically; missing targets red; root, lockfile, workspace, test-config, selector, empty, and malformed scopes select full with a named reason; pointer rows remain distinct. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        'The Nx pointer table binds gateCommands.unit-scoped and gateCommands.unit-impacted, and lint/types/build do not repeat a combined multi-target command.',
+        'Ordinary phase files never execute the full unit binding; missing, malformed, or unsafe scope does, with a machine-visible reason; a nonexistent scoped target cannot report green.',
+      ],
+      files: [
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
+        'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: false,
+      dependsOn: ['32.3'],
+      interfaces: {
+        consumes: ['zeroh-roadmap unit-scoped {files} and unit-impacted {range} slot protocol', 'Nx affected project graph'],
+        produces: ['generated affected-first Nx test selector', 'safe full-tier escalation contract'],
+      },
+    },
   ],
-  reviewRecord: { date: '2026-09-04', model: 'gpt-5.6-sol', verdict: 'READY', via: 'executed' },
+  reviewRecord: { date: '2026-09-04', model: 'pending-independent-review', verdict: 'NEEDS_WORK', via: 'executed' },
   notes:
     'interview: skipped — GREENFIELD is an arc member and its 2026-09-03 interview and user rulings are recorded in roadmap/arcs/GREENFIELD.arc.ts. Four tasks are intentional: the brief reserves this tightly coupled standards-and-pointers plane at four contracts; splitting declarative template fills would add gate cost without an independent boundary. userFacing false: this phase changes model-loaded authoring instructions and consumer-dropped templates, not a rendered or runtime feature, so no flag applies. Test modes are none per test-worthiness: documentation and templates are declarative. Task 32.2 architecture ruling: GREENFIELD.arc.ts LOCKED DECISIONS, 2026-09-03 (ruling on the phase-32 review), says “skills + templates only” governs the plugin runtime shape and a file dropped into and run in the consumer is a TEMPLATE, not plugin code; therefore templates/scripts/check-readme-catalog.mjs remains in scope. Task 32.2 deviation: the skills+templates-only plugin ships no test harness; its executable checker is proven by the plan-time two-way/error-path probe and phase 34.4 dry run; decisionRef: \'GREENFIELD orchestrator ruling 2026-09-03 — skills+templates-only plugin ships no test harness; proof = plan-time two-way probe + phase 34.4 dry run\'. README probe observed 2026-09-03: consistent catalog exit 0; missing beta row exit 1 with `missing README project: beta (packages/beta)`; extra ghost row exit 1 with `orphan README project: ghost (apps/ghost)`. Config probes observed 2026-09-03: DesignHomesShape, architecture, qualityExemplar, copyRules, bindingDesignSystem, testConventions, gateCommands, init refusal, and all seven init.mjs placeholder strings present (exit 0). Phase 32 owns the shared harness-file invariants in standards.md; phase 33 cites that owner and supplies only the brownfield reconciliation delta. Verify rehearsal: all three assumption commands exited 0; every step command and command-shaped criterion exited non-zero because its phase-29/31-dependent output is absent, the exact state the diff removes; task 32.2 scratch observable covered help, matching, missing, orphan, malformed, duplicate, catalog-shape, and project-root branches. Full review is retained because the dropped checker contains normalization and bidirectional comparison logic. Auto review and queueing are disabled by the planning-lane envelope; supervising session owns them. Review repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): strengthened 32.1 complete standards and harness assertions; recorded the 32.2 no-test-harness deviation and full behavior matrix; made 32.3 existing-config merge flow, exact gate mapping, placeholders, and validation explicit; strengthened 32.4 contributor and init-sequence assertions.\nReview repairs round 2 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): cited the consumer-dropped-template ruling for 32.2; enforced standards → README Structure → README Commands → checker → pointers → Done in 32.4.\nReview repairs round 3 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): 32.2 structurally asserts checker parsing, flags, normalization, red messages, and six exact invocation forms; 32.3 parses seven unique gate-slot rows and cross-checks each command against an archetype manifest; 32.4 requires exact copy, run, and exit-code sentences in fixed order; scratch red/green rehearsal observed every repaired clause exit 1 incomplete and exit 0 complete.\nReview repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): unified the 32.2 orphan diagnostic vocabulary; restored per-archetype seven-slot command-to-manifest-heading mappings with structural and grep-F source checks; scratch rehearsal recorded structural RED 1/GREEN 0, binding RED 1/GREEN 0, and wrong-source RED 1.',
 })
