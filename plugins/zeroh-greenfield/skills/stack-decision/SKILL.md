@@ -1,12 +1,13 @@
 ---
 name: stack-decision
-description: Present sourced stack alternatives without defaults and return the selected ADR path and dated ruling.
+description: Handle requests phrased as choose stack, mobile stack, or compare frameworks by presenting sourced alternatives without defaults and returning an ADR ruling.
 ---
 
 # Stack decision
 
 Load `references/matrices.md`. Determine which matrices apply from the approved
 PRD answers, then present every row in each applicable matrix unchanged.
+Not this skill: `greenfield-init` and `brownfield-audit` own repository changes; this skill only returns `StackDecisionOutput`. Provenance: `roadmap/arc-evals/phase-30.peval.json` records the 2026-09-04 stack-decision delivery.
 
 ## Selection
 

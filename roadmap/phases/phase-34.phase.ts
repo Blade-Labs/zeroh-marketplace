@@ -212,7 +212,12 @@ export default definePhase({
         'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
       ],
       testMode: 'none',
-      done: false,
+      done: true,
+      transparencyReport: {
+        whatWasDone: 'Graded all four zeroh-greenfield skills against R1-R28 and recorded byte-derived size baselines.',
+        how: 'Added explicit trigger and sibling-boundary text plus dated phase-eval provenance to each skill, then recorded four ordered 28-row evidence tables with no FAIL verdicts. Recomputed body lines, raw bytes, integer bytes/4, caps, and summary rows mechanically; the aggregate and all four per-skill acceptance checks passed.',
+        compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Grades describe the committed skill contracts; later changes to cited paths trigger re-review under R21.',
+      },
       interfaces: { consumes: ['four zeroh-greenfield SKILL.md bodies from phases 29-33'], produces: ['SKILL-AUTHORING-GRADES.md baseline'] },
     },
     {

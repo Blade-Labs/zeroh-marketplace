@@ -1,12 +1,13 @@
 ---
 name: greenfield-init
-description: Interview for and execute an approval-gated new-repository setup with sourced stack, design, standards, and roadmap pointers.
+description: Handle requests phrased as initialize, scaffold, or create a new repository through an approval-gated setup with sourced stack, design, standards, and roadmap pointers.
 ---
 
 # Greenfield initialization
 
 Use this workflow only after `using-zeroh-greenfield` finds no brownfield
 markers. Load each reference only at the step that names it.
+Not this skill: `brownfield-audit` owns repositories with existing markers, and `stack-decision` owns alternative selection. Provenance: `roadmap/arc-evals/phase-32.peval.json` records the 2026-09-04 initialized-home contracts.
 
 ## Read-only compatibility preflight
 

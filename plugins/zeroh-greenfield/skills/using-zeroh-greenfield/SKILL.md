@@ -1,11 +1,12 @@
 ---
 name: using-zeroh-greenfield
-description: Route project initialization, brownfield standards audits, and explicit stack decisions to the owning zeroh-greenfield skill.
+description: Route requests phrased as init, scaffold, brownfield audit, fill gaps, or stack choice to the owning zeroh-greenfield skill.
 ---
 
 # Using zeroh-greenfield
 
 Inspect the repository before choosing exactly one route.
+Not this skill: `greenfield-init`, `brownfield-audit`, and `stack-decision` own the routed workflow; this skill only dispatches. Provenance: `roadmap/arc-evals/phase-29.peval.json` records the 2026-09-04 router delivery.
 
 ## Dispatch
 

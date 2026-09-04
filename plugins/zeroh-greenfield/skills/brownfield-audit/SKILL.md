@@ -1,11 +1,12 @@
 ---
 name: brownfield-audit
-description: Audit an established repository, classify required homes, and propose only missing, partial, or stale gaps before any approved change.
+description: Handle requests phrased as audit, fill gaps, or reconcile an established repository by proposing only missing, partial, or stale homes before approval.
 ---
 
 # Brownfield audit
 
 Use this workflow for an established repository. Consume `zeroh-greenfield:stack-decision`, then use `skills/greenfield-init/references/standards.md` and `skills/greenfield-init/references/pointers.md` as the contract owners. Read `references/marker-table.md`, `references/harness-files.md`, and `references/readme-reconcile.md` when their stages say so.
+Not this skill: `greenfield-init` owns marker-free repositories, and `stack-decision` owns stack selection. Provenance: `roadmap/arc-evals/phase-33.peval.json` records the 2026-09-04 brownfield fixture and oracle.
 
 ## Detect
 
