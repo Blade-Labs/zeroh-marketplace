@@ -1,0 +1,112 @@
+{
+  "phase": 32,
+  "date": "2026-09-04",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 34
+  },
+  "taskCount": 5,
+  "keyFiles": [
+    "plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/standards.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md",
+    "plugins/zeroh-greenfield/templates/README.md",
+    "plugins/zeroh-greenfield/templates/CONTRIBUTING.md",
+    "plugins/zeroh-greenfield/templates/scripts/check-readme-catalog.mjs",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md",
+    "plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs",
+    "plugins/zeroh-roadmap/cli/lib/config.mjs",
+    "plugins/zeroh-roadmap/cli/lib/config.test.mjs",
+    "plugins/zeroh-roadmap/cli/roadmap.config.schema.json",
+    "plugins/zeroh-roadmap/cli/commands/config.mjs",
+    "plugins/zeroh-roadmap/cli/lib/gate-report.mjs",
+    "plugins/zeroh-roadmap/cli/commands/config.test.mjs",
+    "plugins/zeroh-roadmap/cli/lib/slots.mjs",
+    "plugins/zeroh-roadmap/cli/lib/slots.test.mjs",
+    "plugins/zeroh-roadmap/cli/commands/gate.mjs",
+    "plugins/zeroh-roadmap/cli/commands/gate.test.mjs",
+    "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs",
+    "plugins/zeroh-roadmap/cli/lib/landing.mjs",
+    "plugins/zeroh-roadmap/cli/lib/landing.test.mjs",
+    "plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 5,
+      "MEDIUM": 2,
+      "LOW": 2
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1864127
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 5,
+    "linesAdded": 511,
+    "linesRemoved": 40,
+    "filesChanged": 27,
+    "testsAtStart": 1833,
+    "testsAtEnd": 1834,
+    "testsAdded": 1,
+    "startedAt": "2026-09-04T16:12:00.000Z",
+    "completedAt": "2026-09-04T20:52:00.000Z"
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "gpt-5.6-sol"
+    },
+    "driver": {
+      "model": "gpt-5.6-sol",
+      "lane": "codex"
+    },
+    "roles": {
+      "test-engineer": {
+        "model": "gpt-5.6-sol"
+      },
+      "quality-pass": {
+        "model": "gpt-5.6-sol"
+      },
+      "code-reviewer": {
+        "model": "gpt-5.6-sol"
+      }
+    }
+  }
+}
