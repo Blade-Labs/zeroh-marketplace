@@ -414,12 +414,17 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
     slots.push(compact)
   }
   const testFiles = selectTestFiles(toplevel, ownFiles)
+  const hasUncoveredSource = livingOwnFiles.some((file) => {
+    if (!isExecutable(file) || isTestFile(file)) return false
+    const stem = file.replace(/\.[^./]+$/, '')
+    return !COLOCATED_TEST_EXTS.some((ext) => existsSync(join(toplevel, stem + ext)))
+  })
   const emptyScopeSkip = []
   if (wantsTests && testScope.effective !== 'static' && !testScope.refused) {
     if (testScope.effective === 'full') {
       slots.push(compactSlot(resolveSlot(opts.cfg, 'unit')))
       slots.push(compactSlot(resolveSlot(opts.cfg, 'integration')))
-    } else if (testFiles.length > 0) {
+    } else if (testFiles.length > 0 && !hasUncoveredSource) {
       const manifest = createScopeManifest(toplevel, testFiles)
       for (const tier of ['unit', 'integration']) {
         const template = opts.cfg?.gateCommands?.[`${tier}-scoped`]

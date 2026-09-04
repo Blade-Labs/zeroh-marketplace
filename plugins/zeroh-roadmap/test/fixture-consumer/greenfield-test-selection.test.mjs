@@ -62,3 +62,23 @@ test('malformed, empty, unsafe-root and newline scope fail byte-identically to f
     assert.deepEqual(f.argv, expected)
   }
 })
+
+test('an external manifest whose ancestor merely contains the ownership substring is rejected', () => {
+  const root = mkdtempSync(join(tmpdir(), 'greenfield-selection-root-'))
+  const external = mkdtempSync(join(tmpdir(), 'fake-roadmap-scope-owner-'))
+  roots.push(root, external)
+  mkdirSync(join(root, 'bin'))
+  writeFileSync(join(root, 'bin', 'npm'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$NX_ARGV"\n')
+  chmodSync(join(root, 'bin', 'npm'), 0o755)
+  const manifest = join(external, 'not-scope.json')
+  writeFileSync(manifest, JSON.stringify({ protocol: 'scope-manifest-json-v1', paths: ['src/a.ts'] }))
+  const argv = join(root, 'argv.txt')
+  const run = spawnSync('node', [SELECTOR, `@${manifest}`], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}`, NX_ARGV: argv },
+  })
+  assert.equal(run.status, 0)
+  assert.equal(JSON.parse(run.stdout).reason, 'manifest outside roadmap ownership')
+  assert.deepEqual(readFileSync(argv, 'utf8').trim().split('\n'), ['exec', '--', 'nx', 'run-many', '-t', 'test'])
+})

@@ -37,15 +37,23 @@ export function createScopeManifest(cwd, paths) {
   for (const path of paths) {
     if (typeof path !== 'string' || path.length === 0 || path.includes('\0') || path.includes('\n') || isAbsolute(path)) return null
     const absolute = resolve(root, path)
-    if (relative(root, absolute).startsWith('..') || !existsSync(absolute)) continue
+    if (relative(root, absolute).startsWith('..')) return null
+    if (!existsSync(absolute)) continue
     living.push(path)
   }
   if (living.length === 0) return null
   const dir = mkdtempSync(join(tmpdir(), 'roadmap-scope-'))
   const file = join(dir, 'scope.json')
   writeFileSync(file, JSON.stringify({ protocol: SCOPE_MANIFEST_PROTOCOL, paths: [...new Set(living)].sort() }) + '\n')
-  const cleanup = () => rmSync(dir, { recursive: true, force: true })
-  process.once('exit', cleanup)
+  let cleaned = false
+  const onExit = () => rmSync(dir, { recursive: true, force: true })
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    process.off('exit', onExit)
+    rmSync(dir, { recursive: true, force: true })
+  }
+  process.once('exit', onExit)
   return { protocol: SCOPE_MANIFEST_PROTOCOL, path: file, token: `@${file}`, paths: living, cleanup }
 }
 

@@ -15,6 +15,7 @@ import {
   resolveSlot,
   resolveScopedOrFallback,
   resolveImpactedOrFallback,
+  createScopeManifest,
   runSlot,
   SCOPED_FALLBACK_NOTE,
   IMPACTED_FALLBACK_NOTE,
@@ -76,6 +77,24 @@ test('resolveSlot — {manifest} accepts only a validated token in a quoted plac
 test('resolveSlot — {range} substitutes verbatim', () => {
   const r = resolveSlot(CFG, 'unit-impacted', { range: 'origin/develop..HEAD' })
   assert.equal(r.command, 'bash scripts/test/run-tier.sh unit-impacted origin/develop..HEAD')
+})
+
+test('createScopeManifest — any traversal invalidates the whole scope and cleanup removes its exit listener', () => {
+  const root = mkdtempSync(join(tmpdir(), 'zr-scope-root-'))
+  try {
+    writeFileSync(join(root, 'safe.ts'), '')
+    assert.equal(createScopeManifest(root, ['safe.ts', '../unsafe.ts']), null)
+    const before = process.listenerCount('exit')
+    const manifest = createScopeManifest(root, ['safe.ts'])
+    assert.ok(manifest)
+    assert.equal(process.listenerCount('exit'), before + 1)
+    manifest.cleanup()
+    assert.equal(process.listenerCount('exit'), before)
+    manifest.cleanup()
+    assert.equal(process.listenerCount('exit'), before, 'cleanup is idempotent')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('resolveSlot — a {files} placeholder with no value REFUSES (never a literal-brace command)', () => {

@@ -961,6 +961,30 @@ test('gate plan — relevant leaf source without tests selects affected via a qu
   }
 })
 
+test('gate plan — mixed source and exact-test changes select affected with the complete living phase scope', () => {
+  const cfg = {
+    ...CONFIG,
+    gateCommands: {
+      ...CONFIG.gateCommands,
+      'unit-affected': "node selector.mjs '{manifest}'",
+      'integration-affected': "node selector.mjs '{manifest}'",
+    },
+  }
+  const repo = makeRepo(cfg)
+  repo.writePhase(5008, phaseObj({ phase: 5008, testScope: 'relevant' }))
+  repo.commit('feat: phase 5008 — source and test', {
+    'src/leaf.ts': 'export const leaf = 1\n',
+    'src/other.test.ts': 'export const covered = true\n',
+  })
+  const r = planOf(repo.root, ['5008'])
+  assert.equal(r.code, 0, r.stderr)
+  for (const slot of ['unit-affected', 'integration-affected']) {
+    const row = r.plan.slots.find((candidate) => candidate.slot === slot)
+    assert.ok(row, `${slot} must replace scoped selection for a mixed diff`)
+    assert.deepEqual(row.files.sort(), ['src/leaf.ts', 'src/other.test.ts'])
+  }
+})
+
 // ── the vacuous-scoped-runner probe at PLAN time (task 20.2) ─────────────────────────
 //
 // `gate plan` is where a SCOPED tier is chosen OVER the full suite, so it is the one place

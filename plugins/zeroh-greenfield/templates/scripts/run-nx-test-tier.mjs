@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const PROTOCOL = 'scope-manifest-json-v1'
@@ -16,7 +16,8 @@ function full(reason) {
 function pathsFromManifest(token) {
   if (typeof token !== 'string' || !token.startsWith('@')) throw new Error('missing @manifest')
   const file = resolve(token.slice(1))
-  if (!isAbsolute(token.slice(1)) || (!file.includes('/roadmap-scope-') && relative(root, file).startsWith('..'))) throw new Error('manifest outside roadmap ownership')
+  const ownedTempManifest = basename(file) === 'scope.json' && basename(dirname(file)).startsWith('roadmap-scope-')
+  if (!isAbsolute(token.slice(1)) || (!ownedTempManifest && relative(root, file).startsWith('..'))) throw new Error('manifest outside roadmap ownership')
   const parsed = JSON.parse(readFileSync(file, 'utf8'))
   if (parsed?.protocol !== PROTOCOL || !Array.isArray(parsed.paths)) throw new Error('malformed scope manifest')
   return parsed.paths
