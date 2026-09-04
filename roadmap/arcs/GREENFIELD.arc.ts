@@ -60,19 +60,19 @@ import { defineArc } from '@/lib/roadmap/schema'
  *
  * PROMISE LEDGER (plan-arc Step 2c — audited by arc-sweep / validate-arc)
  * promise                                   | kind        | fulfilled by
- * standards-first                           | criterion   | 29.2 (greenfield-init approval gate) + 33.1 (brownfield gap table + approval) + 34.4 (dry runs)
+ * standards-first                           | criterion   | 29.2 (greenfield-init approval gate) + 33.1 (brownfield gap table + approval) + 34.4 + 34.5 (dry runs)
  * tradeoffs-not-defaults                    | criterion   | 30.1 (stack-decision matrices) + 30.2 (ADR template with "better when" row)
- * beautiful-by-default                      | criterion   | 30.3 (design-system reference) + 31.1 (web archetype manifest) + 32.3 (pointer wiring) + 34.4
+ * beautiful-by-default                      | criterion   | 30.3 (design-system reference) + 31.1 (web archetype manifest) + 32.3 (pointer wiring) + 34.4 + 34.5
  * six-archetypes                            | criterion   | 31.1–31.6 (one manifest per archetype, each with a verify command run on this box)
- * readme-current                            | criterion   | 32.2 (README template + catalog check) + 33.3 (brownfield README reconcile)
+ * readme-current                            | criterion   | 32.2 (README template + catalog check) + 33.3 (brownfield README reconcile) + 34.5
  * roadmap-offers-setup                      | criterion   | 34.1 (layout.md §Missing homes + six pointer clauses + ratchet test)
  * execution-prompt §Design                  | designRef   | 29.1 (plugin skeleton + router) + 29.3 (templates dir split) + 34.1 (routing seam)
  * "conventions land once, one owner"        | honestyRail | 32.1 (AGENTS.md home, CLAUDE.md @import) + 33.2 (harness-file reconciliation)
  * "never author a second home for a fact"   | honestyRail | 33.1 (gap table cites existing homes) + 30.3 (zeroh-design handoff writes pointers only)
- * "nothing written before approval"         | honestyRail | 29.2 + 33.1
+ * "nothing written before approval"         | honestyRail | 29.2 + 33.1 + 34.4 + 34.5
  * "no invented stacks or registries"        | honestyRail | 30.1 (every option row cites a source) + 31.x (verify commands)
  * skill catalog is one router               | singleSeam  | 29.1
- * archetype manifest heading contract       | singleSeam  | 31.1 (defines it) — 31.2–31.6 conform
+ * archetype manifest heading contract       | singleSeam  | 31.1 (defines it) — 31.2–31.6 conform; runtime evidence is truthfully classified
  * stack ADR text owned by stack-decision    | singleSeam  | 30.2 (called by 29.x and 33.x, never restated)
  * pointer keys = zeroh-roadmap config shapes| singleSeam  | 32.3
  * one missing-home remedy (layout.md)     | singleSeam  | 34.1 (the only remedy text; six sites carry a pointer clause + ratchet test)
@@ -169,9 +169,9 @@ export default defineArc({
       job: 'templates for android app, web app, cross-platform, monorepo nx and so on (user verbatim, 2026-09-03)',
       surfaces: ['console'],
       signal:
-        'each of the six archetype manifests (web, flutter, android, expo, nx-monorepo, library-cli) carries a Generator command and a Verify command; running the Verify on this box in a scratch directory yields the manifest\'s documented file tree and matches that archetype\'s row in VERIFY-RECORD-2026-09.md (date · command · observed · box), judged for all six after the manifests landed and again after any manifest edit',
+        'each of the six archetype manifests (web, flutter, android, expo, nx-monorepo, library-cli) carries a Generator command and a Verify command; running the Verify on this box in a scratch directory yields the manifest\'s documented file tree and matches that archetype\'s row in VERIFY-RECORD-2026-09.md (date · command · observed · box · tool version · execution commit), judged for all six after the manifests landed and again after any manifest edit',
       tier: 'wired',
-      bar: 'six green verifies; an archetype whose generator is not installed on the box records `generator absent — <install command>` in its VERIFY-RECORD row rather than a claimed pass',
+      bar: 'six structurally valid manifests; every available generator run is green; unavailable generators are classified `unavailable — <install command>` and never counted as green or failed',
     },
     {
       id: 'readme-current',
