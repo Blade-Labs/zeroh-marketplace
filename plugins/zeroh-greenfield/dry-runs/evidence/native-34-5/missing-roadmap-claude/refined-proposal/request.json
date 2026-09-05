@@ -1,0 +1,66 @@
+{
+  "gateWrapper": {
+    "kind": "capbuild",
+    "executable": "/home/patrik/.local/bin/capbuild",
+    "realpath": "/home/patrik/illumination_VS_setup/scripts/capbuild",
+    "sha256": "f71688b5aa30a7bdc2a900c20593c625192bce54cc7713d66dfd40dca7fc2083",
+    "defaults": {
+      "memoryMax": "8G",
+      "memorySwapMax": "2G",
+      "heapMB": 4096,
+      "slice": "dev.slice"
+    },
+    "hostMetadataEffects": [
+      "systemd-user-transient-units",
+      "/run/user/1000/capbuild-locks"
+    ]
+  },
+  "clearedHostOverrides": [
+    "CAPBUILD_SLICE",
+    "CAPBUILD_PASS_ENV",
+    "NODE_OPTIONS",
+    "FORCE_BARE",
+    "ITEST_FILES",
+    "AUDIT_LEDGER_ENABLED",
+    "TEST_CONCURRENCY",
+    "E2E_PROJECT",
+    "ALLURE"
+  ],
+  "scratch": "/tmp/greenfield-behavior-fn07osnh/consumer",
+  "evidence": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-roadmap-claude/refined-proposal",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+    "-p",
+    "--resume",
+    "6d6b7d69-caa9-404c-a0f4-4e5a5a10efb3",
+    "--verbose",
+    "--output-format",
+    "stream-json",
+    "--plugin-dir",
+    "/tmp/greenfield-behavior-fn07osnh/plugins/zeroh-greenfield",
+    "Read-only evidence refinement in the same session. Earlier consumer observations showed zero writes; keep that unchanged. The machine validator cannot bind compound shell output or untagged JSON mixed with other JSON. Run each of these exact commands in a separate native shell tool call, unchanged, with no echo, extra command, prefix, suffix, pipe or chained read:\ncd '/tmp/greenfield-behavior-fn07osnh/consumer' && ls -1 '/tmp/greenfield-behavior-fn07osnh/plugins'\nThen return your actual unchanged result in explicitly labeled JSON fences, exactly one object per fence. Return one behavior-result JSON object with actual status, reasonCode, missing, remedy, proposals, writes as before. Do not proceed beyond the required-sibling STOP. No writes or installations or subagents or approval changes are authorized. Preserve inherited sandbox and automatic approval review; request scoped review only if sandbox cannot initialize."
+  ],
+  "stage": "proposal",
+  "timeout": 600,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "98de50e7028edfca84efcba67a580b5c12e0c69b",
+  "sourceSnapshotSha256": "57f8d475bb3e7fb3d46cc01f5afb60d4419d2fe9ac6b551061d5cf8bc8ffc4c0",
+  "behaviorScenario": {
+    "id": "missing-roadmap",
+    "expectedMissing": [
+      "zeroh-roadmap"
+    ],
+    "installedInventory": {
+      "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-roadmap-claude/installed-inventory.json",
+      "sha256": "7610daea2d5b91fd1150d1a63d8ecbe54ee1a5ad038af3c9a8314f06e3d54d0d"
+    },
+    "installedRoot": "/tmp/greenfield-behavior-fn07osnh/plugins",
+    "routerContract": "/tmp/greenfield-behavior-fn07osnh/plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md",
+    "markerPath": "AGENTS.md",
+    "pluginDirectories": {
+      "zeroh-greenfield": "/tmp/greenfield-behavior-fn07osnh/plugins/zeroh-greenfield",
+      "zeroh-roadmap": "/tmp/greenfield-behavior-fn07osnh/plugins/zeroh-roadmap",
+      "zeroh-design": "/tmp/greenfield-behavior-fn07osnh/plugins/zeroh-design"
+    }
+  }
+}

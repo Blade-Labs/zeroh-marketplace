@@ -1,0 +1,1486 @@
+{
+  "invocationBaseCommit": "98de50e7028edfca84efcba67a580b5c12e0c69b",
+  "sourceSnapshotFiles": [
+    {
+      "path": ".agents/plugins/marketplace.json",
+      "sha256": "680bf501ca73bfb24cbcecce77a517c60d7201830c6326264a1b7fc3b9d7bd5b",
+      "executable": false
+    },
+    {
+      "path": ".claude-plugin/marketplace.json",
+      "sha256": "90fa59029833735d8f9f7139e062c0cd300ef0b99e2203090a66fa0d2e3e6584",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/.claude-plugin/plugin.json",
+      "sha256": "0f03fdb071d00f37b6ce301e3b4752cd5a42c24c44da96d227d74133e7d2eb41",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/.codex-plugin/plugin.json",
+      "sha256": "25d23dce080b23356e6f48723f89ea9f8cca3f678af3a263db36dd4d2e2666f7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/LICENSE.txt",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/README.md",
+      "sha256": "8dc7c899e9d7a78a2c12c0e5ee00ba569854d2de244e764006e10d1904e3d9ca",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md",
+      "sha256": "5664876faadb57b0aefd5fd108881e76889ffd3ef4a6cb1776acb44f2c5d8c75",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/VERIFY-RECORD-2026-09.md",
+      "sha256": "4866c86697df1f7fcac7634f88a59d7de29564be26a8e19ab0673fd9532bb2b0",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/dry-runs/34.4-scripted-answers.md",
+      "sha256": "4bdf69919f0a91aecbe2c30917fed8d4b7a5463b35f4a038e451f88c959c79a4",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/README.md",
+      "sha256": "f8e467f3667d2ab65eeb89958bf5d9f0769914c7432ed9ed477d07253c2e9c7b",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/AGENTS.md",
+      "sha256": "1cceddd0ba7349008c1fd657f6c43a0f78288458c759c7288377d67be6c5e6b3",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/CLAUDE.md",
+      "sha256": "de261ea28dc94d3690c15ed96d865d7ee4c6a3aeb0a62db1d0c923c691de9b01",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/GEMINI.md",
+      "sha256": "5302d3ef280b4d68f2da824e73e7eb0fa0adc56377096d3840c54d67c0c3bc0b",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/README.md",
+      "sha256": "369176061845e2b7ab83cb6cbd8935f24419ffe7f5c717419ae1c81aab07f88e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/apps/admin/project.json",
+      "sha256": "afb4b96a14d159cca75876516297f3409628a7904e87d4c9d35a07670700037d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/apps/api/project.json",
+      "sha256": "556f3c2b56ab6c1bc0b5188a5187b071c255aabcd561891eeab9dfd94ed5843d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/apps/web/components.json",
+      "sha256": "8d154d01a9e6a6d762ee608e550dfd6f866bf30e2c2e238b110771daee8b9fae",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/apps/web/project.json",
+      "sha256": "dd54e5f40b7935f1e05f02f20e3271ed560e6f25bf6203755edbb1a0abac5eb2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/docs/architecture/boundaries.md",
+      "sha256": "dd4bce487d30dd2f34cfc28f4221fdbe8223bc0cdb44c244cd6abe541f1352f6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/docs/architecture/workflow.md",
+      "sha256": "7b30ba336ea4eb00482ec827836f32a6a58a1148d716152cc384a0e29c568199",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/emitted/repo-catalog.json",
+      "sha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/eslint.config.mjs",
+      "sha256": "ef6fa3d3dbf4c956c79d37787770edc1bc0ee6e3d6f96e4e6615a300fa72abaf",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/nx.json",
+      "sha256": "8eec7a891b9a72e94db23424f4ebbddd1ed1307806f144ad7d78c2a270101a18",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/package.json",
+      "sha256": "a3bbfa38caee94780e3a99121afb170f1633efd61421ee46b08c691693240970",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/packages/generators/project.json",
+      "sha256": "8a656dc990dabae7bc83c6166326987c044b5b6072de28a6f8f4a40234fbbbf3",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/packages/shared/project.json",
+      "sha256": "78864eeba093711d95a53d9f7287bb72463d58cfe77660189631c598a07f0abb",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/packages/ui/components.json",
+      "sha256": "8d154d01a9e6a6d762ee608e550dfd6f866bf30e2c2e238b110771daee8b9fae",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/fixtures/zeroh-shaped/packages/ui/project.json",
+      "sha256": "cb735b63dcabc8e743dae927c00ea8b57e0b31cbf7b4dc0ebf39495b03ea9765",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md",
+      "sha256": "4c1f8442d2df2e9f10aaf85cbec996e946a7c82fb1560bb07c941e78a24fe12e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/brownfield-audit/references/harness-files.md",
+      "sha256": "01c529c0f05e03e957688f83ac79951eae8389287f343125ffea3033eef259e5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/brownfield-audit/references/marker-table.md",
+      "sha256": "59f57faebd25ad783efafd638cab4db271629ae6ee856dac81b8c3a89860b70f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/brownfield-audit/references/readme-reconcile.md",
+      "sha256": "244a79c38b689bacce8b424ffe6d80fa513fb2069c43081dba6edd005e3a5be6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md",
+      "sha256": "b2525eb4c54fe6d888ec71e58c1f5ca0c541f746fbc32288c208040ff4c794c2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/README.md",
+      "sha256": "2543a562bdd2c0f15787cf5ae6e22b3524b489de60a4f0e3d4535de7e188dd45",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md",
+      "sha256": "0b40e4e18973c5be692551c2a9953bf1dcc7095932d163a4b3c6fa3a179da2b7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md",
+      "sha256": "01985e77c67b91a0e8ea3b91f5e56810c3b9d68363afd3031acaaf4c00408522",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md",
+      "sha256": "4a532380bf609611d0a1299d51ca24d1a98931787198601bfbf971964233eda3",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md",
+      "sha256": "65cf2ac648df9b3245991e63344a363615a2e884a415f3fb5552153462fd7e96",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md",
+      "sha256": "40d3490013954106cab060c10499ca205170559c4e6ae896d1aa3141238f2613",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md",
+      "sha256": "73496ee89d232a9b2db09fcccbbed2f3eccb631cf316caaf2c5fb751c0f924b4",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md",
+      "sha256": "9c9b9a5fd367679b285c85e777bc84be5b67663667bce1f511f2059038b5142d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md",
+      "sha256": "cc35f58cf846c120ed488fc76412d1959c51bf4a7da4ea53d6a7dbfb07fd1df7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/prd-interview.md",
+      "sha256": "197f9a19147f35ddb6026663e2369387940ff7e5cabbdf2815c8347a7584c3ec",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/greenfield-init/references/standards.md",
+      "sha256": "47d52afae9efc59346d06ba10341d7d9a3a0e1a2ae8c4ab8de9cab69ee8df653",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/stack-decision/SKILL.md",
+      "sha256": "33ea2349903d9396ee91890b9f4e6c644864694f5019372d0af0a5364547de7a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md",
+      "sha256": "0248ee9034f8fc47fc2972b32ce65f2074745d0a2aa5d71c266acb768ee8c2ac",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md",
+      "sha256": "c3f84092c677cb0d9c64f878e2e1dba53fea36552ade7c2761ad3a85321d810e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/AGENTS.md",
+      "sha256": "febecfb2aec7748109f0e83a35baea818d61b750c32b7debff4407800c4b1366",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/CLAUDE.md",
+      "sha256": "f644bafc136c47ac710ac3f5ead10855542daead0d66f6459c8e1daa52efd831",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/CONTRIBUTING.md",
+      "sha256": "e7d97bf4e49d02cd866e9454bc10e69b55df041307fbe06488826bf35d10b20d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/README.md",
+      "sha256": "b0d0ad5b6a2a280f678304bcf85d8de2973c4f0bc75b8f6d1de0ed76e470f0b9",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/docs/CODE-STYLE.md",
+      "sha256": "d7ff7ca0e28e65d501ee87bd730a77e83eb44b909b1f32376d4aedfe7fb3d550",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/docs/PRD.md",
+      "sha256": "2dbcd3673913b27750a7fa83b9b3c79ab54626add901db7b2c1559a7118e7673",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/docs/adr/0001-tech-stack.md",
+      "sha256": "6a8248ed53435e6bba7a8a3159f5a7187f6ab24bf9807ec664a100da9c895e32",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/docs/adr/0002-design-system.md",
+      "sha256": "c61605cd4b6a3fce8f777940f3cbf6206a402f9de03f4d689da8070881d93240",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/docs/architecture.md",
+      "sha256": "1f23e9a91c7756302efda10d295e1ab6c8b862b6746daa37c5c656b88ea6956f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/docs/ux-canon.md",
+      "sha256": "92ad9024eefd65f49c0df90dcf49e506906c392f1b78d99f66aa8aed8472b7bb",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/scripts/check-readme-catalog.mjs",
+      "sha256": "7cdfebbbcae1b9638fcdb557676f8a3311526e28856fdc0b975ba3d30ad38bbb",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs",
+      "sha256": "f9015d15a1ca748ea9c86b6755acf758a1ee4e8a5ef15b97222ef25d7bd276c5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/.claude-plugin/plugin.json",
+      "sha256": "d4d3734f76ec6e29d1908a64b72a25b63ad0e6204c3d5414483c96e5701502f8",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/.codex-plugin/plugin.json",
+      "sha256": "906d990d165288b1630e2517ed1bee78bbcdce0e6e63af8a35f9367140ff68af",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/arc-eval-judge.md",
+      "sha256": "7c806bbfea9bfa94996cf3090e41ef5e12d4040666e891d69401681737c5aa5b",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/code-reviewer.md",
+      "sha256": "c0bf0da27cc3d2fc7b658511161ad212991f87e0b834f7f54485cba8b4fac85a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/intent-validator.md",
+      "sha256": "807432c7206a8232a42e759e38ca7a6ab53e3441d3b2a9460008e3df36d1caa5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/phase-executor.md",
+      "sha256": "0696a084c6ebfbe52d87fcb6aa3bb3c5f2679703d35d05b2119537f3bccd7e5b",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/quality-pass.md",
+      "sha256": "59d912b677374b85c1af27aeb363a117e6aa58b0b43c4dcf336e3cb69db4d4f4",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/references/executor-reference.md",
+      "sha256": "c272c86cbe3fbca03f427b79c7c19b4e4a4127045eae80e70ad294232c7d1470",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/software-architect.md",
+      "sha256": "3de5b60f0ecd516f9866fc45e134c375a4b711ac8a9fc9f1edbbfa9e04d23a0c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/software-developer.md",
+      "sha256": "d7fa3f005cf15abdb402fabb6bca93820e0ed27705ecf7e8268286163567a941",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/test-engineer.md",
+      "sha256": "99fe6b986020a6e9853249315c77b810492cdbe0b5bf44259e1c97ece3df83d0",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/agents/ux-designer.md",
+      "sha256": "e34dc9c62d68ac48b592a9f64f56488eb3eb0a6cc4e33eb80d695469ebc0aad1",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/bin/roadmap.mjs",
+      "sha256": "4a5657765c30e254ee9f4028e320030aa41cf92df742847c5c36c00e86de99b0",
+      "executable": true
+    },
+    {
+      "path": "plugins/zeroh-roadmap/bin/validate-roadmap-file.mjs",
+      "sha256": "e01029fac00ffef9f9937c97f2e90f812ff54e3df4d7be82624b30108f3d7326",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs",
+      "sha256": "2ff02bc397bb5ea1a9a38ad98c5f2b5df07e483723a028acb958dcca33463838",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/audit-checks.mts",
+      "sha256": "4e8065f02577e86f00558fabaaca39abf79142a4c802ff42a66637d4da9f17cf",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/arc.mjs",
+      "sha256": "512e380cdbdadcc0837091e9dae389eedf248ef4ed6a449f3297dc15372c8b16",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/arc.test.mjs",
+      "sha256": "fcc3352569d17320d3642075e7a8c442691b6fd41c3c6bc38c3cc8eee9fd8891",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/arm-disarm.test.mjs",
+      "sha256": "bd6d5b66285f8b2e92a78c0d822519b6af0a981eb9c6a9ef6027c06f1d73eda1",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/arm.mjs",
+      "sha256": "348d0da6965a5c372925131a3cd1e5b786a6078fa17d9ce4c162d728f5d9ecf2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/audit.mjs",
+      "sha256": "4103734be5a5efa8f33d89cdfc45ffa6164b6639c4c633ec71f488f469877115",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/audit.test.mjs",
+      "sha256": "42716ca5a180a849a7f9be7d1f6cb67d3665bd074d803ef793b1061f3f91d52f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/beacon.mjs",
+      "sha256": "ec3944845fb5a152878a4b3970b297579f8eae42c5a0e0dd1e57a1e99c72287e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/capacity.mjs",
+      "sha256": "f648d449289f563943309c9076364d5fddf601d107c81d1d78e6d80f9d06dcc2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/capacity.test.mjs",
+      "sha256": "ee8a12ad1efe6422275e2d728b36340acaccced96103f76c87903b2d193c103f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/claim.mjs",
+      "sha256": "86f90090c901fd806fe876da2fec09bba46e557a13f9aaa7d4c75f1738d49869",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/claim.test.mjs",
+      "sha256": "c4963e718a58d6c3c32ecb0a3499ba2bb4f2981016828bfeb2cb0d6d720e952e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/codex.mjs",
+      "sha256": "eaa98145bc1d3cb3fec6f29617f49d7925af2fa3bb913b476462a3886791aa15",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/codex.test.mjs",
+      "sha256": "cb37771fe0b62e4d2fec720cd52690d6907555bfc7749f2b402369db51b25395",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/config.mjs",
+      "sha256": "edf6813e02229d3bbdb8f0050c2f1aab5646d88301c69a25dd1fe20f60e29247",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/config.test.mjs",
+      "sha256": "7c3d33fc33ec7101fe716c4995cec54610edb84add28f0ef21dc67bb5b57100a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/contract.mjs",
+      "sha256": "ffbb5a5b0ffc2e1cf6552ddeb59082712f928837378f6c1c2636e8fa7decb2d4",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/disarm.mjs",
+      "sha256": "6be59b786193c4389d4cbc5e8f3d38c0a2776200085bcb999827553cd2a480b1",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/driver.mjs",
+      "sha256": "570666f067f0e4a29ade53b8381686d92b18625faa2a425a3dd79735a1d9adfe",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/driver.test.mjs",
+      "sha256": "694e1b4d7d4ed30c3a65ff4ed8fe9f8bf4021418a0e28479cb260dfd4d5dbeb7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/eval.mjs",
+      "sha256": "7d89fb42b14963ffc3f1a548b58cf3aab4ac19ea1f2df335b485e6bb0d45d0d7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/eval.test.mjs",
+      "sha256": "ea8b19ef64f6531fa60acf12e35a1960815b1b6108188b30a0a313674db4e5f5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/executor-arm-disarm.test.mjs",
+      "sha256": "1bebcfe66e9c48e6aaeb965463006da2dac786cb83b3e111f3f7ed93b2e56713",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/executor-arm.mjs",
+      "sha256": "e6c327269a0cd211e00936c3f6222df6514d96e3d4a74c517d9f180030d607d5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/executor-disarm.mjs",
+      "sha256": "58a5fe87a3c31cacb0db2695d0a9b357bab222278615e2809056341a0f260304",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/followups.mjs",
+      "sha256": "bd931bef4bedf01df6733d7a3cc16b9318490a28de8bc8ac99831fab080a68b9",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/followups.test.mjs",
+      "sha256": "266d3092cb58d224548c81e2b5bacdcdf10af665d30d967c8b1341c4b673edb1",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/gate.mjs",
+      "sha256": "302a9d8d3539c1c45d70c47417fe47c0b9687164c738bc6a2739e4c3379620a2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/gate.test.mjs",
+      "sha256": "ca02ba77adc9251b999c88ed5ca9292f29646ef418d05f38fd995c321b9f68dd",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/init.mjs",
+      "sha256": "60c302972035500f9b4b080b77d8d9dd919779ebf12701d593630d6b7eb07445",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/init.test.mjs",
+      "sha256": "91e79374fc5111a8d924a1aaeb9cf5b537fc759a5e978df5c84b068b2491b3c6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/measure.mjs",
+      "sha256": "70c95fa203fe68b388748137076964bce37524b8205669c1ce6d147772d47835",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/measure.test.mjs",
+      "sha256": "09b4c1dcd57b4746f22276a57df3e5453e781e51f5a8cda671f18bf4081d5dc6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/phase.mjs",
+      "sha256": "43f02ef29e18e116a994747a66984e53107bf001224f861f12cb354debd1464c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/phase.test.mjs",
+      "sha256": "c1d2f74606335cf535d4849be635c0ee53b59ed7fd880fbd319005e607f3e9c6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/result.mjs",
+      "sha256": "8859730b6bb9e0ba23e6514cdb93b6e86ff2ee2d2fe78861784e1f64f6c8c6d8",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/result.test.mjs",
+      "sha256": "b2ccc6eac22175580ed67441b622d485a9093abc917998dd5d165dcb790464cd",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/role.mjs",
+      "sha256": "3d79b25729df1ce976fe4c835a230c35f4e96af1bf288335bd38d10098622d27",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/role.test.mjs",
+      "sha256": "20b8a750bb9d40bc12937201daaa875302dff48dcf45004f23f61825e30217b3",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/status.mjs",
+      "sha256": "0a26acb751f7638c77bb19fb38a4307f34bb66adbf699f9b54b158a95e4dee35",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/status.parity.test.mjs",
+      "sha256": "9bd796787e6482c5049993d639ef7fa614bfa05dfedf4d05235e3baa9fb2572f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/status.test.mjs",
+      "sha256": "9797f38fa966f4a0d550c26e1fceebd1fae88608ef8f6ff6249b4d6c30bd7a5f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/watch.mjs",
+      "sha256": "afcd367a05c6df16f64a32f820fd94e98d84c72a366ee6fd786dfd525e9dc4e7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/worktree.mjs",
+      "sha256": "be5e3059082789d5e0aeabc8714229ee3c3c06f665d86b048dacbe2db8a3cd1c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/commands/worktree.test.mjs",
+      "sha256": "1a5c4a72340ffe388aed3eb2c74b4026c26b4cc086043755fd71efeecadac9e7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/generate-config-schema.mjs",
+      "sha256": "94add9ea9c0f9c173c836328fcff676d53925c7b4b3fe6bced22ed6378bea9c8",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/adherence.mjs",
+      "sha256": "25bc672314207c52b62048d30412a96fb4118ddeb924bc5457c3d647738fd948",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/adherence.test.mjs",
+      "sha256": "c71ef5ca8ba56f8ae7dae7bda01a7e53cc25c1296816b4438088de0b215137e1",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/agent-transcript.mjs",
+      "sha256": "22cd5144df470ff8d8474bda00981045138a66cb9675ed1d404f6b8d58178e23",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/beacon.mjs",
+      "sha256": "15c2bd3ce84655b6c2a3da5cd6489773ed4bd2afeb52a1655066be77462a4b98",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/beacon.test.mjs",
+      "sha256": "477e39f83768c52e42e8c0ff89514c5fca18943bef33c452a83c05c049d4025e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/bridge-error.mjs",
+      "sha256": "ea2f58771175df3fc7a346190351fc6db5142912e33498c1af628c7cfadb1a35",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/capacity.mjs",
+      "sha256": "919829bc8995102922a968b868ce3aba4a4751841fdfdbadb0c25c8a03238c49",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/capacity.test.mjs",
+      "sha256": "7f6e4c3b5f87e276a46deb6fac1735873c7059bd3258c3785f3fb4827deb5ef6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/codex-journal.mjs",
+      "sha256": "3050810ed86daaabf0c404537afc9b92a03ffa7d8ee81f1bf7e2dbfee51d7867",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/config.mjs",
+      "sha256": "e4809e2083c2405574716f7b23f3b57f4ae15e92f7ee8b17338257c44693165f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/config.test.mjs",
+      "sha256": "abc47504d4591d68c51ae8aabf570914368657c9c894cdc51694c73af858b1a7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/curate.mjs",
+      "sha256": "1db49328666e9fef63801518ddc73bb60c884e378600919599aa6d74a2be521d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/curate.test.mjs",
+      "sha256": "055533de469adee16b11e79d8a777447e8cc3c2a26d1c00c30e28d7dd68bdad5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/derive-resume.test.mjs",
+      "sha256": "b626194268c7583b7ce177fc70e96a6846ee5565acf05b479f6ae2cde578cdce",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/derive.mjs",
+      "sha256": "bb73169ea8a38dbb900741bb9ff63b66e9a18181e55420a79fb276fc797ab791",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/derive.test.mjs",
+      "sha256": "f6e2a0f74e320b5062421cdffbe5c01e10bea668470e2da0a76f28bf92195656",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/drivers.mjs",
+      "sha256": "5184bbcdd2c96cb569bd167ef12b2851383e1a6b911ddcd38074e59992995a5d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/drivers.test.mjs",
+      "sha256": "a8ba446a9774212ece94318f35728d4f94ac7479c338a6418b7a0070ee23b3c2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/eval-collect.mjs",
+      "sha256": "5c2a72cfad38692d58413b10e7a519fb66987e080b5ca613e001398eec0a2273",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/eval-collect.test.mjs",
+      "sha256": "6d22fec3e8b6060761e83dd58d5412558dde59c2cb2687a078ef478165e3f0d7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/eval-propose.mjs",
+      "sha256": "2da18a80f199ad9081d4e3a78f71b31b6387f35a84c0b77bbfcf365414c5d2bf",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/eval-propose.test.mjs",
+      "sha256": "d782bdee30be941ca8d3066c041efc0bede01bc4d59b8e4875b1c1cd7ce4f30d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/eval-score.mjs",
+      "sha256": "ccbb7d3e07bbf136051c86339139ca546fc2a340fc9cd3d42753306a2a378d68",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/eval-score.test.mjs",
+      "sha256": "ce7effdc6bc770d501b4cb9b1f424c695dd399e5bac00c2acd834a3826d31bcc",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/eval-scorecard.mjs",
+      "sha256": "58b5dfd0070c8a5fffec7a7a5ef247a56ffd5345c36c2acd14ebd3adac3ed4ad",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/eval-scorecard.test.mjs",
+      "sha256": "c39a7d1b0c9aed3f01a042798a3d014879b6f857fe1202201cd6dddb1b3db589",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/exec.mjs",
+      "sha256": "8f6c6a1ce0137ca63922d520371740f97130f46bec82538d75e04f0e52b5748a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/executor-arm.mjs",
+      "sha256": "7de70a68f8843d6cbbec17a57e4d300f482a9ac69499d7760d53e16743352411",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/executor-arm.test.mjs",
+      "sha256": "b16669c7f4f6cfcfc65f81a1ad689dfddfa922d5fc4eb248da5cb1e555be0829",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/gate-report.mjs",
+      "sha256": "a4082a3eebe49202ecbc3953e0734bf5fa798f235a4ea6a3c85a6f0f2038bac8",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/gate-report.test.mjs",
+      "sha256": "ba684bb44ae1c59abe216192aca31ac5db50b77a58962825e9cb39646b78fd5c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/gitroot.mjs",
+      "sha256": "f463b6918ab164747d027496cf794f0c4cc182606e711eb04d46aad56e3c06c5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/gitroot.test.mjs",
+      "sha256": "56f37fcb548acada7fee0be6e8ab6eea5b516fdffbeb83fafadc64eacc82e4a7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/gitscan.mjs",
+      "sha256": "4c43743125f0939709043ae7b13299384a8174d569ddd9721975142f0ea3a063",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/gitscan.test.mjs",
+      "sha256": "44c798613a91a47b31ea9635814995c3ffcbab264d73e441cd76e80e48cbdee7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/ladder.mjs",
+      "sha256": "f46f3ef4a824da0b65418710b3c4af853e617febce010e69efddf93f6397d8ce",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/ladder.test.mjs",
+      "sha256": "d2e6dddbd9ef7b6329833258b7bb44dfd29116778577b1755154ce665ccd5a35",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs",
+      "sha256": "fa364c43cc36e1300682ffddfdc2670b36a41370fc32932610cff6a557334ec6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/landing.mjs",
+      "sha256": "17b10bec480ecbf7d2c89c89adffa55a6c949c4866c04c0d784319d51be17748",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/landing.test.mjs",
+      "sha256": "3e3ebec808753a1bc414b2ce30b57f1ed2644fc6203859538c602ab87cec7059",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/liveness.mjs",
+      "sha256": "ae79efd743467e7c08ece1e2e58e90e02d72164e5ff03e07a22318d471649194",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/liveness.test.mjs",
+      "sha256": "3e46f6554f9c5e7232f899feb6f29722afc06e24230ce65d084916000f1101e9",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/measure-budget.mjs",
+      "sha256": "599ae1e114fd69267bc462b22c8889769c2a26852e44b8fe788dbdda2bff15e1",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/orphan-sweep.mjs",
+      "sha256": "b624fdecc90ffe9116106cf4e346e7c6869bc84bbe9ca3a7cf3b9556d8b4b8a9",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/orphan-sweep.test.mjs",
+      "sha256": "5488370269652cfc47a80ef5a6916380ad6a9153b1bb9cefbc72a4a7e77d4dcf",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/phasescan.mjs",
+      "sha256": "b1f3f37978097c090cd9ab06fc500d2818528fa3516c430b2776790f1f2b97b9",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/phasescan.test.mjs",
+      "sha256": "3148e5524fbb2743f539d3e06b3aad2c0cacb1c07e7201058f02bac347963585",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/product-repos.mjs",
+      "sha256": "657e21bb64b9616f739ccf345310834118f7a0d6042a49901a393f013f574586",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/product-repos.test.mjs",
+      "sha256": "ef71c9d84b5a5247ed3bc3874ed50b997bb34945f47b2c917615f27a81e3cfb2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs",
+      "sha256": "18c939fcb7157df42739f8dfa259f65bdbc1ba104de0434f6875cf8df494573b",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/roadmap-root.mjs",
+      "sha256": "9ba070df15e57cde7408561682c1c0eb1236e50e5950668ab4c20ef48f4d0f70",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/roadmap-root.test.mjs",
+      "sha256": "6365ed95ebb7ff57ddd1633ddee75b189e63bec6c64453ababe015229a864c40",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/roles.mjs",
+      "sha256": "e826a39cbf0fca53db6bdfff6e9ebe0c425f889325addecf076d5095671609a8",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/roles.test.mjs",
+      "sha256": "f863e3efc061ee456a5d0142cb8ce4ceaf81317c392484502eaaf36c5e96a368",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/sidecar.mjs",
+      "sha256": "812869917c84bef3c8f0456f8adb8444b286247bfb3bb4e4511b1db34ec50f68",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/sidecar.test.mjs",
+      "sha256": "d7efef447c7deaa8fbf90617aa68cdc42b473207f73a67b09522db90b844082a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/slots.mjs",
+      "sha256": "0da81ac41a21c2a663d2c5dda6f94ab6d17eaca2361a14e3052db8f8a44f0f40",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/slots.test.mjs",
+      "sha256": "f10b3d2b5f9b9df24a50169a0de5f89fed484c9e80b8fc1a4a2760b1318551fa",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/transparency.mjs",
+      "sha256": "ec0d13833888f04cd8a5033fca4b4fe23efa8fe89f70c9e34dcbc50a1a45f77d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/transparency.test.mjs",
+      "sha256": "dda190d4eb077853ad69978b0dcaac555369b5665a1df9e661cfcbabf168cb7c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/tsx-bridge.mjs",
+      "sha256": "af2a0dd6375611037aab7e5d9df30bba981072809b5b90aa010fa507491dad6a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/tsx-bridge.test.mjs",
+      "sha256": "1c9c3b8d39b6709eb91c9e333c664ebe4ac2e90b2b3ce00cb87314fd811c94d2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/validate.mjs",
+      "sha256": "a7379c4a56701f394835a59c39f32464432b1764262ace55539b1077f34eee68",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/validate.test.mjs",
+      "sha256": "ae7af77055ddd9a6878001de842fa94a6b24d2ade106ad392d6fded133e09295",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/watch.test.mjs",
+      "sha256": "0052598f9a0a5010b2b5b07378114640cffd5913c174ae76b86cd1395f8d5f7c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/workflow-steps.mjs",
+      "sha256": "c845bc08feb80b9cda190ec298b559f5a8f28a2217582e56806575ad984b639c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/workflow-steps.test.mjs",
+      "sha256": "62eae1bc2977901dd70e53f1775554451d9db0bb0192b43aae583bb51d223530",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/worktree.mjs",
+      "sha256": "7beac85ee4ebf2a87b4a99997dc78b2593ec56c52efeacb362661b946ebcc0e7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/worktree.test.mjs",
+      "sha256": "3f0e0bbbdb238790f38e50c2ca9b06d406d869724f316da0cb6750261b694538",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/measure-manifest.json",
+      "sha256": "59b8861ce6f5a2c04b2f63dc3333f8970765ddb9f61b3dbfaf137299acbec7de",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/roadmap.config.schema.json",
+      "sha256": "1e7f9f4ccaf6d39e2b456eec05801b99056fe0e45c9efa6399ec66b1f4e88a27",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/arc-status-legacy.mjs",
+      "sha256": "79597f019331f5889d6cf210dee654d5a8771637ca1120e060dfd7d26101b850",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/build-fixture.mjs",
+      "sha256": "a4f0eb0080c261686accc7734587d618805cbc84f63a9e34214062a1910b1ae8",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/gate/9001/run-000001-2026-07-16T10-38-00-000Z.json",
+      "sha256": "b32ed55cbcb75d367d913de201dcbe99bed7412a722df79f02c1eeb35d1c8303",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/gate/9002/run-000001-2026-07-17T10-28-00-000Z.json",
+      "sha256": "513f1190427a9514d396bd633b84454ea7c2f580118a366ca2f0bf4e278ea7ea",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/lib/roadmap/schema.ts",
+      "sha256": "d1ca4ce615963faac44e0003475d45993d0605d91b5c4c62d9a37db933210509",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/roadmap/arc-evals/EVALFIX-2026-07-10-sweep.json",
+      "sha256": "2f4e363da28cfbe3aa1c2cdb46eecc1052e8e4ee4b6676ba8d23e835d451bf90",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/roadmap/arc-evals/EVALFIX-2026-07-20-sweep.json",
+      "sha256": "9fd7806a363749651f98e6bd81f59398a5309cf764ee1d1c40a20cf610203d9f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/roadmap/arc-evals/EVALFIX-2026-07-20-verdicts.json",
+      "sha256": "366b2a895415202a060a322354343ed48c3b3c92466f0a60febd34de1d3fd9ac",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/roadmap/arc-summaries/EVALFIX-2026-07-20.json",
+      "sha256": "4c172711e06af1a9f8d9e28eaf53e9079a807f2717759a87a97d98cc82dfa355",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/roadmap/arcs/EVALFIX.arc.ts",
+      "sha256": "95478b57380b27c9a53b9fbf0fa8cbd8f533cb8dfc9bd01e33bdfd4ccf2e2507",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/roadmap/phases/phase-9001.phase.ts",
+      "sha256": "731903435161e1b16c4c2af0fe72c8b62bb1fd7b7e9dd2c64e706b40c3949e1a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-arc/files/roadmap/phases/phase-9002.phase.ts",
+      "sha256": "0be143ee32f848da8864cbff1c008ffea16c5b6da06b69e3d86469ac14e21e24",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-proposals/ALPHA-2026-07-01.json",
+      "sha256": "b20fb646f7ea797a2712c8c5f38eef71bbbd0981da55917bc9a832dfe61380a2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-proposals/BRAVO-2026-07-02.json",
+      "sha256": "58aebb5e30429c5ee5172d4e8bc951ab3be8cf4438791a60410479feb18068d3",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-proposals/CHARLIE-2026-07-03.json",
+      "sha256": "b43b23cec523aca4cece060b632ffe944744eeee6243b061ead524027988d387",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-proposals/DELTA-2026-07-04.json",
+      "sha256": "e545c5432f025b431fdd0e1b70016c21810d89fbdff75b79d797fea8e22c95d6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-proposals/ECHO-2026-07-05.json",
+      "sha256": "42e9138ac351c52890394a7c65f84dc61ab67dda28bd65b97fbf47fae949e058",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-proposals/lessons.jsonl",
+      "sha256": "d0d05881da35342029440940100a471e0501276366b61ef4ab56d025f68d95ff",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/testdata/eval-proposals/load-fixture.mjs",
+      "sha256": "6ee62f4e64d56aa3049530bdb46b0f7e471944d48a22d9aa62f7d3de077563c3",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/package.json",
+      "sha256": "88f8c235329edd83d6b06ef983768a343c8bfd10896a2ba943212f7c1780de00",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/build-dashboard.sh",
+      "sha256": "1fcac286e1e1b40ae24f5847d47fa944d8c81d18f6d6834ff77e22e97afdb677",
+      "executable": true
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/collect-phase-metrics.ts",
+      "sha256": "be26e08919c86627310ee9ee7a3aed4326f831d4bcfc1e217636d420953217eb",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/debt-census.mts",
+      "sha256": "90d6348d2481d1176e333e0e1c8bb8299791b32c93a4d47b4f4680feada30a43",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/debt-dispose.mts",
+      "sha256": "c6b77de868e492672ee49efca6e757fada95953f1b967862c76e7a4587454d90",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/emit-manifests.mjs",
+      "sha256": "dc1df6cd1854d657b2bed7c4d7e78d0eb63ee65e702d201510006c77e2e1c657",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/emit-manifests.test.mjs",
+      "sha256": "35cddbfba910524ae28fa8c04e7a4413739b22ac568474d6b9cca9a019ae695c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/gauntlet-2.0/build.py",
+      "sha256": "c10b95f569651b5defccd389647fc0f862c3bdae3469f2f7b9d63096dde4078a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/gauntlet-2.0/gen-diff.py",
+      "sha256": "e9bd235343b7c906076392e774eb2e1340d76c1a8c13ad5b04f7ae9905854ed2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/gauntlet-2.0/gen-eval.py",
+      "sha256": "ba4bb128eed5e85603de64d44cdfb0fb1cf93d6d768c8376d1400965749d440e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/gauntlet-2.0/template.html",
+      "sha256": "d1f2e29d673098f6a35cf81804d2aa8c803962f71af3b52257392ab5f3727dc1",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/generate-changelog-md.ts",
+      "sha256": "0c5163fb1d4018162f50145af2b7ce7668d5ab33abf30414c9ba2c69c0bb2181",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/migrate/README.md",
+      "sha256": "fe38beaa24b8510379b0642771df9d65740dcefe3278192fd0b4863b544e692a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/migrate/audit.ts",
+      "sha256": "ddc827f228636f8fce84f5ea37e831c6fe7dc17a93c3669d56ae59f0b118f68d",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/pre-review.sh",
+      "sha256": "ac80b678343be9025e63ea432391da3a4af9fd512165c39b24af0eec1b6e2b41",
+      "executable": true
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/scaffold-roadmap.sh",
+      "sha256": "fc7489de89c66718640bcf876b8704f10e1298c230c4e7665008a0455e98057e",
+      "executable": true
+    },
+    {
+      "path": "plugins/zeroh-roadmap/scripts/schema.test.ts",
+      "sha256": "bd498ce6c31cab683d47d659fe8360ee8840c6bd679706c3783ddb44a101e8b2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/arc-sweep/SKILL.md",
+      "sha256": "440c06534e4fe61a40d10a6a03f9469139130df4121bd4c28af76060b4e53323",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/audit-roadmap/SKILL.md",
+      "sha256": "f8cf54dee08ad5debe600013ca4bd4f1c6bf2777e9e4224acbcc0421e3579311",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/do-arc/SKILL.md",
+      "sha256": "6e780f232b33bac4e762f1e2d9bc451de9285727856e3e4228b0f504f568ca4a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/do-phase/SKILL.md",
+      "sha256": "b1e0ad4f29809234570d99cadbef8a2ea6cf184a97b778a0a6c659c4f3462d59",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/do-phase/references/documentation-rules.md",
+      "sha256": "bb2324cf124dbdba05d064d792f82cf13418561d17966f23a175a5bdb95735d4",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/do-phase/references/guard-mutation-proof.md",
+      "sha256": "3d4feedbfc83302b4b6ceb4be60536dca1cf26f8beea54b8b0bc4b91f5d6314f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/do-phase/references/test-worthiness.md",
+      "sha256": "b8618777006b89afbc26e9f20fff9509fa3e9efdd3b5910f99dd3d25c1b6243b",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/eval-arc/SKILL.md",
+      "sha256": "38a78c8fd1079ba6baa2dd7ac731a3d9515dc7c4162a0fc7471eaed343fa62bb",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/full-code-review/SKILL.md",
+      "sha256": "89af1087db56dabd3150ef72f7d09e75f9139473eec590a46f038882fba0d255",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/full-code-review/references/audit-dimensions.md",
+      "sha256": "b112d0fdc56a6b2e2d1e43e161d2db29855c55f30bb2ce4f1887d549312e3759",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/full-code-review/references/remediation-phase.md",
+      "sha256": "4c8d248f4e3f9aba665be9db6e13eee07b74a9251cfc79aa2152390241da984c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/full-code-review/references/report-and-record.md",
+      "sha256": "709407eefd8c7256bbc1ca6ab192e739fec2bd9b765175166dcd67f9abde4702",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/handoff/SKILL.md",
+      "sha256": "fdf371298394060e1dd2b884749e6f16f3b43c99ee42ac3134866ccd9d3af3ab",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/handoff/evals/evals.json",
+      "sha256": "fd6dd49a3ea42d632b149d728f36c39e3b506f3a98357d8c1b07ee7cb2da78ba",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/handoff/references/template.md",
+      "sha256": "60c3e5a58a434924ae8d6e41650fdd3b2bd3205e840598b30cfd091a5c0b5d01",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/plan-arc/SKILL.md",
+      "sha256": "4dbb273aad4d118424a7b54c4ddf79eb04dcbd611a50b1c55806ee9caa78545c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/plan-arc/references/arc-integrity.md",
+      "sha256": "7365f63b23e0ab2a120b75745558576cc765a9c9a12f137a92656780093fdc3c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/plan-arc/references/design-gate.md",
+      "sha256": "290e8cc43d2cb9791a9e8ddafb681865375a4c8231e517a41f49f4468f86e0b0",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/plan-arc/references/ux-craft.md",
+      "sha256": "e0d58329d8d2508acef7e7fc912d4a0f8e89158ef1b7b3aa7bd69c8a7864913a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/plan-phase/SKILL.md",
+      "sha256": "b87d815eb4aea8740af169d5ec229f5b50fc80d8bc761d1fa8d1a8c909d7feee",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/plan-phase/references/closure-checklist.md",
+      "sha256": "88c29efa488ed166a768975ce29992fa58c23755f34d63c34bb066c59a1bff51",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/plan-phase/references/phase-file-contract.md",
+      "sha256": "7cfd217c6f4d9bbc5a23f51d122c1415fc10634bb400c9b4a98a41ff6ee6bd0c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/plan-phase/references/verify-rehearsal.md",
+      "sha256": "c0792f9fa641920f675f1dc2652fc978b0e61ec832664a7378881f8213202130",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/release-sweep/SKILL.md",
+      "sha256": "851ad546b6d24359f39e4ffca2037eb9b33571e1864a976445d7bc1e7fa5cbdd",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/release-sweep/references/followup-contract.md",
+      "sha256": "bff2ace48f14947c082256e890c76acea48491786cfde746720881e3f4cca73c",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/review-phase/SKILL.md",
+      "sha256": "d99fbc55a0b874272e75fbfddbebeb347c7f4fa1511ffb112870d7fc3b9e5271",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/review-phase/references/metadata-ratifications.md",
+      "sha256": "28d66fa8a80b952c45fa22dff97b3507eccc02af3c2c595ff16770057c41243f",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/review-phase/references/plan-adversary.md",
+      "sha256": "b3497f4a08d3147650a8b58b30183e49aa699ed8d6bfcfc2cf0092d0f726f2e5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/review-phase/references/queue-placement.md",
+      "sha256": "dd2ba7c623f2d825ed4651264357e2a7bce8c52e9b439c90f6e91e88abc6d18e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/test-strategy/SKILL.md",
+      "sha256": "3dba0781cf40dc4bc9779689fd2c0691b760c094128efc90a89d7b6a8865e5c6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/SKILL.md",
+      "sha256": "70f2ce369826630cb4191212d36394236bd44a31b4dbffc8fda50fab34207791",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/codex-tools.md",
+      "sha256": "161bae6241e9ba0eb5ad74923642aa0953dd6f9d5c109de04db39efe20a25114",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/component-structure.md",
+      "sha256": "313aeef643fe3cb53f7386c277064203a0d556c7c385aecc7b05334903a715aa",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/documentation-rules.md",
+      "sha256": "bb2324cf124dbdba05d064d792f82cf13418561d17966f23a175a5bdb95735d4",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/external-assets-licensing.md",
+      "sha256": "74f3d2a50fbd92606d45cbd63d69e44ecfcbac33a163f535187e8a319328b170",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/layout.md",
+      "sha256": "301660cf65c1aeac69d4adbe866443534d51a0d647b3d3603a719924bf2c1ddf",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/test-worthiness.md",
+      "sha256": "b8618777006b89afbc26e9f20fff9509fa3e9efdd3b5910f99dd3d25c1b6243b",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/validate-arc/SKILL.md",
+      "sha256": "8d0e13df3f46fc87c23217db1b1ee19bb07cb08153e3584b7a3f2c7ca623e8fd",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/validate-arc/references/driving-tiers.md",
+      "sha256": "53fd4d5491bc0ec53457c63551fe2b7c502775f310547abf340bedd32dd605ed",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/skills/validate-arc/references/parity-rubric.md",
+      "sha256": "313a7e7bee563ff55aab586133a198b5747cc8d633183a48b92c6a1abaeef237",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/templates/ARC-RESUME.md",
+      "sha256": "f2010284fff554957cfa74eee66678cf9a8feec7bc6824980418fbdd656a4c41",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/templates/ROADMAP.md",
+      "sha256": "bcbc0e8fe6e49151db585014f63c8c0801a350bdb9097d996d693d2bb672e91e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/templates/backlog.ts",
+      "sha256": "1db85ab0ff223676642addb5ce7da589cb1d8ce205cd0f928d096fca928934fc",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/templates/emit.ts",
+      "sha256": "5ba6b26a0ad7650784804ac74ce0f36f501be57af131af9833119d2b7dd9c216",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/templates/example.arc.ts",
+      "sha256": "301bc1519c9e27a4cdfd6a3a79cb1fd2a53eb320538f04b5119a1f87134743d5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/templates/registry.ts",
+      "sha256": "1c96d313464f55fde8022e9f797ad8e4381c8dbca625d42ac1654949b2f96f7a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/templates/review-report.json",
+      "sha256": "71315571b45547393747fa52e9268c71d1c9d6322458a2f3d042d9143a4cbcf2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/templates/schema.ts",
+      "sha256": "d32d4a83543b465a1c6e5fc6f4cbf73b16b8bc4d40070989adb20ecd1f44070a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/collect-phase-metrics.test.mjs",
+      "sha256": "7cc0fdb8370be800085c89b1fb22ec36c3ee0e936a872ef57d565ee6004ee0df",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/arc-land.test.mjs",
+      "sha256": "f07cce46cd22c3706d725a29024b9a657ab5b05bcf1fca7205259889acde1050",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/arc-next.test.mjs",
+      "sha256": "156ec45aea31350ff70a366b4eb7b4952eea3d3a23b1c4087707ee08f1227b67",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/contract-drift.test.mjs",
+      "sha256": "d28f2dfbdd75fa825d154c4aa55d3c0b646124f86839f924da1ccc58aae4bcf2",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/error-injection.test.mjs",
+      "sha256": "0f60e3fd76b7dca504d91cce75d4c9b3f0d86072551ca9450103aa7229b16f67",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/executor-guard.test.mjs",
+      "sha256": "198358dba1df8d6cf23446dd9447d440f0ee8ac3136ddc17d62c3ca02d9447c0",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/fixtures/fake-slot.sh",
+      "sha256": "f8e4762888850202655150002df0c0902b3825fc1850a4b848134d1bdfde126e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/gate-untested-fix.test.mjs",
+      "sha256": "07740d5152972a0b56bf03a349d74357bc0c3c12de47e6f7638b8c9def893abf",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior-evidence.mjs",
+      "sha256": "f45db5726ca6369c59f01bc5e6d2d8f442c4105e40495222c4ffeaac5100c0f6",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs",
+      "sha256": "e6695d97f346badc6ea65402afd7bc3476d53b6a40b0359f25fd10d153c04d2e",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-evidence-source.mjs",
+      "sha256": "720dbcdd98af37dcf8477db9c8b2e2af6c5c14f235ecd874abad03d404175a14",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs",
+      "sha256": "fc74c35dc04c60ad641f81e82cd67d08417209aeebcd9adac347cf948a1939e5",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-driver.mjs",
+      "sha256": "4c80644b08abe46fb7732ebda92daa6a92bcca49e7bc3f3117ff52b5be4f673b",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-evidence.mjs",
+      "sha256": "6a17c1f8441d77a5ad1096ea8ad0d8e3e912e28c8bc8c6c0d32c3c8608adc4b7",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-observer.py",
+      "sha256": "f165542b030ec24d7f471d0c881cbe094cb7153b1f01429ddfca95d4fce3cabb",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-review-regressions.test.mjs",
+      "sha256": "17a16a400bca883fa5ccb3f869ced4e622574f1d5ac9697be4dc4c2c30b4aa23",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs",
+      "sha256": "8398d9ca288901b06e54a4a949d3b6cfb3b1146a506919fbedc61f99a3e0e39a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/harness.mjs",
+      "sha256": "dddab17fd997ca5063ced4afcff0c3dc618204e73cdd302e768fc8c33a9ea33a",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/harness.smoke.test.mjs",
+      "sha256": "9a63b2275a94710190136f32d0183a26abbff2ecba1ba1f297928318126195ec",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/layout-docs.test.mjs",
+      "sha256": "cb54d4484c19f94ef46130ef4ea27b62d80d251d18a0dd4832516b8fff9b09cb",
+      "executable": false
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/lifecycle.test.mjs",
+      "sha256": "cbcc8e4a870d06a7b8ea153bdfd7f4e15c0ec9abec17cb3b8e159a37aad4372b",
+      "executable": false
+    }
+  ],
+  "sourceSnapshotSha256": "57f8d475bb3e7fb3d46cc01f5afb60d4419d2fe9ac6b551061d5cf8bc8ffc4c0"
+}

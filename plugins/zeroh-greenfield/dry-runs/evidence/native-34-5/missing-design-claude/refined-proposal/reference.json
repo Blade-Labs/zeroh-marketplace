@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-claude/refined-proposal",
+  "sha256": {
+    "request.json": "195d8e045a60191c3c66163e769ee4ae85c7a87d90a5427c5a6d2f987e97bc82",
+    "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+    "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+    "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+    "stdout.jsonl": "be825e98383538af0d8680c22deac9107a57a5dc1b33ab98074eacb8e86c99a8",
+    "result.json": "ea6f788d373c57435c7cf29ca3ccf03af377c95c7f2bea321ec276abbe2307ce"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-claude/refined-proposal/session.jsonl",
+    "sha256": "665a1d5d5b5532af2bce74b01472b185424fade810d641cd04dc290cfb21c0f2"
+  }
+}

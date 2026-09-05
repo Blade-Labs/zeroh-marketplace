@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-codex/proposal",
+  "sha256": {
+    "request.json": "a5e93f3ff0369c292d4445c6626c481879a0bb2f93a7bc91c7e59b83a8928dfa",
+    "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+    "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+    "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+    "stdout.jsonl": "a198a044c117d8fcb7876455e1a5fd42462275d334ff697c87be277a1267f685",
+    "result.json": "b94a2eb0193022a143d02d86877ecb658e502f013edeb5233c355b631fe5c585"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-codex/proposal/session.jsonl",
+    "sha256": "1fd5e25f40d057f18a4f7a86f9951ece3a0187e8e06406e855655edb4b5048b5"
+  }
+}

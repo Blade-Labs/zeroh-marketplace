@@ -1,0 +1,22 @@
+{
+  "claude": {
+    "README.md": {
+      "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/retained/claude/README.md",
+      "sha256": "82370c762c733ded198493efc53a3b5105a0d80b7f69f01c2390030fca3552f7"
+    },
+    "CLAUDE.md": {
+      "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/retained/claude/CLAUDE.md",
+      "sha256": "cbdf6d1e6387249b6d1743f6d636792ecb8abc4a70e9e75e91c79d5f9f53aecc"
+    }
+  },
+  "codex": {
+    "README.md": {
+      "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/retained/codex/README.md",
+      "sha256": "08e98ccf74c51f24dbf62ffa37b9127ee855c34fcf6ae437dc66058c62090fe1"
+    },
+    "CLAUDE.md": {
+      "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/retained/codex/CLAUDE.md",
+      "sha256": "8b3378190fb8c7333762aeb7e47290c54e5d212c4e7d78a5e205e56b8a4920ef"
+    }
+  }
+}

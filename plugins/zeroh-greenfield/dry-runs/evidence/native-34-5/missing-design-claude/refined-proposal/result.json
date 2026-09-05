@@ -1,0 +1,19 @@
+{
+  "clearedHostOverrides": [
+    "CAPBUILD_SLICE",
+    "CAPBUILD_PASS_ENV",
+    "NODE_OPTIONS",
+    "FORCE_BARE",
+    "ITEST_FILES",
+    "AUDIT_LEDGER_ENABLED",
+    "TEST_CONCURRENCY",
+    "E2E_PROJECT",
+    "ALLURE"
+  ],
+  "exit": 0,
+  "elapsed": 17.05309493513778,
+  "eventCount": 0,
+  "overflow": false,
+  "stdoutSha256": "be825e98383538af0d8680c22deac9107a57a5dc1b33ab98074eacb8e86c99a8",
+  "sourceSnapshotSha256": "57f8d475bb3e7fb3d46cc01f5afb60d4419d2fe9ac6b551061d5cf8bc8ffc4c0"
+}

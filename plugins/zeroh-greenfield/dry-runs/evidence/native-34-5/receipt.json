@@ -1,0 +1,118 @@
+{
+  "arms": [
+    {
+      "scenario": "missing-roadmap",
+      "host": "claude",
+      "stage": {
+        "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-roadmap-claude/refined-proposal",
+        "sha256": {
+          "request.json": "2752e9e164a69101de4335b8c0d0cf573204f8e43982431c7cc6a236e236801e",
+          "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+          "stdout.jsonl": "d8bf7bd4bcddf41d5b31df2a074201f81cb23ff5d58b52052b7376f784511125",
+          "result.json": "df130dffc9939275c54c15d128667e76c6175062672c39e6f98183cdbe383660"
+        },
+        "session": {
+          "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-roadmap-claude/refined-proposal/session.jsonl",
+          "sha256": "8b3fce5ff0ba2878fc0d3d5c209679bc8918c5fb944721ee75451c17c87336cb"
+        }
+      }
+    },
+    {
+      "scenario": "missing-roadmap",
+      "host": "codex",
+      "stage": {
+        "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-roadmap-codex/proposal",
+        "sha256": {
+          "request.json": "6b48d0c0906c196e7e9a85a03e7a9ae1be82bc7c626e6c756fad0dd890f68576",
+          "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+          "stdout.jsonl": "cdf6f20d8e4a509ebdb9d81ec75c89f634090f64d952a226cd32c0a03dc850f0",
+          "result.json": "fed68e3b9bdfe04cb5ee4c8444f8a206bac579c963e8e3c4244a49afce8d2242"
+        },
+        "session": {
+          "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-roadmap-codex/proposal/session.jsonl",
+          "sha256": "87502324a383fb21a6bc01b1485154f369c43c7ce0277b2690841cd114da3ab6"
+        }
+      }
+    },
+    {
+      "scenario": "missing-design",
+      "host": "claude",
+      "stage": {
+        "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-claude/refined-proposal",
+        "sha256": {
+          "request.json": "195d8e045a60191c3c66163e769ee4ae85c7a87d90a5427c5a6d2f987e97bc82",
+          "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+          "stdout.jsonl": "be825e98383538af0d8680c22deac9107a57a5dc1b33ab98074eacb8e86c99a8",
+          "result.json": "ea6f788d373c57435c7cf29ca3ccf03af377c95c7f2bea321ec276abbe2307ce"
+        },
+        "session": {
+          "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-claude/refined-proposal/session.jsonl",
+          "sha256": "665a1d5d5b5532af2bce74b01472b185424fade810d641cd04dc290cfb21c0f2"
+        }
+      }
+    },
+    {
+      "scenario": "missing-design",
+      "host": "codex",
+      "stage": {
+        "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-codex/proposal",
+        "sha256": {
+          "request.json": "a5e93f3ff0369c292d4445c6626c481879a0bb2f93a7bc91c7e59b83a8928dfa",
+          "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+          "stdout.jsonl": "a198a044c117d8fcb7876455e1a5fd42462275d334ff697c87be277a1267f685",
+          "result.json": "b94a2eb0193022a143d02d86877ecb658e502f013edeb5233c355b631fe5c585"
+        },
+        "session": {
+          "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-codex/proposal/session.jsonl",
+          "sha256": "1fd5e25f40d057f18a4f7a86f9951ece3a0187e8e06406e855655edb4b5048b5"
+        }
+      }
+    },
+    {
+      "scenario": "single-router",
+      "host": "claude",
+      "stage": {
+        "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/single-router-claude/refined-proposal",
+        "sha256": {
+          "request.json": "0384af419ddba57226ac0b87ae724c8934f652b45e30071618cfeec283289701",
+          "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+          "stdout.jsonl": "697127546479e38838c5bbcde3a83a6108f44600c95360ab38546653c6b4c294",
+          "result.json": "db660f665130ecc57cad5b4ead0371696f930eedb8a061d22eafb7e9885a0b99"
+        },
+        "session": {
+          "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/single-router-claude/refined-proposal/session.jsonl",
+          "sha256": "58f9a0252010301a7f9c4f6fea634207bce9965fa6770fdf4ef02ef23ef95d6f"
+        }
+      }
+    },
+    {
+      "scenario": "single-router",
+      "host": "codex",
+      "stage": {
+        "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/single-router-codex/refined-proposal",
+        "sha256": {
+          "request.json": "4f11644cedf06f7c994b317f616256a118626a844e8896e45ff1804081c2a600",
+          "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+          "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+          "stdout.jsonl": "4243ad213e5e2178f0a7cb43d5f39716339949ac64ee1ff3b18ff862588fa0c4",
+          "result.json": "16d478ef98bb51de2b5a9f85316de4c4fec761fb91a8ed2530512e8b39c3bf95"
+        },
+        "session": {
+          "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/single-router-codex/refined-proposal/session.jsonl",
+          "sha256": "7d5d8a8bfd6528b4a79b3ec396f8e10c43959465ce2c117444af21c41f83558a"
+        }
+      }
+    }
+  ]
+}

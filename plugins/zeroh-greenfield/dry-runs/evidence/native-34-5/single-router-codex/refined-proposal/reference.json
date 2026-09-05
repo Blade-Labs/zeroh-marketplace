@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/single-router-codex/refined-proposal",
+  "sha256": {
+    "request.json": "4f11644cedf06f7c994b317f616256a118626a844e8896e45ff1804081c2a600",
+    "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+    "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+    "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+    "stdout.jsonl": "4243ad213e5e2178f0a7cb43d5f39716339949ac64ee1ff3b18ff862588fa0c4",
+    "result.json": "16d478ef98bb51de2b5a9f85316de4c4fec761fb91a8ed2530512e8b39c3bf95"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/single-router-codex/refined-proposal/session.jsonl",
+    "sha256": "7d5d8a8bfd6528b4a79b3ec396f8e10c43959465ce2c117444af21c41f83558a"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-roadmap-claude/proposal",
+  "sha256": {
+    "request.json": "6e2726cb87e06ca8b84e58a92a33ca3ebbe6885dd766375a41520d113830f10e",
+    "before.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+    "after.json": "eccfc975f909bfc4a1f51ab19e7b1e45c3977f948462e6af30ca79216a02ce80",
+    "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+    "stdout.jsonl": "9f5d3a20e46a4b34e78c342aff360e99491a69db6d1688b5c978002474a6ea08",
+    "result.json": "b66e00afa126095bc6372246f562520de038148315f37f50bd9a647e48f5e8b2"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-roadmap-claude/proposal/session.jsonl",
+    "sha256": "ad0b706abb1379943ec43db98ee2339c7c46d45561867a6cd7754133dbb99f9c"
+  }
+}

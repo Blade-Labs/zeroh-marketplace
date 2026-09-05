@@ -1,0 +1,66 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs
+TAP version 13
+# Subtest: behavior: four real proposal stages refuse writes before approval and reject planted transient writes
+ok 1 - behavior: four real proposal stages refuse writes before approval and reject planted transient writes
+  ---
+  duration_ms: 122.514928
+  type: 'test'
+  ...
+# Subtest: behavior: real arms preserve homes and reject changed preservation, unapproved paths and invented gates
+ok 2 - behavior: real arms preserve homes and reject changed preservation, unapproved paths and invented gates
+  ---
+  duration_ms: 1829.921949
+  type: 'test'
+  ...
+# Subtest: behavior: repeated native audit has no writes, gaps or proposals and rejects planted rerun mutations
+ok 3 - behavior: repeated native audit has no writes, gaps or proposals and rejects planted rerun mutations
+  ---
+  duration_ms: 307.433593
+  type: 'test'
+  ...
+# Subtest: behavior: canonical required artifact and typed gate outcomes agree across native hosts
+ok 4 - behavior: canonical required artifact and typed gate outcomes agree across native hosts
+  ---
+  duration_ms: 217.932247
+  type: 'test'
+  ...
+# Subtest: behavior: real README drift fails, native approved repairs pass twice, and generated Nx marker bytes survive
+ok 5 - behavior: real README drift fails, native approved repairs pass twice, and generated Nx marker bytes survive
+  ---
+  duration_ms: 347.852541
+  type: 'test'
+  ...
+# Subtest: behavior: real native missing-sibling and single-router scenarios satisfy bounded contracts
+ok 6 - behavior: real native missing-sibling and single-router scenarios satisfy bounded contracts
+  ---
+  duration_ms: 26.168793
+  type: 'test'
+  ...
+# Subtest: behavior: STOP parser rejects changed remedy, extra proposal, wrong sibling and narrated success
+ok 7 - behavior: STOP parser rejects changed remedy, extra proposal, wrong sibling and narrated success
+  ---
+  duration_ms: 1.673365
+  type: 'test'
+  ...
+# Subtest: behavior: router result rejects second dispatch, changed route and unsupported marker
+ok 8 - behavior: router result rejects second dispatch, changed route and unsupported marker
+  ---
+  duration_ms: 0.786316
+  type: 'test'
+  ...
+# Subtest: behavior: changed present-home bytes and reordered approval cannot pass native preservation proof
+ok 9 - behavior: changed present-home bytes and reordered approval cannot pass native preservation proof
+  ---
+  duration_ms: 63.914841
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3062.37686

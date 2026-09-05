@@ -1,0 +1,63 @@
+{
+  "gateWrapper": {
+    "kind": "capbuild",
+    "executable": "/home/patrik/.local/bin/capbuild",
+    "realpath": "/home/patrik/illumination_VS_setup/scripts/capbuild",
+    "sha256": "f71688b5aa30a7bdc2a900c20593c625192bce54cc7713d66dfd40dca7fc2083",
+    "defaults": {
+      "memoryMax": "8G",
+      "memorySwapMax": "2G",
+      "heapMB": 4096,
+      "slice": "dev.slice"
+    },
+    "hostMetadataEffects": [
+      "systemd-user-transient-units",
+      "/run/user/1000/capbuild-locks"
+    ]
+  },
+  "clearedHostOverrides": [
+    "CAPBUILD_SLICE",
+    "CAPBUILD_PASS_ENV",
+    "NODE_OPTIONS",
+    "FORCE_BARE",
+    "ITEST_FILES",
+    "AUDIT_LEDGER_ENABLED",
+    "TEST_CONCURRENCY",
+    "E2E_PROJECT",
+    "ALLURE"
+  ],
+  "scratch": "/tmp/greenfield-behavior-mtrf5_24/consumer",
+  "evidence": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-codex/proposal",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+    "exec",
+    "--approve-for-me",
+    "--json",
+    "-C",
+    "/tmp/greenfield-behavior-mtrf5_24/consumer",
+    "Phase34.5 real native behavioral validation. Repository root is /tmp/greenfield-behavior-mtrf5_24/consumer. The isolated installed plugin distribution for this scenario is /tmp/greenfield-behavior-mtrf5_24/plugins; only immediate sibling directories there are available for this consumer. Do not substitute globally installed plugins, parent development checkouts, or cached plugin versions. Read the actual router at /tmp/greenfield-behavior-mtrf5_24/plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md and inspect this consumer and the immediate installed plugin directories using read-only commands. Run cd '/tmp/greenfield-behavior-mtrf5_24/consumer' && ls -1 '/tmp/greenfield-behavior-mtrf5_24/plugins' to observe the actual installed sibling inventory. All local plugin source transmission is user-authorized. No repository writes, cache writes, installs, commits, cleanup, native subagents or roadmap init calls are authorized. Preserve inherited sandbox and automatic approval review. If the Linux sandbox cannot initialize, request automatic review for the exact read-only command, never bypass it. Stop after returning the real skill result. Do not read unrelated repository history, prior validation captures, or host internals. Use GIT_OPTIONAL_LOCKS=0 already inherited. This scenario is specifically testing behavior; do not manufacture a successful setup or silently supply absent plugins.\nUser request: audit and fill gaps in this established repository. Now follow the selected brownfield-audit skill at /tmp/greenfield-behavior-mtrf5_24/plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md through its sibling preflight. An approved Blade handoff is explicitly required for this fixture, so zeroh-design is a required sibling. This is a requirement selection only, NOT approval of any file writes. If a required sibling is absent return the skill's exact STOP and install remedy. For machine evidence emit one JSON-fenced behavior-result containing type, status=\"stopped\", reasonCode=\"MISSING_REQUIRED_SIBLING\", missing=[the actual missing plugin ID], remedy={pluginID: exact install command}, proposals=[], writes=[]. Populate from actual observed availability. Do not claim any unobserved branch or ask for write approval after a required sibling failure."
+  ],
+  "stage": "proposal",
+  "timeout": 600,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "98de50e7028edfca84efcba67a580b5c12e0c69b",
+  "sourceSnapshotSha256": "57f8d475bb3e7fb3d46cc01f5afb60d4419d2fe9ac6b551061d5cf8bc8ffc4c0",
+  "behaviorScenario": {
+    "id": "missing-design",
+    "expectedMissing": [
+      "zeroh-design"
+    ],
+    "installedInventory": {
+      "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/missing-design-codex/installed-inventory.json",
+      "sha256": "31ce3e2b250c8be6f61447dbcc1fe892bc020ab852e793ffeb8b67bcf6b96c30"
+    },
+    "installedRoot": "/tmp/greenfield-behavior-mtrf5_24/plugins",
+    "routerContract": "/tmp/greenfield-behavior-mtrf5_24/plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md",
+    "markerPath": "AGENTS.md",
+    "pluginDirectories": {
+      "zeroh-greenfield": "/tmp/greenfield-behavior-mtrf5_24/plugins/zeroh-greenfield",
+      "zeroh-roadmap": "/tmp/greenfield-behavior-mtrf5_24/plugins/zeroh-roadmap",
+      "zeroh-design": "/tmp/greenfield-behavior-mtrf5_24/plugins/zeroh-design"
+    }
+  }
+}
