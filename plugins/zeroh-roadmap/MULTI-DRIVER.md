@@ -34,7 +34,7 @@ this plugin says **role**.
 - **`class`** distinguishes judge and builder seams. The legacy `modelPolicy.judgeModel` leads
   judge-class roles only; per-role policy can lead either class.
 - **`tierChain`** is model ids best-first. Only `software-architect` carries a real chain —
-  **`claude-fable-5` → `gpt-5.6-sol` → `claude-opus-5`** (user ruling 2026-08-23, verbatim
+  **`claude-fable-5` → `gpt-6-astra` → `claude-opus-5`** (user ruling 2026-08-23, verbatim; codex model moved to gpt-6-astra by user ruling 2026-09-05 07:28 UTC
   order), the plugin's highest-judgment seam. Every other role carries a 1-entry chain equal to
   its card's frontmatter alias. This table is the ONLY place a chain is written down.
 - **Frontmatter `model:` stays** on each card as the harness fail-safe: a card cannot carry a
@@ -55,15 +55,15 @@ the named preset.
 | preset | default | role exception |
 |---|---|---|
 | `claude` | roles table | — |
-| `codex` | `gpt-5.6-sol` | `software-architect` → `claude-fable-5` |
-| `codex-full` | `gpt-5.6-sol` | — |
+| `codex` | `gpt-6-astra` | `software-architect` → `claude-fable-5` |
+| `codex-full` | `gpt-6-astra` | — |
 
 `PINNED_ROLES` contains `arc-eval-judge`: it always resolves to sonnet under presets/defaults,
 and any `roles` override is refused. This preserves the eval trend's `PINNED_JUDGE_MODEL`
 baseline. Config and pair syntax accept model aliases; the resolver records canonical model ids.
 
 - **The resolver drives the chain itself.** No harness fallback flag is a substitute: `claude
-  --fallback-model` is single-hop and claude-family-only, so it can never reach `gpt-5.6-sol`.
+  --fallback-model` is single-hop and claude-family-only, so it can never reach `gpt-6-astra`.
 - **A tier is unavailable** when `forceUnavailable` or `ROADMAP_ROLE_FORCE_UNAVAILABLE`
   (comma-separated model ids) names it, when no registered driver runs it, or when this driver
   declares no way to reach the driver that does.
