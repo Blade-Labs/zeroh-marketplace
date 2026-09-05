@@ -1,3 +1,7 @@
+## Unreleased
+
+- codex lane model pinned to `gpt-6-astra` (was `gpt-5.6-sol`) — owner ruling 2026-09-05 07:28 UTC ("from now on use codex Astra"); `MODEL_IDS.SOL` keeps its key so `sol` in a consumer's modelPolicy still resolves to the pinned codex model; MULTI-DRIVER.md §1 and the drivers probe evidence (codex-cli 0.153.4, `codex debug models` slug) updated in the same change.
+
 # Changelog — zeroh-roadmap
 
 Reconstructed 2026-08-26 (phase 13.7) from the committed record trail; maintained forward.
