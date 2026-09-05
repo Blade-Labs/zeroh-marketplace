@@ -1,0 +1,7 @@
+34.6 final focused result: 27 PASS, zero FAIL/cancelled/skipped, terminal TAP retained. Types slot declared-none run000007. Test engineer wrote RED first: missing product/workflows; subsequent contradictory raw reports, prebuild authority and source/provenance guards were RED before fixes. The selector overmatch test was added concurrently with its guard and is not claimed test-first RED.
+
+The mandatory parser is repository-locked js-yaml 3.15.2. Actual generated YAML run snippets invoke production inventory/plan/run/fanin/build/attest/verify-release and negative promotion. Six runner boundaries use fake executables only at external command interfaces. Fixed AWS STS/put/head behavior uses fake aws plus mocked HTTPS OIDC. No SDK fleet run, live cloud promotion, published GitHub workflow or signed attestation is claimed. Optional actionlint absent; host gh lacks attestation support.
+
+real-node-local-fixture.mjs.txt and its log exercise real Node test/JUnit/LCOV, build and local exact-byte verification; SHA/tree IDs in that API fixture are deliberately synthetic test inputs, not a native-host source receipt. Final native source-bound four-arm refresh remains task34.7.
+
+Architect ratified one production lifecycle engine, fixed versioned provider adapter with no arbitrary hooks, complete execution-contract binding, isolated CI attestation OIDC vs release deployment-only OIDC, full source guards and exact-SHA promotion handoff.

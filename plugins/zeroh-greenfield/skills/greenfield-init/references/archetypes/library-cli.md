@@ -40,3 +40,15 @@ Set `designHomes.architecture.home` to `docs/architecture.md` and
 ```sh
 test -f my-lib/package.json && test -f my-lib/src/index.ts && test -f my-lib/src/cli.ts && test -f my-lib/tsup.config.ts && (cd my-lib && npm run build && node --test && node dist/cli.js --help && node scripts/check-readme-catalog.mjs --project-root .)
 ```
+
+## CI and release adapter
+
+Select `library-cli` in `.github/greenfield-delivery.json` and follow
+[the shared CI/release strategy](../ci-release-strategy.md) for its exact inventory,
+executor, raw report, coverage merge and build contract. Bind runner/build argv
+into the shard manifest before execution; require exact-once leaf/file selection.
+Generate `scripts/ci-shard-plan.mjs`, `.github/workflows/ci.yml` and
+`.github/workflows/release.yml` only from the approved preservation plan.
+Missing tooling/reporters are unavailable with the adapter install remedy.
+Affected PR checks backstop into authoritative full shards on main/manual runs;
+release promotes the same verified artifact bytes without rebuilding.

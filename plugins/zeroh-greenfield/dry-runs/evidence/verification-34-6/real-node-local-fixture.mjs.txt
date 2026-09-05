@@ -1,0 +1,10 @@
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
+import {planShards,runShard,buildArtifact,validateEvidence,verifyRelease} from '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs';
+const root=mkdtempSync(join(tmpdir(),'greenfield-real-node-ci-'));process.chdir(root);mkdirSync('src');mkdirSync('test');
+writeFileSync('src/api.mjs','export const greet = name => `Hello ${name}`;\n');writeFileSync('test/api.test.mjs',`import test from 'node:test';import assert from 'node:assert/strict';import {greet} from '../src/api.mjs';test('greeting',()=>assert.equal(greet('world'),'Hello world'));\n`);
+const config={schemaVersion:1,archetype:'library-cli',runners:{'node:test':{inventoryArgv:['node','-e',"console.log('test/api.test.mjs')"],inventoryFormat:'lines',shardArgv:['node','--test','--experimental-test-coverage','--test-reporter=junit','--test-reporter-destination={junit}','--test-reporter=lcov','--test-reporter-destination={coverage}','{unit}'],rawReports:[{path:'{junit}',format:'junit'},{path:'{coverage}',format:'lcov'}]}},build:{argv:['node','-e',"require('fs').mkdirSync('dist');require('fs').copyFileSync('src/api.mjs','dist/api.mjs')"],outputs:['dist']}};
+const sha='a'.repeat(40),tree='b'.repeat(40),baseline={minTests:1,minUnits:1,coverageFloor:80};
+const plan=planShards({archetype:config.archetype,inventory:[{runner:'node:test',canonicalPathOrLeafTask:'test/api.test.mjs'}],shardCount:4,commitSha:sha,tree,adapterConfig:{coverageRoots:[root],executionContract:{runners:config.runners,build:config.build},baseline}});
+const reports=[runShard({plan,index:0,config})],build=buildArtifact({config,plan,sha,tree});const now=new Date().toISOString(),expiresAt=new Date(Date.now()+86400000).toISOString();
+const manifest=validateEvidence({plan,reports,baseline,build,commitSha:sha,now,producerRunId:'native-node-local',expiresAt});
+console.log(JSON.stringify({root,manifest,verification:verifyRelease({manifests:[manifest],tagSha:sha,tree,plan,reports,baseline,build,now})},null,2));

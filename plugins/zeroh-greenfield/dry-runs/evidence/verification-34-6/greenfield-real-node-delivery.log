@@ -1,0 +1,30 @@
+capbuild: running in /home/patrik/zeroh-marketplace — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node /tmp/greenfield-real-node-delivery.mjs
+{
+  "root": "/tmp/greenfield-real-node-ci-3OfDPG",
+  "manifest": {
+    "schemaVersion": 1,
+    "authoritative": true,
+    "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "suiteManifestDigest": "44b722ee5dfc320acaeb257a10ef414cef743c008be637316bb830b478eb21ff",
+    "shardReports": [
+      {
+        "shardIndex": 0,
+        "sha256": "cdce0a9254817330029559fda55aaaf1f116824593a98f8243e1db8be7cb9a68"
+      }
+    ],
+    "coverageDigest": "b83764ad5a41b5faea9235215fee00770345ef13250262d145cee4803cba5465",
+    "buildDigest": "2793da90fac8ffa89ca4221e6029fcb2b86d125aa72e9ca6c89e2204166170dd",
+    "producerRunId": "native-node-local",
+    "expiresAt": "2026-09-06T12:28:27.875Z",
+    "baselineDigest": "244affaf8c123ba4ff36a39b2d86c6924591f1e951e391d9082e7e287f259bec",
+    "testCount": 1,
+    "coveragePercent": 100
+  },
+  "verification": {
+    "artifactDigest": "2793da90fac8ffa89ca4221e6029fcb2b86d125aa72e9ca6c89e2204166170dd",
+    "promoteOnly": true,
+    "producerRunId": "native-node-local"
+  }
+}

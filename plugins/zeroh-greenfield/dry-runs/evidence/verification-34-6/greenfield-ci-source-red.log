@@ -1,0 +1,98 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test --test-name-pattern=actual Git source guard|source guard allows|runtime may not broaden|complete build record plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs
+TAP version 13
+# Subtest: actual Git source guard rejects tracked and new source writes during setup, run and build
+not ok 1 - actual Git source guard rejects tracked and new source writes during setup, run and build
+  ---
+  duration_ms: 151.685789
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:401:1'
+  failureType: 'testCodeFailure'
+  error: 'setup accepted tracked source mutation'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:406:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: source guard allows approved cache writes and build outputs only in the build stage
+not ok 2 - source guard allows approved cache writes and build outputs only in the build stage
+  ---
+  duration_ms: 904.169292
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:411:1'
+  failureType: 'testCodeFailure'
+  error: 'test stage cannot smuggle build outputs into cache exceptions'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:419:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: runtime may not broaden prebound operational roots to authorize source writes
+not ok 3 - runtime may not broaden prebound operational roots to authorize source writes
+  ---
+  duration_ms: 187.661709
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:421:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    root drift must stop before runner invocation
+    + actual - expected
+    
+    + 'changed source'
+    - 'export const original=true\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: |-
+    export const original=true
+    
+  actual: 'changed source'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:426:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: release verification binds the complete build record and source identity even for unchanged artifact bytes
+not ok 4 - release verification binds the complete build record and source identity even for unchanged artifact bytes
+  ---
+  duration_ms: 16.957409
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:429:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:432:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1406.371853
+capbuild: command exited non-zero (code 1) — treat as a failure, do not proceed as if it passed.

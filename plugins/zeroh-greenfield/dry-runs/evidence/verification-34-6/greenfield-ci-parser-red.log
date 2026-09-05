@@ -1,0 +1,29 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test --test-name-pattern=raw report completeness plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs
+TAP version 13
+# Subtest: raw report completeness rejects contradictory summaries and duplicate machine/source identities
+not ok 1 - raw report completeness rejects contradictory summaries and duplicate machine/source identities
+  ---
+  duration_ms: 6.381938
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:178:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception: partial or duplicated junit evidence must not pass'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:186:51)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 153.032253
+capbuild: command exited non-zero (code 1) — treat as a failure, do not proceed as if it passed.

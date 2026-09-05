@@ -1,0 +1,174 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs
+TAP version 13
+# Subtest: delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries
+ok 1 - delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries
+  ---
+  duration_ms: 10.876768
+  type: 'test'
+  ...
+# Subtest: six adapters partition disjoint identities exactly once for one shard and more shards than units
+ok 2 - six adapters partition disjoint identities exactly once for one shard and more shards than units
+  ---
+  duration_ms: 24.805444
+  type: 'test'
+  ...
+# Subtest: authoritative full-suite evidence promotes its one content-addressed build without rebuilding
+ok 3 - authoritative full-suite evidence promotes its one content-addressed build without rebuilding
+  ---
+  duration_ms: 6.181703
+  type: 'test'
+  ...
+# Subtest: evidence rejects missing, duplicate, unexpected, malformed, failing or report-count-regressed shard observations
+ok 4 - evidence rejects missing, duplicate, unexpected, malformed, failing or report-count-regressed shard observations
+  ---
+  duration_ms: 8.296998
+  type: 'test'
+  ...
+# Subtest: coverage and test count floors are enforced from raw observations, never supplied summaries
+ok 5 - coverage and test count floors are enforced from raw observations, never supplied summaries
+  ---
+  duration_ms: 4.679796
+  type: 'test'
+  ...
+# Subtest: required-test failure remains red when a later retry passes
+ok 6 - required-test failure remains red when a later retry passes
+  ---
+  duration_ms: 0.933846
+  type: 'test'
+  ...
+# Subtest: release rejects stale SHA, expiry, ambiguous producers and changed inventory/report/build links
+ok 7 - release rejects stale SHA, expiry, ambiguous producers and changed inventory/report/build links
+  ---
+  duration_ms: 11.777452
+  type: 'test'
+  ...
+# Subtest: Nx and Gradle shard only nonoverlapping leaf tasks and reject aggregate/dependency double counting
+ok 8 - Nx and Gradle shard only nonoverlapping leaf tasks and reject aggregate/dependency double counting
+  ---
+  duration_ms: 1.30302
+  type: 'test'
+  ...
+# Subtest: only bounded infrastructure failures can retry; quarantine remains blocking and needs accountable metadata
+ok 9 - only bounded infrastructure failures can retry; quarantine remains blocking and needs accountable metadata
+  ---
+  duration_ms: 4.228025
+  type: 'test'
+  ...
+# Subtest: baseline changes require an approval bound to both old and proposed baseline digests
+ok 10 - baseline changes require an approval bound to both old and proposed baseline digests
+  ---
+  duration_ms: 3.173178
+  type: 'test'
+  ...
+# Subtest: build authority cannot be claimed for a different tree, failed build, duplicate path or unsafe artifact name
+ok 11 - build authority cannot be claimed for a different tree, failed build, duplicate path or unsafe artifact name
+  ---
+  duration_ms: 17.040276
+  type: 'test'
+  ...
+# Subtest: raw parser failures cannot be hidden by a passed envelope or fabricated normalized cases
+ok 12 - raw parser failures cannot be hidden by a passed envelope or fabricated normalized cases
+  ---
+  duration_ms: 2.069618
+  type: 'test'
+  ...
+# Subtest: explicit raw adapters parse Flutter machine completion, JUnit cases, LCOV and JaCoCo line evidence
+ok 13 - explicit raw adapters parse Flutter machine completion, JUnit cases, LCOV and JaCoCo line evidence
+  ---
+  duration_ms: 13.353731
+  type: 'test'
+  ...
+# Subtest: raw report completeness rejects contradictory summaries and duplicate machine/source identities
+ok 14 - raw report completeness rejects contradictory summaries and duplicate machine/source identities
+  ---
+  duration_ms: 0.836993
+  type: 'test'
+  ...
+# Subtest: actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+ok 15 - actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+  ---
+  duration_ms: 822.494466
+  type: 'test'
+  ...
+# Subtest: actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports
+ok 16 - actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports
+  ---
+  duration_ms: 671.410777
+  type: 'test'
+  ...
+# Subtest: actual workflow builds once; allowlisted AWS promotion verifies immutable provider readback without rebuild
+ok 17 - actual workflow builds once; allowlisted AWS promotion verifies immutable provider readback without rebuild
+  ---
+  duration_ms: 1249.131627
+  type: 'test'
+  ...
+# Subtest: all six selected adapter contracts execute their exact inventory argv and retain runner-specific raw reports
+ok 18 - all six selected adapter contracts execute their exact inventory argv and retain runner-specific raw reports
+  ---
+  duration_ms: 1816.875159
+  type: 'test'
+  ...
+# Subtest: workflow privilege separation prevents test/build jobs from publishing and orders fan-in before build
+ok 19 - workflow privilege separation prevents test/build jobs from publishing and orders fan-in before build
+  ---
+  duration_ms: 1.088781
+  type: 'test'
+  ...
+# Subtest: actual inventory adapter executes configured argv and fails closed with remedy when tooling is absent
+ok 20 - actual inventory adapter executes configured argv and fails closed with remedy when tooling is absent
+  ---
+  duration_ms: 405.168226
+  type: 'test'
+  ...
+# Subtest: file-filter adapters prove selected inventory before execution and reject overmatching runner selection
+ok 21 - file-filter adapters prove selected inventory before execution and reject overmatching runner selection
+  ---
+  duration_ms: 273.464085
+  type: 'test'
+  ...
+# Subtest: failed runner with absent reports stays red while actual stdout and stderr diagnostics survive
+ok 22 - failed runner with absent reports stays red while actual stdout and stderr diagnostics survive
+  ---
+  duration_ms: 133.929725
+  type: 'test'
+  ...
+# Subtest: actual Git source guard rejects tracked and new source writes during setup, run and build
+ok 23 - actual Git source guard rejects tracked and new source writes during setup, run and build
+  ---
+  duration_ms: 1111.485178
+  type: 'test'
+  ...
+# Subtest: source guard allows approved cache writes and build outputs only in the build stage
+ok 24 - source guard allows approved cache writes and build outputs only in the build stage
+  ---
+  duration_ms: 938.100082
+  type: 'test'
+  ...
+# Subtest: runtime may not broaden prebound operational roots to authorize source writes
+ok 25 - runtime may not broaden prebound operational roots to authorize source writes
+  ---
+  duration_ms: 101.08913
+  type: 'test'
+  ...
+# Subtest: release verification binds the complete build record and source identity even for unchanged artifact bytes
+ok 26 - release verification binds the complete build record and source identity even for unchanged artifact bytes
+  ---
+  duration_ms: 2.836428
+  type: 'test'
+  ...
+# Subtest: standard JaCoCo declaration parses locally while unknown or entity-bearing doctypes remain rejected
+ok 27 - standard JaCoCo declaration parses locally while unknown or entity-bearing doctypes remain rejected
+  ---
+  duration_ms: 0.775345
+  type: 'test'
+  ...
+1..27
+# tests 27
+# suites 0
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7815.232474

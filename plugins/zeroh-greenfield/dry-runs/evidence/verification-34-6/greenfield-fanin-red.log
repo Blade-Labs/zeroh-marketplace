@@ -1,0 +1,31 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test --test-name-pattern=actual workflow plan plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs
+TAP version 13
+# Subtest: actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+not ok 1 - actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+  ---
+  duration_ms: 236.092864
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:204:1'
+  failureType: 'testCodeFailure'
+  error: 'fan-in is not an authoritative manifest before build and attestation'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: true
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs:211:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 381.471453
+capbuild: command exited non-zero (code 1) — treat as a failure, do not proceed as if it passed.
