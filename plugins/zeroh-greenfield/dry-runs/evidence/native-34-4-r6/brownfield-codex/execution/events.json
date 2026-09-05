@@ -1,0 +1,197 @@
+{
+  "overflow": false,
+  "events": [
+    {
+      "elapsed": 54.0097720567137,
+      "path": "roadmap",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50029301503673,
+      "path": "docs/adr",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5005480297841,
+      "path": "scripts",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5007025040686,
+      "path": "docs/PRD.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50076831970364,
+      "path": "docs/PRD.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50082351407036,
+      "path": "docs/PRD.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50093367369846,
+      "path": "docs/adr/0001-tech-stack.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50099886814132,
+      "path": "docs/adr/0001-tech-stack.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50105889281258,
+      "path": "docs/adr/0002-design-system.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50111753307283,
+      "path": "docs/adr/0002-design-system.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5011754441075,
+      "path": "docs/adr/0002-design-system.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50127441296354,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5013307388872,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50138223776594,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50143504794687,
+      "path": "docs/architecture.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50148659711704,
+      "path": "docs/architecture.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50153775373474,
+      "path": "docs/architecture.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50158896110952,
+      "path": "docs/ux-canon.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50164021877572,
+      "path": "docs/ux-canon.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50168605614454,
+      "path": "docs/ux-canon.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50173041969538,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5018161837943,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5018985797651,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5019443370402,
+      "path": "CLAUDE.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50198599603027,
+      "path": "CLAUDE.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50202668411657,
+      "path": "GEMINI.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50206644879654,
+      "path": "GEMINI.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5021047820337,
+      "path": "README.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50214319489896,
+      "path": "README.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.5021821698174,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.502265247982,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 155.50231646513566,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 8,
+      "cookie": 0
+    }
+  ]
+}

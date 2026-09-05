@@ -1,0 +1,35 @@
+{
+  "phase": 34,
+  "startedAt": "2026-09-05T11:30:00.908Z",
+  "baseSha": "f8151d611ccfc9ae10f65578f13fbf10103ce819",
+  "mode": "inline",
+  "kind": "hardening",
+  "testScope": {
+    "derived": "full",
+    "declared": null,
+    "effective": "full"
+  },
+  "reviewScope": {
+    "derived": "full",
+    "declared": "full",
+    "effective": "full"
+  },
+  "slots": [
+    {
+      "slot": "unit",
+      "command": "bash -c 'cd plugins/zeroh-roadmap && capbuild npm test'",
+      "exitCode": 0,
+      "durationMs": 1826832,
+      "logPath": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/roadmap/.gate/34/logs/unit-2026-09-05T10-59-34-075Z.log"
+    }
+  ],
+  "agents": [],
+  "green": true,
+  "notes": [
+    "reviewScope: the \"adds no new governed surface / contract / ledger event kind\" light-exclusion is plan-time judgment (review-phase Mode A), not machine-decided (pre-made decision 2b)",
+    "a NEW guard (ratchet/tripwire/scan assertion) must carry its quoted mutation proof — planted violation RED, anchor drift loud, decoy GREEN — in the task transparencyReport before review (skills/do-phase/references/guard-mutation-proof.md)",
+    "hardening closure integration test required — never defers (both modes)",
+    "foreignCommitsInRange: scope/floor bind to the phase-own file set; 77 foreign file(s) in base..HEAD are excluded"
+  ],
+  "slotFilter": "unit"
+}

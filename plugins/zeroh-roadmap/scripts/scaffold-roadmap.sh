@@ -17,7 +17,6 @@
 #   <root>/phases/           — Empty phases directory
 #   reviews/releases/         — Release review reports directory
 #   scripts/pre-review.sh     — Automated pre-review checks
-#   scripts/collect-phase-metrics.ts — Gate + git metrics collector
 #   scripts/build-dashboard.sh — Review dashboard HTML generator
 
 set -euo pipefail
@@ -98,7 +97,7 @@ fi
 mkdir -p "$PROJECT_DIR/$ROOT/arcs"
 
 # Copy scripts
-for script in pre-review.sh collect-phase-metrics.ts build-dashboard.sh generate-changelog-md.ts; do
+for script in pre-review.sh build-dashboard.sh generate-changelog-md.ts; do
   if [ ! -f "$PROJECT_DIR/scripts/$script" ]; then
     if [ -f "$PLUGIN_DIR/scripts/$script" ]; then
       cp "$PLUGIN_DIR/scripts/$script" "$PROJECT_DIR/scripts/$script"

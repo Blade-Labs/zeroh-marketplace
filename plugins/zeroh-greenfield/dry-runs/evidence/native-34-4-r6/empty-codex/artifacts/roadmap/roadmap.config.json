@@ -1,0 +1,26 @@
+{
+  "configVersion": 1,
+  "gateCommands": {
+    "lint": "none",
+    "types": "npm run typecheck",
+    "unit": "node --test",
+    "integration": "node dist/cli.js --help",
+    "build": "npm run build",
+    "e2e": "none",
+    "emit": "env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts"
+  },
+  "designHomes": {
+    "architecture": {
+      "home": "docs/architecture.md"
+    },
+    "ux": {
+      "canon": [
+        "docs/ux-canon.md"
+      ]
+    }
+  },
+  "testConventions": [
+    "Use node --test for API and built CLI behavior tests after npm run build.",
+    "Use node dist/cli.js --help as the built CLI smoke check."
+  ]
+}

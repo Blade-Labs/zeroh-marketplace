@@ -190,9 +190,11 @@ chore(roadmap): scaffold missing scripts
 For each done phase the audit flagged, pick one of three strategies per phase.
 Do NOT pick in bulk — each phase may have a different answer.
 
-- **Backfill via script**: `npx tsx scripts/collect-phase-metrics.ts <N>`.
-  Reads `git log --grep="phase N"` and fills gate + metrics. Best for phases
-  that actually shipped through a gate.
+- **Backfill via script**: invoke the installed plugin’s absolute
+  `scripts/collect-phase-metrics.ts` path with tsx and arguments `<N> --historical`,
+  keeping the consumer as the working directory. The plugin-owned helper derives
+  metrics from git history and labels unverified historical gate evidence honestly;
+  it is not copied into new consumers. Live validation uses `roadmap gate run N`.
 - **Fill manually**: the phase predates gate discipline; read commits/PRs and
   fill plausible values. Use `gateRounds: [{ round: 1, findings: [],
   summary: 'Historical — gate discipline retrofitted YYYY-MM-DD' }]` as the

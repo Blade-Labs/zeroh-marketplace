@@ -1,0 +1,230 @@
+{
+  ".git": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/HEAD": {
+    "mode": 33204,
+    "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+  },
+  ".git/branches": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/config": {
+    "mode": 33204,
+    "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+  },
+  ".git/description": {
+    "mode": 33204,
+    "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+  },
+  ".git/hooks": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/hooks/applypatch-msg.sample": {
+    "mode": 33277,
+    "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+  },
+  ".git/hooks/commit-msg.sample": {
+    "mode": 33277,
+    "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+  },
+  ".git/hooks/fsmonitor-watchman.sample": {
+    "mode": 33277,
+    "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+  },
+  ".git/hooks/post-update.sample": {
+    "mode": 33277,
+    "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+  },
+  ".git/hooks/pre-applypatch.sample": {
+    "mode": 33277,
+    "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+  },
+  ".git/hooks/pre-commit.sample": {
+    "mode": 33277,
+    "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+  },
+  ".git/hooks/pre-merge-commit.sample": {
+    "mode": 33277,
+    "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+  },
+  ".git/hooks/pre-push.sample": {
+    "mode": 33277,
+    "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+  },
+  ".git/hooks/pre-rebase.sample": {
+    "mode": 33277,
+    "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+  },
+  ".git/hooks/pre-receive.sample": {
+    "mode": 33277,
+    "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+  },
+  ".git/hooks/prepare-commit-msg.sample": {
+    "mode": 33277,
+    "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+  },
+  ".git/hooks/push-to-checkout.sample": {
+    "mode": 33277,
+    "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+  },
+  ".git/hooks/sendemail-validate.sample": {
+    "mode": 33277,
+    "sha256": "44ebfc923dc5466bc009602f0ecf067b9c65459abfe8868ddc49b78e6ced7a92"
+  },
+  ".git/hooks/update.sample": {
+    "mode": 33277,
+    "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+  },
+  ".git/info": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/info/exclude": {
+    "mode": 33204,
+    "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+  },
+  ".git/objects": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/objects/info": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/objects/pack": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/refs": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/refs/heads": {
+    "directory": true,
+    "mode": 16893
+  },
+  ".git/refs/tags": {
+    "directory": true,
+    "mode": 16893
+  },
+  "AGENTS.md": {
+    "mode": 33204,
+    "sha256": "1cceddd0ba7349008c1fd657f6c43a0f78288458c759c7288377d67be6c5e6b3"
+  },
+  "CLAUDE.md": {
+    "mode": 33204,
+    "sha256": "de261ea28dc94d3690c15ed96d865d7ee4c6a3aeb0a62db1d0c923c691de9b01"
+  },
+  "GEMINI.md": {
+    "mode": 33204,
+    "sha256": "5302d3ef280b4d68f2da824e73e7eb0fa0adc56377096d3840c54d67c0c3bc0b"
+  },
+  "README.md": {
+    "mode": 33204,
+    "sha256": "369176061845e2b7ab83cb6cbd8935f24419ffe7f5c717419ae1c81aab07f88e"
+  },
+  "apps": {
+    "directory": true,
+    "mode": 16893
+  },
+  "apps/admin": {
+    "directory": true,
+    "mode": 16893
+  },
+  "apps/admin/project.json": {
+    "mode": 33204,
+    "sha256": "afb4b96a14d159cca75876516297f3409628a7904e87d4c9d35a07670700037d"
+  },
+  "apps/api": {
+    "directory": true,
+    "mode": 16893
+  },
+  "apps/api/project.json": {
+    "mode": 33204,
+    "sha256": "556f3c2b56ab6c1bc0b5188a5187b071c255aabcd561891eeab9dfd94ed5843d"
+  },
+  "apps/web": {
+    "directory": true,
+    "mode": 16893
+  },
+  "apps/web/components.json": {
+    "mode": 33204,
+    "sha256": "8d154d01a9e6a6d762ee608e550dfd6f866bf30e2c2e238b110771daee8b9fae"
+  },
+  "apps/web/project.json": {
+    "mode": 33204,
+    "sha256": "dd54e5f40b7935f1e05f02f20e3271ed560e6f25bf6203755edbb1a0abac5eb2"
+  },
+  "docs": {
+    "directory": true,
+    "mode": 16893
+  },
+  "docs/architecture": {
+    "directory": true,
+    "mode": 16893
+  },
+  "docs/architecture/boundaries.md": {
+    "mode": 33204,
+    "sha256": "dd4bce487d30dd2f34cfc28f4221fdbe8223bc0cdb44c244cd6abe541f1352f6"
+  },
+  "docs/architecture/workflow.md": {
+    "mode": 33204,
+    "sha256": "7b30ba336ea4eb00482ec827836f32a6a58a1148d716152cc384a0e29c568199"
+  },
+  "emitted": {
+    "directory": true,
+    "mode": 16893
+  },
+  "emitted/repo-catalog.json": {
+    "mode": 33204,
+    "sha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  },
+  "eslint.config.mjs": {
+    "mode": 33204,
+    "sha256": "ef6fa3d3dbf4c956c79d37787770edc1bc0ee6e3d6f96e4e6615a300fa72abaf"
+  },
+  "nx.json": {
+    "mode": 33204,
+    "sha256": "8eec7a891b9a72e94db23424f4ebbddd1ed1307806f144ad7d78c2a270101a18"
+  },
+  "package.json": {
+    "mode": 33204,
+    "sha256": "a3bbfa38caee94780e3a99121afb170f1633efd61421ee46b08c691693240970"
+  },
+  "packages": {
+    "directory": true,
+    "mode": 16893
+  },
+  "packages/generators": {
+    "directory": true,
+    "mode": 16893
+  },
+  "packages/generators/project.json": {
+    "mode": 33204,
+    "sha256": "8a656dc990dabae7bc83c6166326987c044b5b6072de28a6f8f4a40234fbbbf3"
+  },
+  "packages/shared": {
+    "directory": true,
+    "mode": 16893
+  },
+  "packages/shared/project.json": {
+    "mode": 33204,
+    "sha256": "78864eeba093711d95a53d9f7287bb72463d58cfe77660189631c598a07f0abb"
+  },
+  "packages/ui": {
+    "directory": true,
+    "mode": 16893
+  },
+  "packages/ui/components.json": {
+    "mode": 33204,
+    "sha256": "8d154d01a9e6a6d762ee608e550dfd6f866bf30e2c2e238b110771daee8b9fae"
+  },
+  "packages/ui/project.json": {
+    "mode": 33204,
+    "sha256": "cb735b63dcabc8e743dae927c00ea8b57e0b31cbf7b4dc0ebf39495b03ea9765"
+  }
+}

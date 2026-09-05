@@ -1,0 +1,35 @@
+{
+  "overflow": false,
+  "events": [
+    {
+      "elapsed": 19.253323678858578,
+      "path": "docs/adr",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 19.25368141103536,
+      "path": "scripts",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 19.25536120077595,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 19.25550593715161,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 19.255592411849648,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 8,
+      "cookie": 0
+    }
+  ]
+}

@@ -1,0 +1,221 @@
+{
+  "overflow": false,
+  "events": [
+    {
+      "elapsed": 18.45549338683486,
+      "path": "roadmap",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.75290152290836,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.7540622241795,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.75413703685626,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.75573874590918,
+      "path": "docs/adr",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.75594571093097,
+      "path": "scripts",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.75644276710227,
+      "path": "docs/PRD.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.75730350613594,
+      "path": "docs/PRD.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.75740707293153,
+      "path": "docs/PRD.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.7612415459007,
+      "path": "docs/adr/0001-tech-stack.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76238657580689,
+      "path": "docs/adr/0001-tech-stack.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76247341185808,
+      "path": "docs/adr/0001-tech-stack.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.7631265358068,
+      "path": "docs/adr/0002-design-system.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76437956187874,
+      "path": "docs/adr/0002-design-system.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76451239502057,
+      "path": "docs/adr/0002-design-system.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76525639090687,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.7662854208611,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76638682419434,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76692171301693,
+      "path": "docs/architecture.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76816618209705,
+      "path": "docs/architecture.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.76824495289475,
+      "path": "docs/architecture.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.7714443448931,
+      "path": "docs/ux-canon.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.7729026931338,
+      "path": "docs/ux-canon.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.77299031009898,
+      "path": "docs/ux-canon.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.77362893614918,
+      "path": "README.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.77502169879153,
+      "path": "README.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.77514235815033,
+      "path": "README.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.77709434600547,
+      "path": "CLAUDE.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.77860222710297,
+      "path": "CLAUDE.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.77875868510455,
+      "path": "CLAUDE.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.77958012884483,
+      "path": "GEMINI.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.78201483609155,
+      "path": "GEMINI.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.78210296295583,
+      "path": "GEMINI.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.78447636310011,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.78455695603043,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 75.78462220076472,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 8,
+      "cookie": 0
+    }
+  ]
+}

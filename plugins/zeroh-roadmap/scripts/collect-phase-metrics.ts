@@ -48,6 +48,7 @@
  */
 
 import { execSync } from 'node:child_process'
+import { loadConfig } from '../cli/lib/config.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { readdirSync, statSync } from 'node:fs'
@@ -282,37 +283,15 @@ function getGateRoundsFromCommits(phaseNum: number): string[] {
 
 // ── Live gate checks (live mode only) ───────────────────────────────────────
 
-/** Package manager by lockfile sniff — the fallback when no Gate-commands binding exists. */
-function detectPackageManager(): 'pnpm' | 'npm' | 'yarn' {
-  if (fs.existsSync('pnpm-lock.yaml')) return 'pnpm'
-  if (fs.existsSync('yarn.lock')) return 'yarn'
-  return 'npm'
-}
-
-/** Read the consumer's `## Gate commands` CLAUDE.md block ("- slot: command" lines).
- *  Returns {} when the block is absent — callers fall back to detected-PM defaults.
- *  Line-walk instead of a regex block-capture: a multiline-$ lookahead terminates
- *  the lazy capture at the FIRST line end, silently dropping every slot after
- *  the first — exactly the bind-defeating bug a regex here shipped once. */
-function readGateCommands(): Record<string, string> {
-  try {
-    const lines = fs.readFileSync('CLAUDE.md', 'utf-8').split('\n')
-    const start = lines.findIndex((l) => /^## Gate commands\s*$/.test(l))
-    if (start === -1) return {}
-    const out: Record<string, string> = {}
-    for (const line of lines.slice(start + 1)) {
-      if (/^## /.test(line)) break
-      const m = line.match(/^\s*-\s*(\w+):\s*(.+?)\s*$/)
-      if (m) out[m[1]] = m[2]
-    }
-    return out
-  } catch {
-    return {}
-  }
-}
-
-function resolveSlot(slot: string, fallback: string): string {
-  return readGateCommands()[slot] ?? fallback
+// This plugin-owned legacy collector uses the same validated bindings as the CLI.
+// New consumers use roadmap gate run; no copy of this executor is scaffolded.
+let liveBindings: Record<string, string> | undefined
+function resolveSlot(slot: string): string {
+  liveBindings ??= loadConfig(process.cwd()).gateCommands
+  const command = liveBindings![slot]
+  if (typeof command !== 'string' || !command.trim()) throw new Error(`Missing gate binding: ${slot}`)
+  if (command === 'none') console.log(`${slot}: declared-none — not executed`)
+  return command
 }
 
 function getTestCounts(): { passed: number; failed: number } {
@@ -326,7 +305,8 @@ function getTestCounts(): { passed: number; failed: number } {
     )
     return { passed, failed }
   }
-  const cmd = resolveSlot('unit', `${detectPackageManager()} test`)
+  const cmd = resolveSlot('unit')
+  if (cmd === 'none') return { passed: 0, failed: 0 }
   try {
     const output = execSync(`${cmd} 2>&1`, { encoding: 'utf-8', timeout: 600_000 })
     return parse(output)
@@ -336,18 +316,23 @@ function getTestCounts(): { passed: number; failed: number } {
 }
 
 function getLiveGateResults() {
-  const pm = detectPackageManager()
+  // Validate once before any live shell execution; malformed config must fail.
+  liveBindings = loadConfig(process.cwd()).gateCommands
   const lint = (() => {
+    const command = resolveSlot('lint')
+    if (command === 'none') return 'clean' as const
     try {
-      execSync(`${resolveSlot('lint', `${pm} run lint`)} 2>&1`, { encoding: 'utf-8' })
+      execSync(`${command} 2>&1`, { encoding: 'utf-8' })
       return 'clean' as const
     } catch (e) {
       return String(e).includes('error') ? ('errors' as const) : ('warnings' as const)
     }
   })()
   const typeCheck = (() => {
+    const command = resolveSlot('types')
+    if (command === 'none') return 'clean' as const
     try {
-      execSync(`${resolveSlot('types', `${pm} run type-check`)} 2>&1`, { encoding: 'utf-8' })
+      execSync(`${command} 2>&1`, { encoding: 'utf-8' })
       return 'clean' as const
     } catch {
       return 'errors' as const
@@ -355,8 +340,10 @@ function getLiveGateResults() {
   })()
   const tests = getTestCounts()
   const build = (() => {
+    const command = resolveSlot('build')
+    if (command === 'none') return 'clean' as const
     try {
-      execSync(`${resolveSlot('build', `${pm} run build`)} 2>&1`, {
+      execSync(`${command} 2>&1`, {
         encoding: 'utf-8',
         timeout: 600_000,
       })
@@ -370,7 +357,7 @@ function getLiveGateResults() {
     gate: {
       lint,
       typeCheck,
-      unitTests: { passed: tests.passed, total: tests.passed + tests.failed },
+      unitTests: { passed: tests.passed, total: tests.passed + tests.failed, notes: ['lint', 'types', 'unit', 'build'].filter(slot => liveBindings![slot] === 'none').map(slot => `${slot}: declared-none — not executed`).join('; ') || 'Counts from configured unit command' },
       integrationTests: { passed: 0, total: 0, notes: 'Included in unit test count' },
       e2eTests: { passed: 0, total: 0, notes: 'Run separately via the e2e slot' },
       build,

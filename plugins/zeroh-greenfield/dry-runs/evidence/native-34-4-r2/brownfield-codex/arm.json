@@ -1,0 +1,19 @@
+{
+  "kind": "brownfield",
+  "host": "codex",
+  "scratchRoot": "/tmp/greenfield-34-final-brownfield-codex-r5iid4dp",
+  "scratchIdentity": "c025c66c-723b-43ba-8ae3-dcab6996174f",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+  "version": "codex-cli 0.153.4",
+  "existingHomePaths": [
+    "AGENTS.md",
+    "docs/architecture/boundaries.md",
+    "docs/architecture/workflow.md"
+  ],
+  "catalogCheck": {
+    "mode": "catalog",
+    "source": "emitted/repo-catalog.json",
+    "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+    "sourceSha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  }
+}

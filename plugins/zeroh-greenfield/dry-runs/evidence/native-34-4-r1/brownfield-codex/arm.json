@@ -1,0 +1,13 @@
+{
+  "kind": "brownfield",
+  "host": "codex",
+  "scratchRoot": "/tmp/greenfield-34-final-brownfield-codex-xulkn0a3",
+  "scratchIdentity": "549d03bb-543f-42dc-9ed9-6e183a1d7f47",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+  "version": "codex-cli 0.153.4",
+  "existingHomePaths": [
+    "AGENTS.md",
+    "docs/architecture/boundaries.md",
+    "docs/architecture/workflow.md"
+  ]
+}

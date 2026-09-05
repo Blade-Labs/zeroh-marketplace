@@ -71,6 +71,13 @@ async function main() {
     return 0
   }
 
+  // Help must never execute a state transition, even outside a consumer repo.
+  if (Object.hasOwn(TREE, command) && rest.length === 1 && ['--help', '-h'].includes(rest[0])) {
+    const meta = TREE[command]
+    process.stdout.write(`Usage: roadmap ${command} ${meta.sub.join(' | ')}\n\n${meta.desc}\n`)
+    return 0
+  }
+
   const modUrl = new URL(`../cli/commands/${command}.mjs`, import.meta.url)
   if (existsSync(fileURLToPath(modUrl))) {
     const { default: run } = await import(modUrl)

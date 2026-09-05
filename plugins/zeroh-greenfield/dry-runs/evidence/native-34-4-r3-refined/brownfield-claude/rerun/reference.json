@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3-refined/brownfield-claude/rerun",
+  "sha256": {
+    "request.json": "9a1b51c5796d3eaf239a266c7baa3f57875fd7b821d3270be682d68962f49090",
+    "before.json": "0fa33a45e2a87451078983d7ea10006c090a9d0614d47dcfeaf2620dc11b51ae",
+    "after.json": "0fa33a45e2a87451078983d7ea10006c090a9d0614d47dcfeaf2620dc11b51ae",
+    "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+    "stdout.jsonl": "854732343fc830aa9c03b55fc461e8fb4a1309fa1ac827e03fa1401d4b4a0ada",
+    "result.json": "9e69d7959196a2a1b97a686823275e0f824489e29b5cc47cc2f0c1db7144729b"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3-refined/brownfield-claude/rerun/session.jsonl",
+    "sha256": "9846f031c4829da69d3a11b8507a9ed7027301f3ae1ce832e10a0539a725285a"
+  }
+}

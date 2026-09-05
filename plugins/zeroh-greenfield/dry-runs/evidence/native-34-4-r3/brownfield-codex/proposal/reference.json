@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3/brownfield-codex/proposal",
+  "sha256": {
+    "request.json": "5469cd1bc58147c81a3bcc2cc70bcd5356689bfb2c474a6c896632e48b9469a4",
+    "before.json": "2c3c6735648038887e5eb734eb3e3054e8df86d2663cbbaef42b2ea0c2ce791c",
+    "after.json": "2c3c6735648038887e5eb734eb3e3054e8df86d2663cbbaef42b2ea0c2ce791c",
+    "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+    "stdout.jsonl": "82b16c0463e7768827407ecfe3b54b5eeb9e2a628346d1a9f3129970b6bea247",
+    "result.json": "8658b3564466b7ef62b9958fd8f700168faa38f1201898bf1383f65dd67bc402"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3/brownfield-codex/proposal/session.jsonl",
+    "sha256": "55007e4fd03d73a3bbdadcedc2c8c4957773052b9cada615717af6b220a1a989"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "kind": "empty",
+  "host": "claude",
+  "scratchRoot": "/tmp/greenfield-34-final-empty-claude-ldcolbi0",
+  "scratchIdentity": "7046317a-4c27-4e03-950a-620a84cfbc62",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+  "version": "2.1.257 (Claude Code)"
+}

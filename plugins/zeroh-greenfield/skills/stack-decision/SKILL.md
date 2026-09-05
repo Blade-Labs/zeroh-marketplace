@@ -7,34 +7,34 @@ description: Handle requests phrased as choose stack, mobile stack, or compare f
 
 Load `references/matrices.md`. Determine which matrices apply from the approved
 PRD answers, then present every row in each applicable matrix unchanged.
-Not this skill: `greenfield-init` and `brownfield-audit` own repository changes; this skill only returns `StackDecisionOutput`. Provenance: `roadmap/arc-evals/phase-30.peval.json` records the 2026-09-04 stack-decision delivery.
+Not this skill: route initial trigger selection through `using-zeroh-greenfield`, leave repository changes to `greenfield-init` or `brownfield-audit`, and return only `StackDecisionOutput` here. Use `roadmap/arc-evals/phase-30.peval.json` as the 2026-09-04 delivery evidence.
 
 ## Selection
 
 Ask exactly one selection question per applicable matrix.
 Do not preselect any option before the user answers.
-The backend matrix is presented ONLY when the PRD answers name an API.
+Present the backend matrix ONLY when the PRD answers name an API.
 
 Accept an explicit named option or a request to revisit requirements. Do not
 infer a choice from preferences. When the user chooses, ask for or summarize the
 reason and confirm it before producing the ruling.
+If matrix evidence is unavailable, PRD answers conflict, or the reason is unconfirmed, STOP with `status: unresolved` and name the missing evidence or conflicting answers. Treat selection and STOP behavior as honor-system.
 
 ## Callers and ownership
 
-`greenfield-init` calls this skill for new repositories; phase 33 authors the brownfield-audit side
-and calls this same owner rather than copying its matrices or ADR prose.
+Accept calls from `greenfield-init` for new repositories and from `brownfield-audit` only when stack evidence is unresolved or conflicting. Keep matrices and ADR decision content in this skill and `references/matrices.md`.
 
-This skill owns both stack ADR templates. Design implementation and token values
-remain with the selected design system or the `zeroh-design` sibling.
+Return both stack ADR decisions without implementing design or token values; delegate those values to the selected design system or `zeroh-design`.
 
 ## Output
 
-Return a `StackDecisionOutput` for each decision:
+Return one `StackDecisionOutput` containing one object per applicable matrix:
 
-```text
-adrPath: docs/adr/<decision-file>.md
-rulingLine: <YYYY-MM-DD>: <selected option> — <reason>
+```json
+{"status":"decided|unresolved","decisions":[{"adrPath":"docs/adr/0001-tech-stack.md|docs/adr/0002-design-system.md","matrix":"<matrix-heading>","options":["<exact-presented-row>"],"selected":"<named-option>","reason":"<confirmed-reason>","consequences":["<consequence>"],"revisitConditions":["<measurable-condition>"],"rulingDate":"YYYY-MM-DD"}]}
 ```
+
+Define `YYYY-MM-DD` as the decision's ISO calendar date, `<matrix-heading>` as the literal heading in `references/matrices.md`, and every other placeholder as non-empty text copied or confirmed during selection. On STOP, return `{"status":"unresolved","decisions":[]}` plus the named conflict in the surrounding response.
 
 Accumulate every applicable stack decision in the single
 `docs/adr/0001-tech-stack.md`: create a labeled Options group for each presented
@@ -46,3 +46,4 @@ design-system options and ruling.
 Add the confirmed consequences and measurable revisit conditions for every
 group. Do not write either ADR until the calling workflow's approval gate has
 passed.
+Treat preservation of earlier groups as honor-system. Treat the no-write rule as enforced by `plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs` when called inside native initialization; otherwise it is honor-system.

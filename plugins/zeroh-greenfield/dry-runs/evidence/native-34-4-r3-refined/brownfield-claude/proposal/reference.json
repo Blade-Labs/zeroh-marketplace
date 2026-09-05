@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3-refined/brownfield-claude/proposal",
+  "sha256": {
+    "request.json": "69fab32d0e12fdba83b2dff8407ca9f1c0505bc75e7bf1276b0c7d1cb6d63a5b",
+    "before.json": "2c3c6735648038887e5eb734eb3e3054e8df86d2663cbbaef42b2ea0c2ce791c",
+    "after.json": "2c3c6735648038887e5eb734eb3e3054e8df86d2663cbbaef42b2ea0c2ce791c",
+    "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+    "stdout.jsonl": "9aca0dfc8a4336c3ffea7842c00cc888a0ef8a59370a0239dfe9306c0a5d32d9",
+    "result.json": "03f3697b33811a4cfa9acd91a9c64e6fec8e06580c1663f9b5609174fe384c15"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3-refined/brownfield-claude/proposal/session.jsonl",
+    "sha256": "7142464aba8c9b783becabf7cb35ec87ec14bf3a6303126721a19247788131b2"
+  }
+}

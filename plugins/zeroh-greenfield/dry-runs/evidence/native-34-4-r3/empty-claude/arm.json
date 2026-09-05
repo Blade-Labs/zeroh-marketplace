@@ -1,0 +1,14 @@
+{
+  "kind": "empty",
+  "host": "claude",
+  "scratchRoot": "/tmp/greenfield-34-final-empty-claude-u4pki8iu",
+  "scratchIdentity": "91b5f295-b9e8-4af4-aeed-98019e3577ec",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+  "version": "2.1.257 (Claude Code)",
+  "catalogCheck": {
+    "mode": "project-root",
+    "source": ".",
+    "projectName": "greenfield-proof",
+    "command": "node scripts/check-readme-catalog.mjs --project-root ."
+  }
+}

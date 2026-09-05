@@ -1,0 +1,35 @@
+{
+  "kind": "brownfield",
+  "host": "claude",
+  "scratchRoot": "/tmp/greenfield-34-final-brownfield-claude-9chcsh8h",
+  "scratchIdentity": "3fe7d115-f045-4cee-8c67-18fc0c972d3e",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+  "version": "2.1.257 (Claude Code)",
+  "gateWrapper": {
+    "kind": "capbuild",
+    "executable": "/home/patrik/.local/bin/capbuild",
+    "realpath": "/home/patrik/illumination_VS_setup/scripts/capbuild",
+    "sha256": "f71688b5aa30a7bdc2a900c20593c625192bce54cc7713d66dfd40dca7fc2083",
+    "defaults": {
+      "memoryMax": "8G",
+      "memorySwapMax": "2G",
+      "heapMB": 4096,
+      "slice": "dev.slice"
+    },
+    "hostMetadataEffects": [
+      "systemd-user-transient-units",
+      "/run/user/1000/capbuild-locks"
+    ]
+  },
+  "existingHomePaths": [
+    "AGENTS.md",
+    "docs/architecture/boundaries.md",
+    "docs/architecture/workflow.md"
+  ],
+  "catalogCheck": {
+    "mode": "catalog",
+    "source": "emitted/repo-catalog.json",
+    "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+    "sourceSha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  }
+}

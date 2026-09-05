@@ -1,0 +1,51 @@
+{
+  "scratch": "/tmp/greenfield-34-final-brownfield-codex-hyjihmqr",
+  "evidence": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r6/brownfield-codex/execution",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+    "exec",
+    "--approve-for-me",
+    "resume",
+    "--json",
+    "01a07111-cda2-7d33-92b6-442592ef256a",
+    "APPROVE GREENFIELD PLAN"
+  ],
+  "stage": "execution",
+  "gateWrapper": {
+    "kind": "capbuild",
+    "executable": "/home/patrik/.local/bin/capbuild",
+    "realpath": "/home/patrik/illumination_VS_setup/scripts/capbuild",
+    "sha256": "f71688b5aa30a7bdc2a900c20593c625192bce54cc7713d66dfd40dca7fc2083",
+    "defaults": {
+      "memoryMax": "8G",
+      "memorySwapMax": "2G",
+      "heapMB": 4096,
+      "slice": "dev.slice"
+    },
+    "hostMetadataEffects": [
+      "systemd-user-transient-units",
+      "/run/user/1000/capbuild-locks"
+    ]
+  },
+  "clearedHostOverrides": [
+    "CAPBUILD_SLICE",
+    "CAPBUILD_PASS_ENV",
+    "NODE_OPTIONS",
+    "FORCE_BARE",
+    "ITEST_FILES",
+    "AUDIT_LEDGER_ENABLED",
+    "TEST_CONCURRENCY",
+    "E2E_PROJECT",
+    "ALLURE"
+  ],
+  "catalogCheck": {
+    "mode": "catalog",
+    "source": "emitted/repo-catalog.json",
+    "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+    "sourceSha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  },
+  "timeout": 1800,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "aad0ad8abb90c450c032597c0bca83565d24fdce",
+  "sourceSnapshotSha256": "9facc511833b8600c8b5980ab843e1b157c150c2e727c504df2ba5365264842e"
+}

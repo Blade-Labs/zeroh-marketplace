@@ -1,0 +1,13 @@
+{
+  "kind": "brownfield",
+  "host": "claude",
+  "scratchRoot": "/tmp/greenfield-34-final-brownfield-claude-lbnqhyom",
+  "scratchIdentity": "fe612c2f-fb7f-4c5d-9e8f-a7623c1b8c6f",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+  "version": "2.1.257 (Claude Code)",
+  "existingHomePaths": [
+    "AGENTS.md",
+    "docs/architecture/boundaries.md",
+    "docs/architecture/workflow.md"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "scratch": "/tmp/greenfield-34-final-brownfield-claude-e_h8yw8c",
+  "evidence": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3-refined/brownfield-claude/proposal",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+    "-p",
+    "--resume",
+    "9d4c9539-e821-49a7-b306-f1fdaff6320d",
+    "--verbose",
+    "--output-format",
+    "stream-json",
+    "--plugin-dir",
+    "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield",
+    "--plugin-dir",
+    "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap",
+    "Refine the proposal only; STILL NO APPROVAL and no writes. The fixture has no promised runtime/emit runner and package.json is a present home. Use the minimal config-only `roadmap init --config` branch, preserving package.json and omitting unneeded roadmap scaffolding/scripts. Do not add broken emit/changelog scripts whose dependencies are absent. Keep all6 independent homes, bounded README/harness repairs, exact immutable catalog binding and seven honestly absent gates. Re-read only the necessary actual source evidence and run config capabilities --json read-only so the final proposal capture has native command proof. Emit one complete replacement proposal JSON with the full artifacts/commands/gates, selected catalog command exactly once, and no declined alternative commands in that list. Do not mutate anything; await standalone APPROVE GREENFIELD PLAN later. Existing source/authority/catalog metadata and preservation guards remain in force."
+  ],
+  "stage": "proposal",
+  "catalogCheck": {
+    "mode": "catalog",
+    "source": "emitted/repo-catalog.json",
+    "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+    "sourceSha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  },
+  "timeout": 1200,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "aad0ad8abb90c450c032597c0bca83565d24fdce",
+  "sourceSnapshotSha256": "ead1de4e8f82905655071a9b4184c6c41b74f884181b03ebad6394e82e9d8b68"
+}

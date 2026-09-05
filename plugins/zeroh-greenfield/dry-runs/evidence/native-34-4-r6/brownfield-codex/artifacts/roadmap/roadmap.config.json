@@ -1,0 +1,22 @@
+{
+  "configVersion": 1,
+  "gateCommands": {
+    "lint": "none",
+    "types": "none",
+    "unit": "none",
+    "integration": "none",
+    "build": "none",
+    "e2e": "none",
+    "emit": "none"
+  },
+  "designHomes": {
+    "architecture": {
+      "home": "docs/architecture.md"
+    },
+    "ux": {
+      "canon": [
+        "docs/ux-canon.md"
+      ]
+    }
+  }
+}

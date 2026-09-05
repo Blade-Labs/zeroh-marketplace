@@ -1,0 +1,19 @@
+{
+  "kind": "brownfield",
+  "host": "claude",
+  "scratchRoot": "/tmp/greenfield-34-final-brownfield-claude-e_h8yw8c",
+  "scratchIdentity": "9c16aed4-7f4a-4fc0-8379-4f26f455ae99",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+  "version": "2.1.257 (Claude Code)",
+  "existingHomePaths": [
+    "AGENTS.md",
+    "docs/architecture/boundaries.md",
+    "docs/architecture/workflow.md"
+  ],
+  "catalogCheck": {
+    "mode": "catalog",
+    "source": "emitted/repo-catalog.json",
+    "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+    "sourceSha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  }
+}

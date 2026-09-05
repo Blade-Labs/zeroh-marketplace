@@ -1,0 +1,143 @@
+{
+  "overflow": false,
+  "events": [
+    {
+      "elapsed": 8.45912057813257,
+      "path": "roadmap",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 26.47456445498392,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 26.47469142731279,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02681027911603,
+      "path": "docs/adr",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02715515624732,
+      "path": "docs/PRD.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02722189202905,
+      "path": "docs/PRD.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02727608615533,
+      "path": "docs/PRD.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02739439113066,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02745403489098,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02750485111028,
+      "path": "docs/CODE-STYLE.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02755788201466,
+      "path": "docs/architecture.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.027609560173,
+      "path": "docs/architecture.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02766899392009,
+      "path": "docs/architecture.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02772062225267,
+      "path": "docs/ux-canon.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.0277783521451,
+      "path": "docs/ux-canon.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02783275488764,
+      "path": "docs/ux-canon.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02788561629131,
+      "path": "README.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02793445903808,
+      "path": "README.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02798035601154,
+      "path": "CLAUDE.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02804596116766,
+      "path": "CLAUDE.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02810582518578,
+      "path": "GEMINI.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 83.02815388608724,
+      "path": "GEMINI.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 104.87927691312507,
+      "path": "scripts",
+      "mask": 1073742080,
+      "cookie": 0
+    }
+  ]
+}

@@ -12,6 +12,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   mkdtempSync,
@@ -21,6 +22,8 @@ import {
   readdirSync,
   existsSync,
   statSync,
+  lstatSync,
+  readlinkSync,
   rmSync,
   realpathSync,
 } from 'node:fs'
@@ -77,6 +80,57 @@ function roadmap(repo, ...args) {
 }
 
 const CONFIG_REL = join('roadmap', 'roadmap.config.json')
+
+// Help is a read-only operation, including inside a fresh repository. Capture
+// directories and .git bytes as well as files: git status alone misses empty
+// directories, ignored files and edits to repository metadata.
+function completeTree(root) {
+  const entries = []
+  function walk(relative = '') {
+    for (const name of readdirSync(join(root, relative)).sort()) {
+      const path = join(relative, name)
+      const absolute = join(root, path)
+      const stat = lstatSync(absolute)
+      if (stat.isDirectory()) {
+        entries.push([path, 'directory', stat.mode])
+        walk(path)
+      } else if (stat.isSymbolicLink()) {
+        entries.push([path, 'symlink', readlinkSync(absolute)])
+      } else {
+        assert.ok(stat.isFile(), `unexpected fixture entry: ${path}`)
+        entries.push([path, 'file', stat.mode, createHash('sha256').update(readFileSync(absolute)).digest('hex')])
+      }
+    }
+  }
+  walk()
+  return entries
+}
+
+for (const flag of ['--help', '-h']) {
+  test(`command help: init ${flag} leaves the complete fresh git tree byte-identical`, () => {
+    const repo = newRepo()
+    const before = completeTree(repo)
+    const result = roadmap(repo, 'init', flag)
+    assert.deepEqual(completeTree(repo), before, 'help must not scaffold files, create directories or alter .git')
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /usage|commands/i, 'successful help prints usage')
+    assert.match(result.stdout, /\binit\b/)
+    assert.match(result.stdout, /--config/)
+    assert.match(result.stdout, /--scaffold/)
+  })
+
+  for (const command of ['init', 'claim', 'arm', 'disarm']) {
+    test(`command help: ${command} ${flag} works without a repository and leaves disk unchanged`, () => {
+      const root = newTmp('zr-cli-help-nongit-')
+      const before = completeTree(root)
+      const result = roadmap(root, command, flag)
+      assert.deepEqual(completeTree(root), before, 'help needs no repository initialization')
+      assert.equal(result.status, 0, result.stderr)
+      assert.match(result.stdout, /usage|commands/i)
+      assert.match(result.stdout, new RegExp(`\\b${command}\\b`))
+    })
+  }
+}
 
 test('1) `init --config` writes a self-consistent config that `config check` then accepts', () => {
   const repo = newRepo()
@@ -518,4 +572,102 @@ import('file://' + process.argv[1])
     `the registry default root must resolve to docs/roadmap/phases (the first candidate that ` +
       `carries phases/), not the hardcoded roadmap/phases; got: ${JSON.stringify(payload.phases)}`,
   )
+})
+
+// Phase 34.4 architect-approved recovery: the native second audit found that
+// real init publishes obsolete workflow/authority instructions. Exercise the
+// existing copier, including relocated consumers, rather than a second template.
+const obsoleteRoadmapGuidance = [
+  [/YYYY-MM-DD/, 'unfilled creation-date placeholder'],
+  [/Gate commands[\s\S]{0,100}CLAUDE\.md|CLAUDE\.md[^\n]*(?:gate|slots)/i, 'CLAUDE.md gate authority'],
+  [/`(?:main|develop)`/, 'fixed consumer branch topology'],
+  [/Direct push|Push to remote|Mark Done & Push/i, 'unconditional push instruction'],
+  [/2 Parallel Agents|150-200k tokens|Loop Steps|until[^\n]*ZERO findings/i, 'uncapped local reviewer policy'],
+]
+function assertEvergreenRoadmap(text) {
+  for (const [pattern, reason] of obsoleteRoadmapGuidance) assert.doesNotMatch(text, pattern, reason)
+  assert.match(text, /\/do-phase\b/, 'execution delegates to the maintained phase workflow')
+  assert.match(text, /roadmap gate plan\b/, 'use the planned consumer gate')
+  assert.match(text, /roadmap gate run\b/, 'execute the planned consumer gate')
+  assert.match(text, /--verify-complete\b/, 'completion must be verified by the gate')
+  assert.match(text, /roadmap\.config\.json/, 'configuration authority is explicit')
+  assert.match(text, /discover|resolved|canonical/i, 'configuration location is discovered')
+  assert.match(text, /gateCommands/, 'commands come from consumer bindings')
+  assert.match(text, /mergePolicy/, 'publication follows the consumer policy')
+  assert.match(text, /(?:absent|missing|unset)[^.]*hold|hold[^.]*(?:absent|missing|unset)/i, 'absent publication policy means hold')
+}
+for (const root of ['roadmap', 'docs/roadmap']) {
+  test(`scaffold evergreen roadmap: ${root} receives canonical config-authoritative workflow`, () => {
+    const repo = newRepo()
+    const result = roadmap(repo, 'init', '--root', root)
+    assert.equal(result.status, 0, result.stderr)
+    const published = readFileSync(join(repo, root, 'ROADMAP.md'), 'utf8')
+    assert.equal(published, readFileSync(join(PLUGIN_ROOT, 'templates', 'ROADMAP.md'), 'utf8'), 'real scaffold copies the single canonical template')
+    assertEvergreenRoadmap(published)
+  })
+}
+test('scaffold evergreen roadmap: stale instruction mutations cannot pass the published guidance contract', () => {
+  const repo = newRepo()
+  const result = roadmap(repo, 'init')
+  assert.equal(result.status, 0, result.stderr)
+  const published = readFileSync(join(repo, 'roadmap', 'ROADMAP.md'), 'utf8')
+  assertEvergreenRoadmap(published)
+  for (const stale of ['Created: YYYY-MM-DD', 'Gate commands come from CLAUDE.md', '`develop` is the landing branch', 'Push to remote.', 'Loop Steps until all agents return ZERO findings']) {
+    assert.throws(() => assertEvergreenRoadmap(`${published}\n${stale}\n`), { name: 'AssertionError' })
+  }
+})
+
+
+test('scaffold helper recovery: fresh consumers omit the plugin-owned metrics collector', () => {
+  const repo = newRepo()
+  const result = roadmap(repo, 'init')
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(existsSync(join(repo, 'scripts/collect-phase-metrics.ts')), false, 'fresh consumers must not receive a detached stale collector')
+  assert.ok(existsSync(join(PLUGIN_ROOT, 'scripts/collect-phase-metrics.ts')), 'canonical helper remains available for historical and live collection')
+  assert.ok(existsSync(join(repo, 'scripts/generate-changelog-md.ts')), 'portable changelog renderer remains scaffolded')
+  assert.doesNotMatch(output(result), /Created scripts\/collect-phase-metrics\.ts/)
+})
+function scaffoldChangelogFixture() {
+  const repo = newRepo()
+  const result = roadmap(repo, 'init')
+  assert.equal(result.status, 0, result.stderr)
+  const script = join(repo, 'scripts/generate-changelog-md.ts')
+  const tsx = join(PLUGIN_ROOT, 'node_modules/.bin/tsx')
+  return { repo, run: (env = {}) => spawnSync(tsx, [script], { cwd: repo, encoding: 'utf8', env: { ...process.env, ...env } }) }
+}
+test('scaffold helper recovery: copied changelog renderer gives portable actionable missing-input error', () => {
+  const { repo, run } = scaffoldChangelogFixture()
+  const result = run()
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /reviews\/changelog\.json/)
+  assert.match(result.stderr, /configured[^\n]*emit|emit[^\n]*configured/i)
+  assert.doesNotMatch(result.stderr, /pnpm|emit:changelog/)
+  assert.equal(existsSync(join(repo, 'CHANGELOG.md')), false, 'missing source does not create a misleading changelog')
+})
+test('scaffold helper recovery: copied changelog renderer defaults to deterministic CHANGELOG.md without synthetic separators', () => {
+  const { repo, run } = scaffoldChangelogFixture()
+  mkdirSync(join(repo, 'reviews'), { recursive: true })
+  const input = { versions: [{ version: '1.2.3', date: '2026-09-05', sections: { features: [{ name: 'Greeting', description: 'Adds a greeting.' }], fixes: [], internal: [] } }] }
+  writeFileSync(join(repo, 'reviews/changelog.json'), JSON.stringify(input))
+  const first = run({ TZ: 'UTC' })
+  assert.equal(first.status, 0, first.stderr)
+  const written = readFileSync(join(repo, 'CHANGELOG.md'), 'utf8')
+  assert.match(written, /## v1\.2\.3.*September 5, 2026/)
+  assert.match(written, /\*\*Greeting\*\* — Adds a greeting\./)
+  assert.match(written, /GENERATED[^\n]*generate-changelog-md\.ts/, 'generated provenance names the actual renderer')
+  assert.doesNotMatch(written, /pnpm|emit:changelog/)
+  assert.doesNotMatch(written, /---\s+---\s*$/, 'no synthetic extra trailing separator')
+  const second = run({ TZ: 'America/Los_Angeles' })
+  assert.equal(second.status, 0, second.stderr)
+  assert.equal(readFileSync(join(repo, 'CHANGELOG.md'), 'utf8'), written, 'same source gives identical bytes across repeated invocations and host timezones')
+})
+test('scaffold helper recovery: migration audit never asks consumers to copy the retired metrics collector', () => {
+  const repo = newRepo()
+  const result = roadmap(repo, 'init')
+  assert.equal(result.status, 0, result.stderr)
+  rmSync(join(repo, 'scripts/collect-phase-metrics.ts'), { force: true })
+  const audit = spawnSync(join(PLUGIN_ROOT, 'node_modules/.bin/tsx'), [join(PLUGIN_ROOT, 'scripts/migrate/audit.ts'), '--project', repo], { cwd: repo, encoding: 'utf8' })
+  assert.equal(audit.status, 0, audit.stderr)
+  assert.match(audit.stdout, /Steady-state artifacts/)
+  assert.doesNotMatch(audit.stdout, /scripts\/collect-phase-metrics\.ts/, 'migration must not reintroduce a removed scaffold dependency')
 })

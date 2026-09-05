@@ -160,7 +160,6 @@ const REQUIRED_ARTIFACTS: Array<{ target: string; canonical: string | null }> = 
   { target: 'roadmap/ROADMAP.md', canonical: 'templates/ROADMAP.md' },
   { target: 'roadmap/backlog.ts', canonical: 'templates/backlog.ts' },
   { target: 'scripts/pre-review.sh', canonical: 'scripts/pre-review.sh' },
-  { target: 'scripts/collect-phase-metrics.ts', canonical: 'scripts/collect-phase-metrics.ts' },
   { target: 'scripts/build-dashboard.sh', canonical: 'scripts/build-dashboard.sh' },
   { target: 'scripts/generate-changelog-md.ts', canonical: 'scripts/generate-changelog-md.ts' },
 ]
@@ -503,7 +502,7 @@ function buildNextSteps(args: {
   if (args.breakingCount > 0) {
     steps.push(
       `**Reconcile ${args.breakingCount} done phase(s)** flagged in section 3. Three options per phase:\n` +
-        '   - Run `npx tsx scripts/collect-phase-metrics.ts <N>` to backfill gate + metrics from git history.\n' +
+        '   - Run the installed plugin’s `scripts/collect-phase-metrics.ts <N> --historical` with tsx to backfill from git history.\n' +
         '   - Fill the missing fields manually using data from the phase\'s commits.\n' +
         '   - Downgrade the phase to `status: \'cancelled\'` if the completion claim was premature.\n' +
         '   Pick one per phase; the audit makes no assumption.',

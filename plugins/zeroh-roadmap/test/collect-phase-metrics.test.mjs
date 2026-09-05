@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Fixtures for scripts/collect-phase-metrics.ts — seeded tmp git repos (a mini
- * roadmap/phases tree plus a `## Gate commands` CLAUDE.md binding every gate slot to
- * `true`, so LIVE mode shells out to no-ops instead of a real lint/type-check/build)
+ * roadmap/phases tree plus canonical roadmap.config.json bindings to harmless
+ * fixture commands, so LIVE mode never runs a real lint/type-check/build)
  * driven through the REAL script under tsx with cwd = the fixture. Cases: the derived
  * EXECUTION window (startedAt = the `move to in-progress` anchor, completedAt = the last
  * subject-matching commit at or after it, both normalized to UTC from controlled
@@ -17,8 +17,8 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync, existsSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -68,6 +68,10 @@ function makeRepo(phaseNum, commitDates, opts = {}) {
   const rootRel = opts.rootRel ?? 'roadmap'
   mkdirSync(join(root, rootRel, 'phases'), { recursive: true })
   writeFileSync(join(root, 'CLAUDE.md'), CLAUDE_MD)
+  writeFileSync(join(root, rootRel, 'roadmap.config.json'), JSON.stringify({
+    configVersion: 1,
+    gateCommands: { lint: 'true', types: 'true', unit: 'true', integration: 'none', build: 'true', e2e: 'none', emit: 'none' },
+  }))
   const phaseFile = join(root, rootRel, 'phases', `phase-${phaseNum}.phase.ts`)
   writeFileSync(phaseFile, (opts.phaseSource ?? phaseSource)(phaseNum))
 
@@ -327,4 +331,54 @@ test('emitted metrics parse clean against PhaseMetricsShape, incl. offset commit
 
   const out = execFileSync(TSX, [checker], { cwd: PLUGIN, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   assert.match(out, /PARSE_OK 2026-05-06T01:38:09\.000Z 2026-06-07T15:09:10\.000Z/)
+})
+
+function boundCollectorFixture(phaseNum = 9020) {
+  const fixture = makeRepo(phaseNum, ['2026-01-02T03:04:05Z'], { rootRel: 'docs/roadmap', anchor: '2026-01-02T03:00:00Z' })
+  const configPath = join(fixture.root, 'docs/roadmap/roadmap.config.json')
+  const gateCommands = { lint: 'node gate-sentinel.mjs lint', types: 'node gate-sentinel.mjs types', unit: 'node gate-sentinel.mjs unit', integration: 'none', build: 'node gate-sentinel.mjs build', e2e: 'none', emit: 'none' }
+  writeFileSync(configPath, JSON.stringify({ configVersion: 1, gateCommands }))
+  writeFileSync(join(fixture.root, 'gate-sentinel.mjs'), 'import { appendFileSync } from "node:fs"; appendFileSync("gate-calls.txt", process.argv[2] + "\\n"); if (process.argv[2] === "unit") console.log("# pass 7\\n# fail 0");\n')
+  return { ...fixture, configPath, gateCommands }
+}
+test('collector live authority: config bindings drive execution despite CLAUDE and lockfile changes', () => {
+  const { root, phaseFile } = boundCollectorFixture()
+  writeFileSync(join(root, 'CLAUDE.md'), '# unrelated conventions\n')
+  runCollector(root, ['9020'])
+  const expected = ['lint', 'types', 'unit', 'build']
+  assert.deepEqual(readFileSync(join(root, 'gate-calls.txt'), 'utf8').trim().split('\n'), expected)
+  assert.match(readFileSync(phaseFile, 'utf8'), /unitTests:\s*\{\s*passed: 7,\s*total: 7/)
+  writeFileSync(join(root, 'CLAUDE.md'), CLAUDE_MD.replaceAll(': true', ': node gate-sentinel.mjs WRONG-AUTHORITY'))
+  writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n')
+  writeFileSync(join(root, 'yarn.lock'), '# competing lockfile must not choose commands\n')
+  runCollector(root, ['9020'])
+  assert.deepEqual(readFileSync(join(root, 'gate-calls.txt'), 'utf8').trim().split('\n'), [...expected, ...expected])
+})
+for (const mode of ['missing', 'malformed', 'invalid']) {
+  test(`collector live authority: ${mode} config refuses before executing gates or rewriting phase`, () => {
+    const { root, phaseFile, configPath } = boundCollectorFixture(9021)
+    const before = readFileSync(phaseFile, 'utf8')
+    if (mode === 'missing') unlinkSync(configPath)
+    if (mode === 'malformed') writeFileSync(configPath, '{')
+    if (mode === 'invalid') writeFileSync(configPath, JSON.stringify({ configVersion: 1, gateCommands: { lint: 'true' } }))
+    const result = spawnSync(TSX, [SCRIPT, '9021'], { cwd: root, encoding: 'utf8' })
+    assert.notEqual(result.status, 0, 'unusable config cannot report successful collection')
+    assert.match(result.stderr + result.stdout, /config/i)
+    assert.equal(existsSync(join(root, 'gate-calls.txt')), false, 'no configured gate ran')
+    assert.equal(readFileSync(phaseFile, 'utf8'), before, 'failed config cannot rewrite phase evidence')
+  })
+}
+test('collector live authority: none is a declared absence with honest notes and is never a shell command', () => {
+  const { root, phaseFile, configPath, gateCommands } = boundCollectorFixture(9022)
+  writeFileSync(configPath, JSON.stringify({ configVersion: 1, gateCommands: Object.fromEntries(Object.keys(gateCommands).map((slot) => [slot, 'none'])) }))
+  writeFileSync(join(root, 'CLAUDE.md'), CLAUDE_MD.replaceAll(': true', ': none'))
+  const bin = join(root, 'fake-bin'); mkdirSync(bin)
+  const trap = join(bin, 'none')
+  writeFileSync(trap, '#!/bin/sh\nprintf "executed\\n" >> none-was-executed\n')
+  chmodSync(trap, 0o755)
+  const stdout = runCollector(root, ['9022'], { PATH: `${bin}:${process.env.PATH}` })
+  assert.equal(existsSync(join(root, 'none-was-executed')), false, 'none must not be executed, even when resolvable on PATH')
+  const written = readFileSync(phaseFile, 'utf8')
+  assert.match(written, /notes:\s*["'][^"']*declared-none/, 'written gate evidence explains declared absence')
+  for (const slot of ['lint', 'types', 'unit', 'build']) assert.match(stdout, new RegExp(`(?:${slot}[^\\n]*declared-none|declared-none[^\\n]*${slot})`), `${slot} absence is reported honestly`)
 })

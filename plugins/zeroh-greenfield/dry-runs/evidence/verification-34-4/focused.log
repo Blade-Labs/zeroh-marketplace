@@ -1,0 +1,570 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-review-regressions.test.mjs plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs plugins/zeroh-roadmap/cli/commands/init.test.mjs plugins/zeroh-roadmap/test/collect-phase-metrics.test.mjs
+TAP version 13
+# Subtest: command help: init --help leaves the complete fresh git tree byte-identical
+ok 1 - command help: init --help leaves the complete fresh git tree byte-identical
+  ---
+  duration_ms: 167.297409
+  type: 'test'
+  ...
+# Subtest: command help: init --help works without a repository and leaves disk unchanged
+ok 2 - command help: init --help works without a repository and leaves disk unchanged
+  ---
+  duration_ms: 143.385763
+  type: 'test'
+  ...
+# Subtest: command help: claim --help works without a repository and leaves disk unchanged
+ok 3 - command help: claim --help works without a repository and leaves disk unchanged
+  ---
+  duration_ms: 128.457524
+  type: 'test'
+  ...
+# Subtest: command help: arm --help works without a repository and leaves disk unchanged
+ok 4 - command help: arm --help works without a repository and leaves disk unchanged
+  ---
+  duration_ms: 131.031165
+  type: 'test'
+  ...
+# Subtest: command help: disarm --help works without a repository and leaves disk unchanged
+ok 5 - command help: disarm --help works without a repository and leaves disk unchanged
+  ---
+  duration_ms: 148.084287
+  type: 'test'
+  ...
+# Subtest: command help: init -h leaves the complete fresh git tree byte-identical
+ok 6 - command help: init -h leaves the complete fresh git tree byte-identical
+  ---
+  duration_ms: 153.187913
+  type: 'test'
+  ...
+# Subtest: command help: init -h works without a repository and leaves disk unchanged
+ok 7 - command help: init -h works without a repository and leaves disk unchanged
+  ---
+  duration_ms: 138.543735
+  type: 'test'
+  ...
+# Subtest: command help: claim -h works without a repository and leaves disk unchanged
+ok 8 - command help: claim -h works without a repository and leaves disk unchanged
+  ---
+  duration_ms: 145.03609
+  type: 'test'
+  ...
+# Subtest: command help: arm -h works without a repository and leaves disk unchanged
+ok 9 - command help: arm -h works without a repository and leaves disk unchanged
+  ---
+  duration_ms: 135.535597
+  type: 'test'
+  ...
+# Subtest: command help: disarm -h works without a repository and leaves disk unchanged
+ok 10 - command help: disarm -h works without a repository and leaves disk unchanged
+  ---
+  duration_ms: 134.805895
+  type: 'test'
+  ...
+# Subtest: 1) `init --config` writes a self-consistent config that `config check` then accepts
+ok 11 - 1) `init --config` writes a self-consistent config that `config check` then accepts
+  ---
+  duration_ms: 328.576033
+  type: 'test'
+  ...
+# Subtest: 2) `init --config` is no-clobber: a SECOND run exits 1 and leaves the file byte-identical
+ok 12 - 2) `init --config` is no-clobber: a SECOND run exits 1 and leaves the file byte-identical
+  ---
+  duration_ms: 285.609927
+  type: 'test'
+  ...
+# Subtest: 3) `init --scaffold` execs scaffold-roadmap.sh — schema.ts + roadmap/phases/ appear
+ok 13 - 3) `init --scaffold` execs scaffold-roadmap.sh — schema.ts + roadmap/phases/ appear
+  ---
+  duration_ms: 164.952393
+  type: 'test'
+  ...
+# Subtest: 4) init --scaffold leaves roadmap/arcs opt-in and empty — the template stays plugin-side reference material
+ok 14 - 4) init --scaffold leaves roadmap/arcs opt-in and empty — the template stays plugin-side reference material
+  ---
+  duration_ms: 183.341282
+  type: 'test'
+  ...
+# Subtest: 5) a SECOND init --scaffold is idempotent and never claims the example arc was created
+ok 15 - 5) a SECOND init --scaffold is idempotent and never claims the example arc was created
+  ---
+  duration_ms: 340.00337
+  type: 'test'
+  ...
+# Subtest: 6) default `init` scaffolds the schema at roadmap/lib/schema.ts — the root-relative seam, not a toplevel lib/
+ok 16 - 6) default `init` scaffolds the schema at roadmap/lib/schema.ts — the root-relative seam, not a toplevel lib/
+  ---
+  duration_ms: 307.944401
+  type: 'test'
+  ...
+# Subtest: 7) `init --root docs/roadmap` lands the WHOLE consumer under docs/roadmap and nothing at roadmap/ or lib/
+ok 17 - 7) `init --root docs/roadmap` lands the WHOLE consumer under docs/roadmap and nothing at roadmap/ or lib/
+  ---
+  duration_ms: 338.842343
+  type: 'test'
+  ...
+# Subtest: 7b) `init --config --root` writes directly into the selected root before it is discoverable
+ok 18 - 7b) `init --config --root` writes directly into the selected root before it is discoverable
+  ---
+  duration_ms: 183.9284
+  type: 'test'
+  ...
+# Subtest: 8) a phase file under `--root docs/roadmap` validates through the tsx bridge with NO tsconfig alias
+ok 19 - 8) a phase file under `--root docs/roadmap` validates through the tsx bridge with NO tsconfig alias
+  ---
+  duration_ms: 3574.233912
+  type: 'test'
+  ...
+# Subtest: 9) …and in that SAME repo a phase importing `@/lib/roadmap/schema` does NOT validate — the alias is what we removed the dependency on
+ok 20 - 9) …and in that SAME repo a phase importing `@/lib/roadmap/schema` does NOT validate — the alias is what we removed the dependency on
+  ---
+  duration_ms: 1694.108698
+  type: 'test'
+  ...
+# Subtest: 10) the LEGACY lib/roadmap/schema.ts seam still validates a phase file — every existing consumer is that repo
+ok 21 - 10) the LEGACY lib/roadmap/schema.ts seam still validates a phase file — every existing consumer is that repo
+  ---
+  duration_ms: 1806.393906
+  type: 'test'
+  ...
+# Subtest: 11) scaffolding `--root docs/roadmap` into a repo that ALREADY carries a marked roadmap/ exits 1, names both, and creates nothing
+ok 22 - 11) scaffolding `--root docs/roadmap` into a repo that ALREADY carries a marked roadmap/ exits 1, names both, and creates nothing
+  ---
+  duration_ms: 216.630541
+  type: 'test'
+  ...
+# Subtest: 12) no template imports the `@/lib/roadmap/schema` alias — that string is what breaks a repo without one
+ok 23 - 12) no template imports the `@/lib/roadmap/schema` alias — that string is what breaks a repo without one
+  ---
+  duration_ms: 1.037749
+  type: 'test'
+  ...
+# Subtest: 13) the scaffolded registry discovers phases under the DISCOVERED root with no argument and no env
+ok 24 - 13) the scaffolded registry discovers phases under the DISCOVERED root with no argument and no env
+  ---
+  duration_ms: 1758.90653
+  type: 'test'
+  ...
+# Subtest: scaffold evergreen roadmap: roadmap receives canonical config-authoritative workflow
+ok 25 - scaffold evergreen roadmap: roadmap receives canonical config-authoritative workflow
+  ---
+  duration_ms: 177.40877
+  type: 'test'
+  ...
+# Subtest: scaffold evergreen roadmap: docs/roadmap receives canonical config-authoritative workflow
+ok 26 - scaffold evergreen roadmap: docs/roadmap receives canonical config-authoritative workflow
+  ---
+  duration_ms: 191.627232
+  type: 'test'
+  ...
+# Subtest: scaffold evergreen roadmap: stale instruction mutations cannot pass the published guidance contract
+ok 27 - scaffold evergreen roadmap: stale instruction mutations cannot pass the published guidance contract
+  ---
+  duration_ms: 190.246347
+  type: 'test'
+  ...
+# Subtest: scaffold helper recovery: fresh consumers omit the plugin-owned metrics collector
+ok 28 - scaffold helper recovery: fresh consumers omit the plugin-owned metrics collector
+  ---
+  duration_ms: 183.922183
+  type: 'test'
+  ...
+# Subtest: scaffold helper recovery: copied changelog renderer gives portable actionable missing-input error
+ok 29 - scaffold helper recovery: copied changelog renderer gives portable actionable missing-input error
+  ---
+  duration_ms: 1367.815998
+  type: 'test'
+  ...
+# Subtest: scaffold helper recovery: copied changelog renderer defaults to deterministic CHANGELOG.md without synthetic separators
+ok 30 - scaffold helper recovery: copied changelog renderer defaults to deterministic CHANGELOG.md without synthetic separators
+  ---
+  duration_ms: 2612.822186
+  type: 'test'
+  ...
+# Subtest: scaffold helper recovery: migration audit never asks consumers to copy the retired metrics collector
+ok 31 - scaffold helper recovery: migration audit never asks consumers to copy the retired metrics collector
+  ---
+  duration_ms: 1309.16828
+  type: 'test'
+  ...
+# Subtest: missing-home remedy has one owner and every STOP/infer site points to it exactly once
+ok 32 - missing-home remedy has one owner and every STOP/infer site points to it exactly once
+  ---
+  duration_ms: 3.098781
+  type: 'test'
+  ...
+# Subtest: root discovery finds docs/roadmap and ROADMAP_ROOT overrides candidates
+ok 33 - root discovery finds docs/roadmap and ROADMAP_ROOT overrides candidates
+  ---
+  duration_ms: 5122.903808
+  type: 'test'
+  ...
+# Subtest: timestamps: the window opens at the in-progress ANCHOR, not at the first matching commit
+ok 34 - timestamps: the window opens at the in-progress ANCHOR, not at the first matching commit
+  ---
+  duration_ms: 1516.325133
+  type: 'test'
+  ...
+# Subtest: timestamps: no in-progress anchor ⇒ BOTH bounds absent (excluded, never approximated)
+ok 35 - timestamps: no in-progress anchor ⇒ BOTH bounds absent (excluded, never approximated)
+  ---
+  duration_ms: 1343.06891
+  type: 'test'
+  ...
+# Subtest: timestamps: a release MERGE naming the phase in its BODY never enters the window
+ok 36 - timestamps: a release MERGE naming the phase in its BODY never enters the window
+  ---
+  duration_ms: 1275.040341
+  type: 'test'
+  ...
+# Subtest: the time axis lands in METRICS, not in the executionResult that follows a one-line block
+ok 37 - the time axis lands in METRICS, not in the executionResult that follows a one-line block
+  ---
+  duration_ms: 1370.158384
+  type: 'test'
+  ...
+# Subtest: the time-axis merge is ADDITIVE and idempotent over an existing metrics block
+ok 38 - the time-axis merge is ADDITIVE and idempotent over an existing metrics block
+  ---
+  duration_ms: 2559.62007
+  type: 'test'
+  ...
+# Subtest: haltCount is ABSENT (not 0) in live mode with no beacon and no executionResult
+ok 39 - haltCount is ABSENT (not 0) in live mode with no beacon and no executionResult
+  ---
+  duration_ms: 1359.060077
+  type: 'test'
+  ...
+# Subtest: haltCount counts beacon resume events once a beacon exists (zero stays absent without one)
+ok 40 - haltCount counts beacon resume events once a beacon exists (zero stays absent without one)
+  ---
+  duration_ms: 1341.555593
+  type: 'test'
+  ...
+# Subtest: emitted metrics parse clean against PhaseMetricsShape, incl. offset commit dates normalized to Z
+ok 41 - emitted metrics parse clean against PhaseMetricsShape, incl. offset commit dates normalized to Z
+  ---
+  duration_ms: 2807.977944
+  type: 'test'
+  ...
+# Subtest: collector live authority: config bindings drive execution despite CLAUDE and lockfile changes
+ok 42 - collector live authority: config bindings drive execution despite CLAUDE and lockfile changes
+  ---
+  duration_ms: 2964.099578
+  type: 'test'
+  ...
+# Subtest: collector live authority: missing config refuses before executing gates or rewriting phase
+ok 43 - collector live authority: missing config refuses before executing gates or rewriting phase
+  ---
+  duration_ms: 1264.855317
+  type: 'test'
+  ...
+# Subtest: collector live authority: malformed config refuses before executing gates or rewriting phase
+ok 44 - collector live authority: malformed config refuses before executing gates or rewriting phase
+  ---
+  duration_ms: 1399.721748
+  type: 'test'
+  ...
+# Subtest: collector live authority: invalid config refuses before executing gates or rewriting phase
+ok 45 - collector live authority: invalid config refuses before executing gates or rewriting phase
+  ---
+  duration_ms: 1334.821798
+  type: 'test'
+  ...
+# Subtest: collector live authority: none is a declared absence with honest notes and is never a shell command
+ok 46 - collector live authority: none is a declared absence with honest notes and is never a shell command
+  ---
+  duration_ms: 1524.808603
+  type: 'test'
+  ...
+# Subtest: four native-host arms are current, isolated, approval-ordered, bounded, and idempotent
+ok 47 - four native-host arms are current, isolated, approval-ordered, bounded, and idempotent
+  ---
+  duration_ms: 678.2446
+  type: 'test'
+  ...
+# Subtest: the report is a receipt projection and cannot narrate a failed arm green
+ok 48 - the report is a receipt projection and cannot narrate a failed arm green
+  ---
+  duration_ms: 4.762065
+  type: 'test'
+  ...
+# Subtest: observer validator accepts observed read-only preflight without classifying arbitrary shell as safe
+ok 49 - observer validator accepts observed read-only preflight without classifying arbitrary shell as safe
+  ---
+  duration_ms: 0.650851
+  type: 'test'
+  ...
+# Subtest: observer validator rejects a reverted preapproval write and rerun write including .git
+ok 50 - observer validator rejects a reverted preapproval write and rerun write including .git
+  ---
+  duration_ms: 1.631923
+  type: 'test'
+  ...
+# Subtest: observer validator fails closed on overflow, missing events, failed process and changed snapshot
+ok 51 - observer validator fails closed on overflow, missing events, failed process and changed snapshot
+  ---
+  duration_ms: 2.293896
+  type: 'test'
+  ...
+# Subtest: native session parser recognizes real Claude user strings but rejects meta and assistant approval
+ok 52 - native session parser recognizes real Claude user strings but rejects meta and assistant approval
+  ---
+  duration_ms: 0.527276
+  type: 'test'
+  ...
+# Subtest: native execution slice requires approval before calls and preserves the prior session prefix
+ok 53 - native execution slice requires approval before calls and preserves the prior session prefix
+  ---
+  duration_ms: 0.626064
+  type: 'test'
+  ...
+# Subtest: Codex stdout parser binds numeric completion to its started command and rejects narration
+ok 54 - Codex stdout parser binds numeric completion to its started command and rejects narration
+  ---
+  duration_ms: 0.483744
+  type: 'test'
+  ...
+# Subtest: Codex approval is read from native session messages before custom exec calls
+ok 55 - Codex approval is read from native session messages before custom exec calls
+  ---
+  duration_ms: 0.764098
+  type: 'test'
+  ...
+# Subtest: Claude native Bash success uses structured tool result and refuses interrupted execution
+ok 56 - Claude native Bash success uses structured tool result and refuses interrupted execution
+  ---
+  duration_ms: 0.72379
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects changed source, including dirty and untracked files
+ok 57 - source snapshot rejects changed source, including dirty and untracked files
+  ---
+  duration_ms: 4.580719
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects added source, including dirty and untracked files
+ok 58 - source snapshot rejects added source, including dirty and untracked files
+  ---
+  duration_ms: 2.417262
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects renamed source, including dirty and untracked files
+ok 59 - source snapshot rejects renamed source, including dirty and untracked files
+  ---
+  duration_ms: 2.133631
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects deleted source, including dirty and untracked files
+ok 60 - source snapshot rejects deleted source, including dirty and untracked files
+  ---
+  duration_ms: 2.009674
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects executable source, including dirty and untracked files
+ok 61 - source snapshot rejects executable source, including dirty and untracked files
+  ---
+  duration_ms: 1.966611
+  type: 'test'
+  ...
+# Subtest: source snapshot excludes only designated evidence and never an evidence-named source decoy
+ok 62 - source snapshot excludes only designated evidence and never an evidence-named source decoy
+  ---
+  duration_ms: 3.159277
+  type: 'test'
+  ...
+# Subtest: proposal paths authorize directory descendants and necessary parent directories, never siblings or traversal
+ok 63 - proposal paths authorize directory descendants and necessary parent directories, never siblings or traversal
+  ---
+  duration_ms: 0.548146
+  type: 'test'
+  ...
+# Subtest: proposal allowlist rejects self-reported events, duplicate paths and broad or unsafe artifact roots
+ok 64 - proposal allowlist rejects self-reported events, duplicate paths and broad or unsafe artifact roots
+  ---
+  duration_ms: 1.249113
+  type: 'test'
+  ...
+# Subtest: native authority rejects expanded filesystem/network and disabled review
+ok 65 - native authority rejects expanded filesystem/network and disabled review
+  ---
+  duration_ms: 1.206762
+  type: 'test'
+  ...
+# Subtest: native audit parsing retains real gaps and ignores receipt-like narration
+ok 66 - native audit parsing retains real gaps and ignores receipt-like narration
+  ---
+  duration_ms: 0.19389
+  type: 'test'
+  ...
+# Subtest: calibration: source and native evidence share the same canonical byte encoding
+ok 67 - calibration: source and native evidence share the same canonical byte encoding
+  ---
+  duration_ms: 0.131591
+  type: 'test'
+  ...
+# Subtest: calibration: Claude string error results retain the native nonzero exit, never fabricated success
+ok 68 - calibration: Claude string error results retain the native nonzero exit, never fabricated success
+  ---
+  duration_ms: 0.522997
+  type: 'test'
+  ...
+# Subtest: calibration: transparent Bash wrappers preserve literal argv and explicit cwd
+ok 69 - calibration: transparent Bash wrappers preserve literal argv and explicit cwd
+  ---
+  duration_ms: 0.593231
+  type: 'test'
+  ...
+# Subtest: calibration: session identity and observed executable/version cannot be replaced by receipt claims
+ok 70 - calibration: session identity and observed executable/version cannot be replaced by receipt claims
+  ---
+  duration_ms: 0.945744
+  type: 'test'
+  ...
+# Subtest: calibration: malformed or unrestricted native filesystem profiles fail closed
+ok 71 - calibration: malformed or unrestricted native filesystem profiles fail closed
+  ---
+  duration_ms: 0.776872
+  type: 'test'
+  ...
+# Subtest: calibration: all-none gates still need actual successful catalog and config checks
+ok 72 - calibration: all-none gates still need actual successful catalog and config checks
+  ---
+  duration_ms: 0.469095
+  type: 'test'
+  ...
+# Subtest: mixed fences: complete native proposal survives a preceding shell fence and heading
+ok 73 - mixed fences: complete native proposal survives a preceding shell fence and heading
+  ---
+  duration_ms: 0.451652
+  type: 'test'
+  ...
+# Subtest: mixed fences: shell examples, untagged blocks and nested fake JSON are not native proposal objects
+ok 74 - mixed fences: shell examples, untagged blocks and nested fake JSON are not native proposal objects
+  ---
+  duration_ms: 0.280695
+  type: 'test'
+  ...
+# Subtest: catalog selection: empty library-cli binds prospective identity without needing a package
+ok 75 - catalog selection: empty library-cli binds prospective identity without needing a package
+  ---
+  duration_ms: 1.028873
+  type: 'test'
+  ...
+# Subtest: catalog selection: Nx uses the emitted catalog even when wrapper package identity differs
+ok 76 - catalog selection: Nx uses the emitted catalog even when wrapper package identity differs
+  ---
+  duration_ms: 116.358825
+  type: 'test'
+  ...
+# Subtest: catalog proof: selected command is proposed once and succeeds; alternate modes, duplicates and source drift fail
+ok 77 - catalog proof: selected command is proposed once and succeeds; alternate modes, duplicates and source drift fail
+  ---
+  duration_ms: 5.477029
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: portable build/types/unit and emit tail survive the bound wrapper unchanged
+ok 78 - capbuild envelope: portable build/types/unit and emit tail survive the bound wrapper unchanged
+  ---
+  duration_ms: 2.038679
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: wrong cwd, binary, digest, defaults and broadened host metadata fail closed
+ok 79 - capbuild envelope: wrong cwd, binary, digest, defaults and broadened host metadata fail closed
+  ---
+  duration_ms: 2.452338
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: only literal approved env flags and exact ordered configured argv are accepted
+ok 80 - capbuild envelope: only literal approved env flags and exact ordered configured argv are accepted
+  ---
+  duration_ms: 2.683128
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: per-slot metadata matches real native numeric success, never narrated or failed inner status
+ok 81 - capbuild envelope: per-slot metadata matches real native numeric success, never narrated or failed inner status
+  ---
+  duration_ms: 1.695174
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: independent observer must attest all prebound override clearing
+ok 82 - capbuild envelope: independent observer must attest all prebound override clearing
+  ---
+  duration_ms: 2.494979
+  type: 'test'
+  ...
+# Subtest: approval binding: complete exact operational plan and gate bindings validate
+ok 83 - approval binding: complete exact operational plan and gate bindings validate
+  ---
+  duration_ms: 0.448787
+  type: 'test'
+  ...
+# Subtest: approval binding: generated gate changes, extra slots and absent approval fail closed
+ok 84 - approval binding: generated gate changes, extra slots and absent approval fail closed
+  ---
+  duration_ms: 1.058861
+  type: 'test'
+  ...
+# Subtest: approval binding: unapproved install, changed heredoc, wrong cwd, missing, repeated or failed operation rejected
+ok 85 - approval binding: unapproved install, changed heredoc, wrong cwd, missing, repeated or failed operation rejected
+  ---
+  duration_ms: 1.246458
+  type: 'test'
+  ...
+# Subtest: approval binding: native direct file modifications and unobserved calls cannot hide behind approved shell
+ok 86 - approval binding: native direct file modifications and unobserved calls cannot hide behind approved shell
+  ---
+  duration_ms: 1.133793
+  type: 'test'
+  ...
+# Subtest: approval binding: Codex accepts transparent JSON exec envelopes, rejects hidden tools and arbitrary code
+ok 87 - approval binding: Codex accepts transparent JSON exec envelopes, rejects hidden tools and arbitrary code
+  ---
+  duration_ms: 1.273138
+  type: 'test'
+  ...
+# Subtest: approval binding: capbuild is an explicit approved operational envelope, not implicit permission
+ok 88 - approval binding: capbuild is an explicit approved operational envelope, not implicit permission
+  ---
+  duration_ms: 0.53482
+  type: 'test'
+  ...
+# Subtest: approval binding: native namespaced JSON envelopes and empty polling retain exact observed operations
+ok 89 - approval binding: native namespaced JSON envelopes and empty polling retain exact observed operations
+  ---
+  duration_ms: 0.615264
+  type: 'test'
+  ...
+# Subtest: six gate tables are executable bindings or explicit absences; placeholder mutation fails
+ok 90 - six gate tables are executable bindings or explicit absences; placeholder mutation fails
+  ---
+  duration_ms: 4.683395
+  type: 'test'
+  ...
+# Subtest: oracle independently accounts for every promised missing home; deletion fails
+ok 91 - oracle independently accounts for every promised missing home; deletion fails
+  ---
+  duration_ms: 4.68613
+  type: 'test'
+  ...
+# Subtest: design absence is conditional on Blade handoff
+ok 92 - design absence is conditional on Blade handoff
+  ---
+  duration_ms: 1.084459
+  type: 'test'
+  ...
+# Subtest: canonical root discovery preserves migrated and overridden homes and refuses ambiguity
+ok 93 - canonical root discovery preserves migrated and overridden homes and refuses ambiguity
+  ---
+  duration_ms: 6.094566
+  type: 'test'
+  ...
+1..93
+# tests 93
+# suites 0
+# pass 93
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 27417.88046

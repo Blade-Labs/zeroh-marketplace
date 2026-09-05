@@ -1,0 +1,24 @@
+{
+  "scratch": "/tmp/greenfield-34-final-brownfield-codex-bxgpv7ys",
+  "evidence": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3/brownfield-codex/execution",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+    "exec",
+    "--approve-for-me",
+    "resume",
+    "--json",
+    "01a0709b-a444-78e0-a82a-2f93574d5f59",
+    "APPROVE GREENFIELD PLAN"
+  ],
+  "stage": "execution",
+  "catalogCheck": {
+    "mode": "catalog",
+    "source": "emitted/repo-catalog.json",
+    "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+    "sourceSha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  },
+  "timeout": 1800,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "aad0ad8abb90c450c032597c0bca83565d24fdce",
+  "sourceSnapshotSha256": "ead1de4e8f82905655071a9b4184c6c41b74f884181b03ebad6394e82e9d8b68"
+}

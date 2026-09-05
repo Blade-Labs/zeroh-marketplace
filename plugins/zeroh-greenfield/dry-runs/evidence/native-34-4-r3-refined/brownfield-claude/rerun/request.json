@@ -1,0 +1,29 @@
+{
+  "scratch": "/tmp/greenfield-34-final-brownfield-claude-e_h8yw8c",
+  "evidence": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/dry-runs/evidence/native-34-4-r3-refined/brownfield-claude/rerun",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+    "-p",
+    "--resume",
+    "9d4c9539-e821-49a7-b306-f1fdaff6320d",
+    "--verbose",
+    "--output-format",
+    "stream-json",
+    "--plugin-dir",
+    "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield",
+    "--plugin-dir",
+    "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap",
+    "Run the separate second-invocation brownfield audit now against the completed fixture. Read the actual generated tree and required contracts; do not assume prior success. No write, generator, init, install, commit, or package-manager/cache mutation is authorized in this invocation. Retain GIT_OPTIONAL_LOCKS=0. Verify all required homes, generated helper correctness, present-home preservation, pointers, actual gate bindings, catalog currency, and harness ownership. If gaps remain report them honestly; do not repair them. Emit exactly one JSON object {\"type\":\"audit-result\",\"proposals\":[],\"writes\":[],\"gaps\":[]} only if no remaining gaps and no proposed or actual writes; otherwise put the actual gaps/proposals in those arrays. Do not claim the outer observer result; the driver independently compares snapshots and transient events."
+  ],
+  "stage": "rerun",
+  "catalogCheck": {
+    "mode": "catalog",
+    "source": "emitted/repo-catalog.json",
+    "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+    "sourceSha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  },
+  "timeout": 1200,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "aad0ad8abb90c450c032597c0bca83565d24fdce",
+  "sourceSnapshotSha256": "ead1de4e8f82905655071a9b4184c6c41b74f884181b03ebad6394e82e9d8b68"
+}

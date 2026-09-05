@@ -1,0 +1,10 @@
+{
+  "package": "create-vite",
+  "version": "8.3.0",
+  "publicMetadata": "https://registry.npmjs.org/create-vite/8.3.0",
+  "publicTarball": "https://registry.npmjs.org/create-vite/-/create-vite-8.3.0.tgz",
+  "registryShasum": "4addb78fe6f996a8f8c12a8e9bda1bff37e18baf",
+  "exactPublicFileCount": 194,
+  "privateFiles": 0,
+  "result": "all local bytes exactly match publicly published npm archive"
+}

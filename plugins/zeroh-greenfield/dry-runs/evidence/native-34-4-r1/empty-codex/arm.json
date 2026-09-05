@@ -1,0 +1,8 @@
+{
+  "kind": "empty",
+  "host": "codex",
+  "scratchRoot": "/tmp/greenfield-34-final-empty-codex-lqrw8fv4",
+  "scratchIdentity": "1fc14f2c-0d56-4eb5-9bc5-da25796f6c31",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+  "version": "codex-cli 0.153.4"
+}

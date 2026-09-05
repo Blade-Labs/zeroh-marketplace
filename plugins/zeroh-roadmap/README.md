@@ -108,7 +108,6 @@ untouched — it stays recognized. Full rules:
 | `<root>/ROADMAP.md` | Gate protocol + git strategy |
 | `reviews/releases/` | Release review report JSONs |
 | `scripts/pre-review.sh` | Automated checks (catches 40% of findings before agents) |
-| `scripts/collect-phase-metrics.ts` | Git stats + gate results collector |
 | `scripts/build-dashboard.sh` | Self-contained HTML review dashboard |
 | `scripts/generate-changelog-md.ts` | Changelog from phase data |
 

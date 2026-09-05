@@ -2,7 +2,6 @@
   "name": "zeroh-greenfield",
   "version": "1.0.0",
   "description": "Approval-gated project initialization and brownfield standards gap filling for new and existing repositories.",
-  "category": "development",
   "author": {
     "name": "Blade Labs",
     "url": "https://blade-labs.com"

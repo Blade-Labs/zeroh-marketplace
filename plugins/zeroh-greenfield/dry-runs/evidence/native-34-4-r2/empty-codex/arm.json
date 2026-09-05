@@ -1,0 +1,14 @@
+{
+  "kind": "empty",
+  "host": "codex",
+  "scratchRoot": "/tmp/greenfield-34-final-empty-codex-lh3godh9",
+  "scratchIdentity": "7075b69b-eab9-495e-a3a8-809f337ee897",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+  "version": "codex-cli 0.153.4",
+  "catalogCheck": {
+    "mode": "project-root",
+    "source": ".",
+    "projectName": "greenfield-proof",
+    "command": "node scripts/check-readme-catalog.mjs --project-root ."
+  }
+}
