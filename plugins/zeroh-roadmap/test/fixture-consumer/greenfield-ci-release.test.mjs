@@ -249,7 +249,7 @@ function preparedBaselineWorkflow(baseline,previous,baselineApproval,{priorAbsen
     git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--quiet','--allow-empty','-m','proposed baseline')
     const stages=[]
     for(const stage of ['plan','run','fanin']) {
-      const prepared=spawnSync(process.execPath,['scripts/ci-shard-plan.mjs','prepare',stage],{cwd:box.root,encoding:'utf8',env:{...process.env,BASE_SHA:firstParent?'':baseOverride??baseSha,SHARD_INDEX:'0',GITHUB_RUN_ID:'baseline-fixture'}})
+      const prepared=spawnSync(process.execPath,['scripts/ci-shard-plan.mjs','prepare',stage],{cwd:box.root,encoding:'utf8',env:{...process.env,GITHUB_EVENT_NAME:'',BASE_SHA:firstParent?'':baseOverride??baseSha,SHARD_INDEX:'0',GITHUB_RUN_ID:'baseline-fixture'}})
       stages.push({stage:`prepare ${stage}`,status:prepared.status,stderr:prepared.stderr})
       if(prepared.status!==0)return stages
       const request=JSON.parse(readFileSync(join(box.root,`.ci/${stage}-request.json`),'utf8'))
