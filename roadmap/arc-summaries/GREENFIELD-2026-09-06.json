@@ -1,0 +1,12 @@
+{
+  "arcId": "GREENFIELD",
+  "outcome": "shipped",
+  "compromiseDisposition": [],
+  "gateSignals": {
+    "arcSweepClean": false,
+    "validateArcPassed": false,
+    "fullSuiteGreen": false
+  },
+  "receiptRef": "none",
+  "reason": "arc landed EXTERNALLY (arc tip already an ancestor of baseRef — a direct push outside the engine); arc land completed the bookkeeping only, no local suite ran; explicit owner conditional release authorization. Complete78-file regression coverage, schema and independent release reviews are recorded in roadmap/arc-evals/release-evidence/0.40.0/release-completion.json. No final-source validate-arc artifact or single full green gate is claimed. Debt census is unavailable; phase34 remains formally open; original journal and worktree retained."
+}

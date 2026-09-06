@@ -246,5 +246,5 @@ export default defineArc({
     "2026-09-06T08:06:21.266079+00:00 owner accepted the two closing-review evidence gaps and instructed continuation. Six criteria MET; two accepted exceptions, not proven. GREENFIELD-only bounded closure amendment approved; product source unchanged.",
     '2026-09-03 (planning, phase-31 review QUESTION): six-archetypes signal/bar re-homed the dated observed results from the manifests to VERIFY-RECORD-2026-09.md — manifests stay timeless per documentation-rules.md; the honesty rail and execution prompt §Design item 3 were amended in the same commit.',
   ],
-  status: 'planning',
+  status: 'merged',
 })
