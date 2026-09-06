@@ -33,7 +33,7 @@ import {
   EXECUTABLE_EXTS,
   isTestFile,
 } from '../lib/ladder.mjs'
-import { resolveSlot, resolveScopedOrFallback, resolveAffectedOrFallback, createScopeManifest, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings, probeScopedSlot } from '../lib/slots.mjs'
+import { resolveSlot, resolveScopedOrFallback, resolveAffectedOrFallback, createScopeManifest, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings, HISTORY_COMMENT_SUFFIXES, probeScopedSlot } from '../lib/slots.mjs'
 import {
   writeReport,
   latestReport,
@@ -44,6 +44,21 @@ import {
   GateReportUnreadableError,
 } from '../lib/gate-report.mjs'
 import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
+
+export function scanHistoryComments(toplevel, baseSha, roadmapRel, foreignFiles = [], exec = execFileSync) {
+  const options = { encoding: 'utf8', timeout: 30_000, maxBuffer: 64 * 1024 * 1024 }
+  // Filter before Git emits patch bodies; ignored logs/receipts can dwarf source.
+  const paths = HISTORY_COMMENT_SUFFIXES.map(suffix => `:(glob)**/*.${suffix}`)
+  // Keep the old side of cross-suffix renames: filtering it out would turn an
+  // unchanged rename into an apparent addition of all its existing comments.
+  const renames = exec('git', ['-C', toplevel, 'diff', '--name-status', '-z', '--diff-filter=RC', `${baseSha}..HEAD`], options).split('\0')
+  for (let i = 0; i + 2 < renames.length; i += 3) {
+    if (HISTORY_COMMENT_SUFFIXES.some(suffix => renames[i + 2].endsWith(`.${suffix}`))) paths.push(`:(literal)${renames[i + 1]}`)
+  }
+  const diffText = exec('git', ['-C', toplevel, 'diff', `${baseSha}..HEAD`, '--', ...paths], options)
+  const foreign = new Set(foreignFiles)
+  return historyCommentFindings(diffText, roadmapRel).filter((finding) => !foreign.has(finding.file))
+}
 
 /**
  * Leave the per-phase eval record beside the gate's own artifacts — the measurement pipe's
@@ -984,13 +999,7 @@ export async function runGate(phaseNum, opts) {
     let findings = []
     let scanErr = null
     try {
-      const diffText = execFileSync('git', ['-C', toplevel, 'diff', `${plan.baseSha}..HEAD`], {
-        encoding: 'utf8',
-        timeout: 30_000,
-        maxBuffer: 64 * 1024 * 1024,
-      })
-      const foreign = new Set(plan.foreignCommitsInRange ?? [])
-      findings = historyCommentFindings(diffText, roadmapRootRel(toplevel)).filter((f) => !foreign.has(f.file))
+      findings = scanHistoryComments(toplevel, plan.baseSha, roadmapRootRel(toplevel), plan.foreignCommitsInRange)
     } catch (e) {
       scanErr = e.message
     }

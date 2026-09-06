@@ -257,6 +257,9 @@ export function resolveConditionalSlots(cfg, diffPaths) {
   return out
 }
 
+// Shared by Git diff selection and the comment scanner; do not exempt directories.
+export const HISTORY_COMMENT_SUFFIXES = Object.freeze(['js', 'jsx', 'ts', 'tsx', 'mjs', 'mjsx', 'mts', 'mtsx', 'cjs', 'cjsx', 'cts', 'ctsx', 'sh', 'py', 'go', 'rs', 'rb', 'yml', 'yaml'])
+
 /** Comment-line discriminator for an ADDED diff line (the text after the leading '+'). */
 const COMMENT_LINE = /^\s*(\/\/|\*|#|<!--|\/\*)/
 
@@ -294,7 +297,7 @@ export function historyCommentFindings(diffText, roadmapRel = ROOT_CANDIDATES[0]
       if (exempt || file == null) continue
       // Prose files have no code comments: a Markdown heading (#) or bullet (*) carrying a date or
       // a version is CONTENT, not history narration (RELEASE_NOTES.md is made of them).
-      if (!LINTABLE_EXT.test(file) && !/\.(sh|py|go|rs|rb|ya?ml)$/.test(file)) continue
+      if (!HISTORY_COMMENT_SUFFIXES.some(suffix => file.endsWith(`.${suffix}`))) continue
       const text = raw.slice(1)
       if (!COMMENT_LINE.test(text)) continue
       const m = text.match(HISTORY_COMMENT_RE)

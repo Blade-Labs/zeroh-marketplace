@@ -16,7 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, exist
 import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { untestedGateFixFindings, deviantGrammarFindings, annotateScopedProbeWarnings } from './gate.mjs'
+import { scanHistoryComments, untestedGateFixFindings, deviantGrammarFindings, annotateScopedProbeWarnings } from './gate.mjs'
 import { phaseOwnPatterns } from '../lib/gitscan.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -2582,4 +2582,30 @@ test('phaseOwnFiles: the commit-header detector is hash-WIDTH agnostic (sha256 r
     /\[0-9a-f\]\{40,64\}\\t/,
     'the header-row detector must accept both hash widths (40 sha1 / 64 sha256) — cli/commands/gate.mjs phaseOwnFiles',
   )
+})
+
+// Exercise real Git under a small output budget: ignored artifacts must never
+// consume the scanner buffer, while source under an evidence directory still does.
+test('history scan excludes nonscannable artifact payloads before buffering and retains source findings', () => {
+  const repo = makeRepo()
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  const suffixes = ['js', 'jsx', 'ts', 'tsx', 'mjs', 'mjsx', 'mts', 'mtsx', 'cjs', 'cjsx', 'cts', 'ctsx', 'sh', 'py', 'go', 'rs', 'rb', 'yml', 'yaml']
+  const files = Object.fromEntries(suffixes.map(ext => [`evidence/source.${ext}`, '// phase 1234 narration\n']))
+  for (const ext of ['json', 'jsonl', 'log', 'txt', 'md']) files[`evidence/large.${ext}`] = 'x'.repeat(16000) + '\n'
+  files['roadmap/exempt.ts'] = '// phase 1234 narration\n'
+  files['foreign.ts'] = '// phase 1234 narration\n'
+  repo.commit('feat: phase 1234 — scanner fixture', files)
+  const boundedGit = (command, args, options) => execFileSync(command, args, { ...options, maxBuffer: 12000 })
+  const findings = scanHistoryComments(repo.root, base, 'roadmap', ['foreign.ts'], boundedGit)
+  assert.deepEqual(findings.map(f => f.file).sort(), suffixes.map(ext => `evidence/source.${ext}`).sort())
+  assert.ok(findings.every(f => f.line === 1 && f.match === 'phase 1234'))
+})
+
+test('history scan preserves rename detection when a nonscannable file gains a source suffix', () => {
+  const repo = makeRepo()
+  repo.commit('seed existing text', { 'notes.txt': '// phase 1234 existing narration\n' })
+  const base = repo.git('rev-parse', 'HEAD').trim()
+  repo.git('mv', 'notes.txt', 'source.ts')
+  repo.git('commit', '-qm', 'rename only')
+  assert.deepEqual(scanHistoryComments(repo.root, base, 'roadmap'), [], 'a pure rename adds no comment lines')
 })
