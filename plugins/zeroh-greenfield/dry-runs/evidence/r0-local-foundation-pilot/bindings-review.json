@@ -1,0 +1,10 @@
+{
+  "artifact": "65c2e57bb9f2f963903386542a8a408038038c94a2472deaac52ad409871241f.json",
+  "approvedPaths": [
+    "roadmap/roadmap.config.json",
+    "docs/PRD.md",
+    "docs/adr/0001-tech-stack.md"
+  ],
+  "actualTargetGuardsVerified": true,
+  "approved": true
+}

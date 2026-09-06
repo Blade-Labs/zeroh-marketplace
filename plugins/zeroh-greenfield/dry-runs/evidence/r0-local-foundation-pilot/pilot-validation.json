@@ -1,0 +1,267 @@
+{
+  "scope": "One native Codex/Astra local-foundation usability pilot; not four-arm release certification",
+  "passed": true,
+  "sourceSnapshot": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504",
+  "nativeSeconds": 640.280177953653,
+  "changedFiles": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "README.md",
+    "docs/PRD.md",
+    "docs/TEST-STRATEGY.md",
+    "docs/adr/0001-tech-stack.md",
+    "docs/adr/0002-design-system.md",
+    "docs/architecture.md",
+    "docs/ux-canon.md",
+    "package.json",
+    "roadmap/roadmap.config.json",
+    "scripts/check-readme-catalog.mjs",
+    "src/cli.js",
+    "src/index.js",
+    "test/greet.test.js"
+  ],
+  "savedPrograms": 2,
+  "auditCaveat": "One read-only root-lookup syntax typo failed and was corrected; retained, not counted as a passed command",
+  "stages": {
+    "proposal": {
+      "seconds": 334.8929766090587,
+      "consumerEvents": 0,
+      "sourceSnapshot": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504",
+      "usage": [
+        {
+          "input_tokens": 451962,
+          "cached_input_tokens": 405504,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 7797,
+          "reasoning_output_tokens": 853
+        }
+      ],
+      "commands": [
+        {
+          "command": "/bin/bash -lc \"pwd && rg --files -g 'AGENTS.md' -g 'SKILL.md' -g '*contract*' -g '*prepared*' /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap /tmp/greenfield-r0-pilot-px9y6380/project\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/skills/using-zeroh-roadmap/SKILL.md'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'command -v roadmap && roadmap config capabilities --json'",
+          "exit": 1
+        },
+        {
+          "command": "/bin/bash -lc 'cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/brownfield-audit/references/marker-table.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/greenfield-init/references/prd-interview.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/stack-decision/SKILL.md; ls -la /tmp/greenfield-r0-pilot-px9y6380/project; for p in /tmp/AGENTS.md /tmp/greenfield-r0-pilot-px9y6380/AGENTS.md; do if test -f \"$p\"; then cat \"$p\"; fi; done'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/bin/roadmap.mjs config capabilities --json'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/stack-decision/references/matrices.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/greenfield-init/references/design-system.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/greenfield-init/references/standards.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/greenfield-init/references/prepared-program.md'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"git rev-parse --show-toplevel && node --input-type=module -e 'import { roadmapRoot } from \\\"/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/lib/roadmap-root.mjs\\\"; console.log(roadmapRoot(process.cwd()));' && node --version\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/layout.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/documentation-rules.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/codex-tools.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/skills/test-strategy/SKILL.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/scripts/prepared-program.mjs /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/check-readme-catalog.mjs'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/scripts/scaffold-roadmap.sh; rg -n 'designHomes|testConventions|gateCommands|config set' /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/commands/config.mjs; ls -la /tmp/greenfield-r0-pilot-px9y6380/prepared; git status --short\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"rg -n 'init|roadmap.config' /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/commands/init.mjs /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/commands/config.mjs; cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/commands/init.mjs; rg --files /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/greenfield-init/references | rg 'design-gate'; cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/commands/config.mjs\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"node --input-type=module -e 'import fs from \\\"node:fs\\\"; import path from \\\"node:path\\\"; const base=\\\"/tmp/greenfield-r0-pilot-px9y6380/prepared\\\"; const source=fs.readFileSync(base+\\\"/write-foundation.mjs\\\",\\\"utf8\\\"); const files=JSON.parse(source.split(\\\"const files = \\\")[1].split(\\\";\\\\n\\\\nif (process.cwd()\\\")[0]); fs.writeFileSync(base+\\\"/request.json\\\",JSON.stringify({cwd:process.cwd(),script:base+\\\"/write-foundation.mjs\\\",kind:\\\"node\\\",paths:Object.keys(files)},null,2)+\\\"\\\\n\\\",{flag:\\\"wx\\\"}); for(const [name,bytes] of Object.entries(files)){const target=path.join(base,\\\"preview\\\",name);fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,bytes,{flag:\\\"wx\\\"});}'\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/scripts/prepared-program.mjs prepare /tmp/greenfield-r0-pilot-px9y6380/prepared/request.json /tmp/greenfield-r0-pilot-px9y6380/prepared'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/check-readme-catalog.mjs --project-root .'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node --check src/cli.js'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node --test'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"node --input-type=module -e 'import fs from \\\"node:fs\\\"; import {createHash} from \\\"node:crypto\\\"; import path from \\\"node:path\\\"; const p=\\\"/tmp/greenfield-r0-pilot-px9y6380/prepared/c01b656dcc68e1d15e6b0901607799b543c52f1da7f16086b55da84174fe5398.json\\\";const b=fs.readFileSync(p);const a=JSON.parse(b);if(path.basename(p)\"'!==createHash(\"sha256\").update(b).digest(\"hex\")+\".json\")throw Error(\"digest mismatch\");console.log(JSON.stringify({cwd:a.cwd,kind:a.kind,before:a.before},null,2));console.log(a.source);'\"'\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node src/cli.js Ada'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"node --input-type=module -e 'import fs from \\\"node:fs\\\"; const s=JSON.parse(fs.readFileSync(\\\"/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/roadmap.config.schema.json\\\",\\\"utf8\\\")); console.log(JSON.stringify({designHomes:s.properties.designHomes,testConventions:s.properties.testConventions},null,2));'\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'git status --porcelain=v1 --untracked-files=all && ls -la'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node src/cli.js --help'",
+          "exit": 0
+        }
+      ]
+    },
+    "execution": {
+      "seconds": 190.1036203717813,
+      "consumerEvents": 20,
+      "sourceSnapshot": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504",
+      "usage": [
+        {
+          "input_tokens": 503224,
+          "cached_input_tokens": 492544,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3960,
+          "reasoning_output_tokens": 247
+        }
+      ],
+      "commands": [
+        {
+          "command": "/bin/bash -lc 'node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/bin/roadmap.mjs init --config'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/scripts/prepared-program.mjs run /tmp/greenfield-r0-pilot-px9y6380/prepared/c01b656dcc68e1d15e6b0901607799b543c52f1da7f16086b55da84174fe5398.json --approved'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'mkdir -p scripts'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'cp -n /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/check-readme-catalog.mjs scripts/check-readme-catalog.mjs'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'cat roadmap/roadmap.config.json docs/PRD.md docs/adr/0001-tech-stack.md'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node scripts/check-readme-catalog.mjs --project-root .'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'cmp scripts/check-readme-catalog.mjs /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/check-readme-catalog.mjs'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node --test'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node src/cli.js --help'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node src/cli.js Ada'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '35,80p' /tmp/greenfield-r0-pilot-px9y6380/prepared/write-bindings-approval.mjs\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"python3 - <<'PY'\nfrom pathlib import Path\nimport json\nbase = Path('/tmp/greenfield-r0-pilot-px9y6380/prepared')\np = base / 'write-bindings-approval.mjs'\ns = p.read_text()\ns = s.replace(chr(92) * 2 + '\"'`'\"', '')\ns = s.replace(\\\".replaceAll('', '\"'`'\"')\\\", '')\np.write_text(s)\nrequest = {'cwd': '/tmp/greenfield-r0-pilot-px9y6380/project', 'script': str(p), 'kind': 'node', 'paths': ['roadmap/roadmap.config.json', 'docs/PRD.md', 'docs/adr/0001-tech-stack.md']}\nwith (base / 'bindings-request.json').open('x') as f:\n    f.write(json.dumps(request, indent=2) + '\\\\n')\nPY\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/scripts/prepared-program.mjs prepare /tmp/greenfield-r0-pilot-px9y6380/prepared/bindings-request.json /tmp/greenfield-r0-pilot-px9y6380/prepared'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"node --input-type=module -e 'import fs from \\\"node:fs\\\"; import {createHash} from \\\"node:crypto\\\";import path from \\\"node:path\\\";const p=\\\"/tmp/greenfield-r0-pilot-px9y6380/prepared/65c2e57bb9f2f963903386542a8a408038038c94a2472deaac52ad409871241f.json\\\";const b=fs.readFileSync(p);const a=JSON.parse(b);const hash=b=>createHash(\\\"sha256\\\").update(b).digest(\\\"hex\\\");if(path.basename(p)\"'!==hash(b)+\".json\")throw Error(\"Artifact digest mismatch\");for(const [p,s]of Object.entries(a.before)){if(hash(fs.readFileSync(p))!==s.sha256||(fs.statSync(p).mode&511)!==s.mode)throw Error(\"Precondition changed: \"+p);}console.log(JSON.stringify(a,null,2));'\"'\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'git status --short --untracked-files=all'",
+          "exit": 0
+        }
+      ]
+    },
+    "bindings": {
+      "seconds": 29.375060956925154,
+      "consumerEvents": 6,
+      "sourceSnapshot": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504",
+      "usage": [
+        {
+          "input_tokens": 189931,
+          "cached_input_tokens": 185856,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 343,
+          "reasoning_output_tokens": 0
+        }
+      ],
+      "commands": [
+        {
+          "command": "/bin/bash -lc 'node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/scripts/prepared-program.mjs run /tmp/greenfield-r0-pilot-px9y6380/prepared/65c2e57bb9f2f963903386542a8a408038038c94a2472deaac52ad409871241f.json --approved'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/bin/roadmap.mjs config check'",
+          "exit": 0
+        }
+      ]
+    },
+    "audit": {
+      "seconds": 85.90852001588792,
+      "consumerEvents": 0,
+      "sourceSnapshot": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504",
+      "usage": [
+        {
+          "input_tokens": 340208,
+          "cached_input_tokens": 331776,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1898,
+          "reasoning_output_tokens": 133
+        }
+      ],
+      "commands": [
+        {
+          "command": "/bin/bash -lc 'cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"git rev-parse --show-toplevel && rg --files --hidden -g '\"'!.git/**'\"' && cat src/index.js src/cli.js test/greet.test.js package.json docs/architecture.md docs/TEST-STRATEGY.md README.md roadmap/roadmap.config.json docs/PRD.md docs/adr/0001-tech-stack.md docs/adr/0002-design-system.md docs/ux-canon.md AGENTS.md CLAUDE.md\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'cat /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/brownfield-audit/references/marker-table.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/brownfield-audit/references/harness-files.md /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/skills/brownfield-audit/references/readme-reconcile.md'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc 'node scripts/check-readme-catalog.mjs --project-root .'",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"node --input-type=module -e 'import fs from \\\"node:fs\\\";import {createHash} from \\\"node:crypto\\\";const a=JSON.parse(fs.readFileSync(\\\"/tmp/greenfield-r0-pilot-px9y6380/prepared/c01b656dcc68e1d15e6b0901607799b543c52f1da7f16086b55da84174fe5398.json\\\",\\\"utf8\\\"));const files=JSON.parse(a.source.split(\\\"const files = \\\")[1].split(\\\";\\\\n\\\\nif (process.cwd()\\\")[0]);for(const [p,s] of Object.entries(files)){if([\\\"docs/PRD.md\\\",\\\"docs/adr/0001-tech-stack.md\\\"].includes(p))continue;const b=fs.readFileSync(p);if(\"'!b.equals(Buffer.from(s)))throw Error(\"Changed bytes: \"+p);console.log(p+\" MATCH \"+createHash(\"sha256\").update(b).digest(\"hex\"));}const c=\"scripts/check-readme-catalog.mjs\";if(!fs.readFileSync(c).equals(fs.readFileSync(\"/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/\"+c)))throw Error(\"Checker differs\");console.log(c+\" MATCH approved source\");'\"'\"",
+          "exit": 0
+        },
+        {
+          "command": "/bin/bash -lc \"node --input-type=module -e 'import { roadmapRoot } from \\\"/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/lib/roadmap-root.mjs\\\"; console.log(roadmapRoot(\\\"/tmp/greenfield-r0-pilot-px9y6380/project\\\")));'\"",
+          "exit": 1
+        },
+        {
+          "command": "/bin/bash -lc \"node --input-type=module -e 'import { roadmapRoot } from \\\"/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/lib/roadmap-root.mjs\\\"; console.log(roadmapRoot(\\\"/tmp/greenfield-r0-pilot-px9y6380/project\\\"));'\"",
+          "exit": 0
+        }
+      ]
+    }
+  }
+}

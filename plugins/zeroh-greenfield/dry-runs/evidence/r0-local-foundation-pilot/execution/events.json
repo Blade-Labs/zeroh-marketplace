@@ -1,0 +1,125 @@
+{
+  "overflow": false,
+  "events": [
+    {
+      "elapsed": 12.52461485285312,
+      "path": "roadmap",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.579891819041222,
+      "path": "package.json",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.58003246691078,
+      "path": "package.json",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.580087570939213,
+      "path": "package.json",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.5801565120928,
+      "path": "src",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.580350892152637,
+      "path": "test",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.580525744706392,
+      "path": "README.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.58058918500319,
+      "path": "README.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.580641674809158,
+      "path": "README.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.580755130853504,
+      "path": "docs",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.58100537583232,
+      "path": "AGENTS.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.58106511970982,
+      "path": "AGENTS.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.581112519837916,
+      "path": "AGENTS.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.581158176995814,
+      "path": "CLAUDE.md",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.58120370283723,
+      "path": "CLAUDE.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 24.581248378846794,
+      "path": "CLAUDE.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 36.805629836861044,
+      "path": "scripts",
+      "mask": 1073742080,
+      "cookie": 0
+    },
+    {
+      "elapsed": 40.347627472132444,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 256,
+      "cookie": 0
+    },
+    {
+      "elapsed": 40.34783920412883,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 40.34792074887082,
+      "path": "scripts/check-readme-catalog.mjs",
+      "mask": 8,
+      "cookie": 0
+    }
+  ]
+}

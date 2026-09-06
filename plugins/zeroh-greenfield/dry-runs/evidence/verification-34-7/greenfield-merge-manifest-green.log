@@ -1,0 +1,66 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test --test-name-pattern=delivery contract:|delivery merge manifest: plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs
+TAP version 13
+# Subtest: delivery contract: exact output bytes, full installed workflow validation and native optional-linter evidence validate
+ok 1 - delivery contract: exact output bytes, full installed workflow validation and native optional-linter evidence validate
+  ---
+  duration_ms: 23.544429
+  type: 'test'
+  ...
+# Subtest: delivery contract: missing or mismatched proposal fields and output/hash drift fail closed
+ok 2 - delivery contract: missing or mismatched proposal fields and output/hash drift fail closed
+  ---
+  duration_ms: 15.266928
+  type: 'test'
+  ...
+# Subtest: delivery contract: actual full validation cannot be replaced by narration, filtered tests, failed runs or another consumer
+ok 3 - delivery contract: actual full validation cannot be replaced by narration, filtered tests, failed runs or another consumer
+  ---
+  duration_ms: 50.403915
+  type: 'test'
+  ...
+# Subtest: delivery contract: preexisting workflows require exact explicit merge decision and preserve-until-approval contract
+ok 4 - delivery contract: preexisting workflows require exact explicit merge decision and preserve-until-approval contract
+  ---
+  duration_ms: 6.841558
+  type: 'test'
+  ...
+# Subtest: delivery contract: self-consistent retained hashes cannot authorize a different planner, adapter or release environment
+ok 5 - delivery contract: self-consistent retained hashes cannot authorize a different planner, adapter or release environment
+  ---
+  duration_ms: 7.688639
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: complete retained policy, jobs, comments and exact trigger replacement validate
+ok 6 - delivery merge manifest: complete retained policy, jobs, comments and exact trigger replacement validate
+  ---
+  duration_ms: 26.568453
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: missing or incomplete preservation proof and wrong baseline digest fail closed
+ok 7 - delivery merge manifest: missing or incomplete preservation proof and wrong baseline digest fail closed
+  ---
+  duration_ms: 35.671353
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: deleting or changing baseline comments and top-level policy is not authorized by job preservation
+ok 8 - delivery merge manifest: deleting or changing baseline comments and top-level policy is not authorized by job preservation
+  ---
+  duration_ms: 30.213047
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: replacing prior trigger requires exact declared before and after values
+ok 9 - delivery merge manifest: replacing prior trigger requires exact declared before and after values
+  ---
+  duration_ms: 36.069711
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 375.243634

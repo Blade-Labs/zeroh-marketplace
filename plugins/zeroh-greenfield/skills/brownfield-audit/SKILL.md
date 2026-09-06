@@ -21,7 +21,7 @@ Apply these failure exits:
 
 ## Gap table
 
-Expand detection categories into one row per required artifact (PRD, tech-stack ADR, design-system ADR, CODE-STYLE, architecture index, UX canon, README catalog, each harness file, and roadmap config), plus each independently actionable stale/partial asset. Alternative canonical homes count as present; inspect their contents before classifying. Optional framework or Superpowers absence is not a gap unless selected by the approved project requirements. Emit rows with columns `Artefact | State | Evidence path | Proposed action | Existing home to LINK`. Classify each row `present`, `partial`, `missing`, or `stale`; cite concrete evidence. Consult `references/harness-files.md` for harness rows and `references/readme-reconcile.md` for catalog currency.
+Inspect architecture, stack, test strategy and a runnable development path first. Missing documentation is an offer to improve the project, not a reason to replace working code. Expand detection categories into one row per applicable artifact (PRD, tech-stack ADR, design-system ADR, CODE-STYLE, architecture index, UX canon, README catalog, each harness file, and roadmap config), plus each independently actionable stale/partial asset. Alternative canonical homes count as present; inspect their contents before classifying. Optional framework or Superpowers absence is not a gap unless selected by the approved project requirements. Emit rows with columns `Artefact | State | Evidence path | Proposed action | Existing home to LINK`. Classify each row `present`, `partial`, `missing`, or `stale`; cite concrete evidence. Consult `references/harness-files.md` for harness rows and `references/readme-reconcile.md` for catalog currency.
 
 ## Propose
 
@@ -33,7 +33,7 @@ For each eligible row, show the target, source facts, minimal delta, preservatio
 
 ## Approval
 
-Wait for explicit approval of the complete proposal. If approval changes scope, regenerate the gap table and proposal. If approval is absent or ambiguous, STOP with the proposal unchanged.
+The user may accept all, choose individual rows, or decline all improvements. Reuse existing explicit scope approval. For a subset, execute independent accepted rows; explain a dependency before requesting any additional scope. Do not turn a declined suggestion into a mandatory gate or create a new arc. If approval is absent or ambiguous, return the proposal without writes.
 
 ## Act
 
@@ -55,4 +55,4 @@ Emit its parser-bound form with concrete values:
 {"type":"audit-result","proposals":[{"path":"<repository-relative-path>","reason":"<reason>"}],"writes":["<repository-relative-path>"],"gaps":["<artifact>: <missing|partial|stale>: <evidence-path>"]}
 ```
 
-On an idempotent rerun emit empty `proposals`, `writes`, and `gaps`. `plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs` enforces native event ordering and observed writes; treat gap-only preservation as honor-system. Treat sibling routing, approval interpretation, and every other unbound STOP/ONLY/never rule as honor-system.
+Record declined/deferred suggestions separately from acted rows; completion of accepted rows does not claim all gaps were fixed. On an idempotent rerun with no remaining applicable gaps emit empty `proposals`, `writes`, and `gaps`. `plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs` enforces native event ordering and observed writes; treat gap-only preservation as honor-system. Treat sibling routing, approval interpretation, and every other unbound STOP/ONLY/never rule as honor-system.

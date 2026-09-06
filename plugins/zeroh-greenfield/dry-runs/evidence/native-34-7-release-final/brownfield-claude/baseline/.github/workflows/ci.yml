@@ -1,0 +1,16 @@
+# Existing policy: retain through approved merge
+name: Existing checks
+on:
+  push:
+    branches: [main]
+permissions: {}
+env:
+  PRESERVED_CI_POLICY: explicit-existing-value
+jobs:
+  existing-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Preserve this existing check
+        run: node --version

@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../../home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/roadmap.config.schema.json",
+  "configVersion": 1,
+  "gateCommands": {
+    "lint": "none",
+    "types": "none",
+    "unit": "node --test",
+    "integration": "node src/cli.js --help",
+    "build": "none",
+    "e2e": "none",
+    "emit": "none"
+  },
+  "designHomes": {
+    "architecture": {
+      "home": "docs/architecture.md",
+      "extendProtocol": "docs/architecture.md"
+    },
+    "ux": {
+      "canon": [
+        "docs/ux-canon.md"
+      ],
+      "copyRules": "docs/ux-canon.md",
+      "bindingDesignSystem": "docs/adr/0002-design-system.md"
+    }
+  },
+  "testConventions": [
+    "Use Node.js built-in node:test and node:assert/strict; run node --test.",
+    "Keep tests in test/*.test.js; test the pure greeting function without mocks or fixture files.",
+    "Run node src/cli.js --help separately for CLI wiring; this is a smoke check, not full CLI branch coverage.",
+    "See docs/TEST-STRATEGY.md for test boundaries and absent-gate reasons."
+  ]
+}

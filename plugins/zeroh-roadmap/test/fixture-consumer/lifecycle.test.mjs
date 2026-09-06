@@ -195,7 +195,19 @@ test('L9 — a scoped run substitutes {files} verbatim into the fake-slot argv (
   assert.equal(r.code, 0, `green run; stderr:\n${r.stderr}`)
   const scoped = readSlotLog(root).find((s) => s.slot === 'unit-scoped')
   assert.ok(scoped, `the unit-scoped slot ran: ${JSON.stringify(readSlotLog(root).map((s) => s.slot))}`)
-  assert.ok(scoped.argv.includes('src/feature.test.ts'), `{files} substituted verbatim: ${JSON.stringify(scoped.argv)}`)
+  assert.deepEqual(scoped.argv, ['unit-scoped', 'src/feature.test.ts'], 'only the slot selector and test target are passed; phase metadata is excluded')
+})
+
+test('L9 — a real uncovered executable beside a scoped test still requires affected/full coverage', () => {
+  const root = makeFixtureRepo()
+  seedPhase(root, { phase: 9091, status: 'in-progress', arcId: 'FX', kind: 'logic', tasks: [{ id: '9091.1', done: true }] }, {
+    create: { 'src/feature.test.ts': 'export const t = 1\n', 'src/shared.ts': 'export const shared = true\n' },
+  })
+  const result = runCli(root, ['gate', 'plan', '9091', '--json'])
+  assert.equal(result.code, 0, result.stderr)
+  const slots = result.json.slots.map(({ slot }) => slot)
+  assert.ok(slots.includes('unit') && slots.includes('integration'), `uncovered source retains full fallback: ${slots}`)
+  assert.ok(!slots.includes('unit-scoped') && !slots.includes('integration-scoped'), 'an unrelated test cannot hide uncovered executable source')
 })
 
 test('L10 — mixed-driver curation leaves published commits in place and the lane lands by fast-forward', () => {

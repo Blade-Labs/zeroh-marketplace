@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-7-release-final/empty-codex/proposal",
+  "sha256": {
+    "request.json": "56c42596ce1f0cd4be97ac67df9c2b95a87073094b04e9035322630316c0996a",
+    "before.json": "bcbd4544da363a8ec728ff7393b7de2dbe1f8e662749a0f6780b6be5342be5f7",
+    "after.json": "bcbd4544da363a8ec728ff7393b7de2dbe1f8e662749a0f6780b6be5342be5f7",
+    "events.json": "ad1f4de8672781141fbdd36a1ae79c39ff82ad40c5f57147067e64ca228dc0fb",
+    "stdout.jsonl": "3bdc17ae9c16b5a1ab04876ea0ad0678c1301c4eec950b59a25714533bb51667",
+    "result.json": "4dcccc536e19f030354b669bdcff74fc060801666395540c7fa1d4d9659214fa"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-7-release-final/empty-codex/proposal/session.jsonl",
+    "sha256": "79b726c503da908eadcee69656d5da83e9d2776fa89636d488c3af361e1bae8d"
+  }
+}

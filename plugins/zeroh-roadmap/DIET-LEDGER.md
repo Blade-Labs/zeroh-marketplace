@@ -765,3 +765,27 @@ exactly 13,339 tokens (assert passes).
 |---|---|---|
 | do-phase gate paragraph — expanded kind ladder, round numbering, attribution, verify and arc caveats | superseded-with-equivalent(compacted while preserving every kind, cap, model attribution, done guard, docs-only and arc-scope rule) | do-phase gate paragraph, now also carrying round-brief decisions |
 | phase-executor gate paragraph — repeated record-round attribution explanation | superseded-with-equivalent(compacted beside its new round-brief citation) | phase-executor gate paragraph |
+
+## R0 release repair — owner-approved foundation-first kickoff
+
+| Changed instruction | Disposition | Owner / verification |
+| --- | --- | --- |
+| Greenfield mandatory delivery for every init | superseded-with-equivalent(owner narrowed default to runnable local foundation; selected delivery retains existing validation) | greenfield-init + pointers; validateDeliverySelection checks deferred paths unchanged |
+| Retype complete programs and predict before-hashes | enforced-by-code(saved actual bytes, syntax preflight, digest and target guards, real exit) | Greenfield scripts/prepared-program.mjs; prepared-program behavioral tests |
+| All-or-nothing brownfield approval | superseded-with-equivalent(owner explicitly permits individual practices or decline) | brownfield-audit Approval; host owns authorization |
+
+Native source-bound reruns remain a release requirement; previous receipts do not
+certify this edited source. No phase, release or source-freeze hold is cleared here.
+
+## 0.40.0 purpose review corrections
+
+- Stack question/confirmation loop: superseded-with-equivalent(reuse explicit owner answers; unresolved or conflicting decisions still block). Owner: Greenfield stack-decision Selection.
+- Archetype and web design defaults: superseded-with-equivalent(named examples follow the approved stack; incompatible tooling must be resolved before mutation). Owner: greenfield-init Draft proposal and design-system Web.
+
+## 0.40.0 release evidence scope — owner ruling 2026-09-06
+
+Recorded host/source audits remain exact in test:native-evidence; nine unchanged
+receipt-backed audit blocks moved out of default discovery. Synthetic tampering,
+authority, command/exit and delivery mutation regressions remain in npm test.
+The owner authorized purpose-based release review; phase 34.7 explicitly retains
+historical observations and the scoped R0 pilot without claiming a fresh matrix.

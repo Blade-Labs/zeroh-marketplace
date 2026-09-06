@@ -1,0 +1,7 @@
+{
+  "name": "learning-greeter",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": { "start": "node src/cli.js", "test": "node --test" }
+}

@@ -1,0 +1,20 @@
+{
+  "scratch": "/tmp/greenfield-r0-pilot-px9y6380/project",
+  "evidence": "/tmp/greenfield-r0-pilot-px9y6380/audit",
+  "stage": "rerun",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+    "exec",
+    "--approve-for-me",
+    "--model",
+    "gpt-6-astra",
+    "--json",
+    "resume",
+    "01a0761a-8622-7133-82ea-7729019b39f4",
+    "Read-only audit of the completed fixture. Read the current brownfield-audit skill and inspect the actual consumer homes, architecture, test strategy, README and config. Judge the original CLI beginner packet and approved scope. Alternative canonical homes count when their contents cover the practice; do not create duplicate documents just to match filenames. CI/release/cloud remain explicitly deferred. No writes, generator runs, mutation-producing tests, commits or deployment. Report actual remaining gaps honestly; do not force an empty result. Emit audit-result with proposals, writes and gaps; propose nothing if the approved foundation is complete. Confirm the original success signal using retained exact command/exit evidence and unchanged file bytes. This stage is native read-only usability evidence, not a release certification. Retain inherited controls and stop after the report."
+  ],
+  "timeout": 600,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "4f1e85dd85729ab3259585f724aaaca5cf0105f0",
+  "sourceSnapshotSha256": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504"
+}

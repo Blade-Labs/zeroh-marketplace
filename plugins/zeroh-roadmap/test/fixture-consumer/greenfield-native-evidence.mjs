@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
+import { validateDeliveryConfig, DELIVERY_SCHEMA_CONTRACT, ADAPTERS as DELIVERY_ADAPTERS } from '../../../zeroh-greenfield/templates/scripts/ci-shard-plan.mjs'
 import { execFileSync } from 'node:child_process'
+import { SCOPE_MANIFEST_PROTOCOL } from '../../cli/lib/slots.mjs'
 import { readFileSync, readdirSync, lstatSync, realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { sourceFiles, canonical, sha256 } from './greenfield-evidence-source.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..')
+const deliveryYaml=createRequire(resolve(ROOT,'package.json'))('js-yaml')
 
 function receipt(kind) {
   return JSON.parse(readFileSync(resolve(ROOT, `plugins/zeroh-greenfield/dry-runs/${kind}/receipt.json`), 'utf8'))
@@ -83,6 +87,10 @@ function proposalPaths(host, raw) {
   assert.ok(Array.isArray(proposal.commands) && proposal.commands.length > 0, 'native proposal commands required')
   assert.deepEqual(Object.keys(proposal.gates ?? {}).sort(), [...CORE_GATES].sort(), 'native proposal has all seven gates')
   for (const command of Object.values(proposal.gates)) assert.ok(typeof command === 'string' && command.trim(), 'native proposal gate bindings must be explicit')
+  const bindings = validateOptionalGateBindings(proposal)
+  const templated = Object.keys(bindings).filter(key => !CORE_GATES.includes(key) && /[{}]/.test(bindings[key])).sort()
+  assert.deepEqual(Object.keys(proposal.optionalGateRuns ?? {}).sort(), templated, 'every optional template needs exactly one approved run input')
+  for (const slot of templated) optionalGateCommand(proposal, slot, bindings[slot])
   const paths = proposal.artifacts.map((artifact) => {
     assert.ok(safeArtifactPath(artifact.path, true), `unsafe native proposal artifact: ${artifact.path}`)
     assert.ok(typeof artifact.reason === 'string' && artifact.reason.trim(), 'each proposed artifact requires a reason')
@@ -239,18 +247,19 @@ const CAPBUILD_EXECUTABLE = '/home/patrik/.local/bin/capbuild'
 const CAPBUILD_REALPATH = '/home/patrik/illumination_VS_setup/scripts/capbuild'
 const CAPBUILD_DEFAULTS = Object.freeze({ memoryMax: '8G', memorySwapMax: '2G', heapMB: 4096, slice: 'dev.slice' })
 const CAPBUILD_CLEARED_OVERRIDES = Object.freeze(['CAPBUILD_SLICE', 'CAPBUILD_PASS_ENV', 'NODE_OPTIONS', 'FORCE_BARE', 'ITEST_FILES', 'AUDIT_LEDGER_ENABLED', 'TEST_CONCURRENCY', 'E2E_PROJECT', 'ALLURE'])
-function validateGateWrapper(binding) {
+const REAL_WRAPPER_HOST = Object.freeze({ realpathSync, lstatSync, readFileSync, getuid: () => process.getuid() })
+function validateGateWrapper(binding, host = REAL_WRAPPER_HOST) {
   assert.ok(binding && typeof binding === 'object', 'prebound gate wrapper required')
   assert.deepEqual(Object.keys(binding).sort(), ['kind', 'executable', 'realpath', 'sha256', 'defaults', 'hostMetadataEffects'].sort(), 'wrapper envelope has only approved metadata fields')
   assert.equal(binding.kind, 'capbuild')
   assert.equal(binding.executable, CAPBUILD_EXECUTABLE, 'only the vetted absolute wrapper executable is permitted')
   assert.equal(binding.realpath, CAPBUILD_REALPATH, 'only the vetted wrapper realpath is permitted')
-  assert.equal(realpathSync(binding.executable), binding.realpath, 'wrapper symlink target changed')
-  const stat = lstatSync(binding.realpath)
+  assert.equal(host.realpathSync(binding.executable), binding.realpath, 'wrapper symlink target changed')
+  const stat = host.lstatSync(binding.realpath)
   assert.ok(stat.isFile() && (stat.mode & 0o111), 'bound wrapper must remain an executable regular file')
-  assert.equal(sha256(readFileSync(binding.realpath)), binding.sha256, 'prebound wrapper binary digest changed')
+  assert.equal(sha256(host.readFileSync(binding.realpath)), binding.sha256, 'prebound wrapper binary digest changed')
   assert.deepEqual(binding.defaults, CAPBUILD_DEFAULTS, 'wrapper limits must retain vetted defaults')
-  assert.deepEqual(binding.hostMetadataEffects, ['systemd-user-transient-units', `/run/user/${process.getuid()}/capbuild-locks`], 'wrapper host effects cannot expand consumer authority')
+  assert.deepEqual(binding.hostMetadataEffects, ['systemd-user-transient-units', `/run/user/${host.getuid()}/capbuild-locks`], 'wrapper host effects cannot expand consumer authority')
   return binding
 }
 function literalArgv(text) {
@@ -265,11 +274,11 @@ function literalArgv(text) {
   }
   return argv.length ? argv : null
 }
-function unwrapGateExecution(native, configured, scratch, wrapperBinding) {
+function unwrapGateExecution(native, configured, scratch, wrapperBinding, host = REAL_WRAPPER_HOST) {
   // A host wrapper never becomes part of the consumer's portable gate binding.
   if (typeof configured !== 'string' || !configured || /\bcapbuild\b/.test(configured)) return null
   if (wrapperBinding) {
-    try { validateGateWrapper(wrapperBinding) } catch { return null }
+    try { validateGateWrapper(wrapperBinding, host) } catch { return null }
   }
   const executed = commandAtCwd(native, scratch)
   if (executed === null) return null
@@ -292,14 +301,14 @@ function unwrapGateExecution(native, configured, scratch, wrapperBinding) {
   if (tail.length !== expected.length || tail.some((value, index) => value !== expected[index])) return null
   return { configuredCommand: configured, executedCommand: executed, wrapper: { ...wrapperBinding, env } }
 }
-function validateGateExecutionEvidence(record, native, configured, scratch, wrapperBinding) {
+function validateGateExecutionEvidence(record, native, configured, scratch, wrapperBinding, host = REAL_WRAPPER_HOST) {
   assert.ok(native && typeof native.id === 'string' && native.id, 'native gate call required')
   assert.equal(record.toolCallId, native.id, 'gate result must reference its native call')
   assert.equal(record.nativeCommand, native.command, 'raw native invocation must match')
   assert.ok(Number.isInteger(native.exitCode), 'native numeric gate exit required, not narration')
   assert.equal(native.exitCode, 0, 'wrapped or unwrapped native gate must succeed')
   assert.equal(record.exitCode, native.exitCode, 'gate receipt cannot narrate a failed inner command green')
-  const unwrapped = unwrapGateExecution(native.command, configured, scratch, wrapperBinding)
+  const unwrapped = unwrapGateExecution(native.command, configured, scratch, wrapperBinding, host)
   assert.ok(unwrapped, 'gate execution must preserve exact configured command inside the vetted wrapper envelope')
   assert.equal(record.configuredCommand, unwrapped.configuredCommand)
   assert.equal(record.executedCommand, unwrapped.executedCommand)
@@ -415,14 +424,14 @@ function validateInvocationMetadata(arm, observation) {
   assert.ok(arm.version === observation.version || arm.version === labelled, 'receipt version must equal native host version or its known CLI label')
 }
 
-function validateObservation(observation, stage) {
+function validateObservation(observation, stage, host = REAL_WRAPPER_HOST) {
   const { request, before, after, events, result } = observation
   assert.equal(request.stage, stage)
   assert.ok(typeof request.scratch === 'string' && request.scratch.startsWith('/'), 'absolute scratch root required')
   assert.ok(Array.isArray(request.argv) && request.argv.length > 0, 'observed launch argv required')
   assert.equal(result.exit, 0, 'native process must complete successfully')
   if (request.gateWrapper) {
-    validateGateWrapper(request.gateWrapper)
+    validateGateWrapper(request.gateWrapper, host)
     assert.deepEqual(request.clearedHostOverrides, CAPBUILD_CLEARED_OVERRIDES, 'launch must bind clearing the vetted wrapper override variables')
     assert.deepEqual(result.clearedHostOverrides, request.clearedHostOverrides, 'observer must actually clear the prebound wrapper overrides')
   }
@@ -504,11 +513,100 @@ function readStage(reference, stage, host) {
   return observation
 }
 
+const NX_OPTIONAL_GATES = ['unit-scoped', 'unit-affected', 'unit-impacted']
+const OPTIONAL_GATE_KEYS = Object.keys(JSON.parse(readFileSync(resolve(ROOT, 'plugins/zeroh-roadmap/cli/roadmap.config.schema.json'), 'utf8')).properties.gateCommands.properties).filter(key => !CORE_GATES.includes(key))
+function validateOptionalGateBindings(proposal, config) {
+  assert.deepEqual(Object.keys(proposal?.gates ?? {}).sort(), [...CORE_GATES].sort(), 'approval must bind every canonical gate')
+  const optional = proposal.optionalGates ?? {}
+  assert.ok(optional && typeof optional === 'object' && !Array.isArray(optional), 'optional gates must be an object')
+  for (const key of Object.keys(optional)) assert.ok(OPTIONAL_GATE_KEYS.includes(key), 'optional gate must belong to the roadmap schema')
+  const bindings = {...proposal.gates, ...optional}
+  for (const command of Object.values(bindings)) assert.ok(typeof command === 'string' && command.trim(), 'approved gate binding must be explicit')
+  if (proposal.delivery?.adapter === 'nx-monorepo') for (const key of NX_OPTIONAL_GATES) assert.ok(optional[key] && optional[key] !== 'none', 'Nx optional selector may not be omitted or declared absent')
+  if (config) assert.deepEqual(config.gateCommands, bindings, 'generated gate bindings must equal the approved core and optional union')
+  return bindings
+}
+function optionalGateCommand(proposal, slot, configuredCommand) {
+  const run = proposal.optionalGateRuns?.[slot]
+  assert.ok(run && typeof run === 'object', 'optional gate needs its own approved input')
+  const kind = slot.endsWith('-impacted') ? 'range' : 'manifest'
+  assert.deepEqual(Object.keys(run.substitutions ?? {}), [kind], 'exactly one slot-specific substitution required')
+  const token = `{${kind}}`, placeholders = configuredCommand.match(/\{[^{}]*\}/g) ?? []
+  assert.deepEqual(placeholders, [token], 'one supported literal placeholder required')
+  const value = run.substitutions[kind]
+  assert.ok(typeof value === 'string' && value, 'literal substitution value required')
+  assert.match(value, kind === 'range' ? /^[a-f0-9]{40}\.\.[a-f0-9]{40}$/ : /^@\/[A-Za-z0-9_./-]+$/, 'unsafe or nonliteral optional gate input')
+  assert.ok(!value.split('/').some(part => part === '..' || part === '.'), 'optional input traversal rejected')
+  assert.match(run.inputSha256 ?? '', /^[a-f0-9]{64}$/, 'optional input digest required')
+  const resolvedCommand = configuredCommand.replace(token, value)
+  const argv = literalArgv(resolvedCommand), expected = ['node', 'scripts/run-nx-test-tier.mjs', value]
+  assert.ok(canonical(argv) === canonical(expected) || canonical(argv) === canonical(['env', 'NX_DAEMON=false', ...expected]), 'optional gate must invoke the actual bound selector, without extra commands')
+  return {run, kind, value, resolvedCommand}
+}
+function validateOptionalGateEvidence({arm, proposal, slot, configuredCommand, after, commands, evidence}, host = REAL_WRAPPER_HOST) {
+  assert.ok(NX_OPTIONAL_GATES.includes(slot), 'unsupported native optional selector slot')
+  assert.equal(evidence?.slot, slot, 'optional gate evidence belongs to this slot')
+  assert.equal(evidence.command, configuredCommand)
+  assert.equal(evidence.configuredCommand, configuredCommand)
+  assert.equal(evidence.cwd, arm.scratchRoot)
+  const {run, kind, value, resolvedCommand} = optionalGateCommand(proposal, slot, configuredCommand)
+  assert.deepEqual(evidence.substitutions, run.substitutions, 'receipt substitutions must equal the approved slot input')
+  assert.equal(evidence.inputSha256, run.inputSha256)
+  assert.equal(after['scripts/run-nx-test-tier.mjs']?.sha256, sha256(readFileSync(resolve(ROOT, 'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs'))), 'executed selector must equal the installed source template')
+  const pathsValid = paths => {
+    assert.ok(Array.isArray(paths) && paths.length > 0, 'nonempty scope paths required')
+    assert.deepEqual(paths, [...new Set(paths)].sort(), 'scope paths must be sorted and unique')
+    for (const path of paths) {
+      assert.ok(typeof path === 'string' && safeArtifactPath(path) && !/[\r\n\0,]/.test(path), 'unsafe scope path')
+      assert.ok(after[path]?.sha256 && !after[path].symlink, 'scope target must be an observed regular file')
+    }
+  }
+  let paths
+  if (kind === 'manifest') {
+    const absolute = value.slice(1)
+    assert.ok(absolute.startsWith(arm.scratchRoot + '/'), 'manifest must be inside this scratch root')
+    const path = absolute.slice(arm.scratchRoot.length + 1)
+    assert.ok(safeArtifactPath(path), 'unsafe relative manifest path')
+    assert.ok(after[path]?.sha256 && !after[path].symlink, 'observed regular manifest required')
+    const reference = arm.optionalInputs?.[slot]
+    assert.ok(reference && lstatSync(resolve(ROOT, reference.path)).isFile(), 'retained manifest must be a regular file')
+    let bytes, manifest
+    assert.doesNotThrow(() => { bytes = readBoundFile(reference); manifest = JSON.parse(bytes) }, 'malformed or changed retained manifest')
+    assert.equal(sha256(bytes), run.inputSha256, 'approved manifest bytes changed')
+    assert.equal(after[path].sha256, run.inputSha256, 'retained manifest differs from the observed input')
+    assert.deepEqual(Object.keys(manifest).sort(), ['paths', 'protocol'], 'scope manifest schema must match its production owner')
+    assert.equal(manifest.protocol, SCOPE_MANIFEST_PROTOCOL)
+    paths = manifest.paths; pathsValid(paths)
+    const tests = paths.map(path => /(?:^|\/)(?:[^/]+\.)?(?:test|spec)\.[cm]?[jt]sx?$/.test(path))
+    assert.ok(slot.endsWith('-scoped') ? tests.every(Boolean) : tests.some(value => !value), 'manifest must exercise its actual selector tier')
+  } else {
+    assert.equal(sha256(value), run.inputSha256, 'approved range digest changed')
+    const [base, head] = value.split('..'); assert.notEqual(base, head, 'range needs distinct commits')
+    const headCalls = commands.filter(entry => matchesGateCommand(entry.command, 'git rev-parse HEAD', arm.scratchRoot))
+    assert.equal(headCalls.length, 1, 'one actual HEAD proof required')
+    assert.equal(headCalls[0].exitCode, 0); assert.equal(headCalls[0].output.trim(), head, 'range must end at the actual fixture HEAD')
+    const ancestryCalls = commands.filter(entry => matchesGateCommand(entry.command, `git merge-base --is-ancestor ${base} ${head}`, arm.scratchRoot))
+    assert.equal(ancestryCalls.length, 1, 'one actual exact ancestry proof required')
+    assert.equal(ancestryCalls[0].exitCode, 0, 'impacted range base must be an ancestor of its head')
+    const diffCalls = commands.filter(entry => matchesGateCommand(entry.command, `git diff --name-only -z ${value}`, arm.scratchRoot))
+    assert.equal(diffCalls.length, 1, 'one actual exact-range diff required')
+    assert.equal(diffCalls[0].exitCode, 0)
+    assert.ok(diffCalls[0].output.endsWith('\0'), 'complete NUL-delimited actual diff required')
+    paths = diffCalls[0].output.slice(0, -1).split('\0'); pathsValid(paths)
+  }
+  const native = commands.find(entry => entry.id === evidence.toolCallId)
+  const envelope = validateGateExecutionEvidence({...evidence, configuredCommand: resolvedCommand}, native, resolvedCommand, arm.scratchRoot, arm.gateWrapper, host)
+  const selections = native.output.split(/\r?\n/).flatMap(line => { try { const value = JSON.parse(line); return value && Object.hasOwn(value, 'tier') ? [value] : [] } catch { return [] } })
+  assert.equal(selections.length, 1, 'actual single selector result required')
+  assert.equal(selections[0].tier, slot.endsWith('-scoped') ? 'scoped' : 'affected', 'fallback or wrong selector tier cannot count as scoped execution')
+  return {...envelope, configuredCommand, substitutions: run.substitutions, inputSha256: run.inputSha256}
+}
+
 // Execution-stage session suffix only: the earlier proposal discovery is not
 // constrained to the newly approved operational plan.
 function validateApprovedExecution({ proposal, config, commands, host, sessionRaw, raw, scratch }) {
   assert.deepEqual(Object.keys(proposal?.gates ?? {}).sort(), [...CORE_GATES].sort(), 'approval must bind every canonical gate')
-  assert.deepEqual(config?.gateCommands, proposal.gates, 'generated gate bindings must equal the approved proposal exactly')
+  validateOptionalGateBindings(proposal, config)
   for (const command of Object.values(proposal.gates)) assert.ok(typeof command === 'string' && command.trim(), 'approved gate must be explicit')
   assert.ok(Array.isArray(proposal.commands) && proposal.commands.length > 0, 'complete approved command plan required')
   const plan = proposal.commands.map((entry) => {
@@ -571,6 +669,70 @@ function validateApprovedExecution({ proposal, config, commands, host, sessionRa
   for (const row of rows(raw)) assert.notEqual(row.item?.type, 'file_change', 'direct native file changes bypass approved shell commands')
 }
 
+const DELIVERY_PATHS=['.github/greenfield-delivery.json','.github/workflows/ci.yml','.github/workflows/release.yml','scripts/ci-shard-plan.mjs']
+const ACTIONLINT_PROBE="if command -v actionlint >/dev/null 2>&1; then command -v actionlint; actionlint -version; else printf '%s\\n' 'ACTIONLINT_UNAVAILABLE'; fi"
+function validateDeliveryEvidence({arm,proposal,before,after,commands}){
+ const delivery=proposal?.delivery;assert.ok(delivery,'complete delivery proposal required');assert.deepEqual(arm.delivery,delivery,'receipt delivery must equal actual approved proposal')
+ assert.equal(delivery.provider,'github-actions');assert.ok(Object.hasOwn(DELIVERY_ADAPTERS,delivery.adapter));assert.equal(delivery.configPath,DELIVERY_PATHS[0]);assert.deepEqual(delivery.workflowPaths,DELIVERY_PATHS.slice(1,3));assert.equal(delivery.plannerPath,DELIVERY_PATHS[3]);assert.ok(typeof delivery.releaseEnvironment==='string'&&delivery.releaseEnvironment.trim())
+ const existing=delivery.workflowPaths.filter(path=>before[path]).sort();assert.deepEqual(delivery.collision?.existingPaths,existing,'every collision requires an exact prior path');assert.equal(delivery.collision.preserveUntilApproval,true);assert.equal(delivery.collision.decision,existing.length?'merge':'create','existing workflows require explicit merge approval')
+ assert.deepEqual(Object.keys(delivery.collision.mergeManifests??{}).sort(),existing,'exact workflow merge manifests required')
+ const text={};for(const path of DELIVERY_PATHS){
+  assert.ok(after[path]?.sha256,`installed delivery artifact missing: ${path}`);text[path]=readBoundFile(arm.artifacts?.[path]);assert.equal(sha256(text[path]),after[path].sha256,'retained delivery bytes differ from observed output')
+  assert.ok(proposal.artifacts.some(item=>item.path===path),'delivery file requires explicit approved artifact path')
+ }
+ assert.equal(text[DELIVERY_PATHS[3]],readFileSync(resolve(ROOT,'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs'),'utf8'),'installed planner must equal approved template bytes')
+ const config=JSON.parse(text[DELIVERY_PATHS[0]]);validateDeliveryConfig(config);assert.equal(config.archetype,delivery.adapter);assert.equal(config.release.environment,delivery.releaseEnvironment)
+ const workflows={};for(const name of ['ci','release']){
+  const path=`.github/workflows/${name}.yml`,document=deliveryYaml.safeLoad(text[path]),template=deliveryYaml.safeLoad(readFileSync(resolve(ROOT,`plugins/zeroh-greenfield/templates/github/workflows/${name}.yml`),'utf8'))
+  if(name==='release')template.jobs.deploy.environment=delivery.releaseEnvironment
+  for(const [job,value]of Object.entries(template.jobs))assert.deepEqual(document.jobs?.[job],value,`generated delivery job changed: ${job}`)
+  assert.deepEqual(document.permissions,template.permissions);assert.deepEqual(document.concurrency,template.concurrency);assert.deepEqual(document.on,template.on,'delivery lifecycle trigger drift')
+  if(before[path]){
+   const preserved=readBoundFile(arm.existingWorkflowArtifacts?.[path]);assert.equal(sha256(preserved),before[path].sha256,'existing workflow baseline bytes missing')
+   const prior=deliveryYaml.safeLoad(preserved),merge=delivery.collision.mergeManifests[path]
+   assert.equal(merge.beforeSha256,sha256(preserved),'merge baseline digest differs from actual prior workflow')
+   assert.deepEqual(merge.preservedJobs,[...Object.keys(prior.jobs??{})].sort(),'every prior job must be named for preservation')
+   for(const job of merge.preservedJobs)assert.deepEqual(document.jobs[job],prior.jobs[job],`preexisting workflow job overwritten: ${job}`)
+   const replacements=merge.replacements??{},keys=Object.keys(prior).filter(key=>key!=='jobs').sort()
+   for(const key of Object.keys(replacements))assert.ok(keys.includes(key),'replacement must name an existing top-level field')
+   assert.deepEqual(merge.preservedTopLevel,keys.filter(key=>!Object.hasOwn(replacements,key)),'every prior top-level field requires preservation or an explicit replacement')
+   for(const key of merge.preservedTopLevel)assert.deepEqual(document[key],prior[key],`undeclared workflow field replacement: ${key}`)
+   for(const [key,delta]of Object.entries(replacements)){
+    assert.deepEqual(Object.keys(delta).sort(),['after','before'],'replacement requires exact before and after values')
+    assert.deepEqual(delta.before,prior[key],`incorrect approved workflow before value: ${key}`)
+    assert.deepEqual(delta.after,document[key],`unapproved workflow replacement value: ${key}`)
+   }
+   const priorComments=preserved.split('\n').filter(line=>/^\s*#/.test(line))
+   assert.deepEqual(merge.preservedComments,priorComments,'every prior comment/marker line must be bound byte-exactly')
+   const installedLines=text[path].split('\n')
+   for(const line of new Set(priorComments))assert.ok(installedLines.filter(value=>value===line).length>=priorComments.filter(value=>value===line).length,'prior workflow comment or marker removed')
+  }
+  workflows[name]=document
+ }
+ const expected=`${arm.gateWrapper.executable} --env GREENFIELD_DELIVERY_ROOT=${arm.scratchRoot} node --test ${ROOT}/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs`
+ assert.deepEqual(delivery.validationCommands,[{command:expected,cwd:arm.scratchRoot}],'complete installed-output suite required, without filters')
+ assert.equal(arm.deliveryValidation?.commandExits?.length,1)
+ const record=arm.deliveryValidation.commandExits[0],native=commands.find(c=>c.id===record.toolCallId)
+ assert.ok(native);assert.equal(native.exitCode,0);assert.equal(record.exitCode,0);assert.equal(record.nativeCommand,native.command);assert.ok(matchesGateCommand(native.command,expected,arm.scratchRoot),'actual full installed-output validation command required')
+ const total=native.output.match(/^# tests (\d+)\s*$/m),passed=native.output.match(/^# pass (\d+)\s*$/m);assert.ok(total&&Number(total[1])>0,'terminal TAP totals required');assert.ok(passed);assert.equal(passed[1],total[1],'all mandatory tests must complete')
+ for(const field of ['fail','cancelled','skipped'])assert.match(native.output,new RegExp(`^# ${field} 0\\s*$`,'m'),'full suite must have zero incomplete/failed tests')
+ const probe=arm.deliveryValidation.actionlint,actual=commands.find(c=>c.id===probe?.toolCallId);assert.ok(actual);assert.equal(actual.exitCode,0);assert.equal(probe.exitCode,0);assert.equal(probe.command,actual.command);assert.equal(probe.output,actual.output);assert.ok(matchesGateCommand(actual.command,ACTIONLINT_PROBE,arm.scratchRoot),'actual optional linter availability probe required')
+ if(actual.output.trim()!=='ACTIONLINT_UNAVAILABLE'){const lines=actual.output.trim().split(/\r?\n/);assert.ok(lines[0].startsWith('/'),'linter executable path required');assert.ok(lines.slice(1).join('\n').match(/(?:version\s*)?\d+\.\d+/),'linter version required')}
+ const schemaDigests={shardManifest:sha256(canonical(DELIVERY_SCHEMA_CONTRACT.shardManifest)),evidence:sha256(canonical(DELIVERY_SCHEMA_CONTRACT.evidence)),planner:sha256(text[DELIVERY_PATHS[3]])}
+ if(arm.deliveryValidation.schemaDigests)assert.deepEqual(arm.deliveryValidation.schemaDigests,schemaDigests)
+ return {adapter:delivery.adapter,workflowPaths:delivery.workflowPaths,releaseEnvironment:delivery.releaseEnvironment,schemaDigests}
+}
+export function validateDeliverySelection(input) {
+  const { arm, proposal, before, after } = input
+  if (Object.hasOwn(proposal, 'delivery') || Object.hasOwn(arm, 'delivery')) {
+    return validateDeliveryEvidence(input)
+  }
+  assert.equal(arm.deliveryValidation, undefined, 'deferred delivery cannot claim validation')
+  for (const path of DELIVERY_PATHS) {
+    assert.deepEqual(after[path], before[path], `deferred delivery must preserve ${path}`)
+  }
+  return { deferred: true }
+}
 function validateObservedArm(arm) {
   validateGateWrapper(arm.gateWrapper)
   const stages = Object.fromEntries(['proposal', 'execution', 'rerun'].map((stage) => [stage, readStage(arm.stages?.[stage], stage, arm.host)]))
@@ -602,6 +764,7 @@ function validateObservedArm(arm) {
   const nativeProposal = nativeObjects(arm.host, proposal.raw, 'proposal')
   assert.equal(nativeProposal.length, 1, 'one complete native proposal required')
   validateCatalogCheck(arm, before, after, nativeProposal[0], execution.commands)
+  validateDeliverySelection({arm,proposal:nativeProposal[0],before,after,commands:execution.commands})
   const approved = proposalPaths(arm.host, proposal.raw)
   assert.deepEqual(arm.approvedGapAllowlist, approved, 'receipt allowlist is a projection of the native proposal, never a post-hoc diff expansion')
   assert.ok(diff.every((path) => approvedPath(path, after[path] ?? before[path], approved)), 'every changed path must be covered by the native approved proposal')
@@ -632,6 +795,10 @@ function validateObservedArm(arm) {
     }
     const evidence = arm.commandExits.find((entry) => entry.slot === slot)
     assert.ok(evidence, `missing executed consumer gate: ${slot}`)
+    if (!CORE_GATES.includes(slot) && /[{}]/.test(command)) {
+      validateOptionalGateEvidence({arm, proposal: nativeProposal[0], slot, configuredCommand: command, after, commands: execution.commands, evidence})
+      continue
+    }
     assert.equal(evidence.command, command)
     assert.equal(evidence.cwd, arm.scratchRoot)
     const native = execution.commands.find((entry) => entry.id === evidence.toolCallId)
@@ -660,4 +827,4 @@ function validateObservedArm(arm) {
   return stages
 }
 
-export { validateApprovedExecution, CAPBUILD_DEFAULTS, CAPBUILD_CLEARED_OVERRIDES, validateGateWrapper, unwrapGateExecution, validateGateExecutionEvidence, selectCatalogCheck, validateCatalogCheck, matchesGateCommand, validateStructuralChecks, nativeSessionIdentity, validateInvocationMetadata, receipt, validateSourceFiles, validateSourceBinding, safeArtifactPath, nativeObjects, proposalPaths, approvedPath, sessionEvents, sessionSuffix, validateApprovalSlice, nativeCommands, validateObservation, readBoundFile, validateNativeAuthority, readStage, validateObservedArm, ROOT, sha256, APPROVAL, MUTATIONS, STAGE_FILES, CORE_GATES, REQUIRED_HOMES, rows, canonical, treeHash }
+export { validateOptionalGateBindings, optionalGateCommand, validateOptionalGateEvidence, validateDeliveryEvidence, DELIVERY_PATHS, ACTIONLINT_PROBE, validateApprovedExecution, CAPBUILD_DEFAULTS, CAPBUILD_CLEARED_OVERRIDES, validateGateWrapper, unwrapGateExecution, validateGateExecutionEvidence, selectCatalogCheck, validateCatalogCheck, matchesGateCommand, validateStructuralChecks, nativeSessionIdentity, validateInvocationMetadata, receipt, validateSourceFiles, validateSourceBinding, safeArtifactPath, nativeObjects, proposalPaths, approvedPath, sessionEvents, sessionSuffix, validateApprovalSlice, nativeCommands, validateObservation, readBoundFile, validateNativeAuthority, readStage, validateObservedArm, ROOT, sha256, APPROVAL, MUTATIONS, STAGE_FILES, CORE_GATES, REQUIRED_HOMES, rows, canonical, treeHash }

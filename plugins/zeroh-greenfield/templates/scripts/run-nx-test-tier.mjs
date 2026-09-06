@@ -6,7 +6,9 @@ import { spawnSync } from 'node:child_process'
 const PROTOCOL = 'scope-manifest-json-v1'
 const input = process.argv[2]
 const root = process.cwd()
-const unsafe = /(^|\/)(package(?:-lock)?\.json|nx\.json|workspace\.json|project\.json|(?:jest|vitest|playwright)\.config\.[^/]+)$/
+// Workspace, dependency and runner inputs can affect projects outside Nx's source graph.
+const unsafe = /(^|\/)(package(?:-lock)?\.json|npm-shrinkwrap\.json|pnpm-(?:lock|workspace)\.ya?ml|yarn\.lock|bun\.lockb?|uv\.lock|poetry\.lock|Pipfile(?:\.lock)?|requirements(?:[-.][^/]*)?\.txt|pyproject\.toml|setup\.(?:py|cfg)|tox\.ini|pytest\.ini|conftest\.py|nx\.json|workspace\.json|project\.json|tsconfig(?:\.[^/]*)?\.json|(?:jest|vitest|playwright)\.config\.[^/]+|run-nx-test-tier\.mjs)$/
+const unsafeRoot = /^(?:scripts|tools|\.github)\//
 const testFile = /(?:^|\/)(?:[^/]+\.)?(?:test|spec)\.[cm]?[jt]sx?$/
 
 function full(reason) {
@@ -31,17 +33,24 @@ function pathsFromRange(range) {
 }
 
 let selection
+let invalidExactTarget = false
+const explicitManifest = input?.startsWith('@')
 try {
-  const paths = input?.startsWith('@') ? pathsFromManifest(input) : pathsFromRange(input)
+  const paths = explicitManifest ? pathsFromManifest(input) : pathsFromRange(input)
   if (paths.length === 0) selection = full('empty scope')
   else if (paths.some((p) => typeof p !== 'string' || p.length === 0 || p.includes('\0') || p.includes('\n') || isAbsolute(p) || relative(root, resolve(root, p)).startsWith('..'))) selection = full('unsafe scope path')
-  else if (paths.some((p) => unsafe.test(p))) selection = full('workspace or test-runner input')
-  else if (paths.some((p) => testFile.test(p) && !existsSync(resolve(root, p)))) selection = full('nonexistent exact-test target')
+  else if (paths.some((p) => testFile.test(p) && !existsSync(resolve(root, p)))) {
+    invalidExactTarget = explicitManifest
+    selection = full(explicitManifest ? 'nonexistent exact-test target' : 'deleted test in impacted range')
+    if (invalidExactTarget) selection.blocked = true
+  }
+  else if (paths.some((p) => (unsafe.test(p) || unsafeRoot.test(p)))) selection = full('workspace or test-runner input')
   else selection = { tier: paths.every((p) => testFile.test(p)) ? 'scoped' : 'affected', reason: 'validated scope manifest', argv: ['exec', '--', 'nx', 'affected', '-t', 'test', `--files=${paths.join(',')}`] }
 } catch (error) {
   selection = full(error.message)
 }
 
 process.stdout.write(JSON.stringify(selection) + '\n')
+if (invalidExactTarget) process.exit(1)
 const child = spawnSync('npm', selection.argv, { cwd: root, stdio: 'inherit' })
 process.exit(child.error ? 1 : (child.status ?? 1))

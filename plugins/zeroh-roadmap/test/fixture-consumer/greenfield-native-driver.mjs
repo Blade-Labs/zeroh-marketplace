@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } fro
 import { homedir } from 'node:os'
 import { basename, dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { unwrapGateExecution, matchesGateCommand, ROOT, STAGE_FILES, REQUIRED_HOMES, rows, canonical, sha256, treeHash, nativeObjects, proposalPaths, readStage, validateObservedArm, validateSourceBinding } from './greenfield-native-evidence.mjs'
+import { validateOptionalGateBindings, optionalGateCommand, validateDeliveryEvidence, DELIVERY_PATHS, ACTIONLINT_PROBE, unwrapGateExecution, matchesGateCommand, ROOT, STAGE_FILES, REQUIRED_HOMES, rows, canonical, sha256, treeHash, nativeObjects, proposalPaths, readStage, validateObservedArm, validateSourceBinding } from './greenfield-native-evidence.mjs'
 const read = (path) => JSON.parse(readFileSync(path, 'utf8'))
 const save = (path, data) => { mkdirSync(dirname(path), {recursive:true}); writeFileSync(path, JSON.stringify(data, null, 2) + '\n') }
 const ref = (path) => ({path:relative(ROOT,path),sha256:sha256(readFileSync(path))})
@@ -35,32 +35,54 @@ export function buildArm(directory) {
   const after=execution.after,before=proposal.before
   const configPath=Object.keys(after).filter(p=>/(^|\/)roadmap.config.json$/.test(p))
   assert.equal(configPath.length,1)
-  const artifacts={}
+  const proposed=nativeObjects(metadata.host,proposal.raw,'proposal')[0]
+  const bindings=validateOptionalGateBindings(proposed)
+  const artifacts={},optionalInputs={}
   const catalogSource=metadata.catalogCheck?.mode==='catalog' ? 'emitted/repo-catalog.json' : 'package.json'
-  for(const path of [...REQUIRED_HOMES,...configPath,catalogSource]) {
+  for(const path of [...REQUIRED_HOMES,...configPath,catalogSource,...(proposed.delivery ? DELIVERY_PATHS : [])]) {
     const dest=resolve(directory,'artifacts',path)
     mkdirSync(dirname(dest),{recursive:true}); copyFileSync(resolve(metadata.scratchRoot,path),dest)
     artifacts[path]=ref(dest)
   }
+  for(const [slot,input] of Object.entries(proposed.optionalGateRuns??{})) {
+    if(!input.substitutions?.manifest)continue
+    const absolute=input.substitutions.manifest.slice(1)
+    assert.ok(input.substitutions.manifest.startsWith('@'+metadata.scratchRoot+'/'),'manifest must be scratch-owned')
+    const path=relative(metadata.scratchRoot,absolute),dest=resolve(directory,'artifacts',path)
+    assert.ok(proposed.artifacts.some(row=>row.path===path),'optional input requires an explicit approved artifact')
+    mkdirSync(dirname(dest),{recursive:true});copyFileSync(absolute,dest)
+    artifacts[path]=ref(dest);optionalInputs[slot]=artifacts[path]
+  }
   const config=read(resolve(metadata.scratchRoot,configPath[0]))
-  const proposed=nativeObjects(metadata.host,proposal.raw,'proposal')[0]
   const commandExits=[]
   for(const [slot,command] of Object.entries(config.gateCommands)) {
-    if(command==='none') { assert.equal(proposed.gates[slot],'none',`${slot} absence must be proposed`); continue }
-    const native=execution.commands.find(c=>c.exitCode===0 && unwrapGateExecution(c.command,command,metadata.scratchRoot,metadata.gateWrapper))
+    if(command==='none') { assert.equal(bindings[slot],'none',`${slot} absence must be proposed`); continue }
+    const input=Object.hasOwn(proposed.optionalGates??{},slot)&&/[{}]/.test(command) ? optionalGateCommand(proposed,slot,command) : null
+    const resolved=input?.resolvedCommand??command
+    const native=execution.commands.find(c=>c.exitCode===0 && unwrapGateExecution(c.command,resolved,metadata.scratchRoot,metadata.gateWrapper))
     assert.ok(native,`missing exact native execution for ${slot}: ${command}`)
-    const envelope=unwrapGateExecution(native.command,command,metadata.scratchRoot,metadata.gateWrapper)
-    commandExits.push({slot,command,...envelope,cwd:metadata.scratchRoot,toolCallId:native.id,nativeCommand:native.command,exitCode:native.exitCode})
+    const envelope=unwrapGateExecution(native.command,resolved,metadata.scratchRoot,metadata.gateWrapper)
+    const optional=input ? {configuredCommand:command,substitutions:input.run.substitutions,inputSha256:input.run.inputSha256} : {}
+    commandExits.push({slot,command,...envelope,...optional,cwd:metadata.scratchRoot,toolCallId:native.id,nativeCommand:native.command,exitCode:native.exitCode})
   }
   // Preserve additional executed checks even for structural all-none fixtures.
   for(const native of execution.commands.filter(c=>c.exitCode===0 && /config check|check-readme-catalog/.test(c.command))) commandExits.push({slot:'validation',cwd:metadata.scratchRoot,toolCallId:native.id,nativeCommand:native.command,exitCode:native.exitCode})
-  const arm={...metadata,...source,stages,artifacts,commandExits,
+  let deliveryValidation
+  if (proposed.delivery) {
+  const deliveryNative=execution.commands.find(c=>matchesGateCommand(c.command,proposed.delivery.validationCommands[0].command,metadata.scratchRoot))
+  assert.ok(deliveryNative,'native installed delivery validation missing')
+  const lintNative=execution.commands.find(c=>matchesGateCommand(c.command,ACTIONLINT_PROBE,metadata.scratchRoot))
+  assert.ok(lintNative,'native optional actionlint probe missing')
+  deliveryValidation={commandExits:[{nativeCommand:deliveryNative.command,toolCallId:deliveryNative.id,exitCode:deliveryNative.exitCode}],actionlint:{command:lintNative.command,toolCallId:lintNative.id,exitCode:lintNative.exitCode,output:lintNative.output}}
+  }
+  const arm={...metadata,...source,stages,artifacts,optionalInputs,commandExits,...(proposed.delivery ? {delivery:proposed.delivery,deliveryValidation} : {}),
     authorityEnvelope:{filesystem:'workspace-write',network:'inherited',approvals:'inherited'},
     pluginManifestSha256:sha256(readFileSync(resolve(ROOT,`plugins/zeroh-greenfield/.${metadata.host==='claude'?'claude':'codex'}-plugin/plugin.json`))),
     beforeTreeHash:treeHash(before),afterTreeHash:treeHash(after),
     diffPaths:[...new Set([...Object.keys(before),...Object.keys(after)])].filter(p=>canonical(before[p])!==canonical(after[p])).sort(),
-    approvedGapAllowlist:proposalPaths(metadata.host,proposal.raw),approvedAbsentGates:Object.entries(proposed.gates).filter(([,v])=>v==='none').map(([k])=>k),
+    approvedGapAllowlist:proposalPaths(metadata.host,proposal.raw),approvedAbsentGates:Object.entries(bindings).filter(([,v])=>v==='none').map(([k])=>k),
     transcriptSha256:sha256(execution.raw),secondRun:{treeHash:treeHash(rerun.after),proposals:[],writes:[]},status:'passed'}
+  if (proposed.delivery) arm.deliveryValidation.schemaDigests=validateDeliveryEvidence({arm,proposal:proposed,before,after,commands:execution.commands}).schemaDigests
   validateSourceBinding(arm);validateObservedArm(arm)
   save(resolve(directory,'validated-arm.json'),arm)
   return arm
@@ -71,7 +93,7 @@ export function project(directories) {
   assert.equal(new Set(arms.map(a=>a.sourceSnapshotSha256)).size,1,'all four arms must share final source')
   for(const field of ['scratchRoot','scratchIdentity','transcriptSha256']) assert.equal(new Set(arms.map(a=>a[field])).size,4,`four distinct native ${field} values required`)
   for(const kind of ['empty','brownfield']) save(resolve(ROOT,`plugins/zeroh-greenfield/dry-runs/${kind}/receipt.json`),{arms:arms.filter(a=>a.kind===kind)})
-  const report=['# Native greenfield validation — 2026-09','', 'Generated by `greenfield-native-driver.mjs` from validated native sessions, independent filesystem observations, and current source snapshots.','', '| Fixture | Host | Result | Execution SHA-256 | Evidence |','| --- | --- | --- | --- | --- |',...arms.map(a=>`| ${a.kind} | ${a.host} | ${a.status} | ${a.transcriptSha256} | [capture](${relative(resolve(ROOT,'plugins/zeroh-greenfield'),resolve(ROOT,a.stages.execution.directory))}/reference.json) |`),'']
+  const report=['# Native greenfield validation — 2026-09','', 'Generated by `greenfield-native-driver.mjs` from validated native sessions, independent filesystem observations, and source snapshots recorded at observation time. Source freshness is checked separately by test:native-evidence.','', '| Fixture | Host | Result | Adapter | Execution SHA-256 | Evidence |','| --- | --- | --- | --- | --- | --- |',...arms.map(a=>`| ${a.kind} | ${a.host} | ${a.status} | ${a.delivery?.adapter ?? 'local prototype'} | ${a.transcriptSha256} | [capture](${relative(resolve(ROOT,'plugins/zeroh-greenfield'),resolve(ROOT,a.stages.execution.directory))}/reference.json) |`),'']
   writeFileSync(resolve(ROOT,'plugins/zeroh-greenfield/DRYRUN-2026-09.md'),report.join('\n'))
 }
 if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {

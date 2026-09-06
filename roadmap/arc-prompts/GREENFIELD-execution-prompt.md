@@ -122,3 +122,17 @@ viky-agent-2 roadmap.config.json designHomes + docs/ux-canon.md, the zeroh monor
 
 Nothing before approval · never a second home · conventions land once · no invented
 stacks/registries/numbers · absent tools are said, never worked around.
+
+## Review repair completion gate
+Gate tables are proposals: inspect actual tooling, configure promised runners,
+and execute every non-`none` binding from the consumer root. Record exit status,
+cwd, and explicitly approved absence reasons; config parsing alone is insufficient.
+Brownfield expands marker categories into independently approved artifact gaps,
+including PRD, both ADRs, CODE-STYLE, architecture index, and UX canon. Existing
+alternate homes satisfy those requirements; optional unselected tools do not
+create gaps. Only a Blade handoff requires zeroh-design. Resolve configuration
+through the installed roadmap-root module, including docs/roadmap and explicit
+overrides; partial or ambiguous roots stop without creating a second home.
+Phase 34 must rerun native fixtures and skill grades after these repairs. Include
+non-Blade/no-design, migrated, ambiguous, missing-runner, and missing-document
+mutations. No earlier receipt or grade is evidence for a changed skill body.

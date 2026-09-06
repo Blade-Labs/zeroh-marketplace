@@ -1,0 +1,85 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test --test-name-pattern=delivery merge manifest: plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs
+TAP version 13
+# Subtest: delivery merge manifest: complete retained policy, jobs, comments and exact trigger replacement validate
+ok 1 - delivery merge manifest: complete retained policy, jobs, comments and exact trigger replacement validate
+  ---
+  duration_ms: 41.428497
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: missing or incomplete preservation proof and wrong baseline digest fail closed
+not ok 2 - delivery merge manifest: missing or incomplete preservation proof and wrong baseline digest fail closed
+  ---
+  duration_ms: 12.317036
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs:589:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception (AssertionError).'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    name: 'AssertionError'
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs:592:42)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: delivery merge manifest: deleting or changing baseline comments and top-level policy is not authorized by job preservation
+not ok 3 - delivery merge manifest: deleting or changing baseline comments and top-level policy is not authorized by job preservation
+  ---
+  duration_ms: 10.942691
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs:595:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception (AssertionError).'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    name: 'AssertionError'
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs:598:56)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: delivery merge manifest: replacing prior trigger requires exact declared before and after values
+not ok 4 - delivery merge manifest: replacing prior trigger requires exact declared before and after values
+  ---
+  duration_ms: 7.373099
+  type: 'test'
+  location: '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs:601:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception (AssertionError).'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    name: 'AssertionError'
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs:604:71)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 1
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 213.527182
+capbuild: command exited non-zero (code 1) — treat as a failure, do not proceed as if it passed.

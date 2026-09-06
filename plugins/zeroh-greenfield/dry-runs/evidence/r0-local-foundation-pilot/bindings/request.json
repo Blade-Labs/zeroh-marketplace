@@ -1,0 +1,20 @@
+{
+  "scratch": "/tmp/greenfield-r0-pilot-px9y6380/project",
+  "evidence": "/tmp/greenfield-r0-pilot-px9y6380/bindings",
+  "stage": "execution",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+    "exec",
+    "--approve-for-me",
+    "--model",
+    "gpt-6-astra",
+    "--json",
+    "resume",
+    "01a0761a-8622-7133-82ea-7729019b39f4",
+    "Fixture-owner approval: I reviewed and approve the exact dependent artifact 65c2e57bb9f2f963903386542a8a408038038c94a2472deaac52ad409871241f.json and only its three listed target changes. Its actual digest and current target hashes/modes were independently checked. Execute its short prepared-program run command unchanged, then run the listed roadmap config check. Retain real exit statuses and inherited permissions; do not retype the program, append status suffixes, add delivery or edit plugin sources. Previous prototype/test/help/catalog checks remain observed evidence for their unchanged output bytes. Report completion and stop; a separate read-only audit follows. No additional consumer writes are authorized."
+  ],
+  "timeout": 600,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "4f1e85dd85729ab3259585f724aaaca5cf0105f0",
+  "sourceSnapshotSha256": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504"
+}

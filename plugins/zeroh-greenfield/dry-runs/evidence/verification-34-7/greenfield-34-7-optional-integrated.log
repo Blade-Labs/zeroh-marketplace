@@ -1,0 +1,276 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-optional-gates.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs
+TAP version 13
+# Subtest: behavior: four real proposal stages refuse writes before approval and reject planted transient writes
+ok 1 - behavior: four real proposal stages refuse writes before approval and reject planted transient writes
+  ---
+  duration_ms: 153.456802
+  type: 'test'
+  ...
+# Subtest: behavior: real arms preserve homes and reject changed preservation, unapproved paths and invented gates
+ok 2 - behavior: real arms preserve homes and reject changed preservation, unapproved paths and invented gates
+  ---
+  duration_ms: 1992.783849
+  type: 'test'
+  ...
+# Subtest: behavior: repeated native audit has no writes, gaps or proposals and rejects planted rerun mutations
+ok 3 - behavior: repeated native audit has no writes, gaps or proposals and rejects planted rerun mutations
+  ---
+  duration_ms: 286.700828
+  type: 'test'
+  ...
+# Subtest: behavior: canonical required artifact and typed gate outcomes agree across native hosts
+ok 4 - behavior: canonical required artifact and typed gate outcomes agree across native hosts
+  ---
+  duration_ms: 213.054803
+  type: 'test'
+  ...
+# Subtest: behavior: real README drift fails, native approved repairs pass twice, and generated Nx marker bytes survive
+ok 5 - behavior: real README drift fails, native approved repairs pass twice, and generated Nx marker bytes survive
+  ---
+  duration_ms: 344.68141
+  type: 'test'
+  ...
+# Subtest: behavior: real native missing-sibling and single-router scenarios satisfy bounded contracts
+ok 6 - behavior: real native missing-sibling and single-router scenarios satisfy bounded contracts
+  ---
+  duration_ms: 70.45025
+  type: 'test'
+  ...
+# Subtest: behavior: STOP parser rejects changed remedy, extra proposal, wrong sibling and narrated success
+ok 7 - behavior: STOP parser rejects changed remedy, extra proposal, wrong sibling and narrated success
+  ---
+  duration_ms: 3.131703
+  type: 'test'
+  ...
+# Subtest: behavior: router result rejects second dispatch, changed route and unsupported marker
+ok 8 - behavior: router result rejects second dispatch, changed route and unsupported marker
+  ---
+  duration_ms: 0.771448
+  type: 'test'
+  ...
+# Subtest: behavior: changed present-home bytes and reordered approval cannot pass native preservation proof
+ok 9 - behavior: changed present-home bytes and reordered approval cannot pass native preservation proof
+  ---
+  duration_ms: 68.149862
+  type: 'test'
+  ...
+# Subtest: delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries
+ok 10 - delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries
+  ---
+  duration_ms: 12.545862
+  type: 'test'
+  ...
+# Subtest: six adapters partition disjoint identities exactly once for one shard and more shards than units
+ok 11 - six adapters partition disjoint identities exactly once for one shard and more shards than units
+  ---
+  duration_ms: 24.099917
+  type: 'test'
+  ...
+# Subtest: authoritative full-suite evidence promotes its one content-addressed build without rebuilding
+ok 12 - authoritative full-suite evidence promotes its one content-addressed build without rebuilding
+  ---
+  duration_ms: 5.631029
+  type: 'test'
+  ...
+# Subtest: evidence rejects missing, duplicate, unexpected, malformed, failing or report-count-regressed shard observations
+ok 13 - evidence rejects missing, duplicate, unexpected, malformed, failing or report-count-regressed shard observations
+  ---
+  duration_ms: 7.455563
+  type: 'test'
+  ...
+# Subtest: coverage and test count floors are enforced from raw observations, never supplied summaries
+ok 14 - coverage and test count floors are enforced from raw observations, never supplied summaries
+  ---
+  duration_ms: 4.808573
+  type: 'test'
+  ...
+# Subtest: required-test failure remains red when a later retry passes
+ok 15 - required-test failure remains red when a later retry passes
+  ---
+  duration_ms: 1.72262
+  type: 'test'
+  ...
+# Subtest: release rejects stale SHA, expiry, ambiguous producers and changed inventory/report/build links
+ok 16 - release rejects stale SHA, expiry, ambiguous producers and changed inventory/report/build links
+  ---
+  duration_ms: 10.684319
+  type: 'test'
+  ...
+# Subtest: Nx and Gradle shard only nonoverlapping leaf tasks and reject aggregate/dependency double counting
+ok 17 - Nx and Gradle shard only nonoverlapping leaf tasks and reject aggregate/dependency double counting
+  ---
+  duration_ms: 1.188763
+  type: 'test'
+  ...
+# Subtest: only bounded infrastructure failures can retry; quarantine remains blocking and needs accountable metadata
+ok 18 - only bounded infrastructure failures can retry; quarantine remains blocking and needs accountable metadata
+  ---
+  duration_ms: 4.194925
+  type: 'test'
+  ...
+# Subtest: baseline changes require an approval bound to both old and proposed baseline digests
+ok 19 - baseline changes require an approval bound to both old and proposed baseline digests
+  ---
+  duration_ms: 2.958231
+  type: 'test'
+  ...
+# Subtest: build authority cannot be claimed for a different tree, failed build, duplicate path or unsafe artifact name
+ok 20 - build authority cannot be claimed for a different tree, failed build, duplicate path or unsafe artifact name
+  ---
+  duration_ms: 6.097157
+  type: 'test'
+  ...
+# Subtest: raw parser failures cannot be hidden by a passed envelope or fabricated normalized cases
+ok 21 - raw parser failures cannot be hidden by a passed envelope or fabricated normalized cases
+  ---
+  duration_ms: 2.308726
+  type: 'test'
+  ...
+# Subtest: explicit raw adapters parse Flutter machine completion, JUnit cases, LCOV and JaCoCo line evidence
+ok 22 - explicit raw adapters parse Flutter machine completion, JUnit cases, LCOV and JaCoCo line evidence
+  ---
+  duration_ms: 12.74436
+  type: 'test'
+  ...
+# Subtest: raw report completeness rejects contradictory summaries and duplicate machine/source identities
+ok 23 - raw report completeness rejects contradictory summaries and duplicate machine/source identities
+  ---
+  duration_ms: 6.358674
+  type: 'test'
+  ...
+# Subtest: actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+ok 24 - actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+  ---
+  duration_ms: 808.057188
+  type: 'test'
+  ...
+# Subtest: actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports
+ok 25 - actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports
+  ---
+  duration_ms: 668.957166
+  type: 'test'
+  ...
+# Subtest: actual workflow builds once; allowlisted AWS promotion verifies immutable provider readback without rebuild
+ok 26 - actual workflow builds once; allowlisted AWS promotion verifies immutable provider readback without rebuild
+  ---
+  duration_ms: 1277.707138
+  type: 'test'
+  ...
+# Subtest: all six selected adapter contracts execute their exact inventory argv and retain runner-specific raw reports
+ok 27 - all six selected adapter contracts execute their exact inventory argv and retain runner-specific raw reports
+  ---
+  duration_ms: 1760.446584
+  type: 'test'
+  ...
+# Subtest: workflow privilege separation prevents test/build jobs from publishing and orders fan-in before build
+ok 28 - workflow privilege separation prevents test/build jobs from publishing and orders fan-in before build
+  ---
+  duration_ms: 2.215909
+  type: 'test'
+  ...
+# Subtest: actual inventory adapter executes configured argv and fails closed with remedy when tooling is absent
+ok 29 - actual inventory adapter executes configured argv and fails closed with remedy when tooling is absent
+  ---
+  duration_ms: 381.951275
+  type: 'test'
+  ...
+# Subtest: file-filter adapters prove selected inventory before execution and reject overmatching runner selection
+ok 30 - file-filter adapters prove selected inventory before execution and reject overmatching runner selection
+  ---
+  duration_ms: 283.074383
+  type: 'test'
+  ...
+# Subtest: failed runner with absent reports stays red while actual stdout and stderr diagnostics survive
+ok 31 - failed runner with absent reports stays red while actual stdout and stderr diagnostics survive
+  ---
+  duration_ms: 134.274487
+  type: 'test'
+  ...
+# Subtest: actual Git source guard rejects tracked and new source writes during setup, run and build
+ok 32 - actual Git source guard rejects tracked and new source writes during setup, run and build
+  ---
+  duration_ms: 1135.277303
+  type: 'test'
+  ...
+# Subtest: source guard allows approved cache writes and build outputs only in the build stage
+ok 33 - source guard allows approved cache writes and build outputs only in the build stage
+  ---
+  duration_ms: 939.632901
+  type: 'test'
+  ...
+# Subtest: runtime may not broaden prebound operational roots to authorize source writes
+ok 34 - runtime may not broaden prebound operational roots to authorize source writes
+  ---
+  duration_ms: 113.277044
+  type: 'test'
+  ...
+# Subtest: release verification binds the complete build record and source identity even for unchanged artifact bytes
+ok 35 - release verification binds the complete build record and source identity even for unchanged artifact bytes
+  ---
+  duration_ms: 2.504447
+  type: 'test'
+  ...
+# Subtest: standard JaCoCo declaration parses locally while unknown or entity-bearing doctypes remain rejected
+ok 36 - standard JaCoCo declaration parses locally while unknown or entity-bearing doctypes remain rejected
+  ---
+  duration_ms: 0.78783
+  type: 'test'
+  ...
+# Subtest: Nx proposal and config bind the required seven gates plus all three optional unit selectors
+ok 37 - Nx proposal and config bind the required seven gates plus all three optional unit selectors
+  ---
+  duration_ms: 2.698347
+  type: 'test'
+  ...
+# Subtest: optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage
+ok 38 - optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage
+  ---
+  duration_ms: 4.138058
+  type: 'test'
+  ...
+# Subtest: unit-scoped evidence binds its exact input, native command, and selector tier
+ok 39 - unit-scoped evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 5.984493
+  type: 'test'
+  ...
+# Subtest: unit-affected evidence binds its exact input, native command, and selector tier
+ok 40 - unit-affected evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 2.354392
+  type: 'test'
+  ...
+# Subtest: unit-impacted evidence binds its exact input, native command, and selector tier
+ok 41 - unit-impacted evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 1.946785
+  type: 'test'
+  ...
+# Subtest: manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift
+ok 42 - manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift
+  ---
+  duration_ms: 15.243398
+  type: 'test'
+  ...
+# Subtest: affected manifest requires a non-test path and cannot masquerade as scoped or full fallback
+ok 43 - affected manifest requires a non-test path and cannot masquerade as scoped or full fallback
+  ---
+  duration_ms: 4.749461
+  type: 'test'
+  ...
+# Subtest: impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector
+ok 44 - impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector
+  ---
+  duration_ms: 6.521805
+  type: 'test'
+  ...
+1..44
+# tests 44
+# suites 0
+# pass 44
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7786.513446

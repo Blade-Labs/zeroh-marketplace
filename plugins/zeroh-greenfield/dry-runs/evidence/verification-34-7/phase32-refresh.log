@@ -1,0 +1,4 @@
+warning: untested gate-fix: b0bc06a "fix(phase-32): phase 32 gate R0 — unify fallback note and remove dead import" touches only source files with no test in its diff — reviewer judges (MECHRATCHET rank 9)
+warning: untested gate-fix: a1d462b "fix(greenfield): phase 32 gate R1 — resolve catalog roots from workspace" touches only source files with no test in its diff — reviewer judges (MECHRATCHET rank 9)
+warning: attribution-breaking commit grammar (D2 scope-carried (phase-N)): b0bc06a "fix(phase-32): phase 32 gate R0 — unify fallback note and remove dead import" — use "type(scope): phase N — <imperative summary>"
+phase 32 consistent with the latest green gate report

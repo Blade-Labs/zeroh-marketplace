@@ -259,7 +259,19 @@ test('D4 — `roadmap gate plan <N>` builds the plan from the docs-layout phase 
   assert.equal(r.json?.kind, 'mockup', 'the kind is READ from the docs-layout phase file (bridge-imported through <root>/lib/schema.ts)')
   const slots = (r.json?.slots ?? []).map((s) => s.slot)
   assert.ok(slots.includes('lint') && slots.includes('types'), `the mockup cell resolves lint+types; got ${slots}`)
-  assert.ok(!slots.includes('build') && !slots.includes('unit'), `the mockup cell carries no build/unit; got ${slots}`)
+  assert.deepEqual(slots.filter(slot => /^(build|unit|integration|e2e)(-|$)/.test(slot)), [], 'the mockup cell excludes every runtime gate variant')
+})
+
+test('D4 — explicit relevant/full scopes cannot add runtime slots to a mockup cell', () => {
+  for (const testScope of ['relevant', 'full']) {
+    const repo = docsFixture()
+    writePhaseFile(repo, fullPhase(9606, { status: 'in-progress', arcId: 'DOCSFX', kind: 'mockup', testScope }), { kind: 'define' })
+    writeFileSync(join(repo, 'src/preview.test.ts'), 'export const preview = true\n')
+    commitAll(repo, 'feat: phase 9606 — start')
+    const result = runCli(repo, ['gate', 'plan', '9606', '--json'])
+    assert.equal(result.code, 0, result.stderr)
+    assert.deepEqual(result.json.slots.filter(({ slot }) => /^(build|unit|integration|e2e)(-|$)/.test(slot)), [], `${testScope} must honor the mockup cell`)
+  }
 })
 
 // ── D5 — `roadmap claim` reserves the next number in the docs layout ─────────────────────

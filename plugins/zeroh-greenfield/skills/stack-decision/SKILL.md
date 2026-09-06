@@ -11,14 +11,12 @@ Not this skill: route initial trigger selection through `using-zeroh-greenfield`
 
 ## Selection
 
-Ask exactly one selection question per applicable matrix.
-Do not preselect any option before the user answers.
+Reuse an explicit selection and its stated rationale already supplied in the conversation. Ask one selection question only for an unresolved applicable matrix; do not ask the user to repeat a settled choice. Do not infer a selection from preferences.
 Present the backend matrix ONLY when the PRD answers name an API.
 
 Accept an explicit named option or a request to revisit requirements. Do not
-infer a choice from preferences. When the user chooses, ask for or summarize the
-reason and confirm it before producing the ruling.
-If matrix evidence is unavailable, PRD answers conflict, or the reason is unconfirmed, STOP with `status: unresolved` and name the missing evidence or conflicting answers. Treat selection and STOP behavior as honor-system.
+infer a choice from preferences. Reuse the stated reason; ask only if it is absent or conflicts with the requirements. Summarize the ruling without another confirmation round when the selection and reason are explicit.
+If matrix evidence is unavailable, PRD answers conflict, or the reason is missing, STOP with `status: unresolved` and name the missing evidence or conflicting answers. Treat selection and STOP behavior as honor-system.
 
 ## Callers and ownership
 

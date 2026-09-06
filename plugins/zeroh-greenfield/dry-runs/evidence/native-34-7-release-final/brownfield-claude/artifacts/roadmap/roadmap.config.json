@@ -1,0 +1,35 @@
+{
+  "configVersion": 1,
+  "gateCommands": {
+    "lint": "none",
+    "types": "none",
+    "unit": "env NX_DAEMON=false npm test",
+    "integration": "none",
+    "build": "env NX_DAEMON=false npm run build",
+    "e2e": "none",
+    "emit": "none",
+    "unit-scoped": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'",
+    "unit-affected": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'",
+    "unit-impacted": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{range}'"
+  },
+  "testCadence": {
+    "enabled": true,
+    "backstop": ".github/workflows/ci.yml (authoritative full suite on main/manual runs)"
+  },
+  "designHomes": {
+    "architecture": {
+      "home": "docs/architecture.md"
+    },
+    "ux": {
+      "canon": [
+        "docs/ux-canon.md"
+      ]
+    }
+  },
+  "testConventions": [
+    "Vitest 5.0.0 tests live in packages/<project>/test/**/*.test.mjs and run through the uncached Nx test target of that project",
+    "Each Vitest config writes junit.xml and lcov.info under .ci/nx/<project> or GREENFIELD_REPORT_DIR",
+    "Scoped and affected tiers take a scope-manifest-json-v1 file: node scripts/run-nx-test-tier.mjs '{manifest}'",
+    "The impacted tier takes a git range: node scripts/run-nx-test-tier.mjs '{range}'"
+  ]
+}

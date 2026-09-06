@@ -1,0 +1,150 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, relative } from 'node:path'
+import {
+  CORE_GATES,
+  ROOT,
+  sha256,
+  validateOptionalGateBindings,
+  validateOptionalGateEvidence,
+} from './greenfield-native-evidence.mjs'
+
+// Synthetic protocol fixtures only. These records are never native-run claims.
+const OPTIONAL = ['unit-scoped', 'unit-affected', 'unit-impacted']
+const TEMPLATES = {
+  'unit-scoped': "node scripts/run-nx-test-tier.mjs '{manifest}'",
+  'unit-affected': "node scripts/run-nx-test-tier.mjs '{manifest}'",
+  'unit-impacted': 'node scripts/run-nx-test-tier.mjs {range}',
+}
+const roots = []
+process.on('exit', () => roots.forEach((root) => rmSync(root, { recursive: true, force: true })))
+
+function bindingFixture() {
+  const gates = Object.fromEntries(CORE_GATES.map((slot) => [slot, slot === 'unit' ? 'npm test' : 'none']))
+  const proposal = {
+    gates,
+    optionalGates: { ...TEMPLATES },
+    optionalGateRuns: {},
+    delivery: { adapter: 'nx-monorepo' },
+  }
+  return { proposal, config: { gateCommands: { ...gates, ...TEMPLATES } } }
+}
+
+test('Nx proposal and config bind the required seven gates plus all three optional unit selectors', () => {
+  const { proposal, config } = bindingFixture()
+  assert.deepEqual(validateOptionalGateBindings(proposal, config), { ...proposal.gates, ...proposal.optionalGates })
+})
+
+test('optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage', () => {
+  const mutations = [
+    ({ proposal }) => { delete proposal.gates.unit },
+    ({ proposal }) => { proposal.gates.unknown = 'npm run unknown' },
+    ({ proposal }) => { delete proposal.optionalGates['unit-scoped'] },
+    ({ proposal }) => { proposal.optionalGates.unknown = 'npm run unknown' },
+    ({ proposal }) => { proposal.optionalGates['unit-affected'] = 'none' },
+    ({ config }) => { delete config.gateCommands['unit-impacted'] },
+    ({ config }) => { config.gateCommands['unit-scoped'] = 'npm test' },
+    ({ config }) => { config.gateCommands.unknown = 'npm run unknown' },
+  ]
+  for (const mutate of mutations) {
+    const fixture = bindingFixture()
+    mutate(fixture)
+    assert.throws(() => validateOptionalGateBindings(fixture.proposal, fixture.config), { name: 'AssertionError' })
+  }
+})
+
+function evidenceFixture(t, slot) {
+  const scratch = mkdtempSync(join(tmpdir(), 'greenfield-optional-gate-'))
+  roots.push(scratch)
+  t.after(() => rmSync(scratch, { recursive: true, force: true }))
+  const isRange = slot === 'unit-impacted'
+  const relativeManifest = '.zeroh/evidence/scope.json'
+  const manifest = join(scratch, relativeManifest)
+  const manifestBytes = JSON.stringify({ protocol: 'scope-manifest-json-v1', paths: slot === 'unit-scoped' ? ['packages/a/src/a.test.ts', 'packages/b/src/b.spec.ts'] : ['packages/a/src/a.ts', 'packages/b/src/b.test.ts'] })
+  mkdirSync(dirname(manifest), { recursive: true })
+  writeFileSync(manifest, manifestBytes)
+  const range = `${'1'.repeat(40)}..${'2'.repeat(40)}`
+  const substitutions = isRange ? { range } : { manifest: `@${manifest}` }
+  const replacement = isRange ? range : substitutions.manifest
+  const configuredCommand = TEMPLATES[slot]
+  const actual = configuredCommand.replace(isRange ? '{range}' : "'{manifest}'", replacement)
+  const selector = { tier: slot === 'unit-scoped' ? 'scoped' : 'affected' }
+  const selectorCall = { id: `call-${slot}`, command: `cd '${scratch}' && ${actual}`, exitCode: 0, output: `${JSON.stringify(selector)}\n` }
+  const commands = isRange ? [
+    { id: 'call-head', command: `cd '${scratch}' && git rev-parse HEAD`, exitCode: 0, output: `${'2'.repeat(40)}\n` },
+    { id: 'call-diff', command: `cd '${scratch}' && git diff --name-only -z ${range}`, exitCode: 0, output: 'packages/a/src/a.ts\0packages/b/src/b.test.ts\0' },
+    selectorCall,
+  ] : [selectorCall]
+  const selectorSha256 = sha256(readFileSync(join(ROOT, 'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs')))
+  const after = isRange ? {
+    'packages/a/src/a.ts': { sha256: sha256('source'), mode: 33188 },
+    'packages/b/src/b.test.ts': { sha256: sha256('test'), mode: 33188 },
+  } : {
+    [relativeManifest]: { sha256: sha256(manifestBytes), mode: 33188 },
+    ...Object.fromEntries(JSON.parse(manifestBytes).paths.map((path) => [path, { sha256: sha256(path), mode: 33188 }])),
+  }
+  after['scripts/run-nx-test-tier.mjs'] = { sha256: selectorSha256, mode: 33188 }
+  const arm = { scratchRoot: scratch, optionalInputs: {} }
+  if (!isRange) arm.optionalInputs[slot] = { path: manifest, sha256: sha256(manifestBytes) }
+  const proposal = { optionalGateRuns: { [slot]: { substitutions, inputSha256: sha256(isRange ? range : manifestBytes) } } }
+  const evidence = { slot, command: configuredCommand, configuredCommand, executedCommand: actual, substitutions, inputSha256: proposal.optionalGateRuns[slot].inputSha256, cwd: scratch, toolCallId: selectorCall.id, nativeCommand: selectorCall.command, exitCode: 0, wrapper: null }
+  return { arm, proposal, slot, configuredCommand, after, commands, evidence, manifest, manifestBytes, range, relativeManifest }
+}
+
+for (const slot of OPTIONAL) test(`${slot} evidence binds its exact input, native command, and selector tier`, (t) => {
+  const fixture = evidenceFixture(t, slot)
+  assert.doesNotThrow(() => validateOptionalGateEvidence(fixture))
+})
+
+test('manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift', (t) => {
+  const mutations = [
+    (f) => { f.proposal.optionalGateRuns[f.slot].substitutions.manifest = '@../scope.json'; f.evidence.substitutions = f.proposal.optionalGateRuns[f.slot].substitutions },
+    (f) => { f.proposal.optionalGateRuns[f.slot].substitutions.range = `${'1'.repeat(40)}..${'2'.repeat(40)}`; f.evidence.substitutions = f.proposal.optionalGateRuns[f.slot].substitutions },
+    (f) => { writeFileSync(f.manifest, '{"protocol":"scope-manifest-json-v1","paths":[]}'); f.arm.optionalInputs[f.slot].sha256 = sha256('{"protocol":"scope-manifest-json-v1","paths":[]}') },
+    (f) => { writeFileSync(f.manifest, JSON.stringify({ protocol: 'scope-manifest-json-v1', paths: ['packages/a/src/a.test.ts', '../escape.test.ts'] })); f.arm.optionalInputs[f.slot].sha256 = sha256(requireBytes(f.manifest)) },
+    (f) => { f.evidence.slot = 'unit-affected' },
+    (f) => { f.evidence.inputSha256 = '0'.repeat(64) },
+    (f) => { f.evidence.executedCommand += ' --extra' },
+    (f) => { f.commands[0].exitCode = 1; f.commands[0].output = 'passed according to narration' },
+  ]
+  for (const mutate of mutations) {
+    const fixture = evidenceFixture(t, 'unit-scoped')
+    mutate(fixture)
+    assert.throws(() => validateOptionalGateEvidence(fixture), { name: 'AssertionError' })
+  }
+})
+
+function requireBytes(path) {
+  return readFileSync(path)
+}
+
+test('affected manifest requires a non-test path and cannot masquerade as scoped or full fallback', (t) => {
+  for (const mutate of [
+    (f) => { const bytes = JSON.stringify({ protocol: 'scope-manifest-json-v1', paths: ['packages/a/src/a.test.ts'] }); writeFileSync(f.manifest, bytes); f.arm.optionalInputs[f.slot].sha256 = sha256(bytes); f.proposal.optionalGateRuns[f.slot].inputSha256 = sha256(bytes); f.evidence.inputSha256 = sha256(bytes) },
+    (f) => { f.commands[0].output = '{"tier":"scoped"}\n' },
+    (f) => { f.commands[0].output = '{"tier":"full"}\n' },
+  ]) {
+    const fixture = evidenceFixture(t, 'unit-affected')
+    mutate(fixture)
+    assert.throws(() => validateOptionalGateEvidence(fixture), { name: 'AssertionError' })
+  }
+})
+
+test('impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector', (t) => {
+  const mutations = [
+    (f) => { f.proposal.optionalGateRuns[f.slot].substitutions.range = 'HEAD~1..HEAD'; f.evidence.substitutions = f.proposal.optionalGateRuns[f.slot].substitutions },
+    (f) => { f.commands[0].output = `${'3'.repeat(40)}\n` },
+    (f) => { f.commands[1].output = '' },
+    (f) => { f.commands[1].output = '../escape.ts\0' },
+    (f) => { f.commands[1].exitCode = 1 },
+    (f) => { f.commands[2].output = '{"tier":"full"}\n' },
+    (f) => { f.commands[2].output = 'selector passed' },
+  ]
+  for (const mutate of mutations) {
+    const fixture = evidenceFixture(t, 'unit-impacted')
+    mutate(fixture)
+    assert.throws(() => validateOptionalGateEvidence(fixture), { name: 'AssertionError' })
+  }
+})

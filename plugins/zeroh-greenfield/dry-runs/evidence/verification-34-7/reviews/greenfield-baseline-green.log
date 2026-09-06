@@ -1,0 +1,374 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs
+TAP version 13
+# Subtest: delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries
+ok 1 - delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries
+  ---
+  duration_ms: 10.991573
+  type: 'test'
+  ...
+# Subtest: six adapters partition disjoint identities exactly once for one shard and more shards than units
+ok 2 - six adapters partition disjoint identities exactly once for one shard and more shards than units
+  ---
+  duration_ms: 22.626528
+  type: 'test'
+  ...
+# Subtest: authoritative full-suite evidence promotes its one content-addressed build without rebuilding
+ok 3 - authoritative full-suite evidence promotes its one content-addressed build without rebuilding
+  ---
+  duration_ms: 5.15004
+  type: 'test'
+  ...
+# Subtest: evidence rejects missing, duplicate, unexpected, malformed, failing or report-count-regressed shard observations
+ok 4 - evidence rejects missing, duplicate, unexpected, malformed, failing or report-count-regressed shard observations
+  ---
+  duration_ms: 6.59825
+  type: 'test'
+  ...
+# Subtest: coverage and test count floors are enforced from raw observations, never supplied summaries
+ok 5 - coverage and test count floors are enforced from raw observations, never supplied summaries
+  ---
+  duration_ms: 4.310435
+  type: 'test'
+  ...
+# Subtest: required-test failure remains red when a later retry passes
+ok 6 - required-test failure remains red when a later retry passes
+  ---
+  duration_ms: 1.088628
+  type: 'test'
+  ...
+# Subtest: release rejects stale SHA, expiry, ambiguous producers and changed inventory/report/build links
+ok 7 - release rejects stale SHA, expiry, ambiguous producers and changed inventory/report/build links
+  ---
+  duration_ms: 11.458771
+  type: 'test'
+  ...
+# Subtest: Nx and Gradle shard only nonoverlapping leaf tasks and reject aggregate/dependency double counting
+ok 8 - Nx and Gradle shard only nonoverlapping leaf tasks and reject aggregate/dependency double counting
+  ---
+  duration_ms: 1.206531
+  type: 'test'
+  ...
+# Subtest: only bounded infrastructure failures can retry; quarantine remains blocking and needs accountable metadata
+ok 9 - only bounded infrastructure failures can retry; quarantine remains blocking and needs accountable metadata
+  ---
+  duration_ms: 4.127219
+  type: 'test'
+  ...
+# Subtest: baseline changes require an approval bound to both old and proposed baseline digests
+ok 10 - baseline changes require an approval bound to both old and proposed baseline digests
+  ---
+  duration_ms: 2.964851
+  type: 'test'
+  ...
+# Subtest: build authority cannot be claimed for a different tree, failed build, duplicate path or unsafe artifact name
+ok 11 - build authority cannot be claimed for a different tree, failed build, duplicate path or unsafe artifact name
+  ---
+  duration_ms: 13.84935
+  type: 'test'
+  ...
+# Subtest: raw parser failures cannot be hidden by a passed envelope or fabricated normalized cases
+ok 12 - raw parser failures cannot be hidden by a passed envelope or fabricated normalized cases
+  ---
+  duration_ms: 2.197623
+  type: 'test'
+  ...
+# Subtest: explicit raw adapters parse Flutter machine completion, JUnit cases, LCOV and JaCoCo line evidence
+ok 13 - explicit raw adapters parse Flutter machine completion, JUnit cases, LCOV and JaCoCo line evidence
+  ---
+  duration_ms: 12.641016
+  type: 'test'
+  ...
+# Subtest: raw report completeness rejects contradictory summaries and duplicate machine/source identities
+ok 14 - raw report completeness rejects contradictory summaries and duplicate machine/source identities
+  ---
+  duration_ms: 0.893917
+  type: 'test'
+  ...
+# Subtest: actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+ok 15 - actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+  ---
+  duration_ms: 691.878638
+  type: 'test'
+  ...
+# Subtest: prepared workflow preserves approved baselines and requires correctly bound change approval
+    # Subtest: unchanged valid baseline passes without change approval
+    ok 1 - unchanged valid baseline passes without change approval
+      ---
+      duration_ms: 698.810734
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects missing approval
+    ok 2 - minTests: rejects missing approval
+      ---
+      duration_ms: 131.121234
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects previousDigest approval
+    ok 3 - minTests: rejects previousDigest approval
+      ---
+      duration_ms: 144.818746
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects approvedDigest approval
+    ok 4 - minTests: rejects approvedDigest approval
+      ---
+      duration_ms: 146.389019
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects baseSha approval
+    ok 5 - minTests: rejects baseSha approval
+      ---
+      duration_ms: 135.421231
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects owner approval
+    ok 6 - minTests: rejects owner approval
+      ---
+      duration_ms: 140.437988
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects reason approval
+    ok 7 - minTests: rejects reason approval
+      ---
+      duration_ms: 149.246735
+      type: 'test'
+      ...
+    # Subtest: minTests: accepts explicitly approved old and proposed baselines
+    ok 8 - minTests: accepts explicitly approved old and proposed baselines
+      ---
+      duration_ms: 693.706208
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects missing approval
+    ok 9 - minUnits: rejects missing approval
+      ---
+      duration_ms: 147.792334
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects previousDigest approval
+    ok 10 - minUnits: rejects previousDigest approval
+      ---
+      duration_ms: 126.476424
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects approvedDigest approval
+    ok 11 - minUnits: rejects approvedDigest approval
+      ---
+      duration_ms: 125.334967
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects baseSha approval
+    ok 12 - minUnits: rejects baseSha approval
+      ---
+      duration_ms: 145.345738
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects owner approval
+    ok 13 - minUnits: rejects owner approval
+      ---
+      duration_ms: 135.805873
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects reason approval
+    ok 14 - minUnits: rejects reason approval
+      ---
+      duration_ms: 177.612135
+      type: 'test'
+      ...
+    # Subtest: minUnits: accepts explicitly approved old and proposed baselines
+    ok 15 - minUnits: accepts explicitly approved old and proposed baselines
+      ---
+      duration_ms: 717.493035
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects missing approval
+    ok 16 - coverageFloor: rejects missing approval
+      ---
+      duration_ms: 144.252835
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects previousDigest approval
+    ok 17 - coverageFloor: rejects previousDigest approval
+      ---
+      duration_ms: 141.199656
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects approvedDigest approval
+    ok 18 - coverageFloor: rejects approvedDigest approval
+      ---
+      duration_ms: 145.523508
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects baseSha approval
+    ok 19 - coverageFloor: rejects baseSha approval
+      ---
+      duration_ms: 147.905249
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects owner approval
+    ok 20 - coverageFloor: rejects owner approval
+      ---
+      duration_ms: 154.69274
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects reason approval
+    ok 21 - coverageFloor: rejects reason approval
+      ---
+      duration_ms: 160.449703
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: accepts explicitly approved old and proposed baselines
+    ok 22 - coverageFloor: accepts explicitly approved old and proposed baselines
+      ---
+      duration_ms: 750.51333
+      type: 'test'
+      ...
+    1..22
+ok 16 - prepared workflow preserves approved baselines and requires correctly bound change approval
+  ---
+  duration_ms: 5465.435502
+  type: 'test'
+  ...
+# Subtest: prepared workflow derives prior baseline from Git and requires explicit bootstrap approval
+    # Subtest: approval cannot replace the Git baseline with caller-selected previous values
+    ok 1 - approval cannot replace the Git baseline with caller-selected previous values
+      ---
+      duration_ms: 140.03235
+      type: 'test'
+      ...
+    # Subtest: an unavailable base cannot be treated as first adoption
+    ok 2 - an unavailable base cannot be treated as first adoption
+      ---
+      duration_ms: 119.034775
+      type: 'test'
+      ...
+    # Subtest: local first-parent fallback retains changed baseline approval
+    ok 3 - local first-parent fallback retains changed baseline approval
+      ---
+      duration_ms: 861.588545
+      type: 'test'
+      ...
+    # Subtest: proven first adoption needs explicit approval
+    ok 4 - proven first adoption needs explicit approval
+      ---
+      duration_ms: 835.841073
+      type: 'test'
+      ...
+    # Subtest: bootstrap approval cannot hide an existing approved baseline
+    ok 5 - bootstrap approval cannot hide an existing approved baseline
+      ---
+      duration_ms: 129.396273
+      type: 'test'
+      ...
+    # Subtest: bootstrap rejects invalid previousDigest
+    ok 6 - bootstrap rejects invalid previousDigest
+      ---
+      duration_ms: 128.698298
+      type: 'test'
+      ...
+    # Subtest: bootstrap rejects invalid approvedDigest
+    ok 7 - bootstrap rejects invalid approvedDigest
+      ---
+      duration_ms: 126.514941
+      type: 'test'
+      ...
+    # Subtest: bootstrap rejects invalid owner
+    ok 8 - bootstrap rejects invalid owner
+      ---
+      duration_ms: 124.378304
+      type: 'test'
+      ...
+    # Subtest: bootstrap rejects invalid reason
+    ok 9 - bootstrap rejects invalid reason
+      ---
+      duration_ms: 138.274054
+      type: 'test'
+      ...
+    1..9
+ok 17 - prepared workflow derives prior baseline from Git and requires explicit bootstrap approval
+  ---
+  duration_ms: 2605.814535
+  type: 'test'
+  ...
+# Subtest: actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports
+ok 18 - actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports
+  ---
+  duration_ms: 646.594383
+  type: 'test'
+  ...
+# Subtest: actual workflow builds once; allowlisted AWS promotion verifies immutable provider readback without rebuild
+ok 19 - actual workflow builds once; allowlisted AWS promotion verifies immutable provider readback without rebuild
+  ---
+  duration_ms: 1214.42729
+  type: 'test'
+  ...
+# Subtest: all six selected adapter contracts execute their exact inventory argv and retain runner-specific raw reports
+ok 20 - all six selected adapter contracts execute their exact inventory argv and retain runner-specific raw reports
+  ---
+  duration_ms: 1851.774683
+  type: 'test'
+  ...
+# Subtest: workflow privilege separation prevents test/build jobs from publishing and orders fan-in before build
+ok 21 - workflow privilege separation prevents test/build jobs from publishing and orders fan-in before build
+  ---
+  duration_ms: 1.250505
+  type: 'test'
+  ...
+# Subtest: actual inventory adapter executes configured argv and fails closed with remedy when tooling is absent
+ok 22 - actual inventory adapter executes configured argv and fails closed with remedy when tooling is absent
+  ---
+  duration_ms: 441.966959
+  type: 'test'
+  ...
+# Subtest: file-filter adapters prove selected inventory before execution and reject overmatching runner selection
+ok 23 - file-filter adapters prove selected inventory before execution and reject overmatching runner selection
+  ---
+  duration_ms: 276.97844
+  type: 'test'
+  ...
+# Subtest: failed runner with absent reports stays red while actual stdout and stderr diagnostics survive
+ok 24 - failed runner with absent reports stays red while actual stdout and stderr diagnostics survive
+  ---
+  duration_ms: 124.027872
+  type: 'test'
+  ...
+# Subtest: actual Git source guard rejects tracked and new source writes during setup, run and build
+ok 25 - actual Git source guard rejects tracked and new source writes during setup, run and build
+  ---
+  duration_ms: 1087.602002
+  type: 'test'
+  ...
+# Subtest: source guard allows approved cache writes and build outputs only in the build stage
+ok 26 - source guard allows approved cache writes and build outputs only in the build stage
+  ---
+  duration_ms: 932.52015
+  type: 'test'
+  ...
+# Subtest: runtime may not broaden prebound operational roots to authorize source writes
+ok 27 - runtime may not broaden prebound operational roots to authorize source writes
+  ---
+  duration_ms: 103.383086
+  type: 'test'
+  ...
+# Subtest: release verification binds the complete build record and source identity even for unchanged artifact bytes
+ok 28 - release verification binds the complete build record and source identity even for unchanged artifact bytes
+  ---
+  duration_ms: 2.571653
+  type: 'test'
+  ...
+# Subtest: standard JaCoCo declaration parses locally while unknown or entity-bearing doctypes remain rejected
+ok 29 - standard JaCoCo declaration parses locally while unknown or entity-bearing doctypes remain rejected
+  ---
+  duration_ms: 0.735988
+  type: 'test'
+  ...
+1..29
+# tests 60
+# suites 0
+# pass 60
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15716.556881

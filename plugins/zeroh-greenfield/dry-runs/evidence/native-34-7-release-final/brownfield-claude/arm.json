@@ -1,0 +1,42 @@
+{
+  "kind": "brownfield",
+  "host": "claude",
+  "scratchRoot": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+  "scratchIdentity": "f57b302d-cf02-451a-b265-ef7a6860aac4",
+  "executable": "/home/patrik/.nvm/versions/node/v22.23.2/bin/claude",
+  "version": "2.1.257 (Claude Code)",
+  "gateWrapper": {
+    "kind": "capbuild",
+    "executable": "/home/patrik/.local/bin/capbuild",
+    "realpath": "/home/patrik/illumination_VS_setup/scripts/capbuild",
+    "sha256": "f71688b5aa30a7bdc2a900c20593c625192bce54cc7713d66dfd40dca7fc2083",
+    "defaults": {
+      "memoryMax": "8G",
+      "memorySwapMax": "2G",
+      "heapMB": 4096,
+      "slice": "dev.slice"
+    },
+    "hostMetadataEffects": [
+      "systemd-user-transient-units",
+      "/run/user/1000/capbuild-locks"
+    ]
+  },
+  "fixtureRange": "b44e99d8e1fdb8ac490073a3af688c9622d1cbaa..5978aece5090694125b255ee7772be83ef1d61d4",
+  "existingHomePaths": [
+    "AGENTS.md",
+    "docs/architecture/boundaries.md",
+    "docs/architecture/workflow.md"
+  ],
+  "catalogCheck": {
+    "mode": "catalog",
+    "source": "emitted/repo-catalog.json",
+    "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+    "sourceSha256": "1edd9cad271b877cc8ba95936c4289d3c2c694d06ff63cd220e09ef44f334d5a"
+  },
+  "existingWorkflowArtifacts": {
+    ".github/workflows/ci.yml": {
+      "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-7-release-final/brownfield-claude/baseline/.github/workflows/ci.yml",
+      "sha256": "e7891d45079a930ac46a2cac18033cdcdc1fa75abdb95dea60f51161ee447907"
+    }
+  }
+}

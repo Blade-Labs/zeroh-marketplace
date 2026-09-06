@@ -136,3 +136,12 @@ Works on Claude Code, Cursor, GitHub Copilot, Gemini CLI, and Codex.
 ## License
 
 Apache 2.0 — See [LICENSE](LICENSE)
+
+### Product regressions and recorded native audits
+
+`npm test` runs product and validator regressions, followed by the schema suite.
+`npm run test:native-evidence` separately audits retained native observations against
+their original environment and current source. Stale snapshots or unavailable host
+bindings fail that audit; historical evidence is never a fresh run. Synthetic wrapper
+checks use explicit filesystem fixtures; native audits still check the actual host
+executable. Release records state which evidence was used.

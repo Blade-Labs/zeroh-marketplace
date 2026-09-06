@@ -34,7 +34,7 @@ export function semanticProjection(arm,proposal,execution) {
       assert.ok(execution.after[path]?.sha256,`required contract artifact missing: ${path}`)
       return {path,decision:!proposal.before[path]?'created':proposal.before[path].sha256===execution.after[path].sha256?'preserved':'updated'}
     }),
-    gates:CORE_GATES.map(slot=>({slot,command:result[0].gates[slot],decision:result[0].gates[slot]==='none'?'declared-absent':'executed'})),
+    gates:CORE_GATES.map(slot=>({slot,decision:result[0].gates[slot]==='none'?'declared-absent':'executed'})),
   }
 }
 export function validateStopResult(result,missing) {

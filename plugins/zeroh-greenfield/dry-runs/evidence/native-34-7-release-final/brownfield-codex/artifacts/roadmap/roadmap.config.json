@@ -1,0 +1,32 @@
+{
+  "configVersion": 1,
+  "gateCommands": {
+    "lint": "none",
+    "types": "none",
+    "unit": "env NX_DAEMON=false npm test",
+    "integration": "none",
+    "build": "env NX_DAEMON=false npm run build",
+    "e2e": "none",
+    "emit": "none",
+    "unit-scoped": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'",
+    "unit-affected": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'",
+    "unit-impacted": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{range}'"
+  },
+  "designHomes": {
+    "architecture": {
+      "home": "docs/architecture.md"
+    },
+    "ux": {
+      "canon": [
+        "docs/ux-canon.md"
+      ]
+    }
+  },
+  "testConventions": [
+    "Local exact tests use scoped manifests, phase source changes use affected manifests, arc inputs use impacted ranges, and CI runs the full workspace sweep."
+  ],
+  "testCadence": {
+    "enabled": true,
+    "backstop": ".github/workflows/ci.yml (authoritative full suite on main/manual runs)"
+  }
+}

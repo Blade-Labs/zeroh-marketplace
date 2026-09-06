@@ -1,0 +1,301 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-optional-gates.test.mjs
+TAP version 13
+# Subtest: Nx proposal and config bind the required seven gates plus all three optional unit selectors
+ok 1 - Nx proposal and config bind the required seven gates plus all three optional unit selectors
+  ---
+  duration_ms: 9.611083
+  type: 'test'
+  ...
+# Subtest: optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage
+ok 2 - optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage
+  ---
+  duration_ms: 3.912749
+  type: 'test'
+  ...
+# Subtest: unit-scoped evidence binds its exact input, native command, and selector tier
+ok 3 - unit-scoped evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 5.344531
+  type: 'test'
+  ...
+# Subtest: unit-affected evidence binds its exact input, native command, and selector tier
+ok 4 - unit-affected evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 1.69347
+  type: 'test'
+  ...
+# Subtest: unit-impacted evidence binds its exact input, native command, and selector tier
+ok 5 - unit-impacted evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 1.561038
+  type: 'test'
+  ...
+# Subtest: optional selector evidence preserves its portable template through the retained capbuild wrapper
+ok 6 - optional selector evidence preserves its portable template through the retained capbuild wrapper
+  ---
+  duration_ms: 2.988612
+  type: 'test'
+  ...
+# Subtest: manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift
+ok 7 - manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift
+  ---
+  duration_ms: 15.336168
+  type: 'test'
+  ...
+# Subtest: affected manifest requires a non-test path and cannot masquerade as scoped or full fallback
+ok 8 - affected manifest requires a non-test path and cannot masquerade as scoped or full fallback
+  ---
+  duration_ms: 3.820705
+  type: 'test'
+  ...
+# Subtest: impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector
+ok 9 - impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector
+  ---
+  duration_ms: 9.217915
+  type: 'test'
+  ...
+# Subtest: impacted evidence rejects a successful diff between two unrelated real commits
+ok 10 - impacted evidence rejects a successful diff between two unrelated real commits
+  ---
+  duration_ms: 51.171148
+  type: 'test'
+  ...
+# Subtest: source paths select Nx affected with safe argv; metacharacters never split or execute
+ok 11 - source paths select Nx affected with safe argv; metacharacters never split or execute
+  ---
+  duration_ms: 75.24616
+  type: 'test'
+  ...
+# Subtest: explicit nonexistent exact test is nonzero even when the fallback runner succeeds
+ok 12 - explicit nonexistent exact test is nonzero even when the fallback runner succeeds
+  ---
+  duration_ms: 186.601824
+  type: 'test'
+  ...
+# Subtest: mixed explicit scope cannot hide a nonexistent exact test behind a shared lock change
+ok 13 - mixed explicit scope cannot hide a nonexistent exact test behind a shared lock change
+  ---
+  duration_ms: 118.445812
+  type: 'test'
+  ...
+# Subtest: malformed, empty, unsafe-root and newline scope fail byte-identically to full
+ok 14 - malformed, empty, unsafe-root and newline scope fail byte-identically to full
+  ---
+  duration_ms: 189.276699
+  type: 'test'
+  ...
+# Subtest: an external manifest whose ancestor merely contains the ownership substring is rejected
+ok 15 - an external manifest whose ancestor merely contains the ownership substring is rejected
+  ---
+  duration_ms: 59.40874
+  type: 'test'
+  ...
+# Subtest: shared configuration and runner changes execute byte-identical full argv for manifest and Git range
+    # Subtest: manifest: nx.json
+    ok 1 - manifest: nx.json
+      ---
+      duration_ms: 62.756825
+      type: 'test'
+      ...
+    # Subtest: Git range: nx.json
+    ok 2 - Git range: nx.json
+      ---
+      duration_ms: 161.899178
+      type: 'test'
+      ...
+    # Subtest: manifest: package.json
+    ok 3 - manifest: package.json
+      ---
+      duration_ms: 59.159607
+      type: 'test'
+      ...
+    # Subtest: Git range: package.json
+    ok 4 - Git range: package.json
+      ---
+      duration_ms: 162.656788
+      type: 'test'
+      ...
+    # Subtest: manifest: package-lock.json
+    ok 5 - manifest: package-lock.json
+      ---
+      duration_ms: 66.368813
+      type: 'test'
+      ...
+    # Subtest: Git range: package-lock.json
+    ok 6 - Git range: package-lock.json
+      ---
+      duration_ms: 164.823428
+      type: 'test'
+      ...
+    # Subtest: manifest: pnpm-lock.yaml
+    ok 7 - manifest: pnpm-lock.yaml
+      ---
+      duration_ms: 61.555071
+      type: 'test'
+      ...
+    # Subtest: Git range: pnpm-lock.yaml
+    ok 8 - Git range: pnpm-lock.yaml
+      ---
+      duration_ms: 172.910585
+      type: 'test'
+      ...
+    # Subtest: manifest: yarn.lock
+    ok 9 - manifest: yarn.lock
+      ---
+      duration_ms: 69.92298
+      type: 'test'
+      ...
+    # Subtest: Git range: yarn.lock
+    ok 10 - Git range: yarn.lock
+      ---
+      duration_ms: 156.469546
+      type: 'test'
+      ...
+    # Subtest: manifest: pnpm-workspace.yaml
+    ok 11 - manifest: pnpm-workspace.yaml
+      ---
+      duration_ms: 62.073967
+      type: 'test'
+      ...
+    # Subtest: Git range: pnpm-workspace.yaml
+    ok 12 - Git range: pnpm-workspace.yaml
+      ---
+      duration_ms: 155.235278
+      type: 'test'
+      ...
+    # Subtest: manifest: tsconfig.json
+    ok 13 - manifest: tsconfig.json
+      ---
+      duration_ms: 60.132036
+      type: 'test'
+      ...
+    # Subtest: Git range: tsconfig.json
+    ok 14 - Git range: tsconfig.json
+      ---
+      duration_ms: 147.692348
+      type: 'test'
+      ...
+    # Subtest: manifest: tsconfig.base.json
+    ok 15 - manifest: tsconfig.base.json
+      ---
+      duration_ms: 58.876829
+      type: 'test'
+      ...
+    # Subtest: Git range: tsconfig.base.json
+    ok 16 - Git range: tsconfig.base.json
+      ---
+      duration_ms: 161.79508
+      type: 'test'
+      ...
+    # Subtest: manifest: vitest.config.ts
+    ok 17 - manifest: vitest.config.ts
+      ---
+      duration_ms: 69.093853
+      type: 'test'
+      ...
+    # Subtest: Git range: vitest.config.ts
+    ok 18 - Git range: vitest.config.ts
+      ---
+      duration_ms: 158.490247
+      type: 'test'
+      ...
+    # Subtest: manifest: jest.config.ts
+    ok 19 - manifest: jest.config.ts
+      ---
+      duration_ms: 63.359602
+      type: 'test'
+      ...
+    # Subtest: Git range: jest.config.ts
+    ok 20 - Git range: jest.config.ts
+      ---
+      duration_ms: 155.290024
+      type: 'test'
+      ...
+    # Subtest: manifest: pyproject.toml
+    ok 21 - manifest: pyproject.toml
+      ---
+      duration_ms: 61.432738
+      type: 'test'
+      ...
+    # Subtest: Git range: pyproject.toml
+    ok 22 - Git range: pyproject.toml
+      ---
+      duration_ms: 155.521865
+      type: 'test'
+      ...
+    # Subtest: manifest: uv.lock
+    ok 23 - manifest: uv.lock
+      ---
+      duration_ms: 62.526228
+      type: 'test'
+      ...
+    # Subtest: Git range: uv.lock
+    ok 24 - Git range: uv.lock
+      ---
+      duration_ms: 153.700091
+      type: 'test'
+      ...
+    # Subtest: manifest: poetry.lock
+    ok 25 - manifest: poetry.lock
+      ---
+      duration_ms: 58.8777
+      type: 'test'
+      ...
+    # Subtest: Git range: poetry.lock
+    ok 26 - Git range: poetry.lock
+      ---
+      duration_ms: 173.783293
+      type: 'test'
+      ...
+    # Subtest: manifest: requirements.txt
+    ok 27 - manifest: requirements.txt
+      ---
+      duration_ms: 65.12079
+      type: 'test'
+      ...
+    # Subtest: Git range: requirements.txt
+    ok 28 - Git range: requirements.txt
+      ---
+      duration_ms: 152.963771
+      type: 'test'
+      ...
+    # Subtest: manifest: scripts/run-nx-test-tier.mjs
+    ok 29 - manifest: scripts/run-nx-test-tier.mjs
+      ---
+      duration_ms: 63.796232
+      type: 'test'
+      ...
+    # Subtest: Git range: scripts/run-nx-test-tier.mjs
+    ok 30 - Git range: scripts/run-nx-test-tier.mjs
+      ---
+      duration_ms: 166.901609
+      type: 'test'
+      ...
+    1..30
+ok 16 - shared configuration and runner changes execute byte-identical full argv for manifest and Git range
+  ---
+  duration_ms: 3412.101214
+  type: 'test'
+  ...
+# Subtest: a deleted exact test in a Git range may pass through full fallback
+ok 17 - a deleted exact test in a Git range may pass through full fallback
+  ---
+  duration_ms: 166.106058
+  type: 'test'
+  ...
+# Subtest: ordinary source Git range keeps the impacted affected selection
+ok 18 - ordinary source Git range keeps the impacted affected selection
+  ---
+  duration_ms: 164.436704
+  type: 'test'
+  ...
+1..18
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4547.625495

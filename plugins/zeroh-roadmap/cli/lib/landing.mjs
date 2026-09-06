@@ -557,6 +557,9 @@ export function deriveArcSuiteScope(worktree, memberNums, exec = defaultExec) {
     if (r.status !== 0) return null // cannot enumerate a member commit ⇒ no scope
     for (const f of r.stdout.split('\n').map((s) => s.trim()).filter(Boolean)) files.add(f)
   }
+  // Exact-file manifests cannot represent deletions. Retain them through the
+  // existing Git-range fallback so a removed shared input still forces full tests.
+  if ([...files].some((file) => !existsSync(join(worktree, file)))) return null
   const manifest = createScopeManifest(worktree, [...files])
   if (manifest == null) return null
   return { filesFrom: manifest.path, fileCount: manifest.paths.length, commitCount: shas.size, cleanup: manifest.cleanup }

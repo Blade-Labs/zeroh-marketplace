@@ -1,0 +1,36 @@
+{
+  "$schema": "./roadmap.config.schema.json",
+  "configVersion": 1,
+  "gateCommands": {
+    "lint": "none",
+    "types": "npm run typecheck",
+    "unit": "env TSX_DISABLE_CACHE=1 node --import tsx --test",
+    "integration": "node dist/cli.js --help",
+    "build": "npm run build",
+    "e2e": "none",
+    "emit": "env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts"
+  },
+  "designHomes": {
+    "architecture": {
+      "home": "docs/architecture.md",
+      "extendProtocol": "docs/architecture.md#extend-protocol"
+    },
+    "ux": {
+      "canon": [
+        "docs/ux-canon.md"
+      ],
+      "qualityExemplar": "docs/ux-canon.md#interaction-rules",
+      "copyRules": "docs/ux-canon.md#interaction-rules",
+      "bindingDesignSystem": "docs/adr/0002-design-system.md"
+    }
+  },
+  "testConventions": [
+    "Use node:test and node:assert/strict in test/*.test.mjs; load TypeScript through tsx with TSX_DISABLE_CACHE=1.",
+    "API tests exercise public behavior; CLI tests spawn the real source entry without mocks; the integration gate checks the built CLI help path.",
+    "Lint is absent because no lint tooling is selected; browser e2e is absent because this product has no browser or server surface."
+  ],
+  "testCadence": {
+    "enabled": true,
+    "backstop": ".github/workflows/ci.yml (authoritative full suite on main/manual runs)"
+  }
+}

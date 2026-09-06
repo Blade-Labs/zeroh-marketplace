@@ -1,0 +1,27 @@
+{
+  "name": "greenfield-proof",
+  "version": "0.0.0",
+  "description": "A reusable greeting API and CLI for developers",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {"node": ">=22.12.0"},
+  "exports": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {"greenfield-proof": "./dist/cli.js"},
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "env TSX_DISABLE_CACHE=1 node --import tsx --test",
+    "emit:phases": "env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts",
+    "changelog:md": "env TSX_DISABLE_CACHE=1 node --import tsx scripts/generate-changelog-md.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "tsup": "8.5.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "zod": "4.4.3"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "protocol": "scope-manifest-json-v1",
+  "paths": [
+    "packages/ui/src/index.mjs"
+  ]
+}

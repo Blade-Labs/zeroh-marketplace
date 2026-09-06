@@ -1,0 +1,311 @@
+{
+  "type": "proposal",
+  "artifacts": [
+    {
+      "path": ".gitignore",
+      "reason": "generator output edited (before-hash guarded) to ignore scratch-local .npm-cache/, .npm-logs/ and .ci/"
+    },
+    {
+      "path": "package.json",
+      "reason": "generator output rewritten (before-hash guarded, digest derived from create-vite's real isValidPackageName which keeps the underscore): identity greenfield-proof, private UNLICENSED, exports/bin/files on dist, build/typecheck/test/emit scripts with explicit test files, locked devDependencies"
+    },
+    {
+      "path": "tsconfig.json",
+      "reason": "generator output rewritten (before-hash guarded): Node library settings, types node, no DOM, src and test included"
+    },
+    {
+      "path": "tsup.config.ts",
+      "reason": "archetype post-step: tsup entries src/index.ts and src/cli.ts, esm, dts, no chunk splitting"
+    },
+    {
+      "path": "src/index.ts",
+      "reason": "reusable greeting API greet(name?) with default world and TypeError on blank names"
+    },
+    {
+      "path": "src/cli.ts",
+      "reason": "thin CLI adapter: greeting, --help exit 0, unknown option exit 1 with usage even when --help is also present"
+    },
+    {
+      "path": "test/greet.test.ts",
+      "reason": "node:test behaviour tests for the API (5 tests)"
+    },
+    {
+      "path": "test/cli.test.ts",
+      "reason": "node:test behaviour tests for the CLI process contract including the unknown-option-with-help regression (8 tests)"
+    },
+    {
+      "path": ".npm-cache/",
+      "reason": "scratch-local npm cache (npm_config_cache); no home cache writes"
+    },
+    {
+      "path": ".npm-logs/",
+      "reason": "scratch-local npm logs (npm_config_logs_dir); no home log writes"
+    },
+    {
+      "path": "node_modules/",
+      "reason": "installed devDependencies from npm install"
+    },
+    {
+      "path": "package-lock.json",
+      "reason": "pinned dependency lockfile written by npm install"
+    },
+    {
+      "path": "roadmap/roadmap.config.json",
+      "reason": "roadmap init output (initial digest 190afd208a7c70a7ac44f385fe83c7124b1b96b83d71aa29b06828679764570e derived from init.mjs for this scratch depth), then before-hash guarded rewrite: local $schema pointer, the seven gates, testCadence, designHomes and testConventions"
+    },
+    {
+      "path": "roadmap/roadmap.config.schema.json",
+      "reason": "digest-guarded byte copy of the installed roadmap config JSON schema so the consumer $schema pointer is local and portable"
+    },
+    {
+      "path": "roadmap/ROADMAP.md",
+      "reason": "roadmap init scaffold (byte copy of the plugin template)"
+    },
+    {
+      "path": "roadmap/backlog.ts",
+      "reason": "roadmap init scaffold (byte copy of the plugin template)"
+    },
+    {
+      "path": "roadmap/lib/schema.ts",
+      "reason": "roadmap init scaffold: vendored schema seam"
+    },
+    {
+      "path": "roadmap/lib/registry.ts",
+      "reason": "roadmap init scaffold: phase discovery"
+    },
+    {
+      "path": "roadmap/lib/emit.ts",
+      "reason": "roadmap init scaffold: changelog emission used by the emit gate"
+    },
+    {
+      "path": "roadmap/phases/",
+      "reason": "roadmap init scaffold: empty phases directory (root marker)"
+    },
+    {
+      "path": "roadmap/arcs/",
+      "reason": "roadmap init scaffold: empty arcs directory"
+    },
+    {
+      "path": "reviews/releases/",
+      "reason": "roadmap init scaffold: empty release review directory"
+    },
+    {
+      "path": "reviews/changelog.json",
+      "reason": "written by the emit gate from zero phases"
+    },
+    {
+      "path": "scripts/pre-review.sh",
+      "reason": "roadmap init scaffold: review helper copied from the plugin (chmod +x by the scaffold)"
+    },
+    {
+      "path": "scripts/build-dashboard.sh",
+      "reason": "roadmap init scaffold: dashboard helper copied from the plugin (chmod +x by the scaffold)"
+    },
+    {
+      "path": "scripts/generate-changelog-md.ts",
+      "reason": "roadmap init scaffold: changelog markdown helper copied from the plugin"
+    },
+    {
+      "path": "scripts/check-readme-catalog.mjs",
+      "reason": "digest-guarded byte copy of the installed greenfield template catalog comparator"
+    },
+    {
+      "path": "scripts/ci-shard-plan.mjs",
+      "reason": "digest-guarded byte copy of the installed greenfield template delivery planner"
+    },
+    {
+      "path": ".github/greenfield-delivery.json",
+      "reason": "delivery configuration: library-cli adapter, node:test runner and build bindings, explicit affected argv with fallback reason, baseline, release environment greenfield-validation, provider none"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "reason": "digest-guarded byte copy of the installed CI workflow template (create; no prior workflow)"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "reason": "installed release workflow template with only the environment placeholder replaced by greenfield-validation (create; no prior workflow)"
+    },
+    {
+      "path": "README.md",
+      "reason": "structure, commands, delivery lifecycle paths and the repo-catalog block for greenfield-proof"
+    },
+    {
+      "path": "AGENTS.md",
+      "reason": "sole conventions home: Conventions, Don't, Generalize-forward, Flag-first delivery with hold[]"
+    },
+    {
+      "path": "CLAUDE.md",
+      "reason": "harness pointer: @AGENTS.md plus harness-only lines"
+    },
+    {
+      "path": "docs/PRD.md",
+      "reason": "product requirements from the fixture answers, preserved unknowns, decisions including the approval ruling"
+    },
+    {
+      "path": "docs/adr/0001-tech-stack.md",
+      "reason": "stack decision: Library/CLI matrix rows verbatim, ruling tsup + node:test"
+    },
+    {
+      "path": "docs/adr/0002-design-system.md",
+      "reason": "design decision: template option rows verbatim, ruling none (non-UI), no tokens"
+    },
+    {
+      "path": "docs/CODE-STYLE.md",
+      "reason": "lint none and format none with reasons; style derived from tsconfig"
+    },
+    {
+      "path": "docs/architecture.md",
+      "reason": "architecture topic index linking canonical homes"
+    },
+    {
+      "path": "docs/ux-canon.md",
+      "reason": "CLI text contract including unknown-option precedence over help; binding design system none"
+    },
+    {
+      "path": "dist/",
+      "reason": "tsup build output (index.js, index.d.ts, cli.js, cli.d.ts) from the build gate"
+    },
+    {
+      "path": ".ci/",
+      "reason": "delivery working directory created for the temp-root baseline (also the planner operational root in CI)"
+    },
+    {
+      "path": ".ci/native-delivery-temp-baseline.json",
+      "reason": "inventory of pre-existing /tmp/greenfield-workflow-* roots taken immediately before the installed-output suite"
+    }
+  ],
+  "commands": [
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "node /home/patrik/.npm/_npx/16f560e788adb74f/node_modules/create-vite/index.js . --template vanilla-ts --no-interactive --no-immediate",
+      "network": "none (cached create-vite 8.3.0 read from the local npx cache; no registry query, no install; writes .gitignore, index.html, package.json, public/vite.svg, src/counter.ts, src/main.ts, src/style.css, src/typescript.svg, tsconfig.json into the .git-only root)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "rm -r -- index.html public src/counter.ts src/main.ts src/style.css src/typescript.svg",
+      "network": "none (removes the generator demo page and assets; src/ stays as the API/CLI parent)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "python3 - <<'GF_WRITER_A'\nimport hashlib, os, sys\nROOT = '/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf'\ndef _check(rel):\n    parts = rel.split('/')\n    if rel.startswith('/') or any(p in ('', '.', '..') for p in parts):\n        sys.exit('unsafe path: ' + rel)\n    cur = ROOT\n    for p in parts[:-1]:\n        cur = os.path.join(cur, p)\n        if os.path.islink(cur) or not os.path.isdir(cur):\n            sys.exit('unapproved or unsafe parent: ' + cur)\n    path = os.path.join(ROOT, rel)\n    if os.path.islink(path):\n        sys.exit('symlink target refused: ' + rel)\n    return path\ndef _digest(data):\n    return hashlib.sha256(data).hexdigest()\ndef mkdir(rel):\n    os.mkdir(_check(rel), 0o755)\n    print('WRITE: ' + rel + '/')\ndef create(rel, data):\n    fd = os.open(_check(rel), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)\n    with os.fdopen(fd, 'wb') as f:\n        f.write(data)\n    print('WRITE: ' + rel + ' sha256=' + _digest(data))\ndef replace(rel, before, data):\n    path = _check(rel)\n    if not os.path.isfile(path):\n        sys.exit('missing edit target: ' + rel)\n    with open(path, 'rb') as f:\n        actual = _digest(f.read())\n    if actual != before:\n        sys.exit('before-hash mismatch for ' + rel + ': ' + actual)\n    fd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)\n    with os.fdopen(fd, 'wb') as f:\n        f.write(data)\n    print('WRITE: ' + rel + ' (before ' + before + ') sha256=' + _digest(data))\ndef template(src, sha):\n    with open(src, 'rb') as f:\n        data = f.read()\n    if _digest(data) != sha:\n        sys.exit('template digest mismatch: ' + src)\n    return data\ndef apply():\n    for op in PLAN:\n        if op[0] == 'mkdir':\n            mkdir(op[1])\n        elif op[0] == 'create':\n            create(op[1], CONTENT[op[1]].encode('utf-8'))\n        elif op[0] == 'replace':\n            replace(op[1], op[2], CONTENT[op[1]].encode('utf-8'))\n        elif op[0] == 'copy':\n            create(op[2], template(op[1], op[3]))\n        elif op[0] == 'fill':\n            data = template(op[1], op[3])\n            old = op[4].encode('utf-8')\n            if data.count(old) != 1:\n                sys.exit('placeholder count mismatch in ' + op[1])\n            create(op[2], data.replace(old, op[5].encode('utf-8')))\n        else:\n            sys.exit('unknown operation')\nCONTENT = {}\nCONTENT['.gitignore'] = r'''# Logs\nlogs\n*.log\nnpm-debug.log*\nyarn-debug.log*\nyarn-error.log*\npnpm-debug.log*\nlerna-debug.log*\n\nnode_modules\ndist\ndist-ssr\n*.local\n\n# Editor directories and files\n.vscode/*\n!.vscode/extensions.json\n.idea\n.DS_Store\n*.suo\n*.ntvs*\n*.njsproj\n*.sln\n*.sw?\n\n# Scratch-local npm cache and logs, delivery working directory\n.npm-cache/\n.npm-logs/\n.ci/\n'''\nCONTENT['package.json'] = r'''{\n  \"name\": \"greenfield-proof\",\n  \"version\": \"0.0.0\",\n  \"description\": \"A small TypeScript reusable greeting API plus CLI for developers.\",\n  \"private\": true,\n  \"license\": \"UNLICENSED\",\n  \"type\": \"module\",\n  \"engines\": {\n    \"node\": \">=22\"\n  },\n  \"exports\": \"./dist/index.js\",\n  \"types\": \"./dist/index.d.ts\",\n  \"bin\": \"./dist/cli.js\",\n  \"files\": [\n    \"dist\"\n  ],\n  \"scripts\": {\n    \"build\": \"tsup\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"test\": \"node --test test/greet.test.ts test/cli.test.ts\",\n    \"emit:phases\": \"tsx roadmap/lib/emit.ts\",\n    \"changelog:md\": \"tsx scripts/generate-changelog-md.ts\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^22.0.0\",\n    \"tsup\": \"^8.5.0\",\n    \"tsx\": \"^4.23.1\",\n    \"typescript\": \"~5.9.3\",\n    \"zod\": \"^4.4.3\"\n  }\n}\n'''\nCONTENT['tsconfig.json'] = r'''{\n  \"compilerOptions\": {\n    \"target\": \"ES2022\",\n    \"useDefineForClassFields\": true,\n    \"module\": \"ESNext\",\n    \"lib\": [\"ES2022\"],\n    \"types\": [\"node\"],\n    \"skipLibCheck\": true,\n    \"moduleResolution\": \"bundler\",\n    \"allowImportingTsExtensions\": true,\n    \"verbatimModuleSyntax\": true,\n    \"moduleDetection\": \"force\",\n    \"noEmit\": true,\n    \"strict\": true,\n    \"noUnusedLocals\": true,\n    \"noUnusedParameters\": true,\n    \"erasableSyntaxOnly\": true,\n    \"noFallthroughCasesInSwitch\": true,\n    \"noUncheckedSideEffectImports\": true\n  },\n  \"include\": [\"src\", \"test\"]\n}\n'''\nCONTENT['tsup.config.ts'] = r'''import { defineConfig } from 'tsup'\n\nexport default defineConfig({\n  entry: ['src/index.ts', 'src/cli.ts'],\n  format: ['esm'],\n  dts: true,\n  splitting: false,\n  clean: true,\n  target: 'node22',\n  outDir: 'dist',\n})\n'''\nCONTENT['src/index.ts'] = r'''/**\n * Reusable greeting API. The CLI in ./cli.ts is a thin adapter over this module.\n * Contract: docs/ux-canon.md \u00a7Interaction rules.\n */\nexport const DEFAULT_NAME = 'world'\n\n/**\n * Build a greeting for `name`.\n * - `undefined` (or no argument) greets the default name, `world`.\n * - A blank name (empty or whitespace-only) is rejected with a TypeError.\n */\nexport function greet(name?: string): string {\n  if (name === undefined) return `Hello, ${DEFAULT_NAME}!`\n  if (typeof name !== 'string' || name.trim() === '') {\n    throw new TypeError('greet(name): name must be a non-blank string')\n  }\n  return `Hello, ${name}!`\n}\n'''\nCONTENT['src/cli.ts'] = r'''#!/usr/bin/env node\n/**\n * Thin executable adapter over the greeting API (src/index.ts).\n * Contract: docs/ux-canon.md \u00a7Interaction rules.\n */\nimport { greet } from './index.ts'\n\nconst HELP_FLAGS = ['--help', '-h']\n\nconst USAGE = [\n  'Usage: greenfield-proof [name]',\n  '',\n  'Print \"Hello, <name>!\" (default name: world).',\n  '',\n  'Options:',\n  '  -h, --help  Print this usage and exit 0',\n  '',\n].join('\\n')\n\ninterface Outcome {\n  code: number\n  stdout: string\n  stderr: string\n}\n\nfunction run(argv: readonly string[]): Outcome {\n  // Unknown options are rejected first, so they exit 1 even next to --help.\n  const unknown = argv.find((arg) => arg.startsWith('-') && !HELP_FLAGS.includes(arg))\n  if (unknown !== undefined) return { code: 1, stdout: '', stderr: `Unknown option: ${unknown}\\n${USAGE}` }\n  if (argv.some((arg) => HELP_FLAGS.includes(arg))) return { code: 0, stdout: USAGE, stderr: '' }\n  if (argv.length > 1) return { code: 1, stdout: '', stderr: `Too many arguments: expected at most one name\\n${USAGE}` }\n  try {\n    return { code: 0, stdout: `${greet(argv[0])}\\n`, stderr: '' }\n  } catch (error) {\n    const message = error instanceof Error ? error.message : String(error)\n    return { code: 1, stdout: '', stderr: `${message}\\n${USAGE}` }\n  }\n}\n\nconst outcome = run(process.argv.slice(2))\nprocess.stdout.write(outcome.stdout)\nprocess.stderr.write(outcome.stderr)\nprocess.exitCode = outcome.code\n'''\nCONTENT['test/greet.test.ts'] = r'''import test from 'node:test'\nimport assert from 'node:assert/strict'\nimport { DEFAULT_NAME, greet } from '../src/index.ts'\n\ntest('greet() with no argument greets the default name world', () => {\n  assert.equal(DEFAULT_NAME, 'world')\n  assert.equal(greet(), 'Hello, world!')\n})\n\ntest('greet(undefined) greets the default name world', () => {\n  assert.equal(greet(undefined), 'Hello, world!')\n})\n\ntest('greet(name) greets the given name verbatim', () => {\n  assert.equal(greet('Ada'), 'Hello, Ada!')\n  assert.equal(greet('Ada Lovelace'), 'Hello, Ada Lovelace!')\n})\n\ntest('greet rejects an empty name with TypeError', () => {\n  assert.throws(() => greet(''), TypeError)\n})\n\ntest('greet rejects a whitespace-only name with TypeError', () => {\n  assert.throws(() => greet('   '), TypeError)\n})\n'''\nCONTENT['test/cli.test.ts'] = r'''import test from 'node:test'\nimport assert from 'node:assert/strict'\nimport { spawnSync } from 'node:child_process'\nimport { fileURLToPath } from 'node:url'\n\nconst CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url))\n\nfunction cli(...args: string[]): { status: number | null; stdout: string; stderr: string } {\n  const result = spawnSync(process.execPath, ['--no-warnings', CLI, ...args], { encoding: 'utf8' })\n  return { status: result.status, stdout: result.stdout, stderr: result.stderr }\n}\n\ntest('--help prints usage on stdout and exits 0', () => {\n  const result = cli('--help')\n  assert.equal(result.status, 0)\n  assert.ok(result.stdout.startsWith('Usage: greenfield-proof [name]'))\n  assert.equal(result.stderr, '')\n})\n\ntest('-h is the short help alias and exits 0', () => {\n  const result = cli('-h')\n  assert.equal(result.status, 0)\n  assert.ok(result.stdout.startsWith('Usage: greenfield-proof [name]'))\n})\n\ntest('an unknown option prints usage on stderr and exits 1', () => {\n  const result = cli('--bogus')\n  assert.equal(result.status, 1)\n  assert.equal(result.stdout, '')\n  assert.ok(result.stderr.startsWith('Unknown option: --bogus\\nUsage: greenfield-proof [name]'))\n})\n\ntest('an unknown option next to --help still exits 1 in either order', () => {\n  for (const args of [['--help', '--bogus'], ['--bogus', '--help'], ['-h', '-x']]) {\n    const result = cli(...args)\n    assert.equal(result.status, 1, args.join(' '))\n    assert.equal(result.stdout, '', args.join(' '))\n    assert.ok(result.stderr.startsWith(`Unknown option: ${args.find((arg) => !['--help', '-h'].includes(arg))}\\nUsage: greenfield-proof [name]`), args.join(' '))\n  }\n})\n\ntest('no argument prints the default greeting', () => {\n  const result = cli()\n  assert.equal(result.status, 0)\n  assert.equal(result.stdout, 'Hello, world!\\n')\n  assert.equal(result.stderr, '')\n})\n\ntest('a name argument prints its greeting', () => {\n  const result = cli('Ada')\n  assert.equal(result.status, 0)\n  assert.equal(result.stdout, 'Hello, Ada!\\n')\n})\n\ntest('a blank name exits 1 with the TypeError message and usage', () => {\n  const result = cli('   ')\n  assert.equal(result.status, 1)\n  assert.equal(result.stdout, '')\n  assert.ok(result.stderr.startsWith('greet(name): name must be a non-blank string\\nUsage: greenfield-proof [name]'))\n})\n\ntest('more than one positional argument exits 1 with usage', () => {\n  const result = cli('Ada', 'Grace')\n  assert.equal(result.status, 1)\n  assert.ok(result.stderr.includes('Too many arguments'))\n  assert.ok(result.stderr.includes('Usage: greenfield-proof [name]'))\n})\n'''\nPLAN = [\n    ('replace', '.gitignore', 'fe718e7babb14f3cbad2d97f08889b9ce5215ed3fe0e43b2b8cfbfb3b9b844e8'),\n    ('replace', 'package.json', 'f267080d8b6111c740559e653b2f3330a495c9f280f596c8bfbe6a7faf8db151'),\n    ('replace', 'tsconfig.json', 'f1918195c1483e8872ea1087b4d6f195b967dffe295719623531995639564d42'),\n    ('create', 'tsup.config.ts'),\n    ('create', 'src/index.ts'),\n    ('create', 'src/cli.ts'),\n    ('mkdir', 'test'),\n    ('create', 'test/greet.test.ts'),\n    ('create', 'test/cli.test.ts'),\n]\nif __name__ == '__main__':\n    apply()\nGF_WRITER_A",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "mkdir -p -- .npm-cache .npm-logs",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "env npm_config_cache=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-cache npm_config_logs_dir=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-logs npm install --no-audit --no-fund",
+      "network": "inherited network: npm registry metadata and tarball fetch for the declared devDependencies and their transitive tree; writes node_modules/ and package-lock.json; cache and logs stay scratch-local"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/bin/roadmap.mjs init",
+      "network": "none (scaffolds roadmap/lib/{schema,registry,emit}.ts, roadmap/ROADMAP.md, roadmap/backlog.ts, roadmap/phases/, roadmap/arcs/, reviews/releases/, scripts/pre-review.sh, scripts/build-dashboard.sh, scripts/generate-changelog-md.ts and roadmap/roadmap.config.json with digest 190afd208a7c70a7ac44f385fe83c7124b1b96b83d71aa29b06828679764570e; package.json scripts already present, so it is left unchanged)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "python3 - <<'GF_WRITER_B'\nimport hashlib, os, sys\nROOT = '/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf'\ndef _check(rel):\n    parts = rel.split('/')\n    if rel.startswith('/') or any(p in ('', '.', '..') for p in parts):\n        sys.exit('unsafe path: ' + rel)\n    cur = ROOT\n    for p in parts[:-1]:\n        cur = os.path.join(cur, p)\n        if os.path.islink(cur) or not os.path.isdir(cur):\n            sys.exit('unapproved or unsafe parent: ' + cur)\n    path = os.path.join(ROOT, rel)\n    if os.path.islink(path):\n        sys.exit('symlink target refused: ' + rel)\n    return path\ndef _digest(data):\n    return hashlib.sha256(data).hexdigest()\ndef mkdir(rel):\n    os.mkdir(_check(rel), 0o755)\n    print('WRITE: ' + rel + '/')\ndef create(rel, data):\n    fd = os.open(_check(rel), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)\n    with os.fdopen(fd, 'wb') as f:\n        f.write(data)\n    print('WRITE: ' + rel + ' sha256=' + _digest(data))\ndef replace(rel, before, data):\n    path = _check(rel)\n    if not os.path.isfile(path):\n        sys.exit('missing edit target: ' + rel)\n    with open(path, 'rb') as f:\n        actual = _digest(f.read())\n    if actual != before:\n        sys.exit('before-hash mismatch for ' + rel + ': ' + actual)\n    fd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)\n    with os.fdopen(fd, 'wb') as f:\n        f.write(data)\n    print('WRITE: ' + rel + ' (before ' + before + ') sha256=' + _digest(data))\ndef template(src, sha):\n    with open(src, 'rb') as f:\n        data = f.read()\n    if _digest(data) != sha:\n        sys.exit('template digest mismatch: ' + src)\n    return data\ndef apply():\n    for op in PLAN:\n        if op[0] == 'mkdir':\n            mkdir(op[1])\n        elif op[0] == 'create':\n            create(op[1], CONTENT[op[1]].encode('utf-8'))\n        elif op[0] == 'replace':\n            replace(op[1], op[2], CONTENT[op[1]].encode('utf-8'))\n        elif op[0] == 'copy':\n            create(op[2], template(op[1], op[3]))\n        elif op[0] == 'fill':\n            data = template(op[1], op[3])\n            old = op[4].encode('utf-8')\n            if data.count(old) != 1:\n                sys.exit('placeholder count mismatch in ' + op[1])\n            create(op[2], data.replace(old, op[5].encode('utf-8')))\n        else:\n            sys.exit('unknown operation')\nCONTENT = {}\nCONTENT['roadmap/roadmap.config.json'] = r'''{\n  \"$schema\": \"./roadmap.config.schema.json\",\n  \"configVersion\": 1,\n  \"gateCommands\": {\n    \"lint\": \"none\",\n    \"types\": \"npm run typecheck\",\n    \"unit\": \"node --test test/greet.test.ts test/cli.test.ts\",\n    \"integration\": \"node dist/cli.js --help\",\n    \"build\": \"npm run build\",\n    \"e2e\": \"none\",\n    \"emit\": \"env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts\"\n  },\n  \"testCadence\": {\n    \"enabled\": true,\n    \"backstop\": \".github/workflows/ci.yml (authoritative full suite on main/manual runs)\"\n  },\n  \"designHomes\": {\n    \"architecture\": {\n      \"home\": \"docs/architecture.md\"\n    },\n    \"ux\": {\n      \"canon\": [\n        \"docs/ux-canon.md\"\n      ]\n    }\n  },\n  \"testConventions\": [\n    \"node --test test/greet.test.ts test/cli.test.ts\",\n    \"node dist/cli.js --help\"\n  ]\n}\n'''\nCONTENT['docs/PRD.md'] = r'''# Product requirements\n\n## Product\n\ngreenfield-proof: a small TypeScript reusable greeting API plus CLI for developers. `greet(name?: string)` returns `Hello, <name>!`, defaults to `world`, and rejects blank names with `TypeError`. The CLI prints the greeting, `--help` exits 0, and unknown options exit 1 with usage (even when `--help` is also present).\n\n## Audience\n\nDevelopers importing a greeting function and invoking its CLI.\n\n## Platforms\n\nNode 22+ on Linux (library and CLI). Mobile: none. Web: none.\n\n## Constraints\n\n- Package manager npm; build tsup with TypeScript; tests node:test (ADR 0001).\n- Private, UNLICENSED fixture: no publishing; registry absent/none (recorded reason: the fixture is never distributed).\n- No framework runtime, external service, authentication, mobile target, deployment or product remote.\n- Non-Blade; no design system or tokens (ADR 0002).\n- Delivery: GitHub Actions with the protected release environment `greenfield-validation`; deployment provider `none` (explicitly unavailable; never deploy or publish).\n- Unknowns preserved: no version or release cadence decided; no performance or size targets; no success metric beyond passing gates.\n\n## Non-goals\n\nWeb or mobile UI, HTTP or network API, authentication, external services, publishing to a registry, deployment.\n\n## Success signals\n\nThe first release exports a typed greeting and CLI with passing tests: build, typecheck, unit, integration (built CLI `--help`) and emit gates green from the consumer root; README catalog check and `roadmap config check` exit 0. Further signals: don't know yet.\n\n## Brand\n\nNon-Blade. No branding, theme or tokens; the only surface is CLI text.\n\n## Decisions\n\n| Date | Ruling | Reason |\n| --- | --- | --- |\n| 2026-09-05 | Stack: tsup + node:test (Library/CLI matrix; docs/adr/0001-tech-stack.md) | Small TypeScript package values minimal test dependencies; Node 22+ ships the runner and the coverage, junit and lcov reporters the delivery adapter binds |\n| 2026-09-05 | Design system: none (docs/adr/0002-design-system.md) | No graphical surface; the CLI contract lives in docs/ux-canon.md and no tokens are invented |\n| 2026-09-05 | Archetype library-cli via the cached create-vite 8.3.0 vanilla-ts generator, generated into this repository root and adapted to a library (demo page, assets and the `vite` devDependency removed) | Manifest generator; the generated demo page is not part of the product |\n| 2026-09-05 | Registry: absent (none) | Private UNLICENSED fixture is never distributed |\n| 2026-09-05 | Delivery: GitHub Actions, adapter library-cli, protected environment greenfield-validation, release.provider none, collision decision create (no prior workflows existed) | Only supported provider; deployment explicitly unavailable |\n| 2026-09-05 | Gates: lint none, types `npm run typecheck`, unit `node --test test/greet.test.ts test/cli.test.ts`, integration `node dist/cli.js --help`, build `npm run build`, e2e none, emit `env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts` | Bound to the installed tooling with the test files named explicitly; lint and e2e have no tooling yet, so absence is declared, not passed |\n| 2026-09-05 | Roadmap config `$schema` points at the consumer-local copy roadmap/roadmap.config.schema.json (digest-guarded copy of the installed plugin schema) | Consumer files must not reference plugin-internal paths |\n| 2026-09-05 | Approval: the complete Artifact/Target/Reason proposal was followed by the separate exact response `APPROVE GREENFIELD PLAN`; only the proposed rows were executed | greenfield-init approval gate |\n'''\nCONTENT['docs/adr/0001-tech-stack.md'] = r'''# ADR 0001: Technology stack\n\n## Status\n\nAccepted\n\n## Date\n\n2026-09-05\n\n## Context\n\ngreenfield-proof is a small TypeScript greeting library with a CLI for developers on Node 22+ / Linux, managed with npm, private and UNLICENSED, with no framework runtime, external service, authentication, mobile target, deployment or product remote. Only the Library/CLI matrix applies. Not presented: Web and Mobile (no UI surface), Monorepo (single package), Backend (the \"API\" is an exported function, not a network service).\n\n## Options\n\n### Library/CLI\n| option | pros | cons | better when | component reuse | source |\n| --- | --- | --- | --- | --- | --- |\n| tsup + node:test | Compact bundling with built-in tests | Two separate tools | Small TypeScript package values minimal test dependencies | Exported modules and fixtures | tsup |\n| tsdown + vitest | Modern bundling and rich tests | Additional test dependency | Vite-aligned libraries need fast test ergonomics | Exported modules and test helpers | tsdown |\n| unbuild | Convention-led library output | Less explicit build control | Multi-format package follows unjs conventions | Package presets and modules | unbuild |\n\n## Ruling\n\n2026-09-05: tsup + node:test \u2014 Small TypeScript package values minimal test dependencies; Node 22+ ships the test runner plus the coverage, junit and lcov reporters the delivery adapter binds, and tsup emits ESM with declarations for both entries.\n\n## Consequences\n\n- Positive: no test-framework dependency; one MIT build tool (tsup) with declaration output; tests import `src/*.ts` directly through Node type stripping.\n- Negative: node:test has no watch UI and no dependency-graph affected selection, so pull requests run the full (small) suite; the unit command names each test file explicitly, so a new test file must be added to `package.json`, `roadmap/roadmap.config.json` and `.github/greenfield-delivery.json`; two tools to keep versioned.\n- Generator: the cached create-vite 8.3.0 (`^8`, MIT, tier Allowed anywhere) vanilla-ts template was generated into this repository root and adapted to a library: the demo page and assets and the `vite` devDependency were removed; tsup, @types/node, tsx and zod were added.\n\n## Revisit when\n\nThe package needs a second output format, a browser target, or more than 200 tests needing watch mode or richer reporting; or Node type stripping cannot run a needed TypeScript feature.\n'''\nCONTENT['docs/adr/0002-design-system.md'] = r'''# ADR 0002: Design system\n\n## Status\n\nAccepted\n\n## Date\n\n2026-09-05\n\n## Context\n\nNon-Blade fixture with no graphical surface: the only user-facing output is CLI text on stdout and stderr. No brand, platform UI or accessibility needs beyond readable terminal text.\n\n## Options\n| option | pros | cons | better when | component reuse | source |\n| --- | --- | --- | --- | --- | --- |\n| shadcn/ui | Source-owned accessible components | Consumer maintains copied components | Tailored product UI needs full control | Components and registry items compose locally | https://ui.shadcn.com/docs |\n| Radix Themes | Cohesive accessible component theme | Stronger visual conventions | Fast consistent UI matters more than source ownership | Theme primitives compose across screens | @radix-ui/themes |\n| MUI | Broad mature component suite | Larger runtime and opinionated styling | Enterprise UI needs extensive ready-made widgets | Shared theme and component packages | @mui/material |\n\n## Ruling\n\n2026-09-05: none \u2014 no design system is adopted because there is no UI; the CLI text contract is recorded in `docs/ux-canon.md`, and no tokens, fonts, palette or spacing are invented.\n\nFor Blade, store pointers only; tokens are owned by zeroh-design.\n\n## Consequences\n\n- Positive: no UI dependency and no token source to keep in sync; `designHomes.ux.bindingDesignSystem` stays absent in `roadmap/roadmap.config.json`.\n- Negative: any future graphical surface must reopen this decision before UI code is written.\n\n## Revisit when\n\nA web or mobile surface is planned, or Blade branding is requested (then invoke zeroh-design and store only its pointers).\n'''\nCONTENT['docs/CODE-STYLE.md'] = r'''# Code style\n\n## Lint\n\n`none` \u2014 no linter is configured and the `lint` gate is declared absent in `roadmap/roadmap.config.json`. Enforced style comes from `tsconfig.json` (`strict`, `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnly`, `verbatimModuleSyntax`, `noFallthroughCasesInSwitch`, `noUncheckedSideEffectImports`), checked by `npm run typecheck`.\n\n## Format\n\n`none` \u2014 no formatter is configured; match the existing files (ES modules, two-space indentation, single quotes, no semicolons, explicit `.ts` import extensions) until a formatter is adopted through an approved proposal.\n'''\nCONTENT['docs/architecture.md'] = r'''# Architecture\n\nThis file indexes the authoritative architecture homes. Link each topic to its\nowner instead of copying the content.\n\n## Topic index\n\n| Topic | Home |\n| --- | --- |\n| Product requirements and decisions | docs/PRD.md |\n| Stack ruling (tsup + node:test) | docs/adr/0001-tech-stack.md |\n| Design-system ruling (none) | docs/adr/0002-design-system.md |\n| CLI contract | docs/ux-canon.md |\n| Reusable API | src/index.ts |\n| CLI adapter | src/cli.ts |\n| Build and package surface | tsup.config.ts, package.json (`exports`, `bin`, `files`) |\n| Tests | test/greet.test.ts, test/cli.test.ts |\n| Code style | docs/CODE-STYLE.md |\n| Conventions | AGENTS.md |\n| Delivery lifecycle | .github/greenfield-delivery.json, scripts/ci-shard-plan.mjs, .github/workflows/ci.yml, .github/workflows/release.yml |\n| Roadmap | roadmap/ROADMAP.md, roadmap/roadmap.config.json (schema: roadmap/roadmap.config.schema.json) |\n'''\nCONTENT['docs/ux-canon.md'] = r'''# UX canon\n\n## Visual language\n\nNone. The product has no graphical surface; the only user interface is plain CLI text on stdout and stderr, with no colours, tokens, fonts, palette or spacing.\n\n## Component vocabulary\n\n- Greeting line: `Hello, <name>!` followed by a newline on stdout.\n- Usage text: starts with `Usage: greenfield-proof [name]` and lists the options.\n- Error line: one sentence on stderr, followed by the usage text.\n\n## Interaction rules\n\n| Invocation | stdout | stderr | exit |\n| --- | --- | --- | --- |\n| `greenfield-proof` | `Hello, world!` | empty | 0 |\n| `greenfield-proof Ada` | `Hello, Ada!` | empty | 0 |\n| `greenfield-proof --help` or `-h` | usage text | empty | 0 |\n| `greenfield-proof --unknown` | empty | `Unknown option: --unknown` + usage | 1 |\n| `greenfield-proof --help --unknown` (any order) | empty | `Unknown option: --unknown` + usage | 1 |\n| `greenfield-proof ''` or a whitespace-only name | empty | the `TypeError` message + usage | 1 |\n| more than one name | empty | `Too many arguments` + usage | 1 |\n\nUnknown options are checked before help, so an unknown option never exits 0. The API mirrors the CLI: `greet()` and `greet(undefined)` return `Hello, world!`, `greet(name)` returns `Hello, <name>!` verbatim, and blank names throw `TypeError`.\n\n## Binding design system\n\nnone \u2014 ADR 0002 records the non-UI ruling; `designHomes.ux.bindingDesignSystem` is absent and no tokens are defined.\n'''\nCONTENT['README.md'] = r'''# greenfield-proof\n\nA small TypeScript reusable greeting API plus CLI for developers: `greet(name?)` returns `Hello, <name>!` (default `world`; blank names rejected with `TypeError`) and the `greenfield-proof` CLI prints it. Private, UNLICENSED fixture: never published or deployed.\n\n## Structure\n\n| Path | Purpose |\n| --- | --- |\n| `package.json` | Package identity (`greenfield-proof`), scripts, and `exports`/`bin`/`files` pointing only at built `dist/` |\n| `src/index.ts` | Reusable greeting API (`greet`) |\n| `src/cli.ts` | Thin executable adapter over the API (`--help`, unknown-option handling) |\n| `test/greet.test.ts` | `node:test` behaviour tests for the API |\n| `test/cli.test.ts` | `node:test` behaviour tests for the CLI process contract |\n| `tsup.config.ts` | tsup build: ESM plus declarations for `src/index.ts` and `src/cli.ts` into `dist/` |\n| `tsconfig.json` | Strict TypeScript settings shared by typecheck, tests and build |\n| `dist/` | Built artifacts, generated by `npm run build` and ignored by git |\n| `docs/` | PRD, ADRs, code style, architecture index, UX canon |\n| `roadmap/` | zeroh-roadmap root: `roadmap.config.json`, its local `roadmap.config.schema.json`, `backlog.ts`, `phases/`, `arcs/`, `lib/` |\n| `reviews/` | Emitted `changelog.json` and `releases/` review reports |\n| `scripts/ci-shard-plan.mjs` | Delivery lifecycle engine: inventory, shard, fan-in, build, attest, release verification |\n| `scripts/check-readme-catalog.mjs` | README catalog comparator |\n| `scripts/pre-review.sh`, `scripts/build-dashboard.sh`, `scripts/generate-changelog-md.ts` | Roadmap review helpers installed by `roadmap init` |\n| `.github/greenfield-delivery.json` | Delivery configuration: adapter `library-cli`, runner/build bindings, baseline, release environment |\n| `.github/workflows/ci.yml` | CI: affected run on pull requests; authoritative full suite, build and attestation on main/manual runs; nightly diagnostic |\n| `.github/workflows/release.yml` | Exact-artifact release: verify attested evidence, then protected promotion (provider `none`, so promotion is blocked) |\n| `AGENTS.md`, `CLAUDE.md` | Conventions home and harness pointer |\n\n## Commands\n\n| Command | Purpose |\n| --- | --- |\n| `npm install` | Install the locked devDependencies (tsup, typescript, @types/node, tsx, zod) |\n| `npm run build` | Build gate: tsup writes `dist/index.js`, `dist/cli.js` and their declarations |\n| `npm run typecheck` | Types gate: `tsc --noEmit` over `src/` and `test/` |\n| `node --test test/greet.test.ts test/cli.test.ts` | Unit gate: runs the two explicitly named `node:test` files (Node 22 strips their types at load); `npm test` runs the same command |\n| `node dist/cli.js --help` | Integration gate: built CLI smoke check (exit 0) |\n| `env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts` | Emit gate: regenerate `reviews/changelog.json` from roadmap phases |\n| `node scripts/check-readme-catalog.mjs --project-root .` | README catalog check |\n| `node scripts/ci-shard-plan.mjs affected` | Pull-request lifecycle in `.github/workflows/ci.yml` (`BASE_SHA` from the PR base): setup, then the configured affected command, which runs the full explicit unit suite (see `affectedFallbackReason`) |\n| `node scripts/ci-shard-plan.mjs prepare plan`, `plan`, `prepare run`, `run`, `prepare fanin`, `fanin`, `setup`, `build`, `prepare attest`, `attest` | Full lifecycle on main/manual runs in `.github/workflows/ci.yml`: inventory, plan, shard, fan-in, build once, attest (nightly runs diagnose without attesting) |\n| `node scripts/ci-shard-plan.mjs gather-evidence`, `verify-release`, `prepare-promotion`, `promote` | Release lifecycle in `.github/workflows/release.yml`; promotion runs in the protected environment `greenfield-validation` and stays blocked while `release.provider` is `none` |\n\nLint and e2e gates are declared absent (`none`) in `roadmap/roadmap.config.json`: no linter or end-to-end surface exists. A new test file must be added to the unit command in `package.json`, `roadmap/roadmap.config.json` and `affectedArgv` in `.github/greenfield-delivery.json`; the CI inventory matches `test/*.test.ts` through `git ls-files`.\n\n## Catalog\n\n<!-- repo-catalog:start -->\n| Project | Path | Purpose |\n| --- | --- | --- |\n| greenfield-proof | . | TypeScript greeting API and CLI |\n<!-- repo-catalog:end -->\n\nCheck catalog currency with `node scripts/check-readme-catalog.mjs --project-root .`.\n'''\nCONTENT['AGENTS.md'] = r'''# Repository guidance\n\n## Conventions\n\n- Keep the reusable API in `src/index.ts` and the thin executable adapter in `src/cli.ts`; the CLI never re-implements greeting logic, and it rejects unknown options before honouring `--help`.\n- Publish only built artifacts: `exports`, `bin` and `files` in `package.json` point at `dist/`, which `npm run build` generates and nobody edits by hand.\n- Tests are `node:test` files under `test/*.test.ts` that import `src/*.ts` directly (Node 22 type stripping); the unit command names every test file explicitly, so a new test file is added to `package.json`, `roadmap/roadmap.config.json` and `.github/greenfield-delivery.json` in the same commit as the behaviour it covers.\n- Gates and their exact commands live in `roadmap/roadmap.config.json` and README \u00a7Commands; `lint` and `e2e` are declared absent (`none`) until real tooling exists.\n- Documentation homes: product facts in `docs/PRD.md`, decisions in `docs/adr/`, style in `docs/CODE-STYLE.md`, the architecture index in `docs/architecture.md`, the CLI contract in `docs/ux-canon.md`. Link to a home instead of copying its content.\n- Roadmap work goes through the installed zeroh-roadmap skills against the single root `roadmap/` (`roadmap.config.json` with its local `roadmap.config.schema.json`, `backlog.ts`, `phases/`); never create a second root or configuration, and never point consumer files at plugin-internal paths.\n\n## Don't\n\n- No runtime dependencies, framework runtime, external service, authentication, mobile target, deployment or product remote.\n- No publishing: the package is private and UNLICENSED, and `release.provider` stays `none` in `.github/greenfield-delivery.json`.\n- No invented design tokens or UI vocabulary; the only surface is CLI text (ADR 0002, `docs/ux-canon.md`).\n- Do not hand-edit generated files (`dist/`, `reviews/changelog.json`, `package-lock.json`) or bypass the delivery lifecycle in `.github/workflows/`.\n- Do not lower `baseline` floors in `.github/greenfield-delivery.json` to hide a regression; a baseline change needs `baselineApproval`.\n\n## Generalize-forward\n\nExtract a shared helper only when the same logic is needed by both the API and the CLI, or by two tests; a single use stays inline. New public behaviour is added to `src/index.ts` first and then exposed by `src/cli.ts`.\n\n## Flag-first delivery\n\nA behaviour change that alters existing output ships behind an explicit opt-in option (CLI flag or API parameter) whose default keeps the current behaviour; the flag is removed in the roadmap phase that makes the new behaviour the default.\n\nhold: [] \u2014 release-only work (version bump, tag, promotion) is held until an explicit user ruling; publishing is out of scope for this private fixture.\n'''\nCONTENT['CLAUDE.md'] = r'''@AGENTS.md\nRun suite, typecheck and build gates through the host's memory-capped wrapper when the host requires one; the portable commands themselves are in README \u00a7Commands and roadmap/roadmap.config.json.\nUse the installed zeroh-roadmap skills for phase planning and execution; do not hand-edit roadmap/roadmap.config.json outside an approved proposal.\n'''\nPLAN = [\n    ('replace', 'roadmap/roadmap.config.json', '190afd208a7c70a7ac44f385fe83c7124b1b96b83d71aa29b06828679764570e'),\n    ('copy', '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/cli/roadmap.config.schema.json', 'roadmap/roadmap.config.schema.json', '1e7f9f4ccaf6d39e2b456eec05801b99056fe0e45c9efa6399ec66b1f4e88a27'),\n    ('mkdir', 'docs'),\n    ('mkdir', 'docs/adr'),\n    ('create', 'docs/PRD.md'),\n    ('create', 'docs/adr/0001-tech-stack.md'),\n    ('create', 'docs/adr/0002-design-system.md'),\n    ('create', 'docs/CODE-STYLE.md'),\n    ('create', 'docs/architecture.md'),\n    ('create', 'docs/ux-canon.md'),\n    ('create', 'README.md'),\n    ('create', 'AGENTS.md'),\n    ('create', 'CLAUDE.md'),\n]\nif __name__ == '__main__':\n    apply()\nGF_WRITER_B",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "python3 - <<'GF_WRITER_C'\nimport hashlib, os, sys\nROOT = '/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf'\ndef _check(rel):\n    parts = rel.split('/')\n    if rel.startswith('/') or any(p in ('', '.', '..') for p in parts):\n        sys.exit('unsafe path: ' + rel)\n    cur = ROOT\n    for p in parts[:-1]:\n        cur = os.path.join(cur, p)\n        if os.path.islink(cur) or not os.path.isdir(cur):\n            sys.exit('unapproved or unsafe parent: ' + cur)\n    path = os.path.join(ROOT, rel)\n    if os.path.islink(path):\n        sys.exit('symlink target refused: ' + rel)\n    return path\ndef _digest(data):\n    return hashlib.sha256(data).hexdigest()\ndef mkdir(rel):\n    os.mkdir(_check(rel), 0o755)\n    print('WRITE: ' + rel + '/')\ndef create(rel, data):\n    fd = os.open(_check(rel), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)\n    with os.fdopen(fd, 'wb') as f:\n        f.write(data)\n    print('WRITE: ' + rel + ' sha256=' + _digest(data))\ndef replace(rel, before, data):\n    path = _check(rel)\n    if not os.path.isfile(path):\n        sys.exit('missing edit target: ' + rel)\n    with open(path, 'rb') as f:\n        actual = _digest(f.read())\n    if actual != before:\n        sys.exit('before-hash mismatch for ' + rel + ': ' + actual)\n    fd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)\n    with os.fdopen(fd, 'wb') as f:\n        f.write(data)\n    print('WRITE: ' + rel + ' (before ' + before + ') sha256=' + _digest(data))\ndef template(src, sha):\n    with open(src, 'rb') as f:\n        data = f.read()\n    if _digest(data) != sha:\n        sys.exit('template digest mismatch: ' + src)\n    return data\ndef apply():\n    for op in PLAN:\n        if op[0] == 'mkdir':\n            mkdir(op[1])\n        elif op[0] == 'create':\n            create(op[1], CONTENT[op[1]].encode('utf-8'))\n        elif op[0] == 'replace':\n            replace(op[1], op[2], CONTENT[op[1]].encode('utf-8'))\n        elif op[0] == 'copy':\n            create(op[2], template(op[1], op[3]))\n        elif op[0] == 'fill':\n            data = template(op[1], op[3])\n            old = op[4].encode('utf-8')\n            if data.count(old) != 1:\n                sys.exit('placeholder count mismatch in ' + op[1])\n            create(op[2], data.replace(old, op[5].encode('utf-8')))\n        else:\n            sys.exit('unknown operation')\nCONTENT = {}\nCONTENT['.github/greenfield-delivery.json'] = r'''{\n  \"schemaVersion\": 1,\n  \"archetype\": \"library-cli\",\n  \"setupArgv\": [\n    [\"npm\", \"ci\", \"--no-audit\", \"--no-fund\"]\n  ],\n  \"affectedArgv\": [\"node\", \"--test\", \"test/greet.test.ts\", \"test/cli.test.ts\"],\n  \"affectedFallbackReason\": \"node:test has no dependency-graph affected selection; the suite is two small files, so pull requests run the full explicit unit suite on the checked-out head instead of a {base}-scoped subset\",\n  \"shardCount\": 2,\n  \"evidenceDays\": 7,\n  \"operationalRoots\": [\".ci\", \"node_modules\"],\n  \"baseline\": {\n    \"minTests\": 13,\n    \"minUnits\": 2,\n    \"coverageFloor\": 80\n  },\n  \"adapterConfig\": {\n    \"maxInfraRetries\": 0,\n    \"coverageRoots\": [],\n    \"leafTasks\": {}\n  },\n  \"runners\": {\n    \"node:test\": {\n      \"inventoryArgv\": [\"git\", \"ls-files\", \"-z\", \"--\", \"test\", \"tests\"],\n      \"inventoryFormat\": \"git-nul\",\n      \"filePattern\": \"^test/[^/]+[.]test[.]ts$\",\n      \"shardArgv\": [\"node\", \"--test\", \"--experimental-test-coverage\", \"--test-reporter=junit\", \"--test-reporter-destination={junit}\", \"--test-reporter=lcov\", \"--test-reporter-destination={coverage}\", \"{unit}\"],\n      \"rawReports\": [\n        { \"path\": \"{junit}\", \"format\": \"junit\" },\n        { \"path\": \"{coverage}\", \"format\": \"lcov\" }\n      ]\n    }\n  },\n  \"build\": {\n    \"argv\": [\"npm\", \"run\", \"build\"],\n    \"outputs\": [\"dist\"]\n  },\n  \"release\": {\n    \"provider\": \"none\",\n    \"environment\": \"greenfield-validation\"\n  }\n}\n'''\nPLAN = [\n    ('mkdir', '.github'),\n    ('mkdir', '.github/workflows'),\n    ('copy', '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs', 'scripts/ci-shard-plan.mjs', '80b1bbfa11853de251c504ebb00257989962bd36ec82d5ec32b902d8ec176a4c'),\n    ('copy', '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/check-readme-catalog.mjs', 'scripts/check-readme-catalog.mjs', '7cdfebbbcae1b9638fcdb557676f8a3311526e28856fdc0b975ba3d30ad38bbb'),\n    ('copy', '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/github/workflows/ci.yml', '.github/workflows/ci.yml', '9bd337241bf681614c2f97ba7a7ce7b03f8cf269a8832cf5bec543a88ffdb3d2'),\n    ('fill', '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/github/workflows/release.yml', '.github/workflows/release.yml', '6f1c1c6a24d8e9b7c0fe0057aff947fc48fd82fda8db7bb7925413b74017b94b', '    environment: approved-release-environment', '    environment: greenfield-validation'),\n    ('create', '.github/greenfield-delivery.json'),\n]\nif __name__ == '__main__':\n    apply()\nGF_WRITER_C",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-logs npm run build",
+      "network": "none (capbuild transient user unit and /run/user/1000/capbuild-locks; build gate, configured command npm run build; writes dist/)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-logs npm run typecheck",
+      "network": "none (capbuild transient user unit and its runtime locks; types gate, configured command npm run typecheck)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-logs node --test test/greet.test.ts test/cli.test.ts",
+      "network": "none (capbuild transient user unit and its runtime locks; unit gate, configured command node --test test/greet.test.ts test/cli.test.ts, 13 tests)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-logs node dist/cli.js --help",
+      "network": "none (capbuild transient user unit and its runtime locks; integration gate, configured command node dist/cli.js --help)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf/.npm-logs env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts",
+      "network": "none (capbuild transient user unit and its runtime locks; emit gate, configured command env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts; writes reviews/changelog.json)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/bin/roadmap.mjs config check",
+      "network": "none (raw unwrapped structural config check)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "node scripts/check-readme-catalog.mjs --project-root .",
+      "network": "none (driver-selected project-root catalog comparator, run once; the alternate --catalog mode is not run)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "python3 - <<'GF_TEMP_BASELINE'\nimport glob, json, os\nROOT = '/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf'\nPREFIX = '/tmp/greenfield-workflow-'\nroots = sorted(glob.glob(PREFIX + '*'))\ntarget = os.path.join(ROOT, '.ci')\nif os.path.islink(target) or os.path.exists(target):\n    raise SystemExit('refusing: .ci already exists')\nos.mkdir(target, 0o755)\nprint('WRITE: .ci/')\nrecord = {'prefix': PREFIX, 'roots': roots}\ntext = json.dumps(record, indent=2) + chr(10)\nfd = os.open(os.path.join(target, 'native-delivery-temp-baseline.json'), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)\nwith os.fdopen(fd, 'wb') as f:\n    f.write(text.encode('utf-8'))\nprint('WRITE: .ci/native-delivery-temp-baseline.json')\nprint(json.dumps(record))\nGF_TEMP_BASELINE",
+      "network": "none (scratch-only inventory of pre-existing /tmp/greenfield-workflow-* roots; nothing outside scratch is touched)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "/home/patrik/.local/bin/capbuild --env GREENFIELD_DELIVERY_ROOT=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf node --test /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs",
+      "network": "none (capbuild transient user unit and its runtime locks; mandatory installed-output delivery suite, 27 tests, no filter; the GREENFIELD_DELIVERY_ROOT wrapper env is separately authorized; creates and removes only its own unique /tmp/greenfield-workflow-* roots)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "python3 - <<'GF_TEMP_ASSERT'\nimport glob, json\nROOT = '/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf'\nwith open(ROOT + '/.ci/native-delivery-temp-baseline.json', 'rb') as f:\n    baseline = json.loads(f.read().decode('utf-8'))\ncurrent = sorted(glob.glob(baseline['prefix'] + '*'))\nleftover = [path for path in current if path not in baseline['roots']]\nprint(json.dumps({'baselineRoots': baseline['roots'], 'currentRoots': current, 'leftover': leftover}))\nraise SystemExit(1 if leftover else 0)\nGF_TEMP_ASSERT",
+      "network": "none (read-only assertion that no prefix roots absent from the baseline remain; deletes nothing)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "if command -v actionlint >/dev/null 2>&1; then command -v actionlint; actionlint -version; else printf '%s\\n' 'ACTIONLINT_UNAVAILABLE'; fi",
+      "network": "none (optional linter probe; preproposal check printed ACTIONLINT_UNAVAILABLE on this host)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf",
+      "command": "test -f package.json && test -f src/index.ts && test -f src/cli.ts && test -f tsup.config.ts && test -f dist/index.js && test -f dist/cli.js && test -f reviews/changelog.json && test -f roadmap/roadmap.config.schema.json && test -f .github/greenfield-delivery.json && test -f .github/workflows/ci.yml && test -f .github/workflows/release.yml && test -f scripts/ci-shard-plan.mjs && test -f .ci/native-delivery-temp-baseline.json",
+      "network": "none (archetype Verify presence check adapted to the repository root; the Verify gates themselves already ran as separate wrapped commands)"
+    }
+  ],
+  "gates": {
+    "lint": "none",
+    "types": "npm run typecheck",
+    "unit": "node --test test/greet.test.ts test/cli.test.ts",
+    "integration": "node dist/cli.js --help",
+    "build": "npm run build",
+    "e2e": "none",
+    "emit": "env TSX_DISABLE_CACHE=1 node --import tsx roadmap/lib/emit.ts"
+  },
+  "delivery": {
+    "provider": "github-actions",
+    "adapter": "library-cli",
+    "configPath": ".github/greenfield-delivery.json",
+    "workflowPaths": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml"
+    ],
+    "plannerPath": "scripts/ci-shard-plan.mjs",
+    "releaseEnvironment": "greenfield-validation",
+    "collision": {
+      "existingPaths": [],
+      "decision": "create",
+      "preserveUntilApproval": true,
+      "mergeManifests": {}
+    },
+    "validationCommands": [
+      {
+        "command": "/home/patrik/.local/bin/capbuild --env GREENFIELD_DELIVERY_ROOT=/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf node --test /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs",
+        "cwd": "/tmp/greenfield-34-release-empty-claude-gjzu9w5z/greenfield-34-final-empty-claude-p_7e83cf"
+      }
+    ]
+  }
+}

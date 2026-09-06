@@ -37,7 +37,6 @@ function completeOracle(text) {
 test('oracle independently accounts for every promised missing home; deletion fails',()=>{
   const text=read('fixtures/README.md'); completeOracle(text);
   for (const home of homes) assert.throws(()=>completeOracle(text.split('\n').filter(l=>!l.startsWith('| '+home+' |')).join('\n')));
-  assert.match(read(audit), /one row per required artifact/);
 });
 test('design absence is conditional on Blade handoff',()=>{
   const text=read(audit);

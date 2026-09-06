@@ -1,0 +1,319 @@
+{
+  "type": "proposal",
+  "artifacts": [
+    {
+      "path": "docs/PRD.md",
+      "reason": "missing required home: product requirements with explicit unknowns and the approval ruling in Decisions"
+    },
+    {
+      "path": "docs/adr/0001-tech-stack.md",
+      "reason": "missing required home: records the proven existing Nx 23.2.0 + Vitest 5.0.0 + npm stack from lockfile and project.json evidence"
+    },
+    {
+      "path": "docs/adr/0002-design-system.md",
+      "reason": "missing required home: records the observed components.json configuration (style new-york, tsx true) as evidence only; installed components, registry ownership and consumer relationships stay unknown; non-Blade, no tokens invented"
+    },
+    {
+      "path": "docs/CODE-STYLE.md",
+      "reason": "missing required home: derived from eslint.config.mjs (empty flat config) and absent formatter, declaring lint/format none"
+    },
+    {
+      "path": "docs/architecture.md",
+      "reason": "missing architecture index: links docs/architecture/boundaries.md and docs/architecture/workflow.md plus catalog, delivery and roadmap homes without replacing them"
+    },
+    {
+      "path": "docs/ux-canon.md",
+      "reason": "missing required home: records the observed configuration homes and the single exported label function with explicit unknowns, binding ADR 0002"
+    },
+    {
+      "path": "CLAUDE.md",
+      "reason": "partial harness file: replace the duplicated-conventions sentence with the @AGENTS.md pointer while preserving the Nx generated block byte-for-byte"
+    },
+    {
+      "path": "GEMINI.md",
+      "reason": "stale harness file: its conventions duplicate AGENTS.md verbatim; reduce to a pointer with no unique material lost"
+    },
+    {
+      "path": "README.md",
+      "reason": "stale catalog and partial README: add shared, ui and generators rows from emitted/repo-catalog.json, approval-gated removal of the orphan row (apps/orphan has no record or directory), add Structure and Commands sections naming both workflow paths"
+    },
+    {
+      "path": "scripts/check-readme-catalog.mjs",
+      "reason": "missing catalog checker: byte-for-byte copy of the plugin template, the only permitted comparator"
+    },
+    {
+      "path": "scripts/run-nx-test-tier.mjs",
+      "reason": "missing Nx test-tier selector required by the nx-monorepo unit-scoped, unit-affected and unit-impacted bindings"
+    },
+    {
+      "path": "scripts/ci-shard-plan.mjs",
+      "reason": "missing delivery planner: byte-for-byte copy of the plugin template (sole lifecycle engine)"
+    },
+    {
+      "path": ".github/greenfield-delivery.json",
+      "reason": "missing delivery configuration for the nx-monorepo adapter with real leaf identities shared:test and ui:test, build outputs dist/shared and dist/ui, provider none"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "reason": "existing workflow collision resolved by explicit merge: canonical template jobs, triggers, concurrency and permissions added; existing-check job, comment line and env policy preserved"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "reason": "missing release workflow: template copy with only the environment placeholder replaced by greenfield-validation"
+    },
+    {
+      "path": "roadmap/roadmap.config.json",
+      "reason": "missing roadmap configuration: created by roadmap init --config at the resolved root, then rewritten with the approved gate, optional Nx, cadence, design-home and test-convention keys and without the optional $schema key so no development-checkout path is retained"
+    },
+    {
+      "path": "node_modules/",
+      "reason": "npm ci installs the lockfile-pinned Nx, Vitest and coverage dependencies required by the unit and build gates"
+    },
+    {
+      "path": ".npm-cache/",
+      "reason": "scratch-local npm cache (npm_config_cache) so no home cache is written"
+    },
+    {
+      "path": ".npm-logs/",
+      "reason": "scratch-local npm log directory (npm_config_logs_dir) so no home log is written"
+    },
+    {
+      "path": ".nx/",
+      "reason": "Nx workspace-data and cache written by the test, build and selector runs with NX_DAEMON=false"
+    },
+    {
+      "path": ".ci/",
+      "reason": "Vitest JUnit and LCOV outputs under .ci/nx/shared and .ci/nx/ui from the unit and optional gates, plus the two scope manifests and the temporary-fixture baseline file"
+    },
+    {
+      "path": ".ci/scope-scoped.json",
+      "reason": "approved unit-scoped input: scope-manifest-json-v1 naming the real test file packages/shared/test/index.test.mjs"
+    },
+    {
+      "path": ".ci/scope-affected.json",
+      "reason": "approved unit-affected input: scope-manifest-json-v1 naming the real source file packages/ui/src/index.mjs"
+    },
+    {
+      "path": ".ci/native-delivery-temp-baseline.json",
+      "reason": "inventory of preexisting /tmp/greenfield-workflow-* roots captured immediately before the installed-output validation suite so the post-suite read-only comparison can prove no newly created fixture root remains"
+    },
+    {
+      "path": "dist/",
+      "reason": "build gate outputs dist/shared/index.mjs and dist/ui/index.mjs"
+    }
+  ],
+  "commands": [
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "env npm_config_cache=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-cache npm_config_logs_dir=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-logs npm ci",
+      "network": "registry.npmjs.org over the inherited network: lockfile-pinned tarballs only; cache and logs are scratch-local"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "mkdir -p scripts && test -d scripts && test ! -L scripts && test ! -e scripts/check-readme-catalog.mjs && test ! -e scripts/run-nx-test-tier.mjs && test ! -e scripts/ci-shard-plan.mjs && cp /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/check-readme-catalog.mjs scripts/check-readme-catalog.mjs && cp /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs scripts/run-nx-test-tier.mjs && cp /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs scripts/ci-shard-plan.mjs && printf '%s  %s\\n' 7cdfebbbcae1b9638fcdb557676f8a3311526e28856fdc0b975ba3d30ad38bbb scripts/check-readme-catalog.mjs 71b15d6bcdf19f8c128f2a3c75ab9bcdbd5baf4717df56626d05b6eb4a536f93 scripts/run-nx-test-tier.mjs 80b1bbfa11853de251c504ebb00257989962bd36ec82d5ec32b902d8ec176a4c scripts/ci-shard-plan.mjs | sha256sum -c -",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "python3 - <<'PY'\nimport os, hashlib, json\nROOT = '/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j'\nNL = chr(10)\nFILES = {}\nFILES['docs/PRD.md'] = '''# Product requirements\n\n## Product\n\nEstablished Nx workspace `zeroh-shaped-fixture` (private, npm, ESM). Applications `web`, `api` and `admin` live under `apps/`; libraries `shared`, `ui` and `generators` live under `packages/`. `shared` and `ui` each export a `label` function covered by one Vitest test and built into `dist/`.\n\n## Audience\n\nUnknown: the repository records no audience. Retained as an explicit unknown; do not infer one.\n\n## Platforms\n\nNode.js 22 workspace tooling: Nx 23.2.0, Vitest 5.0.0 and @vitest/coverage-v8 5.0.0 under npm. Runtime platforms of `web`, `api` and `admin` are not recorded and are retained as unknown. Mobile: none.\n\n## Constraints\n\n- Package identity, `package-lock.json`, Nx project evidence, `AGENTS.md` conventions, the Nx generated block in `CLAUDE.md` and `emitted/repo-catalog.json` are preserved byte-identically.\n- Existing architecture homes under `docs/architecture/` are linked from `docs/architecture.md`, never replaced.\n- No deployment provider is available: `release.provider` is `none`, so promotion is explicitly unavailable.\n- No product remotes, registries, Blade branding or mobile targets are recorded.\n\n## Non-goals\n\n- Replacing existing runtime scaffolding or selecting a new stack.\n- Publishing or deploying artifacts.\n- Binding lint, type-check, integration or end-to-end gates before their tooling is installed and locked.\n\n## Success signals\n\n- `env NX_DAEMON=false npm test` and `env NX_DAEMON=false npm run build` exit 0 from the workspace root.\n- `node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json` exits 0.\n- `roadmap config check` exits 0 against `roadmap/roadmap.config.json`.\n- The installed delivery outputs pass the plugin-owned `greenfield-ci-release.test.mjs` suite.\n\n## Brand\n\nNon-Blade. No brand tokens or theme home are recorded; retained as unknown.\n\n## Decisions\n\n| Date | Ruling | Reason |\n| --- | --- | --- |\n| 2026-09-05 | Brownfield gap plan approved with the exact response `APPROVE GREENFIELD PLAN`; only proposed gap rows were written and existing homes stayed byte-identical. | The brownfield-audit workflow requires explicit approval of the complete Artifact / Target / Reason proposal before any write. |\n| 2026-09-05 | Gates: unit `env NX_DAEMON=false npm test`, build `env NX_DAEMON=false npm run build`; lint, types, integration, e2e and emit declared `none`; optional Nx slots unit-scoped, unit-affected and unit-impacted bound to `scripts/run-nx-test-tier.mjs`. | Only Nx, Vitest and coverage-v8 are locked; ESLint, TypeScript, integration, Playwright and roadmap emit tooling are absent and absence is declared, not faked. |\n| 2026-09-05 | Delivery: GitHub Actions, adapter `nx-monorepo`, protected release environment `greenfield-validation`, provider `none`; existing `.github/workflows/ci.yml` merged with its `existing-check` job, comment line and `env` policy preserved. | The CI/release strategy owner requires an explicit reviewed merge for workflow collisions and forbids inventing a deployment. |\n'''\nFILES['docs/adr/0001-tech-stack.md'] = '''# ADR 0001: Technology stack\n\n## Status\n\nAccepted\n\n## Date\n\n2026-09-05\n\n## Context\n\nThe repository is an established Nx workspace. `nx.json`, the `package.json` scripts (`nx run-many -t test` and `nx run-many -t build`, both with `--excludeTaskDependencies --skipNxCache`) and `package-lock.json` pin Nx 23.2.0, Vitest 5.0.0 and @vitest/coverage-v8 5.0.0 under npm. Projects are declared by `project.json` files under `apps/` and `packages/`; `shared` and `ui` carry uncached `test` and `build` targets. Sources are ESM JavaScript (`.mjs`); no TypeScript configuration exists. This record documents the proven existing choice. stack-decision was not invoked because the stack evidence is consistent, and a brownfield audit never replaces a proven stack.\n\n## Options\n| option | pros | cons | better when | component reuse | source |\n| --- | --- | --- | --- | --- | --- |\n| Nx 23 integrated workspace (existing) | Locked and proven by present project targets, tests and builds | Daemon and cache need explicit control in CI and wrappers | Several applications and libraries share one project graph | Libraries are consumed through workspace targets | https://nx.dev/docs/reference/nx-commands |\n| Plain npm workspaces without Nx | Fewer moving parts | Loses the project graph, affected selection and target orchestration already in use | Very small single-package repositories | Manual | https://docs.npmjs.com/cli/using-npm/workspaces |\n\n## Ruling\n\n2026-09-05: Nx 23.2.0 integrated workspace with Vitest 5.0.0 under npm (existing). Reason: the lockfile, project targets and test/build evidence already prove it, and replacing a proven stack is outside a brownfield audit.\n\n## Consequences\n\n- Positive: gates bind to the existing `npm test` and `npm run build` scripts with `NX_DAEMON=false` for deterministic wrapper and CI execution; scoped, affected and impacted test tiers use `scripts/run-nx-test-tier.mjs`.\n- Negative: lint, type-check, integration and e2e slots stay `none` until their tooling is installed and locked.\n\n## Revisit when\n\nA project adds TypeScript, ESLint, Playwright or integration tests to `package-lock.json`, or the Nx major version changes.\n'''\nFILES['docs/adr/0002-design-system.md'] = '''# ADR 0002: Design system\n\n## Status\n\nAccepted\n\n## Date\n\n2026-09-05\n\n## Context\n\nTwo configuration files exist: `apps/web/components.json` and `packages/ui/components.json`, each containing only `style: new-york` and `tsx: true`. That shape matches a shadcn/ui `components.json`, but it is the only evidence. No shadcn/ui, Radix or Tailwind dependency appears in `package-lock.json`, no component sources, registry configuration, token home, theme files or Blade brand pointers exist, and nothing proves that `apps/web` consumes `packages/ui` or that either project shares a registry. This record preserves the observed configuration as evidence; it does not invent tokens, values, installed components or ownership.\n\n## Options\n| option | pros | cons | better when | component reuse | source |\n| --- | --- | --- | --- | --- | --- |\n| shadcn/ui (matches the observed components.json shape) | Source-owned accessible components; the observed style new-york / tsx configuration fits it | Installation, registry and consumer relationships are not proven in this repository | Tailored product UI needs full control | Components would compose locally once actually installed | https://ui.shadcn.com/docs |\n| Radix Themes | Cohesive accessible component theme | Stronger visual conventions; not present | Fast consistent UI matters more than source ownership | Theme primitives compose across screens | @radix-ui/themes |\n| MUI | Broad mature component suite | Larger runtime and opinionated styling; not present | Enterprise UI needs extensive ready-made widgets | Shared theme and component packages | @mui/material |\n\n## Ruling\n\n2026-09-05: no new design system is selected. The observed `components.json` configuration (style new-york, tsx true) in `apps/web` and `packages/ui` is recorded as evidence consistent with shadcn/ui; actual installed components, registry ownership and the `apps/web` to `packages/ui` relationship remain unknown until proven by dependencies or sources. Reason: a brownfield audit records repository facts and never infers a runtime.\n\nFor Blade, store pointers only; tokens are owned by zeroh-design. This workspace is non-Blade, so no zeroh-design pointer applies.\n\n## Consequences\n\n- Positive: `docs/ux-canon.md` can point at the observed configuration homes without asserting more than the repository shows.\n- Negative: visual tokens, themes, copy rules, installed component sets and registry ownership stay unknown until an owner records or installs them.\n\n## Revisit when\n\nA UI dependency is locked, component sources or a registry configuration are added, a token or theme home appears, a Blade brand handoff is approved, or the `components.json` files change or disappear.\n'''\nFILES['docs/CODE-STYLE.md'] = '''# Code style\n\n## Lint\n\n`none`: `eslint.config.mjs` exports an empty flat config (`export default []`) and ESLint is not locked in `package-lock.json`. Bind a lint command when the tool is installed; do not invent a standard.\n\n## Format\n\n`none`: no formatter configuration (Prettier, Biome or EditorConfig) exists. Existing sources are ESM `.mjs` files with single quotes and no semicolons; keep new files consistent with neighbouring code.\n'''\nFILES['docs/architecture.md'] = '''# Architecture\n\nThis file indexes the authoritative architecture homes. Link each topic to its\nowner instead of copying the content.\n\n## Topic index\n\n| Topic | Home |\n| --- | --- |\n| Boundaries | docs/architecture/boundaries.md |\n| Workflow | docs/architecture/workflow.md |\n| Project catalog | emitted/repo-catalog.json |\n| Nx workspace and project targets | nx.json, apps/*/project.json, packages/*/project.json |\n| Delivery lifecycle (CI and release) | .github/greenfield-delivery.json, .github/workflows/ci.yml, .github/workflows/release.yml |\n| Roadmap gate bindings | roadmap/roadmap.config.json |\n| Technology stack | docs/adr/0001-tech-stack.md |\n| Design system | docs/adr/0002-design-system.md |\n\n`docs/architecture/boundaries.md` still names `packages/legacy-widgets`, which has no catalog entry or directory. That statement is preserved as the owner's record and is not corrected here.\n'''\nFILES['docs/ux-canon.md'] = '''# UX canon\n\n## Visual language\n\nUnknown: no visual language, tokens or theme are recorded in the repository. Retained as an explicit unknown; do not infer one.\n\n## Component vocabulary\n\nUnknown beyond configuration: `packages/ui/components.json` and `apps/web/components.json` each declare style new-york and tsx true, and `packages/ui/src/index.mjs` exports a single `label` function. No installed component set, registry or consumer relationship between `apps/web` and `packages/ui` is proven; see `docs/adr/0002-design-system.md`.\n\n## Interaction rules\n\nUnknown: no interaction rules are recorded. Retained as an explicit unknown.\n\n## Binding design system\n\ndocs/adr/0002-design-system.md\n'''\nFILES['.github/greenfield-delivery.json'] = json.dumps({'schemaVersion': 1, 'archetype': 'nx-monorepo', 'setupArgv': [['npm', 'ci']], 'affectedArgv': ['env', 'NX_DAEMON=false', 'npm', 'exec', '--', 'nx', 'affected', '-t', 'test', '--base', '{base}', '--head', 'HEAD', '--excludeTaskDependencies', '--skipNxCache'], 'shardCount': 2, 'evidenceDays': 7, 'baseline': {'minTests': 2, 'minUnits': 2, 'coverageFloor': 100}, 'adapterConfig': {'maxInfraRetries': 0, 'coverageRoots': [], 'leafTasks': {'shared:test': {'aggregate': False, 'dependencies': []}, 'ui:test': {'aggregate': False, 'dependencies': []}}}, 'operationalRoots': ['.ci', 'node_modules', '.nx', '.npm-cache', '.npm-logs'], 'runners': {'nx': {'inventoryArgv': ['env', 'NX_DAEMON=false', 'npm', 'exec', '--', 'nx', 'show', 'projects', '--withTarget=test', '--json'], 'inventoryFormat': 'json-paths', 'targetSuffix': ':test', 'shardArgv': ['npm', 'exec', '--', 'nx', 'run', '{unit}', '--excludeTaskDependencies', '--skipNxCache'], 'env': {'NX_DAEMON': 'false', 'GREENFIELD_REPORT_DIR': '{reportDir}'}, 'rawReports': [{'path': '{reportDir}/junit.xml', 'format': 'junit'}, {'path': '{reportDir}/lcov.info', 'format': 'lcov'}]}}, 'build': {'argv': ['env', 'NX_DAEMON=false', 'npm', 'run', 'build'], 'outputs': ['dist/shared', 'dist/ui']}, 'release': {'provider': 'none', 'environment': 'greenfield-validation'}}, indent=2) + NL\nFILES['.ci/scope-scoped.json'] = json.dumps({'protocol': 'scope-manifest-json-v1', 'paths': ['packages/shared/test/index.test.mjs']}, indent=2) + NL\nFILES['.ci/scope-affected.json'] = json.dumps({'protocol': 'scope-manifest-json-v1', 'paths': ['packages/ui/src/index.mjs']}, indent=2) + NL\nEXPECTED = {'.github/greenfield-delivery.json': '29320cb06817e902936d0db90af7d170177c10d97a5bfb4a20ba93abdf5a16eb', '.ci/scope-scoped.json': 'c3a1d87b2d3c5c88a3f8b27fbb2dd73c765500f0763ce34b83fa7d70857b28c6', '.ci/scope-affected.json': 'f705f8c4530770bd37d569d1f1aa2cb631b3c8411baceb7925ad99b7be9c4fde'}\nassert os.getcwd() == ROOT and not os.path.islink(ROOT), os.getcwd()\ntargets = []\nfor rel, content in FILES.items():\n    parts = rel.split('/')\n    assert all(part and part not in ('.', '..') for part in parts), rel\n    current = ROOT\n    for part in parts[:-1]:\n        current = os.path.join(current, part)\n        if os.path.lexists(current):\n            assert os.path.isdir(current) and not os.path.islink(current), current\n    path = os.path.join(current, parts[-1])\n    assert not os.path.lexists(path), path\n    digest = hashlib.sha256(content.encode('utf-8')).hexdigest()\n    if rel in EXPECTED:\n        assert digest == EXPECTED[rel], (rel, digest)\n    targets.append((rel, path, content, digest))\nfor rel, path, content, digest in targets:\n    current = ROOT\n    for part in rel.split('/')[:-1]:\n        current = os.path.join(current, part)\n        if not os.path.lexists(current):\n            os.mkdir(current, 0o755)\n        assert os.path.isdir(current) and not os.path.islink(current), current\n    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)\n    with os.fdopen(fd, 'w', encoding='utf-8', newline='') as handle:\n        handle.write(content)\n    print('WRITE: ' + rel + ' sha256=' + digest)\nPY",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "python3 - <<'PY'\nimport os, hashlib\nROOT = '/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j'\nTEMPLATE = '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/github/workflows/release.yml'\nTEMPLATE_SHA = '6f1c1c6a24d8e9b7c0fe0057aff947fc48fd82fda8db7bb7925413b74017b94b'\nREL = '.github/workflows/release.yml'\nEXPECTED = '41942fec6b022f84b4d096223903182a2a205f1a6b915b647d6469a62695f13a'\nPLACEHOLDER = 'environment: approved-release-environment'\nENVIRONMENT = 'environment: greenfield-validation'\nassert os.getcwd() == ROOT, os.getcwd()\nwith open(TEMPLATE, 'rb') as handle:\n    template = handle.read()\nassert hashlib.sha256(template).hexdigest() == TEMPLATE_SHA, hashlib.sha256(template).hexdigest()\ntext = template.decode('utf-8')\nassert text.count(PLACEHOLDER) == 1\nfilled = text.replace(PLACEHOLDER, ENVIRONMENT)\nassert hashlib.sha256(filled.encode('utf-8')).hexdigest() == EXPECTED, hashlib.sha256(filled.encode('utf-8')).hexdigest()\nparent = os.path.join(ROOT, '.github', 'workflows')\nassert os.path.isdir(parent) and not os.path.islink(parent), parent\npath = os.path.join(parent, 'release.yml')\nassert not os.path.lexists(path), path\nfd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)\nwith os.fdopen(fd, 'w', encoding='utf-8', newline='') as handle:\n    handle.write(filled)\nprint('WRITE: ' + REL + ' sha256=' + EXPECTED)\nPY",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "python3 - <<'PY'\nimport os, hashlib\nROOT = '/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j'\nTEMPLATE = '/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-greenfield/templates/github/workflows/ci.yml'\nTEMPLATE_SHA = '9bd337241bf681614c2f97ba7a7ce7b03f8cf269a8832cf5bec543a88ffdb3d2'\nREL = '.github/workflows/ci.yml'\nBEFORE = 'e7891d45079a930ac46a2cac18033cdcdc1fa75abdb95dea60f51161ee447907'\nEXPECTED = 'e4a60667002a82f6e69ca7da3d675cf2c0ecbb541f222a6d3fa3ce149556bb5b'\nNL = chr(10)\nCOMMENT = '# Existing policy: retain through approved merge'\nENV_BLOCK = 'env:' + NL + '  PRESERVED_CI_POLICY: explicit-existing-value' + NL\nEXISTING_JOB = '''  existing-check:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - name: Preserve this existing check\n        run: node --version\n'''\nassert os.getcwd() == ROOT, os.getcwd()\npath = os.path.join(ROOT, REL)\nassert os.path.isfile(path) and not os.path.islink(path), path\nwith open(path, 'rb') as handle:\n    prior = handle.read()\nassert hashlib.sha256(prior).hexdigest() == BEFORE, hashlib.sha256(prior).hexdigest()\nprior_text = prior.decode('utf-8')\nassert prior_text.split(NL)[0] == COMMENT\nassert ENV_BLOCK in prior_text and EXISTING_JOB in prior_text\nwith open(TEMPLATE, 'rb') as handle:\n    template = handle.read()\nassert hashlib.sha256(template).hexdigest() == TEMPLATE_SHA, hashlib.sha256(template).hexdigest()\ntext = template.decode('utf-8')\nindex = text.index('jobs:' + NL)\nmerged = COMMENT + NL + text[:index] + ENV_BLOCK + text[index:] + EXISTING_JOB\nassert hashlib.sha256(merged.encode('utf-8')).hexdigest() == EXPECTED, hashlib.sha256(merged.encode('utf-8')).hexdigest()\nfd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)\nwith os.fdopen(fd, 'w', encoding='utf-8', newline='') as handle:\n    handle.write(merged)\nprint('WRITE: ' + REL + ' before=' + BEFORE + ' after=' + EXPECTED)\nPY",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/bin/roadmap.mjs init --config",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "python3 - <<'PY'\nimport os, hashlib, json\nROOT = '/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j'\nNL = chr(10)\nQ = chr(39)\nTIER = 'node scripts/run-nx-test-tier.mjs '\nEDITS = {}\nEDITS['README.md'] = ('369176061845e2b7ab83cb6cbd8935f24419ffe7f5c717419ae1c81aab07f88e', '''# Established workspace\n\nNx 23.2.0 workspace on npm with applications under `apps/` and libraries under `packages/`. `shared` and `ui` carry Vitest 5.0.0 test targets and build targets that emit into `dist/`.\n\n## Structure\n\n| Path | Purpose |\n| --- | --- |\n| apps/web | web application |\n| apps/api | API application |\n| apps/admin | admin application |\n| packages/shared | shared library with test and build targets |\n| packages/ui | ui library with test and build targets |\n| packages/generators | first-party generators |\n| emitted/repo-catalog.json | emitted project catalog consumed by the README check |\n| docs/ | product, decision, standards, architecture and UX homes |\n| roadmap/roadmap.config.json | zeroh-roadmap gate bindings |\n| scripts/ | catalog checker, Nx test-tier selector and delivery planner |\n| .github/greenfield-delivery.json | delivery adapter configuration (nx-monorepo) |\n| .github/workflows/ci.yml | affected PR checks and authoritative full runs |\n| .github/workflows/release.yml | exact-artifact release verification and gated promotion |\n\n## Commands\n\n| Command | Purpose |\n| --- | --- |\n| `env NX_DAEMON=false npm test` | full unit suite (roadmap unit gate; CI backstop is `.github/workflows/ci.yml`) |\n| `env NX_DAEMON=false npm run build` | build every project into `dist/` (roadmap build gate) |\n| `env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'` | scoped (exact test files) or affected (source files) Nx test tier from a scope manifest |\n| `env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{range}'` | impacted Nx test tier from a git commit range |\n| `node scripts/ci-shard-plan.mjs affected` | affected PR check as run by `.github/workflows/ci.yml` |\n| `node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json` | README catalog currency |\n| `.github/workflows/ci.yml` | affected tests on pull requests; authoritative full shards, build and attestation on `main` and manual runs; nightly diagnostics |\n| `.github/workflows/release.yml` | verify same-SHA evidence and promote the verified bundle in the `greenfield-validation` environment (provider `none`, so promotion is unavailable) |\n\n## Catalog\n\n<!-- repo-catalog:start -->\n| Project | Path | Purpose |\n| --- | --- | --- |\n| web | apps/web | web application |\n| api | apps/api | API application |\n| admin | apps/admin | admin application |\n| shared | packages/shared | shared library |\n| ui | packages/ui | ui library |\n| generators | packages/generators | first-party generators |\n<!-- repo-catalog:end -->\n\nCheck catalog currency with `node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json`.\n''')\nEDITS['CLAUDE.md'] = ('de261ea28dc94d3690c15ed96d865d7ee4c6a3aeb0a62db1d0c923c691de9b01', '''# Claude guidance\n\n@AGENTS.md\n\n<!-- nx configuration start -->\nUse Nx project inference and preserve this generated region.\n<!-- nx configuration end -->\n''')\nEDITS['GEMINI.md'] = ('5302d3ef280b4d68f2da824e73e7eb0fa0adc56377096d3840c54d67c0c3bc0b', '''# Gemini guidance\n\nConventions live in `AGENTS.md`; read it first. This file carries no Gemini-specific instructions.\n''')\nCONFIG = {'configVersion': 1, 'gateCommands': {'lint': 'none', 'types': 'none', 'unit': 'env NX_DAEMON=false npm test', 'integration': 'none', 'build': 'env NX_DAEMON=false npm run build', 'e2e': 'none', 'emit': 'none', 'unit-scoped': \"env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'\", 'unit-affected': \"env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'\", 'unit-impacted': \"env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{range}'\"}, 'testCadence': {'enabled': True, 'backstop': '.github/workflows/ci.yml (authoritative full suite on main/manual runs)'}, 'designHomes': {'architecture': {'home': 'docs/architecture.md'}, 'ux': {'canon': ['docs/ux-canon.md']}}, 'testConventions': ['node scripts/run-nx-test-tier.mjs invalid', \"node scripts/run-nx-test-tier.mjs '{manifest}'\", \"node scripts/run-nx-test-tier.mjs '{range}'\"]}\nEDITS['roadmap/roadmap.config.json'] = ('190afd208a7c70a7ac44f385fe83c7124b1b96b83d71aa29b06828679764570e', json.dumps(CONFIG, indent=2) + NL)\nEXPECTED = {'roadmap/roadmap.config.json': '2a8d2f2c99f9e0d1259eecca987bca1c7745a710e1116d0c73dac3ee6153a664'}\nNX_START = '<!-- nx configuration start -->'\nNX_END = '<!-- nx configuration end -->'\nassert os.getcwd() == ROOT and not os.path.islink(ROOT), os.getcwd()\nplanned = []\nfor rel, (before, content) in EDITS.items():\n    path = os.path.join(ROOT, rel)\n    assert os.path.isfile(path) and not os.path.islink(path), path\n    with open(path, 'rb') as handle:\n        prior = handle.read()\n    assert hashlib.sha256(prior).hexdigest() == before, (rel, hashlib.sha256(prior).hexdigest())\n    if rel == 'CLAUDE.md':\n        text = prior.decode('utf-8')\n        block = text[text.index(NX_START):text.index(NX_END) + len(NX_END)]\n        assert block in content, block\n    if rel == 'roadmap/roadmap.config.json':\n        prior_config = json.loads(prior.decode('utf-8'))\n        assert list(prior_config) == ['$schema', 'configVersion', 'gateCommands'] and isinstance(prior_config['$schema'], str) and prior_config['configVersion'] == 1\n        assert '$schema' not in CONFIG\n    digest = hashlib.sha256(content.encode('utf-8')).hexdigest()\n    if rel in EXPECTED:\n        assert digest == EXPECTED[rel], (rel, digest)\n    planned.append((rel, path, before, content, digest))\nfor rel, path, before, content, digest in planned:\n    fd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)\n    with os.fdopen(fd, 'w', encoding='utf-8', newline='') as handle:\n        handle.write(content)\n    print('WRITE: ' + rel + ' before=' + before + ' after=' + digest)\nPY",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "node /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/bin/roadmap.mjs config check",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-logs env NX_DAEMON=false npm test",
+      "network": "none (host wrapper effects only: one transient user systemd unit and its capbuild lock directory)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-logs env NX_DAEMON=false npm run build",
+      "network": "none (host wrapper effects only: one transient user systemd unit and its capbuild lock directory)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-logs env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '@/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.ci/scope-scoped.json'",
+      "network": "none (host wrapper effects only: one transient user systemd unit and its capbuild lock directory)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-logs env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '@/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.ci/scope-affected.json'",
+      "network": "none (host wrapper effects only: one transient user systemd unit and its capbuild lock directory)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "git rev-parse HEAD",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "git diff --name-only -z b44e99d8e1fdb8ac490073a3af688c9622d1cbaa..5978aece5090694125b255ee7772be83ef1d61d4",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "git merge-base --is-ancestor b44e99d8e1fdb8ac490073a3af688c9622d1cbaa 5978aece5090694125b255ee7772be83ef1d61d4",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "/home/patrik/.local/bin/capbuild --env npm_config_cache=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-cache --env npm_config_logs_dir=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.npm-logs env NX_DAEMON=false node scripts/run-nx-test-tier.mjs 'b44e99d8e1fdb8ac490073a3af688c9622d1cbaa..5978aece5090694125b255ee7772be83ef1d61d4'",
+      "network": "none (host wrapper effects only: one transient user systemd unit and its capbuild lock directory)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "python3 - <<'PY'\nimport os, json, hashlib\nROOT = '/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j'\nREL = '.ci/native-delivery-temp-baseline.json'\nTEMP = '/tmp'\nPREFIX = 'greenfield-workflow-'\nassert os.getcwd() == ROOT, os.getcwd()\nroots = sorted(entry.name for entry in os.scandir(TEMP) if entry.name.startswith(PREFIX))\nrecord = {'tempDir': TEMP, 'prefix': PREFIX, 'preexistingRoots': roots, 'capturedBefore': '/home/patrik/.local/bin/capbuild --env GREENFIELD_DELIVERY_ROOT=' + ROOT + ' node --test /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs'}\nCONTENT = json.dumps(record, indent=2) + chr(10)\nparent = os.path.join(ROOT, '.ci')\nassert os.path.isdir(parent) and not os.path.islink(parent), parent\npath = os.path.join(parent, 'native-delivery-temp-baseline.json')\nassert not os.path.lexists(path), path\nfd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)\nwith os.fdopen(fd, 'w', encoding='utf-8', newline='') as handle:\n    handle.write(CONTENT)\nprint('WRITE: ' + REL + ' sha256=' + hashlib.sha256(CONTENT.encode('utf-8')).hexdigest() + ' preexisting=' + str(len(roots)))\nPY",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "/home/patrik/.local/bin/capbuild --env GREENFIELD_DELIVERY_ROOT=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j node --test /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs",
+      "network": "none (host wrapper effects: one transient user systemd unit and its capbuild lock directory; the suite creates and removes its own unique /tmp/greenfield-workflow-* fixture roots, bounded by the baseline comparison)"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "python3 - <<'PY'\nimport os, json\nROOT = '/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j'\nREL = '.ci/native-delivery-temp-baseline.json'\nassert os.getcwd() == ROOT, os.getcwd()\npath = os.path.join(ROOT, REL)\nassert os.path.isfile(path) and not os.path.islink(path), path\nwith open(path, 'rb') as handle:\n    record = json.loads(handle.read().decode('utf-8'))\nbaseline = set(record['preexistingRoots'])\ncurrent = sorted(entry.name for entry in os.scandir(record['tempDir']) if entry.name.startswith(record['prefix']))\nunexpected = [name for name in current if name not in baseline]\nassert not unexpected, 'unexpected leftover fixture roots: ' + ', '.join(unexpected)\nprint('TEMP-FIXTURE-CHECK: ok baseline=' + str(len(baseline)) + ' current=' + str(len(current)) + ' leftover=0')\nPY",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "if command -v actionlint >/dev/null 2>&1; then command -v actionlint; actionlint -version; else printf '%s\\n' 'ACTIONLINT_UNAVAILABLE'; fi",
+      "network": "none"
+    },
+    {
+      "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j",
+      "command": "git status --porcelain=v2 --branch",
+      "network": "none"
+    }
+  ],
+  "gates": {
+    "lint": "none",
+    "types": "none",
+    "unit": "env NX_DAEMON=false npm test",
+    "integration": "none",
+    "build": "env NX_DAEMON=false npm run build",
+    "e2e": "none",
+    "emit": "none"
+  },
+  "optionalGates": {
+    "unit-scoped": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'",
+    "unit-affected": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{manifest}'",
+    "unit-impacted": "env NX_DAEMON=false node scripts/run-nx-test-tier.mjs '{range}'"
+  },
+  "optionalGateRuns": {
+    "unit-scoped": {
+      "substitutions": {
+        "manifest": "@/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.ci/scope-scoped.json"
+      },
+      "inputSha256": "c3a1d87b2d3c5c88a3f8b27fbb2dd73c765500f0763ce34b83fa7d70857b28c6"
+    },
+    "unit-affected": {
+      "substitutions": {
+        "manifest": "@/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j/.ci/scope-affected.json"
+      },
+      "inputSha256": "f705f8c4530770bd37d569d1f1aa2cb631b3c8411baceb7925ad99b7be9c4fde"
+    },
+    "unit-impacted": {
+      "substitutions": {
+        "range": "b44e99d8e1fdb8ac490073a3af688c9622d1cbaa..5978aece5090694125b255ee7772be83ef1d61d4"
+      },
+      "inputSha256": "c29f3c833eadfdf440dd54c0a877ad5988a8cbde091aa7b39ba44c878f041599"
+    }
+  },
+  "delivery": {
+    "provider": "github-actions",
+    "adapter": "nx-monorepo",
+    "configPath": ".github/greenfield-delivery.json",
+    "workflowPaths": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml"
+    ],
+    "plannerPath": "scripts/ci-shard-plan.mjs",
+    "releaseEnvironment": "greenfield-validation",
+    "collision": {
+      "existingPaths": [
+        ".github/workflows/ci.yml"
+      ],
+      "decision": "merge",
+      "preserveUntilApproval": true,
+      "mergeManifests": {
+        ".github/workflows/ci.yml": {
+          "beforeSha256": "e7891d45079a930ac46a2cac18033cdcdc1fa75abdb95dea60f51161ee447907",
+          "preservedJobs": [
+            "existing-check"
+          ],
+          "preservedTopLevel": [
+            "env",
+            "permissions"
+          ],
+          "replacements": {
+            "name": {
+              "before": "Existing checks",
+              "after": "Greenfield CI"
+            },
+            "on": {
+              "before": {
+                "push": {
+                  "branches": [
+                    "main"
+                  ]
+                }
+              },
+              "after": {
+                "pull_request": null,
+                "push": {
+                  "branches": [
+                    "main"
+                  ]
+                },
+                "workflow_dispatch": null,
+                "schedule": [
+                  {
+                    "cron": "17 3 * * *"
+                  }
+                ]
+              }
+            }
+          },
+          "preservedComments": [
+            "# Existing policy: retain through approved merge"
+          ]
+        }
+      }
+    },
+    "validationCommands": [
+      {
+        "command": "/home/patrik/.local/bin/capbuild --env GREENFIELD_DELIVERY_ROOT=/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j node --test /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs",
+        "cwd": "/tmp/greenfield-34-release-brownfield-claude-f67auw1a/greenfield-34-final-brownfield-claude-svb3682j"
+      }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "overflow": false,
+  "events": [
+    {
+      "elapsed": 16.040174985770136,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 16.04030533414334,
+      "path": "roadmap/roadmap.config.json",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 16.040410744026303,
+      "path": "docs/PRD.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 16.040469156112522,
+      "path": "docs/PRD.md",
+      "mask": 8,
+      "cookie": 0
+    },
+    {
+      "elapsed": 16.04051981214434,
+      "path": "docs/adr/0001-tech-stack.md",
+      "mask": 2,
+      "cookie": 0
+    },
+    {
+      "elapsed": 16.04059269092977,
+      "path": "docs/adr/0001-tech-stack.md",
+      "mask": 8,
+      "cookie": 0
+    }
+  ]
+}

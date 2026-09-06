@@ -5,8 +5,11 @@ design ADR, UX canon, and roadmap pointers; never invent brand values.
 
 ## Web
 
-Use shadcn/ui with Tailwind v4 and its CSS-first configuration. The proposal
-must name the component sources and license tier before installation.
+For an approved React/shadcn stack, the example below uses shadcn/ui with
+Tailwind v4 and its CSS-first configuration. For another selected stack, propose
+its compatible design integration; do not install React components into SvelteKit
+or force a visual framework into a CLI. The proposal must name the actual
+component sources and license tier before installation.
 
 Use this `components.json` shape, replacing registry names only with approved
 open registries:

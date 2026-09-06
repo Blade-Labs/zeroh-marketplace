@@ -1,0 +1,20 @@
+{
+  "scratch": "/tmp/greenfield-r0-pilot-px9y6380/project",
+  "evidence": "/tmp/greenfield-r0-pilot-px9y6380/execution",
+  "stage": "execution",
+  "argv": [
+    "/home/patrik/.nvm/versions/node/v22.23.2/bin/codex",
+    "exec",
+    "--approve-for-me",
+    "--model",
+    "gpt-6-astra",
+    "--json",
+    "resume",
+    "01a0761a-8622-7133-82ea-7729019b39f4",
+    "APPROVE GREENFIELD PLAN\n\nFixture-owner ruling: approve the plain-JavaScript adaptation and exactly the listed foundation scope. Execute your prepared artifact without retyping its program. Initialize the config, run the reviewed foundation writer and copy the listed checker. Then inspect actual generated config and written PRD/ADR state. Prepare the dependent config merge and approval-record update once outside the consumer, compute actual preconditions with prepared-program, and STOP with the returned artifact and a concrete delta for review before executing that dependent writer. Do not ask the real user for this fixture's product choices. Retain inherited filesystem/network/approval controls; do not bypass a rejection. No plugin-source edits, delivery additions, commits, deployments or subagents. Use actual tool exits; never append status-printing suffixes. The plugin-owned private temporary execution copy is approved for this bounded fixture. No other external product writes. Prototype/test/help/catalog checks may run now; config validation must wait until its reviewed bindings are applied."
+  ],
+  "timeout": 600,
+  "sourceRoot": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34",
+  "invocationBaseCommit": "4f1e85dd85729ab3259585f724aaaca5cf0105f0",
+  "sourceSnapshotSha256": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504"
+}

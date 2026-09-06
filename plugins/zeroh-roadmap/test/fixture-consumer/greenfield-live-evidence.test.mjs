@@ -1,38 +1,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
-import { readFileSync, readdirSync, lstatSync, realpathSync, mkdtempSync, mkdirSync, writeFileSync, renameSync, unlinkSync, chmodSync, rmSync } from 'node:fs'
+import { readFileSync, readdirSync, lstatSync, mkdtempSync, mkdirSync, writeFileSync, renameSync, unlinkSync, chmodSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { sourceFiles, canonical as sourceCanonical, sha256 as sourceSha256 } from './greenfield-evidence-source.mjs'
 import * as evidence from './greenfield-native-evidence.mjs'
-import { receipt, validateSourceFiles, validateSourceBinding, safeArtifactPath, nativeObjects, proposalPaths, approvedPath, sessionEvents, sessionSuffix, validateApprovalSlice, nativeCommands, validateObservation, readBoundFile, validateNativeAuthority, readStage, validateObservedArm, ROOT, sha256, APPROVAL, MUTATIONS, STAGE_FILES, CORE_GATES, REQUIRED_HOMES, rows, canonical, treeHash } from './greenfield-native-evidence.mjs'
+import { validateSourceFiles, nativeObjects, proposalPaths, approvedPath, sessionEvents, validateApprovalSlice, nativeCommands, validateObservation, validateNativeAuthority, ROOT, sha256, APPROVAL, CORE_GATES, canonical } from './greenfield-native-evidence.mjs'
 
-test('four native-host arms are current, isolated, approval-ordered, bounded, and idempotent', () => {
-  const arms = ['empty', 'brownfield'].flatMap((kind) => receipt(kind).arms.map((arm) => ({ kind, ...arm })))
-  assert.deepEqual(arms.map((arm) => `${arm.kind}:${arm.host}`), ['empty:claude', 'empty:codex', 'brownfield:claude', 'brownfield:codex'])
-  assert.equal(new Set(arms.map((arm) => arm.scratchIdentity)).size, 4, 'scratch identities are unique, never copied')
-  assert.equal(new Set(arms.map((arm) => arm.transcriptSha256)).size, 4, 'transcripts are unique, never copied')
-  for (const arm of arms) {
-    validateObservedArm(arm)
-    assert.match(arm.executable, /(?:^|\/)(?:claude|codex)$/)
-    assert.ok(arm.version.trim())
-    assert.equal(arm.pluginManifestSha256, sha256(readFileSync(resolve(ROOT, `plugins/zeroh-greenfield/.${arm.host === 'claude' ? 'claude' : 'codex'}-plugin/plugin.json`))))
-    validateSourceBinding(arm)
-    assert.deepEqual(arm.authorityEnvelope, { filesystem: 'workspace-write', network: 'inherited', approvals: 'inherited' })
 
-  }
-})
 
-test('the report is a receipt projection and cannot narrate a failed arm green', () => {
-  const report = readFileSync(resolve(ROOT, 'plugins/zeroh-greenfield/DRYRUN-2026-09.md'), 'utf8')
-  for (const kind of ['empty', 'brownfield']) {
-    for (const arm of receipt(kind).arms) {
-      assert.match(report, new RegExp(`${kind}.*${arm.host}.*${arm.transcriptSha256}`, 'i'))
-      assert.equal(arm.status, 'passed')
-    }
-  }
-})
+
 
 // Synthetic validator fixtures only. These objects are never native-run receipts.
 const validatorTree = { 'seed.txt': { sha256: sha256('seed'), mode: 33188 }, '.git': { directory: true, mode: 16877 } }
@@ -343,10 +322,33 @@ test('catalog proof: selected command is proposed once and succeeds; alternate m
   }
 })
 
-function capbuildBinding() {
-  const executable='/home/patrik/.local/bin/capbuild',realpath=realpathSync(executable)
-  return {kind:'capbuild',executable,realpath,sha256:sha256(readFileSync(realpath)),defaults:{memoryMax:'8G',memorySwapMax:'2G',heapMB:4096,slice:'dev.slice'},hostMetadataEffects:['systemd-user-transient-units',`/run/user/${process.getuid()}/capbuild-locks`]}
+// Synthetic host boundary: no installed wrapper or machine UID is consulted.
+const wrapperBytes = Buffer.from('synthetic vetted wrapper bytes')
+const wrapperExecutable = '/home/patrik/.local/bin/capbuild'
+const wrapperRealpath = '/home/patrik/illumination_VS_setup/scripts/capbuild'
+const wrapperHost = {
+  realpathSync(path) { assert.equal(path, wrapperExecutable); return wrapperRealpath },
+  lstatSync(path) { assert.equal(path, wrapperRealpath); return { isFile: () => true, mode: 0o100755 } },
+  readFileSync(path) { assert.equal(path, wrapperRealpath); return wrapperBytes },
+  getuid: () => 12345,
 }
+function capbuildBinding() {
+  return {kind:'capbuild',executable:wrapperExecutable,realpath:wrapperRealpath,sha256:sha256(wrapperBytes),defaults:{memoryMax:'8G',memorySwapMax:'2G',heapMB:4096,slice:'dev.slice'},hostMetadataEffects:['systemd-user-transient-units','/run/user/12345/capbuild-locks']}
+}
+test('capbuild envelope: changed host bytes, symlink target and executable mode fail closed', () => {
+  const binding = capbuildBinding()
+  assert.doesNotThrow(() => evidence.validateGateWrapper(binding, wrapperHost))
+  for (const changed of [
+    { readFileSync: () => Buffer.from('changed binary') },
+    { realpathSync: () => '/tmp/replaced-wrapper' },
+    { lstatSync: () => ({ isFile: () => true, mode: 0o100644 }) },
+    { lstatSync: () => ({ isFile: () => false, mode: 0o120755 }) },
+  ]) {
+    const host = { ...wrapperHost, ...changed }
+    assert.throws(() => evidence.validateGateWrapper(binding, host), { name: 'AssertionError' })
+    assert.equal(evidence.unwrapGateExecution(`cd '/tmp/fixture' && ${binding.executable} npm test`, 'npm test', '/tmp/fixture', binding, host), null)
+  }
+})
 test('capbuild envelope: portable build/types/unit and emit tail survive the bound wrapper unchanged',()=>{
   const scratch='/tmp/capbuild-validator',binding=capbuildBinding()
   const env=[`npm_config_cache=${scratch}/.npm-cache`,`npm_config_logs_dir=${scratch}/.npm-logs`]
@@ -354,22 +356,22 @@ test('capbuild envelope: portable build/types/unit and emit tail survive the bou
     const executed=`${binding.executable} --env '${env[0]}' --env '${env[1]}' ${configured}`
     const raw=`cd '${scratch}' && ${executed}`
     const expected={configuredCommand:configured,executedCommand:executed,wrapper:{...binding,env}}
-    assert.deepEqual(evidence.unwrapGateExecution(raw,configured,scratch,binding),expected)
+    assert.deepEqual(evidence.unwrapGateExecution(raw,configured,scratch,binding,wrapperHost),expected)
     const outer="/bin/bash -lc '"+raw.replaceAll("'","'\"'\"'")+"'"
-    assert.deepEqual(evidence.unwrapGateExecution(outer,configured,scratch,binding),expected)
-    assert.deepEqual(evidence.unwrapGateExecution(`cd '${scratch}' && ${configured}`,configured,scratch,binding),{configuredCommand:configured,executedCommand:configured,wrapper:null})
+    assert.deepEqual(evidence.unwrapGateExecution(outer,configured,scratch,binding,wrapperHost),expected)
+    assert.deepEqual(evidence.unwrapGateExecution(`cd '${scratch}' && ${configured}`,configured,scratch,binding,wrapperHost),{configuredCommand:configured,executedCommand:configured,wrapper:null})
   }
   const canonical=`${binding.realpath} node --test`
-  assert.deepEqual(evidence.unwrapGateExecution(`cd '${scratch}' && ${canonical}`,'node --test',scratch,binding),{configuredCommand:'node --test',executedCommand:canonical,wrapper:{...binding,env:[]}})
+  assert.deepEqual(evidence.unwrapGateExecution(`cd '${scratch}' && ${canonical}`,'node --test',scratch,binding,wrapperHost),{configuredCommand:'node --test',executedCommand:canonical,wrapper:{...binding,env:[]}})
 })
 test('capbuild envelope: wrong cwd, binary, digest, defaults and broadened host metadata fail closed',()=>{
   const scratch='/tmp/capbuild-validator',binding=capbuildBinding(),raw=`cd '${scratch}' && ${binding.executable} npm run build`
-  assert.doesNotThrow(()=>evidence.validateGateWrapper(binding))
-  assert.equal(evidence.unwrapGateExecution(raw,'npm run build','/tmp/wrong',binding),null)
+  assert.doesNotThrow(()=>evidence.validateGateWrapper(binding,wrapperHost))
+  assert.equal(evidence.unwrapGateExecution(raw,'npm run build','/tmp/wrong',binding,wrapperHost),null)
   for(const mutate of [b=>{b.executable='/tmp/capbuild'},b=>{b.realpath='/tmp/capbuild'},b=>{b.sha256='0'.repeat(64)},b=>{b.defaults.memoryMax='64G'},b=>{b.hostMetadataEffects.push('/tmp/arbitrary')}]) {
     const invalid=structuredClone(binding);mutate(invalid)
-    assert.throws(()=>evidence.validateGateWrapper(invalid),{name:'AssertionError'})
-    assert.equal(evidence.unwrapGateExecution(raw,'npm run build',scratch,invalid),null)
+    assert.throws(()=>evidence.validateGateWrapper(invalid,wrapperHost),{name:'AssertionError'})
+    assert.equal(evidence.unwrapGateExecution(raw,'npm run build',scratch,invalid,wrapperHost),null)
   }
 })
 test('capbuild envelope: only literal approved env flags and exact ordered configured argv are accepted',()=>{
@@ -380,18 +382,18 @@ test('capbuild envelope: only literal approved env flags and exact ordered confi
     `--env npm_config_cache=${scratch}/.npm-cache --env npm_config_cache=${scratch}/.npm-cache npm run build`,
     'npm build run','npm run build extra','npm run build > result','npm run build; true','npm run build && true','npm run $(echo build)',
   ]
-  for(const tail of invalid) assert.equal(evidence.unwrapGateExecution(`cd '${scratch}' && ${binding.executable} ${tail}`,command,scratch,binding),null,tail)
-  assert.equal(evidence.unwrapGateExecution(`cd '${scratch}' && capbuild ${command}`,command,scratch,binding),null,'PATH lookups are not bound executable evidence')
-  assert.equal(evidence.unwrapGateExecution(`cd '${scratch}' && ${binding.executable} ${command}`,`${binding.executable} ${command}`,scratch,binding),null,'configuration cannot absorb the host wrapper')
-  assert.equal(evidence.unwrapGateExecution(`cd '${scratch}' && ${binding.executable} bash -c 'false; true'`,"bash -c 'false; true'",scratch,binding),null,'a configured shell program cannot hide operators inside the wrapper')
+  for(const tail of invalid) assert.equal(evidence.unwrapGateExecution(`cd '${scratch}' && ${binding.executable} ${tail}`,command,scratch,binding,wrapperHost),null,tail)
+  assert.equal(evidence.unwrapGateExecution(`cd '${scratch}' && capbuild ${command}`,command,scratch,binding,wrapperHost),null,'PATH lookups are not bound executable evidence')
+  assert.equal(evidence.unwrapGateExecution(`cd '${scratch}' && ${binding.executable} ${command}`,`${binding.executable} ${command}`,scratch,binding,wrapperHost),null,'configuration cannot absorb the host wrapper')
+  assert.equal(evidence.unwrapGateExecution(`cd '${scratch}' && ${binding.executable} bash -c 'false; true'`,"bash -c 'false; true'",scratch,binding,wrapperHost),null,'a configured shell program cannot hide operators inside the wrapper')
 })
 test('capbuild envelope: per-slot metadata matches real native numeric success, never narrated or failed inner status',()=>{
   const scratch='/tmp/capbuild-validator',binding=capbuildBinding(),configured='node --test',executed=`${binding.executable} ${configured}`,raw=`cd '${scratch}' && ${executed}`
   const native={id:'validator-call',command:raw,exitCode:0,output:'test output'}
   const record={toolCallId:native.id,nativeCommand:raw,exitCode:0,configuredCommand:configured,executedCommand:executed,wrapper:{...binding,env:[]}}
-  assert.doesNotThrow(()=>evidence.validateGateExecutionEvidence(record,native,configured,scratch,binding))
-  for(const changed of [{...native,exitCode:1},{...native,exitCode:undefined,output:'all tests passed, exit 0'},{...native,id:'another-call'}]) assert.throws(()=>evidence.validateGateExecutionEvidence(record,changed,configured,scratch,binding),{name:'AssertionError'})
-  for(const changed of [{...record,executedCommand:configured},{...record,wrapper:null},{...record,configuredCommand:'npm test'}]) assert.throws(()=>evidence.validateGateExecutionEvidence(changed,native,configured,scratch,binding),{name:'AssertionError'})
+  assert.doesNotThrow(()=>evidence.validateGateExecutionEvidence(record,native,configured,scratch,binding,wrapperHost))
+  for(const changed of [{...native,exitCode:1},{...native,exitCode:undefined,output:'all tests passed, exit 0'},{...native,id:'another-call'}]) assert.throws(()=>evidence.validateGateExecutionEvidence(record,changed,configured,scratch,binding,wrapperHost),{name:'AssertionError'})
+  for(const changed of [{...record,executedCommand:configured},{...record,wrapper:null},{...record,configuredCommand:'npm test'}]) assert.throws(()=>evidence.validateGateExecutionEvidence(changed,native,configured,scratch,binding,wrapperHost),{name:'AssertionError'})
 })
 
 test('capbuild envelope: independent observer must attest all prebound override clearing',()=>{
@@ -399,14 +401,14 @@ test('capbuild envelope: independent observer must attest all prebound override 
   fixture.request.gateWrapper=capbuildBinding()
   fixture.request.clearedHostOverrides=[...evidence.CAPBUILD_CLEARED_OVERRIDES]
   fixture.result.clearedHostOverrides=[...evidence.CAPBUILD_CLEARED_OVERRIDES]
-  assert.doesNotThrow(()=>validateObservation(fixture,'proposal'))
+  assert.doesNotThrow(()=>validateObservation(fixture,'proposal',wrapperHost))
   for(const mutate of [f=>{delete f.result.clearedHostOverrides},f=>{f.result.clearedHostOverrides.pop()},f=>{f.request.clearedHostOverrides.pop()},f=>{f.request.gateWrapper.sha256='0'.repeat(64)}]) {
     const invalid=structuredClone(fixture);mutate(invalid)
-    assert.throws(()=>validateObservation(invalid,'proposal'),{name:'AssertionError'})
+    assert.throws(()=>validateObservation(invalid,'proposal',wrapperHost),{name:'AssertionError'})
   }
   fixture.events.events=[{elapsed:0.1,path:'.npm-cache',mask:0x100,cookie:0}]
   fixture.result.eventCount=1
-  assert.throws(()=>validateObservation(fixture,'proposal'),/mutation/,'host wrapper metadata never exempts scratch writes')
+  assert.throws(()=>validateObservation(fixture,'proposal',wrapperHost),/mutation/,'host wrapper metadata never exempts scratch writes')
 })
 
 function approvedExecutionFixture() {
@@ -476,4 +478,122 @@ test('approval binding: native namespaced JSON envelopes and empty polling retai
   custom.payload.input=custom.payload.input.replace('"workdir":"'+f.scratch+'"','"workdir":"/tmp/wrong"')
   f.sessionRaw=[custom,...direct,poll].map(r=>JSON.stringify(r)).join('\n')
   assert.throws(()=>evidence.validateApprovedExecution(f),/workdir/)
+})
+
+
+
+// Local parser fixtures only; these artifacts are not native installation receipts.
+function deliveryValidatorFixture() {
+  const root=mkdtempSync(resolve(tmpdir(),'delivery-validator-')),scratch='/tmp/native-delivery-fixture'
+  const validation=`/home/patrik/.local/bin/capbuild --env GREENFIELD_DELIVERY_ROOT=${scratch} node --test ${ROOT}/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs`
+  const probe="if command -v actionlint >/dev/null 2>&1; then command -v actionlint; actionlint -version; else printf '%s\\n' 'ACTIONLINT_UNAVAILABLE'; fi"
+  const delivery={provider:'github-actions',adapter:'library-cli',configPath:'.github/greenfield-delivery.json',workflowPaths:['.github/workflows/ci.yml','.github/workflows/release.yml'],plannerPath:'scripts/ci-shard-plan.mjs',releaseEnvironment:'approved-release-environment',collision:{existingPaths:[],decision:'create',preserveUntilApproval:true},validationCommands:[{command:validation,cwd:scratch}]}
+  const texts={
+    '.github/greenfield-delivery.json':JSON.stringify({schemaVersion:1,archetype:'library-cli',setupArgv:[],affectedArgv:['npm','test'],affectedFallbackReason:'Full test fallback selected',shardCount:2,baseline:{minTests:1,minUnits:1,coverageFloor:80},runners:{'node:test':{inventoryArgv:['git','ls-files','-z','--','test'],inventoryFormat:'git-nul',shardArgv:['node','--test','{unit}'],rawReports:[{path:'{junit}',format:'junit'},{path:'{coverage}',format:'lcov'}]}},build:{argv:['npm','run','build'],outputs:['dist']},release:{provider:'none',environment:delivery.releaseEnvironment}}),
+    '.github/workflows/ci.yml':readFileSync(resolve(ROOT,'plugins/zeroh-greenfield/templates/github/workflows/ci.yml'),'utf8'),
+    '.github/workflows/release.yml':readFileSync(resolve(ROOT,'plugins/zeroh-greenfield/templates/github/workflows/release.yml'),'utf8'),
+    'scripts/ci-shard-plan.mjs':readFileSync(resolve(ROOT,'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs'),'utf8'),
+  }
+  const artifacts={},after={}
+  for(const [path,content] of Object.entries(texts)) {
+    const retained=resolve(root,path);mkdirSync(dirname(retained),{recursive:true});writeFileSync(retained,content)
+    artifacts[path]={path:retained,sha256:sha256(content)};after[path]={sha256:sha256(content),mode:33188}
+  }
+  const commands=[{id:'delivery-tests',command:`cd '${scratch}' && ${validation}`,exitCode:0,output:'TAP version 13\n1..27\n# tests 27\n# suites 0\n# pass 27\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1000\n'},{id:'actionlint-probe',command:`cd '${scratch}' && ${probe}`,exitCode:0,output:'ACTIONLINT_UNAVAILABLE\n'}]
+  const arm={kind:'empty',host:'claude',scratchRoot:scratch,gateWrapper:capbuildBinding(),delivery:structuredClone(delivery),artifacts,deliveryValidation:{commandExits:[{nativeCommand:commands[0].command,toolCallId:commands[0].id,exitCode:0}],actionlint:{command:commands[1].command,toolCallId:commands[1].id,exitCode:0,output:commands[1].output}}}
+  const proposal={type:'proposal',delivery,commands:[...delivery.validationCommands,{command:probe,cwd:scratch}],artifacts:Object.keys(artifacts).map(path=>({path,reason:'explicit approved output'}))}
+  return {arm,proposal,before:{},after,commands,close:()=>rmSync(root,{recursive:true,force:true})}
+}
+test('delivery contract: exact output bytes, full installed workflow validation and native optional-linter evidence validate',()=>{
+  const f=deliveryValidatorFixture()
+  try {assert.doesNotThrow(()=>evidence.validateDeliveryEvidence(f))} finally {f.close()}
+})
+test('delivery contract: missing or mismatched proposal fields and output/hash drift fail closed',()=>{
+  for(const mutate of [f=>{delete f.proposal.delivery},f=>{f.arm.delivery.provider='other-ci'},f=>{f.arm.delivery.adapter='web'},f=>{f.arm.delivery.releaseEnvironment='unapproved'},f=>{f.proposal.delivery.collision.preserveUntilApproval=false},f=>{delete f.arm.artifacts['.github/workflows/ci.yml']},f=>{delete f.after['scripts/ci-shard-plan.mjs']},f=>{f.after['.github/workflows/release.yml'].sha256='0'.repeat(64)}]) {
+    const f=deliveryValidatorFixture();try {mutate(f);assert.throws(()=>evidence.validateDeliveryEvidence(f),{name:'AssertionError'})} finally {f.close()}
+  }
+})
+test('delivery contract: actual full validation cannot be replaced by narration, filtered tests, failed runs or another consumer',()=>{
+  for(const mutate of [f=>{f.commands[0].output='all checks passed'},f=>{f.commands[0].output=f.commands[0].output.replace('# pass 27','# pass 26')},f=>{f.commands[0].output=f.commands[0].output.replace('# skipped 0','# skipped 1')},f=>{f.commands[0].output=f.commands[0].output.replace('# cancelled 0','# cancelled 1')},f=>{f.commands[0].exitCode=1},f=>{f.commands[0].exitCode=undefined;f.commands[0].output='all tests passed'},f=>{f.arm.deliveryValidation.commandExits[0].toolCallId='unobserved'},f=>{f.commands[0].command=f.commands[0].command.replace('node --test','node --test --test-name-pattern=one-test')},f=>{f.commands[0].command=f.commands[0].command.replace('GREENFIELD_DELIVERY_ROOT=/tmp/native-delivery-fixture','GREENFIELD_DELIVERY_ROOT=/tmp/other')},f=>{f.arm.deliveryValidation.actionlint.output='ACTIONLINT_UNAVAILABLE invented'},f=>{f.commands[1].command="cd '/tmp/native-delivery-fixture' && echo ACTIONLINT_UNAVAILABLE"}]) {
+    const f=deliveryValidatorFixture();try {mutate(f);assert.throws(()=>evidence.validateDeliveryEvidence(f),{name:'AssertionError'})} finally {f.close()}
+  }
+})
+test('delivery contract: preexisting workflows require exact explicit merge decision and preserve-until-approval contract',()=>{
+  const f=deliveryValidatorFixture(),existing='.github/workflows/ci.yml'
+  try {
+    f.arm.kind='brownfield'
+    const original=readFileSync(f.arm.artifacts[existing].path,'utf8')
+    const retainedBefore=resolve(dirname(f.arm.artifacts[existing].path),'before-ci.yml')
+    writeFileSync(retainedBefore,original)
+    f.arm.existingWorkflowArtifacts={[existing]:{path:retainedBefore,sha256:sha256(original)}}
+    f.before[existing]={sha256:sha256(original),mode:33188}
+    assert.throws(()=>evidence.validateDeliveryEvidence(f),{name:'AssertionError'})
+    for(const delivery of [f.arm.delivery,f.proposal.delivery])delivery.collision={existingPaths:[existing],decision:'merge',preserveUntilApproval:true,mergeManifests:{[existing]:deliveryMergeManifest(original,original)}}
+    assert.doesNotThrow(()=>evidence.validateDeliveryEvidence(f))
+    f.proposal.delivery.collision.existingPaths.push('.github/workflows/unobserved.yml')
+    f.arm.delivery=structuredClone(f.proposal.delivery)
+    assert.throws(()=>evidence.validateDeliveryEvidence(f),{name:'AssertionError'})
+  } finally {f.close()}
+})
+test('delivery contract: self-consistent retained hashes cannot authorize a different planner, adapter or release environment',()=>{
+  for(const [path,replace] of [
+    ['scripts/ci-shard-plan.mjs',text=>text+'\n// altered after template selection\n'],
+    ['.github/greenfield-delivery.json',text=>JSON.stringify({...JSON.parse(text),archetype:'web'})],
+    ['.github/workflows/release.yml',text=>text.replace('environment: approved-release-environment','environment: unapproved-environment')],
+  ]) {
+    const f=deliveryValidatorFixture()
+    try {
+      const reference=f.arm.artifacts[path],changed=replace(readFileSync(reference.path,'utf8'))
+      writeFileSync(reference.path,changed);reference.sha256=sha256(changed);f.after[path].sha256=reference.sha256
+      assert.throws(()=>evidence.validateDeliveryEvidence(f),{name:'AssertionError'})
+    } finally {f.close()}
+  }
+})
+
+const mergeYaml=createRequire(resolve(ROOT,'package.json'))('js-yaml')
+function deliveryMergeManifest(beforeText,afterText,replaced=[]) {
+  const prior=mergeYaml.safeLoad(beforeText),installed=mergeYaml.safeLoad(afterText)
+  return {beforeSha256:sha256(beforeText),preservedJobs:Object.keys(prior.jobs??{}).sort(),preservedTopLevel:Object.keys(prior).filter(key=>key!=='jobs'&&!replaced.includes(key)).sort(),replacements:Object.fromEntries(replaced.map(key=>[key,{before:prior[key],after:installed[key]}])),preservedComments:beforeText.split('\n').filter(line=>/^\s*#/.test(line))}
+}
+// Synthetic merge parser fixture: real YAML structures, never native receipts.
+function deliveryMergeFixture() {
+  const f=deliveryValidatorFixture(),path='.github/workflows/ci.yml'
+  f.arm.kind='brownfield'
+  const canonicalText=readFileSync(f.arm.artifacts[path].path,'utf8')
+  const comments='# Existing workflow policy owner\n  # Preserve this exact indentation\n'
+  const policy='env:\n  RETENTION_POLICY: preserve\n'
+  const installed=comments+policy+canonicalText
+  const priorDocument=mergeYaml.safeLoad(canonicalText)
+  priorDocument.on={workflow_dispatch:{inputs:{reason:{required:true,type:'string'}}}}
+  const baseline=comments+policy+mergeYaml.safeDump(priorDocument,{lineWidth:-1,noRefs:true})
+  const beforePath=resolve(dirname(f.arm.artifacts[path].path),'retained-merge-before.yml')
+  writeFileSync(beforePath,baseline)
+  f.arm.existingWorkflowArtifacts={[path]:{path:beforePath,sha256:sha256(baseline)}}
+  f.before[path]={sha256:sha256(baseline),mode:33188}
+  writeFileSync(f.arm.artifacts[path].path,installed)
+  f.arm.artifacts[path].sha256=sha256(installed);f.after[path].sha256=sha256(installed)
+  for(const delivery of [f.arm.delivery,f.proposal.delivery])delivery.collision={existingPaths:[path],decision:'merge',preserveUntilApproval:true,mergeManifests:{[path]:deliveryMergeManifest(baseline,installed,['on'])}}
+  return {...f,path,baseline,installed,changeManifest(mutate){for(const delivery of [f.arm.delivery,f.proposal.delivery])mutate(delivery.collision)},changeInstalled(text){writeFileSync(f.arm.artifacts[path].path,text);f.arm.artifacts[path].sha256=sha256(text);f.after[path].sha256=sha256(text)}}
+}
+test('delivery merge manifest: complete retained policy, jobs, comments and exact trigger replacement validate',()=>{
+  const f=deliveryMergeFixture()
+  try {assert.doesNotThrow(()=>evidence.validateDeliveryEvidence(f))} finally {f.close()}
+})
+test('delivery merge manifest: missing or incomplete preservation proof and wrong baseline digest fail closed',()=>{
+  for(const mutate of [c=>{delete c.mergeManifests},c=>{c.mergeManifests['.github/workflows/ci.yml'].beforeSha256='0'.repeat(64)},c=>{c.mergeManifests['.github/workflows/ci.yml'].preservedJobs.pop()},c=>{c.mergeManifests['.github/workflows/ci.yml'].preservedTopLevel=c.mergeManifests['.github/workflows/ci.yml'].preservedTopLevel.filter(key=>key!=='env')},c=>{c.mergeManifests['.github/workflows/ci.yml'].preservedComments.pop()}]) {
+    const f=deliveryMergeFixture()
+    try {f.changeManifest(mutate);assert.throws(()=>evidence.validateDeliveryEvidence(f),{name:'AssertionError'})} finally {f.close()}
+  }
+})
+test('delivery merge manifest: deleting or changing baseline comments and top-level policy is not authorized by job preservation',()=>{
+  for(const mutate of [text=>text.replace('# Existing workflow policy owner\n',''),text=>text.replace('  # Preserve this exact indentation','# Preserve this exact indentation'),text=>text.replace('env:\n  RETENTION_POLICY: preserve\n',''),text=>text.replace('RETENTION_POLICY: preserve','RETENTION_POLICY: discard')]) {
+    const f=deliveryMergeFixture()
+    try {f.changeInstalled(mutate(f.installed));assert.throws(()=>evidence.validateDeliveryEvidence(f),{name:'AssertionError'})} finally {f.close()}
+  }
+})
+test('delivery merge manifest: replacing prior trigger requires exact declared before and after values',()=>{
+  for(const mutate of [manifest=>{delete manifest.replacements.on;manifest.preservedTopLevel.push('on')},manifest=>{manifest.replacements.on.before={push:null}},manifest=>{manifest.replacements.on.after={workflow_dispatch:null}},manifest=>{delete manifest.replacements.on}]) {
+    const f=deliveryMergeFixture()
+    try {f.changeManifest(c=>mutate(c.mergeManifests[f.path]));assert.throws(()=>evidence.validateDeliveryEvidence(f),{name:'AssertionError'})} finally {f.close()}
+  }
 })

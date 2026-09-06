@@ -67,6 +67,9 @@ import { defineArc } from '@/lib/roadmap/schema'
  * - Stray claim 35 (a `claim --help` probe reserved it): unused; numbers need uniqueness,
  *   not contiguity.
  *
+ * Review repair 2026-09-04: phase 34 final evidence must prove real gate execution,
+ * individual document-gap coverage, conditional Blade dependency, and canonical
+ * migrated-root discovery; earlier document-shape checks do not establish these.
  * PROMISE LEDGER (plan-arc Step 2c — audited by arc-sweep / validate-arc)
  * promise                                   | kind        | fulfilled by
  * standards-first                           | criterion   | 29.2 (greenfield-init approval gate) + 33.1 (brownfield gap table + approval) + 34.4 + 34.5 (dry runs)
@@ -160,7 +163,7 @@ export default defineArc({
       signal:
         'judged on TWO scratch repos after a full driver run: (a) an empty directory → the run presents the PRD, stack ADR, design decision, standards set and pointers as proposals, writes NOTHING before the recorded approval line, then leaves docs/PRD.md, docs/adr/0001-tech-stack.md, AGENTS.md (+ CLAUDE.md import), docs/CODE-STYLE.md, docs/architecture.md, docs/ux-canon.md, README.md and a roadmap.config.json whose `roadmap config check` resolves; (b) a zeroh-shaped fixture with mature boundaries, generators and a token contract but no PRD/ADR/CODE-STYLE/ux-canon → the gap table names exactly those, the run touches no existing home (git diff limited to the gap files + README + config), and architecture.md/ux-canon.md LINK the existing docs; both judged on a second run (idempotent: no changes proposed)',
       tier: 'wired',
-      bar: 'zero writes before approval on both repos; zero rewrites of an existing home on (b); config check green on both',
+      bar: 'zero writes before approval on both repos; zero rewrites of an existing home on (b); config check green on both; every non-none gate executes with cwd/exit evidence; each missing PRD/ADR/CODE-STYLE/architecture-index/UX-canon has its own approved artifact row; non-Blade repairs work without zeroh-design; migrated roots are preserved and ambiguous roots stop',
     },
     {
       id: 'tradeoffs-not-defaults',
@@ -226,7 +229,20 @@ export default defineArc({
       bar: 'shard count 1 and greater are valid without workflow redesign; omissions, duplicates, incomplete reports, coverage/test-count regression, stale commit, skipped credentials, digest mismatch, or release rebuild are red; permissions and retention are bounded',
     },
   ],
+  descopes: [
+  {
+    "item": "tradeoffs-not-defaults: owner accepts missing observed mobile three-option and dated-choice ADR proof for GREENFIELD 1.0.0; authored instructions remain, runtime outcome is not claimed proven.",
+    "ratifiedBy": "user: just accept ot , and go on",
+    "ratifiedAt": "2026-09-06T08:06:21.266079+00:00"
+  },
+  {
+    "item": "beautiful-by-default: owner accepts missing observed web registry/token-check/UX bindings and Blade pointer-only handoff proof for GREENFIELD 1.0.0; authored guidance remains, runtime outcome is not claimed proven.",
+    "ratifiedBy": "user: just accept ot , and go on",
+    "ratifiedAt": "2026-09-06T08:06:21.266079+00:00"
+  }
+],
   criteriaRatifications: [
+    "2026-09-06T08:06:21.266079+00:00 owner accepted the two closing-review evidence gaps and instructed continuation. Six criteria MET; two accepted exceptions, not proven. GREENFIELD-only bounded closure amendment approved; product source unchanged.",
     '2026-09-03 (planning, phase-31 review QUESTION): six-archetypes signal/bar re-homed the dated observed results from the manifests to VERIFY-RECORD-2026-09.md — manifests stay timeless per documentation-rules.md; the honesty rail and execution prompt §Design item 3 were amended in the same commit.',
   ],
   status: 'planning',

@@ -1,0 +1,1 @@
+2026-09-06T09:53:13.399922Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to read file to update /tmp/greenfield-r0-pilot-px9y6380/prepared/write-bindings-approval.mjs: fs sandbox helper failed with status exit status: 1: bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted

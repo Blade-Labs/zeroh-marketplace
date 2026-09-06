@@ -1,6 +1,10 @@
 import { definePhase } from '@/lib/roadmap/schema'
 
 /**
+ * Review amendment: marker categories are detection inputs, not artifact-gap cardinality.
+ * Expand required document homes independently; only Blade requires zeroh-design.
+ * Canonical roadmap discovery covers docs/roadmap, overrides, and ambiguity.
+ * Final repaired behavior is re-proven by phase 34; historical gates are retained.
  * GREENFIELD brownfield plane — audit an established repository, propose only its gaps,
  * reconcile duplicated instruction/catalog surfaces, and leave a compact oracle fixture for
  * the keystone dry run. Design: roadmap/arc-prompts/GREENFIELD-execution-prompt.md §Design item 6.
@@ -115,7 +119,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md',
           description:
-            'Add one exact STOP/install branch for each absent sibling plugin → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md\',\'utf8\');for(const x of [\'zeroh-roadmap absent: STOP and offer /plugin install zeroh-roadmap@zeroh-marketplace\',\'zeroh-design absent: STOP and offer /plugin install zeroh-design@zeroh-marketplace\',\'greenfield-init absent: STOP and offer /plugin install zeroh-greenfield@zeroh-marketplace\'])if(!s.includes(x))process.exit(1)"',
+            'Add a STOP/install branch for each required absent sibling; zeroh-design is required only by an approved Blade handoff, never by non-Blade gap repair → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md\',\'utf8\');for(const x of [\'zeroh-roadmap absent: STOP and offer /plugin install zeroh-roadmap@zeroh-marketplace\',\'zeroh-design absent: STOP and offer /plugin install zeroh-design@zeroh-marketplace\',\'greenfield-init absent: STOP and offer /plugin install zeroh-greenfield@zeroh-marketplace\'])if(!s.includes(x))process.exit(1)"',
         },
       ],
       acceptanceCriteria: [

@@ -1,0 +1,20 @@
+{
+  "cwd": "/tmp/greenfield-r0-pilot-px9y6380/project",
+  "script": "/tmp/greenfield-r0-pilot-px9y6380/prepared/write-foundation.mjs",
+  "kind": "node",
+  "paths": [
+    "package.json",
+    "src/index.js",
+    "src/cli.js",
+    "test/greet.test.js",
+    "README.md",
+    "docs/PRD.md",
+    "docs/adr/0001-tech-stack.md",
+    "docs/adr/0002-design-system.md",
+    "docs/architecture.md",
+    "docs/ux-canon.md",
+    "docs/TEST-STRATEGY.md",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ]
+}

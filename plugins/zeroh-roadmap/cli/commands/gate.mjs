@@ -393,8 +393,7 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   // ── slots — the non-test frame from the cell + test slots per effective testScope ──
   const cell = gateCell(kind, mode, opts.cfg)
   const nonTest = cell.slots.filter((s) => s !== 'unit' && s !== 'integration')
-  const wantsTests = cell.slots.includes('unit') || cell.slots.includes('integration') || cell.scopedTests ||
-    (testScope.effective !== 'static' && testScope.effective !== 'full')
+  const wantsTests = cell.slots.includes('unit') || cell.slots.includes('integration') || cell.scopedTests
   const slots = []
   for (const s of nonTest) slots.push(compactSlot(resolveSlot(opts.cfg, s)))
   // Per-phase hygiene (1792.1): the diff-scoped consumer lint, {base}-substituted; an unbound
@@ -414,12 +413,16 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
     slots.push(compact)
   }
   const testFiles = selectTestFiles(toplevel, ownFiles)
+  // The phase declaration is planning metadata, not application source. Keep all
+  // other executable/config inputs conservative, including other roadmap modules.
+  const phaseMetadata = `${roadmapRootRel(toplevel)}/phases/phase-${phaseNum}.phase.ts`
+  const isRuntimeInput = (file) => file !== phaseMetadata && isExecutable(file)
   const hasUncoveredSource = livingOwnFiles.some((file) => {
-    if (!isExecutable(file) || isTestFile(file)) return false
+    if (!isRuntimeInput(file) || isTestFile(file)) return false
     const stem = file.replace(/\.[^./]+$/, '')
     return !COLOCATED_TEST_EXTS.some((ext) => existsSync(join(toplevel, stem + ext)))
   })
-  const hasDeletedExecutable = ownFiles.some((file) => isExecutable(file) && !existsSync(join(toplevel, file)))
+  const hasDeletedExecutable = ownFiles.some((file) => isRuntimeInput(file) && !existsSync(join(toplevel, file)))
   const emptyScopeSkip = []
   if (wantsTests && testScope.effective !== 'static' && !testScope.refused) {
     if (testScope.effective === 'full') {
@@ -437,7 +440,7 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
           : resolveScopedOrFallback(opts.cfg, tier, testFiles)
         slots.push(compactSlot({ ...resolved, files: testFiles }))
       }
-    } else if (livingOwnFiles.some(isExecutable) || (ownFiles.length > 0 && livingOwnFiles.length === 0)) {
+    } else if (livingOwnFiles.some(isRuntimeInput) || (ownFiles.some((file) => file !== phaseMetadata) && livingOwnFiles.length === 0)) {
       const manifest = createScopeManifest(toplevel, livingOwnFiles)
       if (manifest) {
         slots.push(compactSlot({ ...resolveAffectedOrFallback(opts.cfg, 'unit', manifest.token), files: livingOwnFiles }))

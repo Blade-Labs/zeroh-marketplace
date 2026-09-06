@@ -350,6 +350,29 @@ test('deriveArcSuiteScope — unions ONLY the member commits\' files into an @ma
   assert.equal(deriveArcSuiteScope(root, [9999], defaultExec), null)
 })
 
+test('deriveArcSuiteScope — mixed deleted shared config and surviving test preserves the range fallback', () => {
+  const root = mkdtempSync(join(tmpdir(), 'zr-scope-deleted-'))
+  bases.push(root)
+  const gg = (...a) => execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' })
+  gg('init', '-q')
+  mkdirSync(join(root, 'packages', 'a'), { recursive: true })
+  writeFileSync(join(root, 'vitest.config.ts'), 'export default {}\n')
+  writeFileSync(join(root, 'packages/a/example.test.ts'), 'old test\n')
+  gg('add', '-A'); gg('commit', '-q', '-m', 'seed')
+  rmSync(join(root, 'vitest.config.ts'))
+  writeFileSync(join(root, 'packages/a/example.test.ts'), 'updated test\n')
+  gg('add', '-A'); gg('commit', '-q', '-m', 'feat: phase 10 — update tests and remove shared config')
+
+  const scope = deriveArcSuiteScope(root, [10], defaultExec)
+  scope?.cleanup()
+  assert.equal(scope, null, 'a surviving test must not hide deleted shared configuration in an exact manifest')
+  const range = deriveArcSuiteRange(root, [10], defaultExec)
+  assert.match(range, /^[0-9a-f]{7,40}\.\.HEAD$/, 'the existing landing fallback retains a usable Git range')
+  assert.deepEqual(gg('diff', '--name-only', range).trim().split('\n').sort(), [
+    'packages/a/example.test.ts', 'vitest.config.ts',
+  ], 'the range exposes the deleted shared config to the selector so its full fallback remains reachable')
+})
+
 test('buildRunnerSummary — an impacted-scope landing reports fullSuiteGreen:false + a reason naming the range and the CI backstop', () => {
   const state = { arcId: 'A', censusEntries: [], hasCriteria: false, suiteMode: 'impacted', suiteRange: 'abc123..HEAD' }
   const s = buildRunnerSummary(state, { suiteGreen: true })

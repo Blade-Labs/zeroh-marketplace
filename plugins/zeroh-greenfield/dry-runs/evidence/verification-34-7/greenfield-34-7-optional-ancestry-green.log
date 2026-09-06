@@ -1,0 +1,72 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-optional-gates.test.mjs
+TAP version 13
+# Subtest: Nx proposal and config bind the required seven gates plus all three optional unit selectors
+ok 1 - Nx proposal and config bind the required seven gates plus all three optional unit selectors
+  ---
+  duration_ms: 2.925489
+  type: 'test'
+  ...
+# Subtest: optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage
+ok 2 - optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage
+  ---
+  duration_ms: 4.799034
+  type: 'test'
+  ...
+# Subtest: unit-scoped evidence binds its exact input, native command, and selector tier
+ok 3 - unit-scoped evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 6.037922
+  type: 'test'
+  ...
+# Subtest: unit-affected evidence binds its exact input, native command, and selector tier
+ok 4 - unit-affected evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 1.960171
+  type: 'test'
+  ...
+# Subtest: unit-impacted evidence binds its exact input, native command, and selector tier
+ok 5 - unit-impacted evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 1.892542
+  type: 'test'
+  ...
+# Subtest: optional selector evidence preserves its portable template through the retained capbuild wrapper
+ok 6 - optional selector evidence preserves its portable template through the retained capbuild wrapper
+  ---
+  duration_ms: 3.481406
+  type: 'test'
+  ...
+# Subtest: manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift
+ok 7 - manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift
+  ---
+  duration_ms: 17.705781
+  type: 'test'
+  ...
+# Subtest: affected manifest requires a non-test path and cannot masquerade as scoped or full fallback
+ok 8 - affected manifest requires a non-test path and cannot masquerade as scoped or full fallback
+  ---
+  duration_ms: 3.77738
+  type: 'test'
+  ...
+# Subtest: impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector
+ok 9 - impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector
+  ---
+  duration_ms: 9.49342
+  type: 'test'
+  ...
+# Subtest: impacted evidence rejects a successful diff between two unrelated real commits
+ok 10 - impacted evidence rejects a successful diff between two unrelated real commits
+  ---
+  duration_ms: 62.789985
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 273.381857

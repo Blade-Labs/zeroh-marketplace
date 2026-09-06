@@ -1,0 +1,1 @@
+One Codex proposal-stage pilot only. Source-bound observer launch must be separately authorized after the recorded source-freeze disposition. Preserve proposal, execution and rerun observations; do not project this pilot into release receipts.

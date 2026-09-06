@@ -28,6 +28,7 @@
     "roundsLowOnly": 0,
     "roundsPastCap": 0,
     "curated": true,
+    "verifyComplete": "passed",
     "slots": [
       {
         "slot": "lint",

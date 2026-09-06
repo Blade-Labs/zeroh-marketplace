@@ -1,5 +1,8 @@
 # CI and exact-artifact release
 
+Load this reference only for explicitly selected CI/release setup. A local first
+prototype does not require these workflows, sharding or cloud configuration.
+
 Use the consumer-owned `scripts/ci-shard-plan.mjs` as the sole lifecycle engine.
 Copy its two workflows to `.github/workflows/ci.yml` and `release.yml` only after
 approval. Configure `.github/greenfield-delivery.json`; missing configuration,
@@ -95,11 +98,23 @@ Quarantine requires owner, reason and unexpired expiry, and still blocks an
 authoritative release. Missing first attempts or gaps in numbering fail. Upload
 compact reports and raw failure diagnostics under `always()`, even on failed jobs.
 
-`minTests`, `minUnits` and `coverageFloor` are approved baselines. A changed baseline
-requires `baselineApproval: {previous,previousDigest,approvedDigest,owner,reason}`
-with both digests matching the old and proposed values. Never lower a floor to
-hide a regression. Review baseline changes like code; a digest is a binding, not
-an independent human authorization mechanism.
+`minTests`, `minUnits` and `coverageFloor` are approved baselines. During preparation,
+the engine reads the previous baseline from the tracked delivery config at `BASE_SHA`:
+push uses the event's previous-main SHA; manual full requires an explicit approved
+`base_sha` input. Scheduled/local validation uses the current commit's first parent.
+A nonempty base must be an exact ancestor preceding HEAD. Missing history fails;
+a root commit or new-branch push can prove that no prior branch baseline exists.
+The plan binds `{baseSha,baseline,baselineDigest,requestedDigest}` as
+`adapterConfig.baselineReference`, carried through fan-in and release verification.
+A changed baseline requires
+`baselineApproval: {baseSha,previous,previousDigest,approvedDigest,owner,reason}`,
+matching the derived previous baseline and proposed values. The approval's `previous`
+value never supplies the source of truth. First installation requires the same
+approval with `bootstrap:true`, `previous:null`, and the digest of null as
+`previousDigest`, bound to the proven absent config/base and approved current floor.
+Record that bootstrap decision in the init proposal; it is not advance write approval.
+Never lower a floor to hide a regression. Review baseline changes like code; a digest
+is a binding, not an independent human authorization mechanism.
 
 ## Lifecycle and release proof
 

@@ -1,0 +1,10 @@
+{
+  "cwd": "/tmp/greenfield-r0-pilot-px9y6380/project",
+  "script": "/tmp/greenfield-r0-pilot-px9y6380/prepared/write-bindings-approval.mjs",
+  "kind": "node",
+  "paths": [
+    "roadmap/roadmap.config.json",
+    "docs/PRD.md",
+    "docs/adr/0001-tech-stack.md"
+  ]
+}

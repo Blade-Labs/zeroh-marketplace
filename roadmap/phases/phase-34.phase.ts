@@ -408,14 +408,14 @@ export default definePhase({
     },
     {
       id: '34.7',
-      title: 'Wire delivery into approval-gated init and re-prove final native trees',
+      title: 'Restore foundation-first init and validate selected delivery',
       problem:
-        'Delivery templates are not a GREENFIELD feature until the init workflow proposes, selects, writes, preserves, and verifies them. Earlier native receipts predate CI/release output, so final evidence must be regenerated after delivery wiring.',
+        'Greenfield must turn an idea into a runnable prototype with a sound foundation. Delivery is optional and retains its validation when selected. Owner release ruling 2026-09-06 supersedes the mandatory four-arm refresh with explicit scoped evidence and current regression/review coverage.',
       steps: [
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
           description:
-            'Before writes, ask CI provider/release-environment questions and present the selected adapter, exact paths, lifecycle, secret placeholders, and preservation plan for approval. After approval, copy/fill the shard planner and workflows, merge rather than overwrite existing workflows, record commands, then validate. Brownfield collisions STOP for an explicit merge decision. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+            'Reuse resolved product and stack answers. Before writes, propose the appropriate template foundation and local prototype; ask CI provider/release-environment questions only when delivery is selected, then present that adapter and preservation plan for approval. After approval, copy/fill the shard planner and workflows, merge rather than overwrite existing workflows, record commands, then validate. Brownfield collisions STOP for an explicit merge decision. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
@@ -425,17 +425,17 @@ export default definePhase({
         {
           file: 'plugins/zeroh-greenfield/dry-runs/empty/receipt.json',
           description:
-            'Rerun real Claude-native and Codex-native empty fixtures after 34.6/34.7. Receipts must include selected adapter, workflow/parser exits, shard manifest/evidence schema digests, approval-before-first-write, final tree, and second-run no-op. Failed or unavailable arms remain blocking. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'Preserve the four recorded native delivery observations at their original snapshots and label them historical. Retain the bounded R0 local-prototype pilot at its actual snapshot, including zero-write proposal/audit, saved-artifact execution and real test/config exits. Do not claim final-source four-arm coverage; run the current product/validator suite and independent release review. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
         {
           file: 'plugins/zeroh-greenfield/dry-runs/brownfield/receipt.json',
           description:
-            'Rerun both native hosts on a brownfield fixture with an existing CI workflow. Prove byte preservation before explicit merge approval, bounded merged diff after approval, no secret defaults, valid delivery evidence, and idempotent second run. Regenerate DRYRUN-2026-09.md solely from receipts. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+            'Retain historical brownfield preservation/selected-delivery evidence and its exact native audit in test:native-evidence. Current deterministic regressions must reject unauthorized changes, forged exits, changed artifacts and invalid delivery. The R0 audit must recognize alternative canonical homes and defer unselected infrastructure. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
         },
       ],
       acceptanceCriteria: [
-        'CI provider, archetype adapter, workflow paths, release environment, and collision behavior are proposed before any write; existing workflows are never overwritten without explicit merge approval.',
-        'Claude and Codex final empty/brownfield receipts include CI/release outputs and machine validation, preserve approved boundaries, and have identical idempotent second-run trees.',
+        'An appropriate runnable foundation is proposed before writes; existing choices are reused. CI/release setup is optional. When selected, its adapter, paths, environment and collision behavior are approved before writes; existing workflows are preserved.',
+        'Release evidence explicitly distinguishes historical four-arm selected-delivery observations, the bounded R0 pilot at its recorded snapshot, and current product/validator regressions plus independent review. Final-source four-arm native coverage is not claimed. The separate recorded-environment audit retains freshness checks and is not a mandatory rerun under the owner release ruling.',
         'All shard/fan-in/release mutations remain red through mandatory js-yaml parsing and executable generated-workflow simulations; optional actionlint path/version or absence is recorded and cannot substitute for or weaken those checks.',
         'The stale phase-32 peval is regenerated with five tasks/current keyFiles and the final phase/arc reports supersede every pre-amendment gate artifact.',
       ],
@@ -448,6 +448,26 @@ export default definePhase({
         'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
         'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
         'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md',
+        'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-driver.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-evidence.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-optional-gates.test.mjs',
+        'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
+        'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        'plugins/zeroh-roadmap/package.json',
+        'plugins/zeroh-roadmap/CHANGELOG.md',
+        'plugins/zeroh-roadmap/.codex-plugin/plugin.json',
+        'plugins/zeroh-roadmap/.codex/INSTALL.md',
+        'plugins/zeroh-roadmap/.claude-plugin/plugin.json',
+        'plugins/zeroh-roadmap/.cursor-plugin/plugin.json',
+        'plugins/zeroh-roadmap/gemini-extension.json',
+        'plugins/zeroh-roadmap/.copilot/plugin.yaml',
+        'plugins/zeroh-greenfield/README.md',
+        'plugins/zeroh-greenfield/CHANGELOG.md',
+        'roadmap/arc-evals/phase-32.peval.json',
       ],
       testMode: 'tdd',
       done: false,

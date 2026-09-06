@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { readFileSync, chmodSync, copyFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
@@ -10,9 +10,15 @@ import { spawnSync } from 'node:child_process'
 const ROOT=fileURLToPath(new URL('../../../../',import.meta.url))
 const require=createRequire(resolve(ROOT,'package.json'))
 const yaml=require('js-yaml')
-const workflow=name=>yaml.safeLoad(readFileSync(resolve(ROOT,`plugins/zeroh-greenfield/templates/github/workflows/${name}.yml`),'utf8'))
+const DELIVERY_ROOT=process.env.GREENFIELD_DELIVERY_ROOT?resolve(process.env.GREENFIELD_DELIVERY_ROOT):null
+const PLANNER=DELIVERY_ROOT?resolve(DELIVERY_ROOT,'scripts/ci-shard-plan.mjs'):resolve(ROOT,'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs')
+const workflow=name=>yaml.safeLoad(readFileSync(DELIVERY_ROOT?resolve(DELIVERY_ROOT,`.github/workflows/${name}.yml`):resolve(ROOT,`plugins/zeroh-greenfield/templates/github/workflows/${name}.yml`),'utf8'))
 
-test('delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries',()=>{
+test('delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries',async()=>{
+  if(DELIVERY_ROOT) {
+    const api=await product()
+    api.validateDeliveryConfig(JSON.parse(readFileSync(resolve(DELIVERY_ROOT,'.github/greenfield-delivery.json'),'utf8')))
+  }
   const lock=JSON.parse(readFileSync(resolve(ROOT,'package-lock.json'),'utf8'))
   assert.equal(require('js-yaml/package.json').version,lock.packages['node_modules/js-yaml'].version)
   for(const name of ['ci','release']) {
@@ -29,7 +35,7 @@ test('delivery workflows parse with the repository-pinned YAML parser and use im
   }
 })
 
-const product=()=>import('../../../zeroh-greenfield/templates/scripts/ci-shard-plan.mjs')
+const product=()=>import(pathToFileURL(PLANNER).href)
 const sha='a'.repeat(40),tree='b'.repeat(40),now='2026-09-05T12:00:00.000Z',expiresAt='2026-09-06T12:00:00.000Z'
 const digest=content=>createHash('sha256').update(content).digest('hex')
 const raw=(path,format,content)=>({path,format,content,sha256:digest(content)})
@@ -189,7 +195,7 @@ test('raw report completeness rejects contradictory summaries and duplicate mach
 function workflowSandbox() {
   const root=mkdtempSync(join(tmpdir(),'greenfield-workflow-'))
   mkdirSync(join(root,'scripts'))
-  copyFileSync(resolve(ROOT,'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs'),join(root,'scripts/ci-shard-plan.mjs'))
+  copyFileSync(PLANNER,join(root,'scripts/ci-shard-plan.mjs'))
   let counter=0
   return {root,close:()=>rmSync(root,{recursive:true,force:true}),step(name,id,request) {
     const found=Object.values(workflow(name).jobs).flatMap(job=>job.steps).filter(step=>step.id===id)
@@ -221,6 +227,93 @@ test('actual workflow plan, attest and release-verification snippets validate ev
     }
   } finally {box.close()}
 })
+// Exercise preparation as well as execution: direct validateEvidence fixtures cannot
+// detect a previous approved baseline being discarded while the plan is prepared.
+function preparedBaselineWorkflow(baseline,previous,baselineApproval,{priorAbsent=false,baseOverride,firstParent=false}={}) {
+  const box=workflowSandbox()
+  try {
+    mkdirSync(join(box.root,'.github'))
+    writeFileSync(join(box.root,'.gitignore'),'.ci/\n')
+    writeFileSync(join(box.root,'inventory.mjs'),`console.log(JSON.stringify(['test/a.test.mjs']));`)
+    writeFileSync(join(box.root,'runner.mjs'),`import {writeFileSync} from 'node:fs';const [unit,junit,coverage]=process.argv.slice(2);writeFileSync(junit,'<testsuite tests="1"><testcase name="works"/></testsuite>');writeFileSync(coverage,${JSON.stringify('TN:\nSF:src/a.mjs\nDA:1,1\nLF:1\nLH:1\nend_of_record\n')});`)
+    const config={schemaVersion:1,archetype:'library-cli',shardCount:1,baseline,adapterConfig:{baseline:previous},baselineApproval,
+      runners:{'node:test':{inventoryArgv:[process.execPath,'inventory.mjs'],inventoryFormat:'json-paths',shardArgv:[process.execPath,'runner.mjs','{unit}','{junit}','{coverage}'],rawReports:[{path:'{junit}',format:'junit'},{path:'{coverage}',format:'lcov'}]}},
+      build:{argv:[process.execPath,'build.mjs'],outputs:['dist']}}
+    const git=(...argv)=>{const result=spawnSync('git',argv,{cwd:box.root,encoding:'utf8'});assert.equal(result.status,0,result.stderr);return result.stdout.trim()}
+    // Keep both revisions in Git as well as supplying the prior approved baseline.
+    if(!priorAbsent)writeFileSync(join(box.root,'.github/greenfield-delivery.json'),JSON.stringify({...config,baseline:previous,baselineApproval:null}))
+    git('init','--quiet');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--quiet','-m','approved baseline')
+    const baseSha=git('rev-parse','HEAD')
+    if(config.baselineApproval)config.baselineApproval={baseSha,...config.baselineApproval}
+    writeFileSync(join(box.root,'.github/greenfield-delivery.json'),JSON.stringify(config))
+    git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--quiet','--allow-empty','-m','proposed baseline')
+    const stages=[]
+    for(const stage of ['plan','run','fanin']) {
+      const prepared=spawnSync(process.execPath,['scripts/ci-shard-plan.mjs','prepare',stage],{cwd:box.root,encoding:'utf8',env:{...process.env,BASE_SHA:firstParent?'':baseOverride??baseSha,SHARD_INDEX:'0',GITHUB_RUN_ID:'baseline-fixture'}})
+      stages.push({stage:`prepare ${stage}`,status:prepared.status,stderr:prepared.stderr})
+      if(prepared.status!==0)return stages
+      const request=JSON.parse(readFileSync(join(box.root,`.ci/${stage}-request.json`),'utf8'))
+      const executed=box.step('ci',stage,request)
+      stages.push({stage,status:executed.status,stderr:executed.stderr})
+      if(executed.status!==0)return stages
+      const output=stage==='run'?'.ci/reports/shard-0.json':`.ci/${stage}.json`
+      mkdirSync(join(box.root,'.ci/reports'),{recursive:true})
+      writeFileSync(join(box.root,output),JSON.stringify(executed.value))
+    }
+    return stages
+  } finally {box.close()}
+}
+test('prepared workflow preserves approved baselines and requires correctly bound change approval',async(t)=>{
+  const api=await product(),baseline={minTests:1,minUnits:1,coverageFloor:99}
+  await t.test('unchanged valid baseline passes without change approval',()=>{
+    const stages=preparedBaselineWorkflow(baseline,baseline,null)
+    assert.deepEqual(stages.map(s=>[s.stage,s.status]),[['prepare plan',0],['plan',0],['prepare run',0],['run',0],['prepare fanin',0],['fanin',0]],JSON.stringify(stages))
+  })
+  for(const field of ['minTests','minUnits','coverageFloor']) {
+    const previous={...baseline,[field]:baseline[field]+1}
+    const approval={previous,previousDigest:api.digest(previous),approvedDigest:api.digest(baseline),owner:'release-owner',reason:'reviewed fixture baseline change'}
+    for(const invalid of ['missing','previousDigest','approvedDigest','baseSha','owner','reason'])await t.test(`${field}: rejects ${invalid} approval`,()=>{
+      const changed=invalid==='missing'?null:{...approval,[invalid]:invalid.endsWith('Digest')?'0'.repeat(64):invalid==='baseSha'?'c'.repeat(40):''}
+      const stages=preparedBaselineWorkflow(baseline,previous,changed),last=stages.at(-1)
+      assert.notEqual(last.status,0,`unapproved ${field} change reached successful fan-in: ${JSON.stringify(stages)}`)
+      assert.match(last.stderr,/baseline|approval/i,'rejection must identify the baseline approval boundary')
+    })
+    await t.test(`${field}: accepts explicitly approved old and proposed baselines`,()=>{
+      const stages=preparedBaselineWorkflow(baseline,previous,approval)
+      assert.deepEqual(stages.map(s=>[s.stage,s.status]),[['prepare plan',0],['plan',0],['prepare run',0],['run',0],['prepare fanin',0],['fanin',0]],JSON.stringify(stages))
+    })
+  }
+})
+
+test('prepared workflow derives prior baseline from Git and requires explicit bootstrap approval',async(t)=>{
+  const api=await product(),baseline={minTests:1,minUnits:1,coverageFloor:99},previous={...baseline,minTests:2}
+  const approved={previous,previousDigest:api.digest(previous),approvedDigest:api.digest(baseline),owner:'release-owner',reason:'reviewed fixture baseline change'}
+  const accepts=stages=>assert.deepEqual(stages.map(s=>[s.stage,s.status]),[['prepare plan',0],['plan',0],['prepare run',0],['run',0],['prepare fanin',0],['fanin',0]],JSON.stringify(stages))
+  const rejects=stages=>{assert.notEqual(stages.at(-1).status,0,`unauthorized baseline reached fan-in: ${JSON.stringify(stages)}`);assert.match(stages.at(-1).stderr,/baseline|approval|base|revision|object/i)}
+  await t.test('approval cannot replace the Git baseline with caller-selected previous values',()=>{
+    const invented={...previous,minTests:3}
+    rejects(preparedBaselineWorkflow(baseline,previous,{...approved,previous:invented,previousDigest:api.digest(invented)}))
+  })
+  await t.test('an unavailable base cannot be treated as first adoption',()=>{
+    rejects(preparedBaselineWorkflow(baseline,previous,approved,{baseOverride:'c'.repeat(40)}))
+  })
+  await t.test('local first-parent fallback retains changed baseline approval',()=>{
+    accepts(preparedBaselineWorkflow(baseline,previous,approved,{firstParent:true}))
+    rejects(preparedBaselineWorkflow(baseline,previous,null,{firstParent:true}))
+  })
+  const bootstrap={bootstrap:true,previous:null,previousDigest:api.digest(null),approvedDigest:api.digest(baseline),owner:'release-owner',reason:'reviewed first delivery baseline'}
+  await t.test('proven first adoption needs explicit approval',()=>{
+    rejects(preparedBaselineWorkflow(baseline,baseline,null,{priorAbsent:true}))
+    accepts(preparedBaselineWorkflow(baseline,baseline,bootstrap,{priorAbsent:true}))
+  })
+  await t.test('bootstrap approval cannot hide an existing approved baseline',()=>{
+    rejects(preparedBaselineWorkflow(baseline,previous,bootstrap))
+  })
+  for(const field of ['previousDigest','approvedDigest','owner','reason'])await t.test(`bootstrap rejects invalid ${field}`,()=>{
+    rejects(preparedBaselineWorkflow(baseline,baseline,{...bootstrap,[field]:field.endsWith('Digest')?'0'.repeat(64):''},{priorAbsent:true}))
+  })
+})
+
 test('actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports',async()=>{
   const api=await product(),box=workflowSandbox()
   try {

@@ -1,0 +1,15 @@
+{
+  "directory": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-7-release-final/brownfield-claude/execution",
+  "sha256": {
+    "request.json": "39f7ba67258e604a787c0eb8675c2864225f20f93ba049564679221413c4c76d",
+    "before.json": "e4c398f7afcca9e31e9229a4dc9be220fdd321446d0f3d0a9ec6ef96524bb4bf",
+    "after.json": "183790e8a2bc27ddefa46be93d791282c1c473e5c528b193f6b0a54d7fe96958",
+    "events.json": "ef301053bf722db922f52b058a76886ba98a3f1d161980218c56c22069272458",
+    "stdout.jsonl": "062c76cb5e272a2675f7a3f8745be9dcf89c4adad03e67fc2555777dec8414e6",
+    "result.json": "2389a862b669ca7de9b090dd30cedddff22d83ee2037dc75926680ac73ffbd3b"
+  },
+  "session": {
+    "path": "plugins/zeroh-greenfield/dry-runs/evidence/native-34-7-release-final/brownfield-claude/execution/session.jsonl",
+    "sha256": "af51382b214cc09a151b43cf9c164c6cfc832955e51aafa560eff192def7f348"
+  }
+}

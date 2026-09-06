@@ -1,0 +1,66 @@
+{
+  "phase": 34,
+  "date": "2026-09-06",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 34
+  },
+  "taskCount": 7,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/layout.md",
+    "plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs",
+    ".claude-plugin/marketplace.json",
+    "plugins/zeroh-greenfield/.codex-plugin/plugin.json",
+    "plugins/zeroh-greenfield/README.md",
+    "plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md",
+    "plugins/zeroh-greenfield/dry-runs/34.4-scripted-answers.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md",
+    "plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs",
+    "plugins/zeroh-greenfield/templates/github/workflows/ci.yml",
+    "plugins/zeroh-greenfield/templates/github/workflows/release.yml",
+    "plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs",
+    "plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md",
+    "plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md",
+    "plugins/zeroh-greenfield/DRYRUN-2026-09.md"
+  ],
+  "gate": {
+    "green": false,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 1,
+        "durationMs": 2007408
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "gpt-5.6-sol"
+    }
+  }
+}

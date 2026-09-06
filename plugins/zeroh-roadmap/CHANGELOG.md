@@ -1,4 +1,12 @@
-## Unreleased
+## 0.40.0 — 2026-09-06
+
+- Foundation-first Greenfield companion: reuse interview answers, follow the selected stack, kickstart a runnable local prototype, and offer existing-project practices individually. CI/release setup is optional.
+- Saved executable programs use actual-byte preflight and real exit statuses; models do not need to predict hashes or retype approved programs.
+- Mockup gates remain static; phase metadata no longer widens scoped tests, and arc-end deletion ranges remain conservative.
+- Product/validator regressions run separately from the explicit recorded-native audit, which retains stale-source rejection.
+- GREENFIELD companion release: machine-readable config capabilities, canonical root discovery, explicit absent gates, and scoped/affected/impacted test selection support approved project setup.
+- Missing-home branches point to the shared zeroh-greenfield remedy while preserving their STOP/fallback behavior.
+- Evidence scope: historical four-host/fixture observations plus a bounded Codex CLI pilot at its recorded source, current regression checks and release review; no new final-source four-case matrix or broad speed claim.
 
 - codex lane model pinned to `gpt-6-astra` (was `gpt-5.6-sol`) — owner ruling 2026-09-05 07:28 UTC ("from now on use codex Astra"); `MODEL_IDS.SOL` keeps its key so `sol` in a consumer's modelPolicy still resolves to the pinned codex model; MULTI-DRIVER.md §1 and the drivers probe evidence (codex-cli 0.153.4, `codex debug models` slug) updated in the same change.
 

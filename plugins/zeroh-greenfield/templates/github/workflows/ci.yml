@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Approved previous baseline commit SHA
+        required: true
+        type: string
   schedule:
     - cron: '17 3 * * *'
 permissions: {}
@@ -39,10 +44,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
-      - run: node scripts/ci-shard-plan.mjs prepare plan
+      - env:
+          BASE_SHA: ${{ github.event.before || inputs.base_sha }}
+        run: node scripts/ci-shard-plan.mjs prepare plan
       - id: plan
         env:
           REQUEST: .ci/plan-request.json

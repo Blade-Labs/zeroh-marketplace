@@ -3,10 +3,11 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, lstatSync, existsSync, readlinkSync } from 'node:fs'
-import { resolve, relative, dirname, isAbsolute } from 'node:path'
+import { resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 export const SCHEMA_VERSION=1
+export const MAX_SHARDS=256
 export const MAX_INFRA_RETRIES=2
 export const MAX_EVIDENCE_DAYS=7
 const canonical=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v)
@@ -132,9 +133,26 @@ function parsedAttempt(attempt,config){
 }
 function baselineCheck(baseline,config,approval){
  assert.ok(baseline);integer(baseline.minTests,1);integer(baseline.minUnits,1);assert.ok(Number.isFinite(baseline.coverageFloor)&&baseline.coverageFloor>=0&&baseline.coverageFloor<=100)
+ const reference=config.baselineReference
+ if(reference){
+  if(reference.baseSha!==null)sha(reference.baseSha)
+  assert.equal(reference.baselineDigest,digest(reference.baseline),'previous baseline digest drift')
+  assert.equal(reference.requestedDigest,digest(baseline),'requested baseline changed after planning')
+  const previous=reference.baseline
+  if(previous!==null&&canonical(previous)===canonical(baseline))return
+  assert.ok(approval,'baseline changes require explicit approval');assert.ok(typeof approval.owner==='string'&&approval.owner.trim(),'baseline approval owner required');assert.ok(typeof approval.reason==='string'&&approval.reason.trim(),'baseline approval reason required')
+  assert.equal(approval.baseSha,reference.baseSha,'baseline approval base mismatch')
+  equal(approval.previous,previous,'baseline approval previous value mismatch')
+  assert.equal(approval.previousDigest,reference.baselineDigest,'baseline approval previous digest mismatch')
+  assert.equal(approval.approvedDigest,digest(baseline),'unapproved baseline change')
+  if(previous===null)assert.equal(approval.bootstrap,true,'initial baseline requires explicit bootstrap approval')
+  else assert.notEqual(approval.bootstrap,true,'bootstrap cannot replace an existing baseline')
+  return
+ }
+ // Low-level callers supply their reviewed baseline; generated workflows bind Git provenance below.
  const previous=config.baseline??approval?.previous
  if(previous&&canonical(previous)!==canonical(baseline)){
-  assert.ok(approval,'baseline changes require explicit approval');nonempty(approval.owner);nonempty(approval.reason)
+  assert.ok(approval,'baseline changes require explicit approval');assert.ok(typeof approval.owner==='string'&&approval.owner.trim(),'baseline approval owner required');assert.ok(typeof approval.reason==='string'&&approval.reason.trim(),'baseline approval reason required')
   assert.equal(approval.previousDigest,digest(previous));assert.equal(approval.approvedDigest,digest(baseline),'unapproved baseline change')
  }
 }
@@ -204,6 +222,25 @@ function inventoryPaths(output,binding){
   if(binding.pathPrefix)paths=paths.map(p=>p.startsWith(binding.pathPrefix)?p.slice(binding.pathPrefix.length):p)
   if(binding.targetSuffix)paths=paths.map(p=>p+binding.targetSuffix)
  return paths.map(path=>canonicalPath(path))
+}
+export const DELIVERY_SCHEMA_CONTRACT=Object.freeze({version:1,identity:['runner','canonicalPathOrLeafTask'],shardManifest:['schemaVersion','archetype','sha','tree','inventory','adapterConfigDigest','suiteManifestDigest','shards'],evidence:['schemaVersion','authoritative','sha','tree','suiteManifestDigest','shardReports','coverageDigest','buildDigest','producerRunId','expiresAt','baselineDigest','testCount','coveragePercent']})
+export function validateDeliveryConfig(config){
+ tooling(config);integer(config.shardCount,1);assert.ok(config.shardCount<=MAX_SHARDS,'excessive shard count');assert.ok(Array.isArray(config.setupArgv));config.setupArgv.forEach(words);words(config.affectedArgv)
+ if(!config.affectedArgv.includes('{base}'))nonempty(config.affectedFallbackReason)
+ baselineCheck(config.baseline,config.adapterConfig??{},config.baselineApproval)
+ for(const runner of ADAPTERS[config.archetype].runners){
+  const binding=config.runners[runner];assert.ok(binding,`${runner} unavailable`);words(binding.inventoryArgv);words(binding.shardArgv)
+  assert.ok(binding.shardArgv.some(arg=>arg.includes('{unit}')),'unit selector required')
+  assert.ok(['lines','git-nul','json-paths','playwright-json'].includes(binding.inventoryFormat))
+  if(['vitest','playwright'].includes(runner)){words(binding.selectionArgv);assert.ok(binding.selectionArgv.some(arg=>arg.includes('{unit}')));assert.ok(['lines','json-paths','playwright-json'].includes(binding.selectionFormat))}
+  assert.ok(Array.isArray(binding.rawReports)&&binding.rawReports.length>=2,'test and coverage report contracts required')
+  assert.ok(binding.rawReports.some(r=>['junit','flutter-machine'].includes(r.format)));assert.ok(binding.rawReports.some(r=>['lcov','jacoco'].includes(r.format)))
+  for(const r of binding.rawReports){nonempty(r.path);assert.ok(['junit','flutter-machine','lcov','jacoco'].includes(r.format))}
+ }
+ words(config.build?.argv);assert.ok(Array.isArray(config.build.outputs)&&config.build.outputs.length);config.build.outputs.forEach(p=>canonicalPath(p));allowedRoots(config,false)
+ nonempty(config.release?.environment);assert.ok(['none','aws-s3-v1'].includes(config.release.provider),'unsupported provider must remain unavailable');assert.ok(!config.release.promoteArgv,'arbitrary promotion hooks forbidden')
+ if(config.evidenceDays!==undefined){integer(config.evidenceDays,1);assert.ok(config.evidenceDays<=MAX_EVIDENCE_DAYS)}
+ return config
 }
 export function inventoryFromConfig(config){
  tooling(config);const inventory=[]
@@ -313,15 +350,49 @@ function guardedRequest(request,operation,{allowBuildOutputs=false}={}){
  return guardSource(request.config,operation,{allowBuildOutputs})
 }
 function setup(config){for(const argv of config.setupArgv??[])checked(argv)}
+function previousBaseline(config,ctx){
+ const requested=process.env.BASE_SHA
+ let baseSha
+ if(requested){
+  sha(requested)
+  if(/^0{40}$/.test(requested)){
+   assert.equal(process.env.GITHUB_EVENT_NAME,'push','zero baseline base is only valid for a new-branch push');baseSha=null
+  }else baseSha=requested
+ }else{
+  assert.notEqual(process.env.GITHUB_EVENT_NAME,'workflow_dispatch','manual full validation requires an explicit BASE_SHA')
+  assert.notEqual(process.env.GITHUB_EVENT_NAME,'push','push validation requires the previous-main BASE_SHA')
+  const parents=checked(['git','rev-list','--parents','-n','1',ctx.sha]).trim().split(/\s+/)
+  assert.equal(parents[0],ctx.sha);baseSha=parents[1]??null
+ }
+ let baseline=null
+ if(baseSha!==null){
+  sha(baseSha);assert.notEqual(baseSha,ctx.sha,'baseline base must precede the current commit')
+  assert.equal(checked(['git','rev-parse',`${baseSha}^{commit}`]).trim(),baseSha)
+  checked(['git','merge-base','--is-ancestor',baseSha,ctx.sha])
+  const path='.github/greenfield-delivery.json',entry=checked(['git','ls-tree','-z',baseSha,'--',path])
+  if(entry){
+   assert.match(entry,/^100(?:644|755) blob [0-9a-f]{40}\t\.github\/greenfield-delivery\.json\0$/,'prior delivery config must be a regular tracked file')
+   const previous=JSON.parse(checked(['git','show',`${baseSha}:${path}`]));assert.ok(previous.baseline,'prior delivery config is missing its approved baseline');baseline=previous.baseline
+  }
+ }
+ const reference={baseSha,baseline,baselineDigest:digest(baseline),requestedDigest:digest(config.baseline)}
+ baselineCheck(config.baseline,{baselineReference:reference},config.baselineApproval)
+ return reference
+}
+function preparedBaseline(plan,config){
+ assert.ok(plan.adapterConfig.baselineReference,'prepared workflow requires a bound previous baseline')
+ baselineCheck(config.baseline,plan.adapterConfig,config.baselineApproval)
+}
 function prepare(mode){
  const config=tooling(json('.github/greenfield-delivery.json')),ctx=context();mkdirSync('.ci',{recursive:true})
  if(mode==='plan'){
+  const baselineReference=previousBaseline(config,ctx)
   const inventory=guardSource(config,()=>{setup(config);return inventoryFromConfig(config)})
-  save('.ci/plan-request.json',{archetype:config.archetype,inventory,shardCount:config.shardCount,commitSha:ctx.sha,tree:ctx.tree,adapterConfig:{...config.adapterConfig,baseline:config.baseline,operationalRoots:config.operationalRoots??DEFAULT_OPERATIONAL_ROOTS,executionContract:{runners:config.runners,build:config.build}}})
+  save('.ci/plan-request.json',{archetype:config.archetype,inventory,shardCount:config.shardCount,commitSha:ctx.sha,tree:ctx.tree,adapterConfig:{...config.adapterConfig,baselineReference,operationalRoots:config.operationalRoots??DEFAULT_OPERATIONAL_ROOTS,executionContract:{runners:config.runners,build:config.build}}})
  }else if(mode==='run'){
-  guardSource(config,()=>setup(config));const plan=json('.ci/plan.json');assert.equal(plan.sha,ctx.sha,'downloaded plan SHA mismatch');const index=Number(process.env.SHARD_INDEX);config.adapterConfig={...config.adapterConfig,baseline:config.baseline};equal(context(),ctx,'source changed during setup');save('.ci/run-request.json',{plan,index,config,verifySource:true})
+  guardSource(config,()=>setup(config));const plan=json('.ci/plan.json');assert.equal(plan.sha,ctx.sha,'downloaded plan SHA mismatch');preparedBaseline(plan,config);const index=Number(process.env.SHARD_INDEX);config.adapterConfig={...config.adapterConfig,baseline:config.baseline};equal(context(),ctx,'source changed during setup');save('.ci/run-request.json',{plan,index,config,verifySource:true})
  }else if(mode==='fanin'||mode==='attest'){
-  const plan=json('.ci/plan.json'),reports=readdirSync('.ci/reports').filter(p=>p.endsWith('.json')).map(p=>json(`.ci/reports/${p}`));assert.equal(plan.sha,ctx.sha)
+  const plan=json('.ci/plan.json'),reports=readdirSync('.ci/reports').filter(p=>p.endsWith('.json')).map(p=>json(`.ci/reports/${p}`));assert.equal(plan.sha,ctx.sha);preparedBaseline(plan,config)
   const request={plan,reports,baseline:config.baseline,baselineApproval:config.baselineApproval??null,commitSha:ctx.sha,now:new Date().toISOString(),producerRunId:process.env.GITHUB_RUN_ID,expiresAt:new Date(Date.now()+86400000*(config.evidenceDays??1)).toISOString(),authoritative:true}
   if(mode==='attest'){request.build=json('.ci/build.json');request.expiresAt=json('.ci/fanin.json').expiresAt}
   save(`.ci/${mode}-request.json`,request)

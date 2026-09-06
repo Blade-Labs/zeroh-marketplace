@@ -1,6 +1,6 @@
 {
   "name": "zeroh-roadmap",
-  "version": "0.39.1",
+  "version": "0.40.0",
   "description": "Phase-driven development with a design-first gate, validation gates, intent validation, review reports, and changelog generation",
   "author": "Blade Labs <info@blade-labs.com>",
   "license": "SEE LICENSE",
@@ -9,7 +9,8 @@
     "roadmap": "bin/roadmap.mjs"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 $(find bin cli hooks scripts test -name '*.test.mjs') && npx tsx scripts/schema.test.ts"
+    "test": "node --test --test-concurrency=1 $(find bin cli hooks scripts test -name '*.test.mjs') && npx tsx scripts/schema.test.ts",
+    "test:native-evidence": "node --test --test-concurrency=1 test/fixture-consumer/greenfield-recorded-native.audit.mjs"
   },
   "dependencies": {
     "zod": "^4.4.3"

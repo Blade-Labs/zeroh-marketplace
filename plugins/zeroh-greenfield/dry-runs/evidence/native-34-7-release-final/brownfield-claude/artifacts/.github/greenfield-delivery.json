@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "archetype": "nx-monorepo",
+  "setupArgv": [
+    [
+      "npm",
+      "ci"
+    ]
+  ],
+  "affectedArgv": [
+    "env",
+    "NX_DAEMON=false",
+    "npm",
+    "exec",
+    "--",
+    "nx",
+    "affected",
+    "-t",
+    "test",
+    "--base",
+    "{base}",
+    "--head",
+    "HEAD",
+    "--excludeTaskDependencies",
+    "--skipNxCache"
+  ],
+  "shardCount": 2,
+  "evidenceDays": 7,
+  "baseline": {
+    "minTests": 2,
+    "minUnits": 2,
+    "coverageFloor": 100
+  },
+  "baselineApproval": {
+    "bootstrap": true,
+    "baseSha": "5978aece5090694125b255ee7772be83ef1d61d4",
+    "previous": null,
+    "previousDigest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "approvedDigest": "ee02d2f26553ba53d69373bfcc07dbbb2d2a481e931bc5e8977916a009c7a703",
+    "owner": "fixture-owner",
+    "reason": "Initial delivery baseline presented for approval with fixture setup"
+  },
+  "adapterConfig": {
+    "maxInfraRetries": 0,
+    "coverageRoots": [],
+    "leafTasks": {
+      "shared:test": {
+        "aggregate": false,
+        "dependencies": []
+      },
+      "ui:test": {
+        "aggregate": false,
+        "dependencies": []
+      }
+    }
+  },
+  "operationalRoots": [
+    ".ci",
+    "node_modules",
+    ".nx",
+    ".npm-cache",
+    ".npm-logs"
+  ],
+  "runners": {
+    "nx": {
+      "inventoryArgv": [
+        "env",
+        "NX_DAEMON=false",
+        "npm",
+        "exec",
+        "--",
+        "nx",
+        "show",
+        "projects",
+        "--withTarget=test",
+        "--json"
+      ],
+      "inventoryFormat": "json-paths",
+      "targetSuffix": ":test",
+      "shardArgv": [
+        "npm",
+        "exec",
+        "--",
+        "nx",
+        "run",
+        "{unit}",
+        "--excludeTaskDependencies",
+        "--skipNxCache"
+      ],
+      "env": {
+        "NX_DAEMON": "false",
+        "GREENFIELD_REPORT_DIR": "{reportDir}"
+      },
+      "rawReports": [
+        {
+          "path": "{reportDir}/junit.xml",
+          "format": "junit"
+        },
+        {
+          "path": "{reportDir}/lcov.info",
+          "format": "lcov"
+        }
+      ]
+    }
+  },
+  "build": {
+    "argv": [
+      "env",
+      "NX_DAEMON=false",
+      "npm",
+      "run",
+      "build"
+    ],
+    "outputs": [
+      "dist/shared",
+      "dist/ui"
+    ]
+  },
+  "release": {
+    "provider": "none",
+    "environment": "greenfield-validation"
+  }
+}

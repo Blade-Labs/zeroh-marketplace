@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "archetype": "library-cli",
+  "setupArgv": [
+    ["npm", "ci", "--no-audit", "--no-fund"]
+  ],
+  "affectedArgv": ["node", "--test", "test/greet.test.ts", "test/cli.test.ts"],
+  "affectedFallbackReason": "node:test has no dependency-graph affected selection; the suite is two small files, so pull requests run the full explicit unit suite on the checked-out head instead of a {base}-scoped subset",
+  "shardCount": 2,
+  "evidenceDays": 7,
+  "operationalRoots": [".ci", "node_modules"],
+  "baseline": {
+    "minTests": 13,
+    "minUnits": 2,
+    "coverageFloor": 80
+  },
+  "baselineApproval": {
+    "bootstrap": true,
+    "baseSha": null,
+    "previous": null,
+    "previousDigest": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "approvedDigest": "5374467fe217b0eb0e7b810b86c55112c592bca63fce55a1d6f02d0905af47e7",
+    "owner": "fixture-owner",
+    "reason": "Initial delivery baseline presented for approval with fixture setup"
+  },
+  "adapterConfig": {
+    "maxInfraRetries": 0,
+    "coverageRoots": [],
+    "leafTasks": {}
+  },
+  "runners": {
+    "node:test": {
+      "inventoryArgv": ["git", "ls-files", "-z", "--", "test", "tests"],
+      "inventoryFormat": "git-nul",
+      "filePattern": "^test/[^/]+[.]test[.]ts$",
+      "shardArgv": ["node", "--test", "--experimental-test-coverage", "--test-reporter=junit", "--test-reporter-destination={junit}", "--test-reporter=lcov", "--test-reporter-destination={coverage}", "{unit}"],
+      "rawReports": [
+        { "path": "{junit}", "format": "junit" },
+        { "path": "{coverage}", "format": "lcov" }
+      ]
+    }
+  },
+  "build": {
+    "argv": ["npm", "run", "build"],
+    "outputs": ["dist"]
+  },
+  "release": {
+    "provider": "none",
+    "environment": "greenfield-validation"
+  }
+}

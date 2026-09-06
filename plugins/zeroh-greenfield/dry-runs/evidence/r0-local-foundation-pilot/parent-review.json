@@ -1,0 +1,8 @@
+{
+  "approved": true,
+  "scope": "Proposed 15 paths and preparation boundary only",
+  "artifact": "c01b656dcc68e1d15e6b0901607799b543c52f1da7f16086b55da84174fe5398.json",
+  "proposalConsumerMutationEvents": 0,
+  "sourceSnapshot": "ddbe1c6348b0a183565336ff14b6960f67a5123dff086b122fdac9e0fcfb1504",
+  "notClaimed": "full release receipt or exact single-proposal replay"
+}
