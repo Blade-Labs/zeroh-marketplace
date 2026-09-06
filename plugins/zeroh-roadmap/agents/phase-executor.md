@@ -54,3 +54,5 @@ the gate chain (`quality-pass`, `code-reviewer`); NEVER another phase-executor, 
 Your final message IS the `PhaseExecutionResult` (`PhaseExecutionResultShape`): `"done"` (map the
 roll-up) · `"escalated"` (question + options in `escalation`) · `"failed"` (gate not green; debt
 arrays carry detail). "Waiting" is never terminal.
+
+On a mechanical failure, use `roadmap gate diagnose <N> --json` and inspect its log before retrying. After two same-cause failures, repair the source or record the diagnosed environment repair with `--retry-reason`. This is not an authority override; unknown or interrupted work stays unresolved.

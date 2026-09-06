@@ -11,8 +11,9 @@
  * refused (floor violation / missing slot binding).
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { diagnoseFailure, gateInputKey, retryDecision } from '../lib/gate-diagnostics.mjs'
+import { existsSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs'
+import { dirname, join, basename, relative } from 'node:path'
 import { gitToplevel, mainCheckout } from '../lib/gitroot.mjs'
 import { findClosedJournal, findJournal, JournalUnreadableError } from '../lib/codex-journal.mjs'
 import { derivePhaseStartSha, GitScanError, phaseOwnPatterns, SUBJECT_GRAMMAR } from '../lib/gitscan.mjs'
@@ -37,6 +38,7 @@ import { resolveSlot, resolveScopedOrFallback, resolveAffectedOrFallback, create
 import {
   writeReport,
   latestReport,
+  recentReports,
   appendAgentRound,
   checkPhaseConsistency,
   correctnessDecision,
@@ -298,6 +300,18 @@ function changedLinesFor(cwd, base, files) {
  *  must agree on — ONE list so the two lookups can never drift apart. */
 const COLOCATED_TEST_EXTS = ['.test.ts', '.test.tsx', '.test.js', '.test.mjs', '.test.cjs', '.itest.ts', '.itest.mjs', '.spec.ts']
 
+function colocatedTests(toplevel, path) {
+  const ext = COLOCATED_TEST_EXTS.find(ext => path.endsWith(ext))
+  const stem = (ext ? path.slice(0, -ext.length) : path.replace(/\.[^./]+$/, ''))
+  const dir = dirname(stem)
+  if (!existsSync(join(toplevel, dir))) return []
+  const prefix = basename(stem)
+  return readdirSync(join(toplevel, dir), { withFileTypes: true })
+    .filter(entry => entry.isFile() && COLOCATED_TEST_EXTS.some(ext => entry.name === prefix + ext || (entry.name.startsWith(prefix + '.') && entry.name.endsWith(ext))))
+    .map(entry => dir === '.' ? entry.name : dir + '/' + entry.name).sort()
+}
+
+
 /** A precomputed Set of exec paths that are a test or have a colocated sibling test on
  *  disk (the ONLY on-disk lookup — passed to ladder.mjs so it stays pure). */
 function colocatedTestSet(toplevel, paths) {
@@ -308,8 +322,7 @@ function colocatedTestSet(toplevel, paths) {
       continue
     }
     if (!isExecutable(p)) continue
-    const stem = p.replace(/\.[^./]+$/, '')
-    if (COLOCATED_TEST_EXTS.some((ext) => existsSync(join(toplevel, stem + ext)))) set.add(p)
+    if (colocatedTests(toplevel, p).length) set.add(p)
   }
   return set
 }
@@ -320,12 +333,11 @@ function selectTestFiles(toplevel, paths) {
   const out = []
   for (const p of paths) {
     if (isTestFile(p)) {
-      out.push(p)
+      out.push(p, ...colocatedTests(toplevel, p))
       continue
     }
     if (!isExecutable(p)) continue
-    const stem = p.replace(/\.[^./]+$/, '')
-    for (const ext of COLOCATED_TEST_EXTS) if (existsSync(join(toplevel, stem + ext))) out.push(stem + ext)
+    out.push(...colocatedTests(toplevel, p))
   }
   return [...new Set(out)]
 }
@@ -458,8 +470,7 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   const isRuntimeInput = (file) => file !== phaseMetadata && isExecutable(file)
   const hasUncoveredSource = livingOwnFiles.some((file) => {
     if (!isRuntimeInput(file) || isTestFile(file)) return false
-    const stem = file.replace(/\.[^./]+$/, '')
-    return !COLOCATED_TEST_EXTS.some((ext) => existsSync(join(toplevel, stem + ext)))
+    return !colocatedTests(toplevel, file).length
   })
   const hasDeletedExecutable = ownFiles.some((file) => isRuntimeInput(file) && !existsSync(join(toplevel, file)))
   const emptyScopeSkip = []
@@ -574,6 +585,7 @@ function parseArgs(argv) {
     else if (a === '--sequence-member') opts.sequenceMember = true
     else if (a === '--json') opts.json = true
     else if (a === '--slots') opts.slots = argv[++i]
+    else if (a === '--retry-reason') opts.retryReason = argv[++i] ?? ''
     else if (a === '--task') opts.task = argv[++i] ?? ''
     else if (a === '--record-round') opts.recordRound = argv[++i]
     else if (a === '--cap-override') opts.capOverride = argv[++i] ?? ''
@@ -610,6 +622,8 @@ export default async function run(argv) {
     process.stdout.write('roadmap gate plan <phase> [--task <id>] [--base <sha>] [--mode inline|arc] [--sequence-member] [--json]\n')
     process.stdout.write('roadmap gate run  <phase> [--task <id> --slots unit] [--base <sha>] [--slots a,b] [--record-round <json>] [--cap-override <reason>] [--verify-complete] [--json]\n')
     process.stdout.write('roadmap gate round-brief <phase> [--json]\n')
+    process.stdout.write('roadmap gate diagnose <phase> [--json] — inspect failures without running commands\n')
+    process.stdout.write('roadmap gate run <phase> [--retry-reason "<diagnosis and repair>"] — resume after repeated failure\n')
     return sub ? 0 : 1
   }
   const { opts, positional } = parseArgs(argv.slice(1))
@@ -619,6 +633,10 @@ export default async function run(argv) {
     (sub === 'run' && opts.slots !== 'unit')
   )) {
     process.stderr.write('gate --task: use plan <phase> --task <id>, or run <phase> --task <id> --slots unit; task checks cannot record reviews or verify completion, and unsupported options are refused\n')
+    return 1
+  }
+  if (opts.retryReason != null && (sub !== 'run' || opts.recordRound != null || opts.verifyComplete || opts.retryReason.trim().length < 12)) {
+    process.stderr.write('gate --retry-reason: name the diagnosis and repair for one run; it cannot certify completion or replace review\n')
     return 1
   }
   const phaseNum = Number(positional[0])
@@ -665,7 +683,7 @@ export default async function run(argv) {
     return built.refused ? 2 : 0
   }
 
-  if (sub === 'run') return runGate(phaseNum, opts)
+  if (sub === 'run' || sub === 'diagnose') return runGate(phaseNum, { ...opts, diagnose: sub === 'diagnose' })
 
   if (sub === 'round-brief') {
     let latest
@@ -696,7 +714,7 @@ export default async function run(argv) {
     return 0
   }
 
-  process.stderr.write(`roadmap gate: unknown subcommand '${sub}' (plan | run | round-brief)\n`)
+  process.stderr.write(`roadmap gate: unknown subcommand '${sub}' (plan | run | round-brief | diagnose)\n`)
   return 1
 }
 
@@ -809,6 +827,20 @@ export async function runGate(phaseNum, opts) {
     }
     process.stderr.write(`roadmap gate run: ${e.message}\n`)
     return 1
+  }
+
+  if (opts.diagnose) {
+    try {
+      const reports = recentReports(toplevel, phaseNum)
+      const inputKey = gateInputKey(toplevel, { exclude: [relative(toplevel, dirname(gateDir(toplevel, phaseNum))), relative(toplevel, phaseEvalRecordPath(toplevel, phaseNum))] })
+      const failures = (reports[0]?.slots ?? []).filter(row => row.exitCode !== 0)
+      const retry = retryDecision(reports, inputKey, reports[0]?.slots ?? [])
+      process.stdout.write(JSON.stringify({ phase: phaseNum, reports: reports.length, failures, retry, note: 'Failure categories are diagnostic hints. Unknown or interrupted execution remains unresolved.' }, null, opts.json ? 0 : 2) + '\n')
+      return 0
+    } catch (error) {
+      process.stderr.write(`gate diagnose: ${error.message}\n`)
+      return 1
+    }
   }
 
   // ── --record-round: append to the latest report ──
@@ -991,6 +1023,22 @@ export async function runGate(phaseNum, opts) {
       return 2
     }
   }
+  const inputKey = gateInputKey(toplevel, { exclude: [relative(toplevel, dirname(gateDir(toplevel, phaseNum))), relative(toplevel, phaseEvalRecordPath(toplevel, phaseNum))] })
+  const commands = plan.slots.filter(row => slotMatches(row.slot) && row.command)
+  if (!wanted || wanted.has('history-comments')) commands.push({ slot: 'history-comments', command: `(plugin-native scan of ${plan.baseSha}..HEAD added comment lines)` })
+  if (cfg.exec?.preReview && (!wanted || wanted.has('preReview'))) commands.push({ slot: 'preReview', command: `${cfg.exec.preReview} ${plan.baseSha}` })
+  try {
+    const retry = retryDecision(recentReports(toplevel, phaseNum), inputKey, commands)
+    if (retry.blocked && !opts.retryReason) {
+      process.stderr.write(`gate run: two same-cause failures without known source progress; no third unchanged attempt ran. Inspect roadmap gate diagnose ${phaseNum} --json, repair the cause, then retry. For environment-only repairs use --retry-reason "<diagnosis and repair>".\n`)
+      for (const row of retry.failures) process.stderr.write(`  ${row.slot}: ${row.failure.category}: ${row.failure.summary} — ${row.failure.nextStep}\n`)
+      return 2
+    }
+  } catch (error) {
+    process.stderr.write(`gate run: cannot inspect previous attempts: ${error.message}\n`)
+    return 2
+  }
+
   const ts = new Date().toISOString().replace(/[:.]/g, '-')
   const logsDir = join(gateDir(toplevel, phaseNum), 'logs')
 
@@ -1014,6 +1062,8 @@ export async function runGate(phaseNum, opts) {
       command: res.command,
       ...(s.files ? { files: s.files } : {}),
       exitCode: res.exitCode,
+      ...(res.signal ? { signal: res.signal } : {}),
+      ...(res.failure ? { failure: res.failure } : {}),
       durationMs: res.durationMs,
       logPath: res.logPath,
       ...(res.note ? { note: res.note } : {}),
@@ -1059,12 +1109,16 @@ export async function runGate(phaseNum, opts) {
     const logPath = join(logsDir, `preReview-${ts}.log`)
     const command = `${cfg.exec.preReview} ${plan.baseSha}`
     const res = await runSlot({ slot: 'preReview', command }, { cwd: toplevel, logPath })
-    rows.push({ slot: 'preReview', command, exitCode: res.exitCode, durationMs: res.durationMs, logPath: res.logPath })
+    rows.push({ slot: 'preReview', command, exitCode: res.exitCode, durationMs: res.durationMs, logPath: res.logPath, ...(res.failure ? { failure: res.failure } : {}), ...(res.signal ? { signal: res.signal } : {}) })
     if (res.exitCode !== 0) green = false
   }
 
+  for (const row of rows) if (row.exitCode !== 0 && !row.failure)
+    row.failure = diagnoseFailure({ exitCode: row.exitCode, output: [row.note, ...(row.findings ?? [])].filter(Boolean).join('\n') })
+
   const report = {
     phase: phaseNum,
+    attempt: { inputKey, ...(opts.retryReason ? { retryReason: opts.retryReason.trim() } : {}) },
     startedAt: new Date().toISOString(),
     baseSha: plan.baseSha,
     mode: plan.mode,
@@ -1104,6 +1158,8 @@ export async function runGate(phaseNum, opts) {
     )
   }
   else emitPhaseEvalRecord(toplevel, phaseNum, { parsed: built.parsed, report: written.report })
+
+  for (const row of rows) if (row.failure) process.stderr.write(`gate failure hint [${row.failure.category}] ${row.slot}: ${row.failure.summary} — ${row.failure.nextStep}\n`)
 
   if (opts.json) process.stdout.write(JSON.stringify(written.report) + '\n')
   else {

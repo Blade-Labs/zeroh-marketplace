@@ -14,8 +14,6 @@ metadata:
 
 ## PRIME RULE 1 — no compromises; escalate to the ARCHITECT, not the user
 
-Senior-architect rigor per task: magic numbers → constants, ambiguity → throw, no TODO deferrals.
-
 **Before you would** (a) write a non-`"None"` `compromises`/`hardcoded`/`skipped`, (b) hardcode
 a value, (c) silence ambiguity, (d) defer with a TODO, or (e) STOP to ask the user — FIRST invoke
 `zeroh-roadmap:software-architect` (foreground, single hop) per its **Decision Contract**
@@ -86,16 +84,19 @@ hardening adds the closure integration rerun; release adds the e2e slot. Run `ro
 quality pass. Under arc-mode the gate runs only phase-relevant SCOPED tests — the full suite
 defers to the arc end.
 
-Record each independent correctness review with `roadmap gate run <N> --record-round '<typed JSON>'`,
-then call `roadmap gate round-brief <N> --json`. Normally: one review, fixes, focused verification.
-`clean` or `close` ends the loop immediately, including at the cap. Verified MEDIUM/LOW fixes name
-`fixedInCommit` and can close without another review; HIGH/CRITICAL repairs require a fresh independent
-correctness review. Send `sinceSha` and `priorFindings` on follow-ups; examine fixes and affected behavior,
-widening only when the change or evidence warrants it. Test runs and implementing fixes do not consume
-review rounds; Round 0 is separate. After three unresolved correctness reviews, stop with the remaining
-findings, why they persist, and a concrete proposed next step. A further review needs an explicit bounded
-extension, recorded through `--cap-override "<owner ruling, reason, next round>"`; it never waives findings.
-Task checks are partial evidence: do not attach final reviews or certify completion from them.
+Record each correctness review with `roadmap gate run <N> --record-round '<typed JSON>'`, then
+call `roadmap gate round-brief <N> --json`. Normally: one review, fixes, focused verification.
+`clean`/`close` ends the loop, even at the cap. Verified MEDIUM/LOW fixes name `fixedInCommit`;
+HIGH/CRITICAL repairs require fresh independent review. Follow-ups receive `sinceSha` + `priorFindings`
+and inspect affected behavior, widening when warranted. After three unresolved reviews, stop with
+remaining findings and a proposed next step. Round 0, tests and fixes do not consume reviews.
+An explicit bounded extension uses `--cap-override "<owner ruling, reason, next round>"`; it waives no findings.
+Task checks remain partial evidence and cannot certify completion.
+
+On a failed mechanical slot, inspect `roadmap gate diagnose <N> --json` and the raw log. Categories
+are hints, not proven causes. Two same-cause failures block a third unchanged attempt: diagnose and
+repair first. An environment-only repair uses `--retry-reason "<diagnosis and repair>"` for one attempt;
+this needs no repeated approval within existing authority. Unknown/interrupted results stay unresolved.
 A new tree guard follows `references/guard-mutation-proof.md`.
 
 **Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
