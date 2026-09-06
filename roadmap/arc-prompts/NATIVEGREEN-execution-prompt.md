@@ -114,3 +114,9 @@ Resume preflights test durable prerequisites, not whether an already-fixed defec
 An interrupted root move uses the migration recovery command to restore a complete layout
 before phase re-entry. Unknown ownership, source impact, provider availability, or authority
 continues to hold the consequential action; completed independent work is retained.
+
+Delivery target is separate from the local source baseRef. For this arc use one independent
+PR to `origin/main`, carrying the already-reviewed0.40.3 prerequisite commits if they have
+not been merged yet. The executor verifies that remote base at publication preflight.
+`fix/roadmap-bounded-intent-repairs` identifies the local source basis, not a presumed
+published PR target. Never reset away the prerequisite or plan commits to create the branch.
