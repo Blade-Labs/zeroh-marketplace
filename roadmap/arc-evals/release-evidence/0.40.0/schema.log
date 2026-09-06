@@ -1,0 +1,204 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ npx tsx scripts/schema.test.ts
+BacklogShape — flat input
+  ok — flat: parses array of entries
+  ok — flat: empty array yields one empty default tier
+  ok — flat: rejects duplicate phase numbers
+  ok — flat: rejects entry with phase <= 0
+  ok — flat: rejects entry with too-short name
+
+BacklogShape — tiered input
+  ok — tiered: parses { tiers: [...] }
+  ok — tiered: rejects duplicate phase numbers across tiers
+  ok — tiered: rejects negative tier number
+  ok — tiered: rejects too-short tier label
+  ok — tiered: empty tiers array is allowed (output: tiers=[])
+
+BacklogShape — exports
+  ok — BacklogShape and BacklogTierShape are exported and parse-capable
+
+PhaseShape — historical status (loose legacy variant)
+  ok — historical: parses loose — no gate required, legacy category/kind accepted
+  ok — historical: tolerates recorded gate with passed != total (never falsified)
+  ok — done stays STRICT — missing gate is still rejected (historical did not loosen done)
+
+ArcShape — defineArc
+  ok — ArcShape: parses id "B" with one plane, applies defaults
+  ok — ArcShape: rejects empty planes array
+  ok — ArcShape: rejects bad status
+  ok — defineArc: flat `phases` form normalizes to one Default plane
+  ok — defineArc: flat form rejects empty phases
+
+ArcShape — acceptanceCriteria
+  ok — acceptanceCriteria: an arc round-trips a structured criterion
+  ok — acceptanceCriteria: an arc without it defaults to []
+  ok — acceptanceCriteria: rejects an unknown tier (fail-loud at the boundary)
+
+ArcShape — designRefs
+  ok — designRefs: an arc round-trips a structured design ref
+  ok — designRefs: an arc without it defaults to []
+  ok — designRefs: rejects an unknown kind (fail-loud at the boundary)
+  ok — designRefs: rejects an unknown status (fail-loud at the boundary)
+  ok — designRefs: a ref WITHOUT supersededBy still parses and stays absent (back-compat)
+  ok — designRefs: a supersededBy stamp round-trips through defineArc (byArc/reason/date all carried)
+  ok — designRefs: a supersededBy reason below 10 chars rejects, exactly 10 parses (the .min(10) boundary)
+
+IntentVerdictShape — the judge return
+  ok — IntentVerdict: a met verdict parses
+  ok — IntentVerdict: a gap verdict carries whatsMissing + suggestedFix
+  ok — IntentVerdict: a gap verdict WITHOUT a gap object fails the refine
+  ok — IntentVerdict: empty evidence fails (met-without-evidence is unexpressible)
+
+PhaseShape — arcId back-reference
+  ok — arcId: a backlog phase with arcId 855 round-trips
+  ok — arcId: a phase without arcId still parses (back-compat)
+  ok — arcId: a string arcId "B" round-trips (matches Arc.id union)
+
+PhaseExecutionResult
+  ok — PhaseExecutionResult: minimal { phase, status, gateRounds } parses, arrays default to []
+  ok — PhaseExecutionResult: rejects bad status
+  ok — executionResult: a phase persists its roll-up and a phase without it still parses
+
+registry — arc cross-validation
+  ok — crossValidate flags a phase whose arcId matches no arc
+  ok — crossValidate passes a phase whose arcId matches a discovered arc
+  ok — crossValidate flags a phase claimed by two arcs
+  ok — crossValidate flags an arcId that disagrees with the arc listing the phase
+
+v9 tightening — MinimalTask discriminant, gate rounds, label cap, arcId union
+  ok — v9: a rich-shaped task missing `problem` REJECTS (no silent MinimalTask degrade)
+  ok — v9: a minimal task WITH `minimal: true` parses
+  ok — v9: a 201-char backlog tier label rejects; 200 passes
+  ok — v9: RunnerSummary accepts a NUMERIC arcId (parity with Arc.id)
+  ok — v9: structured gate round with agent enum + verdict parses; bad agent rejects
+  ok — v9: PhaseTask.commit accepts a sha and rejects a too-short one
+
+ROADOPUS widenings — additive schema fields (phase 1367)
+  ok — decisionRef: TransparencyReport accepts an optional decisionRef; absent still parses
+  ok — userFacing + flag: a phase with userFacing:true and a FlagId parses; boot-wired variant parses
+  ok — flag: a neither-variant object REJECTS ({id} or {bootWired,justification} only)
+  ok — assumptions: onFalse ESCALATE parses; a non-ESCALATE onFalse rejects
+  ok — debtResolutions: the widened statuses planned + operator-pending parse (via optional)
+  ok — back-compat: a pre-ROADOPUS-shaped phase with NONE of the new fields parses
+
+Actor attribution — PhaseExecutionResult.driver + phase-level plannedBy
+  ok — driver: a result WITH driver parses and round-trips model + lane
+  ok — driver: a HISTORICAL result without driver still parses, and driver stays undefined
+  ok — driver: an UNKNOWN lane parses — a result must load whoever wrote it; only empty rejects
+  ok — plannedBy: a phase WITH plannedBy parses; a historical phase WITHOUT it still parses
+  ok — reviewRecord: an executed Mode A verdict round-trips ALL four fields, in BOTH schema homes
+  ok — reviewRecord: optional — a phase without one still parses in both homes
+  ok — reviewRecord: a --skip-review waiver records via:"waived"; all three verdict rungs parse
+  ok — reviewRecord: the laundering vocabulary is REJECTED — verdict "CLEAN", via "inline"
+  ok — reviewRecord: every field is REQUIRED once the record is present
+  ok — reviewRecord: length floors are exact — date 8 and model 2 accept, 7 and 1 reject
+  ok — arc descopes + criteriaRatifications: accepted; a descope missing ratifiedBy rejects
+  ok — RunnerSummary openFollowups: accepted; absent still parses
+
+Role bindings — PhaseExecutionResult.roles
+  ok — roles: a two-entry roles array round-trips every field, through the shape AND through a phase file
+  ok — roles: all three via modes parse, and a fourth REJECTS with the enum error at the binding path
+  ok — roles: a result WITHOUT roles parses unchanged — roles stays undefined, never defaulted to []
+  ok — roles: a binding missing role, model, or via REJECTS — a half-filled binding records nothing
+
+SweepReportShape — the arc-sweep record
+  ok — SweepReport: a full report with an OPERATOR-PENDING debt disposition round-trips
+  ok — SweepReport: an unknown disposition token rejects (reuses CompromiseDispositionShape)
+  ok — SweepReport: an empty phaseGates array rejects (a sweep over no gates is unexpressible)
+
+ArcVerdictsFileShape — the persisted judge run
+  ok — ArcVerdictsFile: a file with one met verdict parses and round-trips
+  ok — ArcVerdictsFile: an EMPTY verdicts array rejects (a judge run with no verdict is not a run)
+  ok — ArcVerdictsFile: a gap verdict without a gap object rejects through the array wrapper
+
+PhaseMetricsShape — time-axis widening (additive)
+  ok — PhaseMetrics: a historical seven-field record still parses; the three new keys are undefined
+  ok — PhaseMetrics: a record WITH startedAt/completedAt/haltCount round-trips all three
+  ok — PhaseMetrics: haltCount 0 parses but -1 rejects (a negative halt count is not honest-absent)
+
+Eval engine contracts — ArcEvalReport / ArcTrace / TimingStats
+  ok — EvalDimension: BOTH score and sentinel REJECTS (a scored dimension is not also absent)
+  ok — EvalDimension: NEITHER score nor sentinel REJECTS (silence is not a score)
+  ok — EvalDimension: a deterministic scored dimension and a judge pending-judge dimension both parse
+  ok — EvalSentinel: the vocabulary is CLOSED — an invented sentinel string rejects
+  ok — EvalDimensionKey: the dimension vocabulary is CLOSED — an eighth key rejects
+  ok — ArcEvalReport: a full SEVEN-key report parses and round-trips every dimension
+  ok — ArcEvalReport: a SIX-key report REJECTS (a dropped dimension cannot be silent)
+  ok — ArcEvalReport: an UNKNOWN eighth dimension key REJECTS (a scorer cannot invent one)
+  ok — ArcEvalReport: sourceRefs: [] REJECTS (the reproducibility bar bites per dimension)
+  ok — ArcEvalReport: score 101 and score -1 REJECT (0..100 is the closed range)
+  ok — ArcEvalReport ratchet: regression:true with delta:null REJECTS; with a real delta parses
+  ok — ArcTrace: a minimal one-phase trace parses and the array defaults land
+  ok — ArcTrace: a non-datetime collectedAt REJECTS (a trace timestamp is machine-comparable)
+  ok — ArcTrace: composes the EXISTING shapes verbatim — a real execution result + metrics parse through
+  ok — ArcTrace: a 6-char escape-fix sha REJECTS (min(7) matches the checkpoint sha bar)
+  ok — ArcTrace: a git block with NO escapeScan REJECTS (an empty escape list needs its provenance)
+  ok — ArcTrace: a parseError on a phase parses (an unreadable phase is SEEN, never dropped)
+  ok — ArcEvalReport: an UNSTAMPED committed-report fixture still parses (the stamps are additive)
+  ok — ArcEvalReport: a fully stamped report parses and round-trips all three stamps
+  ok — ArcEvalReport: a workflow block MISSING pluginSha rejects (a partial stamp is a fabricated one)
+  ok — ArcEvalReport: profile disagreeing with workflow.profile REJECTS (two claims about one fact)
+  ok — ArcTrace: escapeWindow 'land-record-anchored' parses; an unknown window token rejects
+  ok — TimingStats: a cohort with interruptedExcluded 1 parses; notes defaults to []
+  ok — TimingStats: negative samples REJECTS; a zero-sample cohort parses (honest empty band)
+
+Lesson / Scorecard — the learning record and the n-floor rails
+  ok — Lesson: a lesson parses with and without the optional phase; the origin round-trips
+  ok — Lesson: an UNATTRIBUTED lesson REJECTS — every lesson names who wrote it
+  ok — Lesson: origin.kind is CLOSED to session | eval-loop — an unknown lane REJECTS
+  ok — Lesson: ts is a DATETIME — a bare date REJECTS, and empty text REJECTS
+  ok — Scorecard: a fully-sampled card parses, notes defaults to [], and a cell at or above the floor keeps its metrics
+  ok — Scorecard: generatedAt is a DATETIME and nFloor is a POSITIVE int — a bare date and nFloor 0 REJECT
+  ok — Scorecard: THE RANKED ANECDOTE — a driver cell of 2 samples under an nFloor of 5 that does NOT abstain REJECTS
+  ok — Scorecard: abstention is an EQUIVALENCE — a cell at or above the floor claiming abstained REJECTS
+  ok — Scorecard: an abstained cell carries NO metrics — a sub-floor cell smuggling numbers REJECTS on BOTH axes
+  ok — Scorecard: a sub-floor cell that abstains and reports nothing PARSES — on the driver AND the reviewer axis
+  ok — Scorecard: the reviewer axis is a DISTINCT cell — it is keyed by agent and rejects a driver cell in its place
+
+ArcEvalJudgeVerdict — the judge returns a TYPED verdict, never prose
+  ok — JudgeVerdict: JUDGE_OWNED_DIMENSION_KEYS is exactly the four judge keys, and each is a REAL dimension key
+  ok — JudgeVerdict: all four judge dimensions scored, nothing skipped — parses and round-trips score/evidence/confidence
+  ok — JudgeVerdict: two scored + two skipped parses — the honest downgrade path is REACHABLE, not a silent omission
+  ok — JudgeVerdict: ALL FOUR skipped parses — a wholly honest non-judgement is legal, an empty dimensions map included
+  ok — JudgeVerdict: a judge key NEITHER scored NOR skipped REJECTS at path dimensions.plan-quality (anti-vacuous — an `in`/Object.keys coverage check passes this input, since z.record over an enum materializes EVERY key as undefined)
+  ok — JudgeVerdict: an EXPLICITLY undefined dimension value REJECTS — "absent" has exactly ONE wire representation (omission)
+  ok — JudgeVerdict: a key BOTH scored and skipped REJECTS (covered EXACTLY once — a score is not also an abstention)
+  ok — JudgeVerdict: a DUPLICATE dimension in skipped REJECTS (two reasons for one abstention is an unresolvable record)
+  ok — JudgeVerdict: a DETERMINISTIC key alongside the four judge keys PARSES — ownership is per-report, refused by `eval merge-judge` (exit 2), NOT by this shape
+  ok — JudgeVerdict: an INVENTED eighth dimension key REJECTS (the enum record is closed, same bar as ArcEvalReport)
+  ok — JudgeVerdict: evidence at 29 chars REJECTS and at 30 parses — a score without quotable evidence is invalid BY CONSTRUCTION
+  ok — JudgeVerdict: a skip `why` at 9 chars REJECTS and at 10 parses ("no time" is not a reason)
+  ok — JudgeVerdict: score 101 and -1 REJECT; 0 and 100 parse (0..100 is the closed range, same as ArcEvalReport)
+  ok — JudgeVerdict: an empty judgeModel REJECTS (a verdict that will not say what ran it cannot pin a model)
+
+Proposal contract — the ONE shape crossing the plugin/consumer boundary
+  ok — Proposal: a full review-focus-candidate with TWO evidence entries parses and round-trips lane/kind/evidence
+  ok — Proposal: exactly ONE evidence entry REJECTS at [evidence] — the rule-of-three floor is STRUCTURAL, not advisory
+  ok — FindingClass: the vocabulary is CLOSED — a sixth class rejects, in the enum AND inside a proposal
+  ok — Proposal: kind review-focus-candidate WITHOUT candidateReviewFocus REJECTS (the kind IS the promise of a payload)
+  ok — Proposal: kind reduction REQUIRES reductionTarget — missing REJECTS, present parses and round-trips the ledger
+  ok — Proposal: payload/kind pairing is TWO-DIRECTIONAL — process-change carrying EITHER payload REJECTS
+  ok — Proposal: writeOrigin is the LITERAL roadmap-eval-loop — a user-written origin REJECTS
+  ok — Proposal: status archived REQUIRES archivedReason — bare REJECTS, a >=10-char reason parses
+  ok — Opportunity: satisfaction null BINDS score to importance — a diverging score REJECTS, an equal one parses
+  ok — Opportunity: the 0..10 range is closed and the provenance fields are required
+  ok — Proposal: the id is slug-shaped — /^[a-z0-9-]+$/ rejects underscores, capitals and spaces
+  ok — ImportanceRulingsTable: a v1 table with one ruling per finding class parses and keeps every ruling
+  ok — ImportanceRulingsTable: a <10-char rationale REJECTS, version 0 REJECTS, and an empty rulings list REJECTS
+  ok — Proposal: lane and status vocabularies are CLOSED — an unknown lane and an unknown status each REJECT
+  ok — ProposalEvidence: every field is load-bearing — a blank file, jsonPath or excerpt REJECTS
+  ok — Proposal: title and rationale carry a >=10-char floor, and supersededBy is optional-but-nonempty when present
+
+PhaseEvalRecordShape
+  ok — PhaseEvalRecord: a FULL record round-trips every field and optional with values intact
+  ok — PhaseEvalRecord: a MINIMAL record parses — keyFiles and gate.slots default to [], metrics/attribution stay ABSENT
+  ok — PhaseEvalRecord: an unknown key at the ROOT is REJECTED, never silently stripped
+  ok — PhaseEvalRecord: strictness is NOT root-only — an unknown key inside attribution.driver, a gate.slots row, or consumerFingerprint each REJECT at their own path
+  ok — PhaseEvalRecord: metrics is the ONE deliberately-open level — it REUSES PhaseMetricsShape, and the doc says so
+  ok — PhaseEvalRecord: date must be a full ISO date — 9 chars rejects, exactly 10 is the floor
+  ok — PhaseEvalRecord: phase must be a POSITIVE integer — 0, -1 and 1.5 all reject; 1 is the floor
+  ok — PhaseEvalRecord: taskCount is non-negative and driver.lane is OPEN but never blank
+  ok — PhaseEvalRecordList: parses an array of two records and names the offending INDEX on a bad element
+  ok — discoverArcs over a missing roadmap/arcs dir returns empty
+
+PASS — 0 failure(s)

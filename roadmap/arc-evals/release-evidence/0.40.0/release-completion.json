@@ -1,0 +1,48 @@
+{
+  "releaseReady": true,
+  "versions": {
+    "zeroh-roadmap": "0.40.0",
+    "zeroh-greenfield": "1.0.0"
+  },
+  "at": "2026-09-06T11:25:43.237897+00:00",
+  "candidateCommit": "42ff105e5924370e5b89e43f8ec4f8cc20392026",
+  "sourceSnapshotSha256": "c93319b10c50d36d0736d338148cd9cb02a7c6c913f0c991d2c44d3283ea5e2a",
+  "singleFullGatePassed": false,
+  "coverage": {
+    "inventoryFiles": 78,
+    "completedPrefixFiles": 62,
+    "completedPrefixTests": 1844,
+    "rerunInterruptedAndRemainingFiles": 16,
+    "continuation": {
+      "tests": 259,
+      "pass": 259,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "affectedGateAndSlotsRerun": {
+      "tests": 149,
+      "pass": 149,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "schema": "PASS \u2014 0 failure(s)",
+    "historySlot": "PASS, explicitly filtered"
+  },
+  "interruption": "Host test-orphan-reaper stopped a live capbuild unit after31min (>30min cutoff); wrapper exit0 was not completion. Run17 remains RED/incomplete. Fourteen partial arc-next results are excluded and the file rerun in full.",
+  "sourceDelta": "After the prefix, three reviewed files changed: gate.mjs, gate.test.mjs and slots.mjs. Their149 affected checks pass on the continuation source. The scanner buffers only its original suffix domain and preserves rename/copy semantics.",
+  "authority": "Owner requested review and release if aligned. Architect PROCEED_WITH_FIX approves complete reconciled coverage across bounded runs; no paid matrix, host-wide watchdog change or fabricated unfiltered gate report.",
+  "phaseBookkeeping": "The existing GateRunReport/checkPhaseConsistency contract cannot compose separate runs. Preserve filtered reports and retain phase34 in-progress rather than fake a full green report. This is a disclosed bookkeeping limitation, not an unfinished product change. The unchanged original Sol launcher also reports absent phase-level executionResult attribution. Archiving it was rejected by automatic approval review and was not performed; the original journal and refusal remain intact.",
+  "reviews": {
+    "purpose": "independent CLEAR after selected-stack and repeat-question fixes",
+    "code": "independent CLEAR after deleted shared config fix; parent reviewed explicit host fixture and history scan delta"
+  },
+  "evidenceLimits": "Recorded-snapshot R0 CLI pilot and historical four-arm delivery observations; no final-source four-arm or broad performance claim.",
+  "automaticApprovalReview": {
+    "action": "move original Sol launcher journal out of active discovery",
+    "result": "rejected; not performed",
+    "reason": "could suppress attribution failure and bypass completion guard",
+    "publicationDependency": false
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "phase": 34,
+  "startedAt": "2026-09-06T11:10:03.035Z",
+  "baseSha": "f8151d611ccfc9ae10f65578f13fbf10103ce819",
+  "mode": "inline",
+  "kind": "hardening",
+  "testScope": {
+    "derived": "full",
+    "declared": null,
+    "effective": "full"
+  },
+  "reviewScope": {
+    "derived": "full",
+    "declared": "full",
+    "effective": "full"
+  },
+  "slots": [
+    {
+      "slot": "lint",
+      "command": "(declared none)",
+      "exitCode": 0,
+      "durationMs": 0,
+      "logPath": null,
+      "declaredAbsent": true
+    },
+    {
+      "slot": "types",
+      "command": "(declared none)",
+      "exitCode": 0,
+      "durationMs": 0,
+      "logPath": null,
+      "declaredAbsent": true
+    },
+    {
+      "slot": "build",
+      "command": "(declared none)",
+      "exitCode": 0,
+      "durationMs": 0,
+      "logPath": null,
+      "declaredAbsent": true
+    },
+    {
+      "slot": "lint-diff",
+      "command": "(skipped: not bound in gateCommands — hygiene lint skipped (named, never silent))",
+      "exitCode": 0,
+      "durationMs": 0,
+      "logPath": null
+    },
+    {
+      "slot": "unit",
+      "command": "bash -c 'cd plugins/zeroh-roadmap && capbuild npm test'",
+      "exitCode": 0,
+      "durationMs": 1915853,
+      "logPath": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/roadmap/.gate/34/logs/unit-2026-09-06T10-38-05-542Z.log"
+    },
+    {
+      "slot": "integration",
+      "command": "(declared none)",
+      "exitCode": 0,
+      "durationMs": 0,
+      "logPath": null,
+      "declaredAbsent": true
+    },
+    {
+      "slot": "history-comments",
+      "command": "(plugin-native scan of f8151d611ccfc9ae10f65578f13fbf10103ce819..HEAD added comment lines)",
+      "exitCode": 2,
+      "durationMs": 0,
+      "logPath": null,
+      "note": "scan failed: spawnSync git ENOBUFS"
+    }
+  ],
+  "agents": [],
+  "green": false,
+  "notes": [
+    "reviewScope: the \"adds no new governed surface / contract / ledger event kind\" light-exclusion is plan-time judgment (review-phase Mode A), not machine-decided (pre-made decision 2b)",
+    "a NEW guard (ratchet/tripwire/scan assertion) must carry its quoted mutation proof — planted violation RED, anchor drift loud, decoy GREEN — in the task transparencyReport before review (skills/do-phase/references/guard-mutation-proof.md)",
+    "hardening closure integration test required — never defers (both modes)",
+    "foreignCommitsInRange: scope/floor bind to the phase-own file set; 71 foreign file(s) in base..HEAD are excluded"
+  ]
+}

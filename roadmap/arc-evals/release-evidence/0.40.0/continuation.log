@@ -1,0 +1,1569 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test --test-concurrency=1 test/fixture-consumer/arc-next.test.mjs test/fixture-consumer/contract-drift.test.mjs test/fixture-consumer/error-injection.test.mjs test/fixture-consumer/executor-guard.test.mjs test/fixture-consumer/gate-untested-fix.test.mjs test/fixture-consumer/greenfield-behavior.test.mjs test/fixture-consumer/greenfield-ci-release.test.mjs test/fixture-consumer/greenfield-delivery-selection.test.mjs test/fixture-consumer/greenfield-live-evidence.test.mjs test/fixture-consumer/greenfield-optional-gates.test.mjs test/fixture-consumer/greenfield-prepared-program.test.mjs test/fixture-consumer/greenfield-review-regressions.test.mjs test/fixture-consumer/greenfield-test-selection.test.mjs test/fixture-consumer/harness.smoke.test.mjs test/fixture-consumer/layout-docs.test.mjs test/fixture-consumer/lifecycle.test.mjs
+TAP version 13
+# Subtest: N1 — a fresh fixture arc → action run-phase on the first member
+ok 1 - N1 — a fresh fixture arc → action run-phase on the first member
+  ---
+  duration_ms: 4491.814981
+  type: 'test'
+  ...
+# Subtest: N2 — mid-phase post-commit kill → resume-phase with the committed task in resume.doneTasks
+ok 2 - N2 — mid-phase post-commit kill → resume-phase with the committed task in resume.doneTasks
+  ---
+  duration_ms: 5831.396318
+  type: 'test'
+  ...
+# Subtest: N3 — a done:true task with no matching commit → unverifiedDoneFlags + resume-phase scoping it
+ok 3 - N3 — a done:true task with no matching commit → unverifiedDoneFlags + resume-phase scoping it
+  ---
+  duration_ms: 4467.412061
+  type: 'test'
+  ...
+# Subtest: N4 — member 1 done with executionResult → run-phase on member 2
+ok 4 - N4 — member 1 done with executionResult → run-phase on member 2
+  ---
+  duration_ms: 6044.760738
+  type: 'test'
+  ...
+# Subtest: N5 — the terminal chain: sweep → validate → land, each derived from disk state alone
+ok 5 - N5 — the terminal chain: sweep → validate → land, each derived from disk state alone
+  ---
+  duration_ms: 15345.953442
+  type: 'test'
+  ...
+# Subtest: N6 — a landed arc → complete, invoked TWICE with deep-equal JSON and exit 0 both times
+ok 6 - N6 — a landed arc → complete, invoked TWICE with deep-equal JSON and exit 0 both times
+  ---
+  duration_ms: 9187.158439
+  type: 'test'
+  ...
+# Subtest: N7 — blocked: unmet dep, foreign lane, and a malformed member file
+ok 7 - N7 — blocked: unmet dep, foreign lane, and a malformed member file
+  ---
+  duration_ms: 11739.356114
+  type: 'test'
+  ...
+# Subtest: N8 — a fresh live-pid background-run beacon suppresses the stalled halt on a watch exit 3 (keep-waiting)
+ok 8 - N8 — a fresh live-pid background-run beacon suppresses the stalled halt on a watch exit 3 (keep-waiting)
+  ---
+  duration_ms: 2800.643346
+  type: 'test'
+  ...
+# Subtest: N9 — a stale or absent beacon on a watch exit 3 → the TYPED stalled halt payload
+ok 9 - N9 — a stale or absent beacon on a watch exit 3 → the TYPED stalled halt payload
+  ---
+  duration_ms: 5344.869618
+  type: 'test'
+  ...
+# Subtest: N10 — no sessionId ⇒ NO arm file is ever written (an unbound arm is inert noise, never a lock)
+ok 10 - N10 — no sessionId ⇒ NO arm file is ever written (an unbound arm is inert noise, never a lock)
+  ---
+  duration_ms: 2756.803011
+  type: 'test'
+  ...
+# Subtest: N11 — a returned-and-checked result stamps result-returned itself and clears the arm (done AND escalated)
+ok 11 - N11 — a returned-and-checked result stamps result-returned itself and clears the arm (done AND escalated)
+  ---
+  duration_ms: 5647.631747
+  type: 'test'
+  ...
+# Subtest: N12 — an executor that never returns leaves the arm STANDING, bound to the minted executor id
+ok 12 - N12 — an executor that never returns leaves the arm STANDING, bound to the minted executor id
+  ---
+  duration_ms: 2806.447358
+  type: 'test'
+  ...
+# Subtest: N12b — the workflow arm records the card alias too: the CLI is not the only door onto the arm
+ok 13 - N12b — the workflow arm records the card alias too: the CLI is not the only door onto the arm
+  ---
+  duration_ms: 2725.172191
+  type: 'test'
+  ...
+# Subtest: N12c — the workflow door refuses a live sibling arm that claims the same foreign product tree
+ok 14 - N12c — the workflow door refuses a live sibling arm that claims the same foreign product tree
+  ---
+  duration_ms: 2983.479564
+  type: 'test'
+  ...
+# Subtest: N12d — workflow overlap-scan skip notes are surfaced through its warning channel
+ok 15 - N12d — workflow overlap-scan skip notes are surfaced through its warning channel
+  ---
+  duration_ms: 2901.792793
+  type: 'test'
+  ...
+# Subtest: N13 — a second launch over a standing arm halts blocked, naming the incumbent, and spawns nothing
+ok 16 - N13 — a second launch over a standing arm halts blocked, naming the incumbent, and spawns nothing
+  ---
+  duration_ms: 2878.992201
+  type: 'test'
+  ...
+# Subtest: N14 — an incumbent arm blocks the spawn even with NO sessionId (the check never depends on the write)
+ok 17 - N14 — an incumbent arm blocks the spawn even with NO sessionId (the check never depends on the write)
+  ---
+  duration_ms: 2679.691765
+  type: 'test'
+  ...
+# Subtest: N15 — a watchdog exit with NO beacon at all still leaves the arm standing (the gate, not the lib)
+ok 18 - N15 — a watchdog exit with NO beacon at all still leaves the arm standing (the gate, not the lib)
+  ---
+  duration_ms: 2693.485004
+  type: 'test'
+  ...
+# Subtest: N16 — an arm that names NO executor still blocks while its beacon reads work in flight
+ok 19 - N16 — an arm that names NO executor still blocks while its beacon reads work in flight
+  ---
+  duration_ms: 2734.386942
+  type: 'test'
+  ...
+# Subtest: N17 — an executor that RETURNED garbage still clears its own arm (it is gone, not in flight)
+ok 20 - N17 — an executor that RETURNED garbage still clears its own arm (it is gone, not in flight)
+  ---
+  duration_ms: 2782.166921
+  type: 'test'
+  ...
+# Subtest: N23 — a watch exit 5 → the TYPED unobserved halt, never relabelled stalled
+ok 21 - N23 — a watch exit 5 → the TYPED unobserved halt, never relabelled stalled
+  ---
+  duration_ms: 2871.895021
+  type: 'test'
+  ...
+# Subtest: N24 — an unrecognized wake STILL falls through to stalled (the fall-through is not widened)
+ok 22 - N24 — an unrecognized wake STILL falls through to stalled (the fall-through is not widened)
+  ---
+  duration_ms: 2734.004063
+  type: 'test'
+  ...
+# Subtest: N25 — a starved box turns run-phase into blocked, quoting the BINDING signal and the override (exit 2)
+ok 23 - N25 — a starved box turns run-phase into blocked, quoting the BINDING signal and the override (exit 2)
+  ---
+  duration_ms: 8137.88416
+  type: 'test'
+  ...
+# Subtest: N26 — --ignore-capacity restores the UNTRANSFORMED run-phase result byte-for-byte, with a stderr override note
+ok 24 - N26 — --ignore-capacity restores the UNTRANSFORMED run-phase result byte-for-byte, with a stderr override note
+  ---
+  duration_ms: 6443.178554
+  type: 'test'
+  ...
+# Subtest: N27 — a box WITH capacity leaves the derivation untouched: no capacity fields, no dependence on the numbers
+ok 25 - N27 — a box WITH capacity leaves the derivation untouched: no capacity fields, no dependence on the numbers
+  ---
+  duration_ms: 6353.620943
+  type: 'test'
+  ...
+# Subtest: N28 — the gate binds ONLY run-phase: a dependency block keeps its own reason, a complete arc stays complete
+ok 26 - N28 — the gate binds ONLY run-phase: a dependency block keeps its own reason, a complete arc stays complete
+  ---
+  duration_ms: 15853.776223
+  type: 'test'
+  ...
+# Subtest: N29 — the gate honors the consumer config capacity block, not just the library defaults
+ok 27 - N29 — the gate honors the consumer config capacity block, not just the library defaults
+  ---
+  duration_ms: 9238.383137
+  type: 'test'
+  ...
+# Subtest: N30 — a broken seam under --ignore-capacity is NAMED, never silent: exit 0, run-phase stdout intact
+ok 28 - N30 — a broken seam under --ignore-capacity is NAMED, never silent: exit 0, run-phase stdout intact
+  ---
+  duration_ms: 6162.371626
+  type: 'test'
+  ...
+# Subtest: D1 — every fixture gets the SAME verdict from ajv(generated schema) and Zod(result check)
+ok 29 - D1 — every fixture gets the SAME verdict from ajv(generated schema) and Zod(result check)
+  ---
+  duration_ms: 12231.387598
+  type: 'test'
+  ...
+# Subtest: E1 — a hand-claimed band that contradicts the classifyBand echo is caught by the assertion
+ok 30 - E1 — a hand-claimed band that contradicts the classifyBand echo is caught by the assertion
+  ---
+  duration_ms: 3142.254885
+  type: 'test'
+  ...
+# Subtest: E2 — testScope static + reviewScope light over a src/spine/** diff → exit 2 refusing BOTH
+ok 31 - E2 — testScope static + reviewScope light over a src/spine/** diff → exit 2 refusing BOTH
+  ---
+  duration_ms: 1519.924456
+  type: 'test'
+  ...
+# Subtest: E3(a) — a phase flipped done with NO green GateRunReport → phase validate exit 2
+ok 32 - E3(a) — a phase flipped done with NO green GateRunReport → phase validate exit 2
+  ---
+  duration_ms: 4526.35847
+  type: 'test'
+  ...
+# Subtest: E3(b) — arc land with a member missing executionResult → exit 2 before ANY git mutation
+ok 33 - E3(b) — arc land with a member missing executionResult → exit 2 before ANY git mutation
+  ---
+  duration_ms: 4643.436696
+  type: 'test'
+  ...
+# Subtest: H1 — an armed executor ending in bare prose → block with the exact §3 reason
+ok 34 - H1 — an armed executor ending in bare prose → block with the exact §3 reason
+  ---
+  duration_ms: 229.844709
+  type: 'test'
+  ...
+# Subtest: H2 — a final message carrying a valid typed PhaseExecutionResult → allow + result-returned beacon
+ok 35 - H2 — a final message carrying a valid typed PhaseExecutionResult → allow + result-returned beacon
+  ---
+  duration_ms: 1914.43215
+  type: 'test'
+  ...
+# Subtest: H3 — phase already done with executionResult persisted, prose ending → allow
+ok 36 - H3 — phase already done with executionResult persisted, prose ending → allow
+  ---
+  duration_ms: 223.527683
+  type: 'test'
+  ...
+# Subtest: H4 — a background-run beacon (fresh or stale) with a prose ending → BLOCK; the honest yield is a typed checkpoint
+ok 37 - H4 — a background-run beacon (fresh or stale) with a prose ending → BLOCK; the honest yield is a typed checkpoint
+  ---
+  duration_ms: 2366.149054
+  type: 'test'
+  ...
+# Subtest: H5 — fail-open: an unarmed agent AND a broken-config path both stay untouched (exit 0, no block)
+ok 38 - H5 — fail-open: an unarmed agent AND a broken-config path both stay untouched (exit 0, no block)
+  ---
+  duration_ms: 416.779662
+  type: 'test'
+  ...
+# Subtest: H6 — a main-session Stop with roadmap/.arc-mode + a member in-progress → WARN, never block
+ok 39 - H6 — a main-session Stop with roadmap/.arc-mode + a member in-progress → WARN, never block
+  ---
+  duration_ms: 222.762467
+  type: 'test'
+  ...
+# Subtest: H7 — the arm-FILE channel (.building/<N>-executor.armed) blocks a prose ending with NO env
+ok 40 - H7 — the arm-FILE channel (.building/<N>-executor.armed) blocks a prose ending with NO env
+  ---
+  duration_ms: 228.295423
+  type: 'test'
+  ...
+# Subtest: H8 — the arm file removed after the result-check (disarm) → fail-open (exit 0, untouched)
+ok 41 - H8 — the arm file removed after the result-check (disarm) → fail-open (exit 0, untouched)
+  ---
+  duration_ms: 220.515593
+  type: 'test'
+  ...
+# Subtest: G1 — a source-only gate-fix warns in --verify-complete stdout (naming the fix sha7) AND in the persisted report notes; exit codes unchanged
+ok 42 - G1 — a source-only gate-fix warns in --verify-complete stdout (naming the fix sha7) AND in the persisted report notes; exit codes unchanged
+  ---
+  duration_ms: 6559.094901
+  type: 'test'
+  ...
+# Subtest: G2 — a gate-fix that ALSO touches a sibling test warns NOWHERE; its exit codes equal the warned run's (warn never blocks)
+ok 43 - G2 — a gate-fix that ALSO touches a sibling test warns NOWHERE; its exit codes equal the warned run's (warn never blocks)
+  ---
+  duration_ms: 6512.919212
+  type: 'test'
+  ...
+# Subtest: G3 — a docs-only gate-fix warns nowhere (no executable source touched)
+ok 44 - G3 — a docs-only gate-fix warns nowhere (no executable source touched)
+  ---
+  duration_ms: 4761.851337
+  type: 'test'
+  ...
+# Subtest: behavior: real README drift fails, native approved repairs pass twice, and generated Nx marker bytes survive
+ok 45 - behavior: real README drift fails, native approved repairs pass twice, and generated Nx marker bytes survive
+  ---
+  duration_ms: 355.814419
+  type: 'test'
+  ...
+# Subtest: behavior: STOP parser rejects changed remedy, extra proposal, wrong sibling and narrated success
+ok 46 - behavior: STOP parser rejects changed remedy, extra proposal, wrong sibling and narrated success
+  ---
+  duration_ms: 6.473925
+  type: 'test'
+  ...
+# Subtest: behavior: router result rejects second dispatch, changed route and unsupported marker
+ok 47 - behavior: router result rejects second dispatch, changed route and unsupported marker
+  ---
+  duration_ms: 0.942002
+  type: 'test'
+  ...
+# Subtest: delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries
+ok 48 - delivery workflows parse with the repository-pinned YAML parser and use immutable least-privilege boundaries
+  ---
+  duration_ms: 10.446532
+  type: 'test'
+  ...
+# Subtest: six adapters partition disjoint identities exactly once for one shard and more shards than units
+ok 49 - six adapters partition disjoint identities exactly once for one shard and more shards than units
+  ---
+  duration_ms: 19.050068
+  type: 'test'
+  ...
+# Subtest: authoritative full-suite evidence promotes its one content-addressed build without rebuilding
+ok 50 - authoritative full-suite evidence promotes its one content-addressed build without rebuilding
+  ---
+  duration_ms: 5.020209
+  type: 'test'
+  ...
+# Subtest: evidence rejects missing, duplicate, unexpected, malformed, failing or report-count-regressed shard observations
+ok 51 - evidence rejects missing, duplicate, unexpected, malformed, failing or report-count-regressed shard observations
+  ---
+  duration_ms: 6.19817
+  type: 'test'
+  ...
+# Subtest: coverage and test count floors are enforced from raw observations, never supplied summaries
+ok 52 - coverage and test count floors are enforced from raw observations, never supplied summaries
+  ---
+  duration_ms: 3.864521
+  type: 'test'
+  ...
+# Subtest: required-test failure remains red when a later retry passes
+ok 53 - required-test failure remains red when a later retry passes
+  ---
+  duration_ms: 0.797657
+  type: 'test'
+  ...
+# Subtest: release rejects stale SHA, expiry, ambiguous producers and changed inventory/report/build links
+ok 54 - release rejects stale SHA, expiry, ambiguous producers and changed inventory/report/build links
+  ---
+  duration_ms: 10.055147
+  type: 'test'
+  ...
+# Subtest: Nx and Gradle shard only nonoverlapping leaf tasks and reject aggregate/dependency double counting
+ok 55 - Nx and Gradle shard only nonoverlapping leaf tasks and reject aggregate/dependency double counting
+  ---
+  duration_ms: 0.963022
+  type: 'test'
+  ...
+# Subtest: only bounded infrastructure failures can retry; quarantine remains blocking and needs accountable metadata
+ok 56 - only bounded infrastructure failures can retry; quarantine remains blocking and needs accountable metadata
+  ---
+  duration_ms: 3.943612
+  type: 'test'
+  ...
+# Subtest: baseline changes require an approval bound to both old and proposed baseline digests
+ok 57 - baseline changes require an approval bound to both old and proposed baseline digests
+  ---
+  duration_ms: 2.805588
+  type: 'test'
+  ...
+# Subtest: build authority cannot be claimed for a different tree, failed build, duplicate path or unsafe artifact name
+ok 58 - build authority cannot be claimed for a different tree, failed build, duplicate path or unsafe artifact name
+  ---
+  duration_ms: 5.835912
+  type: 'test'
+  ...
+# Subtest: raw parser failures cannot be hidden by a passed envelope or fabricated normalized cases
+ok 59 - raw parser failures cannot be hidden by a passed envelope or fabricated normalized cases
+  ---
+  duration_ms: 2.020403
+  type: 'test'
+  ...
+# Subtest: explicit raw adapters parse Flutter machine completion, JUnit cases, LCOV and JaCoCo line evidence
+ok 60 - explicit raw adapters parse Flutter machine completion, JUnit cases, LCOV and JaCoCo line evidence
+  ---
+  duration_ms: 11.466823
+  type: 'test'
+  ...
+# Subtest: raw report completeness rejects contradictory summaries and duplicate machine/source identities
+ok 61 - raw report completeness rejects contradictory summaries and duplicate machine/source identities
+  ---
+  duration_ms: 0.777149
+  type: 'test'
+  ...
+# Subtest: actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+ok 62 - actual workflow plan, attest and release-verification snippets validate evidence and fail on link tampering
+  ---
+  duration_ms: 670.894442
+  type: 'test'
+  ...
+# Subtest: prepared workflow preserves approved baselines and requires correctly bound change approval
+    # Subtest: unchanged valid baseline passes without change approval
+    ok 1 - unchanged valid baseline passes without change approval
+      ---
+      duration_ms: 684.895054
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects missing approval
+    ok 2 - minTests: rejects missing approval
+      ---
+      duration_ms: 143.425906
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects previousDigest approval
+    ok 3 - minTests: rejects previousDigest approval
+      ---
+      duration_ms: 137.489082
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects approvedDigest approval
+    ok 4 - minTests: rejects approvedDigest approval
+      ---
+      duration_ms: 129.529902
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects baseSha approval
+    ok 5 - minTests: rejects baseSha approval
+      ---
+      duration_ms: 128.421313
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects owner approval
+    ok 6 - minTests: rejects owner approval
+      ---
+      duration_ms: 145.296254
+      type: 'test'
+      ...
+    # Subtest: minTests: rejects reason approval
+    ok 7 - minTests: rejects reason approval
+      ---
+      duration_ms: 126.990752
+      type: 'test'
+      ...
+    # Subtest: minTests: accepts explicitly approved old and proposed baselines
+    ok 8 - minTests: accepts explicitly approved old and proposed baselines
+      ---
+      duration_ms: 716.220413
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects missing approval
+    ok 9 - minUnits: rejects missing approval
+      ---
+      duration_ms: 127.018274
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects previousDigest approval
+    ok 10 - minUnits: rejects previousDigest approval
+      ---
+      duration_ms: 127.683712
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects approvedDigest approval
+    ok 11 - minUnits: rejects approvedDigest approval
+      ---
+      duration_ms: 134.80597
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects baseSha approval
+    ok 12 - minUnits: rejects baseSha approval
+      ---
+      duration_ms: 134.451464
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects owner approval
+    ok 13 - minUnits: rejects owner approval
+      ---
+      duration_ms: 129.098291
+      type: 'test'
+      ...
+    # Subtest: minUnits: rejects reason approval
+    ok 14 - minUnits: rejects reason approval
+      ---
+      duration_ms: 138.663898
+      type: 'test'
+      ...
+    # Subtest: minUnits: accepts explicitly approved old and proposed baselines
+    ok 15 - minUnits: accepts explicitly approved old and proposed baselines
+      ---
+      duration_ms: 703.686612
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects missing approval
+    ok 16 - coverageFloor: rejects missing approval
+      ---
+      duration_ms: 136.045478
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects previousDigest approval
+    ok 17 - coverageFloor: rejects previousDigest approval
+      ---
+      duration_ms: 136.004749
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects approvedDigest approval
+    ok 18 - coverageFloor: rejects approvedDigest approval
+      ---
+      duration_ms: 142.299224
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects baseSha approval
+    ok 19 - coverageFloor: rejects baseSha approval
+      ---
+      duration_ms: 138.647748
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects owner approval
+    ok 20 - coverageFloor: rejects owner approval
+      ---
+      duration_ms: 127.313957
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: rejects reason approval
+    ok 21 - coverageFloor: rejects reason approval
+      ---
+      duration_ms: 132.560257
+      type: 'test'
+      ...
+    # Subtest: coverageFloor: accepts explicitly approved old and proposed baselines
+    ok 22 - coverageFloor: accepts explicitly approved old and proposed baselines
+      ---
+      duration_ms: 690.083314
+      type: 'test'
+      ...
+    1..22
+ok 63 - prepared workflow preserves approved baselines and requires correctly bound change approval
+  ---
+  duration_ms: 5215.104263
+  type: 'test'
+  ...
+# Subtest: prepared workflow derives prior baseline from Git and requires explicit bootstrap approval
+    # Subtest: approval cannot replace the Git baseline with caller-selected previous values
+    ok 1 - approval cannot replace the Git baseline with caller-selected previous values
+      ---
+      duration_ms: 134.956314
+      type: 'test'
+      ...
+    # Subtest: an unavailable base cannot be treated as first adoption
+    ok 2 - an unavailable base cannot be treated as first adoption
+      ---
+      duration_ms: 142.620835
+      type: 'test'
+      ...
+    # Subtest: local first-parent fallback retains changed baseline approval
+    ok 3 - local first-parent fallback retains changed baseline approval
+      ---
+      duration_ms: 836.238361
+      type: 'test'
+      ...
+    # Subtest: proven first adoption needs explicit approval
+    ok 4 - proven first adoption needs explicit approval
+      ---
+      duration_ms: 797.502916
+      type: 'test'
+      ...
+    # Subtest: bootstrap approval cannot hide an existing approved baseline
+    ok 5 - bootstrap approval cannot hide an existing approved baseline
+      ---
+      duration_ms: 136.467079
+      type: 'test'
+      ...
+    # Subtest: bootstrap rejects invalid previousDigest
+    ok 6 - bootstrap rejects invalid previousDigest
+      ---
+      duration_ms: 120.2611
+      type: 'test'
+      ...
+    # Subtest: bootstrap rejects invalid approvedDigest
+    ok 7 - bootstrap rejects invalid approvedDigest
+      ---
+      duration_ms: 120.306987
+      type: 'test'
+      ...
+    # Subtest: bootstrap rejects invalid owner
+    ok 8 - bootstrap rejects invalid owner
+      ---
+      duration_ms: 126.361947
+      type: 'test'
+      ...
+    # Subtest: bootstrap rejects invalid reason
+    ok 9 - bootstrap rejects invalid reason
+      ---
+      duration_ms: 125.992884
+      type: 'test'
+      ...
+    1..9
+ok 64 - prepared workflow derives prior baseline from Git and requires explicit bootstrap approval
+  ---
+  duration_ms: 2542.727196
+  type: 'test'
+  ...
+# Subtest: actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports
+ok 65 - actual workflow run snippet executes each selected identity as literal argv and cannot reuse old reports
+  ---
+  duration_ms: 610.502258
+  type: 'test'
+  ...
+# Subtest: actual workflow builds once; allowlisted AWS promotion verifies immutable provider readback without rebuild
+ok 66 - actual workflow builds once; allowlisted AWS promotion verifies immutable provider readback without rebuild
+  ---
+  duration_ms: 1177.666996
+  type: 'test'
+  ...
+# Subtest: all six selected adapter contracts execute their exact inventory argv and retain runner-specific raw reports
+ok 67 - all six selected adapter contracts execute their exact inventory argv and retain runner-specific raw reports
+  ---
+  duration_ms: 1731.111614
+  type: 'test'
+  ...
+# Subtest: workflow privilege separation prevents test/build jobs from publishing and orders fan-in before build
+ok 68 - workflow privilege separation prevents test/build jobs from publishing and orders fan-in before build
+  ---
+  duration_ms: 1.086166
+  type: 'test'
+  ...
+# Subtest: actual inventory adapter executes configured argv and fails closed with remedy when tooling is absent
+ok 69 - actual inventory adapter executes configured argv and fails closed with remedy when tooling is absent
+  ---
+  duration_ms: 380.933133
+  type: 'test'
+  ...
+# Subtest: file-filter adapters prove selected inventory before execution and reject overmatching runner selection
+ok 70 - file-filter adapters prove selected inventory before execution and reject overmatching runner selection
+  ---
+  duration_ms: 253.602834
+  type: 'test'
+  ...
+# Subtest: failed runner with absent reports stays red while actual stdout and stderr diagnostics survive
+ok 71 - failed runner with absent reports stays red while actual stdout and stderr diagnostics survive
+  ---
+  duration_ms: 133.977855
+  type: 'test'
+  ...
+# Subtest: actual Git source guard rejects tracked and new source writes during setup, run and build
+ok 72 - actual Git source guard rejects tracked and new source writes during setup, run and build
+  ---
+  duration_ms: 1103.685402
+  type: 'test'
+  ...
+# Subtest: source guard allows approved cache writes and build outputs only in the build stage
+ok 73 - source guard allows approved cache writes and build outputs only in the build stage
+  ---
+  duration_ms: 888.911902
+  type: 'test'
+  ...
+# Subtest: runtime may not broaden prebound operational roots to authorize source writes
+ok 74 - runtime may not broaden prebound operational roots to authorize source writes
+  ---
+  duration_ms: 94.769108
+  type: 'test'
+  ...
+# Subtest: release verification binds the complete build record and source identity even for unchanged artifact bytes
+ok 75 - release verification binds the complete build record and source identity even for unchanged artifact bytes
+  ---
+  duration_ms: 2.731786
+  type: 'test'
+  ...
+# Subtest: standard JaCoCo declaration parses locally while unknown or entity-bearing doctypes remain rejected
+ok 76 - standard JaCoCo declaration parses locally while unknown or entity-bearing doctypes remain rejected
+  ---
+  duration_ms: 0.715101
+  type: 'test'
+  ...
+# Subtest: local prototype defers delivery without creating or replacing existing infrastructure
+ok 77 - local prototype defers delivery without creating or replacing existing infrastructure
+  ---
+  duration_ms: 4.618756
+  type: 'test'
+  ...
+# Subtest: selected delivery cannot lose its proposal or receipt to take the deferred path
+ok 78 - selected delivery cannot lose its proposal or receipt to take the deferred path
+  ---
+  duration_ms: 0.801074
+  type: 'test'
+  ...
+# Subtest: observer validator accepts observed read-only preflight without classifying arbitrary shell as safe
+ok 79 - observer validator accepts observed read-only preflight without classifying arbitrary shell as safe
+  ---
+  duration_ms: 3.624144
+  type: 'test'
+  ...
+# Subtest: observer validator rejects a reverted preapproval write and rerun write including .git
+ok 80 - observer validator rejects a reverted preapproval write and rerun write including .git
+  ---
+  duration_ms: 1.442715
+  type: 'test'
+  ...
+# Subtest: observer validator fails closed on overflow, missing events, failed process and changed snapshot
+ok 81 - observer validator fails closed on overflow, missing events, failed process and changed snapshot
+  ---
+  duration_ms: 2.049298
+  type: 'test'
+  ...
+# Subtest: native session parser recognizes real Claude user strings but rejects meta and assistant approval
+ok 82 - native session parser recognizes real Claude user strings but rejects meta and assistant approval
+  ---
+  duration_ms: 0.511813
+  type: 'test'
+  ...
+# Subtest: native execution slice requires approval before calls and preserves the prior session prefix
+ok 83 - native execution slice requires approval before calls and preserves the prior session prefix
+  ---
+  duration_ms: 0.608838
+  type: 'test'
+  ...
+# Subtest: Codex stdout parser binds numeric completion to its started command and rejects narration
+ok 84 - Codex stdout parser binds numeric completion to its started command and rejects narration
+  ---
+  duration_ms: 0.599611
+  type: 'test'
+  ...
+# Subtest: Codex approval is read from native session messages before custom exec calls
+ok 85 - Codex approval is read from native session messages before custom exec calls
+  ---
+  duration_ms: 0.556708
+  type: 'test'
+  ...
+# Subtest: Claude native Bash success uses structured tool result and refuses interrupted execution
+ok 86 - Claude native Bash success uses structured tool result and refuses interrupted execution
+  ---
+  duration_ms: 0.542082
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects changed source, including dirty and untracked files
+ok 87 - source snapshot rejects changed source, including dirty and untracked files
+  ---
+  duration_ms: 14.702408
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects added source, including dirty and untracked files
+ok 88 - source snapshot rejects added source, including dirty and untracked files
+  ---
+  duration_ms: 2.755142
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects renamed source, including dirty and untracked files
+ok 89 - source snapshot rejects renamed source, including dirty and untracked files
+  ---
+  duration_ms: 3.25854
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects deleted source, including dirty and untracked files
+ok 90 - source snapshot rejects deleted source, including dirty and untracked files
+  ---
+  duration_ms: 1.948737
+  type: 'test'
+  ...
+# Subtest: source snapshot rejects executable source, including dirty and untracked files
+ok 91 - source snapshot rejects executable source, including dirty and untracked files
+  ---
+  duration_ms: 1.933779
+  type: 'test'
+  ...
+# Subtest: source snapshot excludes only designated evidence and never an evidence-named source decoy
+ok 92 - source snapshot excludes only designated evidence and never an evidence-named source decoy
+  ---
+  duration_ms: 3.043479
+  type: 'test'
+  ...
+# Subtest: proposal paths authorize directory descendants and necessary parent directories, never siblings or traversal
+ok 93 - proposal paths authorize directory descendants and necessary parent directories, never siblings or traversal
+  ---
+  duration_ms: 1.425682
+  type: 'test'
+  ...
+# Subtest: proposal allowlist rejects self-reported events, duplicate paths and broad or unsafe artifact roots
+ok 94 - proposal allowlist rejects self-reported events, duplicate paths and broad or unsafe artifact roots
+  ---
+  duration_ms: 1.53467
+  type: 'test'
+  ...
+# Subtest: native authority rejects expanded filesystem/network and disabled review
+ok 95 - native authority rejects expanded filesystem/network and disabled review
+  ---
+  duration_ms: 1.233997
+  type: 'test'
+  ...
+# Subtest: native audit parsing retains real gaps and ignores receipt-like narration
+ok 96 - native audit parsing retains real gaps and ignores receipt-like narration
+  ---
+  duration_ms: 0.206733
+  type: 'test'
+  ...
+# Subtest: calibration: source and native evidence share the same canonical byte encoding
+ok 97 - calibration: source and native evidence share the same canonical byte encoding
+  ---
+  duration_ms: 0.153232
+  type: 'test'
+  ...
+# Subtest: calibration: Claude string error results retain the native nonzero exit, never fabricated success
+ok 98 - calibration: Claude string error results retain the native nonzero exit, never fabricated success
+  ---
+  duration_ms: 0.533294
+  type: 'test'
+  ...
+# Subtest: calibration: transparent Bash wrappers preserve literal argv and explicit cwd
+ok 99 - calibration: transparent Bash wrappers preserve literal argv and explicit cwd
+  ---
+  duration_ms: 1.195484
+  type: 'test'
+  ...
+# Subtest: calibration: session identity and observed executable/version cannot be replaced by receipt claims
+ok 100 - calibration: session identity and observed executable/version cannot be replaced by receipt claims
+  ---
+  duration_ms: 1.173522
+  type: 'test'
+  ...
+# Subtest: calibration: malformed or unrestricted native filesystem profiles fail closed
+ok 101 - calibration: malformed or unrestricted native filesystem profiles fail closed
+  ---
+  duration_ms: 0.792658
+  type: 'test'
+  ...
+# Subtest: calibration: all-none gates still need actual successful catalog and config checks
+ok 102 - calibration: all-none gates still need actual successful catalog and config checks
+  ---
+  duration_ms: 1.363884
+  type: 'test'
+  ...
+# Subtest: mixed fences: complete native proposal survives a preceding shell fence and heading
+ok 103 - mixed fences: complete native proposal survives a preceding shell fence and heading
+  ---
+  duration_ms: 0.687197
+  type: 'test'
+  ...
+# Subtest: mixed fences: shell examples, untagged blocks and nested fake JSON are not native proposal objects
+ok 104 - mixed fences: shell examples, untagged blocks and nested fake JSON are not native proposal objects
+  ---
+  duration_ms: 0.300883
+  type: 'test'
+  ...
+# Subtest: catalog selection: empty library-cli binds prospective identity without needing a package
+ok 105 - catalog selection: empty library-cli binds prospective identity without needing a package
+  ---
+  duration_ms: 1.004511
+  type: 'test'
+  ...
+# Subtest: catalog selection: Nx uses the emitted catalog even when wrapper package identity differs
+ok 106 - catalog selection: Nx uses the emitted catalog even when wrapper package identity differs
+  ---
+  duration_ms: 104.370803
+  type: 'test'
+  ...
+# Subtest: catalog proof: selected command is proposed once and succeeds; alternate modes, duplicates and source drift fail
+ok 107 - catalog proof: selected command is proposed once and succeeds; alternate modes, duplicates and source drift fail
+  ---
+  duration_ms: 5.991097
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: changed host bytes, symlink target and executable mode fail closed
+ok 108 - capbuild envelope: changed host bytes, symlink target and executable mode fail closed
+  ---
+  duration_ms: 1.28738
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: portable build/types/unit and emit tail survive the bound wrapper unchanged
+ok 109 - capbuild envelope: portable build/types/unit and emit tail survive the bound wrapper unchanged
+  ---
+  duration_ms: 1.436482
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: wrong cwd, binary, digest, defaults and broadened host metadata fail closed
+ok 110 - capbuild envelope: wrong cwd, binary, digest, defaults and broadened host metadata fail closed
+  ---
+  duration_ms: 1.436453
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: only literal approved env flags and exact ordered configured argv are accepted
+ok 111 - capbuild envelope: only literal approved env flags and exact ordered configured argv are accepted
+  ---
+  duration_ms: 0.954797
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: per-slot metadata matches real native numeric success, never narrated or failed inner status
+ok 112 - capbuild envelope: per-slot metadata matches real native numeric success, never narrated or failed inner status
+  ---
+  duration_ms: 2.200937
+  type: 'test'
+  ...
+# Subtest: capbuild envelope: independent observer must attest all prebound override clearing
+ok 113 - capbuild envelope: independent observer must attest all prebound override clearing
+  ---
+  duration_ms: 1.316183
+  type: 'test'
+  ...
+# Subtest: approval binding: complete exact operational plan and gate bindings validate
+ok 114 - approval binding: complete exact operational plan and gate bindings validate
+  ---
+  duration_ms: 0.772238
+  type: 'test'
+  ...
+# Subtest: approval binding: generated gate changes, extra slots and absent approval fail closed
+ok 115 - approval binding: generated gate changes, extra slots and absent approval fail closed
+  ---
+  duration_ms: 1.155248
+  type: 'test'
+  ...
+# Subtest: approval binding: unapproved install, changed heredoc, wrong cwd, missing, repeated or failed operation rejected
+ok 116 - approval binding: unapproved install, changed heredoc, wrong cwd, missing, repeated or failed operation rejected
+  ---
+  duration_ms: 1.201465
+  type: 'test'
+  ...
+# Subtest: approval binding: native direct file modifications and unobserved calls cannot hide behind approved shell
+ok 117 - approval binding: native direct file modifications and unobserved calls cannot hide behind approved shell
+  ---
+  duration_ms: 1.242774
+  type: 'test'
+  ...
+# Subtest: approval binding: Codex accepts transparent JSON exec envelopes, rejects hidden tools and arbitrary code
+ok 118 - approval binding: Codex accepts transparent JSON exec envelopes, rejects hidden tools and arbitrary code
+  ---
+  duration_ms: 1.527406
+  type: 'test'
+  ...
+# Subtest: approval binding: capbuild is an explicit approved operational envelope, not implicit permission
+ok 119 - approval binding: capbuild is an explicit approved operational envelope, not implicit permission
+  ---
+  duration_ms: 0.472047
+  type: 'test'
+  ...
+# Subtest: approval binding: native namespaced JSON envelopes and empty polling retain exact observed operations
+ok 120 - approval binding: native namespaced JSON envelopes and empty polling retain exact observed operations
+  ---
+  duration_ms: 0.531301
+  type: 'test'
+  ...
+# Subtest: delivery contract: exact output bytes, full installed workflow validation and native optional-linter evidence validate
+ok 121 - delivery contract: exact output bytes, full installed workflow validation and native optional-linter evidence validate
+  ---
+  duration_ms: 12.694829
+  type: 'test'
+  ...
+# Subtest: delivery contract: missing or mismatched proposal fields and output/hash drift fail closed
+ok 122 - delivery contract: missing or mismatched proposal fields and output/hash drift fail closed
+  ---
+  duration_ms: 10.787301
+  type: 'test'
+  ...
+# Subtest: delivery contract: actual full validation cannot be replaced by narration, filtered tests, failed runs or another consumer
+ok 123 - delivery contract: actual full validation cannot be replaced by narration, filtered tests, failed runs or another consumer
+  ---
+  duration_ms: 48.996305
+  type: 'test'
+  ...
+# Subtest: delivery contract: preexisting workflows require exact explicit merge decision and preserve-until-approval contract
+ok 124 - delivery contract: preexisting workflows require exact explicit merge decision and preserve-until-approval contract
+  ---
+  duration_ms: 14.368382
+  type: 'test'
+  ...
+# Subtest: delivery contract: self-consistent retained hashes cannot authorize a different planner, adapter or release environment
+ok 125 - delivery contract: self-consistent retained hashes cannot authorize a different planner, adapter or release environment
+  ---
+  duration_ms: 7.064198
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: complete retained policy, jobs, comments and exact trigger replacement validate
+ok 126 - delivery merge manifest: complete retained policy, jobs, comments and exact trigger replacement validate
+  ---
+  duration_ms: 14.454797
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: missing or incomplete preservation proof and wrong baseline digest fail closed
+ok 127 - delivery merge manifest: missing or incomplete preservation proof and wrong baseline digest fail closed
+  ---
+  duration_ms: 34.047738
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: deleting or changing baseline comments and top-level policy is not authorized by job preservation
+ok 128 - delivery merge manifest: deleting or changing baseline comments and top-level policy is not authorized by job preservation
+  ---
+  duration_ms: 23.485956
+  type: 'test'
+  ...
+# Subtest: delivery merge manifest: replacing prior trigger requires exact declared before and after values
+ok 129 - delivery merge manifest: replacing prior trigger requires exact declared before and after values
+  ---
+  duration_ms: 32.018698
+  type: 'test'
+  ...
+# Subtest: Nx proposal and config bind the required seven gates plus all three optional unit selectors
+ok 130 - Nx proposal and config bind the required seven gates plus all three optional unit selectors
+  ---
+  duration_ms: 2.926768
+  type: 'test'
+  ...
+# Subtest: optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage
+ok 131 - optional binding rejects omissions, unknown keys, config drift, and incomplete Nx selector coverage
+  ---
+  duration_ms: 4.05836
+  type: 'test'
+  ...
+# Subtest: unit-scoped evidence binds its exact input, native command, and selector tier
+ok 132 - unit-scoped evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 5.335179
+  type: 'test'
+  ...
+# Subtest: unit-affected evidence binds its exact input, native command, and selector tier
+ok 133 - unit-affected evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 1.657954
+  type: 'test'
+  ...
+# Subtest: unit-impacted evidence binds its exact input, native command, and selector tier
+ok 134 - unit-impacted evidence binds its exact input, native command, and selector tier
+  ---
+  duration_ms: 1.49844
+  type: 'test'
+  ...
+# Subtest: optional selector evidence preserves its portable template through a synthetic capbuild wrapper
+ok 135 - optional selector evidence preserves its portable template through a synthetic capbuild wrapper
+  ---
+  duration_ms: 2.232237
+  type: 'test'
+  ...
+# Subtest: manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift
+ok 136 - manifest evidence rejects traversal, multiple substitutions, malformed bytes, swapped evidence, and receipt drift
+  ---
+  duration_ms: 23.76108
+  type: 'test'
+  ...
+# Subtest: affected manifest requires a non-test path and cannot masquerade as scoped or full fallback
+ok 137 - affected manifest requires a non-test path and cannot masquerade as scoped or full fallback
+  ---
+  duration_ms: 3.1482
+  type: 'test'
+  ...
+# Subtest: impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector
+ok 138 - impacted evidence requires an exact commit range, current HEAD, changed paths, and affected selector
+  ---
+  duration_ms: 9.165476
+  type: 'test'
+  ...
+# Subtest: impacted evidence rejects a successful diff between two unrelated real commits
+ok 139 - impacted evidence rejects a successful diff between two unrelated real commits
+  ---
+  duration_ms: 46.45984
+  type: 'test'
+  ...
+# Subtest: prepared bash: executes saved bytes after source changes and creates an absent target
+ok 140 - prepared bash: executes saved bytes after source changes and creates an absent target
+  ---
+  duration_ms: 19.479325
+  type: 'test'
+  ...
+# Subtest: prepared python: executes saved bytes after source changes and creates an absent target
+ok 141 - prepared python: executes saved bytes after source changes and creates an absent target
+  ---
+  duration_ms: 95.383637
+  type: 'test'
+  ...
+# Subtest: prepared node: executes saved bytes after source changes and creates an absent target
+ok 142 - prepared node: executes saved bytes after source changes and creates an absent target
+  ---
+  duration_ms: 142.471611
+  type: 'test'
+  ...
+# Subtest: prepared execution without approval refuses before any consumer write
+ok 143 - prepared execution without approval refuses before any consumer write
+  ---
+  duration_ms: 6.171881
+  type: 'test'
+  ...
+# Subtest: prepared bash: syntax failure happens before artifact or consumer writes
+ok 144 - prepared bash: syntax failure happens before artifact or consumer writes
+  ---
+  duration_ms: 5.573643
+  type: 'test'
+  ...
+# Subtest: prepared python: syntax failure happens before artifact or consumer writes
+ok 145 - prepared python: syntax failure happens before artifact or consumer writes
+  ---
+  duration_ms: 140.191755
+  type: 'test'
+  ...
+# Subtest: prepared node: syntax failure happens before artifact or consumer writes
+ok 146 - prepared node: syntax failure happens before artifact or consumer writes
+  ---
+  duration_ms: 49.086717
+  type: 'test'
+  ...
+# Subtest: prepared bash: CLI preserves the real nonzero process exit
+ok 147 - prepared bash: CLI preserves the real nonzero process exit
+  ---
+  duration_ms: 94.169267
+  type: 'test'
+  ...
+# Subtest: prepared python: CLI preserves the real nonzero process exit
+ok 148 - prepared python: CLI preserves the real nonzero process exit
+  ---
+  duration_ms: 155.688182
+  type: 'test'
+  ...
+# Subtest: prepared node: CLI preserves the real nonzero process exit
+ok 149 - prepared node: CLI preserves the real nonzero process exit
+  ---
+  duration_ms: 198.200783
+  type: 'test'
+  ...
+# Subtest: prepared execution rejects changed artifact bytes before mutation
+ok 150 - prepared execution rejects changed artifact bytes before mutation
+  ---
+  duration_ms: 5.142482
+  type: 'test'
+  ...
+# Subtest: prepared execution rejects a target changed after preparation
+ok 151 - prepared execution rejects a target changed after preparation
+  ---
+  duration_ms: 7.009795
+  type: 'test'
+  ...
+# Subtest: prepared execution rejects a missing target created after preparation
+ok 152 - prepared execution rejects a missing target created after preparation
+  ---
+  duration_ms: 6.641394
+  type: 'test'
+  ...
+# Subtest: prepared execution rejects a symlink target introduced before preparation
+ok 153 - prepared execution rejects a symlink target introduced before preparation
+  ---
+  duration_ms: 1.181127
+  type: 'test'
+  ...
+# Subtest: prepared execution rejects a symlink target introduced after preparation
+ok 154 - prepared execution rejects a symlink target introduced after preparation
+  ---
+  duration_ms: 7.134873
+  type: 'test'
+  ...
+# Subtest: prepared program rejects unsupported interpreters without writing an artifact
+ok 155 - prepared program rejects unsupported interpreters without writing an artifact
+  ---
+  duration_ms: 0.984773
+  type: 'test'
+  ...
+# Subtest: prepared bash: a command reading stdin cannot consume later approved program statements
+ok 156 - prepared bash: a command reading stdin cannot consume later approved program statements
+  ---
+  duration_ms: 11.322749
+  type: 'test'
+  ...
+# Subtest: six gate tables are executable bindings or explicit absences; placeholder mutation fails
+ok 157 - six gate tables are executable bindings or explicit absences; placeholder mutation fails
+  ---
+  duration_ms: 4.09461
+  type: 'test'
+  ...
+# Subtest: oracle independently accounts for every promised missing home; deletion fails
+ok 158 - oracle independently accounts for every promised missing home; deletion fails
+  ---
+  duration_ms: 3.107202
+  type: 'test'
+  ...
+# Subtest: design absence is conditional on Blade handoff
+ok 159 - design absence is conditional on Blade handoff
+  ---
+  duration_ms: 0.747071
+  type: 'test'
+  ...
+# Subtest: canonical root discovery preserves migrated and overridden homes and refuses ambiguity
+ok 160 - canonical root discovery preserves migrated and overridden homes and refuses ambiguity
+  ---
+  duration_ms: 3.29103
+  type: 'test'
+  ...
+# Subtest: source paths select Nx affected with safe argv; metacharacters never split or execute
+ok 161 - source paths select Nx affected with safe argv; metacharacters never split or execute
+  ---
+  duration_ms: 73.397554
+  type: 'test'
+  ...
+# Subtest: explicit nonexistent exact test is nonzero even when the fallback runner succeeds
+ok 162 - explicit nonexistent exact test is nonzero even when the fallback runner succeeds
+  ---
+  duration_ms: 201.35295
+  type: 'test'
+  ...
+# Subtest: mixed explicit scope cannot hide a nonexistent exact test behind a shared lock change
+ok 163 - mixed explicit scope cannot hide a nonexistent exact test behind a shared lock change
+  ---
+  duration_ms: 125.985149
+  type: 'test'
+  ...
+# Subtest: malformed, empty, unsafe-root and newline scope fail byte-identically to full
+ok 164 - malformed, empty, unsafe-root and newline scope fail byte-identically to full
+  ---
+  duration_ms: 182.020946
+  type: 'test'
+  ...
+# Subtest: an external manifest whose ancestor merely contains the ownership substring is rejected
+ok 165 - an external manifest whose ancestor merely contains the ownership substring is rejected
+  ---
+  duration_ms: 60.83207
+  type: 'test'
+  ...
+# Subtest: shared configuration and runner changes execute byte-identical full argv for manifest and Git range
+    # Subtest: manifest: nx.json
+    ok 1 - manifest: nx.json
+      ---
+      duration_ms: 67.144699
+      type: 'test'
+      ...
+    # Subtest: Git range: nx.json
+    ok 2 - Git range: nx.json
+      ---
+      duration_ms: 164.848659
+      type: 'test'
+      ...
+    # Subtest: manifest: package.json
+    ok 3 - manifest: package.json
+      ---
+      duration_ms: 60.163708
+      type: 'test'
+      ...
+    # Subtest: Git range: package.json
+    ok 4 - Git range: package.json
+      ---
+      duration_ms: 157.863671
+      type: 'test'
+      ...
+    # Subtest: manifest: package-lock.json
+    ok 5 - manifest: package-lock.json
+      ---
+      duration_ms: 61.318625
+      type: 'test'
+      ...
+    # Subtest: Git range: package-lock.json
+    ok 6 - Git range: package-lock.json
+      ---
+      duration_ms: 158.653714
+      type: 'test'
+      ...
+    # Subtest: manifest: pnpm-lock.yaml
+    ok 7 - manifest: pnpm-lock.yaml
+      ---
+      duration_ms: 59.405907
+      type: 'test'
+      ...
+    # Subtest: Git range: pnpm-lock.yaml
+    ok 8 - Git range: pnpm-lock.yaml
+      ---
+      duration_ms: 177.951323
+      type: 'test'
+      ...
+    # Subtest: manifest: yarn.lock
+    ok 9 - manifest: yarn.lock
+      ---
+      duration_ms: 63.074657
+      type: 'test'
+      ...
+    # Subtest: Git range: yarn.lock
+    ok 10 - Git range: yarn.lock
+      ---
+      duration_ms: 156.273077
+      type: 'test'
+      ...
+    # Subtest: manifest: pnpm-workspace.yaml
+    ok 11 - manifest: pnpm-workspace.yaml
+      ---
+      duration_ms: 69.159852
+      type: 'test'
+      ...
+    # Subtest: Git range: pnpm-workspace.yaml
+    ok 12 - Git range: pnpm-workspace.yaml
+      ---
+      duration_ms: 161.236687
+      type: 'test'
+      ...
+    # Subtest: manifest: tsconfig.json
+    ok 13 - manifest: tsconfig.json
+      ---
+      duration_ms: 56.176414
+      type: 'test'
+      ...
+    # Subtest: Git range: tsconfig.json
+    ok 14 - Git range: tsconfig.json
+      ---
+      duration_ms: 163.885277
+      type: 'test'
+      ...
+    # Subtest: manifest: tsconfig.base.json
+    ok 15 - manifest: tsconfig.base.json
+      ---
+      duration_ms: 58.656401
+      type: 'test'
+      ...
+    # Subtest: Git range: tsconfig.base.json
+    ok 16 - Git range: tsconfig.base.json
+      ---
+      duration_ms: 154.797199
+      type: 'test'
+      ...
+    # Subtest: manifest: vitest.config.ts
+    ok 17 - manifest: vitest.config.ts
+      ---
+      duration_ms: 64.929825
+      type: 'test'
+      ...
+    # Subtest: Git range: vitest.config.ts
+    ok 18 - Git range: vitest.config.ts
+      ---
+      duration_ms: 153.055565
+      type: 'test'
+      ...
+    # Subtest: manifest: jest.config.ts
+    ok 19 - manifest: jest.config.ts
+      ---
+      duration_ms: 60.663559
+      type: 'test'
+      ...
+    # Subtest: Git range: jest.config.ts
+    ok 20 - Git range: jest.config.ts
+      ---
+      duration_ms: 156.933603
+      type: 'test'
+      ...
+    # Subtest: manifest: pyproject.toml
+    ok 21 - manifest: pyproject.toml
+      ---
+      duration_ms: 58.365387
+      type: 'test'
+      ...
+    # Subtest: Git range: pyproject.toml
+    ok 22 - Git range: pyproject.toml
+      ---
+      duration_ms: 169.192582
+      type: 'test'
+      ...
+    # Subtest: manifest: uv.lock
+    ok 23 - manifest: uv.lock
+      ---
+      duration_ms: 56.744804
+      type: 'test'
+      ...
+    # Subtest: Git range: uv.lock
+    ok 24 - Git range: uv.lock
+      ---
+      duration_ms: 152.628402
+      type: 'test'
+      ...
+    # Subtest: manifest: poetry.lock
+    ok 25 - manifest: poetry.lock
+      ---
+      duration_ms: 57.63091
+      type: 'test'
+      ...
+    # Subtest: Git range: poetry.lock
+    ok 26 - Git range: poetry.lock
+      ---
+      duration_ms: 176.021642
+      type: 'test'
+      ...
+    # Subtest: manifest: requirements.txt
+    ok 27 - manifest: requirements.txt
+      ---
+      duration_ms: 58.812077
+      type: 'test'
+      ...
+    # Subtest: Git range: requirements.txt
+    ok 28 - Git range: requirements.txt
+      ---
+      duration_ms: 164.92811
+      type: 'test'
+      ...
+    # Subtest: manifest: scripts/run-nx-test-tier.mjs
+    ok 29 - manifest: scripts/run-nx-test-tier.mjs
+      ---
+      duration_ms: 59.69143
+      type: 'test'
+      ...
+    # Subtest: Git range: scripts/run-nx-test-tier.mjs
+    ok 30 - Git range: scripts/run-nx-test-tier.mjs
+      ---
+      duration_ms: 156.961626
+      type: 'test'
+      ...
+    1..30
+ok 166 - shared configuration and runner changes execute byte-identical full argv for manifest and Git range
+  ---
+  duration_ms: 3403.773501
+  type: 'test'
+  ...
+# Subtest: a deleted exact test in a Git range may pass through full fallback
+ok 167 - a deleted exact test in a Git range may pass through full fallback
+  ---
+  duration_ms: 150.80273
+  type: 'test'
+  ...
+# Subtest: ordinary source Git range keeps the impacted affected selection
+ok 168 - ordinary source Git range keeps the impacted affected selection
+  ---
+  duration_ms: 171.741782
+  type: 'test'
+  ...
+# Subtest: smoke — a scratch repo boots and `roadmap config check` exits 0
+ok 169 - smoke — a scratch repo boots and `roadmap config check` exits 0
+  ---
+  duration_ms: 164.207459
+  type: 'test'
+  ...
+# Subtest: smoke — `roadmap status --json` parses; an armed fixture lane is surfaced
+ok 170 - smoke — `roadmap status --json` parses; an armed fixture lane is surfaced
+  ---
+  duration_ms: 419.007762
+  type: 'test'
+  ...
+# Subtest: smoke — the installed schema is BYTE-IDENTICAL to templates/schema.ts (pre-made decision 1)
+ok 171 - smoke — the installed schema is BYTE-IDENTICAL to templates/schema.ts (pre-made decision 1)
+  ---
+  duration_ms: 26.181104
+  type: 'test'
+  ...
+# Subtest: smoke — fake-slot honors FIXTURE_SLOT_<NAME>_EXIT and records verbatim argv JSONL
+ok 172 - smoke — fake-slot honors FIXTURE_SLOT_<NAME>_EXIT and records verbatim argv JSONL
+  ---
+  duration_ms: 43.482165
+  type: 'test'
+  ...
+# Subtest: smoke — `roadmap result check` succeeds inside a scratch repo via the symlinked tsx
+ok 173 - smoke — `roadmap result check` succeeds inside a scratch repo via the symlinked tsx
+  ---
+  duration_ms: 1761.992959
+  type: 'test'
+  ...
+# Subtest: smoke — a green gate run drives the fake slots and records their argv in the slot log
+ok 174 - smoke — a green gate run drives the fake slots and records their argv in the slot log
+  ---
+  duration_ms: 3207.222005
+  type: 'test'
+  ...
+# Subtest: smoke — teardown is a plain rmSync (no scratch dir survives)
+ok 175 - smoke — teardown is a plain rmSync (no scratch dir survives)
+  ---
+  duration_ms: 31.366659
+  type: 'test'
+  ...
+# Subtest: D0 — runCli OMITS ROADMAP_CONFIG for the docs layout (discovery answers), and a caller env still wins
+ok 176 - D0 — runCli OMITS ROADMAP_CONFIG for the docs layout (discovery answers), and a caller env still wins
+  ---
+  duration_ms: 308.284824
+  type: 'test'
+  ...
+# Subtest: D1 — `roadmap status` with no root argument lists the phase written into the docs layout
+ok 177 - D1 — `roadmap status` with no root argument lists the phase written into the docs layout
+  ---
+  duration_ms: 236.702134
+  type: 'test'
+  ...
+# Subtest: D2 — `roadmap phase validate` exits 0 for a docs-layout phase importing ../lib/schema (and no tsconfig alias exists)
+ok 178 - D2 — `roadmap phase validate` exits 0 for a docs-layout phase importing ../lib/schema (and no tsconfig alias exists)
+  ---
+  duration_ms: 3327.202503
+  type: 'test'
+  ...
+# Subtest: D3a — `roadmap audit` is CLEAN in the docs layout and reads phase files from docs/roadmap/phases
+ok 179 - D3a — `roadmap audit` is CLEAN in the docs layout and reads phase files from docs/roadmap/phases
+  ---
+  duration_ms: 3369.836484
+  type: 'test'
+  ...
+# Subtest: D3b — drifting docs/roadmap/lib/schema.ts fires check 16 HIGH naming the DOCS seam, not the legacy one
+ok 180 - D3b — drifting docs/roadmap/lib/schema.ts fires check 16 HIGH naming the DOCS seam, not the legacy one
+  ---
+  duration_ms: 3439.095425
+  type: 'test'
+  ...
+# Subtest: D4 — `roadmap gate plan <N>` builds the plan from the docs-layout phase file
+ok 181 - D4 — `roadmap gate plan <N>` builds the plan from the docs-layout phase file
+  ---
+  duration_ms: 1729.868039
+  type: 'test'
+  ...
+# Subtest: D4 — explicit relevant/full scopes cannot add runtime slots to a mockup cell
+ok 182 - D4 — explicit relevant/full scopes cannot add runtime slots to a mockup cell
+  ---
+  duration_ms: 3517.257522
+  type: 'test'
+  ...
+# Subtest: D5 — `roadmap claim` reserves the number after the highest phase declared in the docs layout
+ok 183 - D5 — `roadmap claim` reserves the number after the highest phase declared in the docs layout
+  ---
+  duration_ms: 180.863834
+  type: 'test'
+  ...
+# Subtest: D6 — ROADMAP_ROOT=<abs> at a third directory wins over both candidates (control: the same repo answers differently without it)
+ok 184 - D6 — ROADMAP_ROOT=<abs> at a third directory wins over both candidates (control: the same repo answers differently without it)
+  ---
+  duration_ms: 413.7289
+  type: 'test'
+  ...
+# Subtest: D8 — from a SUBDIRECTORY, status and claim still read the docs root, and an ambiguous repo is still refused
+ok 185 - D8 — from a SUBDIRECTORY, status and claim still read the docs root, and an ambiguous repo is still refused
+  ---
+  duration_ms: 702.906398
+  type: 'test'
+  ...
+# Subtest: D7 — a repo carrying both marked roots is refused by status, phase validate and audit with the SAME message
+ok 186 - D7 — a repo carrying both marked roots is refused by status, phase validate and audit with the SAME message
+  ---
+  duration_ms: 513.573131
+  type: 'test'
+  ...
+# Subtest: L1 — two `roadmap claim` calls return distinct consecutive numbers with claim files present
+ok 187 - L1 — two `roadmap claim` calls return distinct consecutive numbers with claim files present
+  ---
+  duration_ms: 314.191761
+  type: 'test'
+  ...
+# Subtest: session worktree journal lets phase land fast-forward, dispose, and archive the lane
+ok 188 - session worktree journal lets phase land fast-forward, dispose, and archive the lane
+  ---
+  duration_ms: 490.687808
+  type: 'test'
+  ...
+# Subtest: L2 — `roadmap phase validate` exits 0 on a well-formed phase and 2 on a task stripped of its problem field
+ok 189 - L2 — `roadmap phase validate` exits 0 on a well-formed phase and 2 on a task stripped of its problem field
+  ---
+  duration_ms: 3363.671638
+  type: 'test'
+  ...
+# Subtest: L3 — `gate plan --json` band is trivial(2) / mid(3,logic) / heavy(10) at the boundaries
+ok 190 - L3 — `gate plan --json` band is trivial(2) / mid(3,logic) / heavy(10) at the boundaries
+  ---
+  duration_ms: 4997.280104
+  type: 'test'
+  ...
+# Subtest: L4 — reviewScope light over a src/spine/** diff → exit 2 with reviewScope.refused in JSON
+ok 191 - L4 — reviewScope light over a src/spine/** diff → exit 2 with reviewScope.refused in JSON
+  ---
+  duration_ms: 1562.591873
+  type: 'test'
+  ...
+# Subtest: L5 — testScope static over a source-touching diff → exit 2 (declared may not sneak under the floor)
+ok 192 - L5 — testScope static over a source-touching diff → exit 2 (declared may not sneak under the floor)
+  ---
+  duration_ms: 1578.163404
+  type: 'test'
+  ...
+# Subtest: L6 — all-green `gate run` → exit 0 and a GateRunReport with per-slot exit/duration/log-path
+ok 193 - L6 — all-green `gate run` → exit 0 and a GateRunReport with per-slot exit/duration/log-path
+  ---
+  duration_ms: 3073.688788
+  type: 'test'
+  ...
+# Subtest: L7 — FIXTURE_SLOT_UNIT_EXIT=1 → exit 2 and the report records the unit slot red
+ok 194 - L7 — FIXTURE_SLOT_UNIT_EXIT=1 → exit 2 and the report records the unit slot red
+  ---
+  duration_ms: 3248.856708
+  type: 'test'
+  ...
+# Subtest: L8 — integration-scoped removed → the full integration slot runs and the report carries the fallback note
+ok 195 - L8 — integration-scoped removed → the full integration slot runs and the report carries the fallback note
+  ---
+  duration_ms: 3247.989077
+  type: 'test'
+  ...
+# Subtest: L9 — a scoped run substitutes {files} verbatim into the fake-slot argv (asserted from the JSONL)
+ok 196 - L9 — a scoped run substitutes {files} verbatim into the fake-slot argv (asserted from the JSONL)
+  ---
+  duration_ms: 3357.040264
+  type: 'test'
+  ...
+# Subtest: L9 — a real uncovered executable beside a scoped test still requires affected/full coverage
+ok 197 - L9 — a real uncovered executable beside a scoped test still requires affected/full coverage
+  ---
+  duration_ms: 1653.95335
+  type: 'test'
+  ...
+# Subtest: L10 — mixed-driver curation leaves published commits in place and the lane lands by fast-forward
+ok 198 - L10 — mixed-driver curation leaves published commits in place and the lane lands by fast-forward
+  ---
+  duration_ms: 4038.552275
+  type: 'test'
+  ...
+1..198
+# tests 259
+# suites 0
+# pass 259
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 284221.505799

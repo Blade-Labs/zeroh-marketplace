@@ -242,6 +242,7 @@ export default defineArc({
   }
 ],
   criteriaRatifications: [
+    '2026-09-06 latest owner conditional release ruling: R0 restores idea-to-runnable-local-prototype purpose. Delivery is optional; selected-stack and valid-home preservation govern. The small prepared-program helper supersedes skills-only runtime wording for this bounded repair. Evidence is historical four-arm delivery, R0 CLI pilot at its recorded snapshot, complete reconciled current regressions and independent review; no final-source four-arm claim. Phase34.7 and GREENFIELD-0.40.0-RELEASE-REVIEW.md record this scope.',
     "2026-09-06T08:06:21.266079+00:00 owner accepted the two closing-review evidence gaps and instructed continuation. Six criteria MET; two accepted exceptions, not proven. GREENFIELD-only bounded closure amendment approved; product source unchanged.",
     '2026-09-03 (planning, phase-31 review QUESTION): six-archetypes signal/bar re-homed the dated observed results from the manifests to VERIFY-RECORD-2026-09.md — manifests stay timeless per documentation-rules.md; the honesty rail and execution prompt §Design item 3 were amended in the same commit.',
   ],

@@ -1,0 +1,27 @@
+{
+  "argv": [
+    "capbuild",
+    "node",
+    "--test",
+    "--test-concurrency=1",
+    "test/fixture-consumer/arc-next.test.mjs",
+    "test/fixture-consumer/contract-drift.test.mjs",
+    "test/fixture-consumer/error-injection.test.mjs",
+    "test/fixture-consumer/executor-guard.test.mjs",
+    "test/fixture-consumer/gate-untested-fix.test.mjs",
+    "test/fixture-consumer/greenfield-behavior.test.mjs",
+    "test/fixture-consumer/greenfield-ci-release.test.mjs",
+    "test/fixture-consumer/greenfield-delivery-selection.test.mjs",
+    "test/fixture-consumer/greenfield-live-evidence.test.mjs",
+    "test/fixture-consumer/greenfield-optional-gates.test.mjs",
+    "test/fixture-consumer/greenfield-prepared-program.test.mjs",
+    "test/fixture-consumer/greenfield-review-regressions.test.mjs",
+    "test/fixture-consumer/greenfield-test-selection.test.mjs",
+    "test/fixture-consumer/harness.smoke.test.mjs",
+    "test/fixture-consumer/layout-docs.test.mjs",
+    "test/fixture-consumer/lifecycle.test.mjs"
+  ],
+  "cwd": "/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/plugins/zeroh-roadmap",
+  "exitCode": 0,
+  "elapsedSeconds": 284.62612438201904
+}

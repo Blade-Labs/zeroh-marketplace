@@ -1,0 +1,4 @@
+gate run: --slots history-comments is a PARTIAL run, so the per-phase eval record /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/roadmap/arc-evals/phase-34.peval.json was left untouched — a filtered run is not a sample; the next full gate run writes it
+
+gate run phase 34 — GREEN (/home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34/roadmap/.gate/34/run-000018-2026-09-06T11-21-37-675Z.json)
+  history-comments     exit 0 (0ms)

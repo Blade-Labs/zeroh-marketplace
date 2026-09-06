@@ -1,0 +1,908 @@
+capbuild: running in /home/patrik/zeroh-marketplace-codex-29-30-31-32-33-34 — MemoryMax=8G MemorySwapMax=2G heap=4096M
+capbuild: $ node --test --test-concurrency=1 plugins/zeroh-roadmap/cli/commands/gate.test.mjs plugins/zeroh-roadmap/cli/lib/slots.test.mjs
+TAP version 13
+# Subtest: gate plan — baseSha is the parent of the OLDEST phase-own commit; the em-dash boundary keeps 136 ≠ 1369
+ok 1 - gate plan — baseSha is the parent of the OLDEST phase-own commit; the em-dash boundary keeps 136 ≠ 1369
+  ---
+  duration_ms: 1632.51258
+  type: 'test'
+  ...
+# Subtest: gate plan — --base overrides the derivation
+ok 2 - gate plan — --base overrides the derivation
+  ---
+  duration_ms: 1572.450536
+  type: 'test'
+  ...
+# Subtest: gate plan — D1: an ancient `phase N —` mention + a newer move-to-in-progress → base is the move-commit parent, no false specialist floor
+ok 3 - gate plan — D1: an ancient `phase N —` mention + a newer move-to-in-progress → base is the move-commit parent, no false specialist floor
+  ---
+  duration_ms: 1608.835651
+  type: 'test'
+  ...
+# Subtest: gate plan — D6: an ancient spine mention with NO move-commit → --base excludes it from diff/floor
+ok 4 - gate plan — D6: an ancient spine mention with NO move-commit → --base excludes it from diff/floor
+  ---
+  duration_ms: 1648.007886
+  type: 'test'
+  ...
+# Subtest: gate plan — a declared static over a SPECIALIST-path diff REFUSES with exit 2
+ok 5 - gate plan — a declared static over a SPECIALIST-path diff REFUSES with exit 2
+  ---
+  duration_ms: 1623.729863
+  type: 'test'
+  ...
+# Subtest: gate plan — a ladder-OFF consumer (no testCadence) yields effective full
+ok 6 - gate plan — a ladder-OFF consumer (no testCadence) yields effective full
+  ---
+  duration_ms: 1607.055074
+  type: 'test'
+  ...
+# Subtest: untestedGateFixFindings — a gate-fix touching ONLY source → one finding naming its sha7 + subject
+ok 7 - untestedGateFixFindings — a gate-fix touching ONLY source → one finding naming its sha7 + subject
+  ---
+  duration_ms: 55.779287
+  type: 'test'
+  ...
+# Subtest: untestedGateFixFindings — a gate-fix touching src + a .test.mjs sibling → no finding
+ok 8 - untestedGateFixFindings — a gate-fix touching src + a .test.mjs sibling → no finding
+  ---
+  duration_ms: 48.550898
+  type: 'test'
+  ...
+# Subtest: untestedGateFixFindings — a docs-only gate-fix → no finding (no executable source touched)
+ok 9 - untestedGateFixFindings — a docs-only gate-fix → no finding (no executable source touched)
+  ---
+  duration_ms: 47.28039
+  type: 'test'
+  ...
+# Subtest: untestedGateFixFindings — a non-gate-fix subject (feat) touching only src → no finding
+ok 10 - untestedGateFixFindings — a non-gate-fix subject (feat) touching only src → no finding
+  ---
+  duration_ms: 52.206752
+  type: 'test'
+  ...
+# Subtest: deviantGrammarFindings — a `phase N N.X —` subject → one finding naming its sha7 + subject
+ok 11 - deviantGrammarFindings — a `phase N N.X —` subject → one finding naming its sha7 + subject
+  ---
+  duration_ms: 61.00516
+  type: 'test'
+  ...
+# Subtest: deviantGrammarFindings — the correct `phase N — N.X` form → no finding
+ok 12 - deviantGrammarFindings — the correct `phase N — N.X` form → no finding
+  ---
+  duration_ms: 56.172887
+  type: 'test'
+  ...
+# Subtest: deviantGrammarFindings — a DIFFERENT phase's deviant commit → no finding for this phase
+ok 13 - deviantGrammarFindings — a DIFFERENT phase's deviant commit → no finding for this phase
+  ---
+  duration_ms: 47.86346
+  type: 'test'
+  ...
+# Subtest: gate plan — a docs-only diff yields static test scope + none review scope
+ok 14 - gate plan — a docs-only diff yields static test scope + none review scope
+  ---
+  duration_ms: 1659.27992
+  type: 'test'
+  ...
+# Subtest: gate plan — designParity.required when the phase cites a ux designRef
+ok 15 - gate plan — designParity.required when the phase cites a ux designRef
+  ---
+  duration_ms: 1873.625634
+  type: 'test'
+  ...
+# Subtest: gate plan — the plan JSON carries every field of the design sketch
+ok 16 - gate plan — the plan JSON carries every field of the design sketch
+  ---
+  duration_ms: 1709.985336
+  type: 'test'
+  ...
+# Subtest: gate plan — FOREIGN commit in range: scope binds to phase-own files, foreignCommitsInRange lists the rest
+ok 17 - gate plan — FOREIGN commit in range: scope binds to phase-own files, foreignCommitsInRange lists the rest
+  ---
+  duration_ms: 1678.148564
+  type: 'test'
+  ...
+# Subtest: gate plan — 1661 class: docs-only phase interleaved with foreign exec commits derives the docs floor; foreign + phase files never cross
+ok 18 - gate plan — 1661 class: docs-only phase interleaved with foreign exec commits derives the docs floor; foreign + phase files never cross
+  ---
+  duration_ms: 1709.986378
+  type: 'test'
+  ...
+# Subtest: gate plan — 1661 class: a plain (foreign, no phase subject) merge commit in range is excluded — no crash, no leak
+ok 19 - gate plan — 1661 class: a plain (foreign, no phase subject) merge commit in range is excluded — no crash, no leak
+  ---
+  duration_ms: 1649.302781
+  type: 'test'
+  ...
+# Subtest: gate plan — 1661 class: an ADVERSARIAL merge whose subject names "phase 5003 —" still keeps its merged-in files OUT of the phase-own set
+ok 20 - gate plan — 1661 class: an ADVERSARIAL merge whose subject names "phase 5003 —" still keeps its merged-in files OUT of the phase-own set
+  ---
+  duration_ms: 1759.304735
+  type: 'test'
+  ...
+# Subtest: gate plan — 1661 class: --base binds baseSha to the given sha verbatim (the b8a4250 contract)
+ok 21 - gate plan — 1661 class: --base binds baseSha to the given sha verbatim (the b8a4250 contract)
+  ---
+  duration_ms: 1684.047444
+  type: 'test'
+  ...
+# Subtest: gate plan — a phase whose keyFiles live in a SIBLING repository floors the DERIVED review scope to full and names that repository
+ok 22 - gate plan — a phase whose keyFiles live in a SIBLING repository floors the DERIVED review scope to full and names that repository
+  ---
+  duration_ms: 1659.036307
+  type: 'test'
+  ...
+# Subtest: gate plan — TWO sibling product repositories are BOTH named, in keyFiles declaration order
+ok 23 - gate plan — TWO sibling product repositories are BOTH named, in keyFiles declaration order
+  ---
+  duration_ms: 1711.871153
+  type: 'test'
+  ...
+# Subtest: gate plan — reviewer evidence names EVERY foreign repo beyond the liveness cap
+ok 24 - gate plan — reviewer evidence names EVERY foreign repo beyond the liveness cap
+  ---
+  duration_ms: 1842.587491
+  type: 'test'
+  ...
+# Subtest: gate plan — a DECLARED light reviewScope on a sibling-repo phase is REFUSED with exit 2, naming the repository
+ok 25 - gate plan — a DECLARED light reviewScope on a sibling-repo phase is REFUSED with exit 2, naming the repository
+  ---
+  duration_ms: 1551.085154
+  type: 'test'
+  ...
+# Subtest: gate plan — combined specialist and cross-repo floors preserve BOTH refusal reasons
+ok 26 - gate plan — combined specialist and cross-repo floors preserve BOTH refusal reasons
+  ---
+  duration_ms: 1549.969271
+  type: 'test'
+  ...
+# Subtest: gate plan — a DECLARED full reviewScope on a sibling-repo phase is honored, not refused
+ok 27 - gate plan — a DECLARED full reviewScope on a sibling-repo phase is honored, not refused
+  ---
+  duration_ms: 1642.289461
+  type: 'test'
+  ...
+# Subtest: gate plan — a LOCAL-only phase (relative keyFiles) derives light exactly as before — no cross-repo drift
+ok 28 - gate plan — a LOCAL-only phase (relative keyFiles) derives light exactly as before — no cross-repo drift
+  ---
+  duration_ms: 1577.371448
+  type: 'test'
+  ...
+# Subtest: gate plan — a LOCAL-only phase whose keyFiles are ABSOLUTE paths inside the worktree still derives light
+ok 29 - gate plan — a LOCAL-only phase whose keyFiles are ABSOLUTE paths inside the worktree still derives light
+  ---
+  duration_ms: 1550.216392
+  type: 'test'
+  ...
+# Subtest: gate plan — keyFiles in a LINKED WORKTREE of the same repository are not foreign — the rung stays light
+ok 30 - gate plan — keyFiles in a LINKED WORKTREE of the same repository are not foreign — the rung stays light
+  ---
+  duration_ms: 1595.945241
+  type: 'test'
+  ...
+# Subtest: gate run — a green run exits 0 and writes a green report under roadmap/.gate/<phase>/
+ok 31 - gate run — a green run exits 0 and writes a green report under roadmap/.gate/<phase>/
+  ---
+  duration_ms: 1647.712037
+  type: 'test'
+  ...
+# Subtest: gate run — a RED slot forces exit 2 and records that slot exitCode + the marker in the log
+ok 32 - gate run — a RED slot forces exit 2 and records that slot exitCode + the marker in the log
+  ---
+  duration_ms: 1642.041438
+  type: 'test'
+  ...
+# Subtest: gate run --slots — a BASE tier name matches its resolved -scoped/-impacted slot (never a silent zero-slot green)
+ok 33 - gate run --slots — a BASE tier name matches its resolved -scoped/-impacted slot (never a silent zero-slot green)
+  ---
+  duration_ms: 1625.693721
+  type: 'test'
+  ...
+# Subtest: gate run --slots — a name matching NO plan slot exits 2, never a green report with zero slots run
+ok 34 - gate run --slots — a name matching NO plan slot exits 2, never a green report with zero slots run
+  ---
+  duration_ms: 1531.088436
+  type: 'test'
+  ...
+# Subtest: gate run — exec.preReview runs as one recorded row; an absent key produces none
+ok 35 - gate run — exec.preReview runs as one recorded row; an absent key produces none
+  ---
+  duration_ms: 3151.431699
+  type: 'test'
+  ...
+# Subtest: gate run --record-round — appends to the SAME report file
+ok 36 - gate run --record-round — appends to the SAME report file
+  ---
+  duration_ms: 1758.425614
+  type: 'test'
+  ...
+# Subtest: gate run --record-round enforces correctness cap unless a named override is recorded
+ok 37 - gate run --record-round enforces correctness cap unless a named override is recorded
+  ---
+  duration_ms: 2049.260854
+  type: 'test'
+  ...
+# Subtest: gate run --record-round — an unknown finding severity exits 2 and names the complete allowed set
+ok 38 - gate run --record-round — an unknown finding severity exits 2 and names the complete allowed set
+  ---
+  duration_ms: 1747.715451
+  type: 'test'
+  ...
+# Subtest: gate round-brief — derives all six correctness-loop directions from the latest recorded round
+ok 39 - gate round-brief — derives all six correctness-loop directions from the latest recorded round
+  ---
+  duration_ms: 11749.016649
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — exit 2 on a gateRounds mismatch, exit 0 on the coherent twin
+ok 40 - gate run --verify-complete — exit 2 on a gateRounds mismatch, exit 0 on the coherent twin
+  ---
+  duration_ms: 2103.970358
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — a new codex completion cannot reuse an old report without independent review
+ok 41 - gate run --verify-complete — a new codex completion cannot reuse an old report without independent review
+  ---
+  duration_ms: 3171.278114
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — no report dir exits 1
+ok 42 - gate run --verify-complete — no report dir exits 1
+  ---
+  duration_ms: 211.346761
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — a DONE phase with no executionResult.driver warns on stdout, exit code unchanged
+ok 43 - gate run --verify-complete — a DONE phase with no executionResult.driver warns on stdout, exit code unchanged
+  ---
+  duration_ms: 2099.238347
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — the SAME done phase WITH executionResult.driver emits no warning and the same exit code
+ok 44 - gate run --verify-complete — the SAME done phase WITH executionResult.driver emits no warning and the same exit code
+  ---
+  duration_ms: 1818.755379
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — a NOT-done phase without executionResult.driver is not warned about (the done guard)
+ok 45 - gate run --verify-complete — a NOT-done phase without executionResult.driver is not warned about (the done guard)
+  ---
+  duration_ms: 1927.868483
+  type: 'test'
+  ...
+# Subtest: gate plan — an EMPTY scoped selection SKIPS the scoped slots with a named note, never a refusal (1737 run-000001 class)
+ok 46 - gate plan — an EMPTY scoped selection SKIPS the scoped slots with a named note, never a refusal (1737 run-000001 class)
+  ---
+  duration_ms: 1638.071077
+  type: 'test'
+  ...
+# Subtest: gate plan — a -spec SOURCE module selects its colocated .test.ts, and never itself (the workflow-agent-spec class)
+ok 47 - gate plan — a -spec SOURCE module selects its colocated .test.ts, and never itself (the workflow-agent-spec class)
+  ---
+  duration_ms: 1595.640002
+  type: 'test'
+  ...
+# Subtest: gate plan — relevant leaf source without tests selects affected via a quoted manifest, never interpolates its filename
+ok 48 - gate plan — relevant leaf source without tests selects affected via a quoted manifest, never interpolates its filename
+  ---
+  duration_ms: 1697.829495
+  type: 'test'
+  ...
+# Subtest: gate plan — mixed source and exact-test changes select affected with the complete living phase scope
+ok 49 - gate plan — mixed source and exact-test changes select affected with the complete living phase scope
+  ---
+  duration_ms: 1631.659491
+  type: 'test'
+  ...
+# Subtest: gate plan — a deleted executable mixed with an exact test falls back to the full tier byte-identically
+ok 50 - gate plan — a deleted executable mixed with an exact test falls back to the full tier byte-identically
+  ---
+  duration_ms: 1521.1076
+  type: 'test'
+  ...
+# Subtest: gate plan — a VACUOUS scoped runner is NAMED per slot, and the plan's exit semantics are unchanged
+ok 51 - gate plan — a VACUOUS scoped runner is NAMED per slot, and the plan's exit semantics are unchanged
+  ---
+  duration_ms: 1610.46836
+  type: 'test'
+  ...
+# Subtest: gate plan — an HONEST scoped runner is really probed and stays SILENT
+ok 52 - gate plan — an HONEST scoped runner is really probed and stays SILENT
+  ---
+  duration_ms: 1594.440019
+  type: 'test'
+  ...
+# Subtest: gate plan — an UNANSWERABLE scoped probe is NAMED and leaves the plan intact
+ok 53 - gate plan — an UNANSWERABLE scoped probe is NAMED and leaves the plan intact
+  ---
+  duration_ms: 34.898135
+  type: 'test'
+  ...
+# Subtest: gate plan — the probe runs ONCE per DISTINCT template, never once per slot
+ok 54 - gate plan — the probe runs ONCE per DISTINCT template, never once per slot
+  ---
+  duration_ms: 1543.790881
+  type: 'test'
+  ...
+# Subtest: gate plan — DISTINCT scoped templates are each probed once; only the vacuous one is named
+ok 55 - gate plan — DISTINCT scoped templates are each probed once; only the vacuous one is named
+  ---
+  duration_ms: 1629.937306
+  type: 'test'
+  ...
+# Subtest: gate plan — the guard-mutation-proof obligation rides notes on EVERY plan, whatever the kind
+ok 56 - gate plan — the guard-mutation-proof obligation rides notes on EVERY plan, whatever the kind
+  ---
+  duration_ms: 3241.340204
+  type: 'test'
+  ...
+# Subtest: gate run — a green run leaves a phase-<N>.peval.json whose attribution + cohort keys are the PHASE FILE's own values
+ok 57 - gate run — a green run leaves a phase-<N>.peval.json whose attribution + cohort keys are the PHASE FILE's own values
+  ---
+  duration_ms: 3084.558782
+  type: 'test'
+  ...
+# Subtest: gate run — a RED run is a sample too: the record is written with green:false and the failing slot exitCode
+ok 58 - gate run — a RED run is a sample too: the record is written with green:false and the failing slot exitCode
+  ---
+  duration_ms: 3037.165116
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — the refresh adds executionResult.driver + metrics to the SAME record file
+ok 59 - gate run --verify-complete — the refresh adds executionResult.driver + metrics to the SAME record file
+  ---
+  duration_ms: 6320.415236
+  type: 'test'
+  ...
+# Subtest: gate run — an unwritable arc-evals path cannot change a GREEN verdict, and the failure is named on stderr
+ok 60 - gate run — an unwritable arc-evals path cannot change a GREEN verdict, and the failure is named on stderr
+  ---
+  duration_ms: 3288.764911
+  type: 'test'
+  ...
+# Subtest: gate run — an unwritable arc-evals path cannot rescue a RED verdict either
+ok 61 - gate run — an unwritable arc-evals path cannot rescue a RED verdict either
+  ---
+  duration_ms: 3089.734078
+  type: 'test'
+  ...
+# Subtest: gate run — a re-run OVERWRITES the record (latest-run-wins), never an accumulating archive
+ok 62 - gate run — a re-run OVERWRITES the record (latest-run-wins), never an accumulating archive
+  ---
+  duration_ms: 4754.35834
+  type: 'test'
+  ...
+# Subtest: gate run --slots <subset> — leaves the record UNTOUCHED and says so (a filtered run is not a sample)
+ok 63 - gate run --slots <subset> — leaves the record UNTOUCHED and says so (a filtered run is not a sample)
+  ---
+  duration_ms: 3609.85807
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete over a FILTERED latest report — refuses the flip and refreshes nothing
+ok 64 - gate run --verify-complete over a FILTERED latest report — refuses the flip and refreshes nothing
+  ---
+  duration_ms: 5006.803471
+  type: 'test'
+  ...
+# Subtest: gate run --record-round — records no eval record (it changes only agent rounds, which the record does not carry)
+ok 65 - gate run --record-round — records no eval record (it changes only agent rounds, which the record does not carry)
+  ---
+  duration_ms: 3242.029437
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — a phase claiming a DIFFERENT driver than the lane journal exits 2, naming journal truth beside file claim
+ok 66 - gate run --verify-complete — a phase claiming a DIFFERENT driver than the lane journal exits 2, naming journal truth beside file claim
+  ---
+  duration_ms: 1789.132782
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — a lane journal beside a phase file with NO executionResult.driver exits 2, not a warning
+ok 67 - gate run --verify-complete — a lane journal beside a phase file with NO executionResult.driver exits 2, not a warning
+  ---
+  duration_ms: 1909.8138
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — a phase whose driver AGREES with the journal verifies unchanged
+ok 68 - gate run --verify-complete — a phase whose driver AGREES with the journal verifies unchanged
+  ---
+  duration_ms: 1960.218825
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — a journal whose lane pins NO model announces the model UNRECONCILED and still reconciles the lane
+ok 69 - gate run --verify-complete — a journal whose lane pins NO model announces the model UNRECONCILED and still reconciles the lane
+  ---
+  duration_ms: 1905.418078
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — an unpinned-model journal still REDS a lane that disagrees
+ok 70 - gate run --verify-complete — an unpinned-model journal still REDS a lane that disagrees
+  ---
+  duration_ms: 1946.206139
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — with NO lane journal the driver claim is not reconciled at all (an inline session)
+ok 71 - gate run --verify-complete — with NO lane journal the driver claim is not reconciled at all (an inline session)
+  ---
+  duration_ms: 1847.405915
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete inside a LINKED codex worktree — the journal is resolved from the PRIMARY checkout
+ok 72 - gate run --verify-complete inside a LINKED codex worktree — the journal is resolved from the PRIMARY checkout
+  ---
+  duration_ms: 1851.818467
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete in worktree B ignores phase-matching journal A, then reconciles against B when present
+ok 73 - gate run --verify-complete in worktree B ignores phase-matching journal A, then reconciles against B when present
+  ---
+  duration_ms: 2160.691892
+  type: 'test'
+  ...
+# Subtest: gate eval fingerprint matches primary checkout from linked worktree
+ok 74 - gate eval fingerprint matches primary checkout from linked worktree
+  ---
+  duration_ms: 3273.553266
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete refresh keeps the primary checkout fingerprint
+ok 75 - gate run --verify-complete refresh keeps the primary checkout fingerprint
+  ---
+  duration_ms: 6427.970263
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — an UNREADABLE lane journal reds naming the file, never passes as "inline session"
+ok 76 - gate run --verify-complete — an UNREADABLE lane journal reds naming the file, never passes as "inline session"
+  ---
+  duration_ms: 1894.833826
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — a driver mismatch names the STALE-JOURNAL remedy, not just the disagreement
+ok 77 - gate run --verify-complete — a driver mismatch names the STALE-JOURNAL remedy, not just the disagreement
+  ---
+  duration_ms: 1869.347825
+  type: 'test'
+  ...
+# Subtest: gate run --record-round — corrupt newest report is NAMED, never reported as no report at all
+ok 78 - gate run --record-round — corrupt newest report is NAMED, never reported as no report at all
+  ---
+  duration_ms: 2205.840258
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — corrupt newest report names the report, not an empty .gate dir
+ok 79 - gate run --verify-complete — corrupt newest report names the report, not an empty .gate dir
+  ---
+  duration_ms: 2314.631839
+  type: 'test'
+  ...
+# Subtest: gate run refuses --slots with --record-round — both flags named, the report byte-identical
+ok 80 - gate run refuses --slots with --record-round — both flags named, the report byte-identical
+  ---
+  duration_ms: 2002.804166
+  type: 'test'
+  ...
+# Subtest: gate run refuses --slots with --verify-complete — both flags named, no verdict and no refresh
+ok 81 - gate run refuses --slots with --verify-complete — both flags named, no verdict and no refresh
+  ---
+  duration_ms: 2142.027467
+  type: 'test'
+  ...
+# Subtest: gate run --slots on the default execute path stays fully supported and stamps slotFilter
+ok 82 - gate run --slots on the default execute path stays fully supported and stamps slotFilter
+  ---
+  duration_ms: 1674.597965
+  type: 'test'
+  ...
+# Subtest: gate run --record-round refuses a FILTERED latest report — the sequential form, not just the same-invocation one
+ok 83 - gate run --record-round refuses a FILTERED latest report — the sequential form, not just the same-invocation one
+  ---
+  duration_ms: 2425.993872
+  type: 'test'
+  ...
+# Subtest: the --slots conflict guard answers for `run` ONLY — it never shadows another subcommand's own diagnostic
+ok 84 - the --slots conflict guard answers for `run` ONLY — it never shadows another subcommand's own diagnostic
+  ---
+  duration_ms: 2059.092512
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — attribution is still reconciled after the lane journal is ARCHIVED by a land
+ok 85 - gate run --verify-complete — attribution is still reconciled after the lane journal is ARCHIVED by a land
+  ---
+  duration_ms: 1819.498597
+  type: 'test'
+  ...
+# Subtest: gate run --verify-complete — an UNREADABLE ARCHIVED journal reds, exactly as the live one does
+ok 86 - gate run --verify-complete — an UNREADABLE ARCHIVED journal reds, exactly as the live one does
+  ---
+  duration_ms: 1814.344724
+  type: 'test'
+  ...
+# Subtest: gate run — a software-architect round is recordable AND declarable: it appends, the phase file parses, the counts agree
+ok 87 - gate run — a software-architect round is recordable AND declarable: it appends, the phase file parses, the counts agree
+  ---
+  duration_ms: 5038.260257
+  type: 'test'
+  ...
+# Subtest: gate run — a self-review round is recordable AND declarable: it appends, the phase file parses, the counts agree
+ok 88 - gate run — a self-review round is recordable AND declarable: it appends, the phase file parses, the counts agree
+  ---
+  duration_ms: 4988.655807
+  type: 'test'
+  ...
+# Subtest: gate run — the five pre-existing enum members still parse and still record (the widening adds, it never swaps)
+ok 89 - gate run — the five pre-existing enum members still parse and still record (the widening adds, it never swaps)
+  ---
+  duration_ms: 5891.875335
+  type: 'test'
+  ...
+# Subtest: gate run — the CONSUMER schema home accepts the same widened enum as the plugin template (the two homes are one contract)
+ok 90 - gate run — the CONSUMER schema home accepts the same widened enum as the plugin template (the two homes are one contract)
+  ---
+  duration_ms: 5463.579175
+  type: 'test'
+  ...
+# Subtest: gate plan — 16.2: a deviant-grammar history derives the same base and phase-own file set as its canonical twin
+ok 91 - gate plan — 16.2: a deviant-grammar history derives the same base and phase-own file set as its canonical twin
+  ---
+  duration_ms: 3297.469115
+  type: 'test'
+  ...
+# Subtest: gate plan — 16.2: two deviant-grammar phases share a range and attribute only their own files, in both directions
+ok 92 - gate plan — 16.2: two deviant-grammar phases share a range and attribute only their own files, in both directions
+  ---
+  duration_ms: 3213.529839
+  type: 'test'
+  ...
+# Subtest: gate plan — 16.2: gate.mjs carries no fixed-string phase-number/em-dash grep — it binds on the shared matcher
+ok 93 - gate plan — 16.2: gate.mjs carries no fixed-string phase-number/em-dash grep — it binds on the shared matcher
+  ---
+  duration_ms: 1.466991
+  type: 'test'
+  ...
+# Subtest: deviantGrammarFindings — 16.3: every tolerated deviant class emits its own teaching WARN
+ok 94 - deviantGrammarFindings — 16.3: every tolerated deviant class emits its own teaching WARN
+  ---
+  duration_ms: 129.494084
+  type: 'test'
+  ...
+# Subtest: deviantGrammarFindings — 16.3: the taught write forms warn about nothing (the batch step’s (k/M) token is not D1)
+ok 95 - deviantGrammarFindings — 16.3: the taught write forms warn about nothing (the batch step’s (k/M) token is not D1)
+  ---
+  duration_ms: 98.164747
+  type: 'test'
+  ...
+# Subtest: deviantGrammarFindings — 16.3: overlapping D1 and D4 deviations produce one WARN naming both
+ok 96 - deviantGrammarFindings — 16.3: overlapping D1 and D4 deviations produce one WARN naming both
+  ---
+  duration_ms: 48.053431
+  type: 'test'
+  ...
+# Subtest: deviantGrammarFindings — 16.3: a neighbouring phase number warns nothing here, and still warns for itself
+ok 97 - deviantGrammarFindings — 16.3: a neighbouring phase number warns nothing here, and still warns for itself
+  ---
+  duration_ms: 317.253857
+  type: 'test'
+  ...
+# Subtest: deviantGrammarFindings — 16.3: a subject that merely QUOTES the grammar is not this phase’s to teach
+ok 98 - deviantGrammarFindings — 16.3: a subject that merely QUOTES the grammar is not this phase’s to teach
+  ---
+  duration_ms: 76.433277
+  type: 'test'
+  ...
+# Subtest: phaseOwnFiles: the commit-header detector is hash-WIDTH agnostic (sha256 repos)
+ok 99 - phaseOwnFiles: the commit-header detector is hash-WIDTH agnostic (sha256 repos)
+  ---
+  duration_ms: 0.548072
+  type: 'test'
+  ...
+# Subtest: history scan excludes nonscannable artifact payloads before buffering and retains source findings
+ok 100 - history scan excludes nonscannable artifact payloads before buffering and retains source findings
+  ---
+  duration_ms: 39.921863
+  type: 'test'
+  ...
+# Subtest: history scan preserves rename detection when a nonscannable file gains a source suffix
+ok 101 - history scan preserves rename detection when a nonscannable file gains a source suffix
+  ---
+  duration_ms: 50.608652
+  type: 'test'
+  ...
+# Subtest: resolveSlot — a plain slot resolves to its command
+ok 102 - resolveSlot — a plain slot resolves to its command
+  ---
+  duration_ms: 6.146141
+  type: 'test'
+  ...
+# Subtest: resolveSlot — a missing slot REFUSES with the exact string
+ok 103 - resolveSlot — a missing slot REFUSES with the exact string
+  ---
+  duration_ms: 0.41472
+  type: 'test'
+  ...
+# Subtest: resolveSlot — a slot bound to the literal 'none' is declaredAbsent, not a failure
+ok 104 - resolveSlot — a slot bound to the literal 'none' is declaredAbsent, not a failure
+  ---
+  duration_ms: 0.225068
+  type: 'test'
+  ...
+# Subtest: resolveSlot — legacy {files} substitution remains compatible
+ok 105 - resolveSlot — legacy {files} substitution remains compatible
+  ---
+  duration_ms: 0.243182
+  type: 'test'
+  ...
+# Subtest: resolveSlot — {manifest} accepts only a validated token in a quoted placeholder
+ok 106 - resolveSlot — {manifest} accepts only a validated token in a quoted placeholder
+  ---
+  duration_ms: 0.708417
+  type: 'test'
+  ...
+# Subtest: resolveSlot — {range} substitutes verbatim
+ok 107 - resolveSlot — {range} substitutes verbatim
+  ---
+  duration_ms: 0.244506
+  type: 'test'
+  ...
+# Subtest: createScopeManifest — any traversal invalidates the whole scope and cleanup removes its exit listener
+ok 108 - createScopeManifest — any traversal invalidates the whole scope and cleanup removes its exit listener
+  ---
+  duration_ms: 2.61285
+  type: 'test'
+  ...
+# Subtest: resolveSlot — a {files} placeholder with no value REFUSES (never a literal-brace command)
+ok 109 - resolveSlot — a {files} placeholder with no value REFUSES (never a literal-brace command)
+  ---
+  duration_ms: 0.249635
+  type: 'test'
+  ...
+# Subtest: resolveScopedOrFallback — a bound scoped slot substitutes files
+ok 110 - resolveScopedOrFallback — a bound scoped slot substitutes files
+  ---
+  duration_ms: 0.772879
+  type: 'test'
+  ...
+# Subtest: resolveScopedOrFallback — an UNBOUND scoped slot returns the full command byte-identical + the verbatim note
+ok 111 - resolveScopedOrFallback — an UNBOUND scoped slot returns the full command byte-identical + the verbatim note
+  ---
+  duration_ms: 0.501495
+  type: 'test'
+  ...
+# Subtest: resolveImpactedOrFallback — a bound impacted slot substitutes the {range} verbatim
+ok 112 - resolveImpactedOrFallback — a bound impacted slot substitutes the {range} verbatim
+  ---
+  duration_ms: 0.359795
+  type: 'test'
+  ...
+# Subtest: resolveImpactedOrFallback — an UNBOUND impacted slot returns the full command byte-identical + the verbatim note
+ok 113 - resolveImpactedOrFallback — an UNBOUND impacted slot returns the full command byte-identical + the verbatim note
+  ---
+  duration_ms: 0.135126
+  type: 'test'
+  ...
+# Subtest: resolveImpactedOrFallback — a bound impacted slot with NO range REFUSES (never a literal-brace command)
+ok 114 - resolveImpactedOrFallback — a bound impacted slot with NO range REFUSES (never a literal-brace command)
+  ---
+  duration_ms: 0.127953
+  type: 'test'
+  ...
+# Subtest: resolveImpactedOrFallback — an impacted slot bound to the literal 'none' falls back to the full tier
+ok 115 - resolveImpactedOrFallback — an impacted slot bound to the literal 'none' falls back to the full tier
+  ---
+  duration_ms: 0.157179
+  type: 'test'
+  ...
+# GREEN_MARKER_123
+# Subtest: runSlot — a green fake command: exit 0, marker tee-d to the log AND streamed to stdout
+ok 116 - runSlot — a green fake command: exit 0, marker tee-d to the log AND streamed to stdout
+  ---
+  duration_ms: 22.674262
+  type: 'test'
+  ...
+# FAIL_MARKER
+# Subtest: runSlot — a red fake command returns its exit code as DATA (never throws)
+ok 117 - runSlot — a red fake command returns its exit code as DATA (never throws)
+  ---
+  duration_ms: 4.439355
+  type: 'test'
+  ...
+# Subtest: runSlot — carries a scoped-fallback note through to the result row
+ok 118 - runSlot — carries a scoped-fallback note through to the result row
+  ---
+  duration_ms: 6.054016
+  type: 'test'
+  ...
+# Subtest: resolveSlot — {base} substitutes VERBATIM (sibling of {files}/{range})
+ok 119 - resolveSlot — {base} substitutes VERBATIM (sibling of {files}/{range})
+  ---
+  duration_ms: 0.224747
+  type: 'test'
+  ...
+# Subtest: resolveSlot — a {base} placeholder with no value REFUSES (never a literal-brace command)
+ok 120 - resolveSlot — a {base} placeholder with no value REFUSES (never a literal-brace command)
+  ---
+  duration_ms: 0.139384
+  type: 'test'
+  ...
+# Subtest: resolveHygieneSlots — a bound lint-diff resolves with {base} → the base sha
+ok 121 - resolveHygieneSlots — a bound lint-diff resolves with {base} → the base sha
+  ---
+  duration_ms: 0.312925
+  type: 'test'
+  ...
+# Subtest: resolveHygieneSlots — an UNBOUND lint-diff is a NAMED skip OBJECT, never omitted
+ok 122 - resolveHygieneSlots — an UNBOUND lint-diff is a NAMED skip OBJECT, never omitted
+  ---
+  duration_ms: 0.160685
+  type: 'test'
+  ...
+# Subtest: resolveHygieneSlots — lint-diff bound to 'none' is declaredAbsent like its siblings
+ok 123 - resolveHygieneSlots — lint-diff bound to 'none' is declaredAbsent like its siblings
+  ---
+  duration_ms: 0.139996
+  type: 'test'
+  ...
+# Subtest: resolveHygieneSlots — lintDiffMatches filters to the linter estate; all-outside ⇒ the NAMED estate skip
+ok 124 - resolveHygieneSlots — lintDiffMatches filters to the linter estate; all-outside ⇒ the NAMED estate skip
+  ---
+  duration_ms: 0.734477
+  type: 'test'
+  ...
+# Subtest: resolveHygieneSlots — the estate filter is ANCHORED: site/src does NOT tail-collide with src/**
+ok 125 - resolveHygieneSlots — the estate filter is ANCHORED: site/src does NOT tail-collide with src/**
+  ---
+  duration_ms: 0.280414
+  type: 'test'
+  ...
+# Subtest: historyCommentFindings — an ADDED comment with a phase number is a finding (file+line+match)
+ok 126 - historyCommentFindings — an ADDED comment with a phase number is a finding (file+line+match)
+  ---
+  duration_ms: 0.560005
+  type: 'test'
+  ...
+# Subtest: historyCommentFindings — a date literal in a \# comment is a finding at the right line
+ok 127 - historyCommentFindings — a date literal in a \# comment is a finding at the right line
+  ---
+  duration_ms: 0.424969
+  type: 'test'
+  ...
+# Subtest: historyCommentFindings — a version literal in a jsdoc (*) comment is a finding
+ok 128 - historyCommentFindings — a version literal in a jsdoc (*) comment is a finding
+  ---
+  duration_ms: 0.160376
+  type: 'test'
+  ...
+# Subtest: historyCommentFindings — an ADDED CODE line carrying a version literal is NOT a finding
+ok 129 - historyCommentFindings — an ADDED CODE line carrying a version literal is NOT a finding
+  ---
+  duration_ms: 0.117454
+  type: 'test'
+  ...
+# Subtest: historyCommentFindings — files under roadmap/ are EXEMPT (phase files legitimately carry numbers)
+ok 130 - historyCommentFindings — files under roadmap/ are EXEMPT (phase files legitimately carry numbers)
+  ---
+  duration_ms: 0.312455
+  type: 'test'
+  ...
+# Subtest: historyCommentFindings — REMOVED and CONTEXT comment lines never match (added-only)
+ok 131 - historyCommentFindings — REMOVED and CONTEXT comment lines never match (added-only)
+  ---
+  duration_ms: 0.12541
+  type: 'test'
+  ...
+# Subtest: resolveConditionalSlots — a matching glob resolves its slot, augmented with a reason naming the glob
+ok 132 - resolveConditionalSlots — a matching glob resolves its slot, augmented with a reason naming the glob
+  ---
+  duration_ms: 0.318246
+  type: 'test'
+  ...
+# Subtest: resolveConditionalSlots — no diff path matches any entry → [] (no phantom slots)
+ok 133 - resolveConditionalSlots — no diff path matches any entry → [] (no phantom slots)
+  ---
+  duration_ms: 0.177737
+  type: 'test'
+  ...
+# Subtest: resolveConditionalSlots — mixed entries: only the matching one resolves
+ok 134 - resolveConditionalSlots — mixed entries: only the matching one resolves
+  ---
+  duration_ms: 0.146168
+  type: 'test'
+  ...
+# Subtest: resolveConditionalSlots — two entries both match → both resolve, each with its own glob reason
+ok 135 - resolveConditionalSlots — two entries both match → both resolve, each with its own glob reason
+  ---
+  duration_ms: 0.240118
+  type: 'test'
+  ...
+# Subtest: resolveConditionalSlots — a matching entry whose slot is UNBOUND returns the refusal shape verbatim
+ok 136 - resolveConditionalSlots — a matching entry whose slot is UNBOUND returns the refusal shape verbatim
+  ---
+  duration_ms: 0.283951
+  type: 'test'
+  ...
+# Subtest: resolveConditionalSlots — glob semantics ARE matchGlobPath (src/contracts/** hits src/contracts/foo.ts, misses web/src/x.ts)
+ok 137 - resolveConditionalSlots — glob semantics ARE matchGlobPath (src/contracts/** hits src/contracts/foo.ts, misses web/src/x.ts)
+  ---
+  duration_ms: 0.187727
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — slots.mjs EXPORTS the probe (a gate that cannot ask cannot answer)
+ok 138 - probeScopedSlot — slots.mjs EXPORTS the probe (a gate that cannot ask cannot answer)
+  ---
+  duration_ms: 0.09419
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — a runner that exits 0 on a nonexistent target is VACUOUS TRUE
+ok 139 - probeScopedSlot — a runner that exits 0 on a nonexistent target is VACUOUS TRUE
+  ---
+  duration_ms: 16.965253
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — a runner that reds on a nonexistent target is VACUOUS FALSE
+ok 140 - probeScopedSlot — a runner that reds on a nonexistent target is VACUOUS FALSE
+  ---
+  duration_ms: 9.924369
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — VACUOUS FALSE reads ANY non-zero exit, and carries the code verbatim
+ok 141 - probeScopedSlot — VACUOUS FALSE reads ANY non-zero exit, and carries the code verbatim
+  ---
+  duration_ms: 6.724291
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — the honest stub is not an always-red script, so its FALSE is real discrimination
+ok 142 - probeScopedSlot — the honest stub is not an always-red script, so its FALSE is real discrimination
+  ---
+  duration_ms: 10.834511
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — the probe command IS the module substitution, never a hand-built string
+ok 143 - probeScopedSlot — the probe command IS the module substitution, never a hand-built string
+  ---
+  duration_ms: 5.816604
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — NO template ⇒ NULL, and nothing is executed
+ok 144 - probeScopedSlot — NO template ⇒ NULL, and nothing is executed
+  ---
+  duration_ms: 0.845298
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — a template bound to the literal 'none' ⇒ NULL (declared absence, not a verdict)
+ok 145 - probeScopedSlot — a template bound to the literal 'none' ⇒ NULL (declared absence, not a verdict)
+  ---
+  duration_ms: 0.673711
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — an UNSUBSTITUTABLE template ⇒ NULL carrying the module's OWN refusal text
+ok 146 - probeScopedSlot — an UNSUBSTITUTABLE template ⇒ NULL carrying the module's OWN refusal text
+  ---
+  duration_ms: 0.740258
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — a template with NO {files} placeholder ⇒ NULL, and the full suite is never run
+ok 147 - probeScopedSlot — a template with NO {files} placeholder ⇒ NULL, and the full suite is never run
+  ---
+  duration_ms: 0.835269
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — a shell-level command-not-found exit is a non-zero verdict
+ok 148 - probeScopedSlot — a shell-level command-not-found exit is a non-zero verdict
+  ---
+  duration_ms: 8.321751
+  type: 'test'
+  ...
+# Subtest: probeScopedSlot — a runner that HANGS past timeoutMs ⇒ NULL naming the timeout, and the probe returns
+ok 149 - probeScopedSlot — a runner that HANGS past timeoutMs ⇒ NULL naming the timeout, and the probe returns
+  ---
+  duration_ms: 254.992698
+  type: 'test'
+  ...
+1..149
+# tests 149
+# suites 0
+# pass 149
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 206972.281507

@@ -9,7 +9,7 @@ import { definePhase } from '@/lib/roadmap/schema'
  */
 export default definePhase({
   phase: 34,
-  name: 'GREENFIELD keystone: packaging, dry-run evidence, and shard-ready delivery',
+  name: 'GREENFIELD keystone: runnable foundations, optional delivery, and paired release',
   plannedBy: { model: 'gpt-5.6-sol' },
   status: 'in-progress',
   category: 'feature',
@@ -38,7 +38,7 @@ export default definePhase({
     'plugins/zeroh-greenfield/DRYRUN-2026-09.md',
   ],
   stakeholderDemo:
-    'An approved scratch repo proves the four-skill workflow, affected local gates, deterministic full-suite shards with merged evidence, and an exact-commit content-addressed artifact promoted through release without rebuilding.',
+    'An approved idea reaches a runnable local foundation with architecture and meaningful tests; valid existing homes are preserved. CI/release setup is installed and validated when selected.',
   userFacing: false,
   reviewScope: 'full',
   assumptions: [
@@ -470,12 +470,24 @@ export default definePhase({
         'roadmap/arc-evals/phase-32.peval.json',
       ],
       testMode: 'tdd',
-      done: false,
+      done: true,
+      doneDate: '2026-09-06',
+      transparencyReport: {
+  "whatWasDone": "Restored foundation-first local prototypes, reuse of settled choices, approved-stack adaptation, optional delivery and individual existing-project improvements; saved actual-byte writers remove hash guessing and retyping. Prepared the paired release.",
+  "how": "R0 focused 164 checks and recorded-snapshot Codex/Astra CLI pilot passed. Independent release reviews cleared fixes. Current regression coverage reconciles all 78 files:62 completed files / 1844 passing tests before a host reaper interruption; all 16 remaining/interrupted files rerun with 259/259 pass;149/149 affected scanner/gate checks after the reviewed source delta. Explicit schema and actual history-comments slot pass. See release-evidence/0.40.0/release-completion.json.",
+  "compromises": "Owner-amended evidence scope retains historical four-arm delivery plus the recorded-source R0 CLI pilot and current regressions/review. No final-source four-arm matrix; earlier mobile/web proof exceptions remain in Arc.descopes.",
+  "skipped": "No duplicate whole-suite replay, paid native matrix, NATIVEGREEN execution or deployment.",
+  "hardcoded": "Synthetic host bindings are explicit fixture inputs; native defaults retain actual host checks.",
+  "limitations": "The host stops capbuild tests after 30 min; interrupted run17 remains RED and its zero exit is not completion. Existing gate reports cannot compose bounded runs, so phase status remains in-progress as a bookkeeping limitation despite complete release coverage. The native freshness audit is honestly RED; no broad platform/performance claim."
+},
       dependsOn: ['34.6'],
-      interfaces: { consumes: ['34.6 delivery templates and mutation harness', '34.4 native receipt protocol'], produces: ['approval-gated delivery installation', 'final native GREENFIELD evidence'] },
+      interfaces: { consumes: ['34.6 delivery templates and mutation harness', '34.4 native receipt protocol'], produces: ['runnable local foundation with optional approved delivery', 'explicitly scoped release evidence'] },
     },
   ],
   reviewRecord: { date: '2026-09-04', model: 'software-architect-agent', verdict: 'READY', via: 'executed' },
+  // Product work is released through complete reconciled coverage; the existing
+  // single-run completion guard cannot represent it. Preserve the open status
+  // and original reports rather than manufacture an unfiltered green gate.
   notes:
     '## Hypotheses\n1. CONFIRMED — The six absent-home sites stop or go silent without naming a remedy because no protocol file owns remedy text. Evidence: plugins/zeroh-roadmap/skills/plan-arc/references/design-gate.md:94; plugins/zeroh-roadmap/skills/plan-arc/SKILL.md:91; plugins/zeroh-roadmap/agents/ux-designer.md:17; plugins/zeroh-roadmap/agents/software-architect.md:44; plugins/zeroh-roadmap/agents/test-engineer.md:14; plugins/zeroh-roadmap/skills/test-strategy/SKILL.md:16.\n2. REFUTED — The README first-session claim is implemented by a hook. Evidence: plugins/zeroh-roadmap/hooks/hooks.json has SessionStart only for session-lane-check.mjs and no scaffold action.\ninterview: skipped — arc member; GREENFIELD.arc.ts records every 2026-09-03 user ruling. userFacing false re-ratified by the GREENFIELD orchestrator ruling 2026-09-03: installable operator guidance is visible but is not a consumer runtime surface, so no flag applies. Full review is required because model-loaded protocols and a guard change. decisionRef: \'GREENFIELD orchestrator ruling 2026-09-03 — protocol-anchor ratchet, tdd\'. The ratchet is the house protocol-anchor pattern: a node:test file under plugins/zeroh-roadmap/cli/lib reads the seven protocol files and asserts one owner heading plus six pointer clauses; testMode tdd is ratified. testMode TDD for 34.4–34.5 is ratified: machine receipts, native-host evidence, negative behavior, semantic parity, and mutations are executable contracts; DRYRUN-2026-09.md is only their projection. A failed dry run escalates with transcript and blocks phase completion. Review repair scope includes the six accepted review findings and final R1-R28 regrading; earlier PASS measurements do not certify amended bodies. Planned phase-29–33 paths are consumed only after dependency order makes them real. Review repairs round 2 2026-09-03 (orchestrator, mechanical): 34.3 grade checker asserts the exact ordered R1..R28 id vector per skill; 34.1 test verifies run through the host capbuild wrapper. Review repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): added mandatory hypotheses; ratified the protocol-anchor TDD seam; asserted every packaging field and ownership boundary; asserted four skill summaries, 112 verdict rows, byte/token equality, and caps; made four real native-host arms with inherited authority, machine receipts, behavioral mutations, config and idempotence proof the completion bar.',
 })
