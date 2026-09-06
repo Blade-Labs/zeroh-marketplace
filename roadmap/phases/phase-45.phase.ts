@@ -19,6 +19,7 @@ export default definePhase({
   dependsOn: [44],
   conflictsWith: [],
   keyFiles: [
+    'docs/roadmap/roadmap.config.json',
     'plugins/zeroh-roadmap/docs/doc-projection.json',
     'plugins/zeroh-roadmap/scripts/docs/build.mjs',
     'plugins/zeroh-roadmap/scripts/docs/check.mjs',
@@ -35,29 +36,15 @@ export default definePhase({
   reviewScope: 'full',
   assumptions: [
     {
-      claim: 'Phase 43 completed with a sealed claim inventory and phase 44 completed its concise-code/provenance gate before user documentation begins.',
-      verify:
-        'bash -c "grep -Eq \"status:.*done\" docs/roadmap/phases/phase-43.phase.ts && grep -Eq \"status:.*done\" docs/roadmap/phases/phase-44.phase.ts && node plugins/zeroh-roadmap/scripts/gauntlet-3.0/report.mjs --verify-seal plugins/zeroh-roadmap/gauntlet-3.0/results.json"',
-      onFalse: 'ESCALATE',
+      "claim": "Prerequisite phases43 and44 are complete; the retained claim inventory parses without claiming it certifies later source changes.",
+      "verify": "for n in 43 44; do grep -Eq \"status:[[:space:]]*['\\\"]done['\\\"]\" docs/roadmap/phases/phase-$n.phase.ts || exit 1; done; node plugins/zeroh-roadmap/scripts/gauntlet-3.0/report.mjs --verify-seal plugins/zeroh-roadmap/gauntlet-3.0/results.json",
+      "onFalse": "ESCALATE"
     },
     {
-      claim: 'The Disclosure theme is the ratified visual canon and its local theme instructions remain present.',
-      verify:
-        'bash -c "test -f plugins/zeroh-design/themes/disclosure/CLAUDE.md && grep -qF \"Disclosure\" docs/roadmap/arcs/NATIVEGREEN.arc.ts"',
-      onFalse: 'ESCALATE',
-    },
-    {
-      claim: 'The existing README and orientation are the established engineer-facing surfaces to evolve rather than replace.',
-      verify:
-        'bash -c "test -s plugins/zeroh-roadmap/README.md && test -s plugins/zeroh-roadmap/docs/orientation.html && test -s plugins/zeroh-roadmap/docs/ux-previews/intent-to-green-pr-visual-guide-layout.md"',
-      onFalse: 'ESCALATE',
-    },
-    {
-      claim: 'The repository contains no approved local ELI5 invocation contract and NATIVEGREEN explicitly forbids adding one.',
-      verify:
-        'bash -c "grep -qF \"no local ELI5 skill/invocation copy\" docs/roadmap/arcs/NATIVEGREEN.arc.ts && ! rg -n -i \"/eli5|\\$eli5|invoke eli5\" plugins/zeroh-roadmap/README.md plugins/zeroh-roadmap/docs/orientation.html"',
-      onFalse: 'ESCALATE',
-    },
+      "claim": "Ratified Disclosure design instructions and existing engineer surfaces remain present.",
+      "verify": "test -f plugins/zeroh-design/themes/disclosure/CLAUDE.md && grep -qF Disclosure docs/roadmap/arcs/NATIVEGREEN.arc.ts && test -s plugins/zeroh-roadmap/README.md && test -s plugins/zeroh-roadmap/docs/orientation.html && test -s plugins/zeroh-roadmap/docs/ux-previews/intent-to-green-pr-visual-guide-layout.md",
+      "onFalse": "ESCALATE"
+    }
   ],
   tasks: [
     {
@@ -69,21 +56,22 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/docs/doc-projection.json',
           description:
-            'Define DocProjection {schemaVersion:1, sections:[{id, claimIds, sourceRefs, content}], comparison:{version,retrievedAt,sources}}; the bounded claim catalog owns factual claims, while prose and markup stay ordinary editorial content. Define the canonical projection data for lifecycle stages, support matrix, install commands, role/driver facts, artifacts, recovery, delivery/history/GC policy, limitations and source links; every behavioral claim references a verified phase-43 claim ID. → verify: node plugins/zeroh-roadmap/scripts/docs/check.mjs --projection-only',
+            'Define DocProjection {schemaVersion:1, capabilities:[{id,status,claimId,sourceAnchors,missingCapability}], sections:[{id,capabilityIds,sourceRefs,content}], comparison:{version,retrievedAt,sources}}. The bounded capability catalog owns advertised behavioral claims and explicit unavailable/missing capabilities; prose and markup stay ordinary editorial content rather than a sentence-proof DSL. Define the canonical projection data for lifecycle stages, support matrix, install commands, role/driver facts, artifacts, recovery, delivery/history/GC policy, limitations and source links; every supported behavior references a verified phase-43 claim ID plus the source anchors whose implementation it describes. → verify: node plugins/zeroh-roadmap/scripts/docs/check.mjs --projection-only',
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/docs/build.mjs',
           description:
-            'Implement loadDocProjection(root) and renderDocumentation(projection, sources) returning a path-to-bytes map; check.mjs computes that map in memory and compares without mutation. Implement the rendering so generated fragments for README, the complete Markdown guide and orientation HTML share one fact source while retaining format-specific navigation and progressive disclosure. → verify: node --test --test-name-pattern="render|single source" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
+            'Implement loadDocProjection(root), resolveDocumentationFacts(projection, owningSources) and renderDocumentation(projection, resolvedFacts) returning a path-to-bytes map; check.mjs computes that map in memory and compares without mutation. Supported capabilities render only after claim status, source anchors and current owning-source values resolve; missing/unavailable capabilities render only as limitations. Generated fragments share that resolved fact source. → verify: node --test --test-name-pattern="render|single source|missing capability" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
           description:
-            'Add mutation-red checks for unknown/unverified claim IDs, manifest/version/model drift, unsupported capability, missing limitation, duplicate fact ownership and nondeterministic output. → verify: node --test --test-name-pattern="claim|drift|deterministic" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
+            'Add mutation-red checks for unknown/unverified claim IDs, stale source anchors, manifest/version/model drift, unsupported or missing capability rendered as supported, missing limitation, duplicate ownership and nondeterminism. Record a phase-43 evidence/source fingerprint and classify phase-44-and-later changes per capability: unchanged anchors reuse the seal, affected anchors require a scoped deterministic/live refresh appropriate to that claim, and unresolved impact makes the capability unavailable. Never bless post-seal source with a blind whole-matrix replay or the old seal alone. → verify: node --test --test-name-pattern="claim|source freshness|affected refresh|deterministic" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
         },
       ],
       acceptanceCriteria: [
         'Every advertised runtime behavior resolves to a verified phase-43 claim ID; unavailable, unjudged and untested claims cannot render as supported.',
+        'Each capability names current source anchors and any missing capability explicitly; post-seal source changes are impact-classified and affected claims receive scoped fresh evidence or become limitations.',
         'Manifest, role/driver registry and command facts are imported or checked against their owning sources rather than recopied as independent truth.',
         'Two consecutive builds are byte-identical and a stale generated surface fails the check command.',
       ],
@@ -241,12 +229,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/scripts/docs/check.mjs',
           description:
-            'Implement checkDocumentation to validate projection schema/claims, generated drift, local/external links with recorded retry disposition, snippets, diagrams/text equivalents, accessibility, offline assets, comparison expiry and clean-room fixtures; emit typed per-check JSON. → verify: node --test plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
+            'Implement checkDocumentation to validate projection schema/claims/source freshness, generated drift, local links, snippets, diagrams/text equivalents, accessibility, offline assets, comparison expiry and clean-room fixtures in deterministic offline mode; emit typed per-check JSON. Live mode alone checks external links, native-host records and real-browser acceptance with recorded retry disposition. → verify: node --test plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/package.json',
           description:
-            'Add one docs:check script invoking checkDocumentation in deterministic offline mode; an explicit docs:check:live command owns external-link and native checks, and --release --json requires their current successful records. Add the default script without duplicating its flags or logic, and include deterministic checks in the existing plugin test/CI path without triggering live models/network on every task. Include live checks only at the explicit release acceptance boundary. → verify: pnpm --dir plugins/zeroh-roadmap run docs:check',
+            'Add Playwright1.61.1 as a dev-only dependency with the plugin lockfile updated and explicit live-browser setup instructions; add one docs:check script invoking checkDocumentation in deterministic offline mode; an explicit docs:check:live command owns external-link and native checks, and --release --json requires their current successful records. Add the default script without duplicating its flags or logic, and include deterministic checks in the existing plugin test/CI path without triggering live models/network on every task. Include live checks only at the explicit release acceptance boundary. → verify: pnpm --dir plugins/zeroh-roadmap run docs:check',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
@@ -260,6 +248,7 @@ export default definePhase({
         'The full repository gate runs docs:check and leaves generated files unchanged.',
       ],
       files: [
+        'plugins/zeroh-roadmap/package-lock.json',
         'plugins/zeroh-roadmap/scripts/docs/check.mjs',
         'plugins/zeroh-roadmap/package.json',
         'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
@@ -303,6 +292,7 @@ export default definePhase({
       problem:
         'Individual projection checks do not by themselves prove that the final GitHub-native guide and Disclosure HTML advertise only implemented behavior or meet the arc acceptance signal as a coherent release surface.',
       steps: [
+        { file: 'docs/roadmap/roadmap.config.json', description: "Bind docs/roadmap/roadmap.config.json validationTiers.live-ui to capbuild node plugins/zeroh-roadmap/scripts/docs/check.mjs --live-ui --json; implement that entrypoint to launch the local generated surface in a real browser, capture320px/1440px first/second-visit screenshots, drive keyboard/reduced-motion/offline checks, return screenshot paths for independent vision judgments, and refuse unavailable browsers. Preserve the phase43 live-host and existing wired bindings. \u2192 verify: node plugins/zeroh-roadmap/bin/roadmap.mjs config check && capbuild node --test --test-name-pattern=binding plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs" },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
           description:
@@ -311,7 +301,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/scripts/docs/check.mjs',
           description:
-            'Use a real browser in an isolated local fixture for viewport320px and desktop1440px, keyboard tab/focus, details toggling, reduced-motion emulation, computed contrast and offline reload on first/second visits; record failures with screenshots and reuse the repo browser tooling if available. Add a release-mode acceptance report covering GitHub-renderable Markdown/Mermaid with complete prose fallback, Disclosure HTML at 320px and desktop, keyboard/focus/reduced-motion/offline behavior, first/second-visit disclosure, clean-room parent snippets, respectful versioned Superpowers comparison, editorial economy and unchanged generated bytes. → verify: node plugins/zeroh-roadmap/scripts/docs/check.mjs --release --json',
+            'Use a real browser in an isolated local fixture for viewport320px and desktop1440px, keyboard tab/focus, details toggling, reduced-motion emulation, computed contrast and offline reload on first/second visits; record failures with screenshots and use a repository-local Playwright1.61.1 dev dependency (the already installed host trial version), with an explicit Chrome/Chromium executable option; never import Mojko or another checkout at runtime. Browser installation is an explicit live-test prerequisite and is not run by default docs:check. Add a release-mode acceptance report covering GitHub-renderable Markdown/Mermaid with complete prose fallback, Disclosure HTML at 320px and desktop, keyboard/focus/reduced-motion/offline behavior, first/second-visit disclosure, clean-room parent snippets, respectful versioned Superpowers comparison, editorial economy and unchanged generated bytes. → verify: node plugins/zeroh-roadmap/scripts/docs/check.mjs --release --json',
         },
         {
           file: 'plugins/zeroh-roadmap/README.md',
@@ -320,11 +310,13 @@ export default definePhase({
         },
       ],
       acceptanceCriteria: [
-        'Every final behavioral claim is backed by a sealed supported phase-43 claim; unavailable, unjudged, unsupported and untested behavior is absent or labeled as a limitation.',
+        'Every final behavioral claim is backed by a sealed supported phase-43 claim whose source anchors are unchanged or have scoped refreshed evidence after phase 44; unavailable, unjudged, unsupported, stale and untested behavior is absent or labeled as a limitation.',
         'The GitHub-viewable README and complete Markdown guide remain useful without HTML, and the Disclosure HTML is a deterministic, accessible, offline visual enhancement rather than another truth owner.',
         'One release check proves every truthful-visual-docs signal and leaves the worktree byte-identical; a mutation in each evidence class turns it red with a typed reason.',
+        'The live-ui report includes 320px and 1440px first- and second-visit screenshots plus independent vision judgments over those images; DOM assertions alone cannot satisfy visual acceptance.',
       ],
       files: [
+        'docs/roadmap/roadmap.config.json',
         'plugins/zeroh-roadmap/README.md',
         'plugins/zeroh-roadmap/scripts/docs/check.mjs',
         'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',

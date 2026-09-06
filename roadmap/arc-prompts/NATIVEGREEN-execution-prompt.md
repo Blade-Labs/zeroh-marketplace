@@ -6,7 +6,8 @@ references, and user rulings bind execution. Documentation is phase 45, after ph
 
 ## Evidence
 
-- Preserve and incorporate the primary checkout's untracked review without overwriting it.
+- Original findings are preserved at plugins/zeroh-roadmap/docs/reviews/2026-09-04-codex-intent-to-pr-review.md; its dated source claims are historical, not evidence of current defects. The primary untracked original remains untouched.
+- Prior repairs are preserved at roadmap/arc-evals/GREENFIELD-NATIVEGREEN-review-repairs-2026-09-04.md (moved with the root during39).
 - Preserve Elrond's pending lessons proving stale reused plan/review worktrees and open-ended
   incomplete-world reviews.
 - Reuse shared semantic adapters, provider-neutral delivery, exact-head CI, pre-publication
@@ -89,3 +90,27 @@ Documentation CI is deterministic/offline by default. Explicit live/release chec
 remote links, native installations and actual browser acceptance. Keep the capability
 catalog bounded and use source pointers; do not add a proof for every sentence or repeat
 native experiments merely to rebuild documentation. Retain original safety and honesty bars.
+
+Remaining size:66 tasks across phases36–45 (4,6,6,5,8,7,8,8,6,8), versus71 in the preserved plan. The original broad native comparison remains substantial; this reduction is not a runtime-performance claim.
+
+
+## Self-hosting the updated plugin
+
+Start from the verified installed0.40.3 planning skills. During this arc, implementation
+changes the plugin itself: after each completed phase, reread changed source skill/reference
+files from the arc checkout and drive that checkout's `plugins/zeroh-roadmap/bin/roadmap.mjs`.
+Do not keep calling an older installed CLI for newly added commands or rely on an older
+cached terminal protocol after phase41 changes delivery ordering. A global reinstall is not
+required per task. Report the source SHA used at every native/conformance boundary; install
+that exact candidate only in the isolated native fixtures when their test requires it.
+
+Phase41 must deliver the PR before any local integration or cleanup; phase42 observes and
+repairs its exact head. Existing integration/merge policy remains a separate authority bound.
+The final default is one open green PR, not a direct main push. Validate-arc uses the explicit
+live-host and live-ui bindings added by43.8 and45.8. No old installed command, absent binding,
+stale result, or proof-file-only check may stand in for a newly implemented end-to-end path.
+
+Resume preflights test durable prerequisites, not whether an already-fixed defect remains.
+An interrupted root move uses the migration recovery command to restore a complete layout
+before phase re-entry. Unknown ownership, source impact, provider availability, or authority
+continues to hold the consequential action; completed independent work is retained.

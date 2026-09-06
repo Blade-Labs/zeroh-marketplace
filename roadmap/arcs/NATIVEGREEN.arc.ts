@@ -19,39 +19,54 @@ import { defineArc } from '@/lib/roadmap/schema'
  *
  * Review repair 2026-09-04: phase 39 owns non-vacuous import validation and all active
  * post-migration plan/config/script paths; phases 42/45 must pass migrated-layout preflights.
- * PROMISE LEDGER
- * packaging-valid | criterion | 36.1-36.6
- * semantic-parity | criterion | 37.1-37.7 + 38.1-38.7
- * one-roadmap-root | criterion | 39.1-39.6
- * clean-review-input | criterion | 37.5-37.7
- * curated-history | criterion | 40.1-40.4
- * owned-worktree-gc | criterion | 40.5-40.8
- * idempotent-green-pr | criterion | 41.1-41.7 + 42.1-42.8
- * gauntlet-conformance | criterion | 43.1-43.8
- * concise-current-code | criterion | 44.1-44.6
- * truthful-visual-docs | criterion | 45.1-45.8
- * architecture designRef | designRef | 37-43
- * visual layout designRef | designRef | 45
- * semantic reducer | singleSeam | 37.1-37.4
- * role/driver registry | singleSeam | 38.1-38.5
- * discovered root | singleSeam | 39.1-39.6
- * delivery reducer/receipt | singleSeam | 41.1-42.8
- * worktree disposer/GC | singleSeam | 40.5-40.8
- * generated projections | singleSeam | 45.1-45.8
- * no authority enlargement | honestyRail | 36.4 + 38.2 + 41.3
- * exact-head green | honestyRail | 42.2 + 42.7
- * unrelated untouched | honestyRail | 42.3-42.5
- * no cosmetic green rewrite | honestyRail | 40.1-40.4
- * no unowned worktree removal | honestyRail | 40.5-40.8
- * USER ASK: all actionable | request | 36-45
- * USER ASK: full CI green or fix | request | 42.1-42.8
- * USER ASK: owned pre-existing fixed, unrelated left | request | 42.3-42.6
- * USER ASK: 2-3 arcs branch strategy | request | 41.4-41.7 + 43.5
- * USER ASK: no fix1...fix52 | request | 40.1-40.4
- * USER ASK: automatic worktree cleanup | request | 40.5-40.8
- * USER ASK: Elrond defects | request | 37.5-37.7
- * USER ASK: docs/roadmap migration | request | 39.1-39.6
- * USER ASK: documentation last | request | 45.1-45.8
+ * PROMISE LEDGER (existing task ranges expand only within their named phase)
+ * packaging-valid | criterion | 36.1–36.4 +43.4
+ * semantic-parity | criterion | 37.1–37.3 +37.6 +38.1–38.6 +43.7
+ * one-roadmap-root | criterion | 39.1–39.5
+ * clean-review-input | criterion | 37.4–37.6
+ * curated-history | criterion | 40.1–40.4
+ * owned-worktree-gc | criterion | 40.5–40.8
+ * idempotent-green-pr | criterion | 41.1–41.7 +42.1–42.8
+ * gauntlet-conformance | criterion | 43.1–43.8
+ * concise-current-code | criterion | 44.1–44.6
+ * truthful-visual-docs | criterion | 45.1–45.8
+ * plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md | designRef | 36.1–36.2 +37.1–37.6 +38.1–38.6 +39.1–39.5 +40.1–40.8 +41.1–41.7 +42.1–42.8 +43.1–43.8
+ * plugins/zeroh-roadmap/docs/ux-previews/intent-to-green-pr-visual-guide-layout.md | designRef | 45.1–45.8
+ * harness-neutral reducer | singleSeam | 37.1–37.3 +41.1 +42.2
+ * role/driver registry | singleSeam | 36.2 +38.1–38.6
+ * discovered root | singleSeam | 39.1–39.5
+ * delivery reducer/receipt | singleSeam | 41.1–41.7 +42.1–42.8
+ * inventory/classifier/disposer | singleSeam | 40.5–40.8
+ * documentation projections | singleSeam | 45.1–45.8
+ * no authority enlargement | honestyRail | 36.1–36.2 +38.2–38.5 +41.3 +41.5 +43.6
+ * exact-head green | honestyRail | 42.1–42.2 +42.5–42.8
+ * unrelated/indeterminate untouched | honestyRail | 42.3–42.4 +42.6 +42.8
+ * no cosmetic green rewrite | honestyRail | 40.1–40.4 +42.5
+ * no unowned worktree removal | honestyRail | 40.5–40.8
+ * truthful docs/no ELI5 invocation | honestyRail | 43.8 +45.1–45.8
+ * all actionable findings; documentation last | locked | 36.1–45.8 (existing phase task sets; no intervening task IDs inferred)
+ * atomic marketplace roadmap/schema move | locked | 39.1–39.5
+ * one arc/one PR; independent/stacked; explicit grouping | locked | 41.2 +41.4 +41.7 +43.5
+ * default open green PR; configured merge/queue | locked | 41.5–41.7 +42.6–42.8
+ * causal and owned repair; unrelated left | locked | 42.3–42.8
+ * normalize before PR;1–2 useful fixes; no cosmetic green rewrite | locked | 40.1–40.4 +42.5
+ * owned inactive cleanup only | locked | 40.5–40.8
+ * Disclosure canon/evolved orientation | locked | 45.5 +45.8
+ * no local ELI5 invocation | locked | 45.2–45.3 +45.7–45.8
+ * original review R1 packaging | source-finding | 36.3–36.4
+ * original review R2/R3 adapters/parity | source-finding | 38.1–38.6 +43.1–43.8
+ * original review R4 PR terminal | source-finding | 41.1–41.7 +42.1–42.8
+ * original review R5 lifecycle/eval/recovery | source-finding | 37.1–37.3 +37.6
+ * original review R6 governance | source-finding | 36.1–36.2
+ * original review R7 exact-head identity | source-finding | 37.4–37.6 +38.2
+ * original strong recommendations: neutral actions/current capabilities | source-finding | 38.1–38.6
+ * original strong recommendations: source-edit-constrained judges | source-finding | 41.3 +41.7 +43.3
+ * original strong recommendations: post-land failure/no replay | source-finding | 37.3 +41.6
+ * original strong recommendations: foreign dirt preserved | source-finding | 36.1–36.2 +39.1–39.5 +40.5–40.8
+ * original review documentation/clarity addenda | source-finding | 44.1–44.6 +45.1–45.8
+ * Sep04 import/pending-path review repairs | source-finding | 39.3–39.5
+ * "replan remaining of NATIVEGREEN so rest can be done as arc? test it this way?" | request | 36.1–45.8; cache/plan rehearsal recorded in arc-evals/NATIVEGREEN-replan-2026-09-06.md
+ * "update roadmap plugin in cache" | request | completed setup outside implementation tasks; same closing report records installed paths/source identity
  */
 export default defineArc({
   id: 'NATIVEGREEN',

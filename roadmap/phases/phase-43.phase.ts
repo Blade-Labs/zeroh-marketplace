@@ -19,6 +19,7 @@ export default definePhase({
   dependsOn: [42],
   conflictsWith: [],
   keyFiles: [
+    'docs/roadmap/roadmap.config.json',
     'plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs',
     'plugins/zeroh-roadmap/scripts/gauntlet-3.0/scenarios.mjs',
     "plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs",
@@ -36,29 +37,15 @@ export default definePhase({
   reviewScope: 'full',
   assumptions: [
     {
-      claim: 'Gauntlet 1.0 and 2.0 are retained as historical evidence and neither already supplies a four-lane full-lifecycle runner.',
-      verify:
-        'bash -c "test -f plugins/zeroh-roadmap/GAUNTLET-2026-08.md && test -f plugins/zeroh-roadmap/GAUNTLET-2.0.md && test ! -e plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs"',
-      onFalse: 'ESCALATE',
+      "claim": "Historical gauntlets and the phase41 provider remain available.",
+      "verify": "test -f plugins/zeroh-roadmap/GAUNTLET-2026-08.md && test -f plugins/zeroh-roadmap/GAUNTLET-2.0.md && test -f plugins/zeroh-roadmap/cli/lib/providers/github.mjs",
+      "onFalse": "ESCALATE"
     },
     {
-      claim: 'The semantic delivery, CI, normalization, and GC seams needed by the trial are committed by phases 37 through 42 before this phase starts.',
-      verify:
-        'bash -c "for n in 37 38 39 40 41 42; do grep -Eq \"status:.*done\" docs/roadmap/phases/phase-$n.phase.ts || exit 1; done"',
-      onFalse: 'ESCALATE',
-    },
-    {
-      claim: 'Before live tasks43.4-43.7, both drivers must be registered and verified on this host; missing availability permits deterministic authoring but blocks live support claims.',
-      verify:
-        'node plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs --check-only',
-      onFalse: 'ESCALATE',
-    },
-    {
-      claim: 'No Gauntlet 3 preflight exists yet; task 43.1 owns the mandatory isolation and real-provider gate before any external mutation.',
-      verify:
-        'bash -c "test ! -e plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs && test -f plugins/zeroh-roadmap/cli/lib/providers/github.mjs"',
-      onFalse: 'ESCALATE',
-    },
+      "claim": "Prerequisite phases37 through42 are complete before conformance authoring.",
+      "verify": "for n in 37 38 39 40 41 42; do grep -Eq \"status:[[:space:]]*['\\\"]done['\\\"]\" docs/roadmap/phases/phase-$n.phase.ts || exit 1; done",
+      "onFalse": "ESCALATE"
+    }
   ],
   tasks: [
     {
@@ -75,17 +62,17 @@ export default definePhase({
         {
           file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs",
           description:
-            "Implement a mutation-free preflight that requires isolated repository/provider namespaces, exact real Claude and Codex binaries/versions, installed plugin hashes, credentials/capabilities, and explicit external-action authority; unavailable is a refusal, never a simulated pass. → verify: node --test --test-name-pattern=preflight plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs",
+            "Implement a mutation-free preflight that requires isolated repository/provider namespaces, exact real Claude and Codex binaries/versions, installed plugin hashes, credentials/capabilities, and explicit external-action authority; unavailable is a refusal, never a simulated pass. → verify: capbuild node --test --test-name-pattern=preflight plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs",
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/fixtures.mjs',
           description:
-            'Implement buildGauntletFixture and assertFixtureIsolation so every arm starts at one frozen SHA in its own repository/worktree/provider namespace and sealed packets never enter builder prompts. → verify: node --test --test-name-pattern=fixture plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Implement buildGauntletFixture and assertFixtureIsolation so every arm starts at one frozen SHA in its own repository/worktree/provider namespace and sealed packets never enter builder prompts. → verify: capbuild node --test --test-name-pattern=fixture plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
           description:
-            'Add mutation tests proving omitted no-plugin baselines, shared worktrees, changed base SHA, leaked held-out packets, absent exact-model stamps, and unjudged arms all RED while the frozen matrix GREENs. → verify: node --test --test-name-pattern=contract plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Add mutation tests proving omitted no-plugin baselines, shared worktrees, changed base SHA, leaked held-out packets, absent exact-model stamps, and unjudged arms all RED while the frozen matrix GREENs. → verify: capbuild node --test --test-name-pattern=contract plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -112,17 +99,17 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs',
           description:
-            'Implement runGauntlet3({contract, outputDir, adapters, budget}), runArm(armId), and resumeArm(armId) over phase38 AgentRunHandle and phase41 ArcDelivery; ArmJournal is a small arm-index projection of those records, never a second scheduler/lock/journal engine; persist requested condition, authority, fixture SHA and external-action intent before launch, then append observed driver/model/result receipts with unavailable/failed/unjudged kept terminally distinct. → verify: node --test --test-name-pattern=runner plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Implement runGauntlet3({contract, outputDir, adapters, budget}), runArm(armId), and resumeArm(armId) over phase38 AgentRunHandle and phase41 ArcDelivery; ArmJournal is a small arm-index projection of those records, never a second scheduler/lock/journal engine; persist requested condition, authority, fixture SHA and external-action intent before launch, then append observed driver/model/result receipts with unavailable/failed/unjudged kept terminally distinct. → verify: capbuild node --test --test-name-pattern=runner plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs',
           description:
-            'Use the existing capbuild shared host pool and worker admission, never reserve all currently free RAM per session; add bounded concurrency and interruption injection so twenty lanes preserve one owner/result, a killed parent resumes the same stable run and PR key, and no adapter retries an external mutation without reconciling its prior receipt. → verify: node --test --test-name-pattern=interruption plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Use the existing capbuild shared host pool and worker admission, never reserve all currently free RAM per session; add bounded concurrency and interruption injection so twenty lanes preserve one owner/result, a killed parent resumes the same stable run and PR key, and no adapter retries an external mutation without reconciling its prior receipt. → verify: capbuild node --test --test-name-pattern=interruption plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
           description:
-            'Use fake Claude/Codex/provider adapters to plant limit, auth, sandbox, crash-before-receipt, crash-after-provider-success, duplicate-result, and wrong-model outcomes and assert exact typed dispositions and resume commands. → verify: node --test --test-name-pattern=permission plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Use fake Claude/Codex/provider adapters to plant limit, auth, sandbox, crash-before-receipt, crash-after-provider-success, duplicate-result, and wrong-model outcomes and assert exact typed dispositions and resume commands. → verify: capbuild node --test --test-name-pattern=permission plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -148,17 +135,17 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/score.mjs',
           description:
-            'Implement scoreDeterministicSentinels for exact-head checks, stable PR identity, branch strategy, repair classification, bounded review, tree-equivalent normalization, GC identity/recoverability, terminal eval, and idempotent resume; any missing/unreadable sentinel invalidates the arm and yields no absolute score. → verify: node --test --test-name-pattern=sentinel plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Implement scoreDeterministicSentinels for exact-head checks, stable PR identity, branch strategy, repair classification, bounded review, tree-equivalent normalization, GC identity/recoverability, terminal eval, and idempotent resume; any missing/unreadable sentinel invalidates the arm and yields no absolute score. → verify: capbuild node --test --test-name-pattern=sentinel plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/score.mjs',
           description:
-            'Implement buildBlindJudgePacket and mergeBlindVerdict so judges see frozen criteria plus anonymized deliverables but no skill, driver, condition, builder reasoning, or prior verdict; require exact judge model and abstain/unjudged handling. → verify: node --test --test-name-pattern=judge plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Implement buildBlindJudgePacket and mergeBlindVerdict so judges see frozen criteria plus anonymized deliverables but no skill, driver, condition, builder reasoning, or prior verdict; require exact judge model and abstain/unjudged handling. → verify: capbuild node --test --test-name-pattern=judge plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
           description:
-            'Plant stale-SHA green, unrelated-code edit, unsafe GC, cosmetic force-push, omitted eval, leaked condition, missing judge, and fabricated absolute score mutations and require each to fail its named check. → verify: node --test --test-name-pattern=mutation plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Plant stale-SHA green, unrelated-code edit, unsafe GC, cosmetic force-push, omitted eval, leaked condition, missing judge, and fabricated absolute score mutations and require each to fail its named check. → verify: capbuild node --test --test-name-pattern=mutation plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -181,8 +168,8 @@ export default definePhase({
       problem: "Fake adapters can prove reducer negatives but cannot establish that Claude-native, Codex-native, cross-driver, plugin loading, or provider delivery actually worked.",
       steps: [
         { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs", description: "Probe the real claude and codex executables, exact versions/models, clean plugin installation hashes, isolated repository remotes, provider account/repository identity, required capabilities, and mutation authority; persist a preflight record with hashes computed from actual bytes by the runner, without signatures, model-predicted hashes, or retyped executable programs and refuse product repositories or any fake/shim executable. → verify: node plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs --verify-receipt plugins/zeroh-roadmap/gauntlet-3.0/preflight.json" },
-        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs", description: "Require the matching fresh preflight receipt for every live arm and record parent PID/executable/version, child driver receipt, plugin manifest hash, provider request IDs, repository identity, and raw transcript checksums; never promote fake-adapter output into the live result namespace. → verify: node --test --test-name-pattern=attestation plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
-        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs", description: "Plant shim binaries, stale or copied preflight receipts, wrong plugin hashes, product remotes, fake provider receipts, missing native provenance, and cross-arm receipt reuse; require each arm to be invalid or unavailable, never passed. → verify: node --test --test-name-pattern=attestation plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
+        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs", description: "Require the matching fresh preflight receipt for every live arm and record parent PID/executable/version, child driver receipt, plugin manifest hash, provider request IDs, repository identity, and raw transcript checksums; never promote fake-adapter output into the live result namespace. → verify: capbuild node --test --test-name-pattern=attestation plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
+        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs", description: "Plant shim binaries, stale or copied preflight receipts, wrong plugin hashes, product remotes, fake provider receipts, missing native provenance, and cross-arm receipt reuse; require each arm to be invalid or unavailable, never passed. → verify: capbuild node --test --test-name-pattern=attestation plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
       ],
       acceptanceCriteria: ["A live-pass arm proves a real native parent process, declared child driver, installed plugin hash, isolated repository, and real provider request chain.", "Fake/shim/stale/copied/missing provenance is mechanically excluded from live scores and documentation claims.", "Unavailable credentials, capabilities, binaries, or authority remain unavailable and cannot be substituted by an in-memory adapter."],
       files: ["plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs", "plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs", "plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs", "plugins/zeroh-roadmap/gauntlet-3.0/preflight.json"],
@@ -227,7 +214,7 @@ export default definePhase({
       title: "Disqualify negative lifecycle, authority, and provider outcomes",
       problem: "A happy-path live run can hide stale green, unauthorized edits, adapter fallback, or held provider failures unless raw evidence is checked independently.",
       steps: [
-        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/verify-live.mjs", description: "Validate raw live receipts for blocked, stalled, unobserved, exited, review-exhausted, gaps, causal, owned-preexisting, unrelated, flaky, indeterminate, auth, quota, timeout, repeated fingerprint, stale head, forbidden edit, and authority-growth outcomes; reject missing raw evidence and synthetic live receipts. → verify: node --test --test-name-pattern=live-negative plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
+        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/verify-live.mjs", description: "Validate raw live receipts for blocked, stalled, unobserved, exited, review-exhausted, gaps, causal, owned-preexisting, unrelated, flaky, indeterminate, auth, quota, timeout, repeated fingerprint, stale head, forbidden edit, and authority-growth outcomes; reject missing raw evidence and synthetic live receipts. → verify: capbuild node --test --test-name-pattern=live-negative plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
         { file: "plugins/zeroh-roadmap/gauntlet-3.0/results.json", description: "Record controlled isolated-provider negative scenarios with before/after repository trees and external-action ledgers; causal and owned repair through the existing bounded correction route, with larger changes planned while all other classes hold with zero unauthorized edits or actions. → verify: node plugins/zeroh-roadmap/scripts/gauntlet-3.0/verify-live.mjs --assert-negatives plugins/zeroh-roadmap/gauntlet-3.0/results.json" },
       ],
       acceptanceCriteria: ["Every negative class has raw causal evidence, exact typed disposition, repository diff, action ledger, and bounded resume or user-decision state.", "Unrelated, indeterminate, infrastructure, auth, quota, timeout, and repeated-fingerprint cases produce zero unauthorized source edits.", "No fake adapter, fabricated provider receipt, missing check, or stale-head green can score as a live pass."],
@@ -240,7 +227,7 @@ export default definePhase({
       title: "Prove semantic parity and paired no-plugin baselines",
       problem: "Four completed arms are not parity evidence unless the same frozen semantic events and outputs are compared, and plugin benefit is not attributable without matched real-parent baselines.",
       steps: [
-        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/parity.mjs", description: "Compare canonical transition, authority, delivery, CI, history, cleanup, evaluation, and resume receipts across all four real parent-child conditions after removing declared host provenance only; emit exact mismatch paths and refuse unavailable or unjudged pairs. → verify: node --test --test-name-pattern=parity plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
+        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/parity.mjs", description: "Compare canonical transition, authority, delivery, CI, history, cleanup, evaluation, and resume receipts across all four real parent-child conditions after removing declared host provenance only; emit exact mismatch paths and refuse unavailable or unjudged pairs. → verify: capbuild node --test --test-name-pattern=parity plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
         { file: "plugins/zeroh-roadmap/gauntlet-3.0/results.json", description: "Run matched no-plugin baselines through the same real parent binaries, models, fixture SHA, provider namespace class, prompts, limits, and blind judges; pair each condition directly and exclude historical Gauntlet means from concurrent effect claims. → verify: node plugins/zeroh-roadmap/scripts/gauntlet-3.0/parity.mjs --assert-paired plugins/zeroh-roadmap/gauntlet-3.0/results.json" },
       ],
       acceptanceCriteria: ["All four available real-host conditions yield byte-equivalent semantic receipts after only declared provenance fields are normalized.", "Each plugin arm has one matched real-parent no-plugin baseline with identical frozen inputs and an independently complete blind verdict.", "Unavailable, invalid, failed, or unjudged arms prevent a parity/support claim rather than shrinking the denominator."],
@@ -254,10 +241,11 @@ export default definePhase({
       problem:
         'Phase 45 may document only behavior established here, so the evidence needs a machine-readable claim inventory and a human report that distinguishes verified, unavailable, failed, inferred, and untested behavior.',
       steps: [
+        { file: 'docs/roadmap/roadmap.config.json', description: "Bind docs/roadmap/roadmap.config.json validationTiers.live-host to capbuild node plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs --validate-arc NATIVEGREEN --json; implement that explicit entrypoint in run.mjs to preflight and drive missing real-host scenarios within the recorded authority/budget, return retained evidence separately from fresh observations, and refuse missing/unavailable conditions. --verify-seal alone cannot count as a new live drive. Preserve wired binding and add a wrong-source/missing-condition binding-negative test. \u2192 verify: node plugins/zeroh-roadmap/bin/roadmap.mjs config check && capbuild node --test --test-name-pattern=binding plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
         {
           file: 'plugins/zeroh-roadmap/scripts/gauntlet-3.0/report.mjs',
           description:
-            'Implement buildGauntlet3Report({contract, arms, verdicts}) from frozen contract, existing run records, deterministic scores, blind verdicts, exact versions and checksums; emit a claim inventory whose status vocabulary is verified/unavailable/failed/unjudged/untested and reject unsupported green claims. → verify: node --test --test-name-pattern=report plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
+            'Implement buildGauntlet3Report({contract, arms, verdicts}) from frozen contract, existing run records, deterministic scores, blind verdicts, exact versions and checksums; emit a claim inventory whose status vocabulary is verified/unavailable/failed/unjudged/untested and reject unsupported green claims. → verify: capbuild node --test --test-name-pattern=report plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/GAUNTLET-3.0.md',
@@ -276,6 +264,8 @@ export default definePhase({
         'A clean deterministic replay passes every sentinel and completes every available blind judgment before the sealed result is written.',
       ],
       files: [
+        'docs/roadmap/roadmap.config.json',
+        'plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs',
         'plugins/zeroh-roadmap/scripts/gauntlet-3.0/report.mjs',
         'plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs',
         'plugins/zeroh-roadmap/GAUNTLET-3.0.md',
@@ -288,5 +278,5 @@ export default definePhase({
     },
   ],
   notes:
-    'Replan 2026-09-06 against source036b7c5; reuse cli/lib/drivers.mjs launchArgv/driverStamp, gate-report.mjs reports, gate-diagnostics.mjs retryDecision, test/fixture-consumer/harness.mjs, and phase38/41 run/delivery records. Greenfield native collectors are product-specific: borrow raw-output parsing only when compatible, never rerun their prototype matrix or scan all session/log trees. Collect only this run ID and bounded secret-free records. All original four conditions plus baselines, three concurrent arcs, twenty lanes and fifty GC cases remain required; deterministic cases do not substitute for live-host criteria. The harness is development conformance tooling, never a new consumer gate or installed proof service; prior READY is historical and fresh review is required. Author model identity is not externally attested. Future modules and verifies are implementation obligations, not existing passes. Scoped task checks use the shipped capbuild pool; the configured terminal suite remains full. ## Hypotheses — CONFIRMED cause: earlier gauntlets compare partial or potentially invalid evidence and no existing runner exercises the complete real native-parent/provider lifecycle (evidence: only scripts/gauntlet-2.0 exists and GAUNTLET-2026-08.md plus GAUNTLET-2.0.md are reports, not a four-condition live runner). Refuted rival: existing fixture-consumer tests provide reusable deterministic substrate but cannot attest real Claude/Codex/plugin/provider execution. Metadata ratification: userFacing false because this produces internal evidence; testScope full and full review are mandatory for the public truth source. interview: skipped — arc member; NATIVEGREEN.arc.ts and its execution prompt record the user rulings. userFacing false: this phase creates internal conformance infrastructure and evidence, not a consumer runtime feature, so no feature flag applies. `testScope: full` and full review are required because the result is the truth source for later public claims. Gauntlet 1.0 provides stronger blind comparative evidence while 2.0 provides paragraph/load discipline; this phase combines both and adds the missing whole lifecycle. The repository boundary wrapper was invoked before editing but dependency preflight stopped on ERR_PNPM_IGNORED_BUILDS before classification; no restricted-path verdict was emitted. --skip-review: plan unverified, not queued.',
+    'Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. Both native drivers and provider authority are still mandatory before live tasks43.4–43.7 via43.1/43.4 preflight; unavailable hosts cannot pass, but do not block prior deterministic authoring. Replan 2026-09-06 against source036b7c5; reuse cli/lib/drivers.mjs launchArgv/driverStamp, gate-report.mjs reports, gate-diagnostics.mjs retryDecision, test/fixture-consumer/harness.mjs, and phase38/41 run/delivery records. Greenfield native collectors are product-specific: borrow raw-output parsing only when compatible, never rerun their prototype matrix or scan all session/log trees. Collect only this run ID and bounded secret-free records. All original four conditions plus baselines, three concurrent arcs, twenty lanes and fifty GC cases remain required; deterministic cases do not substitute for live-host criteria. The harness is development conformance tooling, never a new consumer gate or installed proof service; prior READY is historical and fresh review is required. Author model identity is not externally attested. Future modules and verifies are implementation obligations, not existing passes. Scoped task checks use the shipped capbuild pool; the configured terminal suite remains full. ## Hypotheses — CONFIRMED cause: earlier gauntlets compare partial or potentially invalid evidence and no existing runner exercises the complete real native-parent/provider lifecycle (evidence: only scripts/gauntlet-2.0 exists and GAUNTLET-2026-08.md plus GAUNTLET-2.0.md are reports, not a four-condition live runner). Refuted rival: existing fixture-consumer tests provide reusable deterministic substrate but cannot attest real Claude/Codex/plugin/provider execution. Metadata ratification: userFacing false because this produces internal evidence; testScope full and full review are mandatory for the public truth source. Task 43.5 testMode none is ratified because it records live-host evidence through the validators authored in adjacent TDD tasks rather than adding executable logic; every reducer, validator, provider boundary, and report builder remains TDD. interview: skipped — arc member; NATIVEGREEN.arc.ts and its execution prompt record the user rulings. userFacing false: this phase creates internal conformance infrastructure and evidence, not a consumer runtime feature, so no feature flag applies. `testScope: full` and full review are required because the result is the truth source for later public claims. Gauntlet 1.0 provides stronger blind comparative evidence while 2.0 provides paragraph/load discipline; this phase combines both and adds the missing whole lifecycle. The repository boundary wrapper was invoked before editing but dependency preflight stopped on ERR_PNPM_IGNORED_BUILDS before classification; no restricted-path verdict was emitted. --skip-review: plan unverified, not queued. [FIXED review] Replaced the impossible pre-task Gauntlet preflight assumption with the shipped driver-verification commands; task 43.1 still owns creation of the later provider/isolation preflight.',
 })
