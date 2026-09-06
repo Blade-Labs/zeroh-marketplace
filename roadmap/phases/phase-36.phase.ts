@@ -5,7 +5,7 @@ export default definePhase({
   phase: 36,
   name: 'Governance precedence, safe authority, and dual-host packaging proof',
   plannedBy: { model: 'unverified' },
-  status: 'in-progress', category: 'feature', kind: 'hardening',
+  status: 'done', category: 'feature', kind: 'hardening',
   source: 'NATIVEGREEN governance plane; ratified architecture §Semantic core and harness adapters; replanned against 036b7c5.',
   priority: 'HIGH', arcId: 'NATIVEGREEN', dependsOn: [], conflictsWith: [],
   keyFiles: [
@@ -185,7 +185,7 @@ export default definePhase({
   compromises: 'None',
   executionResult: {
     "phase": 36,
-    "status": "checkpoint",
+    "status": "done",
     "driver": {
       "model": "gpt-6 (self-reported; exact runtime unverified)",
       "lane": "codex"
@@ -194,11 +194,6 @@ export default definePhase({
       "source": "config",
       "preset": "codex"
     },
-    "checkpoint": {
-      "committedSha": "d8c62fe",
-      "reason": "All checks and independent review passed; history curation and completion record remain.",
-      "resume": "Curate only phase36 owned commits, mark complete and run verify-complete, then continue NATIVEGREEN."
-    },
     "compromises": [],
     "skipped": [],
     "hardcoded": [],
@@ -206,6 +201,7 @@ export default definePhase({
     "hardStops": [],
     "gateRounds": 3
   },
+  completedDate: '2026-09-06',
   reviewRecord: { date: '2026-09-06', model: 'unverified (requested gpt-5.6-sol)', verdict: 'READY', via: 'executed' },
   notes: 'Completion evidence: full gate passed 2172 aggregate Node TAP cases across 92 distinct shard files at826d79c; affected resume tests passed136/136 after d8c62fe, followed by independent clean R2 and refreshed native packaging PASS. Metrics test baseline unobserved: PhaseMetricsShape requires numeric testsAtStart/testsAdded, so both carry the legacy 0 sentinel; neither means zero baseline tests or zero tests added. testsAtEnd=2172 is the observed full-gate case count, not a fabricated aggregate after the later targeted repair. Reproduction: roadmap/arc-evals/NATIVEGREEN-phase-36-test-counts.json. Architect PROCEED_WITH_FIX approved this existing compatibility interpretation; a future metrics schema should distinguish unknown structurally. Canonical collector derived Git metrics but returned absent time fields, which remain omitted. Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. interview: inherited from NATIVEGREEN. Replan preserves the prior owner-approved packaging-valid and no-authority-enlargement outcomes while consolidating delivered manifest, executor-reference, role-registry, and driver-registry work instead of reimplementing it. The obsolete phase-34 dependency is replaced by explicit shipped-source prerequisites 30be1fe and 036b7c5; phase 34 remains in-progress and is not declared complete. Its retained full-suite/current-source Greenfield refresh limitation is not a prerequisite for this distinct zeroh-roadmap packaging proof, which keeps its own bounded current-source dual-host confirmation. requested collaboration model: gpt-5.6-sol; planner runtime self-reported GPT-6 but its exact model id was unattested, so plannedBy.model is unverified. userFacing false: packaging and control-plane enforcement have no product flag surface. reviewScope full: authority, repository instructions, and native package discovery are governed seams. testMode ratified: reducers, launch policy, and executable packaging guards use TDD. Native confirmation runs only after cheap validation and remains bounded and serial; UNAVAILABLE is unresolved, never success. Documentation remains phase 45. ## Hypotheses\n1. CONFIRMED — governance and authority remain incomplete because governance.mjs is absent and cli/commands/codex.mjs at 036b7c5 still documents a bypass posture.\n2. REFUTED — package structure itself is wholly absent: both manifests, the relocated executor reference, and central role/driver registries are present at 036b7c5.',
 })

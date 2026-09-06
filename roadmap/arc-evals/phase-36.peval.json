@@ -1,0 +1,81 @@
+{
+  "phase": 36,
+  "date": "2026-09-06",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 44
+  },
+  "taskCount": 4,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/cli/lib/governance.mjs",
+    "plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/governance.md",
+    "plugins/zeroh-roadmap/cli/lib/drivers.mjs",
+    "plugins/zeroh-roadmap/cli/commands/codex.mjs",
+    "plugins/zeroh-roadmap/templates/schema.ts",
+    "lib/roadmap/schema.ts",
+    "plugins/zeroh-roadmap/scripts/validate-packaging.mjs",
+    "plugins/zeroh-roadmap/scripts/validate-packaging.test.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 1,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "curated": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 416923
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 6,
+    "linesAdded": 3074,
+    "linesRemoved": 130,
+    "filesChanged": 31,
+    "testsAtStart": 0,
+    "testsAtEnd": 2172,
+    "testsAdded": 0
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "unverified"
+    },
+    "driver": {
+      "model": "gpt-6 (self-reported; exact runtime unverified)",
+      "lane": "codex"
+    }
+  }
+}
