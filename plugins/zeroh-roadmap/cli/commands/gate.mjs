@@ -39,6 +39,7 @@ import {
   latestReport,
   appendAgentRound,
   checkPhaseConsistency,
+  correctnessDecision,
   gateDir,
   AgentRoundInputShape,
   GateReportUnreadableError,
@@ -375,6 +376,29 @@ export function buildPlan(cwd, phaseNum, opts = {}) {
   const phase = imp.parsed
   const kind = phase?.kind ?? 'logic'
 
+  if (opts.task != null) {
+    const task = phase.tasks?.find(task => task.id === opts.task)
+    if (!task) throw new GateError(1, [`gate plan: phase ${phaseNum} has no task '${opts.task}'`])
+    const files = selectTestFiles(toplevel, task.files ?? [])
+    const resolved = files.length
+      ? resolveScopedOrFallback(opts.cfg, 'unit', files)
+      : { ...resolveSlot(opts.cfg, 'unit'), note: 'task has no selected test targets — ran full unit binding' }
+    const scope = resolved.scoped ? 'relevant' : 'full'
+    return {
+      parsed: phase,
+      refused: !!resolved.refused,
+      plan: {
+        phase: phaseNum, task: task.id, kind, mode,
+        baseSha: deriveBaseSha(cwd, phaseNum, { base: opts.base }),
+        testScope: { derived: scope, declared: null, effective: scope },
+        reviewScope: { derived: 'none', declared: null, effective: 'none' },
+        slots: [compactSlot({ ...resolved, ...(resolved.scoped ? { files } : {}) })],
+        agents: { qualityPass: null, reviewers: [] },
+        notes: [`task ${task.id}: partial check only; full phase completion still requires its normal gate`, ...(resolved.note ? [resolved.note] : [])],
+      },
+    }
+  }
+
   const base = deriveBaseSha(cwd, phaseNum, { base: opts.base })
   const ownFiles = phaseOwnFiles(cwd, phaseNum, base)
   const rawFiles = rawRangeFiles(cwd, base)
@@ -550,10 +574,12 @@ function parseArgs(argv) {
     else if (a === '--sequence-member') opts.sequenceMember = true
     else if (a === '--json') opts.json = true
     else if (a === '--slots') opts.slots = argv[++i]
+    else if (a === '--task') opts.task = argv[++i] ?? ''
     else if (a === '--record-round') opts.recordRound = argv[++i]
     else if (a === '--cap-override') opts.capOverride = argv[++i] ?? ''
     else if (a === '--verify-complete') opts.verifyComplete = true
     else if (!a.startsWith('--')) positional.push(a)
+    else opts.unknown = a
   }
   return { opts, positional }
 }
@@ -564,7 +590,7 @@ export async function annotateScopedProbeWarnings(built, cfg, cwd, { timeoutMs }
   const probes = new Map()
   for (const slot of built.plan.slots) {
     const template = cfg?.gateCommands?.[slot.slot]
-    if (typeof template !== 'string' || !template.includes('{files}')) continue
+    if (typeof template !== 'string' || !(template.includes('{files}') || template.includes('{fileArgs}'))) continue
     if (!probes.has(template)) probes.set(template, probeScopedSlot(template, { cwd, timeoutMs }))
     const result = await probes.get(template)
     if (result.vacuous === true) {
@@ -581,12 +607,20 @@ export async function annotateScopedProbeWarnings(built, cfg, cwd, { timeoutMs }
 export default async function run(argv) {
   const sub = argv[0]
   if (sub === '--help' || sub === '-h' || !sub) {
-    process.stdout.write('roadmap gate plan <phase> [--base <sha>] [--mode inline|arc] [--sequence-member] [--json]\n')
-    process.stdout.write('roadmap gate run  <phase> [--base <sha>] [--slots a,b] [--record-round <json>] [--cap-override <reason>] [--verify-complete] [--json]\n')
+    process.stdout.write('roadmap gate plan <phase> [--task <id>] [--base <sha>] [--mode inline|arc] [--sequence-member] [--json]\n')
+    process.stdout.write('roadmap gate run  <phase> [--task <id> --slots unit] [--base <sha>] [--slots a,b] [--record-round <json>] [--cap-override <reason>] [--verify-complete] [--json]\n')
     process.stdout.write('roadmap gate round-brief <phase> [--json]\n')
     return sub ? 0 : 1
   }
   const { opts, positional } = parseArgs(argv.slice(1))
+  if (opts.task != null && (
+    !opts.task.trim() || opts.task.startsWith('--') || opts.unknown || positional.length !== 1 ||
+    !['plan', 'run'].includes(sub) || opts.recordRound != null || opts.verifyComplete || opts.capOverride != null || opts.mode != null || opts.sequenceMember ||
+    (sub === 'run' && opts.slots !== 'unit')
+  )) {
+    process.stderr.write('gate --task: use plan <phase> --task <id>, or run <phase> --task <id> --slots unit; task checks cannot record reviews or verify completion, and unsupported options are refused\n')
+    return 1
+  }
   const phaseNum = Number(positional[0])
   if (!Number.isFinite(phaseNum)) {
     process.stderr.write(`roadmap gate ${sub}: a numeric <phase> is required\n`)
@@ -651,15 +685,7 @@ export default async function run(argv) {
       process.stderr.write(`roadmap gate round-brief: phase ${phaseNum} has no recorded correctness round\n`)
       return 1
     }
-    const blocking = last.findings.some((finding) => finding.severity === 'CRITICAL' || finding.severity === 'HIGH')
-    const legacyUnknown = last.verdict === 'findings-fixed' && last.findings.length === 0
-    const rule = correctnessRounds.length >= CORRECTNESS_ROUND_CAP || last.round >= CORRECTNESS_ROUND_CAP
-      ? 'cap'
-      : last.verdict === 'clean'
-        ? 'clean'
-        : blocking || legacyUnknown
-          ? 'continue'
-          : 'close'
+    const { rule } = correctnessDecision(correctnessRounds)
     const brief = {
       nextRound: last.round + 1,
       rule,
@@ -821,6 +847,10 @@ export async function runGate(phaseNum, opts) {
             + 'covers that subset alone and is not evidence about the phase — a round recorded there is dropped by the eval. '
             + `Re-run the full gate (roadmap gate run ${phaseNum}) and record the round into that report.\n`,
         )
+        return 2
+      }
+      if (check.data.round >= 1 && (latest?.report.agents.filter(round => round.round >= 1).length ?? 0) >= CORRECTNESS_ROUND_CAP && !opts.capOverride) {
+        process.stderr.write(`gate run --record-round: correctness round cap is ${CORRECTNESS_ROUND_CAP}; pass --cap-override "<reason and bounded next round>" to extend it\n`)
         return 2
       }
       appendAgentRound(toplevel, phaseNum, { ...check.data, ...(opts.capOverride ? { capOverride: opts.capOverride } : {}) })

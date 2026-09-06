@@ -1231,7 +1231,7 @@ test('assemblePhaseEvalRecord — counts recorded correctness rounds past the sh
     agents,
     findingsRecorded: agents.map(() => true),
   })
-  assert.equal(record.gate.roundsPastCap, 2)
+  assert.equal(record.gate.roundsPastCap, 4)
 })
 
 test('assemblePhaseEvalRecord — projects curation and verify-complete evidence from the gate report', () => {

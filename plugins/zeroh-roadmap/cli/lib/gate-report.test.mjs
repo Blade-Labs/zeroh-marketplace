@@ -900,3 +900,28 @@ test('checkPhaseConsistency — only phases completed before enforcement keep hi
   })
   assert.equal(checkPhaseConsistency(reviewed.phase, reviewed.report).ok, true, 'post-cutoff independent review is clean')
 })
+
+test('correctness decision and completion agree at the cap and on historical terminals', () => {
+  const small = { file: 'x.mjs', severity: 'LOW', description: 'small concrete defect', fixedInCommit: 'abcdef1' }
+  for (const [round, verdict, findings, expected] of [
+    [1, 'clean', [], 'clean'], [3, 'clean', [], 'clean'], [5, 'clean', [], 'clean'],
+    [3, 'fixed-closed', [small], 'close'], [5, 'findings-fixed', [small], 'close'],
+    [3, 'findings-fixed', [{ ...small, severity: 'HIGH' }], 'cap'],
+    [3, 'findings-fixed', [], 'cap'], [1, 'findings-fixed', [], 'continue'],
+    [1, 'findings-fixed', [{ ...small, fixedInCommit: undefined }], 'continue'],
+    [3, 'clean', [small], 'cap'],
+  ]) {
+    const agents = [{ round, agent: 'code-reviewer', verdict, findings }]
+    const decision = gateReport.correctnessDecision(agents)
+    assert.equal(decision.rule, expected)
+    assert.equal(checkPhaseConsistency({ phase: 1670, gateRounds: [{ round }] }, baseReport({ agents })).ok,
+      ['clean', 'close'].includes(expected), `${round}/${verdict}`)
+  }
+})
+
+test('blocking repairs need an independent follow-up, not the implementer closing its own finding', () => {
+  const prior={round:1,agent:'code-reviewer',verdict:'findings-fixed',findings:[{file:'x.mjs',severity:'HIGH',description:'a blocking logic defect'}]}
+  const clean={round:2,agent:'code-reviewer',verdict:'clean',findings:[]}
+  assert.equal(gateReport.correctnessDecision([prior,clean]).terminal,true)
+  assert.equal(gateReport.correctnessDecision([prior,{...clean,agent:'self-review'}]).terminal,false)
+})

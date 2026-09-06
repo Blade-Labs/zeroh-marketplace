@@ -8,7 +8,8 @@
     "integration": "none",
     "build": "none",
     "e2e": "none",
-    "emit": "none"
+    "emit": "none",
+    "unit-scoped": "capbuild node plugins/zeroh-roadmap/scripts/run-scoped-tests.mjs {fileArgs}"
   },
   "validationTiers": {
     "wired": {

@@ -718,12 +718,12 @@ test('gate run --record-round enforces correctness cap unless a named override i
   repo.commit('feat: phase 1302 — code', { 'lib/cap.ts': 'export const cap = 1\n' })
   assert.equal(runGateCmd(repo.root, ['1302']).code, 0)
   const payload = (round) => JSON.stringify({ round, agent: 'code-reviewer', verdict: 'clean', summary: `round ${round}`, findings: [] })
-  assert.equal(runGateCmd(repo.root, ['1302', '--record-round', payload(5)]).code, 0, 'round at cap records normally')
-  const refused = runGateCmd(repo.root, ['1302', '--record-round', payload(6)])
+  assert.equal(runGateCmd(repo.root, ['1302', '--record-round', payload(3)]).code, 0, 'round at cap records normally')
+  const refused = runGateCmd(repo.root, ['1302', '--record-round', payload(4)])
   assert.equal(refused.code, 2)
-  assert.match(refused.stderr, /cap.*5/i)
+  assert.match(refused.stderr, /cap.*3/i)
   assert.match(refused.stderr, /--cap-override.*reason/i)
-  const allowed = runGateCmd(repo.root, ['1302', '--record-round', payload(6), '--cap-override', 'security review requested one more pass'])
+  const allowed = runGateCmd(repo.root, ['1302', '--record-round', payload(4), '--cap-override', 'security review requested one more pass'])
   assert.equal(allowed.code, 0, allowed.stderr)
   assert.equal(latestReportOf(repo.root, 1302).agents.at(-1).capOverride, 'security review requested one more pass')
 })
@@ -764,7 +764,11 @@ test('gate round-brief — derives all six correctness-loop directions from the 
     ['MEDIUM is fixed', 1, 'findings-fixed', [{ file: 'lib/x.ts', severity: 'MEDIUM', description: 'a medium defect was repaired', fixedInCommit: 'abcdef1' }], 'close'],
     ['LOW is fixed', 1, 'findings-fixed', [{ file: 'lib/x.ts', severity: 'LOW', description: 'a low defect was repaired', fixedInCommit: 'abcdef1' }], 'close'],
     ['empty clean round', 1, 'clean', [], 'clean'],
-    ['round five is the cap', 5, 'findings-fixed', [{ file: 'lib/x.ts', severity: 'HIGH', description: 'a high severity defect remains at the cap' }], 'cap'],
+    ['clean at cap is terminal', 3, 'clean', [], 'clean'],
+    ['fixed-closed at cap is terminal', 3, 'fixed-closed', [{file: 'lib/x.ts', severity: 'LOW', description: 'verified low severity repair', fixedInCommit: 'abcdef1'}], 'close'],
+    ['unfixed low cannot close', 1, 'findings-fixed', [{file: 'lib/x.ts', severity: 'LOW', description: 'low defect without fixing evidence'}], 'continue'],
+    ['contradictory clean remains unresolved', 3, 'clean', [{file: 'lib/x.ts', severity: 'HIGH', description: 'blocking finding contradicts clean verdict'}], 'cap'],
+    ['round three is the cap', 3, 'findings-fixed', [{ file: 'lib/x.ts', severity: 'HIGH', description: 'a high severity defect remains at the cap' }], 'cap'],
     ['legacy findings-fixed without findings', 1, 'findings-fixed', [], 'continue'],
   ]
 
@@ -2201,9 +2205,9 @@ const recordRoundArgs = (num, round, agent) => [String(num), '--record-round', J
 
 /** Drive one phase end-to-end: green gate run → --record-round per declared round>=1 →
  *  --verify-complete. Returns the three results so each leg fails with its own message. */
-function driveRounds(repo, num, rounds) {
+function driveRounds(repo, num, rounds, capOverride = null) {
   const run = runGateCmd(repo.root, [String(num)])
-  const recorded = rounds.filter((r) => r.round >= 1).map((r) => runGateCmd(repo.root, recordRoundArgs(num, r.round, r.agent)))
+  const recorded = rounds.filter((r) => r.round >= 1).map((r) => runGateCmd(repo.root, [...recordRoundArgs(num, r.round, r.agent), ...(capOverride ? ['--cap-override', capOverride] : [])]))
   const verify = runGateCmd(repo.root, [String(num), '--verify-complete'])
   return { run, recorded, verify }
 }
@@ -2252,7 +2256,7 @@ test('gate run — the five pre-existing enum members still parse and still reco
   writeDefinePhase(repo, 1742, rounds)
   repo.commit('feat: phase 1742 — code', { 'lib/a.ts': 'export const a = 1\n' })
 
-  const { run, recorded, verify } = driveRounds(repo, 1742, rounds)
+  const { run, recorded, verify } = driveRounds(repo, 1742, rounds, 'Fixture explicitly extends to five rounds to exercise every legacy enum member')
 
   assert.equal(run.code, 0, `every historical member must keep parsing — a phase gated before the widening must not stop reading; stderr: ${run.stderr}`)
   assert.deepEqual(recorded.map((r) => r.code), [0, 0, 0, 0, 0], `each legacy member still appends; stderr: ${recorded.map((r) => r.stderr).join(' | ')}`)
@@ -2608,4 +2612,39 @@ test('history scan preserves rename detection when a nonscannable file gains a s
   repo.git('mv', 'notes.txt', 'source.ts')
   repo.git('commit', '-qm', 'rename only')
   assert.deepEqual(scanHistoryComments(repo.root, base, 'roadmap'), [], 'a pure rename adds no comment lines')
+})
+
+test('task gate selects exactly declared and colocated tests with the ladder off', () => {
+  const cfg=RUN_CFG();cfg.testCadence={enabled:false}
+  cfg.gateCommands['unit-scoped']='node task-runner.mjs {fileArgs}'
+  const repo=makeRepo(cfg)
+  repo.writePhase(1391,phaseObj({phase:1391,tasks:[{id:'1391.1',files:['lib/one.mjs','lib/two space.test.mjs']},{id:'1391.2',files:['README.md']}]}))
+  repo.commit('feat: phase 1391 — scoped fixture', {
+    'lib/one.mjs':'export const one=1\n','lib/one.test.mjs':'','lib/two space.test.mjs':'','lib/unrelated.test.mjs':'',
+    'task-runner.mjs':'import {existsSync,writeFileSync} from "node:fs";const files=process.argv.slice(2);if(!files.length||files.some(f=>!existsSync(f)))process.exit(2);writeFileSync("selected.json",JSON.stringify(files));process.exit(existsSync("fail-selected")?1:0)',
+  })
+  const plan=runGateSubcommand(repo.root,'plan',['1391','--task','1391.1','--json'])
+  assert.equal(plan.code,0,plan.stderr)
+  const parsed=JSON.parse(plan.stdout)
+  assert.deepEqual(parsed.slots[0].files,['lib/one.test.mjs','lib/two space.test.mjs'])
+  assert.equal(parsed.slots[0].slot,'unit-scoped')
+  const args=['1391','--task','1391.1','--slots','unit']
+  assert.equal(runGateCmd(repo.root,args).code,0)
+  assert.deepEqual(JSON.parse(readFileSync(join(repo.root,'selected.json'),'utf8')),['lib/one.test.mjs','lib/two space.test.mjs'])
+  const report=latestReportOf(repo.root,1391)
+  assert.equal(report.slotFilter,'unit')
+  assert.equal(report.agents.length,0)
+  assert.notEqual(runGateCmd(repo.root,['1391','--verify-complete']).code,0)
+  const record=runGateCmd(repo.root,['1391','--record-round',JSON.stringify({round:1,agent:'code-reviewer',verdict:'clean',summary:'clean'})])
+  assert.equal(record.code,2,'partial report cannot receive final reviews')
+  writeFileSync(join(repo.root,'fail-selected'),'yes')
+  assert.equal(runGateCmd(repo.root,args).code,2,'selected failure is a failed gate')
+  const fallback=runGateSubcommand(repo.root,'plan',['1391','--task','1391.2','--json'])
+  assert.equal(fallback.code,0,fallback.stderr)
+  assert.equal(JSON.parse(fallback.stdout).slots[0].command,cfg.gateCommands.unit)
+  assert.match(JSON.parse(fallback.stdout).slots[0].note,/no selected test targets.*full/)
+  for (const badArgs of [['1391','--task','missing','--slots','unit'], ['1391','--task','1391.1'],
+    [...args,'--verify-complete'],[...args,'--record-round','{}'],[...args,'--unknown']]) {
+    assert.notEqual(runGateCmd(repo.root,badArgs).code,0,JSON.stringify(badArgs))
+  }
 })

@@ -46,8 +46,8 @@ For each task in order:
    problem/acceptanceCriteria/files/type-signatures (NOT `steps`); new tests scoped (RED),
    implement, scoped (GREEN), commit test+code. `"e2e"` — implement, then `test-engineer` writes
    the flow test blind to source; commit together (e2e runs at the gate). `"none"` — the steps.
-2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; scope touched tests via
-   the scoped slot (never a hand-built filter); a UI change runs `build`.
+2. **Verify** — the `types` slot via `roadmap gate run <N> --slots types`; preview task tests with `roadmap gate plan <N> --task <id>`, then run
+   `roadmap gate run <N> --task <id> --slots unit` (never a hand-built filter); a UI change runs `build`.
 3. **Commit** — `<type>(<scope>): phase N — <task title>`.
 4. **Persist** `transparencyReport` + `done: true` + `doneDate`, same commit.
 5. **Continue immediately** — the task boundary is a commit boundary, never a turn boundary.
@@ -80,14 +80,23 @@ Test-worthiness and documentation details live in `references/test-worthiness.md
 `code-reviewer`; every round records its model and typed findings.
 
 `roadmap gate plan <N>` prints the resolved cell (slots, scopes, floors, agent chain) for the
-`kind`: mockup = lint+types; logic = Round 0 quality pass → Rounds 1..N correctness loop (cap 5);
+`kind`: mockup = lint+types; logic = Round 0 quality pass → Rounds 1..N correctness loop (default cap 3);
 hardening adds the closure integration rerun; release adds the e2e slot. Run `roadmap gate run
 <N>` for the mechanical half, then the agent chain the plan names. A docs-only diff skips the
 quality pass. Under arc-mode the gate runs only phase-relevant SCOPED tests — the full suite
 defers to the arc end.
 
-Record every review with `roadmap gate run <N> --record-round '<typed JSON>'`. A new tree guard
-follows `references/guard-mutation-proof.md`.
+Record each independent correctness review with `roadmap gate run <N> --record-round '<typed JSON>'`,
+then call `roadmap gate round-brief <N> --json`. Normally: one review, fixes, focused verification.
+`clean` or `close` ends the loop immediately, including at the cap. Verified MEDIUM/LOW fixes name
+`fixedInCommit` and can close without another review; HIGH/CRITICAL repairs require a fresh independent
+correctness review. Send `sinceSha` and `priorFindings` on follow-ups; examine fixes and affected behavior,
+widening only when the change or evidence warrants it. Test runs and implementing fixes do not consume
+review rounds; Round 0 is separate. After three unresolved correctness reviews, stop with the remaining
+findings, why they persist, and a concrete proposed next step. A further review needs an explicit bounded
+extension, recorded through `--cap-override "<owner ruling, reason, next round>"`; it never waives findings.
+Task checks are partial evidence: do not attach final reviews or certify completion from them.
+A new tree guard follows `references/guard-mutation-proof.md`.
 
 **Design-parity stage** (a task cites a `ux` designRef AND the diff touches a rendered surface): a
 confirmed design is a CONTRACT. Apply the canonical `skills/validate-arc/references/parity-rubric.md`

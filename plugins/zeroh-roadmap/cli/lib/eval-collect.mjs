@@ -27,12 +27,12 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defaultExec } from './exec.mjs'
-import { GateRunReportShape } from './gate-report.mjs'
+import { GateRunReportShape, CORRECTNESS_ROUND_CAP } from './gate-report.mjs'
 import { flowTokens } from '../commands/measure.mjs'
 import { bridgeImport, bridgeImportMany, bridgeParseShape, consumerSchemaPath } from './tsx-bridge.mjs'
 import { roadmapRoot } from './roadmap-root.mjs'
 
-export const CORRECTNESS_ROUND_CAP = 5
+export { CORRECTNESS_ROUND_CAP } from './gate-report.mjs'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 

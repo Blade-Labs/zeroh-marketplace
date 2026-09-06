@@ -157,7 +157,7 @@ defaults — the consumer's <code>modelPolicy.judgeModel</code> upgrades every j
   <tr><td>software-developer</td><td>opus</td><td>implements tasks in the project's idiom, after tests are red</td></tr>
   <tr><td>test-engineer</td><td>opus</td><td>writes RED-first tests from criteria alone — never sees the implementation steps</td></tr>
   <tr><td>quality-pass</td><td>opus</td><td>gate Round 0: fix shortcuts + hardcodes, delete dead scaffolding, one shot per phase</td></tr>
-  <tr><td>code-reviewer</td><td>opus</td><td>correctness rounds 1..N (cap 5), confidence-filtered findings</td></tr>
+  <tr><td>code-reviewer</td><td>opus</td><td>correctness rounds 1..N (default cap 3), confidence-filtered findings</td></tr>
   <tr><td>intent-validator</td><td>judgeModel (fable here)</td><td>one independent judge per acceptance criterion, drives the real flow, evidence or downgrade</td></tr>
   <tr><td>arc-eval-judge</td><td>sonnet (pinned)</td><td>scores landed arcs vs a rolling baseline — pinned so the baseline stays comparable</td></tr>
   <tr><td>Codex lane</td><td>gpt-5.6-sol</td><td><code>roadmap codex run</code> — plans and executes whole phases in its own worktree; never merges, never pushes, never touches the primary checkout</td></tr>

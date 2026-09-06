@@ -32,7 +32,7 @@ long-run + foreign-red: `agents/references/executor-reference.md`.
 one task = one commit:
 1. Beacon `task-start` → `<worktree>/.building/<N>-executor.jsonl`.
 2. Implement `steps` (TDD via `test-engineer` for `testMode` tdd/e2e).
-3. Verify — `roadmap gate run <N> --slots types` + the phase-relevant scoped tests.
+3. Verify — `roadmap gate run <N> --slots types` + `roadmap gate plan <N> --task <id>` followed by `roadmap gate run <N> --task <id> --slots unit`. Task reports are partial and cannot close a phase.
 4. Commit (the hook stamps the `commit` beacon); persist `transparencyReport` + `done: true`.
 5. **Re-anchor: re-read this card**, then the next task IN THE SAME TURN — a commit boundary is
    never a turn boundary.

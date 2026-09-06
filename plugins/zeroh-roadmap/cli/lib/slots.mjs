@@ -66,8 +66,17 @@ const refusal = (slot) =>
  * owns quoting). A placeholder present in the template but given no value is an ERROR
  * (never run a command with the literal braces still in it). Returns { cmd } | { error }.
  */
+// {fileArgs} opts into per-path shell quoting; legacy {files} remains author-quoted.
 function substitute(template, { files, range, base, manifest }) {
   let cmd = template
+  if (cmd.includes('{fileArgs}')) {
+    if (cmd.replace(/(^|\s)\{fileArgs\}(?=\s|$)/g, '$1').includes('{fileArgs}'))
+      return { error: 'slot {fileArgs} must be an unquoted standalone placeholder' }
+    if (!Array.isArray(files) || !files.length || files.some(file => typeof file !== 'string' || /[\0\r\n]/.test(file)))
+      return { error: 'slot {fileArgs} requires a nonempty array of file paths without control characters' }
+    const quoted = files.map(file => "'" + file.replaceAll("'", "'\\''") + "'").join(' ')
+    cmd = cmd.split('{fileArgs}').join(quoted)
+  }
   if (cmd.includes('{files}')) {
     if (files == null) return { error: `slot template has a {files} placeholder but no files were provided` }
     cmd = cmd.split('{files}').join(Array.isArray(files) ? files.join(' ') : String(files))
@@ -121,7 +130,7 @@ const VACUOUS_SCOPED_RUNNER_MESSAGE =
 export async function probeScopedSlot(template, { cwd, timeoutMs = VACUITY_PROBE_TIMEOUT_MS } = {}) {
   // No runner to probe: absent, declared-absent ('none', this module's absence literal), or
   // not file-scoped — none of which is a verdict about a runner.
-  if (typeof template !== 'string' || template === 'none' || !template.includes('{files}')) {
+  if (typeof template !== 'string' || template === 'none' || !(template.includes('{files}') || template.includes('{fileArgs}'))) {
     return { vacuous: null, message: 'not a scoped template' }
   }
   const probeTarget = vacuityProbeTarget(cwd)

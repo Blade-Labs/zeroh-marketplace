@@ -690,3 +690,17 @@ test('probeScopedSlot — a runner that HANGS past timeoutMs ⇒ NULL naming the
     s.cleanup()
   }
 })
+
+test('fileArgs preserves individual argv through the real shell without expansion', async () => {
+  const root=mkdtempSync(join(tmpdir(),'zr-file-args-'))
+  try {
+    writeFileSync(join(root,'collect.mjs'),'import {writeFileSync} from "node:fs";writeFileSync("args.json",JSON.stringify(process.argv.slice(2)))')
+    const files=['space name.test.mjs',"quote's.test.mjs",'$(touch injected).test.mjs']
+    const slot=resolveScopedOrFallback({gateCommands:{'unit-scoped':'node collect.mjs {fileArgs}'}},'unit',files)
+    const result=await runSlot(slot,{cwd:root,logPath:join(root,'run.log')})
+    assert.equal(result.exitCode,0)
+    assert.deepEqual(JSON.parse(readFileSync(join(root,'args.json'),'utf8')),files)
+    assert.equal(existsSync(join(root,'injected')),false)
+    assert.match(resolveSlot({gateCommands:{unit:'node collect.mjs {fileArgs}'}},'unit',{files:[]}).refused,/nonempty/)
+  } finally {rmSync(root,{recursive:true,force:true})}
+})

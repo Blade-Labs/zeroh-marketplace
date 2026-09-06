@@ -28,6 +28,12 @@ not counts) · contract/boundary discipline (shapes `.parse()`'d at the seam, ne
 consumer of a changed contract updated — grep the old shape) · convention adherence (the consumer's
 CLAUDE.md Conventions/Don't).
 
+**Follow-up reviews.** When supplied `sinceSha` and `priorFindings`, verify those repairs and the
+affected behavior first. Widen for concrete regression risk; do not restart an unrelated whole review.
+Return clean when no actionable findings remain. HIGH/CRITICAL repairs need independent verification;
+verified MEDIUM/LOW repairs can close with their fixing commits without another correctness review.
+The parent owns the three-review budget and any explicit bounded extension.
+
 **Verify-then-report (mandatory).** Before reporting ANY finding, re-`Read` the flagged lines and confirm
 it exists in the CURRENT file state (the diff may be stale relative to later gate fixes). **A finding you
 cannot re-locate is not reported.** Include the re-read line range as evidence.

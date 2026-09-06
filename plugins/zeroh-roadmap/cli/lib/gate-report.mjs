@@ -19,6 +19,37 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { roadmapRoot } from './roadmap-root.mjs'
 
+export const CORRECTNESS_ROUND_CAP = 3;
+
+/** One terminal rule for live review guidance and completion. Old clean rounds
+ * remain terminal even when their recorded number exceeds today's default cap. */
+export function correctnessDecision(agents) {
+  const rounds = agents.filter(round => round.round >= 1)
+  const last = rounds.at(-1)
+  if (!last) return { rule: 'continue', terminal: false, problems: ['no correctness round recorded'] }
+  const findings = last.findings ?? []
+  const priorBlocking = rounds.slice(0, -1).some(round => (round.findings ?? []).some(finding => ['HIGH', 'CRITICAL'].includes(finding.severity)))
+  const selfVerification = priorBlocking && /self[\s_-]?review|phase-executor/i.test(last.agent ?? '')
+  if (last.verdict === 'clean' && findings.length === 0 && !selfVerification)
+    return { rule: 'clean', terminal: true, problems: [] }
+  const fixedSmall = findings.length > 0 && findings.every(finding =>
+    ['MEDIUM', 'LOW'].includes(finding.severity) && typeof finding.fixedInCommit === 'string' && finding.fixedInCommit.trim().length >= 7)
+  if (['fixed-closed', 'findings-fixed'].includes(last.verdict) && fixedSmall && !selfVerification)
+    return { rule: 'close', terminal: true, problems: [] }
+  const problems = selfVerification
+    ? ['HIGH/CRITICAL repairs require fresh independent verification; a self-review cannot close them']
+    : last.verdict === 'clean'
+    ? ['terminal clean round contradicts its nonempty findings']
+    : findings.some(finding => ['HIGH', 'CRITICAL'].includes(finding.severity))
+      ? ['terminal round has open CRITICAL/HIGH findings; another independent correctness round is required']
+      : ['terminal fixed-closed/findings-fixed must contain at least one MEDIUM/LOW finding and every finding must name fixedInCommit; unknown or skipped verdicts cannot close']
+  return {
+    rule: rounds.length >= CORRECTNESS_ROUND_CAP || last.round >= CORRECTNESS_ROUND_CAP ? 'cap' : 'continue',
+    terminal: false,
+    problems,
+  }
+}
+
 const RETAIN = 5
 // Reports attached to phases completed before the no-self-judge rule landed are immutable
 // historical evidence. A merely old report cannot waive review for a completion happening now.
@@ -281,23 +312,9 @@ export function checkPhaseConsistency(parsedPhase, report) {
       `no-self-judge rule: codex-lane completion needs an independent recorded round; ` +
         `record one with gate run ${parsedPhase?.phase ?? report.phase} --record-round (self-review rounds do not satisfy completion)`,
     )
-  const terminalRound = report.agents.filter((round) => round.round >= 1).at(-1)
-  if (terminalRound?.verdict === 'findings-fixed') {
-    const openBlocking = terminalRound.findings.filter(
-      (finding) => finding.severity === 'CRITICAL' || finding.severity === 'HIGH',
-    )
-    if (openBlocking.length > 0)
-      problems.push(
-        `terminal findings-fixed round has open ${openBlocking.map((finding) => finding.severity).join('/')} finding(s); `
-          + 'CRITICAL/HIGH findings require another correctness round',
-      )
-  }
-  if (terminalRound?.verdict === 'fixed-closed') {
-    const invalid = terminalRound.findings.filter(
-      (finding) => !['MEDIUM', 'LOW'].includes(finding.severity) || !finding.fixedInCommit,
-    )
-    if (terminalRound.findings.length === 0 || invalid.length > 0)
-      problems.push('terminal fixed-closed round must contain at least one MEDIUM/LOW finding and every finding must name fixedInCommit')
+  if (report.agents.some(round => round.round >= 1)) {
+    const decision = correctnessDecision(report.agents)
+    if (!decision.terminal) problems.push(...decision.problems)
   }
   return { ok: problems.length === 0, problems }
 }

@@ -203,7 +203,7 @@ The entire file is `git rm`'d. Every top-level section's disposition:
 | Review-scope ladder (none/light/full, ≤150-line threshold, specialist hard floor, declared semantics) | enforced-by-code(cli/lib/ladder.mjs deriveReviewScope) | cli/lib/ladder.test.mjs |
 | Per-Stage Echo Contract | relocated | folded into skills/do-phase/SKILL.md "Echo contract" (1658.4) |
 | Round 0 — Quality Pass | relocated | the protocol is in skills/do-phase/SKILL.md gate section + agents/quality-pass.md |
-| Rounds 1..N — Correctness Loop (mechanical checks half) | enforced-by-code(cli/lib/ladder.mjs + slots.mjs + `roadmap gate run`) / relocated(the agent-review loop + hard-cap 5 in do-phase) | ladder.mjs, slots.mjs |
+| Rounds 1..N — Correctness Loop (mechanical checks half) | enforced-by-code(cli/lib/ladder.mjs + slots.mjs + `roadmap gate run`) / relocated(the agent-review loop + default cap 3 in gate-report.mjs + do-phase) | ladder.mjs, slots.mjs |
 | Compromise Summary | relocated | skills/do-phase/SKILL.md Step 4b (already the durable statement) |
 | Phase Completion (done-fields, gate enforcement) | enforced-by-code(`roadmap gate run --verify-complete` + cli/lib/validate.mjs done-transition check) / relocated(do-phase Step 5) | validate.mjs |
 
@@ -273,7 +273,7 @@ silent drop:
 
 | passage | disposition | evidence |
 |---|---|---|
-| hard round-cap 5 | relocated | skills/do-phase/SKILL.md gate section — "Rounds 1..N correctness loop (cap 5)" |
+| default correctness cap 3 | enforced-by-code | cli/lib/gate-report.mjs correctnessDecision; do-phase owns bounded override guidance |
 | RN>1 reviewers scoped to the fix-diff only | relocated | skills/do-phase/SKILL.md gate section — the Rounds 1..N loop names the round-scoped review-input |
 | the finding `agent` attribution vocabulary (reviewer-1 / specialist name / quality-pass) | enforced-by-code(StructuredGateRoundShape.`agent` field; do-phase records `agent:` per finding + `agent: 'design-parity'`) | templates/schema.ts |
 
