@@ -8,7 +8,7 @@ import { definePhase } from '../../lib/roadmap/schema'
 export default definePhase({
   phase: 45,
   name: 'Truthful intent-to-green-PR README, guide, orientation, and clean-room onboarding',
-  plannedBy: { model: 'gpt-5.6-sol' },
+  plannedBy: { model: 'unverified' },
   status: 'backlog',
   category: 'docs',
   kind: 'hardening',
@@ -55,7 +55,7 @@ export default definePhase({
     {
       claim: 'The repository contains no approved local ELI5 invocation contract and NATIVEGREEN explicitly forbids adding one.',
       verify:
-        'bash -c "grep -qF \"no local ELI5 skill/invocation copy\" docs/roadmap/arcs/NATIVEGREEN.arc.ts && ! rg -n -i \"/eli5|\\$eli5|invoke eli5\" plugins/zeroh-roadmap/README.md plugins/zeroh-roadmap/docs"',
+        'bash -c "grep -qF \"no local ELI5 skill/invocation copy\" docs/roadmap/arcs/NATIVEGREEN.arc.ts && ! rg -n -i \"/eli5|\\$eli5|invoke eli5\" plugins/zeroh-roadmap/README.md plugins/zeroh-roadmap/docs/orientation.html"',
       onFalse: 'ESCALATE',
     },
   ],
@@ -69,12 +69,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/docs/doc-projection.json',
           description:
-            'Define the canonical DocProjection data for lifecycle stages, support matrix, install commands, role/driver facts, artifacts, recovery, delivery/history/GC policy, limitations and source links; every behavioral claim references a verified phase-43 claim ID. → verify: node plugins/zeroh-roadmap/scripts/docs/check.mjs --projection-only',
+            'Define DocProjection {schemaVersion:1, sections:[{id, claimIds, sourceRefs, content}], comparison:{version,retrievedAt,sources}}; the bounded claim catalog owns factual claims, while prose and markup stay ordinary editorial content. Define the canonical projection data for lifecycle stages, support matrix, install commands, role/driver facts, artifacts, recovery, delivery/history/GC policy, limitations and source links; every behavioral claim references a verified phase-43 claim ID. → verify: node plugins/zeroh-roadmap/scripts/docs/check.mjs --projection-only',
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/docs/build.mjs',
           description:
-            'Implement loadDocProjection and renderDocumentation so generated fragments for README, the complete Markdown guide and orientation HTML share one fact source while retaining format-specific navigation and progressive disclosure. → verify: node --test --test-name-pattern="render|single source" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
+            'Implement loadDocProjection(root) and renderDocumentation(projection, sources) returning a path-to-bytes map; check.mjs computes that map in memory and compares without mutation. Implement the rendering so generated fragments for README, the complete Markdown guide and orientation HTML share one fact source while retaining format-specific navigation and progressive disclosure. → verify: node --test --test-name-pattern="render|single source" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
@@ -148,7 +148,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
           description:
-            'Run snippets in isolated Claude-shaped and Codex-shaped fixtures at the recorded versions, asserting clean second install, one mapping, validator success, no bypass posture, identical semantic receipts, and expected permission holds. → verify: node --test --test-name-pattern="clean-room|Claude|Codex" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
+            'Validate snippet syntax and semantics in isolated Claude-shaped and Codex-shaped fixtures, reuse exact-input matching native installation results from36/43 for real-host claims and label fixture-only results explicitly at the recorded versions, asserting clean second install, one mapping, validator success, no bypass posture, identical semantic receipts, and expected permission holds. → verify: node --test --test-name-pattern="clean-room|Claude|Codex" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -246,7 +246,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/package.json',
           description:
-            'Add one docs:check script invoking checkDocumentation without duplicating its flags or logic, and include it in the plugin test/CI path used by the repository gate. → verify: pnpm --dir plugins/zeroh-roadmap run docs:check',
+            'Add one docs:check script invoking checkDocumentation in deterministic offline mode; an explicit docs:check:live command owns external-link and native checks, and --release --json requires their current successful records. Add the default script without duplicating its flags or logic, and include deterministic checks in the existing plugin test/CI path without triggering live models/network on every task. Include live checks only at the explicit release acceptance boundary. → verify: pnpm --dir plugins/zeroh-roadmap run docs:check',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
@@ -255,7 +255,7 @@ export default definePhase({
         },
       ],
       acceptanceCriteria: [
-        'One docs:check command fails on projection drift, unsupported claims, broken links/snippets, accessibility/offline defects, expired comparison facts, or clean-room semantic divergence.',
+        'Default docs:check rejects deterministic drift/claims/local links/snippets/accessibility/offline defects and expired comparison metadata; docs:check:live verifies remote links and real-host results, and release mode requires both. Fixtures alone cannot attest a native install.',
         'External-link infrastructure failures are reported distinctly from invalid links and cannot silently green or trigger unrelated code edits.',
         'The full repository gate runs docs:check and leaves generated files unchanged.',
       ],
@@ -278,7 +278,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/scripts/docs/check.mjs',
           description:
-            'Add an editorial-economy check with explicit per-surface budgets, duplicate-section detection, and durable-token scans for dates, phase IDs, attempt narration, codenames and postmortem prose outside version/source metadata; require links to canonical protocol and architecture owners instead of copied protocol bodies. → verify: node --test --test-name-pattern="editorial economy|archaeology|duplicate prose" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
+            'Add an editorial-economy check with a 1000-word README orientation budget (excluding command reference), a 1600-word initially expanded HTML overview budget, and exact normalized duplicate-paragraph detection above80 words; the complete guide has no arbitrary total cap, and durable-token scans for dates, phase IDs, attempt narration, codenames and postmortem prose outside version/source metadata; require links to canonical protocol and architecture owners instead of copied protocol bodies. → verify: node --test --test-name-pattern="editorial economy|archaeology|duplicate prose" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
@@ -306,12 +306,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
           description:
-            'Add a final claim-closure fixture that enumerates every behavioral sentence/table cell/diagram label across README, Markdown and HTML, resolves it to a sealed phase-43 supported claim or a non-behavioral source fact, and mutation-fails unproven, unavailable, unjudged or stale claims. → verify: node --test --test-name-pattern="final claim closure" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
+            'Add a final claim-closure fixture that enumerates every declared capability in the bounded DocProjection catalog and its generated surfaces, resolves it to supported phase43 evidence or an owning non-behavioral source fact, and independently review free prose for unsupported claims; do not build a sentence-by-sentence proof language; and mutation-fails unproven, unavailable, unjudged or stale claims. → verify: node --test --test-name-pattern="final claim closure" plugins/zeroh-roadmap/cli/lib/docs-projection.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/scripts/docs/check.mjs',
           description:
-            'Add a release-mode acceptance report covering GitHub-renderable Markdown/Mermaid with complete prose fallback, Disclosure HTML at 320px and desktop, keyboard/focus/reduced-motion/offline behavior, first/second-visit disclosure, clean-room parent snippets, respectful versioned Superpowers comparison, editorial economy and unchanged generated bytes. → verify: node plugins/zeroh-roadmap/scripts/docs/check.mjs --release --json',
+            'Use a real browser in an isolated local fixture for viewport320px and desktop1440px, keyboard tab/focus, details toggling, reduced-motion emulation, computed contrast and offline reload on first/second visits; record failures with screenshots and reuse the repo browser tooling if available. Add a release-mode acceptance report covering GitHub-renderable Markdown/Mermaid with complete prose fallback, Disclosure HTML at 320px and desktop, keyboard/focus/reduced-motion/offline behavior, first/second-visit disclosure, clean-room parent snippets, respectful versioned Superpowers comparison, editorial economy and unchanged generated bytes. → verify: node plugins/zeroh-roadmap/scripts/docs/check.mjs --release --json',
         },
         {
           file: 'plugins/zeroh-roadmap/README.md',
@@ -335,7 +335,6 @@ export default definePhase({
       interfaces: { consumes: ['editorial-economy documentation gate', 'Gauntlet 3 claim inventory'], produces: ['truthful-visual-docs release evidence'] },
     },
   ],
-  reviewRecord: { date: '2026-09-04', model: 'gpt-5.6-sol', verdict: 'READY', via: 'executed' },
   notes:
-    '## Hypotheses\n1. CONFIRMED — the current engineer surfaces are independently authored and already contain stale/version-sensitive and competitive prose, while no generated DocProjection or docs:check seam exists; evidence: plugins/zeroh-roadmap/docs/orientation.html contains its own dated version footer and comparative claims, plugins/zeroh-roadmap/README.md is separately maintained, and plugins/zeroh-roadmap/package.json has no docs:check script.\n2. REFUTED — evolving only orientation.html can satisfy the arc: NATIVEGREEN locks GitHub and visual-guide surfaces, complete text equivalents, clean-room Claude/Codex onboarding and one source per fact, so README/Markdown, projection and checks are required.\ninterview: skipped — arc member; NATIVEGREEN.arc.ts records Disclosure canon, evolved orientation, neutral versioned comparison, clean-room parents and the no-ELI5 ruling. userFacing false ratified: these are developer-control-plane documentation and generated orientation assets, not a consumer runtime feature, so no feature flag applies. testScope full and reviewScope full ratified because public claims, install commands, both native parents, generated drift and release checks cross every supported harness. testMode tdd ratified for 45.1-45.8: each executable renderer/checker or declarative surface is guarded by mutation-red projection tests before acceptance. Licensing ratified: generated documents and tests remain under the plugin repository license; external Superpowers material is paraphrased from pinned primary sources with links, never copied. Phase 45 may advertise only claim IDs verified by phase 43; phase 44 owns non-user provenance relocation and 45 depends on it, making documentation the final plane. External Superpowers facts must be verified against primary sources during execution because they are version-sensitive. Review repairs 2026-09-04 (Mode A gpt-5.6-sol, --no-queue): restored promised 45.7-45.8 ledger coverage, added editorial-economy and final coherent truth/visual gates, corrected node:test option ordering, and added mandatory hardening hypotheses plus metadata ratifications. The boundary wrapper stopped in dependency preflight with ERR_PNPM_IGNORED_BUILDS before classifying paths. --no-queue: placement not applied.',
+    'Replan 2026-09-06 against source036b7c5; source facts reuse .codex-plugin/plugin.json, .claude-plugin/plugin.json, cli/lib/drivers.mjs MODEL_IDS and roles.mjs, plus existing protocol references. Current owner model policy849635f (Fable architect, Sol implementor) supersedes old Astra defaults; render actual config, never hard-code the older ruling. All claims remain reviewed, but the projection is a bounded documentation data file rather than a new claim-proof engine. Snapshot matching prevents cached native results being described as fresh runs; prior READY is historical and fresh review is required. Author model identity is not externally attested. Future modules and verifies are implementation obligations, not existing passes. Scoped task checks use the shipped capbuild pool; the configured terminal suite remains full. ## Hypotheses\n1. CONFIRMED — the current engineer surfaces are independently authored and already contain stale/version-sensitive and competitive prose, while no generated DocProjection or docs:check seam exists; evidence: plugins/zeroh-roadmap/docs/orientation.html contains its own dated version footer and comparative claims, plugins/zeroh-roadmap/README.md is separately maintained, and plugins/zeroh-roadmap/package.json has no docs:check script.\n2. REFUTED — evolving only orientation.html can satisfy the arc: NATIVEGREEN locks GitHub and visual-guide surfaces, complete text equivalents, clean-room Claude/Codex onboarding and one source per fact, so README/Markdown, projection and checks are required.\ninterview: skipped — arc member; NATIVEGREEN.arc.ts records Disclosure canon, evolved orientation, neutral versioned comparison, clean-room parents and the no-ELI5 ruling. userFacing false ratified: these are developer-control-plane documentation and generated orientation assets, not a consumer runtime feature, so no feature flag applies. testScope full and reviewScope full ratified because public claims, install commands, both native parents, generated drift and release checks cross every supported harness. testMode tdd ratified for 45.1-45.8: each executable renderer/checker or declarative surface is guarded by mutation-red projection tests before acceptance. Licensing ratified: generated documents and tests remain under the plugin repository license; external Superpowers material is paraphrased from pinned primary sources with links, never copied. Phase 45 may advertise only claim IDs verified by phase 43; phase 44 owns non-user provenance relocation and 45 depends on it, making documentation the final plane. External Superpowers facts must be verified against primary sources during execution because they are version-sensitive. Review repairs 2026-09-04 (Mode A gpt-5.6-sol, --no-queue): restored promised 45.7-45.8 ledger coverage, added editorial-economy and final coherent truth/visual gates, corrected node:test option ordering, and added mandatory hardening hypotheses plus metadata ratifications. The boundary wrapper stopped in dependency preflight with ERR_PNPM_IGNORED_BUILDS before classifying paths. --no-queue: placement not applied.',
 })

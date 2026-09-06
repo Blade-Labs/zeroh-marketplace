@@ -8,7 +8,7 @@ import { definePhase } from '../../lib/roadmap/schema'
 export default definePhase({
   phase: 44,
   name: 'Encode safety invariants and retire production incident archaeology',
-  plannedBy: { model: 'gpt-5.6-sol' },
+  plannedBy: { model: 'unverified' },
   status: 'backlog',
   category: 'refactor',
   kind: 'hardening',
@@ -65,12 +65,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
           description:
-            'Define PRODUCTION_HISTORY_TARGETS, ALLOWED_SEMANTIC_LITERALS and FORBIDDEN_ARCHAEOLOGY patterns for dates, phase/attempt IDs, codenames and postmortem narration; exclude tests, ADRs, evals, changelogs and fixtures from the production scan. → verify: node --test plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs --test-name-pattern="policy|scope"',
+            'Define PRODUCTION_HISTORY_TARGETS, ALLOWED_SEMANTIC_LITERALS and FORBIDDEN_ARCHAEOLOGY patterns for dates, phase/attempt IDs, codenames and postmortem narration; exclude tests, ADRs, evals, changelogs and fixtures from the production scan. → verify: node --test --test-name-pattern="policy|scope" plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
           description:
-            'Add mutation fixtures proving a dated incident, phase-number rationale, codename and attempt story RED while protocol versions, schema versions, HTTP status codes, numeric thresholds and current invariant comments GREEN only through explicit semantic allowlisting. → verify: node --test plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs --test-name-pattern="mutation|allowlist"',
+            'Add mutation fixtures proving a dated incident, phase-number rationale, codename and attempt story RED while protocol versions, schema versions, HTTP status codes, numeric thresholds and current invariant comments GREEN only through explicit semantic allowlisting. → verify: node --test --test-name-pattern="mutation|allowlist" plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -102,12 +102,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/liveness.test.mjs',
           description:
-            'Rename incident-shaped test titles to invariant-shaped behavior and add assertions for unobservable-not-stalled, live-background-not-stalled, mismatched phase token, product overlap and bounded probe evidence. → verify: node --test plugins/zeroh-roadmap/cli/lib/liveness.test.mjs',
+            'Preserve existing regression tests and add only missing behavioral assertions for unobservable-not-stalled, live-background-not-stalled, mismatched phase token, product overlap and bounded probe evidence. → verify: node --test plugins/zeroh-roadmap/cli/lib/liveness.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/executor-arm.test.mjs',
           description:
-            'Rename incident-shaped tests and pin one-owner, no-unbound-arm, no-live-disarm, exact identity and overlap behavior without dates or phase-history narration. → verify: node --test plugins/zeroh-roadmap/cli/lib/executor-arm.test.mjs',
+            'Preserve existing tests and pin one-owner, no-unbound-arm, no-live-disarm, exact identity and overlap behavior without dates or phase-history narration. → verify: node --test plugins/zeroh-roadmap/cli/lib/executor-arm.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -140,12 +140,12 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
           description:
-            'Rename history-shaped test titles and retain adversarial coverage for dirty, unique, live, human, other-tool, open-PR, merged-ancestor, symlink, identity mismatch and just-before-remove race cases. → verify: node --test plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
+            'Retain existing test names unless misleading and preserve adversarial coverage for dirty, unique, live, human, other-tool, open-PR, merged-ancestor, symlink, identity mismatch and just-before-remove race cases. → verify: node --test plugins/zeroh-roadmap/cli/lib/worktree.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
           description:
-            'Add a semantic-surface assertion that every destructive worktree decision exercised above has a named refusal/receipt value before its explanatory archaeology is allowed to disappear. → verify: node --test plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs --test-name-pattern="worktree semantic surface"',
+            'Add a semantic-surface assertion that every destructive worktree decision exercised above has a named refusal/receipt value before its explanatory archaeology is allowed to disappear. → verify: node --test --test-name-pattern="worktree semantic surface" plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -182,18 +182,18 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
           description:
-            'Rename archaeology-shaped cases and assert exact-head invalidation after push, stable PR reconciliation, default open-PR terminal, held merge authority, no cosmetic rewrite and recovery receipt behavior. → verify: node --test plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
+            'Reuse existing cases and assert exact-head invalidation after push, stable PR reconciliation, default open-PR terminal, held merge authority, no cosmetic rewrite and recovery receipt behavior. → verify: node --test plugins/zeroh-roadmap/cli/lib/landing.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
           description:
-            'Require landing and arc-plane production paths to pass the archaeology scan and assert their current terminal/halt vocabulary remains present after cleanup. → verify: node --test plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs --test-name-pattern="landing|arc-plane"',
+            'Require landing and arc-plane production paths to pass the archaeology scan and assert their current terminal/halt vocabulary remains present after cleanup. → verify: node --test --test-name-pattern="landing|arc-plane" plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
         },
       ],
       acceptanceCriteria: [
         'Landing and workflow suites pass with exact-head, idempotency, authority, recovery, same-executor and typed-halt invariants intact.',
         'Production comments state current why/constraint only and contain no incident dates, phase numbers, attempts, codenames or postmortem narration.',
-        'Test names describe invariant behavior rather than historical incidents while preserving the same or stronger branch coverage.',
+        'Existing behavior coverage is preserved; source comment cleanup does not require cosmetic test renaming.',
       ],
       files: [
         'plugins/zeroh-roadmap/cli/lib/landing.mjs',
@@ -226,7 +226,7 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
           description:
-            'Add an invariant-preservation checklist that searches current names/types/assertions for every removed safety concept and fails if cleanup leaves rationale neither executable nor linked from the architecture record. → verify: node --test plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs --test-name-pattern="invariant preservation"',
+            'Add an invariant-preservation checklist that maps each removed safety rationale to an existing behavior assertion and durable source pointer; missing mappings fail, while behavior suites (not mere token presence) establish preservation. → verify: node --test --test-name-pattern="invariant preservation" plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -252,17 +252,17 @@ export default definePhase({
         {
           file: 'plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
           description:
-            'Scan comments and user-visible diagnostic literals separately across the existing named production inventory; apply the same forbidden-history patterns to both, retain semantic allowlists with reasons, and mutation-prove dated, phase, attempt, codename and postmortem diagnostics RED. → verify: node --test plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs --test-name-pattern="diagnostic archaeology"',
+            'Scan comments and user-visible diagnostic literals separately across the existing named production inventory; apply the same forbidden-history patterns to both, retain semantic allowlists with reasons, and mutation-prove dated, phase, attempt, codename and postmortem diagnostics RED. → verify: node --test --test-name-pattern="diagnostic archaeology" plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
           description:
-            'Record the post-cleanup production comment count/bytes and architecture-provenance section count/bytes as exact ratchet fixtures; fail growth unless the fixture is deliberately reviewed, and reject provenance entries that retell an incident instead of naming a current invariant plus an ADR/eval/Gauntlet path and a path-scoped git log command. → verify: node --test plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs --test-name-pattern="volume ratchet|Git provenance"',
+            'Extend the existing DIET-LEDGER.md disposition practice with a bounded comment/provenance volume budget recorded after cleanup; fail growth beyond that reviewed budget, and reject provenance entries that retell an incident instead of naming a current invariant plus an ADR/eval/Gauntlet path and a path-scoped git log command. → verify: node --test --test-name-pattern="volume ratchet|Git provenance" plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
         },
         {
           file: 'plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md',
           description:
-            'Keep the provenance section as a compact index of current invariant, durable record path, and copy-pasteable `git log -- <path>` lookup; do not reproduce dates, attempts, codenames, incident timelines, or user guidance. → verify: node --test plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs --test-name-pattern="Git provenance"',
+            'Keep the provenance section as a compact index of current invariant, durable record path, and copy-pasteable `git log -- <path>` lookup; do not reproduce dates, attempts, codenames, incident timelines, or user guidance. → verify: node --test --test-name-pattern="Git provenance" plugins/zeroh-roadmap/cli/lib/history-comments.test.mjs',
         },
       ],
       acceptanceCriteria: [
@@ -280,7 +280,6 @@ export default definePhase({
       interfaces: { consumes: ['concise-code gate', 'architecture provenance index'], produces: ['diagnostic archaeology gate', 'comment/documentation volume ratchet', 'Git provenance lookup'] },
     },
   ],
-  reviewRecord: { date: '2026-09-04', model: 'gpt-5.6-sol', verdict: 'READY', via: 'executed' },
   notes:
-    'interview: skipped — arc member; NATIVEGREEN.arc.ts records the cleanup ruling. [FIXED] Added ledger task 44.6 so the arc criterion covers production diagnostics as well as comments, preserves operative rationale through an explicit mapping, delegates historical lookup to path-scoped Git commands, and ratchets comment/provenance volume against silent growth. userFacing false: this phase refactors internal source comments, diagnostics, tests, names and architecture provenance without changing consumer behavior, so no flag applies. Full test and review scopes are deliberate because safety rationale moves across destructive and concurrent seams. Documentation hierarchy ruling: durable engineering rationale goes to a compact docs/architecture index; user tasks and claims remain for phase 45; incident evidence remains in Gauntlet/eval/Git rather than being duplicated. The boundary wrapper stopped in dependency preflight with ERR_PNPM_IGNORED_BUILDS before classifying paths. Mode A review ran --no-queue; backlog remains untouched.',
+    'Replan 2026-09-06 against source036b7c5; anchors readLiveness, disposeWorktree, landArc, correctnessDecision and arc-plane workflow already enforce safety. Reuse their behavioral tests and DIET-LEDGER.md; do not introduce a runtime proof checker or scan retained logs/JSON. Keep the original two-pass conformance requirement as focused affected-suite runs, not two full repository gates; prior READY is historical and fresh review is required. Author model identity is not externally attested. Future modules and verifies are implementation obligations, not existing passes. Scoped task checks use the shipped capbuild pool; the configured terminal suite remains full. interview: skipped — arc member; NATIVEGREEN.arc.ts records the cleanup ruling. [FIXED] Added ledger task 44.6 so the arc criterion covers production diagnostics as well as comments, preserves operative rationale through an explicit mapping, delegates historical lookup to path-scoped Git commands, and ratchets comment/provenance volume against silent growth. userFacing false: this phase refactors internal source comments, diagnostics, tests, names and architecture provenance without changing consumer behavior, so no flag applies. Full test and review scopes are deliberate because safety rationale moves across destructive and concurrent seams. Documentation hierarchy ruling: durable engineering rationale goes to a compact docs/architecture index; user tasks and claims remain for phase 45; incident evidence remains in Gauntlet/eval/Git rather than being duplicated. The boundary wrapper stopped in dependency preflight with ERR_PNPM_IGNORED_BUILDS before classifying paths. Mode A review ran --no-queue; backlog remains untouched.',
 })
