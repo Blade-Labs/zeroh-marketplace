@@ -68,6 +68,9 @@ function git(dir, ...args) {
 function newRepo() {
   const d = newTmp()
   git(d, 'init', '-q')
+  // Snapshot tests need a quiescent .git tree, including after the seed commit.
+  git(d, 'config', 'maintenance.auto', 'false')
+  git(d, 'config', 'gc.auto', '0')
   writeFileSync(join(d, 'seed.txt'), 'seed\n')
   git(d, 'add', 'seed.txt')
   git(d, 'commit', '-qm', 'seed')
