@@ -11,7 +11,7 @@ metadata:
 
 Drive the shipped product against its original acceptance criteria with a fresh independent
 `intent-validator`. Report PASS only when all criteria are met; otherwise GAPS with evidence.
-Never merge. Authorized repairs use the gated `plan-phase` + `do-phase` loop in Step 5.
+Never merge. Step 5 routes authorized small repairs to a bounded pass and larger work to planning.
 
 **Trigger:** `validate arc <id>`, `/validate-arc <id>`; also `do-arc`'s terminal Step 7 (after `arc-sweep`,
 before the merge-hold). `<id>` matches `Arc.id`.
@@ -69,30 +69,7 @@ omitted), and PASS/GAPS. **Stop on PASS** (merge-readiness is do-arc's call). On
 
 ## Step 5: Corrective loop (on GAPS) — bounded
 
-Apply this authority order before corrective writes:
-
-- An explicit owner stop/hold wins. Otherwise applicable session authorization permits its
-  scoped, budgeted corrections even with configured `hold`; do not request it again.
-- Without a session ruling, discovered consumer `mergePolicy.gapsCorrection: autonomous`
-  permits correction. `hold` or absent mode requires concrete proposed fixes and owner approval.
-- Scope expansion, descope, budget extension, or an unapproved service boundary requires the
-  specific missing ruling. Never change config to manufacture authority; correction grants no
-  merge/release authority.
-
-Keep the two-round and budget bounds. Fresh independent judgment must verify each repair;
-unavailable judgment remains UNJUDGED/GAPS. Each authorized round:
-
-1. **Author a corrective phase per gap via `plan-phase`** — `problem` = `whatsMissing`, tasks seeded by
-   `suggestedFix`. `plan-phase` does NOT stamp `arcId`, so DO what `plan-arc` Step 2b does: set the phase's
-   `arcId` AND append its number to `planes[].phases` (else `crossValidate` rejects).
-2. **Execute each via `do-phase`** (full gate — corrective work is gated code).
-3. **Re-validate the affected criteria** (re-run Steps 2–4 for the criteria whose phase landed, not the
-   whole arc). A bound, not a guarantee: a corrective phase could regress a MET criterion — the backstop is
-   two-layered (each phase's `do-phase` gate + do-arc's terminal full-arc re-validate). Widen if a phase's
-   blast radius plausibly reaches other criteria.
-
-Loop until PASS or the **bound** trips: `maxRounds` default **2** + a budget cap.
-**Exhaustion exit (never spin/silently-pass):** when the bound trips with criteria unmet,
-**DISPOSITION each residual gap through the arc-sweep disposition table** (IN-ARC author-and-execute, or a
-user-ratified DESCOPE typed on `Arc.descopes`) — NOT prose into the backlog. Report `GAPS: N residual —
-dispositioned <in-arc | descope>`. Never report PASS with a criterion unmet.
+Read **`references/corrections.md`** only on GAPS. It owns authority, repair eligibility,
+checkpointing, affected checks, fresh judgment and exhaustion. Group related small gaps into
+one repair pass on the existing arc; reserve `plan-phase` + `do-phase` for work needing new
+planning. No repair route grants merge/release authority or changes acceptance criteria.

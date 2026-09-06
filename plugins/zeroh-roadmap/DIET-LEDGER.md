@@ -789,3 +789,9 @@ receipt-backed audit blocks moved out of default discovery. Synthetic tampering,
 authority, command/exit and delivery mutation regressions remain in npm test.
 The owner authorized purpose-based release review; phase 34.7 explicitly retains
 historical observations and the scoped R0 pilot without claiming a fresh matrix.
+
+## Bounded intent corrections
+
+- Mandatory new phase per gap: superseded-with-equivalent(owner-approved small repairs reuse existing ownership, affected gates and fresh independent intent judgment; larger work remains planned). Owner: validate-arc/references/corrections.md.
+- Inline correction detail: moved-to-reference(validate-arc/references/corrections.md), loaded only on GAPS; authority, scope, bounds and unresolved-state rules retained.
+- Automatic new work at exhaustion: superseded-with-equivalent(stop GAPS and obtain an explicit bounded extension; descope remains owner-ratified). Owner: same correction reference.

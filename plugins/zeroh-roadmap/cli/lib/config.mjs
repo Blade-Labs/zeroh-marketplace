@@ -79,10 +79,8 @@ const MergePolicyShape = z.strictObject({
   // pipeline is the full-suite gate). 'defer-ci' skips local suites entirely; the
   // RunnerSummary records the deferral honestly (never a fake green).
   arcEndSuite: z.enum(['full', 'impacted', 'defer-ci']).optional(),
-  // validate-arc GAPS handling under do-arc (user ruling 2026-07-18): 'autonomous' = run the
-  // bounded corrective loop unattended (plan -> do -> re-validate until PASS) and land on the
-  // judge's PASS; 'hold' (default, fail-safe) = pause for the user's go. Bound exhaustion and
-  // descope ratification ALWAYS stop for the user regardless of this key.
+  // Correction authority when no session ruling applies; never landing permission.
+  // validate-arc's correction reference owns routing, shared bounds and descope rules.
   gapsCorrection: z.enum(['autonomous', 'hold']).optional(),
 })
 

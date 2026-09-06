@@ -7,7 +7,8 @@ disable-model-invocation: false
 # zeroh-roadmap: Phase-Driven Development
 
 Route ALL development work through the phase system — never create files/schemas/structure
-ad hoc (honor-system). Invoke the CLI as `roadmap <cmd>` (fallback `node
+ad hoc (honor-system). The bounded small-repair exception in `validate-arc` Step 5 reuses
+existing phase ownership and gates; it grants no broader workflow bypass. Invoke the CLI as `roadmap <cmd>` (fallback `node
 ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`).
 
 **Layout — the ONE rule about paths.** The root is DISCOVERED (`roadmap/` or `docs/roadmap/`;

@@ -67,9 +67,11 @@ it always fast-forwards past committed work — it never re-runs a completed pha
    re-resolution picks it up automatically. A SECOND sweep over a loop-back phase may only
    ACCEPT / DESCOPE / OPERATOR-PENDING — never author again.
 2. **validate** → run `validate-arc <id>`, then `roadmap arc record-validate <id> --verdict
-   <PASS|GAPS|no-op>` (stamps the verdict artifact `arc land` reads). For GAPS, follow
+   <PASS|GAPS|no-op>` (stamps the verdict artifact `arc land` reads). On GAPS, retain Step 5’s
+   round/budget checkpoint with `--note` so this stamp cannot erase resume state. Follow
    validate-arc Step 5's authority rules: reuse existing session authorization, otherwise honor
-   `mergePolicy.gapsCorrection`. Correct and independently re-judge within the existing bound;
+   `mergePolicy.gapsCorrection`. Group eligible small gaps into the existing arc’s repair pass;
+   plan larger corrections. Independently re-judge within the shared bound;
    missing authority or scope expansion requires a ruling. Correction does not authorize landing.
 3. **land** → `roadmap arc land <id>` — the ONE landing engine (preconditions, arc-end suite,
    the blocker check, backlog regroom, RunnerSummary, and the autonomous push per the
