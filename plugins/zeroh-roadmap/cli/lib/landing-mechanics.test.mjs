@@ -39,6 +39,8 @@ function makeConsumer(prefix = 'zr-landm-') {
   symlinkSync(PLUGIN_ZOD, join(root, 'node_modules', 'zod'), 'dir')
   mkdirSync(join(root, 'roadmap', 'arcs'), { recursive: true })
   g(root, 'init', '-q', '-b', 'develop')
+  g(root, 'config', 'user.name', 'Fixture')
+  g(root, 'config', 'user.email', 'fixture@example.invalid')
   writeFileSync(join(root, 'base.txt'), 'base\n')
   g(root, 'add', '-A')
   g(root, 'commit', '-q', '-m', 'base on develop')
@@ -414,7 +416,7 @@ test('REAL merge — landing merges into LOCAL develop and a sibling unpushed co
 
   const state = stateFor(primary, { arcBranch: 'arc/a', sidecar: { worktree: wt, branch: 'arc/a' }, mergePolicy: { arcIntegration: 'autonomous', maxOpenFollowups: 0, autonomousPushRefs: [], primaryCheckout: primary } })
   const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary, { autonomousPushRefs: [] }), exec: defaultExec, flags: {}, state })
-  assert.equal(res.outcome, 'landed')
+  assert.equal(res.outcome, 'landed', JSON.stringify(res))
   const log = g(primary, 'log', '--format=%s', 'develop')
   assert.match(log, /arc work/, 'the arc commit landed on local develop')
   assert.match(log, /sibling: unrelated unpushed develop work/, 'the sibling unpushed commit survived the merge — never clobbered')

@@ -24,6 +24,8 @@ jobs:
       - name: install (zod + the tsx/ajv test devDeps)
         run: npm ci --ignore-scripts
       - name: plugin test tier (incl. the fixture-consumer wired suite)
+        env:
+          TEST_CONCURRENCY: "2"
         run: npm test
       - name: protocol-load budget (do-arc ≤ 12k tokens, measured)
         run: node bin/roadmap.mjs measure --flow do-arc --assert 12000
