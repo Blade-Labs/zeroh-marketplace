@@ -695,7 +695,7 @@ test('fileArgs preserves individual argv through the real shell without expansio
   const root=mkdtempSync(join(tmpdir(),'zr-file-args-'))
   try {
     writeFileSync(join(root,'collect.mjs'),'import {writeFileSync} from "node:fs";writeFileSync("args.json",JSON.stringify(process.argv.slice(2)))')
-    const files=['space name.test.mjs',"quote's.test.mjs",'$(touch injected).test.mjs']
+    const files=['space name.test.mjs',"quote's.test.mjs",'$(touch injected).test.mjs', "a{files}'$(touch injected).test.mjs", 'lib/{base}.test.mjs', '{range}{manifest}{fileArgs}.test.mjs']
     const slot=resolveScopedOrFallback({gateCommands:{'unit-scoped':'node collect.mjs {fileArgs}'}},'unit',files)
     const result=await runSlot(slot,{cwd:root,logPath:join(root,'run.log')})
     assert.equal(result.exitCode,0)

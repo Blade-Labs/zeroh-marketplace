@@ -68,35 +68,26 @@ const refusal = (slot) =>
  */
 // {fileArgs} opts into per-path shell quoting; legacy {files} remains author-quoted.
 function substitute(template, { files, range, base, manifest }) {
-  let cmd = template
-  if (cmd.includes('{fileArgs}')) {
-    if (cmd.replace(/(^|\s)\{fileArgs\}(?=\s|$)/g, '$1').includes('{fileArgs}'))
+  const values = {}
+  if (template.includes('{fileArgs}')) {
+    if (template.replace(/(^|\s)\{fileArgs\}(?=\s|$)/g, '$1').includes('{fileArgs}'))
       return { error: 'slot {fileArgs} must be an unquoted standalone placeholder' }
     if (!Array.isArray(files) || !files.length || files.some(file => typeof file !== 'string' || /[\0\r\n]/.test(file)))
       return { error: 'slot {fileArgs} requires a nonempty array of file paths without control characters' }
-    const quoted = files.map(file => "'" + file.replaceAll("'", "'\\''") + "'").join(' ')
-    cmd = cmd.split('{fileArgs}').join(quoted)
+    values.fileArgs = files.map(file => "'" + file.replaceAll("'", "'\\''") + "'").join(' ')
   }
-  if (cmd.includes('{files}')) {
-    if (files == null) return { error: `slot template has a {files} placeholder but no files were provided` }
-    cmd = cmd.split('{files}').join(Array.isArray(files) ? files.join(' ') : String(files))
-  }
-  if (cmd.includes('{range}')) {
-    if (range == null) return { error: `slot template has a {range} placeholder but no range was provided` }
-    cmd = cmd.split('{range}').join(String(range))
-  }
-  if (cmd.includes('{base}')) {
-    if (base == null) return { error: `slot template has a {base} placeholder but no base was provided` }
-    cmd = cmd.split('{base}').join(String(base))
-  }
-  if (cmd.includes('{manifest}')) {
-    if (manifest == null) return { error: 'slot template has a {manifest} placeholder but no @manifest was provided' }
-    if (!/^@[A-Za-z0-9_./-]+$/.test(String(manifest)) ||
-        !(template.includes("'{manifest}'") || template.includes('"{manifest}"'))) {
+  for (const [name, value] of Object.entries({ files, range, base, manifest })) {
+    if (!template.includes(`{${name}}`)) continue
+    if (value == null) return { error: `slot template has a {${name}} placeholder but no ${name === 'manifest' ? '@manifest' : name} was provided` }
+    if (name === 'manifest' && (!/^@[A-Za-z0-9_./-]+$/.test(String(value)) ||
+        !(template.includes("'{manifest}'") || template.includes('"{manifest}"')))) {
       return { error: 'slot {manifest} requires one validated @manifest token in a quoted placeholder' }
     }
-    cmd = cmd.split('{manifest}').join(String(manifest))
+    values[name] = name === 'files' && Array.isArray(value) ? value.join(' ') : String(value)
   }
+  // Replace only directives in the original template. Filename bytes are data,
+  // even when they themselves contain a token such as {files} or {base}.
+  const cmd = template.replace(/\{(fileArgs|files|range|base|manifest)\}/g, (_, name) => values[name])
   return { cmd }
 }
 

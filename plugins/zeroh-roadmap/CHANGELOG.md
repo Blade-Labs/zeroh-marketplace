@@ -1,3 +1,12 @@
+## 0.40.1 — 2026-09-06
+
+- End correctness review as soon as clean or verified MEDIUM/LOW fixes close. Default to at most three independent reviews; unresolved HIGH/CRITICAL repairs still need independent verification and further rounds require an explicit bounded extension.
+- Add task-scoped unit checks with explicit full fallback and partial-report enforcement. Preserve filename arguments safely without reinterpreting them as template directives. Phase completion retains its normal gate.
+- Reuse existing authorization for bounded intent corrections; preserve owner holds, scope and budget limits, and fresh independent judgment. No consumer authority setting is changed.
+- Use the host's shared capped file-shard pool when installed; use bounded Node concurrency elsewhere. Host resource-pool installation remains separate from the plugin.
+- Resolve audit/debt TypeScript tools from the consumer or bundled plugin; make CI installs reproducible and scratch fixtures independent of host Git identity.
+- Keep the existing protocol-load budget. Native authority behavior has not been newly smoke-tested; no cross-host or broad performance claim.
+
 ## 0.40.0 — 2026-09-06
 
 - Foundation-first Greenfield companion: reuse interview answers, follow the selected stack, kickstart a runnable local prototype, and offer existing-project practices individually. CI/release setup is optional.

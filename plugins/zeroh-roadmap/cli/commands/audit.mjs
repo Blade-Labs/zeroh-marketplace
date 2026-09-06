@@ -30,7 +30,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { debtCensusJson } from '../lib/derive.mjs'
-import { TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
+import { TSX_ABSENT_HINT, resolveTsxInvocation } from '../lib/tsx-bridge.mjs'
 import { censusFollowups } from './followups.mjs'
 import { isTerminalPhaseSource } from '../lib/phasescan.mjs'
 import { surveyLanes } from '../lib/worktree.mjs'
@@ -95,7 +95,8 @@ export default async function run(argv) {
   const checksScript = join(PLUGIN_ROOT, 'cli', 'audit-checks.mts')
   let typed
   try {
-    const out = execFileSync('npx', ['--no-install', 'tsx', checksScript, repo], {
+    const invocation = resolveTsxInvocation(repo)
+    const out = execFileSync(invocation.file, [...invocation.prefix, checksScript, repo], {
       cwd: repo,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',

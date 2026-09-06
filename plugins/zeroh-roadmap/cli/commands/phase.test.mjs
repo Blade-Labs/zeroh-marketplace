@@ -78,6 +78,8 @@ function makeRepo() {
       encoding: 'utf8',
     })
   git('init', '-q')
+  git('config', 'user.name', 'Fixture')
+  git('config', 'user.email', 'fixture@example.invalid')
   writeFileSync(join(root, '.gitkeep'), '')
   git('add', '.gitkeep')
   git('commit', '-q', '-m', 'root')

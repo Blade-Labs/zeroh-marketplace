@@ -22,7 +22,7 @@ jobs:
         working-directory: .
         run: npm ci --ignore-scripts
       - name: install (zod + the tsx/ajv test devDeps)
-        run: npm install
+        run: npm ci --ignore-scripts
       - name: plugin test tier (incl. the fixture-consumer wired suite)
         run: npm test
       - name: protocol-load budget (do-arc ≤ 12k tokens, measured)

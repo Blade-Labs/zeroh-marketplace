@@ -547,7 +547,7 @@ test('13) the scaffolded registry discovers phases under the DISCOVERED root wit
   const script = `
 import('file://' + process.argv[1])
   .then(async (m) => {
-    const r = await m.discoverPhases()
+    const r = await (m.discoverPhases ?? m.default?.discoverPhases)()
     process.stdout.write('RESULT:' + JSON.stringify({ phases: r.phases.map((p) => p.phase), errors: r.errors.map((e) => e.error) }))
   })
   .catch((e) => { process.stderr.write(String((e && e.stack) || e)); process.exit(4) })

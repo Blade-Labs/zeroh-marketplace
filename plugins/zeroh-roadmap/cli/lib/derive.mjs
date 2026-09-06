@@ -25,7 +25,7 @@ import { join, resolve, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { scanPhaseFile, scanProgress } from './phasescan.mjs'
-import { bridgeImport, bridgeImportMany, TSX_ABSENT_HINT } from './tsx-bridge.mjs'
+import { bridgeImport, bridgeImportMany, TSX_ABSENT_HINT, resolveTsxInvocation } from './tsx-bridge.mjs'
 import { derivePhaseStartSha, GitScanError } from './gitscan.mjs'
 import { readSidecar } from './sidecar.mjs'
 import { classifyBand } from './ladder.mjs'
@@ -114,13 +114,10 @@ export function debtCensusJson(repoRoot, { includeArchive = false, exec = defaul
   const tmp = mkdtempSync(join(tmpdir(), 'roadmap-census-'))
   const outFile = join(tmp, 'census.json')
   try {
-    // `npx --no-install tsx` resolves tsx from the consumer's local node_modules first,
-    // then the global install (the proven tsx-bridge resolution) — so census runs against
-    // a production consumer AND a bare scratch fixture. debt-census.mts is a CLI invoked
-    // by argv, never imported (assumption A5): plugin carries no second census parser.
-    const argv = ['--no-install', 'tsx', censusScript, repoRoot, '--json', outFile]
+    const invocation = resolveTsxInvocation(repoRoot)
+    const argv = [...invocation.prefix, censusScript, repoRoot, '--json', outFile]
     if (includeArchive) argv.push('--include-archive')
-    const r = exec('npx', argv, { cwd: repoRoot })
+    const r = exec(invocation.file, argv, { cwd: repoRoot })
     if (r.status !== 0 || !existsSync(outFile)) return null
     return JSON.parse(readFileSync(outFile, 'utf8'))
   } catch {
