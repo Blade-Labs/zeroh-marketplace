@@ -14,6 +14,9 @@ import { defineArc } from '@/lib/roadmap/schema'
  * - 2026-09-04: reclaim only mechanically proven roadmap-owned inactive worktrees.
  * - 2026-09-04: plan-arc go confirms Disclosure canon and evolved-orientation visual arm.
  *
+ * - 2026-09-06: "update roadmap plugin in cache, and replan remaining of NATIVEGREEN so rest can be done as arc? test it this way?" Planning/cache rehearsal; implementation remains a subsequent execution.
+ * - 2026-09-06: interview/design reused from ratified Sep04 decisions; current source036b7c5 includes owner model ruling849635f and bounded repair23c7786.
+ *
  * Review repair 2026-09-04: phase 39 owns non-vacuous import validation and all active
  * post-migration plan/config/script paths; phases 42/45 must pass migrated-layout preflights.
  * PROMISE LEDGER
@@ -53,7 +56,7 @@ import { defineArc } from '@/lib/roadmap/schema'
 export default defineArc({
   id: 'NATIVEGREEN',
   name: 'Native Claude/Codex intent-to-green-PR with bounded repair, clean history, and owned cleanup',
-  baseRef: 'feat/roadmap-arcs',
+  baseRef: 'fix/roadmap-bounded-intent-repairs',
   planes: [
     { name: 'governance', phases: [36] },
     { name: 'semantic-core', phases: [37] },
@@ -67,7 +70,7 @@ export default defineArc({
     { name: 'documentation', phases: [45] },
   ],
   designRefs: [
-    { kind: 'architecture', ref: 'plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md', status: 'designed', summary: 'One typed semantic core with Claude/Codex/provider adapters, green-PR repair, branch/history policy, owned GC, root-first artifacts, and generated documentation.' },
+    { kind: 'architecture', ref: 'plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md', status: 'reused', summary: 'Reuse the ratified design and shipped 0.40.x primitives; one typed semantic core with Claude/Codex/provider adapters, green-PR repair, branch/history policy, owned GC, root-first artifacts, and generated documentation.' },
     { kind: 'ux', ref: 'plugins/zeroh-roadmap/docs/ux-previews/intent-to-green-pr-visual-guide-layout.md', status: 'reused', summary: 'Evolve orientation with Disclosure canon after conformance; Markdown stays complete and HTML is generated enhancement.' },
   ],
   rejectedAlternatives: [
@@ -103,10 +106,11 @@ export default defineArc({
     { id: 'clean-review-input', job: 'Make repeated plan/review judge repaired HEAD and converge without open-ended rediscovery.', surfaces: ['cli', 'codex'], signal: 'Stale, dirty, live, reusable, and absent lane relaunches reset/refuse correctly and read requested HEAD; ten incomplete criteria enter delta-only capped review and material tokens have mutation-red verifies.', tier: 'wired', bar: 'Zero stale review, no unsafe reset, bounded rounds/fingerprints, incomplete artifacts fail lint.' },
     { id: 'curated-history', job: 'Present outcome commits instead of task/gate noise or fix1 through fix52 without wasting green CI.', surfaces: ['git', 'pull-request'], signal: 'Six-phase fixture normalizes pre-publish to one tree-identical commit per phase with rescue/receipt; two fixes may remain if green, third compacts only with a necessary red-CI push; resume is idempotent.', tier: 'wired', bar: 'No foreign rewrite, tree/CAS proof, force-with-lease only, no cosmetic green push, eval attribution survives.' },
     { id: 'owned-worktree-gc', job: 'Remove finished roadmap worktrees without risking live, dirty, unique, human, or other-tool work.', surfaces: ['cli', 'filesystem'], signal: 'Across 50 active/closed/open-PR/merged/dirty/unique/slot/legacy/unknown/symlink/race lanes, dry-run/apply agree; only matching-ID inactive-twice clean recoverable lanes disappear; repeat is no-op.', tier: 'wired', bar: 'Zero false deletion, atomic receipts, per-item isolation, open-PR branch retained, merged branch needs ancestor proof.' },
-    { id: 'idempotent-green-pr', job: 'Turn a validated arc into one open green PR, repair owned failures, and leave unrelated failures alone.', surfaces: ['cli', 'github'], signal: 'Independent, stacked, and explicit-group fixtures create/update by stable key and survive interruption; causal/owned red makes reviewed correction phases; unrelated/indeterminate/flaky/auth/quota/timeout/repeat fingerprint holds without unrelated edits; base churn rechecks latest SHA.', tier: 'live-host', bar: 'One PR receipt per target, configured checks green on exact SHA, default open/non-draft, merge/queue requires config and authority.' },
+    { id: 'idempotent-green-pr', job: 'Turn a validated arc into one open green PR, repair owned failures, and leave unrelated failures alone.', surfaces: ['cli', 'github'], signal: 'Independent, stacked, and explicit-group fixtures create/update by stable key and survive interruption; causal/owned red takes a bounded reviewed correction pass; larger changes use planned correction phases; unrelated/indeterminate/flaky/auth/quota/timeout/repeat fingerprint holds without unrelated edits; base churn rechecks latest SHA.', tier: 'live-host', bar: 'One PR receipt per target, configured checks green on exact SHA, default open/non-draft, merge/queue requires config and authority.' },
     { id: 'gauntlet-conformance', job: 'Prove intent-to-green-PR under both native parents and cross-driver children before advertising it.', surfaces: ['claude-code', 'codex', 'github'], signal: 'Gauntlet 3 runs four parent/child lanes plus baselines through 3 concurrent arcs, 20 lanes, migration, branch strategies, interruption, owned/unrelated red, correction, normalization, GC, green PR, optional merge, eval, and second resume.', tier: 'live-host', bar: 'All deterministic sentinels pass; no invalid absolute score, unjudged-as-pass, or unsupported claim.' },
     { id: 'concise-current-code', job: 'Make comments explain current invariants rather than incident archaeology.', surfaces: ['source'], signal: 'Production comments/errors contain no dates, phase IDs, attempts, codenames, or postmortem narration except allowlisted semantic data; landing/liveness/arm/guard/workflow tests pass twice.', tier: 'wired', bar: 'Safety rationale remains in names/types/assertions/tests or concise comments; history stays in ADR/eval/Git.' },
     { id: 'truthful-visual-docs', job: 'Let a senior developer understand in five minutes what the plugin does, why, how it differs from Superpowers, and how to use either parent.', surfaces: ['github', 'visual-guide'], signal: 'At 320px/desktop on first/second visits, README, Markdown, and orientation show proven lifecycle, install/support, artifacts/recovery, delivery/history/GC, and versioned neutral comparison; links/snippets/validators/accessibility/drift/offline pass.', tier: 'live-ui', bar: 'No stale facts or ELI5 invocation text; text equivalents, AA contrast, keyboard/focus/reduced motion, one source per fact.' },
   ],
+  criteriaRatifications: ['2026-09-06: the owner-approved bounded intent-repair implementation23c7786 replaces mandatory per-gap correction phases for small owned fixes; exact-head green, independent intent judgment, scope authority and bounded budgets remain unchanged. Larger changes still require planning.'],
   status: 'planning',
 })

@@ -21,8 +21,9 @@ separate policy: `manual` by default, with explicitly configured and authorized 
 explicitly; grouping several arcs into one PR requires a ratified delivery group.
 
 CI classification uses raw evidence: causal, owned-preexisting, unrelated, infrastructure/flaky,
-or indeterminate. Causal and owned-preexisting failures re-enter normal correction-phase, gate,
-sweep, validation, push, and exact-head checks. Other failures never authorize speculative edits.
+or indeterminate. Causal and owned-preexisting failures use the existing bounded small-correction route, affected
+checks, fresh intent validation, push and exact-head checks; larger changes use planned
+correction phases, gate and sweep. Scope authority and correction budgets survive resume. Other failures never authorize speculative edits.
 
 ## History and worktrees
 
@@ -49,3 +50,30 @@ The atomic migration includes active assumption/verifier paths, configuration ga
 commands, tsconfig includes, and registry/emit entrypoints. Historical evidence is
 retained. Pending-phase path checks and real typed imports run against the migrated
 fixture; validating filenames alone is insufficient.
+
+
+## Current-source reuse (2026-09-06)
+
+The ratified design is reused at `036b7c5`; this amendment identifies existing owners,
+not a second workflow framework. Native architect re-review did not run; its external
+model call was denied by automatic approval review. No fresh architecture verdict is claimed.
+
+- `gate-report.mjs::correctnessDecision` already caps correctness at three rounds and
+  closes clean/fixed small findings early. `gate-diagnostics.mjs::retryDecision` already
+  stops repeated unchanged failures. Extend these owners.
+- `skills/validate-arc/references/corrections.md` owns one bounded correction pass for
+  related small owned gaps; larger scope stays planned. Phase42 wires this into delivery.
+- `drivers.mjs::launchArgv`, `roles.mjs`, executor arms, workflow and liveness already
+  own launch selection and same-executor observation. Phase38 adds only missing portable
+  run identity and reconciliation; there is no competing scheduler or retry loop.
+- `worktree.mjs::disposeWorktree` and the existing registry/journal own cleanup. Extend
+  stable matching identity and final provider/ownership checks in this same seam.
+- Existing actual-byte prepared-program execution and shared capbuild admission remain
+  unchanged. Conformance computes checksums from bytes; models never predict them or
+  retype programs. Native trial records stay outside the normal consumer task flow.
+- Documentation uses a bounded capability catalog and generated fragments. Ordinary
+  prose is independently reviewed, not converted into a per-sentence proof language.
+
+The original native matrix and density bars remain acceptance obligations. Deterministic
+negative tests run first; live scenarios require isolated provider authority and a frozen
+operator budget. Exhaustion leaves missing conditions unresolved, not silently omitted.
