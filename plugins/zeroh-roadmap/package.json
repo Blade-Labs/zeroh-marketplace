@@ -9,7 +9,7 @@
     "roadmap": "bin/roadmap.mjs"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 $(find bin cli hooks scripts test -name '*.test.mjs') && npx tsx scripts/schema.test.ts",
+    "test": "node scripts/run-tests.mjs",
     "test:native-evidence": "node --test --test-concurrency=1 test/fixture-consumer/greenfield-recorded-native.audit.mjs"
   },
   "dependencies": {
