@@ -217,6 +217,9 @@ test('L10 — mixed-driver curation leaves published commits in place and the la
       mergePolicy: { arcIntegration: 'autonomous', maxOpenFollowups: 0, autonomousPushRefs: ['develop'], primaryCheckout: '/tmp/fixture-primary' },
     },
   })
+  // Curation invokes Git inside the CLI, outside the seed helper's -c identity.
+  git(root, 'config', 'user.name', 'fixture')
+  git(root, 'config', 'user.email', 'fixture@test')
   const phase = 9100
   seedPhase(root, {
     phase,
