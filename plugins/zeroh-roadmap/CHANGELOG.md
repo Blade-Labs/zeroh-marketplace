@@ -1,3 +1,10 @@
+## 0.40.2 — 2026-09-06
+
+- Split the slow eval suite into ten process-isolated scenario files under the existing capped scheduler. Preserve all 99 eval tests; source changes select the complete family and shared-fixture changes retain the full fallback.
+- Diagnose failed gate commands from real output, exit codes and signals. Stop a third same-cause attempt without source progress; allow one attempt for a stated environment repair. Empty commits and generated evidence do not count as repairs. Partial checks cannot certify completion.
+- Keep complete PR and main CI gates while removing duplicate feature-push and release-tag runs. Independent intent validation remains unchanged.
+- Single local comparison: 2,121 passing tests across 90 files in 398.37 seconds versus 566.34 seconds at 0.40.1 (29.7% shorter); schema and protocol checks passed. Live resource admission varied; no broad performance or native-model claim.
+
 ## 0.40.1 — 2026-09-06
 
 - End correctness review as soon as clean or verified MEDIUM/LOW fixes close. Default to at most three independent reviews; unresolved HIGH/CRITICAL repairs still need independent verification and further rounds require an explicit bounded extension.
