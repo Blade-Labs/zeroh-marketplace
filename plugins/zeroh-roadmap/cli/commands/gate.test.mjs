@@ -16,7 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, exist
 import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { scanHistoryComments, untestedGateFixFindings, deviantGrammarFindings, annotateScopedProbeWarnings } from './gate.mjs'
+import { buildPlan, scanHistoryComments, untestedGateFixFindings, deviantGrammarFindings, annotateScopedProbeWarnings } from './gate.mjs'
 import { phaseOwnPatterns } from '../lib/gitscan.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -2647,4 +2647,63 @@ test('task gate selects exactly declared and colocated tests with the ladder off
     [...args,'--verify-complete'],[...args,'--record-round','{}'],[...args,'--unknown']]) {
     assert.notEqual(runGateCmd(repo.root,badArgs).code,0,JSON.stringify(badArgs))
   }
+})
+
+test('task selection includes sharded test families and safely falls back for shared fixtures', () => {
+  const cfg = RUN_CFG()
+  cfg.gateCommands['unit-scoped'] = 'node runner.mjs {fileArgs}'
+  const repo = makeRepo(cfg)
+  repo.writePhase(1393, phaseObj({ phase: 1393, tasks: [
+    { id: '1393.1', files: ['lib/eval.mjs'] },
+    { id: '1393.2', files: ['lib/eval.test.mjs'] },
+    { id: '1393.3', files: ['testdata/eval.test-support.mjs'] },
+  ] }))
+  repo.commit('feat: phase 1393 — test family', {
+    'lib/eval.mjs': '', 'lib/eval.test.mjs': '', 'lib/eval.run.test.mjs': '',
+    'lib/eval.judge.test.mjs': '', 'testdata/eval.test-support.mjs': '', 'lib/unrelated.test.mjs': '',
+  })
+  for (const id of ['1393.1', '1393.2']) {
+    // buildPlan avoids the intentional external runner probe; the real CLI task route is covered above.
+    const built = buildPlan(repo.root, 1393, { cfg, task: id })
+    assert.deepEqual(built.plan.slots[0].files.slice().sort(), ['lib/eval.judge.test.mjs', 'lib/eval.run.test.mjs', 'lib/eval.test.mjs'])
+  }
+  const shared = buildPlan(repo.root, 1393, { cfg, task: '1393.3' })
+  assert.equal(shared.plan.slots[0].command, cfg.gateCommands.unit, 'shared fixture changes retain the full fallback')
+})
+
+test('gate refuses a third unchanged failure, diagnoses without execution, and resumes after real repair', () => {
+  const cfg = RUN_CFG()
+  cfg.gateCommands.unit = 'node retry-fixture.mjs'
+  const repo = makeRepo(cfg)
+  repo.writePhase(1392, phaseObj({ phase: 1392 }))
+  repo.commit('feat: phase 1392 — retry diagnosis fixture', {
+    '.gitignore': '.gate-count\nrepaired-env\n',
+    'retry-fixture.mjs': 'import {existsSync,readFileSync,writeFileSync} from "node:fs";const n=existsSync(".gate-count")?Number(readFileSync(".gate-count","utf8")):0;writeFileSync(".gate-count",String(n+1));if(!existsSync("repaired-env")){console.error("Error: Cannot find module fixture-tool");process.exit(1)}',
+  })
+  const args = ['1392', '--slots', 'unit']
+  const count = () => Number(readFileSync(join(repo.root, '.gate-count'), 'utf8'))
+  assert.equal(runGateCmd(repo.root, args).code, 2)
+  assert.equal(runGateCmd(repo.root, args).code, 2)
+  const blocked = runGateCmd(repo.root, args)
+  assert.equal(blocked.code, 2)
+  assert.match(blocked.stderr, /no third unchanged attempt ran/)
+  assert.equal(count(), 2)
+  const diagnosis = runGateSubcommand(repo.root, 'diagnose', ['1392', '--json'])
+  assert.equal(diagnosis.code, 0, diagnosis.stderr)
+  const data = JSON.parse(diagnosis.stdout)
+  assert.equal(data.retry.blocked, true)
+  assert.equal(data.failures[0].failure.category, 'tooling')
+  assert.equal(count(), 2, 'diagnosis does not execute the command')
+  repo.commit('fix: phase 1392 gate R1 — repair prerequisite handling', { 'source-repair.mjs': 'export const repaired = true\n' })
+  assert.equal(runGateCmd(repo.root, args).code, 2, 'changed source permits verification, but does not fabricate success')
+  assert.equal(count(), 3)
+  assert.equal(runGateCmd(repo.root, args).code, 2)
+  assert.equal(count(), 4)
+  assert.match(runGateCmd(repo.root, args).stderr, /no third unchanged attempt ran/)
+  writeFileSync(join(repo.root, 'repaired-env'), 'available')
+  const repaired = runGateCmd(repo.root, [...args, '--retry-reason', 'Installed the missing fixture tool; verifying the repaired environment'])
+  assert.equal(repaired.code, 0, repaired.stderr)
+  assert.equal(count(), 5)
+  assert.match(latestReportOf(repo.root, 1392).attempt.retryReason, /Installed/)
+  assert.notEqual(runGateCmd(repo.root, ['1392', '--verify-complete']).code, 0, 'a successful partial retry cannot certify completion')
 })

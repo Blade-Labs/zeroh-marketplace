@@ -62,6 +62,11 @@ const ScopeTripleShape = z.object({
   effective: z.string(),
 })
 
+const FailureShape = z.object({
+  category: z.enum(['product', 'tooling', 'resource', 'authority-quota', 'unknown']),
+  summary: z.string(), nextStep: z.string(), signature: z.string(),
+})
+
 const SlotRowShape = z.object({
   slot: z.string(),
   command: z.string().optional(),
@@ -71,6 +76,8 @@ const SlotRowShape = z.object({
   logPath: z.string().nullable().optional(),
   note: z.string().optional(),
   declaredAbsent: z.boolean().optional(),
+  signal: z.string().optional(),
+  failure: FailureShape.optional(),
 })
 
 export const GateFindingRecordShape = z.object({
@@ -126,6 +133,7 @@ export const GateRunReportShape = z.object({
    * flip) and by the --verify-complete eval refresh (a subset is not a sample).
    */
   slotFilter: z.string().min(1).optional(),
+  attempt: z.object({ inputKey: z.string().nullable(), retryReason: z.string().optional() }).optional(),
 })
 
 /** The record element gate run --record-round parses (without recordedAt — added on append). */
@@ -226,6 +234,16 @@ export function latestReport(toplevel, phase) {
     ? raw.agents.map((round) => Object.hasOwn(round, 'findings'))
     : []
   return { path, report: parsed.data, findingsRecorded }
+}
+
+/** Newest first, using the existing five-report retention window. */
+export function recentReports(toplevel, phase, count = 5) {
+  const dir = gateDir(toplevel, phase)
+  return runFiles(dir).slice(-count).reverse().map(({ f }) => {
+    const path = join(dir, f)
+    try { return GateRunReportShape.parse(JSON.parse(readFileSync(path, 'utf8'))) }
+    catch (cause) { throw new GateReportUnreadableError(path, cause) }
+  })
 }
 
 /** Append an agent round to the LATEST report (no new run file). Returns the updated

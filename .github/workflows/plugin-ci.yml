@@ -1,10 +1,11 @@
 name: plugin-ci
 
-# The fixture-e2e bar (arc ROADCODE): the fixture-consumer wired tier runs on EVERY push and
-# pull_request, and the do-arc protocol-load budget is asserted (measured, never asserted-in-
-# prose). A red slot, a caught banding/scoping/landing error, or a budget breach fails the push.
+# PRs verify proposed changes; main verifies integration. Feature pushes and release tags
+# do not duplicate those runs. Releases must use the verified main commit.
+# Both retained gates run the complete fixture suite and protocol-load budget.
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:

@@ -12,6 +12,7 @@
  * and they're the caller's to set).
  */
 import { spawn } from 'node:child_process'
+import { diagnoseFailure } from './gate-diagnostics.mjs'
 import { matchGlob, matchGlobPath } from './ladder.mjs'
 import { runCaptured } from './exec.mjs'
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -325,13 +326,16 @@ export async function runSlot(resolved, { cwd, logPath } = {}) {
 
   return await new Promise((resolvePromise) => {
     let finished = false
-    const finish = (exitCode) => {
+    let output = ''
+    const finish = (exitCode, signal = null) => {
       if (finished) return
       finished = true
       const out = {
         slot: resolved.slot,
         command,
         exitCode,
+        ...(signal ? { signal } : {}),
+        ...(exitCode !== 0 || signal ? { failure: diagnoseFailure({ exitCode, signal, output }) } : {}),
         durationMs: Date.now() - start,
         logPath: logPath ?? null,
         ...(resolved.note ? { note: resolved.note } : {}),
@@ -343,6 +347,7 @@ export async function runSlot(resolved, { cwd, logPath } = {}) {
     const child = spawn('bash', ['-c', command], { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
     const tee = (src, dst) =>
       src.on('data', (chunk) => {
+        output = (output + chunk.toString()).slice(-65536)
         dst.write(chunk)
         if (logStream) logStream.write(chunk)
       })
@@ -350,10 +355,11 @@ export async function runSlot(resolved, { cwd, logPath } = {}) {
     tee(child.stderr, process.stderr)
     child.on('error', (err) => {
       const msg = `runSlot: failed to spawn '${command}': ${err.message}\n`
+      output = (output + msg).slice(-65536)
       process.stderr.write(msg)
       if (logStream) logStream.write(msg)
       finish(127)
     })
-    child.on('close', (code, signal) => finish(code ?? (signal ? 128 : 0)))
+    child.on('close', (code, signal) => finish(code ?? 128, signal))
   })
 }
