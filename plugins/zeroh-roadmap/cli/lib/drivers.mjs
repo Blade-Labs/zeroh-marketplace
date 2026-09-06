@@ -28,7 +28,7 @@
  */
 
 /** The one home for the pinned codex model id: the entry field and the argv share this value. */
-const CODEX_MODEL = 'gpt-6-astra'
+const CODEX_MODEL = 'gpt-5.6-sol'
 
 /** Probe evidence pasted verbatim from the command each entry's verifiedAt names. */
 const CODEX_PROBE_OUTPUT = `codex-cli 0.153.4
@@ -36,7 +36,7 @@ hooks                                stable             true
 multi_agent                          stable             true
 plugin_hooks                         removed            false
 plugins                              stable             true
-"slug":"gpt-6-astra"
+"slug":"gpt-5.6-sol"
 Usage: codex exec [OPTIONS] [PROMPT]`
 
 const CLAUDE_PROBE_OUTPUT = `2.1.241 (Claude Code)
@@ -59,11 +59,11 @@ export const DRIVERS = Object.freeze({
     resume: 'codex resume [SESSION_ID] [--last]',
     roleCapabilities: Object.freeze({ subagents: 'native', headlessChild: true, hooks: true, plugins: true }),
     verifiedAt: Object.freeze({
-      date: '2026-09-05',
+      date: '2026-09-06',
       host: 'illumination',
       command:
         "codex --version && codex features list | grep -E '^(hooks|multi_agent|plugin_hooks|plugins)\\b'"
-        + " && codex debug models | grep -o '\"slug\":\"gpt-6-astra\"'"
+        + " && codex debug models | grep -o '\"slug\":\"gpt-5.6-sol\"'"
         + " && codex exec --help | grep -E '^Usage: codex exec'",
       output: CODEX_PROBE_OUTPUT,
     }),

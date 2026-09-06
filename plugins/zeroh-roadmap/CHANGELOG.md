@@ -1,3 +1,7 @@
+## 0.40.3 — 2026-09-06
+
+- codex lane model pinned back to `gpt-5.6-sol` (was `gpt-6-astra` since 0.40.0) — owner ruling 2026-09-06 17:53 UTC ("use fable as architect and sol 5.6 as implementor"), after the astra account hit its usage limit mid-arc on 2026-09-05 18:29 UTC. `MODEL_IDS.SOL` and `MODEL_ALIASES.sol` follow the one home; preset `codex` (sol builders, fable architect) IS the ruled combination, no per-role override needed. Probe re-verified on illumination 2026-09-06 (`codex debug models` lists `gpt-5.6-sol`; `codex exec -m gpt-5.6-sol` answered).
+
 ## 0.40.2 — 2026-09-06
 
 - Split the slow eval suite into ten process-isolated scenario files under the existing capped scheduler. Preserve all 99 eval tests; source changes select the complete family and shared-fixture changes retain the full fallback.

@@ -21,7 +21,7 @@ test("launchArgv('codex') plus the entry's bin reproduce today's spawn inputs ex
     'exec',
     '--dangerously-bypass-approvals-and-sandbox',
     '-m',
-    'gpt-6-astra',
+    'gpt-5.6-sol',
     '-C',
     '/tmp/wt-42',
     '-',
@@ -33,7 +33,7 @@ test('launchArgv threads the caller\'s worktree into the -C position, never a ba
     'exec',
     '--dangerously-bypass-approvals-and-sandbox',
     '-m',
-    'gpt-6-astra',
+    'gpt-5.6-sol',
     '-C',
     '/srv/checkouts/zeroh-codex-2',
     '-',
@@ -56,7 +56,7 @@ test("the codex entry's declared model is the one the argv pins — one home, no
 })
 
 test('driverStamp reads { model, lane } off the registry — lane is the DRIVER ID, not the journal lane', () => {
-  assert.deepEqual(driverStamp(resolveDriver('codex')), { model: 'gpt-6-astra', lane: 'codex' })
+  assert.deepEqual(driverStamp(resolveDriver('codex')), { model: 'gpt-5.6-sol', lane: 'codex' })
 })
 
 test('driverStamp on an entry declaring NO model records model: null explicitly, never an absent key', () => {
@@ -71,7 +71,7 @@ test('driverStamp on an entry declaring NO model records model: null explicitly,
 test("MODEL_ALIASES.sol names the codex pinned model — the CONFIG spelling of the one id no alias could reach", () => {
   assert.equal(
     MODEL_ALIASES.sol,
-    'gpt-6-astra',
+    'gpt-5.6-sol',
     "a consumer's modelPolicy can only ever carry an ALIAS, so an unaliased model is a model no repo can ask for — add sol: MODEL_IDS.SOL to MODEL_ALIASES in cli/lib/drivers.mjs",
   )
   assert.equal(
@@ -178,7 +178,7 @@ test('every populated entry carries host-stamped verifiedAt with PASTED probe ou
 const CLI_ROOT = fileURLToPath(new URL('../', import.meta.url))
 // Quote-inclusive: the bare flag name is legal in prose, only a quoted token is launcher argv.
 const BYPASS_ARGV = "'--dangerously-bypass-approvals-and-sandbox'"
-const MODEL_LITERAL = "'gpt-6-astra'"
+const MODEL_LITERAL = "'gpt-5.6-sol'"
 const REGISTRY_NEEDLES = [BYPASS_ARGV, MODEL_LITERAL]
 const ARGV_HOMES = new Set(['lib/drivers.mjs', 'lib/drivers.test.mjs'])
 

@@ -495,7 +495,7 @@ function expectedUnder(roleId, { driver = 'claude', policy, force } = {}) {
 
 const PINNED_JUDGE = ROLES['arc-eval-judge'].tierChain[0] // claude-sonnet-5 — the eval trend baseline
 
-test('12) --models on an EMPTY-config repo: `resolve quality-pass --driver codex --models codex` is gpt-6-astra (native)', () => {
+test('12) --models on an EMPTY-config repo: `resolve quality-pass --driver codex --models codex` is gpt-5.6-sol (native)', () => {
   // The phase's headline: a repo that has opted into nothing at all still runs a codex arc when
   // the RUN says so. quality-pass carries a 1-entry [OPUS] chain, so without the flag reaching
   // the resolver this is claude-opus-5 (child-cli) — the exact waste 24 exists to end.
