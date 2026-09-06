@@ -136,6 +136,8 @@ consumer's `mergePolicy` (workflow serialization covers arc-mode only).
 ## Codex delegation lane
 
 Launch delegated work through `roadmap codex run`, never a hand-built command. A delegated phase
+resolves the target checkout's instructions and native runners per
+`../using-zeroh-roadmap/references/governance.md` before launch. It
 still performs every task and gate; a `codex-self-review` round must be labeled honestly and does
 not replace the independent recorded correctness round. Codex never lands, merges, pushes, edits
 the primary checkout, or grooms the backlog; the supervising session audits and integrates.

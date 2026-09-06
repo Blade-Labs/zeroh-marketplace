@@ -10,7 +10,8 @@
   },
   "scripts": {
     "test": "node scripts/run-tests.mjs",
-    "test:native-evidence": "node --test --test-concurrency=1 test/fixture-consumer/greenfield-recorded-native.audit.mjs"
+    "test:native-evidence": "node --test --test-concurrency=1 test/fixture-consumer/greenfield-recorded-native.audit.mjs",
+    "validate:packaging": "node scripts/validate-packaging.mjs --validation-only"
   },
   "dependencies": {
     "zod": "^4.4.3"

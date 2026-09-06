@@ -120,3 +120,7 @@ PR to `origin/main`, carrying the already-reviewed0.40.3 prerequisite commits if
 not been merged yet. The executor verifies that remote base at publication preflight.
 `fix/roadmap-bounded-intent-repairs` identifies the local source basis, not a presumed
 published PR target. Never reset away the prerequisite or plan commits to create the branch.
+
+## Execution authorization — 2026-09-06
+
+The owner subsequently instructed: "do it now". Execute the reviewed NATIVEGREEN arc in this checkout; the earlier planning-only boundary is historical. Preserve explicit provider, native-run, budget and merge/release boundaries.

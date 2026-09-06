@@ -28,3 +28,24 @@ test('missing-home remedy has one owner and every STOP/infer site points to it e
     assert.equal(body.split(POINTER).length - 1, 1, `${site} must carry exactly one canonical remedy pointer`)
   }
 })
+
+test('mutating child protocols resolve the single repository-governance reference', () => {
+  const ownerPath = 'skills/using-zeroh-roadmap/references/governance.md'
+  assert.match(read(ownerPath), /^# Repository governance$/m)
+  const sites = [
+    ['skills/using-zeroh-roadmap/SKILL.md', 'references/governance.md'],
+    ['skills/do-phase/SKILL.md', '../using-zeroh-roadmap/references/governance.md'],
+    ['skills/do-arc/SKILL.md', '../using-zeroh-roadmap/references/governance.md'],
+    ['skills/plan-phase/SKILL.md', '../using-zeroh-roadmap/references/governance.md'],
+  ]
+  for (const [site, pointer] of sites) {
+    const body = read(site)
+    assert.equal(body.split(pointer).length - 1, 1, `${site} must carry exactly one canonical governance pointer`)
+    const resolved = resolve(PLUGIN, dirname(site), pointer)
+    assert.equal(resolved, resolve(PLUGIN, ownerPath), `${site}'s governance pointer must resolve to the one owner`)
+    assert.doesNotThrow(
+      () => readFileSync(resolved, 'utf8'),
+      `${site}'s governance pointer must resolve to the committed owner`,
+    )
+  }
+})

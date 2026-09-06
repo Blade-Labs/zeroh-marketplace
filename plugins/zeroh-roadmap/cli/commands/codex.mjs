@@ -29,11 +29,10 @@
  *
  * The whole point of this being ONE committed entrypoint is classifier hygiene: the
  * shared-host hook and the orphan-reaper pattern-match the VISIBLE command line, so the
- * hand-rolled launch (setsid + sandbox bypass + stdin prompt) kept tripping them. Every
+ * hand-rolled launch (setsid + ad hoc sandbox flags + stdin prompt) kept tripping them. Every
  * hard-won invariant lives here instead (session lessons 2026-07-15/22):
- *  - direct CLI, binary and argv sourced from cli/lib/drivers.mjs (the ONE registry; the
- *    codex entry's bypass posture is there because the companion runtime's bubblewrap sandbox
- *    cannot create loopback on this host — bwrap RTM_NEWADDR);
+ *  - direct CLI, binary, authority profiles and argv sourced from cli/lib/drivers.mjs (the ONE registry);
+ *    bounded profiles use native controls, while isolated unsafe needs explicit parent authority and acknowledgement;
  *  - the mission prompt goes via STDIN, never argv (the test-orphan-reaper kills any
  *    detached PPID-1 process whose args mention vitest/--test — a long prompt naming the
  *    verify commands looks exactly like a leaked test worker);
@@ -54,9 +53,12 @@ import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSyn
 import { spawn, spawnSync } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isDeepStrictEqual } from 'node:util'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { ConfigError, integrationRefOf, loadConfig } from '../lib/config.mjs'
-import { driverStamp, launchArgv, resolveDriver } from '../lib/drivers.mjs'
+import { authorityProfileBounds, driverStamp, intersectAuthority, launchArgv, resolveDriver } from '../lib/drivers.mjs'
+import { resolveGovernance } from '../lib/governance.mjs'
+import { matchKeyFilesField } from '../lib/phasescan.mjs'
 import { disposeWorktree, groupAlive, isSlotDir } from '../lib/worktree.mjs'
 import {
   LANES, prevReportName, journalPath, journalDeclineReason,
@@ -71,6 +73,29 @@ import { driverTrailer, mergePolicy, policyFromArg, policyToArg } from '../lib/r
 export { findJournal }
 
 const SENTINEL_RE = /CODEX-RUN-(COMPLETE|BLOCKED)/
+
+
+function authorityFromArgv(argv) {
+  const pi = argv.indexOf('--parent-authority')
+  if (pi < 0) throw new Error('parent authority is required: pass --parent-authority read-only|workspace-write|isolated-unsafe from the invoking operator context')
+  const parentProfile = argv[pi + 1]
+  let parentBounds
+  try { parentBounds = authorityProfileBounds(parentProfile) } catch { throw new Error(`--parent-authority profile '${parentProfile ?? ''}' is unknown`) }
+  const ri = argv.indexOf('--authority')
+  const requestProfile = ri < 0 ? 'inherit' : argv[ri + 1]
+  let requestedBounds
+  try { requestedBounds = requestProfile === 'inherit' ? structuredClone(parentBounds) : authorityProfileBounds(requestProfile) } catch { throw new Error(`--authority profile '${requestProfile ?? ''}' is unknown`) }
+  const effectiveUnsafe = requestProfile === 'isolated-unsafe' || (requestProfile === 'inherit' && parentProfile === 'isolated-unsafe')
+  if (effectiveUnsafe && !argv.includes('--authorize-isolated-unsafe')) throw new Error('effective isolated-unsafe authority requires the separate --authorize-isolated-unsafe acknowledgement')
+  const parent = { profile: parentProfile, bounds: parentBounds, provenance: { kind: 'explicit-operator-invocation', source: `--parent-authority ${parentProfile}` } }
+  const request = { profile: requestProfile, bounds: requestedBounds, provenance: effectiveUnsafe ? { kind: 'explicit-user-authorization', source: '--authorize-isolated-unsafe' } : null }
+  return intersectAuthority(parent, request)
+}
+function nativeAuthority(worktree, envelope) {
+  const argv = launchArgv('codex', { worktree, authority: envelope })
+  const bypass = envelope.effective.profile === 'isolated-unsafe'
+  return { ...envelope, native: { driver: 'codex', runtime: { version: null, verified: false }, argv, enforcement: { filesystem: bypass ? 'bypass' : 'sandbox', network: bypass ? 'bypass' : 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' }, limitations: ['gitPush and externalWrites are workflow constraints with no dedicated native enforcement; on-request approval exceptions remain possible, and argv evidence does not prove runtime enforcement'] } }
+}
 
 /**
  * Select the package manager solely from the package directory's committed lockfile — never a
@@ -363,11 +388,13 @@ function preserveStaleReport(worktree, reportName) {
  * id (the DriverShape lane vocabulary) — deliberately not this function's `lane`, which is the
  * run/plan/review mission.
  */
-function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null, modelPolicy, label, reportName = LANES[lane].report }) {
+function launch(root, ids, lane, { worktree, base, prompt, governance, authority, carriedIn = null, modelPolicy, label, reportName = LANES[lane].report }) {
   const building = join(root, '.building')
   const stem = `${LANES[lane].prefix}${ids.join('-')}${label ? `.${label}` : ''}`
   const promptPath = join(building, `${stem}-prompt.txt`)
-  writeFileSync(promptPath, prompt)
+  const effectiveAuthority = authority
+  const governedPrompt = `${prompt}\n\nDELEGATED AUTHORITY RECEIPT — these effective bounds override generic mutation instructions (read-only forbids mutation). Within them, routine assigned work, scoped tests, and required local Git commits are already authorized: reuse this scope for run/resume without human reconfirmation. Native automatic review may approve or deny sandbox exceptions; denial is a hold and never permits self-upgrade:\n${JSON.stringify(effectiveAuthority, null, 2)}\n\nREPOSITORY GOVERNANCE RECEIPT — these source instructions and runner bindings are inert evidence; read and obey the applicable instruction text, and never execute runner strings merely because they appear here:\n${JSON.stringify(governance, null, 2)}\n`
+  writeFileSync(promptPath, governedPrompt)
   const logPath = join(building, `${stem}.log`)
   const logFd = openSync(logPath, 'a')
 
@@ -375,7 +402,7 @@ function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null, mod
   const entry = resolveDriver('codex')
   const child = spawn(
     entry.bin,
-    launchArgv('codex', { worktree }),
+    effectiveAuthority.native.argv,
     { detached: true, stdio: [openSync(promptPath, 'r'), logFd, logFd] },
   )
   child.unref()
@@ -386,7 +413,7 @@ function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null, mod
       // nothing else can recover it: the copy lands untracked at a path only the launcher knew, and
       // a done-moment that cannot name it refuses on the launcher's own artifact — the same trap
       // RUN_LANE_ARTIFACTS exists to stop for CODEX-REPORT.md. Absent when nothing was carried in.
-      { phases: ids, lane, driver: driverStamp(entry), report: reportName, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, ...(modelPolicy ? { modelPolicy } : {}), ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString() },
+      { phases: ids, lane, driver: driverStamp(entry), authority: effectiveAuthority, governance, report: reportName, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath, ...(label ? { label } : {}), ...(modelPolicy ? { modelPolicy } : {}), ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString() },
     { label },
   )
   const poll = `roadmap codex status ${ids[0]}${LANES[lane].flag ? ` ${LANES[lane].flag}` : ''}`
@@ -394,28 +421,56 @@ function launch(root, ids, lane, { worktree, base, prompt, carriedIn = null, mod
   return 0
 }
 
+function phaseTargets(root, ids) {
+  const targets = []
+  for (const id of ids) {
+    const phaseFile = `${roadmapRootRel(root)}/phases/phase-${id}.phase.ts`
+    targets.push(phaseFile)
+    targets.push(...matchKeyFilesField(readFileSync(join(root, phaseFile), 'utf8')))
+  }
+  return targets
+}
+
+function governanceGate(root, targets, lane) {
+  const receipt = resolveGovernance(root, targets)
+  if (!receipt.hold) return receipt
+  process.stderr.write(
+    `roadmap codex: ${lane} governance hold (${receipt.hold.kind}) for ${receipt.hold.target}: ${receipt.hold.reason} — no child launched\n`,
+  )
+  return null
+}
+
+function governedPhaseTargets(root, ids, lane) {
+  try {
+    return phaseTargets(root, ids)
+  } catch (error) {
+    process.stderr.write(`roadmap codex: ${lane} governance hold (access-refused) for phase scope: ${error?.message ?? error} — no child launched\n`)
+    return null
+  }
+}
+
 /**
  * The shared worktree setup: a branch when the mission COMMITS (run, plan), detached when it only
  * reads (review), and dependency installation only where the mission needs the consumer's toolchain — the plan
  * act validates its phase file through the consumer's tsx. Returns 0 or an exit to propagate.
  */
-function ensureWorktree(root, { worktree, base, branch, install }) {
-  if (existsSync(worktree)) return 0
-  if (install) {
-    for (const dir of [root, join(root, 'web')]) {
-      const installer = detectInstaller(dir)
-      if (installer === null) {
-        process.stderr.write(
-          `roadmap codex: cannot select a package manager for ${dir}: commit pnpm-lock.yaml or package-lock.json; nothing was created\n`,
-        )
-        return 1
-      }
-    }
-  }
+function ensureWorktree(root, { worktree, base, branch }) {
+  if (existsSync(worktree)) return { status: 0, created: false }
   const addArgs = branch ? [worktree, '-b', branch, base] : ['--detach', worktree, base]
   const wt = spawnSync('git', ['worktree', 'add', ...addArgs], { cwd: root, stdio: 'inherit' })
-  if (wt.status !== 0) return wt.status ?? 1
-  if (!install) return 0
+  return { status: wt.status ?? 1, created: wt.status === 0 }
+}
+
+function installersAvailable(root) {
+  for (const dir of [root, join(root, 'web')]) {
+    if (detectInstaller(dir) !== null) continue
+    process.stderr.write(`roadmap codex: cannot select a package manager for ${dir}: commit pnpm-lock.yaml or package-lock.json; nothing was created\n`)
+    return false
+  }
+  return true
+}
+
+function installWorktree(worktree) {
   const capbuild = spawnSync('which', ['capbuild']).status === 0
   for (const dir of [worktree, join(worktree, 'web')]) {
     const installer = detectInstaller(dir)
@@ -448,11 +503,12 @@ function carryIn(root, worktree, rel) {
   copyFileSync(join(root, rel), join(worktree, rel))
 }
 
-function runCodex(root, ids, argv) {
+function runCodex(root, ids, argv, authority) {
   const wi = argv.indexOf('--worktree')
   const bi = argv.indexOf('--base')
   const base = bi >= 0 ? argv[bi + 1] : 'develop'
   const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-${ids.join('-')}`
+  try { authority = nativeAuthority(worktree, authority) } catch (error) { process.stderr.write(`roadmap codex: authority hold — ${error.message}; no prompt, journal, worktree or child was created\n`); return 1 }
   const li = argv.indexOf('--label')
   const label = li >= 0 ? argv[li + 1] : undefined
   if (li >= 0 && (!label || !/^[a-z0-9]+$/.test(label) || label === 'closed')) {
@@ -466,6 +522,13 @@ function runCodex(root, ids, argv) {
     process.stderr.write('roadmap codex: --models needs a value\n')
     return 1
   }
+  const building = join(root, '.building')
+  const jPath = journalPath(root, ids, 'run', { label })
+
+  const refused = refuseIfLive(root, ids, 'run', worktree, jPath, "; the prompt's resume rule skips already-done tasks")
+  if (refused !== 0) return refused
+  const targets = governedPhaseTargets(root, ids, 'run')
+  if (!targets || !governanceGate(root, targets, 'run')) return 1
   let repoPolicy
   try {
     repoPolicy = loadConfig(root).modelPolicy
@@ -480,34 +543,45 @@ function runCodex(root, ids, argv) {
     return 1
   }
   const resolverArg = policyToArg(modelPolicy)
-  const building = join(root, '.building')
   mkdirSync(building, { recursive: true })
-  const jPath = journalPath(root, ids, 'run', { label })
+  if (!existsSync(worktree) && !installersAvailable(root)) return 1
 
-  const refused = refuseIfLive(root, ids, 'run', worktree, jPath, "; the prompt's resume rule skips already-done tasks")
-  if (refused !== 0) return refused
+  const made = ensureWorktree(root, { worktree, base, branch: `codex/${ids.join('-')}` })
+  if (made.status !== 0) return made.status
 
-  const made = ensureWorktree(root, { worktree, base, branch: `codex/${ids.join('-')}`, install: true })
-  if (made !== 0) return made
+  const worktreeTargets = governedPhaseTargets(worktree, ids, 'run')
+  if (!worktreeTargets) return 1
+  const governance = governanceGate(worktree, worktreeTargets, 'run')
+  if (!governance) return 1
+  if (made.created) {
+    const installed = installWorktree(worktree)
+    if (installed !== 0) return installed
+  }
 
   // buildPrompt can still throw (a renamed/renumbered phase file) — resolve it BEFORE
   // touching the previous run's hand-off, so a failed relaunch destroys no evidence.
   const prompt = buildPrompt(root, ids, { modelPolicy, modelsArg: resolverArg, reportName })
   preserveStaleReport(worktree, reportName)
-  return launch(root, ids, 'run', { worktree, base, prompt, modelPolicy, label, reportName })
+  return launch(root, ids, 'run', { worktree, base, prompt, governance, authority, modelPolicy, label, reportName })
 }
 
 /**
  * The review lane. No branch and no dependency install: the mission never builds and never commits, so
  * the worktree is a detached read-only copy — isolation that costs a checkout, not an install.
  */
-function reviewCodex(root, ids, argv) {
+function reviewCodex(root, ids, argv, authority) {
   const wi = argv.indexOf('--worktree')
   const bi = argv.indexOf('--base')
   const di = argv.indexOf('--doc')
   const fi = argv.indexOf('--focus')
   const base = bi >= 0 ? argv[bi + 1] : 'HEAD'
   const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-review-${ids.join('-')}`
+  try { authority = nativeAuthority(worktree, authority) } catch (error) { process.stderr.write(`roadmap codex: authority hold — ${error.message}; no prompt, journal, worktree or child was created\n`); return 1 }
+  const doc = repoRelative(root, di >= 0 ? argv[di + 1] : undefined, '--doc')
+  const phaseScope = governedPhaseTargets(root, ids, 'review')
+  if (!phaseScope) return 1
+  const targets = [...phaseScope, ...(doc ? [doc] : [])]
+  if (!governanceGate(root, targets, 'review')) return 1
   mkdirSync(join(root, '.building'), { recursive: true })
   const jPath = journalPath(root, ids, 'review')
 
@@ -516,15 +590,18 @@ function reviewCodex(root, ids, argv) {
 
   // Resolve the prompt against the PRIMARY checkout before any worktree work, so a bad --doc
   // or a renumbered phase file fails loudly and destroys no previous hand-off.
-  const doc = repoRelative(root, di >= 0 ? argv[di + 1] : undefined, '--doc')
   const focus = fi >= 0 ? argv[fi + 1] : undefined
   const prompt = buildReviewPrompt(root, ids, { doc, focus })
 
-  const made = ensureWorktree(root, { worktree, base, branch: null, install: false })
-  if (made !== 0) return made
+  const made = ensureWorktree(root, { worktree, base, branch: null })
+  if (made.status !== 0) return made.status
+  const worktreeScope = governedPhaseTargets(worktree, ids, 'review')
+  if (!worktreeScope) return 1
+  const governance = governanceGate(worktree, [...worktreeScope, ...(doc ? [doc] : [])], 'review')
+  if (!governance) return 1
   carryIn(root, worktree, doc)
   preserveStaleReport(worktree, LANES.review.report)
-  return launch(root, ids, 'review', { worktree, base, prompt })
+  return launch(root, ids, 'review', { worktree, base, prompt, governance, authority })
 }
 
 /**
@@ -532,12 +609,18 @@ function reviewCodex(root, ids, argv) {
  * validates it through the consumer's tsx), but exactly one file may change and the number is
  * reserved before launch — the planner never picks its own.
  */
-function planCodex(root, ids, argv) {
+function planCodex(root, ids, argv, authority) {
   const wi = argv.indexOf('--worktree')
   const bi = argv.indexOf('--base')
   const fi = argv.indexOf('--brief')
   const base = bi >= 0 ? argv[bi + 1] : 'develop'
   const worktree = wi >= 0 ? argv[wi + 1] : `${root}-codex-plan-${ids.join('-')}`
+  try { authority = nativeAuthority(worktree, authority) } catch (error) { process.stderr.write(`roadmap codex: authority hold — ${error.message}; no prompt, journal, worktree or child was created\n`); return 1 }
+  const brief = repoRelative(root, fi >= 0 ? argv[fi + 1] : undefined, '--brief')
+  const phaseFile = `${roadmapRootRel(root)}/phases/phase-${ids[0]}.phase.ts`
+  const targets = [phaseFile, ...(brief ? [brief] : [])]
+  if (!existsSync(worktree) && !installersAvailable(root)) return 1
+  if (!governanceGate(root, targets, 'plan')) return 1
   mkdirSync(join(root, '.building'), { recursive: true })
   const jPath = journalPath(root, ids, 'plan')
 
@@ -546,12 +629,10 @@ function planCodex(root, ids, argv) {
 
   // Resolve the prompt against the PRIMARY checkout before any worktree work, so a missing
   // --brief or a taken number fails loudly and destroys no previous hand-off.
-  const brief = repoRelative(root, fi >= 0 ? argv[fi + 1] : undefined, '--brief')
   const prompt = buildPlanPrompt(root, ids, { brief })
 
   // --base may carry a phase file the primary checkout does not. Checked from the PRIMARY, before
   // the worktree and its dependency install, so a taken number costs no install and leaves no orphan branch.
-  const phaseFile = `${roadmapRootRel(root)}/phases/phase-${ids[0]}.phase.ts`
   if (spawnSync('git', ['cat-file', '-e', `${base}:${phaseFile}`], { cwd: root }).status === 0) {
     process.stderr.write(
       `roadmap codex: ${phaseFile} already exists on ${base} — this lane authors a newly reserved number. `
@@ -560,8 +641,8 @@ function planCodex(root, ids, argv) {
     return 1
   }
 
-  const made = ensureWorktree(root, { worktree, base, branch: `codex-plan/${ids.join('-')}`, install: true })
-  if (made !== 0) return made
+  const made = ensureWorktree(root, { worktree, base, branch: `codex-plan/${ids.join('-')}` })
+  if (made.status !== 0) return made.status
   // Present here but NOT on base means a PREVIOUS run of this number authored it (refuseIfLive
   // relaunches over a dead one) — a different cause needing the opposite remedy.
   if (existsSync(join(worktree, phaseFile))) {
@@ -571,9 +652,15 @@ function planCodex(root, ids, argv) {
     )
     return 1
   }
+  const governance = governanceGate(worktree, targets, 'plan')
+  if (!governance) return 1
+  if (made.created) {
+    const installed = installWorktree(worktree)
+    if (installed !== 0) return installed
+  }
   carryIn(root, worktree, brief)
   preserveStaleReport(worktree, LANES.plan.report)
-  return launch(root, ids, 'plan', { worktree, base, prompt, carriedIn: brief })
+  return launch(root, ids, 'plan', { worktree, base, prompt, governance, authority, carriedIn: brief })
 }
 
 /**
@@ -885,6 +972,55 @@ function archivePlanLane(root, jPath, journal, reportPath) {
  * The ids come from the JOURNAL, not from the poll: an arc lane launched as `222 223` and polled by
  * `223` must be relaunched with both, or the operator is handed a command that abandons 222.
  */
+function relaunchAuthorityArgs(authority) {
+  if (!authority) return null
+  try {
+    const derived = intersectAuthority(authority.parent, authority.request)
+    if (!isDeepStrictEqual(derived.effective, authority.effective)) return null
+    if (authority.parent.provenance?.kind !== 'explicit-operator-invocation') return null
+    if (!isDeepStrictEqual(authority.parent.bounds, authorityProfileBounds(authority.parent.profile))) return null
+    if (authority.request.profile !== 'inherit' && !isDeepStrictEqual(authority.request.bounds, authorityProfileBounds(authority.request.profile))) return null
+    const args = [`--parent-authority ${authority.parent.profile}`]
+    if (authority.request.profile !== 'inherit') args.push(`--authority ${authority.request.profile}`)
+    if (derived.effective.profile === 'isolated-unsafe') {
+      if (authority.request.provenance?.kind !== 'explicit-user-authorization') return null
+      args.push('--authorize-isolated-unsafe')
+    }
+    return args.join(' ')
+  } catch {
+    return null
+  }
+}
+
+/** Quote one recorded argument for the pasteable POSIX-shell recovery command. */
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\"'\"'")}'`
+}
+
+function relaunchContextArgs(journal) {
+  if (typeof journal.worktree !== 'string' || journal.worktree.length === 0) return null
+  if (typeof journal.base !== 'string' || journal.base.length === 0) return null
+
+  const reportLabel = typeof journal.report === 'string'
+    ? journal.report.match(/^CODEX-REPORT\.([a-z0-9]+)\.md$/)?.[1]
+    : undefined
+  if (journal.label != null && (typeof journal.label !== 'string' || !/^[a-z0-9]+$/.test(journal.label))) return null
+  if (journal.label && reportLabel && journal.label !== reportLabel) return null
+  if (journal.label && journal.report === 'CODEX-REPORT.md') return null
+  const label = journal.label ?? reportLabel
+
+  const args = [`--worktree ${shellQuote(journal.worktree)}`, `--base ${shellQuote(journal.base)}`]
+  if (label) args.push(`--label ${shellQuote(label)}`)
+  if (journal.modelPolicy) {
+    try {
+      args.push(`--models ${shellQuote(policyToArg(journal.modelPolicy))}`)
+    } catch {
+      return null
+    }
+  }
+  return args.join(' ')
+}
+
 function nextStepHint(lane, state, journal, reportPath, root) {
   const ids = (journal.phases ?? []).map(String)
   const wt = journal.worktree
@@ -916,7 +1052,14 @@ function nextStepHint(lane, state, journal, reportPath, root) {
     return `roadmap codex status ${ids.join(' ')} --plan — the plan lane's done-moment: harvest the phase file to the primary checkout, then this read closes the lane`
   }
   if (lane !== 'run' || ids.length === 0) return null
-  const relaunch = `roadmap codex run ${ids.join(' ')}`
+  const authorityArgs = relaunchAuthorityArgs(journal.authority)
+  const contextArgs = relaunchContextArgs(journal)
+  const replayableArgs = [contextArgs, authorityArgs].filter(Boolean).join(' ')
+  const relaunch = contextArgs === null
+    ? null
+    : `roadmap codex run ${ids.join(' ')}${replayableArgs ? ` ${replayableArgs}` : ''}`
+  const legacyAuthority = !authorityArgs ? ' \u2014 supply the current explicit parent authority with --parent-authority before relaunch; legacy journal evidence grants nothing' : ''
+  const contextHold = 'relaunch held -- the recorded checkout context cannot be reconstructed; supply the current explicit worktree, base, label and model policy'
   if (state === 'complete') {
     // `phase land` resolves its checkout from cwd, so the cd is part of the command, not context.
     // ONE land, even for an arc lane covering several ids: landPhase moves the whole scratch head
@@ -927,10 +1070,14 @@ function nextStepHint(lane, state, journal, reportPath, root) {
       + (ids.length > 1 ? `  (one land moves the whole lane head, covering ${ids.join(' ')})` : '')
   }
   if (state === 'dead-no-report') {
-    return `${relaunch} — the lane died without a hand-off; the prompt's RESUME RULE skips tasks already done with a commit, and a previous report is preserved as its .prev twin rather than clobbered`
+    return relaunch
+      ? `${relaunch}${legacyAuthority} \u2014 the lane died without a hand-off; the prompt's RESUME RULE skips tasks already done with a commit, and a previous report is preserved as its .prev twin rather than clobbered`
+      : contextHold
   }
   if (state === 'blocked') {
-    return `read ${reportPath} for the question it stopped on, resolve it, then relaunch: ${relaunch} (the RESUME RULE skips the tasks it already finished)`
+    return relaunch
+      ? `read ${reportPath} for the question it stopped on, resolve it, then relaunch: ${relaunch}${legacyAuthority} (the RESUME RULE skips the tasks it already finished)`
+      : `read ${reportPath} for the question it stopped on; ${contextHold}`
   }
   return null
 }
@@ -1046,7 +1193,7 @@ export default async function run(argv) {
     return 1
   }
   // A flag's VALUE must never be read as a phase id (`--base 719` is a ref, not a phase).
-  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc', '--models', '--label'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
+  const flagValues = new Set(['--worktree', '--base', '--doc', '--focus', '--brief', '--arc', '--models', '--label', '--parent-authority', '--authority'].flatMap((f) => (argv.indexOf(f) >= 0 ? [argv.indexOf(f) + 1] : [])))
   // BEFORE the member list is resolved: arcPhases throws on an arc file with no parseable
   // `phases:`, and a traceback is the exact outcome this refusal exists to replace.
   if (sub === 'plan' && arcId) {
@@ -1083,9 +1230,14 @@ export default async function run(argv) {
     return 1
   }
   const lane = laneFlags[0] ?? 'run'
-  if (sub === 'run' && ids.length > 0) return runCodex(root, ids, argv)
-  if (sub === 'review' && ids.length > 0) return reviewCodex(root, ids, argv)
-  if (sub === 'plan' && ids.length > 0) return planCodex(root, ids, argv)
+  let authority
+  if (['run', 'review', 'plan'].includes(sub) && ids.length > 0) {
+    try { authority = authorityFromArgv(argv) }
+    catch (error) { process.stderr.write(`roadmap codex: authority hold — ${error.message}; no prompt, journal, worktree or child was created\n`); return 1 }
+  }
+  if (sub === 'run' && ids.length > 0) return runCodex(root, ids, argv, authority)
+  if (sub === 'review' && ids.length > 0) return reviewCodex(root, ids, argv, authority)
+  if (sub === 'plan' && ids.length > 0) return planCodex(root, ids, argv, authority)
   if (sub === 'status' && ids.length > 0) return statusCodex(root, ids, lane)
   process.stderr.write(
     'roadmap codex: usage: roadmap codex run <N> [<N2>…] | run --arc <ID> [--worktree <path>] [--base <ref>]\n' +

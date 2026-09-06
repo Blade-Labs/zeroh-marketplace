@@ -61,11 +61,15 @@ import {
   ImportanceRulingShape,
   ImportanceRulingsTableShape,
   ProposalShape,
+  AuthorityEnvelopeShape,
 } from '../templates/schema'
 // The SECOND schema home — the consumer copy the CLI validates every phase file
 // through (cli/lib/tsx-bridge.mjs seam 3). Imported so the vendor-pair discipline
 // is a behavioral check over both homes, not a byte diff of one.
-import { definePhase as definePhaseConsumerHome } from '../../../lib/roadmap/schema'
+import {
+  definePhase as definePhaseConsumerHome,
+  AuthorityEnvelopeShape as AuthorityEnvelopeConsumerHome,
+} from '../../../lib/roadmap/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
 
 let failures = 0
@@ -103,6 +107,128 @@ function assertThrows(fn: () => unknown, where: string): void {
     return
   }
   throw new Error(`${where}: expected to throw, did not`)
+}
+
+console.log('\nAuthorityEnvelopeShape — shared child authority receipt')
+
+const authorityEnvelopeFixture = {
+  parent: {
+    profile: 'workspace-write',
+    bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false },
+    provenance: { kind: 'explicit-operator-invocation', source: '--parent-authority workspace-write' },
+  },
+  request: {
+    profile: 'inherit',
+    bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false },
+    provenance: null,
+  },
+  effective: {
+    profile: 'workspace-write',
+    bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false },
+  },
+  native: {
+    driver: 'codex',
+    runtime: { version: null, verified: false },
+    argv: [
+      'exec', '--ignore-user-config', '--sandbox', 'workspace-write',
+      '-c', 'approval_policy="on-request"',
+      '-c', 'approvals_reviewer="auto_review"',
+      '-c', 'sandbox_workspace_write.network_access=false',
+      '-c', 'sandbox_workspace_write.writable_roots=[]',
+      '-C', '/tmp/child', '-',
+    ],
+    enforcement: {
+      filesystem: 'sandbox',
+      network: 'sandbox-config',
+      gitPush: 'semantic-only',
+      externalWrites: 'semantic-only',
+    },
+    limitations: ['git push and external writes are enforced semantically'],
+  },
+}
+
+for (const [home, shape] of [
+  ['templates/schema.ts', AuthorityEnvelopeShape],
+  ['lib/roadmap/schema.ts', AuthorityEnvelopeConsumerHome],
+] as const) {
+  check(`authority envelope: ${home} exports and round-trips the complete receipt`, () => {
+    assertEq(shape.parse(authorityEnvelopeFixture), authorityEnvelopeFixture, `${home} complete authority receipt`)
+  })
+
+  check(`authority envelope: ${home} rejects unknown permission vocabulary`, () => {
+    zodIssues(
+      () => shape.parse({
+        ...authorityEnvelopeFixture,
+        effective: { ...authorityEnvelopeFixture.effective, bounds: { ...authorityEnvelopeFixture.effective.bounds, network: 'sometimes' } },
+      }),
+      `${home} unknown effective.network`,
+    )
+  })
+
+  check(`authority envelope: ${home} accepts the honest read-only profile`, () => {
+    shape.parse({
+      ...authorityEnvelopeFixture,
+      request: {
+        profile: 'read-only',
+        bounds: { filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false },
+        provenance: null,
+      },
+      effective: {
+        profile: 'read-only',
+        bounds: { filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false },
+      },
+    })
+  })
+
+  check(`authority envelope: ${home} requires native enforcement and limitations`, () => {
+    const { enforcement: _missing, limitations: _alsoMissing, ...incompleteNative } = authorityEnvelopeFixture.native
+    zodIssues(
+      () => shape.parse({ ...authorityEnvelopeFixture, native: incompleteNative }),
+      `${home} incomplete native receipt`,
+    )
+  })
+
+  check(`authority envelope: ${home} rejects missing, empty or unknown parent provenance`, () => {
+    for (const provenance of [
+      undefined,
+      { kind: 'explicit-operator-invocation', source: '' },
+      { kind: 'self-asserted', source: '--parent-authority workspace-write' },
+    ]) {
+      zodIssues(
+        () => shape.parse({
+          ...authorityEnvelopeFixture,
+          parent: { ...authorityEnvelopeFixture.parent, provenance },
+        }),
+        `${home} invalid parent provenance ${JSON.stringify(provenance)}`,
+      )
+    }
+  })
+
+  check(`authority envelope: ${home} rejects a tampered effective bound`, () => {
+    zodIssues(
+      () => shape.parse({
+        ...authorityEnvelopeFixture,
+        effective: {
+          ...authorityEnvelopeFixture.effective,
+          bounds: { ...authorityEnvelopeFixture.effective.bounds, externalWrites: true },
+        },
+      }),
+      `${home} effective authority exceeds its recorded parent`,
+    )
+  })
+
+  check(`authority envelope: ${home} rejects inherit carrying altered bounds`, () => {
+    zodIssues(
+      () => shape.parse({
+        ...authorityEnvelopeFixture,
+        request: {
+          ...authorityEnvelopeFixture.request,
+          bounds: { ...authorityEnvelopeFixture.request.bounds, filesystem: 'read-only' },
+        },
+      }),
+      `${home} inherit request disagrees with parent bounds`,
+    )
+  })
 }
 
 console.log('BacklogShape — flat input')

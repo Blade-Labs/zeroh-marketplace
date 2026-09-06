@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util'
+
 /**
  * drivers — the ONE home for per-driver launch semantics and probed capabilities.
  *
@@ -30,6 +32,66 @@
 /** The one home for the pinned codex model id: the entry field and the argv share this value. */
 const CODEX_MODEL = 'gpt-5.6-sol'
 
+
+const AUTHORITY_PROFILES = Object.freeze({
+  'read-only': Object.freeze({ filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false }),
+  'workspace-write': Object.freeze({ filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }),
+  'isolated-unsafe': Object.freeze({ filesystem: 'unrestricted', network: 'allowed', gitPush: true, externalWrites: true }),
+})
+const FILESYSTEM_RANK = Object.freeze({ 'read-only': 0, 'workspace-write': 1, unrestricted: 2 })
+const NETWORK_RANK = Object.freeze({ denied: 0, approval: 1, allowed: 2 })
+
+
+export function authorityProfileBounds(profile) {
+  if (!Object.hasOwn(AUTHORITY_PROFILES, profile)) throw new Error(`authority profile '${profile}' is unknown`)
+  return structuredClone(AUTHORITY_PROFILES[profile])
+}
+
+function validateAuthorityPart(value, name, { allowInherit = false } = {}) {
+  if (!value || typeof value !== 'object') throw new Error(`${name} authority is required`)
+  const profiles = allowInherit ? ['inherit', ...Object.keys(AUTHORITY_PROFILES)] : Object.keys(AUTHORITY_PROFILES)
+  if (!profiles.includes(value.profile)) throw new Error(`${name} authority profile '${value.profile}' is unknown`)
+  const bounds = value.bounds
+  if (!bounds || typeof bounds !== 'object') throw new Error(`${name} authority bounds are required`)
+  if (!Object.hasOwn(FILESYSTEM_RANK, bounds.filesystem)) throw new Error(`${name} filesystem authority '${bounds.filesystem}' is unknown`)
+  if (!Object.hasOwn(NETWORK_RANK, bounds.network)) throw new Error(`${name} network authority '${bounds.network}' is unknown`)
+  if (typeof bounds.gitPush !== 'boolean') throw new Error(`${name} gitPush authority must be boolean`)
+  if (typeof bounds.externalWrites !== 'boolean') throw new Error(`${name} externalWrites authority must be boolean`)
+  const provenance = value.provenance
+  if (name === 'parent' || provenance !== null) {
+    if (!provenance || !['explicit-operator-invocation', 'managed-host-input', 'explicit-user-authorization'].includes(provenance.kind) || typeof provenance.source !== 'string' || provenance.source.trim().length === 0) {
+      throw new Error(`${name} authority provenance requires a recognized kind and nonempty source`)
+    }
+  }
+}
+
+export function intersectAuthority(parent, request) {
+  validateAuthorityPart(parent, 'parent')
+  validateAuthorityPart(request, 'request', { allowInherit: true })
+  if (request.profile === 'inherit' && !isDeepStrictEqual(request.bounds, parent.bounds)) throw new Error('inherit authority must preserve the exact parent bounds')
+  for (const [dimension, rank] of [['filesystem', FILESYSTEM_RANK], ['network', NETWORK_RANK]]) {
+    if (rank[request.bounds[dimension]] > rank[parent.bounds[dimension]]) throw new Error(`requested ${dimension} authority enlarges the parent ceiling`)
+  }
+  for (const dimension of ['gitPush', 'externalWrites']) {
+    if (request.bounds[dimension] && !parent.bounds[dimension]) throw new Error(`requested ${dimension} authority enlarges the parent ceiling`)
+  }
+  if ((request.profile === 'isolated-unsafe' || (request.profile === 'inherit' && parent.profile === 'isolated-unsafe')) && request.provenance?.kind !== 'explicit-user-authorization') throw new Error('effective isolated-unsafe authority requires explicit user authorization provenance')
+  return { parent: structuredClone(parent), request: structuredClone(request), effective: { profile: request.profile === 'inherit' ? parent.profile : request.profile, bounds: structuredClone(request.bounds) } }
+}
+
+function codexLaunchArgv({ worktree, authority }) {
+  if (!authority) throw new Error('effective authority envelope is required for Codex launch')
+  const derived = intersectAuthority(authority.parent, authority.request)
+  if (!isDeepStrictEqual(derived.effective, authority.effective)) throw new Error('effective authority envelope does not match its parent/request intersection')
+  const { profile, bounds } = derived.effective
+  if (profile === 'isolated-unsafe') {
+    if (bounds.filesystem !== 'unrestricted' || bounds.network !== 'allowed' || !bounds.gitPush || !bounds.externalWrites) throw new Error('isolated-unsafe native mapping requires equally broad explicit bounds')
+    return ['exec', '--dangerously-bypass-approvals-and-sandbox', '-m', CODEX_MODEL, '-C', worktree, '-']
+  }
+  if (!['read-only', 'workspace-write'].includes(profile) || bounds.filesystem !== profile || bounds.network !== 'denied' || bounds.gitPush || bounds.externalWrites) throw new Error(`authority profile '${profile}' has bounds the native Codex controls cannot represent`)
+  return ['exec', '--ignore-user-config', '--sandbox', bounds.filesystem, '-c', 'approval_policy="on-request"', '-c', 'approvals_reviewer="auto_review"', '-c', 'sandbox_workspace_write.network_access=false', '-c', 'sandbox_workspace_write.writable_roots=[]', '-m', CODEX_MODEL, '-C', worktree, '-']
+}
+
 /** Probe evidence pasted verbatim from the command each entry's verifiedAt names. */
 const CODEX_PROBE_OUTPUT = `codex-cli 0.153.4
 hooks                                stable             true
@@ -50,11 +112,9 @@ export const DRIVERS = Object.freeze({
     bin: 'codex',
     model: CODEX_MODEL,
     launch: Object.freeze({
-      argv: ({ worktree }) => ['exec', '--dangerously-bypass-approvals-and-sandbox', '-m', CODEX_MODEL, '-C', worktree, '-'],
+      argv: codexLaunchArgv,
       promptChannel: 'stdin',
-      // This host's bubblewrap cannot create loopback (bwrap RTM_NEWADDR under
-      // apparmor_restrict_unprivileged_userns), so isolation is the worktree, not the sandbox.
-      sandboxPosture: 'bypass',
+      sandboxPosture: 'authority-envelope',
     }),
     resume: 'codex resume [SESSION_ID] [--last]',
     roleCapabilities: Object.freeze({ subagents: 'native', headlessChild: true, hooks: true, plugins: true }),

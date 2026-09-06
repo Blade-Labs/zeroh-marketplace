@@ -449,6 +449,7 @@ re-ratcheted to that post-diet measured total — zero growth from here.
 | Curate — ", so nothing the review relied on goes unreachable" | obsolete-with-evidence(rationale for CLI behaviour the sentence already states) | cli/commands/phase.mjs curate |
 | Curate — "In the worktree lane a refusal cannot fire (…) — one on a primary-checkout phase means siblings shared the range" | obsolete-with-evidence(explanation of a case the stated rule already handles identically) | do-phase §Curate the landed history |
 | Codex lane — "(the shared-host hook and reaper classify argv; the entrypoint carries the invariants: …)" | enforced-by-code(`roadmap codex run` owns every invariant listed; the rule "never hand-roll the launch" survives) | cli/commands/codex.mjs |
+| Codex hook isolation explanation (`hooks: {}` plus conventional `hooks/hooks.json`) | superseded-with-equivalent(host manifests now separate discovery structurally: Codex omits hooks; Claude explicitly points to `hooks/claude-hooks.json`) | .codex-plugin/plugin.json, .claude-plugin/plugin.json, scripts/validate-packaging.mjs |
 | Codex lane — "(user ruling 2026-07-22)" attribution | obsolete-with-evidence(dated attribution belongs to git history; the division of labor survives verbatim) | git log |
 | Codex lane — the merge-in-the-wrong-checkout diagnosis ("Already up to date" tell, `cd`-reset cause) | obsolete-with-evidence(archeology; "run … FROM THE PRIMARY checkout" and the silent no-op survive) | do-phase §Codex delegation lane |
 

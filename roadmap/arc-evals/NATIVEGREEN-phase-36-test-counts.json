@@ -1,0 +1,16 @@
+{
+  "sourceHead": "826d79c",
+  "gateReport": "roadmap/.gate/36/run-000013-2026-09-06T22-36-43-322Z.json",
+  "files": 92,
+  "seconds": 413.8405319596641,
+  "totals": {
+    "tests": 2172,
+    "pass": 2172,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "unit": "aggregate Node TAP cases, deduplicated by shard file",
+  "shardSummary": "/tmp/capbuild-tests-nqqyt5px/summary.json"
+}

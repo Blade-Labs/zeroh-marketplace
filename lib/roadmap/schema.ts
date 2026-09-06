@@ -265,6 +265,47 @@ export type TransparencyReport = z.output<typeof TransparencyReportShape>
  *  enum makes an unrecognised lane an import-time parse failure indistinguishable from a
  *  corrupt file. Whether a lane is KNOWN is a validation question, answered by the engine at
  *  cli/lib/validate.mjs, which reads the driver registry and WARNS by name. */
+export const AuthorityEnvelopeShape = z.object({
+  parent: z.object({
+    profile: z.enum(['read-only', 'workspace-write', 'isolated-unsafe']),
+    bounds: z.object({ filesystem: z.enum(['read-only', 'workspace-write', 'unrestricted']), network: z.enum(['denied', 'approval', 'allowed']), gitPush: z.boolean(), externalWrites: z.boolean() }),
+    provenance: z.object({ kind: z.enum(['explicit-operator-invocation', 'managed-host-input', 'explicit-user-authorization']), source: z.string().min(1), attestedAt: z.string().optional() }),
+  }),
+  request: z.object({
+    profile: z.enum(['inherit', 'read-only', 'workspace-write', 'isolated-unsafe']),
+    bounds: z.object({ filesystem: z.enum(['read-only', 'workspace-write', 'unrestricted']), network: z.enum(['denied', 'approval', 'allowed']), gitPush: z.boolean(), externalWrites: z.boolean() }),
+    provenance: z.object({ kind: z.enum(['explicit-operator-invocation', 'managed-host-input', 'explicit-user-authorization']), source: z.string().min(1), attestedAt: z.string().optional() }).nullable(),
+  }),
+  effective: z.object({
+    profile: z.enum(['read-only', 'workspace-write', 'isolated-unsafe']),
+    bounds: z.object({ filesystem: z.enum(['read-only', 'workspace-write', 'unrestricted']), network: z.enum(['denied', 'approval', 'allowed']), gitPush: z.boolean(), externalWrites: z.boolean() }),
+  }),
+  native: z.object({
+    driver: z.string().min(1),
+    runtime: z.object({ version: z.string().nullable(), verified: z.boolean() }),
+    argv: z.array(z.string()),
+    enforcement: z.object({ filesystem: z.enum(['sandbox', 'bypass']), network: z.enum(['sandbox-config', 'bypass']), gitPush: z.literal('semantic-only'), externalWrites: z.literal('semantic-only') }),
+    limitations: z.array(z.string().min(1)).min(1),
+  }),
+}).superRefine((value, ctx) => {
+  const filesystemRank = { 'read-only': 0, 'workspace-write': 1, unrestricted: 2 } as const
+  const networkRank = { denied: 0, approval: 1, allowed: 2 } as const
+  const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path, message })
+  const sameBounds = (a: typeof value.parent.bounds, b: typeof value.parent.bounds) =>
+    a.filesystem === b.filesystem && a.network === b.network && a.gitPush === b.gitPush && a.externalWrites === b.externalWrites
+
+  if (value.request.profile === 'inherit' && !sameBounds(value.request.bounds, value.parent.bounds)) issue(['request', 'bounds'], 'inherit authority must preserve the exact parent bounds')
+  if (filesystemRank[value.request.bounds.filesystem] > filesystemRank[value.parent.bounds.filesystem]) issue(['request', 'bounds', 'filesystem'], 'requested filesystem authority enlarges the parent ceiling')
+  if (networkRank[value.request.bounds.network] > networkRank[value.parent.bounds.network]) issue(['request', 'bounds', 'network'], 'requested network authority enlarges the parent ceiling')
+  if (value.request.bounds.gitPush && !value.parent.bounds.gitPush) issue(['request', 'bounds', 'gitPush'], 'requested gitPush authority enlarges the parent ceiling')
+  if (value.request.bounds.externalWrites && !value.parent.bounds.externalWrites) issue(['request', 'bounds', 'externalWrites'], 'requested externalWrites authority enlarges the parent ceiling')
+
+  const expectedProfile = value.request.profile === 'inherit' ? value.parent.profile : value.request.profile
+  if (value.effective.profile !== expectedProfile) issue(['effective', 'profile'], 'effective profile must equal the resolved request profile')
+  if (!sameBounds(value.effective.bounds, value.request.bounds)) issue(['effective', 'bounds'], 'effective bounds must equal the validated requested bounds')
+  if (expectedProfile === 'isolated-unsafe' && value.request.provenance?.kind !== 'explicit-user-authorization') issue(['request', 'provenance'], 'effective isolated-unsafe authority requires explicit user authorization provenance')
+})
+
 export const DriverShape = z.object({
   model: z.string().min(1),
   lane: z.string().min(1),

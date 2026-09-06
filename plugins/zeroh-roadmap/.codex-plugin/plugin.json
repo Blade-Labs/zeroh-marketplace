@@ -17,5 +17,18 @@
     "changelog"
   ],
   "skills": "./skills/",
-  "hooks": {}
+  "interface": {
+    "displayName": "zeroh-roadmap",
+    "shortDescription": "Phase-driven development with a design-first gate, validation gates, intent validation, review reports, and changelog generation",
+    "longDescription": "Phase-driven development with a design-first gate, validation gates, intent validation, review reports, and changelog generation",
+    "developerName": "Blade Labs",
+    "category": "development",
+    "capabilities": [
+      "skills",
+      "agents"
+    ],
+    "defaultPrompt": [
+      "Use zeroh-roadmap to plan, execute, review, and validate roadmap phases."
+    ]
+  }
 }

@@ -28,9 +28,10 @@ must list the plugin — the Claude-side `.claude-plugin/marketplace.json` is no
 an entry `plugin add` refuses by name. **Surfacing is native**: every skill under `skills/` reaches
 the model's prompt with its description and path, with no session-start hook and no per-session
 opt-in. `.codex-plugin/plugin.json` declares that channel explicitly (`"skills": "./skills/"`) and
-carries an EMPTY `"hooks": {}` — deliberate, so Codex never auto-discovers this plugin's
-`hooks/hooks.json`, which is Claude-shaped. A hook *system* is not a session-start *event*: confirm
-the specific event exists before building a bootstrap on it.
+omits Claude hook configuration. Claude alone receives the explicit
+`"hooks": "./hooks/claude-hooks.json"` pointer; the conventional cross-host `hooks/hooks.json`
+name stays absent so another host cannot auto-discover Claude-shaped events. A hook *system* is
+not a session-start *event*: confirm the specific event exists before building a bootstrap on it.
 
 `codex debug prompt-input` is the re-runnable check. If a skill stops appearing there, discovery
 broke — do not infer it from an installed-plugin listing, which reports installation, not surfacing.

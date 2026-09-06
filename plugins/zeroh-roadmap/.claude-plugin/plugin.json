@@ -16,5 +16,6 @@
     "review",
     "gates",
     "changelog"
-  ]
+  ],
+  "hooks": "./hooks/claude-hooks.json"
 }

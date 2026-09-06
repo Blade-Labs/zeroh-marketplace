@@ -1,6 +1,7 @@
 ---
 name: full-code-review
-description: Whole-codebase pre-release audit. Parallel agents cover security, dead code, duplication, performance, architecture, edge cases, data flow, and domain-critical calculations; findings become a release verdict (any critical blocks), a remediation phase, and a review-record round. Use for "full code review", "pre-release audit", a pre-prod checkup on worry areas, or before merge-to-main/prod deploy. Not this skill: diff/phase review (code-review); a consumer's own release-review supersedes this.
+description: >-
+  Whole-codebase pre-release audit. Parallel agents cover security, dead code, duplication, performance, architecture, edge cases, data flow, and domain-critical calculations; findings become a release verdict (any critical blocks), a remediation phase, and a review-record round. Use for "full code review", "pre-release audit", a pre-prod checkup on worry areas, or before merge-to-main/prod deploy. Not this skill: diff/phase review (code-review); a consumer's own release-review supersedes this.
 argument-hint: "[path or scope] [focus notes]"
 ---
 

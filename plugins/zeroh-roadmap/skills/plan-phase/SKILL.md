@@ -9,6 +9,9 @@ metadata:
 
 # Plan Phase: Author a Known Diff
 
+Delegated planning resolves phase-file and brief governance per
+`../using-zeroh-roadmap/references/governance.md` before launch.
+
 Write `<root>/…`, never a bare `roadmap/…`: the roadmap root is DISCOVERED. Rule: `skills/using-zeroh-roadmap/SKILL.md` (mechanics: its `references/layout.md`).
 
 **Trigger:** `plan phase for X`, `/plan-phase`, `/create-phase`, `/new-phase`. Input: a bug report,

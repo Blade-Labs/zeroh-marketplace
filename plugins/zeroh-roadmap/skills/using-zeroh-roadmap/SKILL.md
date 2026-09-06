@@ -65,4 +65,5 @@ skill has not already:
 - Splitting or placing a UI component (at planning time) → `references/component-structure.md`
 - Introducing any external package/font/icon/image/snippet/model → `references/external-assets-licensing.md`
 - Running this protocol on a non-Claude harness (Codex) → `references/codex-tools.md`
+- Launching a mutating child or resolving repository instructions/runners → `references/governance.md`
 - Scaffolding a consumer, writing a phase file's import, or a root refusal → `references/layout.md`

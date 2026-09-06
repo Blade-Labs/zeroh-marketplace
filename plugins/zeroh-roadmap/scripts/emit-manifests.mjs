@@ -78,7 +78,7 @@ function readSource(root) {
         .sort()
     : []
 
-  return { name: pkg.name, description: pkg.description ?? '', version: pkg.version, skills, agents }
+  return { name: pkg.name, description: pkg.description ?? '', version: pkg.version, developerName: typeof pkg.author === 'string' ? pkg.author.replace(/\s*<[^>]+>\s*$/, '') : pkg.author?.name ?? pkg.name, skills, agents }
 }
 
 /** The marketplace metadata the codex manifest mirrors; .claude-plugin stays its hand-owned home. */
@@ -100,9 +100,15 @@ function renderCodexPlugin(root, src) {
       ...(meta.license ? { license: meta.license } : {}),
       ...(meta.keywords ? { keywords: meta.keywords } : {}),
       skills: './skills/',
-      // EMPTY ON PURPOSE: it suppresses Codex's auto-discovery of hooks/hooks.json, which is
-      // Claude-shaped. An absent key is not the same as an empty object.
-      hooks: {},
+      interface: {
+        displayName: src.name,
+        shortDescription: src.description,
+        longDescription: src.description,
+        developerName: src.developerName,
+        category: 'development',
+        capabilities: ['skills', 'agents'],
+        defaultPrompt: ['Use zeroh-roadmap to plan, execute, review, and validate roadmap phases.'],
+      },
     },
     null,
     2,

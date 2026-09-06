@@ -22,17 +22,33 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync, spawnSync, spawn } from 'node:child_process'
+import { execFileSync, spawnSync as rawSpawnSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DRIVERS } from '../lib/drivers.mjs'
+import { DRIVERS, launchArgv } from '../lib/drivers.mjs'
 import { findJournal as mod_findJournal } from './codex.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
+const EXPLICIT_PARENT = ['--parent-authority', 'workspace-write']
+
+function authorizedCodexArgs(lane, ...args) {
+  return [BIN, 'codex', lane, ...args, ...EXPLICIT_PARENT]
+}
+
+/** Existing positive launch fixtures all model an operator invocation with a known parent.
+ * Tests for missing parent input call rawSpawnSync explicitly. */
+function spawnSync(command, args, options) {
+  const isCodexLaunch = command === 'node'
+    && args?.[0] === BIN
+    && args?.[1] === 'codex'
+    && ['run', 'review', 'plan'].includes(args?.[2])
+  const hasParent = args?.includes('--parent-authority')
+  return rawSpawnSync(command, isCodexLaunch && !hasParent ? [...args, ...EXPLICIT_PARENT] : args, options)
+}
 
 const cleanups = []
 process.on('exit', () => cleanups.forEach((fn) => fn()))
@@ -48,6 +64,15 @@ function tmpRepo() {
 function writeJournal(root, ids, extra = {}) {
   const worktree = join(root, `wt-${ids.join('-')}`)
   mkdirSync(worktree, { recursive: true })
+  execFileSync('git', ['init', '-q'], { cwd: worktree })
+  if (!existsSync(join(root, 'roadmap', 'roadmap.config.json'))) writeCodexConfig(root)
+  mkdirSync(join(worktree, 'roadmap'), { recursive: true })
+  copyFileSync(join(root, 'roadmap', 'roadmap.config.json'), join(worktree, 'roadmap', 'roadmap.config.json'))
+  const phases = join(root, 'roadmap', 'phases')
+  if (existsSync(phases)) {
+    mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
+    for (const file of readdirSync(phases)) copyFileSync(join(phases, file), join(worktree, 'roadmap', 'phases', file))
+  }
   const j = {
     phases: ids.map(String),
     worktree,
@@ -118,8 +143,7 @@ test('fresh report: sentinel written after launch is the verdict', () => {
 test('codex run preserves a leftover CODEX-REPORT.md as .prev before launching', () => {
   const root = tmpRepo()
   // Phase file so buildPrompt resolves; premade worktree so no git-worktree/npm-ci runs.
-  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
-  writeFileSync(join(root, 'roadmap', 'phases', 'phase-45.phase.ts'), 'export default {}\n')
+  writePhase(root, 45)
   const j = writeJournal(root, [45]) // dead pgid → relaunch path
   const report = join(j.worktree, 'CODEX-REPORT.md')
   writeFileSync(report, 'previous run\nCODEX-RUN-BLOCKED\n')
@@ -165,8 +189,7 @@ test('a LIVE run under a different journal id refuses a launch into the same wor
   const j = writeJournal(root, [50, 51], { pgid: child.pid }) // an arc journal, alive
   const report = join(j.worktree, 'CODEX-REPORT.md')
   writeFileSync(report, 'live run in progress\n')
-  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
-  writeFileSync(join(root, 'roadmap', 'phases', 'phase-50.phase.ts'), 'export default {}\n')
+  writePhase(root, 50)
   const r = spawnSync('node', [BIN, 'codex', 'run', '50', '--worktree', j.worktree], {
     cwd: root,
     encoding: 'utf8',
@@ -187,8 +210,7 @@ test('a journal with a malformed startedAt trusts the report', () => {
 
 test('the lane prompt carries the cross-repo instruction', () => {
   const root = tmpRepo()
-  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
-  writeFileSync(join(root, 'roadmap', 'phases', 'phase-46.phase.ts'), 'export default {}\n')
+  writePhase(root, 46)
   const j = writeJournal(root, [46])
   const fakeBin = join(root, 'fakebin')
   mkdirSync(fakeBin)
@@ -485,6 +507,15 @@ test('review and plan lanes stay silent about the gate-round rule they cannot ac
 /** A premade worktree + fake `codex` on PATH: the launch path runs, nothing real spawns. */
 function fakeLaunchEnv(root, worktree) {
   mkdirSync(worktree, { recursive: true })
+  execFileSync('git', ['init', '-q'], { cwd: worktree })
+  if (!existsSync(join(root, 'roadmap', 'roadmap.config.json'))) writeCodexConfig(root)
+  mkdirSync(join(worktree, 'roadmap'), { recursive: true })
+  copyFileSync(join(root, 'roadmap', 'roadmap.config.json'), join(worktree, 'roadmap', 'roadmap.config.json'))
+  const phases = join(root, 'roadmap', 'phases')
+  if (existsSync(phases)) {
+    mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
+    for (const file of readdirSync(phases)) copyFileSync(join(phases, file), join(worktree, 'roadmap', 'phases', file))
+  }
   return fakeCodexPath(root)
 }
 
@@ -499,7 +530,14 @@ function fakeCodexPath(root) {
 
 function writePhase(root, n) {
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
-  writeFileSync(join(root, 'roadmap', 'phases', `phase-${n}.phase.ts`), 'export default {}\n')
+  const source = join(root, 'roadmap', 'phases', `phase-${n}.phase.ts`)
+  writeFileSync(source, 'export default {}\n')
+  for (const entry of readdirSync(root).filter((name) => name.startsWith('wt-'))) {
+    const worktree = join(root, entry)
+    if (!existsSync(join(worktree, '.git'))) continue
+    mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
+    copyFileSync(source, join(worktree, 'roadmap', 'phases', `phase-${n}.phase.ts`))
+  }
 }
 
 test('review: the mission DELIVERS review-phase rather than restating it', () => {
@@ -765,10 +803,14 @@ test('labeled run journals participate in both live and closed lookup grammars',
 
 test('codex run --label names the journal, hand-off report and log for that arm', () => {
   const root = tmpRepo()
-  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
-  writeFileSync(join(root, 'roadmap', 'phases', 'phase-79.phase.ts'), 'export default {}\n')
+  writePhase(root, 79)
   const worktree = join(root, 'wt-79-opus')
   mkdirSync(worktree)
+  execFileSync('git', ['init', '-q'], { cwd: worktree })
+  writeCodexConfig(root)
+  writeCodexConfig(worktree)
+  mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
+  copyFileSync(join(root, 'roadmap', 'phases', 'phase-79.phase.ts'), join(worktree, 'roadmap', 'phases', 'phase-79.phase.ts'))
   const fakeBin = join(root, 'fakebin-label')
   mkdirSync(fakeBin)
   writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nexit 0\n')
@@ -2107,6 +2149,88 @@ test('next-step hint: a DEAD run lane names the relaunch with ITS OWN ids, and s
   assert.ok(!stdout.includes('next:'), `and the hint must not leak onto the parsed stream; got stdout: ${stdout}`)
 })
 
+test('next-step hint: a dead run round-trips its custom checkout, label and model policy through the shell', () => {
+  const root = tmpRepo()
+  writePhase(root, 235)
+  const worktree = join(root, "worktree with patrik's changes")
+  const env = fakeLaunchEnv(root, worktree)
+  const launched = spawnSync('node', authorizedCodexArgs(
+    'run', '235', '--worktree', worktree, '--base', 'feature/resume-base', '--label', 'resume1', '--models', 'codex-full',
+  ), { cwd: root, encoding: 'utf8', env })
+  assert.equal(launched.status, 0, launched.stderr)
+
+  const journalPath = join(root, '.building', 'codex-235.resume1.json')
+  const journal = JSON.parse(readFileSync(journalPath, 'utf8'))
+  assert.equal(journal.label, 'resume1', 'new journals persist the label needed to identify this lane')
+  delete journal.label // A pre-fix labeled journal derives the same label from CODEX-REPORT.<label>.md.
+  journal.pgid = 999999999
+  writeFileSync(journalPath, JSON.stringify(journal, null, 2) + '\n')
+  assertGroupDead(journal.pgid, 'the resume-context fixture must be dead')
+
+  const { out, err } = statusRaw(root, [235])
+  assert.equal(out?.state, 'dead-no-report')
+  const hint = nextHint(err)
+  assert.ok(hint)
+  const command = hint.match(/(roadmap codex run .*?)(?: \u2014 )/)?.[1]
+  assert.ok(command, `the next-step line must expose one runnable relaunch command; got: ${hint}`)
+
+  const recorderDir = join(root, 'resume-recorder')
+  const observedPath = join(root, 'resume-argv.json')
+  mkdirSync(recorderDir)
+  writeFileSync(join(recorderDir, 'roadmap'), `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(${JSON.stringify(observedPath)}, JSON.stringify(process.argv.slice(2)))\n`)
+  chmodSync(join(recorderDir, 'roadmap'), 0o755)
+  const replayed = rawSpawnSync('/bin/sh', ['-c', command], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${recorderDir}:${process.env.PATH}` },
+  })
+  assert.equal(replayed.status, 0, replayed.stderr)
+  assert.deepEqual(JSON.parse(readFileSync(observedPath, 'utf8')), [
+    'codex', 'run', '235',
+    '--worktree', worktree,
+    '--base', 'feature/resume-base',
+    '--label', 'resume1',
+    '--models', 'codex-full',
+    '--parent-authority', 'workspace-write',
+  ])
+})
+
+test('next-step hint: a dead run preserves its explicit parent ceiling and narrower request', () => {
+  const root = tmpRepo()
+  const authority = {
+    parent: {
+      profile: 'workspace-write',
+      bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false },
+      provenance: { kind: 'explicit-operator-invocation', source: '--parent-authority workspace-write' },
+    },
+    request: {
+      profile: 'read-only',
+      bounds: { filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false },
+      provenance: null,
+    },
+    effective: {
+      profile: 'read-only',
+      bounds: { filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false },
+    },
+    native: {
+      driver: 'codex', runtime: { version: null, verified: false }, argv: null,
+      enforcement: { filesystem: 'sandbox', network: 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' },
+      limitations: [],
+    },
+  }
+  const j = writeJournal(root, [224], { lane: 'run', report: 'CODEX-REPORT.md', authority })
+  assertGroupDead(j.pgid, 'this authority-preserving relaunch fixture must be dead')
+
+  const { out, err } = statusRaw(root, [224])
+  assert.equal(out?.state, 'dead-no-report')
+  const hint = nextHint(err)
+  assert.ok(hint)
+  assert.match(hint, /roadmap codex run 224/)
+  assert.match(hint, /--parent-authority workspace-write/)
+  assert.match(hint, /--authority read-only/)
+  assert.doesNotMatch(hint, /--authorize-isolated-unsafe/)
+})
+
 test('next-step hint: a BLOCKED run lane names the REPORT PATH to read, then the relaunch verb', () => {
   const root = tmpRepo()
   const j = writeJournal(root, [231], { lane: 'run', report: 'CODEX-REPORT.md', startedAt: new Date(Date.now() - 60_000).toISOString() })
@@ -2132,6 +2256,95 @@ test('next-step hint: a BLOCKED run lane names the REPORT PATH to read, then the
 
   assert.ok(!('next' in out), `stdout must not gain a \`next\` key; got keys ${Object.keys(out).join(',')}`)
   assert.ok(!stdout.includes('next:'), `and the hint must not leak onto the parsed stream; got stdout: ${stdout}`)
+})
+
+test('next-step hint: a blocked unsafe run preserves the parent, request and explicit acknowledgement', () => {
+  const root = tmpRepo()
+  const authority = {
+    parent: {
+      profile: 'isolated-unsafe',
+      bounds: { filesystem: 'unrestricted', network: 'allowed', gitPush: true, externalWrites: true },
+      provenance: { kind: 'explicit-operator-invocation', source: '--parent-authority isolated-unsafe' },
+    },
+    request: {
+      profile: 'isolated-unsafe',
+      bounds: { filesystem: 'unrestricted', network: 'allowed', gitPush: true, externalWrites: true },
+      provenance: { kind: 'explicit-user-authorization', source: '--authorize-isolated-unsafe' },
+    },
+    effective: {
+      profile: 'isolated-unsafe',
+      bounds: { filesystem: 'unrestricted', network: 'allowed', gitPush: true, externalWrites: true },
+    },
+    native: {
+      driver: 'codex', runtime: { version: null, verified: false }, argv: null,
+      enforcement: { filesystem: 'none', network: 'none', gitPush: 'none', externalWrites: 'none' },
+      limitations: ['unsafe isolation was explicitly authorized for this task'],
+    },
+  }
+  const j = writeJournal(root, [232], {
+    lane: 'run', authority, report: 'CODEX-REPORT.md', startedAt: new Date(Date.now() - 60_000).toISOString(),
+  })
+  writeFileSync(join(j.worktree, 'CODEX-REPORT.md'), 'operator decision required\nCODEX-RUN-BLOCKED\n')
+  assertGroupDead(j.pgid, 'this authority-preserving blocked fixture must be dead')
+
+  const { out, err } = statusRaw(root, [232])
+  assert.equal(out?.state, 'blocked')
+  const hint = nextHint(err)
+  assert.ok(hint)
+  assert.match(hint, /--parent-authority isolated-unsafe/)
+  assert.match(hint, /--authority isolated-unsafe/)
+  assert.match(hint, /--authorize-isolated-unsafe/)
+})
+
+test('next-step hint: a legacy journal asks for current parent context without inventing broader authority', () => {
+  const root = tmpRepo()
+  const j = writeJournal(root, [233], { lane: 'run', report: 'CODEX-REPORT.md' })
+  assert.equal(j.authority, undefined, 'fixture precondition: this is a legacy journal with no authority receipt')
+  assertGroupDead(j.pgid, 'this legacy relaunch fixture must be dead')
+
+  const { out, err } = statusRaw(root, [233])
+  assert.equal(out?.state, 'dead-no-report')
+  const hint = nextHint(err)
+  assert.ok(hint)
+  assert.match(hint, /parent authority|--parent-authority/i)
+  assert.doesNotMatch(hint, /--parent-authority (workspace-write|isolated-unsafe)/)
+  assert.doesNotMatch(hint, /--authorize-isolated-unsafe/)
+})
+
+test('next-step hint: bounds narrower than their profile are not reconstructed as broader profile flags', () => {
+  const root = tmpRepo()
+  const authority = {
+    parent: {
+      profile: 'workspace-write',
+      bounds: { filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false },
+      provenance: { kind: 'managed-host-input', source: 'supervisor supplied narrower bounds' },
+    },
+    request: {
+      profile: 'inherit',
+      bounds: { filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false },
+      provenance: null,
+    },
+    effective: {
+      profile: 'workspace-write',
+      bounds: { filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false },
+    },
+    native: {
+      driver: 'codex', runtime: { version: null, verified: false }, argv: null,
+      enforcement: { filesystem: 'sandbox', network: 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' },
+      limitations: ['profile shorthand cannot faithfully reconstruct these narrower bounds'],
+    },
+  }
+  const j = writeJournal(root, [234], { lane: 'run', report: 'CODEX-REPORT.md', authority })
+  assertGroupDead(j.pgid, 'this narrower-than-profile relaunch fixture must be dead')
+
+  const { out, err } = statusRaw(root, [234])
+  assert.equal(out?.state, 'dead-no-report')
+  const hint = nextHint(err)
+  assert.ok(hint)
+  assert.match(hint, /current|explicit|parent authority|--parent-authority/i)
+  assert.doesNotMatch(hint, /--parent-authority workspace-write/)
+  assert.doesNotMatch(hint, /--authority workspace-write/)
+  assert.doesNotMatch(hint, /--authorize-isolated-unsafe/)
 })
 
 test('next-step hint: a RUNNING lane gets NO hint — there is nothing to do but wait', () => {
@@ -3191,6 +3404,7 @@ function installRepo(files, phaseId) {
     writeFileSync(abs, body)
   }
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  writeCodexConfig(root)
   writeFileSync(join(root, 'roadmap', 'phases', `phase-${phaseId}.phase.ts`), 'export default {}\n')
   git('add', '--all')
   git('commit', '-q', '-m', 'seed: the consumer exactly as its lockfiles describe it')
@@ -3354,7 +3568,7 @@ test('codex run: a mixed-manager consumer gives the nested web/ package dir its 
 function lanePrompt(root, argv, journalName) {
   const worktree = join(root, `wt-153-${journalName}`)
   const env = fakeLaunchEnv(root, worktree)
-  const r = spawnSync('node', [BIN, 'codex', ...argv, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  const r = spawnSync('node', [BIN, 'codex', ...argv, '--worktree', worktree, ...EXPLICIT_PARENT], { cwd: root, encoding: 'utf8', env })
   assert.equal(r.status, 0, `the ${journalName} lane must launch for its envelope to be observable; stderr:\n${r.stderr}`)
   return readFileSync(join(root, '.building', `${journalName}-prompt.txt`), 'utf8')
 }
@@ -3608,6 +3822,10 @@ const STACK_FRAME = /\n\s+at \S+ \(?file:\/\//
 test('15.5 — plan --arc refuses with the SUPERVISED flow: plan-arc, the per-member delegation, and no traceback', () => {
   const root = tmpRepo()
   const git = seedDevelop(root)
+  writeCodexConfig(root)
+  git('add', 'roadmap/roadmap.config.json')
+  git('commit', '-q', '-m', 'bind native task runners')
+  git('branch', '-f', 'develop')
   writeArc(root, 'PLANARC', [130, 131])
   const env = fakeCodexPath(root)
   const arcWorktree = planWorktreeOf(root, [130, 131])
@@ -3748,12 +3966,13 @@ test('run: a worktree checked out from a base ref carrying NO lockfile refuses a
   // it (a pre-created --worktree is a provisioned slot the launcher deliberately does not install).
   const root = tmpRepo()
   writeFileSync(join(root, 'package.json'), '{ "name": "consumer", "private": true }\n')
-  execFileSync('git', ['add', 'package.json'], { cwd: root })
+  writeCodexConfig(root)
+  writePhase(root, 92)
+  execFileSync('git', ['add', 'package.json', 'roadmap/roadmap.config.json', 'roadmap/phases/phase-92.phase.ts'], { cwd: root })
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'base without a lockfile'], { cwd: root })
   execFileSync('git', ['branch', 'base-nolock'], { cwd: root })
   // The primary now carries one, so the PRE-check passes and the refusal must come from the tree.
   writeFileSync(join(root, 'package-lock.json'), '{ "lockfileVersion": 3 }\n')
-  writePhase(root, 92)
 
   const r = spawnSync('node', [BIN, 'codex', 'run', '92', '--base', 'base-nolock'], {
     cwd: root,
@@ -3823,7 +4042,7 @@ function writeCodexConfig(root, modelPolicy) {
 function runLaneJournal(root, id, ...extra) {
   const worktree = join(root, `wt-run-${id}`)
   const env = fakeLaunchEnv(root, worktree)
-  const r = spawnSync('node', [BIN, 'codex', 'run', String(id), '--worktree', worktree, ...extra], { cwd: root, encoding: 'utf8', env })
+  const r = spawnSync('node', authorizedCodexArgs('run', String(id), '--worktree', worktree, ...extra), { cwd: root, encoding: 'utf8', env })
   assert.equal(r.status, 0, `the run lane must launch for its journal to exist; stderr:\n${r.stderr}`)
   return JSON.parse(readFileSync(join(root, '.building', `codex-${id}.json`), 'utf8'))
 }
@@ -3947,4 +4166,287 @@ test('24.3 — a PINNED or unspellable --models refuses the launch: nothing jour
   assert.ok(unknown.stderr.includes('gpt'), `the refusal must name the offender; got stderr:\n${unknown.stderr}`)
   assert.doesNotMatch(unknown.stderr, /^\s+at .*:\d+:\d+\)?$/m, `a policy refusal must not expose a stack frame; got stderr:\n${unknown.stderr}`)
   assert.ok(!existsSync(join(root, '.building', 'codex-244.json')), 'an unparseable policy journals nothing either')
+})
+
+// ── repository governance: every child envelope resolves prerequisites before spawn ──────────
+test('governance hold: run, plan and review launch no child when native task runners are unavailable', () => {
+  for (const lane of ['run', 'plan', 'review']) {
+    const root = tmpRepo() // deliberately no roadmap/roadmap.config.json
+    const id = lane === 'run' ? 271 : lane === 'plan' ? 272 : 273
+    const worktree = join(root, `wt-governance-${lane}`)
+    mkdirSync(worktree, { recursive: true })
+    const marker = join(root, 'FAKE-CODEX-WAS-SPAWNED')
+    const fakeBin = join(root, 'fakebin')
+    mkdirSync(fakeBin, { recursive: true })
+    writeFileSync(join(fakeBin, 'codex'), `#!/bin/sh\ntouch '${marker}'\nexit 0\n`)
+    chmodSync(join(fakeBin, 'codex'), 0o755)
+
+    const argv = ['codex', lane, String(id)]
+    if (lane === 'plan') argv.push('--brief', writeBrief(root))
+    else writePhase(root, id)
+    argv.push('--worktree', worktree)
+
+    const r = spawnSync('node', [BIN, ...argv], {
+      cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    })
+    assert.notEqual(r.status, 0, `${lane}: an unavailable runner binding must hold; stderr:\n${r.stderr}`)
+    assert.match(r.stderr, /governance|task.runners|roadmap\.config\.json/i, `${lane}: refusal must name the failed prerequisite; got:\n${r.stderr}`)
+    assert.equal(existsSync(marker), false, `${lane}: the driver must not spawn after a governance hold`)
+    const stem = lane === 'run' ? `codex-${id}` : `codex-${lane}-${id}`
+    assert.equal(existsSync(join(root, '.building', `${stem}.json`)), false, `${lane}: a refused child owns no journal`)
+    assert.equal(existsSync(join(root, '.building', `${stem}-prompt.txt`)), false, `${lane}: a refused child owns no prompt`)
+  }
+})
+
+test('governance preflight reads the actual child worktree: its missing config refuses before carry-in or spawn', () => {
+  const root = tmpRepo()
+  writeCodexConfig(root)
+  const brief = writeBrief(root)
+  const worktree = join(root, 'wt-governance-missing-config')
+  mkdirSync(worktree, { recursive: true })
+  execFileSync('git', ['init', '-q'], { cwd: worktree })
+  const marker = join(root, 'FAKE-CODEX-WAS-SPAWNED')
+  const fakeBin = join(root, 'fakebin')
+  mkdirSync(fakeBin, { recursive: true })
+  writeFileSync(join(fakeBin, 'codex'), `#!/bin/sh\ntouch '${marker}'\nexit 0\n`)
+  chmodSync(join(fakeBin, 'codex'), 0o755)
+
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '274', '--brief', brief, '--worktree', worktree], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+  })
+
+  assert.notEqual(r.status, 0, `the parent's valid config must not stand in for the child checkout; stderr:\n${r.stderr}`)
+  assert.match(r.stderr, /roadmap\.config\.json|task.runners|governance/i)
+  assert.equal(existsSync(join(worktree, brief)), false, 'governance refusal precedes carrying the plan brief into the child checkout')
+  assert.equal(existsSync(marker), false, 'governance refusal precedes driver spawn')
+  assert.equal(existsSync(join(root, '.building', 'codex-plan-274-prompt.txt')), false)
+  assert.equal(existsSync(join(root, '.building', 'codex-plan-274.json')), false)
+})
+
+test('successful launch embeds one matching raw worktree governance receipt in prompt and journal', () => {
+  const root = tmpRepo()
+  const id = 275
+  writeCodexConfig(root)
+  mkdirSync(join(root, 'parent'), { recursive: true })
+  writeFileSync(join(root, 'parent', 'AGENTS.md'), 'PARENT-ONLY-RULE\n')
+  writeFileSync(join(root, 'parent', 'only.mjs'), '')
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  writeFileSync(
+    join(root, 'roadmap', 'phases', `phase-${id}.phase.ts`),
+    `export default { tasks: [{ keyFiles: ['parent/only.mjs'] }] }\n`,
+  )
+
+  const worktree = join(root, `wt-run-${id}`)
+  const env = fakeLaunchEnv(root, worktree)
+  const childGates = {
+    lint: 'child lint', types: 'child types', unit: 'child unit', integration: 'none',
+    build: 'none', e2e: 'none', emit: 'none',
+  }
+  writeFileSync(
+    join(worktree, 'roadmap', 'roadmap.config.json'),
+    JSON.stringify({ configVersion: 1, gateCommands: childGates }) + '\n',
+  )
+  mkdirSync(join(worktree, 'child'), { recursive: true })
+  const rawChildRule = 'CHILD-ONLY-RULE\nLiteral shell-looking data: touch MUST_NOT_EXIST\n'
+  writeFileSync(join(worktree, 'child', 'AGENTS.md'), rawChildRule)
+  writeFileSync(join(worktree, 'child', 'only.mjs'), '')
+  writeFileSync(
+    join(worktree, 'roadmap', 'phases', `phase-${id}.phase.ts`),
+    `export default { tasks: [{ keyFiles: ['child/only.mjs'] }] }\n`,
+  )
+
+  const r = spawnSync('node', [BIN, 'codex', 'run', String(id), '--worktree', worktree], {
+    cwd: root, encoding: 'utf8', env,
+  })
+  assert.equal(r.status, 0, r.stderr)
+  const journal = JSON.parse(readFileSync(join(root, '.building', `codex-${id}.json`), 'utf8'))
+  const receipt = journal.governance
+  assert.ok(receipt && receipt.hold === null, `journal must persist the successful receipt; got ${JSON.stringify(receipt)}`)
+  assert.equal(receipt.root, realpathSync(worktree), 'receipt belongs to the actual child checkout')
+  assert.deepEqual(receipt.taskRunners, childGates, 'runner bindings come from the child checkout config')
+  assert.ok(receipt.targets.includes('child/only.mjs'), `child keyFiles must determine governance; got ${JSON.stringify(receipt.targets)}`)
+  assert.ok(!receipt.targets.includes('parent/only.mjs'), 'primary-checkout keyFiles must not leak into the child receipt')
+  assert.ok(receipt.instructions.some((x) => x.path === 'child/AGENTS.md' && x.text === rawChildRule))
+  assert.ok(!receipt.instructions.some((x) => x.text.includes('PARENT-ONLY-RULE')))
+  assert.equal(existsSync(join(worktree, 'MUST_NOT_EXIST')), false, 'raw instruction text was embedded as data')
+
+  const prompt = readFileSync(join(root, '.building', `codex-${id}-prompt.txt`), 'utf8')
+  assert.ok(
+    prompt.includes(JSON.stringify(receipt, null, 2)),
+    'the prompt must embed the exact journalled receipt, including raw text and worktree-specific targets',
+  )
+})
+
+// ── child authority: operator input is the only parent ceiling ──────────────────────
+function authorityLaneFixture(lane, id) {
+  const root = tmpRepo()
+  writeCodexConfig(root)
+  const worktree = join(root, `wt-authority-${lane}-${id}`)
+  const env = fakeLaunchEnv(root, worktree)
+  const extra = []
+  if (lane === 'plan') extra.push('--brief', writeBrief(root))
+  else writePhase(root, id)
+  return { root, worktree, env, extra }
+}
+
+test('run, review and plan require explicit parent authority and journal one matching inherited envelope', () => {
+  for (const [lane, id] of [['run', 280], ['review', 281], ['plan', 282]]) {
+    const fx = authorityLaneFixture(lane, id)
+    const r = spawnSync(
+      'node',
+      authorizedCodexArgs(lane, String(id), ...fx.extra, '--worktree', fx.worktree),
+      { cwd: fx.root, encoding: 'utf8', env: fx.env },
+    )
+    assert.equal(r.status, 0, `${lane}: explicit workspace-write parent must launch; stderr:\n${r.stderr}`)
+    const stem = lane === 'run' ? `codex-${id}` : `codex-${lane}-${id}`
+    const journal = JSON.parse(readFileSync(join(fx.root, '.building', `${stem}.json`), 'utf8'))
+    assert.deepEqual(journal.authority?.parent, {
+      profile: 'workspace-write',
+      bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false },
+      provenance: { kind: 'explicit-operator-invocation', source: '--parent-authority workspace-write' },
+    }, `${lane}: journal must record the operator-supplied parent facts`)
+    assert.deepEqual(journal.authority?.request, {
+      profile: 'inherit',
+      bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false },
+      provenance: null,
+    }, `${lane}: omitted --authority means inherit, never a wider request`)
+    assert.deepEqual(journal.authority?.effective, {
+      profile: 'workspace-write',
+      bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false },
+    })
+    assert.deepEqual(
+      journal.authority?.native?.argv,
+      launchArgv('codex', { worktree: fx.worktree, authority: journal.authority }),
+      `${lane}: journal receipt and registry-owned spawn argv must be the same command`,
+    )
+    assert.ok(journal.authority.native.argv.includes('--ignore-user-config'))
+    assert.ok(journal.authority.native.argv.includes('approval_policy="on-request"'))
+    assert.ok(journal.authority.native.argv.includes('approvals_reviewer="auto_review"'))
+    assert.equal(
+      journal.authority.native.argv.some((arg) => /dangerously.*approvals.*sandbox/.test(arg)),
+      false,
+      `${lane}: bounded authority must never map to a bypass control`,
+    )
+  }
+})
+
+test('the detached child receives exactly the native argv persisted in its authority receipt', () => {
+  const fx = authorityLaneFixture('run', 289)
+  const capture = join(fx.root, 'captured-codex-argv.json')
+  const fakeCodex = join(fx.root, 'fakebin', 'codex')
+  writeFileSync(
+    fakeCodex,
+    '#!/usr/bin/env node\n'
+      + "const fs = require('node:fs')\n"
+      + "fs.writeFileSync(process.env.ZR_CAPTURE_CODEX_ARGV, JSON.stringify(process.argv.slice(2)) + '\\n')\n",
+  )
+  chmodSync(fakeCodex, 0o755)
+
+  const r = spawnSync(
+    'node',
+    authorizedCodexArgs('run', '289', '--worktree', fx.worktree),
+    { cwd: fx.root, encoding: 'utf8', env: { ...fx.env, ZR_CAPTURE_CODEX_ARGV: capture } },
+  )
+  assert.equal(r.status, 0, r.stderr)
+  const journal = JSON.parse(readFileSync(join(fx.root, '.building', 'codex-289.json'), 'utf8'))
+
+  const deadline = Date.now() + 2_000
+  const waiter = new Int32Array(new SharedArrayBuffer(4))
+  while (!existsSync(capture) && Date.now() < deadline) Atomics.wait(waiter, 0, 0, 10)
+  assert.ok(existsSync(capture), 'the detached fake child must record argv within the bounded wait')
+  assert.deepEqual(
+    JSON.parse(readFileSync(capture, 'utf8')),
+    journal.authority.native.argv,
+    'the request, persisted receipt and actual child process must describe one launch argv',
+  )
+})
+
+test('missing parent authority holds before prompt, journal or child spawn', () => {
+  const fx = authorityLaneFixture('run', 283)
+  const marker = join(fx.root, 'AUTHORITY-CHILD-SPAWNED')
+  writeFileSync(join(fx.root, 'fakebin', 'codex'), `#!/bin/sh\ntouch '${marker}'\nexit 0\n`)
+  chmodSync(join(fx.root, 'fakebin', 'codex'), 0o755)
+  const r = rawSpawnSync('node', [BIN, 'codex', 'run', '283', '--worktree', fx.worktree], {
+    cwd: fx.root, encoding: 'utf8', env: { ...fx.env, ROADMAP_PARENT_AUTHORITY: 'isolated-unsafe' },
+  })
+  assert.notEqual(r.status, 0)
+  assert.match(r.stderr, /parent.authority|--parent-authority/i)
+  assert.equal(existsSync(marker), false, 'environment authority must not reach child spawn')
+  assert.equal(existsSync(join(fx.root, '.building', 'codex-283-prompt.txt')), false)
+  assert.equal(existsSync(join(fx.root, '.building', 'codex-283.json')), false)
+})
+
+test('a child enlargement and isolated-unsafe without its separate acknowledgement both refuse pre-spawn', () => {
+  const enlargement = authorityLaneFixture('run', 284)
+  const tooBroad = spawnSync(
+    'node',
+    [BIN, 'codex', 'run', '284', '--worktree', enlargement.worktree, '--parent-authority', 'read-only', '--authority', 'workspace-write'],
+    { cwd: enlargement.root, encoding: 'utf8', env: enlargement.env },
+  )
+  assert.notEqual(tooBroad.status, 0)
+  assert.match(tooBroad.stderr, /authority|parent|filesystem|enlarge/i)
+  assert.equal(existsSync(join(enlargement.root, '.building', 'codex-284.json')), false)
+
+  const unsafe = authorityLaneFixture('run', 285)
+  const noAck = spawnSync(
+    'node',
+    [BIN, 'codex', 'run', '285', '--worktree', unsafe.worktree, '--parent-authority', 'isolated-unsafe', '--authority', 'isolated-unsafe'],
+    { cwd: unsafe.root, encoding: 'utf8', env: unsafe.env },
+  )
+  assert.notEqual(noAck.status, 0)
+  assert.match(noAck.stderr, /authorize-isolated-unsafe|acknowledg|explicit/i)
+  assert.equal(existsSync(join(unsafe.root, '.building', 'codex-285.json')), false)
+
+  const inheritedUnsafe = authorityLaneFixture('run', 290)
+  const inheritedNoAck = spawnSync(
+    'node',
+    [BIN, 'codex', 'run', '290', '--worktree', inheritedUnsafe.worktree, '--parent-authority', 'isolated-unsafe'],
+    { cwd: inheritedUnsafe.root, encoding: 'utf8', env: inheritedUnsafe.env },
+  )
+  assert.notEqual(inheritedNoAck.status, 0)
+  assert.match(inheritedNoAck.stderr, /authorize-isolated-unsafe|acknowledg|explicit/i)
+  assert.equal(existsSync(join(inheritedUnsafe.root, '.building', 'codex-290.json')), false)
+})
+
+test('authority flag values are consumed as values, never reinterpreted as phase ids', () => {
+  const fx = authorityLaneFixture('review', 288)
+  const r = rawSpawnSync(
+    'node',
+    [BIN, 'codex', 'review', '288', '--worktree', fx.worktree, '--parent-authority', '123', '--authority', '456'],
+    { cwd: fx.root, encoding: 'utf8', env: fx.env },
+  )
+  assert.notEqual(r.status, 0)
+  assert.match(r.stderr, /parent-authority|authority|profile/i)
+  assert.doesNotMatch(r.stderr, /phase file missing: .*phase-(123|456)\.phase\.ts/)
+  assert.equal(existsSync(join(fx.root, '.building', 'codex-review-288-prompt.txt')), false)
+  assert.equal(existsSync(join(fx.root, '.building', 'codex-review-288.json')), false)
+})
+
+test('config cannot grant parent authority; explicit unsafe acknowledgement is recorded as request provenance', () => {
+  const held = authorityLaneFixture('run', 286)
+  writeCodexConfig(held.root, { preset: 'codex' })
+  const config = JSON.parse(readFileSync(join(held.root, 'roadmap', 'roadmap.config.json'), 'utf8'))
+  config.parentAuthority = 'isolated-unsafe'
+  writeFileSync(join(held.root, 'roadmap', 'roadmap.config.json'), JSON.stringify(config) + '\n')
+  copyFileSync(join(held.root, 'roadmap', 'roadmap.config.json'), join(held.worktree, 'roadmap', 'roadmap.config.json'))
+  const refused = rawSpawnSync('node', [BIN, 'codex', 'run', '286', '--worktree', held.worktree], {
+    cwd: held.root, encoding: 'utf8', env: held.env,
+  })
+  assert.notEqual(refused.status, 0)
+  assert.match(refused.stderr, /parent.authority|--parent-authority/i, 'repo config cannot satisfy the explicit invocation requirement')
+  assert.equal(existsSync(join(held.root, '.building', 'codex-286.json')), false)
+
+  const allowed = authorityLaneFixture('run', 287)
+  const launched = spawnSync(
+    'node',
+    [BIN, 'codex', 'run', '287', '--worktree', allowed.worktree, '--parent-authority', 'isolated-unsafe', '--authority', 'isolated-unsafe', '--authorize-isolated-unsafe'],
+    { cwd: allowed.root, encoding: 'utf8', env: allowed.env },
+  )
+  assert.equal(launched.status, 0, launched.stderr)
+  const journal = JSON.parse(readFileSync(join(allowed.root, '.building', 'codex-287.json'), 'utf8'))
+  assert.deepEqual(journal.authority.request.provenance, {
+    kind: 'explicit-user-authorization',
+    source: '--authorize-isolated-unsafe',
+  })
+  assert.equal(journal.authority.effective.profile, 'isolated-unsafe')
 })

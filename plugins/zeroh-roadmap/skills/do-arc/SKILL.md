@@ -9,6 +9,9 @@ metadata:
 
 # Do Arc — Arc Orchestration
 
+Child launches resolve their actual checkout governance per
+`../using-zeroh-roadmap/references/governance.md` before work.
+
 The terminal evaluation uses the resolved `arc-eval-judge`; its pin and substitutions come from
 `MULTI-DRIVER.md` through the role resolver.
 Phase work resolves `phase-executor`, `software-developer`, and `test-engineer` through that same home.

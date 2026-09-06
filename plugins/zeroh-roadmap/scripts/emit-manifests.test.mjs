@@ -119,6 +119,7 @@ function makeFixture({ omitPackageJson = false, omitSkillsDir = false } = {}) {
         name: 'zeroh-roadmap',
         version: '0.0.1',
         description: 'fixture plugin',
+        hooks: './hooks/claude-hooks.json',
         author: { name: 'Blade Labs', url: 'https://blade-labs.com' },
         repository: 'https://github.com/Blade-Labs/zeroh-roadmap',
         license: 'SEE LICENSE',
@@ -143,6 +144,7 @@ function makeFixture({ omitPackageJson = false, omitSkillsDir = false } = {}) {
   )
   write('.copilot/plugin.yaml', 'name: zeroh-roadmap\nversion: 9.9.9\ndescription: fixture plugin\nskills_dir: skills/\n')
   write('.codex/INSTALL.md', '# stale\n\n- retired-skill\n')
+  write('hooks/claude-hooks.json', '{"hooks":{}}\n')
   return root
 }
 
@@ -370,8 +372,8 @@ test('patching the version preserves every other byte and the key order', () => 
   )
 })
 
-// ── 8. the NEW codex manifest: the empty hooks object is deliberate ──────────────────
-test(".codex-plugin/plugin.json carries skills './skills/' and a PRESENT, EMPTY hooks object", () => {
+// ── 8. host manifests keep their discovery surfaces structurally isolated ───────────
+test("generated Codex manifest carries supported skills + interface fields and no Claude hooks", () => {
   const root = makeFixture()
   assert.equal(emit(root).code, 0)
   const abs = join(root, '.codex-plugin', 'plugin.json')
@@ -379,15 +381,24 @@ test(".codex-plugin/plugin.json carries skills './skills/' and a PRESENT, EMPTY 
   const manifest = JSON.parse(readFileSync(abs, 'utf8'))
 
   assert.equal(manifest.skills, './skills/', "codex reads the skills directory off this key — './skills/', leading dot")
-  assert.ok(
-    'hooks' in manifest,
-    'the hooks key must be PRESENT and empty, not absent: the empty object is what suppresses Codex\'s hooks/hooks.json auto-discovery of Claude-shaped hooks. An absent key is indistinguishable from a forgotten one and re-enables the discovery.',
-  )
-  assert.equal(typeof manifest.hooks, 'object')
-  assert.notEqual(manifest.hooks, null)
-  assert.equal(Array.isArray(manifest.hooks), false)
-  assert.equal(Object.keys(manifest.hooks).length, 0, 'hooks must be EMPTY — a populated hooks block would be Claude-shaped')
+  assert.equal('hooks' in manifest, false, 'Codex rejects the Claude-shaped hooks field; its manifest must omit it')
+  assert.equal(typeof manifest.interface, 'object')
+  assert.notEqual(manifest.interface, null)
+  assert.equal(Array.isArray(manifest.interface), false)
+  assert.equal(typeof manifest.interface.displayName, 'string')
+  assert.ok(manifest.interface.displayName.trim().length > 0)
+  assert.equal(typeof manifest.interface.shortDescription, 'string')
+  assert.ok(manifest.interface.shortDescription.trim().length > 0)
   assert.equal(manifest.version, '7.3.1')
+})
+
+test('Claude manifest explicitly points at the isolated hook file and the conventional hook name stays absent', () => {
+  const root = makeFixture()
+  assert.equal(emit(root).code, 0)
+  const claude = JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf8'))
+  assert.equal(claude.hooks, './hooks/claude-hooks.json')
+  assert.ok(existsSync(join(root, claude.hooks)), 'the explicit Claude hook target must resolve')
+  assert.equal(existsSync(join(root, 'hooks', 'hooks.json')), false, 'the conventional filename would be auto-discovered by the wrong host')
 })
 
 // ── the generated INSTALL.md renders the LIVE directories, never a hand-kept list ─────
