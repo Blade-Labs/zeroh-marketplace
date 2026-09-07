@@ -1,0 +1,1433 @@
+{
+  "phase": 37,
+  "sourceHead": "940eedf8c9b8c50765c95603544f21c05ba80313",
+  "gateReport": "roadmap/.gate/37/run-000018-2026-09-07T03-24-59-173Z.json",
+  "rawLog": ".building/nativegreen-37-full-gate-repaired.log",
+  "schemaScript": "PASS, separate from Node aggregate",
+  "totals": {
+    "tests": 2255,
+    "pass": 2255,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "run": {
+    "files": 94,
+    "expectedFiles": 94,
+    "seconds": 417.9668491152115,
+    "results": [
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/claim.test.mjs",
+        "exit": 0,
+        "seconds": 2.6581478589214385,
+        "totals": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 192937984,
+        "log": "/tmp/capbuild-tests-4uubc53f/005.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/capacity.test.mjs",
+        "exit": 0,
+        "seconds": 4.502707416657358,
+        "totals": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 61579264,
+        "log": "/tmp/capbuild-tests-4uubc53f/004.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/config.test.mjs",
+        "exit": 0,
+        "seconds": 5.114333895035088,
+        "totals": {
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 53207040,
+        "log": "/tmp/capbuild-tests-4uubc53f/007.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/driver.test.mjs",
+        "exit": 0,
+        "seconds": 8.587609210982919,
+        "totals": {
+          "tests": 38,
+          "pass": 38,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 56717312,
+        "log": "/tmp/capbuild-tests-4uubc53f/008.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/arm-disarm.test.mjs",
+        "exit": 0,
+        "seconds": 23.129629601258785,
+        "totals": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 237789184,
+        "log": "/tmp/capbuild-tests-4uubc53f/002.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/arc.test.mjs",
+        "exit": 0,
+        "seconds": 28.04189726896584,
+        "totals": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 220778496,
+        "log": "/tmp/capbuild-tests-4uubc53f/001.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.lessons.test.mjs",
+        "exit": 0,
+        "seconds": 21.685274353716522,
+        "totals": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 254160896,
+        "log": "/tmp/capbuild-tests-4uubc53f/011.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.phase-records.test.mjs",
+        "exit": 0,
+        "seconds": 30.01632123067975,
+        "totals": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 265060352,
+        "log": "/tmp/capbuild-tests-4uubc53f/012.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.proposal-trend.test.mjs",
+        "exit": 0,
+        "seconds": 26.53576441295445,
+        "totals": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 257474560,
+        "log": "/tmp/capbuild-tests-4uubc53f/013.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.backfill.test.mjs",
+        "exit": 0,
+        "seconds": 55.58499694056809,
+        "totals": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 263733248,
+        "log": "/tmp/capbuild-tests-4uubc53f/009.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.test.mjs",
+        "exit": 0,
+        "seconds": 30.884622984100133,
+        "totals": {
+          "tests": 11,
+          "pass": 11,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 254701568,
+        "log": "/tmp/capbuild-tests-4uubc53f/017.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.judge.test.mjs",
+        "exit": 0,
+        "seconds": 86.2788574048318,
+        "totals": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 265728000,
+        "log": "/tmp/capbuild-tests-4uubc53f/010.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/executor-arm-disarm.test.mjs",
+        "exit": 0,
+        "seconds": 11.423599116969854,
+        "totals": {
+          "tests": 31,
+          "pass": 31,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 59932672,
+        "log": "/tmp/capbuild-tests-4uubc53f/019.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/codex.test.mjs",
+        "exit": 0,
+        "seconds": 104.07219981076196,
+        "totals": {
+          "tests": 150,
+          "pass": 150,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 321802240,
+        "log": "/tmp/capbuild-tests-4uubc53f/006.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/followups.test.mjs",
+        "exit": 0,
+        "seconds": 2.258326203096658,
+        "totals": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 52490240,
+        "log": "/tmp/capbuild-tests-4uubc53f/020.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.scorecard.test.mjs",
+        "exit": 0,
+        "seconds": 75.24388963496312,
+        "totals": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 267878400,
+        "log": "/tmp/capbuild-tests-4uubc53f/016.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/init.test.mjs",
+        "exit": 0,
+        "seconds": 24.52880373224616,
+        "totals": {
+          "tests": 31,
+          "pass": 31,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 244273152,
+        "log": "/tmp/capbuild-tests-4uubc53f/022.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/measure.test.mjs",
+        "exit": 0,
+        "seconds": 2.463193248026073,
+        "totals": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 48607232,
+        "log": "/tmp/capbuild-tests-4uubc53f/023.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.propose.test.mjs",
+        "exit": 0,
+        "seconds": 99.55795619590208,
+        "totals": {
+          "tests": 11,
+          "pass": 11,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 253644800,
+        "log": "/tmp/capbuild-tests-4uubc53f/014.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/role.test.mjs",
+        "exit": 0,
+        "seconds": 7.5441878526471555,
+        "totals": {
+          "tests": 28,
+          "pass": 28,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 56053760,
+        "log": "/tmp/capbuild-tests-4uubc53f/026.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/status.parity.test.mjs",
+        "exit": 0,
+        "seconds": 1.226721643935889,
+        "totals": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 48758784,
+        "log": "/tmp/capbuild-tests-4uubc53f/027.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.trend.test.mjs",
+        "exit": 0,
+        "seconds": 56.848865799140185,
+        "totals": {
+          "tests": 17,
+          "pass": 17,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 268763136,
+        "log": "/tmp/capbuild-tests-4uubc53f/018.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/worktree.test.mjs",
+        "exit": 0,
+        "seconds": 5.11004859674722,
+        "totals": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 53878784,
+        "log": "/tmp/capbuild-tests-4uubc53f/029.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/status.test.mjs",
+        "exit": 0,
+        "seconds": 13.502084903884679,
+        "totals": {
+          "tests": 32,
+          "pass": 32,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 80654336,
+        "log": "/tmp/capbuild-tests-4uubc53f/028.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/beacon.test.mjs",
+        "exit": 0,
+        "seconds": 0.8131326329894364,
+        "totals": {
+          "tests": 20,
+          "pass": 20,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 32206848,
+        "log": "/tmp/capbuild-tests-4uubc53f/031.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/capacity.test.mjs",
+        "exit": 0,
+        "seconds": 1.0198572776280344,
+        "totals": {
+          "tests": 11,
+          "pass": 11,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 40579072,
+        "log": "/tmp/capbuild-tests-4uubc53f/032.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/codex-journal.test.mjs",
+        "exit": 0,
+        "seconds": 4.324313287157565,
+        "totals": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 56975360,
+        "log": "/tmp/capbuild-tests-4uubc53f/033.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/config.test.mjs",
+        "exit": 0,
+        "seconds": 2.663926006760448,
+        "totals": {
+          "tests": 48,
+          "pass": 48,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 58339328,
+        "log": "/tmp/capbuild-tests-4uubc53f/034.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/adherence.test.mjs",
+        "exit": 0,
+        "seconds": 14.376511508133262,
+        "totals": {
+          "tests": 20,
+          "pass": 20,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 223428608,
+        "log": "/tmp/capbuild-tests-4uubc53f/030.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/curate.test.mjs",
+        "exit": 0,
+        "seconds": 6.5642149690538645,
+        "totals": {
+          "tests": 36,
+          "pass": 36,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 59490304,
+        "log": "/tmp/capbuild-tests-4uubc53f/035.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/bin/validate-roadmap-file.test.mjs",
+        "exit": 0,
+        "seconds": 182.0838753376156,
+        "totals": {
+          "tests": 66,
+          "pass": 66,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 252600320,
+        "log": "/tmp/capbuild-tests-4uubc53f/000.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/drivers.test.mjs",
+        "exit": 0,
+        "seconds": 0.8136755102314055,
+        "totals": {
+          "tests": 23,
+          "pass": 23,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 25309184,
+        "log": "/tmp/capbuild-tests-4uubc53f/038.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/phase.test.mjs",
+        "exit": 0,
+        "seconds": 55.70748300245032,
+        "totals": {
+          "tests": 54,
+          "pass": 54,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 267739136,
+        "log": "/tmp/capbuild-tests-4uubc53f/024.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/eval-propose.test.mjs",
+        "exit": 0,
+        "seconds": 1.0162456082180142,
+        "totals": {
+          "tests": 44,
+          "pass": 44,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 47783936,
+        "log": "/tmp/capbuild-tests-4uubc53f/040.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/derive-resume.test.mjs",
+        "exit": 0,
+        "seconds": 23.315928037278354,
+        "totals": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 220659712,
+        "log": "/tmp/capbuild-tests-4uubc53f/036.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/eval-scorecard.test.mjs",
+        "exit": 0,
+        "seconds": 0.8160730712115765,
+        "totals": {
+          "tests": 49,
+          "pass": 49,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 26099712,
+        "log": "/tmp/capbuild-tests-4uubc53f/042.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/executor-arm.test.mjs",
+        "exit": 0,
+        "seconds": 0.8144044247455895,
+        "totals": {
+          "tests": 42,
+          "pass": 42,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 35041280,
+        "log": "/tmp/capbuild-tests-4uubc53f/043.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/gate-diagnostics.test.mjs",
+        "exit": 0,
+        "seconds": 0.8144236006774008,
+        "totals": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 29577216,
+        "log": "/tmp/capbuild-tests-4uubc53f/044.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/gate-report.test.mjs",
+        "exit": 0,
+        "seconds": 1.4240060239098966,
+        "totals": {
+          "tests": 36,
+          "pass": 36,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 50102272,
+        "log": "/tmp/capbuild-tests-4uubc53f/045.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/gitroot.test.mjs",
+        "exit": 0,
+        "seconds": 0.8115660641342402,
+        "totals": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 28426240,
+        "log": "/tmp/capbuild-tests-4uubc53f/046.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/gitscan.test.mjs",
+        "exit": 0,
+        "seconds": 1.2204839149489999,
+        "totals": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 31023104,
+        "log": "/tmp/capbuild-tests-4uubc53f/047.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/governance.test.mjs",
+        "exit": 0,
+        "seconds": 1.0167575278319418,
+        "totals": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 38559744,
+        "log": "/tmp/capbuild-tests-4uubc53f/048.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/ladder.test.mjs",
+        "exit": 0,
+        "seconds": 0.8166538248769939,
+        "totals": {
+          "tests": 22,
+          "pass": 22,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 27320320,
+        "log": "/tmp/capbuild-tests-4uubc53f/049.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/eval-score.test.mjs",
+        "exit": 0,
+        "seconds": 13.502059569582343,
+        "totals": {
+          "tests": 56,
+          "pass": 56,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 239181824,
+        "log": "/tmp/capbuild-tests-4uubc53f/041.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/eval.run.test.mjs",
+        "exit": 0,
+        "seconds": 153.8855366287753,
+        "totals": {
+          "tests": 17,
+          "pass": 17,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 276779008,
+        "log": "/tmp/capbuild-tests-4uubc53f/015.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/result.test.mjs",
+        "exit": 0,
+        "seconds": 83.51260099187493,
+        "totals": {
+          "tests": 23,
+          "pass": 23,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 254758912,
+        "log": "/tmp/capbuild-tests-4uubc53f/025.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/landing.test.mjs",
+        "exit": 0,
+        "seconds": 15.118473839014769,
+        "totals": {
+          "tests": 55,
+          "pass": 55,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 212660224,
+        "log": "/tmp/capbuild-tests-4uubc53f/051.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/orphan-sweep.test.mjs",
+        "exit": 0,
+        "seconds": 0.6152132852002978,
+        "totals": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 11071488,
+        "log": "/tmp/capbuild-tests-4uubc53f/053.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/phasescan.test.mjs",
+        "exit": 0,
+        "seconds": 0.8170765060931444,
+        "totals": {
+          "tests": 29,
+          "pass": 29,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 34152448,
+        "log": "/tmp/capbuild-tests-4uubc53f/054.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/product-repos.test.mjs",
+        "exit": 0,
+        "seconds": 1.4253766760230064,
+        "totals": {
+          "tests": 12,
+          "pass": 12,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 36028416,
+        "log": "/tmp/capbuild-tests-4uubc53f/055.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs",
+        "exit": 0,
+        "seconds": 0.8115251706913114,
+        "totals": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 29093888,
+        "log": "/tmp/capbuild-tests-4uubc53f/056.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/roadmap-root.test.mjs",
+        "exit": 0,
+        "seconds": 0.8177035483531654,
+        "totals": {
+          "tests": 23,
+          "pass": 23,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 46006272,
+        "log": "/tmp/capbuild-tests-4uubc53f/057.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/roles.test.mjs",
+        "exit": 0,
+        "seconds": 1.0233081593178213,
+        "totals": {
+          "tests": 62,
+          "pass": 62,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 34340864,
+        "log": "/tmp/capbuild-tests-4uubc53f/058.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/slots.test.mjs",
+        "exit": 0,
+        "seconds": 1.2185123367235065,
+        "totals": {
+          "tests": 49,
+          "pass": 49,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 39055360,
+        "log": "/tmp/capbuild-tests-4uubc53f/060.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/sidecar.test.mjs",
+        "exit": 0,
+        "seconds": 1.8391882348805666,
+        "totals": {
+          "tests": 13,
+          "pass": 13,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 108568576,
+        "log": "/tmp/capbuild-tests-4uubc53f/059.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/transparency.test.mjs",
+        "exit": 0,
+        "seconds": 0.818780206143856,
+        "totals": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 12902400,
+        "log": "/tmp/capbuild-tests-4uubc53f/061.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/liveness.test.mjs",
+        "exit": 0,
+        "seconds": 15.353519127238542,
+        "totals": {
+          "tests": 46,
+          "pass": 46,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 62836736,
+        "log": "/tmp/capbuild-tests-4uubc53f/052.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/watch.test.mjs",
+        "exit": 0,
+        "seconds": 2.646926448214799,
+        "totals": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 48390144,
+        "log": "/tmp/capbuild-tests-4uubc53f/064.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/workflow-steps.test.mjs",
+        "exit": 0,
+        "seconds": 0.817185920663178,
+        "totals": {
+          "tests": 39,
+          "pass": 39,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 37347328,
+        "log": "/tmp/capbuild-tests-4uubc53f/065.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/tsx-bridge.test.mjs",
+        "exit": 0,
+        "seconds": 12.264098337851465,
+        "totals": {
+          "tests": 28,
+          "pass": 28,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 218103808,
+        "log": "/tmp/capbuild-tests-4uubc53f/062.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/worktree.test.mjs",
+        "exit": 0,
+        "seconds": 7.55249662976712,
+        "totals": {
+          "tests": 48,
+          "pass": 48,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 165539840,
+        "log": "/tmp/capbuild-tests-4uubc53f/066.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/hooks/beacon-stamp.test.mjs",
+        "exit": 0,
+        "seconds": 1.8360906238667667,
+        "totals": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 35790848,
+        "log": "/tmp/capbuild-tests-4uubc53f/067.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/hooks/fail-soft.test.mjs",
+        "exit": 0,
+        "seconds": 1.0188116482459009,
+        "totals": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 36274176,
+        "log": "/tmp/capbuild-tests-4uubc53f/069.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/hooks/heartbeat-stamp.test.mjs",
+        "exit": 0,
+        "seconds": 1.4253194690681994,
+        "totals": {
+          "tests": 17,
+          "pass": 17,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 39215104,
+        "log": "/tmp/capbuild-tests-4uubc53f/070.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/scripts/emit-manifests.test.mjs",
+        "exit": 0,
+        "seconds": 2.451227047946304,
+        "totals": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 40255488,
+        "log": "/tmp/capbuild-tests-4uubc53f/071.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/eval-collect.test.mjs",
+        "exit": 0,
+        "seconds": 57.692269975319505,
+        "totals": {
+          "tests": 45,
+          "pass": 45,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 243863552,
+        "log": "/tmp/capbuild-tests-4uubc53f/039.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/derive.test.mjs",
+        "exit": 0,
+        "seconds": 69.96540212770924,
+        "totals": {
+          "tests": 24,
+          "pass": 24,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 228511744,
+        "log": "/tmp/capbuild-tests-4uubc53f/037.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/scripts/run-scoped-tests.test.mjs",
+        "exit": 0,
+        "seconds": 2.4595106691122055,
+        "totals": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 55914496,
+        "log": "/tmp/capbuild-tests-4uubc53f/072.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/scripts/run-tests.test.mjs",
+        "exit": 0,
+        "seconds": 1.8502603839151561,
+        "totals": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 59428864,
+        "log": "/tmp/capbuild-tests-4uubc53f/073.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/scripts/validate-packaging.test.mjs",
+        "exit": 0,
+        "seconds": 7.3619368420913815,
+        "totals": {
+          "tests": 18,
+          "pass": 18,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 98074624,
+        "log": "/tmp/capbuild-tests-4uubc53f/074.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/audit.test.mjs",
+        "exit": 0,
+        "seconds": 254.92825220618397,
+        "totals": {
+          "tests": 103,
+          "pass": 103,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 247316480,
+        "log": "/tmp/capbuild-tests-4uubc53f/003.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/hooks/executor-result-guard.test.mjs",
+        "exit": 0,
+        "seconds": 29.233823176007718,
+        "totals": {
+          "tests": 34,
+          "pass": 34,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 250191872,
+        "log": "/tmp/capbuild-tests-4uubc53f/068.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/contract-drift.test.mjs",
+        "exit": 0,
+        "seconds": 16.50654028309509,
+        "totals": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 248049664,
+        "log": "/tmp/capbuild-tests-4uubc53f/078.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/validate.test.mjs",
+        "exit": 0,
+        "seconds": 52.51785754831508,
+        "totals": {
+          "tests": 13,
+          "pass": 13,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 231260160,
+        "log": "/tmp/capbuild-tests-4uubc53f/063.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/collect-phase-metrics.test.mjs",
+        "exit": 0,
+        "seconds": 35.53329561697319,
+        "totals": {
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 205029376,
+        "log": "/tmp/capbuild-tests-4uubc53f/075.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs",
+        "exit": 0,
+        "seconds": 1.2219201964326203,
+        "totals": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 41340928,
+        "log": "/tmp/capbuild-tests-4uubc53f/082.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/executor-guard.test.mjs",
+        "exit": 0,
+        "seconds": 8.387029849924147,
+        "totals": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 255176704,
+        "log": "/tmp/capbuild-tests-4uubc53f/080.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/error-injection.test.mjs",
+        "exit": 0,
+        "seconds": 18.174648364074528,
+        "totals": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 250576896,
+        "log": "/tmp/capbuild-tests-4uubc53f/079.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-delivery-selection.test.mjs",
+        "exit": 0,
+        "seconds": 0.8127261949703097,
+        "totals": {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 32862208,
+        "log": "/tmp/capbuild-tests-4uubc53f/084.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs",
+        "exit": 0,
+        "seconds": 1.2229916430078447,
+        "totals": {
+          "tests": 51,
+          "pass": 51,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 47468544,
+        "log": "/tmp/capbuild-tests-4uubc53f/085.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-optional-gates.test.mjs",
+        "exit": 0,
+        "seconds": 1.017128113657236,
+        "totals": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 38236160,
+        "log": "/tmp/capbuild-tests-4uubc53f/086.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-review-regressions.test.mjs",
+        "exit": 0,
+        "seconds": 0.813424623105675,
+        "totals": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 31596544,
+        "log": "/tmp/capbuild-tests-4uubc53f/088.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-prepared-program.test.mjs",
+        "exit": 0,
+        "seconds": 2.0517840976826847,
+        "totals": {
+          "tests": 17,
+          "pass": 17,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 48386048,
+        "log": "/tmp/capbuild-tests-4uubc53f/087.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs",
+        "exit": 0,
+        "seconds": 6.329604358877987,
+        "totals": {
+          "tests": 38,
+          "pass": 38,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 46252032,
+        "log": "/tmp/capbuild-tests-4uubc53f/089.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/harness.smoke.test.mjs",
+        "exit": 0,
+        "seconds": 7.748533789999783,
+        "totals": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 251400192,
+        "log": "/tmp/capbuild-tests-4uubc53f/090.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/gate-untested-fix.test.mjs",
+        "exit": 0,
+        "seconds": 23.30815640836954,
+        "totals": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 251777024,
+        "log": "/tmp/capbuild-tests-4uubc53f/081.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs",
+        "exit": 0,
+        "seconds": 19.61765796225518,
+        "totals": {
+          "tests": 60,
+          "pass": 60,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 63393792,
+        "log": "/tmp/capbuild-tests-4uubc53f/083.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/layout-docs.test.mjs",
+        "exit": 0,
+        "seconds": 21.21462709782645,
+        "totals": {
+          "tests": 11,
+          "pass": 11,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 248766464,
+        "log": "/tmp/capbuild-tests-4uubc53f/091.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/lib/landing-mechanics.test.mjs",
+        "exit": 0,
+        "seconds": 123.58529521618038,
+        "totals": {
+          "tests": 37,
+          "pass": 37,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 260370432,
+        "log": "/tmp/capbuild-tests-4uubc53f/050.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/review-convergence.test.mjs",
+        "exit": 0,
+        "seconds": 41.25830226391554,
+        "totals": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 255549440,
+        "log": "/tmp/capbuild-tests-4uubc53f/093.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/lifecycle.test.mjs",
+        "exit": 0,
+        "seconds": 46.762489586137235,
+        "totals": {
+          "tests": 30,
+          "pass": 30,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 270630912,
+        "log": "/tmp/capbuild-tests-4uubc53f/092.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/arc-land.test.mjs",
+        "exit": 0,
+        "seconds": 104.90034783119336,
+        "totals": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 258629632,
+        "log": "/tmp/capbuild-tests-4uubc53f/076.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/cli/commands/gate.test.mjs",
+        "exit": 0,
+        "seconds": 271.52420613216236,
+        "totals": {
+          "tests": 104,
+          "pass": 104,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 299737088,
+        "log": "/tmp/capbuild-tests-4uubc53f/021.log"
+      },
+      {
+        "file": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/plugins/zeroh-roadmap/test/fixture-consumer/arc-next.test.mjs",
+        "exit": 0,
+        "seconds": 169.16114111896604,
+        "totals": {
+          "tests": 28,
+          "pass": 28,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "peakMemoryBytes": 275197952,
+        "log": "/tmp/capbuild-tests-4uubc53f/077.log"
+      }
+    ]
+  },
+  "limitations": "Single local full-gate observation; no native model or cross-host performance claim."
+}

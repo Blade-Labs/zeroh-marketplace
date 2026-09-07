@@ -11,10 +11,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { join, dirname, resolve } from 'node:path'
+import { plantPrior } from '../testdata/eval.test-support.mjs'
 import { deriveArcPosition } from './derive.mjs'
+const HERE = dirname(fileURLToPath(import.meta.url))
 import { defaultExec } from './exec.mjs'
 
 const bases = []
@@ -32,6 +36,8 @@ function newRepo() {
   const root = mkdtempSync(join(tmpdir(), 'zr-resume-'))
   bases.push(root)
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
+  symlinkSync(resolve(HERE, '..', '..', '..', '..', 'lib', 'roadmap', 'schema.ts'), join(root, 'lib', 'roadmap', 'schema.ts'))
   mkdirSync(join(root, 'roadmap', 'arcs'), { recursive: true })
   g(root, 'init', '-q')
   return root
@@ -166,9 +172,17 @@ test('PROSE-FALSE-POSITIVE — a backlog member with literal done:true/execution
 
 test('RE-RUN IDEMPOTENCE — a completed arc derives action complete twice with byte-identical JSON', () => {
   const root = newRepo()
-  writeArc(root, 'A', { planes: [{ name: 'P', phases: [50] }] }) // no acceptanceCriteria → validated no-op
+  writeArc(root, 'A', { planes: [{ name: 'P', phases: [50] }] })
   writePhase(root, { phase: 50, status: 'done', arcId: 'A', tasks: [{ id: '50.1', done: true }] })
-  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId: 'A', outcome: 'shipped' }))
+  const summaryPath = join(root, 'roadmap', 'arc-summary.json')
+  writeFileSync(summaryPath, JSON.stringify({
+    arcId: 'A', outcome: 'shipped', compromiseDisposition: [],
+    gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true }, receiptRef: 'none',
+  }))
+  const digest = `sha256:${createHash('sha256').update(readFileSync(summaryPath)).digest('hex')}`
+  const reportPath = plantPrior(root, '2026-09-07', { arcId: 'A' })
+  const report = JSON.parse(readFileSync(reportPath, 'utf8'))
+  writeFileSync(reportPath, JSON.stringify({ ...report, landSummaryDigest: digest }, null, 2) + '\n')
   commit(root, 'seed completed arc') // no sidecar
 
   const a = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, worktree: root, exec: execSeam })

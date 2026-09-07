@@ -14,7 +14,7 @@ import { makeFixtureRepo, runCli, writePhaseFile, writeArcFile, commitPaths, rea
 import { SCOPED_FALLBACK_NOTE } from '../../cli/lib/slots.mjs'
 import arcPlaneWorkflow from '../../workflows/arc-plane.workflow.mjs'
 
-import { groomBacklogSource } from '../../cli/lib/workflow-steps.mjs'
+import { groomBacklogSource, reduceArcTransition, HALT_KINDS } from '../../cli/lib/workflow-steps.mjs'
 import { claimResultConsumption, listResultClaims } from '../../cli/lib/sidecar.mjs'
 import { appendExecutorEvent } from '../../cli/lib/beacon.mjs'
 import { armExecutor } from '../../cli/lib/executor-arm.mjs'
@@ -799,4 +799,31 @@ test('arc workflow lifecycle — exact completion beacon lets the next workflow 
   assert.equal(result.transitionReceipt.event.type, 'complete')
   assert.equal(result.transitionReceipt.next.stage, 'complete')
   assert.notDeepEqual(result.transitionReceipt, { forged: true })
+})
+
+test('37.6 — every advertised lifecycle halt has one stable safe resume and duplicate delivery is a no-op', () => {
+  const expected = new Map([
+    ['blocked', 'inspect-blocker'], ['escalated', 'wait-user'], ['failed', 'inspect-failure'],
+    ['self-descope', 'wait-user'], ['stalled', 'reconcile'], ['exited', 'reconcile'],
+    ['unobserved', 'reconcile'], ['permission', 'wait-user'], ['auth', 'wait-user'],
+    ['review-exhausted', 'wait-user'], ['gaps', 'run-correction'],
+    ['pause-after', 'relaunch-plane'], ['land-unproven', 'reconcile'],
+  ])
+  assert.deepEqual(new Set(HALT_KINDS), new Set(expected.keys()), 'new advertised halt tokens require an explicit safe-resume decision')
+  for (const [index, kind] of HALT_KINDS.entries()) {
+    const stage = kind === 'gaps' ? 'validate' : kind === 'land-unproven' ? 'land' : 'phase'
+    const state = {
+      arcId: 'FX', stage, status: 'active', processedEventIds: [], lastHalt: null,
+      authorityRef: { status: 'unknown', reason: 'read-only-projection', sourceRef: null },
+    }
+    const event = { eventId: `legacy-${index}`, arcId: 'FX', source: 'fixture-conformance', type: kind, phase: 37, evidence: { legacyOutcome: index } }
+    const accepted = reduceArcTransition(state, event)
+    assert.equal(accepted.rejection, null, kind)
+    assert.equal(accepted.resume, expected.get(kind), kind)
+    assert.equal(accepted.next.lastHalt.resume, expected.get(kind), kind)
+    const duplicate = reduceArcTransition(accepted.next, event)
+    assert.equal(duplicate.rejection.kind, 'duplicate-event', kind)
+    assert.deepEqual(duplicate.next, accepted.next, kind)
+    assert.equal(duplicate.resume, expected.get(kind), kind)
+  }
 })

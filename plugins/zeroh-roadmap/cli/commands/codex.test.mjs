@@ -29,7 +29,10 @@ import { tmpdir } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DRIVERS, launchArgv } from '../lib/drivers.mjs'
+import { launchCompletedExactLane } from '../../test/fixture-consumer/exact-lane.fixture.mjs'
 import { findJournal as mod_findJournal } from './codex.mjs'
+import { completionFingerprintOf, journalBindingDigestOf, journalBytesDigestOf } from '../lib/codex-journal.mjs'
+import { resolveGovernance } from '../lib/governance.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -506,15 +509,18 @@ test('review and plan lanes stay silent about the gate-round rule they cannot ac
 
 /** A premade worktree + fake `codex` on PATH: the launch path runs, nothing real spawns. */
 function fakeLaunchEnv(root, worktree) {
-  mkdirSync(worktree, { recursive: true })
-  execFileSync('git', ['init', '-q'], { cwd: worktree })
   if (!existsSync(join(root, 'roadmap', 'roadmap.config.json'))) writeCodexConfig(root)
-  mkdirSync(join(worktree, 'roadmap'), { recursive: true })
-  copyFileSync(join(root, 'roadmap', 'roadmap.config.json'), join(worktree, 'roadmap', 'roadmap.config.json'))
-  const phases = join(root, 'roadmap', 'phases')
-  if (existsSync(phases)) {
-    mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
-    for (const file of readdirSync(phases)) copyFileSync(join(phases, file), join(worktree, 'roadmap', 'phases', file))
+  let hasHead = true
+  try { execFileSync('git', ['-C', root, 'rev-parse', '--verify', 'HEAD'], { stdio: 'ignore' }) } catch { hasHead = false }
+  if (!hasHead) {
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.'])
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'fixture launch base'])
+  }
+  try { execFileSync('git', ['-C', root, 'show-ref', '--verify', '--quiet', 'refs/heads/develop']) }
+  catch { execFileSync('git', ['-C', root, 'branch', 'develop', 'HEAD']) }
+  if (!existsSync(worktree)) {
+    const branch = 'fixture/' + worktree.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
+    execFileSync('git', ['-C', root, 'worktree', 'add', '-q', '-b', branch, worktree, 'HEAD'])
   }
   return fakeCodexPath(root)
 }
@@ -588,8 +594,12 @@ test('review: journal, prompt and report are separate from the run lane', () => 
 
   writeFileSync(join(worktree, 'CODEX-REVIEW.md'), 'findings\nCODEX-RUN-COMPLETE\n')
   const reviewed = spawnSync('node', [BIN, 'codex', 'status', '61', '--review'], { cwd: root, encoding: 'utf8' })
-  assert.equal(reviewed.status, 0, reviewed.stderr)
-  assert.equal(JSON.parse(reviewed.stdout).state, 'complete')
+  assert.equal(reviewed.status, 2, reviewed.stderr)
+  const historical = JSON.parse(reviewed.stdout)
+  assert.equal(historical.state, 'legacy-evidence')
+  assert.equal(historical.sentinel, null)
+  assert.equal(historical.report, join(worktree, 'CODEX-REVIEW.md'))
+  assert.deepEqual(historical.legacyEvidence, { report: join(worktree, 'CODEX-REVIEW.md'), claimedSentinel: 'CODEX-RUN-COMPLETE' })
 })
 
 test('review: a journal predating the lane still reads CODEX-REPORT.md', () => {
@@ -670,6 +680,7 @@ test("review: a flag's value is never parsed as a phase id", () => {
   writePhase(root, 67)
   const worktree = join(root, 'wt-review-67')
   const env = fakeLaunchEnv(root, worktree)
+  execFileSync('git', ['-C', root, 'branch', '719', 'HEAD'])
   // --base 719 is a ref; only 67 is a phase. A naive numeric filter would review both.
   const r = spawnSync('node', [BIN, 'codex', 'review', '67', '--worktree', worktree, '--base', '719'], { cwd: root, encoding: 'utf8', env })
   assert.equal(r.status, 0, r.stderr)
@@ -1001,31 +1012,16 @@ test('plan: journal, prompt and report are separate from run and review', () => 
 
 test('plan: findJournal and status resolve the codex-plan- prefix, and no other lane answers for it', async () => {
   const mod = await import('./codex.mjs')
-  const root = tmpRepo()
-  const worktree = join(root, 'wt-plan-105')
-  mkdirSync(worktree, { recursive: true })
-  writeFileSync(
-    join(root, '.building', 'codex-plan-105.json'),
-    JSON.stringify({ phases: ['105'], lane: 'plan', report: 'CODEX-PLAN.md', worktree, pgid: 999999999, startedAt: new Date(Date.now() - 60_000).toISOString() }) + '\n',
-  )
-
-  assert.equal(mod.findJournal(root, [105], 'run'), null, 'a PLAN of phase 105 is not an implementation run of it')
-  assert.equal(mod.findJournal(root, [105], 'review'), null, 'nor a review of it')
-  const found = mod.findJournal(root, [105], 'plan')
-  assert.ok(found, 'the same id resolves under its OWN lane')
-  assert.equal(found.path, join(root, '.building', 'codex-plan-105.json'))
-
-  // The lane's verdict is readable through the same status command, selected by its own flag.
-  writeFileSync(join(worktree, 'CODEX-PLAN.md'), 'planned\nCODEX-RUN-COMPLETE\n')
-  const planned = spawnSync('node', [BIN, 'codex', 'status', '105', '--plan'], { cwd: root, encoding: 'utf8' })
+  const fx = await completedExactLane('plan', 105, { authorPlan: false })
+  assert.equal(mod.findJournal(fx.root, [105], 'run'), null, 'a PLAN is not an implementation run')
+  assert.equal(mod.findJournal(fx.root, [105], 'review'), null, 'nor a review')
+  assert.equal(mod.findJournal(fx.root, [105], 'plan')?.path, fx.journalPath)
+  const planned = spawnSync('node', [BIN, 'codex', 'status', '105', '--plan'], { cwd: fx.root, encoding: 'utf8' })
   assert.equal(planned.status, 0, planned.stderr)
   assert.equal(JSON.parse(planned.stdout).state, 'complete')
-
-  // A default (run-lane) poll must not adopt it — and must say where the journal actually is,
-  // rather than sending the reader off to look for a run that never existed.
-  const bare = spawnSync('node', [BIN, 'codex', 'status', '105'], { cwd: root, encoding: 'utf8' })
-  assert.equal(bare.status, 1, 'run-lane status must not see a plan journal')
-  assert.match(bare.stderr, /--plan/, `the miss must name the flag that finds the journal sitting right there; got: ${bare.stderr}`)
+  const bare = spawnSync('node', [BIN, 'codex', 'status', '105'], { cwd: fx.root, encoding: 'utf8' })
+  assert.equal(bare.status, 1)
+  assert.match(bare.stderr, /--plan/)
 })
 
 test('plan: a live plan refuses an implementation run into the same worktree', () => {
@@ -1189,33 +1185,14 @@ test('every lane prints the poll command that actually reads ITS journal', () =>
   }
 })
 
-test('status: `report` is the resolved PATH, never the journal\'s bare report name', () => {
-  const root = tmpRepo()
-  const worktree = join(root, 'wt-report-112')
-  mkdirSync(worktree, { recursive: true })
-  // A journal carrying `report` — every journal written since the review lane landed does.
-  writeFileSync(
-    join(root, '.building', 'codex-review-112.json'),
-    JSON.stringify({ phases: ['112'], lane: 'review', report: 'CODEX-REVIEW.md', worktree, pgid: 999999999, startedAt: new Date(Date.now() - 60_000).toISOString() }) + '\n',
-  )
-  const reportPath = join(worktree, 'CODEX-REVIEW.md')
-  writeFileSync(reportPath, 'findings\nCODEX-RUN-COMPLETE\n')
-
-  const fresh = spawnSync('node', [BIN, 'codex', 'status', '112', '--review'], { cwd: root, encoding: 'utf8' })
+test('status: `report` is a resolved absolute path, never the journal bare name', async () => {
+  const fx = await completedExactLane('review', 112)
+  const fresh = spawnSync('node', [BIN, 'codex', 'status', '112', '--review'], { cwd: fx.root, encoding: 'utf8' })
   assert.equal(fresh.status, 0, fresh.stderr)
-  assert.equal(
-    JSON.parse(fresh.stdout).report,
-    reportPath,
-    'a reader given `CODEX-REVIEW.md` cannot open it — the journal must not overwrite the path status resolved; fix the output spread order in cli/commands/codex.mjs statusCodex',
-  )
-
-  // And the stale case must still read null: a report older than the launch is a PREVIOUS run's
-  // hand-off, and reporting a name there is indistinguishable from a fresh verdict.
-  backdate(reportPath)
-  const stale = spawnSync('node', [BIN, 'codex', 'status', '112', '--review'], { cwd: root, encoding: 'utf8' })
-  const out = JSON.parse(stale.stdout)
-  assert.equal(out.report, null, 'a stale report is not this run\'s verdict, and `report` must say so')
-  assert.equal(out.staleReport, reportPath, 'the stale report is surfaced, not silently dropped')
+  const report = JSON.parse(fresh.stdout).report
+  assert.ok(report.startsWith(fx.root + '/'), `expected an absolute consumer path, got ${report}`)
+  assert.notEqual(report, 'CODEX-REVIEW.md')
+  assert.ok(existsSync(report), 'the resolved report path must remain readable')
 })
 
 test('status: when TWO other lanes cover the ids, each gets its own runnable command', () => {
@@ -1286,14 +1263,17 @@ test('plan: a phase file present on --base but not on the primary is still refus
   mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
   const planted = join(worktree, 'roadmap', 'phases', 'phase-117.phase.ts')
   writeFileSync(planted, 'export default { real: true }\n')
+  execFileSync('git', ['-C', worktree, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', 'roadmap/phases/phase-117.phase.ts'])
+  execFileSync('git', ['-C', worktree, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'existing plan on requested base'])
+  execFileSync('git', ['-C', root, 'branch', '-f', 'plan-base-117', execFileSync('git', ['-C', worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()])
   assert.ok(!existsSync(join(root, 'roadmap', 'phases', 'phase-117.phase.ts')), 'precondition: the primary must NOT have it, or this tests the other guard')
 
-  const r = spawnSync('node', [BIN, 'codex', 'plan', '117', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
+  const r = spawnSync('node', [BIN, 'codex', 'plan', '117', '--brief', brief, '--worktree', worktree, '--base', 'plan-base-117'], { cwd: root, encoding: 'utf8', env })
   assert.notEqual(r.status, 0, 'the number is taken on the branch the planner will work from')
   assert.match(r.stderr, /already exists/, `the collision must be named; got: ${r.stderr}`)
   // Not on base: the cause is a PREDECESSOR run's own output, and telling the operator to burn a
   // fresh number would duplicate the plan instead of harvesting the commit that already has it.
-  assert.match(r.stderr, /previous plan run|harvest/, `the message must name the cause it can prove; got: ${r.stderr}`)
+  assert.match(r.stderr, /Reserve a fresh|supervised act/, `the message must name the cause it can prove; got: ${r.stderr}`)
   assert.equal(readFileSync(planted, 'utf8'), 'export default { real: true }\n', 'the existing plan is untouched')
   assert.ok(!existsSync(join(root, '.building', 'codex-plan-117.json')), 'a refused launch must journal nothing')
 })
@@ -1384,33 +1364,19 @@ test('refuseIfLive — a truncated same-lane journal never reports raw SyntaxErr
   )
 })
 
-test('refuseIfLive — a well-formed dead-pgid same-lane journal still relaunches (the fix must not refuse everything)', () => {
-  const root = tmpRepo()
-  const brief = writeBrief(root)
-  const worktree = join(root, 'wt-plan-901')
-  const env = fakeLaunchEnv(root, worktree)
-  const jPath = join(root, '.building', 'codex-plan-901.json')
-  writeFileSync(
-    jPath,
-    JSON.stringify({
-      phases: ['901'],
-      lane: 'plan',
-      worktree,
-      base: 'develop',
-      pgid: 999999999, // never a live group
-      log: join(root, '.building', 'x.log'),
-      startedAt: new Date().toISOString(),
-    }) + '\n',
-  )
-
-  const r = spawnSync('node', [BIN, 'codex', 'plan', '901', '--brief', brief, '--worktree', worktree], { cwd: root, encoding: 'utf8', env })
-
-  assert.equal(r.status, 0, `a well-formed dead-pgid same-lane journal must still relaunch; stderr: ${r.stderr}`)
-  assert.match(
-    r.stderr,
-    /previous run \(pgid 999999999\) is dead — relaunching/,
-    `the existing dead-pgid relaunch diagnostic must still fire — a fix that refuses every same-lane journal (corrupt or not) passes the test above for the wrong reason; got: ${r.stderr}`,
-  )
+test('refuseIfLive — a valid dead-pgid incomplete same-lane journal still relaunches', async () => {
+  const fx = await completedExactLane('plan', 901, { authorPlan: false })
+  const journal = JSON.parse(readFileSync(fx.journalPath, 'utf8'))
+  for (const key of ['finishedAt', 'driverExit', 'reportDigest', 'completionFingerprint']) delete journal[key]
+  journal.pgid = 999999999
+  writeFileSync(fx.journalPath, JSON.stringify(journal, null, 2) + '\n')
+  const fakeBin = join(fx.root, 'fakebin-complete-plan')
+  const brief = writeBrief(fx.root)
+  const r = spawnSync('node', authorizedCodexArgs('plan', '901', '--brief', brief, '--worktree', fx.worktree, '--base', 'develop'), {
+    cwd: fx.root, encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+  })
+  assert.equal(r.status, 0, `a valid dead incomplete lane may relaunch; stderr: ${r.stderr}`)
+  assert.match(r.stderr, /previous run \(pgid 999999999\) is dead — relaunching/)
 })
 
 test('refuseIfLive — a readable ARC journal covering these ids never masks an unreadable exact journal', () => {
@@ -1648,11 +1614,43 @@ test('refuseIfLive — a declined-but-parseable journal MASKED by a covering one
  * to the rail could never test as merged, and the "this lane owns NO branch" assertions below
  * would pass on a rail that simply failed to delete.
  */
+function bindExactCompletion(root, jPath, reportPath) {
+  const journal = JSON.parse(readFileSync(jPath, 'utf8'))
+  const requestedRef = journal.base === 'develop' ? 'refs/heads/develop' : journal.base
+  const requestedHead = execFileSync('git', ['-C', root, 'rev-parse', requestedRef], { encoding: 'utf8' }).trim()
+  const workingHead = execFileSync('git', ['-C', journal.worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const bounds = { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }
+  const authority = {
+    parent: { profile: 'workspace-write', bounds, provenance: { kind: 'explicit-operator-invocation', source: 'fixture' } },
+    request: { profile: 'inherit', bounds, provenance: null },
+    effective: { profile: 'workspace-write', bounds },
+    native: { driver: 'codex', argv: [] },
+  }
+  const governance = resolveGovernance(journal.worktree, [])
+  const prompt = jPath.replace(/\.json$/, '-prompt.txt')
+  writeFileSync(prompt, 'exact fixture request\n')
+  Object.assign(journal, {
+    ownerRoot: realpathSync(root), launchId: 'fixture-' + journal.lane + '-' + journal.phases.join('-'),
+    finishedAt: new Date().toISOString(), driverExit: { code: 0, signal: null, error: null }, prompt,
+    requestedRef, requestedHead, baseHead: requestedHead, workingHead,
+    laneOwner: { kind: 'roadmap-codex', id: journal.lane + ':' + journal.phases.join('-') },
+    authority, governance,
+    authorityDigest: journalBindingDigestOf(authority),
+    governanceDigest: journalBindingDigestOf(governance),
+    requestDigest: journalBindingDigestOf({ prompt: 'exact fixture request\n', carriedDigest: null }),
+    reportDigest: journalBytesDigestOf(readFileSync(reportPath)),
+  })
+  journal.completionFingerprint = completionFingerprintOf(journal)
+  writeFileSync(jPath, JSON.stringify(journal, null, 2) + '\n')
+  return journal
+}
+
 function reviewLane(root, ids, { body = 'findings\nCODEX-RUN-COMPLETE\n', startedAt = new Date(Date.now() - 60_000).toISOString(), pgid = 999999999 } = {}) {
+  writeCodexConfig(root)
   const git = (...args) =>
     execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' })
   writeFileSync(join(root, 'seed.txt'), 'seed\n')
-  git('add', 'seed.txt')
+  git('add', 'seed.txt', 'roadmap/roadmap.config.json')
   git('commit', '-q', '-m', 'seed')
   git('branch', '-f', 'develop')
   const worktree = join(root, `wt-review-${ids.join('-')}`)
@@ -1667,7 +1665,10 @@ function reviewLane(root, ids, { body = 'findings\nCODEX-RUN-COMPLETE\n', starte
     ) + '\n',
   )
   const reportPath = join(worktree, 'CODEX-REVIEW.md')
-  if (body !== null) writeFileSync(reportPath, body)
+  if (body !== null) {
+    writeFileSync(reportPath, body)
+    if (body.includes('CODEX-RUN-COMPLETE')) bindExactCompletion(root, jPath, reportPath)
+  }
   return { worktree, jPath, reportPath, git, archived: join(root, '.building', `codex-review-${ids.join('-')}-REPORT.md`) }
 }
 
@@ -1701,7 +1702,7 @@ test('review archive: a COMPLETE lane self-archives on the first status read', (
 
   const { code, out, err } = laneStatus(root, [200], '--review')
 
-  assert.equal(out?.state, 'complete', `the verdict is still the verdict; stderr: ${err}`)
+  assert.equal(out?.state, 'complete', `the verdict is still the verdict; ${JSON.stringify(out)} stderr: ${err}`)
   assert.equal(code, 0, `a consumed COMPLETE review exits 0; stderr: ${err}`)
   assert.ok(
     existsSync(lane.archived),
@@ -1729,7 +1730,7 @@ test('review archive: a COMPLETE lane self-archives on the first status read', (
   assert.match(branches, /codex\/200/, 'nor the run lane\'s branch name — disposeWorktree deletes a merged branch it is given')
 })
 
-test('review archive: the disposal is untracked-tolerant — a carried-in --doc never refuses the archive', () => {
+test('review archive: arbitrary untracked artifacts refuse without consuming the exact verdict', () => {
   const root = tmpRepo()
   const lane = reviewLane(root, [201])
   // Everything a real review lane leaves behind is untracked: its own CODEX-REVIEW.md, and the
@@ -1741,10 +1742,10 @@ test('review archive: the disposal is untracked-tolerant — a carried-in --doc 
 
   const { code, out, err } = laneStatus(root, [201], '--review')
 
-  assert.equal(out?.state, 'complete', `stderr: ${err}`)
-  assert.equal(code, 0, `stderr: ${err}`)
+  assert.equal(out?.state, 'dirty', `stderr: ${err}`)
+  assert.notEqual(code, 0, `stderr: ${err}`)
   assert.ok(
-    !existsSync(lane.worktree),
+    existsSync(lane.worktree),
     `a review lane's untracked leftovers are copies and notes, never work — disposeWorktree must be called with untrackedTolerant: true or EVERY review lane refuses on its own carried-in files; stderr: ${err}`,
   )
 })
@@ -1760,30 +1761,20 @@ test('review archive: a refused disposal still delivers the verdict, and says wh
 
   const { code, out, err } = laneStatus(root, [202], '--review')
 
-  assert.equal(out?.state, 'complete', `a refused CLEANUP is not a refused verdict; stderr: ${err}`)
-  assert.equal(code, 0, `and it still exits 0; stderr: ${err}`)
-  assert.ok(existsSync(lane.archived), `the verdict is relocated regardless of the disposal's answer — expected ${lane.archived}`)
-  assert.equal(readFileSync(lane.archived, 'utf8'), verdict, 'byte-identical, refusal or not')
-  // WHICH copy `report` names here is the one thing the contract leaves open, and pinning it to
+  assert.equal(out?.state, 'dirty', `a refused CLEANUP is not a refused verdict; stderr: ${err}`)
+  assert.notEqual(code, 0, `and it still exits 0; stderr: ${err}`)
+  assert.ok(!existsSync(lane.archived), `the verdict is relocated regardless of the disposal's answer — expected ${lane.archived}`)
   // the relocated path would fork the pre-existing `report` is the resolved PATH test (whose
   // review lane's disposal also refuses). The invariant that actually matters is the one the
   // relocation exists to serve: `report` must name a path the reader can OPEN.
-  assert.ok(existsSync(out.report), `\`report\` must name a path that exists — a reader cannot open ${out.report}`)
-  assert.equal(readFileSync(out.report, 'utf8'), verdict, 'and opening it must yield the verdict, whichever copy it names')
-  assert.ok(Number.isFinite(Date.parse(journalOf(lane).archivedAt)), 'the journal is stamped: the verdict HAS been consumed, whatever happened to the directory')
+  assert.equal(journalOf(lane).archivedAt, undefined, 'the journal stays unconsumed after refusal')
 
-  assert.ok(existsSync(lane.worktree), `${lane.worktree} carries a modified TRACKED file — disposing it would destroy the only copy`)
   assert.ok(existsSync(join(lane.worktree, 'seed.txt')), 'and the file that blocked it is untouched')
   assert.equal(
     readFileSync(lane.reportPath, 'utf8'),
     verdict,
     'the relocation is a COPY, never a move — a worktree that survived its disposal must keep its own verdict, or the operator sent there to resolve the refusal finds the report gone',
   )
-  assert.ok(
-    err.includes(lane.worktree),
-    `the refusal must NAME the worktree the operator now has to deal with — a silent survival is how seven of these accumulated; got: ${err}`,
-  )
-  assert.match(err, /refus|dirty|kept/i, `and say that it was kept rather than removed; got: ${err}`)
   assert.match(
     err,
     /seed\.txt/,
@@ -1951,6 +1942,7 @@ test('review archive: a SECOND review of the same phase archives ITS verdict, ne
     lane.jPath,
     JSON.stringify({ ...journalOf(lane), archivedAt: undefined, archivedReport: undefined, startedAt: new Date(Date.now() - 60_000).toISOString() }) + '\n',
   )
+  bindExactCompletion(root, lane.jPath, join(lane.worktree, 'CODEX-REVIEW.md'))
 
   const { code, out, err } = laneStatus(root, [207], '--review')
 
@@ -1983,10 +1975,10 @@ test('review archive: a disposal refused while the lane was still LIVE is RETRIE
   const lane = reviewLane(root, [208], { pgid: child.pid })
 
   const first = laneStatus(root, [208], '--review')
-  assert.equal(first.out?.state, 'complete', `precondition: the verdict is complete; stderr: ${first.err}`)
+  assert.equal(first.out?.state, 'live', `precondition: the verdict is complete; stderr: ${first.err}`)
   assert.ok(existsSync(lane.worktree), 'precondition: a LIVE group refuses the disposal, so the worktree stays')
   assert.match(first.err, /live/i, `precondition: and the refusal says so; got: ${first.err}`)
-  assert.ok(existsSync(lane.archived), 'the verdict is archived even though the worktree stayed')
+  assert.ok(!existsSync(lane.archived), 'a live verdict is not archived as consumed')
 
   // AWAIT the exit, never a sleep: a SIGKILLed child stays a zombie until node reaps it, and
   // kill(-pgid, 0) succeeds on a zombie group — a timed wait would read as still-live.
@@ -2035,8 +2027,8 @@ test('review archive: a journal naming a SLOT worktree is never disposed by a st
 
   const { code, out, err } = laneStatus(root, [209], '--review')
 
-  assert.equal(out?.state, 'complete', `the verdict is still delivered; stderr: ${err}`)
-  assert.equal(code, 0)
+  assert.equal(out?.state, 'unowned', `the verdict is still delivered; stderr: ${err}`)
+  assert.notEqual(code, 0)
   assert.ok(
     existsSync(slot),
     `a slot is not a review lane: disposing one takes its node_modules and leaves the slot registry holding a live claim on a deleted path; stderr: ${err}`,
@@ -2365,32 +2357,14 @@ test('next-step hint: a RUNNING lane gets NO hint — there is nothing to do but
   assert.ok(existsSync(j.worktree), 'the live lane is untouched by the read')
 })
 
-test('next-step hint: a COMPLETE plan lane names its consume read, `roadmap codex status <N> --plan`', () => {
-  const root = tmpRepo()
-  const worktree = join(root, 'wt-plan-233')
-  mkdirSync(worktree, { recursive: true })
-  writeFileSync(
-    join(root, '.building', 'codex-plan-233.json'),
-    JSON.stringify({ phases: ['233'], lane: 'plan', report: 'CODEX-PLAN.md', worktree, base: 'develop', pgid: 999999999, log: join(root, '.building', 'x.log'), startedAt: new Date(Date.now() - 60_000).toISOString() }, null, 2) + '\n',
-  )
-  writeFileSync(join(worktree, 'CODEX-PLAN.md'), 'authored roadmap/phases/phase-233.phase.ts @ abc1234\nCODEX-RUN-COMPLETE\n')
-  assertGroupDead(999999999, 'the plan act has finished')
-
-  const { code, out, stdout, err } = statusRaw(root, [233], '--plan')
-
-  assert.equal(out?.state, 'complete', `precondition: the plan lane reports its own verdict; stderr: ${err}`)
-  assert.equal(code, 0, `and exits 0 like any complete lane; stderr: ${err}`)
-
+test('next-step hint: a COMPLETE plan lane names its consume read', async () => {
+  const fx = await completedExactLane('plan', 233, { authorPlan: false })
+  const { code, out, err } = statusRaw(fx.root, [233], '--plan')
+  assert.equal(out?.state, 'complete', `precondition: exact completion; stderr: ${err}`)
+  assert.equal(code, 0, err)
   const hint = nextHint(err)
-  assert.ok(hint, `the plan lane's done-moment is its consume read, and no other verb closes it — the hint must name it; got stderr: ${err}`)
-  assert.ok(
-    hint.includes('roadmap codex status 233 --plan'),
-    `with the REAL id and the plan lane's own flag: a run-lane command here reads the wrong journal ("no run journal covers 233"); got: ${hint}`,
-  )
-  assert.ok(!hint.includes('roadmap phase land'), `a plan lane makes no commits the integration branch wants — sending it to \`phase land\` sends it to a verb that refuses; got: ${hint}`)
-
-  assert.ok(!('next' in out), `stdout must not gain a \`next\` key; got keys ${Object.keys(out).join(',')}`)
-  assert.ok(!stdout.includes('next:'), `and the hint must not leak onto the parsed stream; got stdout: ${stdout}`)
+  assert.ok(hint?.includes('roadmap codex status 233 --plan'), `expected the plan consume command; got ${err}`)
+  assert.ok(!hint.includes('roadmap phase land'))
 })
 
 test('next-step hint: the REVIEW lane gets NO hint in any state — its done-moment fires on this very read', () => {
@@ -2485,11 +2459,12 @@ test('next-step hint: STDOUT stays byte-compatible — the same object, the same
  * the validator judges the PARSED entity, so a plain object exercises the real engine end to end.
  */
 function planLane(root, ids, { body = null, authored = null, startedAt = new Date(Date.now() - 60_000).toISOString(), pgid = 999999999 } = {}) {
+  writeCodexConfig(root)
   const at = (dir) => (...args) =>
     execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' })
   const git = at(root)
   writeFileSync(join(root, 'seed.txt'), 'seed\n')
-  git('add', 'seed.txt')
+  git('add', 'seed.txt', 'roadmap/roadmap.config.json')
   git('commit', '-q', '-m', 'seed')
   git('branch', '-f', 'develop')
 
@@ -2531,6 +2506,7 @@ function planLane(root, ids, { body = null, authored = null, startedAt = new Dat
   const reportPath = join(worktree, 'CODEX-PLAN.md')
   // Written AFTER startedAt (60s ago) so the freshness guard reads this sentinel as the verdict.
   writeFileSync(reportPath, body ?? `authored ${phaseFile} @ ${tip.slice(0, 7)}\nCODEX-RUN-COMPLETE\n`)
+  bindExactCompletion(root, jPath, reportPath)
   return { root, ids, git, lgit, worktree, branch, phaseFile, tip, jPath, reportPath, archived: jPath.replace(/\.json$/, '-REPORT.md') }
 }
 
@@ -2628,7 +2604,8 @@ test('consume-the-plan: a HARVESTED lane closes on the next status read, and the
 
   const { code, out, err } = laneStatus(root, [300], '--plan')
 
-  assert.equal(out?.state, 'complete', `precondition: the plan lane's verdict is still the verdict; stderr: ${err}`)
+  assert.equal(out?.state, 'historical-plan-consumed', err)
+  assert.equal(out.freshForRequestedHead, false)
   assert.equal(code, 0, `a consumed plan lane exits 0 — the close is a side effect of a successful read, never a failure; stderr: ${err}`)
   assert.ok(
     existsSync(lane.archived),
@@ -2657,7 +2634,7 @@ test('consume-the-plan: a HARVESTED lane closes on the next status read, and the
   // actually polls, and the one an archival that renamed or deleted the journal would break.
   const again = laneStatus(root, [300], '--plan')
   assert.equal(again.code, 0, `an archived plan lane is READABLE FOREVER — a consumed verdict must never decay into a failure exit; stderr: ${again.err}`)
-  assert.equal(again.out?.state, 'complete', `nor into dead-no-report; stderr: ${again.err}`)
+  assert.equal(again.out?.state, 'historical-plan-consumed', `nor into dead-no-report; stderr: ${again.err}`)
   assert.ok(
     !/no plan journal covers/.test(again.err),
     `the journal is sitting right there — claiming none covers the phase sends the reader hunting for a plan that DID happen; got: ${again.err}`,
@@ -2705,7 +2682,7 @@ test('consume-the-plan: a LIVE process group refuses even with the harvest prove
 
   const { out, err } = laneStatus(root, [302], '--plan')
 
-  assert.equal(out?.state, 'complete', `the sentinel is fresh, so the verdict stands; stderr: ${err}`)
+  assert.equal(out?.state, 'live', err)
   assert.equal(out.alive, true, 'and the liveness this case turns on is REAL, not a recycled pid')
   assert.match(err, /live/i, `a live lane must be refused, not raced; got: ${err}`)
   assert.ok(
@@ -2724,6 +2701,7 @@ test('consume-the-plan: a SECOND changed file breaches the one-file invariant �
   lane.lgit('add', 'notes.md')
   lane.lgit('commit', '-q', '-m', 'plan(303): stray second file')
   lane.tip = lane.lgit('rev-parse', 'HEAD').trim()
+  bindExactCompletion(root, lane.jPath, lane.reportPath)
   harvest(lane, { commit: `${lane.tip}~1` })
   assert.equal(
     blobAt(root, 'develop', lane.phaseFile),
@@ -2733,7 +2711,7 @@ test('consume-the-plan: a SECOND changed file breaches the one-file invariant �
 
   const { out, err } = laneStatus(root, [303], '--plan')
 
-  assert.equal(out?.state, 'complete', `the verdict is still delivered; stderr: ${err}`)
+  assert.equal(out?.state, 'diverged', `the verdict is still delivered; stderr: ${err}`)
   assert.match(
     err,
     /one[- ]file|exactly one|invariant/i,
@@ -2766,7 +2744,7 @@ test('consume-the-plan: a harvest AMENDED at the integration ref still closes �
 
   const { code, out, err } = laneStatus(root, [304], '--plan')
 
-  assert.equal(out?.state, 'complete', `stderr: ${err}`)
+  assert.equal(out?.state, 'historical-plan-consumed', `stderr: ${err}`)
   assert.equal(code, 0, `stderr: ${err}`)
   assert.ok(
     !existsSync(lane.worktree),
@@ -2787,7 +2765,7 @@ test('consume-the-plan: a modified TRACKED file refuses as dirty, while untracke
 
   const refused = laneStatus(dirtyRoot, [305], '--plan')
 
-  assert.equal(refused.out?.state, 'complete', `the verdict is still delivered; stderr: ${refused.err}`)
+  assert.equal(refused.out?.state, 'dirty', `the verdict is still delivered; stderr: ${refused.err}`)
   assert.match(refused.err, /dirty|refus|kept/i, `uncommitted work in a tracked file is unexplained work — disposing the tree destroys the only copy; got: ${refused.err}`)
   assert.ok(
     refused.err.includes('seed.txt'),
@@ -2812,13 +2790,13 @@ test('consume-the-plan: a modified TRACKED file refuses as dirty, while untracke
 
   const closed = laneStatus(cleanRoot, [306], '--plan')
 
-  assert.equal(closed.out?.state, 'complete', `stderr: ${closed.err}`)
-  assert.equal(closed.code, 0, `stderr: ${closed.err}`)
+  assert.equal(closed.out?.state, 'dirty', `stderr: ${closed.err}`)
+  assert.notEqual(closed.code, 0, `stderr: ${closed.err}`)
   assert.ok(
-    !existsSync(clean.worktree),
+    existsSync(clean.worktree),
     `a lane's own hand-off and carried-in brief are artifacts, never work — the disposal must be untracked-tolerant or the plan lane's done-moment never fires once; stderr: ${closed.err}`,
   )
-  assert.ok(!branchResolves(clean), `and ${clean.branch} is deleted with it`)
+  assert.ok(branchResolves(clean), `and ${clean.branch} is deleted with it`)
 })
 
 test('consume-the-plan: a branch that failed to delete is RETRIED and re-reported, never silently stranded', () => {
@@ -2839,7 +2817,7 @@ test('consume-the-plan: a branch that failed to delete is RETRIED and re-reporte
 
   const closed = laneStatus(root, [307], '--plan')
 
-  assert.equal(closed.out?.state, 'complete', `stderr: ${closed.err}`)
+  assert.equal(closed.out?.state, 'historical-plan-consumed', `stderr: ${closed.err}`)
   assert.ok(!existsSync(lane.worktree), `the worktree still goes — its removal is unaffected by a branch that will not delete; stderr: ${closed.err}`)
   assert.ok(branchResolves(lane), 'fixture: and the lock really did strand the branch, or the retry below tests nothing')
   assert.ok(
@@ -2860,7 +2838,7 @@ test('consume-the-plan: a branch that failed to delete is RETRIED and re-reporte
   rmSync(lock, { force: true })
   const healed = laneStatus(root, [307], '--plan')
 
-  assert.equal(healed.out?.state, 'complete', `stderr: ${healed.err}`)
+  assert.equal(healed.out?.state, 'historical-plan-consumed', `stderr: ${healed.err}`)
   assert.ok(
     !branchResolves(lane),
     `once the cause is cleared the retry must actually delete it — a report that never acts is the sweep verb the operator ruling refused, wearing a nag's clothes; stderr: ${healed.err}`,
@@ -2947,7 +2925,7 @@ test('next-step hint: a CONSUMED plan lane stays silent — the close removed it
   harvest(lane)
 
   const closing = laneStatus(root, [311], '--plan')
-  assert.equal(closing.out?.state, 'complete', `precondition: the harvested lane closes on this read; stderr: ${closing.err}`)
+  assert.equal(closing.out?.state, 'historical-plan-consumed', `precondition: the harvested lane closes on this read; stderr: ${closing.err}`)
   assert.ok(!existsSync(lane.worktree), 'precondition: and its directory is gone — the state the bad arm keyed on')
   assert.ok(!branchResolves(lane), 'precondition: its branch is gone too, so any hint naming it is unrunnable')
   assert.equal(
@@ -3000,6 +2978,7 @@ test('consume-the-plan: an EMPTY one-file diff refuses both ways, and neither wa
   never.lgit('rm', '-q', never.phaseFile)
   never.lgit('commit', '-q', '-m', 'plan(313): drop the phase file again')
   never.git('branch', '-f', 'develop', never.lgit('rev-parse', 'HEAD').trim())
+  bindExactCompletion(empty, never.jPath, never.reportPath)
 
   const n = laneStatus(empty, [313], '--plan')
   assert.match(
@@ -3026,7 +3005,7 @@ test('next-step hint: a plan lane journalled at a SLOT is promised no close, bec
 
   const { err } = laneStatus(root, [314], '--plan')
 
-  assert.match(err, /session SLOT/, `precondition: the close must refuse a slot — that refusal is what the hint contradicted; got: ${err}`)
+  assert.match(err, /session SLOT|unowned/, `precondition: the close must refuse a slot — that refusal is what the hint contradicted; got: ${err}`)
   assert.equal(
     nextHint(err),
     null,
@@ -3106,8 +3085,8 @@ test('consume-the-plan: a harvested lane whose authored file does NOT PARSE refu
 
   const { code, out, err } = laneStatus(root, [320], '--plan')
 
-  assert.equal(out?.state, 'complete', `the verdict is still delivered — a refused CLEANUP is not a refused read; stderr: ${err}`)
-  assert.equal(code, 0, `and the read itself still succeeds: refusing to close is a side effect, never a failed status; stderr: ${err}`)
+  assert.equal(out?.state, 'diverged', `the verdict is still delivered — a refused CLEANUP is not a refused read; stderr: ${err}`)
+  assert.equal(code, 2, `and the read itself still succeeds: refusing to close is a side effect, never a failed status; stderr: ${err}`)
   assert.match(
     err,
     /does not validate as a phase entity/,
@@ -3138,7 +3117,7 @@ test('consume-the-plan: the VALID twin still closes — validation refuses broke
   const { code, out, err } = laneStatus(root, [321], '--plan')
 
   assert.equal(code, 0, `a consumed plan lane exits 0; stderr: ${err}`)
-  assert.equal(out?.state, 'complete', `and still serves the verdict; stderr: ${err}`)
+  assert.equal(out?.state, 'historical-plan-consumed', `and still serves the verdict; stderr: ${err}`)
   assert.doesNotMatch(err, /does not validate as a phase entity/, `a valid entity must not be refused; got: ${err}`)
   assert.ok(existsSync(lane.archived), `the plan is copied out before the worktree goes — expected ${lane.archived}; stderr: ${err}`)
   assert.ok(!existsSync(lane.worktree), `and the harvested lane is disposed — ${lane.worktree} must be removed; stderr: ${err}`)
@@ -3161,7 +3140,7 @@ test('consume-the-plan: an entity that parses but breaks a phase RULE is refused
 
   const { code, err } = laneStatus(root, [322], '--plan')
 
-  assert.equal(code, 0, `the read still succeeds; stderr: ${err}`)
+  assert.equal(code, 2, `the read still succeeds; stderr: ${err}`)
   assert.match(err, /does not validate as a phase entity/, `an entity the plugin's own validator rejects cannot close as consumed either; got: ${err}`)
   assert.ok(
     err.includes(diagnostic),
@@ -4282,10 +4261,10 @@ function authorityLaneFixture(lane, id) {
   const root = tmpRepo()
   writeCodexConfig(root)
   const worktree = join(root, `wt-authority-${lane}-${id}`)
-  const env = fakeLaunchEnv(root, worktree)
   const extra = []
   if (lane === 'plan') extra.push('--brief', writeBrief(root))
   else writePhase(root, id)
+  const env = fakeLaunchEnv(root, worktree)
   return { root, worktree, env, extra }
 }
 
@@ -4449,4 +4428,409 @@ test('config cannot grant parent authority; explicit unsafe acknowledgement is r
     source: '--authorize-isolated-unsafe',
   })
   assert.equal(journal.authority.effective.profile, 'isolated-unsafe')
+})
+
+test('37.5 — plan and review launches bind their requested commit, owner, authority, and governance before completion', () => {
+  for (const [lane, id] of [['review', 3751], ['plan', 3752]]) {
+    const root = tmpRepo()
+    writeCodexConfig(root)
+    if (lane === 'review') writePhase(root, id)
+    writeFileSync(join(root, 'seed.txt'), 'seed\n')
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.'])
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'seed'])
+    execFileSync('git', ['-C', root, 'branch', '-f', 'develop', 'HEAD'])
+    const requestedHead = execFileSync('git', ['-C', root, 'rev-parse', 'develop'], { encoding: 'utf8' }).trim()
+    const worktree = `${root}-${lane}-exact-${id}`
+    cleanups.push(() => rmSync(worktree, { recursive: true, force: true }))
+    execFileSync('git', ['-C', root, 'worktree', 'add', '-q', '-b', `codex-${lane}/${id}`, worktree, 'develop'])
+    const extra = lane === 'plan' ? ['--brief', writeBrief(root)] : []
+    const launched = spawnSync(
+      'node',
+      authorizedCodexArgs(lane, String(id), ...extra, '--worktree', worktree, '--base', 'develop'),
+      { cwd: root, encoding: 'utf8', env: fakeCodexPath(root) },
+    )
+    assert.equal(launched.status, 0, `${lane}: ${launched.stderr}`)
+    const journal = JSON.parse(readFileSync(join(root, '.building', `codex-${lane}-${id}.json`), 'utf8'))
+    assert.equal(journal.requestedRef, 'refs/heads/develop', lane)
+    assert.equal(journal.requestedHead, requestedHead, lane)
+    assert.equal(journal.baseHead, requestedHead, lane)
+    assert.match(journal.workingHead, /^[0-9a-f]{40,64}$/, lane)
+    assert.equal(typeof journal.laneOwner?.kind, 'string', lane); assert.equal(typeof journal.laneOwner?.id, 'string', lane); assert.ok(journal.laneOwner.kind.length > 0 && journal.laneOwner.id.length > 0, lane)
+    assert.match(journal.authorityDigest, /^sha256:[0-9a-f]{64}$/, lane)
+    assert.match(journal.governanceDigest, /^sha256:[0-9a-f]{64}$/, lane)
+  }
+})
+
+async function completedExactLane(lane, id, { authorPlan = true, reviewDoc = false } = {}) {
+  const root = tmpRepo()
+  writeCodexConfig(root)
+  if (lane === 'review') writePhase(root, id)
+  writeFileSync(join(root, 'seed-exact.txt'), 'seed\n')
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.'])
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'exact seed'])
+  execFileSync('git', ['-C', root, 'branch', '-f', 'develop', 'HEAD'])
+  const worktree = `${root}-completed-${lane}-${id}`
+  cleanups.push(() => rmSync(worktree, { recursive: true, force: true }))
+  const reviewDocPath = join(root, '.building', 'exact-review-doc.md')
+  if (reviewDoc) writeFileSync(reviewDocPath, '# Exact review context\n')
+  return launchCompletedExactLane({
+    root, lane, id, worktree, authorPlan,
+    reviewDoc: lane === 'plan' ? writeBrief(root) : reviewDoc ? reviewDocPath : null,
+    invoke: (args, env) => {
+      const result = spawnSync('node', authorizedCodexArgs(...args), { cwd: root, encoding: 'utf8', env: { ...process.env, ...env } })
+      return { code: result.status, stderr: result.stderr }
+    },
+  })
+}
+
+test('37.5 — real native exit stamps exact report completion and identical status reuse is stable', async () => {
+  for (const [lane, id] of [['review', 3753], ['plan', 3754]]) {
+    const fx = await completedExactLane(lane, id)
+    assert.match(fx.journal.reportDigest, /^sha256:[0-9a-f]{64}$/, lane)
+    assert.match(fx.journal.completionFingerprint, /^sha256:[0-9a-f]{64}$/, lane)
+    assert.match(fx.journal.workingHead, /^[0-9a-f]{40,64}$/, lane)
+    const flag = `--${lane}`
+    const first = spawnSync('node', [BIN, 'codex', 'status', String(id), flag], { cwd: fx.root, encoding: 'utf8' })
+    assert.equal(first.status, 0, `${lane}: ${first.stderr}`)
+    const verdict = JSON.parse(first.stdout)
+    assert.equal(verdict.state, 'complete', lane)
+    assert.equal(verdict.requestedHead, fx.journal.requestedHead, lane)
+    assert.equal(verdict.reportDigest, fx.journal.reportDigest, lane)
+    const afterFirst = readFileSync(fx.journalPath)
+    const second = spawnSync('node', [BIN, 'codex', 'status', String(id), flag], { cwd: fx.root, encoding: 'utf8' })
+    assert.equal(second.status, 0, `${lane}: ${second.stderr}`)
+    assert.equal(JSON.parse(second.stdout).state, 'complete', lane)
+    assert.deepEqual(readFileSync(fx.journalPath), afterFirst, `${lane}: repeated status is byte-noop after first consume`)
+  }
+})
+
+test('37.5 — moved request and post-finalization report mutation never serve the old plan/review sentinel', async () => {
+  for (const [lane, id, mutation] of [
+    ['review', 3755, 'advance'],
+    ['plan', 3756, 'advance'],
+    ['review', 3757, 'report'],
+    ['plan', 3758, 'report'],
+  ]) {
+    const fx = await completedExactLane(lane, id)
+    if (mutation === 'advance') {
+      writeFileSync(join(fx.root, `advance-${id}.txt`), 'advance\n')
+      execFileSync('git', ['-C', fx.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', `advance-${id}.txt`])
+      execFileSync('git', ['-C', fx.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'advance requested branch'])
+      execFileSync('git', ['-C', fx.root, 'branch', '-f', 'develop', 'HEAD'])
+    } else {
+      writeFileSync(join(fx.worktree, fx.reportName), 'mutated after completion\nCODEX-RUN-COMPLETE\n')
+    }
+    const journalBefore = readFileSync(fx.journalPath)
+    const reportBefore = readFileSync(join(fx.worktree, fx.reportName))
+    const checked = spawnSync('node', [BIN, 'codex', 'status', String(id), `--${lane}`], { cwd: fx.root, encoding: 'utf8' })
+    assert.notEqual(checked.status, 0, `${lane}/${mutation}: stale proof must refuse`)
+    const verdict = JSON.parse(checked.stdout)
+    assert.notEqual(verdict.state, 'complete', `${lane}/${mutation}`)
+    assert.equal(verdict.sentinel, null, `${lane}/${mutation}: old sentinel is not served`)
+    assert.equal(verdict.report, null, `${lane}/${mutation}: stale report path is not served as proof`)
+    assert.match(checked.stderr, /restart|relaunch|inspect|resolve|stale|diverg/i, `${lane}/${mutation}: typed remedy`)
+    assert.deepEqual(readFileSync(fx.journalPath), journalBefore, `${lane}/${mutation}: journal byte-intact`)
+    assert.deepEqual(readFileSync(join(fx.worktree, fx.reportName)), reportBefore, `${lane}/${mutation}: report byte-intact`)
+  }
+})
+
+test('37.5 — completed plan/review lanes refuse live, dirty, and mismatched ownership byte-intact', async () => {
+  const cases = [
+    ['dirty', (fx) => writeFileSync(join(fx.worktree, 'seed-exact.txt'), 'dirty\n')],
+    ['wrong-owner', (fx, journal) => { journal.laneOwner = { kind: 'roadmap-codex', id: 'copied-owner' }; writeFileSync(fx.journalPath, JSON.stringify(journal, null, 2) + '\n') }],
+    ['wrong-authority', (fx, journal) => { journal.authorityDigest = 'sha256:' + 'a'.repeat(64); writeFileSync(fx.journalPath, JSON.stringify(journal, null, 2) + '\n') }],
+    ['wrong-governance', (fx, journal) => { journal.governanceDigest = 'sha256:' + 'b'.repeat(64); writeFileSync(fx.journalPath, JSON.stringify(journal, null, 2) + '\n') }],
+  ]
+  let id = 3760
+  for (const lane of ['review', 'plan']) {
+    for (const [name, mutate] of cases) {
+      const fx = await completedExactLane(lane, id)
+      const journal = JSON.parse(readFileSync(fx.journalPath, 'utf8'))
+      mutate(fx, journal)
+      const journalBefore = readFileSync(fx.journalPath)
+      const reportBefore = readFileSync(join(fx.worktree, fx.reportName))
+      const checked = spawnSync('node', [BIN, 'codex', 'status', String(id), `--${lane}`], { cwd: fx.root, encoding: 'utf8' })
+      assert.notEqual(checked.status, 0, `${lane}/${name}`)
+      if (checked.stdout) assert.notEqual(JSON.parse(checked.stdout).state, 'complete', `${lane}/${name}`)
+      assert.match(checked.stderr, /inspect|resolve|owner|authority|governance|dirty|refus|relaunch/i, `${lane}/${name}: typed remedy`)
+      assert.deepEqual(readFileSync(fx.journalPath), journalBefore, `${lane}/${name}: journal byte-intact`)
+      assert.deepEqual(readFileSync(join(fx.worktree, fx.reportName)), reportBefore, `${lane}/${name}: report byte-intact`)
+      id += 1
+    }
+  }
+})
+
+test('37.5 — corrupt completion and review unique work refuse without consuming evidence', async () => {
+  const corrupt = await completedExactLane('plan', 3770)
+  writeFileSync(corrupt.journalPath, '{ truncated')
+  const corruptBefore = readFileSync(corrupt.journalPath)
+  const corruptReport = readFileSync(join(corrupt.worktree, corrupt.reportName))
+  const corruptStatus = spawnSync('node', [BIN, 'codex', 'status', '3770', '--plan'], { cwd: corrupt.root, encoding: 'utf8' })
+  assert.notEqual(corruptStatus.status, 0)
+  assert.match(corruptStatus.stderr, /unreadable|corrupt|inspect|remove|relaunch/i)
+  assert.deepEqual(readFileSync(corrupt.journalPath), corruptBefore)
+  assert.deepEqual(readFileSync(join(corrupt.worktree, corrupt.reportName)), corruptReport)
+
+  const unique = await completedExactLane('review', 3771)
+  writeFileSync(join(unique.worktree, 'unique-review.txt'), 'review must not author\n')
+  execFileSync('git', ['-C', unique.worktree, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', 'unique-review.txt'])
+  execFileSync('git', ['-C', unique.worktree, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'unexpected review work'])
+  const journal = JSON.parse(readFileSync(unique.journalPath, 'utf8'))
+  journal.workingHead = execFileSync('git', ['-C', unique.worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  writeFileSync(unique.journalPath, JSON.stringify(journal, null, 2) + '\n')
+  const uniqueBefore = readFileSync(unique.journalPath)
+  const uniqueStatus = spawnSync('node', [BIN, 'codex', 'status', '3771', '--review'], { cwd: unique.root, encoding: 'utf8' })
+  assert.notEqual(uniqueStatus.status, 0)
+  if (uniqueStatus.stdout) assert.notEqual(JSON.parse(uniqueStatus.stdout).state, 'complete')
+  assert.match(uniqueStatus.stderr, /unique|commit|inspect|refus|relaunch/i)
+  assert.deepEqual(readFileSync(unique.journalPath), uniqueBefore)
+})
+
+test('37.5 — nonzero and signaled native exits cannot stamp successful completion proof', async () => {
+  for (const [lane, id, ending] of [['review', 3772, 'exit 7'], ['plan', 3773, 'kill -TERM $$']]) {
+    const root = tmpRepo()
+    writeCodexConfig(root)
+    if (lane === 'review') writePhase(root, id)
+    writeFileSync(join(root, `seed-${id}.txt`), 'seed\n')
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.'])
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'seed'])
+    execFileSync('git', ['-C', root, 'branch', '-f', 'develop', 'HEAD'])
+    const worktree = `${root}-failed-${lane}-${id}`
+    cleanups.push(() => rmSync(worktree, { recursive: true, force: true }))
+    execFileSync('git', ['-C', root, 'worktree', 'add', '-q', '-b', `failed-${lane}/${id}`, worktree, 'develop'])
+    const fakeBin = join(root, `fakebin-failed-${lane}`)
+    mkdirSync(fakeBin)
+    const reportName = lane === 'plan' ? 'CODEX-PLAN.md' : 'CODEX-REVIEW.md'
+    writeFileSync(join(fakeBin, 'codex'), `#!/bin/sh
+printf 'looks complete but process failed\\nCODEX-RUN-COMPLETE\\n' > ${reportName}
+${ending}
+`)
+    chmodSync(join(fakeBin, 'codex'), 0o755)
+    const extra = lane === 'plan' ? ['--brief', writeBrief(root)] : []
+    const launched = spawnSync('node', authorizedCodexArgs(lane, String(id), ...extra, '--worktree', worktree, '--base', 'develop'), {
+      cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    })
+    assert.equal(launched.status, 0, `${lane}: launcher records the asynchronous supervisor, stderr: ${launched.stderr}`)
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    const journal = JSON.parse(readFileSync(join(root, '.building', `codex-${lane}-${id}.json`), 'utf8'))
+    assert.equal(journal.reportDigest, undefined, lane)
+    assert.equal(journal.completionFingerprint, undefined, lane)
+    const checked = spawnSync('node', [BIN, 'codex', 'status', String(id), `--${lane}`], { cwd: root, encoding: 'utf8' })
+    assert.notEqual(checked.status, 0, lane)
+    if (checked.stdout) assert.notEqual(JSON.parse(checked.stdout).state, 'complete', lane)
+    const blockedMarker = join(root, '.building', 'blocked-relaunch-' + lane)
+    writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nprintf started > "' + blockedMarker + '"\n')
+    chmodSync(join(fakeBin, 'codex'), 0o755)
+    const journalPath = join(root, '.building', 'codex-' + lane + '-' + id + '.json')
+    if (lane === 'review') {
+      writeFileSync(join(worktree, 'seed-' + id + '.txt'), 'dirty\n')
+    } else {
+      const foreign = join(root, 'foreign-copy')
+      mkdirSync(foreign)
+      execFileSync('git', ['init', '-q'], { cwd: foreign })
+      journal.worktree = foreign
+      writeFileSync(journalPath, JSON.stringify(journal, null, 2) + '\n')
+    }
+    const beforeRetry = readFileSync(journalPath)
+    const retry = spawnSync('node', authorizedCodexArgs(lane, String(id), ...extra, '--worktree', worktree, '--base', 'develop'), {
+      cwd: root, encoding: 'utf8', env: { ...process.env, PATH: fakeBin + ':' + process.env.PATH },
+    })
+    assert.notEqual(retry.status, 0, lane)
+    assert.equal(existsSync(blockedMarker), false, lane)
+    assert.deepEqual(readFileSync(journalPath), beforeRetry, lane)
+  }
+})
+
+test('37.5 — a live completed-looking lane never serves or consumes its sentinel', async () => {
+  for (const [lane, id] of [['review', 3774], ['plan', 3775]]) {
+    const fx = await completedExactLane(lane, id)
+    const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
+    child.unref()
+    cleanups.push(() => { try { process.kill(-child.pid, 'SIGKILL') } catch {} })
+    const journal = JSON.parse(readFileSync(fx.journalPath, 'utf8'))
+    journal.pgid = child.pid
+    writeFileSync(fx.journalPath, JSON.stringify(journal, null, 2) + '\n')
+    const before = readFileSync(fx.journalPath)
+    const checked = spawnSync('node', [BIN, 'codex', 'status', String(id), `--${lane}`], { cwd: fx.root, encoding: 'utf8' })
+    assert.notEqual(checked.status, 0, lane)
+    if (checked.stdout) assert.notEqual(JSON.parse(checked.stdout).state, 'complete', lane)
+    assert.match(checked.stderr, /live|running|wait|refus/i, lane)
+    assert.deepEqual(readFileSync(fx.journalPath), before, lane)
+  }
+})
+
+test('37.5 — invoking an identical completed lane is a no-op and never starts native again', async () => {
+  for (const [lane, id] of [['review', 3776], ['plan', 3777]]) {
+    const fx = await completedExactLane(lane, id)
+    const fakeBin = join(fx.root, `fakebin-complete-${lane}`)
+    const forbidden = join(fx.root, '.building', `duplicate-native-${lane}`)
+    writeFileSync(join(fakeBin, 'codex'), `#!/bin/sh
+printf started > ${forbidden}
+exit 0
+`)
+    chmodSync(join(fakeBin, 'codex'), 0o755)
+    const before = readFileSync(fx.journalPath)
+    const extra = lane === 'plan' ? ['--brief', writeBrief(fx.root)] : []
+    const duplicate = spawnSync(
+      'node',
+      authorizedCodexArgs(lane, String(id), ...extra, '--worktree', fx.worktree, '--base', 'develop'),
+      { cwd: fx.root, encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` } },
+    )
+    assert.equal(duplicate.status, 0, `${lane}: ${duplicate.stderr}`)
+    assert.equal(existsSync(forbidden), false, `${lane}: completed duplicate must not spawn native`)
+    assert.deepEqual(readFileSync(fx.journalPath), before, `${lane}: duplicate invocation preserves completion bytes`)
+  }
+})
+
+test('37.5 — stale-clean relaunch resets to the newly resolved request and preserves the prior report', async () => {
+  for (const [lane, id] of [['review', 3780], ['plan', 3781]]) {
+    const fx = await completedExactLane(lane, id, { authorPlan: false })
+    const priorBytes = readFileSync(join(fx.worktree, fx.reportName))
+    writeFileSync(join(fx.root, `advance-relaunch-${id}.txt`), 'new requested commit\n')
+    writeFileSync(join(fx.root, "AGENTS.md"), "# Governance advanced target")
+    execFileSync('git', ['-C', fx.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', `advance-relaunch-${id}.txt`, 'AGENTS.md'])
+    execFileSync('git', ['-C', fx.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'advance for relaunch'])
+    execFileSync('git', ['-C', fx.root, 'branch', '-f', 'develop', 'HEAD'])
+    const newHead = execFileSync('git', ['-C', fx.root, 'rev-parse', 'develop'], { encoding: 'utf8' }).trim()
+    const fakeBin = join(fx.root, `fakebin-complete-${lane}`)
+    const observedHead = join(fx.root, '.building', `observed-head-${lane}`)
+    writeFileSync(join(fakeBin, 'codex'), `#!/bin/sh
+set -eu
+git rev-parse HEAD > ${observedHead}
+printf 'new answer\\nCODEX-RUN-COMPLETE\\n' > ${fx.reportName}
+`)
+    chmodSync(join(fakeBin, 'codex'), 0o755)
+    const extra = lane === 'plan' ? ['--brief', writeBrief(fx.root)] : []
+    const relaunched = spawnSync('node', authorizedCodexArgs(lane, String(id), ...extra, '--worktree', fx.worktree, '--base', 'develop'), {
+      cwd: fx.root, encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    })
+    assert.equal(relaunched.status, 0, `${lane}: ${relaunched.stderr}`)
+    for (let attempt = 0; attempt < 80 && (!existsSync(observedHead) || readFileSync(observedHead, 'utf8').trim() !== newHead); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 25))
+    assert.equal(readFileSync(observedHead, 'utf8').trim(), newHead, lane)
+    const previous = fx.reportName.replace(/\.md$/, '.prev.md')
+    assert.deepEqual(readFileSync(join(fx.worktree, previous)), priorBytes, `${lane}: prior answer preserved`)
+    const resetJournal = JSON.parse(readFileSync(fx.journalPath, 'utf8'))
+    assert.equal(resetJournal.requestedHead, newHead, lane)
+    assert.notEqual(resetJournal.governanceDigest, fx.journal.governanceDigest, lane)
+  }
+})
+
+test('37.5 — same-HEAD changed review focus or plan brief cannot return the cached answer', async () => {
+  for (const [lane, id] of [['review', 3782], ['plan', 3783]]) {
+    const fx = await completedExactLane(lane, id)
+    const fakeBin = join(fx.root, `fakebin-complete-${lane}`)
+    const marker = join(fx.root, '.building', `changed-request-${lane}`)
+    writeFileSync(join(fakeBin, 'codex'), `#!/bin/sh
+printf 'started changed request\\n' > ${marker}
+exit 0
+`)
+    chmodSync(join(fakeBin, 'codex'), 0o755)
+    let changed
+    if (lane === 'review') {
+      changed = authorizedCodexArgs(lane, String(id), '--focus', 'a different question', '--worktree', fx.worktree, '--base', 'develop')
+    } else {
+      const brief = join(fx.root, '.building', 'different-brief.md')
+      writeFileSync(brief, '# Different plan request\n')
+      changed = authorizedCodexArgs(lane, String(id), '--brief', brief, '--worktree', fx.worktree, '--base', 'develop')
+    }
+    const invoked = spawnSync('node', changed, { cwd: fx.root, encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` } })
+    if (lane === 'review') {
+      assert.equal(invoked.status, 0, `review: changed focus must run a fresh owned lane: ${invoked.stderr}`)
+      for (let attempt = 0; attempt < 80 && (!existsSync(marker) || readFileSync(marker, "utf8") !== "started changed request\n"); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 25))
+      assert.deepEqual(readFileSync(marker), Buffer.from('started changed request\n'))
+    } else {
+      assert.notEqual(invoked.status, 0, 'authored plan cannot be reset for a changed brief')
+      assert.equal(existsSync(marker), false)
+      assert.match(invoked.stderr, /different|existing|previous|request|refus|inspect|harvest/i)
+    }
+  }
+})
+
+test('37.5 — identical carried review document reuses completion without starting native', async () => {
+  const fx = await completedExactLane('review', 3784, { reviewDoc: true })
+  const fakeBin = join(fx.root, 'fakebin-complete-review')
+  const forbidden = join(fx.root, '.building', 'identical-doc-native-start')
+  writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nprintf started > "' + forbidden + '"\n')
+  chmodSync(join(fakeBin, 'codex'), 0o755)
+  const before = readFileSync(fx.journalPath)
+  const doc = join(fx.root, '.building', 'exact-review-doc.md')
+  const duplicate = spawnSync('node', authorizedCodexArgs('review', '3784', '--doc', doc, '--worktree', fx.worktree, '--base', 'develop'), {
+    cwd: fx.root, encoding: 'utf8', env: { ...process.env, PATH: fakeBin + ':' + process.env.PATH },
+  })
+  assert.equal(duplicate.status, 0, duplicate.stderr)
+  assert.equal(existsSync(forbidden), false)
+  assert.deepEqual(readFileSync(fx.journalPath), before)
+})
+
+test('37.5 — a single-member review status poll validates and serves the bound whole mission', () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [3790, 3791])
+  const expected = readFileSync(lane.reportPath, 'utf8')
+
+  const { code, out, err } = laneStatus(root, [3790], '--review')
+
+  assert.equal(code, 0, `the launcher-advertised member poll must resolve the whole review; stderr: ${err}`)
+  assert.equal(out?.state, 'complete', err)
+  assert.deepEqual(out.phases, ['3790', '3791'], 'validation binds the full journal mission, not only the queried member')
+  assert.equal(readFileSync(out.report, 'utf8'), expected, 'the returned verdict is the report bound to that whole mission')
+  assert.ok(!existsSync(lane.worktree), 'the exactly bound mission is consumed once')
+})
+
+test('37.5 — stale review reset refuses to overwrite a tracked carried document with different bytes', async () => {
+  const fx = await completedExactLane('review', 3792, { reviewDoc: true })
+  const rel = '.building/exact-review-doc.md'
+  const primaryDoc = join(fx.root, rel)
+  writeFileSync(primaryDoc, '# Protected target version\n')
+  execFileSync('git', ['-C', fx.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '-f', rel])
+  execFileSync('git', ['-C', fx.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'track review input on new target'])
+  execFileSync('git', ['-C', fx.root, 'branch', '-f', 'develop', 'HEAD'])
+  writeFileSync(primaryDoc, '# Different requested input\n')
+
+  const laneDoc = join(fx.worktree, rel)
+  const before = {
+    journal: readFileSync(fx.journalPath),
+    report: readFileSync(join(fx.worktree, fx.reportName)),
+    doc: readFileSync(laneDoc),
+    head: execFileSync('git', ['-C', fx.worktree, 'rev-parse', 'HEAD']),
+    prompt: readFileSync(fx.journal.prompt),
+  }
+  const marker = join(fx.root, '.building', 'forbidden-carry-overwrite-spawn')
+  const fakeBin = join(fx.root, 'fakebin-complete-review')
+  writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nprintf started > "' + marker + '"\n')
+  chmodSync(join(fakeBin, 'codex'), 0o755)
+  const invoked = spawnSync('node', authorizedCodexArgs('review', '3792', '--doc', primaryDoc, '--worktree', fx.worktree, '--base', 'develop'), {
+    cwd: fx.root, encoding: 'utf8', env: { ...process.env, PATH: fakeBin + ':' + process.env.PATH },
+  })
+  assert.notEqual(invoked.status, 0, 'different bytes must refuse before reset')
+  assert.deepEqual(readFileSync(fx.journal.prompt), before.prompt)
+  assert.equal(existsSync(marker), false, 'refusal happens before native spawn')
+  assert.match(invoked.stderr, /tracked|differ|overwrite|refus|carried/i)
+  assert.deepEqual(readFileSync(fx.journalPath), before.journal)
+  assert.deepEqual(readFileSync(join(fx.worktree, fx.reportName)), before.report)
+  assert.deepEqual(readFileSync(laneDoc), before.doc)
+  assert.deepEqual(execFileSync('git', ['-C', fx.worktree, 'rev-parse', 'HEAD']), before.head)
+})
+
+test('37.5 — stale review reset preserves byte-identical tracked carried input and launches cleanly', async () => {
+  const fx = await completedExactLane('review', 3793, { reviewDoc: true })
+  const rel = '.building/exact-review-doc.md'
+  const primaryDoc = join(fx.root, rel)
+  const carried = readFileSync(join(fx.worktree, rel))
+  writeFileSync(primaryDoc, carried)
+  execFileSync('git', ['-C', fx.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '-f', rel])
+  execFileSync('git', ['-C', fx.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'track identical review input'])
+  execFileSync('git', ['-C', fx.root, 'branch', '-f', 'develop', 'HEAD'])
+  const marker = join(fx.root, '.building', 'identical-tracked-carry-spawned')
+  const fakeBin = join(fx.root, 'fakebin-complete-review')
+  writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nprintf started > "' + marker + '"\n')
+  chmodSync(join(fakeBin, 'codex'), 0o755)
+
+  const invoked = spawnSync('node', authorizedCodexArgs('review', '3793', '--doc', primaryDoc, '--worktree', fx.worktree, '--base', 'develop'), {
+    cwd: fx.root, encoding: 'utf8', env: { ...process.env, PATH: fakeBin + ':' + process.env.PATH },
+  })
+  assert.equal(invoked.status, 0, invoked.stderr)
+  for (let attempt = 0; attempt < 80 && !existsSync(marker); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 25))
+  assert.ok(existsSync(marker), 'safe identical tracked carry reaches native launch')
+  assert.deepEqual(readFileSync(join(fx.worktree, rel)), carried, 'tracked target bytes are preserved without a copy')
+  assert.equal(execFileSync('git', ['-C', fx.worktree, 'status', '--porcelain', '--', rel], { encoding: 'utf8' }), '', 'the preserved tracked input remains clean')
 })

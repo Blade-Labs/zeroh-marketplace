@@ -1,0 +1,57 @@
+{
+  "phase": 37,
+  "date": "2026-09-07",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 44
+  },
+  "taskCount": 6,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/templates/schema.ts",
+    "plugins/zeroh-roadmap/cli/lib/workflow-steps.mjs",
+    "plugins/zeroh-roadmap/cli/lib/derive.mjs",
+    "plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs",
+    "plugins/zeroh-roadmap/cli/lib/codex-journal.mjs",
+    "plugins/zeroh-roadmap/cli/commands/codex.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 421749
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "unverified"
+    }
+  }
+}

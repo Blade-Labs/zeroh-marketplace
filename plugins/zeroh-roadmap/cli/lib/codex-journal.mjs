@@ -7,8 +7,14 @@
  * lib→command dependency inversion. Bodies and docblocks moved verbatim, a MOVE not a rewrite;
  * every consumer — the launcher included — imports the names from HERE, so there is one home.
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { createHash, randomUUID } from 'node:crypto'
+import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { basename, isAbsolute, join, resolve } from 'node:path'
+import { roadmapRootRel } from './roadmap-root.mjs'
+import { resolveGovernance } from './governance.mjs'
+import { intersectAuthority } from './drivers.mjs'
+import { groupAlive, listWorktrees } from './worktree.mjs'
 
 /**
  * One entry per mission. Adding a lane is adding an entry here — the launcher, the liveness guard,
@@ -40,6 +46,28 @@ export function writeJournal(root, journal, { label } = {}) {
   const path = journalPath(root, journal.phases, journal.lane ?? 'run', { label })
   mkdirSync(join(root, '.building'), { recursive: true })
   writeFileSync(path, JSON.stringify(journal, null, 2) + '\n')
+  return path
+}
+
+export function writeJournalAtomic(root, journal, { label } = {}) {
+  const path = journalPath(root, journal.phases, journal.lane ?? 'run', { label })
+  const dir = join(root, '.building')
+  mkdirSync(dir, { recursive: true })
+  if (realpathSync(dir) !== resolve(dir)) throw new Error('journal directory must be canonical')
+  const temp = `${path}.${randomUUID()}.tmp`
+  let fd
+  try {
+    fd = openSync(temp, 'wx', 0o600)
+    writeFileSync(fd, JSON.stringify(journal, null, 2) + '\n')
+    fsyncSync(fd)
+    closeSync(fd); fd = undefined
+    renameSync(temp, path)
+    const dirFd = openSync(dir, 'r')
+    try { fsyncSync(dirFd) } finally { closeSync(dirFd) }
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+    try { unlinkSync(temp) } catch {}
+  }
   return path
 }
 
@@ -207,4 +235,361 @@ export function findClosedJournal(root, ids, lane = 'run', { strict = false, wor
   }
   if (strict && failures.length > 0) throw new JournalUnreadableError(failures)
   return null
+}
+
+// -- Exact-head lane classification ---------------------------------------------------
+
+const stableBinding = (value) => {
+  if (Array.isArray(value)) return `[${value.map(stableBinding).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableBinding(value[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+/** Digest structured launch evidence using the same canonical byte grammar as completion binding. */
+export function journalBindingDigestOf(value) {
+  const bytes = stableBinding(value)
+  return bytes === undefined ? null : `sha256:${createHash('sha256').update(bytes).digest('hex')}`
+}
+
+export function journalBytesDigestOf(value) {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`
+}
+
+/** Fingerprint only the fields that bind one completed lane result. */
+export function completionFingerprintOf(journal) {
+  const binding = {
+    phases: journal?.phases,
+    lane: journal?.lane ?? 'run',
+    worktree: journal?.worktree,
+    requestedRef: journal?.requestedRef,
+    requestedHead: journal?.requestedHead,
+    baseHead: journal?.baseHead,
+    workingHead: journal?.workingHead,
+    report: journal?.report,
+    reportDigest: journal?.reportDigest,
+    laneOwner: journal?.laneOwner,
+    authorityDigest: journal?.authorityDigest,
+    governanceDigest: journal?.governanceDigest,
+    requestDigest: journal?.requestDigest,
+    ownerRoot: journal?.ownerRoot,
+    prompt: journal?.prompt,
+    carriedIn: journal?.carriedIn,
+    carriedDigest: journal?.carriedDigest,
+    launchId: journal?.launchId,
+    driverExit: journal?.driverExit,
+  }
+  return journalBindingDigestOf(binding)
+}
+
+const defaultGit = (file, args, opts = {}) => {
+  try {
+    return { status: 0, stdout: execFileSync(file, args, { ...opts, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }), stderr: '' }
+  } catch (error) {
+    return { status: error.status ?? 1, stdout: error.stdout?.toString() ?? '', stderr: error.stderr?.toString() ?? error.message }
+  }
+}
+
+const refusal = (state, evidence = {}) => ({ state, restartable: false, evidence })
+const sameJson = (a, b) => stableBinding(a) === stableBinding(b)
+const digestFile = (path) => `sha256:${createHash('sha256').update(readFileSync(path)).digest('hex')}`
+const SHA256 = /^sha256:[0-9a-f]{64}$/
+const GIT_HEAD = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/
+const nonblank = (value) => typeof value === 'string' && value.trim().length > 0
+const validOwner = (owner) => owner && typeof owner === 'object' && !Array.isArray(owner)
+  && nonblank(owner.kind) && nonblank(owner.id)
+
+function canonicalExisting(path) {
+  try { return realpathSync(path) } catch { return null }
+}
+
+function commonDir(worktree, exec) {
+  const result = gitProbe(exec, worktree, ['rev-parse', '--git-common-dir'])
+  if (result.status !== 0 || !result.stdout.trim()) return null
+  const raw = result.stdout.trim()
+  return canonicalExisting(isAbsolute(raw) ? raw : resolve(worktree, raw))
+}
+
+function gitProbe(exec, cwd, args) {
+  try { return exec('git', ['-C', cwd, ...args]) } catch (error) {
+    return { status: 1, stdout: '', stderr: error.message }
+  }
+}
+
+function inspectLane(root, ids, expected, { isAlive, exec }, allowArchived = false) {
+  let found
+  try {
+    found = findJournal(root, ids, expected?.lane ?? 'run')
+  } catch (error) {
+    return refusal('corrupt', { error: error.message })
+  }
+  if (!found) return refusal('corrupt', { error: 'journal missing' })
+  const { journal, path } = found
+  const lane = expected?.lane ?? 'run'
+  const label = lane === 'run' && /^[a-z0-9]+$/.test(journal.label ?? '') ? journal.label : undefined
+  const reportName = label ? `CODEX-REPORT.${label}.md` : LANES[lane]?.report
+  const expectedJournalName = LANES[lane] ? basename(journalPath(root, ids, lane, { label })) : null
+  const pathReal = canonicalExisting(path)
+  let pathIsLink = true
+  try { pathIsLink = lstatSync(path).isSymbolicLink() } catch {}
+  if (!LANES[lane] || pathIsLink || !pathReal || pathReal !== resolve(path)
+    || basename(path) !== expectedJournalName
+    || journal.lane !== lane || !sameJson(journal.phases, ids)) {
+    return refusal('corrupt', { path, error: 'journal scope or path does not match the requested lane' })
+  }
+  if (!validOwner(journal.laneOwner) || !validOwner(expected?.laneOwner)
+    || !SHA256.test(journal.authorityDigest) || !SHA256.test(expected?.authorityDigest)
+    || !SHA256.test(journal.governanceDigest) || !SHA256.test(expected?.governanceDigest)
+    || !Number.isSafeInteger(journal.pgid) || journal.pgid <= 0
+    || !GIT_HEAD.test(journal.baseHead) || !GIT_HEAD.test(journal.requestedHead)
+    || !GIT_HEAD.test(journal.workingHead)
+    || !nonblank(journal.requestedRef) || !nonblank(expected?.requestedRef)) {
+    return refusal('corrupt', { path, error: 'journal identity metadata is missing or malformed' })
+  }
+  const rootReal = canonicalExisting(root)
+  const worktreeReal = canonicalExisting(journal.worktree)
+  const expectedWorktree = canonicalExisting(expected?.worktree)
+  const archived = allowArchived && !worktreeReal && !existsSync(journal.worktree ?? '')
+    && isAbsolute(journal.worktree ?? '') && nonblank(expected?.worktree)
+    && resolve(journal.worktree) === resolve(expected.worktree)
+    && Number.isFinite(Date.parse(journal.archivedAt))
+    && journal.ownerRoot === rootReal
+  let registered
+  try { registered = listWorktrees(root).map(({ dir }) => canonicalExisting(dir)).filter(Boolean) } catch (error) {
+    return refusal('unowned', { path, error: error.message })
+  }
+  const rootCommon = rootReal ? commonDir(rootReal, exec) : null
+  const worktreeCommon = worktreeReal ? commonDir(worktreeReal, exec) : null
+  if (!rootReal || !rootCommon || (!archived && (!worktreeReal || !expectedWorktree || worktreeReal !== expectedWorktree
+    || !registered.includes(worktreeReal) || !worktreeCommon || rootCommon !== worktreeCommon))
+    || (journal.ownerRoot !== undefined && journal.ownerRoot !== rootReal)) {
+    return refusal('unowned', { path, worktree: journal.worktree })
+  }
+  if (!sameJson(journal.laneOwner, expected.laneOwner)
+    || journal.authorityDigest !== expected.authorityDigest
+    || (expected.governanceDigest !== undefined && journal.governanceDigest !== expected.governanceDigest)) {
+    return refusal('unowned', { path, laneOwner: journal.laneOwner, authorityDigest: journal.authorityDigest })
+  }
+  try {
+    if (isAlive(journal.pgid)) return refusal('live', { path, pgid: journal.pgid })
+  } catch (error) {
+    return refusal('corrupt', { path, error: error.message })
+  }
+
+  return { journal, path, lane, reportName, rootReal, worktreeReal, archived }
+}
+
+function laneDirt(context, exec) {
+  const { journal, path, reportName, worktreeReal } = context
+  const status = gitProbe(exec, worktreeReal, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+  if (status.status !== 0) return refusal('dirty', { path, error: status.stderr })
+  let artifactRoot
+  try { artifactRoot = roadmapRootRel(worktreeReal) } catch (error) {
+    return refusal('corrupt', { path, error: error.message })
+  }
+  const allowed = new Set([reportName, prevReportName(reportName), `${artifactRoot}/.arc-mode`])
+  if (journal.carriedIn) {
+    const carried = canonicalExisting(resolve(worktreeReal, journal.carriedIn))
+    try {
+      if (!carried || !carried.startsWith(`${worktreeReal}/`) || !SHA256.test(journal.carriedDigest)
+        || digestFile(carried) !== journal.carriedDigest) return refusal('dirty', { path, error: 'carried input changed or is unreadable' })
+      allowed.add(journal.carriedIn)
+    } catch (error) { return refusal('dirty', { path, error: error.message }) }
+  }
+  const changes = status.stdout.split('\0').filter(Boolean)
+    .filter((line) => !line.startsWith('?? ') || !allowed.has(line.slice(3)))
+  if (changes.length) return refusal('dirty', { path, changes })
+  if (journal.report !== reportName) return refusal('corrupt', { path, error: 'journal report does not match the requested lane' })
+  return null
+}
+
+/** Read-only classification of one plan/review/run lane against a newly resolved request. */
+export function classifyJournal(root, ids, expected, { isAlive = groupAlive, exec = defaultGit } = {}) {
+  const context = inspectLane(root, ids, expected, { isAlive, exec })
+  if (context.state) return context
+  const { journal, path, rootReal, worktreeReal } = context
+  const dirty = laneDirt(context, exec)
+  if (dirty) return dirty
+
+  const requested = gitProbe(exec, rootReal, ['rev-parse', '--verify', '--end-of-options', `${expected.requestedRef}^{commit}`])
+  if (journal.requestedRef !== expected.requestedRef || requested.status !== 0 || !requested.stdout.trim()
+    || expected.requestedHead !== requested.stdout.trim()) {
+    return refusal('diverged', { path, requestedRef: expected.requestedRef, requestedHead: requested.stdout.trim() || null })
+  }
+  const head = gitProbe(exec, worktreeReal, ['rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}'])
+  if (head.status !== 0 || head.stdout.trim() !== journal.workingHead) {
+    return refusal('diverged', { path, workingHead: head.stdout.trim() || null, recordedWorkingHead: journal.workingHead })
+  }
+  const baseOwned = gitProbe(exec, worktreeReal, ['merge-base', '--is-ancestor', journal.baseHead, journal.workingHead])
+  const requestAdvanced = gitProbe(exec, rootReal, ['merge-base', '--is-ancestor', journal.requestedHead, expected.requestedHead])
+  if (journal.baseHead !== journal.requestedHead || baseOwned.status !== 0 || requestAdvanced.status !== 0) {
+    return refusal('diverged', { path, error: baseOwned.stderr || requestAdvanced.stderr })
+  }
+  const unique = gitProbe(exec, worktreeReal, ['rev-list', '--count', `${expected.requestedHead}..${journal.workingHead}`])
+  if (unique.status !== 0) return refusal('diverged', { path, error: unique.stderr })
+  if (Number(unique.stdout.trim()) > 0) return refusal('unique-commit', { path, count: Number(unique.stdout.trim()) })
+
+  const reportPath = resolve(worktreeReal, journal.report ?? '')
+  const reportReal = canonicalExisting(reportPath)
+  const completed = typeof journal.reportDigest === 'string' && typeof journal.completionFingerprint === 'string'
+  const partialCompletion = journal.reportDigest !== undefined || journal.completionFingerprint !== undefined
+  if (partialCompletion && !completed) return refusal('corrupt', { path, error: 'completion binding is incomplete' })
+  if (completed) {
+    const expectedFingerprint = completionFingerprintOf(journal)
+    let actualReportDigest
+    try { actualReportDigest = reportReal ? digestFile(reportReal) : null } catch (error) {
+      return refusal('diverged', { path, error: error.message })
+    }
+    if (!reportReal || !reportReal.startsWith(worktreeReal + '/')
+      || actualReportDigest !== journal.reportDigest
+      || journal.completionFingerprint !== expectedFingerprint
+      || !SHA256.test(journal.reportDigest) || !SHA256.test(journal.completionFingerprint)) {
+      return refusal('diverged', { path, reportDigest: journal.reportDigest, completionFingerprint: journal.completionFingerprint })
+    }
+    const changedRequest = SHA256.test(expected.requestDigest) && SHA256.test(journal.requestDigest)
+      && expected.requestDigest !== journal.requestDigest
+    if (journal.requestedHead !== expected.requestedHead || changedRequest) {
+      return {
+        state: 'stale-clean', restartable: true,
+        requestedHead: expected.requestedHead, workingHead: journal.workingHead,
+        evidence: { path, priorRequestedHead: journal.requestedHead, ...(changedRequest ? { reason: 'request-changed' } : {}) },
+      }
+    }
+    if (expected.reportDigest !== journal.reportDigest
+      || expected.completionFingerprint !== journal.completionFingerprint) {
+      return refusal('diverged', { path, reportDigest: journal.reportDigest, completionFingerprint: journal.completionFingerprint })
+    }
+    return {
+      state: 'reusable', restartable: false,
+      requestedHead: expected.requestedHead, workingHead: journal.workingHead,
+      evidence: { path, reportDigest: journal.reportDigest, completionFingerprint: journal.completionFingerprint },
+    }
+  }
+  return {
+    state: 'stale-clean', restartable: true,
+    requestedHead: expected.requestedHead, workingHead: journal.workingHead,
+    evidence: { path, priorRequestedHead: journal.requestedHead },
+  }
+}
+
+/** Validate a completed result without granting reset or disposal authority. */
+function validateImmutableCompletionBinding(root, ids, lane, expected, { isAlive = groupAlive, exec = defaultGit } = {}, historical = false, requireArchived = false) {
+  if (!['plan', 'review'].includes(lane)) return refusal('corrupt', { error: 'completion is only defined for plan/review lanes' })
+  const context = inspectLane(root, ids, { ...expected, lane }, { isAlive, exec }, true)
+  if (context.state) return context
+  if (requireArchived && !context.archived) return refusal('unowned', { path: context.path, error: 'review completion is not archived with its worktree absent' })
+  const { journal, path, rootReal, worktreeReal, archived, reportName } = context
+  if (journal.report !== reportName || journal.ownerRoot !== rootReal
+    || !nonblank(journal.launchId) || !Number.isFinite(Date.parse(journal.finishedAt))
+    || journal.driverExit?.code !== 0 || journal.driverExit?.signal != null || journal.driverExit?.error
+    || !journal.authority || !journal.governance || journal.governance.hold
+    || journalBindingDigestOf(journal.authority) !== journal.authorityDigest
+    || journalBindingDigestOf(journal.governance) !== journal.governanceDigest) {
+    return refusal('corrupt', { path, error: 'successful native completion bindings are missing or inconsistent' })
+  }
+  try {
+    const authority = intersectAuthority(journal.authority.parent, journal.authority.request)
+    if (!sameJson(authority.effective, journal.authority.effective)
+      || journal.authority.native?.driver !== 'codex' || !Array.isArray(journal.authority.native?.argv)
+      || journal.governance.root !== journal.worktree || !Array.isArray(journal.governance.targets)
+      || !Array.isArray(journal.governance.instructions) || !journal.governance.taskRunners) {
+      return refusal('corrupt', { path, error: 'authority or governance receipt is malformed' })
+    }
+  } catch (error) { return refusal('corrupt', { path, error: error.message }) }
+  const requested = gitProbe(exec, rootReal, ['rev-parse', '--verify', '--end-of-options',
+    `${historical ? journal.requestedHead : expected.requestedRef}^{commit}`])
+  if (requested.status !== 0 || requested.stdout.trim() !== expected.requestedHead
+    || journal.requestedRef !== expected.requestedRef || journal.requestedHead !== expected.requestedHead) {
+    return refusal('diverged', { path, reason: 'request-mismatch' })
+  }
+  const head = gitProbe(exec, archived ? rootReal : worktreeReal,
+    ['rev-parse', '--verify', '--end-of-options', `${archived ? journal.workingHead : 'HEAD'}^{commit}`])
+  if (journal.baseHead !== journal.requestedHead
+    || head.status !== 0 || head.stdout.trim() !== journal.workingHead) {
+    return refusal('diverged', { path, reason: 'head-mismatch' })
+  }
+  const relation = lane === 'review' ? journal.workingHead === expected.requestedHead
+    : gitProbe(exec, rootReal, ['merge-base', '--is-ancestor', expected.requestedHead, journal.workingHead]).status === 0
+  if (!relation) return refusal(lane === 'review' ? 'unique-commit' : 'diverged', { path })
+  if (!archived) {
+    const dirty = laneDirt(context, exec)
+    if (dirty) return dirty
+  }
+  const promptPath = path.replace(/\.json$/, '-prompt.txt')
+  const reportPath = archived ? path.replace(/\.json$/, '-REPORT.md') : resolve(worktreeReal, reportName)
+  try {
+    if (journal.prompt !== promptPath || canonicalExisting(promptPath) !== resolve(promptPath)
+      || (archived && journal.archivedReport !== reportPath)
+      || canonicalExisting(reportPath) !== resolve(reportPath)) return refusal('unowned', { path, error: 'completion artifact path does not belong to this lane' })
+    const carriedDigest = journal.carriedIn
+      ? (archived ? journal.carriedDigest : digestFile(resolve(worktreeReal, journal.carriedIn))) : null
+    if (journal.carriedIn && (!SHA256.test(carriedDigest) || carriedDigest !== journal.carriedDigest)) {
+      return refusal('diverged', { path, error: 'carried input binding changed' })
+    }
+    const requestDigest = journalBindingDigestOf({ prompt: readFileSync(promptPath, 'utf8'), carriedDigest })
+    if (!SHA256.test(journal.requestDigest) || requestDigest !== journal.requestDigest
+      || (expected.requestDigest !== undefined && expected.requestDigest !== requestDigest)) {
+      return refusal('diverged', { path, error: 'request bytes changed' })
+    }
+    const report = readFileSync(reportPath)
+    const reportDigest = journalBytesDigestOf(report)
+    if (report.toString('utf8').match(/CODEX-RUN-(COMPLETE|BLOCKED)/)?.[0] !== 'CODEX-RUN-COMPLETE'
+      || !SHA256.test(journal.reportDigest) || reportDigest !== journal.reportDigest
+      || !SHA256.test(journal.completionFingerprint)
+      || completionFingerprintOf(journal) !== journal.completionFingerprint) return refusal('diverged', { path })
+    return {
+      state: 'reusable', restartable: false, reportPath,
+      requestedHead: journal.requestedHead, workingHead: journal.workingHead,
+      evidence: { path, requestedHead: journal.requestedHead, workingHead: journal.workingHead, reportDigest, completionFingerprint: journal.completionFingerprint },
+    }
+  } catch (error) { return refusal('diverged', { path, error: error.message }) }
+}
+
+/** A newly requested result must still match the ref resolved now. */
+export function validateLaneCompletion(root, ids, lane, expected, opts) {
+  return validateImmutableCompletionBinding(root, ids, lane, expected, opts)
+}
+
+/** Prove an archived review's original completion without treating it as fresh for a moved ref. */
+export function validateArchivedReviewCompletion(root, ids, expected, opts) {
+  let found
+  try { found = findJournal(root, ids, 'review') } catch (error) {
+    return { valid: false, purpose: 'archived-review', state: 'corrupt', evidence: { error: error.message } }
+  }
+  if (found && (!Number.isFinite(Date.parse(found.journal.archivedAt)) || existsSync(found.journal.worktree ?? ''))) {
+    return {
+      valid: false, purpose: 'archived-review', state: 'unowned',
+      evidence: { path: found.path, error: 'review completion is not archived with its worktree absent' },
+    }
+  }
+  const checked = validateImmutableCompletionBinding(root, ids, 'review', expected, opts, true, true)
+  if (checked.state !== 'reusable') {
+    return { valid: false, purpose: 'archived-review', state: checked.state, evidence: checked.evidence }
+  }
+  return {
+    valid: true, purpose: 'archived-review', originalRequestedHead: checked.requestedHead,
+    workingHead: checked.workingHead, reportPath: checked.reportPath, evidence: checked.evidence,
+  }
+}
+
+/** Historical plan evidence can feed only the existing harvest owner, never a new request. */
+export function validatePlanArchiveCandidate(root, ids, journal, opts) {
+  let governance = journal?.governance
+  try {
+    if (existsSync(journal?.worktree ?? '')) governance = resolveGovernance(journal.worktree, journal.governance?.targets ?? [])
+  } catch (error) {
+    return { valid: false, purpose: 'plan-archive', state: 'corrupt', evidence: { error: error.message } }
+  }
+  const checked = validateImmutableCompletionBinding(root, ids, 'plan', {
+    worktree: journal?.worktree, requestedRef: journal?.requestedRef, requestedHead: journal?.requestedHead,
+    laneOwner: { kind: 'roadmap-codex', id: `plan:${ids.join('-')}` },
+    authorityDigest: journalBindingDigestOf(journal?.authority),
+    governanceDigest: journalBindingDigestOf(governance),
+  }, opts, true)
+  if (checked.state !== 'reusable') return { valid: false, purpose: 'plan-archive', state: checked.state, evidence: checked.evidence }
+  return {
+    valid: true, purpose: 'plan-archive', originalRequestedHead: checked.requestedHead,
+    workingHead: checked.workingHead, reportPath: checked.reportPath, evidence: checked.evidence,
+  }
 }
