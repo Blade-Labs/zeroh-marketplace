@@ -84,6 +84,42 @@ const MergePolicyShape = z.strictObject({
   gapsCorrection: z.enum(['autonomous', 'hold']).optional(),
 })
 
+// Delivery selects provider intent; local integration policy grants no provider authority.
+const deliveryString = z.string().min(1).regex(/^\S(?:.*\S)?$/)
+const deliveryRef = deliveryString.regex(/^(?!-)(?!.*(?:\.\.|@\{))[^\s\\~^:?*\[\]\x00-\x1f\x7f]+$/)
+const exactPushRef = deliveryRef.regex(/^refs\/heads\/(?!.*(?:\/\/|\/\.|\.lock(?:\/|$)))(?!\.)(?!.*[./]$).+$/)
+const uniqueDeliveryList = (shape, min = 0) => z.array(shape).min(min)
+  .refine(values => new Set(values).size === values.length, 'delivery entries must be unique')
+  .meta({ uniqueItems: true })
+const DeliveryStrategyShape = z.discriminatedUnion('kind', [
+  z.strictObject({kind:z.literal('independent')}),
+  z.strictObject({kind:z.literal('stacked'),predecessorArcId:deliveryString}),
+  z.strictObject({kind:z.literal('grouped'),groupId:deliveryString,order:z.number().int().nonnegative()}),
+])
+export const DeliveryPolicyShape = z.strictObject({
+  provider:z.literal('github').optional(),
+  remote:deliveryString.regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/).optional(),
+  defaultBase:deliveryRef.optional(),
+  terminal:z.enum(['open','queue','merge']).optional(),
+  allowedPushRefs:uniqueDeliveryList(exactPushRef).optional(),
+  requiredCapabilities:uniqueDeliveryList(deliveryString).optional(),
+  requiredChecks:uniqueDeliveryList(deliveryString, 1).optional(),
+  branchStrategy:z.record(deliveryString,DeliveryStrategyShape).optional(),
+})
+
+/** Null bootstrap fields are resolved against the verified remote before receipt initialization. */
+export function deliveryPolicyOf(config = {}) {
+  const policy=DeliveryPolicyShape.parse(config.deliveryPolicy??{}),terminal=policy.terminal??'open'
+  const capabilities=new Set(['pull-request','lookup','push','create','update',...(policy.requiredCapabilities??[])])
+  if(terminal!=='open')capabilities.add(terminal)
+  return {
+    providerId:policy.provider??'github',remote:policy.remote??'origin',defaultBaseRef:policy.defaultBase??null,terminal,
+    allowedPushRefs:policy.allowedPushRefs===undefined?null:[...policy.allowedPushRefs].sort(),
+    requiredCapabilities:[...capabilities].sort(),requiredChecks:policy.requiredChecks===undefined?null:[...policy.requiredChecks].sort(),
+    strategy:structuredClone(policy.branchStrategy??{}),
+  }
+}
+
 const ModelPolicyShape = z.strictObject({
   preset: z.enum(Object.keys(MODEL_PRESETS)).optional(),
   default: z.enum(Object.keys(MODEL_ALIASES)).optional(),
@@ -200,6 +236,7 @@ export const RoadmapConfigShape = z.strictObject({
   executionIsolation: z.enum(['primary', 'worktree']).optional(),
   testCadence: TestCadenceShape.optional(),
   mergePolicy: MergePolicyShape.optional(),
+  deliveryPolicy: DeliveryPolicyShape.optional(),
   modelPolicy: ModelPolicyShape.optional(),
   gateSpecialists: z.array(GateSpecialistShape).optional(),
   validationTiers: ValidationTiersShape.optional(),

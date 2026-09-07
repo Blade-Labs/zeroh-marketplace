@@ -208,6 +208,157 @@
       ],
       "additionalProperties": false
     },
+    "deliveryPolicy": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "const": "github"
+        },
+        "remote": {
+          "type": "string",
+          "minLength": 1,
+          "allOf": [
+            {
+              "pattern": "^\\S(?:.*\\S)?$"
+            },
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+            }
+          ]
+        },
+        "defaultBase": {
+          "type": "string",
+          "minLength": 1,
+          "allOf": [
+            {
+              "pattern": "^\\S(?:.*\\S)?$"
+            },
+            {
+              "pattern": "^(?!-)(?!.*(?:\\.\\.|@\\{))[^\\s\\\\~^:?*\\[\\]\\x00-\\x1f\\x7f]+$"
+            }
+          ]
+        },
+        "terminal": {
+          "type": "string",
+          "enum": [
+            "open",
+            "queue",
+            "merge"
+          ]
+        },
+        "allowedPushRefs": {
+          "minItems": 0,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "allOf": [
+              {
+                "pattern": "^\\S(?:.*\\S)?$"
+              },
+              {
+                "pattern": "^(?!-)(?!.*(?:\\.\\.|@\\{))[^\\s\\\\~^:?*\\[\\]\\x00-\\x1f\\x7f]+$"
+              },
+              {
+                "pattern": "^refs\\/heads\\/(?!.*(?:\\/\\/|\\/\\.|\\.lock(?:\\/|$)))(?!\\.)(?!.*[./]$).+$"
+              }
+            ]
+          },
+          "uniqueItems": true
+        },
+        "requiredCapabilities": {
+          "minItems": 0,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$"
+          },
+          "uniqueItems": true
+        },
+        "requiredChecks": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$"
+          },
+          "uniqueItems": true
+        },
+        "branchStrategy": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "independent"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "stacked"
+                  },
+                  "predecessorArcId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^\\S(?:.*\\S)?$"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "predecessorArcId"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "grouped"
+                  },
+                  "groupId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^\\S(?:.*\\S)?$"
+                  },
+                  "order": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "kind",
+                  "groupId",
+                  "order"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "modelPolicy": {
       "type": "object",
       "properties": {

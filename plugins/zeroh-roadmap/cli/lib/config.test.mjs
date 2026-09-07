@@ -19,7 +19,7 @@ import { MODEL_PRESETS } from './roles.mjs'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MOD = join(HERE, 'config.mjs')
 const SCHEMA_FILE = join(HERE, '..', 'roadmap.config.schema.json') // cli/roadmap.config.schema.json
-const { RoadmapConfigShape, ConfigError, loadConfig, DEFAULT_WORKTREE_GC, worktreeGcPolicyOf } = await import(MOD)
+const { RoadmapConfigShape, ConfigError, loadConfig, DEFAULT_WORKTREE_GC, worktreeGcPolicyOf, DeliveryPolicyShape, deliveryPolicyOf } = await import(MOD)
 
 // The env override is a test-only escape hatch; never inherit a stray one.
 delete process.env.ROADMAP_CONFIG
@@ -837,4 +837,47 @@ test('40.7 worktreeGc accepts one strict bounded policy and rejects unsafe thres
     { ...accepted, inactivityMs: 60_000 },
     { ...accepted, enabled: 'yes' },
   ]) assert.throws(() => RoadmapConfigShape.parse(validConfig({ worktreeGc })), /worktreeGc|unrecognized|number|boolean/i)
+})
+
+test('deliveryPolicy absence preserves raw config and yields safe unresolved defaults',()=>{
+ const input=validConfig(),parsed=RoadmapConfigShape.parse(input);assert.deepEqual(parsed,input);assert.equal(Object.hasOwn(parsed,'deliveryPolicy'),false)
+ assert.deepEqual(deliveryPolicyOf(parsed),{providerId:'github',remote:'origin',defaultBaseRef:null,terminal:'open',allowedPushRefs:null,requiredCapabilities:['create','lookup','pull-request','push','update'],requiredChecks:null,strategy:{}})
+})
+test('deliveryPolicy derives terminal capabilities and preserves explicit strategy declarations',()=>{
+ const policy={provider:'github',remote:'upstream',defaultBase:'refs/heads/release',terminal:'merge',allowedPushRefs:[],requiredCapabilities:['audit','push'],requiredChecks:['lint','unit'],branchStrategy:{A:{kind:'independent'},B:{kind:'stacked',predecessorArcId:'A'},C:{kind:'grouped',groupId:'release-one',order:0}}}
+ const result=deliveryPolicyOf(RoadmapConfigShape.parse(validConfig({deliveryPolicy:policy})))
+ assert.deepEqual(result,{providerId:'github',remote:'upstream',defaultBaseRef:'refs/heads/release',terminal:'merge',allowedPushRefs:[],requiredCapabilities:['audit','create','lookup','merge','pull-request','push','update'],requiredChecks:['lint','unit'],strategy:policy.branchStrategy})
+ const onlyStack=deliveryPolicyOf(RoadmapConfigShape.parse(validConfig({deliveryPolicy:{branchStrategy:{B:{kind:'stacked',predecessorArcId:'A'}}}})))
+ assert.equal(Object.hasOwn(onlyStack.strategy,'A'),false)
+})
+test('deliveryPolicy queue adds one capability and retains exact allowed refs',()=>{
+ const policy=deliveryPolicyOf(RoadmapConfigShape.parse(validConfig({deliveryPolicy:{terminal:'queue',allowedPushRefs:['refs/heads/roadmap/arc-a'],requiredCapabilities:['queue','pull-request'],requiredChecks:['unit']}})))
+ assert.deepEqual(policy.requiredCapabilities,['create','lookup','pull-request','push','queue','update']);assert.deepEqual(policy.allowedPushRefs,['refs/heads/roadmap/arc-a'])
+})
+test('deliveryPolicy refuses unknown fields, unsafe refs and duplicate declarations',()=>{
+ const invalid=[{surprise:true},{authority:{merge:true}},{provider:'gitlab'},{remote:''},{remote:'origin\0other'},{defaultBase:''},{terminal:'ship'},{allowedPushRefs:['main']},{allowedPushRefs:['refs/heads/*']},{allowedPushRefs:['refs/heads/main','refs/heads/main']},{requiredCapabilities:['push','push']},{requiredCapabilities:['']},{requiredChecks:[]},{requiredChecks:['unit','unit']},{branchStrategy:{A:{kind:'independent',predecessorArcId:'B'}}},{branchStrategy:{A:{kind:'stacked',predecessorArcId:''}}},{branchStrategy:{A:{kind:'grouped',groupId:'',order:0}}},{branchStrategy:{A:{kind:'grouped',groupId:'release',order:-1}}}]
+ for(const deliveryPolicy of invalid)assert.throws(()=>RoadmapConfigShape.parse(validConfig({deliveryPolicy})),/deliveryPolicy|provider|remote|ref|unique|check|capabil|strategy|unrecognized|too small|invalid/i,JSON.stringify(deliveryPolicy))
+})
+test('deliveryPolicy ignores legacy local integration authority',()=>{
+ const baseline=deliveryPolicyOf(RoadmapConfigShape.parse(validConfig()))
+ assert.deepEqual(deliveryPolicyOf(RoadmapConfigShape.parse(validConfig({mergePolicy:{arcIntegration:'autonomous',maxOpenFollowups:0,autonomousPushRefs:['refs/heads/everything'],primaryCheckout:'/tmp/x'}}))),baseline)
+})
+test('DeliveryPolicyShape is strict and raw parsing adds no defaults',()=>{
+ assert.deepEqual(DeliveryPolicyShape.parse({}),{});assert.throws(()=>DeliveryPolicyShape.parse({allowedPushRefs:['refs/heads/main'],unknown:true}),/unrecognized|unknown/i)
+})
+
+
+test('delivery JSON schema exposes uniqueness, nonempty checks and exact safe branch refs',()=>{
+ const delivery=JSON.parse(readFileSync(SCHEMA_FILE,'utf8')).properties.deliveryPolicy
+ assert.equal(delivery.additionalProperties,false)
+ for(const field of ['allowedPushRefs','requiredCapabilities','requiredChecks'])assert.equal(delivery.properties[field].uniqueItems,true,field)
+ assert.equal(delivery.properties.requiredChecks.minItems,1)
+ const item=delivery.properties.allowedPushRefs.items
+ const patterns=[...(item.pattern?[item.pattern]:[]),...(item.allOf??[]).filter(x=>x.pattern).map(x=>x.pattern)].map(pattern=>new RegExp(pattern))
+ assert.ok(patterns.length)
+ for(const ref of ['refs/heads/main','refs/heads/roadmap/arc-a'])assert.ok(patterns.every(pattern=>pattern.test(ref)),ref)
+ for(const ref of ['main','refs/heads/*','refs/heads/a/','refs/heads/a.','refs/heads/a//b','refs/heads/.a','refs/heads/a.lock/b','refs/heads/a.lock']){
+  assert.ok(patterns.some(pattern=>!pattern.test(ref)),ref)
+  assert.equal(DeliveryPolicyShape.safeParse({allowedPushRefs:[ref]}).success,false,ref)
+ }
 })

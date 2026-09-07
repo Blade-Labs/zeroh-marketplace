@@ -23,6 +23,7 @@ import { roadmapRoot, resetRoadmapRootCache } from '../lib/roadmap-root.mjs'
 const SCAFFOLD_SH = fileURLToPath(new URL('../../scripts/scaffold-roadmap.sh', import.meta.url))
 const SCHEMA_ABS = fileURLToPath(new URL('../roadmap.config.schema.json', import.meta.url))
 
+// Provider delivery policy stays absent: open/manual is a use-site intent, not recorded mutation authority.
 const PLACEHOLDER_CONFIG = {
   gateCommands: {
     lint: 'npm run lint',

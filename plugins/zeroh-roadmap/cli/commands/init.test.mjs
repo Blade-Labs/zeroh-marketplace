@@ -30,6 +30,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { deliveryPolicyOf } from '../lib/config.mjs'
 import { provisionTsx, installConsumerSchema } from '../../test/fixture-consumer/harness.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url)) // cli/commands/
@@ -142,6 +143,11 @@ test('1) `init --config` writes a self-consistent config that `config check` the
 
   const cfgPath = join(repo, CONFIG_REL)
   assert.ok(existsSync(cfgPath), 'roadmap/roadmap.config.json now exists')
+  const emitted=JSON.parse(readFileSync(cfgPath,'utf8'))
+  assert.equal(Object.hasOwn(emitted,'deliveryPolicy'),false)
+  assert.equal(deliveryPolicyOf(emitted).terminal,'open')
+  assert.equal(deliveryPolicyOf(emitted).requiredChecks,null)
+  assert.equal(deliveryPolicyOf(emitted).allowedPushRefs,null)
 
   // Self-consistency: the scaffolded config must parse through the loader the
   // check command drives — a placeholder that fails its own validator is a bug.
