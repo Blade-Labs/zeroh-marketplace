@@ -3,7 +3,7 @@ import { definePhase } from '../lib/schema'
   /** NATIVEGREEN PR-delivery plane. timing: no reference data for band 7-9 × surface:false */
 export default definePhase({
   phase: 41, name: 'Idempotent arc delivery with explicit branch and merge authority',
-  plannedBy: { model: 'unverified' }, status: 'backlog', category: 'feature', kind: 'logic',
+  plannedBy: { model: 'unverified' }, status: 'in-progress', category: 'feature', kind: 'logic',
   source: 'NATIVEGREEN pr-delivery plane; intent-to-green-pr-design.md §§ArcDelivery, PullRequestProvider, BranchStrategy.',
   priority: 'HIGH', arcId: 'NATIVEGREEN', dependsOn: [40], conflictsWith: [],
   keyFiles: ['plugins/zeroh-roadmap/templates/schema.ts', 'docs/roadmap/lib/schema.ts', 'plugins/zeroh-roadmap/cli/lib/delivery.mjs', 'plugins/zeroh-roadmap/cli/lib/branch-strategy.mjs', 'plugins/zeroh-roadmap/cli/lib/providers/github.mjs', 'plugins/zeroh-roadmap/cli/commands/deliver.mjs', 'plugins/zeroh-roadmap/cli/lib/config.mjs', 'plugins/zeroh-roadmap/cli/commands/init.mjs', 'plugins/zeroh-roadmap/skills/do-arc/SKILL.md', 'plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs'],
