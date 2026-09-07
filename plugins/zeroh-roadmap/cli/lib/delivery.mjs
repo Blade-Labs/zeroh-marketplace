@@ -1,10 +1,11 @@
-import { closeSync, constants, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { closeSync, constants, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join, parse, resolve } from 'node:path'
 import { isDeepStrictEqual as same } from 'node:util'
 import { roadmapRoot, consumerSchemaPath } from './roadmap-root.mjs'
 import { bridgeEval, bridgeParseShape } from './tsx-bridge.mjs'
 import { withFileLock } from './file-lock.mjs'
+import { publishImmutableFile } from './sidecar.mjs'
 
 export const deliveryKeyOf = target => JSON.stringify([target.providerId, target.repositoryId, target.targetKey])
 const clone = structuredClone
@@ -191,6 +192,16 @@ function inspectAncestors(path) {
     if (cursor !== absolute && !stat.isDirectory()) throw new Error(`delivery path ancestor is not a directory: ${cursor}`)
   }
 }
+function ensureDeliveryIgnore(directory) {
+  const path = join(directory, '.gitignore')
+  let fd
+  try {
+    if (publishImmutableFile(path, '*\n')) return
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    if (!fstatSync(fd).isFile() || readFileSync(fd, 'utf8') !== '*\n') throw new Error('delivery gitignore must be a regular self-ignore guard')
+  } catch (error) { throw new Error(`unsafe delivery gitignore: ${error.message}`) }
+  finally { if (fd !== undefined) closeSync(fd) }
+}
 function deliveryPaths(cwd, arcId, create) {
   assertSafeArcId(arcId)
   const directory = join(roadmapRoot(cwd), '.deliveries')
@@ -199,6 +210,7 @@ function deliveryPaths(cwd, arcId, create) {
     mkdirSync(directory, { recursive: true, mode: 0o700 })
     inspectAncestors(directory)
     if (realpathSync(directory) !== resolve(directory)) throw new Error('delivery directory is noncanonical')
+    ensureDeliveryIgnore(directory)
   }
   const receipt = join(directory, `${arcId}.json`)
   return { directory, receipt, lock: `${receipt}.lock` }
@@ -316,4 +328,137 @@ export function transitionArcDelivery(cwd, arcId, event) {
   if (next.arcId !== arcId) throw new Error('delivery transition arc identity differs from requested path')
   if (next === current) return current
   return persist(cwd, parsedEvent.parsed.expectedRevision, next, { allowBindings: true })
+}
+
+const publicationActionKey = (state, kind, requested) => JSON.stringify([
+  state.schemaVersion, state.deliveryKey, kind, requested.baseSha, requested.headSha,
+])
+const publicationExpected = state => ({ revision:state.revision,deliveryKey:state.deliveryKey,...state.target,
+  ...(state.pullRequest ? {providerPullRequestId:state.pullRequest.providerPullRequestId} : {}),
+})
+const publicationResult = (status,delivery,pullRequest=null,reason=null) => ({status,delivery,pullRequest,reason})
+export function publishDelivery(request, {
+  load=loadArcDelivery,transition=transitionArcDelivery,withLock:publicationLock=withFileLock,
+  clock=()=>new Date().toISOString(),checkpoint=()=>{},
+}={}) {
+  const {root,arcId,provider}=request??{}
+  try { assertSafeArcId(arcId) } catch { return publicationResult('refused',null,null,'publication owner is malformed') }
+  if (typeof root!=='string'||!root||!provider) return publicationResult('refused',null,null,'publication request is malformed')
+  let retained=null
+  try {
+  const lockPath=join(publicationLock===withFileLock?roadmapRoot(root):root,'.deliveries',`${arcId}.json.publish.lock`)
+  return publicationLock(lockPath,()=>{
+    const mark=(label,state)=>checkpoint(label,state?{revision:state.revision,deliveryKey:state.deliveryKey}:null)
+    let state=load(root,arcId);retained=state
+    mark('01-after-load',state)
+    if (!state || state.arcId!==arcId) return publicationResult('refused',state,null,'delivery receipt is missing or has another owner')
+    const candidateHead=request.publishHeadSha??request.expected?.publishHeadSha??state.target.currentHeadSha
+    if (typeof candidateHead!=='string'||!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(candidateHead)) return publicationResult('refused',state,state.pullRequest,'publication head is malformed')
+    if(request.expected){
+      for(const [field,actual] of Object.entries({revision:state.revision,currentBaseSha:state.target.currentBaseSha,currentHeadSha:state.target.currentHeadSha})) if(request.expected[field]!==actual)return publicationResult('held',state,state.pullRequest,`delivery ${field} changed; reload and resume`)
+      if(request.expected.publishHeadSha!==undefined&&request.expected.publishHeadSha!==candidateHead)return publicationResult('held',state,state.pullRequest,'publication head changed; reload and resume')
+    }
+    mark('02-after-request-binding',state)
+    const context={root,cwd:root,ownerArcId:arcId,remote:request.remote??'origin',...(request.presentation==null?{}:{presentation:clone(request.presentation)})}
+    const event=(type,extra={})=>({type,deliveryKey:state.deliveryKey,targetKey:state.target.targetKey,expectedRevision:state.revision,at:clock(),...extra})
+    const apply=(label,type,extra)=>{
+      mark(`before-${label}`,state)
+      state=transition(root,arcId,event(type,extra));retained=state
+      mark(`after-${label}`,state)
+      return state
+    }
+    const refusal=reason=>publicationResult('held',state,state.pullRequest,reason)
+    function ensureAction(kind,headSha){
+      const requested={baseSha:state.target.currentBaseSha,headSha,ref:state.target.headRef,authorityId:null},actionKey=publicationActionKey(state,kind,requested)
+      let action=state.actions.find(row=>row.actionKey===actionKey)
+      if(!action){
+        action={actionKey,kind,targetKey:state.target.targetKey,requested,status:'requested',attempts:[]}
+        apply(`${kind}-request`,'request-action',{action});action=state.actions.find(row=>row.actionKey===actionKey)
+      }
+      return action
+    }
+    function mutate(method,kind,headSha){
+      let action=ensureAction(kind,headSha)
+      if(action.status==='succeeded')return {status:'succeeded',action,pullRequest:state.pullRequest}
+      const preflightInput={operation:method,context,repositoryId:state.target.repositoryId,target:clone(state.target),pullRequest:state.pullRequest&&clone(state.pullRequest)}
+      mark(`before-${method}-preflight`,state)
+      let preflight
+      try{preflight=provider.preflight(preflightInput)}catch(error){return {status:'held',reason:`provider preflight failed: ${error.message}`}}
+      mark(`after-${method}-preflight`,state)
+      if(!preflight||preflight.status!=='ready')return {status:preflight?.status==='refused'?'refused':'held',reason:preflight?.remedy??'provider preflight is not ready'}
+      if(preflight.providerId!==state.target.providerId||preflight.repositoryId!==state.target.repositoryId||preflight.operation!==method)return {status:'held',reason:'provider preflight identity differs from delivery'}
+      action=state.actions.find(row=>row.actionKey===action.actionKey)
+      let attempt=action.attempts.at(-1)
+      if(!attempt||attempt.finishedAt!==null){
+        attempt={attempt:action.attempts.length+1,startedAt:clock(),finishedAt:null,observed:null}
+        apply(`${method}-attempt-${attempt.attempt}`,'record-action-attempt',{actionKey:action.actionKey,attempt})
+        action=state.actions.find(row=>row.actionKey===action.actionKey);attempt=action.attempts.at(-1)
+      }
+      const providerRequest={action:clone(action),expected:{...publicationExpected(state),...(request.normalizationReceipt?{normalizationReceipt:request.normalizationReceipt}:{})},context}
+      mark(`before-${method}-call`,state)
+      let outcome
+      try{outcome=provider[method](providerRequest)}catch(error){return {status:'held',reason:`provider ${method} outcome is unknown: ${error.message}`}}
+      mark(`after-${method}-return`,state)
+      if(!outcome||!['succeeded','unknown','failed','held','refused'].includes(outcome.status)||outcome.actionKey!==action.actionKey)return {status:'held',reason:`provider ${method} returned an unrecognized outcome`}
+      if(['held','refused'].includes(outcome.status))return {status:outcome.status,reason:outcome.remedy??'provider action held'}
+      if(outcome.status==='succeeded'&&(typeof outcome.providerActionId!=='string'||!outcome.providerActionId))return {status:'held',reason:'provider success lacks an observed action identity'}
+      const completed={...attempt,finishedAt:clock(),observed:{providerActionId:outcome.providerActionId??null,outcome:outcome.status,errorKind:outcome.errorKind??null}}
+      apply(`${method}-completion-${attempt.attempt}`,'record-action-attempt',{actionKey:action.actionKey,attempt:completed})
+      action=state.actions.find(row=>row.actionKey===action.actionKey)
+      return {status:outcome.status,action,pullRequest:outcome.pullRequest??null,reason:outcome.remedy??outcome.errorKind??null}
+    }
+    const push=mutate('push','push',candidateHead)
+    if(push.status!=='succeeded')return publicationResult(push.status==='refused'?'refused':'held',state,state.pullRequest,push.reason??'publication push did not succeed')
+    if(state.target.currentHeadSha!==candidateHead)apply('head-advance','advance-head',{actionKey:push.action.actionKey,fromHeadSha:state.target.currentHeadSha,toHeadSha:candidateHead,observedBaseSha:state.target.currentBaseSha})
+    else mark('after-head-already-current',state)
+    const createRequested={baseSha:state.target.currentBaseSha,headSha:state.target.currentHeadSha,ref:state.target.headRef,authorityId:null}
+    const createKey=publicationActionKey(state,'create-pr',createRequested)
+    let ownCreate=state.actions.find(row=>row.actionKey===createKey),observedPr=null
+    // An interrupted create is reconciled through the same idempotent provider operation.
+    if(ownCreate&&ownCreate.status!=='succeeded'){
+      const reconciled=mutate('create','create-pr',state.target.currentHeadSha)
+      if(reconciled.status!=='succeeded')return publicationResult(reconciled.status==='refused'?'refused':'held',state,state.pullRequest,reconciled.reason??'pull request creation could not be reconciled')
+      observedPr=reconciled.pullRequest;ownCreate=reconciled.action
+    }
+    if(!observedPr){
+      const lookupPreflight={operation:'lookup',context,repositoryId:state.target.repositoryId,target:clone(state.target),pullRequest:state.pullRequest&&clone(state.pullRequest)}
+      mark('before-lookup-preflight',state)
+      let ready
+      try{ready=provider.preflight(lookupPreflight)}catch(error){return refusal(`provider lookup preflight failed: ${error.message}`)}
+      mark('after-lookup-preflight',state)
+      if(!ready||ready.status!=='ready')return publicationResult(ready?.status==='refused'?'refused':'held',state,state.pullRequest,ready?.remedy??'provider lookup is not ready')
+      if(ready.providerId!==state.target.providerId||ready.repositoryId!==state.target.repositoryId||ready.operation!=='lookup')return refusal('provider lookup preflight identity differs')
+      const lookupRequest={repositoryId:state.target.repositoryId,deliveryKey:state.deliveryKey,targetKey:state.target.targetKey,baseRef:state.target.baseRef,headRef:state.target.headRef,currentBaseSha:state.target.currentBaseSha,currentHeadSha:state.target.currentHeadSha,context}
+      mark('before-lookup-call',state)
+      try{observedPr=provider.lookup(lookupRequest)}catch(error){return refusal(`provider lookup failed: ${error.message}`)}
+      mark('after-lookup-return',state)
+      if(observedPr?.status)return publicationResult(observedPr.status==='refused'?'refused':'held',state,state.pullRequest,observedPr.remedy??'provider lookup did not establish a pull request')
+    }
+    if(observedPr===null){
+      if(ownCreate?.status==='succeeded')return refusal('a succeeded create action has no matching pull request; reconcile provider state')
+      const created=mutate('create','create-pr',state.target.currentHeadSha)
+      if(created.status!=='succeeded'||!created.pullRequest)return publicationResult(created.status==='refused'?'refused':'held',state,state.pullRequest,created.reason??'pull request creation did not return a canonical receipt')
+      observedPr=created.pullRequest;ownCreate=created.action
+    }
+    const t=state.target
+    if(!observedPr||observedPr.providerId!==t.providerId||observedPr.repositoryId!==t.repositoryId||observedPr.targetKey!==t.targetKey||observedPr.baseRef!==t.baseRef||observedPr.headRef!==t.headRef||observedPr.baseSha!==t.currentBaseSha||observedPr.headSha!==t.currentHeadSha||observedPr.state!=='open'||observedPr.draft)return refusal('provider pull request is closed, draft, or differs from the exact delivery target')
+    if(state.pullRequest&&state.pullRequest.providerPullRequestId!==observedPr.providerPullRequestId)return refusal('provider PR identity changed; reconcile before resume')
+    const samePrFacts=(a,b)=>a&&b&&same({...a,observedAt:null},{...b,observedAt:null})
+    if(!samePrFacts(state.pullRequest,observedPr))apply('pull-request-observation','observe-pr',{pullRequest:observedPr})
+    else mark('after-pull-request-already-observed',state)
+    // A PR created by this delivery already carries the requested presentation.
+    if(!ownCreate&&request.presentation!=null){
+      const updated=mutate('update','update-pr',state.target.currentHeadSha)
+      if(updated.status!=='succeeded')return publicationResult(updated.status==='refused'?'refused':'held',state,state.pullRequest,updated.reason??'pull request update did not succeed')
+      const p=updated.pullRequest
+      if(p&&(['providerId','repositoryId','targetKey','baseRef','headRef'].some(key=>p[key]!==t[key])||p.baseSha!==t.currentBaseSha||p.headSha!==t.currentHeadSha||p.state!=='open'||p.draft||p.providerPullRequestId!==state.pullRequest.providerPullRequestId))return refusal('updated PR observation differs from the exact delivery target')
+      if(p&&!samePrFacts(state.pullRequest,p))apply('updated-pull-request-observation','observe-pr',{pullRequest:p})
+    }
+    mark('publication-complete',state)
+    return publicationResult('published',state,state.pullRequest,null)
+  },{label:'delivery publication'})
+  } catch (error) {
+    try { retained=load(root,arcId) } catch { /* Preserve the last observed state when the store is unavailable. */ }
+    return publicationResult('held',retained,retained?.pullRequest??null,`Publication interrupted; reload and resume: ${error.message}`)
+  }
 }

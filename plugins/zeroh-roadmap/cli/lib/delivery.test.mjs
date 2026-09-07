@@ -161,3 +161,20 @@ test('the public transition seam persists initialization, observed push and expl
  assert.equal(state.target.currentHeadSha,SHA2);assert.equal(state.checks,null);assert.equal(state.terminal.status,'awaiting-ci')
  assert.deepEqual(loadArcDelivery(root,'NATIVEGREEN'),state)
 })
+
+import { execFileSync } from 'node:child_process'
+const fixtureGit=(root,...args)=>execFileSync('git',['-C',root,'-c','user.email=t@t','-c','user.name=t',...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim()
+function trackedRepoFixture(){
+ const root=repoFixture();fixtureGit(root,'init','-q','-b','main');writeFileSync(join(root,'.gitignore'),'node_modules\n')
+ fixtureGit(root,'add','.gitignore','docs/roadmap/roadmap.config.json','docs/roadmap/lib/schema.ts');fixtureGit(root,'commit','-qm','fixture baseline');return root
+}
+test('local delivery receipts self-ignore without hiding unrelated consumer work',()=>{
+ const root=trackedRepoFixture();persistArcDelivery(root,null,initial())
+ assert.equal(readFileSync(join(root,'docs/roadmap/.deliveries/.gitignore'),'utf8'),'*\n');assert.equal(fixtureGit(root,'status','--porcelain'),'')
+ writeFileSync(join(root,'foreign.txt'),'consumer work\n');assert.equal(fixtureGit(root,'status','--porcelain'),'?? foreign.txt');assert.deepEqual(loadArcDelivery(root,'NATIVEGREEN'),initial())
+})
+test('symlinked delivery ignore guard refuses without touching its target',()=>{
+ const root=trackedRepoFixture(),directory=join(root,'docs/roadmap/.deliveries');mkdirSync(directory)
+ const outside=join(root,'outside-ignore');writeFileSync(outside,'outside bytes\n');symlinkSync(outside,join(directory,'.gitignore'));const before=readFileSync(outside)
+ assert.throws(()=>persistArcDelivery(root,null,initial()),/gitignore|symlink|regular|unsafe/i);assert.deepEqual(readFileSync(outside),before);assert.equal(existsSync(receiptPath(root)),false);assert.equal(lstatSync(join(directory,'.gitignore')).isSymbolicLink(),true)
+})

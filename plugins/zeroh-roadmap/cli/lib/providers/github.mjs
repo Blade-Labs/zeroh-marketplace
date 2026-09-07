@@ -73,7 +73,7 @@ export function createGitHubPullRequestProvider({execFile=defaultExec,git='git',
     if(!pr || pr.base?.repo?.full_name?.toLowerCase()!==request.repositoryId.toLowerCase() || pr.head?.repo?.full_name?.toLowerCase()!==request.repositoryId.toLowerCase() || pr.base.ref!==names.base || pr.head.ref!==names.head || typeof pr.node_id!=='string' || !Number.isInteger(pr.number) || !SHA.test(pr.base.sha) || !SHA.test(pr.head.sha) || typeof pr.draft!=='boolean' || !['open','closed'].includes(pr.state))throw new Error('GitHub PR identity or commit observation differs')
     return {providerId:'github',repositoryId:request.repositoryId,targetKey:request.targetKey,providerPullRequestId:pr.node_id,number:pr.number,url:pr.html_url??null,state:pr.merged_at?'merged':pr.state,draft:pr.draft,baseRef:request.baseRef,headRef:request.headRef,baseSha:pr.base.sha,headSha:pr.head.sha,observedAt:clock()}
   }
-  const lookup=request=>{
+  const lookup=(request,observedRaw=()=>{})=>{
     if(!REPO.test(request.repositoryId)||typeof request.deliveryKey!=='string')return hold('repository','lookup','A stable GitHub repository and delivery key are required.')
     const named=labels(request);if(named.error)return named.error
     const names=named.value,endpoint=`repos/${request.repositoryId}/pulls?state=all&head=${encodeURIComponent(request.repositoryId.split('/')[0]+':'+names.head)}&base=${encodeURIComponent(names.base)}&per_page=100`
@@ -82,7 +82,7 @@ export function createGitHubPullRequestProvider({execFile=defaultExec,git='git',
     const rows=result.value.flat(),marked=rows.filter(pr=>typeof pr.body==='string'&&pr.body.includes(deliveryMarker(request.deliveryKey)))
     if(marked.length>1)return {status:'refused',kind:'ambiguous',remedy:'Multiple PRs claim this delivery; reconcile their identity before resume.',resumable:false,observedAt:clock()}
     if(!marked.length)return null
-    try{return canonical(marked[0],request,names)}catch{return hold('target-drift','lookup','Marked PR differs from the expected repository, branch or commit observation.')}
+    try{const receipt=canonical(marked[0],request,names);observedRaw(marked[0]);return receipt}catch{return hold('target-drift','lookup','Marked PR differs from the expected repository, branch or commit observation.')}
   }
   const capabilities=()=>({providerId:'github',supported:[...OPERATIONS],unsupported:[]})
   const preflight=({operation,context,repositoryId,target,pullRequest})=>{
@@ -110,14 +110,17 @@ export function createGitHubPullRequestProvider({execFile=defaultExec,git='git',
   const observe=request=>lookup(requestOf(request))
   const presentation=(request)=>({title:request.context.presentation?.title??`Roadmap ${request.context.ownerArcId}`,body:`${request.context.presentation?.body??''}\n\n${deliveryMarker(request.expected.deliveryKey)}`})
   const mutatePr=(request,method)=>{
-    const existing=observe(request)
+    let raw
+    const existing=lookup(requestOf(request),value=>{raw=value})
     if(existing?.status)return actionHold(request,existing)
     if(existing && (existing.headSha!==request.action.requested.headSha||existing.baseSha!==request.action.requested.baseSha))return actionHold(request,hold('target-drift',method,'PR commits changed; reconcile before publication.'))
     if(existing && (existing.state!=='open'||existing.draft))return actionHold(request,hold('closed-or-draft',method,'Existing delivery PR is closed or draft; resolve its status before resume.'))
     if(method==='create'&&existing)return result(request,'succeeded',existing.providerPullRequestId,existing)
     if(method==='update'&&(!existing||existing.providerPullRequestId!==request.expected.providerPullRequestId))return actionHold(request,hold('target-drift',method,'Update requires the exact persisted PR.'))
     const named=labels(requestOf(request));if(named.error)return actionHold(request,named.error)
-    const text=presentation(request),args=['api','--method',method==='create'?'POST':'PATCH',`repos/${request.expected.repositoryId}/pulls${method==='update'?'/'+existing.number:''}`,'-f',`title=${text.title}`,'-f',`body=${text.body}`]
+    const text=presentation(request)
+    if(method==='update'&&raw?.title===text.title&&raw?.body===text.body)return result(request,'succeeded',existing.providerPullRequestId,existing)
+    const args=['api','--method',method==='create'?'POST':'PATCH',`repos/${request.expected.repositoryId}/pulls${method==='update'?'/'+existing.number:''}`,'-f',`title=${text.title}`,'-f',`body=${text.body}`]
     if(method==='create')args.push('-f',`head=${named.value.head}`,'-f',`base=${named.value.base}`,'-F','draft=false')
     const out=json(args,request.context,method)
     if(out.error)return ['auth','permission','quota','unsupported','missing-tool'].includes(out.error.kind)?actionHold(request,out.error):result(request,'unknown',null,null,out.error.kind)

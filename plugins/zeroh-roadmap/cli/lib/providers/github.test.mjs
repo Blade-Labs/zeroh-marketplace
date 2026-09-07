@@ -118,3 +118,11 @@ test('queue and merge use exact-head GraphQL and reconcile completed outcomes wi
   calls.length=0;const replay=provider[kind](request);assert.equal(replay.status,'succeeded');assert.equal(replay.providerActionId,first.providerActionId);assert.equal(calls.some(([,args])=>args.some(a=>a.startsWith('query=mutation'))),false)
  }
 })
+
+test('resuming an update with the desired title and body makes no duplicate PATCH',()=>{
+ const update={...action,actionKey:'update-1',kind:'update-pr',status:'unknown',attempts:[{attempt:1,startedAt:AT,finishedAt:null,observed:null}]}
+ const p={providerId:'github',repositoryId:target.repositoryId,targetKey:target.targetKey,providerPullRequestId:'PR_17',number:17,url:pr.html_url,state:'open',draft:false,baseRef:target.baseRef,headRef:target.headRef,baseSha:SHA0,headSha:SHA1,observedAt:AT}
+ const remote={...pr,title:'Arc A',body:`Body\n\n${marker}`},h=harness({...readyRoutes,'gh api repos/blade/roadmap/pulls':ok([remote])},{...stored,actions:[update],pullRequest:p})
+ const result=h.provider.update({action:update,expected:{...expected,providerPullRequestId:'PR_17'},context})
+ assert.equal(result.status,'succeeded');assert.equal(h.calls.some(([,args])=>args.includes('PATCH')),false)
+})
