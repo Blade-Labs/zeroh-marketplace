@@ -1,3 +1,7 @@
+## 0.40.4 — 2026-09-07
+
+- `rejectedAlternatives-append-only` no longer reds an honest append: the array splitter (`topLevelElements`) treated a trailing `// R<n>` line comment after the last entry as a phantom element, so every append "erased" it (VF, 2026-09-07: "HEAD had 18, 21 now" on a 17→20 append). Line comments outside quotes are skipped; a real erasure in the same tagged style still reds (regression test).
+
 ## 0.40.3 — 2026-09-06
 
 - codex lane model pinned back to `gpt-5.6-sol` (was `gpt-6-astra` since 0.40.0) — owner ruling 2026-09-06 17:53 UTC ("use fable as architect and sol 5.6 as implementor"), after the astra account hit its usage limit mid-arc on 2026-09-05 18:29 UTC. `MODEL_IDS.SOL` and `MODEL_ALIASES.sol` follow the one home; preset `codex` (sol builders, fable architect) IS the ruled combination, no per-role override needed. Probe re-verified on illumination 2026-09-06 (`codex debug models` lists `gpt-5.6-sol`; `codex exec -m gpt-5.6-sol` answered).

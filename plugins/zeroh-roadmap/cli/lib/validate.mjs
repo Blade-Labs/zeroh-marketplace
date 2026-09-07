@@ -631,6 +631,14 @@ function topLevelElements(arrayBlock) {
       segHasContent = true
       continue
     }
+    // A `// …` line comment outside quotes is annotation, never content: the trailing `// R17`
+    // marker after an array's last entry must not become a phantom element that every honest
+    // append "erases" (VF 2026-09-07). Skip to end of line; the newline itself is whitespace.
+    if (c === '/' && inner[i + 1] === '/') {
+      const eol = inner.indexOf('\n', i)
+      i = eol === -1 ? inner.length : eol
+      continue
+    }
     if (c === "'" || c === '"' || c === '`') {
       quote = c
       segHasContent = true
