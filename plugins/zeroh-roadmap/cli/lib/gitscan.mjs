@@ -23,7 +23,7 @@ export class GitScanError extends Error {
 }
 
 const git = (cwd, args) =>
-  execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8' }).trim()
+  execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim()
 
 /**
  * The subject-grammar fragments every reader shares, ERE- and JS-compatible. They live
@@ -115,5 +115,69 @@ export function derivePhaseStartSha(cwd, phaseNum, { base } = {}) {
     return git(cwd, ['rev-parse', `${chosen}^`])
   } catch {
     return chosen // root commit — no parent
+  }
+}
+
+/** Exact terminal task notation shares one parser across ownership readers. */
+export function phaseTaskSuffix(subject) {
+  return new RegExp(`^${SUBJECT_GRAMMAR.typePrefix}.+ \\(([0-9]+\\.[0-9]+)\\)$`).exec(subject)?.at(-1) ?? null
+}
+
+export function hasPhaseTaskSuffix(subject, phaseNum, taskIds = []) {
+  phaseOwnPatterns(phaseNum)
+  const task = phaseTaskSuffix(subject)
+  return Boolean(task && task.startsWith(String(phaseNum) + '.') && taskIds.includes(task))
+}
+
+function historyReachability(cwd) {
+  const ordinary = (ancestor, descendant) => {
+    try { git(cwd, ['merge-base', '--is-ancestor', ancestor, descendant]); return true }
+    catch (error) { if (error.status === 1) return false; throw error }
+  }
+  const rescued = git(cwd, ['for-each-ref', '--format=%(objectname) %(objecttype)', 'refs/curate-rescue/'])
+  const tips = rescued ? rescued.split('\n').map(row => {
+    const [tip, type] = row.split(' ')
+    if (type !== 'commit' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(tip)) throw new Error('curation rescue does not name a commit')
+    return { tip, tree: git(cwd, ['show', '-s', '--format=%T', tip]) }
+  }) : []
+  const trees = new Map(), closures = new Map(), ancestry = new Map()
+  const related = (ancestor, descendant) => {
+    const key = ancestor + ':' + descendant
+    if (!ancestry.has(key)) ancestry.set(key, ordinary(ancestor, descendant))
+    return ancestry.get(key)
+  }
+  const histories = head => {
+    if (closures.has(head)) return closures.get(head)
+    const reached = new Set([head]), pending = [head]
+    while (pending.length) {
+      const tip = pending.pop()
+      if (!trees.has(tip)) trees.set(tip, new Set(git(cwd, ['log', '--format=%T', tip]).split('\n')))
+      for (const rescue of tips) if (!reached.has(rescue.tip) && trees.get(tip).has(rescue.tree)) {
+        reached.add(rescue.tip); pending.push(rescue.tip)
+      }
+    }
+    closures.set(head, reached)
+    return reached
+  }
+  return (ancestor, descendant) => related(ancestor, descendant) || [...histories(descendant)].some(tip => related(ancestor, tip))
+}
+
+/** Existing rescue refs connect tree-identical rewrites without inventing ancestry. */
+export function curationAncestry(cwd, ancestor, descendant) {
+  try {
+    for (const value of [ancestor, descendant]) {
+      if (typeof value !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value) || git(cwd, ['rev-parse', '--verify', value + '^{commit}']) !== value) throw new Error('history comparison requires exact commit IDs')
+    }
+    return historyReachability(cwd)(ancestor, descendant)
+  } catch (error) { throw new GitScanError('git-error', ['curation history could not be verified: ' + error.message]) }
+}
+
+export function isCuratedTreeReplacement(cwd, original, replacement) {
+  try {
+    return curationAncestry(cwd, original, replacement)
+      && git(cwd, ['show', '-s', '--format=%T', original]) === git(cwd, ['show', '-s', '--format=%T', replacement])
+  } catch (error) {
+    if (error instanceof GitScanError) throw error
+    throw new GitScanError('git-error', ['curation trees could not be verified: ' + error.message])
   }
 }

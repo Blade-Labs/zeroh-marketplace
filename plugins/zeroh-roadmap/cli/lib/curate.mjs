@@ -12,7 +12,7 @@
 import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 
-import { derivePhaseStartSha, phaseOwnPatterns, SUBJECT_GRAMMAR } from './gitscan.mjs'
+import { derivePhaseStartSha, phaseOwnPatterns, hasPhaseTaskSuffix, phaseTaskSuffix, SUBJECT_GRAMMAR } from './gitscan.mjs'
 import { recordCuration, latestReport } from './gate-report.mjs'
 import { driverTrailer } from './roles.mjs'
 import { MODEL_DRIVERS } from './drivers.mjs'
@@ -40,8 +40,10 @@ export class CurateError extends Error {
  * number mid-sentence stays foreign. Gate fixes
  * use their own bounded form (`phase N gate R<d>`), the one place with no dash at all.
  */
-function classifySubject(subject, phaseNum) {
+export function classifySubject(subject, phaseNum, taskIds = []) {
   const P = String(phaseNum)
+  const suffix = phaseTaskSuffix(subject)
+  if (taskIds.length && suffix?.startsWith(P + '.') && !taskIds.includes(suffix)) return null
   const { dash, type, typePrefix } = SUBJECT_GRAMMAR
   // Every ownership test is ANCHORED to the subject's own prefix: a subject that merely
   // QUOTES the grammar mid-sentence must stay foreign, or the squash rewrites a sibling's
@@ -55,7 +57,7 @@ function classifySubject(subject, phaseNum) {
   if (new RegExp(`^scratch(\\([^)]*\\))?: phase ${P} ${dash}`).test(inner)) return 'scratch'
   if (isRevert) return null // a revert of anything but this phase's scratch work is foreign
   if (new RegExp(`${prefix}phase ${P} gate R\\d+`).test(subject)) return 'gate-fix'
-  if (!phaseOwnPatterns(P).test(subject)) return null
+  if (!phaseOwnPatterns(P).test(subject)) return hasPhaseTaskSuffix(subject, phaseNum, taskIds) ? 'task' : null
   if (new RegExp(`^${type}\\(phase-${P}\\): gate R\\d+`).test(subject)) return 'gate-fix'
   if (new RegExp(`^docs\\(roadmap\\): mark phase ${P} complete$`).test(subject)) return 'state'
   if (subject.startsWith('docs(roadmap):')) {

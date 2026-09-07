@@ -4,6 +4,7 @@ import { closeSync, constants, fstatSync, openSync, lstatSync, mkdirSync, readFi
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { ROOT_CANDIDATES, roadmapRoot, roadmapRootRel, consumerSchemaPath, resetRoadmapRootCache } from './roadmap-root.mjs'
 import { gitToplevel, gitCommonDir } from './gitroot.mjs'
+import { curationAncestry } from './gitscan.mjs'
 import { publishImmutableFile } from './sidecar.mjs'
 import { ensureReceiptDirectory } from './run-receipt.mjs'
 import { bridgeImportMany } from './tsx-bridge.mjs'
@@ -270,40 +271,6 @@ function validateCompletedLayout(root, plan) {
   if (roadmapRoot(root) !== join(root, plan.destinationRoot) || consumerSchemaPath(root) !== join(root, plan.destinationSchemaDir, 'schema.ts') || present(safePath(root, plan.sourceSchemaDir + '/schema.ts'))) fail('post-validation', 'completed migration no longer has one destination root and schema owner')
   if (!lstatSync(safePath(root, plan.destinationSchemaDir + '/schema.ts')).isFile()) fail('post-validation', 'destination schema is not a regular file')
 }
-function isAncestor(root, ancestor, descendant) {
-  try { git(root, ['merge-base', '--is-ancestor', ancestor, descendant]); return true }
-  catch (error) { if (error.status === 1) return false; throw error }
-}
-// Curation preserves old history under rescue refs and its boundary tree in the new chain.
-// Follow those existing bridges so repeated normalization does not invalidate completion.
-function migrationAncestry(root) {
-  const rescued = git(root, ['for-each-ref', '--format=%(objectname) %(objecttype)', 'refs/curate-rescue/']).toString().trim()
-  const tips = rescued ? rescued.split('\n').map(row => {
-    const [tip, type] = row.split(' ')
-    if (type !== 'commit' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(tip)) fail('history-conflict', 'curation rescue does not name a commit')
-    return { tip, tree: git(root, ['show', '-s', '--format=%T', tip]).toString().trim() }
-  }) : []
-  const trees = new Map(), closures = new Map(), ancestry = new Map()
-  const ordinary = (ancestor, descendant) => {
-    const key = ancestor + ':' + descendant
-    if (!ancestry.has(key)) ancestry.set(key, isAncestor(root, ancestor, descendant))
-    return ancestry.get(key)
-  }
-  const histories = head => {
-    if (closures.has(head)) return closures.get(head)
-    const reached = new Set([head]), pending = [head]
-    while (pending.length) {
-      const tip = pending.pop()
-      if (!trees.has(tip)) trees.set(tip, new Set(git(root, ['log', '--format=%T', tip]).toString().trim().split('\n')))
-      for (const rescue of tips) if (!reached.has(rescue.tip) && trees.get(tip).has(rescue.tree)) {
-        reached.add(rescue.tip); pending.push(rescue.tip)
-      }
-    }
-    closures.set(head, reached)
-    return reached
-  }
-  return (ancestor, descendant) => ordinary(ancestor, descendant) || [...histories(descendant)].some(tip => ordinary(ancestor, tip))
-}
 function recoveryPlan(root, to) {
   const records = storedMigrations(root)
   const incomplete = records.filter(record => !record.complete)
@@ -317,7 +284,10 @@ function recoveryPlan(root, to) {
   resetRoadmapRootCache()
   if (roadmapRootRel(root) === ROOT_CANDIDATES[0]) return null
   const head = git(root, ['rev-parse', 'HEAD']).toString().trim()
-  const precedes = migrationAncestry(root)
+  const precedes = (ancestor, descendant) => {
+    try { return curationAncestry(root, ancestor, descendant) }
+    catch (error) { throw new RootMigrationError('history-conflict', error.message, { cause: error }) }
+  }
   const candidates = records.filter(record => record.plan.destinationRoot === to && precedes(record.plan.head, head))
   const latest = candidates.filter(candidate => !candidates.some(other => other !== candidate && candidate.plan.head !== other.plan.head && precedes(candidate.plan.head, other.plan.head)))
   if (latest.length !== 1) fail('history-conflict', 'completed migrations have no unique ancestral owner')
