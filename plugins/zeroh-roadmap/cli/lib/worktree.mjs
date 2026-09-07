@@ -994,25 +994,42 @@ function cleanupGit(root, cwd, args, deps = {}) {
   try { return { ok: true, status: 0, out: execFileSync('git', ['-C', cwd, ...args], { cwd: root, timeout: 60_000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) } }
   catch (error) { return { ok: false, status: error.status ?? null, out: `${error.stdout ?? ''}${error.stderr ?? ''}`.trim() || error.message } }
 }
-function cleanupJournal(root, worktree) {
+function cleanupJournal(root, identity) {
   if (!registryDirectory(root)) throw new WorktreeError('journal owner directory is absent')
+  const owner = /^(run|plan|review):(\d+(?:-\d+)*)$/.exec(identity.laneOwner.id)
+  if (!owner) throw new WorktreeError('journal owner scope is unavailable')
+  const [, lane, phaseIds] = owner, phases = phaseIds.split('-')
+  const stem = LANES[lane].prefix + phaseIds, worktree = identity.worktree
+  const inFamily = name => (LANES[lane].journalRe.test(name) || LANES[lane].closedRe.test(name))
+    && (name === `${stem}.json` || name === `${stem}.closed.json` || lane === 'run' && name.startsWith(`${stem}.`))
+  const bound = journal => journal.ownerRoot === root && (journal.lane ?? 'run') === lane
+    && Array.isArray(journal.phases) && isDeepStrictEqual(journal.phases.map(String), phases)
+    && isDeepStrictEqual(journal.laneOwner, identity.laneOwner) && isDeepStrictEqual(journal.worktreeIdentity, identity)
   const matches = []
   for (const name of readdirSync(join(root, '.building'))) {
-    if (!Object.values(LANES).some(lane => lane.journalRe.test(name) || lane.closedRe.test(name))) continue
-    const path = join(root, '.building', name)
-    if (!lstatSync(path).isFile()) throw new WorktreeError('non-regular lane journal')
+    if (!Object.values(LANES).some(spec => spec.journalRe.test(name) || spec.closedRe.test(name))) continue
+    const path = join(root, '.building', name), target = inFamily(name)
     let fd, bytes, journal
-    try { fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW); bytes = readFileSync(fd); journal = JSON.parse(bytes) }
-    catch { throw new WorktreeError('unreadable lane journal') }
-    finally { if (fd !== undefined) closeSync(fd) }
-    if (typeof journal?.worktree !== 'string' || resolve(root, journal.worktree) !== worktree) continue
-    if (journalDeclineReason(journal) || journal.ownerRoot !== root) throw new WorktreeError('journal owner binding differs')
-    matches.push({ path, journal, journalDigest: journalBytesDigestOf(bytes), closed: Object.values(LANES).some(lane => lane.closedRe.test(name)) })
+    try {
+      if (!lstatSync(path).isFile()) throw new WorktreeError('non-regular lane journal')
+      fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW)
+      bytes = readFileSync(fd); journal = JSON.parse(bytes)
+      if (journalDeclineReason(journal)) throw new WorktreeError('malformed lane journal')
+    } catch (error) {
+      if (target) throw new WorktreeError(`unreadable target lane journal: ${error.message}`)
+      continue
+    } finally { if (fd !== undefined) closeSync(fd) }
+    const sameWorktree = typeof journal.worktree === 'string' && resolve(root, journal.worktree) === worktree
+    if (target && (!sameWorktree || !bound(journal))) throw new WorktreeError('journal owner binding differs')
+    if (!sameWorktree) continue
+    // Readable duplicate evidence still participates, even under another lane's filename.
+    matches.push({ path, journal, journalDigest: journalBytesDigestOf(bytes), closed: Object.values(LANES).some(spec => spec.closedRe.test(name)), target })
   }
   const open = matches.filter(row => !row.closed), selected = open.length ? open : matches
-  if (selected.length !== 1) throw new WorktreeError('absent or ambiguous lane journal')
+  if (selected.length !== 1 || !selected[0].target || !bound(selected[0].journal)) throw new WorktreeError('absent, ambiguous or mismatched lane journal')
   return selected[0]
 }
+
 function cleanupLiveness(pgid, deps = {}) {
   if (!Number.isSafeInteger(pgid) || pgid <= 1) return 'unknown'
   if (deps.isAlive) { const answer = deps.isAlive(pgid); return answer === true ? 'live' : answer === false ? 'inactive' : 'unknown' }
@@ -1045,7 +1062,7 @@ function cleanupLocalEvidence(root, identity, policy, deps = {}, { missing = fal
     if (!identity || identity.repository !== realpathSync(mainCheckout(root)) || identity.worktree === root || identity.worktree === identity.repository || isSlotDir(identity.repository, identity.worktree) || isSlotDir(root, identity.worktree)) return hold('ownership-uncertain')
     const registry = readRegistry(root), matches = registry.identities.filter(row => row.ownershipId === identity.ownershipId)
     if (matches.length !== 1 || !isDeepStrictEqual(matches[0], identity)) return hold('ownership-uncertain')
-    joined = cleanupJournal(root, identity.worktree)
+    joined = cleanupJournal(root, identity)
     if (!isDeepStrictEqual(joined.journal.worktreeIdentity, identity)) return hold('ownership-uncertain')
     if (!missing && resolveWorktreeOwnership(root, joined.journal).state !== 'owned') return hold('ownership-uncertain')
   } catch { return hold('ownership-uncertain') }

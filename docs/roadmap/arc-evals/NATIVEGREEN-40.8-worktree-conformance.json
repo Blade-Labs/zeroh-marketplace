@@ -1,0 +1,454 @@
+{
+  "count": 50,
+  "providerUsage": "injected",
+  "recoveries": [
+    {
+      "interrupted": "matrix interruption crash-after-planned",
+      "resumed": [
+        {
+          "ownershipId": "823e4567-e89b-42d3-a456-426614408106",
+          "state": "removed"
+        }
+      ]
+    },
+    {
+      "interrupted": "matrix interruption crash-after-removing",
+      "resumed": [
+        {
+          "ownershipId": "823e4567-e89b-42d3-a456-426614408107",
+          "state": "removed"
+        }
+      ]
+    },
+    {
+      "interrupted": "matrix interruption crash-before-disposal",
+      "resumed": [
+        {
+          "ownershipId": "823e4567-e89b-42d3-a456-426614408108",
+          "state": "removed"
+        }
+      ]
+    },
+    {
+      "interrupted": "matrix interruption crash-after-disposal",
+      "resumed": [
+        {
+          "ownershipId": "823e4567-e89b-42d3-a456-426614408109",
+          "state": "removed"
+        }
+      ]
+    },
+    {
+      "interrupted": "matrix interruption crash-after-receipt",
+      "resumed": []
+    }
+  ],
+  "rows": [
+    {
+      "label": "merged-run",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "merged-plan",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "merged-review-detached",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "closed-run",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "closed-plan",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "closed-review",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "crash-after-planned",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "crash-after-removing",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "crash-before-disposal",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "crash-after-disposal",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "crash-after-receipt",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": true,
+      "held": false
+    },
+    {
+      "label": "active-run",
+      "expectedClass": "live",
+      "classified": "live",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "active-plan",
+      "expectedClass": "live",
+      "classified": "live",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "active-review",
+      "expectedClass": "live",
+      "classified": "live",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "dirty-tracked",
+      "expectedClass": "dirty",
+      "classified": "dirty",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "dirty-index",
+      "expectedClass": "dirty",
+      "classified": "dirty",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "dirty-report",
+      "expectedClass": "dirty",
+      "classified": "dirty",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "dirty-unknown",
+      "expectedClass": "dirty",
+      "classified": "dirty",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "dirty-mixed",
+      "expectedClass": "dirty",
+      "classified": "dirty",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "unique-run",
+      "expectedClass": "unique",
+      "classified": "unique",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "unique-plan",
+      "expectedClass": "unique",
+      "classified": "unique",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "unique-detached",
+      "expectedClass": "unique",
+      "classified": "unique",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "not-integrated-run",
+      "expectedClass": "not-integrated",
+      "classified": "not-integrated",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "not-integrated-plan",
+      "expectedClass": "not-integrated",
+      "classified": "not-integrated",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "not-integrated-review",
+      "expectedClass": "not-integrated",
+      "classified": "not-integrated",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "open-pr-run",
+      "expectedClass": "protected",
+      "classified": "protected",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "open-pr-review",
+      "expectedClass": "protected",
+      "classified": "protected",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "provider-unavailable",
+      "expectedClass": "protection-unavailable",
+      "classified": "protection-unavailable",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "provider-throws",
+      "expectedClass": "protection-unavailable",
+      "classified": "protection-unavailable",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "provider-malformed",
+      "expectedClass": "protection-unavailable",
+      "classified": "protection-unavailable",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "legacy-journal",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "unregistered-journal-only",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "unknown-no-journal",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "session-slot-one",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "session-slot-two",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "other-tool-worktree",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "target-corrupt-json",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "target-journal-symlink",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "worktree-path-symlink",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "copied-ownership-id",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "mismatched-git-admin",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "mismatched-git-common",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "mismatched-repository",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "ambiguous-run-label",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "ambiguous-cross-lane",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "wrong-owner-root",
+      "expectedClass": "ownership-uncertain",
+      "classified": "ownership-uncertain",
+      "selected": false,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "race-journal",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "race-dirt",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "race-head",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": false,
+      "held": true
+    },
+    {
+      "label": "race-registry",
+      "expectedClass": "eligible",
+      "classified": "eligible",
+      "selected": true,
+      "removed": false,
+      "held": true
+    }
+  ],
+  "gateRun": "run-000022-2026-09-07T15-51-58-900Z.json",
+  "sourceLog": "/tmp/capbuild-tests-p5heb286/001.log",
+  "observedAt": "2026-09-07T15:51:58.900Z",
+  "sourceCommitBeforeTask": "af6bcf4",
+  "liveProviderUsage": "unknown",
+  "evidenceScope": "Native Git and filesystem; injected provider responses and simulated interruptions; recovery executed in fresh OS processes."
+}
