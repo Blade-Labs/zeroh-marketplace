@@ -482,8 +482,9 @@ test('arc correction lifecycle — missing or corrupt correction checkpoints ref
   }
 })
 
-test('arc workflow lifecycle — concurrent identical results run exactly one verify/groom/emit tail', async () => {
+for (const layout of ['toplevel', 'docs']) test(`arc workflow lifecycle — ${layout} concurrent identical results run exactly one verify/groom/emit tail`, async () => {
   const root = makeFixtureRepo({
+    layout,
     config: {
       gateCommands: {
         emit: `node -e "require('fs').appendFileSync('emit.log','emit\\n')"`,
@@ -491,9 +492,10 @@ test('arc workflow lifecycle — concurrent identical results run exactly one ve
     },
   })
   const phase = 9038
+  const rr = layout === 'docs' ? 'docs/roadmap' : 'roadmap'
   writePhaseFile(root, { phase, status: 'backlog', arcId: 'FX', tasks: [{ id: '9038.1', done: false }] })
   writeArcFile(root, { id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [phase] }] })
-  writeFileSync(join(root, 'roadmap', 'backlog.ts'), `export default defineBacklog({
+  writeFileSync(join(root, rr, 'backlog.ts'), `export default defineBacklog({
   "tiers": [
     {
       "tier": 0,
@@ -513,9 +515,9 @@ test('arc workflow lifecycle — concurrent identical results run exactly one ve
 })
 `)
   commitPaths(root, 'docs(roadmap): seed concurrent result fixture', [
-    'roadmap/phases/phase-9038.phase.ts',
-    'roadmap/arcs/FX.arc.ts',
-    'roadmap/backlog.ts',
+    `${rr}/phases/phase-9038.phase.ts`,
+    `${rr}/arcs/FX.arc.ts`,
+    `${rr}/backlog.ts`,
   ])
 
   let completed = false
@@ -559,7 +561,7 @@ test('arc workflow lifecycle — concurrent identical results run exactly one ve
   assert.equal(verifyCount, 1, 'only the claim winner verifies completion')
   assert.equal(results.filter((result) => result.done === true).length, 1, JSON.stringify(results))
   assert.equal(readFileSync(join(root, 'emit.log'), 'utf8'), 'emit\n', 'only the claim winner emits once')
-  const backlog = readFileSync(join(root, 'roadmap', 'backlog.ts'), 'utf8')
+  const backlog = readFileSync(join(root, rr, 'backlog.ts'), 'utf8')
   assert.doesNotMatch(backlog, /"phase":\s*9038/)
   assert.match(backlog, /"phase":\s*9039/, 'the multiline quoted sibling survives')
   assert.match(backlog, /literal \\"phase\\": 9038/, 'a target-looking string in sibling data survives')

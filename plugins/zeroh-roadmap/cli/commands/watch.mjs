@@ -19,7 +19,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { readLiveness } from '../lib/liveness.mjs'
 import { buildingDir } from '../lib/sidecar.mjs'
-import { ROOT_CANDIDATES } from '../lib/roadmap-root.mjs'
+import { ROOT_CANDIDATES, RoadmapRootError } from '../lib/roadmap-root.mjs'
 
 const flagVal = (argv, name) => {
   const i = argv.indexOf(name)
@@ -31,7 +31,8 @@ function resolveSidecar(arg) {
   if (arg.endsWith('.json')) return arg
   try {
     return join(buildingDir(process.cwd()), `${arg}.json`)
-  } catch {
+  } catch (error) {
+    if (error instanceof RoadmapRootError) throw error
     // best-effort when cwd is not a repo: no toplevel to probe, so the resolver's own
     // default candidate is the only honest guess.
     return join(ROOT_CANDIDATES[0], 'arcs', '.building', `${arg}.json`)

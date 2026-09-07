@@ -22,6 +22,7 @@
  * Run: node --test cli/commands/arm-disarm.test.mjs
  */
 import { test } from 'node:test'
+import { consumerSchemaPath } from '../lib/roadmap-root.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
@@ -463,7 +464,7 @@ const PLUGIN_ROOT = resolve(HERE, '..', '..')
 const CONSUMER_ROOT = resolve(PLUGIN_ROOT, '..', '..')
 const SCHEMA_HOMES = {
   'plugins/zeroh-roadmap/templates/schema.ts': join(PLUGIN_ROOT, 'templates', 'schema.ts'),
-  'lib/roadmap/schema.ts': join(CONSUMER_ROOT, 'lib', 'roadmap', 'schema.ts'),
+  'consumer schema': consumerSchemaPath(CONSUMER_ROOT),
 }
 /** tsx for the bridge: the plugin's own devDependency, else the consumer checkout's. */
 const TSX_CANDIDATES = [join(PLUGIN_ROOT, 'node_modules', '.bin', 'tsx'), join(CONSUMER_ROOT, 'node_modules', '.bin', 'tsx')]

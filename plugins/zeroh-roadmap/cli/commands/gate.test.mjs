@@ -18,6 +18,7 @@ import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildPlan, scanHistoryComments, untestedGateFixFindings, deviantGrammarFindings, annotateScopedProbeWarnings } from './gate.mjs'
 import { phaseOwnPatterns } from '../lib/gitscan.mjs'
+import { consumerSchemaPath } from '../lib/roadmap-root.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_ROOT = join(HERE, '..', '..')
@@ -2166,7 +2167,7 @@ test('gate run --verify-complete — an UNREADABLE ARCHIVED journal reds, exactl
 // through `definePhase` (the consumer schema's import-time parse — a plain `export default
 // {…}` fixture never reaches the enum), the round is appended with --record-round, and
 // --verify-complete reconciles the two.
-const CONSUMER_SCHEMA = join(PLUGIN_ROOT, '..', '..', 'lib', 'roadmap', 'schema.ts')
+const CONSUMER_SCHEMA = consumerSchemaPath(join(PLUGIN_ROOT, '..', '..'))
 
 /** The minimal phase document `definePhase` accepts, plus the rounds under test. */
 const enumPhaseObj = (num, gateRounds) => ({

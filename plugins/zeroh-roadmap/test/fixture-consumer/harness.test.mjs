@@ -2,11 +2,14 @@
 /** TEST-FIRST: arc-plane selects the native-driver factory for phase execution. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import arcPlaneWorkflow from '../../workflows/arc-plane.workflow.mjs'
+import { resetRoadmapRootCache } from '../../cli/lib/roadmap-root.mjs'
 import { makeFixtureRepo, writePhaseFile, writeArcFile, commitPaths, git, runNativeDriverFixture } from './harness.mjs'
 
-test('run-phase selects createNativeAgentDriver and leaves the legacy agent primitive untouched', async () => {
-  const root = makeFixtureRepo()
+for (const layout of ['toplevel', 'docs']) test(`run-phase selects createNativeAgentDriver from the ${layout} layout and leaves the legacy agent primitive untouched`, async () => {
+  const root = makeFixtureRepo({ layout })
   writePhaseFile(root, { phase: 3851, status: 'backlog', arcId: 'FX', tasks: [{ id: '3851.1', done: false }] })
   const head = git(root, 'rev-parse', 'HEAD')
   let factories = 0
@@ -41,8 +44,8 @@ test('orphan stable arm holds before native factory or current-source planning',
   assert.equal(factories, 0); assert.equal(result.halt, 'blocked')
 })
 
-test('canonical stable-arm result enters result-check before arc-next after child HEAD changes', async () => {
-  const { createHash } = await import('node:crypto'); const { persistRunRequest, bindNativeSession, persistRunResult } = await import('../../cli/lib/run-receipt.mjs'); const { reduceArcTransition } = await import('../../cli/lib/workflow-steps.mjs'); const { claimExecutorRun } = await import('../../cli/lib/executor-arm.mjs')
+for (const { migrateAfterRequest, skipOriginal } of [{ migrateAfterRequest: false, skipOriginal: false }, { migrateAfterRequest: true, skipOriginal: false }, { migrateAfterRequest: true, skipOriginal: true }]) test(`canonical stable-arm result uses original source before arc-next${migrateAfterRequest ? ' after a roadmap root move' : ''}${skipOriginal ? ' and detects original intent gaps' : ''}`, async () => {
+  const { createHash } = await import('node:crypto'); const { persistRunRequest, bindNativeSession, persistRunResult, readRunReceipt } = await import('../../cli/lib/run-receipt.mjs'); const { reduceArcTransition } = await import('../../cli/lib/workflow-steps.mjs'); const { claimExecutorRun } = await import('../../cli/lib/executor-arm.mjs')
   const root = makeFixtureRepo(); const phase = 3853
   writePhaseFile(root, { phase, status: 'in-progress', arcId: 'FX', acceptanceCriteria: ['candidate recorded'], tasks: [{ id: '3853.1', title: 'record candidate', done: false }] })
   writeArcFile(root, { id: 'FX', baseRef: 'develop', acceptanceCriteria: [{ job: 'candidate recorded' }], planes: [{ name: 'P', phases: [phase] }] })
@@ -51,29 +54,47 @@ test('canonical stable-arm result enters result-check before arc-next after chil
   const authority = { parent: { profile: 'workspace-write', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }, provenance: { kind: 'managed-host-input', source: 'supervisor' } }, request: { profile: 'inherit', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }, provenance: null }, effective: { profile: 'workspace-write', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false } }, native: { driver: 'codex', runtime: { version: null, verified: false }, argv: ['exec'], enforcement: { filesystem: 'sandbox', network: 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' }, limitations: ['fixture'] } }
   const request = { runId: 'run-original', executorId: 'executor-original', arcId: 'FX', phase, roleId: 'phase-executor', driverId: 'codex', model: 'gpt-5.6-sol', worktree: root, baseHead: originalHead, requestedHead: originalHead, roleCardDigest: hash(role), governanceDigest: hash(governance), authority, authorityRef: { status: 'known', envelopeDigest: 'sha256:fixture', source: { kind: 'managed-host-receipt', ref: 'harness' } } }
   const recorded = persistRunRequest(root, request, { operation: { kind: 'start', inputDigest: hash('') }, roleCardBytes: role, governanceBytes: governance }); claimExecutorRun(root, phase, { sessionId: 'parent', executorId: request.executorId, runReceipt: recorded.receipt })
-  writePhaseFile(root, { phase, status: 'done', arcId: 'FX', acceptanceCriteria: ['candidate recorded'], executionResult: { phase, status: 'done', gateRounds: 1, compromises: [], skipped: [] }, tasks: [{ id: '3853.1', title: 'record candidate', done: true }] })
+  writePhaseFile(root, { phase, status: 'done', arcId: 'FX', acceptanceCriteria: ['CURRENT criterion must not govern the original request'], executionResult: { phase, status: 'done', gateRounds: 1, compromises: [], skipped: [] }, tasks: [{ id: '3853.1', title: 'record candidate', done: true }] })
   commitPaths(root, 'feat: child completed native phase', [`roadmap/phases/phase-${phase}.phase.ts`]); assert.notEqual(git(root, 'rev-parse', 'HEAD'), originalHead)
-  const order = []; const phaseResult = { phase, status: 'done', gateRounds: 1, compromises: [], skipped: [] }
-  const candidate = { phase, status: 'done', gateRounds: 1 } // Consumer validation supplies default arrays.
+  if (migrateAfterRequest) {
+    const { mkdirSync, renameSync } = await import('node:fs')
+    mkdirSync(root + '/docs', { recursive: true })
+    renameSync(root + '/roadmap', root + '/docs/roadmap')
+    renameSync(root + '/lib/roadmap', root + '/docs/roadmap/lib')
+    resetRoadmapRootCache()
+  }
+  const historicalSkip = 'candidate recorded was omitted from the delivered result'
+  const order = []; const phaseResult = { phase, status: 'done', gateRounds: 1, compromises: [], skipped: skipOriginal ? [historicalSkip] : [] }
+  const candidate = { phase, status: 'done', gateRounds: 1, compromises: [], skipped: skipOriginal ? [historicalSkip] : [] }
 
   const result = await arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, { cwd: root, createNativeAgentDriver() { return { async runPhase(input) { order.push('recover'); assert.equal(input.recovery.runId, request.runId); const bound = bindNativeSession(root, { arcId: 'FX', runId: request.runId, expectedRevisionDigest: recorded.receipt.digest, nativeSessionId: 'native-harness' }); const prior = { arcId: 'FX', stage: 'phase', status: 'active', processedEventIds: [], lastHalt: null, authorityRef: request.authorityRef }; const event = { eventId: 'native-harness-exit', arcId: 'FX', source: 'native-agent', type: 'exited', phase, authorityRef: request.authorityRef }; const observation = { handle: { request, nativeSessionId: 'native-harness' }, observation: { runId: request.runId, executorId: request.executorId, roleId: request.roleId, driverId: request.driverId, model: request.model, nativeSessionId: 'native-harness', event }, transition: reduceArcTransition(prior, event) }; persistRunResult(root, { arcId: 'FX', runId: request.runId, expectedRevisionDigest: bound.receipt.digest, observation, result: { status: 'transport-exited', phaseResult: candidate } }); return { result: candidate } } } }, run(command) { if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }; if (command.includes('result check')) { order.push('result-check'); return { stdout: JSON.stringify(phaseResult), stderr: '', exitCode: 0 } }; if (command.includes('arc next')) { order.push('arc-next'); return { stdout: JSON.stringify({ arc: 'FX', action: 'complete', done: [phase], remaining: [], gates: {} }), stderr: '', exitCode: 0 } }; return { stdout: '{}', stderr: '', exitCode: 0 } } })
-  assert.deepEqual(order.slice(0, 2), ['recover', 'result-check']); assert.equal(result.done, true)
-  const { existsSync } = await import('node:fs')
+  assert.deepEqual(order.slice(0, 2), ['recover', 'result-check'])
+  if (skipOriginal) {
+    assert.equal(result.halt, 'self-descope', JSON.stringify(result))
+    assert.match(JSON.stringify(result.evidence), /candidate recorded/)
+    const residue = readdirSync(join(root, '.building')).filter((name) => name.startsWith('native-source-'))
+    assert.deepEqual(residue, [], 'historical imports leave no native-source-* residue')
+    return
+  }
+  assert.equal(result.done, true, JSON.stringify(result))
   const { armPath, claimExecutorRun: reclaimExecutorRun } = await import('../../cli/lib/executor-arm.mjs')
   assert.equal(existsSync(armPath(root, phase)), false, 'normal completed tail removes the exact native arm')
   let secondFactories = 0
   const completeRun = (factory) => arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, { cwd: root, createNativeAgentDriver: factory, run(command) { if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }; if (command.includes('result check')) return { stdout: JSON.stringify(phaseResult), stderr: '', exitCode: 0 }; if (command.includes('arc next')) return { stdout: JSON.stringify({ arc: 'FX', action: 'complete', done: [phase], remaining: [], gates: {} }), stderr: '', exitCode: 0 }; return { stdout: '{}', stderr: '', exitCode: 0 } } })
   const second = await completeRun(() => { secondFactories++; return {} })
   assert.equal(second.done, true, JSON.stringify(second)); assert.equal(secondFactories, 0)
-  reclaimExecutorRun(root, phase, { sessionId: 'parent', executorId: request.executorId, runReceipt: recorded.receipt })
+  const currentRecorded = readRunReceipt(root, { arcId: request.arcId, runId: request.runId }, { digest: recorded.receipt.digest })
+  reclaimExecutorRun(root, phase, { sessionId: 'parent', executorId: request.executorId, runReceipt: currentRecorded })
   let crashFactories = 0
   const crashRecovery = await completeRun(() => { crashFactories++; return {} })
   assert.equal(crashRecovery.done, true, JSON.stringify(crashRecovery)); assert.equal(crashFactories, 0)
   assert.equal(existsSync(armPath(root, phase)), false, 'crash-after-tail recovery removes the exact reintroduced arm')
+  const nativeSourceResidue = readdirSync(join(root, '.building')).filter((name) => name.startsWith('native-source-'))
+  assert.deepEqual(nativeSourceResidue, [], 'historical imports leave no native-source-* residue')
 })
 
-test('native runPhase races the supplied watchdog and returns unobserved without duplicating the retained run', { timeout: 1_000 }, async () => {
-  const root = makeFixtureRepo()
+for (const layout of ['toplevel', 'docs']) test(`native runPhase in the ${layout} layout races the supplied watchdog without duplicating the retained run`, { timeout: 1_000 }, async () => {
+  const root = makeFixtureRepo({ layout })
   const phase = 3854
   writePhaseFile(root, { phase, status: 'backlog', arcId: 'FX', tasks: [{ id: '3854.1', done: false }] })
   const head = git(root, 'rev-parse', 'HEAD')

@@ -68,7 +68,7 @@ if (!ALL_HISTORICAL && (argv.length === 0 || argv[0].startsWith('--'))) {
   process.exit(1)
 }
 
-const PHASES_DIR = path.resolve(process.cwd(), 'roadmap/phases')
+const PHASES_DIR = path.resolve(process.cwd(), 'docs/roadmap/phases')
 
 // ── Filename resolution ─────────────────────────────────────────────────────
 

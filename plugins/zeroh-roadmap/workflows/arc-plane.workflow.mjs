@@ -22,7 +22,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { randomUUID, createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -35,9 +35,10 @@ import {
   groomBacklogSource,
 } from '../cli/lib/workflow-steps.mjs'
 import { gitToplevel } from '../cli/lib/gitroot.mjs'
+import { ROOT_CANDIDATES, roadmapRoot } from '../cli/lib/roadmap-root.mjs'
 import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
-import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
+import { bridgeImport, bridgeImportMany } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine, appendExecutorEvent, readResultTailCompletion } from '../cli/lib/beacon.mjs'
 import { armExecutor, disarmExecutor, liveArm, armPath, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps, readExecutorRunArm } from '../cli/lib/executor-arm.mjs'
 import { productRepos } from '../cli/lib/product-repos.mjs'
@@ -47,7 +48,7 @@ import { NativeAgentDriver } from '../cli/lib/native-agent-driver.mjs'
 import { MODEL_DRIVERS } from '../cli/lib/drivers.mjs'
 import { resolveRole } from '../cli/lib/roles.mjs'
 import { resolveGovernance } from '../cli/lib/governance.mjs'
-import { validateRunAddress, inspectReceiptAncestors, readRunReceipt } from '../cli/lib/run-receipt.mjs'
+import { validateRunAddress, ensureReceiptDirectory, readRunReceipt } from '../cli/lib/run-receipt.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
 const BACKGROUND_RUN_MAX_MIN = 10 // mirror hooks/executor-result-guard.mjs — one 10-min rule
@@ -171,42 +172,65 @@ function backgroundRunAlive(b) {
 
 /** Read the phase's + arc's acceptanceCriteria + the arc designRefs via the typed bridge
  *  (the same seam validate-roadmap-file proves). Best-effort: a bridge miss yields empty
- *  arrays (detectSelfDescope then no-ops rather than false-firing). */
+ *  arrays for live reads. Historical recovery requires both original records. */
 function readPhaseAndArcMeta(repoRoot, arcId, phase, { atCommit, runId } = {}) {
-  if (atCommit !== undefined) {
+  let pimp, aimp
+  if (atCommit === undefined) {
+    const root = roadmapRoot(repoRoot)
+    pimp = bridgeImport(join(root, 'phases', `phase-${phase}.phase.ts`), { consumerRoot: repoRoot })
+    aimp = bridgeImport(join(root, 'arcs', `${arcId}.arc.ts`), { consumerRoot: repoRoot })
+  } else {
     validateRunAddress({ arcId, runId })
     if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(atCommit) || !Number.isSafeInteger(phase) || phase < 1) throw new Error('native recovery requires an exact source commit and phase')
-  }
-  const readMeta = (relativePath) => {
-    const path = join(repoRoot, relativePath)
-    if (atCommit === undefined) return bridgeImport(path, { consumerRoot: repoRoot })
-    inspectReceiptAncestors(dirname(path))
-    const bytes = execFileSync('git', ['show', `${atCommit}:${relativePath}`], { cwd: repoRoot, maxBuffer: 2 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] })
-    const digest = createHash('sha256').update(bytes).digest('hex')
-    const temporary = join(dirname(path), `.native-recovery-${digest}-${randomUUID()}.ts`)
-    // Sibling location preserves the consumer's relative schema imports. This is
-    // a temporary input to the existing typed parser, never a second snapshot store.
-    writeFileSync(temporary, bytes, { flag: 'wx', mode: 0o600 })
+    const git = (args) => execFileSync('git', args, { cwd: repoRoot, maxBuffer: 2 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] })
+    const entry = (path) => {
+      const row = git(['ls-tree', '-z', atCommit, '--', path]).toString().split('\0').filter(Boolean)
+      if (!row.length) return null
+      if (row.length !== 1 || row[0].slice(row[0].indexOf('\t') + 1) !== path) throw new Error('ambiguous original source: ' + path)
+      const [mode, type] = row[0].split(/[ \t]/)
+      return { mode, type }
+    }
+    const regular = (value) => value?.type === 'blob' && ['100644', '100755'].includes(value.mode)
+    const roots = ROOT_CANDIDATES.filter((root) => {
+      const config = entry(root + '/roadmap.config.json'), phases = entry(root + '/phases')
+      if ((config && !regular(config)) || (phases && phases.type !== 'tree')) throw new Error('unsafe original root marker: ' + root)
+      return config || phases
+    })
+    if (roots.length !== 1) throw new Error('original source must have exactly one marked roadmap root')
+    const root = roots[0]
+    const localSchema = root + '/lib/schema.ts'
+    const schema = entry(localSchema) ? localSchema : 'lib/' + ROOT_CANDIDATES[0] + '/schema.ts'
+    const phasePath = root + `/phases/phase-${phase}.phase.ts`, arcPath = root + `/arcs/${arcId}.arc.ts`
+    const configPath = root + '/roadmap.config.json'
+    const paths = [phasePath, arcPath, schema, ...(entry(configPath) ? [configPath] : [])]
+    // Exact historical bytes and relative paths preserve the original schema owner.
+    // Nothing is imported beside live records or rewritten to today's schema.
+    const sources = paths.map((path) => {
+      if (!regular(entry(path))) throw new Error('missing or unsafe original source: ' + path)
+      return { path, bytes: git(['show', `${atCommit}:${path}`]) }
+    })
+    const base = ensureReceiptDirectory(join(repoRoot, '.building'))
+    const temporary = mkdtempSync(join(base, 'native-source-'))
     try {
-      const imported = bridgeImport(temporary, { consumerRoot: repoRoot, cache: false })
-      if (!imported.ok) throw new Error(`cannot parse original native source ${relativePath}`)
-      return imported
+      for (const { path, bytes } of sources) {
+        const target = join(temporary, path)
+        mkdirSync(dirname(target), { recursive: true })
+        writeFileSync(target, bytes, { flag: 'wx', mode: 0o600 })
+      }
+      const phaseFile = join(temporary, phasePath), arcFile = join(temporary, arcPath)
+      const imported = bridgeImportMany([phaseFile, arcFile], { consumerRoot: temporary, cache: false })
+      pimp = imported.byPath?.[phaseFile]; aimp = imported.byPath?.[arcFile]
+      if (!imported.ok || !pimp?.ok || !aimp?.ok) throw new Error('cannot parse original native phase and arc')
     } finally {
-      unlinkSync(temporary) // Cleanup failure must stop recovery rather than leave hidden source.
+      rmSync(temporary, { recursive: true })
     }
   }
-  const meta = { acceptanceCriteria: [], tasks: [], arcCriteria: [], designRefs: [] }
-  const pimp = readMeta(`roadmap/phases/phase-${phase}.phase.ts`)
-  if (pimp.ok) {
-    meta.acceptanceCriteria = pimp.parsed?.acceptanceCriteria ?? []
-    meta.tasks = pimp.parsed?.tasks ?? []
+  return {
+    acceptanceCriteria: pimp.ok ? pimp.parsed?.acceptanceCriteria ?? [] : [],
+    tasks: pimp.ok ? pimp.parsed?.tasks ?? [] : [],
+    arcCriteria: aimp.ok ? (aimp.parsed?.acceptanceCriteria ?? []).map((c) => c.job ?? c.signal ?? c) : [],
+    designRefs: aimp.ok ? aimp.parsed?.designRefs ?? [] : [],
   }
-  const aimp = readMeta(`roadmap/arcs/${arcId}.arc.ts`)
-  if (aimp.ok) {
-    meta.arcCriteria = (aimp.parsed?.acceptanceCriteria ?? []).map((c) => c.job ?? c.signal ?? c)
-    meta.designRefs = aimp.parsed?.designRefs ?? []
-  }
-  return meta
 }
 
 /**
@@ -216,7 +240,7 @@ function readPhaseAndArcMeta(repoRoot, arcId, phase, { atCommit, runId } = {}) {
  * config/slots seam (singleSeam 1). It runs between executor spawns, never concurrently.
  */
 async function serializeSharedMutation(phase, { repoRoot, cfg, arcId }) {
-  const backlogPath = join(repoRoot, 'roadmap', 'backlog.ts')
+  const backlogPath = join(roadmapRoot(repoRoot), 'backlog.ts')
   if (existsSync(backlogPath)) {
     const groomed = groomBacklogSource(readFileSync(backlogPath, 'utf8'), phase, { allowAbsent: true })
     if (groomed.error) return buildHaltPayload('failed', { phase, evidence: { backlogGroom: groomed.error } })
@@ -591,7 +615,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
 
     // ── the executor spawn (the ONE agent() judgment step) ──
     const meta = readPhaseAndArcMeta(repoRoot, arcId, phase)
-    const phaseFilePath = join(repoRoot, 'roadmap', 'phases', `phase-${phase}.phase.ts`)
+    const phaseFilePath = join(roadmapRoot(repoRoot), 'phases', `phase-${phase}.phase.ts`)
     const phaseSource = existsSync(phaseFilePath) ? readFileSync(phaseFilePath, 'utf8') : ''
     const beacon = latestPhaseBeacon(worktree, phase)
     const prompt = buildExecutorPrompt({

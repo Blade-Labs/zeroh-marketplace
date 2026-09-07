@@ -1292,6 +1292,7 @@ test('composeLandedMessage: the Co-Authored-By trailer is the LAST non-empty lin
   const phaseRecord = {
     phase: 77,
     name: 'Preserve the co-author trailer',
+    executionResult: { driver: { model: MODEL_IDS.OPUS, lane: 'claude' } },
     tasks: [
       { id: '77.1', title: 'First task', transparencyReport: { whatWasDone: 'did the first thing', compromises: 'None' } },
       { id: '77.2', title: 'Second task', transparencyReport: { whatWasDone: 'did the second thing', compromises: 'a real compromise here' } },
@@ -1311,6 +1312,14 @@ test('composeLandedMessage: the Co-Authored-By trailer is the LAST non-empty lin
   assert.equal(lastNonEmptyLine(out.body), trailers[0], 'the trailer is the LAST non-empty line — git only reads trailers at the end')
   assert.ok(lines.indexOf(trailers[0]) > 0, 'the trailer follows the body content, it is not the whole body')
   assert.ok(out.body.includes('did the second thing'), 'the trailer rule must not have swallowed the content')
+})
+
+test('composeLandedMessage: absent or unknown execution model omits the co-author trailer', () => {
+  const group = groupOf([['feat(cli): phase 78 — 78.1 work', 'task']])
+  for (const executionResult of [undefined, { driver: { model: 'unknown-native-model', lane: 'native' } }]) {
+    const phaseRecord = { phase: 78, name: 'Unknown attribution', executionResult, tasks: [{ id: '78.1', title: 'work', transparencyReport: { whatWasDone: 'did it', compromises: 'None' } }] }
+    assert.doesNotMatch(composeLandedMessage(phaseRecord, group).body, /Co-Authored-By:/)
+  }
 })
 
 test('composeLandedMessage: executionResult driver model owns the trailer', () => {

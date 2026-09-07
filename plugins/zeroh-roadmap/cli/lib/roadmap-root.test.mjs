@@ -336,8 +336,8 @@ const argvForm = () => /(['"`])(?:docs\/)?roadmap\1\s*[,)]/g
 const pathForm = () => new RegExp(`(['"\`])(?:docs/)?roadmap/(?:${memberAlt()})`, 'g')
 
 /**
- * Every non-test .mjs/.mts under cli/ (recursively) and under hooks/, as { rel, src }. scripts/ is
- * OUT of scope by plan ruling — migration and estate tooling there keeps its literals. The walk
+ * Every shipped JavaScript, TypeScript, and shell source under cli/, hooks/, scripts/, and
+ * workflows/, as { rel, src }. Test files remain fixture/oracle material rather than active owners. The walk
  * deliberately still RETURNS the SCAN_EXCLUDED_DIRS entries: the scan filters them out, and the
  * exclusion-proof test below needs to read them.
  */
@@ -347,23 +347,36 @@ function rootLiteralSources() {
   const walk = (rel) => {
     for (const e of readdirSync(new URL(rel, pluginRoot), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if (e.isDirectory()) walk(`${rel}${e.name}/`)
-      else if (/\.m[jt]s$/.test(e.name) && !/\.test\.m[jt]s$/.test(e.name)) {
+      else if (/\.(?:m[jt]s|ts|sh)$/.test(e.name) && !/\.test\.(?:m[jt]s|ts)$/.test(e.name)) {
         out.push({ rel: `${rel}${e.name}`, src: readFileSync(new URL(`${rel}${e.name}`, pluginRoot), 'utf8') })
       }
     }
   }
   walk('cli/')
   walk('hooks/')
+  walk('scripts/')
+  walk('workflows/')
   return out
 }
 
-test('roadmap-root.mjs: it is the ONLY home of the root literals left in non-test cli/ and hooks/ code', () => {
+
+const PERMITTED_ROOT_LITERAL_OWNERS = new Set(['cli/lib/roadmap-root.mjs', 'cli/lib/root-migration.mjs', 'hooks/lib/roadmap-root.sh', 'scripts/scaffold-roadmap.sh'])
+function unpermittedRootLiterals(sources) {
+  const found = []
+  for (const { rel, src } of sources) {
+    const shapes = [...src.matchAll(argvForm()), ...src.matchAll(pathForm())].map((match) => match[0])
+    if (shapes.length > 0 && !PERMITTED_ROOT_LITERAL_OWNERS.has(rel)) found.push({ rel, shapes: [...new Set(shapes)] })
+  }
+  return found
+}
+
+test('active cli, hooks, scripts, and workflows keep root literals only in ratified owners', () => {
   // The acceptance criterion as a grep the conversion cannot half-do. A consumer laid out under
   // docs/roadmap/ reads as "no roadmap" at every site that spells the root itself, so the count
   // of such sites has to be checkable — and stay at one — rather than surveyed by hand once.
   const sources = rootLiteralSources().filter((s) => !isScanExcluded(s.rel))
   const names = new Set(sources.map((s) => s.rel))
-  const known = ['cli/lib/derive.mjs', 'cli/commands/status.mjs', 'hooks/session-lane-check.mjs', 'cli/audit-checks.mts']
+  const known = ['cli/lib/derive.mjs', 'cli/commands/status.mjs', 'hooks/session-lane-check.mjs', 'cli/audit-checks.mts', 'scripts/collect-phase-metrics.ts', 'workflows/arc-plane.workflow.mjs']
   const missing = known.filter((k) => !names.has(k))
   assert.ok(
     sources.length >= 30 && missing.length === 0,
@@ -373,21 +386,14 @@ test('roadmap-root.mjs: it is the ONLY home of the root literals left in non-tes
       `flagged set deepEquals nothing and every literal in the tree would ship unnoticed`,
   )
 
-  const found = []
-  for (const { rel, src } of sources) {
-    const shapes = [...src.matchAll(argvForm()), ...src.matchAll(pathForm())].map((m) => m[0])
-    if (shapes.length > 0) found.push({ rel, shapes: [...new Set(shapes)] })
-  }
-  const hits = found.map((f) => f.rel)
-  const detail = found.map((f) => `  ${f.rel} — ${f.shapes.join(' ')}`).join('\n')
+  const unexpected = unpermittedRootLiterals(sources)
+  const detail = unexpected.map((f) => `  ${f.rel} — ${f.shapes.join(' ')}`).join('\n')
   assert.deepEqual(
-    hits,
-    ['cli/lib/roadmap-root.mjs'],
-    `cli/lib/roadmap-root.mjs is the ONLY home the roadmap data root may be spelled as a literal in; ` +
-      `${hits.length} file(s) under cli/ or hooks/ still spell it themselves:\n${detail}\n` +
-      `Each one reads a docs/roadmap consumer as "no roadmap" — join onto roadmapRoot(dir) / ` +
-      `roadmapRootRel(dir) instead. (Only QUOTED occurrences are flagged: the docs/roadmap prose in ` +
-      `gate.mjs and slots.mjs is not a literal and is not the target.)`,
+    unexpected.map(({ rel }) => rel),
+    [],
+    `only resolver twins, templates, and root migration may spell roadmap data roots as active literals; ` +
+      `${unexpected.length} unpermitted file(s) still spell it themselves:\n${detail}\n` +
+      `Each one reads a docs/roadmap consumer as "no roadmap" — join onto roadmapRoot(dir) / roadmapRootRel(dir) instead.`,
   )
 
   // The exemption is only sound while the exempt file is a REAL home. An entry pointing at a
@@ -442,6 +448,12 @@ test('roadmap-root.mjs: it is the ONLY home of the root literals left in non-tes
       `the ABSOLUTE spelling too — join(roadmapRoot(dir), '${member}') is the other replacement idiom`,
     )
   }
+})
+
+
+test('estate guard mutation proof reaches workflow sources', () => {
+  const mutated = [...rootLiteralSources(), { rel: 'workflows/__mutation__.mjs', src: "join(root, 'roadmap', 'phases')" }]
+  assert.deepEqual(unpermittedRootLiterals(mutated).filter(({ rel }) => rel === 'workflows/__mutation__.mjs').map(({ rel }) => rel), ['workflows/__mutation__.mjs'])
 })
 
 // ── roadmapRootRel: the repo-relative spelling (git pathspecs, diff prefixes, provenance) ──

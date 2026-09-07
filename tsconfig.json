@@ -8,5 +8,5 @@
     "baseUrl": ".",
     "paths": { "@/*": ["./*"] }
   },
-  "include": ["lib/**/*.ts", "roadmap/**/*.ts", "scripts/**/*.ts"]
+  "include": ["lib/**/*.ts", "docs/roadmap/**/*.ts", "scripts/**/*.ts"]
 }

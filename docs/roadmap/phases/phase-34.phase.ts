@@ -1,0 +1,493 @@
+import { definePhase } from '../lib/schema'
+
+/**
+ * GREENFIELD's keystone lands the missing-home remedy seam, packages the plugin, grades its
+ * four model-loaded entry points, and records honest end-to-end evidence from empty and mature
+ * repositories. Phases 29-33 create every consumed plugin path before this final plane runs.
+ *
+ * timing: band 4-6 × surface:false, N=7; recalibrate after CI/release generation lands
+ */
+export default definePhase({
+  phase: 34,
+  name: 'GREENFIELD keystone: runnable foundations, optional delivery, and paired release',
+  plannedBy: { model: 'gpt-5.6-sol' },
+  status: 'in-progress',
+  category: 'feature',
+  kind: 'hardening',
+  source:
+    'GREENFIELD arc plane seam-packaging-validation; execution prompt §Design items 7-8; brief 34; and the 2026-09-04 ruling that greenfield establishes affected PR, sharded full CI, and build-once release strategy.',
+  priority: 'HIGH',
+  arcId: 'GREENFIELD',
+  dependsOn: [29, 30, 31, 32, 33],
+  conflictsWith: [],
+  keyFiles: [
+    'plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/layout.md',
+    'plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs',
+    '.claude-plugin/marketplace.json',
+    'plugins/zeroh-greenfield/.codex-plugin/plugin.json',
+    'plugins/zeroh-greenfield/README.md',
+    'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md',
+    'plugins/zeroh-greenfield/dry-runs/34.4-scripted-answers.md',
+    'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
+    'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
+    'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
+    'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
+    'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+    'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+    'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
+    'plugins/zeroh-greenfield/DRYRUN-2026-09.md',
+  ],
+  stakeholderDemo:
+    'An approved idea reaches a runnable local foundation with architecture and meaningful tests; valid existing homes are preserved. CI/release setup is installed and validated when selected.',
+  userFacing: false,
+  reviewScope: 'full',
+  assumptions: [
+    {
+      claim: 'All six missing-home call sites retain the exact STOP or infer behavior that task 34.1 only annotates.',
+      verify:
+        "node -e 'const fs=require('\"'\"'fs'\"'\"');const pairs=[[\"skills/plan-arc/references/design-gate.md\", \"surface that and STOP\"], [\"skills/plan-arc/SKILL.md\", \"absent key -> surface it and STOP the gate\"], [\"agents/ux-designer.md\", \"surface that and STOP\"], [\"agents/software-architect.md\", \"fall back to the repo'\"'\"'s CLAUDE.md architecture sections\"], [\"agents/test-engineer.md\", \"inferred from <files>\"], [\"skills/test-strategy/SKILL.md\", \"infer from 2-3 existing test files nearest the code under test and say so\"]];if(!pairs.every(([p,t])=>fs.readFileSync('\"'\"'plugins/zeroh-roadmap/'\"'\"'+p,'\"'\"'utf8'\"'\"').includes(t)))process.exit(1)'",
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim: 'The zeroh-sdd Codex manifest is the package-less hand-written shape required for zeroh-greenfield packaging.',
+      verify:
+        "node -e 'const p=require('\"'\"'./plugins/zeroh-sdd/.codex-plugin/plugin.json'\"'\"');if(p.skills!=='\"'\"'./skills/'\"'\"'||Object.hasOwn(p,'\"'\"'hooks'\"'\"'))process.exit(1)'",
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim: 'The marketplace registry entry shape includes name, description, relative source, category, and tags.',
+      verify:
+        'node -e "const m=require(\'./.claude-plugin/marketplace.json\');const p=m.plugins.find(x=>x.name===\'zeroh-design\');process.exit(p&&p.description&&p.source&&p.category&&Array.isArray(p.tags)?0:1)"',
+      onFalse: 'ESCALATE',
+    },
+    {
+      claim: 'The pre-phase do-arc protocol load is exactly the enforced 11065-token ceiling.',
+      verify:
+        "node -e 'const s=require('\"'\"'child_process'\"'\"').execFileSync('\"'\"'node'\"'\"',['\"'\"'plugins/zeroh-roadmap/bin/roadmap.mjs'\"'\"','\"'\"'measure'\"'\"','\"'\"'--flow'\"'\"','\"'\"'do-arc'\"'\"'],{encoding:'\"'\"'utf8'\"'\"'});if(!s.includes('\"'\"'| **11065** | **44246** | **TOTAL (8 files)** |'\"'\"'))process.exit(1)'",
+      onFalse: 'ESCALATE',
+    },
+  ],
+  tasks: [
+    {
+      id: '34.1',
+      title: 'Route every missing-home branch to one zeroh-greenfield remedy and ratchet the pointers',
+      problem:
+        'Six protocol sites stop or infer when designHomes, testConventions, or CLAUDE.md conventions are absent, but none names a setup remedy; README also claims an automatic first-session scaffold that the plugin does not perform.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/layout.md',
+          description:
+            'After `## Scaffolding`, add `## Missing homes` as the sole remedy owner: preserve each caller\'s STOP/infer behavior, name `/plugin install zeroh-greenfield@zeroh-marketplace`, say when the plugin is not installed, and delegate home authoring plus pointer writes to `brownfield-audit`; never authorize inline home creation. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/skills/plan-arc/references/design-gate.md',
+          description:
+            'Append exactly `(remedy: using-zeroh-roadmap/references/layout.md §Missing homes)` without changing behavior at the six named STOP/fallback/infer anchors in design-gate.md, plan-arc/SKILL.md, ux-designer.md, software-architect.md, test-engineer.md, and test-strategy/SKILL.md. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/README.md',
+          description:
+            'Replace the false first-session auto-detection claim with the actual `roadmap init` scaffold path and the §Missing homes zeroh-greenfield/brownfield-audit remedy. → verify: bash -c "grep -qF \'roadmap init\' plugins/zeroh-roadmap/README.md && grep -qF \'zeroh-greenfield\' plugins/zeroh-roadmap/README.md && test \"$(grep -c \'On first session, the plugin detects\' plugins/zeroh-roadmap/README.md)\" = \"0\""',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs',
+          description:
+            'Add a node:test ratchet that reads the owner section and six exact files, requiring the section heading once and the exact pointer once per site; before commit follow do-phase/references/guard-mutation-proof.md and quote planted missing pointer RED, renamed owner heading RED, and an unrelated legal parenthetical GREEN in the transparency report. → verify: capbuild node --test plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/DIET-LEDGER.md',
+          description:
+            'Add one 2026-09 ledger row for the six model-loaded-body edits with disposition `no trim — additive remedy pointer`; record the post-edit do-arc measurement and keep it at or below 11065. → verify: bash -c "grep -qF \'no trim — additive remedy pointer\' plugins/zeroh-roadmap/DIET-LEDGER.md && node /home/patrik/zeroh-marketplace/plugins/zeroh-roadmap/bin/roadmap.mjs measure --flow do-arc --assert 11065"',
+        },
+      ],
+      acceptanceCriteria: [
+        'capbuild node --test plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs passes with one owner section and all six exact pointer clauses, after its three mutation-proof outcomes are quoted in 34.1 transparencyReport.how',
+        'node /home/patrik/zeroh-marketplace/plugins/zeroh-roadmap/bin/roadmap.mjs measure --flow do-arc --assert 11065 exits 0 (observed before: 11065 tokens / 44246 bytes)',
+        'README names roadmap init and zeroh-greenfield/brownfield-audit, and contains zero copies of `On first session, the plugin detects`',
+      ],
+      files: [
+        'plugins/zeroh-roadmap/skills/using-zeroh-roadmap/references/layout.md',
+        'plugins/zeroh-roadmap/skills/plan-arc/references/design-gate.md',
+        'plugins/zeroh-roadmap/skills/plan-arc/SKILL.md',
+        'plugins/zeroh-roadmap/agents/ux-designer.md',
+        'plugins/zeroh-roadmap/agents/software-architect.md',
+        'plugins/zeroh-roadmap/agents/test-engineer.md',
+        'plugins/zeroh-roadmap/skills/test-strategy/SKILL.md',
+        'plugins/zeroh-roadmap/README.md',
+        'plugins/zeroh-roadmap/cli/lib/protocol-refs.test.mjs',
+        'plugins/zeroh-roadmap/DIET-LEDGER.md',
+      ],
+      testMode: 'tdd',
+      done: true,
+      doneDate: '2026-09-04',
+      transparencyReport: {
+        whatWasDone: 'Added one missing-home remedy owner, routed all six existing STOP/infer branches to it, corrected the README scaffold claim, and ratcheted the protocol references.',
+        how: 'TDD RED: protocol-refs reported `owner heading must resolve exactly once` with 0 !== 1; GREEN: 1/1 passed. `missing-home remedy` ratchet mutation proof: planted a missing pointer in agents/test-engineer.md → RED (`must carry exactly one canonical remedy pointer`, 0 !== 1); renamed `## Missing homes` → RED (`owner heading must resolve exactly once`, 0 !== 1); decoy `(Existing configured homes remain authoritative.)` under the owner → GREEN (1/1). Restored every mutation before the final GREEN. Post-edit do-arc measured 44,246 bytes / 11,065 tokens and passed the 11,065 ceiling.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'None',
+      },
+      interfaces: { produces: ['layout.md §Missing homes', 'protocol-refs ratchet'], consumes: [] },
+    },
+    {
+      id: '34.2',
+      title: 'Publish zeroh-greenfield through both marketplace manifests and document its boundaries',
+      problem:
+        'Phases 29-33 create a Claude plugin, but the repository marketplace has no zeroh-greenfield entry, Codex has no skills manifest, and users have no install or sibling-plugin boundary guide.',
+      steps: [
+        {
+          file: '.claude-plugin/marketplace.json',
+          description:
+            'Add one `zeroh-greenfield` entry with non-empty description, exact source/category, and the five ordered tags. → verify: node -e "const f=require(\'fs\'),m=require(\'./.claude-plugin/marketplace.json\'),a=m.plugins.filter(x=>x.name===\'zeroh-greenfield\'),p=a[0],t=[\'greenfield\',\'brownfield\',\'project-init\',\'standards\',\'roadmap\'];if(a.length!==1||!p.description?.trim()||p.source!==\'./plugins/zeroh-greenfield\'||p.category!==\'development\'||JSON.stringify(p.tags)!==JSON.stringify(t)||!f.statSync(p.source).isDirectory())process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/.codex-plugin/plugin.json',
+          description:
+            'Match fields; add skills, no hooks, four capabilities. → verify: node -e "const c=require(\'./plugins/zeroh-greenfield/.codex-plugin/plugin.json\'),p=require(\'./plugins/zeroh-greenfield/.claude-plugin/plugin.json\'),j=JSON.stringify,s=j(c.interface),n=[\'using-zeroh-greenfield\',\'greenfield-init\',\'brownfield-audit\',\'stack-decision\'];if([\'name\',\'version\',\'author\',\'license\',\'repository\'].some(k=>j(c[k])!==j(p[k]))||c.skills!==\'./skills/\'||\'hooks\' in c||!c.interface?.capabilities?.length||!n.every(x=>s.includes(x)))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/README.md',
+          description:
+            'Add ordered Claude/Codex install sections and `How it relates` with exactly three ownership rows. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/README.md\',\'utf8\'),h=[\'## Claude Code\',\'## Codex\',\'## How it relates\'];let p=-1;for(const x of h){let n=s.indexOf(x);if(n<=p)process.exit(1);p=n}const b=s.slice(p,s.indexOf(\'## \',p+3)<0?s.length:s.indexOf(\'## \',p+3)),r=[\'| zeroh-greenfield | Missing project homes |\',\'| zeroh-roadmap | Consume pointers and run phases |\',\'| zeroh-design | Blade tokens and themes |\'];if(!s.includes(\'zeroh-greenfield@zeroh-marketplace\')||r.some(x=>!b.includes(x))||(b.match(/^\\| zeroh-/gm)||[]).length!==3)process.exit(1)"',
+        },
+      ],
+      acceptanceCriteria: [
+        'node -e verifies exactly one marketplace entry with name, non-empty description, exact source, development category, exact non-empty tag set, and an existing source directory',
+        'node -e verifies Codex name/version/author/license/repository parity, `skills: "./skills/"`, no hooks key, non-empty capabilities, and all four skill names in its interface',
+        'node -e verifies Claude, Codex, then How it relates heading order plus the install literal and all three exact ownership rows',
+      ],
+      files: ['.claude-plugin/marketplace.json', 'plugins/zeroh-greenfield/.codex-plugin/plugin.json', 'plugins/zeroh-greenfield/README.md'],
+      testMode: 'none',
+      done: true,
+      transparencyReport: {
+        whatWasDone: 'Published zeroh-greenfield through the Claude marketplace and Codex manifest and documented install and ownership boundaries.',
+        how: 'The marketplace has one development entry with the five ordered tags; the package-less Codex manifest matches the Claude identity fields, exports the skills directory, declares no hooks, and names all four capabilities. README install sections are ordered Claude then Codex, followed by exactly three ownership rows. All three acceptance checks passed.',
+        compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Installation itself is not performed in this packaging task.',
+      },
+      interfaces: { consumes: ['zeroh-greenfield .claude-plugin/plugin.json from 29.1'], produces: ['zeroh-greenfield marketplace entry', 'zeroh-greenfield Codex manifest'] },
+    },
+    {
+      id: '34.3',
+      title: 'Grade all four skills and establish their measured body-size baseline',
+      problem:
+        'The four completed skills have no single auditable rule-by-rule SKILL-AUTHORING-STANDARD grade or byte-derived token baseline, so packaging could publish a blocked or already-overweight model-loaded entry point.',
+      steps: [
+        {
+          file: 'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md',
+          description:
+            'Create dated/SHA summaries and ordered R1-R28 evidence tables for four skills. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md\',\'utf8\'),a=[\'using-zeroh-greenfield\',\'greenfield-init\',\'brownfield-audit\',\'stack-decision\'];let p=-1;for(const n of a){let i=s.indexOf(\`## ${n}\`),e=s.indexOf(\'## \',i+3),b=s.slice(i,e<0?s.length:e),r=[...b.matchAll(/^\\| (R(?:[1-9]|1\\d|2[0-8])) \\| (?:PASS|N-A: [^|]+) \\| [^|]+ \\|$/gm)].map(m=>m[1]);if(i<=p||r.join()!==Array.from({length:28},(_,k)=>\'R\'+(k+1)).join()||b.includes(\'| FAIL |\'))process.exit(1);p=i}if((s.match(/^\\| (?:using-zeroh-greenfield|greenfield-init|brownfield-audit|stack-decision) \\|/gm)||[]).length!==4)process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md',
+          description:
+            'Score/fix the router against R1-R28; cap its body at 100 and record exact lines, bytes, integer bytes/4, cap 100, empty FAIL ids, and PASS in its summary row. → verify: node -e "const fs=require(\'fs\'),n=\'using-zeroh-greenfield\',p=\`plugins/zeroh-greenfield/skills/${n}/SKILL.md\`,x=fs.readFileSync(p),s=x.toString(),a=s.split(/\\r?\\n/),k=a.reduce((z,v)=>z+(v===\'---\'),0),lines=a.slice(a.findIndex((v,i)=>i>0&&v===\'---\')+1).length-1,b=x.length,t=Math.floor(b/4),g=fs.readFileSync(\'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md\',\'utf8\');if(k<2||lines>100||!g.includes(\`| ${n} | ${p} | ${lines} | ${b} | ${t} | 100 | — | PASS |\`))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+          description:
+            'Score/fix init against R1-R28; cap its body at 200 and record exact lines, bytes, integer bytes/4, cap 200, empty FAIL ids, and PASS. → verify: node -e "const fs=require(\'fs\'),n=\'greenfield-init\',p=\`plugins/zeroh-greenfield/skills/${n}/SKILL.md\`,x=fs.readFileSync(p),a=x.toString().split(/\\r?\\n/),lines=a.slice(a.findIndex((v,i)=>i>0&&v===\'---\')+1).length-1,b=x.length,t=Math.floor(b/4),g=fs.readFileSync(\'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md\',\'utf8\');if(lines>200||!g.includes(\`| ${n} | ${p} | ${lines} | ${b} | ${t} | 200 | — | PASS |\`))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md',
+          description:
+            'Score/fix audit against R1-R28; cap its body at 200 and record exact lines, bytes, integer bytes/4, cap 200, empty FAIL ids, and PASS. → verify: node -e "const fs=require(\'fs\'),n=\'brownfield-audit\',p=\`plugins/zeroh-greenfield/skills/${n}/SKILL.md\`,x=fs.readFileSync(p),a=x.toString().split(/\\r?\\n/),lines=a.slice(a.findIndex((v,i)=>i>0&&v===\'---\')+1).length-1,b=x.length,t=Math.floor(b/4),g=fs.readFileSync(\'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md\',\'utf8\');if(lines>200||!g.includes(\`| ${n} | ${p} | ${lines} | ${b} | ${t} | 200 | — | PASS |\`))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
+          description:
+            'Score/fix stack-decision against R1-R28; cap its body at 100 and record exact lines, bytes, integer bytes/4, cap 100, empty FAIL ids, and PASS. → verify: node -e "const fs=require(\'fs\'),n=\'stack-decision\',p=\`plugins/zeroh-greenfield/skills/${n}/SKILL.md\`,x=fs.readFileSync(p),a=x.toString().split(/\\r?\\n/),lines=a.slice(a.findIndex((v,i)=>i>0&&v===\'---\')+1).length-1,b=x.length,t=Math.floor(b/4),g=fs.readFileSync(\'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md\',\'utf8\');if(lines>100||!g.includes(\`| ${n} | ${p} | ${lines} | ${b} | ${t} | 100 | — | PASS |\`))process.exit(1)"',
+        },
+      ],
+      acceptanceCriteria: [
+        'node -e asserts four fixed-order skill sections, exactly 28 R1-R28 rows in each section, exactly four summary rows, evidence cells, and zero FAIL verdicts',
+        'each per-skill node -e recomputes body lines, byte length, integer bytes/4, and matches every recorded summary field including cap, empty FAIL ids, and PASS',
+        'the same four per-skill checks enforce 100-line caps for router/decision and 200-line caps for init/audit',
+      ],
+      files: [
+        'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md',
+        'plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+        'plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md',
+        'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
+      ],
+      testMode: 'none',
+      done: true,
+      transparencyReport: {
+        whatWasDone: 'Graded all four zeroh-greenfield skills against R1-R28 and recorded byte-derived size baselines.',
+        how: 'Added explicit trigger and sibling-boundary text plus dated phase-eval provenance to each skill, then recorded four ordered 28-row evidence tables with no FAIL verdicts. Recomputed body lines, raw bytes, integer bytes/4, caps, and summary rows mechanically; the aggregate and all four per-skill acceptance checks passed.',
+        compromises: 'None', skipped: 'None', hardcoded: 'None', limitations: 'Grades describe the committed skill contracts; later changes to cited paths trigger re-review under R21.',
+      },
+      interfaces: { consumes: ['four zeroh-greenfield SKILL.md bodies from phases 29-33'], produces: ['SKILL-AUTHORING-GRADES.md baseline'] },
+    },
+    {
+      id: '34.4',
+      title: 'Prove native-host runs with inherited authority and machine-bound evidence',
+      problem:
+        'The arc completion bar requires successful Claude-native and Codex-native scratch runs, but prose-only success markers and permission-bypass flags cannot prove approval ordering, isolation, tree integrity, or idempotence.',
+      steps: [
+        {
+          file: 'plugins/zeroh-greenfield/dry-runs/34.4-scripted-answers.md',
+          description:
+            'Author equivalent Claude and Codex briefs that run only inside a newly created scratch root with inherited/workspace-write authority. Explicitly forbid dangerously-skip-permissions, dangerously-bypass-approvals-and-sandbox, writes outside scratch, live product remotes, and unrecorded network/external actions. → verify: node -e "const s=require(\'fs\').readFileSync(\'plugins/zeroh-greenfield/dry-runs/34.4-scripted-answers.md\',\'utf8\'),need=[\'mobile: none\',\'non-Blade\',\'approval response:\',\'second run:\',\'claude -p\',\'codex exec\',\'workspace-write\',\'AuthorityEnvelope\'];if(need.some(x=>!s.includes(x))||/dangerously-(?:skip-permissions|bypass-approvals-and-sandbox)/.test(s))process.exit(1)"',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
+          description:
+            'Create a fixture driver that records host executable/version, plugin manifest digest, scratch identity, AuthorityEnvelope, ordered approval and first-write events, command exits, before/after tree hashes, diff allowlist, raw transcript SHA-256, and second-run tree equality for empty and brownfield runs; fail closed on missing or copied evidence. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/dry-runs/empty/receipt.json',
+          description:
+            'Run the empty-repository brief once under each real native host and persist machine receipts plus raw transcript digests; generate the Markdown summary from those receipts rather than accepting authored success strings. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/dry-runs/brownfield/receipt.json',
+          description:
+            'Run the zeroh-shaped fixture under each real native host, mechanically compute the gap-only diff, prove existing homes byte-identical, rerun, and require identical final trees with zero proposals and writes. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/DRYRUN-2026-09.md',
+          description:
+            'Generate a compact human report from the four receipts with direct paths and digests; a failed, unavailable, stale-head, authority-expanded, or incomplete arm remains explicit and blocks completion. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'Real Claude-native and Codex-native empty and brownfield arms identify executable/version, plugin digest, scratch root, exact authority, transcript digest, current commit, and command exits. Review repair gate: execute every non-none consumer gate with cwd/exit evidence; approved absence is explicit and cannot hide a promised runner. Config check alone is insufficient.',
+        'For every arm, the recorded approval event precedes the first write; the empty tree contains all promised artifacts; brownfield existing homes are byte-identical and its diff is a mechanically computed subset of the approved gap allowlist. Brownfield native receipts account separately for PRD, both ADRs, CODE-STYLE, architecture index, and UX canon; missing one must fail even when README/config are repaired.',
+        'Every second run has zero proposals, zero writes, and the same final tree hash; missing, copied, stale, unavailable, failed, or expanded-authority evidence cannot be reported successful. Exercise non-Blade without zeroh-design, migrated docs/roadmap, explicit root override, and dual-marked roots; preserve existing homes and bindings, never initialize a second config.',
+        'No command or generated brief contains a permission/sandbox bypass flag. Run node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-review-regressions.test.mjs; refresh final skill grades and native receipts after the repaired bodies land.',
+      ],
+      files: [
+        'plugins/zeroh-greenfield/dry-runs/34.4-scripted-answers.md',
+        'plugins/zeroh-greenfield/dry-runs/empty/receipt.json',
+        'plugins/zeroh-greenfield/dry-runs/brownfield/receipt.json',
+        'plugins/zeroh-greenfield/DRYRUN-2026-09.md',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-observer.py',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-evidence.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-driver.mjs',
+        '.agents/plugins/marketplace.json',
+        'plugins/zeroh-greenfield/.codex-plugin/plugin.json',
+        'plugins/zeroh-roadmap/bin/roadmap.mjs',
+        'plugins/zeroh-roadmap/cli/commands/init.test.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-evidence-source.mjs',
+        'plugins/zeroh-roadmap/templates/ROADMAP.md',
+        'plugins/zeroh-roadmap/scripts/scaffold-roadmap.sh',
+        'plugins/zeroh-roadmap/scripts/collect-phase-metrics.ts',
+        'plugins/zeroh-roadmap/scripts/generate-changelog-md.ts',
+        'plugins/zeroh-roadmap/scripts/migrate/audit.ts',
+        'plugins/zeroh-roadmap/scripts/migrate/README.md',
+        'plugins/zeroh-roadmap/test/collect-phase-metrics.test.mjs',
+        'plugins/zeroh-roadmap/README.md',
+        'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md',
+        'plugins/zeroh-greenfield/fixtures/README.md',
+        'plugins/zeroh-greenfield/skills/brownfield-audit/SKILL.md',
+        'plugins/zeroh-greenfield/skills/brownfield-audit/references/marker-table.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
+        'plugins/zeroh-greenfield/skills/stack-decision/SKILL.md',
+        'plugins/zeroh-greenfield/skills/using-zeroh-greenfield/SKILL.md',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-review-regressions.test.mjs',
+      ],
+      testMode: 'tdd',
+      done: true,
+      doneDate: '2026-09-05',
+      transparencyReport: {
+        whatWasDone: 'Proved real Claude and Codex initialization and read-only reruns on empty and brownfield fixtures; repaired preflight, approval binding, generated roadmap guidance, metrics ownership, and Codex packaging defects exposed by validation.',
+        how: 'Four independent native arms passed with retained sessions, recursive write observations, exact approved command execution, current source digest, six-home preservation, actual consumer gate exits, and zero-write second runs. Receipt projection succeeded. Focused final verification passed 93/93 with terminal TAP totals; types slot is declared-none. Negative approval, authority, command drift, stale/missing evidence, wrapper, root-discovery and help-side-effect regressions were exercised. Source snapshot 9facc511833b8600c8b5980ab843e1b157c150c2e727c504df2ba5365264842e binds the final four arms. Evidence and failed attempts are retained under dry-runs/evidence.',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'Additional full unit run 000005 is excluded: systemd stopped capbuild before terminal TAP/schema summaries despite wrapper exit zero. Architect PROCEED_WITH_FIX ratified focused task verification; final closure still requires complete full-suite evidence. Released roadmap 0.39.1 lacks config capabilities and cannot serve as the matching Greenfield sibling; native runs used the development pair.',
+      },
+      interfaces: { consumes: ['all GREENFIELD outputs from phases 29-34.3'], produces: ['machine-bound native-host dry-run evidence', 'DRYRUN-2026-09.md projection'] },
+    },
+    {
+      id: '34.5',
+      title: 'Mutation-prove approval, ownership, routing, and idempotence behavior',
+      problem:
+        'Substring checks establish document shape but do not prove the behavior-owning skills refuse pre-approval writes, preserve existing homes, stop on absent siblings, or behave identically under Claude and Codex.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+          description:
+            'Drive deterministic empty and brownfield fixtures through the shared skill contracts; cover no approval, approval after proposal, absent roadmap/design plugin, present/partial/stale/missing homes, generated harness blocks, README additions/orphans, and second-run idempotence. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+          description:
+            'Plant one mutation at a time for approval-before-write, gap-only action, link-not-replace, exact sibling STOP, single-router dispatch, README drift red, and second-run no-op; compare canonical Claude/Codex outcomes and require every mutation red while the restored contract is green. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'No-approval and absent-sibling cases perform zero writes and return the exact bounded STOP/remedy.',
+        'Present homes remain byte-identical; only approved missing/partial/stale gaps change; generated marker blocks survive byte-identically.',
+        'README drift turns red, an approved repair turns green, and a repeated run is a no-op.',
+        'Claude and Codex projections produce the same typed decisions and artifact set; every planted contract mutation makes the suite red.',
+      ],
+      files: ['plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs', 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior-evidence.mjs', 'plugins/zeroh-greenfield/dry-runs/evidence/native-34-5/receipt.json'],
+      testMode: 'tdd',
+      done: true,
+      doneDate: '2026-09-05',
+      transparencyReport: {
+        whatWasDone: 'Mutation-proved approval, approved gaps, present-home preservation, README repair, exact sibling STOP, single router dispatch and repeat-run behavior using real retained host sessions and the shipped checker.',
+        how: 'Test-engineer FIRST: initial 3 PASS/4 RED exposed absent helper plus unbound structural commandExit; new helper binds every recorded result to its native command. Pre-native 8 PASS/1 RED; final 9/9 PASS with terminal TAP. Six isolated read-only Claude/Codex cases bind actual sibling inventories, exact typed STOP/remedy or router result, and zero observed mutations. Four initial capture formats were rejected then refined in the same native sessions; both attempts remain retained. Mutations reject preapproval/transient writes, reordered approval, altered present-home bytes, unapproved paths, invented exits, missing required artifacts, wrong remedies/siblings, multiple dispatches and rerun writes. Real README drift is RED; both SHA-bound native repairs are GREEN twice and preserve Nx blocks. Architect ratified the native-session seam and helper/evidence scope expansion. Types slot declared-none (run000006).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'Host parity covers the required canonical artifact contract and typed gate outcomes; optional application/test scaffolding differs. The four 34.4 arms are historical source-bound evidence during subsequent source edits; final current-source native refresh remains mandatory after 34.7.',
+      },
+      dependsOn: ['34.4'],
+      interfaces: { consumes: ['machine-bound native-host dry-run evidence'], produces: ['GREENFIELD behavioral conformance evidence'] },
+    },
+    {
+      id: '34.6',
+      title: 'Specify and mutation-prove six-archetype sharded CI plus exact-artifact release',
+      problem:
+        'A generic workflow over ambiguous project/spec identities cannot guarantee exact-once execution or apply honestly across Nx, web, Expo, Flutter, Gradle Android, and library/CLI estates. CI needs one lifecycle with explicit archetype inventory/executor/report adapters and a complete evidence-to-artifact protocol.',
+      steps: [
+        {
+          file: 'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+          description:
+            'TDD first with an executable simulated CI/fan-in/release harness. Plant missing, duplicate, red, retried, quarantined, malformed, stale-SHA, expired, ambiguous-producer, coverage-floor, test-count, report-digest, inventory-digest, build-digest, tag-SHA, and rebuild mutations. Mandatory validation uses the repository-pinned js-yaml parser plus executable workflow simulations; actionlint runs as an optional extra diagnostic and its path/version or absence is recorded without weakening mandatory evidence. Record RED. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
+          description:
+            'Define the shared lifecycle and six adapter rows. Every atomic key is the tagged union `{runner, canonicalPathOrLeafTask}`. Web and Expo keep separately inventoried unit and Playwright populations, each exact-once; Flutter and library/CLI use canonical test-file keys; Nx uses leaf project-target keys; Android enumerates leaf test tasks only and rejects aggregate or dependency-overlapping tasks. Each adapter owns inventory argv, shard argv, JUnit/coverage format, merge, and build. Unsupported tooling is unavailable with an install remedy, never green. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
+          description:
+            'Implement versioned deterministic planning over one adapter’s normalized disjoint identities. Sort and reject duplicates; count-balance with an explicit deterministic default weight; define Windows separator normalization, renamed/deleted identities, count=1, count>units with no emitted empty shards, permutation stability, manifest digest, and exact-once union proof between inventory and executed reports. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
+          description:
+            'Generate PR affected validation and authoritative main/manual-full validation; nightly diagnoses but cannot become an ambiguous release producer. Full runs create shards, preserve first attempts, allow only bounded infrastructure retry, classify rerun-pass as blocking flaky, require quarantine owner/reason/expiry, always upload compact reports, merge canonical path-remapped coverage once, verify inventory/test-count/floors via approved baseline changes, then emit an attested evidence manifest `{sha,tree,suiteManifestDigest,shardReports,coverageDigest,buildDigest,producerRunId,expiresAt}`. Pin third-party actions to full commit SHA with version comments; use job-level least privilege, no fork secrets, bounded retention, and PR-only cancellation. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
+          description:
+            'Resolve a tag/manual input to exact SHA; locate exactly one unexpired authoritative evidence manifest for that SHA; verify tree, inventory, shard-report, coverage, build, producer-run, and artifact digests; download and promote those bytes through a protected environment with deploy-job-only OIDC; never build. Missing credentials/evidence, multiple producers, digest drift, stale tag, or skipped promotion is red. Provider deployment remains an approved placeholder. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        'Every one of six archetype adapters defines one disjoint identity inventory and exact argv/report/coverage/build contract; shard count 1 and >units are valid, and the executed union equals inventory exactly once.',
+        'Required-test retries cannot erase first failure; bounded infra retry and quarantine metadata/expiry are enforced; malformed/partial reports, coverage or count regression, and unapproved baseline changes are red.',
+        'Exactly one authoritative same-SHA unexpired evidence manifest binds full-suite inventory/reports/coverage to one content-addressed build; release verifies all links and promotes without rebuilding under least privilege and immutable action pins.',
+      ],
+      files: [
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
+        'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
+        'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
+        'plugins/zeroh-greenfield/templates/github/workflows/release.yml',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/web.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/flutter.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/android.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/expo.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/nx-monorepo.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/archetypes/library-cli.md',
+      ],
+      testMode: 'tdd',
+      done: true,
+      doneDate: '2026-09-05',
+      transparencyReport: {
+        whatWasDone: 'Implemented six-adapter deterministic shard planning, raw-report fan-in, approved baselines, build-once content-addressed artifacts, signed authoritative CI evidence and exact-artifact release through one shipped lifecycle CLI and two workflows.',
+        how: 'Test-engineer FIRST established RED for missing product/workflows; parser completeness, prebuild authority and source/provenance mutations exposed further RED cases before repairs. Final 27/27 PASS with terminal TAP, mandatory locked js-yaml 3.15.2 parsing and execution of actual YAML run snippets. Tests cover all six adapter command boundaries, exact-once union, count limits, every requested evidence mutation, retries/quarantine, baseline approval, contract drift, selected-inventory overmatch, source changes and fixed-provider checksum/size/version readback. Actual Node test/JUnit/LCOV, build and local artifact verification also passed. Immutable action pins resolved from official Git refs. Architect ratified the production engine, fixed aws-s3-v1 provider boundary, OIDC role separation and source/provenance guards. Types declared-none (run000007).',
+        compromises: 'None',
+        skipped: 'None',
+        hardcoded: 'None',
+        limitations: 'Other SDK and cloud boundaries are simulated with actual production CLI calls and fake external executables; no published workflow, signed GitHub attestation or cloud deployment is claimed. Provider is unavailable until explicitly configured. Optional actionlint is absent and host gh lacks attestation support; mandatory parser/workflow simulations passed. Final native init/CI validation is task34.7.',
+      },
+      dependsOn: ['34.5'],
+      interfaces: { consumes: ['32.5 safe affected/full bindings', 'six archetype manifests'], produces: ['six-adapter shard contract', 'authoritative CI evidence manifest', 'build-once release protocol'] },
+    },
+    {
+      id: '34.7',
+      title: 'Restore foundation-first init and validate selected delivery',
+      problem:
+        'Greenfield must turn an idea into a runnable prototype with a sound foundation. Delivery is optional and retains its validation when selected. Owner release ruling 2026-09-06 supersedes the mandatory four-arm refresh with explicit scoped evidence and current regression/review coverage.',
+      steps: [
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+          description:
+            'Reuse resolved product and stack answers. Before writes, propose the appropriate template foundation and local prototype; ask CI provider/release-environment questions only when delivery is selected, then present that adapter and preservation plan for approval. After approval, copy/fill the shard planner and workflows, merge rather than overwrite existing workflows, record commands, then validate. Brownfield collisions STOP for an explicit merge decision. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
+          description:
+            'Bind the selected archetype adapter and CI/release files into the existing proposal/copy/validate order; ensure README commands and testCadence backstop point at generated workflow names. A second run proposes and writes nothing. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/dry-runs/empty/receipt.json',
+          description:
+            'Preserve the four recorded native delivery observations at their original snapshots and label them historical. Retain the bounded R0 local-prototype pilot at its actual snapshot, including zero-write proposal/audit, saved-artifact execution and real test/config exits. Do not claim final-source four-arm coverage; run the current product/validator suite and independent release review. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+        {
+          file: 'plugins/zeroh-greenfield/dry-runs/brownfield/receipt.json',
+          description:
+            'Retain historical brownfield preservation/selected-delivery evidence and its exact native audit in test:native-evidence. Current deterministic regressions must reject unauthorized changes, forged exits, changed artifacts and invalid delivery. The R0 audit must recognize alternative canonical homes and defer unselected infrastructure. → verify: capbuild node --test plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        },
+      ],
+      acceptanceCriteria: [
+        'An appropriate runnable foundation is proposed before writes; existing choices are reused. CI/release setup is optional. When selected, its adapter, paths, environment and collision behavior are approved before writes; existing workflows are preserved.',
+        'Release evidence explicitly distinguishes historical four-arm selected-delivery observations, the bounded R0 pilot at its recorded snapshot, and current product/validator regressions plus independent review. Final-source four-arm native coverage is not claimed. The separate recorded-environment audit retains freshness checks and is not a mandatory rerun under the owner release ruling.',
+        'All shard/fan-in/release mutations remain red through mandatory js-yaml parsing and executable generated-workflow simulations; optional actionlint path/version or absence is recorded and cannot substitute for or weaken those checks.',
+        'The stale phase-32 peval is regenerated with five tasks/current keyFiles and the final phase/arc reports supersede every pre-amendment gate artifact.',
+      ],
+      files: [
+        'plugins/zeroh-greenfield/skills/greenfield-init/SKILL.md',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/pointers.md',
+        'plugins/zeroh-greenfield/dry-runs/empty/receipt.json',
+        'plugins/zeroh-greenfield/dry-runs/brownfield/receipt.json',
+        'plugins/zeroh-greenfield/DRYRUN-2026-09.md',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-behavior.test.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-ci-release.test.mjs',
+        'plugins/zeroh-greenfield/SKILL-AUTHORING-GRADES.md',
+        'plugins/zeroh-greenfield/templates/scripts/ci-shard-plan.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-driver.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-native-evidence.mjs',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-optional-gates.test.mjs',
+        'plugins/zeroh-greenfield/templates/scripts/run-nx-test-tier.mjs',
+        'plugins/zeroh-greenfield/templates/github/workflows/ci.yml',
+        'plugins/zeroh-greenfield/skills/greenfield-init/references/ci-release-strategy.md',
+        'plugins/zeroh-roadmap/test/fixture-consumer/greenfield-test-selection.test.mjs',
+        'plugins/zeroh-roadmap/package.json',
+        'plugins/zeroh-roadmap/CHANGELOG.md',
+        'plugins/zeroh-roadmap/.codex-plugin/plugin.json',
+        'plugins/zeroh-roadmap/.codex/INSTALL.md',
+        'plugins/zeroh-roadmap/.claude-plugin/plugin.json',
+        'plugins/zeroh-roadmap/.cursor-plugin/plugin.json',
+        'plugins/zeroh-roadmap/gemini-extension.json',
+        'plugins/zeroh-roadmap/.copilot/plugin.yaml',
+        'plugins/zeroh-greenfield/README.md',
+        'plugins/zeroh-greenfield/CHANGELOG.md',
+        'roadmap/arc-evals/phase-32.peval.json',
+      ],
+      testMode: 'tdd',
+      done: true,
+      doneDate: '2026-09-06',
+      transparencyReport: {
+  "whatWasDone": "Restored foundation-first local prototypes, reuse of settled choices, approved-stack adaptation, optional delivery and individual existing-project improvements; saved actual-byte writers remove hash guessing and retyping. Prepared the paired release.",
+  "how": "R0 focused 164 checks and recorded-snapshot Codex/Astra CLI pilot passed. Independent release reviews cleared fixes. Current regression coverage reconciles all 78 files:62 completed files / 1844 passing tests before a host reaper interruption; all 16 remaining/interrupted files rerun with 259/259 pass;149/149 affected scanner/gate checks after the reviewed source delta. Explicit schema and actual history-comments slot pass. See release-evidence/0.40.0/release-completion.json.",
+  "compromises": "Owner-amended evidence scope retains historical four-arm delivery plus the recorded-source R0 CLI pilot and current regressions/review. No final-source four-arm matrix; earlier mobile/web proof exceptions remain in Arc.descopes.",
+  "skipped": "No duplicate whole-suite replay, paid native matrix, NATIVEGREEN execution or deployment.",
+  "hardcoded": "Synthetic host bindings are explicit fixture inputs; native defaults retain actual host checks.",
+  "limitations": "The host stops capbuild tests after 30 min; interrupted run17 remains RED and its zero exit is not completion. Existing gate reports cannot compose bounded runs, so phase status remains in-progress as a bookkeeping limitation despite complete release coverage. The native freshness audit is honestly RED; no broad platform/performance claim."
+},
+      dependsOn: ['34.6'],
+      interfaces: { consumes: ['34.6 delivery templates and mutation harness', '34.4 native receipt protocol'], produces: ['runnable local foundation with optional approved delivery', 'explicitly scoped release evidence'] },
+    },
+  ],
+  reviewRecord: { date: '2026-09-04', model: 'software-architect-agent', verdict: 'READY', via: 'executed' },
+  // Product work is released through complete reconciled coverage; the existing
+  // single-run completion guard cannot represent it. Preserve the open status
+  // and original reports rather than manufacture an unfiltered green gate.
+  notes:
+    '## Hypotheses\n1. CONFIRMED — The six absent-home sites stop or go silent without naming a remedy because no protocol file owns remedy text. Evidence: plugins/zeroh-roadmap/skills/plan-arc/references/design-gate.md:94; plugins/zeroh-roadmap/skills/plan-arc/SKILL.md:91; plugins/zeroh-roadmap/agents/ux-designer.md:17; plugins/zeroh-roadmap/agents/software-architect.md:44; plugins/zeroh-roadmap/agents/test-engineer.md:14; plugins/zeroh-roadmap/skills/test-strategy/SKILL.md:16.\n2. REFUTED — The README first-session claim is implemented by a hook. Evidence: plugins/zeroh-roadmap/hooks/hooks.json has SessionStart only for session-lane-check.mjs and no scaffold action.\ninterview: skipped — arc member; GREENFIELD.arc.ts records every 2026-09-03 user ruling. userFacing false re-ratified by the GREENFIELD orchestrator ruling 2026-09-03: installable operator guidance is visible but is not a consumer runtime surface, so no flag applies. Full review is required because model-loaded protocols and a guard change. decisionRef: \'GREENFIELD orchestrator ruling 2026-09-03 — protocol-anchor ratchet, tdd\'. The ratchet is the house protocol-anchor pattern: a node:test file under plugins/zeroh-roadmap/cli/lib reads the seven protocol files and asserts one owner heading plus six pointer clauses; testMode tdd is ratified. testMode TDD for 34.4–34.5 is ratified: machine receipts, native-host evidence, negative behavior, semantic parity, and mutations are executable contracts; DRYRUN-2026-09.md is only their projection. A failed dry run escalates with transcript and blocks phase completion. Review repair scope includes the six accepted review findings and final R1-R28 regrading; earlier PASS measurements do not certify amended bodies. Planned phase-29–33 paths are consumed only after dependency order makes them real. Review repairs round 2 2026-09-03 (orchestrator, mechanical): 34.3 grade checker asserts the exact ordered R1..R28 id vector per skill; 34.1 test verifies run through the host capbuild wrapper. Review repairs 2026-09-03 (Mode A gpt-5.6-sol, BLOCKED → repaired by codex gpt-5.6-sol): added mandatory hypotheses; ratified the protocol-anchor TDD seam; asserted every packaging field and ownership boundary; asserted four skill summaries, 112 verdict rows, byte/token equality, and caps; made four real native-host arms with inherited authority, machine receipts, behavioral mutations, config and idempotence proof the completion bar.',
+})

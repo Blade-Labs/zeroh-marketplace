@@ -13,6 +13,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { consumerSchemaPath } from '../lib/roadmap-root.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -35,7 +36,7 @@ function makeRepo(arcId, arc, phases, { configJson = true } = {}) {
   // `npx --no-install tsx`) runs over the scratch repo and reports an empty (swept) slice —
   // the census is exhaustively exercised with fakes in derive.test.mjs; here it is real e2e.
   mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
-  symlinkSync(resolve(HERE, '..', '..', '..', '..', 'lib', 'roadmap', 'schema.ts'), join(root, 'lib', 'roadmap', 'schema.ts'))
+  symlinkSync(consumerSchemaPath(resolve(HERE, '..', '..', '..', '..')), join(root, 'lib', 'roadmap', 'schema.ts'))
   writeFileSync(
     join(root, 'lib', 'roadmap', 'registry.ts'),
     'export async function discoverPhases() { return { phases: [], errors: [] } }\n'

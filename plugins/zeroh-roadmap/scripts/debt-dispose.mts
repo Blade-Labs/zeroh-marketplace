@@ -29,7 +29,10 @@
  * proof the edits kept every file valid.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
+
+import { gitToplevel } from '../cli/lib/gitroot.mjs'
+import { roadmapRoot } from '../cli/lib/roadmap-root.mjs'
 
 const args = process.argv.slice(2)
 const allowInProgress = args.includes('--allow-in-progress')
@@ -39,7 +42,9 @@ if (!worklistPath) {
   console.error('usage: debt-dispose.mts <worklist.json> [repo-root] [--allow-in-progress]')
   process.exit(1)
 }
-const repo = resolve(positional[1] ?? '.')
+let repo = resolve(positional[1] ?? '.')
+try { repo = gitToplevel(repo) } catch { /* Non-Git consumer roots remain supported. */ }
+const root = roadmapRoot(repo)
 const worklist: { phase: number; ref: string; status: string; via?: string; date: string }[] = JSON.parse(
   readFileSync(worklistPath, 'utf8'),
 )
@@ -67,7 +72,7 @@ let applied = 0
 let skippedExisting = 0
 
 for (const [phase, items] of [...byPhase.entries()].sort((a, b) => a[0] - b[0])) {
-  const file = join(repo, 'roadmap/phases', `phase-${phase}.phase.ts`)
+  const file = join(root, 'phases', `phase-${phase}.phase.ts`)
   if (!existsSync(file)) {
     console.error(`  ⚠ no file for phase ${phase} — skipped ${items.length} item(s)`)
     continue
@@ -111,7 +116,7 @@ for (const [phase, items] of [...byPhase.entries()].sort((a, b) => a[0] - b[0]))
     src = `${head}${needsComma ? ',' : ''}\n  debtResolutions: [\n${entries}\n  ],${src.slice(closeIdx)}`
   }
   writeFileSync(file, src)
-  modified.push(`roadmap/phases/phase-${phase}.phase.ts`)
+  modified.push(relative(repo, file))
   applied += fresh.length
 }
 

@@ -13,14 +13,35 @@
 # silent `exit 0`. What both refuse to do is GUESS — two marked roots means two backlogs and two
 # registries, and picking one is how half a consumer's records go quietly unread.
 
+# Lexical path.resolve parity, including overrides that do not exist yet.
+# Pure shell: hooks do not launch Node or depend on platform-specific realpath flags.
+_roadmap_normalize_path() {
+  local input="$1" part result="" index
+  local parts=()
+  case "$input" in /*) ;; *) input="$PWD/$input" ;; esac
+  input="$input/"
+  while [[ "$input" == */* ]]; do
+    part="${input%%/*}"
+    input="${input#*/}"
+    case "$part" in
+      ''|.) ;;
+      ..) if [ "${#parts[@]}" -gt 0 ]; then index=$((${#parts[@]} - 1)); unset 'parts[index]'; fi ;;
+      *) parts+=("$part") ;;
+    esac
+  done
+  for part in "${parts[@]}"; do result="$result/$part"; done
+  printf '%s\n' "${result:-/}"
+}
+
 roadmap_root() {
-  local dir="$1"
+  local dir
+  dir=$(_roadmap_normalize_path "$1")
 
   # The override names where the root WILL be, so it is never probed for existence.
   if [ -n "${ROADMAP_ROOT:-}" ]; then
     case "$ROADMAP_ROOT" in
       /*) printf '%s\n' "$ROADMAP_ROOT" ;;
-      *) printf '%s\n' "$dir/$ROADMAP_ROOT" ;;
+      *) _roadmap_normalize_path "$dir/$ROADMAP_ROOT" ;;
     esac
     return 0
   fi

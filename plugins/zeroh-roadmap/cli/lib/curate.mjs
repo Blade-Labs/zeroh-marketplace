@@ -15,6 +15,7 @@ import { writeFileSync } from 'node:fs'
 import { derivePhaseStartSha, phaseOwnPatterns, SUBJECT_GRAMMAR } from './gitscan.mjs'
 import { recordCuration, latestReport } from './gate-report.mjs'
 import { driverTrailer } from './roles.mjs'
+import { MODEL_DRIVERS } from './drivers.mjs'
 
 const git = (cwd, args, opts = {}) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 15_000, encoding: 'utf8', ...opts }).trim()
@@ -260,7 +261,7 @@ function majorityPrefix(commits) {
  * acronym), truncated on WORD boundaries so the whole subject stays ≤72 chars. Body:
  * every task whose `N.x` token appears in the group's task commits — title +
  * whatWasDone + any real (non-'None') compromises — closed by exactly one
- * Co-Authored-By trailer. Nothing lands unlisted.
+ * Co-Authored-By trailer when a model is recorded. Nothing lands unlisted.
  */
 export function composeLandedMessage(phaseRecord, group) {
   const { type, scope } = majorityPrefix(group.commits)
@@ -287,6 +288,7 @@ export function composeLandedMessage(phaseRecord, group) {
   }
   const roundModels = (phaseRecord.gateRounds ?? []).map((round) => round.model).filter(Boolean)
   const majorityModel = roundModels.sort((a, b) => roundModels.filter((m) => m === b).length - roundModels.filter((m) => m === a).length)[0]
-  lines.push(driverTrailer(phaseRecord.executionResult?.driver?.model ?? majorityModel ?? null))
+  const model = phaseRecord.executionResult?.driver?.model ?? majorityModel
+  if (Object.hasOwn(MODEL_DRIVERS, model ?? '')) lines.push(driverTrailer(model))
   return { subject, body: lines.join('\n') }
 }

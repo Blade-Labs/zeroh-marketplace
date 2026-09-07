@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Targets are repository-relative argv, validated completely before any test starts.
 import { realpathSync, statSync } from 'node:fs'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveTestExecution, runNodeTests, runSchemaTest, finishTestExecution } from './test-execution.mjs'
 const plugin = realpathSync(fileURLToPath(new URL('../', import.meta.url)))
@@ -14,17 +14,20 @@ try {
     if (isAbsolute(target) || target.split(/[\\/]/).includes('..') || !(target.endsWith('.test.mjs') || resolve(repo, target) === schema)) throw Error(`unsupported target: ${target}`)
     const path = realpathSync(resolve(repo, target))
     const rel = relative(plugin, path)
-    if (rel.startsWith(`..${sep}`) || rel === '..' || isAbsolute(rel) || !statSync(path).isFile()) throw Error(`target outside plugin or not a file: ${target}`)
-    return path
+    const inPlugin = !(rel.startsWith(`..${sep}`) || rel === '..' || isAbsolute(rel))
+    const inConsumerScripts = dirname(path) === resolve(repo, 'scripts') && path.endsWith('.test.mjs')
+    if ((!inPlugin && !inConsumerScripts) || !statSync(path).isFile()) throw Error(`target outside test homes or not a file: ${target}`)
+    return { path, cwd: inPlugin ? plugin : repo }
   })
-  const nodeFiles = [...new Set(files.filter(path => path !== schema))]
   const execution = resolveTestExecution()
-  if (nodeFiles.length) {
-    const result = runNodeTests({ cwd: plugin, files: nodeFiles, execution })
+  for (const cwd of [plugin, repo]) {
+    const nodeFiles = [...new Set(files.filter(file => file.cwd === cwd && file.path !== schema).map(file => file.path))]
+    if (!nodeFiles.length) continue
+    const result = runNodeTests({ cwd, files: nodeFiles, execution })
     const status = finishTestExecution(result)
     if (status !== 0) process.exit(status)
   }
-  if (files.includes(schema)) {
+  if (files.some(file => file.path === schema)) {
     const status = finishTestExecution(runSchemaTest({ cwd: plugin, execution }))
     if (status !== 0) process.exit(status)
   }

@@ -29,6 +29,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gitToplevel } from '../lib/gitroot.mjs'
 import { debtCensusJson } from '../lib/derive.mjs'
 import { TSX_ABSENT_HINT, resolveTsxInvocation } from '../lib/tsx-bridge.mjs'
 import { censusFollowups } from './followups.mjs'
@@ -82,7 +83,9 @@ function queueEntryAddedAt(repo, phase) {
 
 export default async function run(argv) {
   const json = argv.includes('--json')
-  const repo = resolve(argv.find((a) => !a.startsWith('--')) ?? '.')
+  const target = argv.find((a) => !a.startsWith('--'))
+  let repo = resolve(target ?? '.')
+  if (!target) { try { repo = gitToplevel(process.cwd()) } catch { /* Standalone non-Git roots remain auditable. */ } }
   const roadmap = roadmapRoot(repo)
   const phasesDir = join(roadmap, 'phases')
 

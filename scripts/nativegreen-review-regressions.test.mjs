@@ -4,8 +4,7 @@ import { mkdtempSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync, sy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
-import { checkRoadmapImports } from './check-roadmap-imports.mjs';
+import { checkRoadmapImports, validateRoadmapImports } from './check-roadmap-imports.mjs';
 const repo=fileURLToPath(new URL('../',import.meta.url));
 const sourceRoot=resolve(repo,process.env.NATIVEGREEN_REVIEW_ROOT??(existsSync(join(repo,'docs/roadmap/roadmap.config.json'))?'docs/roadmap':'roadmap'));
 function validatePendingPaths(text) {
@@ -26,28 +25,33 @@ test('migrated real artifacts import through tsx/Zod; wrong imports and missing 
     const root=join(scratch,'docs/roadmap'); mkdirSync(root,{recursive:true});
     cpSync(join(sourceRoot,'arcs'),join(root,'arcs'),{recursive:true});
     cpSync(join(sourceRoot,'phases'),join(root,'phases'),{recursive:true});
-    cpSync(existsSync(join(sourceRoot,'lib/schema.ts'))?join(sourceRoot,'lib/schema.ts'):join(repo,'lib/roadmap/schema.ts'),join(root,'schema-source.ts'));
-    mkdirSync(join(root,'lib')); cpSync(join(root,'schema-source.ts'),join(root,'lib/schema.ts'));
+    cpSync(join(sourceRoot,'backlog.ts'),join(root,'backlog.ts'));
+    mkdirSync(join(root,'lib')); cpSync(join(sourceRoot,'lib/schema.ts'),join(root,'lib/schema.ts'));
     symlinkSync(join(repo,'node_modules'),join(scratch,'node_modules'),'dir');
-    // Simulate only the declared import transformation, preserving all payloads.
-    for(const dir of ['arcs','phases']) for(const name of readdirSync(join(root,dir))) {
-      if(!name.endsWith('.ts')) continue;
-      const file=join(root,dir,name);
-      writeFileSync(file,readFileSync(file,'utf8').replace(/from ['"](?:@\/lib\/roadmap\/schema|\.\.\/\.\.\/lib\/roadmap\/schema|\.\.\/lib\/schema)['"]/g,"from '../lib/schema'"));
-    }
+    // Copy the actual migrated bytes; the fixture must not repair wrong imports.
     const files=checkRoadmapImports(root); assert.ok(files.length>=40);
-    const script=join(scratch,'load.mjs');
-    writeFileSync(script,`for (const file of ${JSON.stringify(files)}) await import(file); console.log('loaded '+${files.length});`);
-    const result=spawnSync(process.execPath,['--import',join(repo,'node_modules/tsx/dist/loader.mjs'),script],{cwd:scratch,encoding:'utf8'});
-    assert.equal(result.status,0,result.stderr);
-    const victim=files[0],original=readFileSync(victim,'utf8');
+    assert.equal(validateRoadmapImports(root,{consumerRoot:scratch}).length,files.length);
+    for (const file of [join(root,'backlog.ts'),files.find(f=>f.endsWith('.arc.ts')),files.find(f=>f.endsWith('.phase.ts'))]) {
+      const before=readFileSync(file,'utf8');
+      const wrong=file.endsWith('backlog.ts')?before.replace("from './lib/schema'","from '../lib/schema'"):before.replace("from '../lib/schema'","from './lib/schema'");
+      assert.notEqual(wrong,before); writeFileSync(file,wrong);
+      assert.throws(()=>checkRoadmapImports(root),/invalid schema import/); writeFileSync(file,before);
+    }
+    const victim=files.find(f=>f.endsWith('.phase.ts')),original=readFileSync(victim,'utf8');
     for(const bad of ['../../lib/roadmap/schema','@/lib/roadmap/schema','../wrong/schema']) {
       writeFileSync(victim,original.replace('../lib/schema',bad));
       assert.throws(()=>checkRoadmapImports(root),/invalid schema import/);
     }
     writeFileSync(victim,original);
+    writeFileSync(victim,"import { PhaseShape } from '../lib/schema'\nexport default { phase: 3903 }\n");
+    assert.throws(()=>validateRoadmapImports(root,{consumerRoot:scratch}),/typed record validation failed/);
+    writeFileSync(victim,original);
     rmSync(join(root,'lib/schema.ts')); assert.throws(()=>checkRoadmapImports(root),/missing root-local schema/);
-    cpSync(join(root,'schema-source.ts'),join(root,'lib/schema.ts'));
+    cpSync(join(sourceRoot,'lib/schema.ts'),join(root,'lib/schema.ts'));
+    const backlogBytes=readFileSync(join(root,'backlog.ts')); rmSync(join(root,'backlog.ts'));
+    assert.throws(()=>checkRoadmapImports(root),/missing backlog/); writeFileSync(join(root,'backlog.ts'),backlogBytes);
+    const phaseDir=join(root,'phases'); const savedPhases=join(scratch,'saved-phases'); cpSync(phaseDir,savedPhases,{recursive:true});
+    rmSync(phaseDir,{recursive:true}); mkdirSync(phaseDir); assert.throws(()=>checkRoadmapImports(root),/empty phases/); cpSync(savedPhases,phaseDir,{recursive:true});
     rmSync(join(root,'arcs'),{recursive:true}); mkdirSync(join(root,'arcs'));
     assert.throws(()=>checkRoadmapImports(root),/empty arcs/);
   } finally { rmSync(scratch,{recursive:true,force:true}); }

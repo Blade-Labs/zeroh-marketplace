@@ -130,7 +130,13 @@ test('root discovery finds docs/roadmap and ROADMAP_ROOT overrides candidates', 
   assert.match(readFileSync(docs.phaseFile, 'utf8'), /metrics:\s*\{/)
   runCollector(docs.root, ['9010', '--historical'], { ROADMAP_ROOT: '' })
   mkdirSync(join(docs.root, 'roadmap', 'phases'), { recursive: true })
-  assert.throws(() => runCollector(docs.root, ['9010', '--historical']), /ambiguous roadmap root/)
+  const beforeRefusal = readFileSync(docs.phaseFile, 'utf8')
+  assert.throws(() => runCollector(docs.root, ['9010', '--historical']), (error) => {
+    assert.match(error.stderr.toString(), /kind: 'ambiguous'/)
+    assert.match(error.stderr.toString(), /ROADMAP_ROOT=<dir>/)
+    return true
+  })
+  assert.equal(readFileSync(docs.phaseFile, 'utf8'), beforeRefusal, 'ambiguous roots cannot mutate metrics')
 
   const custom = makeRepo(9011, ['2026-01-02T03:04:05Z'], { rootRel: 'ops/roadmap', anchor: '2026-01-02T03:00:00Z' })
   runCollector(custom.root, ['9011', '--historical'], { ROADMAP_ROOT: 'ops/roadmap' })

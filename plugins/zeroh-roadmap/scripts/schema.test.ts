@@ -85,7 +85,7 @@ import {
   CapabilityReceiptShape as CapabilityReceiptConsumerHome,
   RoleRunRequestShape as RoleRunRequestConsumerHome,
   AgentRunReceiptShape as AgentRunReceiptConsumerHome,
-} from '../../../lib/roadmap/schema'
+} from '../../../docs/roadmap/lib/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
 import { reduceArcTransition } from '../cli/lib/workflow-steps.mjs'
 import { MODEL_IDS } from '../cli/lib/drivers.mjs'
@@ -167,7 +167,7 @@ const authorityEnvelopeFixture = {
 
 for (const [home, shape] of [
   ['templates/schema.ts', AuthorityEnvelopeShape],
-  ['lib/roadmap/schema.ts', AuthorityEnvelopeConsumerHome],
+  ['docs/roadmap/lib/schema.ts', AuthorityEnvelopeConsumerHome],
 ] as const) {
   check(`authority envelope: ${home} exports and round-trips the complete receipt`, () => {
     assertEq(shape.parse(authorityEnvelopeFixture), authorityEnvelopeFixture, `${home} complete authority receipt`)
@@ -967,7 +967,7 @@ check('plannedBy: a phase WITH plannedBy parses; a historical phase WITHOUT it s
 /** The two homes the vendor-pair discipline keeps in lock-step. */
 const SCHEMA_HOMES: Array<[string, (input: never) => unknown]> = [
   ['templates/schema.ts', definePhase as (input: never) => unknown],
-  ['lib/roadmap/schema.ts', definePhaseConsumerHome as (input: never) => unknown],
+  ['docs/roadmap/lib/schema.ts', definePhaseConsumerHome as (input: never) => unknown],
 ]
 
 /** The record an actually-run Mode A pass writes before it queues. */
@@ -3233,7 +3233,7 @@ for (const home of [
     receipt: TransitionReceiptShape,
   },
   {
-    name: 'lib/roadmap/schema.ts',
+    name: 'docs/roadmap/lib/schema.ts',
     authority: ArcAuthorityRefConsumerHome,
     state: ArcLifecycleStateConsumerHome,
     event: ArcLifecycleEventConsumerHome,
@@ -3338,7 +3338,7 @@ const agentRunReceiptFixture = {
 
 for (const home of [
   { name: 'templates/schema.ts', capability: CapabilityReceiptShape, request: RoleRunRequestShape, receipt: AgentRunReceiptShape },
-  { name: 'lib/roadmap/schema.ts', capability: CapabilityReceiptConsumerHome, request: RoleRunRequestConsumerHome, receipt: AgentRunReceiptConsumerHome },
+  { name: 'docs/roadmap/lib/schema.ts', capability: CapabilityReceiptConsumerHome, request: RoleRunRequestConsumerHome, receipt: AgentRunReceiptConsumerHome },
 ] as const) {
   check(`agent driver: ${home.name} accepts capability, request, and reducer-bound receipt contracts`, () => {
     requireShape(home.capability, `${home.name} CapabilityReceiptShape`)

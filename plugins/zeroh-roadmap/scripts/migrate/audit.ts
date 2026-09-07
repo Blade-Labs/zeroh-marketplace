@@ -24,6 +24,8 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { roadmapRoot, consumerSchemaPath } from '../../cli/lib/roadmap-root.mjs'
+import { gitToplevel } from '../../cli/lib/gitroot.mjs'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -153,31 +155,33 @@ function findBlock(
 
 // ── Steady-state artifact check ────────────────────────────────────────────
 
-const REQUIRED_ARTIFACTS: Array<{ target: string; canonical: string | null }> = [
-  { target: 'lib/roadmap/schema.ts', canonical: 'templates/schema.ts' },
-  { target: 'lib/roadmap/registry.ts', canonical: 'templates/registry.ts' },
-  { target: 'lib/roadmap/emit.ts', canonical: 'templates/emit.ts' },
-  { target: 'roadmap/ROADMAP.md', canonical: 'templates/ROADMAP.md' },
-  { target: 'roadmap/backlog.ts', canonical: 'templates/backlog.ts' },
-  { target: 'scripts/pre-review.sh', canonical: 'scripts/pre-review.sh' },
-  { target: 'scripts/build-dashboard.sh', canonical: 'scripts/build-dashboard.sh' },
-  { target: 'scripts/generate-changelog-md.ts', canonical: 'scripts/generate-changelog-md.ts' },
-]
+function schemaPath(projectDir: string): string {
+  try { return consumerSchemaPath(projectDir) }
+  catch (error) {
+    if ((error as { kind?: string }).kind !== 'schema-missing') throw error
+    return path.join(roadmapRoot(projectDir), 'lib', 'schema.ts')
+  }
+}
 
 function checkArtifacts(projectDir: string): ArtifactCheck[] {
-  return REQUIRED_ARTIFACTS.map((a) => ({
-    path: a.target,
-    exists: fs.existsSync(path.join(projectDir, a.target)),
-    canonicalAvailable: a.canonical
-      ? fs.existsSync(path.join(PLUGIN_DIR, a.canonical))
-      : false,
+  const root = roadmapRoot(projectDir)
+  const schemaDir = path.dirname(schemaPath(projectDir))
+  const artifacts = [
+    ...['schema.ts', 'registry.ts', 'emit.ts'].map(name => ({ target: path.join(schemaDir, name), canonical: 'templates/' + name })),
+    ...['ROADMAP.md', 'backlog.ts'].map(name => ({ target: path.join(root, name), canonical: 'templates/' + name })),
+    ...['pre-review.sh', 'build-dashboard.sh', 'generate-changelog-md.ts'].map(name => ({ target: path.join(projectDir, 'scripts', name), canonical: 'scripts/' + name })),
+  ]
+  return artifacts.map(a => ({
+    path: path.relative(projectDir, a.target),
+    exists: fs.existsSync(a.target),
+    canonicalAvailable: fs.existsSync(path.join(PLUGIN_DIR, a.canonical)),
   }))
 }
 
 // ── Phase file compatibility scan ──────────────────────────────────────────
 
 function listPhaseFiles(projectDir: string): string[] {
-  const dir = path.join(projectDir, 'roadmap', 'phases')
+  const dir = path.join(roadmapRoot(projectDir), 'phases')
   if (!fs.existsSync(dir)) return []
   return fs
     .readdirSync(dir)
@@ -359,7 +363,7 @@ function renderReport(args: {
   }
 
   let schemaVerdict = 'UNKNOWN'
-  if (!fs.existsSync(path.join(projectDir, 'lib', 'roadmap', 'schema.ts'))) {
+  if (!fs.existsSync(schemaPath(projectDir))) {
     schemaVerdict = 'NO SCHEMA — fresh scaffold recommended'
   } else if (behind === 0) {
     schemaVerdict = 'CURRENT'
@@ -411,10 +415,11 @@ function renderReport(args: {
 
   const nextSteps = buildNextSteps({
     schemaVerdict,
+    targetSchemaPath: path.relative(projectDir, schemaPath(projectDir)),
     missingArtifacts,
     breakingCount: breakingScans.length,
     totalDone: doneScans.length,
-    targetSchemaExists: fs.existsSync(path.join(projectDir, 'lib', 'roadmap', 'schema.ts')),
+    targetSchemaExists: fs.existsSync(schemaPath(projectDir)),
     missingKindCount: missingKindScans.length,
   })
 
@@ -465,6 +470,7 @@ function buildNextSteps(args: {
   breakingCount: number
   totalDone: number
   targetSchemaExists: boolean
+  targetSchemaPath: string
   missingKindCount: number
 }): string {
   const steps: string[] = []
@@ -481,7 +487,7 @@ function buildNextSteps(args: {
 
   if (args.schemaVerdict !== 'CURRENT') {
     steps.push(
-      '**Upgrade `lib/roadmap/schema.ts`** to the canonical version. Diff your current schema against ' +
+      `**Upgrade \`${args.targetSchemaPath}\`** to the canonical version. Diff your current schema against ` +
         '`${CLAUDE_PLUGIN_ROOT}/templates/schema.ts`. All new shapes (TransparencyReportShape, ' +
         'GateFindingShape, StructuredGateRoundShape, task dependsOn, phase compromises) are **additive** ' +
         'with defaults — if you already have the discriminated union + PassingGateResultShape, the upgrade ' +
@@ -530,7 +536,9 @@ function buildNextSteps(args: {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 function main(): void {
-  const { projectDir } = parseArgs()
+  const { projectDir: requestedDir } = parseArgs()
+  let projectDir = requestedDir
+  try { projectDir = gitToplevel(requestedDir) } catch { /* A non-Git project remains auditable. */ }
 
   if (!fs.existsSync(projectDir)) {
     console.error(`Project directory not found: ${projectDir}`)
@@ -538,7 +546,7 @@ function main(): void {
   }
 
   const canonicalContent = readIfExists(CANONICAL_SCHEMA)
-  const targetContent = readIfExists(path.join(projectDir, 'lib', 'roadmap', 'schema.ts'))
+  const targetContent = readIfExists(schemaPath(projectDir))
 
   const canonicalFeatures = detectFeatures(canonicalContent)
   const targetFeatures = detectFeatures(targetContent)
@@ -559,4 +567,6 @@ function main(): void {
 // Run as a CLI only when invoked directly — so `roadmap audit` check 9 can `import
 // { suggestKind }` from this module (the single-source backfill rule) without the
 // migration report executing on import.
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main()
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  try { main() } catch (error) { console.error((error as Error).message); process.exitCode = 2 }
+}

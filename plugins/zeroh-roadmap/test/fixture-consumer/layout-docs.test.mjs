@@ -27,8 +27,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import * as harness from './harness.mjs'
-import { commitAll, makeFixtureRepo, plainSrc, runCli, writePhaseFile, TEMPLATES_SCHEMA } from './harness.mjs'
+import { commitAll, git, makeFixtureRepo, plainSrc, runCli, writePhaseFile, TEMPLATES_SCHEMA } from './harness.mjs'
 
 // The two candidate roots, spelled here ON PURPOSE: this suite is the one place that must
 // pin WHICH directories discovery answers with, and D7's refusal must name both by path.
@@ -391,4 +392,57 @@ test('D7 — a repo carrying both marked roots is refused by status, phase valid
   const [status, phaseValidate, audit] = runs.map(({ r }) => refusalBody(r.stderr))
   assert.equal(phaseValidate, status, 'phase validate must refuse with the SAME message as status')
   assert.equal(audit, status, 'audit must refuse with the SAME message as status')
+})
+
+
+test('D9 — migration audit reads the selected docs root and its root-local schema', () => {
+  const repo = docsFixture()
+  writePhaseFile(repo, fullPhase(9901), { kind: 'define' })
+  commitAll(repo, 'seed: migration audit docs layout')
+  const audit = new URL('../../scripts/migrate/audit.ts', import.meta.url)
+  const run = spawnSync(join(repo, 'node_modules', '.bin', 'tsx'), [audit.pathname, '--project', repo], { cwd: repo, encoding: 'utf8' })
+  assert.equal(run.status, 0, run.stderr)
+  assert.doesNotMatch(run.stdout, /NO SCHEMA|lib\/roadmap\/schema\.ts/, 'audit must not diagnose the retired legacy schema owner')
+  assert.match(run.stdout, /docs\/roadmap\/lib\/schema\.ts/, 'audit evidence names the selected root-local schema')
+  assert.match(run.stdout, /Total scanned: 1(?:\n|$)/)
+})
+
+
+test('D10 — record operations from a linked nested checkout select the docs roadmap', () => {
+  const repo = docsFixture()
+  writePhaseFile(repo, fullPhase(9902, { status: 'in-progress', arcId: 'LINKEDDOCS' }), { kind: 'define' })
+  cpSync(new URL('../../templates/registry.ts', import.meta.url), join(DOCS_ROOT(repo), 'lib', 'registry.ts'))
+  commitAll(repo, 'seed: linked docs operation')
+  const linked = join(repo, '..', `linked-docs-${Date.now()}`)
+  git(repo, 'worktree', 'add', '-q', '-b', `linked-docs-${Date.now()}`, linked)
+  try {
+    const nested = join(linked, 'src', 'spine')
+    const result = runCli(linked, ['status', '--json'], { ROADMAP_CONFIG: undefined }, { cwd: nested })
+    assert.equal(result.code, 0, result.stderr)
+    assert.ok((result.json?.rows ?? []).some((row) => row.arc === 'LINKEDDOCS'))
+    const validate = runCli(linked, ['phase', 'validate', '9902', '--json'], { ROADMAP_CONFIG: undefined }, { cwd: nested })
+    assert.equal(validate.code, 0, validate.stderr); assert.equal(validate.json?.kind, 'ok')
+    const audit = runCli(linked, ['audit', '--json'], { ROADMAP_CONFIG: undefined }, { cwd: nested })
+    assert.ok([0, 2].includes(audit.code), audit.stderr)
+    assert.equal(audit.json?.summary?.phases, 1, 'audit really scanned the linked phase: ' + JSON.stringify(audit.json))
+    const base = git(linked, 'rev-parse', 'HEAD')
+    const gate = runCli(linked, ['gate', 'plan', '9902', '--base', base, '--json'], { ROADMAP_CONFIG: undefined }, { cwd: nested })
+    assert.equal(gate.code, 0, gate.stderr); assert.equal(gate.json?.phase, 9902)
+    const claim = runCli(linked, ['claim'], { ROADMAP_CONFIG: undefined }, { cwd: nested })
+    assert.equal(claim.code, 0, claim.stderr); assert.equal(claim.stdout.trim(), '9903')
+    const arm = runCli(linked, ['arm', 'LINKEDDOCS', '--mode', 'inline'], { ROADMAP_CONFIG: undefined }, { cwd: nested })
+    assert.equal(arm.code, 0, arm.stderr)
+    const shared = join(repo, 'docs', 'roadmap', 'arcs', '.building')
+    assert.ok(existsSync(join(shared, 'LINKEDDOCS.json')), 'real arm uses the main checkout docs registry')
+    writeFileSync(join(shared, 'LINKEDDOCS-executor.jsonl'), JSON.stringify({ ts: new Date().toISOString(), phase: 9902, event: 'commit', detail: 'fixture' }) + '\n')
+    const watch = runCli(linked, ['watch', 'LINKEDDOCS', '--once', '--json'], { ROADMAP_CONFIG: undefined, LIVENESS_PGREP_CMD: 'true', LIVENESS_PROBE_MS: '20' }, { cwd: nested })
+    assert.equal(watch.code, 0, watch.stderr); assert.equal(watch.json?.arcId, 'LINKEDDOCS'); assert.equal(watch.json?.verdict, 'ALIVE')
+    mkdirSync(join(repo, 'roadmap', 'phases'), { recursive: true })
+    const ambiguousWatch = runCli(linked, ['watch', 'LINKEDDOCS', '--once', '--json'], { ROADMAP_CONFIG: undefined }, { cwd: nested })
+    assert.notEqual(ambiguousWatch.code, 0)
+    assert.match(ambiguousWatch.stderr, /more than one roadmap root/, 'watch must retain the shared registry ambiguity refusal')
+
+  } finally {
+    git(repo, 'worktree', 'remove', '--force', linked)
+  }
 })

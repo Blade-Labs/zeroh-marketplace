@@ -49,6 +49,7 @@
 
 import { execSync } from 'node:child_process'
 import { loadConfig } from '../cli/lib/config.mjs'
+import { defaultRoadmapRoot } from '../cli/lib/roadmap-root.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { readdirSync, statSync } from 'node:fs'
@@ -69,18 +70,7 @@ if (!ALL_HISTORICAL && (argv.length === 0 || argv[0].startsWith('--'))) {
   process.exit(1)
 }
 
-const cwd = process.cwd()
-const configuredRoot = process.env.ROADMAP_ROOT || undefined
-const rootCandidates = ['roadmap', 'docs/roadmap']
-const markedRoots = rootCandidates.filter((candidate) => {
-  const root = path.resolve(cwd, candidate)
-  return fs.existsSync(path.resolve(root, 'roadmap.config.json')) || fs.existsSync(path.resolve(root, 'phases'))
-})
-if (!configuredRoot && markedRoots.length > 1) {
-  throw new Error(`ambiguous roadmap root: ${markedRoots.join(', ')}; set ROADMAP_ROOT`)
-}
-const roadmapRoot = path.resolve(cwd, configuredRoot ?? markedRoots[0] ?? rootCandidates[0])
-const PHASES_DIR = path.resolve(roadmapRoot, 'phases')
+const PHASES_DIR = path.join(defaultRoadmapRoot(process.cwd()), 'phases')
 
 // ── Filename resolution ─────────────────────────────────────────────────────
 

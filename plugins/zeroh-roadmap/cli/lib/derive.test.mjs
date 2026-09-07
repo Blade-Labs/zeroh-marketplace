@@ -14,6 +14,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSyn
 import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { consumerSchemaPath } from './roadmap-root.mjs'
 import { deriveArcPosition, deriveArcLifecycleTransition, runDebtCensus, readValidateVerdict, DeriveError } from './derive.mjs'
 import { defaultExec } from './exec.mjs'
 import { plantPrior } from '../testdata/eval.test-support.mjs'
@@ -37,7 +38,7 @@ function makeRepo(arcId, arc, phases) {
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
   mkdirSync(join(root, 'roadmap', 'arcs'), { recursive: true })
   mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
-  symlinkSync(resolve(HERE, '..', '..', '..', '..', 'lib', 'roadmap', 'schema.ts'), join(root, 'lib', 'roadmap', 'schema.ts'))
+  symlinkSync(consumerSchemaPath(resolve(HERE, '..', '..', '..', '..')), join(root, 'lib', 'roadmap', 'schema.ts'))
   writeFileSync(join(root, 'roadmap', 'arcs', `${arcId}.arc.ts`), tsSrc({ id: arcId, baseRef: 'develop', ...arc }))
   for (const p of phases) writeFileSync(join(root, 'roadmap', 'phases', `phase-${p.phase}.phase.ts`), tsSrc(p))
   execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'init', '-q'])

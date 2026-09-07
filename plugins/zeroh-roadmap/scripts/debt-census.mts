@@ -37,8 +37,10 @@
  * the ceiling is user-ratified).
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { gitToplevel } from '../cli/lib/gitroot.mjs'
+import { roadmapRoot, consumerSchemaPath } from '../cli/lib/roadmap-root.mjs'
 import { isExplanatoryEmpty } from '../cli/lib/transparency.mjs'
 
 const args = process.argv.slice(2)
@@ -47,9 +49,10 @@ const flag = (name: string): string | undefined => {
   const i = args.indexOf(`--${name}`)
   return i >= 0 ? args[i + 1] : undefined
 }
-const repo = resolve(positional[0] ?? '.')
-const roadmap = join(repo, 'roadmap')
-const registryPath = join(repo, 'lib/roadmap/registry.ts')
+let repo = resolve(positional[0] ?? '.')
+try { repo = gitToplevel(repo) } catch { /* Non-Git consumer roots remain supported. */ }
+const roadmap = roadmapRoot(repo)
+const registryPath = join(dirname(consumerSchemaPath(repo)), 'registry.ts')
 if (!existsSync(registryPath)) {
   console.error(`debt-census: no registry at ${registryPath} (run from a scaffolded consumer repo, or pass its root)`)
   process.exit(1)
@@ -185,7 +188,7 @@ if (existsSync(followupsDir)) {
     const lines = body
       .split('\n')
       .filter((l) => /(^|\s)(- \[ \]|OPEN\b|OPERATOR-PENDING|TODO\b|PENDING\b)/.test(l) && !/CLOSED|DONE|RESOLVED|SHIPPED/i.test(l))
-    if (lines.length) followups.push({ file: `roadmap/followups/${f}`, openMarkers: lines.length, lines: lines.slice(0, 20).map((l) => l.trim().slice(0, 160)) })
+    if (lines.length) followups.push({ file: relative(repo, join(followupsDir, f)), openMarkers: lines.length, lines: lines.slice(0, 20).map((l) => l.trim().slice(0, 160)) })
   }
 }
 

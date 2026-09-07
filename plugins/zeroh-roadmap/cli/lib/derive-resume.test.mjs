@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { consumerSchemaPath } from './roadmap-root.mjs'
 import { join, dirname, resolve } from 'node:path'
 import { plantPrior } from '../testdata/eval.test-support.mjs'
 import { deriveArcPosition } from './derive.mjs'
@@ -37,7 +38,7 @@ function newRepo() {
   bases.push(root)
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
   mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
-  symlinkSync(resolve(HERE, '..', '..', '..', '..', 'lib', 'roadmap', 'schema.ts'), join(root, 'lib', 'roadmap', 'schema.ts'))
+  symlinkSync(consumerSchemaPath(resolve(HERE, '..', '..', '..', '..')), join(root, 'lib', 'roadmap', 'schema.ts'))
   mkdirSync(join(root, 'roadmap', 'arcs'), { recursive: true })
   g(root, 'init', '-q')
   return root
