@@ -4,6 +4,7 @@ import { defineArc } from '../lib/schema'
  * NATIVEGREEN — native Claude/Codex intent-to-green-PR.
  *
  * LOCKED DECISIONS (user rulings, dated):
+ * - 2026-09-07: owner instructed "do the full arc now". Resume phases40–45 and all original criteria; this supersedes the pause and reduced release proposal. Preserve codex-full, bounded native budgets, existing authority and independent gates.
  * - 2026-09-07: owner authorized Codex-only usability reassessment. The next release slice is documented in arc-evals/NATIVEGREEN-codex-usability-reassessment.md; the broad remaining sequence stays paused, with no deferred criterion marked complete.
  * - 2026-09-07: PAUSED by owner for scope/quota reassessment. Only absolutely necessary Codex-usability improvements; do not automatically continue the remaining broad arc. This supersedes the Sep04 all-findings execution scope until reassessed.
  * - 2026-09-04: every actionable review finding is in scope; documentation is last.

@@ -124,3 +124,7 @@ published PR target. Never reset away the prerequisite or plan commits to create
 ## Execution authorization — 2026-09-06
 
 The owner subsequently instructed: "do it now". Execute the reviewed NATIVEGREEN arc in this checkout; the earlier planning-only boundary is historical. Preserve explicit provider, native-run, budget and merge/release boundaries.
+
+## Full resumption — 2026-09-07
+
+Owner: "do the full arc now". Resume the original remaining phases40–45, starting with the unresolved phase40 journal concurrency finding. The pause and three-packet release proposal are historical. Use the current codex-full role resolver; preserve bounded native experiments and existing external-action authority. Full arc execution does not waive correctness gates or authorize an automatic release.
