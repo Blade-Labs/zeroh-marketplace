@@ -347,9 +347,11 @@ export function reconcileRunReceipt(cwd, input) {
   return { status: 'active', receipt: current }
 }
 
-export function readRunReceipt(cwd, address, { revision, digest: requestedDigest } = {}) {
-  if (requestedDigest !== undefined && (revision !== undefined || !/^[a-f0-9]{64}$/.test(requestedDigest))) throw new Error("receipt lookup requires either a revision or a canonical digest")
+export function readRunReceipt(cwd, address, { revision, digest: requestedDigest, actionFingerprint } = {}) {
+  if ([revision, requestedDigest, actionFingerprint].filter((value) => value !== undefined).length > 1
+    || [requestedDigest, actionFingerprint].some((value) => value !== undefined && (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)))) throw new Error('receipt lookup requires one revision, canonical digest, or action fingerprint')
   const chain = readChain(cwd, address)
+  if (actionFingerprint !== undefined) return chain.find((receipt) => receipt.snapshot.pendingOperation?.actionFingerprint === actionFingerprint) ?? null
   if (requestedDigest !== undefined) return chain.find((receipt) => receipt.digest === requestedDigest) ?? null
   if (revision === undefined) return chain.at(-1) ?? null
   if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('receipt revision must be a nonnegative integer')

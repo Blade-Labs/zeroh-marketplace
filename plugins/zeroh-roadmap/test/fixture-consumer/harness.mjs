@@ -6,8 +6,8 @@
  * nothing but roadmap.config.json, the INSTALLED lib/roadmap/schema.ts (templates/schema.ts
  * COPIED VERBATIM — pre-made decision 1; a hand-fork would recreate the seam-3 split-brain
  * this suite exists to catch), controllable fake-slot commands, and a mini estate. Every
- * suite composes from these primitives; NONE reaches into cli/lib internals — the contract
- * under test is the exit-coded CLI surface a non-Claude executor also drives.
+ * CLI suites compose from these primitives to exercise the exit-coded consumer surface.
+ * The native fixture helper also drives the shipped adapter contract with real receipt storage.
  *
  *   makeFixtureRepo(opts)   → root  (base scaffold + git init + initial commit)
  *   roadmapDir(root)        → the absolute root THAT repo's layout puts the records under
@@ -353,4 +353,98 @@ exec "${realGit}" "$@"
 export function readGitLog(logPath) {
   if (!existsSync(logPath)) return []
   return readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
+}
+
+/** Deterministic native adapter fixture. Only the native process/probe boundary is fake;
+ * requests, arms, immutable revisions, reducer events, and restart routing are real. */
+export async function runNativeDriverFixture({ parentDriverId, policy, laneId, schedule = {}, unavailableHost = false }) {
+  const [{ NativeAgentDriver }, drivers, { resolveRole }, store, arms, { createHash }] = await Promise.all([
+    import('../../cli/lib/native-agent-driver.mjs'), import('../../cli/lib/drivers.mjs'),
+    import('../../cli/lib/roles.mjs'), import('../../cli/lib/run-receipt.mjs'),
+    import('../../cli/lib/executor-arm.mjs'), import('node:crypto'),
+  ])
+  const root = makeFixtureRepo()
+  const phase = 3886
+  const arcId = 'NATIVE-FIXTURE'
+  const resolved = resolveRole('phase-executor', parentDriverId, { policy })
+  const selected = { roleId: 'phase-executor', driverId: drivers.MODEL_DRIVERS[resolved.model], model: resolved.model }
+  const sha = (bytes) => createHash('sha256').update(bytes).digest('hex')
+  const roleCardBytes = Buffer.from('fixture semantic phase-executor card\n')
+  const governanceBytes = Buffer.from('fixture consumer governance\n')
+  const head = git(root, 'rev-parse', 'HEAD')
+  const bounds = { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }
+  const parentAuthority = { profile: 'workspace-write', bounds, provenance: { kind: 'managed-host-input', source: 'fixture parent' } }
+  const authority = {
+    ...drivers.intersectAuthority(parentAuthority, { profile: 'inherit', bounds, provenance: null }),
+    native: { driver: selected.driverId, runtime: { version: null, verified: false }, argv: [], enforcement: { filesystem: 'sandbox', network: 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' }, limitations: ['fake native fixture; no OS enforcement claim'] },
+  }
+  const request = { ...selected, arcId, phase, runId: 'run-' + laneId, executorId: 'executor-' + laneId,
+    worktree: root, baseHead: head, requestedHead: head, roleCardDigest: sha(roleCardBytes), governanceDigest: sha(governanceBytes), authority,
+    authorityRef: { status: 'known', envelopeDigest: 'sha256:' + sha(JSON.stringify(authority.effective)), source: { kind: 'managed-host-receipt', ref: laneId } },
+  }
+  const launchOptions = { worktree: root, authority, ...(selected.driverId === 'codex' ? { json: true } : { model: selected.model, streamJson: true }) }
+  authority.native.argv = drivers.launchArgv(selected.driverId, launchOptions)
+  const candidate = { phase, status: 'done', gateRounds: 1, compromises: [], skipped: [] }
+  const calls = []
+  const completions = new Map()
+  const processTransport = {
+    async launch(input) {
+      calls.push(structuredClone(input))
+      const receipt = input.runReceipt
+      const ref = { cwd: root, arcId, runId: request.runId, pendingReceiptDigest: receipt.digest }
+      const bytes = Buffer.from(JSON.stringify(candidate))
+      completions.set(receipt.digest, { version: 1, arcId, runId: request.runId, pendingReceiptDigest: receipt.digest,
+        actionFingerprint: receipt.snapshot.pendingOperation.actionFingerprint, nativeSessionId: 'native-' + laneId,
+        phaseResult: candidate, protocolTerminal: selected.driverId === 'codex' ? { type: 'turn.completed' } : { type: 'result', subtype: 'success', is_error: false },
+        exitCode: 0, signal: null, stdoutBytes: bytes.length, stderrBytes: 0, stdoutDigest: sha(bytes), stderrDigest: sha(''),
+      })
+      return { status: 'running', operationRef: ref }
+    },
+    async observe(ref) {
+      const completion = completions.get(ref.pendingReceiptDigest)
+      return completion ? { status: 'complete', completion: structuredClone(completion) }
+        : { status: 'hold', kind: 'unknown-native-outcome', reason: 'fixture has no completion for this operation revision' }
+    },
+  }
+  const options = { cwd: root, parentDriverId, policy, sessionId: 'parent-' + laneId, parentAuthority, processTransport,
+    readLaunchInputs: () => ({ roleCardBytes, governanceBytes, prompt: 'execute fixture ' + laneId }),
+    provenanceStore: { read: () => unavailableHost ? { ok: false, reason: 'fixture host unavailable' }
+      : { ok: true, doc: { probes: [{ name: 'version', pass: true }, { name: 'capabilities', pass: true }] } }, verify: () => 2 },
+  }
+  const driver = new NativeAgentDriver(options)
+  const handle = await driver.start(request)
+  if (handle.status === 'hold') return { outcome: 'hold', kind: handle.kind, reason: handle.reason, selected, externalLaunchCount: calls.length, ownerCount: Number(existsSync(arms.armPath(root, phase))), terminalResultCount: 0, receipts: [], refusals: [] }
+  const refusals = []
+  if (schedule.resume) await driver.resume(handle)
+  if (schedule.action) refusals.push(await driver.performAction(handle, schedule.action))
+  const prior = { arcId, stage: 'phase', status: 'active', processedEventIds: [], lastHalt: null, authorityRef: handle.request.authorityRef }
+  let completed
+  if (schedule.compact || schedule.newDriverInstance || schedule.parentRestart) {
+    const bound = store.readRunReceipt(root, { arcId, runId: request.runId })
+    const wake = () => new NativeAgentDriver(options).recover(bound, prior)
+    const arrivals = await Promise.all(schedule.duplicateWake ? [wake(), wake()] : [wake()])
+    const failed = arrivals.find((arrival) => !arrival.receipt || ['hold', 'conflict'].includes(arrival.status))
+    if (failed) return { outcome: 'hold', kind: failed.kind, reason: failed.reason, selected, externalLaunchCount: calls.length, receipts: [], refusals }
+    completed = arrivals[0]
+  } else completed = await driver.awaitEvent(handle, prior)
+  if (!completed.receipt) throw new Error('fixture did not persist a normalized native result')
+  if (schedule.parentRestart || schedule.newDriverInstance || schedule.duplicateWake) {
+    const restarted = new NativeAgentDriver(options)
+    const input = { arcId, phase, plan: selected }
+    const results = await Promise.all(schedule.duplicateWake ? [restarted.runPhase(input), restarted.runPhase(input)] : [restarted.runPhase(input)])
+    if (results.some((result) => JSON.stringify(result.result) !== JSON.stringify(candidate))) throw new Error('fixture restart did not return the original durable candidate')
+  }
+  const receipts = []
+  for (let revision = 0; ; revision++) {
+    const receipt = store.readRunReceipt(root, { arcId, runId: request.runId }, { revision })
+    if (!receipt) break
+    receipts.push({ path: receipt.path, digest: receipt.digest, snapshot: receipt.snapshot, runId: receipt.snapshot.request.runId, executorId: receipt.snapshot.request.executorId })
+  }
+  const owner = arms.readExecutorRunArm(root, phase)
+  const transition = completed.transition
+  return { outcome: 'complete', selected, root, phase, runId: request.runId, executorId: request.executorId, nativeSessionId: completed.handle.nativeSessionId,
+    ownerCount: Number(owner.status === 'valid'), owner: owner.arm, terminalResultCount: receipts.filter((receipt) => receipt.snapshot.terminalResult !== null).length,
+    externalLaunchCount: calls.length, calls, receipts, refusals, transition,
+    semanticTransition: { roleId: selected.roleId, event: transition.event.type, priorStatus: transition.prior.status, nextStatus: transition.next.status, nextStage: transition.next.stage, halt: transition.next.lastHalt?.kind, authority: handle.request.authority.effective },
+  }
 }

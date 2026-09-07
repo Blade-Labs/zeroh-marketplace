@@ -173,7 +173,9 @@ export class DurableProcessAgentDriver {
     validateRoleRunRequest(request, this.driverId)
     if (!this.acceptsModel(request.model) || !receipt?.snapshot?.pendingOperation) return hold('receipt-conflict', 'native recovery requires the selected pending receipt', receipt)
     if (typeof this.processTransport.observe !== 'function') return hold('unknown-native-outcome', 'native transport cannot observe durable operations', receipt)
-    const operationRef = { cwd: request.worktree, arcId: request.arcId, runId: request.runId, pendingReceiptDigest: receipt.digest }
+    const operationReceipt = this.receiptStore.readRunReceipt(request.worktree, { arcId: request.arcId, runId: request.runId }, { actionFingerprint: receipt.snapshot.pendingOperation.actionFingerprint })
+    if (!operationReceipt || !isDeepStrictEqual(operationReceipt.snapshot.request, request)) return hold('receipt-conflict', 'native recovery lacks its original pending operation receipt', receipt)
+    const operationRef = { cwd: request.worktree, arcId: request.arcId, runId: request.runId, pendingReceiptDigest: operationReceipt.digest }
     const observed = await this.waitForCompletion(operationRef)
     if (observed.status !== 'complete') return observed
     const completion = observed.completion

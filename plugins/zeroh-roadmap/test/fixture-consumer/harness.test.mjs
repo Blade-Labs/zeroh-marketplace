@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import arcPlaneWorkflow from '../../workflows/arc-plane.workflow.mjs'
-import { makeFixtureRepo, writePhaseFile, writeArcFile, commitPaths, git } from './harness.mjs'
+import { makeFixtureRepo, writePhaseFile, writeArcFile, commitPaths, git, runNativeDriverFixture } from './harness.mjs'
 
 test('run-phase selects createNativeAgentDriver and leaves the legacy agent primitive untouched', async () => {
   const root = makeFixtureRepo()
@@ -98,4 +98,58 @@ test('native runPhase races the supplied watchdog and returns unobserved without
   assert.deepEqual(result.evidence, { reason: 'fixture unobserved' })
   assert.equal(factories, 1)
   assert.equal(phases, 1)
+})
+
+const NATIVE_COMBINATIONS = [
+  { parentDriverId: 'claude', policy: { preset: 'claude' }, expectedDriver: 'claude' },
+  { parentDriverId: 'claude', policy: { preset: 'codex' }, expectedDriver: 'codex' },
+  { parentDriverId: 'codex', policy: { preset: 'claude' }, expectedDriver: 'claude' },
+  { parentDriverId: 'codex', policy: { preset: 'codex' }, expectedDriver: 'codex' },
+]
+
+test('four available parent-to-native combinations complete with equivalent transitions and exact resume', async () => {
+  const rows = []
+  for (const [index, combination] of NATIVE_COMBINATIONS.entries()) {
+    const row = await runNativeDriverFixture({ ...combination, laneId: `matrix-${index}`, schedule: { resume: true } })
+    assert.equal(row.outcome, 'complete', JSON.stringify(row))
+    assert.equal(row.selected.roleId, 'phase-executor'); assert.equal(row.selected.driverId, combination.expectedDriver)
+    assert.equal(row.ownerCount, 1); assert.equal(row.terminalResultCount, 1); assert.equal(row.externalLaunchCount, 1)
+    assert.equal(row.owner.runId, row.runId); assert.equal(row.owner.executorId, row.executorId)
+    assert.equal(row.receipts.filter(({ snapshot }) => snapshot.terminalResult !== null).length, 1)
+    for (const receipt of row.receipts) { assert.match(receipt.digest, /^[a-f0-9]{64}$/); assert.deepEqual(JSON.parse((await import('node:fs')).readFileSync(receipt.path, 'utf8')), receipt.snapshot); assert.equal(receipt.snapshot.request.runId, row.runId); assert.equal(receipt.snapshot.request.executorId, row.executorId) }
+    rows.push(row)
+  }
+  for (const row of rows.slice(1)) assert.deepEqual(row.semanticTransition, rows[0].semanticTransition)
+})
+
+test('an explicitly unavailable host holds before owner or launch', async () => {
+  const row = await runNativeDriverFixture({ ...NATIVE_COMBINATIONS[0], laneId: 'unavailable', unavailableHost: true })
+  assert.equal(row.outcome, 'hold'); assert.match(row.kind, /capability|provenance|unavailable/); assert.ok(row.reason.length > 0)
+  assert.equal(row.externalLaunchCount, 0); assert.equal(row.ownerCount, 0); assert.equal(row.terminalResultCount, 0)
+})
+
+test('twenty concurrent native lanes survive duplicate wake, refused action, compaction, and parent restart with one owner/result', async () => {
+  const rows = await Promise.all(Array.from({ length: 20 }, (_, lane) => {
+    const combination = NATIVE_COMBINATIONS[lane % NATIVE_COMBINATIONS.length]
+    return runNativeDriverFixture({
+      ...combination,
+      laneId: `race-${lane}`,
+      schedule: { duplicateWake: true, action: { action: 'message', payload: { text: `lane-${lane}` } }, compact: true, newDriverInstance: true, parentRestart: true },
+    })
+  }))
+  assert.equal(rows.length, 20)
+  for (const [lane, row] of rows.entries()) {
+    assert.equal(row.outcome, 'complete', `lane ${lane}: ${JSON.stringify(row)}`)
+    assert.equal(row.selected.roleId, 'phase-executor', `lane ${lane}`)
+    assert.equal(row.ownerCount, 1, `lane ${lane}`)
+    assert.equal(row.terminalResultCount, 1, `lane ${lane}`)
+    assert.equal(row.externalLaunchCount, 1, `lane ${lane}`)
+    assert.equal(new Set(row.receipts.map((receipt) => receipt.runId)).size, 1, `lane ${lane}: one run`)
+    assert.equal(new Set(row.receipts.map((receipt) => receipt.executorId)).size, 1, `lane ${lane}: one executor`)
+    assert.equal(row.refusals.length, 1, `lane ${lane}: one action refusal`)
+    assert.equal(row.refusals[0].kind, 'capability-refusal', `lane ${lane}`)
+    assert.equal(row.owner.runId, row.runId); assert.equal(row.owner.executorId, row.executorId)
+    assert.equal(row.receipts.filter(({ snapshot }) => snapshot.terminalResult !== null).length, 1)
+    for (const receipt of row.receipts) assert.deepEqual(JSON.parse((await import('node:fs')).readFileSync(receipt.path, 'utf8')), receipt.snapshot)
+  }
 })
