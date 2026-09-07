@@ -178,11 +178,17 @@ export class NativeAgentDriver {
       return this.usesInjectedAdapters ? { result: observed?.result?.phaseResult ?? observed?.phaseResult ?? observed?.result } : phaseOutcome(observed?.result)
     }
     if (arm.status !== 'missing') return hold('executor arm cannot be used for native recovery')
-    const freshRoute = this.route({ roleId: plan.roleId, driverId, model: resolved.model })
-    if (freshRoute.refusal) return freshRoute.refusal
     if (!sourceCheckpoint || !this.parentAuthority || typeof this.readLaunchInputs !== 'function' || typeof this.sessionId !== 'string') throw new Error('fresh native phase requires source checkpoint, parent authority, session, and launch inputs')
     const requestAuthority = { profile: 'inherit', bounds: structuredClone(this.parentAuthority.bounds), provenance: null }
-    const authority = { ...intersectAuthority(this.parentAuthority, requestAuthority), native: { driver: driverId, runtime: { version: null, verified: false }, argv: [], enforcement: { filesystem: 'sandbox', network: 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' }, limitations: ['runtime capability is verified separately'] } }
+    let inheritedAuthority
+    try {
+      inheritedAuthority = intersectAuthority(this.parentAuthority, requestAuthority)
+    } catch (error) {
+      return { status: 'hold', kind: 'authority-refusal', reason: error.message }
+    }
+    const freshRoute = this.route({ roleId: plan.roleId, driverId, model: resolved.model })
+    if (freshRoute.refusal) return freshRoute.refusal
+    const authority = { ...inheritedAuthority, native: { driver: driverId, runtime: { version: null, verified: false }, argv: [], enforcement: { filesystem: 'sandbox', network: 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' }, limitations: ['runtime capability is verified separately'] } }
     const seed = JSON.stringify({ arcId, phase, plan, sourceCheckpoint, authorityRef: sourceCheckpoint.authorityRef })
     const hash = createHash('sha256').update(seed).digest('hex')
     const executorId = plan.executorId ?? ('executor-' + hash.slice(0, 24))

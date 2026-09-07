@@ -184,3 +184,30 @@ and factory checks pass25/25. A fresh full gate and correctness review follow.
 Raw full diagnosis: `.building/nativegreen-38-full-diagnosis.json`; raw focused
 result: `.building/nativegreen-38-root-repair-green.log`. No live model execution
 or broader migrated-workflow coverage is claimed by this regression.
+
+## R1 authority disposition and repair
+
+The independent reviewer reported fresh unsafe-parent refusal as HIGH and suggested
+copying parent authorization. A single-hop architecture review ruled
+`PROCEED_WITH_FIX`: the inability to inherit unsafe permission without a separate
+child acknowledgement is intentional under the phase36 owner ruling. Copying
+parent provenance would violate that boundary. Phase38 adds no unsafe API.
+The concrete defect is the expected authority refusal throwing after capability
+routing. Fresh runs now intersect the existing default inherit request first,
+return an `authority-refusal` hold with the original reason on failure, and reuse
+the derived envelope on success. No capability probes, receipt persistence, arm
+claim, or launch occurs on this refusal. Historical recovery stays unchanged.
+The architect was requested Sol via the previously authorized native fallback;
+exact runtime is unverified, and no Fable execution is claimed.
+
+Independent tests reproduced the throw (10 pass/1 fail). Affected driver checks
+passed39/39, affected workflow checks7/7, and a final strengthened assertion
+passed11/11 with explicit parent authorization but no child acknowledgement.
+The recovery unit check proves adapter routing without fresh provenance or a
+start/resume; the separate real-store factory and workflow suites cover durable
+recovery. Raw results are `.building/nativegreen-38-authority-repair-green.log`,
+`.building/nativegreen-38-authority-harness-green.log`, and
+`.building/nativegreen-38-explicit-parent-green.log`.
+The full gate000017 at41198b4 passed2357/2357 across102 files plus schema in469.701
+seconds before this narrow review repair. These focused checks are its subsequent
+repair evidence; no second full run is claimed for the repaired source.

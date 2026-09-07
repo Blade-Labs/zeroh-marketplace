@@ -22,18 +22,20 @@ const request = (overrides = {}) => ({
 })
 const fresh = (driverId) => ({ ok: true, doc: { driverId, host: 'current-host', date: new Date().toISOString(), probes: [{ name: 'version', pass: true }, { name: 'capabilities', pass: true }] } })
 
-function fixture(provenance = fresh('codex')) {
+function fixture(provenance = fresh('codex'), options = {}) {
   const calls = []
   const adapter = (id) => ({
     async probe() { calls.push([id, 'probe']); return { reachable: true } },
     async start(req) { calls.push([id, 'start', structuredClone(req)]); return { request: req, nativeSessionId: `${id}-native` } },
     async resume(handle) { calls.push([id, 'resume', structuredClone(handle)]); return handle },
     async awaitEvent(handle) { calls.push([id, 'awaitEvent']); return { handle, result: { status: 'transport-exited' } } },
+    async recover(receipt) { calls.push([id, 'recover', structuredClone(receipt)]); return { result: { status: 'transport-exited' } } },
     async performAction(handle, action) { calls.push([id, 'performAction', action]); return { kind: 'capability-refusal', driverId: id, operation: 'performAction', action: action.action, reason: 'unsupported' } },
   })
   const driver = new NativeAgentDriver({
     cwd: '/tmp/native-38-5', parentDriverId: 'codex', modelPolicy: { preset: 'codex' }, sessionId: 'parent-38-5', parentAuthority: request().authority.parent, readLaunchInputs: () => ({ roleCardBytes: Buffer.from('role'), governanceBytes: Buffer.from('governance') }), adapters: { codex: adapter('codex'), claude: adapter('claude') },
     readFreshProvenance: (_cwd, id) => typeof provenance === 'function' ? provenance(id) : provenance,
+    ...options,
   })
   return { calls, driver }
 }
@@ -131,4 +133,53 @@ test('runPhase drives the selected durable adapter and returns transport result 
   assert.equal(output.result.phaseCompleted, undefined)
   assert.equal(calls.filter(([, operation]) => operation === 'start').length, 1)
   assert.equal(calls.filter(([, operation]) => operation === 'awaitEvent').length, 1)
+})
+
+
+test('a fresh isolated-unsafe parent without a separate child authorization holds before provenance or launch effects', async () => {
+  const broadParent = {
+    profile: 'isolated-unsafe',
+    bounds: { filesystem: 'unrestricted', network: 'allowed', gitPush: true, externalWrites: true },
+    provenance: { kind: 'explicit-user-authorization', source: 'parent authorization only; no child acknowledgement' },
+  }
+  let provenanceReads = 0
+  const { calls, driver } = fixture(() => { provenanceReads++; return fresh('codex') }, { parentAuthority: broadParent })
+  const held = await driver.runPhase({
+    arcId: 'NATIVEGREEN', phase: 38, prompt: 'execute phase', schema: { type: 'object' },
+    plan: { roleId: 'phase-executor', driverId: 'codex', model: MODEL_IDS.SOL },
+    sourceCheckpoint: { baseHead: '1'.repeat(40), requestedHead: '2'.repeat(40), roleCardDigest: 'a'.repeat(64), governanceDigest: 'b'.repeat(64), authorityRef: request().authorityRef },
+  })
+  assert.equal(held.status, 'hold')
+  assert.match(JSON.stringify(held), /explicit|authorization/i)
+  assert.equal(provenanceReads, 0)
+  assert.equal(calls.length, 0)
+})
+
+test('normal workspace authority still inherits into a fresh native run', async () => {
+  const { calls, driver } = fixture()
+  const output = await driver.runPhase({
+    arcId: 'NATIVEGREEN', phase: 38, prompt: 'execute phase', schema: { type: 'object' },
+    plan: { roleId: 'phase-executor', driverId: 'codex', model: MODEL_IDS.SOL },
+    sourceCheckpoint: { baseHead: '1'.repeat(40), requestedHead: '2'.repeat(40), roleCardDigest: 'a'.repeat(64), governanceDigest: 'b'.repeat(64), authorityRef: request().authorityRef },
+  })
+  assert.equal(output.result.status, 'transport-exited')
+  const started = calls.find(([, operation]) => operation === 'start')[2]
+  assert.deepEqual(started.authority.effective, request().authority.effective)
+})
+
+test('recovery routes stored explicit unsafe authorization without provenance probes or relaunch', async () => {
+  const broadParent = {
+    profile: 'isolated-unsafe',
+    bounds: { filesystem: 'unrestricted', network: 'allowed', gitPush: true, externalWrites: true },
+    provenance: { kind: 'managed-host-input', source: 'unsafe parent envelope' },
+  }
+  const explicit = { profile: 'isolated-unsafe', bounds: { ...broadParent.bounds }, provenance: { kind: 'explicit-user-authorization', source: 'recorded child approval' } }
+  const durable = request({ authority: { ...request().authority, parent: broadParent, request: explicit, effective: { profile: 'isolated-unsafe', bounds: { ...broadParent.bounds } } } })
+  let provenanceReads = 0
+  const { calls, driver } = fixture(() => { provenanceReads++; return fresh('codex') }, { parentAuthority: broadParent })
+  const recovered = await driver.recover({ snapshot: { request: durable } }, { arcId: 'NATIVEGREEN', status: 'active' })
+  assert.equal(recovered.result.status, 'transport-exited')
+  assert.equal(provenanceReads, 0)
+  assert.equal(calls.filter(([, operation]) => operation === 'recover').length, 1)
+  assert.equal(calls.filter(([, operation]) => operation === 'start' || operation === 'resume').length, 0)
 })
