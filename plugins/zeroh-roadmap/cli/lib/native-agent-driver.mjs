@@ -12,6 +12,7 @@ import * as defaultReceiptStore from './run-receipt.mjs'
 import { ensureReceiptDirectory } from './run-receipt.mjs'
 import { buildingDir, publishImmutableFile } from './sidecar.mjs'
 import { resolveRole } from './roles.mjs'
+import { roadmapRoot } from './roadmap-root.mjs'
 import { createNativeProcessTransport } from './native-process-transport.mjs'
 
 const hold = (reason) => ({ status: 'hold', kind: 'capability-provenance-unavailable', reason })
@@ -190,7 +191,7 @@ export class NativeAgentDriver {
       roleCardDigest: sourceCheckpoint.roleCardDigest, governanceDigest: sourceCheckpoint.governanceDigest, authority, authorityRef: sourceCheckpoint.authorityRef }
     if (!this.hasExternalLaunchInputs) {
       const roleCardBytes = readFileSync(DEFAULT_AGENT_CARD)
-      const governance = resolveGovernance(this.cwd, [join(this.cwd, 'roadmap', 'phases', 'phase-' + phase + '.phase.ts')])
+      const governance = resolveGovernance(this.cwd, [join(roadmapRoot(this.cwd), 'phases', 'phase-' + phase + '.phase.ts')])
       if (governance.hold) return hold('governance inputs are unavailable: ' + governance.hold.reason)
       const governanceBytes = Buffer.from(JSON.stringify({ ...governance, outputSchemaDigest: createHash('sha256').update(JSON.stringify(schema)).digest('hex') }, null, 2) + '\n')
       this.phaseLaunchInputs.set(JSON.stringify([arcId, request.runId]), { prompt, schema, roleCardBytes, governanceBytes })

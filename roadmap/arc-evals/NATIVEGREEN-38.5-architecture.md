@@ -169,3 +169,18 @@ A supplied watchdog races one retained native promise per phase. A keep-waiting 
 second invocation. Durable completion polling runs once per second, reducing repeated receipt reads.
 Malformed native output stops the owned CLI and closes the supervisor's own streams; broader process
 group termination was rejected by automatic approval review and was not enabled.
+
+## Full-gate root repair
+
+The phase38 full gate at711d6f5 completed102 files and passed2355/2356 Node
+checks in444.068 seconds. The sole failure was the existing active-root guard:
+NativeAgentDriver collected governance from a hardcoded legacy phase path.
+An independent production-factory regression retained the legacy layout and added
+`docs/roadmap` with a phase-local AGENTS.md; it failed before launch with a
+mismatched governance digest. The driver now resolves the phase target through
+the existing roadmapRoot owner. Both layouts exercise real receipts, the detached
+fake CLI, changed-HEAD recovery, and exactly one invocation. The focused root
+and factory checks pass25/25. A fresh full gate and correctness review follow.
+Raw full diagnosis: `.building/nativegreen-38-full-diagnosis.json`; raw focused
+result: `.building/nativegreen-38-root-repair-green.log`. No live model execution
+or broader migrated-workflow coverage is claimed by this regression.
