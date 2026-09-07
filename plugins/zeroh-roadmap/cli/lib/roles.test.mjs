@@ -73,7 +73,7 @@ const ALIAS_TO_MODEL = { fable: FABLE, opus: OPUS, sonnet: SONNET }
  * (nothing in that harness would run it), but a consumer's modelPolicy must be able to name it —
  * without the alias, "run the builders on codex" is inexpressible.
  */
-const EXPECTED_ALIASES = { ...ALIAS_TO_MODEL, sol: SOL }
+const EXPECTED_ALIASES = { ...ALIAS_TO_MODEL, sol: SOL, astra: 'gpt-6-astra' }
 
 /** Written out in full — the expectation must not be rebuilt from the table under test. */
 const EXPECTED_CHAINS = {

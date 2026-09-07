@@ -97,6 +97,10 @@ export const MODEL_IDS = Object.freeze({
   SONNET: 'claude-sonnet-5',
   OPUS: 'claude-opus-5',
   SOL: CODEX_MODEL,
+  /** The codex family's higher-judgment model (`codex debug models` slug, illumination 2026-09-06);
+   *  bindable by alias for a per-role lead (owner ruling 2026-09-07 20:04 UTC: "astra architect,
+   *  sol developer"). The lane's default pin stays CODEX_MODEL; a role lead pins this on its child. */
+  ASTRA: 'gpt-6-astra',
 })
 
 /**
@@ -112,6 +116,7 @@ export const MODEL_ALIASES = Object.freeze({
   sonnet: MODEL_IDS.SONNET,
   opus: MODEL_IDS.OPUS,
   sol: MODEL_IDS.SOL,
+  astra: MODEL_IDS.ASTRA,
 })
 
 /**
@@ -123,6 +128,7 @@ export const MODEL_DRIVERS = Object.freeze({
   [MODEL_IDS.SONNET]: 'claude',
   [MODEL_IDS.OPUS]: 'claude',
   [MODEL_IDS.SOL]: 'codex',
+  [MODEL_IDS.ASTRA]: 'codex',
 })
 
 /** The registry entry for `id`, or a throw naming the offending id and every known one. */

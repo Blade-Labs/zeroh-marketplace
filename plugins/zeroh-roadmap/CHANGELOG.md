@@ -1,3 +1,7 @@
+## 0.40.5 — 2026-09-07
+
+- `astra` joins the alias vocabulary (`MODEL_IDS.ASTRA` = `gpt-6-astra`, routed to the codex driver) so a consumer can lead a role on the codex family's higher-judgment model while the lane's default pin stays `gpt-5.6-sol` — owner ruling 2026-09-07 20:04 UTC ("use codex fully: astra architect and sol developer"). No chain or preset changes; `roles.test.mjs` fixture extended.
+
 ## 0.40.4 — 2026-09-07
 
 - `rejectedAlternatives-append-only` no longer reds an honest append: the array splitter (`topLevelElements`) treated a trailing `// R<n>` line comment after the last entry as a phantom element, so every append "erased" it (VF, 2026-09-07: "HEAD had 18, 21 now" on a 17→20 append). Line comments outside quotes are skipped; a real erasure in the same tagged style still reds (regression test).
