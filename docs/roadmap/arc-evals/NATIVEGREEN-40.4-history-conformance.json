@@ -1,0 +1,121 @@
+{
+  "phase": 40,
+  "task": "40.4",
+  "date": "2026-09-07",
+  "productionCommit": "54ef8b8",
+  "scope": "Real local Git fixtures and injected provider callbacks; no native GitHub publication claimed.",
+  "mutationIsolation": "Temporary archived tracked source copy; execution production files never mutated.",
+  "sourceRestoration": [
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/curate.mjs",
+      "sha256": "a8f78b9e50aedbdc5a18d8f17c187aa2be55b3308f604d1f16e8f29ef561bee6",
+      "restoredExactly": true
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/history-normalize.mjs",
+      "sha256": "c3a69b372ac987e21530d9a31ffda003f477615f1112ffb98ee58512d93c03d1",
+      "restoredExactly": true
+    }
+  ],
+  "testSources": [
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/history-normalize.test.mjs",
+      "sha256": "064788d3f7e62326acdfea20a8f597effb799d54c24767c8bf03581f8747d67c"
+    },
+    {
+      "path": "plugins/zeroh-roadmap/test/fixture-consumer/history-fixture.mjs",
+      "sha256": "39ef1301d9231c85929bbf0c4a24daa95e2882f5e0b30f66ea0c020d371a3fa2"
+    },
+    {
+      "path": "plugins/zeroh-roadmap/cli/lib/history-normalize.test.mjs",
+      "sha256": "ba4ed971c084b0eedce92e9e32fb49356437d1c9591ac73789bdeb2ae79897a2"
+    }
+  ],
+  "mutations": [
+    {
+      "guard": "tree",
+      "pristine": {
+        "passed": 1,
+        "failed": 0
+      },
+      "mutated": {
+        "passed": 0,
+        "failed": 1,
+        "assertion": "'a tip-tree mismatch must ABORT \u2014 landing it would silently drop work'"
+      },
+      "baselineLog": ".building/nativegreen-40-4-tree-baseline.log",
+      "mutationLog": ".building/nativegreen-40-4-tree-mutant.log"
+    },
+    {
+      "guard": "attribution",
+      "pristine": {
+        "passed": 1,
+        "failed": 0
+      },
+      "mutated": {
+        "passed": 0,
+        "failed": 1,
+        "assertion": "wrong phase attribution: expected /phase 4002 \u2014/, received phase 4001"
+      },
+      "baselineLog": ".building/nativegreen-40-4-attribution-baseline.log",
+      "mutationLog": ".building/nativegreen-40-4-attribution-mutant.log"
+    },
+    {
+      "guard": "cas",
+      "pristine": {
+        "passed": 1,
+        "failed": 0
+      },
+      "mutated": {
+        "passed": 0,
+        "failed": 1,
+        "assertion": "'Missing expected exception.'"
+      },
+      "baselineLog": ".building/nativegreen-40-4-cas-baseline.log",
+      "mutationLog": ".building/nativegreen-40-4-cas-mutant.log"
+    },
+    {
+      "guard": "rescue",
+      "pristine": {
+        "passed": 1,
+        "failed": 0
+      },
+      "mutated": {
+        "passed": 0,
+        "failed": 1,
+        "assertion": "'Missing expected exception.'"
+      },
+      "baselineLog": ".building/nativegreen-40-4-rescue-baseline.log",
+      "mutationLog": ".building/nativegreen-40-4-rescue-mutant.log"
+    },
+    {
+      "guard": "red-only",
+      "pristine": {
+        "passed": 1,
+        "failed": 0
+      },
+      "mutated": {
+        "passed": 0,
+        "failed": 1,
+        "assertion": "'Missing expected exception.'"
+      },
+      "baselineLog": ".building/nativegreen-40-4-red-only-baseline.log",
+      "mutationLog": ".building/nativegreen-40-4-red-only-mutant.log"
+    },
+    {
+      "guard": "green",
+      "pristine": {
+        "passed": 1,
+        "failed": 0
+      },
+      "mutated": {
+        "passed": 0,
+        "failed": 1,
+        "assertion": "'Missing expected exception.'"
+      },
+      "baselineLog": ".building/nativegreen-40-4-green-baseline.log",
+      "mutationLog": ".building/nativegreen-40-4-green-mutant.log"
+    }
+  ],
+  "invalidAttempt": "Initial pristine conformance run caught an omitted callback closing brace; corrected before mutation evidence. No syntax failure counted as a killed guard."
+}
