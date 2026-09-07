@@ -1,14 +1,18 @@
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { dirname, join, relative } from 'node:path'
-import { readFileSync, realpathSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
+import { readFileSync, realpathSync, readdirSync, lstatSync } from 'node:fs'
 import { gitToplevel } from './gitroot.mjs'
 import { roadmapRoot, consumerSchemaPath } from './roadmap-root.mjs'
 import { bridgeEval } from './tsx-bridge.mjs'
 import { loadConfig, integrationRefOf } from './config.mjs'
 import { latestReport, checkPhaseConsistency, correctnessDecision, GateRunReportShape } from './gate-report.mjs'
-import { classifySubject, composeLandedMessage } from './curate.mjs'
-import { isCuratedTreeReplacement, phaseTaskSuffix } from './gitscan.mjs'
+import { classifySubject, composeLandedMessage, ensureCurationRescue, prepareCuration, commitPreparedCuration } from './curate.mjs'
+import { isCuratedTreeReplacement, phaseTaskSuffix, curationAncestry } from './gitscan.mjs'
+
+import { isDeepStrictEqual } from 'node:util'
+import { publishImmutableFile } from './sidecar.mjs'
+import { ensureReceiptDirectory, inspectReceiptAncestors } from './run-receipt.mjs'
 
 export class HistoryNormalizationError extends Error {
   constructor(kind, message, options) { super(message, options); this.name = 'HistoryNormalizationError'; this.kind = kind }
@@ -24,6 +28,27 @@ const exactCommit = (root, value) => {
 function stableHead(root, head) {
   if (git(root, ['rev-parse', 'HEAD']) !== head) fail('head-changed', 'normalization HEAD differs from the requested commit')
   if (git(root, ['diff', '--name-only', 'HEAD', '--'])) fail('dirty', 'normalization refuses staged or unstaged tracked changes')
+}
+
+function recordFiles(root, head) {
+  const directory = roadmapRoot(root), schema = consumerSchemaPath(root)
+  const paths = [schema, join(dirname(schema), 'registry.ts')]
+  for (const [dir, suffix] of [[join(directory, 'phases'), '.phase.ts'], [join(directory, 'arcs'), '.arc.ts']]) {
+    inspectReceiptAncestors(dir)
+    paths.push(...readdirSync(dir).filter(name => name.endsWith(suffix)).map(name => join(dir, name)))
+  }
+  return paths.map(path => {
+    const rel = relative(root, path)
+    if (!rel || rel.startsWith('../') || resolve(root, rel) !== path) fail('records-unproven', 'normalization records must belong to the current worktree')
+    inspectReceiptAncestors(dirname(path))
+    const stat = lstatSync(path)
+    if (!stat.isFile() || stat.isSymbolicLink()) fail('records-unproven', 'normalization record must be a regular nonsymlink file: ' + rel)
+    let entry
+    try { entry = git(root, ['ls-tree', head, '--', rel]) } catch { fail('records-unproven', 'untracked normalization record: ' + rel) }
+    const match = /^(100644|100755) blob ([a-f0-9]+)\t/.exec(entry)
+    if (!match) fail('records-unproven', 'untracked normalization record: ' + rel)
+    return { path: rel, blob: match[2] }
+  }).sort((a, b) => a.path.localeCompare(b.path))
 }
 
 const READ_RECORDS = `
@@ -104,10 +129,14 @@ function gateBinding(root, phase, substantive) {
 
 /** Plan only: Git objects, refs, runtime files and the consumer tree stay untouched. */
 export function planHistoryNormalization(cwd, input, deps = {}) {
+  return deriveNormalization(cwd, input, deps)
+}
+
+function deriveNormalization(cwd, input, deps, currentHead = input?.head, historicalRefs = null) {
   try {
     if (!input || Object.keys(input).some(key => !['arcId', 'base', 'head'].includes(key)) || typeof input.arcId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(input.arcId)) fail('input', 'normalization accepts only arcId and exact base/head commits')
     const root = realpathSync(gitToplevel(cwd)), { arcId, base, head } = input
-    exactCommit(root, base); exactCommit(root, head); stableHead(root, head)
+    exactCommit(root, base); exactCommit(root, head); stableHead(root, currentHead)
     try { git(root, ['merge-base', '--is-ancestor', base, head]) } catch { fail('base', 'normalization base is not an ancestor of HEAD') }
     const observed = observation(root, input, deps.inspectDelivery)
     const rows = git(root, ['log', '--reverse', '--format=%H%x00%P%x00%T%x00%s', base + '..' + head]).split('\n').filter(Boolean).map(line => {
@@ -116,8 +145,9 @@ export function planHistoryNormalization(cwd, input, deps = {}) {
       return { sha, tree, subject }
     })
     if (!rows.length) fail('empty', 'normalization range has no outcome commits')
-    const refs = publicationRefs(root, loadConfig(root), observed), owned = new Set(rows.map(row => row.sha))
+    const refs = historicalRefs ?? publicationRefs(root, loadConfig(root), observed), owned = new Set(rows.map(row => row.sha))
     for (const ref of refs) if (git(root, ['rev-list', ref.head, '^' + base]).split('\n').some(sha => owned.has(sha))) fail('published', 'normalization range is already on ' + ref.ref)
+    const sources = recordFiles(root, head)
     const loaded = records(root, arcId)
     const ids = loaded.arc.planes.flatMap(plane => plane.phases)
     if (!ids.length || new Set(ids).size !== ids.length) fail('records', 'arc phases are empty or duplicated')
@@ -151,12 +181,179 @@ export function planHistoryNormalization(cwd, input, deps = {}) {
       group.message = composeLandedMessage(phases[index], group)
       group.gate = gateBinding(root, phases[index], substantive)
     }
-    stableHead(root, head)
-    const plan = { version: 1, arcId, base, expectedHead: head, expectedTree: git(root, ['show', '-s', '--format=%T', head]), phases: ids, groups, delivery: observed, publicationRefs: refs }
+    stableHead(root, currentHead)
+    const plan = { version: 1, arcId, base, expectedHead: head, expectedTree: git(root, ['show', '-s', '--format=%T', head]), phases: ids, groups, recordFiles: sources, delivery: observed, publicationRefs: refs }
     plan.planDigest = hash(encoded(plan))
     return plan
   } catch (error) {
     if (error instanceof HistoryNormalizationError) throw error
     throw new HistoryNormalizationError('unproven', 'normalization preflight failed: ' + error.message, { cause: error })
+  }
+}
+
+const keys = (value, names) => value && typeof value === 'object' && !Array.isArray(value) && isDeepStrictEqual(Object.keys(value).sort(), names.split(' ').sort())
+const oid = value => typeof value === 'string' && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value)
+const digestValue = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+const repoPath = value => typeof value === 'string' && value.length > 0 && !value.startsWith('/') && !value.includes('\\') && !value.includes('\0') && value.split('/').every(part => part && part !== '.' && part !== '..' && part !== '.git')
+function validatePlan(root, plan) {
+  if (!plan || !isDeepStrictEqual(Object.keys(plan).sort(), ['version', 'arcId', 'base', 'expectedHead', 'expectedTree', 'phases', 'groups', 'recordFiles', 'delivery', 'publicationRefs', 'planDigest'].sort())) fail('plan', 'normalization plan fields are invalid')
+  if (typeof plan.arcId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(plan.arcId) || !oid(plan.expectedTree)
+    || !Array.isArray(plan.phases) || plan.phases.some(id => !Number.isSafeInteger(id) || id < 0) || new Set(plan.phases).size !== plan.phases.length
+    || !keys(plan.delivery, 'head publication pullRequest green publicationRefs') || plan.delivery.head !== plan.expectedHead
+    || plan.delivery.publication !== 'unpublished' || plan.delivery.pullRequest !== null || plan.delivery.green !== false
+    || !Array.isArray(plan.delivery.publicationRefs) || plan.delivery.publicationRefs.some(ref => typeof ref !== 'string')
+    || !Array.isArray(plan.publicationRefs) || plan.publicationRefs.some(row => !keys(row, 'ref head') || typeof row.ref !== 'string' || !row.ref.startsWith('refs/') || !oid(row.head))
+    || !Array.isArray(plan.recordFiles) || !plan.recordFiles.length) fail('plan', 'normalization plan values are invalid')
+  if (!isDeepStrictEqual(plan.delivery.publicationRefs, [...new Set(plan.delivery.publicationRefs)].sort())
+    || !isDeepStrictEqual(plan.publicationRefs.map(row => row.ref), [...new Set(plan.publicationRefs.map(row => row.ref))].sort())) fail('plan', 'publication refs are not canonical')
+  for (const ref of [...plan.delivery.publicationRefs, ...plan.publicationRefs.map(row => row.ref)]) git(root, ['check-ref-format', ref])
+  let previousPath = null
+  for (const row of plan.recordFiles) {
+    if (!keys(row, 'path blob') || !repoPath(row.path) || !oid(row.blob) || previousPath !== null && previousPath.localeCompare(row.path) >= 0) fail('plan', 'normalization source manifest is invalid')
+    const entry = git(root, ['ls-tree', plan.expectedHead, '--', row.path])
+    if (!new RegExp('^100(?:644|755) blob ' + row.blob + '\\t').test(entry)) fail('plan', 'normalization source manifest differs from Git')
+    previousPath = row.path
+  }
+  const phaseDirs = [...new Set(plan.recordFiles.filter(row => row.path.endsWith('.phase.ts')).map(row => dirname(row.path)))]
+  const schemas = plan.recordFiles.filter(row => row.path.endsWith('/schema.ts'))
+  if (phaseDirs.length !== 1 || !phaseDirs[0].endsWith('/phases') || schemas.length !== 1) fail('plan', 'normalization source estate is ambiguous')
+  const sourceRoot = dirname(phaseDirs[0]), schemaPath = schemas[0].path
+  const originalFiles = git(root, ['ls-tree', '-r', '--name-only', plan.expectedHead, '--', sourceRoot, dirname(schemaPath)]).split('\n')
+  const expectedFiles = originalFiles.filter(path => path === schemaPath || path === dirname(schemaPath) + '/registry.ts'
+    || dirname(path) === phaseDirs[0] && path.endsWith('.phase.ts') || dirname(path) === sourceRoot + '/arcs' && path.endsWith('.arc.ts')).sort((a, b) => a.localeCompare(b))
+  if (!isDeepStrictEqual(plan.recordFiles.map(row => row.path), expectedFiles)) fail('plan', 'normalization source estate differs from original Git tree')
+  for (const row of plan.publicationRefs) exactCommit(root, row.head)
+  const { planDigest, ...body } = plan
+  if (plan.version !== 1 || !/^[a-f0-9]{64}$/.test(planDigest) || hash(encoded(body)) !== planDigest) fail('plan', 'normalization plan digest differs from its bytes')
+  exactCommit(root, plan.base); exactCommit(root, plan.expectedHead)
+  if (git(root, ['rev-parse', plan.expectedHead + '^{tree}']) !== plan.expectedTree) fail('plan', 'normalization original tree differs')
+  if (!Array.isArray(plan.groups) || !plan.groups.length || !isDeepStrictEqual(plan.phases, plan.groups.map(group => group.phase))) fail('plan', 'normalization groups differ from phases')
+  try { git(root, ['merge-base', '--is-ancestor', plan.base, plan.expectedHead]) } catch { fail('plan', 'normalization base is not an ancestor') }
+  if (git(root, ['rev-list', '--min-parents=2', plan.base + '..' + plan.expectedHead])) fail('plan', 'normalization range contains a merge')
+  const range = git(root, ['log', '--reverse', '--format=%H%x00%s', plan.base + '..' + plan.expectedHead]).split('\n')
+  const flattened = []
+  for (const [index, group] of plan.groups.entries()) {
+    if (!keys(group, 'phase commits sourceBoundary parent message gate') || !keys(group.message, 'subject body') || typeof group.message.subject !== 'string' || typeof group.message.body !== 'string'
+      || !keys(group.gate, 'path digest baseSha reviewedHead') || !repoPath(group.gate.path) || !digestValue(group.gate.digest) || !oid(group.gate.baseSha) || !oid(group.gate.reviewedHead)
+      || !Array.isArray(group.commits)) fail('plan', 'normalization group values are invalid')
+    for (const row of group.commits) {
+      if (!keys(row, 'sha subject kind') || !oid(row.sha) || typeof row.subject !== 'string' || !['task', 'gate-fix', 'scratch', 'state'].includes(row.kind)) fail('plan', 'normalization commit record is invalid')
+      const suffix = phaseTaskSuffix(row.subject)
+      if (classifySubject(row.subject, group.phase, suffix ? [suffix] : []) !== row.kind) fail('plan', 'normalization commit ownership differs')
+      flattened.push(row.sha + '\0' + row.subject)
+    }
+    if (!group.commits?.length || !isDeepStrictEqual(group.parent, index ? { phase: plan.groups[index - 1].phase } : { base: plan.base })) fail('plan', 'normalization parent or group differs')
+    const substantive = group.commits.filter(row => row.kind === 'task' || row.kind === 'gate-fix').at(-1)
+    if (!substantive) fail('plan', 'normalization group lacks substantive work')
+    exactCommit(root, group.gate.baseSha); exactCommit(root, group.gate.reviewedHead)
+    if (group.gate.reviewedHead !== substantive.sha && !isCuratedTreeReplacement(root, group.gate.reviewedHead, substantive.sha)) fail('plan', 'normalization review binding differs')
+    const last = group.commits.at(-1)
+    exactCommit(root, last.sha)
+    if (!isDeepStrictEqual(group.sourceBoundary, { sha: last.sha, tree: git(root, ['rev-parse', last.sha + '^{tree}']) })) fail('plan', 'normalization boundary tree differs')
+  }
+  if (!isDeepStrictEqual(flattened, range)) fail('plan', 'normalization recorded history differs from Git')
+}
+function receiptFile(root, digest) {
+  const dir = join(root, '.building', 'history-normalizations')
+  inspectReceiptAncestors(dir)
+  return join(dir, digest + '.receipt.json')
+}
+function readReceipt(path) {
+  let stat
+  try { stat = lstatSync(path) } catch (error) { if (error.code === 'ENOENT') return null; throw error }
+  if (!stat.isFile() || stat.isSymbolicLink()) fail('receipt', 'normalization receipt must be a regular nonsymlink file')
+  const bytes = readFileSync(path, 'utf8')
+  let value
+  try { value = JSON.parse(bytes) } catch { fail('receipt', 'normalization receipt is incomplete or malformed') }
+  if (encoded(value) !== bytes) fail('receipt', 'normalization receipt is not canonical')
+  return value
+}
+function receiptValue(plan, prepared) {
+  return { version: 1, planDigest: plan.planDigest, arcId: plan.arcId, base: plan.base,
+    oldHead: prepared.oldHead, newHead: prepared.newHead, tree: prepared.tree,
+    rescueRef: prepared.rescueRef, outcomes: prepared.outcomes }
+}
+function verifyChain(root, plan, receipt) {
+  if (!Array.isArray(receipt.outcomes) || receipt.outcomes.length !== plan.groups.length) fail('receipt', 'normalization outcome count differs')
+  let parent = plan.base
+  for (const [index, row] of receipt.outcomes.entries()) {
+    const group = plan.groups[index]
+    if (!isDeepStrictEqual(Object.keys(row).sort(), ['phase', 'sourceCommit', 'sourceTree', 'normalizedCommit'].sort()) || row.phase !== group.phase || row.sourceCommit !== group.sourceBoundary.sha || row.sourceTree !== group.sourceBoundary.tree) fail('receipt', 'normalization outcome mapping differs')
+    exactCommit(root, row.normalizedCommit)
+    const [tree, parents, author, email, date, committer, committerEmail, committerDate] = git(root, ['show', '-s', '--format=%T%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI', row.normalizedCommit]).split('\0')
+    const identity = git(root, ['show', '-s', '--format=%an%x00%ae%x00%aI', row.sourceCommit])
+    if (tree !== row.sourceTree || parents !== parent || [author, email, date].join('\0') !== identity || [committer, committerEmail, committerDate].join('\0') !== identity || git(root, ['show', '-s', '--format=%B', row.normalizedCommit]) !== `${group.message.subject}\n\n${group.message.body}`.trim()) fail('receipt', 'normalization commit contents differ')
+    parent = row.normalizedCommit
+  }
+  const expected = receiptValue(plan, { oldHead: plan.expectedHead, newHead: parent, tree: plan.expectedTree, rescueRef: `refs/curate-rescue/${plan.expectedHead.slice(0, 12)}`, outcomes: receipt.outcomes })
+  if (!isDeepStrictEqual(receipt, expected) || git(root, ['rev-parse', parent + '^{tree}']) !== plan.expectedTree) fail('receipt', 'normalization receipt identity or final tree differs')
+}
+function liveDelivery(root, plan, head, deps, recovery = false) {
+  const observed = observation(root, { arcId: plan.arcId, base: plan.base, head }, deps.inspectDelivery)
+  const refs = publicationRefs(root, loadConfig(root), observed)
+  if (!recovery && !isDeepStrictEqual(refs, plan.publicationRefs)) fail('publication-unproven', 'publication refs changed after planning')
+  if (recovery) {
+    const commits = new Set([...git(root, ['rev-list', plan.base + '..' + plan.expectedHead]).split('\n'), ...git(root, ['rev-list', plan.base + '..' + head]).split('\n')])
+    for (const ref of refs) if (git(root, ['rev-list', ref.head, '^' + plan.base]).split('\n').some(sha => commits.has(sha))) fail('published', 'normalization history is already published on ' + ref.ref)
+  }
+  return observed
+}
+
+/** Apply one exact plan through the shared curation owner. Git determines crash recovery. */
+export function applyHistoryNormalization(cwd, plan, deps = {}) {
+  try {
+    const root = realpathSync(gitToplevel(cwd))
+    validatePlan(root, plan)
+    const path = receiptFile(root, plan.planDigest)
+    const incumbent = readReceipt(path)
+    const current = git(root, ['rev-parse', 'HEAD'])
+    const result = (receipt, status) => ({ status, planDigest: receipt.planDigest, oldHead: receipt.oldHead,
+      newHead: receipt.newHead, rescueRef: receipt.rescueRef, receiptPath: path, outcomes: receipt.outcomes })
+    if (incumbent) {
+      verifyChain(root, plan, incumbent)
+      ensureCurationRescue(root, plan.expectedHead, { create: false })
+      if (!curationAncestry(root, incumbent.newHead, current)) fail('head-changed', 'completed normalization is not reachable from HEAD')
+      return result(incumbent, 'already-applied')
+    }
+    stableHead(root, current)
+    if (git(root, ['rev-parse', current + '^{tree}']) !== plan.expectedTree) fail('head-changed', 'unreceipted normalization has a different current tree')
+    // Re-derive original ownership from unchanged tracked sources. Live delivery is
+    // separately observed at the actual current HEAD, including post-CAS recovery.
+    if (current !== plan.expectedHead) ensureCurationRescue(root, plan.expectedHead, { create: false })
+    const rederived = deriveNormalization(root, { arcId: plan.arcId, base: plan.base, head: plan.expectedHead }, { inspectDelivery: () => plan.delivery }, current, current === plan.expectedHead ? null : plan.publicationRefs)
+    if (!isDeepStrictEqual(rederived, plan)) fail('plan-stale', 'normalization inputs changed since planning')
+    liveDelivery(root, plan, current, deps, current !== plan.expectedHead)
+    const rescueRef = ensureCurationRescue(root, plan.expectedHead, { create: current === plan.expectedHead })
+    deps.afterRescue?.({ oldHead: plan.expectedHead, tree: plan.expectedTree, rescueRef })
+    const prepared = prepareCuration(root, plan, { afterCommit: deps.afterCommit })
+    const receipt = receiptValue(plan, prepared)
+    verifyChain(root, plan, receipt)
+    deps.afterPrepare?.(prepared)
+    if (current !== plan.expectedHead && current !== prepared.newHead) fail('head-changed', 'HEAD is not an exact normalization recovery prefix')
+    if (current === plan.expectedHead) {
+      deps.beforeCas?.(prepared)
+      stableHead(root, current)
+      const fresh = deriveNormalization(root, { arcId: plan.arcId, base: plan.base, head: current }, deps)
+      if (!isDeepStrictEqual(fresh, plan)) fail('plan-stale', 'normalization inputs changed before CAS')
+      commitPreparedCuration(root, prepared)
+      deps.afterCas?.(prepared)
+    } else {
+      stableHead(root, prepared.newHead)
+      liveDelivery(root, plan, prepared.newHead, deps, true)
+    }
+    // Publication failure keeps the deterministic new HEAD and original rescue.
+    // A retry recognizes this exact prefix, without rewriting it again.
+    ensureReceiptDirectory(dirname(path))
+    deps.beforeReceipt?.(prepared)
+    stableHead(root, prepared.newHead)
+    if (!publishImmutableFile(path, encoded(receipt)) && !isDeepStrictEqual(readReceipt(path), receipt)) fail('receipt', 'normalization receipt conflicts with an incumbent')
+    const out = result(receipt, 'applied')
+    deps.afterReceipt?.(out)
+    return out
+  } catch (error) {
+    if (error instanceof HistoryNormalizationError) throw error
+    const wrapped = new HistoryNormalizationError('apply-refused', 'normalization apply refused: ' + error.message, { cause: error })
+    if (plan?.expectedHead) wrapped.rescueRef = `refs/curate-rescue/${plan.expectedHead.slice(0, 12)}`
+    throw wrapped
   }
 }

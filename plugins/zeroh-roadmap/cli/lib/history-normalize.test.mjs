@@ -2,7 +2,8 @@
 /** Whole-arc normalization planning against typed records, real Git ownership, and gate evidence. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { makeFixtureRepo, writeArcFile, writePhaseFile, commitAll, git } from '../../test/fixture-consumer/harness.mjs'
 import { writeReport } from './gate-report.mjs'
@@ -137,4 +138,188 @@ test('terminal review may bind an exact-tree curated replacement, while ordinary
   const before = unchanged(f.root); const out = await plan(f)
   assert.equal(out.groups.at(-1).sourceBoundary.sha, replacement)
   assert.deepEqual(unchanged(f.root), before)
+})
+
+test('history normalization exposes the synchronous apply API', async () => {
+  const module = await planner()
+  assert.equal(typeof module.applyHistoryNormalization, 'function')
+})
+
+const normalizationDir = (root) => join(root, '.building', 'history-normalizations')
+const rescueFor = (plan) => `refs/curate-rescue/${plan.expectedHead.slice(0, 12)}`
+const applyWithDelivery = (applyHistoryNormalization, fixture, deps = {}) => applyHistoryNormalization(fixture.root, fixture.plan, {
+  inspectDelivery: () => delivery(git(fixture.root, 'rev-parse', 'HEAD')),
+  ...deps,
+})
+async function plannedFixture() {
+  const fixture = arcFixture()
+  writeFileSync(join(fixture.root, 'runtime-untracked.txt'), 'preserve me\n')
+  return { ...fixture, plan: await plan(fixture) }
+}
+
+function assertApplyResult(result, fixture) {
+  assert.equal(result.status, 'applied')
+  assert.equal(result.planDigest, fixture.plan.planDigest)
+  assert.equal(result.oldHead, fixture.plan.expectedHead)
+  assert.equal(result.newHead, git(fixture.root, 'rev-parse', 'HEAD'))
+  assert.equal(result.rescueRef, rescueFor(fixture.plan))
+  assert.equal(result.receiptPath, join(normalizationDir(fixture.root), `${fixture.plan.planDigest}.receipt.json`))
+  assert.equal(git(fixture.root, 'rev-parse', `${result.rescueRef}^{commit}`), result.oldHead)
+  assert.equal(git(fixture.root, 'rev-parse', `${result.newHead}^{tree}`), fixture.plan.expectedTree)
+  assert.equal(git(fixture.root, 'rev-list', '--count', `${fixture.base}..${result.newHead}`), String(fixture.phases.length))
+  assert.deepEqual(result.outcomes.map((row) => row.phase), fixture.phases)
+  for (const [index, row] of result.outcomes.entries()) {
+    assert.equal(row.sourceCommit, fixture.plan.groups[index].sourceBoundary.sha)
+    assert.equal(row.sourceTree, fixture.plan.groups[index].sourceBoundary.tree)
+    assert.equal(git(fixture.root, 'rev-parse', `${row.normalizedCommit}^{tree}`), row.sourceTree)
+    assert.equal(git(fixture.root, 'rev-parse', `${row.normalizedCommit}^`), index ? result.outcomes[index - 1].normalizedCommit : fixture.base)
+  }
+  assert.equal(readFileSync(join(fixture.root, 'runtime-untracked.txt'), 'utf8'), 'preserve me\n')
+  assert.deepEqual(JSON.parse(readFileSync(result.receiptPath, 'utf8')), { version: 1, planDigest: result.planDigest, arcId: fixture.arcId, base: fixture.base, oldHead: result.oldHead, newHead: result.newHead, tree: fixture.plan.expectedTree, rescueRef: result.rescueRef, outcomes: result.outcomes })
+}
+
+test('apply lands one deterministic outcome commit per phase, preserves the original tree, and publishes rescue plus receipt', async () => {
+  const fixture = await plannedFixture(); const { applyHistoryNormalization } = await planner()
+  const result = applyWithDelivery(applyHistoryNormalization, fixture)
+  assertApplyResult(result, fixture)
+  const replay = applyWithDelivery(applyHistoryNormalization, fixture)
+  assert.equal(replay.status, 'already-applied')
+  assert.equal(replay.newHead, result.newHead)
+  assert.equal(readdirSync(normalizationDir(fixture.root)).filter((name) => name.endsWith('.receipt.json')).length, 1)
+})
+
+test('tampered plans, stale gate bytes, rescue collisions, and a live pre-CAS ref advance refuse without overwriting recoverable history', async () => {
+  const { applyHistoryNormalization } = await planner()
+  for (const mode of ['plan', 'gate', 'rescue', 'concurrent']) {
+    const fixture = await plannedFixture(); const original = fixture.head; const tree = fixture.plan.expectedTree
+    let competitor = null
+    if (mode === 'plan') fixture.plan.groups[0].sourceBoundary.tree = '0'.repeat(40)
+    if (mode === 'gate') writeFileSync(join(fixture.root, fixture.plan.groups[0].gate.path), '{"changed":true}\n')
+    if (mode === 'rescue') git(fixture.root, 'update-ref', rescueFor(fixture.plan), fixture.base)
+    const deps = mode === 'concurrent' ? { beforeCas() {
+      competitor = git(fixture.root, 'commit-tree', tree, '-p', original, '-m', 'concurrent advance')
+      git(fixture.root, 'update-ref', 'refs/heads/feature/history', competitor, original)
+    } } : {}
+    assert.throws(() => applyWithDelivery(applyHistoryNormalization, fixture, deps), (error) => typeof error.kind === 'string', mode)
+    assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), competitor ?? original, mode)
+    if (mode === 'concurrent') assert.equal(git(fixture.root, 'rev-parse', `${rescueFor(fixture.plan)}^{commit}`), original)
+    assert.equal(existsSync(join(normalizationDir(fixture.root), `${fixture.plan.planDigest}.receipt.json`)), false, mode)
+    assert.equal(readFileSync(join(fixture.root, 'runtime-untracked.txt'), 'utf8'), 'preserve me\n')
+  }
+})
+
+test('interruptions retain an exact rescue and deterministically resume before or after the ref CAS without duplicate receipts', async () => {
+  const { applyHistoryNormalization } = await planner()
+  for (const boundary of ['afterRescue', 'afterPrepare', 'afterCommit', 'afterCas', 'beforeReceipt', 'afterReceipt']) {
+    const fixture = await plannedFixture(); let preparedHead = null; let partialOutcome = null
+    const deps = { [boundary](value) {
+      if (boundary === 'afterCommit') partialOutcome = value.outcomes.at(-1)
+      else preparedHead = value.newHead ?? preparedHead
+      throw new Error(`interrupt-${boundary}`)
+    } }
+    assert.throws(() => applyWithDelivery(applyHistoryNormalization, fixture, deps), new RegExp(`interrupt-${boundary}`))
+    assert.equal(git(fixture.root, 'rev-parse', `${rescueFor(fixture.plan)}^{commit}`), fixture.head)
+    const resumed = applyWithDelivery(applyHistoryNormalization, fixture)
+    assert.ok(['applied', 'already-applied'].includes(resumed.status), boundary)
+    if (preparedHead) assert.equal(resumed.newHead, preparedHead, `${boundary} must reconstruct the same deterministic commits`)
+    if (partialOutcome) assert.equal(resumed.outcomes.find((row) => row.phase === partialOutcome.phase).normalizedCommit, partialOutcome.normalizedCommit, 'the interrupted prefix commit is reused exactly')
+    assert.equal(git(fixture.root, 'rev-parse', `${resumed.newHead}^{tree}`), fixture.plan.expectedTree)
+    assert.equal(readdirSync(normalizationDir(fixture.root)).filter((name) => name.endsWith('.receipt.json')).length, 1)
+  }
+})
+
+test('an incomplete or conflicting incumbent receipt refuses byte-intact before history movement', async () => {
+  const fixture = await plannedFixture(); const { applyHistoryNormalization } = await planner()
+  const path = join(normalizationDir(fixture.root), `${fixture.plan.planDigest}.receipt.json`)
+  mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, '{"status":"interrupted"}\n')
+  const bytes = readFileSync(path); const before = unchanged(fixture.root)
+  assert.throws(() => applyWithDelivery(applyHistoryNormalization, fixture), (error) => typeof error.kind === 'string')
+  assert.deepEqual(readFileSync(path), bytes)
+  assert.deepEqual(unchanged(fixture.root), before)
+  assert.equal(existsSync(join(fixture.root, '.building', 'history-normalizations', `${fixture.plan.planDigest}.receipt.json`)), true)
+})
+
+
+test('apply refuses untracked registry overlays and tracked record symlinks outside the worktree before creating a rescue', async () => {
+  const { applyHistoryNormalization } = await planner()
+  for (const mode of ['untracked-overlay', 'external-record']) {
+    const fixture = await plannedFixture(); let external = null
+    if (mode === 'untracked-overlay') writeFileSync(join(fixture.root, 'roadmap', 'phases', 'phase-4999.phase.ts'), "export default {phase:4999}\n")
+    else {
+      const phasePath = join(fixture.root, 'roadmap', 'phases', 'phase-4001.phase.ts')
+      external = join(dirname(fixture.root), `external-phase-${fixture.plan.planDigest}.ts`)
+      writeFileSync(external, readFileSync(phasePath)); rmSync(phasePath); symlinkSync(external, phasePath)
+    }
+    const before = unchanged(fixture.root)
+    assert.throws(() => applyWithDelivery(applyHistoryNormalization, fixture), (error) => typeof error.kind === 'string', mode)
+    assert.deepEqual(unchanged(fixture.root), before, mode)
+    assert.throws(() => git(fixture.root, 'rev-parse', '--verify', rescueFor(fixture.plan)))
+    if (external) rmSync(external)
+  }
+})
+
+test('completed replay tolerates a later descendant without moving it or republishing the receipt', async () => {
+  const fixture = await plannedFixture(); const { applyHistoryNormalization } = await planner()
+  const applied = applyWithDelivery(applyHistoryNormalization, fixture)
+  writeFileSync(join(fixture.root, 'later-after-normalization.txt'), 'later work\n')
+  git(fixture.root, 'add', 'later-after-normalization.txt'); git(fixture.root, 'commit', '-q', '-m', 'chore: later descendant')
+  const descendant = git(fixture.root, 'rev-parse', 'HEAD'); const receipt = readFileSync(applied.receiptPath)
+  const replay = applyWithDelivery(applyHistoryNormalization, fixture)
+  assert.equal(replay.status, 'already-applied'); assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), descendant)
+  assert.deepEqual(readFileSync(applied.receiptPath), receipt)
+})
+
+test('publication appearing before CAS and descendants of an unreceipted normalized head refuse without overwriting either head', async () => {
+  const { applyHistoryNormalization } = await planner()
+  {
+    const fixture = await plannedFixture(); let published = false
+    const deps = {
+      inspectDelivery: () => delivery(git(fixture.root, 'rev-parse', 'HEAD'), { publicationRefs: published ? ['refs/remotes/origin/develop'] : [] }),
+      beforeCas() { git(fixture.root, 'update-ref', 'refs/remotes/origin/develop', fixture.head); published = true },
+    }
+    assert.throws(() => applyHistoryNormalization(fixture.root, fixture.plan, deps), (error) => error.kind === 'published')
+    assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), fixture.head)
+    assert.equal(git(fixture.root, 'rev-parse', `${rescueFor(fixture.plan)}^{commit}`), fixture.head)
+  }
+  {
+    const fixture = await plannedFixture()
+    assert.throws(() => applyWithDelivery(applyHistoryNormalization, fixture, { afterCas() { throw new Error('crash-after-cas') } }), /crash-after-cas/)
+    const normalized = git(fixture.root, 'rev-parse', 'HEAD')
+    writeFileSync(join(fixture.root, 'unreceipted-descendant.txt'), 'later\n'); git(fixture.root, 'add', 'unreceipted-descendant.txt'); git(fixture.root, 'commit', '-q', '-m', 'chore: descendant before receipt')
+    const descendant = git(fixture.root, 'rev-parse', 'HEAD')
+    assert.notEqual(descendant, normalized)
+    assert.throws(() => applyWithDelivery(applyHistoryNormalization, fixture), (error) => typeof error.kind === 'string')
+    assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), descendant)
+    assert.equal(existsSync(join(normalizationDir(fixture.root), `${fixture.plan.planDigest}.receipt.json`)), false)
+  }
+})
+
+
+test('recomputed plan digests cannot admit nested unknown fields or missing required bindings', async () => {
+  const { applyHistoryNormalization } = await planner()
+  for (const mode of ['unknown', 'missing']) {
+    const fixture = await plannedFixture()
+    if (mode === 'unknown') fixture.plan.groups[0].sourceBoundary.unrecognized = true
+    else delete fixture.plan.groups[0].sourceBoundary.tree
+    const { planDigest: _old, ...body } = fixture.plan
+    fixture.plan.planDigest = createHash('sha256').update(JSON.stringify(body) + '\n').digest('hex')
+    const before = unchanged(fixture.root)
+    assert.throws(() => applyWithDelivery(applyHistoryNormalization, fixture), (error) => typeof error.kind === 'string', mode)
+    assert.deepEqual(unchanged(fixture.root), before)
+    assert.throws(() => git(fixture.root, 'rev-parse', '--verify', rescueFor(fixture.plan)))
+  }
+})
+
+test('post-CAS recovery tolerates an unrelated integration branch advance and publishes the original normalization once', async () => {
+  const fixture = await plannedFixture(); const { applyHistoryNormalization } = await planner(); let normalized = null
+  assert.throws(() => applyWithDelivery(applyHistoryNormalization, fixture, { afterCas(prepared) {
+    normalized = prepared.newHead
+    const unrelated = git(fixture.root, 'commit-tree', git(fixture.root, 'rev-parse', `${fixture.base}^{tree}`), '-p', fixture.base, '-m', 'unrelated integration advance')
+    git(fixture.root, 'update-ref', 'refs/heads/develop', unrelated, fixture.base)
+    throw new Error('crash-after-cas-with-unrelated-integration')
+  } }), /crash-after-cas-with-unrelated-integration/)
+  assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), normalized)
+  const resumed = applyWithDelivery(applyHistoryNormalization, fixture)
+  assert.equal(resumed.status, 'applied'); assert.equal(resumed.newHead, normalized)
+  assert.equal(readdirSync(normalizationDir(fixture.root)).filter((name) => name.endsWith('.receipt.json')).length, 1)
 })

@@ -175,35 +175,61 @@ export function deriveCurationRange(cwd, phaseNum, { integrationRef } = {}) {
  * unreachable afterwards, so a report that cannot be written aborts the curate with
  * the granular history intact. Returns { tip, rescueRef }.
  */
+/** Create once; a prefix collision must never replace another rescue. */
+export function ensureCurationRescue(cwd, oldHead, { create = true } = {}) {
+  const rescueRef = `refs/curate-rescue/${oldHead.slice(0, 12)}`
+  let rescued
+  try { rescued = git(cwd, ['show-ref', '--verify', '--hash', rescueRef]) } catch (error) {
+    if (error.status !== 1 && error.status !== 128) throw error
+  }
+  if (rescued && rescued !== oldHead) throw new CurateError('curate: immutable rescue collision', rescueRef)
+  if (!rescued) {
+    if (!create) throw new CurateError('curate: recovery requires original rescue', rescueRef)
+    try { git(cwd, ['update-ref', rescueRef, oldHead, '0'.repeat(oldHead.length)]) }
+    catch (error) {
+      if (git(cwd, ['show-ref', '--verify', '--hash', rescueRef]) !== oldHead) throw new CurateError('curate: immutable rescue collision', rescueRef)
+    }
+  }
+  return rescueRef
+}
+
+/** Deterministic object preparation, with no ref or worktree mutation. */
+export function prepareCuration(cwd, plan, options = {}) {
+  const { expectedHead: oldHead, expectedTree: tree } = plan
+  const rescueRef = `refs/curate-rescue/${oldHead.slice(0, 12)}`
+  if (git(cwd, ['rev-parse', `${oldHead}^{tree}`]) !== tree) throw new CurateError('curate: original tree differs from plan', rescueRef)
+  let parent = git(cwd, ['rev-parse', `${plan.base}^{commit}`])
+  const outcomes = []
+  for (const group of plan.groups) {
+    const sourceCommit = group.commits.at(-1).sha
+    const sourceTree = git(cwd, ['rev-parse', `${sourceCommit}^{tree}`])
+    const [name, email, date] = git(cwd, ['show', '-s', '--format=%an%x00%ae%x00%aI', sourceCommit]).split('\0')
+    const normalizedCommit = git(cwd, ['commit-tree', sourceTree, '-p', parent, '-m', `${group.message.subject}\n\n${group.message.body}`], {
+      env: { ...process.env, GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_AUTHOR_DATE: date,
+        GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email, GIT_COMMITTER_DATE: date },
+    })
+    outcomes.push({ phase: group.phase, sourceCommit, sourceTree, normalizedCommit })
+    parent = normalizedCommit
+    options.afterCommit?.({ oldHead, newHead: parent, tree, rescueRef, outcomes: outcomes.map(row => ({ ...row })) })
+  }
+  if (!outcomes.length || git(cwd, ['rev-parse', `${parent}^{tree}`]) !== tree) {
+    throw new CurateError(`curate: assembled tree differs from original — HEAD is unmoved; original history is at ${rescueRef}`, rescueRef)
+  }
+  const prepared = { oldHead, newHead: parent, tree, rescueRef, outcomes }
+  options.afterPrepare?.(prepared)
+  return prepared
+}
+
+/** The sole branch-mutation owner; never reset the worktree or overwrite a concurrent advance. */
+export function commitPreparedCuration(cwd, prepared) {
+  git(cwd, ['update-ref', 'HEAD', prepared.newHead, prepared.oldHead])
+  return prepared
+}
+
 export function executeCurate(cwd, plan, evidence) {
   const preHead = git(cwd, ['rev-parse', 'HEAD'])
-  const preTree = git(cwd, ['rev-parse', 'HEAD^{tree}'])
-  const rescueRef = `refs/curate-rescue/${preHead.slice(0, 12)}`
-  git(cwd, ['update-ref', rescueRef, preHead])
-
-  let parent = git(cwd, ['rev-parse', `${plan.base}^{commit}`])
-  for (const group of plan.groups) {
-    const last = group.commits[group.commits.length - 1]
-    const tree = git(cwd, ['rev-parse', `${last.sha}^{tree}`])
-    const [aName, aEmail, aDate] = git(cwd, ['show', '-s', '--format=%an%x00%ae%x00%aI', last.sha]).split('\0')
-    parent = git(cwd, ['commit-tree', tree, '-p', parent, '-m', `${group.message.subject}\n\n${group.message.body}`], {
-      env: {
-        ...process.env,
-        GIT_AUTHOR_NAME: aName,
-        GIT_AUTHOR_EMAIL: aEmail,
-        GIT_AUTHOR_DATE: aDate,
-      },
-    })
-  }
-
-  const tipTree = git(cwd, ['rev-parse', `${parent}^{tree}`])
-  if (tipTree !== preTree) {
-    throw new CurateError(
-      `curate: the assembled chain's tree (${tipTree.slice(0, 12)}) differs from the pre-curation tree (${preTree.slice(0, 12)}) — HEAD is unmoved; the original history is at ${rescueRef}`,
-      rescueRef,
-    )
-  }
-
+  ensureCurationRescue(cwd, preHead)
+  const prepared = prepareCuration(cwd, { ...plan, expectedHead: preHead, expectedTree: git(cwd, ['rev-parse', 'HEAD^{tree}']) })
   // Evidence lands AFTER the tree assertion (an aborted curate must leave no false
   // "squashed" claim in the report) and BEFORE the ref move (the destructive step the
   // evidence must precede). The only window left is a failed update-ref — restored below.
@@ -218,14 +244,12 @@ export function executeCurate(cwd, plan, evidence) {
   }
 
   try {
-    git(cwd, ['update-ref', 'HEAD', parent, preHead])
-  } catch (e) {
-    // The old-value guard refused (the branch moved underneath): the squash did NOT land,
-    // so the report must not say it did.
+    commitPreparedCuration(cwd, prepared)
+  } catch (error) {
     if (prevLatest) writeFileSync(prevLatest.path, JSON.stringify(prevLatest.report, null, 2) + '\n')
-    throw e
+    throw error
   }
-  return { tip: parent, rescueRef }
+  return { tip: prepared.newHead, rescueRef: prepared.rescueRef }
 }
 
 const SUBJECT_MAX = 72
