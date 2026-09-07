@@ -98,6 +98,49 @@ function codexResumeArgv(nativeSessionId, opts) {
   return [...argv.slice(0, -1), 'resume', nativeSessionId, '-']
 }
 
+const CLAUDE_SETTINGS = JSON.stringify({
+  permissions: { blockReadsOutsideWorkingDirectories: true, deny: ["WebFetch", "WebSearch", "mcp__*", "Agent", "Task"] },
+  sandbox: { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, network: { allowedDomains: [], deniedDomains: ['*'], strictAllowlist: true } },
+})
+
+function claudeLaunchArgv({ authority, model, streamJson = false }) {
+  if (!authority) throw new Error('effective authority envelope is required for Claude launch')
+  const derived = intersectAuthority(authority.parent, authority.request)
+  if (!isDeepStrictEqual(derived.effective, authority.effective)) throw new Error('effective authority envelope does not match its parent/request intersection')
+  if (MODEL_DRIVERS[model] !== 'claude') throw new Error('requested model is not registered to the Claude driver')
+  const { profile, bounds } = derived.effective
+  if (!['read-only', 'workspace-write'].includes(profile) || bounds.filesystem !== profile || bounds.network !== 'denied' || bounds.gitPush || bounds.externalWrites) {
+    throw new Error('requested authority bounds cannot be represented by native Claude controls')
+  }
+  const tools = profile === 'read-only' ? 'Read,Glob,Grep' : 'Read,Glob,Grep,Edit,Write,Bash'
+  return ['-p', ...(streamJson ? ['--output-format', 'stream-json', '--verbose'] : []), '--model', model,
+    '--restricted', '--permission-mode', 'auto', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
+    '--tools', tools, '--settings', CLAUDE_SETTINGS]
+}
+
+function claudeResumeArgv(nativeSessionId, opts) {
+  if (typeof nativeSessionId !== 'string' || nativeSessionId.trim().length === 0 || nativeSessionId.startsWith('-')) throw new Error('Claude resume requires an exact native session id')
+  return [...claudeLaunchArgv({ ...opts, streamJson: true }), '--resume', nativeSessionId]
+}
+
+function parseClaudeResult(result, { expectedSessionId = null, expectedModel = null } = {}) {
+  if (!result || !Number.isInteger(result.exitCode)) throw new Error('Claude transport result is malformed')
+  const records = []
+  for (const line of String(result.stdout ?? '').split('\n').filter((value) => value.trim())) {
+    try { records.push(JSON.parse(line)) } catch { throw new Error('Claude native stream JSON is malformed') }
+  }
+  const identities = records.filter((record) => record?.type === 'system' && record?.subtype === 'init')
+  if (identities.length !== 1) throw new Error('Claude native stream requires exactly one system init identity')
+  const identity = identities[0]
+  if (typeof identity.session_id !== 'string' || !identity.session_id.trim()) throw new Error('Claude native session identity is missing')
+  if (expectedSessionId !== null && identity.session_id !== expectedSessionId) throw new Error('Claude resumed session identity does not match durable identity')
+  if (expectedModel !== null && identity.model !== expectedModel) throw new Error('Claude native model identity does not match the requested model')
+  const terminals = records.filter((record) => record?.type === 'result')
+  if (terminals.length !== 1) throw new Error('Claude native stream requires exactly one terminal result')
+  if (terminals[0].session_id !== identity.session_id) throw new Error('Claude terminal session identity does not match init identity')
+  return { records, nativeSessionId: identity.session_id, terminal: terminals[0] }
+}
+
 function parseCodexResult(result, { expectedSessionId = null } = {}) {
   if (!result || !Number.isInteger(result.exitCode)) throw new Error('Codex transport result is malformed')
   const records = []
@@ -161,11 +204,13 @@ export const DRIVERS = Object.freeze({
     family: 'anthropic',
     bin: 'claude',
     launch: Object.freeze({
-      argv: ({ agents }) => ['-p', ...(agents ? ['--agents', agents] : [])],
+      argv: claudeLaunchArgv,
       promptChannel: 'stdin',
-      sandboxPosture: 'inherit',
+      sandboxPosture: 'authority-envelope',
     }),
-    resume: 'claude --resume [SESSION_ID] | claude --continue',
+    resume: 'claude --resume [SESSION_ID]',
+    resumeOperation: Object.freeze({ argv: claudeResumeArgv }),
+    protocol: Object.freeze({ parseResult: parseClaudeResult }),
     roleCapabilities: Object.freeze({ subagents: 'child-cli', headlessChild: true }),
     verifiedAt: Object.freeze({
       date: '2026-08-24',

@@ -441,3 +441,40 @@ test('Codex resume argv addresses one exact native session through the registry'
   assert.equal(argv.includes('--latest'), false)
   assert.equal(argv.includes('start'), false)
 })
+
+test('Claude stream JSON argv pins restricted sandbox, empty MCP, network deny, and authority-specific tools', () => {
+  const workspace = intersectAuthority(KNOWN_PARENT, requestAuthority())
+  const readOnly = intersectAuthority(KNOWN_PARENT, requestAuthority({
+    profile: 'read-only',
+    bounds: { filesystem: 'read-only', network: 'denied', gitPush: false, externalWrites: false },
+  }))
+  for (const [name, authority, expectedTools] of [
+    ['workspace-write', workspace, 'Read,Glob,Grep,Edit,Write,Bash'],
+    ['read-only', readOnly, 'Read,Glob,Grep'],
+  ]) {
+    const argv = launchArgv('claude', { authority, model: MODEL_IDS.SONNET, streamJson: true })
+    assert.ok(argv.includes('--restricted'), name)
+    assert.equal(argv[argv.indexOf('--permission-mode') + 1], 'auto', name)
+    assert.ok(argv.includes('--strict-mcp-config'), name)
+    assert.deepEqual(JSON.parse(argv[argv.indexOf('--mcp-config') + 1]), { mcpServers: {} }, name)
+    assert.equal(argv[argv.indexOf('--tools') + 1], expectedTools, name)
+    assert.ok(argv.includes('--output-format'), name)
+    assert.equal(argv[argv.indexOf('--output-format') + 1], 'stream-json', name)
+    const settings = JSON.parse(argv[argv.indexOf('--settings') + 1])
+    assert.equal(settings.sandbox.enabled, true, name)
+    assert.equal(settings.sandbox.failIfUnavailable, true, name)
+    assert.equal(settings.sandbox.allowUnsandboxedCommands, false, name)
+    assert.deepEqual(settings.sandbox.network, { allowedDomains: [], deniedDomains: ['*'], strictAllowlist: true }, name)
+    assert.match(JSON.stringify(settings.permissions), /WebFetch|WebSearch/)
+    assert.match(JSON.stringify(settings.permissions), /mcp__|Agent|Task/)
+    assert.equal(argv.some((arg) => /^--.*(?:bypass|dangerously|unsandboxed)/i.test(arg)), false, name)
+  }
+})
+
+test('Claude registry refuses authority it cannot represent', () => {
+  const forged = {
+    ...intersectAuthority(KNOWN_PARENT, requestAuthority()),
+    effective: { profile: 'workspace-write', bounds: { filesystem: 'workspace-write', network: 'allowed', gitPush: false, externalWrites: false } },
+  }
+  assert.throws(() => launchArgv('claude', { authority: forged, model: MODEL_IDS.SONNET, streamJson: true }), /authority|network|represent|intersection/i)
+})
