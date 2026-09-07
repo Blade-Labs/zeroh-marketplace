@@ -17,6 +17,15 @@
   ],
   "gate": {
     "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "curated": true,
     "slots": [
       {
         "slot": "lint",
@@ -49,9 +58,22 @@
       }
     ]
   },
+  "metrics": {
+    "commits": 2,
+    "linesAdded": 6731,
+    "linesRemoved": 433,
+    "filesChanged": 43,
+    "testsAtStart": 0,
+    "testsAtEnd": 2255,
+    "testsAdded": 0
+  },
   "attribution": {
     "plannedBy": {
       "model": "unverified"
+    },
+    "driver": {
+      "model": "gpt-6 (self-reported; exact runtime unverified)",
+      "lane": "codex"
     }
   }
 }

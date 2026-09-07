@@ -434,6 +434,108 @@ export type ArcLifecycleEvent = z.output<typeof ArcLifecycleEventShape>
 export type TypedHalt = z.output<typeof TypedHaltShape>
 export type TransitionReceipt = z.output<typeof TransitionReceiptShape>
 
+
+/** Native driver capability discovery or a typed unsupported-operation/action result. */
+const AgentDriverOperationShape = z.enum(['start', 'resume', 'awaitEvent', 'performAction'])
+
+const CapabilitySuccessShape = z.object({
+  kind: z.literal('capability-receipt'),
+  driverId: ArcNonBlankStringShape,
+  reachable: z.boolean(),
+  operations: z.array(AgentDriverOperationShape),
+  actions: z.array(ArcNonBlankStringShape),
+  reason: ArcNonBlankStringShape.optional(),
+}).strict()
+
+const CapabilityRefusalShape = z.object({
+  kind: z.literal('capability-refusal'),
+  driverId: ArcNonBlankStringShape,
+  operation: AgentDriverOperationShape,
+  action: ArcNonBlankStringShape.nullable(),
+  reason: ArcNonBlankStringShape,
+}).strict()
+
+export const CapabilityReceiptShape = z.union([CapabilitySuccessShape, CapabilityRefusalShape])
+
+export const RoleRunRequestShape = z.object({
+  runId: ArcNonBlankStringShape,
+  executorId: ArcNonBlankStringShape,
+  arcId: ArcNonBlankStringShape,
+  phase: z.number().int().positive(),
+  roleId: ArcNonBlankStringShape,
+  driverId: ArcNonBlankStringShape,
+  model: ArcNonBlankStringShape,
+  worktree: ArcNonBlankStringShape,
+  baseHead: ArcNonBlankStringShape,
+  requestedHead: ArcNonBlankStringShape,
+  roleCardDigest: ArcNonBlankStringShape,
+  governanceDigest: ArcNonBlankStringShape,
+  authority: AuthorityEnvelopeShape,
+  authorityRef: ArcAuthorityRefShape,
+}).strict().superRefine((value, ctx) => {
+  if (value.authority.native.driver !== value.driverId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['authority', 'native', 'driver'], message: 'native authority driver must equal request driverId' })
+  }
+})
+
+export const AgentRunHandleShape = z.object({
+  request: RoleRunRequestShape,
+  nativeSessionId: ArcNonBlankStringShape,
+}).strict()
+
+const AgentRunObservationShape = z.object({
+  runId: ArcNonBlankStringShape,
+  executorId: ArcNonBlankStringShape,
+  roleId: ArcNonBlankStringShape,
+  driverId: ArcNonBlankStringShape,
+  model: ArcNonBlankStringShape,
+  nativeSessionId: ArcNonBlankStringShape,
+  event: ArcLifecycleEventShape,
+}).strict()
+
+export const AgentRunReceiptShape = z.object({
+  handle: AgentRunHandleShape,
+  observation: AgentRunObservationShape,
+  transition: TransitionReceiptShape,
+}).strict().superRefine((value, ctx) => {
+  const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
+  const request = value.handle.request
+  for (const field of ['runId', 'executorId', 'roleId', 'driverId', 'model'] as const) {
+    if (value.observation[field] !== request[field]) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['observation', field], message: `observation ${field} must equal request ${field}` })
+    }
+  }
+  if (value.observation.nativeSessionId !== value.handle.nativeSessionId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['observation', 'nativeSessionId'], message: 'observation nativeSessionId must equal handle nativeSessionId' })
+  }
+  if (value.observation.event.arcId !== request.arcId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['observation', 'event', 'arcId'], message: 'event arcId must equal request arcId' })
+  }
+  if (value.observation.event.phase !== request.phase) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['observation', 'event', 'phase'], message: 'event phase must equal request phase' })
+  }
+  if (value.observation.event.authorityRef !== undefined && value.transition.rejection?.kind !== 'authority-conflict' && !same(value.observation.event.authorityRef, request.authorityRef)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['observation', 'event', 'authorityRef'], message: 'event authorityRef must equal request authorityRef' })
+  }
+  if (value.transition.prior?.arcId !== request.arcId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['transition', 'prior', 'arcId'], message: 'transition prior arcId must equal request arcId' })
+  }
+  if (!same(value.transition.prior?.authorityRef, request.authorityRef)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['transition', 'prior', 'authorityRef'], message: 'transition prior authorityRef must equal request authorityRef' })
+  }
+  if (!same(value.transition.event, value.observation.event)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['transition', 'event'], message: 'transition event must equal observation event' })
+  }
+  if (!same(value.transition.authorityRef, request.authorityRef)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['transition', 'authorityRef'], message: 'transition authorityRef must equal request authorityRef' })
+  }
+})
+
+export type CapabilityReceipt = z.output<typeof CapabilityReceiptShape>
+export type RoleRunRequest = z.output<typeof RoleRunRequestShape>
+export type AgentRunHandle = z.output<typeof AgentRunHandleShape>
+export type AgentRunReceipt = z.output<typeof AgentRunReceiptShape>
+
 export const DriverShape = z.object({
   model: z.string().min(1),
   lane: z.string().min(1),

@@ -67,6 +67,9 @@ import {
   ArcLifecycleEventShape,
   TypedHaltShape,
   TransitionReceiptShape,
+  CapabilityReceiptShape,
+  RoleRunRequestShape,
+  AgentRunReceiptShape,
 } from '../templates/schema'
 // The SECOND schema home — the consumer copy the CLI validates every phase file
 // through (cli/lib/tsx-bridge.mjs seam 3). Imported so the vendor-pair discipline
@@ -79,9 +82,13 @@ import {
   ArcLifecycleEventShape as ArcLifecycleEventConsumerHome,
   TypedHaltShape as TypedHaltConsumerHome,
   TransitionReceiptShape as TransitionReceiptConsumerHome,
+  CapabilityReceiptShape as CapabilityReceiptConsumerHome,
+  RoleRunRequestShape as RoleRunRequestConsumerHome,
+  AgentRunReceiptShape as AgentRunReceiptConsumerHome,
 } from '../../../lib/roadmap/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
 import { reduceArcTransition } from '../cli/lib/workflow-steps.mjs'
+import { MODEL_IDS } from '../cli/lib/drivers.mjs'
 
 let failures = 0
 
@@ -3305,6 +3312,98 @@ for (const home of [
       () => home.authority.parse({ ...lifecycleUnknownAuthority, reason: 'probably-fine' }),
       `${home.name} unknown authority reason`,
     )
+  })
+}
+
+const roleRunRequestFixture = {
+  runId: 'run-38-1', executorId: 'executor-38', arcId: 'NATIVEGREEN', phase: 38,
+  roleId: 'test-engineer', driverId: 'codex', model: MODEL_IDS.SOL,
+  worktree: '/tmp/nativegreen-38', baseHead: '1111111111111111111111111111111111111111', requestedHead: '2222222222222222222222222222222222222222',
+  roleCardDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', governanceDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  authority: {
+    parent: { profile: 'workspace-write', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }, provenance: { kind: 'managed-host-input', source: 'supervisor' } },
+    request: { profile: 'inherit', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }, provenance: null },
+    effective: { profile: 'workspace-write', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false } },
+    native: { driver: 'codex', runtime: { version: null, verified: false }, argv: ['exec'], enforcement: { filesystem: 'sandbox', network: 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' }, limitations: ['exact runtime is unverified'] },
+  },
+  authorityRef: lifecycleKnownAuthority,
+}
+const agentRunEventFixture = { ...lifecycleEventFixture, eventId: 'agent-event-38', phase: 38, authorityRef: lifecycleKnownAuthority }
+const agentRunTransitionFixture = reduceArcTransition(lifecycleStateFixture, agentRunEventFixture)
+const agentRunReceiptFixture = {
+  handle: { request: roleRunRequestFixture, nativeSessionId: 'native-session-38' },
+  observation: { runId: 'run-38-1', executorId: 'executor-38', roleId: 'test-engineer', driverId: 'codex', model: MODEL_IDS.SOL, nativeSessionId: 'native-session-38', event: agentRunEventFixture },
+  transition: agentRunTransitionFixture,
+}
+
+for (const home of [
+  { name: 'templates/schema.ts', capability: CapabilityReceiptShape, request: RoleRunRequestShape, receipt: AgentRunReceiptShape },
+  { name: 'lib/roadmap/schema.ts', capability: CapabilityReceiptConsumerHome, request: RoleRunRequestConsumerHome, receipt: AgentRunReceiptConsumerHome },
+] as const) {
+  check(`agent driver: ${home.name} accepts capability, request, and reducer-bound receipt contracts`, () => {
+    requireShape(home.capability, `${home.name} CapabilityReceiptShape`)
+    requireShape(home.request, `${home.name} RoleRunRequestShape`)
+    requireShape(home.receipt, `${home.name} AgentRunReceiptShape`)
+    const capability = { kind: 'capability-receipt', driverId: 'codex', reachable: true, operations: ['start', 'resume', 'awaitEvent', 'performAction'], actions: ['message'] }
+    const refusal = { kind: 'capability-refusal', driverId: 'codex', operation: 'performAction', action: 'merge', reason: "driver 'codex' does not support action 'merge'" }
+    assertEq(home.capability.parse(capability), capability, `${home.name} capability receipt`)
+    assertEq(home.capability.parse(refusal), refusal, `${home.name} capability refusal`)
+    assertEq(home.request.parse(roleRunRequestFixture), roleRunRequestFixture, `${home.name} role request`)
+    assertEq(home.receipt.parse(agentRunReceiptFixture), agentRunReceiptFixture, `${home.name} agent receipt`)
+  })
+
+  check(`agent driver: ${home.name} preserves inherited authority from a real reducer receipt`, () => {
+    const { authorityRef: omitted, ...event } = agentRunEventFixture
+    const transition = reduceArcTransition(agentRunTransitionFixture.prior, event)
+    const receipt = { ...agentRunReceiptFixture, observation: { ...agentRunReceiptFixture.observation, event }, transition }
+    assertEq(transition.rejection, null, `${home.name} inherited authority accepted by reducer`)
+    assertEq(home.receipt.parse(receipt), receipt, `${home.name} inherited-authority receipt`)
+  })
+
+  check(`agent driver: ${home.name} keeps semantic and native identities coherent`, () => {
+    for (const [field, value] of [
+      ['runId', 'other-run'], ['executorId', 'other-executor'], ['arcId', 'OTHER'],
+      ['phase', 39], ['roleId', 'architect'], ['driverId', 'claude'],
+    ] as const) {
+      const changedObservation = { ...agentRunReceiptFixture.observation, [field]: value }
+      assertThrows(() => home.receipt.parse({ ...agentRunReceiptFixture, observation: changedObservation }), `${home.name} mismatched ${field}`)
+    }
+    assertThrows(() => home.receipt.parse({ ...agentRunReceiptFixture, observation: { ...agentRunReceiptFixture.observation, nativeSessionId: 'other-session' } }), `${home.name} mismatched native session`)
+    assertThrows(() => home.receipt.parse({ ...agentRunReceiptFixture, observation: { ...agentRunReceiptFixture.observation, event: { ...agentRunEventFixture, arcId: 'OTHER' } } }), `${home.name} event arc differs from request`)
+    assertThrows(() => home.receipt.parse({ ...agentRunReceiptFixture, transition: { ...agentRunTransitionFixture, authorityRef: lifecycleUnknownAuthority } }), `${home.name} transition authority differs from request`)
+  })
+
+  check(`agent driver: ${home.name} accepts real authority-conflict reducer receipts but never an accepted claim`, () => {
+    const conflictingAuthority = { status: 'known', envelopeDigest: 'sha256:conflict', source: { kind: 'managed-host-receipt', ref: 'conflicting-receipt' } }
+    const conflictingEvent = { ...agentRunEventFixture, eventId: 'agent-authority-conflict', authorityRef: conflictingAuthority }
+    const rejectedTransition = reduceArcTransition(lifecycleStateFixture, conflictingEvent)
+    assertEq(rejectedTransition.rejection?.kind, 'authority-conflict', `${home.name} reducer rejection kind`)
+    const rejectedReceipt = {
+      ...agentRunReceiptFixture,
+      observation: { ...agentRunReceiptFixture.observation, event: conflictingEvent },
+      transition: rejectedTransition,
+    }
+    assertEq(home.receipt.parse(rejectedReceipt), rejectedReceipt, `${home.name} real authority-conflict receipt`)
+    assertThrows(
+      () => home.receipt.parse({ ...rejectedReceipt, transition: { ...rejectedTransition, rejection: null } }),
+      `${home.name} accepted claim for conflicting authority`,
+    )
+  })
+
+  check(`agent driver: ${home.name} requires every observed event phase to equal its request`, () => {
+    const { phase: _omitted, ...missingPhaseEvent } = agentRunEventFixture
+    const missingPhaseReceipt = {
+      ...agentRunReceiptFixture,
+      observation: { ...agentRunReceiptFixture.observation, event: missingPhaseEvent },
+      transition: reduceArcTransition(lifecycleStateFixture, missingPhaseEvent),
+    }
+    assertThrows(() => home.receipt.parse(missingPhaseReceipt), `${home.name} missing observed event phase`)
+  })
+
+  check(`agent driver: ${home.name} rejects blank durable identities and unknown operations`, () => {
+    assertThrows(() => home.request.parse({ ...roleRunRequestFixture, runId: '   ' }), `${home.name} blank runId`)
+    assertThrows(() => home.request.parse({ ...roleRunRequestFixture, surprise: true }), `${home.name} request extra key`)
+    assertThrows(() => home.capability.parse({ kind: 'capability-refusal', driverId: 'codex', operation: 'restart', action: 'message', reason: 'unsupported' }), `${home.name} unknown operation`)
   })
 }
 
