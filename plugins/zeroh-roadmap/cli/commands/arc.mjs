@@ -9,11 +9,12 @@
  * around it) · 3 held-for-user (land). STRICT context — a tsx-absent typed read is a
  * loud exit 1, never a guess.
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { loadConfig, ConfigError } from '../lib/config.mjs'
-import { deriveArcPosition, DeriveError } from '../lib/derive.mjs'
+import { deriveArcPosition, readValidateVerdict, DeriveError } from '../lib/derive.mjs'
 import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
 const firstPositional = (rest) => rest.find((a) => !a.startsWith('--'))
@@ -122,8 +123,9 @@ async function recordValidate(rest) {
   const arcId = firstPositional(rest)
   const verdict = flagVal(rest, '--verdict')
   const note = flagVal(rest, '--note')
-  if (!arcId || !['PASS', 'GAPS', 'no-op'].includes(verdict)) {
-    process.stderr.write('usage: roadmap arc record-validate <arcId> --verdict <PASS|GAPS|no-op> [--note <s>]\n')
+  const correctionReady = rest.includes('--correction-ready')
+  if (!arcId || (correctionReady ? verdict !== undefined || note !== undefined : !['PASS', 'GAPS', 'no-op'].includes(verdict))) {
+    process.stderr.write('usage: roadmap arc record-validate <arcId> (--verdict <PASS|GAPS|no-op> [--note <s>] | --correction-ready)\n')
     return 1
   }
   let toplevel
@@ -134,9 +136,76 @@ async function recordValidate(rest) {
     return 1
   }
   const dir = join(roadmapRoot(toplevel), '.gate', `arc-${arcId}`)
+  const path = join(dir, 'validate.json')
+  let head
+  try {
+    head = execFileSync('git', ['-C', toplevel, 'rev-parse', 'HEAD^{commit}'], { encoding: 'utf8' }).trim()
+  } catch (e) {
+    process.stderr.write(`roadmap arc record-validate: cannot resolve the current commit: ${e.message}\n`)
+    return 1
+  }
+  let artifact
+  if (correctionReady) {
+    let existing
+    try {
+      existing = readValidateVerdict(toplevel, arcId)
+    } catch (e) {
+      process.stderr.write(`roadmap arc record-validate: malformed existing validate artifact: ${e.message}\n`)
+      return 1
+    }
+    const correction = existing?.correction
+    if (String(existing?.arcId) !== String(arcId) || existing?.verdict !== 'GAPS'
+      || !['awaiting-repair', 'needs-sweep'].includes(correction?.state)
+      || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(correction?.validationHead ?? '')
+      || typeof existing.at !== 'string' || Number.isNaN(Date.parse(existing.at))) {
+      process.stderr.write('roadmap arc record-validate: --correction-ready requires a well-formed GAPS artifact awaiting repair\n')
+      return 1
+    }
+    if (correction.state === 'needs-sweep' && correction.repairHead === head) {
+      process.stdout.write(JSON.stringify(existing, null, 2) + '\n')
+      return 0
+    }
+    if (correction.state !== 'awaiting-repair') {
+      process.stderr.write('roadmap arc record-validate: correction is not awaiting repair\n')
+      return 1
+    }
+    if (head === correction.validationHead) {
+      process.stderr.write('roadmap arc record-validate: correction repair HEAD must differ from validation HEAD\n')
+      return 1
+    }
+    try {
+      execFileSync('git', ['-C', toplevel, 'merge-base', '--is-ancestor', correction.validationHead, head], { stdio: 'pipe' })
+    } catch {
+      process.stderr.write('roadmap arc record-validate: repair commit does not descend from its validation checkpoint\n')
+      return 1
+    }
+    artifact = {
+      ...existing,
+      correction: {
+        ...correction,
+        state: 'needs-sweep',
+        repairHead: head,
+        readyAt: new Date().toISOString(),
+      },
+    }
+  } else {
+    let prior = null
+    if (verdict === 'GAPS' && existsSync(path)) {
+      try { prior = JSON.parse(readFileSync(path, 'utf8')) } catch { /* a new explicit verdict replaces corrupt evidence */ }
+    }
+    const continuing = prior?.verdict === 'GAPS' && String(prior.arcId) === String(arcId)
+    const { state, validationHead, repairHead, readyAt, ...bounds } = continuing ? (prior.correction ?? {}) : {}
+    artifact = {
+      ...(continuing ? prior : {}),
+      arcId,
+      verdict,
+      at: new Date().toISOString(),
+      ...(note ? { note } : {}),
+      ...(verdict === 'GAPS' ? { correction: { ...bounds, state: 'awaiting-repair', validationHead: head } } : {}),
+    }
+  }
   mkdirSync(dir, { recursive: true })
-  const artifact = { arcId, verdict, at: new Date().toISOString(), ...(note ? { note } : {}) }
-  writeFileSync(join(dir, 'validate.json'), JSON.stringify(artifact, null, 2) + '\n')
+  writeFileSync(path, JSON.stringify(artifact, null, 2) + '\n')
   process.stdout.write(JSON.stringify(artifact, null, 2) + '\n')
   return 0
 }
@@ -145,7 +214,7 @@ export default async function run(argv) {
   const sub = argv[0]
   if (!sub || sub === '--help' || sub === '-h') {
     process.stdout.write('roadmap arc next <arcId> [--json] [--ignore-capacity]\n')
-    process.stdout.write('roadmap arc record-validate <arcId> --verdict <PASS|GAPS|no-op> [--note <s>]\n')
+    process.stdout.write('roadmap arc record-validate <arcId> (--verdict <PASS|GAPS|no-op> [--note <s>] | --correction-ready)\n')
     process.stdout.write('roadmap arc land <arcId> [--push|--no-push|--hold] [--json]\n')
     return sub ? 0 : 1
   }

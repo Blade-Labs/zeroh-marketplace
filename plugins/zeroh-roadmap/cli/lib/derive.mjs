@@ -20,17 +20,20 @@
  * sweep → validate → land → complete. Census/verdict reads run ONLY when the member
  * ladder is exhausted (all done), so phase sequencing stays regex-tier fast (decision 2).
  */
-import { existsSync, readFileSync, mkdtempSync, rmSync } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { existsSync, readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { join, resolve, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
 import { scanPhaseFile, scanProgress } from './phasescan.mjs'
-import { bridgeImport, bridgeImportMany, TSX_ABSENT_HINT, resolveTsxInvocation } from './tsx-bridge.mjs'
+import { bridgeImport, bridgeImportMany, bridgeParseShape, consumerSchemaPath, TSX_ABSENT_HINT, resolveTsxInvocation } from './tsx-bridge.mjs'
 import { derivePhaseStartSha, GitScanError } from './gitscan.mjs'
-import { readSidecar } from './sidecar.mjs'
+import { readSidecar, pidAlive } from './sidecar.mjs'
+import { readLandJournal, classifyLandJournal, landJournalPath } from './landing.mjs'
 import { classifyBand } from './ladder.mjs'
 import { defaultExec } from './exec.mjs'
 import { roadmapRoot } from './roadmap-root.mjs'
+import { reduceArcTransition } from './workflow-steps.mjs'
 
 /** A typed derivation failure. kind ∈ 'tsx-absent' | 'load' | 'malformed-artifact'. */
 export class DeriveError extends Error {
@@ -74,6 +77,20 @@ export function readValidateVerdict(repoRoot, arcId) {
     throw new DeriveError('malformed-artifact', [
       `roadmap: invalid validate artifact ${p} — expected { arcId: "${arcId}", verdict: PASS|GAPS|no-op }`,
     ])
+  }
+  if (raw.correction !== undefined) {
+    const correction = raw.correction
+    const validHead = (value) => typeof value === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value)
+    const valid = correction && typeof correction === 'object' && !Array.isArray(correction)
+      && ['awaiting-repair', 'needs-sweep'].includes(correction.state)
+      && validHead(correction.validationHead)
+      && (correction.state === 'awaiting-repair'
+        ? correction.repairHead === undefined && correction.readyAt === undefined
+        : validHead(correction.repairHead) && correction.repairHead !== correction.validationHead
+          && typeof correction.readyAt === 'string' && !Number.isNaN(Date.parse(correction.readyAt)))
+    if (raw.verdict !== 'GAPS' || !valid) {
+      throw new DeriveError('malformed-artifact', [`roadmap: invalid correction state in validate artifact ${p}`])
+    }
   }
   return raw
 }
@@ -132,11 +149,79 @@ function readArcSummary(repoRoot, arcId) {
   const p = join(roadmapRoot(repoRoot), 'arc-summary.json')
   if (!existsSync(p)) return null
   try {
-    const s = JSON.parse(readFileSync(p, 'utf8'))
-    return String(s.arcId) === String(arcId) ? s : null
+    const bytes = readFileSync(p)
+    const s = JSON.parse(bytes.toString('utf8'))
+    if (String(s.arcId) !== String(arcId)) return null
+    const checked = bridgeParseShape(repoRoot, consumerSchemaPath(repoRoot), 'RunnerSummaryShape', s)
+    return checked.ok ? { summary: checked.parsed, bytes, path: p } : null
   } catch {
     return null
   }
+}
+
+function latestArcArtifact(repoRoot, arcId, suffix = '', shapeName = null) {
+  const dir = join(roadmapRoot(repoRoot), 'arc-evals')
+  if (!existsSync(dir)) return null
+  const escaped = String(arcId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const rx = new RegExp(`^${escaped}-\\d{4}-\\d{2}-\\d{2}${suffix}\\.json$`)
+  const name = readdirSync(dir).filter((entry) => rx.test(entry)).sort().at(-1)
+  if (!name) return null
+  const path = join(dir, name)
+  try {
+    const doc = JSON.parse(readFileSync(path, 'utf8'))
+    if (!shapeName) return { path, doc }
+    const checked = bridgeParseShape(repoRoot, consumerSchemaPath(repoRoot), shapeName, doc)
+    return checked.ok ? { path, doc: checked.parsed } : null
+  } catch { return null }
+}
+
+function correctionSweepFresh(repoRoot, arcId, verdict, exec) {
+  const correction = verdict?.correction
+  if (correction?.state !== 'needs-sweep') return false
+  const sweep = latestArcArtifact(repoRoot, arcId, '-sweep', 'SweepReportShape')
+  const binding = sweep?.doc?.correction
+  if (sweep?.doc?.overall !== 'green' || String(sweep.doc.arcId) !== String(arcId)
+    || binding?.validationAt !== verdict.at
+    || binding?.validationHead !== correction.validationHead
+    || binding?.repairHead !== correction.repairHead
+    || !/^[0-9a-f]{40,64}$/.test(binding?.reviewedHead ?? '')) return false
+  const ancestor = exec('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', correction.repairHead, binding.reviewedHead])
+  if (ancestor.status !== 0) return false
+  if (exec('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', binding.reviewedHead, 'HEAD']).status !== 0) return false
+  const changed = exec('git', ['-C', repoRoot, 'diff', '--name-only', binding.reviewedHead])
+  const untracked = exec('git', ['-C', repoRoot, 'ls-files', '--others', '--exclude-standard'])
+  if (changed.status !== 0 || untracked.status !== 0) return false
+  const allowed = new Set([
+    relative(repoRoot, join(roadmapRoot(repoRoot), '.gate', `arc-${arcId}`, 'validate.json')),
+    sweep.path.slice(repoRoot.length + 1),
+  ])
+  return [...changed.stdout.split('\n'), ...untracked.stdout.split('\n')]
+    .map((entry) => entry.trim()).filter(Boolean)
+    .filter((entry) => entry !== 'node_modules' && !entry.startsWith('node_modules/'))
+    .filter((entry) => !entry.startsWith(relative(repoRoot, join(roadmapRoot(repoRoot), '.gate', '.typed-cache')) + '/'))
+    .every((entry) => allowed.has(entry))
+}
+
+function currentEvaluationComplete(repoRoot, arcId, summaryProof) {
+  if (!summaryProof) return false
+  const report = latestArcArtifact(repoRoot, arcId, '', 'ArcEvalReportShape')
+  const doc = report?.doc
+  if (!doc || String(doc.arcId) !== String(arcId) || !Array.isArray(doc.ratchet)
+    || !doc.attribution || typeof doc.dimensions !== 'object' || doc.dimensions === null
+    || Object.keys(doc.dimensions).length !== 7) return false
+  const digest = sha256(summaryProof.bytes)
+  if (doc.landSummaryDigest !== digest) return false
+  return Object.values(doc.dimensions).every((dimension) =>
+    dimension && !['pending-judge', 'unjudged-backfill'].includes(dimension.sentinel))
+}
+
+function readLandingJournalState(repoRoot, arcId) {
+  const home = process.env.ZEROH_LAND_JOURNAL_HOME ?? repoRoot
+  const journal = readLandJournal(home, arcId)
+  if (journal && typeof journal.exitCode !== 'number' && (!Number.isInteger(journal.pid) || journal.pid < 1)) {
+    return { state: 'unresolved', journal }
+  }
+  return classifyLandJournal(journal, { isAlive: pidAlive })
 }
 
 /** done:true task commit verification (decision 2): commit: field via cat-file, else --grep taskId. */
@@ -175,6 +260,58 @@ function statusOf(repoRoot, n) {
 }
 const isDone = (s) => s === 'done' || s === 'historical'
 
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+function sha256(value) {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`
+}
+
+const lifecyclePriorStage = {
+  'run-phase': 'phase',
+  'resume-phase': 'phase',
+  blocked: 'phase',
+  gaps: 'validate',
+  sweep: 'phase',
+  validate: 'sweep',
+  land: 'validate',
+  'land-unproven': 'land',
+  evaluate: 'delivery',
+  complete: 'evaluate',
+}
+
+/** Project one disk-derived position through the canonical reducer. No lifecycle
+ * state is persisted: equal disk checkpoints reconstruct equal receipts. */
+export function deriveArcLifecycleTransition(position, priorState) {
+  const authorityRef = { status: 'unknown', reason: 'read-only-projection', sourceRef: null }
+  const stage = lifecyclePriorStage[position?.action] ?? 'phase'
+  const checkpoint = position?.sourceCheckpoint ?? { head: null, digest: sha256(stableJson(position)) }
+  const eventId = `disk:${position?.arc ?? '?'}:${checkpoint.digest}`
+  const prior = priorState ?? {
+    arcId: String(position?.arc ?? ''),
+    stage,
+    status: 'active',
+    processedEventIds: [],
+    lastHalt: null,
+    authorityRef,
+  }
+  const event = {
+    eventId,
+    arcId: String(position?.arc ?? ''),
+    source: 'disk-checkpoint',
+    type: position?.action,
+    ...(position?.phase == null ? {} : { phase: position.phase }),
+    evidence: { checkpoint },
+    authorityRef,
+  }
+  return reduceArcTransition(prior, event)
+}
+
 /**
  * derive the ONE next action for an arc from disk. Output is the §2 JSON sketch:
  * { arc, action, phase?, band?, plane?, resume?, done[], remaining[], gates{swept,validated,suiteGreen} }.
@@ -190,13 +327,35 @@ export function deriveArcPosition({ repoRoot, arcId, config, worktree = repoRoot
     return { num: n, file: f, exists: existsSync(f), status: existsSync(f) ? scanPhaseFile(f)?.status ?? null : null, plane: planeOf(n) }
   })
   const done = members.filter((m) => isDone(m.status)).map((m) => m.num)
-  const base = (extra) => ({
-    arc: arcId,
-    done,
-    remaining: members.filter((m) => !isDone(m.status)).map((m) => m.num),
-    gates: { swept: false, validated: false, suiteGreen: null },
-    ...extra,
-  })
+  const head = exec('git', ['-C', worktree, 'rev-parse', 'HEAD'])
+  if (head.status !== 0 || !head.stdout.trim()) {
+    throw new DeriveError('load', [`roadmap: cannot resolve the current HEAD for arc ${arcId}`, (head.stderr ?? '').trim()])
+  }
+  const sourceBytes = [arcFilePath(repoRoot, arcId), ...members.filter((member) => member.exists).map((member) => member.file)]
+    .map((path) => ({ path, digest: sha256(readFileSync(path)) }))
+  const base = (extra) => {
+    const projection = {
+      arc: arcId,
+      done,
+      remaining: members.filter((m) => !isDone(m.status)).map((m) => m.num),
+      gates: { swept: false, validated: false, suiteGreen: null },
+      ...extra,
+    }
+    const evidenceFiles = [
+      join(roadmapRoot(repoRoot), '.gate', 'arc-' + arcId, 'validate.json'),
+      join(roadmapRoot(repoRoot), 'arc-summary.json'),
+      landJournalPath(process.env.ZEROH_LAND_JOURNAL_HOME ?? repoRoot, arcId),
+      latestArcArtifact(repoRoot, arcId, '-sweep')?.path,
+      latestArcArtifact(repoRoot, arcId)?.path,
+    ].filter((path) => path && existsSync(path)).map((path) => ({ path, digest: sha256(readFileSync(path)) }))
+    const sourceCheckpoint = {
+      head: head.stdout.trim(),
+      digest: sha256(stableJson({ head: head.stdout.trim(), sourceBytes, evidenceFiles, projection })),
+    }
+    const position = { ...projection, sourceCheckpoint }
+    const transitionReceipt = deriveArcLifecycleTransition(position)
+    return { ...position, transitionReceipt }
+  }
   const blocked = (reason) => base({ action: 'blocked', reason, remaining: members.filter((m) => !isDone(m.status)).map((m) => m.num) })
 
   // 1) BLOCKED — malformed/missing member file.
@@ -269,6 +428,28 @@ export function deriveArcPosition({ repoRoot, arcId, config, worktree = repoRoot
     }
   }
 
+  // Proven landing resumes post-land work even if pre-land artifacts were cleaned up.
+  const summary = readArcSummary(repoRoot, arcId)
+  const landingJournal = readLandingJournalState(repoRoot, arcId)
+  const landedGates = summary?.summary.outcome === 'shipped'
+    ? { swept: summary.summary.gateSignals.arcSweepClean, validated: summary.summary.gateSignals.validateArcPassed, suiteGreen: summary.summary.gateSignals.fullSuiteGreen }
+    : { swept: false, validated: false, suiteGreen: null }
+  if (landingJournal.state === 'live') {
+    return base({ action: 'land-unproven', gates: landedGates, reason: 'a landing process is still live; reconcile its journal before post-land work' })
+  }
+  if (summary?.summary.outcome === 'shipped') {
+    return currentEvaluationComplete(repoRoot, arcId, summary)
+      ? base({ action: 'complete', gates: landedGates })
+      : base({ action: 'evaluate', gates: landedGates })
+  }
+  if (landingJournal.state !== 'none') {
+    return base({
+      action: 'land-unproven',
+      gates: landedGates,
+      reason: 'landing journal exists without a valid shipped summary; branch identity or bookkeeping proof is incomplete',
+    })
+  }
+
   // 4) TERMINAL LADDER (all members done) — census/verdict reads happen ONLY here (decision 2).
   const census = runDebtCensus(repoRoot, arcId, { exec })
   const swept = census !== null && census.open === 0
@@ -278,13 +459,29 @@ export function deriveArcPosition({ repoRoot, arcId, config, worktree = repoRoot
   const verdict = readValidateVerdict(repoRoot, arcId)
   const validated = !hasCriteria || verdict?.verdict === 'PASS' || verdict?.verdict === 'no-op'
   gates.validated = validated
-  if (hasCriteria && (verdict === null || verdict.verdict === 'GAPS')) {
-    return base({ action: 'validate', gates, reason: verdict === null ? 'no verdict artifact' : 'verdict GAPS' })
+  if (hasCriteria && verdict === null) {
+    return base({ action: 'validate', gates, reason: 'no verdict artifact' })
+  }
+  if (verdict?.verdict === 'GAPS') {
+    if (verdict.correction?.state === 'needs-sweep') {
+      return correctionSweepFresh(repoRoot, arcId, verdict, exec)
+        ? base({ action: 'validate', gates, reason: 'correction resweep is green and current' })
+        : base({ action: 'sweep', gates, reason: 'corrected validation gap requires a current bound resweep' })
+    }
+    return base({ action: 'gaps', gates, reason: 'verdict GAPS awaiting an explicit correction-ready record' })
   }
 
-  const summary = readArcSummary(repoRoot, arcId)
-  if (summary?.outcome === 'shipped' && !sidecar) {
-    return base({ action: 'complete', gates })
+  if (sidecar?.branch && sidecar.branch !== arc.baseRef) {
+    const integrated = exec('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', sidecar.branch, arc.baseRef])
+    if (integrated.status !== 1) {
+      return base({
+        action: 'land-unproven',
+        gates,
+        reason: integrated.status === 0
+          ? `arc branch ${sidecar.branch} is already integrated but no shipped summary proves bookkeeping`
+          : `cannot prove whether arc branch ${sidecar.branch} is integrated: ${(integrated.stderr ?? '').trim()}`,
+      })
+    }
   }
   return base({ action: 'land', gates })
 }

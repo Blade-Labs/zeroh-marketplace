@@ -1,15 +1,25 @@
 // Eval run scenarios; fixture state is private to this test process.
 import { ARC_ID, EVAL_DATE, EVAL_DETERMINISTIC_KEYS, EVAL_JUDGE_KEYS, EVAL_KEYS, assert, buildEvalFixture, docFile, evalsDir, existsSync, git, join, mkdirSync, parsesConsumerShape, plantPrior, ratchetRow, readFileSync, readReport, renameSync, reportPath, roadmap, samplesOf, sharedFixture, test, timingPath, writeFileSync } from '../testdata/eval.test-support.mjs'
+import { createHash } from 'node:crypto'
 
 // ── 1. end to end ─────────────────────────────────────────────────────────────────────
 test('eval <ARCID> — writes the dated report with all seven dimensions, three scored and four pending-judge', () => {
   const root = buildEvalFixture()
+  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({
+    arcId: ARC_ID,
+    outcome: 'shipped',
+    compromiseDisposition: [],
+    gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true },
+    receiptRef: 'none',
+  }))
   const r = roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE])
   assert.equal(r.code, 0, r.stdout + r.stderr)
   assert.ok(existsSync(reportPath(root, EVAL_DATE)), `expected the report at ${reportPath(root, EVAL_DATE)}`)
 
   const report = readReport(root, EVAL_DATE)
   assert.equal(report.arcId, ARC_ID)
+  const summaryBytes = readFileSync(join(root, 'roadmap', 'arc-summary.json'))
+  assert.equal(report.landSummaryDigest, `sha256:${createHash('sha256').update(summaryBytes).digest('hex')}`)
   assert.equal(report.date, EVAL_DATE, 'the report is dated by the flag, not by a second wall-clock read')
   assert.deepEqual(Object.keys(report.dimensions).sort(), [...EVAL_KEYS].sort(), 'exactly the seven closed keys')
 
@@ -133,6 +143,13 @@ test('eval <ARCID> — the -sweep/-verdicts siblings and timing-stats.json are N
 // ── 7. --collect-only ─────────────────────────────────────────────────────────────────
 test('eval <ARCID> --collect-only — writes NOTHING and, with --json, emits the trace on stdout', () => {
   const root = buildEvalFixture()
+  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({
+    arcId: ARC_ID,
+    outcome: 'shipped',
+    compromiseDisposition: [{ item: 'current-pointer-proof', disposition: 'ACCEPT' }],
+    gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true },
+    receiptRef: 'current-pointer-receipt',
+  }))
   const r = roadmap(root, ['eval', ARC_ID, '--date', EVAL_DATE, '--collect-only'])
   assert.equal(r.code, 0, r.stdout + r.stderr)
   assert.equal(existsSync(reportPath(root, EVAL_DATE)), false, '--collect-only stops before the report')
@@ -143,6 +160,8 @@ test('eval <ARCID> --collect-only — writes NOTHING and, with --json, emits the
   const trace = JSON.parse(j.stdout)
   assert.ok(Array.isArray(trace.phases) && trace.phases.length > 0, 'the emitted trace carries its phases')
   assert.equal(typeof trace.git, 'object', 'and the git facts the scorer reads')
+  assert.equal(trace.summary.receiptRef, 'current-pointer-receipt', 'the current shipped pointer replaces a stale dated summary before scoring')
+  assert.equal(trace.summary.compromiseDisposition[0].item, 'current-pointer-proof')
   assert.equal(existsSync(reportPath(root, EVAL_DATE)), false, '--json does not smuggle a write back in')
 })
 

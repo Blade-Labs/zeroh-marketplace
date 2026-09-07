@@ -1,5 +1,5 @@
 // Eval records scenarios; fixture state is private to this test process.
-import { ARC, DATE, assert, commitAll, docFile, existsSync, join, makeConsumer, makeFixtureRepo, outPath, readFileSync, roadmap, runCli, test, validSweep, validVerdicts, writePhaseFile } from '../testdata/eval.test-support.mjs'
+import { ARC, DATE, assert, commitAll, docFile, existsSync, git, join, makeConsumer, makeFixtureRepo, mkdirSync, outPath, readFileSync, roadmap, runCli, test, validSweep, validVerdicts, writeFileSync, writePhaseFile } from '../testdata/eval.test-support.mjs'
 
 test('eval adherence — a phase number scores exactly that one phase as JSON', () => {
   const root = makeFixtureRepo()
@@ -46,6 +46,42 @@ test('record-sweep — a valid report writes the dated archive file and round-tr
     { item: 'a named compromise', disposition: 'ACCEPT', ref: 'phase 9001' },
   ])
   assert.deepEqual(onDisk.phaseGates, [{ phase: 9001, done: true, gateGreen: true }])
+})
+
+test('record-sweep — correction binding comes from the current ready checkpoint and actual reviewed HEAD', () => {
+  const root = makeConsumer()
+  writeFileSync(join(root, 'seed.txt'), 'validation baseline\n')
+  commitAll(root, 'seed validation baseline')
+  const validationHead = git(root, 'rev-parse', 'HEAD')
+  writeFileSync(join(root, 'repair.txt'), 'bounded repair\n')
+  commitAll(root, 'fix: bounded correction')
+  const repairHead = git(root, 'rev-parse', 'HEAD')
+  const validationAt = '2026-09-07T00:00:00.000Z'
+  const validatePath = join(root, 'roadmap', '.gate', `arc-${ARC}`, 'validate.json')
+  mkdirSync(join(root, 'roadmap', '.gate', `arc-${ARC}`), { recursive: true })
+  writeFileSync(validatePath, JSON.stringify({
+    arcId: ARC, verdict: 'GAPS', at: validationAt,
+    correction: { state: 'needs-sweep', validationHead, repairHead, readyAt: '2026-09-07T00:01:00.000Z' },
+  }, null, 2) + '\n')
+  const input = docFile(root, 'correction-sweep.json', validSweep)
+  const result = roadmap(root, ['eval', 'record-sweep', '--arc', ARC, input])
+  assert.equal(result.code, 0, result.stdout + result.stderr)
+  const recorded = JSON.parse(readFileSync(outPath(root, 'sweep'), 'utf8'))
+  assert.deepEqual(recorded.correction, { validationAt, validationHead, repairHead, reviewedHead: repairHead })
+})
+
+test('record-sweep — model-supplied correction binding is refused without publishing an archive', () => {
+  const root = makeConsumer()
+  const input = docFile(root, 'forged-correction-sweep.json', {
+    ...validSweep,
+    correction: { validationAt: 'forged', validationHead: 'forged', repairHead: 'forged', reviewedHead: 'forged' },
+  })
+  const before = readFileSync(input, 'utf8')
+  const result = roadmap(root, ['eval', 'record-sweep', '--arc', ARC, input])
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /correction|binding|caller/i)
+  assert.equal(existsSync(outPath(root, 'sweep')), false)
+  assert.equal(readFileSync(input, 'utf8'), before)
 })
 
 test('record-verdicts — the document PIPED ON STDIN writes the verdicts archive (exit 0)', () => {

@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import {
   HALT_KINDS,
   RESUME_LINE,
+  reduceArcTransition,
   buildHaltPayload,
   classifyBandRoute,
   classifyNextAction,
@@ -239,4 +240,216 @@ test('workflow — arms the Stop-hook guard (ROADMAP_EXECUTOR_PHASE + the ONE ar
   assert.match(WORKFLOW, /armExecutor\(worktree, phase, sessionId/)
   assert.doesNotMatch(WORKFLOW, /-executor\.armed/)
   assert.match(WORKFLOW, /contract show --json-schema/)
+})
+
+// ── reduceArcTransition ──────────────────────────────────────────────────────────────
+const knownAuthority = { status: 'known', envelopeDigest: 'sha256:authority-one', source: { kind: 'codex-journal', ref: 'session-1' } }
+const lifecycleState = (overrides = {}) => ({ arcId: 'NATIVEGREEN', stage: 'phase', status: 'active', processedEventIds: [], lastHalt: null, authorityRef: structuredClone(knownAuthority), ...overrides })
+const lifecycleEvent = (eventId, type, detail = {}) => ({ eventId, arcId: 'NATIVEGREEN', source: 'arc-workflow', type, ...detail })
+
+test('reduceArcTransition — normal authorized flow reaches complete without wait-user', () => {
+  let state = lifecycleState()
+  const flow = [
+    ['run-phase', { phase: 37 }, 'phase', 'relaunch-plane'], ['done', { phase: 37 }, 'phase', 'relaunch-plane'],
+    ['sweep', {}, 'sweep', 'run-sweep'], ['validate', {}, 'validate', 'run-validate'],
+    ['land', {}, 'land', 'run-land'], ['land-proven', { evidence: { head: 'abc1234' } }, 'delivery', 'run-evaluate'],
+    ['evaluate', {}, 'evaluate', 'run-evaluate'], ['complete', { evidence: { verdict: 'PASS' } }, 'complete', 'done'],
+  ]
+  for (const [index, [type, detail, stage, resume]] of flow.entries()) {
+    const receipt = reduceArcTransition(state, lifecycleEvent(`flow-${index}`, type, detail))
+    assert.equal(receipt.rejection, null, type)
+    assert.equal(receipt.next.stage, stage, type)
+    assert.equal(receipt.resume, resume, type)
+    assert.notEqual(receipt.resume, 'wait-user', type)
+    assert.deepEqual(receipt.authorityRef, state.authorityRef, type)
+    state = receipt.next
+  }
+})
+
+test('reduceArcTransition — every halt has its safe recovery action', () => {
+  const cases = [
+    ['blocked', 'inspect-blocker'], ['escalated', 'wait-user'], ['self-descope', 'wait-user'],
+    ['permission', 'wait-user'], ['auth', 'wait-user'], ['review-exhausted', 'wait-user'],
+    ['failed', 'inspect-failure'], ['stalled', 'reconcile'], ['exited', 'reconcile'],
+    ['unobserved', 'reconcile'], ['gaps', 'run-correction'], ['pause-after', 'relaunch-plane'],
+  ]
+  for (const [index, [kind, resume]] of cases.entries()) {
+    const state = lifecycleState({ stage: kind === 'gaps' ? 'validate' : 'phase' })
+    const event = lifecycleEvent(`halt-${index}`, kind, { phase: 37, evidence: { source: kind } })
+    const receipt = reduceArcTransition(state, event)
+    assert.equal(receipt.rejection, null, kind)
+    assert.equal(receipt.next.status, 'halted', kind)
+    assert.equal(receipt.next.lastHalt.kind, kind, kind)
+    assert.deepEqual(receipt.next.lastHalt.evidence, event.evidence, kind)
+    assert.equal(receipt.resume, resume, kind)
+  }
+})
+
+test('reduceArcTransition — recovery evidence is mandatory and gaps return through sweep', () => {
+  for (const [index, c] of [
+    { halt: 'blocked', evidence: { reconciled: true } },
+    { halt: 'stalled', evidence: { reconciled: true } },
+    { halt: 'failed', evidence: { inspected: true } },
+    { halt: 'permission', evidence: { authorized: true } },
+  ].entries()) {
+    const halted = reduceArcTransition(lifecycleState(), lifecycleEvent(`cause-${index}`, c.halt, { evidence: { source: c.halt } })).next
+    const missing = reduceArcTransition(halted, lifecycleEvent(`missing-${index}`, 'resume'))
+    assert.equal(missing.rejection.kind, 'invalid-transition', c.halt)
+    assert.deepEqual(missing.next, halted, c.halt)
+    const recovered = reduceArcTransition(halted, lifecycleEvent(`resume-${index}`, 'resume', { evidence: c.evidence }))
+    assert.equal(recovered.rejection, null, c.halt)
+    assert.deepEqual(recovered.authorityRef, knownAuthority, c.halt)
+  }
+  const gap = reduceArcTransition(lifecycleState({ stage: 'validate' }), lifecycleEvent('gap', 'gaps', { evidence: { verdict: 'GAPS' } })).next
+  const corrected = reduceArcTransition(gap, lifecycleEvent('correction', 'correction', { evidence: { corrected: true } }))
+  assert.equal(corrected.next.stage, 'sweep')
+  assert.equal(corrected.resume, 'run-sweep')
+  assert.equal(reduceArcTransition(gap, lifecycleEvent('skip-sweep', 'land')).rejection.kind, 'invalid-transition')
+})
+
+test('reduceArcTransition — unproven landing reconciles without replaying land', () => {
+  const halted = reduceArcTransition(lifecycleState({ stage: 'land' }), lifecycleEvent('land-uncertain', 'land-unproven', { evidence: { exitCode: 2 } }))
+  assert.equal(halted.next.status, 'halted')
+  assert.equal(halted.resume, 'reconcile')
+  assert.equal(reduceArcTransition(halted.next, lifecycleEvent('land-replay', 'land')).rejection.kind, 'invalid-transition')
+  const reconciled = reduceArcTransition(halted.next, lifecycleEvent('land-reconciled', 'resume', { evidence: { reconciled: true, landed: true } }))
+  assert.equal(reconciled.next.stage, 'delivery')
+  assert.equal(reconciled.resume, 'run-evaluate')
+})
+
+test('reduceArcTransition — duplicate, invalid, cross-arc, and authority-conflict events are typed no-ops', () => {
+  const state = lifecycleState({ processedEventIds: ['same-event'] })
+  const cases = [
+    [lifecycleEvent('same-event', 'run-phase', { phase: 37 }), 'duplicate-event'],
+    [lifecycleEvent('too-early', 'land-proven'), 'invalid-transition'],
+    [{ ...lifecycleEvent('foreign', 'run-phase', { phase: 37 }), arcId: 'OTHER' }, 'arc-mismatch'],
+    [lifecycleEvent('auth-conflict', 'run-phase', { phase: 37, authorityRef: { ...knownAuthority, envelopeDigest: 'sha256:different' } }), 'authority-conflict'],
+  ]
+  for (const [event, kind] of cases) {
+    const receipt = reduceArcTransition(state, event)
+    assert.equal(receipt.rejection.kind, kind)
+    assert.equal(receipt.rejection.eventId, event.eventId)
+    assert.deepEqual(receipt.next, receipt.prior)
+    assert.deepEqual(receipt.authorityRef, knownAuthority)
+  }
+})
+
+test('reduceArcTransition — pure: inputs and nested authority/evidence are never mutated', () => {
+  const state = lifecycleState()
+  const event = lifecycleEvent('pure-1', 'blocked', { evidence: { reason: 'dependency' } })
+  const beforeState = structuredClone(state)
+  const beforeEvent = structuredClone(event)
+  const receipt = reduceArcTransition(state, event)
+  assert.deepEqual(state, beforeState)
+  assert.deepEqual(event, beforeEvent)
+  assert.deepEqual(receipt.prior, beforeState)
+  assert.notStrictEqual(receipt.next, state)
+  assert.notStrictEqual(receipt.event, event)
+})
+
+test('reduceArcTransition — malformed identities and incoherent state return parseable no-op receipts', () => {
+  const malformed = reduceArcTransition(lifecycleState(), lifecycleEvent('   ', 'run-phase', { phase: 37 }))
+  assert.equal(malformed.rejection.kind, 'malformed-event')
+  assert.deepEqual(malformed.next, malformed.prior)
+  assert.deepEqual(malformed.authorityRef, malformed.next.authorityRef)
+
+  const duplicateIds = lifecycleState({ processedEventIds: ['event-a', 'event-a'] })
+  const invalidState = reduceArcTransition(duplicateIds, lifecycleEvent('event-b', 'run-phase', { phase: 37 }))
+  assert.equal(invalidState.rejection.kind, 'invalid-state')
+  assert.deepEqual(invalidState.next, invalidState.prior)
+  assert.deepEqual(invalidState.authorityRef, invalidState.next.authorityRef)
+})
+
+test('reduceArcTransition — unreadable or conflicting event authority never erases a known reference', () => {
+  const state = lifecycleState()
+  const unreadable = reduceArcTransition(state, lifecycleEvent('auth-unreadable', 'run-phase', {
+    phase: 37,
+    authorityRef: { status: 'unknown', reason: 'source-unreadable', sourceRef: 'journal:missing' },
+  }))
+  assert.equal(unreadable.rejection.kind, 'authority-conflict')
+  assert.deepEqual(unreadable.next, unreadable.prior)
+  assert.deepEqual(unreadable.authorityRef, knownAuthority)
+
+  const conflict = reduceArcTransition(state, lifecycleEvent('auth-known-conflict', 'run-phase', {
+    phase: 37,
+    authorityRef: {
+      status: 'known',
+      envelopeDigest: 'sha256:different',
+      source: { kind: 'managed-host-receipt', ref: 'host-receipt-2' },
+    },
+  }))
+  assert.equal(conflict.rejection.kind, 'authority-conflict')
+  assert.deepEqual(conflict.next, conflict.prior)
+  assert.deepEqual(conflict.authorityRef, knownAuthority)
+  assert.deepEqual(conflict.next.authorityRef, knownAuthority)
+})
+
+test('reduceArcTransition — rejected recovery keeps the prior resume and authority reference', () => {
+  const landHalt = reduceArcTransition(
+    lifecycleState({ stage: 'land' }),
+    lifecycleEvent('land-halt', 'land-unproven', { evidence: { exitCode: 2 } }),
+  ).next
+  const rejected = reduceArcTransition(landHalt, lifecycleEvent('bad-recovery', 'resume'))
+  assert.equal(rejected.rejection.kind, 'invalid-transition')
+  assert.equal(rejected.resume, 'reconcile')
+  assert.notEqual(rejected.resume, 'run-land')
+  assert.deepEqual(rejected.next, rejected.prior)
+
+  const unknown = lifecycleState({
+    authorityRef: { status: 'unknown', reason: 'legacy-unrecorded', sourceRef: null },
+  })
+  const invalid = reduceArcTransition(unknown, lifecycleEvent('known-too-early', 'land-proven', {
+    authorityRef: knownAuthority,
+  }))
+  assert.equal(invalid.rejection.kind, 'invalid-transition')
+  assert.deepEqual(invalid.authorityRef, unknown.authorityRef)
+  assert.deepEqual(invalid.next.authorityRef, unknown.authorityRef)
+})
+
+test('reduceArcTransition — authority source identity participates in conflict detection', () => {
+  const sameDigestDifferentSource = lifecycleEvent('source-conflict', 'run-phase', {
+    phase: 37,
+    authorityRef: {
+      ...knownAuthority,
+      source: { kind: 'managed-host-receipt', ref: 'host-receipt-2' },
+    },
+  })
+  const receipt = reduceArcTransition(lifecycleState(), sameDigestDifferentSource)
+  assert.equal(receipt.rejection.kind, 'authority-conflict')
+  assert.deepEqual(receipt.next, receipt.prior)
+  assert.deepEqual(receipt.authorityRef, knownAuthority)
+})
+
+test('reduceArcTransition — forged halt recovery and explicit null optionals are malformed', () => {
+  const forgedHalt = lifecycleState({
+    status: 'halted',
+    lastHalt: { kind: 'stalled', phase: 37, evidence: {}, resume: 'run-land' },
+  })
+  const invalidState = reduceArcTransition(forgedHalt, lifecycleEvent('forged-resume', 'resume', {
+    evidence: { reconciled: true },
+  }))
+  assert.equal(invalidState.rejection.kind, 'invalid-state')
+  assert.deepEqual(invalidState.next, invalidState.prior)
+
+  for (const [eventId, detail] of [
+    ['null-phase', { phase: null }],
+    ['null-authority', { authorityRef: null }],
+  ]) {
+    const malformed = reduceArcTransition(lifecycleState(), lifecycleEvent(eventId, 'run-phase', detail))
+    assert.equal(malformed.rejection.kind, 'malformed-event', eventId)
+    assert.deepEqual(malformed.next, malformed.prior, eventId)
+  }
+})
+
+test('reduceArcTransition — semantically equal known authority ignores object key order', () => {
+  const receipt = reduceArcTransition(lifecycleState(), lifecycleEvent('auth-reordered-equal', 'run-phase', {
+    phase: 37,
+    authorityRef: {
+      source: { ref: 'session-1', kind: 'codex-journal' },
+      envelopeDigest: 'sha256:authority-one',
+      status: 'known',
+    },
+  }))
+  assert.equal(receipt.rejection, null)
+  assert.deepEqual(receipt.authorityRef, knownAuthority)
 })

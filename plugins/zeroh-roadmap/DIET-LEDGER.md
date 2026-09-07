@@ -1,5 +1,16 @@
 # zeroh-roadmap — Deletion-Disposition Ledger (ROADCODE prose diet)
 
+## NATIVEGREEN lifecycle recovery
+
+Measured do-arc load after this edit: **43,884 bytes / 10,976 tokens**, within the existing 11,065-token ceiling.
+
+| passage | disposition | evidence |
+|---|---|---|
+| do-arc halt narration and unconditional respawn advice | enforced-by-code (`reduceArcTransition`, arm reconciliation); safe remedy retained in caller | workflow and lifecycle tests |
+| do-arc corrective loop duplication | relocated to existing `validate-arc/references/corrections.md` | existing bounded repair owner and recorder-owned correction checkpoint |
+| eval-arc missing Step 9 reference and fixed-model prohibition | obsolete-with-evidence; actual evaluation steps owned here | `eval.mjs` accepts typed off-pin verdicts and reports baseline resets |
+
+
 ## 2026-09 missing-home routing — phase 34.1
 
 | passage (origin heading/anchor) | disposition | evidence |

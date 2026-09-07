@@ -8,12 +8,34 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   makeFixtureRepo, runCli, writePhaseFile, writeArcFile, writePhaseRaw, commitAll, git,
 } from './harness.mjs'
 import arcPlaneWorkflow from '../../workflows/arc-plane.workflow.mjs'
+
+const EVAL_KEYS = ['code-confidence', 'verified-vs-intent', 'standards-adherence', 'doc-brevity', 'composability-testability', 'speed', 'plan-quality']
+const JUDGE_KEYS = new Set(['standards-adherence', 'doc-brevity', 'composability-testability', 'plan-quality'])
+function plantCompletedEvaluation(root, arcId) {
+  const summary = {
+    arcId, outcome: 'shipped', compromiseDisposition: [],
+    gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true }, receiptRef: 'none',
+  }
+  const summaryBytes = Buffer.from(JSON.stringify(summary))
+  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), summaryBytes)
+  const dir = join(root, 'roadmap', 'arc-evals')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, `${arcId}-2026-09-07.json`), JSON.stringify({
+    arcId, date: '2026-09-07', judgeModel: 'claude-sonnet-5',
+    landSummaryDigest: `sha256:${createHash('sha256').update(summaryBytes).digest('hex')}`,
+    dimensions: Object.fromEntries(EVAL_KEYS.map((key) => [key, {
+      owner: JUDGE_KEYS.has(key) ? 'judge' : 'deterministic', score: 80, signals: {}, sourceRefs: ['fixture'],
+    }])),
+    ratchet: [], attribution: { drivers: [], reviewers: [] }, notes: [],
+  }, null, 2) + '\n')
+}
 
 /** Build arc FX over the given member phase objects (+ optional acceptanceCriteria).
  *  `config` is shallow-merged into the fixture's roadmap.config.json (makeFixtureRepo opts). */
@@ -105,7 +127,10 @@ test('N6 — a landed arc → complete, invoked TWICE with deep-equal JSON and e
   const root = arcRepo([
     { phase: 9101, status: 'done', arcId: 'FX', tasks: [{ id: '9101.1', done: true }], executionResult: { phase: 9101, status: 'done', gateRounds: 1, hardStops: [] } },
   ], { criteria: false })
-  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId: 'FX', outcome: 'shipped' }))
+  const summary = { arcId: 'FX', outcome: 'shipped', compromiseDisposition: [], gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true }, receiptRef: 'none' }
+  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify(summary))
+  assert.equal(next(root).json.action, 'evaluate', 'a shipped summary alone still requires evaluation')
+  plantCompletedEvaluation(root, 'FX')
   const a = next(root)
   const b = next(root)
   assert.equal(a.code, 0)
@@ -202,6 +227,8 @@ const armFile = (root, phase) => join(root, '.building', `${phase}-executor.arme
 const readArm = (root, phase) => JSON.parse(readFileSync(armFile(root, phase), 'utf8'))
 const lastBeacon = (root, phase) =>
   JSON.parse(readFileSync(join(root, '.building', `${phase}-executor.jsonl`), 'utf8').trim().split('\n').pop())
+const beaconEvents = (root, phase) =>
+  readFileSync(join(root, '.building', `${phase}-executor.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
 const memberRepo = (phase) => arcRepo([{ phase, status: 'in-progress', arcId: 'FX', tasks: [{ id: `${phase}.1`, done: false }] }])
 const typedResult = (phase, status) => ({
   phase, status, compromises: [], skipped: [], hardcoded: [], surfaced: [], hardStops: [], gateRounds: 1,
@@ -236,7 +263,16 @@ test('N11 — a returned-and-checked result stamps result-returned itself and cl
     }).promise
     // The Claude lane gets result-returned from the Stop hook; this harness may run no hooks,
     // so the workflow stamps the same proof itself — otherwise its own disarm would refuse.
-    assert.equal(lastBeacon(root, 9801).event, 'result-returned', `${status}: the returned-result proof is stamped`)
+    const events = beaconEvents(root, 9801)
+    const returnedIndex = events.findIndex((event) => event.event === 'result-returned')
+    assert.ok(returnedIndex >= 0, `${status}: the returned-result proof is stamped`)
+    if (status === 'done') {
+      const completionIndex = events.findIndex((event) => event.event === 'phase-complete' && event.resultTailComplete === true)
+      assert.ok(completionIndex > returnedIndex, 'done: result-returned precedes durable tail completion')
+      assert.equal(events.at(-1).event, 'phase-complete', 'done: durable tail completion is terminal')
+    } else {
+      assert.equal(events.at(-1).event, 'result-returned', 'escalated: result-returned remains terminal')
+    }
     assert.equal(existsSync(armFile(root, 9801)), false, `${status}: a returned result clears the arm`)
     if (status === 'done') assert.equal(result.done, true)
     else assert.equal(result.halt, 'escalated', 'an escalated result still ENDS the workflow')
@@ -539,7 +575,7 @@ test('N28 — the gate binds ONLY run-phase: a dependency block keeps its own re
   const doneRoot = arcRepo([
     { phase: 9101, status: 'done', arcId: 'FX', tasks: [{ id: '9101.1', done: true }], executionResult: { phase: 9101, status: 'done', gateRounds: 1, hardStops: [] } },
   ], { criteria: false })
-  writeFileSync(join(doneRoot, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId: 'FX', outcome: 'shipped' }))
+  plantCompletedEvaluation(doneRoot, 'FX')
   const starvedComplete = nextUnder(doneRoot, STARVED)
   assert.equal(starvedComplete.code, 0, 'a starved box still lets a finished arc report complete')
   assert.equal(starvedComplete.json.action, 'complete')

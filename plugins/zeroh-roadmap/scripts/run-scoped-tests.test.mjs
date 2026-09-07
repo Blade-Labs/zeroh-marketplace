@@ -1,24 +1,37 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, symlinkSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, symlinkSync, existsSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-function fixture(t) {
+function fixture(t, { helper = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'roadmap-scoped-'))
   t.after(() => rmSync(root, {recursive:true,force:true}))
   const plugin = join(root, 'plugins/zeroh-roadmap')
   mkdirSync(join(plugin, 'scripts'), {recursive:true})
+  mkdirSync(join(root, 'tools'), { recursive: true })
   const script = join(plugin, 'scripts/run-scoped-tests.mjs')
   copyFileSync(new URL('./run-scoped-tests.mjs', import.meta.url), script)
+  copyFileSync(new URL('./test-execution.mjs', import.meta.url), join(plugin, 'scripts/test-execution.mjs'))
   const marker = join(root, 'ran')
   writeFileSync(join(plugin, 'space name.test.mjs'), `import {writeFileSync} from 'node:fs';writeFileSync(${JSON.stringify(marker)},'yes')`)
   writeFileSync(join(plugin, 'bad.test.mjs'), 'throw Error("intentional failure")')
   writeFileSync(join(root, 'outside.test.mjs'), '')
+  writeFileSync(join(plugin, 'scripts/schema.test.ts'), '')
   symlinkSync(join(root, 'outside.test.mjs'), join(plugin, 'escape.test.mjs'))
   const env = {...process.env};delete env.NODE_TEST_CONTEXT
-  return {root, plugin, marker, run: targets => spawnSync(process.execPath, [script, ...targets], {cwd:tmpdir(),env,encoding:'utf8',timeout:15000})}
+  const args = join(root, 'helper-args')
+  const record = join(root, 'record')
+  if (helper) {
+    writeFileSync(join(root, 'tools/capbuild-node-tests'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$TEST_RUNNER_ARGS"\nif [ "$HELPER_FAIL" = 1 ]; then exit 7; fi\n', { mode: 0o755 })
+    writeFileSync(join(root, 'tools/capbuild'), '#!/bin/sh\nshift 2\nexec "$@"\n', { mode: 0o755 })
+    writeFileSync(join(root, 'tools/npx'), '#!/bin/sh\nprintf "schema\\n" >> "$TEST_RUNNER_RECORD"\n', { mode: 0o755 })
+  }
+  return {root, plugin, marker, args, record, recordStringify: record, run: (targets, options = {}) => spawnSync(process.execPath, [script, ...targets], {
+    cwd:tmpdir(), encoding:'utf8',timeout:15000,
+    env: { ...env, PATH: helper ? `${join(root, 'tools')}:/usr/bin:/bin` : '/usr/bin:/bin', TEST_CONCURRENCY: options.concurrency ?? 'auto', TEST_RUNNER_ARGS: args, TEST_RUNNER_RECORD: record, HELPER_FAIL: options.fail ? '1' : '0' },
+  })}
 }
 test('scoped runner executes the exact space-containing target and preserves failure', t => {
   const f=fixture(t)
@@ -40,4 +53,30 @@ test('scoped runner propagates child signal instead of returning success', t => 
   writeFileSync(join(f.plugin,'signal.test.mjs'), 'process.kill(process.ppid,"SIGKILL")')
   const result=f.run(['plugins/zeroh-roadmap/signal.test.mjs'])
   assert.equal(result.signal,'SIGKILL',result.stderr)
+})
+
+test('scoped runner shares helper worker policy and sends deduped absolute realpaths', t => {
+  const f = fixture(t, { helper: true })
+  const target = 'plugins/zeroh-roadmap/space name.test.mjs'
+  const result = f.run([target, target], { concurrency: 'auto' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(readFileSync(f.args, 'utf8').trim().split('\n'), ['--workers', 'auto', join(f.plugin, 'space name.test.mjs')])
+})
+
+test('scoped runner validates concurrency before spawn and runs requested schema only after node success', t => {
+  const f = fixture(t, { helper: true })
+  const nodeTarget = 'plugins/zeroh-roadmap/space name.test.mjs'
+  const schemaTarget = 'plugins/zeroh-roadmap/scripts/schema.test.ts'
+  assert.equal(f.run([nodeTarget], { concurrency: '999' }).status, 2)
+  assert.equal(existsSync(f.args), false)
+  assert.equal(existsSync(f.record), false)
+
+  const failed = f.run([nodeTarget, schemaTarget], { concurrency: '3', fail: true })
+  assert.equal(failed.status, 7)
+  assert.equal(existsSync(f.record), false, 'schema waits for green node tests')
+
+  const green = f.run([nodeTarget, schemaTarget], { concurrency: '3' })
+  assert.equal(green.status, 0, green.stderr)
+  assert.deepEqual(readFileSync(f.args, 'utf8').trim().split('\n'), ['--workers', '3', join(f.plugin, 'space name.test.mjs')])
+  assert.equal(readFileSync(f.record, 'utf8'), 'schema\n')
 })

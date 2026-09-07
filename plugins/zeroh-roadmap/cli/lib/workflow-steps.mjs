@@ -15,7 +15,10 @@
  *  `unobserved` (2384.3) is behaviourally a halt like `stalled` but honestly labelled: no life
  *  signal could be probed, which is not evidence of death — the session judges with the evidence in
  *  hand rather than being told a stall it can act on by respawning. */
-export const HALT_KINDS = ['blocked', 'escalated', 'failed', 'self-descope', 'stalled', 'exited', 'unobserved']
+export const HALT_KINDS = [
+  'blocked', 'escalated', 'failed', 'self-descope', 'stalled', 'exited', 'unobserved',
+  'permission', 'auth', 'review-exhausted', 'gaps', 'pause-after', 'land-unproven',
+]
 
 /** The FIXED resume line every halt carries (locked decision 3: files are the only truth —
  *  resume after ANY halt/kill is always the same act; `arc next` re-derives from disk). */
@@ -37,6 +40,233 @@ export function buildHaltPayload(kind, detail = {}) {
     phase: detail.phase ?? null,
     evidence: detail.evidence ?? null,
     resume: RESUME_LINE,
+  }
+}
+
+
+// -- Canonical arc lifecycle reducer ----------------------------------------
+const LIFECYCLE_STAGES = new Set(['phase', 'sweep', 'validate', 'land', 'delivery', 'evaluate', 'complete'])
+const LIFECYCLE_EVENTS = new Set([
+  'run-phase', 'resume-phase', 'done', 'sweep', 'validate', 'land', 'land-proven',
+  'land-unproven', 'evaluate', 'complete', 'resume', 'correction', 'blocked',
+  'escalated', 'failed', 'self-descope', 'stalled', 'exited', 'unobserved',
+  'permission', 'auth', 'review-exhausted', 'gaps', 'pause-after',
+])
+const HALT_RESUME = {
+  blocked: 'inspect-blocker',
+  escalated: 'wait-user',
+  'self-descope': 'wait-user',
+  permission: 'wait-user',
+  auth: 'wait-user',
+  'review-exhausted': 'wait-user',
+  failed: 'inspect-failure',
+  stalled: 'reconcile',
+  exited: 'reconcile',
+  unobserved: 'reconcile',
+  gaps: 'run-correction',
+  'pause-after': 'relaunch-plane',
+  'land-unproven': 'reconcile',
+}
+const ACTIVE_TRANSITIONS = {
+  phase: {
+    'run-phase': ['phase', 'relaunch-plane'],
+    'resume-phase': ['phase', 'relaunch-plane'],
+    done: ['phase', 'relaunch-plane'],
+    sweep: ['sweep', 'run-sweep'],
+  },
+  sweep: { validate: ['validate', 'run-validate'] },
+  validate: { land: ['land', 'run-land'] },
+  land: { 'land-proven': ['delivery', 'run-evaluate'] },
+  delivery: { evaluate: ['evaluate', 'run-evaluate'] },
+  evaluate: { complete: ['complete', 'done'] },
+  complete: {},
+}
+const RESUME_FOR_STAGE = {
+  phase: 'relaunch-plane',
+  sweep: 'run-sweep',
+  validate: 'run-validate',
+  land: 'run-land',
+  delivery: 'run-evaluate',
+  evaluate: 'run-evaluate',
+}
+
+function cloneLifecycle(value) {
+  return value == null ? value : structuredClone(value)
+}
+
+function exactKeys(value, allowed) {
+  return Object.keys(value).every((key) => allowed.includes(key))
+}
+
+function nonBlank(value) {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function authorityRefValid(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  if (value.status === 'known') {
+    return exactKeys(value, ['status', 'envelopeDigest', 'source'])
+      && nonBlank(value.envelopeDigest)
+      && value.source && typeof value.source === 'object' && !Array.isArray(value.source)
+      && exactKeys(value.source, ['kind', 'ref'])
+      && ['codex-journal', 'managed-host-receipt'].includes(value.source.kind)
+      && nonBlank(value.source.ref)
+  }
+  return value.status === 'unknown'
+    && exactKeys(value, ['status', 'reason', 'sourceRef'])
+    && ['read-only-projection', 'legacy-unrecorded', 'source-unreadable'].includes(value.reason)
+    && (value.sourceRef === null || nonBlank(value.sourceRef))
+}
+
+function lifecycleStateValid(state) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return false
+  if (!exactKeys(state, ['arcId', 'stage', 'status', 'processedEventIds', 'lastHalt', 'authorityRef'])) return false
+  if (!nonBlank(state.arcId)) return false
+  if (!LIFECYCLE_STAGES.has(state.stage) || !['active', 'halted', 'complete'].includes(state.status)) return false
+  if (!Array.isArray(state.processedEventIds) || state.processedEventIds.some((id) => !nonBlank(id))) return false
+  if (new Set(state.processedEventIds).size !== state.processedEventIds.length) return false
+  if (!authorityRefValid(state.authorityRef)) return false
+  if ((state.stage === 'complete') !== (state.status === 'complete')) return false
+  if ((state.status === 'halted') !== (state.lastHalt != null)) return false
+  if (state.lastHalt != null) {
+    const halt = state.lastHalt
+    if (!halt || typeof halt !== 'object' || Array.isArray(halt)) return false
+    if (!exactKeys(halt, ['kind', 'phase', 'evidence', 'resume'])) return false
+    if (!Object.hasOwn(HALT_RESUME, halt.kind) || halt.resume !== HALT_RESUME[halt.kind]) return false
+    if (halt.phase !== null && (!Number.isInteger(halt.phase) || halt.phase < 1)) return false
+    if (halt.kind === 'gaps' && state.stage !== 'validate') return false
+    if (halt.kind === 'land-unproven' && state.stage !== 'land') return false
+  }
+  return true
+}
+
+function lifecycleEventValid(event) {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return false
+  const allowed = new Set(['eventId', 'arcId', 'source', 'type', 'phase', 'evidence', 'authorityRef'])
+  if (Object.keys(event).some((key) => !allowed.has(key))) return false
+  if (!nonBlank(event.eventId) || !nonBlank(event.arcId)) return false
+  if (!nonBlank(event.source) || !LIFECYCLE_EVENTS.has(event.type)) return false
+  if (event.phase !== undefined && (!Number.isInteger(event.phase) || event.phase < 1)) return false
+  return event.authorityRef === undefined || authorityRefValid(event.authorityRef)
+}
+
+function rejectedTransition(prior, event, authorityRef, kind, reason) {
+  const safeResume = kind === 'invalid-state'
+    ? 'inspect-failure'
+    : prior?.lastHalt?.resume ?? (prior?.status === 'complete' ? 'done' : (RESUME_FOR_STAGE[prior?.stage] ?? 'inspect-failure'))
+  return {
+    prior,
+    next: cloneLifecycle(prior),
+    event: cloneLifecycle(event),
+    authorityRef: cloneLifecycle(authorityRef),
+    resume: safeResume,
+    rejection: { kind, eventId: typeof event?.eventId === 'string' ? event.eventId : null, reason },
+  }
+}
+
+function requiredRecoveryEvidence(kind, evidence) {
+  if (['blocked', 'stalled', 'exited', 'unobserved'].includes(kind)) return evidence?.reconciled === true
+  if (kind === 'land-unproven') return evidence?.reconciled === true && evidence?.landed === true
+  if (kind === 'failed') return evidence?.inspected === true
+  if (['escalated', 'self-descope', 'permission', 'auth', 'review-exhausted'].includes(kind)) return evidence?.authorized === true
+  return kind === 'pause-after'
+}
+
+/**
+ * Apply one harness-neutral lifecycle event. Rejections are typed no-ops; the
+ * reducer performs no I/O and carries only persisted authority references.
+ */
+export function reduceArcTransition(state, event) {
+  const prior = cloneLifecycle(state)
+  const suppliedAuthority = authorityRefValid(state?.authorityRef)
+    ? state.authorityRef
+    : { status: 'unknown', reason: 'source-unreadable', sourceRef: null }
+
+  if (!lifecycleStateValid(state)) {
+    return rejectedTransition(prior, event, suppliedAuthority, 'invalid-state', 'lifecycle state is malformed or incoherent')
+  }
+  if (!lifecycleEventValid(event)) {
+    return rejectedTransition(prior, event, state.authorityRef, 'malformed-event', 'lifecycle event is malformed')
+  }
+  if (event.arcId !== state.arcId) {
+    return rejectedTransition(prior, event, state.authorityRef, 'arc-mismatch', 'event arcId does not match state arcId')
+  }
+  if (state.processedEventIds.includes(event.eventId)) {
+    return rejectedTransition(prior, event, state.authorityRef, 'duplicate-event', 'eventId was already processed')
+  }
+
+  let authorityRef = state.authorityRef
+  if (event.authorityRef?.status === 'unknown' && event.authorityRef.reason === 'source-unreadable') {
+    return rejectedTransition(prior, event, state.authorityRef, 'authority-conflict', 'unreadable authority source cannot authorize a transition')
+  }
+  if (event.authorityRef?.status === 'known' && state.authorityRef.status === 'known'
+    && (event.authorityRef.envelopeDigest !== state.authorityRef.envelopeDigest
+      || event.authorityRef.source.kind !== state.authorityRef.source.kind
+      || event.authorityRef.source.ref !== state.authorityRef.source.ref)) {
+    return rejectedTransition(prior, event, state.authorityRef, 'authority-conflict', 'known authority references conflict')
+  }
+  if (state.authorityRef.status === 'unknown' && event.authorityRef?.status === 'known') authorityRef = event.authorityRef
+
+  let stage = state.stage
+  let status = state.status
+  let lastHalt = state.lastHalt
+  let resume
+
+  if (state.status === 'halted') {
+    if (event.type === 'correction' && state.lastHalt.kind === 'gaps' && event.evidence?.corrected === true) {
+      stage = 'sweep'
+      status = 'active'
+      lastHalt = null
+      resume = 'run-sweep'
+    } else if (event.type === 'resume' && requiredRecoveryEvidence(state.lastHalt.kind, event.evidence)) {
+      stage = state.lastHalt.kind === 'land-unproven' ? 'delivery' : state.stage
+      status = 'active'
+      lastHalt = null
+      resume = RESUME_FOR_STAGE[stage]
+    }
+  } else if (state.status === 'active') {
+    const haltResume = HALT_RESUME[event.type]
+    const haltAllowed = haltResume != null
+      && (event.type !== 'gaps' || state.stage === 'validate')
+      && (event.type !== 'land-unproven' || state.stage === 'land')
+    if (haltAllowed) {
+      status = 'halted'
+      resume = haltResume
+      lastHalt = {
+        kind: event.type,
+        phase: event.phase ?? null,
+        evidence: cloneLifecycle(event.evidence ?? null),
+        resume,
+      }
+    } else {
+      const transition = ACTIVE_TRANSITIONS[state.stage]?.[event.type]
+      if (transition) {
+        ;[stage, resume] = transition
+        if (stage === 'complete') status = 'complete'
+      }
+    }
+  }
+
+  if (!resume) {
+    return rejectedTransition(prior, event, state.authorityRef, 'invalid-transition', `event '${event.type}' is invalid from ${state.status}/${state.stage}`)
+  }
+
+  const acceptedEvent = cloneLifecycle(event)
+  const next = {
+    ...cloneLifecycle(state),
+    stage,
+    status,
+    processedEventIds: [...state.processedEventIds, event.eventId],
+    lastHalt,
+    authorityRef: cloneLifecycle(authorityRef),
+  }
+  return {
+    prior,
+    next,
+    event: acceptedEvent,
+    authorityRef: cloneLifecycle(authorityRef),
+    resume,
+    rejection: null,
   }
 }
 
@@ -74,8 +304,8 @@ export function classifyBandRoute(band, force) {
 export function classifyNextAction(next, plane) {
   const action = next?.action
   if (action === 'complete') return 'complete'
-  if (action === 'blocked') return 'halt'
-  if (action === 'sweep' || action === 'validate' || action === 'land') return 'handoff'
+  if (action === 'blocked' || action === 'gaps' || action === 'land-unproven') return 'halt'
+  if (action === 'sweep' || action === 'validate' || action === 'land' || action === 'evaluate') return 'handoff'
   if (action !== 'run-phase' && action !== 'resume-phase') {
     throw new Error(`classifyNextAction: unhandled arc-next action '${action}'`)
   }
@@ -239,30 +469,72 @@ export function buildExecutorPrompt({ phaseFilePath, phaseSource, gatePlan, desi
  * entry is absent or ambiguous — the workflow turns { error } into a typed halt, never a
  * silent skip (pre-made decision 2).
  */
-export function groomBacklogSource(source, phaseNumber) {
+function groomSerializedBacklog(source, phaseNumber, { allowAbsent }) {
+  const call = source.indexOf('defineBacklog(')
+  const close = source.lastIndexOf(')')
+  if (call < 0 || close < call) return null
+  const bodyStart = call + 'defineBacklog('.length
+  const raw = source.slice(bodyStart, close).trim()
+  if (!/^\{\s*"/.test(raw) && !/^\[\s*(?:\{|\])/.test(raw)) return null
+
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch (e) {
+    return { error: `groomBacklogSource: malformed serialized backlog: ${e.message}` }
+  }
+  const lists = Array.isArray(parsed)
+    ? [parsed]
+    : Array.isArray(parsed?.tiers) && parsed.tiers.every((tier) => Array.isArray(tier?.items))
+      ? parsed.tiers.map((tier) => tier.items)
+      : null
+  if (!lists) return { error: 'groomBacklogSource: serialized backlog has no flat entries or tier items' }
+  const matches = lists.flat().filter((entry) => entry?.phase === phaseNumber)
+  if (matches.length === 0) {
+    return allowAbsent
+      ? { source, alreadyAbsent: true }
+      : { error: `groomBacklogSource: no backlog entry for phase ${phaseNumber}` }
+  }
+  if (matches.length > 1) return { error: `groomBacklogSource: ambiguous — ${matches.length} entries reference phase ${phaseNumber}` }
+  for (const list of lists) {
+    const index = list.findIndex((entry) => entry?.phase === phaseNumber)
+    if (index >= 0) list.splice(index, 1)
+  }
+  return {
+    source: source.slice(0, bodyStart) + JSON.stringify(parsed, null, 2) + source.slice(close),
+  }
+}
+
+export function groomBacklogSource(source, phaseNumber, { allowAbsent = false } = {}) {
   if (typeof source !== 'string') return { error: 'groomBacklogSource: source must be a string' }
   const n = Number(phaseNumber)
   if (!Number.isInteger(n)) return { error: `groomBacklogSource: invalid phase number '${phaseNumber}'` }
+
+  const serialized = groomSerializedBacklog(source, n, { allowAbsent })
+  if (serialized) return serialized
+
   const lines = source.split('\n')
   const entryRe = new RegExp(`\\{\\s*phase:\\s*${n}\\b`)
   const entryIdxs = []
-  lines.forEach((l, i) => {
-    if (entryRe.test(l)) entryIdxs.push(i)
+  lines.forEach((line, index) => {
+    if (entryRe.test(line)) entryIdxs.push(index)
   })
-  if (entryIdxs.length === 0) return { error: `groomBacklogSource: no backlog entry for phase ${n}` }
+  if (entryIdxs.length === 0) {
+    const mentionsPhaseField = new RegExp(`["']?phase["']?\\s*:\\s*${n}\\b`).test(source)
+    if (mentionsPhaseField) return { error: `groomBacklogSource: phase ${n} uses an unsupported backlog format` }
+    return allowAbsent ? { source, alreadyAbsent: true } : { error: `groomBacklogSource: no backlog entry for phase ${n}` }
+  }
   if (entryIdxs.length > 1) return { error: `groomBacklogSource: ambiguous — ${entryIdxs.length} entries reference phase ${n}` }
 
   const remove = new Set(entryIdxs)
   const selfRe = new RegExp(`\\b${n}\\b`)
   const numRe = /\b\d{2,}\b/g
-  lines.forEach((l, i) => {
-    const t = l.trim()
-    if (!t.startsWith('//') && !t.startsWith('*')) return
-    if (!selfRe.test(t)) return
-    const nums = t.match(numRe)
-    // remove ONLY when every multi-digit token in the comment IS this phase (single-phase
-    // narrative). A comment naming any other number/date/phase is left untouched.
-    if (nums && nums.every((x) => Number(x) === n)) remove.add(i)
+  lines.forEach((line, index) => {
+    const text = line.trim()
+    if (!text.startsWith('//') && !text.startsWith('*')) return
+    if (!selfRe.test(text)) return
+    const nums = text.match(numRe)
+    if (nums && nums.every((value) => Number(value) === n)) remove.add(index)
   })
-  return { source: lines.filter((_, i) => !remove.has(i)).join('\n') }
+  return { source: lines.filter((_, index) => !remove.has(index)).join('\n') }
 }

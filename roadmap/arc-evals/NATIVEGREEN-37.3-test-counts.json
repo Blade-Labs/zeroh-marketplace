@@ -1,0 +1,18 @@
+{
+  "phase": 37,
+  "task": "37.3",
+  "gate": "roadmap/.gate/37/run-000008-2026-09-07T00-54-59-673Z.json",
+  "nodeShards": 18,
+  "counts": {
+    "tests": 246,
+    "pass": 246,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "schemaFailures": 0,
+  "unitDurationMs": 219466,
+  "sourceLog": ".building/nativegreen-37-3-gate-shared.log",
+  "scope": "Fresh local task gate; no phase completion or native-host claim."
+}

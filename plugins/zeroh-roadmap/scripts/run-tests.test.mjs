@@ -10,10 +10,11 @@ function fixture(t, body, { helper = false } = {}) {
   t.after(() => rmSync(root, { recursive: true, force: true }))
   for (const dir of ['bin', 'cli', 'hooks', 'scripts', 'test', 'tools']) mkdirSync(join(root, dir))
   copyFileSync(new URL('./run-tests.mjs', import.meta.url), join(root, 'scripts/run-tests.mjs'))
+  copyFileSync(new URL('./test-execution.mjs', import.meta.url), join(root, 'scripts/test-execution.mjs'))
   writeFileSync(join(root, 'test/file with spaces.test.mjs'), body)
   writeFileSync(join(root, 'tools/npx'), '#!/bin/sh\nprintf "schema\\n" >> "$TEST_RUNNER_RECORD"\n', { mode: 0o755 })
   if (helper) {
-    writeFileSync(join(root, 'tools/capbuild-node-tests'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$TEST_RUNNER_ARGS"\n', { mode: 0o755 })
+    writeFileSync(join(root, 'tools/capbuild-node-tests'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$TEST_RUNNER_ARGS"\nif [ "$HELPER_SIGNAL" = 1 ]; then kill -TERM "$PPID"; fi\n', { mode: 0o755 })
     writeFileSync(join(root, 'tools/capbuild'), '#!/bin/sh\nshift 2\nexec "$@"\n', { mode: 0o755 })
   }
   const env = { ...process.env }
@@ -21,10 +22,10 @@ function fixture(t, body, { helper = false } = {}) {
   delete env.NODE_TEST_CONTEXT
   const record = join(root, 'record')
   const args = join(root, 'args')
-  return { root, record, args, run: (concurrency = '2') => spawnSync(process.execPath, [join(root, 'scripts/run-tests.mjs')], {
+  return { root, record, args, run: (concurrency = '2', options = {}) => spawnSync(process.execPath, [join(root, 'scripts/run-tests.mjs')], {
     encoding: 'utf8', timeout: 20000,
     env: { ...env, PATH: `${join(root, 'tools')}:/usr/bin:/bin`, TEST_CONCURRENCY: concurrency,
-      TEST_RUNNER_RECORD: record, TEST_RUNNER_ARGS: args },
+      TEST_RUNNER_RECORD: record, TEST_RUNNER_ARGS: args, HELPER_SIGNAL: options.signal ? '1' : '0' },
   }) }
 }
 test('portable runner executes real files and schema exactly once after success', t => {
@@ -49,5 +50,20 @@ test('host helper receives intact file paths and worker bound; schema remains ca
 test('invalid worker count fails before launching tests or schema', t => {
   const f = fixture(t, '')
   assert.equal(f.run('999').status, 2)
+  assert.equal(existsSync(f.record), false)
+})
+
+test('portable auto concurrency is bounded to at most four workers', t => {
+  const f = fixture(t, 'import {test} from "node:test";test("passes",()=>{})')
+  const result = f.run('auto')
+  assert.equal(result.status, 0, result.stderr)
+  const workers = Number(result.stdout.match(/concurrency=(\d+)/)?.[1])
+  assert.ok(Number.isInteger(workers) && workers >= 1 && workers <= 4, result.stdout)
+})
+
+test('host helper signal is preserved and schema never runs', t => {
+  const f = fixture(t, '', { helper: true })
+  const result = f.run('2', { signal: true })
+  assert.equal(result.signal, 'SIGTERM', result.stderr)
   assert.equal(existsSync(f.record), false)
 })

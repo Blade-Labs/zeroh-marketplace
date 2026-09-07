@@ -9,12 +9,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { deriveArcPosition, runDebtCensus, readValidateVerdict, DeriveError } from './derive.mjs'
+import { deriveArcPosition, deriveArcLifecycleTransition, runDebtCensus, readValidateVerdict, DeriveError } from './derive.mjs'
 import { defaultExec } from './exec.mjs'
+import { plantPrior } from '../testdata/eval.test-support.mjs'
+import { writeLandJournal } from './landing.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const bases = []
@@ -33,6 +36,8 @@ function makeRepo(arcId, arc, phases) {
   bases.push(root)
   mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
   mkdirSync(join(root, 'roadmap', 'arcs'), { recursive: true })
+  mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
+  symlinkSync(resolve(HERE, '..', '..', '..', '..', 'lib', 'roadmap', 'schema.ts'), join(root, 'lib', 'roadmap', 'schema.ts'))
   writeFileSync(join(root, 'roadmap', 'arcs', `${arcId}.arc.ts`), tsSrc({ id: arcId, baseRef: 'develop', ...arc }))
   for (const p of phases) writeFileSync(join(root, 'roadmap', 'phases', `phase-${p.phase}.phase.ts`), tsSrc(p))
   execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'init', '-q'])
@@ -52,7 +57,13 @@ function writeValidate(root, arcId, verdict) {
   writeFileSync(join(dir, 'validate.json'), JSON.stringify({ arcId, verdict, at: '2026-07-16T00:00:00Z' }))
 }
 function writeArcSummary(root, arcId, outcome) {
-  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId, outcome }))
+  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({
+    arcId,
+    outcome,
+    compromiseDisposition: [],
+    gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true },
+    receiptRef: 'none',
+  }))
 }
 
 /** An exec seam that fakes the debt census (writes `entries` to --json <out>) and
@@ -155,20 +166,159 @@ test('validate — swept, arc HAS acceptanceCriteria, no verdict artifact', () =
   assert.equal(pos.gates.validated, false)
 })
 
+test('gaps — a durable GAPS verdict exposes one corrective resume through sweep', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }], acceptanceCriteria: [{ id: 'c1', job: 'x' }] }, [done(10)])
+  writeValidate(root, 'A', 'GAPS')
+  const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'gaps')
+  assert.equal(pos.transitionReceipt.rejection, null)
+  assert.equal(pos.transitionReceipt.next.status, 'halted')
+  assert.equal(pos.transitionReceipt.next.stage, 'validate')
+  assert.equal(pos.transitionReceipt.resume, 'run-correction')
+})
+
+test('correction lifecycle — awaiting repair gaps, ready repair sweeps, and matching green review revalidates', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }], acceptanceCriteria: [{ id: 'c1', job: 'x' }] }, [done(10)])
+  const validationHead = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const validatePath = join(root, 'roadmap', '.gate', 'arc-A', 'validate.json')
+  mkdirSync(dirname(validatePath), { recursive: true })
+  const validationAt = '2026-09-07T00:00:00.000Z'
+  writeFileSync(validatePath, JSON.stringify({
+    arcId: 'A', verdict: 'GAPS', at: validationAt,
+    correction: { state: 'awaiting-repair', validationHead },
+  }))
+  assert.equal(deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) }).action, 'gaps')
+
+  writeFileSync(join(root, 'repair.txt'), 'repair\n')
+  execFileSync('git', ['-C', root, 'add', 'repair.txt'])
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'fix: repair gap'])
+  const repairHead = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  writeFileSync(validatePath, JSON.stringify({
+    arcId: 'A', verdict: 'GAPS', at: validationAt,
+    correction: { state: 'needs-sweep', validationHead, repairHead, readyAt: '2026-09-07T00:01:00.000Z' },
+  }))
+  assert.equal(deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) }).action, 'sweep')
+
+  const evalDir = join(root, 'roadmap', 'arc-evals')
+  mkdirSync(evalDir, { recursive: true })
+  writeFileSync(join(evalDir, 'A-2026-09-07-sweep.json'), JSON.stringify({
+    arcId: 'A', date: '2026-09-07', estateRatchets: 'green', phaseGates: [{ phase: 10, done: true, gateGreen: true }],
+    debtDispositions: [], architectVerdict: 'clean', deferredToReleaseSweep: [], overall: 'green', blockers: [],
+    correction: { validationAt, validationHead, repairHead, reviewedHead: repairHead },
+  }, null, 2) + '\n')
+  const sweepPath = join(evalDir, 'A-2026-09-07-sweep.json')
+  const validSweepBytes = readFileSync(sweepPath, 'utf8')
+  writeFileSync(sweepPath, JSON.stringify({
+    arcId: 'A', date: '2026-09-07', overall: 'green',
+    correction: { validationAt, validationHead, repairHead, reviewedHead: repairHead },
+  }))
+  assert.equal(deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) }).action, 'sweep', 'a partial green object is not a valid sweep proof')
+  writeFileSync(sweepPath, validSweepBytes)
+  execFileSync('git', ['-C', root, 'add', 'roadmap'])
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'docs: record correction review'])
+  assert.equal(deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) }).action, 'validate', 'an evidence-only commit after the matching review does not force another sweep')
+
+  writeFileSync(join(root, 'source-change.txt'), 'post-review source change\n')
+  execFileSync('git', ['-C', root, 'add', 'source-change.txt'])
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'feat: change source after review'])
+  assert.equal(deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) }).action, 'sweep')
+})
+
 test('land — swept + validate verdict PASS + not yet landed', () => {
   const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }], acceptanceCriteria: [{ id: 'c1', job: 'x' }] }, [done(10)])
   writeValidate(root, 'A', 'PASS')
+  writeSidecar(root, 'A', { worktree: root, branch: 'develop' })
   const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
   assert.equal(pos.action, 'land')
   assert.deepEqual(pos.gates, { swept: true, validated: true, suiteGreen: null })
 })
 
-test('complete — arc-summary shipped + no sidecar → idempotent no-op', () => {
+test('land-unproven — integrated distinct arc branch without shipped summary reconciles and never replays land', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)])
+  execFileSync('git', ['-C', root, 'branch', 'develop'])
+  execFileSync('git', ['-C', root, 'branch', 'arc/A'])
+  writeSidecar(root, 'A', { worktree: root, branch: 'arc/A' })
+  const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'land-unproven')
+  assert.equal(pos.transitionReceipt.rejection, null)
+  assert.equal(pos.transitionReceipt.next.status, 'halted')
+  assert.equal(pos.transitionReceipt.next.stage, 'land')
+  assert.equal(pos.transitionReceipt.resume, 'reconcile')
+})
+
+test('land — same-branch ancestry is not proof of a prior landing', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)])
+  execFileSync('git', ['-C', root, 'branch', 'develop'])
+  writeSidecar(root, 'A', { worktree: root, branch: 'develop' })
+  const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'land')
+  assert.equal(pos.transitionReceipt.rejection, null)
+})
+
+test('land-unproven — a malformed shipped summary cannot prove land', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)])
+  execFileSync('git', ['-C', root, 'branch', 'develop'])
+  execFileSync('git', ['-C', root, 'branch', 'arc/A'])
+  writeSidecar(root, 'A', { worktree: root, branch: 'arc/A' })
+  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId: 'A', outcome: 'shipped' }))
+  const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'land-unproven')
+  assert.equal(pos.transitionReceipt.rejection, null)
+  assert.equal(pos.transitionReceipt.resume, 'reconcile')
+})
+
+test('evaluate — proven shipped summary without an arc evaluation resumes the missing post-land action', () => {
   const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)]) // no acceptanceCriteria → validated no-op
   writeArcSummary(root, 'A', 'shipped')
+  writeSidecar(root, 'A', { worktree: root, branch: 'arc/A' })
   const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
-  assert.equal(pos.action, 'complete')
+  assert.equal(pos.action, 'evaluate')
+  assert.equal(pos.transitionReceipt.rejection, null)
+  assert.equal(pos.transitionReceipt.next.stage, 'evaluate')
+  assert.equal(pos.transitionReceipt.resume, 'run-evaluate')
   assert.equal(pos.gates.validated, true)
+})
+
+test('land-unproven — a live landing journal holds even when a shipped summary is visible', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)])
+  writeArcSummary(root, 'A', 'shipped')
+  writeLandJournal(root, 'A', { pid: process.pid, startedAt: '2026-09-07T00:00:00.000Z', step: 'post-land' })
+  const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'land-unproven')
+  assert.equal(pos.transitionReceipt.rejection, null)
+  assert.equal(pos.transitionReceipt.resume, 'reconcile')
+})
+
+test('complete — only a final seven-dimension report bound to exact shipped summary bytes completes evaluation', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)])
+  writeArcSummary(root, 'A', 'shipped')
+  const summaryBytes = readFileSync(join(root, 'roadmap', 'arc-summary.json'))
+  const digest = `sha256:${createHash('sha256').update(summaryBytes).digest('hex')}`
+  const reportPath = plantPrior(root, '2026-09-07', { arcId: 'A' })
+  const report = JSON.parse(readFileSync(reportPath, 'utf8'))
+  writeFileSync(reportPath, JSON.stringify({ ...report, landSummaryDigest: digest }, null, 2) + '\n')
+  let pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'complete')
+  assert.equal(pos.transitionReceipt.rejection, null)
+  assert.equal(pos.transitionReceipt.next.stage, 'complete')
+
+  writeFileSync(reportPath, JSON.stringify({ ...report, landSummaryDigest: 'sha256:mismatch' }, null, 2) + '\n')
+  pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'evaluate', 'a structurally valid legacy or mismatched report cannot complete this land')
+
+  writeFileSync(join(root, 'roadmap', 'arc-evals', 'A-2026-09-08.json'), JSON.stringify({
+    arcId: 'A', date: '2026-09-08', judgeModel: 'claude-sonnet-5', landSummaryDigest: digest,
+    dimensions: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((key) => [key, {}])),
+    ratchet: [], attribution: { drivers: [], reviewers: [] }, notes: [],
+  }))
+  pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'evaluate', 'seven arbitrary dimension keys are not a valid completed evaluation')
+
+  const pendingPath = plantPrior(root, '2026-09-09', { arcId: 'A', sentinels: { 'doc-brevity': 'pending-judge' } })
+  const pending = JSON.parse(readFileSync(pendingPath, 'utf8'))
+  writeFileSync(pendingPath, JSON.stringify({ ...pending, landSummaryDigest: digest }, null, 2) + '\n')
+  pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(pos.action, 'evaluate', 'a newer pending judge report keeps evaluation open')
 })
 
 test('strict context — tsx bridge unavailable makes deriveArcPosition fail LOUD (never guesses)', () => {
@@ -209,4 +359,38 @@ test('singleSeam — derive.mjs imports phasescan + tsx-bridge + gitscan from cl
   assert.match(src, /from '\.\/phasescan\.mjs'/)
   assert.match(src, /from '\.\/tsx-bridge\.mjs'/)
   assert.match(src, /from '\.\/gitscan\.mjs'/)
+})
+
+test('derive lifecycle — identical disk checkpoint yields an identical reducer receipt after resume', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [backlog(10)])
+  const position = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  const fresh = deriveArcLifecycleTransition(position)
+  const resumed = deriveArcLifecycleTransition(
+    deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) }),
+  )
+  assert.deepEqual(resumed, fresh)
+  assert.equal(fresh.event.type, 'run-phase')
+  assert.equal(fresh.event.phase, 10)
+  assert.equal(fresh.rejection, null)
+  assert.deepEqual(fresh.authorityRef, {
+    status: 'unknown',
+    reason: 'read-only-projection',
+    sourceRef: null,
+  })
+})
+
+test('derive lifecycle — terminal disk checkpoints seed their honest stage before reducing', () => {
+  const root = makeRepo(
+    'A',
+    { planes: [{ name: 'P1', phases: [10] }], acceptanceCriteria: [{ id: 'c1', job: 'x' }] },
+    [done(10)],
+  )
+  writeValidate(root, 'A', 'PASS')
+  const position = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
+  assert.equal(position.action, 'land')
+  assert.ok(position.transitionReceipt, 'derive output carries its reducer receipt')
+  assert.equal(position.transitionReceipt.prior.stage, 'validate')
+  assert.equal(position.transitionReceipt.event.type, 'land')
+  assert.equal(position.transitionReceipt.next.stage, 'land')
+  assert.equal(position.transitionReceipt.rejection, null)
 })

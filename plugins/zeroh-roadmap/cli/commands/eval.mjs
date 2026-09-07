@@ -23,6 +23,9 @@
  */
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { readValidateVerdict } from '../lib/derive.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { bridgeParseShape, bridgeParseShapeJson, consumerSchemaPath, BridgeError, TSX_ABSENT_HINT } from '../lib/tsx-bridge.mjs'
 import {
@@ -185,6 +188,36 @@ export default async function run(argv) {
       `roadmap eval ${sub}: refused — document arcId '${parsed.arcId}' !== --arc '${opts.arc}'\n`,
     )
     return 2
+  }
+
+  if (sub === 'record-sweep') {
+    // Models supply the review; only the recorder binds it to the observed checkout.
+    if (Object.hasOwn(JSON.parse(inputJson), 'correction')) {
+      process.stderr.write('roadmap eval record-sweep: correction binding is recorder-owned; omit it from the submitted report\n')
+      return 2
+    }
+    try {
+      const validation = readValidateVerdict(toplevel, opts.arc)
+      const correction = validation?.correction
+      if (validation?.verdict === 'GAPS' && correction?.state === 'needs-sweep') {
+        const reviewedHead = execFileSync('git', ['-C', toplevel, 'rev-parse', 'HEAD^{commit}'], { encoding: 'utf8' }).trim()
+        execFileSync('git', ['-C', toplevel, 'merge-base', '--is-ancestor', correction.repairHead, reviewedHead], { stdio: 'pipe' })
+        parsed.correction = {
+          validationAt: validation.at,
+          validationHead: correction.validationHead,
+          repairHead: correction.repairHead,
+          reviewedHead,
+        }
+        const bound = bridgeParseShape(toplevel, schemaPath, recorder.shape, parsed)
+        if (!bound.ok || !bound.parsed.correction) {
+          process.stderr.write('roadmap eval record-sweep: consumer schema cannot preserve the correction binding; sync its schema\n')
+          return 2
+        }
+      }
+    } catch (e) {
+      process.stderr.write(`roadmap eval record-sweep: cannot bind the correction review: ${e.message}\n`)
+      return 2
+    }
   }
 
   const dir = arcEvalsDir(toplevel)
@@ -1341,6 +1374,28 @@ async function runArcEval(arcId, opts) {
   }
   for (const w of collected.warnings) say(`WARN: ${w}`)
 
+  let landSummaryDigest
+  let summaryBytes
+  const summaryPath = join(roadmapRoot(toplevel), 'arc-summary.json')
+  if (existsSync(summaryPath)) {
+    try {
+      const bytes = readFileSync(summaryPath)
+      const raw = JSON.parse(bytes.toString('utf8'))
+      if (String(raw.arcId) === String(arcId)) {
+        if (raw.outcome !== 'shipped') {
+          process.stderr.write(`roadmap eval ${arcId}: current landing summary is not a valid shipped result\n`)
+          return 2
+        }
+        collected.trace.summary = raw
+        summaryBytes = bytes
+        landSummaryDigest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`
+      }
+    } catch (e) {
+      process.stderr.write(`roadmap eval ${arcId}: cannot read current landing summary: ${e.message}\n`)
+      return 2
+    }
+  }
+
   // The trace is validated HERE, at the one boundary it crosses into the scorer. This is what
   // the collector defers to: ArcTraceShape composes SweepReportShape / ArcVerdictsFileShape /
   // RunnerSummaryShape by reference, so this single parse is what stops a well-formed-JSON but
@@ -1395,7 +1450,9 @@ async function runArcEval(arcId, opts) {
     // and half a provenance record still reads as one.
     ...(workflow ? { workflow } : {}),
     fingerprint: assembleConsumerFingerprint(toplevel),
-    notes: [...collected.warnings, ...scored.notes, ...stampWarnings],
+    ...(landSummaryDigest ? { landSummaryDigest } : {}),
+    notes: [...collected.warnings, ...scored.notes, ...stampWarnings,
+      ...(landSummaryDigest ? [] : ['No matching current shipped summary: this report is historical-unbound and cannot complete a current arc.'])],
   }
   const priors = readPriorReports(dir, { excludePath: outPath, onWarn: say })
   draft.ratchet = computeRatchet(draft, priors)
@@ -1420,6 +1477,10 @@ async function runArcEval(arcId, opts) {
     return 1
   }
   const report = validated.parsed
+  if (landSummaryDigest && report.landSummaryDigest !== landSummaryDigest) {
+    process.stderr.write(`roadmap eval ${arcId}: consumer schema cannot preserve the landing binding; sync its schema\n`)
+    return 2
+  }
 
   // The timing table pools EVERY arc that already has a report, not just this one — a
   // reference class of one arc is not a reference class.
@@ -1451,6 +1512,9 @@ async function runArcEval(arcId, opts) {
 
   try {
     mkdirSync(dir, { recursive: true })
+    if (summaryBytes && !readFileSync(summaryPath).equals(summaryBytes)) {
+      throw new Error('landing summary changed during evaluation; re-collect before writing')
+    }
     writeFileSync(outPath, JSON.stringify(report, null, 2) + '\n')
     writeFileSync(join(dir, TIMING_STATS_FILE), JSON.stringify(statsValidated.parsed, null, 2) + '\n')
   } catch (e) {

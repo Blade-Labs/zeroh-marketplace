@@ -22,12 +22,13 @@
  * the harness `agent()` must be provided by the caller.
  */
 import { execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   buildHaltPayload,
+  reduceArcTransition,
   classifyBandRoute,
   classifyNextAction,
   detectSelfDescope,
@@ -38,10 +39,11 @@ import { gitToplevel } from '../cli/lib/gitroot.mjs'
 import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
 import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
-import { readBeaconLine, appendExecutorEvent } from '../cli/lib/beacon.mjs'
-import { armExecutor, disarmExecutor, liveArm, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps } from '../cli/lib/executor-arm.mjs'
+import { readBeaconLine, appendExecutorEvent, readResultTailCompletion } from '../cli/lib/beacon.mjs'
+import { armExecutor, disarmExecutor, liveArm, armPath, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps } from '../cli/lib/executor-arm.mjs'
 import { productRepos } from '../cli/lib/product-repos.mjs'
-import { pidAlive } from '../cli/lib/sidecar.mjs'
+import { pidAlive, claimResultConsumption, listResultClaims } from '../cli/lib/sidecar.mjs'
+import { deriveArcLifecycleTransition } from '../cli/lib/derive.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
 const BACKGROUND_RUN_MAX_MIN = 10 // mirror hooks/executor-result-guard.mjs — one 10-min rule
@@ -76,6 +78,83 @@ function defaultAgent() {
 }
 
 const jsonOf = (r) => JSON.parse(r.stdout)
+
+function lifecycleHalt(kind, { arcId = 'unknown', phase = null, evidence = null, stage = 'phase' } = {}) {
+  const authorityRef = { status: 'unknown', reason: 'read-only-projection', sourceRef: null }
+  const prior = {
+    arcId: String(arcId),
+    stage,
+    status: 'active',
+    processedEventIds: [],
+    lastHalt: null,
+    authorityRef,
+  }
+  const event = {
+    eventId: `workflow:${arcId}:${kind}:${phase ?? '-'}:${createHash('sha256').update(JSON.stringify(evidence)).digest('hex')}`,
+    arcId: String(arcId),
+    source: 'arc-plane-workflow',
+    type: kind,
+    ...(phase == null ? {} : { phase }),
+    evidence,
+    authorityRef,
+  }
+  const transitionReceipt = reduceArcTransition(prior, event)
+  return {
+    ...buildHaltPayload(kind, { phase, evidence }),
+    transitionReceipt,
+    trace: { state: transitionReceipt.next, receipts: [transitionReceipt] },
+  }
+}
+
+function withTransition(payload, transitionReceipt, priorReceipts = []) {
+  return {
+    ...payload,
+    transitionReceipt,
+    trace: { state: transitionReceipt.next, receipts: [...priorReceipts, transitionReceipt] },
+  }
+}
+
+function commandFailure(kind, field, result, context) {
+  const evidence = { [field]: result.stderr || result.stdout || `${field} exited ${result.exitCode}` }
+  return lifecycleHalt(kind, { ...context, evidence })
+}
+
+function currentHead(worktree) {
+  try {
+    return execFileSync('git', ['-C', worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  } catch {
+    return null
+  }
+}
+
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+const sha256 = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`
+
+function duplicateResultOutput({ arcId, phase, evidence, eventId, authorityRef }) {
+  const prior = {
+    arcId: String(arcId),
+    stage: 'phase',
+    status: 'active',
+    processedEventIds: [eventId],
+    lastHalt: null,
+    authorityRef,
+  }
+  const event = { eventId, arcId: String(arcId), source: 'result-consumption', type: 'done', phase, evidence, authorityRef }
+  const transitionReceipt = reduceArcTransition(prior, event)
+  return {
+    ...buildHaltPayload('blocked', { phase, evidence }),
+    transitionReceipt,
+    trace: { state: transitionReceipt.next, receipts: [transitionReceipt] },
+  }
+}
 
 /** The latest beacon event for the phase, or null. A fresh `background-run` with a live `log`
  *  means a detached run is alive — the STALLED probe uses this to KEEP WAITING, never halt. */
@@ -127,10 +206,10 @@ function readPhaseAndArcMeta(repoRoot, arcId, phase) {
  * silent skip — pre-made decision 2) + run the consumer's `emit` slot through the ONE
  * config/slots seam (singleSeam 1). It runs between executor spawns, never concurrently.
  */
-async function serializeSharedMutation(phase, { repoRoot, cfg }) {
+async function serializeSharedMutation(phase, { repoRoot, cfg, arcId }) {
   const backlogPath = join(repoRoot, 'roadmap', 'backlog.ts')
   if (existsSync(backlogPath)) {
-    const groomed = groomBacklogSource(readFileSync(backlogPath, 'utf8'), phase)
+    const groomed = groomBacklogSource(readFileSync(backlogPath, 'utf8'), phase, { allowAbsent: true })
     if (groomed.error) return buildHaltPayload('failed', { phase, evidence: { backlogGroom: groomed.error } })
     writeFileSync(backlogPath, groomed.source)
   }
@@ -154,40 +233,159 @@ async function serializeSharedMutation(phase, { repoRoot, cfg }) {
  * { handoff } | { handoffInline } | a typed halt payload.
  */
 export default async function arcPlaneWorkflow(input, deps = {}) {
-  const { arcId, planeName, force } = input
+  const { arcId, planeName, force, pauseAfter, recovery } = input
   const run = deps.run ?? defaultRun
   const agent = deps.agent ?? defaultAgent
   const warn = deps.warn ?? ((message) => process.stderr.write(message))
   const cwd = deps.cwd ?? process.cwd()
+  const workflowHalt = (kind, detail = {}) => lifecycleHalt(kind, { arcId, ...detail })
+  if (pauseAfter !== undefined && (!Number.isInteger(pauseAfter) || pauseAfter < 1)) {
+    return workflowHalt('failed', { evidence: { pauseAfter: 'must be a positive phase number' } })
+  }
+  const recoveryKinds = new Set(['failed', 'stalled', 'exited', 'unobserved'])
+  const recoveryEvidenceValid = recovery?.kind === 'failed'
+    ? recovery?.evidence?.inspected === true
+    : recovery?.evidence?.reconciled === true
+  if (recovery !== undefined && (!recoveryKinds.has(recovery?.kind)
+    || !Number.isInteger(recovery?.phase) || recovery.phase < 1
+    || !recoveryEvidenceValid)) {
+    return workflowHalt('failed', { evidence: { recovery: 'requires failed+inspected or watch-halt+reconciled evidence for a positive phase' } })
+  }
   const repoRoot = gitToplevel(cwd)
   const cfg = loadConfig(cwd)
   const worktree = repoRoot
+  const completedClaims = new Set()
+  const lifecycleReceipts = []
+  if (recovery) {
+    const authorityRef = { status: 'unknown', reason: 'read-only-projection', sourceRef: null }
+    const active = { arcId: String(arcId), stage: 'phase', status: 'active', processedEventIds: [], lastHalt: null, authorityRef }
+    const haltReceipt = reduceArcTransition(active, {
+      eventId: `recovery-cause:${arcId}:${recovery.phase}`,
+      arcId: String(arcId), source: 'arc-plane-workflow', type: recovery.kind,
+      phase: recovery.phase, evidence: { recovery: recovery.kind }, authorityRef,
+    })
+    if (haltReceipt.rejection) return workflowHalt('failed', { phase: recovery.phase, evidence: { recovery: haltReceipt.rejection } })
+    if (existsSync(armPath(worktree, recovery.phase))) {
+      return {
+        ...buildHaltPayload(recovery.kind, { phase: recovery.phase, evidence: { executorArm: 'standing executor arm remains unresolved' } }),
+        resume: haltReceipt.resume,
+        transitionReceipt: haltReceipt,
+        trace: { state: haltReceipt.next, receipts: [haltReceipt] },
+      }
+    }
+    const resumeReceipt = reduceArcTransition(haltReceipt.next, {
+      eventId: `recovery:${arcId}:${recovery.phase}`,
+      arcId: String(arcId), source: 'arc-plane-workflow', type: 'resume',
+      phase: recovery.phase, evidence: recovery.evidence, authorityRef,
+    })
+    if (resumeReceipt.rejection) return workflowHalt('failed', { phase: recovery.phase, evidence: { recovery: resumeReceipt.rejection } })
+    lifecycleReceipts.push(haltReceipt, resumeReceipt)
+  }
 
   // fail-loud before anything (§4: `roadmap config check`).
   const cfgCheck = run('roadmap config check', { cwd })
-  if (cfgCheck.exitCode !== 0) return buildHaltPayload('failed', { phase: null, evidence: { configCheck: cfgCheck.stderr } })
+  if (cfgCheck.exitCode !== 0) return commandFailure('failed', 'configCheck', cfgCheck, { arcId })
   // arm the lane (no-op if this session already holds it).
-  run(`roadmap arm ${arcId}`, { cwd })
+  const arcArm = run(`roadmap arm ${arcId}`, { cwd })
+  if (arcArm.exitCode !== 0) return commandFailure('blocked', 'arcArm', arcArm, { arcId })
 
   const plane = { name: planeName } // NO snapshot — membership is next.plane, re-resolved each iteration
 
   while (true) {
-    const next = jsonOf(run(`roadmap arc next ${arcId} --json`, { cwd }))
-    const decision = classifyNextAction(next, plane)
+    // A claim proves only that result consumption began. Before deriving any next
+    // action, require the exact durable tail-completion marker or stop for inspection.
+    let pendingClaims
+    try {
+      pendingClaims = listResultClaims(worktree, arcId)
+    } catch (e) {
+      return workflowHalt('failed', { evidence: { resultConsumptionInterrupted: e.message } })
+    }
+    for (const claim of pendingClaims) {
+      if (completedClaims.has(claim.eventId)) continue
+      const completion = readResultTailCompletion(worktree, claim.phase, claim)
+      if (!completion) {
+        return workflowHalt('failed', {
+          phase: claim.phase,
+          evidence: { resultConsumptionInterrupted: { claim, reason: 'result tail completion is not durably proven' } },
+        })
+      }
+    }
 
-    if (decision === 'complete') return { done: true, arc: arcId }
-    if (decision === 'halt') return buildHaltPayload('blocked', { phase: next.phase ?? null, evidence: next })
-    if (decision === 'plane-done') return { planeDone: true, plane: planeName } // next plane = the session's next launch
-    if (decision === 'handoff') return { handoff: next.action, next } // sweep/validate/land run in-session (judgment-heavy)
+    const arcNext = run(`roadmap arc next ${arcId} --json`, { cwd })
+    if (arcNext.exitCode !== 0 || !arcNext.stdout?.trim()) {
+      return commandFailure('failed', 'arcNext', arcNext, { arcId })
+    }
+    let next
+    try {
+      next = jsonOf(arcNext)
+    } catch (e) {
+      return workflowHalt('failed', { arcId, evidence: { arcNext: `invalid JSON: ${e.message}` } })
+    }
+    let decision
+    try {
+      decision = classifyNextAction(next, plane)
+    } catch (e) {
+      return workflowHalt('failed', { evidence: { arcNext: e.message } })
+    }
+    // Recompute from the read-only projection. CLI JSON is evidence, not authority
+    // over lifecycle state, so an injected or stale receipt cannot drive the workflow.
+    const transitionReceipt = deriveArcLifecycleTransition(next)
+    if (transitionReceipt.rejection) {
+      return workflowHalt('failed', { phase: next.phase ?? null, evidence: { lifecycleProjection: transitionReceipt.rejection } })
+    }
+
+    if (decision === 'complete') return withTransition({ done: true, arc: arcId }, transitionReceipt, lifecycleReceipts)
+    if (decision === 'halt') {
+      const kind = next.action === 'gaps' ? 'gaps' : next.action === 'land-unproven' ? 'land-unproven' : 'blocked'
+      return {
+        ...buildHaltPayload(kind, { phase: next.phase ?? null, evidence: next }),
+        resume: transitionReceipt.resume,
+        transitionReceipt,
+        trace: { state: transitionReceipt.next, receipts: [...lifecycleReceipts, transitionReceipt] },
+      }
+    }
+    if (decision === 'plane-done') return withTransition({ planeDone: true, plane: planeName }, transitionReceipt, lifecycleReceipts)
+    if (decision === 'handoff') return withTransition({ handoff: next.action, next }, transitionReceipt, lifecycleReceipts)
 
     // decision === 'run' (run-phase | resume-phase)
     const phase = next.phase
-    const plan = jsonOf(run(`roadmap gate plan ${phase} --json`, { cwd })) // banding echoed to the user
+    const preflightArm = liveArm(worktree, phase)
+    if (preflightArm) {
+      const who = preflightArm.executorId
+        ? `executor '${preflightArm.executorId}'`
+        : `an executor it does not name (beacon '${preflightArm.beaconEvent ?? 'unresolved'}')`
+      const halt = workflowHalt('blocked', {
+        phase,
+        evidence: {
+          executorArm:
+            `arc-plane: phase ${phase} is already armed to ${who} — refusing to continue over its working tree and branch. Reconcile the arm before resuming.`,
+        },
+      })
+      return { ...halt, resume: halt.transitionReceipt.resume }
+    }
+    const prestartHead = next.action === 'run-phase' ? currentHead(worktree) : null
+    if (next.action === 'run-phase' && !prestartHead) {
+      return workflowHalt('failed', { phase, evidence: { baseline: 'cannot resolve exact pre-start HEAD' } })
+    }
+    const planCommand = prestartHead
+      ? `roadmap gate plan ${phase} --base ${prestartHead} --json`
+      : `roadmap gate plan ${phase} --json`
+    const gatePlan = run(planCommand, { cwd })
+    if (gatePlan.exitCode !== 0 || !gatePlan.stdout?.trim()) {
+      return commandFailure('failed', 'gatePlan', gatePlan, { arcId, phase })
+    }
+    let plan
+    try {
+      plan = jsonOf(gatePlan)
+    } catch (e) {
+      return workflowHalt('failed', { arcId, phase, evidence: { gatePlan: `invalid JSON: ${e.message}` } })
+    }
+    plan = { ...plan, baselineKind: prestartHead ? 'pre-start-head' : 'phase-start', baseHead: prestartHead }
     const bandRoute = classifyBandRoute(next.band, force)
     if (bandRoute.route === 'handoff-inline') {
       // trivial/heavy (or --inline forced) → the session runs this phase INLINE under the thin
       // do-phase arc-mode / inline-supervised rules; only `mid` spawns an executor.
-      return { handoffInline: bandRoute, phase, plan }
+      return withTransition({ handoffInline: bandRoute, phase, plan }, transitionReceipt, lifecycleReceipts)
     }
 
     // ── the executor spawn (the ONE agent() judgment step) ──
@@ -202,7 +400,14 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
       designRefs: meta.designRefs,
       beaconEvents: beacon ? [beacon] : [],
     })
-    const schema = jsonOf(run('roadmap contract show --json-schema', { cwd })) // seam 3 — GENERATED, never restated
+    const contract = run('roadmap contract show --json-schema', { cwd })
+    if (contract.exitCode !== 0 || !contract.stdout?.trim()) return commandFailure('failed', 'contractShow', contract, { arcId, phase })
+    let schema
+    try {
+      schema = jsonOf(contract)
+    } catch (e) {
+      return workflowHalt('failed', { phase, evidence: { contractShow: `invalid JSON: ${e.message}` } })
+    }
 
     // Arm the guard BEFORE the spawn, through the ONE lifecycle lib both lanes share. The id is
     // minted per SPAWN, not per session: one session spawns many executors, and the 2026-08-17
@@ -218,14 +423,14 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     try {
       productClaim = productRepoOverlaps(worktree, phase, repos)
     } catch (e) {
-      return buildHaltPayload('blocked', { phase, evidence: { productRepoOverlap: `overlap scan failed: ${e.message}` } })
+      return workflowHalt('blocked', { phase, evidence: { productRepoOverlap: `overlap scan failed: ${e.message}` } })
     }
     for (const note of productClaim.notes) warn(note)
     if (productClaim.overlaps.length > 0) {
       const evidence = productClaim.overlaps
         .map((hit) => `phase ${hit.phase} in ${hit.root} shares ${hit.repos.join(', ')}`)
         .join('; ')
-      return buildHaltPayload('blocked', {
+      return workflowHalt('blocked', {
         phase,
         evidence: { productRepoOverlap: `arc-plane: phase ${phase} product-tree overlap — ${evidence}` },
       })
@@ -235,21 +440,6 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     // own session id — a caller without one is precisely the lane that walked into the 2026-08-17
     // double-spawn. liveArm is the lib's own judgement (an arm naming an executor, or one whose
     // beacon still reads work in flight), so the CHECK door is never laxer than the disarm door.
-    const incumbent = liveArm(worktree, phase)
-    if (incumbent) {
-      const who = incumbent.executorId
-        ? `executor '${incumbent.executorId}'`
-        : `an executor it does not name (beacon '${incumbent.beaconEvent}')`
-      return buildHaltPayload('blocked', {
-        phase,
-        evidence: {
-          executorArm:
-            `arc-plane: phase ${phase} is already armed to ${who} — refusing to spawn a second`
-            + ' executor onto its working tree and branch (2026-08-17). Read the beacon, then'
-            + ` \`roadmap executor-disarm ${phase} --force\` only once the incumbent is genuinely gone.`,
-        },
-      })
-    }
     const armed = Boolean(sessionId)
     if (armed) {
       try {
@@ -258,7 +448,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
         armExecutor(worktree, phase, sessionId, { executorId, expectedModelAlias: cardModelAlias(DEFAULT_AGENT_CARD) })
       } catch (e) {
         // The belt for a race between the read above and this write (the lib is the same rule).
-        return buildHaltPayload('blocked', { phase, evidence: { executorArm: e.message } })
+        return workflowHalt('blocked', { phase, evidence: { executorArm: e.message } })
       }
     }
 
@@ -284,29 +474,24 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
         // executor did not return) — so the once-built `prompt` is not re-sent and needs no
         // re-render; only a fresh spawn (a relaunch by the session after a halt) rebuilds it.
         if (backgroundRunAlive(b)) continue
-        return buildHaltPayload('stalled', { phase, evidence: spawn.watchVerdict })
+        return workflowHalt('stalled', { phase, evidence: spawn.watchVerdict })
       }
       if (spawn.watchExit === 4) {
-        return buildHaltPayload('exited', { phase, evidence: spawn.watchVerdict })
+        return workflowHalt('exited', { phase, evidence: spawn.watchVerdict })
       }
       if (spawn.watchExit === 5) {
         // UNOBSERVED — no life signal could be probed. Behaviourally a halt like stalled, but the
         // session must judge it with the evidence in hand: relabelling it `stalled` is exactly the
         // over-claim that nearly put a second executor on a live phase (2026-08-18).
-        return buildHaltPayload('unobserved', { phase, evidence: spawn.watchVerdict })
+        return workflowHalt('unobserved', { phase, evidence: spawn.watchVerdict })
       }
       // an unrecognized wake with no result — treat as a stall, evidence in hand
-      return buildHaltPayload('stalled', { phase, evidence: spawn })
+      return workflowHalt('stalled', { phase, evidence: spawn })
     }
 
     // ── the result tail (§4 order) ──
     rc = run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(spawn.result) }) // parse or die
-    // A green result check IS the mechanical proof that this executor handed something back —
-    // the same proof the Stop hook stamps in the Claude lane, which this harness may not run.
-    // Advisory (the disarm below trusts its own facts, not this line), and best-effort like its
-    // hook twin: a failed journal write must never break the typed contract. A double stamp when
-    // the hook DID run is harmless: append-only, closed vocabulary, same event.
-    if (rc.exitCode === 0) {
+    if (rc.exitCode === 0 && rc.stdout?.trim()) {
       try {
         appendExecutorEvent(worktree, phase, 'result-returned')
       } catch (e) {
@@ -330,21 +515,97 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
         }
       }
     }
-    if (rc.exitCode !== 0) return buildHaltPayload('failed', { phase, evidence: { resultCheck: rc.stderr || 'invalid PhaseExecutionResult' } })
-    const result = jsonOf(rc)
+    if (rc.exitCode !== 0 || !rc.stdout?.trim()) return workflowHalt('failed', { phase, evidence: { resultCheck: rc.stderr || rc.stdout || 'invalid PhaseExecutionResult' } })
+    let result
+    try {
+      result = jsonOf(rc)
+    } catch (e) {
+      return workflowHalt('failed', { phase, evidence: { resultCheck: `invalid JSON: ${e.message}` } })
+    }
     if (result.status !== 'done') {
       // escalated/failed → the workflow ENDS; the session owns the conversation and surfaces it.
-      return buildHaltPayload(result.status === 'escalated' ? 'escalated' : 'failed', { phase, evidence: result })
+      return workflowHalt(result.status === 'escalated' ? 'escalated' : 'failed', { phase, evidence: result })
     }
     const descope = detectSelfDescope(result, { acceptanceCriteria: meta.acceptanceCriteria, tasks: meta.tasks, arcCriteria: meta.arcCriteria })
-    if (descope.length > 0) return buildHaltPayload('self-descope', { phase, evidence: descope }) // bounce/ratify stays HUMAN
+    if (descope.length > 0) return workflowHalt('self-descope', { phase, evidence: descope }) // bounce/ratify stays HUMAN
 
+    const authorityRef = transitionReceipt.authorityRef
+    const checkpointDigest = next.sourceCheckpoint?.digest
+      ?? sha256(JSON.stringify({ arcId, phase, head: prestartHead ?? currentHead(worktree), action: next.action }))
+    const resultDigest = sha256(canonicalJson(result))
+    const eventId = `result:${arcId}:${phase}:${checkpointDigest}`
+    const resultReceipt = reduceArcTransition(transitionReceipt.next, {
+      eventId,
+      arcId: String(arcId),
+      source: 'result-consumption',
+      type: 'done',
+      phase,
+      evidence: { checkpointDigest, resultDigest },
+      authorityRef,
+    })
+    if (resultReceipt.rejection) {
+      return workflowHalt('failed', { phase, evidence: { lifecycleResult: resultReceipt.rejection } })
+    }
+    lifecycleReceipts.push(resultReceipt)
+    let consumption
+    try {
+      consumption = claimResultConsumption(worktree, {
+        arcId,
+        phase,
+        checkpointDigest,
+        resultDigest,
+        eventId,
+        owner: { pid: process.pid, sessionId: String(sessionId ?? `pid-${process.pid}`) },
+        authorityRef,
+      })
+    } catch (e) {
+      return workflowHalt('failed', { phase, evidence: { resultConsumption: e.message } })
+    }
+    if (consumption.status === 'duplicate') {
+      return duplicateResultOutput({ arcId, phase, eventId, authorityRef, evidence: { resultConsumption: consumption } })
+    }
+    if (consumption.status === 'conflict') {
+      return workflowHalt('failed', { phase, evidence: { resultConsumption: consumption } })
+    }
     // phase-file / gate-report consistency (the anti-narration check, DESIGN §2). A red
     // verify-complete (exit 2 = inconsistent) must halt, not be silently accepted.
     const vc = run(`roadmap gate run ${phase} --verify-complete`, { cwd })
-    if (vc.exitCode !== 0) return buildHaltPayload('failed', { phase, evidence: { verifyComplete: vc.stderr || vc.stdout } })
+    if (vc.exitCode !== 0) return workflowHalt('failed', { phase, evidence: { verifyComplete: vc.stderr || vc.stdout } })
 
-    const mut = await serializeSharedMutation(phase, { repoRoot, cfg }) // groom backlog + emit — the loop's final step
-    if (mut) return mut
+    const mut = await serializeSharedMutation(phase, { repoRoot, cfg, arcId }) // groom backlog + emit — the loop's final step
+    if (mut) return workflowHalt(mut.halt ?? 'failed', { phase, evidence: mut.evidence })
+    try {
+      appendExecutorEvent(worktree, phase, 'phase-complete', {
+        resultTailComplete: true,
+        checkpointDigest,
+        resultDigest,
+      })
+    } catch (e) {
+      return workflowHalt('failed', {
+        phase,
+        evidence: { resultConsumptionInterrupted: { claim: consumption.claim, reason: `completion beacon failed: ${e.message}` } },
+      })
+    }
+    completedClaims.add(eventId)
+    if (pauseAfter === phase) {
+      const pauseReceipt = reduceArcTransition(resultReceipt.next, {
+        eventId: `pause:${arcId}:${phase}:${checkpointDigest}`,
+        arcId: String(arcId),
+        source: 'arc-plane-workflow',
+        type: 'pause-after',
+        phase,
+        evidence: { pauseAfter: phase },
+        authorityRef,
+      })
+      if (pauseReceipt.rejection) {
+        return workflowHalt('failed', { phase, evidence: { lifecyclePause: pauseReceipt.rejection } })
+      }
+      return {
+        ...buildHaltPayload('pause-after', { phase, evidence: { pauseAfter: phase } }),
+        resume: pauseReceipt.resume,
+        transitionReceipt: pauseReceipt,
+        trace: { state: pauseReceipt.next, receipts: [...lifecycleReceipts, pauseReceipt] },
+      }
+    }
   }
 }

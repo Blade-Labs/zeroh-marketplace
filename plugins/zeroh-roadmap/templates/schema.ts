@@ -306,6 +306,134 @@ export const AuthorityEnvelopeShape = z.object({
   if (expectedProfile === 'isolated-unsafe' && value.request.provenance?.kind !== 'explicit-user-authorization') issue(['request', 'provenance'], 'effective isolated-unsafe authority requires explicit user authorization provenance')
 })
 
+// -- Arc lifecycle -----------------------------------------------------------
+
+const ArcNonBlankStringShape = z.string().refine((value) => value.trim().length > 0, 'must contain a non-whitespace character')
+
+/** Reference to authority validated and persisted by an impure owner. */
+export const ArcAuthorityRefShape = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('known'),
+    envelopeDigest: ArcNonBlankStringShape,
+    source: z.object({ kind: z.enum(['codex-journal', 'managed-host-receipt']), ref: ArcNonBlankStringShape }).strict(),
+  }).strict(),
+  z.object({
+    status: z.literal('unknown'),
+    reason: z.enum(['read-only-projection', 'legacy-unrecorded', 'source-unreadable']),
+    sourceRef: ArcNonBlankStringShape.nullable(),
+  }).strict(),
+])
+
+const ArcLifecycleStageShape = z.enum(['phase', 'sweep', 'validate', 'land', 'delivery', 'evaluate', 'complete'])
+const ArcLifecycleStatusShape = z.enum(['active', 'halted', 'complete'])
+const ArcResumeActionShape = z.enum([
+  'relaunch-plane', 'run-sweep', 'run-validate', 'run-land', 'run-evaluate', 'done',
+  'wait-user', 'inspect-blocker', 'inspect-failure', 'reconcile', 'run-correction',
+])
+const ArcLifecycleEventTypeShape = z.enum([
+  'run-phase', 'resume-phase', 'done', 'sweep', 'validate', 'land', 'land-proven',
+  'land-unproven', 'evaluate', 'complete', 'resume', 'correction', 'blocked',
+  'escalated', 'failed', 'self-descope', 'stalled', 'exited', 'unobserved',
+  'permission', 'auth', 'review-exhausted', 'gaps', 'pause-after',
+])
+
+const HaltKindShape = z.enum([
+  'blocked', 'escalated', 'failed', 'self-descope', 'stalled', 'exited',
+  'unobserved', 'permission', 'auth', 'review-exhausted', 'gaps',
+  'pause-after', 'land-unproven',
+])
+const HaltResumeByKind = {
+  blocked: 'inspect-blocker', escalated: 'wait-user', failed: 'inspect-failure',
+  'self-descope': 'wait-user', stalled: 'reconcile', exited: 'reconcile',
+  unobserved: 'reconcile', permission: 'wait-user', auth: 'wait-user',
+  'review-exhausted': 'wait-user', gaps: 'run-correction',
+  'pause-after': 'relaunch-plane', 'land-unproven': 'reconcile',
+} as const
+
+export const TypedHaltShape = z.object({
+  kind: HaltKindShape,
+  phase: z.number().int().positive().nullable(),
+  evidence: z.unknown(),
+  resume: ArcResumeActionShape,
+}).strict().superRefine((value, ctx) => {
+  if (value.resume !== HaltResumeByKind[value.kind]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['resume'], message: 'halt kind has a different safe resume action' })
+})
+
+export const ArcLifecycleStateShape = z.object({
+  arcId: ArcNonBlankStringShape,
+  stage: ArcLifecycleStageShape,
+  status: ArcLifecycleStatusShape,
+  processedEventIds: z.array(ArcNonBlankStringShape).superRefine((ids, ctx) => {
+    if (new Set(ids).size !== ids.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'processedEventIds must be unique' })
+  }),
+  lastHalt: TypedHaltShape.nullable(),
+  authorityRef: ArcAuthorityRefShape,
+}).strict().superRefine((value, ctx) => {
+  if (value.stage === 'complete' && value.status !== 'complete') ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['status'], message: 'complete stage requires complete status' })
+  if (value.stage !== 'complete' && value.status === 'complete') ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['stage'], message: 'complete status requires complete stage' })
+  if (value.status === 'halted' && value.lastHalt == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lastHalt'], message: 'halted state requires lastHalt' })
+  if (value.status !== 'halted' && value.lastHalt != null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lastHalt'], message: 'non-halted state cannot retain lastHalt' })
+  if (value.lastHalt?.kind === 'gaps' && value.stage !== 'validate') ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['stage'], message: 'gaps halt belongs to validate stage' })
+  if (value.lastHalt?.kind === 'land-unproven' && value.stage !== 'land') ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['stage'], message: 'land-unproven halt belongs to land stage' })
+})
+
+export const ArcLifecycleEventShape = z.object({
+  eventId: ArcNonBlankStringShape,
+  arcId: ArcNonBlankStringShape,
+  source: ArcNonBlankStringShape,
+  type: ArcLifecycleEventTypeShape,
+  phase: z.number().int().positive().optional(),
+  evidence: z.unknown().optional(),
+  authorityRef: ArcAuthorityRefShape.optional(),
+}).strict()
+
+const TransitionRejectionShape = z.object({
+  kind: z.enum(['invalid-state', 'malformed-event', 'duplicate-event', 'invalid-transition', 'arc-mismatch', 'authority-conflict']),
+  eventId: z.string().nullable(),
+  reason: ArcNonBlankStringShape,
+}).strict()
+
+const AcceptedTransitionReceiptShape = z.object({
+  prior: ArcLifecycleStateShape,
+  next: ArcLifecycleStateShape,
+  event: ArcLifecycleEventShape,
+  authorityRef: ArcAuthorityRefShape,
+  resume: ArcResumeActionShape,
+  rejection: z.null(),
+}).strict().superRefine((value, ctx) => {
+  if (JSON.stringify(value.authorityRef) !== JSON.stringify(value.next.authorityRef)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['authorityRef'], message: 'accepted receipt authority must equal next-state authority' })
+  }
+})
+
+const RejectedTransitionReceiptShape = z.object({
+  prior: z.any(),
+  next: z.any(),
+  event: z.any(),
+  authorityRef: ArcAuthorityRefShape,
+  resume: ArcResumeActionShape,
+  rejection: TransitionRejectionShape,
+}).strict().superRefine((value, ctx) => {
+  if (JSON.stringify(value.prior) !== JSON.stringify(value.next)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['next'], message: 'rejected transition must preserve prior state' })
+  }
+  const prior = ArcLifecycleStateShape.safeParse(value.prior)
+  if (prior.success && JSON.stringify(value.authorityRef) !== JSON.stringify(prior.data.authorityRef)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['authorityRef'], message: 'rejected transition must preserve prior authority' })
+  }
+})
+
+export const TransitionReceiptShape = z.union([
+  AcceptedTransitionReceiptShape,
+  RejectedTransitionReceiptShape,
+])
+
+export type ArcAuthorityRef = z.output<typeof ArcAuthorityRefShape>
+export type ArcLifecycleState = z.output<typeof ArcLifecycleStateShape>
+export type ArcLifecycleEvent = z.output<typeof ArcLifecycleEventShape>
+export type TypedHalt = z.output<typeof TypedHaltShape>
+export type TransitionReceipt = z.output<typeof TransitionReceiptShape>
+
 export const DriverShape = z.object({
   model: z.string().min(1),
   lane: z.string().min(1),
@@ -495,6 +623,13 @@ export const SweepReportShape = z.object({
    *  records the honest literal ('no designRefs'), never an empty string. */
   architectVerdict: z.string().min(1),
   deferredToReleaseSweep: z.array(z.string()),
+  /** Recorder-owned binding for the exceptional intent-correction resweep. */
+  correction: z.object({
+    validationAt: z.string().datetime(),
+    validationHead: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+    repairHead: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+    reviewedHead: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+  }).strict().optional(),
   overall: z.enum(['green', 'blocked']),
   blockers: z.array(z.string()),
 })
@@ -1358,6 +1493,8 @@ export const ArcEvalReportShape = z.object({
   arcId: z.union([z.number().int().positive(), z.string().min(1)]),
   date: z.string().min(10),
   judgeModel: z.string().min(1).optional(),
+  /** Computed by the recorder; absent on historical, unbound reports. */
+  landSummaryDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
   /** A record over the CLOSED key enum: all seven required, no eighth accepted. */
   dimensions: z.record(EvalDimensionKeyShape, EvalDimensionShape),
   ratchet: z.array(EvalRatchetRowShape),

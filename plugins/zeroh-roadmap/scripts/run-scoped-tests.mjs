@@ -3,7 +3,7 @@
 import { realpathSync, statSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
+import { resolveTestExecution, runNodeTests, runSchemaTest, finishTestExecution } from './test-execution.mjs'
 const plugin = realpathSync(fileURLToPath(new URL('../', import.meta.url)))
 const repo = resolve(plugin, '../..')
 const schema = resolve(plugin, 'scripts/schema.test.ts')
@@ -17,15 +17,16 @@ try {
     if (rel.startsWith(`..${sep}`) || rel === '..' || isAbsolute(rel) || !statSync(path).isFile()) throw Error(`target outside plugin or not a file: ${target}`)
     return path
   })
-  const commands = []
   const nodeFiles = [...new Set(files.filter(path => path !== schema))]
-  if (nodeFiles.length) commands.push([process.execPath, ['--test', '--test-concurrency=1', ...nodeFiles]])
-  if (files.includes(schema)) commands.push(['npx', ['--no-install', 'tsx', 'scripts/schema.test.ts']])
-  for (const [command, args] of commands) {
-    const result = spawnSync(command, args, { cwd: plugin, stdio: 'inherit' })
-    if (result.error) console.error(result.error.message)
-    if (result.signal) { process.kill(process.pid, result.signal); break }
-    if (result.status !== 0) { process.exitCode = result.status ?? 1; break }
+  const execution = resolveTestExecution()
+  if (nodeFiles.length) {
+    const result = runNodeTests({ cwd: plugin, files: nodeFiles, execution })
+    const status = finishTestExecution(result)
+    if (status !== 0) process.exit(status)
+  }
+  if (files.includes(schema)) {
+    const status = finishTestExecution(runSchemaTest({ cwd: plugin, execution }))
+    if (status !== 0) process.exit(status)
   }
 } catch (error) {
   console.error(`scoped tests: ${error.message}`)

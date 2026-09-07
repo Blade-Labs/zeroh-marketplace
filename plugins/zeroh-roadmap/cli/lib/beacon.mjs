@@ -122,3 +122,29 @@ export function appendExecutorEvent(worktree, phase, event, extra = {}) {
   appendFileSync(p, JSON.stringify({ ts: new Date().toISOString(), phase: phaseNum, event, ...extra }) + '\n')
   return p
 }
+
+
+/** Find durable proof that the result tail for one exact checkpoint completed.
+ * The whole JSONL file is parsed fail-closed; a corrupt or phase-mismatched
+ * record cannot be skipped to reach an older, apparently convenient proof. */
+export function readResultTailCompletion(worktree, phase, { checkpointDigest, resultDigest }) {
+  const phaseNum = Number(phase)
+  const p = join(worktree, '.building', `${phaseNum}-executor.jsonl`)
+  if (!existsSync(p)) return null
+  let records
+  try {
+    records = readFileSync(p, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line))
+  } catch {
+    return null
+  }
+  for (const record of records.toReversed()) {
+    const bindsResult = record.checkpointDigest === checkpointDigest || record.resultDigest === resultDigest
+    if (bindsResult && record.phase !== phaseNum) return null
+    if (record.event === 'phase-complete'
+      && record.resultTailComplete === true
+      && record.phase === phaseNum
+      && record.checkpointDigest === checkpointDigest
+      && record.resultDigest === resultDigest) return record
+  }
+  return null
+}

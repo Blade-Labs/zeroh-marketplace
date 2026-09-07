@@ -13,7 +13,7 @@ Drive the shipped product against its original acceptance criteria with a fresh 
 `intent-validator`. Report PASS only when all criteria are met; otherwise GAPS with evidence.
 Never merge. Step 5 routes authorized small repairs to a bounded pass and larger work to planning.
 
-**Trigger:** `validate arc <id>`, `/validate-arc <id>`; also `do-arc`'s terminal Step 7 (after `arc-sweep`,
+**Trigger:** `validate arc <id>`, `/validate-arc <id>`; also `do-arc`'s validation handoff (after `arc-sweep`,
 before the merge-hold). `<id>` matches `Arc.id`.
 
 ## Step 0: Resolve the arc + its criteria

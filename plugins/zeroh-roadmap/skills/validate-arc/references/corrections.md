@@ -43,10 +43,15 @@ budget/round usage requires clarification, not a fresh allowance.
    partial evidence, never phase or arc completion. Failed commands use the existing gate
    diagnosis/retry rules; a code fix is not a passing check.
 3. Review the repair diff for correctness under the existing risk rules. Reuse focused
-   verification of fixes; retain fresh independent review for HIGH/CRITICAL repairs. Refresh
-   affected sweep/debt conclusions when the repair changes them. No clean record applies to
-   a change it did not examine.
-4. Send each affected criterion and the current running surface to a **fresh independent
+   verification of fixes; retain fresh independent review for HIGH/CRITICAL repairs.
+   No clean record applies to a change it did not examine. Record repair completion with
+   `roadmap arc record-validate <id> --correction-ready`; it preserves the existing GAPS
+   budget and note and records the actual repair HEAD. Relaunch for the required sweep.
+   The existing sweep recorder attaches the correction binding itself; no model-authored
+   hash or new state file is needed. Evidence commits do not invalidate that sweep.
+   Stop this sequence until the sweep is recorded and relaunch returns a fresh `validate`
+   handoff. A repair-completion stamp alone does not permit Step 4.
+4. After that handoff, send each affected criterion and the current running surface to a **fresh independent
    intent-validator** using validate-arc Steps 2–4. Give no builder reasoning, diffs or commit
    history. Deterministic criteria use one judge; subjective criteria require two agreeing
    judges. Recheck previously MET criteria whose behavior could change; uncertainty widens
@@ -61,8 +66,9 @@ The arc landing gate retains its configured terminal suite/CI requirements; this
 ## Planned route and exhaustion
 
 For work needing planning, group related gaps into a corrective phase via `plan-phase`, set its
-`arcId` and append it to the owning plane, then execute with `do-phase`. Do not create one phase
-per gap when one coherent plan covers them. Re-judge affected criteria with the same independence
+`arcId` and append it to the owning plane, then execute with `do-phase`. Record
+`--correction-ready` and follow Step 3 through the sweep and fresh `validate` handoff. Do not create one
+phase per gap when one coherent plan covers them. Re-judge affected criteria with the same independence
 and complete-panel rules above.
 
 Stop at PASS or the shared round/budget bound. On exhaustion report GAPS, remaining criteria,

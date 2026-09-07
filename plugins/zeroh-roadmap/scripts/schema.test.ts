@@ -62,6 +62,11 @@ import {
   ImportanceRulingsTableShape,
   ProposalShape,
   AuthorityEnvelopeShape,
+  ArcAuthorityRefShape,
+  ArcLifecycleStateShape,
+  ArcLifecycleEventShape,
+  TypedHaltShape,
+  TransitionReceiptShape,
 } from '../templates/schema'
 // The SECOND schema home — the consumer copy the CLI validates every phase file
 // through (cli/lib/tsx-bridge.mjs seam 3). Imported so the vendor-pair discipline
@@ -69,8 +74,14 @@ import {
 import {
   definePhase as definePhaseConsumerHome,
   AuthorityEnvelopeShape as AuthorityEnvelopeConsumerHome,
+  ArcAuthorityRefShape as ArcAuthorityRefConsumerHome,
+  ArcLifecycleStateShape as ArcLifecycleStateConsumerHome,
+  ArcLifecycleEventShape as ArcLifecycleEventConsumerHome,
+  TypedHaltShape as TypedHaltConsumerHome,
+  TransitionReceiptShape as TransitionReceiptConsumerHome,
 } from '../../../lib/roadmap/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
+import { reduceArcTransition } from '../cli/lib/workflow-steps.mjs'
 
 let failures = 0
 
@@ -3159,6 +3170,143 @@ check('PhaseEvalRecordList: parses an array of two records and names the offendi
     'an unknown root key in the second element of a batch',
   )
 })
+
+console.log('\nArc lifecycle — canonical state, events, halts, and receipts')
+
+const lifecycleKnownAuthority = {
+  status: 'known',
+  envelopeDigest: 'sha256:authority-one',
+  source: { kind: 'codex-journal', ref: 'session-1' },
+}
+const lifecycleUnknownAuthority = {
+  status: 'unknown',
+  reason: 'source-unreadable',
+  sourceRef: null,
+}
+const lifecycleStateFixture = {
+  arcId: 'NATIVEGREEN',
+  stage: 'phase',
+  status: 'active',
+  processedEventIds: [],
+  lastHalt: null,
+  authorityRef: lifecycleKnownAuthority,
+}
+const lifecycleEventFixture = {
+  eventId: 'event-37-1',
+  arcId: 'NATIVEGREEN',
+  source: 'arc-workflow',
+  type: 'run-phase',
+  phase: 37,
+}
+const lifecycleHaltFixture = {
+  kind: 'stalled',
+  phase: 37,
+  evidence: { verdict: 'STALLED' },
+  resume: 'reconcile',
+}
+const lifecycleReceiptFixture = {
+  prior: lifecycleStateFixture,
+  next: {
+    ...lifecycleStateFixture,
+    processedEventIds: ['event-37-1'],
+  },
+  event: lifecycleEventFixture,
+  authorityRef: lifecycleKnownAuthority,
+  resume: 'relaunch-plane',
+  rejection: null,
+}
+
+for (const home of [
+  {
+    name: 'templates/schema.ts',
+    authority: ArcAuthorityRefShape,
+    state: ArcLifecycleStateShape,
+    event: ArcLifecycleEventShape,
+    halt: TypedHaltShape,
+    receipt: TransitionReceiptShape,
+  },
+  {
+    name: 'lib/roadmap/schema.ts',
+    authority: ArcAuthorityRefConsumerHome,
+    state: ArcLifecycleStateConsumerHome,
+    event: ArcLifecycleEventConsumerHome,
+    halt: TypedHaltConsumerHome,
+    receipt: TransitionReceiptConsumerHome,
+  },
+] as const) {
+  check(`arc lifecycle: ${home.name} round-trips known/unknown authority and all four contracts`, () => {
+    requireShape(home.authority, `${home.name} ArcAuthorityRefShape`)
+    requireShape(home.state, `${home.name} ArcLifecycleStateShape`)
+    requireShape(home.event, `${home.name} ArcLifecycleEventShape`)
+    requireShape(home.halt, `${home.name} TypedHaltShape`)
+    requireShape(home.receipt, `${home.name} TransitionReceiptShape`)
+    assertEq(home.authority.parse(lifecycleKnownAuthority), lifecycleKnownAuthority, `${home.name} known authority`)
+    assertEq(home.authority.parse(lifecycleUnknownAuthority), lifecycleUnknownAuthority, `${home.name} unknown authority`)
+    assertEq(home.state.parse(lifecycleStateFixture), lifecycleStateFixture, `${home.name} state`)
+    assertEq(home.event.parse(lifecycleEventFixture), lifecycleEventFixture, `${home.name} event`)
+    assertEq(home.halt.parse(lifecycleHaltFixture), lifecycleHaltFixture, `${home.name} halt`)
+    assertEq(home.receipt.parse(lifecycleReceiptFixture), lifecycleReceiptFixture, `${home.name} receipt`)
+  })
+  check(`arc lifecycle: ${home.name} accepts real reducer receipts including a rejected no-op`, () => {
+    const actual = reduceArcTransition(lifecycleStateFixture, lifecycleEventFixture)
+    assertEq(home.receipt.parse(actual), actual, `${home.name} actual reducer receipt`)
+    const rejected = reduceArcTransition(
+      { ...lifecycleStateFixture, processedEventIds: [lifecycleEventFixture.eventId] },
+      lifecycleEventFixture,
+    )
+    assertEq(rejected.rejection?.kind, 'duplicate-event', `${home.name} duplicate rejection`)
+    assertEq(rejected.next, rejected.prior, `${home.name} rejected receipt structural no-op`)
+    assertEq(home.receipt.parse(rejected), rejected, `${home.name} rejected receipt`)
+  })
+
+
+  check(`arc lifecycle: ${home.name} parses real malformed/state rejections but refuses incoherent receipts`, () => {
+    const malformed = reduceArcTransition(lifecycleStateFixture, { ...lifecycleEventFixture, eventId: '   ' })
+    assertEq(malformed.rejection?.kind, 'malformed-event', `${home.name} malformed event rejection`)
+    assertEq(home.receipt.parse(malformed), malformed, `${home.name} malformed event receipt`)
+    const badState = { ...lifecycleStateFixture, processedEventIds: ['dup', 'dup'] }
+    const invalidState = reduceArcTransition(badState, { ...lifecycleEventFixture, eventId: 'fresh' })
+    assertEq(invalidState.rejection?.kind, 'invalid-state', `${home.name} invalid state rejection`)
+    assertEq(home.receipt.parse(invalidState), invalidState, `${home.name} invalid state receipt`)
+    assertThrows(() => home.receipt.parse({ ...malformed, rejection: null }), `${home.name} malformed accepted receipt`)
+    assertThrows(
+      () => home.receipt.parse({ ...malformed, next: { ...lifecycleStateFixture, processedEventIds: ['other'] } }),
+      `${home.name} rejected receipt that changes state`,
+    )
+    assertThrows(
+      () => home.receipt.parse({ ...malformed, authorityRef: lifecycleUnknownAuthority }),
+      `${home.name} receipt authority differs from valid next state`,
+    )
+  })
+
+  check(`arc lifecycle: ${home.name} rejects blank identities, unknown vocabulary, and malformed authority`, () => {
+    assertThrows(() => home.state.parse({ ...lifecycleStateFixture, arcId: '' }), `${home.name} blank arcId`)
+    assertThrows(() => home.event.parse({ ...lifecycleEventFixture, eventId: '' }), `${home.name} blank eventId`)
+    assertThrows(() => home.event.parse({ ...lifecycleEventFixture, type: 'teleport' }), `${home.name} unknown event`)
+    assertThrows(() => home.state.parse({ ...lifecycleStateFixture, stage: 'shipping-ish' }), `${home.name} unknown stage`)
+    assertThrows(() => home.halt.parse({ ...lifecycleHaltFixture, resume: 'just-try-again' }), `${home.name} unsafe resume`)
+    assertThrows(() => home.state.parse({ ...lifecycleStateFixture, status: 'halted', lastHalt: null }), `${home.name} halted without halt`)
+    assertThrows(() => home.state.parse({ ...lifecycleStateFixture, stage: 'complete', status: 'active' }), `${home.name} active complete stage`)
+    assertThrows(() => home.event.parse({ ...lifecycleEventFixture, surprise: true }), `${home.name} event extra key`)
+    assertThrows(() => home.state.parse({ ...lifecycleStateFixture, arcId: '   ' }), `${home.name} whitespace arcId`)
+    assertThrows(() => home.event.parse({ ...lifecycleEventFixture, eventId: '   ' }), `${home.name} whitespace eventId`)
+    assertThrows(() => home.state.parse({ ...lifecycleStateFixture, processedEventIds: ['dup', 'dup'] }), `${home.name} duplicate processed event ids`)
+    assertThrows(
+      () => home.authority.parse({ ...lifecycleKnownAuthority, source: { kind: 'shell-log', ref: 'x' } }),
+      `${home.name} unknown authority source kind`,
+    )
+    assertThrows(() => home.event.parse({ ...lifecycleEventFixture, phase: null }), `${home.name} null phase`)
+    assertThrows(() => home.event.parse({ ...lifecycleEventFixture, authorityRef: null }), `${home.name} null authorityRef`)
+    assertThrows(
+      () => home.authority.parse({ ...lifecycleKnownAuthority, envelopeDigest: '' }),
+      `${home.name} blank authority digest`,
+    )
+    assertThrows(
+      () => home.authority.parse({ ...lifecycleUnknownAuthority, reason: 'probably-fine' }),
+      `${home.name} unknown authority reason`,
+    )
+  })
+}
 
 // discoverArcs is async — run it and the final summary inside an async tail so
 // the harness stays CJS-compatible (no top-level await).

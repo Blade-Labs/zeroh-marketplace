@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import {
   mkdtempSync,
   mkdirSync,
@@ -18,6 +18,7 @@ import {
   existsSync,
   rmSync,
   realpathSync,
+  symlinkSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
@@ -36,6 +37,9 @@ const {
   writeArcMode,
   clearArcMode,
   releaseClaims,
+  readResultClaim,
+  listResultClaims,
+  claimResultConsumption,
   LaneHeldError,
 } = await import(MOD)
 
@@ -189,4 +193,170 @@ test('8) releaseClaims rm claim files best-effort; a missing claim is a no-op', 
   releaseClaims(main, [1700, 1701])
   assert.ok(!existsSync(join(claimsDir, '1700.claim')), 'the present claim is removed')
   assert.ok(!existsSync(join(claimsDir, '1701.claim')), 'a missing claim stays absent, no throw')
+})
+
+function claimInChild(repo, input, worker) {
+  const program = `
+    const mod = await import(process.argv[1])
+    const input = JSON.parse(process.argv[3])
+    input.owner = { pid: process.pid, sessionId: process.argv[2] }
+    process.stdout.write(JSON.stringify(mod.claimResultConsumption(process.argv[4], input)))
+  `
+  return new Promise((resolveResult, rejectResult) => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', program, MOD, worker, JSON.stringify(input), repo], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    child.on('error', rejectResult)
+    child.on('close', (code) => {
+      if (code !== 0) rejectResult(new Error(`claim worker ${worker} exited ${code}: ${stderr}`))
+      else resolveResult(JSON.parse(stdout))
+    })
+  })
+}
+
+test('9) result consumption claim has one cross-process winner and immutable conflict evidence', async () => {
+  const repo = newRepo()
+  const input = {
+    arcId: 'ARC',
+    phase: 1702,
+    checkpointDigest: 'sha256:checkpoint-one',
+    resultDigest: 'sha256:result-one',
+    eventId: 'ARC:1702:checkpoint-one',
+    authorityRef: { status: 'unknown', reason: 'read-only-projection', sourceRef: null },
+  }
+  const results = await Promise.all(
+    Array.from({ length: 8 }, (_, index) => claimInChild(repo, input, `worker-${index}`)),
+  )
+  assert.equal(results.filter((result) => result.status === 'claimed').length, 1)
+  assert.equal(results.filter((result) => result.status === 'duplicate').length, 7)
+  const published = readResultClaim(repo, {
+    arcId: input.arcId,
+    phase: input.phase,
+    checkpointDigest: input.checkpointDigest,
+  })
+  assert.equal(published.resultDigest, input.resultDigest)
+  assert.equal(published.checkpointDigest, input.checkpointDigest)
+  assert.ok(results.every((result) => result.claim.resultDigest === input.resultDigest))
+
+  const conflict = claimResultConsumption(repo, {
+    ...input,
+    resultDigest: 'sha256:different-result',
+    eventId: 'ARC:1702:different-result',
+    owner: { pid: process.pid, sessionId: 'conflicting-session' },
+  })
+  assert.equal(conflict.status, 'conflict')
+  assert.equal(conflict.claim.resultDigest, input.resultDigest)
+  assert.deepEqual(
+    readResultClaim(repo, { arcId: input.arcId, phase: input.phase, checkpointDigest: input.checkpointDigest }),
+    published,
+    'a conflict never overwrites the immutable winning claim',
+  )
+})
+
+const claimPath = (repo, input) => join(
+  buildingDir(repo),
+  'result-claims',
+  encodeURIComponent(input.arcId),
+  `${input.phase}-${encodeURIComponent(input.checkpointDigest)}.json`,
+)
+
+test('10) malformed or identity-mismatched existing claim fails without changing its bytes', () => {
+  for (const body of [
+    '{ malformed json',
+    JSON.stringify({
+      arcId: 'OTHER',
+      phase: 1702,
+      checkpointDigest: 'sha256:checkpoint-one',
+      resultDigest: 'sha256:result-one',
+      eventId: 'foreign',
+      owner: { pid: process.pid, sessionId: 'foreign' },
+      authorityRef: { status: 'unknown', reason: 'read-only-projection', sourceRef: null },
+      claimedAt: new Date().toISOString(),
+    }),
+  ]) {
+    const repo = newRepo()
+    const input = {
+      arcId: 'ARC',
+      phase: 1702,
+      checkpointDigest: 'sha256:checkpoint-one',
+      resultDigest: 'sha256:result-one',
+      eventId: 'event-one',
+      owner: { pid: process.pid, sessionId: 'session-one' },
+      authorityRef: { status: 'unknown', reason: 'read-only-projection', sourceRef: null },
+    }
+    const target = claimPath(repo, input)
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, body)
+    assert.throws(() => readResultClaim(repo, input), /malformed|identity/)
+    assert.throws(() => claimResultConsumption(repo, input), /malformed|identity/)
+    assert.equal(readFileSync(target, 'utf8'), body, 'refusal leaves the existing bytes intact')
+  }
+})
+
+test('11) result claim refuses existing symlinks without reading or changing outside bytes', () => {
+  for (const dangling of [false, true]) {
+    const repo = newRepo()
+    const input = {
+      arcId: 'ARC',
+      phase: 1703,
+      checkpointDigest: `sha256:symlink-${dangling}`,
+      resultDigest: 'sha256:result',
+      eventId: `event-symlink-${dangling}`,
+      owner: { pid: process.pid, sessionId: 'session-one' },
+      authorityRef: { status: 'unknown', reason: 'read-only-projection', sourceRef: null },
+    }
+    const target = claimPath(repo, input)
+    const outside = join(newTmp('zr-claim-outside-'), 'outside.json')
+    const outsideBytes = 'outside bytes must remain private\n'
+    if (!dangling) writeFileSync(outside, outsideBytes)
+    mkdirSync(dirname(target), { recursive: true })
+    symlinkSync(outside, target)
+    assert.throws(() => readResultClaim(repo, input), /symlink/)
+    assert.throws(() => claimResultConsumption(repo, input), /symlink/)
+    if (!dangling) assert.equal(readFileSync(outside, 'utf8'), outsideBytes)
+  }
+})
+
+test('12) different results racing for one checkpoint yield one claim and one immutable conflict', async () => {
+  const repo = newRepo()
+  const base = {
+    arcId: 'ARC',
+    phase: 1704,
+    checkpointDigest: 'sha256:shared-checkpoint',
+    authorityRef: { status: 'unknown', reason: 'read-only-projection', sourceRef: null },
+  }
+  const results = await Promise.all([
+    claimInChild(repo, { ...base, resultDigest: 'sha256:left', eventId: 'left' }, 'left-session'),
+    claimInChild(repo, { ...base, resultDigest: 'sha256:right', eventId: 'right' }, 'right-session'),
+  ])
+  assert.deepEqual(results.map((result) => result.status).sort(), ['claimed', 'conflict'])
+  const winner = results.find((result) => result.status === 'claimed').claim
+  const conflict = results.find((result) => result.status === 'conflict')
+  assert.equal(conflict.claim.resultDigest, winner.resultDigest)
+  assert.deepEqual(readResultClaim(repo, base), winner)
+})
+
+test('13) claim discovery refuses a valid claim stored under a noncanonical filename', () => {
+  const repo = newRepo()
+  const input = {
+    arcId: 'ARC',
+    phase: 1705,
+    checkpointDigest: 'sha256:canonical-checkpoint',
+    resultDigest: 'sha256:canonical-result',
+    eventId: 'canonical-event',
+    owner: { pid: process.pid, sessionId: 'canonical-session' },
+    authorityRef: { status: 'unknown', reason: 'read-only-projection', sourceRef: null },
+  }
+  const published = claimResultConsumption(repo, input).claim
+  const alias = join(dirname(claimPath(repo, input)), 'alias.json')
+  const aliasBytes = JSON.stringify(published)
+  writeFileSync(alias, aliasBytes)
+
+  assert.throws(() => listResultClaims(repo, input.arcId), /canonical|identity|filename/)
+  assert.equal(readFileSync(alias, 'utf8'), aliasBytes, 'refusal leaves alias bytes intact')
+  assert.deepEqual(readResultClaim(repo, input), published, 'the canonical claim remains intact')
 })

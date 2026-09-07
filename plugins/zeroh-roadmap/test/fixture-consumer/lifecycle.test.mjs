@@ -8,11 +8,16 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { makeFixtureRepo, runCli, writePhaseFile, commitPaths, readSlotLog, git } from './harness.mjs'
+import { makeFixtureRepo, runCli, writePhaseFile, writeArcFile, commitPaths, readSlotLog, git } from './harness.mjs'
 import { SCOPED_FALLBACK_NOTE } from '../../cli/lib/slots.mjs'
+import arcPlaneWorkflow from '../../workflows/arc-plane.workflow.mjs'
 
+import { groomBacklogSource } from '../../cli/lib/workflow-steps.mjs'
+import { claimResultConsumption, listResultClaims } from '../../cli/lib/sidecar.mjs'
+import { appendExecutorEvent } from '../../cli/lib/beacon.mjs'
+import { armExecutor } from '../../cli/lib/executor-arm.mjs'
 /** Seed a phase file + optional source touches, committed under a `phase N —` boundary commit
  *  (the em-dash the gate greps for a phase-start SHA). Returns the phase number. */
 function seedPhase(root, phaseObj, { kind = 'plain', touch = [], create = {}, msg } = {}) {
@@ -256,4 +261,542 @@ test('L10 — mixed-driver curation leaves published commits in place and the la
   assert.equal(land.code, 0, `the shipped phase land command succeeds; stderr:\n${land.stderr}`)
   assert.equal(git(root, 'rev-parse', 'develop'), curatedTip, 'the integration ref advances to the curated tip by fast-forward')
   assert.equal(git(root, 'rev-list', '--merges', `${publishedTip}..develop`), '', 'landing introduces no merge commit')
+})
+
+function driveEarlyArcWorkflow(run, input = {}) {
+  let agentCalls = 0
+  const root = makeFixtureRepo()
+  return {
+    root,
+    calls: [],
+    agentCalls: () => agentCalls,
+    async result() {
+      return arcPlaneWorkflow(
+        { arcId: 'FX', planeName: 'P', ...input },
+        {
+          cwd: root,
+          run: (command, options = {}) => {
+            this.calls.push(command)
+            return run(command, options)
+          },
+          agent: async () => {
+            agentCalls++
+            return { result: {} }
+          },
+        },
+      )
+    },
+  }
+}
+
+test('arc workflow lifecycle — backlog startup returns a pre-start HEAD plan without mutating the phase', async () => {
+  let baseline
+  const drive = driveEarlyArcWorkflow((command) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return {
+      stdout: JSON.stringify({ arc: 'FX', action: 'run-phase', phase: 9037, band: 'mid', plane: 'P', done: [], remaining: [], gates: {} }),
+      stderr: '',
+      exitCode: 0,
+    }
+    if (command === `roadmap gate plan 9037 --base ${baseline} --json`) return {
+      stdout: JSON.stringify({ phase: 9037, slots: [], baselineKind: 'pre-start-head', baseHead: baseline }),
+      stderr: '',
+      exitCode: 0,
+    }
+    throw new Error(`unexpected command after startup: ${command}`)
+  }, { force: 'inline' })
+  writePhaseFile(drive.root, { phase: 9037, status: 'backlog', arcId: 'FX', tasks: [{ id: '9037.1', done: false }] })
+  baseline = git(drive.root, 'rev-parse', 'HEAD')
+  const result = await drive.result()
+  assert.equal(result.plan.baselineKind, 'pre-start-head')
+  assert.equal(result.plan.baseHead, baseline)
+  assert.ok(!drive.calls.some((command) => command.includes('phase start')))
+  assert.match(readFileSync(join(drive.root, 'roadmap', 'phases', 'phase-9037.phase.ts'), 'utf8'), /status:\s*'backlog'/)
+  assert.equal(drive.agentCalls(), 0)
+})
+
+test('arc workflow lifecycle — empty failed gate plan is a typed halt with raw evidence', async () => {
+  let baseline
+  const drive = driveEarlyArcWorkflow((command) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return {
+      stdout: JSON.stringify({ arc: 'FX', action: 'run-phase', phase: 9037, band: 'mid', plane: 'P', done: [], remaining: [], gates: {} }),
+      stderr: '',
+      exitCode: 0,
+    }
+    if (command === `roadmap gate plan 9037 --base ${baseline} --json`) return { stdout: '', stderr: 'no phase baseline', exitCode: 2 }
+    throw new Error(`unexpected command after gate-plan failure: ${command}`)
+  })
+  baseline = git(drive.root, 'rev-parse', 'HEAD')
+  const result = await drive.result()
+  assert.equal(result.halt, 'failed')
+  assert.match(result.evidence.gatePlan, /no phase baseline/)
+  assert.equal(result.transitionReceipt.event.type, 'failed')
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.equal(drive.agentCalls(), 0)
+})
+
+test('arc workflow lifecycle — a nonzero arc-next result halts before any mutation', async () => {
+  const drive = driveEarlyArcWorkflow((command) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return { stdout: JSON.stringify({ error: 'malformed arc member' }), stderr: 'arc next refused', exitCode: 2 }
+    throw new Error(`mutation ran after red arc-next: ${command}`)
+  })
+  const result = await drive.result()
+  assert.equal(result.halt, 'failed')
+  assert.match(result.evidence.arcNext, /arc next refused/)
+  assert.equal(result.transitionReceipt.event.type, 'failed')
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.deepEqual(drive.calls, ['roadmap config check', 'roadmap arm FX', 'roadmap arc next FX --json'])
+  assert.equal(drive.agentCalls(), 0)
+})
+
+test('arc workflow lifecycle — a failed lane arm produces a reducer halt and never launches an agent', async () => {
+  const drive = driveEarlyArcWorkflow((command) => {
+    if (command === 'roadmap config check') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command === 'roadmap arm FX') return { stdout: '', stderr: 'lane already owned', exitCode: 2 }
+    throw new Error(`command ran after failed arm: ${command}`)
+  })
+  const result = await drive.result()
+  assert.equal(result.halt, 'blocked')
+  assert.match(result.evidence.arcArm, /lane already owned/)
+  assert.equal(result.transitionReceipt.event.type, 'blocked')
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.deepEqual(drive.calls, ['roadmap config check', 'roadmap arm FX'])
+  assert.equal(drive.agentCalls(), 0)
+})
+
+test('arc workflow lifecycle — durable validation gaps return the reducer corrective decision', async () => {
+  const drive = driveEarlyArcWorkflow((command) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return {
+      stdout: JSON.stringify({ arc: 'FX', action: 'gaps', done: [9037], remaining: [], gates: { swept: true, validated: false }, reason: 'verdict GAPS' }),
+      stderr: '', exitCode: 0,
+    }
+    throw new Error(`unexpected command after gaps decision: ${command}`)
+  })
+  const result = await drive.result()
+  assert.equal(result.halt, 'gaps')
+  assert.equal(result.resume, 'run-correction')
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.equal(result.transitionReceipt.next.stage, 'validate')
+  assert.equal(drive.agentCalls(), 0)
+})
+
+test('arc workflow lifecycle — proven land hands off only the missing evaluation action', async () => {
+  const drive = driveEarlyArcWorkflow((command) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return {
+      stdout: JSON.stringify({ arc: 'FX', action: 'evaluate', done: [9037], remaining: [], gates: { swept: true, validated: true } }),
+      stderr: '', exitCode: 0,
+    }
+    throw new Error(`landing replayed after proven land: ${command}`)
+  })
+  const result = await drive.result()
+  assert.equal(result.handoff, 'evaluate')
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.equal(result.transitionReceipt.next.stage, 'evaluate')
+  assert.ok(!drive.calls.some((command) => /arc land/.test(command)))
+  assert.equal(drive.agentCalls(), 0)
+})
+
+test('arc correction lifecycle — correction-ready binds actual heads, preserves GAPS evidence, and retries byte-identically', () => {
+  const root = makeFixtureRepo()
+  writePhaseFile(root, { phase: 9042, status: 'done', arcId: 'FX', tasks: [{ id: '9042.1', done: true }] })
+  writeArcFile(root, {
+    id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [9042] }],
+    acceptanceCriteria: [{ id: 'c1', job: 'repair the observed gap' }],
+  })
+  commitPaths(root, 'feat: seed correction fixture', ['roadmap/phases/phase-9042.phase.ts', 'roadmap/arcs/FX.arc.ts'])
+  const validationHead = git(root, 'rev-parse', 'HEAD')
+  let cli = runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'GAPS', '--note', 'one bounded repair remains'])
+  assert.equal(cli.code, 0, cli.stderr)
+  const artifactPath = join(root, 'roadmap', '.gate', 'arc-FX', 'validate.json')
+  const awaiting = JSON.parse(readFileSync(artifactPath, 'utf8'))
+  assert.equal(awaiting.verdict, 'GAPS')
+  assert.equal(awaiting.note, 'one bounded repair remains')
+  assert.deepEqual(awaiting.correction, { state: 'awaiting-repair', validationHead })
+
+  const awaitingBytes = readFileSync(artifactPath, 'utf8')
+  cli = runCli(root, ['arc', 'record-validate', 'FX', '--correction-ready'])
+  assert.notEqual(cli.code, 0, 'unchanged HEAD is not repair evidence')
+  assert.equal(readFileSync(artifactPath, 'utf8'), awaitingBytes)
+
+  const bounds = { round: 1, budget: { used: 1, limit: 2 } }
+  const topLevelBounds = { correctionRounds: { used: 1, limit: 2 } }
+  writeFileSync(artifactPath, JSON.stringify({
+    ...awaiting,
+    bounds: topLevelBounds,
+    correction: { ...awaiting.correction, bounds },
+  }, null, 2) + '\n')
+
+  writeFileSync(join(root, 'repair-evidence.txt'), 'bounded correction evidence\n')
+  commitPaths(root, 'fix: repair validated gap', ['repair-evidence.txt'])
+  const repairHead = git(root, 'rev-parse', 'HEAD')
+  cli = runCli(root, ['arc', 'record-validate', 'FX', '--correction-ready'])
+  assert.equal(cli.code, 0, cli.stderr)
+  const readyBytes = readFileSync(artifactPath, 'utf8')
+  const ready = JSON.parse(readyBytes)
+  assert.equal(ready.verdict, awaiting.verdict)
+  assert.equal(ready.at, awaiting.at)
+  assert.equal(ready.note, awaiting.note)
+  assert.equal(ready.correction.state, 'needs-sweep')
+  assert.equal(ready.correction.validationHead, validationHead)
+  assert.equal(ready.correction.repairHead, repairHead)
+  assert.deepEqual(ready.correction.bounds, bounds)
+  assert.deepEqual(ready.bounds, topLevelBounds)
+  assert.match(ready.correction.readyAt, /^\d{4}-\d{2}-\d{2}T/)
+
+  cli = runCli(root, ['arc', 'record-validate', 'FX', '--correction-ready'])
+  assert.equal(cli.code, 0, cli.stderr)
+  assert.equal(readFileSync(artifactPath, 'utf8'), readyBytes, 'same-head retry is a byte no-op')
+
+  cli = runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'GAPS'])
+  assert.equal(cli.code, 0, cli.stderr)
+  const nextRound = JSON.parse(readFileSync(artifactPath, 'utf8'))
+  assert.equal(nextRound.note, awaiting.note)
+  assert.deepEqual(nextRound.bounds, topLevelBounds)
+  assert.deepEqual(nextRound.correction.bounds, bounds)
+  assert.equal(nextRound.correction.state, 'awaiting-repair')
+  assert.equal(nextRound.correction.validationHead, repairHead)
+  assert.equal(nextRound.correction.repairHead, undefined)
+  assert.equal(nextRound.correction.readyAt, undefined)
+})
+
+test('arc correction lifecycle — missing or corrupt correction checkpoints refuse byte-intact', () => {
+  for (const correction of [
+    undefined,
+    { state: 'awaiting-repair', validationHead: 'not-a-git-head' },
+  ]) {
+    const root = makeFixtureRepo()
+    const path = join(root, 'roadmap', '.gate', 'arc-FX', 'validate.json')
+    mkdirSync(join(root, 'roadmap', '.gate', 'arc-FX'), { recursive: true })
+    writeFileSync(join(root, 'roadmap', 'seed.txt'), 'seed\n')
+    commitPaths(root, 'seed correction refusal', ['roadmap/seed.txt'])
+    const artifact = { arcId: 'FX', verdict: 'GAPS', at: '2026-09-07T00:00:00.000Z', note: 'preserve me', ...(correction ? { correction } : {}) }
+    writeFileSync(path, JSON.stringify(artifact, null, 2) + '\n')
+    const before = readFileSync(path, 'utf8')
+    const cli = runCli(root, ['arc', 'record-validate', 'FX', '--correction-ready'])
+    assert.notEqual(cli.code, 0)
+    assert.equal(readFileSync(path, 'utf8'), before)
+  }
+})
+
+test('arc workflow lifecycle — concurrent identical results run exactly one verify/groom/emit tail', async () => {
+  const root = makeFixtureRepo({
+    config: {
+      gateCommands: {
+        emit: `node -e "require('fs').appendFileSync('emit.log','emit\\n')"`,
+      },
+    },
+  })
+  const phase = 9038
+  writePhaseFile(root, { phase, status: 'backlog', arcId: 'FX', tasks: [{ id: '9038.1', done: false }] })
+  writeArcFile(root, { id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [phase] }] })
+  writeFileSync(join(root, 'roadmap', 'backlog.ts'), `export default defineBacklog({
+  "tiers": [
+    {
+      "tier": 0,
+      "label": "Queued work",
+      "items": [
+        {
+          "phase": 9038,
+          "name": "Consume one executor result"
+        },
+        {
+          "phase": 9039,
+          "name": "Preserve literal \\"phase\\": 9038 inside sibling data"
+        }
+      ]
+    }
+  ]
+})
+`)
+  commitPaths(root, 'docs(roadmap): seed concurrent result fixture', [
+    'roadmap/phases/phase-9038.phase.ts',
+    'roadmap/arcs/FX.arc.ts',
+    'roadmap/backlog.ts',
+  ])
+
+  let completed = false
+  let arrivals = 0
+  let releaseAgents
+  const bothArrived = new Promise((resolve) => { releaseAgents = resolve })
+  const agent = async () => {
+    arrivals++
+    if (arrivals === 2) releaseAgents()
+    await bothArrived
+    return { result: { phase, status: 'done', gateRounds: 1, compromises: [], skipped: [] } }
+  }
+  let verifyCount = 0
+  const run = (command, options = {}) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return {
+      stdout: JSON.stringify(completed
+        ? { arc: 'FX', action: 'complete', done: [phase], remaining: [], gates: {} }
+        : {
+            arc: 'FX', action: 'run-phase', phase, band: 'mid', plane: 'P', done: [], remaining: [],
+            gates: {}, sourceCheckpoint: { digest: 'sha256:checkpoint-9038' },
+          }),
+      stderr: '',
+      exitCode: 0,
+    }
+    if (command.includes('gate plan')) return { stdout: JSON.stringify({ phase, slots: [] }), stderr: '', exitCode: 0 }
+    if (command === 'roadmap contract show --json-schema') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('result check')) return { stdout: options.input, stderr: '', exitCode: 0 }
+    if (command.includes('--verify-complete')) {
+      verifyCount++
+      completed = true
+      return { stdout: '{}', stderr: '', exitCode: 0 }
+    }
+    throw new Error(`unexpected concurrent-tail command: ${command}`)
+  }
+
+  const results = await Promise.all([
+    arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, { cwd: root, run, agent }),
+    arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, { cwd: root, run, agent }),
+  ])
+  assert.equal(verifyCount, 1, 'only the claim winner verifies completion')
+  assert.equal(results.filter((result) => result.done === true).length, 1, JSON.stringify(results))
+  assert.equal(readFileSync(join(root, 'emit.log'), 'utf8'), 'emit\n', 'only the claim winner emits once')
+  const backlog = readFileSync(join(root, 'roadmap', 'backlog.ts'), 'utf8')
+  assert.doesNotMatch(backlog, /"phase":\s*9038/)
+  assert.match(backlog, /"phase":\s*9039/, 'the multiline quoted sibling survives')
+  assert.match(backlog, /literal \\"phase\\": 9038/, 'a target-looking string in sibling data survives')
+  assert.equal(results.filter((result) => result.done === true).length, 1)
+  const winner = results.find((result) => result.done === true)
+  const [claim] = listResultClaims(root, 'FX')
+  const acceptedResult = winner.trace.receipts.find((receipt) => receipt.event.type === 'done')
+  assert.equal(acceptedResult.rejection, null)
+  assert.equal(acceptedResult.event.eventId, claim.eventId)
+  const duplicate = results.find((result) => result.halt === 'blocked')
+  assert.equal(duplicate.transitionReceipt.rejection.kind, 'duplicate-event')
+  assert.deepEqual(duplicate.transitionReceipt.next, duplicate.transitionReceipt.prior)
+})
+
+test('arc workflow lifecycle — pauseAfter halts only after the successful result tail is durable', async () => {
+  const root = makeFixtureRepo({ config: { gateCommands: { emit: 'true' } } })
+  const phase = 9041
+  writePhaseFile(root, { phase, status: 'backlog', arcId: 'FX', tasks: [{ id: '9041.1', done: false }] })
+  writeArcFile(root, { id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [phase] }] })
+  writeFileSync(join(root, 'roadmap', 'backlog.ts'), `export default defineBacklog({
+  "tiers": [{ "tier": 0, "label": "queued", "items": [{ "phase": ${phase}, "name": "pause target" }] }]
+})\n`)
+  commitPaths(root, 'docs(roadmap): seed pause-after fixture', [
+    `roadmap/phases/phase-${phase}.phase.ts`, 'roadmap/arcs/FX.arc.ts', 'roadmap/backlog.ts',
+  ])
+  let arcNextCalls = 0
+  let agentCalls = 0
+  const run = (command, options = {}) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) {
+      arcNextCalls++
+      return { stdout: JSON.stringify({ arc: 'FX', action: 'run-phase', phase, band: 'mid', plane: 'P', done: [], remaining: [], gates: {}, sourceCheckpoint: { digest: 'sha256:pause-checkpoint' } }), stderr: '', exitCode: 0 }
+    }
+    if (command.includes('gate plan')) return { stdout: JSON.stringify({ phase, slots: [] }), stderr: '', exitCode: 0 }
+    if (command === 'roadmap contract show --json-schema') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('result check')) return { stdout: options.input, stderr: '', exitCode: 0 }
+    if (command.includes('--verify-complete')) return { stdout: '{}', stderr: '', exitCode: 0 }
+    throw new Error(`unexpected pause-after command: ${command}`)
+  }
+  const result = await arcPlaneWorkflow({ arcId: 'FX', planeName: 'P', pauseAfter: phase }, {
+    cwd: root,
+    run,
+    agent: async () => {
+      agentCalls++
+      return { result: { phase, status: 'done', gateRounds: 1, compromises: [], skipped: [] } }
+    },
+  })
+  const events = readFileSync(join(root, '.building', `${phase}-executor.jsonl`), 'utf8').trim().split('\n').map(JSON.parse)
+  assert.equal(result.halt, 'pause-after', JSON.stringify(result))
+  assert.equal(result.phase, phase)
+  assert.deepEqual(result.evidence, { pauseAfter: phase })
+  assert.equal(result.resume, 'relaunch-plane')
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.equal(result.transitionReceipt.event.type, 'pause-after')
+  assert.equal(events.at(-1).event, 'phase-complete')
+  assert.equal(events.at(-1).resultTailComplete, true)
+  assert.equal(arcNextCalls, 1, 'pause returns before deriving another action')
+  assert.equal(agentCalls, 1, 'pause never respawns the completed phase')
+})
+
+test('arc workflow lifecycle — invalid pauseAfter fails before config, arm, derive, or spawn', async () => {
+  let actions = 0
+  const result = await arcPlaneWorkflow({ arcId: 'FX', planeName: 'P', pauseAfter: 0 }, {
+    cwd: makeFixtureRepo(),
+    run: () => { actions++; throw new Error('invalid pauseAfter must fail before commands') },
+    agent: async () => { actions++; throw new Error('invalid pauseAfter must fail before spawn') },
+  })
+  assert.equal(result.halt, 'failed')
+  assert.match(JSON.stringify(result.evidence), /pauseAfter/)
+  assert.equal(result.transitionReceipt.event.type, 'failed')
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.equal(actions, 0)
+})
+
+test('arc workflow lifecycle — reconciled unobserved recovery still refuses a standing executor arm', async () => {
+  const phase = 9043
+  const drive = driveEarlyArcWorkflow((command) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return {
+      stdout: JSON.stringify({ arc: 'FX', action: 'resume-phase', phase, band: 'mid', plane: 'P', done: [], remaining: [], gates: {} }),
+      stderr: '', exitCode: 0,
+    }
+    if (command.includes('gate plan')) return { stdout: JSON.stringify({ phase, slots: [] }), stderr: '', exitCode: 0 }
+    if (command === 'roadmap contract show --json-schema') return { stdout: '{}', stderr: '', exitCode: 0 }
+    throw new Error(`unexpected recovery command: ${command}`)
+  }, { recovery: { kind: 'unobserved', phase, evidence: { reconciled: true } } })
+  writePhaseFile(drive.root, {
+    phase, status: 'in-progress', arcId: 'FX', keyFiles: [],
+    tasks: [{ id: `${phase}.1`, done: false }],
+  })
+  writeArcFile(drive.root, { id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [phase] }] })
+  armExecutor(drive.root, phase, 'incumbent-session', { executorId: 'incumbent-executor' })
+
+  const result = await drive.result()
+  assert.equal(result.trace.receipts.some((receipt) => receipt.event.type === 'resume'), false)
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.equal(result.transitionReceipt.event.type, 'unobserved')
+  assert.equal(result.transitionReceipt.next.status, 'halted')
+  assert.equal(result.halt, 'unobserved')
+  assert.match(JSON.stringify(result.evidence), /executor.*arm|standing|incumbent/i)
+  assert.equal(result.resume, 'reconcile')
+  assert.equal(drive.agentCalls(), 0, 'caller reconciliation evidence cannot bypass the actual arm')
+})
+
+test('arc workflow lifecycle — every recoverable halt keeps its safe decision closed while an arm stands', async () => {
+  for (const [kind, evidence, resume] of [
+    ['failed', { inspected: true }, 'inspect-failure'],
+    ['stalled', { reconciled: true }, 'reconcile'],
+    ['exited', { reconciled: true }, 'reconcile'],
+    ['unobserved', { reconciled: true }, 'reconcile'],
+  ]) {
+    const root = makeFixtureRepo()
+    armExecutor(root, 9044, 'incumbent-session', { executorId: `incumbent-${kind}` })
+    let actions = 0
+    const result = await arcPlaneWorkflow({ arcId: 'FX', planeName: 'P', recovery: { kind, phase: 9044, evidence } }, {
+      cwd: root,
+      run: () => { actions++; throw new Error('standing recovery arm must hold before commands') },
+      agent: async () => { actions++; throw new Error('standing recovery arm must hold before spawn') },
+    })
+    assert.equal(result.halt, kind)
+    assert.equal(result.resume, resume)
+    assert.equal(result.transitionReceipt.event.type, kind)
+    assert.equal(result.transitionReceipt.rejection, null)
+    assert.equal(result.trace.receipts.some((receipt) => receipt.event.type === 'resume'), false)
+    assert.equal(actions, 0)
+  }
+})
+
+test('arc workflow lifecycle — a standing arm blocks before gate planning and inline handoff', async () => {
+  const phase = 9045
+  const drive = driveEarlyArcWorkflow((command) => {
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return {
+      stdout: JSON.stringify({ arc: 'FX', action: 'run-phase', phase, band: 'trivial', plane: 'P', done: [], remaining: [], gates: {} }),
+      stderr: '', exitCode: 0,
+    }
+    throw new Error(`standing arm must block before inline preparation: ${command}`)
+  })
+  writePhaseFile(drive.root, { phase, status: 'backlog', arcId: 'FX', keyFiles: [], tasks: [{ id: `${phase}.1`, done: false }] })
+  writeArcFile(drive.root, { id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [phase] }] })
+  armExecutor(drive.root, phase, 'incumbent-session', { executorId: 'incumbent-inline' })
+  const result = await drive.result()
+  assert.equal(result.halt, 'blocked')
+  assert.equal(result.resume, 'inspect-blocker')
+  assert.match(JSON.stringify(result.evidence), /executor.*arm|incumbent/i)
+  assert.equal(drive.calls.some((command) => command.includes('gate plan')), false)
+  assert.equal(result.handoffInline, undefined)
+  assert.equal(drive.agentCalls(), 0)
+})
+
+test('arc workflow lifecycle — malformed quoted backlog refuses without changing actual file bytes', () => {
+  const root = makeFixtureRepo()
+  const file = join(root, 'roadmap', 'backlog.ts')
+  const malformed = `export default defineBacklog({
+  "tiers": [
+    { "tier": 0, "label": "Broken queue", "items": [
+      { "phase": 9038, "name": "truncated"
+  ]
+})
+`
+  writeFileSync(file, malformed)
+  const before = readFileSync(file, 'utf8')
+  const result = groomBacklogSource(before, 9038)
+  assert.match(result.error, /malformed|parse|unsupported/)
+  assert.equal(readFileSync(file, 'utf8'), before)
+})
+
+function interruptedTailFixture({ complete }) {
+  const root = makeFixtureRepo()
+  const phase = 9040
+  const result = { phase, status: 'done', gateRounds: 1, compromises: [], skipped: [] }
+  writePhaseFile(root, { phase, status: 'done', arcId: 'FX', executionResult: result, tasks: [{ id: '9040.1', done: true }] })
+  writeArcFile(root, { id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [phase] }] })
+  commitPaths(root, 'feat: seed result-tail recovery fixture', [
+    'roadmap/phases/phase-9040.phase.ts',
+    'roadmap/arcs/FX.arc.ts',
+  ])
+  const identity = {
+    arcId: 'FX',
+    phase,
+    checkpointDigest: 'sha256:checkpoint-9040',
+    resultDigest: 'sha256:result-9040',
+    eventId: 'result:FX:9040:sha256:checkpoint-9040',
+    owner: { pid: process.pid, sessionId: 'interrupted-owner' },
+    authorityRef: { status: 'unknown', reason: 'read-only-projection', sourceRef: null },
+  }
+  claimResultConsumption(root, identity)
+  if (complete) appendExecutorEvent(root, phase, 'phase-complete', {
+    resultTailComplete: true,
+    checkpointDigest: identity.checkpointDigest,
+    resultDigest: identity.resultDigest,
+  })
+  const calls = []
+  const run = (command) => {
+    calls.push(command)
+    if (command === 'roadmap config check' || command === 'roadmap arm FX') return { stdout: '{}', stderr: '', exitCode: 0 }
+    if (command.includes('arc next')) return {
+      stdout: JSON.stringify({
+        arc: 'FX',
+        action: 'complete',
+        done: [phase],
+        remaining: [],
+        gates: {},
+        transitionReceipt: { forged: true },
+      }),
+      stderr: '',
+      exitCode: 0,
+    }
+    throw new Error(`unexpected interrupted-tail command: ${command}`)
+  }
+  return { root, phase, calls, run }
+}
+
+test('arc workflow lifecycle — claim without matching completion halts before arc-next', async () => {
+  const fixture = interruptedTailFixture({ complete: false })
+  const result = await arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, {
+    cwd: fixture.root,
+    run: fixture.run,
+    agent: async () => { throw new Error('agent must not launch for interrupted result tail') },
+  })
+  assert.equal(result.halt, 'failed')
+  assert.ok(result.evidence.resultConsumptionInterrupted)
+  assert.equal(result.transitionReceipt.event.type, 'failed')
+  assert.ok(!fixture.calls.some((command) => command.includes('arc next')))
+})
+
+test('arc workflow lifecycle — exact completion beacon lets the next workflow derive progress', async () => {
+  const fixture = interruptedTailFixture({ complete: true })
+  const result = await arcPlaneWorkflow({ arcId: 'FX', planeName: 'P' }, {
+    cwd: fixture.root,
+    run: fixture.run,
+    agent: async () => { throw new Error('completed result tail must not relaunch agent') },
+  })
+  assert.equal(result.done, true)
+  assert.ok(fixture.calls.some((command) => command.includes('arc next')))
+  assert.equal(result.transitionReceipt.rejection, null)
+  assert.equal(result.transitionReceipt.event.type, 'complete')
+  assert.equal(result.transitionReceipt.next.stage, 'complete')
+  assert.notDeepEqual(result.transitionReceipt, { forged: true })
 })

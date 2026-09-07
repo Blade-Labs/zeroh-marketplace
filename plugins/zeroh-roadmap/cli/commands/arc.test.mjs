@@ -9,9 +9,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -35,6 +35,7 @@ function makeRepo(arcId, arc, phases, { configJson = true } = {}) {
   // `npx --no-install tsx`) runs over the scratch repo and reports an empty (swept) slice —
   // the census is exhaustively exercised with fakes in derive.test.mjs; here it is real e2e.
   mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
+  symlinkSync(resolve(HERE, '..', '..', '..', '..', 'lib', 'roadmap', 'schema.ts'), join(root, 'lib', 'roadmap', 'schema.ts'))
   writeFileSync(
     join(root, 'lib', 'roadmap', 'registry.ts'),
     'export async function discoverPhases() { return { phases: [], errors: [] } }\n'
@@ -82,12 +83,15 @@ test('arc next — exit 1 when config.json is absent (usage/config error)', () =
   assert.equal(r.code, 1)
 })
 
-test('arc next — exit 0 for the terminal complete action', () => {
+test('arc next — exit 0 for the post-land evaluate action', () => {
   const root = makeRepo('A', { planes: [{ name: 'P', phases: [10] }] }, [done(10)])
-  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId: 'A', outcome: 'shipped' }))
+  writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({
+    arcId: 'A', outcome: 'shipped', compromiseDisposition: [],
+    gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true }, receiptRef: 'none',
+  }))
   const r = bin(root, ['arc', 'next', 'A', '--json'])
   assert.equal(r.code, 0)
-  assert.equal(JSON.parse(r.stdout).action, 'complete')
+  assert.equal(JSON.parse(r.stdout).action, 'evaluate')
 })
 
 test('record-validate → arc next round-trip: gates.validated false → write PASS → true → land', () => {

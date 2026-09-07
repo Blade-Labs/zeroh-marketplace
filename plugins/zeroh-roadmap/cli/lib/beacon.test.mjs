@@ -25,6 +25,7 @@ const {
   EXECUTOR_EVENTS,
   appendExecutorEvent,
   readBeaconLine,
+  readResultTailCompletion,
 } = await import(MOD)
 
 const tmps = []
@@ -251,4 +252,59 @@ test('16) WORK_EVENTS is UNCHANGED — exactly the three liveness events', () =>
     assert.ok(WORK_EVENTS.has(e), `WORK_EVENTS must still contain ${e}`)
   }
   assert.ok(!WORK_EVENTS.has('phase-complete'), 'phase-complete is not a liveness/work event')
+})
+
+test('17) readResultTailCompletion — later heartbeat does not erase exact completion proof', () => {
+  const worktree = newTmp()
+  appendExecutorEvent(worktree, 1727, 'phase-complete', {
+    resultTailComplete: true,
+    checkpointDigest: 'sha256:checkpoint-one',
+    resultDigest: 'sha256:result-one',
+  })
+  appendExecutorEvent(worktree, 1727, 'heartbeat', { detail: 'later observation' })
+  const completion = readResultTailCompletion(worktree, 1727, {
+    checkpointDigest: 'sha256:checkpoint-one',
+    resultDigest: 'sha256:result-one',
+  })
+  assert.equal(completion.event, 'phase-complete')
+  assert.equal(completion.resultTailComplete, true)
+  assert.equal(completion.phase, 1727)
+})
+
+test('18) readResultTailCompletion — wrong binding or incomplete marker returns null', () => {
+  const worktree = newTmp()
+  appendExecutorEvent(worktree, 1727, 'phase-complete', {
+    resultTailComplete: true,
+    checkpointDigest: 'sha256:checkpoint-one',
+    resultDigest: 'sha256:result-one',
+  })
+  appendExecutorEvent(worktree, 1727, 'phase-complete', {
+    checkpointDigest: 'sha256:checkpoint-two',
+    resultDigest: 'sha256:result-two',
+  })
+  assert.equal(readResultTailCompletion(worktree, 1727, {
+    checkpointDigest: 'sha256:checkpoint-one',
+    resultDigest: 'sha256:different',
+  }), null)
+  assert.equal(readResultTailCompletion(worktree, 1727, {
+    checkpointDigest: 'sha256:checkpoint-two',
+    resultDigest: 'sha256:result-two',
+  }), null)
+})
+
+test('19) readResultTailCompletion — unreadable or phase-ambiguous beacon fails closed', () => {
+  const worktree = newTmp()
+  const path = phaseBeaconPath(worktree, 1727)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, [
+    JSON.stringify({
+      ts: isoAgo(2), event: 'phase-complete', phase: 9999, resultTailComplete: true,
+      checkpointDigest: 'sha256:checkpoint-one', resultDigest: 'sha256:result-one',
+    }),
+    '{ unreadable latest line',
+  ].join('\n') + '\n')
+  assert.equal(readResultTailCompletion(worktree, 1727, {
+    checkpointDigest: 'sha256:checkpoint-one',
+    resultDigest: 'sha256:result-one',
+  }), null)
 })
