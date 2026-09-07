@@ -175,5 +175,50 @@ export function createGitHubPullRequestProvider({execFile=defaultExec,git='git',
     if(typeof id!=='string'||(kind==='queue'&&payload.mergeQueueEntry.headCommit?.oid!==request.action.requested.headSha)||(kind==='merge'&&(!SHA.test(id)||payload.pullRequest.merged!==true)))return result(request,'unknown',null,null,'malformed-response')
     return {...result(request,'succeeded',id,kind==='merge'?{...pr,state:'merged'}:pr),...(kind==='merge'?{mergeSha:id}:{})}
   }
-  return createPullRequestProvider({providerId:'github',loadDelivery,withLock,impl:{capabilities,preflight,lookup,push,create:request=>mutatePr(request,'create'),update:request=>mutatePr(request,'update'),queue:request=>terminal(request,'queue'),merge:request=>terminal(request,'merge')}})
+  // Read-only discovery precedes receipt initialization. Unknown protection is never empty policy.
+  const bootstrap=({context,defaultBaseRef=null,requiredChecks=null})=>{
+    const configured=checked(git,['remote','get-url','--',context.remote],context,'bootstrap');if(configured.error)return configured.error
+    const repositoryId=repositoryFromUrl(configured.value)
+    if(!repositoryId||!REPO.test(repositoryId))return hold('repository','bootstrap','Configure one GitHub publication remote and resume.')
+    const mapped=remote(context,repositoryId,'bootstrap');if(mapped.error)return mapped.error
+    const ready=preflight({operation:'lookup',context,repositoryId});if(ready.status!=='ready')return ready
+    let baseRef=defaultBaseRef
+    if(baseRef===null){
+      const remoteHead=checked(git,['ls-remote','--symref',context.remote,'HEAD'],context,'bootstrap');if(remoteHead.error)return remoteHead.error
+      const refs=remoteHead.value.split('\n').filter(line=>line.startsWith('ref: ')).map(line=>/^ref: (refs\/heads\/[^\s]+)\s+HEAD$/.exec(line)?.[1])
+      if(refs.length!==1||!refs[0])return hold('base','bootstrap','Publication remote HEAD is ambiguous; configure deliveryPolicy.defaultBase and resume.')
+      baseRef=refs[0]
+    }else{
+      const named=label(baseRef,context,repositoryId);if(named.error)return named.error
+      baseRef=`refs/heads/${named.value}`
+    }
+    const snapshot=checked(git,['ls-remote','--heads',context.remote],context,'bootstrap');if(snapshot.error)return snapshot.error
+    const heads={}
+    for(const line of snapshot.value.trim().split('\n').filter(Boolean)){
+      const match=/^([a-f0-9]{40}|[a-f0-9]{64})\s+(refs\/heads\/[^\s]+)$/.exec(line)
+      if(!match||Object.hasOwn(heads,match[2]))return hold('base','bootstrap','Remote branch snapshot is malformed; inspect remote refs and resume.')
+      heads[match[2]]=match[1]
+    }
+    if(!heads[baseRef])return hold('base','bootstrap','Configured base is absent from the verified publication remote; reconcile it and resume.')
+    let names=requiredChecks
+    if(names===null){
+      const branch=encodeURIComponent(baseRef.slice('refs/heads/'.length))
+      // GitHub rules endpoint includes active organization/repository rules; paginate all pages.
+      const rules=json(['api',`repos/${repositoryId}/rules/branches/${branch}?per_page=100`,'--paginate','--slurp'],context,'bootstrap')
+      const classic=json(['api',`repos/${repositoryId}/branches/${branch}/protection/required_status_checks`],context,'bootstrap')
+      if(rules.error||classic.error)return {...(rules.error??classic.error),remedy:'Required check discovery is incomplete; configure deliveryPolicy.requiredChecks or restore readable branch rules and protection, then resume.'}
+      if(!Array.isArray(rules.value)||rules.value.some(page=>!Array.isArray(page))||!Array.isArray(classic.value?.contexts)||!Array.isArray(classic.value?.checks))return hold('checks','bootstrap','Malformed branch rules; configure deliveryPolicy.requiredChecks or restore readable rules and resume.')
+      names=[...classic.value.contexts,...classic.value.checks.map(check=>check?.context)]
+      for(const rule of rules.value.flat()){
+        if(!rule||typeof rule.type!=='string')return hold('checks','bootstrap','Incomplete branch rules; configure deliveryPolicy.requiredChecks and resume.')
+        if(rule.type==='required_status_checks'){
+          if(!Array.isArray(rule.parameters?.required_status_checks))return hold('checks','bootstrap','Incomplete required-check rule; configure deliveryPolicy.requiredChecks and resume.')
+          names.push(...rule.parameters.required_status_checks.map(check=>check?.context))
+        }
+      }
+    }
+    if(!Array.isArray(names)||!names.length||names.some(name=>typeof name!=='string'||!name.trim()||name!==name.trim()))return hold('checks','bootstrap','Configure nonempty deliveryPolicy.requiredChecks; no complete required-check set was observed.')
+    return {status:'ready',providerId:'github',repositoryId,baseRef,baseSha:heads[baseRef],requiredChecks:[...new Set(names)].sort(),refs:{heads}}
+  }
+  return {...createPullRequestProvider({providerId:'github',loadDelivery,withLock,impl:{capabilities,preflight,lookup,push,create:request=>mutatePr(request,'create'),update:request=>mutatePr(request,'update'),queue:request=>terminal(request,'queue'),merge:request=>terminal(request,'merge')}}),bootstrap}
 }

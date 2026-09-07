@@ -24,6 +24,7 @@ import { RoadmapRootError } from '../cli/lib/roadmap-root.mjs'
 // (default ROADCODE); `sub` lists subcommands for --help. A command becomes MOUNTED the
 // moment its module lands.
 const TREE = {
+  deliver: { arc: 'NATIVEGREEN', phase: 41, sub: ['<arc> [--resume] [--json] [--provider github]'], desc: 'publish or resume one arc PR; stop at awaiting CI' },
   root: { arc: 'NATIVEGREEN', phase: 39, sub: ['migrate [--to docs/roadmap] [--apply] [--json]'], desc: 'preview or apply the atomic roadmap root migration' },
   config: { phase: 1655, sub: ['check', 'capabilities --json'], desc: 'load bindings or report read-only protocol capabilities' },
   init: { phase: 1655, sub: ['--config', '--scaffold', '--root <dir>'], desc: 'scaffold the roadmap root + config.json' },

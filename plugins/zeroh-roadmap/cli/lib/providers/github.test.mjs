@@ -126,3 +126,27 @@ test('resuming an update with the desired title and body makes no duplicate PATC
  const result=h.provider.update({action:update,expected:{...expected,providerPullRequestId:'PR_17'},context})
  assert.equal(result.status,'succeeded');assert.equal(h.calls.some(([,args])=>args.includes('PATCH')),false)
 })
+
+const bootstrapRoutes={...readyRoutes,
+ 'git ls-remote --symref origin HEAD':ok(`ref: refs/heads/main\tHEAD\n${SHA0}\tHEAD\n`),
+ 'git ls-remote --heads origin':ok(`${SHA0}\trefs/heads/main\n`),
+ 'gh api repos/blade/roadmap/rules/branches/main':ok([[{type:'required_status_checks',parameters:{required_status_checks:[{context:'lint',integration_id:null}]}}]]),
+ 'gh api repos/blade/roadmap/branches/main/protection/required_status_checks':ok({contexts:['unit'],checks:[]}),
+}
+test('bootstrap resolves verified remote HEAD and the union of required checks without mutation',()=>{
+ const {provider,calls}=harness(bootstrapRoutes),result=provider.bootstrap({context,defaultBaseRef:null,requiredChecks:null})
+ assert.equal(result.status,'ready',JSON.stringify(result));assert.deepEqual(result.requiredChecks,['lint','unit']);assert.equal(result.baseRef,'refs/heads/main');assert.equal(result.baseSha,SHA0);assert.equal(result.repositoryId,'blade/roadmap')
+ assert.equal(calls.some(([,args])=>args.includes('POST')||args.includes('PATCH')||args[0]==='push'),false)
+})
+test('bootstrap missing, unauthorized or empty check discovery holds rather than inventing green',()=>{
+ for(const failure of [{status:1,stdout:'',stderr:'HTTP 404 Not Found'},{status:1,stdout:'',stderr:'HTTP 401 Bad credentials'},ok({contexts:[],checks:[]})]){
+ const {provider}=harness({...bootstrapRoutes,'gh api repos/blade/roadmap/rules/branches/main':ok([[]]),'gh api repos/blade/roadmap/branches/main/protection/required_status_checks':failure})
+ const result=provider.bootstrap({context,defaultBaseRef:null,requiredChecks:null});assert.equal(result.status,'held');assert.match(result.remedy,/requiredChecks|access|credentials|rules/)
+ }
+})
+test('explicit nonempty checks bypass discovery and wrong push remote holds',()=>{
+ const {provider,calls}=harness(bootstrapRoutes),result=provider.bootstrap({context,defaultBaseRef:null,requiredChecks:['unit','lint']})
+ assert.equal(result.status,'ready');assert.deepEqual(result.requiredChecks,['lint','unit']);assert.equal(calls.some(([,args])=>args.some(arg=>String(arg).includes('required_status_checks'))),false)
+ const wrong=harness({...bootstrapRoutes,'git remote get-url --push -- origin':ok('git@github.com:other/repo.git')})
+ assert.equal(wrong.provider.bootstrap({context,defaultBaseRef:null,requiredChecks:['unit']}).status,'held')
+})
