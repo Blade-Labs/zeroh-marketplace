@@ -4,7 +4,7 @@ import { definePhase } from '../lib/schema'
 export default definePhase({
   phase: 40,
   name: 'Safe pre-PR history normalization and roadmap-owned worktree garbage collection',
-  plannedBy: { model: 'unverified' }, status: 'in-progress', category: 'feature', kind: 'hardening',
+  plannedBy: { model: 'unverified' }, status: 'done', category: 'feature', kind: 'hardening',
   source: 'NATIVEGREEN history-and-worktrees plane; plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md §History and worktrees.',
   priority: 'HIGH', arcId: 'NATIVEGREEN', dependsOn: [39], conflictsWith: [],
   keyFiles: ['plugins/zeroh-roadmap/cli/lib/history-normalize.mjs', 'plugins/zeroh-roadmap/cli/lib/curate.mjs', 'plugins/zeroh-roadmap/cli/lib/worktree.mjs', 'plugins/zeroh-roadmap/cli/lib/codex-journal.mjs', 'plugins/zeroh-roadmap/cli/lib/landing.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/worktree.mjs'],
@@ -111,6 +111,103 @@ export default definePhase({
       interfaces: { consumes: ['WorktreeCleanupPlan'], produces: ['owned-worktree cleanup conformance evidence'] },
     },
   ],
+  gate: {
+  "lint": "clean",
+  "typeCheck": "clean",
+  "build": "clean",
+  "unitTests": {
+    "passed": 2477,
+    "total": 2477,
+    "notes": "Full gate000026 at f3a2f5e:108 files plus schema,655440ms. All three multiprocess journal regressions passed; independent R2 clean."
+  },
+  "integrationTests": {
+    "passed": 0,
+    "total": 0,
+    "notes": "Declared absent; real Git/process integration fixtures run under the unit binding."
+  },
+  "e2eTests": {
+    "passed": 0,
+    "total": 0,
+    "notes": "Native conformance remains phase43; no new native trial claimed."
+  }
+},
+  metrics: {
+  "commits": 12,
+  "linesAdded": 5559,
+  "linesRemoved": 1064,
+  "filesChanged": 43,
+  "testsAtStart": 2391,
+  "testsAtEnd": 2477,
+  "testsAdded": 86
+},
+  compromises: "None",
+  completedDate: "2026-09-07",
+  gateRounds: [
+  {
+    "round": 0,
+    "agent": "quality-pass",
+    "verdict": "findings-fixed",
+    "summary": "Independent one-pass quality review of phase40 at054a717 vs94b8afc. Consolidated duplicated cleanup outcome decoding across Codex status, phase landing and arc landing in the shared worktree owner; commit eb7f8f8. Four production files,24 added/15 removed lines. Affected341/341 tests passed in111719ms; diff whitespace clean. No bugs noted or hard stops. Types slot declared absent. Full phase gate runs separately after this commit. Mechanical full000023 later failed4 integration assertions; repair b11770b updates two legacy retention fixtures and preserves prior review artifacts across retained and retired worktrees. Explicit review-only generation replacement preserves the ordinary identity guard and immutable predecessor triplet. Journal14/14, expanded convergence8/8, and both landing cases1/1 passed; full-gate retry runs at b11770b.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  },
+  {
+    "round": 1,
+    "agent": "code-reviewer",
+    "verdict": "findings-fixed",
+    "summary": "Closure disposition: original R1 HIGH subsequently fixed by f3a2f5e and independently cleared in R2; original unresolved R1 remains in the gate report. Independent full phase40 review at b11770b vs94b8afc; reviewFocus absent. One unresolved HIGH concurrent journal-publication race. Owner paused the arc for quota-conscious Codex-only scope reassessment before any locking repair or R2. No correctness-pass or completion claimed.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": [
+      {
+        "file": "plugins/zeroh-roadmap/cli/lib/codex-journal.mjs",
+        "line": 113,
+        "severity": "HIGH",
+        "confidence": 96,
+        "description": "Generation replacement has a check-to-rename race: concurrent relaunches can validate the same predecessor and then overwrite it, potentially starting duplicate native reviewers in one worktree and losing a launch record. Serialize validation through directory fsync for every mutation of this journal path, including ordinary writes, archival and report consumption."
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "agent": "code-reviewer",
+    "verdict": "clean",
+    "summary": "Independent R2 at f3a2f5e since b11770b; reviewFocus absent. Prior HIGH journal generation race repaired: all public writes, close and report consumption share persistent canonical live-path flock, predecessor/CAS validation and durable mutation remain under lock; private unlocked writer avoids recursive acquisition. Actual callers and lock order inspected. Independently reran multiprocess write/close/consume regressions:3/3 pass; diff check clean. No actionable findings.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  }
+],
+  executionResult: {
+  "phase": 40,
+  "status": "done",
+  "driver": {
+    "model": "unverified (Codex supervising session)",
+    "lane": "codex"
+  },
+  "modelPolicy": {
+    "source": "config",
+    "preset": "codex-full"
+  },
+  "roles": [
+    {
+      "role": "test-engineer",
+      "model": "unverified (requested gpt-5.6-sol)",
+      "via": "native"
+    },
+    {
+      "role": "code-reviewer",
+      "model": "unverified (requested gpt-5.6-sol)",
+      "via": "native"
+    }
+  ],
+  "compromises": [],
+  "skipped": [],
+  "hardcoded": [],
+  "surfaced": [
+    "History curation refused four interleaved owner-policy/scope commits; preserved unchanged."
+  ],
+  "hardStops": [],
+  "gateRounds": 3
+},
   reviewRecord: { date: '2026-09-06', model: 'unverified (requested gpt-5.6-sol)', verdict: 'READY', via: 'executed' },
-  notes: 'OWNER RESUME 2026-09-07: owner requested the full arc; acd3db1 supersedes the pause. R1 repair serializes live/closed journal writes, close and report consumption with one persistent per-live-path kernel flock; the worktree registry shares the extracted primitive. Real subprocess diagnostic was RED before repair (journal changed while another process held its lock). Three durable write/close/consume process-lock regressions pass, and existing journal14/worktree73 checks pass; full repaired gate and independent R2 remain pending. Tests started from the independent test engineer design; parent applied and extended them after its patch tool failed, so implementation-blind authorship is not claimed. Historical pause follows: OWNER PAUSE 2026-09-07: stop implementation for Codex-only usability and quota reassessment before continuing this arc. Source b11770b passed full gate000025:2474/2474 across108 files plus schema in663071ms. Independent R1 found one unresolved HIGH check-to-rename journal race; no lock repair, R2, phase completion or release has occurred. The proposed bounded fix is one shared persistent per-live-journal flock across all write/archive/report-consumption mutations, extracting the existing registry lock primitive; it is NOT implemented or approved for automatic continuation after this pause. Mechanical green does not clear the correctness finding. Durable review: docs/roadmap/arc-evals/NATIVEGREEN-40-paused-review.json. Curation remains intentionally refused because the separate owner-policy commit f55e379 interleaves the phase; preserve it. Gate repair: full000023 at eb7f8f8 ran108 suites in588760ms and exposed4 failures across3 integration fixtures. Legacy unowned arc/session lanes now assert exact retention plus successful integration and surfaced ownership-uncertain holds. Retained completed reviews preserve immutable prior journal/prompt/report before reset; absent review relaunch uses an explicit same-scope generation replacement in the existing writer, requiring exact predecessor, preserved artifacts and independently registered new ownership while ordinary identity changes still refuse. Architect approved both bounded seams. Independent generation RED preceded implementation; final journal suite14/14 including missing/conflicting-artifact and identity/scope refusals, review-convergence8/8 across retained/removed/no-op/corrupt-archive cases, and both landing fixtures1/1 pass. Fixture-only retirement explicitly removes its exact registry identity and does not claim GC coverage. Types declared absent. Full gate retry and independent correctness review remain pending. Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. ## Hypotheses — CONFIRMED cause: terminal orchestration lacks one whole-arc history seam and proof-bearing cleanup classification on the existing disposer; phase-local curation leaves trailing commits and landArc directly removes its sidecar (evidence: deriveCurationRange/executeCurate in cli/lib/curate.mjs, disposeWorktree in cli/lib/worktree.mjs, landArc in cli/lib/landing.mjs). Refuted rivals: codex-journal, surveyLanes, disposeWorktree, and landing already own identity evidence, inventory, refusal safety, and terminal cleanup; extend those homes and do not create a parallel journal or GC transaction framework. Metadata ratification: userFacing false because history and worktree safety are developer-control-plane behavior; full review and TDD are required. Requested planner model was gpt-5.6-sol; runtime identity was not attested, so plannedBy.model is unverified. Suggested config: worktreeGc { enabled?: boolean, inactiveObservations?: integer >= 2, inactiveIntervalMs?: positive integer, deleteIntegratedBranches?: boolean }. Planned with plan-phase --skip-review; unverified and not queued. designRef: plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md.',
+  notes: 'COMPLETED: full gate000026 at f3a2f5e passed2477/2477 across108 files plus schema in655440ms; independent R2 clean closes the earlier HIGH. Curation refused four interleaved owner-ruling commits (f55e379,6040308,0580272,acd3db1); these remain untouched. Earlier pause and pending statements below are historical checkpoints. OWNER RESUME 2026-09-07: owner requested the full arc; acd3db1 supersedes the pause. R1 repair serializes live/closed journal writes, close and report consumption with one persistent per-live-path kernel flock; the worktree registry shares the extracted primitive. Real subprocess diagnostic was RED before repair (journal changed while another process held its lock). Three durable write/close/consume process-lock regressions pass, and existing journal14/worktree73 checks pass; full repaired gate and independent R2 remain pending. Tests started from the independent test engineer design; parent applied and extended them after its patch tool failed, so implementation-blind authorship is not claimed. Historical pause follows: OWNER PAUSE 2026-09-07: stop implementation for Codex-only usability and quota reassessment before continuing this arc. Source b11770b passed full gate000025:2474/2474 across108 files plus schema in663071ms. Independent R1 found one unresolved HIGH check-to-rename journal race; no lock repair, R2, phase completion or release has occurred. The proposed bounded fix is one shared persistent per-live-journal flock across all write/archive/report-consumption mutations, extracting the existing registry lock primitive; it is NOT implemented or approved for automatic continuation after this pause. Mechanical green does not clear the correctness finding. Durable review: docs/roadmap/arc-evals/NATIVEGREEN-40-paused-review.json. Curation remains intentionally refused because the separate owner-policy commit f55e379 interleaves the phase; preserve it. Gate repair: full000023 at eb7f8f8 ran108 suites in588760ms and exposed4 failures across3 integration fixtures. Legacy unowned arc/session lanes now assert exact retention plus successful integration and surfaced ownership-uncertain holds. Retained completed reviews preserve immutable prior journal/prompt/report before reset; absent review relaunch uses an explicit same-scope generation replacement in the existing writer, requiring exact predecessor, preserved artifacts and independently registered new ownership while ordinary identity changes still refuse. Architect approved both bounded seams. Independent generation RED preceded implementation; final journal suite14/14 including missing/conflicting-artifact and identity/scope refusals, review-convergence8/8 across retained/removed/no-op/corrupt-archive cases, and both landing fixtures1/1 pass. Fixture-only retirement explicitly removes its exact registry identity and does not claim GC coverage. Types declared absent. Full gate retry and independent correctness review remain pending. Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. ## Hypotheses — CONFIRMED cause: terminal orchestration lacks one whole-arc history seam and proof-bearing cleanup classification on the existing disposer; phase-local curation leaves trailing commits and landArc directly removes its sidecar (evidence: deriveCurationRange/executeCurate in cli/lib/curate.mjs, disposeWorktree in cli/lib/worktree.mjs, landArc in cli/lib/landing.mjs). Refuted rivals: codex-journal, surveyLanes, disposeWorktree, and landing already own identity evidence, inventory, refusal safety, and terminal cleanup; extend those homes and do not create a parallel journal or GC transaction framework. Metadata ratification: userFacing false because history and worktree safety are developer-control-plane behavior; full review and TDD are required. Requested planner model was gpt-5.6-sol; runtime identity was not attested, so plannedBy.model is unverified. Suggested config: worktreeGc { enabled?: boolean, inactiveObservations?: integer >= 2, inactiveIntervalMs?: positive integer, deleteIntegratedBranches?: boolean }. Planned with plan-phase --skip-review; unverified and not queued. designRef: plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md.',
 })

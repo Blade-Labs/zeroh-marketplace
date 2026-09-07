@@ -1,6 +1,6 @@
 {
   "phase": 40,
-  "status": "paused-by-owner",
+  "status": "resumed-and-repaired",
   "sourceHead": "b11770b",
   "fullGate": {
     "run": "000025",
@@ -33,7 +33,16 @@
     ],
     "verdict": "findings"
   },
-  "blockingFindingFixed": false,
-  "nextAction": "Reassess the remaining arc for only necessary Codex usability improvements before authorizing more execution.",
-  "scopeRuling": "2026-09-07: owner paused to avoid spending a substantial weekly quota on this arc; only absolutely necessary improvements for usable Roadmap with Codex. This supersedes automatic continuation of all remaining phases."
+  "blockingFindingFixed": true,
+  "nextAction": "Verify phase40 completion and continue full NATIVEGREEN arc under acd3db1 owner ruling.",
+  "scopeRuling": "2026-09-07: owner paused to avoid spending a substantial weekly quota on this arc; only absolutely necessary improvements for usable Roadmap with Codex. This supersedes automatic continuation of all remaining phases.",
+  "resolution": {
+    "commit": "f3a2f5e",
+    "reviewRound": 2,
+    "verdict": "clean",
+    "fullGate": "000026",
+    "tests": 2477,
+    "pass": 2477,
+    "next": "phase41 after verify-complete"
+  }
 }
