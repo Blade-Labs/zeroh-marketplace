@@ -27,6 +27,7 @@ import { gitToplevel } from '../lib/gitroot.mjs'
 import { DRIVERS, resolveDriver } from '../lib/drivers.mjs'
 
 const PROBE_TIMEOUT_MS = 60_000
+const PROVENANCE_MAX_AGE_MS = 86_400_000 // NATIVEGREEN 38.5: at most 24 hours, never a future report
 
 /**
  * A feature is ON only if exactly ONE row has `name` as its first token, that row ends in
@@ -77,11 +78,16 @@ function modelListed(slug) {
  * Flag patterns are line-anchored on [ \t] (never \s, which in JS matches \n) and end on a
  * non-word, non-dash boundary, so `--agents` is not satisfied by `--agents-legacy`.
  */
+const helpFlag = (name) => new RegExp('^[ \t]*(?:-[A-Za-z?],[ \t]+)?--' + name + '(?![\\w-])', 'm')
+const outputPasses = (probe, output) => (probe.expect ?? []).every((expected) =>
+  typeof expected === 'function' ? expected(output) : expected.test(output))
+
 const PROBES = Object.freeze({
   codex: Object.freeze([
     { name: 'version', args: ['--version'] },
     { name: 'capabilities', args: ['features', 'list'], expect: [featureOn('multi_agent'), featureOn('hooks')] },
-    { name: 'exec-smoke', args: ['exec', '--help'] },
+    { name: 'exec-smoke', args: ['exec', '--help'], expect: [helpFlag('json'), helpFlag('output-schema'), helpFlag('sandbox'), helpFlag('ignore-user-config')] },
+    { name: 'resume-smoke', args: ['exec', 'resume', '--help'], expect: [/^Usage: codex exec resume .*SESSION_ID/m, helpFlag('json')] },
     { name: 'model-pin', args: ['debug', 'models'], expect: [modelListed(DRIVERS.codex.model)] },
   ]),
   claude: Object.freeze([
@@ -89,8 +95,9 @@ const PROBES = Object.freeze({
     {
       name: 'capabilities',
       args: ['--help'],
-      expect: [/^[ \t]*--agents(?![\w-])/m, /^[ \t]*-p,[ \t]+--print(?![\w-])/m],
+      expect: ['agents', 'print', 'resume', 'output-format', 'json-schema', 'model', 'restricted', 'tools', 'settings', 'permission-mode', 'strict-mcp-config', 'mcp-config'].map(helpFlag),
     },
+    { name: 'resume-smoke', args: ['--resume', '--help'], expect: [helpFlag('resume'), helpFlag('output-format')] },
   ]),
 })
 
@@ -110,13 +117,13 @@ function ensureBuildingIgnored(root) {
 }
 
 /** Run one probe → { name, command, output, pass }. A missing binary is a FAIL row, never a throw. */
-function runProbe(bin, probe) {
+function runProbe(bin, probe, cwd) {
   const command = [bin, ...probe.args].join(' ')
-  const r = spawnSync(bin, probe.args, { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS })
+  const r = spawnSync(bin, probe.args, { cwd, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS })
   if (r.error) return { name: probe.name, command, output: r.error.message, pass: false }
   const output = [r.stdout, r.stderr].filter((s) => s && s.length > 0).join('\n')
   const ran = r.status === 0
-  const expected = (probe.expect ?? []).every((e) => (typeof e === 'function' ? e(output) : e.test(output)))
+  const expected = outputPasses(probe, output)
   return { name: probe.name, command, output, pass: ran && expected }
 }
 
@@ -130,7 +137,7 @@ function interpret(id, probes, generic) {
   return lines.join(' ')
 }
 
-function verifyDriver(root, id) {
+export function verifyDriver(root, id) {
   let entry
   try {
     entry = resolveDriver(id)
@@ -139,7 +146,7 @@ function verifyDriver(root, id) {
     return 2
   }
   const set = Object.hasOwn(PROBES, id) ? PROBES[id] : GENERIC_PROBES
-  const probes = set.map((p) => runProbe(entry.bin, p))
+  const probes = set.map((p) => runProbe(entry.bin, p, root))
   const doc = {
     date: new Date().toISOString(),
     host: hostname(),
@@ -160,9 +167,9 @@ function verifyDriver(root, id) {
 }
 
 /** The provenance if it is fresh, else a refusal reason naming what is wrong with it. */
-function freshProvenance(root, id) {
+export function freshProvenance(root, id, { now = Date.now() } = {}) {
   const path = reportPath(root, id)
-  if (!existsSync(path)) return { ok: false, reason: `no provenance at ${path}` }
+  if (!existsSync(path)) return { ok: false, reason: `no provenance at ${path}`, refreshable: true }
   let doc
   try {
     doc = JSON.parse(readFileSync(path, 'utf8'))
@@ -213,6 +220,18 @@ function freshProvenance(root, id) {
       reason: `provenance at ${path} records probes of another binary (${foreign.map((p) => p.command).join(', ')}), not of '${bin}'`,
     }
   }
+  const set = Object.hasOwn(PROBES, id) ? PROBES[id] : GENERIC_PROBES
+  for (const expected of set) {
+    const rows = probes.filter((probe) => probe.name === expected.name)
+    if (rows.length !== 1) return { ok: false, reason: `required probe '${expected.name}' must occur exactly once` }
+    const command = [bin, ...expected.args].join(' ')
+    if (rows[0].command !== command || !outputPasses(expected, rows[0].output)) {
+      return { ok: false, reason: `required probe '${expected.name}' does not satisfy its current command/output contract` }
+    }
+  }
+  const age = now - Date.parse(doc.date)
+  if (!Number.isFinite(age) || age < 0) return { ok: false, reason: 'provenance carries a future or invalid date' }
+  if (age > PROVENANCE_MAX_AGE_MS) return { ok: false, reason: 'provenance is stale; fresh evidence must be from the last 24 hours', refreshable: true }
   return { ok: true, doc }
 }
 

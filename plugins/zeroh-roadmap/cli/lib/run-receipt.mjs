@@ -138,9 +138,11 @@ function publish(cwd, address, snapshot, sameMutation) {
 
 function operationRecord(operation, requestFingerprint) {
   if (!operation || !['start', 'action'].includes(operation.kind)) throw new Error('operation kind must be start or action')
-  if (operation.kind === 'start') return { kind: 'start', actionFingerprint: fingerprint({ kind: 'start', requestFingerprint }) }
+  if (operation.inputDigest !== undefined && (typeof operation.inputDigest !== 'string' || !/^[a-f0-9]{64}$/.test(operation.inputDigest))) throw new Error('operation inputDigest must be a canonical byte digest')
+  const inputBinding = operation.inputDigest === undefined ? {} : { inputDigest: operation.inputDigest }
+  if (operation.kind === 'start') return { kind: 'start', ...inputBinding, actionFingerprint: fingerprint({ kind: 'start', requestFingerprint, ...inputBinding }) }
   if (!nonBlank(operation.action)) throw new Error('action operation requires a nonempty action')
-  const actual = { kind: 'action', action: operation.action, payload: structuredClone(operation.payload) }
+  const actual = { kind: 'action', action: operation.action, payload: structuredClone(operation.payload), ...inputBinding }
   return { ...actual, actionFingerprint: fingerprint(actual) }
 }
 
@@ -345,9 +347,14 @@ export function reconcileRunReceipt(cwd, input) {
   return { status: 'active', receipt: current }
 }
 
-export function readRunReceipt(cwd, address, { revision } = {}) {
+export function readRunReceipt(cwd, address, { revision, digest: requestedDigest } = {}) {
+  if (requestedDigest !== undefined && (revision !== undefined || !/^[a-f0-9]{64}$/.test(requestedDigest))) throw new Error("receipt lookup requires either a revision or a canonical digest")
   const chain = readChain(cwd, address)
+  if (requestedDigest !== undefined) return chain.find((receipt) => receipt.digest === requestedDigest) ?? null
   if (revision === undefined) return chain.at(-1) ?? null
   if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('receipt revision must be a nonnegative integer')
   return chain[revision] ?? null
 }
+
+// Sibling immutable native artifacts share these storage guards.
+export { validateAddress as validateRunAddress, inspectAncestors as inspectReceiptAncestors, ensureDir as ensureReceiptDirectory }

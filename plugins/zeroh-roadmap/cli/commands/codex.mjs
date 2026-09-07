@@ -51,6 +51,7 @@
  */
 import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
+import { spawnNativeChild } from '../lib/native-child-process.mjs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
@@ -499,15 +500,12 @@ async function superviseExactLane(root, ids, lane, launchId) {
   try { effective = nativeAuthority(journal.worktree, journal.authority) } catch (error) { process.stderr.write(`supervisor: authority refused ${error.message}\n`); return 1 }
   const logFd = openSync(journal.log, 'a')
   const promptFd = openSync(journal.prompt, 'r')
-  const native = spawn(entry.bin, effective.native.argv, {
+  const { completion } = spawnNativeChild(entry.bin, effective.native.argv, {
     cwd: journal.worktree, detached: false, stdio: [promptFd, logFd, logFd],
   })
   closeSync(promptFd)
   closeSync(logFd)
-  const outcome = await new Promise((done) => {
-    native.once('error', (error) => done({ code: null, signal: null, error: error.message }))
-    native.once('exit', (code, signal) => done({ code, signal }))
-  })
+  const outcome = await completion
   let current
   try { current = JSON.parse(readFileSync(path, 'utf8')) } catch { return 1 }
   if (current.launchId !== launchId || current.pgid !== process.pid) { process.stderr.write('supervisor: final identity refused\n'); return 1 }

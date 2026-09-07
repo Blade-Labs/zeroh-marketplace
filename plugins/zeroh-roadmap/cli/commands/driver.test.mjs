@@ -24,6 +24,7 @@ import { hostname, tmpdir } from 'node:os'
 import { join, dirname, delimiter } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DRIVERS } from '../lib/drivers.mjs'
+import { freshProvenance } from './driver.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const BIN = join(HERE, '..', '..', 'bin', 'roadmap.mjs')
@@ -63,6 +64,24 @@ const FAKE_STDOUT = [
   'config lives at `~/.codex/config.toml` (a backtick + ${brace} the skeleton must survive)',
 ]
 
+const CODEX_EXEC_HELP = ['Usage: codex exec [OPTIONS] [PROMPT]', '  --json', '  --output-schema <FILE>', '  --sandbox <MODE>', '  --ignore-user-config'];
+const CODEX_RESUME_HELP = ['Usage: codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]', '  --json'];
+const CLAUDE_HELP = ['  --agents <JSON>', '  -p, --print', '  -r, --resume [SESSION_ID]', '  --output-format stream-json', '  --json-schema <JSON>', '  --model <MODEL>', '  --restricted', '  --tools <TOOLS>', '  --settings <JSON>', '  --permission-mode auto', '  --strict-mcp-config', '  --mcp-config <JSON>'];
+
+function passingProbes(id) {
+  return id === 'codex' ? [
+    {name:'version', command:'codex --version', output:FAKE_STDOUT[0], pass:true},
+    {name:'capabilities', command:'codex features list', output:FAKE_STDOUT.slice(1).join('\n'), pass:true},
+    {name:'exec-smoke', command:'codex exec --help', output:CODEX_EXEC_HELP.join('\n'), pass:true},
+    {name:'resume-smoke', command:'codex exec resume --help', output:CODEX_RESUME_HELP.join('\n'), pass:true},
+    {name:'model-pin', command:'codex debug models', output:fakeCatalog(), pass:true},
+  ] : [
+    {name:'version', command:'claude --version', output:'2.1.257', pass:true},
+    {name:'capabilities', command:'claude --help', output:CLAUDE_HELP.join('\n'), pass:true},
+    {name:'resume-smoke', command:'claude --resume --help', output:CLAUDE_HELP.join('\n'), pass:true},
+  ];
+}
+
 /** A model catalog shaped like `codex debug models` — one listed, API-supported row per slug. */
 function fakeCatalog(rows = [{ slug: DRIVERS.codex.model, supported_in_api: true, visibility: 'list' }]) {
   return JSON.stringify({ models: rows })
@@ -81,6 +100,12 @@ function fakeBinOnPath(root, name = 'codex', lines = FAKE_STDOUT, catalog = fake
     `  echo '${catalog}'`,
     '  exit 0',
     'fi',
+    ...(name === 'codex' ? [
+      'if [ "$1" = "exec" ] && [ "$2" = "resume" ]; then',
+      ...CODEX_RESUME_HELP.map((l) => `  echo '${l}'`), '  exit 0', 'fi',
+      'if [ "$1" = "exec" ]; then',
+      ...CODEX_EXEC_HELP.map((l) => `  echo '${l}'`), '  exit 0', 'fi',
+    ] : []),
     ...lines.map((l) => `echo '${l}'`),
     'exit 0',
     '',
@@ -113,10 +138,7 @@ function writeProvenance(root, id, overrides = {}) {
   const doc = {
     date: new Date().toISOString(),
     host: HOST,
-    probes: [
-      { name: 'version', command: `${id} --version`, output: FAKE_STDOUT[0], pass: true },
-      { name: 'capabilities', command: `${id} features list`, output: FAKE_STDOUT.slice(1).join('\n'), pass: true },
-    ],
+    probes: passingProbes(id),
     interpretation: 'subagents native; hooks and plugins available',
     ...overrides,
   }
@@ -160,7 +182,7 @@ test('verify records the probe stdout VERBATIM and exits 0 when every probe pass
 
   // The verbatim rail: every line the report carries is a line the binary actually printed.
   // A summary, a truncation or a rewritten verdict fails this.
-  const printed = new Set([...FAKE_STDOUT, fakeCatalog()].map((l) => l.trimEnd()))
+  const printed = new Set([...FAKE_STDOUT, ...CODEX_EXEC_HELP, ...CODEX_RESUME_HELP, fakeCatalog()].map((l) => l.trimEnd()))
   for (const p of doc.probes) {
     for (const line of p.output.split('\n').map((l) => l.trimEnd()).filter(Boolean)) {
       assert.ok(
@@ -503,3 +525,46 @@ test('verify refuses an Object.prototype member as a driver id, never crashing o
     assert.ok(!existsSync(join(root, '.building', `driver-verify-${id}.json`)), `${id}: a refused id writes no provenance`)
   }
 })
+
+test('freshProvenance rejects stale and future reports at the exact 24-hour boundary', () => {
+  const root = tmpRepo();
+  const now = Date.parse('2026-09-07T12:00:00Z');
+  for (const [name, offset, expected] of [['stale', -86_400_001, false], ['future', 1, false], ['boundary', -86_400_000, true], ['current', 0, true]]) {
+    writeProvenance(root, 'codex', {date: new Date(now + offset).toISOString()});
+    const result = freshProvenance(root, 'codex', {now});
+    assert.equal(result.ok, expected, name);
+  }
+});
+
+test('freshProvenance requires every registered native operation probe, not merely green rows', () => {
+  const required = {
+    codex: ['version', 'capabilities', 'exec-smoke', 'resume-smoke', 'model-pin'],
+    claude: ['version', 'capabilities', 'resume-smoke'],
+  }
+  for (const [id, names] of Object.entries(required)) {
+    const root = tmpRepo()
+    const probes = passingProbes(id)
+    writeProvenance(root, id, { probes })
+    assert.equal(freshProvenance(root, id).ok, true, id)
+    for (const missing of names) {
+      writeProvenance(root, id, { probes: probes.filter((probe) => probe.name !== missing) })
+      const result = freshProvenance(root, id)
+      assert.equal(result.ok, false, `${id}: ${missing}`)
+      assert.match(result.reason, new RegExp(`${missing}|required|probe`, 'i'))
+    }
+  }
+})
+
+
+test('freshProvenance rechecks command and output contracts instead of trusting green booleans', () => {
+  const root = tmpRepo();
+  for (const mutate of [
+    (probes) => { probes.find((p) => p.name === 'resume-smoke').command = 'codex --version'; },
+    (probes) => { probes.find((p) => p.name === 'exec-smoke').output = 'unsupported'; },
+    (probes) => { probes.push({...probes[0]}); },
+  ]) {
+    const probes = passingProbes('codex'); mutate(probes);
+    writeProvenance(root, 'codex', {probes});
+    assert.equal(freshProvenance(root, 'codex').ok, false);
+  }
+});

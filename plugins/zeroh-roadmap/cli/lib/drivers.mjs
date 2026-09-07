@@ -79,17 +79,17 @@ export function intersectAuthority(parent, request) {
   return { parent: structuredClone(parent), request: structuredClone(request), effective: { profile: request.profile === 'inherit' ? parent.profile : request.profile, bounds: structuredClone(request.bounds) } }
 }
 
-function codexLaunchArgv({ worktree, authority, json = false }) {
+function codexLaunchArgv({ worktree, authority, json = false, outputSchemaPath = null }) {
   if (!authority) throw new Error('effective authority envelope is required for Codex launch')
   const derived = intersectAuthority(authority.parent, authority.request)
   if (!isDeepStrictEqual(derived.effective, authority.effective)) throw new Error('effective authority envelope does not match its parent/request intersection')
   const { profile, bounds } = derived.effective
   if (profile === 'isolated-unsafe') {
     if (bounds.filesystem !== 'unrestricted' || bounds.network !== 'allowed' || !bounds.gitPush || !bounds.externalWrites) throw new Error('isolated-unsafe native mapping requires equally broad explicit bounds')
-    return ['exec', '--dangerously-bypass-approvals-and-sandbox', ...(json ? ['--json'] : []), '-m', CODEX_MODEL, '-C', worktree, '-']
+    return ['exec', '--dangerously-bypass-approvals-and-sandbox', ...(json ? ['--json'] : []), ...(outputSchemaPath ? ['--output-schema', outputSchemaPath] : []), '-m', CODEX_MODEL, '-C', worktree, '-']
   }
   if (!['read-only', 'workspace-write'].includes(profile) || bounds.filesystem !== profile || bounds.network !== 'denied' || bounds.gitPush || bounds.externalWrites) throw new Error(`authority profile '${profile}' has bounds the native Codex controls cannot represent`)
-  return ['exec', '--ignore-user-config', '--sandbox', bounds.filesystem, ...(json ? ['--json'] : []), '-c', 'approval_policy="on-request"', '-c', 'approvals_reviewer="auto_review"', '-c', 'sandbox_workspace_write.network_access=false', '-c', 'sandbox_workspace_write.writable_roots=[]', '-m', CODEX_MODEL, '-C', worktree, '-']
+  return ['exec', '--ignore-user-config', '--sandbox', bounds.filesystem, ...(json ? ['--json'] : []), ...(outputSchemaPath ? ['--output-schema', outputSchemaPath] : []), '-c', 'approval_policy="on-request"', '-c', 'approvals_reviewer="auto_review"', '-c', 'sandbox_workspace_write.network_access=false', '-c', 'sandbox_workspace_write.writable_roots=[]', '-m', CODEX_MODEL, '-C', worktree, '-']
 }
 
 function codexResumeArgv(nativeSessionId, opts) {
@@ -103,7 +103,7 @@ const CLAUDE_SETTINGS = JSON.stringify({
   sandbox: { enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, network: { allowedDomains: [], deniedDomains: ['*'], strictAllowlist: true } },
 })
 
-function claudeLaunchArgv({ authority, model, streamJson = false }) {
+function claudeLaunchArgv({ authority, model, streamJson = false, schema = null }) {
   if (!authority) throw new Error('effective authority envelope is required for Claude launch')
   const derived = intersectAuthority(authority.parent, authority.request)
   if (!isDeepStrictEqual(derived.effective, authority.effective)) throw new Error('effective authority envelope does not match its parent/request intersection')
@@ -113,7 +113,7 @@ function claudeLaunchArgv({ authority, model, streamJson = false }) {
     throw new Error('requested authority bounds cannot be represented by native Claude controls')
   }
   const tools = profile === 'read-only' ? 'Read,Glob,Grep' : 'Read,Glob,Grep,Edit,Write,Bash'
-  return ['-p', ...(streamJson ? ['--output-format', 'stream-json', '--verbose'] : []), '--model', model,
+  return ['-p', ...(streamJson ? ['--output-format', 'stream-json', '--verbose'] : []), ...(schema ? ['--json-schema', JSON.stringify(schema)] : []), '--model', model,
     '--restricted', '--permission-mode', 'auto', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
     '--tools', tools, '--settings', CLAUDE_SETTINGS]
 }
@@ -160,6 +160,39 @@ export function parseNativeResult(id, result, opts = {}) {
   const parser = resolveDriver(id).protocol?.parseResult
   if (typeof parser !== 'function') throw new Error("driver '" + id + "' has no native result parser")
   return parser(result, opts)
+}
+
+function phaseResultCandidate(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return structuredClone(value)
+  if (typeof value !== 'string') return null
+  try { const parsed = JSON.parse(value); return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null } catch { return null }
+}
+
+export function projectNativeFrame(id, frame) {
+  if (!frame || typeof frame !== 'object') return null
+  if (id === 'codex') {
+    if (frame.type === 'thread.started') return { kind: 'identity', nativeSessionId: frame.thread_id }
+    if (frame.type === 'item.completed' && frame.item?.type === 'agent_message') return { kind: 'phase-result', phaseResult: phaseResultCandidate(frame.item.text) }
+    if (['turn.completed', 'turn.failed', 'error'].includes(frame.type)) return { kind: 'terminal', protocolTerminal: { type: frame.type, ...(frame.subtype === undefined ? {} : { subtype: frame.subtype }), ...(frame.is_error === undefined ? {} : { is_error: frame.is_error }), ...(frame.usage === undefined ? {} : { usage: structuredClone(frame.usage) }) } }
+  }
+  if (id === 'claude') {
+    if (frame.type === 'system' && frame.subtype === 'init') return { kind: 'identity', nativeSessionId: frame.session_id, model: frame.model }
+    if (frame.type === 'result') return { kind: 'terminal', nativeSessionId: frame.session_id, protocolTerminal: { type: frame.type, ...(frame.subtype === undefined ? {} : { subtype: frame.subtype }), ...(frame.is_error === undefined ? {} : { is_error: frame.is_error }), ...(frame.usage === undefined ? {} : { usage: structuredClone(frame.usage) }) }, phaseResult: phaseResultCandidate(frame.structured_output ?? frame.result) }
+  }
+  return null
+}
+
+export function validateNativeTerminal(driverId, terminal) {
+  const type = typeof terminal === 'string' ? terminal : terminal?.type
+  if (driverId === 'codex' && !['turn.completed', 'turn.failed', 'error'].includes(type)) return false
+  if (driverId === 'claude' && !(type === 'result' || (typeof type === 'string' && type.startsWith('result.')))) return false
+  if (!['codex', 'claude'].includes(driverId)) return false
+  if (typeof terminal === 'string') return true
+  return Boolean(terminal) && !Array.isArray(terminal)
+    && Object.keys(terminal).every((key) => ['type', 'subtype', 'is_error', 'usage'].includes(key))
+    && (terminal.subtype === undefined || typeof terminal.subtype === 'string')
+    && (terminal.is_error === undefined || typeof terminal.is_error === 'boolean')
+    && (terminal.usage === undefined || (terminal.usage !== null && typeof terminal.usage === 'object' && !Array.isArray(terminal.usage)))
 }
 /** Probe evidence pasted verbatim from the command each entry's verifiedAt names. */
 const CODEX_PROBE_OUTPUT = `codex-cli 0.153.4

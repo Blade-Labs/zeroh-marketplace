@@ -16,14 +16,13 @@
  *   (2) The band fed to classifyBandRoute is `next.band` (arc next emits it; `gate plan`
  *       does not), and plane membership is `next.plane === planeName`.
  *
- * The harness supplies the ONE judgment step, `agent()` (the phase-executor spawn) — every
- * other step is a Bash-shaped CLI call. Primitives are INJECTABLE (deps) so the fixture tier
- * (1660) drives every branch with fakes; the defaults shell to the real `roadmap` bin and
- * the harness `agent()` must be provided by the caller.
+ * The production NativeAgentDriver owns the phase-executor invocation. Explicit deps.agent
+ * retains the legacy fixture/harness seam. Both paths share result validation and consumption;
+ * the remaining commands use the real `roadmap` bin unless a fixture supplies deps.run.
  */
 import { execFileSync } from 'node:child_process'
 import { randomUUID, createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -40,10 +39,15 @@ import { loadConfig } from '../cli/lib/config.mjs'
 import { resolveSlot, runSlot } from '../cli/lib/slots.mjs'
 import { bridgeImport } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine, appendExecutorEvent, readResultTailCompletion } from '../cli/lib/beacon.mjs'
-import { armExecutor, disarmExecutor, liveArm, armPath, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps } from '../cli/lib/executor-arm.mjs'
+import { armExecutor, disarmExecutor, liveArm, armPath, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps, readExecutorRunArm } from '../cli/lib/executor-arm.mjs'
 import { productRepos } from '../cli/lib/product-repos.mjs'
 import { pidAlive, claimResultConsumption, listResultClaims } from '../cli/lib/sidecar.mjs'
 import { deriveArcLifecycleTransition } from '../cli/lib/derive.mjs'
+import { NativeAgentDriver } from '../cli/lib/native-agent-driver.mjs'
+import { MODEL_DRIVERS } from '../cli/lib/drivers.mjs'
+import { resolveRole } from '../cli/lib/roles.mjs'
+import { resolveGovernance } from '../cli/lib/governance.mjs'
+import { validateRunAddress, inspectReceiptAncestors, readRunReceipt } from '../cli/lib/run-receipt.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
 const BACKGROUND_RUN_MAX_MIN = 10 // mirror hooks/executor-result-guard.mjs — one 10-min rule
@@ -60,22 +64,7 @@ function defaultRun(cmd, { input, cwd } = {}) {
   }
 }
 
-/** The default `agent()` is provided by the workflow harness (Claude Agent SDK / the session):
- *  it runs the phase-executor AND the backgrounded `roadmap watch` watchdog concurrently and
- *  resolves to { result } (executor returned) OR { watchExit, watchVerdict } (watchdog woke
- *  first). Without a harness there is nothing to run — fail loud, never fabricate a result.
- *
- *  CONTRACT the harness must honour: a repeat call for a phase already in flight (the
- *  keep-waiting branch below) MUST re-await the SAME executor, never spawn a second one. The
- *  workflow arms once, pre-spawn, so a re-spawning harness reproduces the exact double-spawn
- *  the arm exists to prevent, and the arm on disk cannot see it. */
-function defaultAgent() {
-  throw new Error(
-    'arc-plane.workflow: no agent() runner injected — the harness (Claude Agent SDK / the do-arc '
-    + 'session) must provide deps.agent to spawn the phase-executor. The workflow composes CLI parts; '
-    + 'the ONE judgment step is the caller\'s.',
-  )
-}
+
 
 const jsonOf = (r) => JSON.parse(r.stdout)
 
@@ -183,16 +172,36 @@ function backgroundRunAlive(b) {
 /** Read the phase's + arc's acceptanceCriteria + the arc designRefs via the typed bridge
  *  (the same seam validate-roadmap-file proves). Best-effort: a bridge miss yields empty
  *  arrays (detectSelfDescope then no-ops rather than false-firing). */
-function readPhaseAndArcMeta(repoRoot, arcId, phase) {
+function readPhaseAndArcMeta(repoRoot, arcId, phase, { atCommit, runId } = {}) {
+  if (atCommit !== undefined) {
+    validateRunAddress({ arcId, runId })
+    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(atCommit) || !Number.isSafeInteger(phase) || phase < 1) throw new Error('native recovery requires an exact source commit and phase')
+  }
+  const readMeta = (relativePath) => {
+    const path = join(repoRoot, relativePath)
+    if (atCommit === undefined) return bridgeImport(path, { consumerRoot: repoRoot })
+    inspectReceiptAncestors(dirname(path))
+    const bytes = execFileSync('git', ['show', `${atCommit}:${relativePath}`], { cwd: repoRoot, maxBuffer: 2 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] })
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    const temporary = join(dirname(path), `.native-recovery-${digest}-${randomUUID()}.ts`)
+    // Sibling location preserves the consumer's relative schema imports. This is
+    // a temporary input to the existing typed parser, never a second snapshot store.
+    writeFileSync(temporary, bytes, { flag: 'wx', mode: 0o600 })
+    try {
+      const imported = bridgeImport(temporary, { consumerRoot: repoRoot, cache: false })
+      if (!imported.ok) throw new Error(`cannot parse original native source ${relativePath}`)
+      return imported
+    } finally {
+      unlinkSync(temporary) // Cleanup failure must stop recovery rather than leave hidden source.
+    }
+  }
   const meta = { acceptanceCriteria: [], tasks: [], arcCriteria: [], designRefs: [] }
-  const pf = join(repoRoot, 'roadmap', 'phases', `phase-${phase}.phase.ts`)
-  const pimp = bridgeImport(pf, { consumerRoot: repoRoot })
+  const pimp = readMeta(`roadmap/phases/phase-${phase}.phase.ts`)
   if (pimp.ok) {
     meta.acceptanceCriteria = pimp.parsed?.acceptanceCriteria ?? []
     meta.tasks = pimp.parsed?.tasks ?? []
   }
-  const af = join(repoRoot, 'roadmap', 'arcs', `${arcId}.arc.ts`)
-  const aimp = bridgeImport(af, { consumerRoot: repoRoot })
+  const aimp = readMeta(`roadmap/arcs/${arcId}.arc.ts`)
   if (aimp.ok) {
     meta.arcCriteria = (aimp.parsed?.acceptanceCriteria ?? []).map((c) => c.job ?? c.signal ?? c)
     meta.designRefs = aimp.parsed?.designRefs ?? []
@@ -235,7 +244,9 @@ async function serializeSharedMutation(phase, { repoRoot, cfg, arcId }) {
 export default async function arcPlaneWorkflow(input, deps = {}) {
   const { arcId, planeName, force, pauseAfter, recovery } = input
   const run = deps.run ?? defaultRun
-  const agent = deps.agent ?? defaultAgent
+  const nativeMode = deps.agent === undefined
+  let nativeDriver = null
+  const createNativeAgentDriver = deps.createNativeAgentDriver ?? ((options) => new NativeAgentDriver(options))
   const warn = deps.warn ?? ((message) => process.stderr.write(message))
   const cwd = deps.cwd ?? process.cwd()
   const workflowHalt = (kind, detail = {}) => lifecycleHalt(kind, { arcId, ...detail })
@@ -254,8 +265,130 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
   const repoRoot = gitToplevel(cwd)
   const cfg = loadConfig(cwd)
   const worktree = repoRoot
+  const getNativeDriver = () => {
+    nativeDriver ??= createNativeAgentDriver({ cwd, parentDriverId: deps.parentDriverId ?? input.parentDriverId, policy: deps.policy ?? cfg.modelPolicy ?? {}, sessionId: deps.sessionId ?? input.sessionId, parentAuthority: deps.parentAuthority ?? input.parentAuthority, processTransports: deps.processTransports, readLaunchInputs: deps.readLaunchInputs, provenanceStore: deps.provenanceStore })
+    return nativeDriver
+  }
+  const nativeRuns = new Map()
+  const agent = deps.agent ?? (async (_role, options) => {
+    const key = JSON.stringify([options.nativePhase.arcId, options.nativePhase.phase])
+    if (!nativeRuns.has(key)) nativeRuns.set(key, getNativeDriver().runPhase(options.nativePhase))
+    const pending = nativeRuns.get(key)
+    // A watchdog wake does not replace or re-launch the original native operation.
+    return options.watchdog && typeof options.watchdog.then === 'function'
+      ? Promise.race([pending, options.watchdog]) : pending
+  })
   const completedClaims = new Set()
   const lifecycleReceipts = []
+  const checkPhaseResult = (phase, candidate) => {
+    const checked = run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(candidate) })
+    if (checked.exitCode === 0 && checked.stdout?.trim()) {
+      try { appendExecutorEvent(worktree, phase, 'result-returned') }
+      catch (error) { process.stderr.write(`arc-plane: phase ${phase} result-returned not stamped — ${error.message}\n`) }
+    }
+    return checked
+  }
+  const nativeCheckpoint = (receipt) => sha256(canonicalJson({ runId: receipt.snapshot.request.runId, requestFingerprint: receipt.snapshot.requestFingerprint }))
+  const disarmCompletedNative = (phase, receipt) => {
+    const arm = readExecutorRunArm(worktree, phase)
+    const request = receipt.snapshot.request
+    if (arm.status !== 'valid' || arm.arm.runId !== request.runId || arm.arm.executorId !== request.executorId || arm.arm.requestFingerprint !== receipt.snapshot.requestFingerprint) throw new Error('native completion no longer owns the executor arm')
+    disarmExecutor(worktree, phase)
+  }
+  const consumePhaseResult = async ({ phase, rc, meta, resultPrior, checkpointDigest, authorityRef, sessionId, nativeReceipt }) => {
+    if (rc.exitCode !== 0 || !rc.stdout?.trim()) return workflowHalt('failed', { phase, evidence: { resultCheck: rc.stderr || rc.stdout || 'invalid PhaseExecutionResult' } })
+    let result
+    try {
+      result = jsonOf(rc)
+    } catch (e) {
+      return workflowHalt('failed', { phase, evidence: { resultCheck: `invalid JSON: ${e.message}` } })
+    }
+    if (result.status !== 'done') {
+      // escalated/failed → the workflow ENDS; the session owns the conversation and surfaces it.
+      return workflowHalt(result.status === 'escalated' ? 'escalated' : 'failed', { phase, evidence: result })
+    }
+    const descope = detectSelfDescope(result, { acceptanceCriteria: meta.acceptanceCriteria, tasks: meta.tasks, arcCriteria: meta.arcCriteria })
+    if (descope.length > 0) return workflowHalt('self-descope', { phase, evidence: descope }) // bounce/ratify stays HUMAN
+
+    const resultDigest = sha256(canonicalJson(result))
+    const eventId = `result:${arcId}:${phase}:${checkpointDigest}`
+    const resultReceipt = reduceArcTransition(resultPrior, {
+      eventId,
+      arcId: String(arcId),
+      source: 'result-consumption',
+      type: 'done',
+      phase,
+      evidence: { checkpointDigest, resultDigest },
+      authorityRef,
+    })
+    if (resultReceipt.rejection) {
+      return workflowHalt('failed', { phase, evidence: { lifecycleResult: resultReceipt.rejection } })
+    }
+    lifecycleReceipts.push(resultReceipt)
+    let consumption
+    try {
+      consumption = claimResultConsumption(worktree, {
+        arcId,
+        phase,
+        checkpointDigest,
+        resultDigest,
+        eventId,
+        owner: { pid: process.pid, sessionId: String(sessionId ?? `pid-${process.pid}`) },
+        authorityRef,
+      })
+    } catch (e) {
+      return workflowHalt('failed', { phase, evidence: { resultConsumption: e.message } })
+    }
+    if (consumption.status === 'duplicate') {
+      return duplicateResultOutput({ arcId, phase, eventId, authorityRef, evidence: { resultConsumption: consumption } })
+    }
+    if (consumption.status === 'conflict') {
+      return workflowHalt('failed', { phase, evidence: { resultConsumption: consumption } })
+    }
+    // phase-file / gate-report consistency (the anti-narration check, DESIGN §2). A red
+    // verify-complete (exit 2 = inconsistent) must halt, not be silently accepted.
+    const vc = run(`roadmap gate run ${phase} --verify-complete`, { cwd })
+    if (vc.exitCode !== 0) return workflowHalt('failed', { phase, evidence: { verifyComplete: vc.stderr || vc.stdout } })
+
+    const mut = await serializeSharedMutation(phase, { repoRoot, cfg, arcId }) // groom backlog + emit — the loop's final step
+    if (mut) return workflowHalt(mut.halt ?? 'failed', { phase, evidence: mut.evidence })
+    try {
+      appendExecutorEvent(worktree, phase, 'phase-complete', {
+        resultTailComplete: true,
+        checkpointDigest,
+        resultDigest,
+        ...(nativeReceipt ? { arcId, runId: nativeReceipt.snapshot.request.runId, executorId: nativeReceipt.snapshot.request.executorId, requestFingerprint: nativeReceipt.snapshot.requestFingerprint, runReceiptDigest: nativeReceipt.digest } : {}),
+      })
+      if (nativeReceipt) disarmCompletedNative(phase, nativeReceipt)
+    } catch (e) {
+      return workflowHalt('failed', {
+        phase,
+        evidence: { resultConsumptionInterrupted: { claim: consumption.claim, reason: `completion beacon failed: ${e.message}` } },
+      })
+    }
+    completedClaims.add(eventId)
+    if (pauseAfter === phase) {
+      const pauseReceipt = reduceArcTransition(resultReceipt.next, {
+        eventId: `pause:${arcId}:${phase}:${checkpointDigest}`,
+        arcId: String(arcId),
+        source: 'arc-plane-workflow',
+        type: 'pause-after',
+        phase,
+        evidence: { pauseAfter: phase },
+        authorityRef,
+      })
+      if (pauseReceipt.rejection) {
+        return workflowHalt('failed', { phase, evidence: { lifecyclePause: pauseReceipt.rejection } })
+      }
+      return {
+        ...buildHaltPayload('pause-after', { phase, evidence: { pauseAfter: phase } }),
+        resume: pauseReceipt.resume,
+        transitionReceipt: pauseReceipt,
+        trace: { state: pauseReceipt.next, receipts: [...lifecycleReceipts, pauseReceipt] },
+      }
+    }
+    return null
+  }
   if (recovery) {
     const authorityRef = { status: 'unknown', reason: 'read-only-projection', sourceRef: null }
     const active = { arcId: String(arcId), stage: 'phase', status: 'active', processedEventIds: [], lastHalt: null, authorityRef }
@@ -288,6 +421,74 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
   // arm the lane (no-op if this session already holds it).
   const arcArm = run(`roadmap arm ${arcId}`, { cwd })
   if (arcArm.exitCode !== 0) return commandFailure('blocked', 'arcArm', arcArm, { arcId })
+
+  // A native child may have committed and marked its phase done. Consume its
+  // original result before arc-next can advance, using the original source criteria.
+  if (nativeMode) {
+    const building = join(worktree, '.building')
+    const armedPhases = existsSync(building)
+      ? readdirSync(building).map((name) => name.match(/^(\d+)-executor\.armed$/)?.[1]).filter(Boolean).map(Number)
+      : []
+    const unfinished = []
+    let claims
+    try { claims = listResultClaims(worktree, arcId) }
+    catch (error) { return workflowHalt('failed', { evidence: { resultConsumptionInterrupted: error.message } }) }
+    for (const phase of armedPhases) {
+      const arm = readExecutorRunArm(worktree, phase)
+      if (arm.status !== 'valid') return workflowHalt('blocked', { phase, evidence: { executorArm: 'legacy or partial executor arm cannot recover a native run' } })
+      const terminalBeacon = latestPhaseBeacon(worktree, phase)
+      const ownerArc = terminalBeacon?.event === 'phase-complete' && typeof terminalBeacon.arcId === 'string' ? terminalBeacon.arcId : arcId
+      let receipt
+      try { receipt = readRunReceipt(worktree, { arcId: ownerArc, runId: arm.arm.runId }) }
+      catch (error) { return workflowHalt('blocked', { phase, evidence: { executorArm: error.message } }) }
+      if (!receipt || receipt.snapshot.request.phase !== phase || receipt.snapshot.request.executorId !== arm.arm.executorId || receipt.snapshot.requestFingerprint !== arm.arm.requestFingerprint) {
+        return workflowHalt('blocked', { phase, evidence: { executorArm: 'stable executor arm lacks its matching canonical native receipt' } })
+      }
+      const checkpointDigest = nativeCheckpoint(receipt)
+      const eventId = `result:${ownerArc}:${phase}:${checkpointDigest}`
+      let ownerClaims
+      try { ownerClaims = ownerArc === arcId ? claims : listResultClaims(worktree, ownerArc) }
+      catch (error) { return workflowHalt('blocked', { phase, evidence: { resultConsumptionInterrupted: error.message } }) }
+      const claim = ownerClaims.find((value) => value.eventId === eventId)
+      if (claim) {
+        const candidate = receipt.snapshot.terminalResult?.phaseResult
+        const checked = candidate === undefined ? null : run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(candidate) })
+        let accepted = null
+        try { if (checked?.exitCode === 0) accepted = jsonOf(checked) } catch {}
+        if (!accepted || claim.resultDigest !== sha256(canonicalJson(accepted)) || !readResultTailCompletion(worktree, phase, claim)
+          || terminalBeacon?.arcId !== ownerArc || terminalBeacon.runId !== arm.arm.runId || terminalBeacon.executorId !== arm.arm.executorId || terminalBeacon.requestFingerprint !== arm.arm.requestFingerprint) {
+          return workflowHalt('failed', { phase, evidence: { resultConsumptionInterrupted: 'native result claim lacks its exact accepted candidate and completed tail' } })
+        }
+        try { disarmCompletedNative(phase, receipt) }
+        catch (error) { return workflowHalt('blocked', { phase, evidence: { executorArm: error.message } }) }
+        if (ownerArc === arcId) completedClaims.add(eventId)
+        continue
+      }
+      if (ownerArc !== arcId) return workflowHalt('blocked', { phase, evidence: { executorArm: 'foreign native run lacks a completed result claim' } })
+      unfinished.push({ phase, arm, receipt, checkpointDigest })
+    }
+    if (unfinished.length > 1) return workflowHalt('blocked', { evidence: { executorArm: 'multiple unfinished native runs require recovery' } })
+    for (const { phase, arm, receipt, checkpointDigest } of unfinished) {
+      const request = receipt.snapshot.request
+      const sourceCheckpoint = { baseHead: request.baseHead, requestedHead: request.requestedHead, roleCardDigest: request.roleCardDigest, governanceDigest: request.governanceDigest, authorityRef: request.authorityRef }
+      const recovered = await getNativeDriver().runPhase({
+        arcId, phase, prompt: null, schema: null,
+        plan: { roleId: request.roleId, driverId: request.driverId, model: request.model, executorId: request.executorId },
+        sourceCheckpoint, recovery: { runId: request.runId, sourceCheckpoint },
+      })
+      if (recovered?.status === 'hold' || recovered?.status === 'conflict') return recovered
+      if (recovered?.result === undefined) return workflowHalt('failed', { phase, evidence: { nativeRecovery: 'native recovery returned no result' } })
+      const rc = checkPhaseResult(phase, recovered.result)
+      let meta
+      try { meta = readPhaseAndArcMeta(repoRoot, arcId, phase, { atCommit: request.requestedHead, runId: request.runId }) }
+      catch (error) { return workflowHalt('blocked', { phase, evidence: { originalSource: error.message } }) }
+      const resultPrior = { arcId: String(arcId), stage: 'phase', status: 'active', processedEventIds: [], lastHalt: null, authorityRef: request.authorityRef }
+      const nativeReceipt = readRunReceipt(worktree, { arcId, runId: request.runId })
+      if (!nativeReceipt?.snapshot.terminalResult) return workflowHalt('blocked', { phase, evidence: { nativeRecovery: 'returned native candidate is not durably terminal' } })
+      const consumed = await consumePhaseResult({ phase, rc, meta, resultPrior, checkpointDigest, authorityRef: request.authorityRef, sessionId: arm.arm.sessionId, nativeReceipt })
+      if (consumed) return consumed
+    }
+  }
 
   const plane = { name: planeName } // NO snapshot — membership is next.plane, re-resolved each iteration
 
@@ -349,7 +550,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
 
     // decision === 'run' (run-phase | resume-phase)
     const phase = next.phase
-    const preflightArm = liveArm(worktree, phase)
+    const preflightArm = nativeMode ? null : liveArm(worktree, phase)
     if (preflightArm) {
       const who = preflightArm.executorId
         ? `executor '${preflightArm.executorId}'`
@@ -440,7 +641,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     // own session id — a caller without one is precisely the lane that walked into the 2026-08-17
     // double-spawn. liveArm is the lib's own judgement (an arm naming an executor, or one whose
     // beacon still reads work in flight), so the CHECK door is never laxer than the disarm door.
-    const armed = Boolean(sessionId)
+    const armed = !nativeMode && Boolean(sessionId)
     if (armed) {
       try {
         // Same alias the CLI records: this workflow is the other door onto the arm, and an
@@ -452,6 +653,21 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
       }
     }
 
+    let nativePlan = deps.nativePlan ?? null
+    let nativeSourceCheckpoint = null
+    if (nativeMode && deps.createNativeAgentDriver === undefined) {
+      const roleCardBytes = readFileSync(DEFAULT_AGENT_CARD)
+      const governance = resolveGovernance(repoRoot, [phaseFilePath])
+      if (governance.hold) return workflowHalt('blocked', { phase, evidence: { governance: governance.hold } })
+      const governanceBytes = Buffer.from(JSON.stringify({ ...governance, outputSchemaDigest: createHash('sha256').update(JSON.stringify(schema)).digest('hex') }, null, 2) + '\n')
+      nativeSourceCheckpoint = { baseHead: prestartHead ?? currentHead(worktree), requestedHead: prestartHead ?? currentHead(worktree), roleCardDigest: createHash('sha256').update(roleCardBytes).digest('hex'), governanceDigest: createHash('sha256').update(governanceBytes).digest('hex'), authorityRef: transitionReceipt.authorityRef }
+    }
+    if (nativeMode && nativePlan === null && deps.createNativeAgentDriver === undefined) {
+      const parentDriverId = deps.parentDriverId ?? input.parentDriverId
+      if (!parentDriverId) return workflowHalt('blocked', { phase, evidence: { nativeDriver: 'parentDriverId is required for native role selection' } })
+      const selected = resolveRole('phase-executor', parentDriverId, { policy: deps.policy ?? cfg.modelPolicy ?? {} })
+      nativePlan = { roleId: 'phase-executor', driverId: MODEL_DRIVERS[selected.model], model: selected.model }
+    }
     let spawn
     let rc
     try {
@@ -463,7 +679,12 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
         prompt,
         schema,
         watchdog: deps.bg ? deps.bg(`roadmap watch ${arcId}`) : `roadmap watch ${arcId}`,
+        nativePhase: {
+          arcId, phase, prompt, schema, plan: nativePlan,
+          sourceCheckpoint: nativeSourceCheckpoint ?? { baseHead: prestartHead, requestedHead: prestartHead, roleCardDigest: createHash('sha256').update(readFileSync(DEFAULT_AGENT_CARD)).digest('hex'), governanceDigest: createHash('sha256').update(JSON.stringify(schema)).digest('hex'), authorityRef: deps.authorityRef ?? input.authorityRef },
+        },
       })
+      if (spawn?.status === 'hold' || spawn?.status === 'conflict') return spawn
       if (spawn.result !== undefined) break
       if (spawn.watchExit === 3) {
         // STALLED — probe the beacon FIRST: a demonstrably-alive background-run (fresh + live
@@ -490,14 +711,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     }
 
     // ── the result tail (§4 order) ──
-    rc = run(`roadmap result check --phase ${phase}`, { cwd, input: JSON.stringify(spawn.result) }) // parse or die
-    if (rc.exitCode === 0 && rc.stdout?.trim()) {
-      try {
-        appendExecutorEvent(worktree, phase, 'result-returned')
-      } catch (e) {
-        process.stderr.write(`arc-plane: phase ${phase} result-returned not stamped — ${e.message}\n`)
-      }
-    }
+    rc = checkPhaseResult(phase, spawn.result)
     } finally {
       // Disarm ONLY the arm THIS workflow wrote, and ONLY once OUR executor handed something back
       // (spawn.result present — even an unparseable one: it returned, so it is gone, and its arm
@@ -515,97 +729,21 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
         }
       }
     }
-    if (rc.exitCode !== 0 || !rc.stdout?.trim()) return workflowHalt('failed', { phase, evidence: { resultCheck: rc.stderr || rc.stdout || 'invalid PhaseExecutionResult' } })
-    let result
-    try {
-      result = jsonOf(rc)
-    } catch (e) {
-      return workflowHalt('failed', { phase, evidence: { resultCheck: `invalid JSON: ${e.message}` } })
-    }
-    if (result.status !== 'done') {
-      // escalated/failed → the workflow ENDS; the session owns the conversation and surfaces it.
-      return workflowHalt(result.status === 'escalated' ? 'escalated' : 'failed', { phase, evidence: result })
-    }
-    const descope = detectSelfDescope(result, { acceptanceCriteria: meta.acceptanceCriteria, tasks: meta.tasks, arcCriteria: meta.arcCriteria })
-    if (descope.length > 0) return workflowHalt('self-descope', { phase, evidence: descope }) // bounce/ratify stays HUMAN
-
-    const authorityRef = transitionReceipt.authorityRef
-    const checkpointDigest = next.sourceCheckpoint?.digest
+    let checkpointDigest = next.sourceCheckpoint?.digest
       ?? sha256(JSON.stringify({ arcId, phase, head: prestartHead ?? currentHead(worktree), action: next.action }))
-    const resultDigest = sha256(canonicalJson(result))
-    const eventId = `result:${arcId}:${phase}:${checkpointDigest}`
-    const resultReceipt = reduceArcTransition(transitionReceipt.next, {
-      eventId,
-      arcId: String(arcId),
-      source: 'result-consumption',
-      type: 'done',
-      phase,
-      evidence: { checkpointDigest, resultDigest },
-      authorityRef,
-    })
-    if (resultReceipt.rejection) {
-      return workflowHalt('failed', { phase, evidence: { lifecycleResult: resultReceipt.rejection } })
+    let nativeReceipt
+    if (nativeMode) {
+      try {
+        const arm = readExecutorRunArm(worktree, phase)
+        if (arm.status !== 'valid') throw new Error('native result has no canonical executor arm')
+        const receipt = readRunReceipt(worktree, { arcId, runId: arm.arm.runId })
+        if (!receipt || receipt.snapshot.requestFingerprint !== arm.arm.requestFingerprint) throw new Error('native result arm does not match its receipt')
+        if (!receipt.snapshot.terminalResult) throw new Error('native result is not durably terminal')
+        nativeReceipt = receipt
+        checkpointDigest = nativeCheckpoint(receipt)
+      } catch (error) { return workflowHalt('failed', { phase, evidence: { nativeResult: error.message } }) }
     }
-    lifecycleReceipts.push(resultReceipt)
-    let consumption
-    try {
-      consumption = claimResultConsumption(worktree, {
-        arcId,
-        phase,
-        checkpointDigest,
-        resultDigest,
-        eventId,
-        owner: { pid: process.pid, sessionId: String(sessionId ?? `pid-${process.pid}`) },
-        authorityRef,
-      })
-    } catch (e) {
-      return workflowHalt('failed', { phase, evidence: { resultConsumption: e.message } })
-    }
-    if (consumption.status === 'duplicate') {
-      return duplicateResultOutput({ arcId, phase, eventId, authorityRef, evidence: { resultConsumption: consumption } })
-    }
-    if (consumption.status === 'conflict') {
-      return workflowHalt('failed', { phase, evidence: { resultConsumption: consumption } })
-    }
-    // phase-file / gate-report consistency (the anti-narration check, DESIGN §2). A red
-    // verify-complete (exit 2 = inconsistent) must halt, not be silently accepted.
-    const vc = run(`roadmap gate run ${phase} --verify-complete`, { cwd })
-    if (vc.exitCode !== 0) return workflowHalt('failed', { phase, evidence: { verifyComplete: vc.stderr || vc.stdout } })
-
-    const mut = await serializeSharedMutation(phase, { repoRoot, cfg, arcId }) // groom backlog + emit — the loop's final step
-    if (mut) return workflowHalt(mut.halt ?? 'failed', { phase, evidence: mut.evidence })
-    try {
-      appendExecutorEvent(worktree, phase, 'phase-complete', {
-        resultTailComplete: true,
-        checkpointDigest,
-        resultDigest,
-      })
-    } catch (e) {
-      return workflowHalt('failed', {
-        phase,
-        evidence: { resultConsumptionInterrupted: { claim: consumption.claim, reason: `completion beacon failed: ${e.message}` } },
-      })
-    }
-    completedClaims.add(eventId)
-    if (pauseAfter === phase) {
-      const pauseReceipt = reduceArcTransition(resultReceipt.next, {
-        eventId: `pause:${arcId}:${phase}:${checkpointDigest}`,
-        arcId: String(arcId),
-        source: 'arc-plane-workflow',
-        type: 'pause-after',
-        phase,
-        evidence: { pauseAfter: phase },
-        authorityRef,
-      })
-      if (pauseReceipt.rejection) {
-        return workflowHalt('failed', { phase, evidence: { lifecyclePause: pauseReceipt.rejection } })
-      }
-      return {
-        ...buildHaltPayload('pause-after', { phase, evidence: { pauseAfter: phase } }),
-        resume: pauseReceipt.resume,
-        transitionReceipt: pauseReceipt,
-        trace: { state: pauseReceipt.next, receipts: [...lifecycleReceipts, pauseReceipt] },
-      }
-    }
+    const consumed = await consumePhaseResult({ phase, rc, meta, resultPrior: transitionReceipt.next, checkpointDigest, authorityRef: transitionReceipt.authorityRef, sessionId, nativeReceipt })
+    if (consumed) return consumed
   }
 }

@@ -101,7 +101,7 @@ test('resume addresses the recorded native session and never launches start/late
   assert.equal(executions[0][1].stdin, 'execute phase 38.3')
   assert.equal(fx.calls.filter(([name]) => name === 'persistRunRequest').length, 1)
   const pending = fx.calls.find(([name]) => name === 'persistRunRequest')
-  assert.deepEqual(pending[3].operation, { kind: 'action', action: 'resume', payload: { nativeSessionId: fx.nativeSessionId }, expectedRevisionDigest: pending[3].operation.expectedRevisionDigest })
+  assert.deepEqual(pending[3].operation, { kind: 'action', action: 'resume', payload: { nativeSessionId: fx.nativeSessionId }, inputDigest: hash('execute phase 38.3'), expectedRevisionDigest: pending[3].operation.expectedRevisionDigest })
 })
 
 test('fresh and resumed native JSON retain one runId and persist one terminal result', async () => {

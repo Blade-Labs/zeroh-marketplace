@@ -7,7 +7,7 @@ export class CodexAgentDriver extends DurableProcessAgentDriver {
       ...options,
       driverId: 'codex',
       acceptsModel: (model) => model === resolveDriver('codex').model,
-      launchOptions: (request) => ({ worktree: request.worktree, authority: request.authority, json: true }),
+      launchOptions: (request, context = {}) => ({ worktree: request.worktree, authority: request.authority, json: true, ...(context.outputSchemaPath ? { outputSchemaPath: context.outputSchemaPath } : {}) }),
       parseOptions: (_request, expectedSessionId) => expectedSessionId === null ? {} : { expectedSessionId },
     })
   }
