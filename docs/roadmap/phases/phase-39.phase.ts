@@ -3,7 +3,7 @@ import { definePhase } from '../lib/schema'
 /** timing: band 4-6 × surface:false, N=4, median 148.8 min, p80 196.4 min */
 export default definePhase({
   phase:39, name:'Atomic marketplace migration to the discovered roadmap root',
-  plannedBy:{model:'unverified'}, status:'in-progress', category:'feature', kind:'hardening',
+  plannedBy:{model:'unverified'}, status:'done', category:'feature', kind:'hardening',
   source:'NATIVEGREEN artifact-root plane; locked docs/roadmap migration ruling; replanned against 036b7c5.',
   priority:'HIGH', arcId:'NATIVEGREEN', dependsOn:[38], conflictsWith:[],
   keyFiles:['plugins/zeroh-roadmap/cli/lib/root-migration.mjs','plugins/zeroh-roadmap/cli/commands/root.mjs','plugins/zeroh-roadmap/cli/lib/roadmap-root.mjs','plugins/zeroh-roadmap/test/fixture-consumer/layout-docs.test.mjs','scripts/check-roadmap-imports.mjs','scripts/nativegreen-review-regressions.test.mjs','roadmap/roadmap.config.json','lib/roadmap/schema.ts'],
@@ -48,6 +48,81 @@ export default definePhase({
       {file:'plugins/zeroh-roadmap/cli/lib/root-migration.test.mjs',description:'Prove apply, interrupted resume, second apply, and one-commit revert converge to byte-identical expected trees with one root and no duplicate record → verify: node --test plugins/zeroh-roadmap/cli/lib/root-migration.test.mjs'},
     ],acceptanceCriteria:['Estate scan reports zero unallowlisted active-root literals or duplicate schema owners: node --test plugins/zeroh-roadmap/cli/lib/roadmap-root.test.mjs.','Revert restores the exact legacy tree and reapply converges to the exact destination tree: node --test plugins/zeroh-roadmap/cli/lib/root-migration.test.mjs.'],files:['plugins/zeroh-roadmap/cli/lib/roadmap-root.test.mjs','plugins/zeroh-roadmap/cli/lib/root-migration.test.mjs','plugins/zeroh-roadmap/cli/lib/root-migration.mjs','plugins/zeroh-roadmap/cli/commands/root.test.mjs','plugins/zeroh-roadmap/scripts/collect-phase-metrics.ts','plugins/zeroh-roadmap/test/collect-phase-metrics.test.mjs','plugins/zeroh-roadmap/scripts/debt-census.mts','plugins/zeroh-roadmap/scripts/debt-dispose.mts','plugins/zeroh-roadmap/cli/commands/audit.test.mjs'],testMode:'tdd',done:true,doneDate:'2026-09-07',transparencyReport:{"whatWasDone": "Ratchet migration completion, stored-plan integrity, runtime-preserving revert/reapply and root ownership across shipped scripts and workflows.", "how": "Independent tests reproduced completed-history rejection and runtime leftovers after one-commit Git revert. Stored plans validate versioned fixed mappings, actual original Git manifest/modes/blobs and code-computed byte digests; later legitimate destination edits do not invalidate history. Version2 uses the existing intent and kernel lock to park only named runtime entries, resume exact prefixes, restore and roll back without foreign overwrites. Runtime file hashing streams bounded buffers. Tampering, rename/rewrite/parking/restoration failures and actual subprocess exits are exercised. Actual current checkout returns already-applied on the original receipt, all49 records pass typed imports, and the census discovers44 phases without errors. Root literal ratchet: planted workflow literal -> RED (1 unpermitted file); removed known workflow source -> RED (missing workflows/arc-plane.workflow.mjs); lawful join(roadmapRoot(root), phases) projection -> GREEN. Scratch source was restored exactly. Metrics expectation repaired to shared typed ambiguity plus unchanged bytes. Configured types is declared absent. Repaired task gate000018 passed159/159 Node checks across5 suites in242.328 seconds; raw nativegreen-39-5-task-gate-repaired.log and capbuild-tests-mw8z6cql/summary.json preserve counts. The first configured attempt failed only the obsolete diagnostic assertion, which was diagnosed before repair and rerun.", "compromises": "None", "skipped": "None", "hardcoded": "None", "limitations": "Revert and crash operations run in isolated real Git/filesystem fixtures; the execution checkout itself was not reverted. These are task checks, not the pending full phase or native end-to-end gates."},interfaces:{consumes:['RootMigrationReceipt','migrated operation matrix'],produces:['single-root migration ratchet']}},
   ],
+  gate: {
+  "lint": "clean",
+  "typeCheck": "clean",
+  "unitTests": {
+    "passed": 2391,
+    "total": 2391,
+    "notes": "Full gate000020 at66b3919:105 files plus schema,499.649 seconds. Subsequent curation compatibility repair6692c90 passed55/55 affected checks, strengthened wrong-tree control1/1, and independent clean R2. Actual curationf56802a preserved the exact tree and original completed migration receipt."
+  },
+  "integrationTests": {
+    "passed": 0,
+    "total": 0,
+    "notes": "Declared absent by repository config; integration fixtures run in unit binding."
+  },
+  "e2eTests": {
+    "passed": 0,
+    "total": 0,
+    "notes": "Actual native conformance remains phase43."
+  },
+  "build": "clean"
+},
+  metrics: {
+  "commits": 8,
+  "linesAdded": 1734,
+  "linesRemoved": 290,
+  "filesChanged": 175,
+  "testsAtStart": 2357,
+  "testsAtEnd": 2391,
+  "testsAdded": 34
+},
+  compromises: "None",
+  completedDate: "2026-09-07",
+  gateRounds: [
+  {
+    "round": 0,
+    "agent": "quality-pass",
+    "verdict": "clean",
+    "summary": "Independent one-pass quality review at86185e3 vs2b5f167: no fixes, hard stops or noted bugs; changed core syntax and full diff whitespace passed. Full gate later identified four stale fixture sources; repair66b3919 keeps legacy fixtures and resolves actual repository schema, verified by6arc and29derive/resume checks.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  },
+  {
+    "round": 1,
+    "agent": "code-reviewer",
+    "verdict": "clean",
+    "summary": "Independent read-only correctness review at66b3919 vs2b5f167: no actionable findings at confidence80 or above; reviewFocus absent. Checked atomicc40308e root/schema boundary, stored-plan fixed mappings and original Git integrity, kernel flock, runtime parking/restore/rollback, original historical source materialization, root-aware workflow/audit/watch/shell paths, repository test boundary and fixture source repair. Reproduced estate guard mutation proof with isolated TMPDIR:1/1 pass.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  },
+  {
+    "round": 2,
+    "agent": "code-reviewer",
+    "verdict": "clean",
+    "summary": "Independent bounded review of the closure repair after66b3919, committed as6692c9001351c90fcdc4801364def84da852ff6d: finite memoized exact-tree bridges reuse existing rescue histories; same relation selects unique latest completion; missing/mismatched bridges and ambiguous ownership refuse. Curation attributes only canonical registered models. No new store, receipt mutation or authority change. Parent55/55 affected checks149.6s; reviewer independently55/55 in135.1s; strengthened valid-ancestry/wrong-tree negative1/1 passed. Full gate remains000020 at66b3919; no new full-gate claim.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  }
+],
+  executionResult: {
+  "phase": 39,
+  "status": "done",
+  "driver": {
+    "model": "gpt-6 (self-reported; exact runtime unverified)",
+    "lane": "codex"
+  },
+  "modelPolicy": {
+    "source": "config",
+    "preset": "codex"
+  },
+  "compromises": [],
+  "skipped": [],
+  "hardcoded": [],
+  "surfaced": [],
+  "hardStops": [],
+  "gateRounds": 3
+},
   reviewRecord: { date: '2026-09-06', model: 'unverified (requested gpt-5.6-sol)', verdict: 'READY', via: 'executed' },
-  notes:'Atomic commit clarification: task39.3 batchMode is false because the owner explicitly requires one task commit containing the entire root/schema move and active rewrites. Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. interview: inherited from NATIVEGREEN. The user-locked destination is docs/roadmap and migration occurs only during execution on a reviewed queued plan based on fix/roadmap-bounded-intent-repairs at 036b7c5. Replan reuses shipped canonical discovery, dual-root refusal, root-first schema loading, shell resolver, layout coverage, and active-literal ratchets. It preserves the prior non-vacuous import checker and every active phase/config/script path repair; historical prose is not rewritten. Review repair: import rewrites are mapped by artifact location — root backlog ./lib/schema; direct arcs/phases ../lib/schema — and the checker must exercise both directions rather than blanket-rewrite every record. requested collaboration model: gpt-5.6-sol; exact runtime model id unattested, so plannedBy.model and reviewRecord.model remain unverified. Metadata ratified: userFacing false because repository record location has no runtime flag surface; testScope/reviewScope full because migration rollback and record writes cross governed seams; 39.1, 39.2, 39.4, and 39.5 use TDD for reducers, command contracts, resolver parity, and idempotency, while 39.3 uses the existing import/path ratchet lane for declarative moved records. ## Hypotheses\n1. CONFIRMED — strict root discovery exists at 036b7c5, while root-migration.mjs and commands/root.mjs are absent and the marketplace still owns roadmap plus lib/roadmap.\n2. REFUTED — root selection itself must be rebuilt: roadmap-root.mjs, its shell twin, layout tests, and estate scan already cover the shipped discovery contract.',
+  notes:'Completion: full gate000020 at66b3919 passed2391/2391 across105 files plus schema. Curation compatibility repair6692c90 passed55/55 affected checks and independent clean R2; actual curationf56802a preserved the tracked tree and original receipt. Metrics count8 original phase commits retained under the curation rescue, with test counts measured at the full-gate checkpoint rather than inferred after later tests. Evidence: docs/roadmap/arc-evals/NATIVEGREEN-phase-39-test-counts.json. Atomic commit clarification: task39.3 batchMode is false because the owner explicitly requires one task commit containing the entire root/schema move and active rewrites. Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. interview: inherited from NATIVEGREEN. The user-locked destination is docs/roadmap and migration occurs only during execution on a reviewed queued plan based on fix/roadmap-bounded-intent-repairs at 036b7c5. Replan reuses shipped canonical discovery, dual-root refusal, root-first schema loading, shell resolver, layout coverage, and active-literal ratchets. It preserves the prior non-vacuous import checker and every active phase/config/script path repair; historical prose is not rewritten. Review repair: import rewrites are mapped by artifact location — root backlog ./lib/schema; direct arcs/phases ../lib/schema — and the checker must exercise both directions rather than blanket-rewrite every record. requested collaboration model: gpt-5.6-sol; exact runtime model id unattested, so plannedBy.model and reviewRecord.model remain unverified. Metadata ratified: userFacing false because repository record location has no runtime flag surface; testScope/reviewScope full because migration rollback and record writes cross governed seams; 39.1, 39.2, 39.4, and 39.5 use TDD for reducers, command contracts, resolver parity, and idempotency, while 39.3 uses the existing import/path ratchet lane for declarative moved records. ## Hypotheses\n1. CONFIRMED — strict root discovery exists at 036b7c5, while root-migration.mjs and commands/root.mjs are absent and the marketplace still owns roadmap plus lib/roadmap.\n2. REFUTED — root selection itself must be rebuilt: roadmap-root.mjs, its shell twin, layout tests, and estate scan already cover the shipped discovery contract.',
 })

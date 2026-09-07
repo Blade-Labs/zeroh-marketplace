@@ -1,0 +1,46 @@
+{
+  "phase": 39,
+  "fullGate": {
+    "run": "000020",
+    "head": "66b3919d7dbaa68926477dd42c4c7523eb207a66",
+    "nodeTests": 2391,
+    "nodePassed": 2391,
+    "files": 105,
+    "schemaPassed": true,
+    "unitDurationMs": 499649,
+    "rawLog": ".building/nativegreen-39-full-gate-repaired.log",
+    "helperSummary": "/tmp/capbuild-tests-408g5tl9/summary.json"
+  },
+  "postFullRepair": {
+    "head": "6692c9001351c90fcdc4801364def84da852ff6d",
+    "affectedTests": 55,
+    "affectedPassed": 55,
+    "strengthenedNegative": {
+      "passed": 1,
+      "total": 1
+    },
+    "review": "independent clean R2",
+    "rawLog": ".building/nativegreen-39-curation-repair-tests.log"
+  },
+  "curation": {
+    "head": "f56802a2e20d9a3a4b844d3c8b4762eba4ece95d",
+    "originalHead": "6692c9001351c90fcdc4801364def84da852ff6d",
+    "rescueRef": "refs/curate-rescue/6692c9001351",
+    "identicalTree": "af17678193431ded3c4b8989d1347ea01fd34a57",
+    "originalMigrationRepeat": "already-applied"
+  },
+  "metricsBasis": "Original execution range2b5f167..6692c90; test totals from measured full checkpoint, not later additions.",
+  "metrics": {
+    "commits": 8,
+    "linesAdded": 1734,
+    "linesRemoved": 290,
+    "filesChanged": 175,
+    "testsAtStart": 2357,
+    "testsAtEnd": 2391,
+    "testsAdded": 34
+  },
+  "limitations": [
+    "No native model or OS isolation evidence is claimed by this phase.",
+    "Raw transient logs are referenced, not vendored as authoritative fresh-run proof."
+  ]
+}
