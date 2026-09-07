@@ -65,6 +65,31 @@ function validateTerminal(state, terminal) {
   if (state.requested.terminal !== kind || !authority || !state.actions.some(a => a.kind === kind && a.status === 'succeeded' && a.requested.authorityId === authority.authorityId && a.requested.headSha === state.target.currentHeadSha && a.requested.baseSha === state.target.currentBaseSha && a.requested.ref === state.target.headRef && a.attempts.at(-1)?.observed?.providerActionId === terminal.providerActionId)) throw new Error(`${kind} terminal lacks matching successful current-head authorized action`)
 }
 
+// Provider calls consume durable intent through the same authority/check guards as the reducer.
+export function authorizeProviderAction(state, supplied, expected, { providerId, method, kind, capabilities = null } = {}) {
+  const deny = reason => ({ ok: false, reason })
+  if (!state || !expected || !supplied) return deny('durable delivery intent is missing')
+  if (!same(Object.keys(supplied).sort(), ['actionKey','kind','targetKey','requested','status','attempts'].sort()) || !supplied.requested || !same(Object.keys(supplied.requested).sort(), ['baseSha','headSha','ref','authorityId'].sort())) return deny('caller action has unknown or missing fields')
+  const target = state.target, bindings = { revision:state.revision,deliveryKey:state.deliveryKey,...target }
+  for (const [field,value] of Object.entries(bindings)) if (expected[field] !== value) return deny(`expected ${field} differs from durable delivery`)
+  if (providerId !== target.providerId) return deny('provider differs from durable delivery')
+  if (expected.providerPullRequestId !== undefined && expected.providerPullRequestId !== (state.pullRequest?.providerPullRequestId ?? null)) return deny('expected pull request differs from durable delivery')
+  const persisted = state.actions.find(action => action.actionKey === supplied.actionKey)
+  if (!persisted || persisted.kind !== kind || supplied.kind !== kind) return deny('persisted action is missing or has a different kind')
+  if (!sameActionIntent(persisted,supplied)) return deny('caller action differs from durable intent')
+  if (!['requested','unknown'].includes(persisted.status)) return deny('persisted action is not pending or reconcilable')
+  if (persisted.targetKey !== target.targetKey || persisted.requested.ref !== target.headRef || persisted.requested.baseSha !== target.currentBaseSha) return deny('action target, ref or base differs from delivery')
+  if (kind !== 'push' && persisted.requested.headSha !== target.currentHeadSha) return deny('action head differs from delivery')
+  try { actionAuthority(state,persisted) } catch (error) { return deny(error.message) }
+  if (['queue','merge'].includes(kind)) {
+    if (!state.requested.allowedPushRefs.includes(target.headRef)) return deny('terminal ref is outside durable authority')
+    try { exactChecks(state,{status:kind==='queue'?'queued':'merged',headSha:target.currentHeadSha}) } catch (error) { return deny(error.message) }
+    if (capabilities !== null && !capabilities.supported?.includes(method)) return deny('terminal capability is unsupported')
+  }
+  if (kind === 'update-pr' && (!state.pullRequest || expected.providerPullRequestId !== state.pullRequest.providerPullRequestId)) return deny('update requires exact persisted PR identity')
+  return { ok:true,action:persisted }
+}
+
 // Full nested parsing belongs to the canonical schema at the persistence boundary.
 export function reduceDelivery(current, event) {
   if (!Object.hasOwn(eventKeys, event?.type)) throw new Error('unknown delivery event type')

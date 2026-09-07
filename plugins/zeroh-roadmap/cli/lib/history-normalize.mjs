@@ -385,6 +385,15 @@ function storedNormalizations(root, arcId) {
   }
   return rows
 }
+// Provider rewrites consume the existing verified history record, never a caller assertion.
+export function loadPublishedCorrectionReceipt(cwd, arcId, planDigest) {
+  if (!digestValue(planDigest)) fail('receipt', 'normalization receipt digest is malformed')
+  const root = gitToplevel(cwd)
+  const row = storedNormalizations(root, arcId).find(item => item.plan.planDigest === planDigest)
+  if (!row?.receipt || row.plan.kind !== 'published-corrections') fail('receipt', 'verified published correction receipt is absent')
+  return row.receipt
+}
+
 function currentPreparedReceipt(root, plan, head) {
   const commits = git(root, ['rev-list', '--reverse', plan.base + '..' + head]).split('\n')
   if (commits.length !== plan.groups.length) fail('head-changed', 'incomplete normalization has no exact prepared chain')
