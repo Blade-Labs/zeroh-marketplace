@@ -8,26 +8,6 @@ export default defineBacklog({
       "label": "NATIVEGREEN — phases36–45",
       "items": [
         {
-          "phase": 36,
-          "name": "Governance precedence, safe authority, and dual-host packaging proof"
-        },
-        {
-          "phase": 37,
-          "name": "Typed lifecycle reducer and exact-head restart semantics"
-        },
-        {
-          "phase": 38,
-          "name": "Durable run identity and native Claude/Codex adapters"
-        },
-        {
-          "phase": 39,
-          "name": "Atomic marketplace migration to the discovered roadmap root"
-        },
-        {
-          "phase": 40,
-          "name": "Safe pre-PR history normalization and roadmap-owned worktree garbage collection"
-        },
-        {
           "phase": 41,
           "name": "Idempotent arc delivery with explicit branch and merge authority"
         },
