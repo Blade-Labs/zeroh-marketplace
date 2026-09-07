@@ -279,13 +279,16 @@ const REJECT_C = {
  * actually performs); `[]` writes an empty array. `rails` and `ratifications` are the
  * benign-edit and AC-ratification levers the cases below need.
  */
-function arcSource({ signal = 'the original signal text', rejected = null, rails = [], ratifications = null } = {}) {
+function arcSource({ signal = 'the original signal text', rejected = null, rails = [], ratifications = null, tagged = false } = {}) {
   const railBlock = rails.length ? `\n  honestyRails: [${rails.map((r) => `'${r}'`).join(', ')}],` : ''
+  // `tagged` writes the consumer's real `}, // R<n>` trailing-comment style after every entry —
+  // the last tag sits between the final comma and `]`, exactly where a comment-blind splitter
+  // would mint a phantom element.
   const rejBlock =
     rejected === null
       ? ''
       : `\n  rejectedAlternatives: [\n${rejected
-          .map((r) => `    { option: '${r.option}', why: '${r.why}', decidedBy: '${r.decidedBy}', decidedAt: '${r.decidedAt}' },`)
+          .map((r, i) => `    { option: '${r.option}', why: '${r.why}', decidedBy: '${r.decidedBy}', decidedAt: '${r.decidedAt}' },${tagged ? ` // R${i + 1}` : ''}`)
           .join('\n')}\n  ],`
   const ratBlock = ratifications === null ? '' : `\n  criteriaRatifications: [${ratifications.map((r) => `'${r}'`).join(', ')}],`
   return `import { defineArc } from '${SCHEMA}'
@@ -325,6 +328,30 @@ function makeArcRepo() {
 
 const rulesOf = (res) => (res.errors ?? []).map((e) => e.rule)
 const appendOnly = (res) => (res.errors ?? []).find((e) => e.rule === 'rejectedAlternatives-append-only')
+
+test('rejectedAlternatives — an honest APPEND past a trailing `// R<n>` comment is NOT an erasure (comment fragments are never elements)', () => {
+  // VF 2026-09-07: the consumer writes `}, // R17` after its last entry. The comment between
+  // the final comma and `]` was tokenized as an 18th element, so every append rewrote it and
+  // the guard red an honest append ("HEAD had 18, 21 now"). Comments are annotation.
+  const repo = makeArcRepo()
+  repo.write({ rejected: [REJECT_A, REJECT_B], tagged: true })
+  repo.commitAll('v1: two tagged rejections')
+  repo.markBuilding()
+
+  repo.write({ rejected: [REJECT_A, REJECT_B, REJECT_C], tagged: true })
+  const appended = validateRoadmapFile(repo.arcPath)
+  assert.equal(
+    appendOnly(appended),
+    undefined,
+    `appending R3 after a trailing "// R2" comment must pass the append-only guard; got ${JSON.stringify(rulesOf(appended))}`,
+  )
+
+  // The guard still bites on a REAL erasure in the same tagged style.
+  repo.write({ rejected: [REJECT_A, REJECT_C], tagged: true })
+  const erased = validateRoadmapFile(repo.arcPath)
+  assert.ok(appendOnly(erased), `dropping tagged R2 must still red; got ${JSON.stringify(rulesOf(erased))}`)
+  assert.match(appendOnly(erased).msg, /HEAD had 2, 2 now/, `counts are ELEMENTS, never comment fragments (got: ${appendOnly(erased).msg})`)
+})
 
 test('rejectedAlternatives — a building arc that DELETES a recorded rejection is an append-only ERROR, on every path the AC branch short-circuits', () => {
   const repo = makeArcRepo()

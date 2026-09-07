@@ -1,3 +1,7 @@
+## 0.40.4 — 2026-09-07
+
+- `rejectedAlternatives-append-only` no longer reds an honest append: the array splitter (`topLevelElements`) treated a trailing `// R<n>` line comment after the last entry as a phantom element, so every append "erased" it (VF, 2026-09-07: "HEAD had 18, 21 now" on a 17→20 append). Line comments outside quotes are skipped; a real erasure in the same tagged style still reds (regression test).
+
 ## 0.40.3 — 2026-09-06
 
 - Group related small intent gaps into one bounded repair pass on the existing arc. Preserve phase records, affected checks and fresh independent judgment; larger changes remain planned. Resume checkpoints retain correction rounds and budget accounting.
