@@ -1,0 +1,78 @@
+{
+  "phase": 38,
+  "date": "2026-09-07",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 44
+  },
+  "taskCount": 6,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/cli/lib/agent-driver.mjs",
+    "plugins/zeroh-roadmap/cli/lib/run-receipt.mjs",
+    "plugins/zeroh-roadmap/cli/lib/codex-agent-driver.mjs",
+    "plugins/zeroh-roadmap/cli/lib/claude-agent-driver.mjs",
+    "plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs",
+    "plugins/zeroh-roadmap/test/fixture-consumer/harness.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 1,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 469701
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 10,
+    "linesAdded": 5168,
+    "linesRemoved": 435,
+    "filesChanged": 38,
+    "testsAtStart": 2255,
+    "testsAtEnd": 2357,
+    "testsAdded": 102
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "unverified"
+    },
+    "driver": {
+      "model": "gpt-6 (self-reported; exact runtime unverified)",
+      "lane": "codex"
+    }
+  }
+}

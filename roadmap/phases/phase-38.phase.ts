@@ -3,7 +3,7 @@ import { definePhase } from '../../lib/roadmap/schema'
 /** timing: band 4-6 × surface:false, N=4, median 148.8 min, p80 196.4 min */
 export default definePhase({
   phase:38, name:'Durable run identity and native Claude/Codex adapters',
-  plannedBy:{model:'unverified'}, status:'in-progress', category:'feature', kind:'hardening',
+  plannedBy:{model:'unverified'}, status:'done', category:'feature', kind:'hardening',
   source:'NATIVEGREEN harness-adapters plane; ratified architecture §Semantic core and harness adapters; replanned against 036b7c5.',
   priority:'HIGH', arcId:'NATIVEGREEN', dependsOn:[37], conflictsWith:[],
   keyFiles:['plugins/zeroh-roadmap/cli/lib/agent-driver.mjs','plugins/zeroh-roadmap/cli/lib/run-receipt.mjs','plugins/zeroh-roadmap/cli/lib/codex-agent-driver.mjs','plugins/zeroh-roadmap/cli/lib/claude-agent-driver.mjs','plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs','plugins/zeroh-roadmap/test/fixture-consumer/harness.mjs'],
@@ -42,6 +42,90 @@ export default definePhase({
       {file:'plugins/zeroh-roadmap/test/fixture-consumer/harness.test.mjs',description:'Drive twenty concurrent fixture lanes through duplicate wake, message, result, compaction, and parent restart, asserting one owner/result and equivalent normalized receipts → verify: capbuild node plugins/zeroh-roadmap/scripts/run-scoped-tests.mjs plugins/zeroh-roadmap/test/fixture-consumer/lifecycle.test.mjs'},
     ],acceptanceCriteria:['Four parent/child fixture combinations produce equivalent semantic transitions or an honest capability hold: capbuild node plugins/zeroh-roadmap/scripts/run-scoped-tests.mjs plugins/zeroh-roadmap/test/fixture-consumer/harness.test.mjs.','Twenty concurrent fixture lanes retain one owner and terminal result apiece: capbuild node plugins/zeroh-roadmap/scripts/run-scoped-tests.mjs plugins/zeroh-roadmap/test/fixture-consumer/lifecycle.test.mjs.'],files:['plugins/zeroh-roadmap/test/fixture-consumer/harness.mjs','plugins/zeroh-roadmap/test/fixture-consumer/harness.test.mjs','plugins/zeroh-roadmap/test/fixture-consumer/lifecycle.test.mjs','plugins/zeroh-roadmap/cli/lib/durable-process-agent-driver.mjs','plugins/zeroh-roadmap/cli/lib/run-receipt.mjs','plugins/zeroh-roadmap/cli/lib/run-receipt.test.mjs','plugins/zeroh-roadmap/cli/lib/codex-agent-driver.test.mjs','plugins/zeroh-roadmap/cli/lib/claude-agent-driver.test.mjs','plugins/zeroh-roadmap/cli/lib/native-agent-driver.integration.test.mjs','plugins/zeroh-roadmap/cli/lib/native-process-transport.test.mjs'],testMode:'tdd',done:true,doneDate:'2026-09-07',transparencyReport:{"whatWasDone": "Added deterministic cross-driver parity and twenty concurrent restart/race lanes; repaired recovery lookup after native identity binding.", "how": "Independent tests first failed on the missing fixture export, then exposed that adapter recovery used the latest bound revision instead of the original pending-operation revision. The existing receipt reader now resolves an action fingerprint to its original revision. Fixtures use real temporary Git consumers, registered role/model selection, concrete adapters, actual arms, immutable receipts and the reducer; only native execution/probe output is injected. All four available parent/child combinations complete with exact buffered resume and equivalent semantic transitions. Twenty simultaneous lanes exercise duplicate wake, refused message action, compaction/new instances and parent restart, checking physical receipt bytes and one owner/terminal result/external launch per lane. A separate unavailable host holds before launch. Final configured task gate run-000015 passed 107/107 checks across eight suites in 46.827 seconds; types run-000013 is declared absent. The initial gate overlapped a test assertion correction from row.arm to the actual row.owner; the corrected frozen tree passed.", "compromises": "None", "skipped": "None", "hardcoded": "Deterministic fixture identifiers and outputs only; no new production limit or policy.", "limitations": "The four combinations and twenty lanes are deterministic fixtures, not live model calls or a claim about native host capacity. The matrix and concurrency tests share harness.test.mjs; existing lifecycle regressions remain in the configured gate. Full phase closure and independent correctness review remain pending."},interfaces:{consumes:['native driver workflow','RunReceipt'],produces:['cross-driver parity matrix']}},
   ],
+  gate: {
+  "lint": "clean",
+  "typeCheck": "clean",
+  "unitTests": {
+    "passed": 2357,
+    "total": 2357,
+    "notes": "Full gate000017 at41198b4:102 files plus schema,469.701 seconds; subsequent authority repairf9b7918 passed39 driver+7 workflow checks and final11 unit checks, with clean independent R2."
+  },
+  "integrationTests": {
+    "passed": 0,
+    "total": 0,
+    "notes": "Declared absent by repository config; integration fixtures run in unit binding."
+  },
+  "e2eTests": {
+    "passed": 0,
+    "total": 0,
+    "notes": "Native conformance remains phase43."
+  },
+  "build": "clean"
+},
+  metrics: {
+  "commits": 10,
+  "linesAdded": 5168,
+  "linesRemoved": 435,
+  "filesChanged": 38,
+  "testsAtStart": 2255,
+  "testsAtEnd": 2357,
+  "testsAdded": 102
+},
+  compromises: "None",
+  completedDate: "2026-09-07",
+  gateRounds: [
+  {
+    "round": 0,
+    "agent": "quality-pass",
+    "verdict": "clean",
+    "summary": "Independent quality pass711d6f5 named existing timing policies and cleaned architecture whitespace, with no noted bugs. Existing root guard then found hardcoded native governance; independent docs fixture reproduced it, repair41198b4 passed25 focused checks and fresh full gate000017 passed plus schema.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  },
+  {
+    "round": 1,
+    "agent": "code-reviewer",
+    "verdict": "findings-fixed",
+    "summary": "Independent read-only review41198b4 vs49f8317 reported unsafe-parent launch refusal as HIGH. Architect clarified parent authority alone must not authorize child bypass; actual repair is a typed pre-effect hold, never copying parent provenance or adding an unsafe API. Original finding retained; focused repair and independent follow-up pending. Independent R2 confirms the narrower pre-effect hold repair and rejects copying parent authorization.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": [
+      {
+        "file": "plugins/zeroh-roadmap/cli/lib/native-agent-driver.mjs",
+        "line": 184,
+        "severity": "HIGH",
+        "confidence": 96,
+        "description": "Production runPhase always sets inherited request provenance to null. intersectAuthority requires explicit-user-authorization provenance when inheriting an isolated-unsafe parent, so even an explicitly authorized Codex parent fails before receipt persistence despite the registered Codex launcher supporting this profile. Preserve the parent explicit user authorization on the derived request and cover this production path.",
+        "fixedInCommit": "f9b7918249b0f6fac14c75dcce10961fbe136fc8"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "agent": "code-reviewer",
+    "verdict": "clean",
+    "summary": "Independent bounded R2 atf9b7918 vs41198b4 verifies the authority disposition and repair: parent permission cannot substitute for separate child authorization; intersect occurs before capability routing and expected refusal returns a typed hold. Historical recovery remains before the fresh branch. Focused current suite11/11; no actionable findings at confidence80 or above.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  }
+],
+  executionResult: {
+  "phase": 38,
+  "status": "done",
+  "driver": {
+    "model": "gpt-6 (self-reported; exact runtime unverified)",
+    "lane": "codex"
+  },
+  "modelPolicy": {
+    "source": "config",
+    "preset": "codex"
+  },
+  "compromises": [],
+  "skipped": [],
+  "hardcoded": [],
+  "surfaced": [],
+  "hardStops": [],
+  "gateRounds": 3
+},
   reviewRecord: { date: '2026-09-06', model: 'unverified (requested gpt-5.6-sol)', verdict: 'READY', via: 'executed' },
-  notes:'38.2 architect PROCEED_WITH_FIX: immutable numbered full-state receipts reuse an extracted existing sidecar link-publication primitive for actual CAS; snapshots retain only latest normalized observation. The arm retains stable run ownership only; native/action identity belongs to the receipt. Fingerprints are code-computed, unknown native outcomes hold, and older beacons bind their exact historical receipt. Export existing driver guards and extend existing beacon reader rather than duplicate their owners. Scope and rationale: roadmap/arc-evals/NATIVEGREEN-38.2-architecture.md. Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. interview: inherited from NATIVEGREEN. Replan preserves durable identity, native correctness, strict authority, restart/idempotency, cross-driver parity, and the legacy twenty-lane requirement. It reuses the shipped roles/drivers registry, model policy, provenance, driver verify/register surfaces, and configured role models from owner ruling 849635f. No Greenfield prototype matrix, actual-byte program, capbuild-sharding, task-scoped-check work, or second proof framework is repeated. requested collaboration model: gpt-5.6-sol; exact runtime model id unattested, so plannedBy.model is unverified. userFacing false: internal harness adapters have no flag surface. testScope/reviewScope full: native launch, authority, and concurrent receipt semantics require the full configured gate and review. Mode A ratification: TDD is warranted for executable driver, receipt, reconciliation, and concurrency logic; no external assets or dependencies are introduced. ## Hypotheses\n1. CONFIRMED — agent-driver.mjs and run-receipt.mjs are absent at 036b7c5 while arc-plane.workflow.mjs still requires an injected agent runner.\n2. REFUTED — role and driver registration are missing: roles.mjs, drivers.mjs, model policy, and verification commands are already shipped.',
+  notes:'Completion: full gate000017 at41198b4 passed2357/2357 plus schema; narrow authority repairf9b7918 passed affected checks and independent clean R2. Curation refused because own task38.5/38.6 subjects omit the canonical phase grammar; no history was rewritten. Metrics derive actual phase-range Git changes, with tests measured at the full-gate checkpoint, not an inferred final count; timing/cost fields stay absent. Detailed measured scope and shard totals: roadmap/arc-evals/NATIVEGREEN-phase-38-test-counts.json. 38.2 architect PROCEED_WITH_FIX: immutable numbered full-state receipts reuse an extracted existing sidecar link-publication primitive for actual CAS; snapshots retain only latest normalized observation. The arm retains stable run ownership only; native/action identity belongs to the receipt. Fingerprints are code-computed, unknown native outcomes hold, and older beacons bind their exact historical receipt. Export existing driver guards and extend existing beacon reader rather than duplicate their owners. Scope and rationale: roadmap/arc-evals/NATIVEGREEN-38.2-architecture.md. Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. interview: inherited from NATIVEGREEN. Replan preserves durable identity, native correctness, strict authority, restart/idempotency, cross-driver parity, and the legacy twenty-lane requirement. It reuses the shipped roles/drivers registry, model policy, provenance, driver verify/register surfaces, and configured role models from owner ruling 849635f. No Greenfield prototype matrix, actual-byte program, capbuild-sharding, task-scoped-check work, or second proof framework is repeated. requested collaboration model: gpt-5.6-sol; exact runtime model id unattested, so plannedBy.model is unverified. userFacing false: internal harness adapters have no flag surface. testScope/reviewScope full: native launch, authority, and concurrent receipt semantics require the full configured gate and review. Mode A ratification: TDD is warranted for executable driver, receipt, reconciliation, and concurrency logic; no external assets or dependencies are introduced. ## Hypotheses\n1. CONFIRMED — agent-driver.mjs and run-receipt.mjs are absent at 036b7c5 while arc-plane.workflow.mjs still requires an injected agent runner.\n2. REFUTED — role and driver registration are missing: roles.mjs, drivers.mjs, model policy, and verification commands are already shipped.',
 })
