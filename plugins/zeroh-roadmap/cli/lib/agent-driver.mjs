@@ -165,3 +165,8 @@ export class AgentDriver {
     return trustedHandle
   }
 }
+
+export { validateAuthority, validateAuthorityRef }
+export function validateRoleRunRequest(request, driverId = request?.driverId) { return validateRequest(request, driverId) }
+export function validateNativeObservation(observation, handle) { return validateObservation(observation, handle) }
+export const validateAgentObservation = validateNativeObservation

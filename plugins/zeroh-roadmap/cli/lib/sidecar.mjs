@@ -41,6 +41,32 @@ export function buildingDir(cwd) {
   return join(roadmapRoot(mainCheckout(cwd)), 'arcs', '.building')
 }
 
+/** Atomically publish immutable bytes; true wins, false observes an incumbent. */
+export function publishImmutableFile(path, bytes) {
+  const dir = resolve(path, '..')
+  const tmp = join(dir, '.' + process.pid + '-' + randomUUID() + '.tmp')
+  let fd
+  try {
+    fd = openSync(tmp, 'wx', 0o600)
+    writeFileSync(fd, bytes)
+    fsyncSync(fd)
+    closeSync(fd)
+    fd = undefined
+    try {
+      linkSync(tmp, path)
+      const dirFd = openSync(dir, 'r')
+      try { fsyncSync(dirFd) } finally { closeSync(dirFd) }
+      return true
+    } catch (error) {
+      if (error?.code === 'EEXIST') return false
+      throw error
+    }
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+    try { unlinkSync(tmp) } catch (error) { if (error?.code !== 'ENOENT') throw error }
+  }
+}
+
 function sidecarPath(cwd, arcId) {
   return join(buildingDir(cwd), `${arcId}.json`)
 }
@@ -280,29 +306,12 @@ export function claimResultConsumption(cwd, input) {
     authorityRef: input.authorityRef,
     claimedAt: new Date().toISOString(),
   }
-  const tmp = join(target.dir, `.${input.phase}-${process.pid}-${randomUUID()}.tmp`)
-  let fd
-  try {
-    fd = openSync(tmp, 'wx', 0o600)
-    writeFileSync(fd, JSON.stringify(claim, null, 2) + '\n')
-    fsyncSync(fd)
-    closeSync(fd)
-    fd = undefined
-    try {
-      linkSync(tmp, target.path)
-      const dirFd = openSync(target.dir, 'r')
-      try { fsyncSync(dirFd) } finally { closeSync(dirFd) }
-      return { status: 'claimed', claim }
-    } catch (e) {
-      if (e?.code !== 'EEXIST') throw e
-      const existing = readResultClaim(cwd, input)
-      return {
-        status: existing.resultDigest === input.resultDigest ? 'duplicate' : 'conflict',
-        claim: existing,
-      }
-    }
-  } finally {
-    if (fd !== undefined) closeSync(fd)
-    try { unlinkSync(tmp) } catch (e) { if (e?.code !== 'ENOENT') throw e }
+  if (publishImmutableFile(target.path, JSON.stringify(claim, null, 2) + '\n')) {
+    return { status: 'claimed', claim }
+  }
+  const existing = readResultClaim(cwd, input)
+  return {
+    status: existing.resultDigest === input.resultDigest ? 'duplicate' : 'conflict',
+    claim: existing,
   }
 }

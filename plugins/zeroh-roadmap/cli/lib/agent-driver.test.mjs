@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { AgentDriver } from './agent-driver.mjs'
+import { AgentDriver, validateAuthority, validateAuthorityRef, validateRoleRunRequest, validateAgentObservation } from './agent-driver.mjs'
 import { reduceArcTransition } from './workflow-steps.mjs'
 import { MODEL_IDS } from './drivers.mjs'
 
@@ -276,4 +276,24 @@ test('awaitEvent refuses an observation with no phase instead of normalizing it'
   })
   await assert.rejects(() => driver.awaitEvent(handle, lifecycle()), /event.*phase|phase.*request|mismatch/i)
   assert.equal(awaits, 1)
+})
+
+test('run-receipt validation guards are exported, fail closed, and do not mutate evidence', () => {
+  const runRequest = request()
+  const handle = { request: runRequest, nativeSessionId: 'native-session-1' }
+  const observation = {
+    runId: runRequest.runId, executorId: runRequest.executorId, roleId: runRequest.roleId,
+    driverId: runRequest.driverId, model: runRequest.model, nativeSessionId: handle.nativeSessionId,
+    event: { eventId: 'guard-event', arcId: runRequest.arcId, source: 'native-agent', type: 'run-phase', phase: runRequest.phase, authorityRef: runRequest.authorityRef },
+  }
+  const before = structuredClone({ runRequest, handle, observation })
+  assert.doesNotThrow(() => validateAuthority(runRequest.authority))
+  assert.doesNotThrow(() => validateAuthorityRef(runRequest.authorityRef))
+  assert.doesNotThrow(() => validateRoleRunRequest(runRequest, 'codex'))
+  assert.doesNotThrow(() => validateAgentObservation(observation, handle))
+  assert.deepEqual({ runRequest, handle, observation }, before)
+
+  assert.throws(() => validateAuthorityRef({ status: 'known', envelopeDigest: '', source: runRequest.authorityRef.source }), /authority|digest/i)
+  assert.throws(() => validateRoleRunRequest({ ...runRequest, executorId: '' }, 'codex'), /executorId/i)
+  assert.throws(() => validateAgentObservation({ ...observation, runId: 'other-run' }, handle), /runId|identity|mismatch/i)
 })

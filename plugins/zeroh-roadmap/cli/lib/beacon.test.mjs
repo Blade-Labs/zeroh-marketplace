@@ -308,3 +308,20 @@ test('19) readResultTailCompletion — unreadable or phase-ambiguous beacon fail
     resultDigest: 'sha256:result-one',
   }), null)
 })
+
+test('20) readBeaconLine projects optional durable run identity without inventing it for legacy lines', () => {
+  const worktree = newTmp()
+  const path = phaseBeaconPath(worktree, 1727)
+  mkdirSync(dirname(path), { recursive: true })
+  const identity = {
+    runId: 'run-38-2', executorId: 'executor-38', nativeSessionId: 'native-session-38',
+    actionFingerprint: 'a'.repeat(64), requestFingerprint: 'b'.repeat(64), runReceiptDigest: 'c'.repeat(64),
+  }
+  writeFileSync(path, JSON.stringify({ ts: isoAgo(1), event: 'task-start', phase: 1727, ...identity }) + '\n')
+  const projected = readBeaconLine(path)
+  for (const [field, value] of Object.entries(identity)) assert.equal(projected[field], value, field)
+
+  writeFileSync(path, JSON.stringify({ ts: isoAgo(1), event: 'task-start', phase: 1727 }) + '\n')
+  const legacy = readBeaconLine(path)
+  for (const field of Object.keys(identity)) assert.equal(field in legacy, false, `legacy beacon must not invent ${field}`)
+})

@@ -32,14 +32,17 @@
  * staleArms and its definition of stale are CONSUMED by this guard, never changed: the sweep
  * passes force because staleArms has already made the judgement.
  */
-import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync, lstatSync } from 'node:fs'
+import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readBeaconLine } from './beacon.mjs'
 import { scanPhaseFile } from './phasescan.mjs'
 import { productRepos } from './product-repos.mjs'
 import { listWorktrees } from './worktree.mjs'
 import { roadmapRoot } from './roadmap-root.mjs'
+import { publishImmutableFile } from './sidecar.mjs'
+import { readRunReceipt } from './run-receipt.mjs'
+import { isDeepStrictEqual } from 'node:util'
 
 /** The one home for the arm-file path: `roadmap result check` reconciles against the same file. */
 export function armPath(worktree, phase) {
@@ -187,6 +190,57 @@ export function liveArm(worktree, phase) {
  * family. It is NOT an exclusivity axis — a re-arm may change it without refusing — and an empty
  * alias records nothing, because a blank request is not a request.
  */
+export function readExecutorRunArm(worktree, phase) {
+  const path = armPath(worktree, phase)
+  if (!existsSync(path)) return { status: 'missing', path }
+  if (lstatSync(path).isSymbolicLink()) throw new Error('executor-arm: unsafe arm symlink')
+  let arm
+  const raw = readFileSync(path, 'utf8').trim()
+  try { arm = JSON.parse(raw) } catch {
+    return { status: 'partial', path, arm: null }
+  }
+  if (!arm || typeof arm !== 'object' || Array.isArray(arm)) return { status: 'partial', path, arm }
+  const keys = Object.keys(arm).sort()
+  const exact = JSON.stringify(keys) === JSON.stringify(['armedAt', 'executorId', 'requestFingerprint', 'runId', 'sessionId'])
+  const strings = ['armedAt', 'executorId', 'requestFingerprint', 'runId', 'sessionId'].every((field) => typeof arm[field] === 'string' && arm[field].trim())
+  return { status: exact && strings && !Number.isNaN(Date.parse(arm.armedAt)) ? 'valid' : 'partial', path, arm }
+}
+
+export function claimExecutorRun(worktree, phase, { sessionId, executorId, runReceipt } = {}) {
+  if (!Number.isInteger(Number(phase)) || Number(phase) <= 0 || typeof sessionId !== 'string' || !sessionId.trim()
+    || typeof executorId !== 'string' || !executorId.trim()) throw new Error('executor run claim requires phase, sessionId, and executorId')
+  if (!runReceipt || typeof runReceipt.path !== 'string' || !runReceipt.path.trim() || !runReceipt.snapshot) {
+    throw new Error('executor run claim requires a canonical receipt path and snapshot')
+  }
+  const canonical = readRunReceipt(worktree, { arcId: runReceipt.snapshot.arcId, runId: runReceipt.snapshot.runId }, { revision: 0 })
+  if (!canonical || resolve(runReceipt.path) !== resolve(canonical.path)
+    || runReceipt.digest !== canonical.digest || !isDeepStrictEqual(runReceipt.snapshot, canonical.snapshot)) {
+    throw new Error('executor run claim canonical receipt path, digest or snapshot mismatch')
+  }
+  const snapshot = canonical.snapshot
+  if (snapshot.request.phase !== Number(phase) || resolve(snapshot.request.worktree) !== resolve(worktree)) {
+    throw new Error('executor run claim phase or worktree mismatch')
+  }
+  if (snapshot.request.executorId !== executorId) return { status: 'conflict', reason: 'run receipt executorId does not match arm executorId' }
+  if (snapshot.revision !== 0 || snapshot.previousDigest !== null || snapshot.pendingOperation?.kind !== 'start'
+    || snapshot.nativeSessionId !== null || snapshot.outcome !== 'pending') {
+    throw new Error('executor run claim requires the canonical pre-start receipt')
+  }
+  const p = armPath(worktree, phase)
+  const dir = dirname(p)
+  if (existsSync(dir) && lstatSync(dir).isSymbolicLink()) throw new Error('executor-arm: unsafe .building symlink')
+  mkdirSync(dir, { recursive: true })
+  const body = { sessionId, executorId, runId: snapshot.runId, requestFingerprint: snapshot.requestFingerprint, armedAt: new Date().toISOString() }
+  if (publishImmutableFile(p, JSON.stringify(body) + '\n')) return { status: 'recorded', path: p, arm: body }
+  const evidence = readExecutorRunArm(worktree, phase)
+  const existing = evidence.arm
+  if (evidence.status !== 'valid') return { status: 'hold', path: p, arm: existing, reason: 'legacy partial executor arm lacks runId or requestFingerprint' }
+  const same = existing.sessionId === sessionId && existing.executorId === executorId
+    && existing.runId === snapshot.runId && existing.requestFingerprint === snapshot.requestFingerprint
+  return { status: same ? 'duplicate' : 'conflict', path: p, arm: existing,
+    ...(same ? {} : { reason: 'executor arm is already held by different stable run identity' }) }
+}
+
 export function armExecutor(worktree, phase, sessionId, opts = {}) {
   if (!sessionId || typeof sessionId !== 'string' || sessionId.trim().length === 0) {
     throw new Error('executor-arm: sessionId is required — an unbound arm file is never written (the 2026-07-17 fabrication hazard)')

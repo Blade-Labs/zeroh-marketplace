@@ -40,6 +40,7 @@ const {
   readResultClaim,
   listResultClaims,
   claimResultConsumption,
+  publishImmutableFile,
   LaneHeldError,
 } = await import(MOD)
 
@@ -359,4 +360,29 @@ test('13) claim discovery refuses a valid claim stored under a noncanonical file
   assert.throws(() => listResultClaims(repo, input.arcId), /canonical|identity|filename/)
   assert.equal(readFileSync(alias, 'utf8'), aliasBytes, 'refusal leaves alias bytes intact')
   assert.deepEqual(readResultClaim(repo, input), published, 'the canonical claim remains intact')
+})
+
+test('14) publishImmutableFile has one winner and never overwrites incumbent bytes', async () => {
+  const root = newTmp('zr-immutable-publish-')
+  const dir = join(root, 'nested')
+  mkdirSync(dir, { recursive: true })
+  const path = join(dir, 'revision.json')
+  const program = `
+    const m = await import(process.argv[1])
+    process.stdout.write(JSON.stringify(m.publishImmutableFile(process.argv[2], Buffer.from(process.argv[3]))))
+  `
+  const publish = (body) => new Promise((resolveResult, rejectResult) => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', program, MOD, path, body], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''; let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    child.on('close', (code) => code === 0 ? resolveResult(JSON.parse(stdout)) : rejectResult(new Error(stderr)))
+  })
+  const bodies = Array.from({ length: 8 }, (_, index) => `contender-${index}\n`)
+  const outcomes = await Promise.all(bodies.map(publish))
+  assert.equal(outcomes.filter(Boolean).length, 1)
+  const winnerBytes = readFileSync(path, 'utf8')
+  assert.ok(bodies.includes(winnerBytes))
+  assert.equal(publishImmutableFile(path, Buffer.from('late overwrite\n')), false)
+  assert.equal(readFileSync(path, 'utf8'), winnerBytes)
 })
