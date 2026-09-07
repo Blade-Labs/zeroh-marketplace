@@ -4,6 +4,7 @@ import { defineArc } from '../lib/schema'
  * NATIVEGREEN — native Claude/Codex intent-to-green-PR.
  *
  * LOCKED DECISIONS (user rulings, dated):
+ * - 2026-09-07: PAUSED by owner for scope/quota reassessment. Only absolutely necessary Codex-usability improvements; do not automatically continue the remaining broad arc. This supersedes the Sep04 all-findings execution scope until reassessed.
  * - 2026-09-04: every actionable review finding is in scope; documentation is last.
  * - 2026-09-04: no local ELI5 skill/invocation copy; repository documentation supplies truth.
  * - 2026-09-04: marketplace roadmap and schema move atomically under docs/roadmap.
