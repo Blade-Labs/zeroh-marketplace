@@ -16,6 +16,9 @@ import { gitToplevel } from '../lib/gitroot.mjs'
 import { loadConfig, ConfigError } from '../lib/config.mjs'
 import { deriveArcPosition, readValidateVerdict, DeriveError } from '../lib/derive.mjs'
 import { roadmapRoot } from '../lib/roadmap-root.mjs'
+import { normalizeArc, HistoryNormalizationError } from '../lib/history-normalize.mjs'
+export { normalizeArc }
+
 
 const firstPositional = (rest) => rest.find((a) => !a.startsWith('--'))
 const flagVal = (rest, name) => {
@@ -210,21 +213,41 @@ async function recordValidate(rest) {
   return 0
 }
 
-export default async function run(argv) {
+export async function arcNormalize(rest, deps = {}) {
+  const ids = rest.filter(arg => !arg.startsWith('-'))
+  if (ids.length !== 1 || rest.some(arg => arg.startsWith('-') && !['--apply', '--json'].includes(arg)) || new Set(rest).size !== rest.length) {
+    process.stderr.write('usage: roadmap arc normalize <arcId> [--apply] [--json]\n')
+    return 1
+  }
+  try {
+    const result = normalizeArc(process.cwd(), ids[0], { apply: rest.includes('--apply') }, deps)
+    process.stdout.write(JSON.stringify(result, null, rest.includes('--json') ? 0 : 2) + '\n')
+    return 0
+  } catch (error) {
+    if (!(error instanceof HistoryNormalizationError)) throw error
+    process.stdout.write(JSON.stringify({ status: 'refused', kind: error.kind, reason: error.message }) + '\n')
+    process.stderr.write('roadmap arc normalize: ' + error.message + '\n')
+    return error.kind === 'input' ? 1 : 2
+  }
+}
+
+export default async function run(argv, deps = {}) {
   const sub = argv[0]
   if (!sub || sub === '--help' || sub === '-h') {
+    process.stdout.write('roadmap arc normalize <arcId> [--apply] [--json]\n')
     process.stdout.write('roadmap arc next <arcId> [--json] [--ignore-capacity]\n')
     process.stdout.write('roadmap arc record-validate <arcId> (--verdict <PASS|GAPS|no-op> [--note <s>] | --correction-ready)\n')
     process.stdout.write('roadmap arc land <arcId> [--push|--no-push|--hold] [--json]\n')
     return sub ? 0 : 1
   }
   const rest = argv.slice(1)
+  if (sub === 'normalize') return arcNormalize(rest, deps)
   if (sub === 'next') return arcNext(rest)
   if (sub === 'record-validate') return recordValidate(rest)
   if (sub === 'land') {
     const { landCommand } = await import('../lib/landing.mjs')
     return landCommand(rest)
   }
-  process.stderr.write(`roadmap arc: unknown subcommand '${sub}' (next | record-validate | land)\n`)
+  process.stderr.write(`roadmap arc: unknown subcommand '${sub}' (next | normalize | record-validate | land)\n`)
   return 1
 }

@@ -116,3 +116,10 @@ test('record-validate — a bad verdict is a usage error (exit 1)', () => {
   const root = makeRepo('A', { planes: [{ name: 'P', phases: [10] }] }, [done(10)])
   assert.equal(bin(root, ['arc', 'record-validate', 'A', '--verdict', 'MAYBE']).code, 1)
 })
+
+test('arc normalize without an arc id is a normalize-specific usage refusal', () => {
+  const root = makeRepo('A', { planes: [{ name: 'P', phases: [10] }] }, [backlog(10)])
+  const result = bin(root, ['arc', 'normalize'])
+  assert.equal(result.code, 1)
+  assert.match(result.stderr, /usage: roadmap arc normalize <arcId> \[--apply\] \[--json\]/)
+})

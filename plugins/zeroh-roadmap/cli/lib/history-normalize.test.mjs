@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { makeFixtureRepo, writeArcFile, writePhaseFile, commitAll, git } from '../../test/fixture-consumer/harness.mjs'
+import { makeFixtureRepo, writeArcFile, writePhaseFile, commitAll, git, runCli } from '../../test/fixture-consumer/harness.mjs'
 import { writeReport } from './gate-report.mjs'
 
 const dirs = []
@@ -321,5 +321,167 @@ test('post-CAS recovery tolerates an unrelated integration branch advance and pu
   assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), normalized)
   const resumed = applyWithDelivery(applyHistoryNormalization, fixture)
   assert.equal(resumed.status, 'applied'); assert.equal(resumed.newHead, normalized)
+  assert.equal(readdirSync(normalizationDir(fixture.root)).filter((name) => name.endsWith('.receipt.json')).length, 1)
+})
+
+const arcCommand = async () => import('../commands/arc.mjs')
+test('arc command exports the normalize orchestration API', async () => {
+  assert.equal(typeof (await arcCommand()).normalizeArc, 'function')
+})
+
+test('first publication dry-run is mutation-free; apply records its exact plan and restart reuses it without new commits', async () => {
+  const fixture = arcFixture(); const { normalizeArc } = await arcCommand(); const calls = []
+  const deps = {
+    inspectDelivery: ({ head }) => { calls.push(['inspect', head]); return delivery(head) },
+    replacePublishedHead: (input) => { calls.push(['replace', input]); throw new Error('unpublished normalization must not push') },
+  }
+  const beforeHead = fixture.head; const beforeTree = git(fixture.root, 'rev-parse', 'HEAD^{tree}'); const beforeDry = unchanged(fixture.root)
+  const dry = normalizeArc(fixture.root, fixture.arcId, {}, deps)
+  assert.equal(dry.status, 'planned'); assert.match(dry.planDigest, /^[a-f0-9]{64}$/)
+  assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), beforeHead); assert.deepEqual(unchanged(fixture.root), beforeDry)
+  assert.equal(existsSync(join(normalizationDir(fixture.root), `${dry.planDigest}.plan.json`)), false)
+
+  const applied = normalizeArc(fixture.root, fixture.arcId, { apply: true }, deps)
+  assert.equal(applied.status, 'applied'); assert.equal(applied.planDigest, dry.planDigest)
+  assert.equal(git(fixture.root, 'rev-parse', 'HEAD^{tree}'), beforeTree)
+  assert.equal(git(fixture.root, 'rev-list', '--count', `${fixture.base}..HEAD`), String(fixture.phases.length))
+  const planPath = join(normalizationDir(fixture.root), `${dry.planDigest}.plan.json`)
+  assert.ok(existsSync(planPath)); assert.equal(JSON.parse(readFileSync(planPath, 'utf8')).planDigest, dry.planDigest)
+  const normalizedHead = git(fixture.root, 'rev-parse', 'HEAD'); const commits = git(fixture.root, 'rev-list', `${fixture.base}..HEAD`)
+
+  const restarted = normalizeArc(fixture.root, fixture.arcId, { apply: true }, deps)
+  assert.equal(restarted.status, 'already-applied'); assert.equal(restarted.planDigest, dry.planDigest)
+  assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), normalizedHead)
+  assert.equal(git(fixture.root, 'rev-list', `${fixture.base}..HEAD`), commits)
+  assert.equal(calls.filter(([kind]) => kind === 'replace').length, 0)
+})
+
+function latestGatePath(root, phase) {
+  const dir = join(root, 'roadmap', '.gate', String(phase))
+  return join(dir, readdirSync(dir).filter((name) => name.endsWith('.json')).sort().at(-1))
+}
+function appendReviewedCorrection(fixture, round, phase = fixture.phases.at(-1)) { const path = join(fixture.root, 'src', `published-correction-${round}.txt`)
+  writeFileSync(path, `correction ${round}\n`); git(fixture.root, 'add', path)
+  git(fixture.root, 'commit', '-q', '-m', `fix(history): phase ${phase} gate R${round} — published correction`)
+  const head = git(fixture.root, 'rev-parse', 'HEAD'); const gatePath = latestGatePath(fixture.root, phase)
+  const report = JSON.parse(readFileSync(gatePath, 'utf8'))
+  report.agents = [{ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: `correction ${round} reviewed`, sha: head, recordedAt: '2026-09-07T07:00:00.000Z' }]
+  writeFileSync(gatePath, JSON.stringify(report, null, 2) + '\n')
+  return head
+}
+function publishedDelivery(root, localHead, publishedHead, overrides = {}) {
+  const ref = 'refs/remotes/origin/feature/history'; git(root, 'update-ref', ref, publishedHead)
+  return { head: localHead, publication: 'published', pullRequest: { head: publishedHead, ref }, green: false, checks: { head: publishedHead, state: 'red' }, correction: { classification: 'causal', pushRequired: true }, publicationRefs: [ref], ...overrides }
+}
+
+test('one or two reviewed tree-changing corrections stay as useful published commits without rewrite or push', async () => {
+  const fixture = arcFixture(); const { normalizeArc } = await arcCommand(); const firstDeps = { inspectDelivery: ({ head }) => delivery(head) }
+  assert.equal(normalizeArc(fixture.root, fixture.arcId, { apply: true }, firstDeps).status, 'applied')
+  const publishedHead = git(fixture.root, 'rev-parse', 'HEAD'); const pushes = []
+  for (const count of [1, 2]) {
+    const head = appendReviewedCorrection(fixture, count, fixture.phases.at(-3 + count)); const observed = publishedDelivery(fixture.root, head, publishedHead)
+    const result = normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: () => observed, replacePublishedHead: (call) => { pushes.push(call); throw new Error('retained corrections never push') } })
+    assert.equal(result.status, 'retained-corrections'); assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), head)
+  }
+  assert.equal(pushes.length, 0)
+})
+
+test('the third reviewed red-CI correction plans then applies one fresh-rescue force-with-lease replacement', async () => {
+  const fixture = arcFixture(); const { normalizeArc } = await arcCommand()
+  assert.equal(normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => delivery(head) }).status, 'applied')
+  const publishedHead = git(fixture.root, 'rev-parse', 'HEAD'); let observed
+  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count)), publishedHead)
+  const oldHead = observed.pullRequest.head; const dryHead = git(fixture.root, 'rev-parse', 'HEAD'); const beforeDry = unchanged(fixture.root); const calls = []
+  const deps = { inspectDelivery: () => ({ ...observed, head: git(fixture.root, 'rev-parse', 'HEAD') }), replacePublishedHead(call) { calls.push(call); git(fixture.root, 'update-ref', call.ref, call.newHead, call.expectedOld); return { ref: call.ref, head: call.newHead } } }
+  const dry = normalizeArc(fixture.root, fixture.arcId, {}, deps)
+  assert.equal(dry.status, 'published-rewrite-planned'); assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), dryHead); assert.deepEqual(unchanged(fixture.root), beforeDry); assert.equal(calls.length, 0)
+  const applied = normalizeArc(fixture.root, fixture.arcId, { apply: true }, deps)
+  assert.equal(applied.status, 'published-rewrite-applied'); assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0], { ref: observed.pullRequest.ref, expectedOld: oldHead, newHead: git(fixture.root, 'rev-parse', 'HEAD'), arcId: fixture.arcId, planDigest: applied.planDigest })
+  assert.equal(git(fixture.root, 'rev-list', '--count', `${fixture.base}..HEAD`), '7')
+  const landedMessage = git(fixture.root, 'show', '-s', '--format=%s%n%n%b', 'HEAD')
+  assert.doesNotMatch(landedMessage.split('\n')[0], /phase 400[456]/, 'the shared correction tail is neutral, not attributed to its last phase')
+  for (const phase of fixture.phases.slice(-3)) assert.match(landedMessage, new RegExp(String(phase)), `tail body accounts for phase ${phase}`)
+  assert.equal(git(fixture.root, 'rev-parse', `${rescueFor({ expectedHead: observed.head })}^{commit}`), observed.head)
+})
+
+test('green, unclassified, or non-push-required published correction evidence refuses without rewriting or pushing', async () => {
+  const cases = [
+    { green: true, checks: { head: null, state: 'green' } },
+    { correction: null },
+    { correction: { classification: 'causal', pushRequired: false } },
+  ]
+  for (const change of cases) {
+    const fixture = arcFixture(); const { normalizeArc } = await arcCommand()
+    normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => delivery(head) })
+    const publishedHead = git(fixture.root, 'rev-parse', 'HEAD'); const head = appendReviewedCorrection(fixture, 1)
+    const overrides = change.green ? { ...change, checks: { head: publishedHead, state: 'green' } } : change
+    const observed = publishedDelivery(fixture.root, head, publishedHead, overrides); let pushes = 0
+    assert.throws(() => normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: () => observed, replacePublishedHead() { pushes++ } }), (error) => typeof error.kind === 'string')
+    assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), head); assert.equal(pushes, 0)
+  }
+})
+
+
+test('a failed force-with-lease resumes the exact published correction plan and never pushes twice after replacement', async () => {
+  const fixture = arcFixture(); const { normalizeArc } = await arcCommand()
+  normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => delivery(head) })
+  const publishedHead = git(fixture.root, 'rev-parse', 'HEAD'); let observed
+  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count)), publishedHead)
+  let attempts = 0
+  const inspectDelivery = () => ({ ...observed, head: git(fixture.root, 'rev-parse', 'HEAD') })
+  assert.throws(() => normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery, replacePublishedHead() { attempts++; throw new Error('lease unavailable') } }), /lease unavailable/)
+  const preparedHead = git(fixture.root, 'rev-parse', 'HEAD'); assert.equal(attempts, 1)
+  const recovered = normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery, replacePublishedHead(call) { attempts++; git(fixture.root, 'update-ref', call.ref, call.newHead, call.expectedOld); return { ref: call.ref, head: call.newHead } } })
+  assert.equal(recovered.status, 'published-rewrite-applied'); assert.equal(recovered.newHead, preparedHead); assert.equal(attempts, 2)
+  const settledObservation = { ...observed, head: preparedHead, pullRequest: { ...observed.pullRequest, head: preparedHead }, checks: { head: preparedHead, state: 'red' } }
+  const settled = normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: () => settledObservation, replacePublishedHead() { attempts++ } })
+  assert.equal(settled.status, 'already-applied'); assert.equal(attempts, 2)
+})
+
+test('malformed or orphaned stored normalization plans refuse, and CLI has no publication authority fallback', async () => {
+  const { normalizeArc } = await arcCommand()
+  for (const mode of ['malformed-plan', 'orphan-receipt']) {
+    const fixture = arcFixture(); normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => delivery(head) })
+    const dir = normalizationDir(fixture.root); const digest = mode === 'malformed-plan' ? 'a'.repeat(64) : 'b'.repeat(64)
+    writeFileSync(join(dir, `${digest}.${mode === 'malformed-plan' ? 'plan' : 'receipt'}.json`), '{}\n')
+    const before = unchanged(fixture.root)
+    assert.throws(() => normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => delivery(head) }), (error) => error.kind === 'recovery')
+    assert.deepEqual(unchanged(fixture.root), before)
+  }
+  const fixture = arcFixture(); const before = unchanged(fixture.root)
+  const unavailable = runCli(fixture.root, ['arc', 'normalize', fixture.arcId, '--apply', '--json'])
+  assert.equal(unavailable.code, 2); assert.match(unavailable.stderr, /delivery|provider|unavailable/i); assert.deepEqual(unchanged(fixture.root), before)
+})
+
+
+test('checks turning green after the correction receipt refuse the push while retaining exact recovery evidence', async () => {
+  const fixture = arcFixture(); const { normalizeArc } = await arcCommand()
+  normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => delivery(head) })
+  const publishedHead = git(fixture.root, 'rev-parse', 'HEAD'); let observed
+  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count)), publishedHead)
+  const correctionHead = observed.head; let green = false; let pushes = 0
+  const deps = {
+    inspectDelivery: () => ({ ...observed, head: git(fixture.root, 'rev-parse', 'HEAD'), green, checks: { head: publishedHead, state: green ? 'green' : 'red' } }),
+    afterReceipt() { green = true },
+    replacePublishedHead() { pushes++ },
+  }
+  assert.throws(() => normalizeArc(fixture.root, fixture.arcId, { apply: true }, deps), (error) => typeof error.kind === 'string')
+  const normalizedHead = git(fixture.root, 'rev-parse', 'HEAD')
+  assert.notEqual(normalizedHead, correctionHead); assert.equal(pushes, 0)
+  assert.equal(git(fixture.root, 'rev-parse', `${rescueFor({ expectedHead: correctionHead })}^{commit}`), correctionHead)
+  assert.equal(readdirSync(normalizationDir(fixture.root)).filter((name) => name.endsWith('.receipt.json')).length, 2, 'original and correction receipts remain durable')
+  assert.throws(() => normalizeArc(fixture.root, fixture.arcId, { apply: true }, deps), (error) => typeof error.kind === 'string')
+  assert.equal(git(fixture.root, 'rev-parse', 'HEAD'), normalizedHead); assert.equal(pushes, 0)
+})
+
+test('arc normalization refuses an unpublished descendant of its completed first-publication receipt', async () => {
+  const fixture = arcFixture(); const { normalizeArc } = await arcCommand(); let pushes = 0
+  normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => delivery(head) })
+  writeFileSync(join(fixture.root, 'unpublished-descendant.txt'), 'new unreviewed work\n')
+  git(fixture.root, 'add', 'unpublished-descendant.txt'); git(fixture.root, 'commit', '-q', '-m', 'feat: unpublished descendant')
+  const head = git(fixture.root, 'rev-parse', 'HEAD'); const before = unchanged(fixture.root)
+  assert.throws(() => normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: () => delivery(head), replacePublishedHead() { pushes++ } }), (error) => error.kind === 'head-changed')
+  assert.deepEqual(unchanged(fixture.root), before); assert.equal(pushes, 0)
   assert.equal(readdirSync(normalizationDir(fixture.root)).filter((name) => name.endsWith('.receipt.json')).length, 1)
 })

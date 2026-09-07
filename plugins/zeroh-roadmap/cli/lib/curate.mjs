@@ -204,15 +204,22 @@ export function prepareCuration(cwd, plan, options = {}) {
     const sourceCommit = group.commits.at(-1).sha
     const sourceTree = git(cwd, ['rev-parse', `${sourceCommit}^{tree}`])
     const [name, email, date] = git(cwd, ['show', '-s', '--format=%an%x00%ae%x00%aI', sourceCommit]).split('\0')
-    const normalizedCommit = git(cwd, ['commit-tree', sourceTree, '-p', parent, '-m', `${group.message.subject}\n\n${group.message.body}`], {
-      env: { ...process.env, GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_AUTHOR_DATE: date,
-        GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email, GIT_COMMITTER_DATE: date },
-    })
-    outcomes.push({ phase: group.phase, sourceCommit, sourceTree, normalizedCommit })
+    const env = { ...process.env, GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_AUTHOR_DATE: date,
+      GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email, GIT_COMMITTER_DATE: date }
+    const message = `${group.message.subject}\n\n${group.message.body}`
+    let normalizedCommit
+    if (options.writeObjects === false) {
+      const identity = git(cwd, ['var', 'GIT_AUTHOR_IDENT'], { env })
+      const bytes = `tree ${sourceTree}\nparent ${parent}\nauthor ${identity}\ncommitter ${identity}\n\n${message}${message.endsWith('\n') ? '' : '\n'}`
+      normalizedCommit = git(cwd, ['hash-object', '-t', 'commit', '--stdin'], { input: bytes })
+    } else {
+      normalizedCommit = git(cwd, ['commit-tree', sourceTree, '-p', parent, '-m', message], { env })
+    }
+    outcomes.push({ phase: group.phase ?? null, ...(group.kind ? { kind: group.kind } : {}), sourceCommit, sourceTree, normalizedCommit })
     parent = normalizedCommit
     options.afterCommit?.({ oldHead, newHead: parent, tree, rescueRef, outcomes: outcomes.map(row => ({ ...row })) })
   }
-  if (!outcomes.length || git(cwd, ['rev-parse', `${parent}^{tree}`]) !== tree) {
+  if (!outcomes.length || (options.writeObjects === false ? outcomes.at(-1).sourceTree : git(cwd, ['rev-parse', `${parent}^{tree}`])) !== tree) {
     throw new CurateError(`curate: assembled tree differs from original — HEAD is unmoved; original history is at ${rescueRef}`, rescueRef)
   }
   const prepared = { oldHead, newHead: parent, tree, rescueRef, outcomes }

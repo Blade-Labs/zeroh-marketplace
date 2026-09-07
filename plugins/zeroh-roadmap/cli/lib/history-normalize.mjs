@@ -8,7 +8,7 @@ import { bridgeEval } from './tsx-bridge.mjs'
 import { loadConfig, integrationRefOf } from './config.mjs'
 import { latestReport, checkPhaseConsistency, correctnessDecision, GateRunReportShape } from './gate-report.mjs'
 import { classifySubject, composeLandedMessage, ensureCurationRescue, prepareCuration, commitPreparedCuration } from './curate.mjs'
-import { isCuratedTreeReplacement, phaseTaskSuffix, curationAncestry } from './gitscan.mjs'
+import { isCuratedTreeReplacement, phaseTaskSuffix, curationAncestry, derivePhaseStartSha } from './gitscan.mjs'
 
 import { isDeepStrictEqual } from 'node:util'
 import { publishImmutableFile } from './sidecar.mjs'
@@ -356,4 +356,278 @@ export function applyHistoryNormalization(cwd, plan, deps = {}) {
     if (plan?.expectedHead) wrapped.rescueRef = `refs/curate-rescue/${plan.expectedHead.slice(0, 12)}`
     throw wrapped
   }
+}
+
+function storedNormalizations(root, arcId) {
+  const directory = dirname(receiptFile(root, '0'.repeat(64)))
+  let names
+  try { names = readdirSync(directory) } catch (error) { if (error.code === 'ENOENT') return []; throw error }
+  const rows = []
+  for (const name of names) {
+    if (/^\..+\.tmp$/.test(name)) continue
+    if (!/^[a-f0-9]{64}\.(plan|receipt)\.json$/.test(name)) fail('recovery', 'unrecognized normalization artifact: ' + name)
+    if (name.endsWith('.receipt.json') && !names.includes(name.replace('.receipt.json', '.plan.json'))) fail('recovery', 'normalization receipt has no original plan')
+    if (!name.endsWith('.plan.json')) continue
+    const plan = readReceipt(join(directory, name))
+    if (plan?.planDigest !== name.slice(0, 64)) fail('recovery', 'normalization plan filename differs from its digest')
+    if (plan.kind === 'published-corrections') validateCorrectionPlan(root, plan)
+    else validatePlan(root, plan)
+    const receipt = readReceipt(receiptFile(root, plan.planDigest))
+    if (receipt) {
+      if (plan.kind === 'published-corrections') verifyCorrectionReceipt(root, plan, receipt)
+      else verifyChain(root, plan, receipt)
+    }
+    if (plan.arcId === arcId) rows.push({ plan, receipt })
+  }
+  for (const row of rows) if (row.plan.kind === 'published-corrections') {
+    const predecessors = rows.filter(other => other.receipt && hash(encoded(other.receipt)) === row.plan.priorReceiptDigest && other.receipt.newHead === row.plan.base)
+    if (predecessors.length !== 1) fail('recovery', 'published correction has no unique completed predecessor')
+  }
+  return rows
+}
+function currentPreparedReceipt(root, plan, head) {
+  const commits = git(root, ['rev-list', '--reverse', plan.base + '..' + head]).split('\n')
+  if (commits.length !== plan.groups.length) fail('head-changed', 'incomplete normalization has no exact prepared chain')
+  const value = receiptValue(plan, { oldHead: plan.expectedHead, newHead: head, tree: plan.expectedTree,
+    rescueRef: `refs/curate-rescue/${plan.expectedHead.slice(0, 12)}`,
+    outcomes: plan.groups.map((group, index) => ({ phase: group.phase, sourceCommit: group.sourceBoundary.sha, sourceTree: group.sourceBoundary.tree, normalizedCommit: commits[index] })) })
+  verifyChain(root, plan, value)
+  ensureCurationRescue(root, plan.expectedHead, { create: false })
+  return value
+}
+function persistNormalizationPlan(root, plan) {
+  const path = receiptFile(root, plan.planDigest).replace('.receipt.json', '.plan.json')
+  ensureReceiptDirectory(dirname(path))
+  if (!publishImmutableFile(path, encoded(plan)) && !isDeepStrictEqual(readReceipt(path), plan)) fail('recovery', 'normalization plan conflicts with an incumbent')
+  return path
+}
+function completionResult(root, plan, receipt) {
+  ensureCurationRescue(root, plan.expectedHead, { create: false })
+  return { status: 'already-applied', planDigest: plan.planDigest, oldHead: receipt.oldHead, newHead: receipt.newHead,
+    rescueRef: receipt.rescueRef, receiptPath: receiptFile(root, plan.planDigest), outcomes: receipt.outcomes }
+}
+
+/** Provider-neutral publication door. No CLI switch can supply publication authority. */
+export function normalizeArc(cwd, arcId, options = {}, deps = {}) {
+  try {
+    if (typeof arcId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(arcId) || !options || Object.keys(options).some(key => key !== 'apply') || options.apply !== undefined && typeof options.apply !== 'boolean') fail('input', 'normalize accepts only arcId and an apply boolean')
+    const root = realpathSync(gitToplevel(cwd)), head = git(root, ['rev-parse', 'HEAD'])
+    const stored = storedNormalizations(root, arcId)
+    const incomplete = stored.filter(row => !row.receipt)
+    if (incomplete.length > 1) fail('recovery', 'multiple incomplete normalization plans require reconciliation')
+    if (incomplete.length) {
+      const { plan } = incomplete[0]
+      if (plan.kind === 'published-corrections') {
+        const previous = stored.find(row => row.receipt && hash(encoded(row.receipt)) === plan.priorReceiptDigest)
+        return applyCorrectionPlan(root, plan, previous, options, deps)
+      }
+      if (head !== plan.expectedHead) currentPreparedReceipt(root, plan, head)
+      if (!options.apply) return { status: 'planned', planDigest: plan.planDigest, plan, recovery: true }
+      return applyHistoryNormalization(root, plan, deps)
+    }
+    const candidates = stored.filter(row => row.receipt && curationAncestry(root, row.receipt.newHead, head))
+    const maximal = candidates.filter(row => !candidates.some(other => other !== row && curationAncestry(root, row.receipt.newHead, other.receipt.newHead)))
+    if (candidates.length && maximal.length !== 1) fail('recovery', 'normalization history has no unique completed predecessor')
+    if (stored.length && !maximal.length) fail('head-changed', 'stored normalization does not belong to the current history')
+    if (maximal.length) {
+      const previous = maximal[0]
+      if (head === previous.receipt.newHead) {
+        if (previous.plan.kind === 'published-corrections') {
+          if (!options.apply) return { status: 'published-rewrite-planned', planDigest: previous.plan.planDigest, newHead: head, recovery: true }
+          return finishCorrectionPush(root, previous.plan, previous.receipt, deps)
+        }
+        return completionResult(root, previous.plan, previous.receipt)
+      }
+      if (typeof deps.inspectDelivery !== 'function') fail('delivery-unproven', 'normalization requires a current delivery observation')
+      const observed = deps.inspectDelivery({ root, arcId, base: previous.plan.base, head })
+      if (observed?.publication === 'published' || observed?.pullRequest != null || observed?.green === true) return normalizePublishedCorrections(root, arcId, previous, observed, options, deps)
+      observation(root, { arcId, base: previous.plan.base, head }, () => observed)
+      fail('head-changed', 'an unpublished descendant requires fresh normalization before publication')
+    }
+    recordFiles(root, head)
+    const loaded = records(root, arcId), ids = loaded.arc.planes.flatMap(plane => plane.phases)
+    if (!ids.length || new Set(ids).size !== ids.length) fail('records', 'arc phase order is empty or duplicated')
+    const base = exactCommit(root, derivePhaseStartSha(root, ids[0]))
+    if (typeof loaded.arc.baseRef !== 'string' || !loaded.arc.baseRef || loaded.arc.baseRef.startsWith('-')) fail('base', 'arc base ref is absent or malformed')
+    const configuredBase = exactCommit(root, git(root, ['rev-parse', '--verify', loaded.arc.baseRef + '^{commit}']))
+    try { git(root, ['merge-base', '--is-ancestor', configuredBase, base]) } catch { fail('base', 'arc base is not an ancestor of the execution boundary') }
+    const plan = planHistoryNormalization(root, { arcId, base, head }, deps)
+    if (!options.apply) return { status: 'planned', planDigest: plan.planDigest, plan }
+    persistNormalizationPlan(root, plan)
+    return applyHistoryNormalization(root, plan, deps)
+  } catch (error) {
+    if (error instanceof HistoryNormalizationError) throw error
+    throw new HistoryNormalizationError('normalization-refused', 'arc normalization refused: ' + error.message, { cause: error })
+  }
+}
+
+function publishedObservation(root, observed, head, originalHead = head) {
+  if (!observed || observed.then || observed.head !== head || observed.publication !== 'published'
+    || !keys(observed.pullRequest, 'head ref') || !oid(observed.pullRequest.head) || typeof observed.pullRequest.ref !== 'string'
+    || !observed.pullRequest.ref.startsWith('refs/') || !Array.isArray(observed.publicationRefs) || !observed.publicationRefs.includes(observed.pullRequest.ref)) fail('delivery-unproven', 'published correction needs an exact local and PR head observation')
+  const { ref, head: publishedHead } = observed.pullRequest
+  git(root, ['check-ref-format', ref]); exactCommit(root, publishedHead)
+  if (git(root, ['rev-parse', '--verify', ref]) !== publishedHead) fail('lease', 'provider ref differs from the observed PR head')
+  if (observed.green === true || observed.checks?.state === 'green') fail('green', 'green history is never rewritten for cosmetics')
+  if (observed.green !== false || !keys(observed.checks, 'head state') || observed.checks.head !== publishedHead || observed.checks.state !== 'red'
+    || !keys(observed.correction, 'classification pushRequired') || !['causal', 'owned-preexisting'].includes(observed.correction.classification) || observed.correction.pushRequired !== true) fail('correction-unproven', 'published compaction requires owned red CI and an already-necessary repair push')
+  if (originalHead === publishedHead) fail('correction-unproven', 'published compaction requires a pending local repair')
+  try { git(root, ['merge-base', '--is-ancestor', publishedHead, originalHead]) } catch { fail('lease', 'local repair does not descend from the observed red PR head') }
+  return { localHead: originalHead, ref, publishedHead, checksHead: publishedHead, classification: observed.correction.classification }
+}
+function correctionMessage(arcId, corrections) {
+  return { subject: `fix(roadmap): ${arcId} — consolidate reviewed CI corrections`, body: corrections.map(row => `phase ${row.phase}: ${row.sha} ${row.subject}`).join('\n') }
+}
+function correctionSpec(plan) {
+  return { base: plan.base, expectedHead: plan.expectedHead, expectedTree: plan.expectedTree,
+    groups: [{ phase: null, kind: 'correction-tail', commits: plan.corrections, message: plan.group.message }] }
+}
+function correctionReceipt(plan, prepared) {
+  return { ...receiptValue(plan, prepared), kind: 'published-corrections', priorReceiptDigest: plan.priorReceiptDigest,
+    publishedRef: plan.delivery.ref, expectedOld: plan.delivery.publishedHead }
+}
+function validateCorrectionPlan(root, plan) {
+  if (!keys(plan, 'version kind arcId priorReceiptDigest base expectedHead expectedTree corrections phaseGates group delivery planDigest')
+    || plan.version !== 1 || plan.kind !== 'published-corrections' || typeof plan.arcId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(plan.arcId)
+    || !digestValue(plan.priorReceiptDigest) || !digestValue(plan.planDigest) || !oid(plan.expectedTree)
+    || !Array.isArray(plan.corrections) || !Array.isArray(plan.phaseGates) || !keys(plan.group, 'sourceBoundary message')
+    || !keys(plan.delivery, 'localHead ref publishedHead checksHead classification')) fail('plan', 'published correction plan is malformed')
+  const { planDigest, ...body } = plan
+  if (hash(encoded(body)) !== planDigest) fail('plan', 'published correction plan digest differs')
+  exactCommit(root, plan.base); exactCommit(root, plan.expectedHead); exactCommit(root, plan.delivery.publishedHead)
+  if (plan.delivery.localHead !== plan.expectedHead || plan.delivery.checksHead !== plan.delivery.publishedHead || typeof plan.delivery.ref !== 'string' || !plan.delivery.ref.startsWith('refs/') || !['causal', 'owned-preexisting'].includes(plan.delivery.classification)) fail('plan', 'published correction delivery binding differs')
+  git(root, ['check-ref-format', plan.delivery.ref])
+  try {
+    git(root, ['merge-base', '--is-ancestor', plan.base, plan.expectedHead])
+    git(root, ['merge-base', '--is-ancestor', plan.delivery.publishedHead, plan.expectedHead])
+  } catch { fail('plan', 'published correction ancestry differs') }
+  if (plan.delivery.publishedHead === plan.expectedHead || git(root, ['rev-list', '--min-parents=2', plan.base + '..' + plan.expectedHead])) fail('plan', 'published correction range is not a pending linear repair')
+  const actual = git(root, ['log', '--reverse', '--format=%H%x00%T%x00%s', plan.base + '..' + plan.expectedHead]).split('\n')
+  let useful = 0, priorTree = git(root, ['rev-parse', plan.base + '^{tree}'])
+  const substantive = new Map()
+  const rows = plan.corrections.map(row => {
+    if (!keys(row, 'sha tree subject phase kind') || !oid(row.sha) || !oid(row.tree) || !Number.isSafeInteger(row.phase) || typeof row.subject !== 'string') fail('plan', 'published correction row is malformed')
+    const suffix = phaseTaskSuffix(row.subject)
+    if (!['task', 'gate-fix', 'state', 'scratch'].includes(row.kind) || classifySubject(row.subject, row.phase, suffix ? [suffix] : []) !== row.kind) fail('ownership', 'published correction attribution differs')
+    if (['task', 'gate-fix'].includes(row.kind)) {
+      if (row.tree === priorTree) fail('correction-unproven', 'bookkeeping-only correction cannot count toward compaction')
+      useful++; substantive.set(row.phase, row.sha)
+    }
+    priorTree = row.tree
+    return [row.sha, row.tree, row.subject].join('\0')
+  })
+  if (useful < 3 || !isDeepStrictEqual(rows, actual) || priorTree !== plan.expectedTree
+    || !isDeepStrictEqual(plan.group, { sourceBoundary: { sha: plan.expectedHead, tree: plan.expectedTree }, message: correctionMessage(plan.arcId, plan.corrections) })) fail('plan', 'published correction range, count or message differs')
+  if (!isDeepStrictEqual(plan.phaseGates.map(row => row.phase), [...substantive.keys()].sort((a, b) => a - b))) fail('plan', 'published correction phase gate set differs')
+  for (const row of plan.phaseGates) {
+    if (!keys(row, 'phase path digest baseSha reviewedHead') || !repoPath(row.path) || !digestValue(row.digest)) fail('plan', 'published correction gate binding is malformed')
+    exactCommit(root, row.baseSha); exactCommit(root, row.reviewedHead)
+    if (row.reviewedHead !== substantive.get(row.phase) && !isCuratedTreeReplacement(root, row.reviewedHead, substantive.get(row.phase))) fail('gate-stale', 'published correction review is stale')
+  }
+}
+function verifyCorrectionReceipt(root, plan, receipt) {
+  const preview = prepareCuration(root, correctionSpec(plan), { writeObjects: false })
+  const expected = correctionReceipt(plan, preview)
+  if (!isDeepStrictEqual(expected, receipt) || git(root, ['rev-parse', receipt.newHead + '^{tree}']) !== plan.expectedTree) fail('receipt', 'published correction receipt differs from deterministic Git contents')
+  ensureCurationRescue(root, plan.expectedHead, { create: false })
+}
+function planCorrectionTail(root, arcId, previous, observed) {
+  const head = git(root, ['rev-parse', 'HEAD']); stableHead(root, head)
+  const delivery = publishedObservation(root, observed, head)
+  recordFiles(root, head)
+  const loaded = records(root, arcId), ids = loaded.arc.planes.flatMap(plane => plane.phases)
+  const phases = loaded.phases.filter(phase => ids.includes(phase.phase))
+  if (phases.length !== ids.length || phases.some(phase => phase.arcId !== arcId || phase.status !== 'done' || phase.tasks.some(task => !task.done))) fail('records', 'published corrections require complete typed arc members')
+  const base = previous.receipt.newHead
+  try { git(root, ['merge-base', '--is-ancestor', base, head]) } catch { fail('base', 'corrections must directly descend from their normalized predecessor') }
+  const log = git(root, ['log', '--reverse', '--format=%H%x00%P%x00%T%x00%s', base + '..' + head]).split('\n').filter(Boolean)
+  let priorTree = git(root, ['rev-parse', base + '^{tree}']), useful = 0
+  const lastWork = new Map()
+  const corrections = log.map(line => {
+    const [sha, parents, tree, subject] = line.split('\0')
+    if (parents.split(' ').length !== 1) fail('merge', 'published correction range contains a merge')
+    const matches = phases.flatMap(phase => {
+      const kind = classifySubject(subject, phase.phase, phase.tasks.map(task => task.id))
+      return kind ? [{ phase: phase.phase, kind }] : []
+    })
+    if (matches.length !== 1) fail('ownership', 'published correction is foreign or ambiguous: ' + sha)
+    const row = { sha, tree, subject, ...matches[0] }
+    if (['task', 'gate-fix'].includes(row.kind)) {
+      if (tree === priorTree) fail('correction-unproven', 'correction does not change the tree')
+      useful++; lastWork.set(row.phase, row)
+    }
+    priorTree = tree
+    return row
+  })
+  if (!useful) fail('correction-unproven', 'published history contains no useful corrections')
+  const phaseGates = [...lastWork].sort(([a], [b]) => a - b).map(([phase, row]) => ({ phase, ...gateBinding(root, phases.find(item => item.phase === phase), row) }))
+  if (useful < 3) return { status: 'retained-corrections', correctionCount: useful, newHead: head }
+  const plan = { version: 1, kind: 'published-corrections', arcId, priorReceiptDigest: hash(encoded(previous.receipt)), base,
+    expectedHead: head, expectedTree: priorTree, corrections, phaseGates,
+    group: { sourceBoundary: { sha: head, tree: priorTree }, message: correctionMessage(arcId, corrections) }, delivery }
+  plan.planDigest = hash(encoded(plan))
+  validateCorrectionPlan(root, plan)
+  return plan
+}
+function finishCorrectionPush(root, plan, receipt, deps) {
+  const head = git(root, ['rev-parse', 'HEAD'])
+  if (head !== receipt.newHead) fail('head-changed', 'correction publication requires its exact normalized HEAD')
+  if (typeof deps.inspectDelivery !== 'function') fail('delivery-unproven', 'correction publication requires a current provider observation')
+  const observed = deps.inspectDelivery({ root, arcId: plan.arcId, base: plan.base, head })
+  if (observed?.head !== head || observed?.publication !== 'published' || observed?.pullRequest?.ref !== plan.delivery.ref) fail('delivery-unproven', 'correction replay observation differs from its exact head/ref')
+  const actual = git(root, ['rev-parse', '--verify', plan.delivery.ref])
+  if (observed.pullRequest.head !== actual) fail('lease', 'provider observation differs from actual publication ref')
+  if (actual === receipt.newHead) return { status: 'already-applied', planDigest: plan.planDigest, newHead: receipt.newHead, rescueRef: receipt.rescueRef, alreadyPublished: true }
+  if (actual !== plan.delivery.publishedHead) fail('lease', 'correction publication lease changed')
+  publishedObservation(root, observed, head, plan.expectedHead)
+  return replaceCorrectionHead(root, plan, receipt, deps)
+}
+function replaceCorrectionHead(root, plan, receipt, deps) {
+  if (typeof deps.replacePublishedHead !== 'function') fail('delivery-unproven', 'published correction replacement capability is unavailable')
+  const out = deps.replacePublishedHead({ ref: plan.delivery.ref, expectedOld: plan.delivery.publishedHead, newHead: receipt.newHead, arcId: plan.arcId, planDigest: plan.planDigest })
+  if (!keys(out, 'ref head') || out.ref !== plan.delivery.ref || out.head !== receipt.newHead || git(root, ['rev-parse', '--verify', out.ref]) !== receipt.newHead) fail('lease', 'provider did not attest the exact leased replacement')
+  return { status: 'published-rewrite-applied', planDigest: plan.planDigest, newHead: receipt.newHead, rescueRef: receipt.rescueRef }
+}
+function applyCorrectionPlan(root, plan, previous, options, deps) {
+  validateCorrectionPlan(root, plan)
+  const preview = prepareCuration(root, correctionSpec(plan), { writeObjects: false })
+  if (!options.apply) return { status: 'published-rewrite-planned', planDigest: plan.planDigest, plan, ref: plan.delivery.ref,
+    expectedOld: plan.delivery.publishedHead, oldHead: plan.expectedHead, newHead: preview.newHead, correctionCount: plan.corrections.filter(row => ['task', 'gate-fix'].includes(row.kind)).length }
+  if (typeof deps.replacePublishedHead !== 'function' || typeof deps.inspectDelivery !== 'function') fail('delivery-unproven', 'published normalization requires current observation and exact-lease replacement capabilities')
+  const path = receiptFile(root, plan.planDigest), existing = readReceipt(path)
+  if (existing) { verifyCorrectionReceipt(root, plan, existing); return finishCorrectionPush(root, plan, existing, deps) }
+  const head = git(root, ['rev-parse', 'HEAD'])
+  if (head !== plan.expectedHead && head !== preview.newHead) fail('head-changed', 'published correction is not at an exact recovery prefix')
+  stableHead(root, head)
+  if (head === plan.expectedHead) {
+    const fresh = planCorrectionTail(root, plan.arcId, previous, deps.inspectDelivery({ root, arcId: plan.arcId, base: plan.base, head }))
+    if (!isDeepStrictEqual(fresh, plan)) fail('plan-stale', 'published correction inputs changed before apply')
+  } else {
+    ensureCurationRescue(root, plan.expectedHead, { create: false })
+    for (const row of plan.phaseGates) if (hash(readFileSync(join(root, row.path))) !== row.digest) fail('gate-stale', 'published correction gate bytes changed during recovery')
+  }
+  persistNormalizationPlan(root, plan)
+  const rescueRef = ensureCurationRescue(root, plan.expectedHead, { create: head === plan.expectedHead })
+  deps.afterRescue?.({ oldHead: plan.expectedHead, rescueRef })
+  const prepared = prepareCuration(root, correctionSpec(plan), { afterCommit: deps.afterCommit })
+  if (!isDeepStrictEqual(prepared, preview)) fail('tree', 'correction preparation differs from the read-only preview')
+  deps.afterPrepare?.(prepared)
+  if (head === plan.expectedHead) {
+    deps.beforeCas?.(prepared)
+    stableHead(root, head)
+    const fresh = planCorrectionTail(root, plan.arcId, previous, deps.inspectDelivery({ root, arcId: plan.arcId, base: plan.base, head }))
+    if (!isDeepStrictEqual(fresh, plan)) fail('plan-stale', 'published correction changed before CAS')
+    commitPreparedCuration(root, prepared)
+    deps.afterCas?.(prepared)
+  }
+  const receipt = correctionReceipt(plan, prepared)
+  deps.beforeReceipt?.(prepared); stableHead(root, prepared.newHead)
+  if (!publishImmutableFile(path, encoded(receipt)) && !isDeepStrictEqual(readReceipt(path), receipt)) fail('receipt', 'published correction receipt conflicts')
+  deps.afterReceipt?.(receipt)
+  return finishCorrectionPush(root, plan, receipt, deps)
+}
+function normalizePublishedCorrections(root, arcId, previous, observed, options, deps) {
+  const plan = planCorrectionTail(root, arcId, previous, observed)
+  if (plan.status === 'retained-corrections') return plan
+  return applyCorrectionPlan(root, plan, previous, options, deps)
 }
