@@ -18,7 +18,7 @@
     }
   },
   "modelPolicy": {
-    "preset": "codex"
+    "preset": "codex-full"
   },
   "designHomes": {
     "architecture": {
