@@ -465,7 +465,7 @@ import { sweepOrphanCapbuildUnits } from './orphan-sweep.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
-import { runWorktreeCleanup, isSlotDir } from './worktree.mjs'
+import { runWorktreeCleanup, worktreeCleanupOutcome, isSlotDir } from './worktree.mjs'
 import { archiveJournal, archiveCompletedLaneOutput, findJournal, RUN_LANE_ARTIFACTS } from './codex-journal.mjs'
 import { loadConfig, ConfigError, worktreeGcPolicyOf } from './config.mjs'
 
@@ -833,11 +833,10 @@ export async function landArc({ repoRoot, arcId, config, exec = defaultExec, fla
         const policy = { ...worktreeGcPolicyOf(config), integrationRef: baseRef }
         const identity = journal.worktreeIdentity
         const result = await cleanup(home, { apply: policy.enabled, ownershipIds: identity ? [identity.ownershipId] : [], policy }, cleanupDeps)
-        const receipt = [...result.resumed.items, ...(result.applied?.items ?? [])].find(row => row.ownershipId === identity?.ownershipId)
-        const item = result.plan.items.find(row => row.worktree === laneDir.dir)
-        disposedNow = receipt?.state === 'removed'
+        const { receipt, removed, reason } = worktreeCleanupOutcome(result, identity, laneDir.dir)
+        disposedNow = removed
         record.push({ step: 'codex-lane-dispose', worktree: laneDir.dir, outcome: disposedNow ? (receipt.disposal?.alreadyDisposed ? 'already-disposed' : 'disposed') : 'refused',
-          reason: disposedNow ? null : identity ? receipt?.reason ?? item?.classification ?? 'observation-required' : 'ownership-uncertain', journal: closed, cleanup: result })
+          reason: disposedNow ? null : reason, journal: closed, cleanup: result })
         record.push({ step: 'lessons-merge', dir: laneDir.dir, merged: lessons.merged })
       } catch (e) {
         const detail = e?.message?.split('\n')[0] ?? String(e)

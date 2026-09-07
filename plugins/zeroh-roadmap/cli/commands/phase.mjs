@@ -31,7 +31,7 @@ import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
-import { landPhase, runWorktreeCleanup, isSlotDir, samePath } from '../lib/worktree.mjs'
+import { landPhase, runWorktreeCleanup, worktreeCleanupOutcome, isSlotDir, samePath } from '../lib/worktree.mjs'
 import { archiveJournal, archiveCompletedLaneOutput, findJournal, JournalUnreadableError, prevReportName, RUN_LANE_ARTIFACTS } from '../lib/codex-journal.mjs'
 import { loadConfig, executionIsolationOf, integrationRefOf, worktreeGcPolicyOf } from '../lib/config.mjs'
 import { carryLaneEvidence, mergeLaneLessons } from '../lib/landing.mjs'
@@ -468,10 +468,9 @@ async function disposeSource(lane, { cwd, laneBranch, baseRef, out, err, config,
     const policy = { ...worktreeGcPolicyOf(config), integrationRef: baseRef }
     const identity = journal.worktreeIdentity
     const result = await cleanup(lane.root, { apply: policy.enabled, ownershipIds: identity ? [identity.ownershipId] : [], policy }, cleanupDeps)
-    const receipt = [...result.resumed.items, ...(result.applied?.items ?? [])].find(row => row.ownershipId === identity?.ownershipId)
-    const item = result.plan.items.find(row => row.worktree === cwd)
+    const { receipt, reason } = worktreeCleanupOutcome(result, identity, cwd)
     if (receipt?.state === 'removed') out.write(`disposed the codex lane ${cwd}${receipt.disposal?.branchDeleted ? ` and its merged ${laneBranch} branch` : ''}; journal archived to ${closed}\n`)
-    else err.write(`phase land: LANDED, but the lane worktree ${cwd} (branch ${laneBranch}) was KEPT (${identity ? receipt?.reason ?? item?.classification ?? 'observation-required' : 'ownership-uncertain'}); journal ${closed}\n`)
+    else err.write(`phase land: LANDED, but the lane worktree ${cwd} (branch ${laneBranch}) was KEPT (${reason}); journal ${closed}\n`)
   } catch (error) { err.write(`phase land: LANDED, but cleanup held ${cwd}: ${error.message}\n`) }
 }
 

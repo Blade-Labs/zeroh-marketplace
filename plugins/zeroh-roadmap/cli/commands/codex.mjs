@@ -61,7 +61,7 @@ import { ConfigError, integrationRefOf, loadConfig, worktreeGcPolicyOf } from '.
 import { authorityProfileBounds, driverStamp, intersectAuthority, launchArgv, resolveDriver } from '../lib/drivers.mjs'
 import { resolveGovernance } from '../lib/governance.mjs'
 import { matchKeyFilesField } from '../lib/phasescan.mjs'
-import { runWorktreeCleanup, groupAlive, isSlotDir, listWorktrees, createWorktreeIdentity, registerWorktreeIdentity, removeWorktreeIdentity, registeredWorktreeIdentity, resolveWorktreeOwnership } from '../lib/worktree.mjs'
+import { runWorktreeCleanup, worktreeCleanupOutcome, groupAlive, isSlotDir, listWorktrees, createWorktreeIdentity, registerWorktreeIdentity, removeWorktreeIdentity, registeredWorktreeIdentity, resolveWorktreeOwnership } from '../lib/worktree.mjs'
 import {
   LANES, prevReportName, journalPath, journalDeclineReason,
   archiveCompletedLaneOutput, JournalUnreadableError, findJournal, findClosedJournal, writeJournal, writeJournalAtomic,
@@ -1070,11 +1070,7 @@ async function requestLaneCleanup(root, journal, { cleanup = runWorktreeCleanup,
   } catch (error) { return { state: 'held', reason: 'cleanup-unavailable', detail: error.message } }
 }
 function laneCleanupOutcome(result, journal) {
-  if (!journal.worktreeIdentity) return { removed: false, reason: 'ownership-uncertain' }
-  const id = journal.worktreeIdentity.ownershipId
-  const receipt = [...(result.resumed?.items ?? []), ...(result.applied?.items ?? [])].find(row => row.ownershipId === id)
-  const item = result.plan?.items.find(row => row.identity?.ownershipId === id)
-  return { removed: receipt?.state === 'removed', reason: receipt?.reason ?? item?.classification ?? result.reason ?? 'observation-required' }
+  return worktreeCleanupOutcome(result, journal.worktreeIdentity, journal.worktree)
 }
 async function consumeLaneOutput(root, jPath, journal, reportPath, { cleanup = runWorktreeCleanup, archiveOutput = archiveCompletedLaneOutput, cleanupDeps = {} } = {}) {
   const output = await archiveOutput(root, jPath, journal)

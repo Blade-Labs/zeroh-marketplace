@@ -1331,3 +1331,18 @@ export async function runWorktreeCleanup(root, { apply = false, ownershipIds, in
   const applied = apply ? await applyWorktreeCleanup(root, plan, deps) : null
   return freezeCleanup({ version: 1, invocationId, resumed, plan, applied })
 }
+
+/** Read one identity's terminal disposition from a cleanup run. */
+export function worktreeCleanupOutcome(result, identity, worktree) {
+  if (!identity) return { removed: false, reason: 'ownership-uncertain', receipt: null, item: null }
+  const receipt = [...(result.resumed?.items ?? []), ...(result.applied?.items ?? [])]
+    .find(row => row.ownershipId === identity.ownershipId) ?? null
+  const item = (result.plan?.items ?? [])
+    .find(row => row.identity?.ownershipId === identity.ownershipId || row.worktree === worktree) ?? null
+  return {
+    removed: receipt?.state === 'removed',
+    reason: receipt?.reason ?? item?.classification ?? result.reason ?? 'observation-required',
+    receipt,
+    item,
+  }
+}
