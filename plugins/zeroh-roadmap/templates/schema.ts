@@ -2250,3 +2250,106 @@ export function normalizeArc(parsed: z.output<typeof ArcInputShape>): Arc {
 export function defineArc(input: z.input<typeof ArcInputShape>): Arc {
   return normalizeArc(ArcInputShape.parse(input))
 }
+
+// ── Arc delivery receipts ───────────────────────────────────────────────────
+const DeliveryText = z.string().trim().min(1)
+const DeliverySha = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/)
+const DeliveryTime = z.string().datetime()
+const DeliveryAuthority = z.object({ authorityId: DeliveryText, recordedAt: DeliveryTime }).strict()
+export const DeliveryTargetShape = z.object({
+  targetKey: DeliveryText, providerId: DeliveryText, repositoryId: DeliveryText,
+  baseRef: DeliveryText, headRef: DeliveryText, currentBaseSha: DeliverySha, currentHeadSha: DeliverySha,
+}).strict()
+export const BranchStrategyShape = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('independent'), arcId: DeliveryText }).strict(),
+  z.object({ kind: z.literal('stacked'), arcId: DeliveryText, predecessorDeliveryKey: DeliveryText, predecessorTargetKey: DeliveryText }).strict(),
+  z.object({ kind: z.literal('grouped'), groupId: DeliveryText, order: z.number().int().nonnegative() }).strict(),
+])
+const ActionObservationShape = z.object({
+  providerActionId: DeliveryText.nullable(), outcome: z.enum(['succeeded', 'failed', 'unknown']), errorKind: DeliveryText.nullable(),
+}).strict()
+const ActionAttemptShape = z.object({
+  attempt: z.number().int().positive(), startedAt: DeliveryTime, finishedAt: DeliveryTime.nullable(), observed: ActionObservationShape.nullable(),
+}).strict()
+export const ExternalActionShape = z.object({
+  actionKey: DeliveryText, kind: z.enum(['push', 'create-pr', 'update-pr', 'queue', 'merge']), targetKey: DeliveryText,
+  requested: z.object({ baseSha: DeliverySha, headSha: DeliverySha, ref: DeliveryText, authorityId: DeliveryText.nullable() }).strict(),
+  status: z.enum(['requested', 'unknown', 'succeeded', 'failed']), attempts: z.array(ActionAttemptShape),
+}).strict().superRefine((action, ctx) => {
+  action.attempts.forEach((a, i) => {
+    if (a.attempt !== i + 1) ctx.addIssue({ code: 'custom', path: ['attempts', i, 'attempt'], message: 'attempts must be contiguous from 1' })
+    if ((a.finishedAt === null) !== (a.observed === null)) ctx.addIssue({ code: 'custom', path: ['attempts', i], message: 'finished attempt requires its observation' })
+    if (a.finishedAt !== null && a.finishedAt < a.startedAt) ctx.addIssue({ code: 'custom', path: ['attempts', i], message: 'attempt cannot finish before it starts' })
+    if (i < action.attempts.length - 1 && a.finishedAt === null) ctx.addIssue({ code: 'custom', path: ['attempts', i], message: 'only the last attempt may be unfinished' })
+  })
+  const last = action.attempts.at(-1), expected = !last ? 'requested' : (!last.finishedAt || !last.observed ? 'unknown' : last.observed.outcome)
+  if (action.status !== expected) ctx.addIssue({ code: 'custom', path: ['status'], message: `status must reflect last attempt (${expected})` })
+})
+export const PullRequestReceiptShape = z.object({
+  providerId: DeliveryText, repositoryId: DeliveryText, targetKey: DeliveryText, providerPullRequestId: DeliveryText,
+  number: z.number().int().positive().nullable(), url: DeliveryText.nullable(), state: z.enum(['open', 'closed', 'merged']), draft: z.boolean(),
+  baseRef: DeliveryText, headRef: DeliveryText, baseSha: DeliverySha, headSha: DeliverySha, observedAt: DeliveryTime,
+}).strict()
+const ObservedCheckShape = z.object({ name: DeliveryText, status: z.enum(['pending', 'green', 'red', 'missing']), attemptId: DeliveryText.nullable(), observedAt: DeliveryTime }).strict()
+export const RequiredChecksEvidenceShape = z.object({
+  providerId: DeliveryText, repositoryId: DeliveryText, providerPullRequestId: DeliveryText, headSha: DeliverySha,
+  requiredChecks: z.array(DeliveryText), observedChecks: z.array(ObservedCheckShape), observedAt: DeliveryTime,
+}).strict().superRefine((v, ctx) => {
+  if (new Set(v.requiredChecks).size !== v.requiredChecks.length || v.requiredChecks.some((n, i, a) => i > 0 && a[i - 1] > n)) ctx.addIssue({ code: 'custom', path: ['requiredChecks'], message: 'requiredChecks must be unique and sorted' })
+  const names = v.observedChecks.map(c => c.name)
+  if (new Set(names).size !== names.length || names.some((n, i) => i > 0 && names[i - 1] > n)) ctx.addIssue({ code: 'custom', path: ['observedChecks'], message: 'observed check names must be unique and sorted' })
+})
+export const DeliveryTerminalShape = z.discriminatedUnion('status', [
+  z.object({ status: z.enum(['preparing', 'awaiting-ci', 'held']), headSha: DeliverySha, reason: DeliveryText.nullable() }).strict(),
+  z.object({ status: z.literal('open-green'), headSha: DeliverySha, checksObservedAt: DeliveryTime }).strict(),
+  z.object({ status: z.literal('queued'), headSha: DeliverySha, providerActionId: DeliveryText }).strict(),
+  z.object({ status: z.literal('merged'), headSha: DeliverySha, providerActionId: DeliveryText, mergeSha: DeliverySha }).strict(),
+])
+export const ArcDeliveryShape = z.object({
+  schemaVersion: z.literal(1), revision: z.number().int().nonnegative(), arcId: DeliveryText, deliveryKey: DeliveryText,
+  target: DeliveryTargetShape, strategy: BranchStrategyShape,
+  requested: z.object({
+    terminal: z.enum(['open', 'queue', 'merge']), allowedPushRefs: z.array(DeliveryText), requiredCapabilities: z.array(DeliveryText), requiredChecks: z.array(DeliveryText),
+    authority: z.object({ queue: DeliveryAuthority.nullable(), merge: DeliveryAuthority.nullable() }).strict(),
+  }).strict(),
+  actions: z.array(ExternalActionShape), pullRequest: PullRequestReceiptShape.nullable(), checks: RequiredChecksEvidenceShape.nullable(),
+  terminal: DeliveryTerminalShape, createdAt: DeliveryTime, updatedAt: DeliveryTime,
+}).strict().superRefine((d, ctx) => {
+  const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message })
+  if (d.deliveryKey !== JSON.stringify([d.target.providerId, d.target.repositoryId, d.target.targetKey])) issue(['deliveryKey'], 'deliveryKey does not match target identity')
+  if (d.strategy.kind !== 'grouped' && d.strategy.arcId !== d.arcId) issue(['strategy'], 'strategy arcId must match delivery arcId')
+  if (new Set(d.requested.requiredChecks).size !== d.requested.requiredChecks.length || d.requested.requiredChecks.some((n, i, a) => i > 0 && a[i - 1] > n)) issue(['requested', 'requiredChecks'], 'configured checks must be unique and sorted')
+  if (new Set(d.actions.map(a => a.actionKey)).size !== d.actions.length) issue(['actions'], 'action keys must be unique')
+  d.actions.forEach((a, i) => { if (a.targetKey !== d.target.targetKey) issue(['actions', i, 'targetKey'], 'action targetKey must match target') })
+  const pr = d.pullRequest, terminal = d.terminal
+  if (pr && (pr.providerId !== d.target.providerId || pr.repositoryId !== d.target.repositoryId || pr.targetKey !== d.target.targetKey)) issue(['pullRequest'], 'pull request address must match target')
+  if (d.checks && (!pr || d.checks.providerId !== d.target.providerId || d.checks.repositoryId !== d.target.repositoryId || d.checks.providerPullRequestId !== pr.providerPullRequestId)) issue(['checks'], 'check evidence must match target pull request')
+  if (terminal.headSha !== d.target.currentHeadSha) issue(['terminal', 'headSha'], 'terminal headSha must match current target head')
+  if (['open-green', 'queued', 'merged'].includes(terminal.status)) {
+    const prStates = terminal.status === 'merged' ? ['open', 'merged'] : ['open']
+    if (!pr || pr.headSha !== d.target.currentHeadSha || pr.baseSha !== d.target.currentBaseSha || pr.baseRef !== d.target.baseRef || pr.headRef !== d.target.headRef || pr.draft || !prStates.includes(pr.state)) issue(['terminal'], 'successful terminal requires an exact current nondraft pull request')
+    const required = d.requested.requiredChecks, observed = d.checks?.observedChecks ?? []
+    if (!d.checks || d.checks.headSha !== d.target.currentHeadSha || required.length === 0 || JSON.stringify(required) !== JSON.stringify(d.checks.requiredChecks) || required.some(n => observed.find(c => c.name === n)?.status !== 'green') || observed.length !== required.length) issue(['terminal'], 'successful terminal requires the exact nonempty configured green check set')
+    if (terminal.status === 'open-green' && d.requested.terminal !== 'open') issue(['terminal'], 'open terminal exceeds requested terminal policy')
+    if (terminal.status === 'open-green' && terminal.checksObservedAt !== d.checks?.observedAt) issue(['terminal'], 'green terminal must name its current check observation')
+  }
+  if (terminal.status === 'queued' || terminal.status === 'merged') {
+    const kind = terminal.status === 'queued' ? 'queue' : 'merge', authority = d.requested.authority[kind]
+    if (d.requested.terminal !== kind) issue(['terminal'], `${kind} terminal exceeds requested terminal policy`)
+    if (!authority || !d.actions.some(a => a.kind === kind && a.status === 'succeeded' && a.requested.headSha === d.target.currentHeadSha && a.requested.baseSha === d.target.currentBaseSha && a.requested.ref === d.target.headRef && a.requested.authorityId === authority.authorityId && a.attempts.at(-1)?.observed?.providerActionId === terminal.providerActionId)) issue(['terminal'], `${kind} terminal requires matching recorded authority and successful current-head action`)
+  }
+})
+export type ArcDelivery = z.output<typeof ArcDeliveryShape>
+const DeliveryEventBase = { deliveryKey: DeliveryText, targetKey: DeliveryText, expectedRevision: z.number().int().nonnegative().nullable(), at: DeliveryTime }
+export const DeliveryEventShape = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('initialize'), ...DeliveryEventBase, state: ArcDeliveryShape }).strict(),
+  z.object({ type: z.literal('request-action'), ...DeliveryEventBase, action: ExternalActionShape }).strict(),
+  z.object({ type: z.literal('record-action-attempt'), ...DeliveryEventBase, actionKey: DeliveryText, attempt: ActionAttemptShape }).strict(),
+  z.object({ type: z.literal('observe-pr'), ...DeliveryEventBase, pullRequest: PullRequestReceiptShape }).strict(),
+  z.object({ type: z.literal('observe-checks'), ...DeliveryEventBase, checks: RequiredChecksEvidenceShape }).strict(),
+  z.object({ type: z.literal('set-terminal'), ...DeliveryEventBase, terminal: DeliveryTerminalShape }).strict(),
+  z.object({ type: z.literal('hold'), ...DeliveryEventBase, reason: DeliveryText }).strict(),
+  z.object({ type: z.literal('advance-head'), ...DeliveryEventBase, actionKey: DeliveryText, fromHeadSha: DeliverySha, toHeadSha: DeliverySha, observedBaseSha: DeliverySha }).strict(),
+  z.object({ type: z.literal('advance-base'), ...DeliveryEventBase, fromBaseSha: DeliverySha, toBaseSha: DeliverySha }).strict(),
+])
+export type DeliveryEvent = z.output<typeof DeliveryEventShape>

@@ -86,6 +86,8 @@ import {
   RoleRunRequestShape as RoleRunRequestConsumerHome,
   AgentRunReceiptShape as AgentRunReceiptConsumerHome,
 } from '../../../docs/roadmap/lib/schema'
+import * as deliveryTemplateHome from '../templates/schema'
+import * as deliveryConsumerHome from '../../../docs/roadmap/lib/schema'
 import { crossValidate, discoverArcs } from '../templates/registry'
 import { reduceArcTransition } from '../cli/lib/workflow-steps.mjs'
 import { MODEL_IDS } from '../cli/lib/drivers.mjs'
@@ -3409,6 +3411,35 @@ for (const home of [
 
 // discoverArcs is async — run it and the final summary inside an async tail so
 // the harness stays CJS-compatible (no top-level await).
+
+console.log('\nArcDeliveryShape — strict durable delivery contract')
+const deliveryTarget = { targetKey: 'target-main', providerId: 'github', repositoryId: 'blade/roadmap', baseRef: 'main', headRef: 'feat/nativegreen', currentBaseSha: '0'.repeat(40), currentHeadSha: '1'.repeat(40) }
+const deliveryRecord = {
+  schemaVersion: 1, revision: 0, arcId: 'NATIVEGREEN', deliveryKey: JSON.stringify(['github', 'blade/roadmap', 'target-main']),
+  target: deliveryTarget, strategy: { kind: 'independent', arcId: 'NATIVEGREEN' },
+  requested: { terminal: 'open', allowedPushRefs: ['feat/nativegreen'], requiredCapabilities: ['pull-request'], requiredChecks: ['lint'], authority: { queue: null, merge: null } },
+  actions: [], pullRequest: null, checks: null, terminal: { status: 'preparing', headSha: '1'.repeat(40), reason: null },
+  createdAt: '2026-09-07T00:00:00.000Z', updatedAt: '2026-09-07T00:00:00.000Z',
+}
+const deliveryHomes = [deliveryTemplateHome, deliveryConsumerHome]
+check('both schema homes export every delivery contract and parse the same canonical record', () => {
+  for (const home of deliveryHomes) {
+    for (const name of ['ArcDeliveryShape', 'DeliveryTargetShape', 'BranchStrategyShape', 'ExternalActionShape', 'PullRequestReceiptShape', 'RequiredChecksEvidenceShape', 'DeliveryTerminalShape', 'DeliveryEventShape'] as const) {
+      if (typeof home[name]?.parse !== 'function') throw new Error(`${name} export is missing`)
+    }
+    assertEq(home.ArcDeliveryShape.parse(deliveryRecord), deliveryRecord, 'canonical delivery parse')
+  }
+})
+check('both schema homes reject unknown nested policy, stale version, malformed SHA and empty green evidence', () => {
+  const invalids = [
+    { ...deliveryRecord, schemaVersion: 0 },
+    { ...deliveryRecord, requested: { ...deliveryRecord.requested, authority: { ...deliveryRecord.requested.authority, surprise: true } } },
+    { ...deliveryRecord, target: { ...deliveryRecord.target, currentHeadSha: 'ABC123' } },
+    { ...deliveryRecord, pullRequest: { providerId: 'github', repositoryId: 'blade/roadmap', targetKey: 'target-main', providerPullRequestId: 'pr-7', number: 7, url: null, state: 'open', draft: false, baseRef: 'main', headRef: 'feat/nativegreen', baseSha: '0'.repeat(40), headSha: '1'.repeat(40), observedAt: '2026-09-07T00:01:00.000Z' }, checks: { providerId: 'github', repositoryId: 'blade/roadmap', providerPullRequestId: 'pr-7', headSha: '1'.repeat(40), requiredChecks: [], observedChecks: [], observedAt: '2026-09-07T00:01:00.000Z' }, terminal: { status: 'open-green', headSha: '1'.repeat(40), checksObservedAt: '2026-09-07T00:01:00.000Z' } },
+  ]
+  for (const home of deliveryHomes) for (const value of invalids) assertThrows(() => home.ArcDeliveryShape.parse(value), 'strict delivery contract')
+})
+
 ;(async () => {
   try {
     const out = await discoverArcs('/no/such/dir')
