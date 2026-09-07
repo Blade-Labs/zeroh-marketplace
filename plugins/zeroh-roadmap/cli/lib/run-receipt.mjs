@@ -229,12 +229,42 @@ export function bindNativeSession(cwd, input) {
   }, (snapshot) => snapshot.nativeSessionId === input.nativeSessionId)
 }
 
+function applyObservation(snapshot, input) {
+  if (snapshot.terminalResult !== null) return conflict('terminal run cannot accept another observation')
+  if (!snapshot.nativeSessionId) return conflict('observation arrived before native identity binding')
+  const receipt = structuredClone(input.observation)
+  if (!isDeepStrictEqual(receipt.handle?.request, snapshot.request)) return conflict('observation request identity mismatch')
+  validateNativeObservation(receipt.observation, receipt.handle)
+  if (receipt.handle.nativeSessionId !== snapshot.nativeSessionId) return conflict('observation native identity mismatch')
+  if (receipt.transition?.prior?.arcId !== snapshot.request.arcId || !isDeepStrictEqual(receipt.transition?.prior?.authorityRef, snapshot.request.authorityRef)) return conflict('observation prior identity mismatch')
+  const lastTransition = snapshot.latestObservation?.transition
+  if (lastTransition && !isDeepStrictEqual(receipt.transition.prior, lastTransition.next)) return conflict('observation prior does not continue the last accepted lifecycle state')
+  const recomputed = reduceArcTransition(receipt.transition?.prior, receipt.observation.event)
+  if (!isDeepStrictEqual(recomputed, receipt.transition)) return conflict('observation transition does not match reducer output')
+  snapshot.latestObservation = receipt
+  if (snapshot.pendingOperation?.kind === 'start') {
+    snapshot.pendingOperation = null
+    snapshot.outcome = 'active'
+  } else if (input.actionAcknowledgement) {
+    const acknowledgement = input.actionAcknowledgement
+    if (acknowledgement.nativeSessionId !== snapshot.nativeSessionId) return conflict('action acknowledgement native identity mismatch')
+    const acknowledged = operationRecord(acknowledgement.operation)
+    if (!isDeepStrictEqual(acknowledged, snapshot.pendingOperation)) return conflict('action acknowledgement does not match pending operation')
+    snapshot.pendingOperation = null
+    snapshot.outcome = 'active'
+  }
+  return snapshot
+}
+function historicalObservation(chain, observation) {
+  const eventId = observation?.observation?.event?.eventId
+  return chain.find((receipt) => receipt.snapshot.latestObservation?.observation?.event?.eventId === eventId)
+}
+
 export function persistRunObservation(cwd, input) {
   const chain = readChain(cwd, input)
   const currentBeforeObservation = chain.at(-1)
   if (currentBeforeObservation?.snapshot.terminalResult !== null) return conflict('terminal run cannot accept another observation', currentBeforeObservation)
-  const eventId = input?.observation?.observation?.event?.eventId
-  const priorEvent = chain.find((receipt) => receipt.snapshot.latestObservation?.observation?.event?.eventId === eventId)
+  const priorEvent = historicalObservation(chain, input?.observation)
   if (priorEvent) {
     if (!isDeepStrictEqual(priorEvent.snapshot.latestObservation, input.observation)) return conflict('eventId was previously recorded with different observation bytes', priorEvent)
     if (!input.actionAcknowledgement) return { status: 'duplicate', receipt: priorEvent }
@@ -251,44 +281,30 @@ export function persistRunObservation(cwd, input) {
     const next = { ...structuredClone(current.snapshot), revision: current.snapshot.revision + 1, previousDigest: current.digest, pendingOperation: null, outcome: 'active' }
     return publish(cwd, input, next, (snapshot) => snapshot.pendingOperation === null && isDeepStrictEqual(snapshot.latestObservation, input.observation))
   }
-  return mutate(cwd, input, (snapshot) => {
-    if (snapshot.terminalResult !== null) return conflict('terminal run cannot accept another observation')
-    if (!snapshot.nativeSessionId) return conflict('observation arrived before native identity binding')
-    const receipt = structuredClone(input.observation)
-    if (!isDeepStrictEqual(receipt.handle?.request, snapshot.request)) return conflict('observation request identity mismatch')
-    validateNativeObservation(receipt.observation, receipt.handle)
-    if (receipt.handle.nativeSessionId !== snapshot.nativeSessionId) return conflict('observation native identity mismatch')
-    if (receipt.transition?.prior?.arcId !== snapshot.request.arcId || !isDeepStrictEqual(receipt.transition?.prior?.authorityRef, snapshot.request.authorityRef)) return conflict('observation prior identity mismatch')
-    const lastTransition = snapshot.latestObservation?.transition
-    if (lastTransition && !isDeepStrictEqual(receipt.transition.prior, lastTransition.next)) return conflict('observation prior does not continue the last accepted lifecycle state')
-    const recomputed = reduceArcTransition(receipt.transition?.prior, receipt.observation.event)
-    if (!isDeepStrictEqual(recomputed, receipt.transition)) return conflict('observation transition does not match reducer output')
-    snapshot.latestObservation = receipt
-    if (snapshot.pendingOperation?.kind === 'start') {
-      snapshot.pendingOperation = null
-      snapshot.outcome = 'active'
-    } else if (input.actionAcknowledgement) {
-      const acknowledgement = input.actionAcknowledgement
-      if (acknowledgement.nativeSessionId !== snapshot.nativeSessionId) return conflict('action acknowledgement native identity mismatch')
-      const acknowledged = operationRecord(acknowledgement.operation)
-      if (!isDeepStrictEqual(acknowledged, snapshot.pendingOperation)) return conflict('action acknowledgement does not match pending operation')
-      snapshot.pendingOperation = null
-      snapshot.outcome = 'active'
-    }
-    return snapshot
-  }, (snapshot) => !input.actionAcknowledgement && isDeepStrictEqual(snapshot.latestObservation, input.observation))
+  return mutate(cwd, input, (snapshot) => applyObservation(snapshot, input), (snapshot) => !input.actionAcknowledgement && isDeepStrictEqual(snapshot.latestObservation, input.observation))
 }
 
 export function persistRunResult(cwd, input) {
   if (!input || !input.result || typeof input.result !== 'object') throw new Error('terminal result is required')
+  if (input.observation) {
+    const priorEvent = historicalObservation(readChain(cwd, input), input.observation)
+    if (priorEvent && !isDeepStrictEqual(priorEvent.snapshot.latestObservation, input.observation)) {
+      return conflict('eventId was previously recorded with different observation bytes', priorEvent)
+    }
+  }
   return mutate(cwd, input, (snapshot) => {
     if (snapshot.terminalResult !== null) return conflict('a different terminal result is already recorded')
     if (!snapshot.nativeSessionId) return conflict('result arrived before native identity binding')
+    if (input.observation) {
+      const observed = applyObservation(snapshot, input)
+      if (observed?.status) return observed
+    }
     snapshot.pendingOperation = null
     snapshot.terminalResult = structuredClone(input.result)
     snapshot.outcome = 'complete'
     return snapshot
-  }, (snapshot) => isDeepStrictEqual(snapshot.terminalResult, input.result))
+  }, (snapshot) => isDeepStrictEqual(snapshot.terminalResult, input.result)
+    && (input.observation === undefined || isDeepStrictEqual(snapshot.latestObservation, input.observation)))
 }
 
 export function reconcileRunReceipt(cwd, input) {

@@ -79,19 +79,45 @@ export function intersectAuthority(parent, request) {
   return { parent: structuredClone(parent), request: structuredClone(request), effective: { profile: request.profile === 'inherit' ? parent.profile : request.profile, bounds: structuredClone(request.bounds) } }
 }
 
-function codexLaunchArgv({ worktree, authority }) {
+function codexLaunchArgv({ worktree, authority, json = false }) {
   if (!authority) throw new Error('effective authority envelope is required for Codex launch')
   const derived = intersectAuthority(authority.parent, authority.request)
   if (!isDeepStrictEqual(derived.effective, authority.effective)) throw new Error('effective authority envelope does not match its parent/request intersection')
   const { profile, bounds } = derived.effective
   if (profile === 'isolated-unsafe') {
     if (bounds.filesystem !== 'unrestricted' || bounds.network !== 'allowed' || !bounds.gitPush || !bounds.externalWrites) throw new Error('isolated-unsafe native mapping requires equally broad explicit bounds')
-    return ['exec', '--dangerously-bypass-approvals-and-sandbox', '-m', CODEX_MODEL, '-C', worktree, '-']
+    return ['exec', '--dangerously-bypass-approvals-and-sandbox', ...(json ? ['--json'] : []), '-m', CODEX_MODEL, '-C', worktree, '-']
   }
   if (!['read-only', 'workspace-write'].includes(profile) || bounds.filesystem !== profile || bounds.network !== 'denied' || bounds.gitPush || bounds.externalWrites) throw new Error(`authority profile '${profile}' has bounds the native Codex controls cannot represent`)
-  return ['exec', '--ignore-user-config', '--sandbox', bounds.filesystem, '-c', 'approval_policy="on-request"', '-c', 'approvals_reviewer="auto_review"', '-c', 'sandbox_workspace_write.network_access=false', '-c', 'sandbox_workspace_write.writable_roots=[]', '-m', CODEX_MODEL, '-C', worktree, '-']
+  return ['exec', '--ignore-user-config', '--sandbox', bounds.filesystem, ...(json ? ['--json'] : []), '-c', 'approval_policy="on-request"', '-c', 'approvals_reviewer="auto_review"', '-c', 'sandbox_workspace_write.network_access=false', '-c', 'sandbox_workspace_write.writable_roots=[]', '-m', CODEX_MODEL, '-C', worktree, '-']
 }
 
+function codexResumeArgv(nativeSessionId, opts) {
+  if (typeof nativeSessionId !== 'string' || nativeSessionId.trim().length === 0 || nativeSessionId.startsWith('-')) throw new Error('Codex resume requires an exact native session id')
+  const argv = codexLaunchArgv({ ...opts, json: true })
+  return [...argv.slice(0, -1), 'resume', nativeSessionId, '-']
+}
+
+function parseCodexResult(result, { expectedSessionId = null } = {}) {
+  if (!result || !Number.isInteger(result.exitCode)) throw new Error('Codex transport result is malformed')
+  const records = []
+  for (const line of String(result.stdout ?? '').split('\n').filter((value) => value.trim())) {
+    try { records.push(JSON.parse(line)) } catch { throw new Error('Codex native JSONL is malformed') }
+  }
+  const identities = records.filter((record) => record?.type === 'thread.started').map((record) => record.thread_id)
+  if (identities.length === 0 || identities.some((value) => typeof value !== 'string' || !value.trim())) throw new Error('Codex native thread identity is missing')
+  if (new Set(identities).size !== 1) throw new Error('Codex native thread identity changed within one execution')
+  if (expectedSessionId !== null && identities[0] !== expectedSessionId) throw new Error('Codex resumed thread identity does not match durable identity')
+  const terminal = records.findLast((record) => ['turn.completed', 'turn.failed', 'error'].includes(record?.type))
+  if (!terminal) throw new Error('Codex native JSONL has no terminal protocol record')
+  return { records, nativeSessionId: identities[0], terminal }
+}
+
+export function parseNativeResult(id, result, opts = {}) {
+  const parser = resolveDriver(id).protocol?.parseResult
+  if (typeof parser !== 'function') throw new Error("driver '" + id + "' has no native result parser")
+  return parser(result, opts)
+}
 /** Probe evidence pasted verbatim from the command each entry's verifiedAt names. */
 const CODEX_PROBE_OUTPUT = `codex-cli 0.153.4
 hooks                                stable             true
@@ -116,7 +142,9 @@ export const DRIVERS = Object.freeze({
       promptChannel: 'stdin',
       sandboxPosture: 'authority-envelope',
     }),
-    resume: 'codex resume [SESSION_ID] [--last]',
+    resume: 'codex exec resume [SESSION_ID]',
+    resumeOperation: Object.freeze({ argv: codexResumeArgv }),
+    protocol: Object.freeze({ parseResult: parseCodexResult }),
     roleCapabilities: Object.freeze({ subagents: 'native', headlessChild: true, hooks: true, plugins: true }),
     verifiedAt: Object.freeze({
       date: '2026-09-06',
@@ -200,6 +228,13 @@ export function resolveDriver(id) {
 /** The argv for `id`'s launch, sourced from the registry so no caller carries a literal. */
 export function launchArgv(id, opts = {}) {
   return resolveDriver(id).launch.argv(opts)
+}
+
+/** Exact-session resume argv, owned by the same registry as fresh launch. */
+export function resumeArgv(id, nativeSessionId, opts = {}) {
+  const resume = resolveDriver(id).resumeOperation
+  if (!resume || typeof resume.argv !== 'function') throw new Error("driver '" + id + "' has no executable resume contract")
+  return resume.argv(nativeSessionId, opts)
 }
 
 /**

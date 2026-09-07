@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DRIVERS, MODEL_ALIASES, MODEL_DRIVERS, MODEL_IDS, resolveDriver, launchArgv, driverStamp, intersectAuthority } from './drivers.mjs'
+import { DRIVERS, MODEL_ALIASES, MODEL_DRIVERS, MODEL_IDS, resolveDriver, launchArgv, resumeArgv, driverStamp, intersectAuthority } from './drivers.mjs'
 
 const KNOWN_PARENT = Object.freeze({
   profile: 'workspace-write',
@@ -425,4 +425,19 @@ test('no file under cli/ outside the driver registry carries a codex launch lite
     [],
     `model-specific launch literal outside the driver registry: ${offenders.join(', ')} — source it from launchArgv('codex', { worktree }) / driverStamp(resolveDriver('codex')) in cli/lib/drivers.mjs, the one home for every launch argv and every declared model id`,
   )
+})
+
+test('Codex resume argv addresses one exact native session through the registry', () => {
+  const authority = intersectAuthority(KNOWN_PARENT, requestAuthority())
+  const sessionId = '0199aabb-ccdd-7000-8000-112233445566'
+  const argv = resumeArgv('codex', sessionId, { worktree: '/tmp/codex-resume-38', authority })
+  assert.equal(resolveDriver('codex').model, MODEL_IDS.SOL)
+  assert.equal(argv.filter((value) => value === sessionId).length, 1)
+  assert.ok(argv.includes('resume'))
+  assert.ok(argv.includes('--json'), 'durable identity/result parsing requires native JSONL')
+  assert.ok(argv.includes(MODEL_IDS.SOL), 'resume pins the same registry-owned model as start')
+  assert.ok(argv.includes('/tmp/codex-resume-38'))
+  assert.equal(argv.includes('--last'), false)
+  assert.equal(argv.includes('--latest'), false)
+  assert.equal(argv.includes('start'), false)
 })

@@ -246,6 +246,25 @@ test('a conflicting terminal result is refused and the winning terminal revision
   assert.deepEqual(reconcileRunReceipt(root, { ...address, evidence: {} }).result, firstResult)
 })
 
+test('atomic terminal duplicate requires the same observation and rejects a reused event identity with different payload', () => {
+  const root = repo()
+  const initial = recordRequest(root)
+  const address = { arcId: 'NATIVEGREEN', runId: 'run-38-2' }
+  const bound = bindNativeSession(root, { ...address, expectedRevisionDigest: initial.receipt.digest, nativeSessionId: 'native-session-38' })
+  const firstObservation = observationFor(bound.receipt.snapshot.request)
+  const result = { status: 'transport-exited', resultDigest: digest('same-result') }
+  const completed = persistRunResult(root, { ...address, expectedRevisionDigest: bound.receipt.digest, observation: firstObservation, result })
+  assert.equal(completed.status, 'recorded')
+  const before = readFileSync(completed.receipt.path)
+
+  const conflictingObservation = structuredClone(firstObservation)
+  conflictingObservation.observation.event.type = 'failed'
+  conflictingObservation.transition = reduceArcTransition(conflictingObservation.transition.prior, conflictingObservation.observation.event)
+  const conflict = persistRunResult(root, { ...address, expectedRevisionDigest: bound.receipt.digest, observation: conflictingObservation, result })
+  assert.equal(conflict.status, 'conflict')
+  assert.deepEqual(readFileSync(completed.receipt.path), before)
+})
+
 test('stable request identity conflicts never rewrite the initial receipt', () => {
   const fields = [
     ['executorId', 'other-executor'], ['worktree', '/tmp/other-worktree'],
