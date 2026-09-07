@@ -4,7 +4,7 @@ import { definePhase } from '../lib/schema'
 export default definePhase({
   phase: 40,
   name: 'Safe pre-PR history normalization and roadmap-owned worktree garbage collection',
-  plannedBy: { model: 'unverified' }, status: 'backlog', category: 'feature', kind: 'hardening',
+  plannedBy: { model: 'unverified' }, status: 'in-progress', category: 'feature', kind: 'hardening',
   source: 'NATIVEGREEN history-and-worktrees plane; plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md §History and worktrees.',
   priority: 'HIGH', arcId: 'NATIVEGREEN', dependsOn: [39], conflictsWith: [],
   keyFiles: ['plugins/zeroh-roadmap/cli/lib/history-normalize.mjs', 'plugins/zeroh-roadmap/cli/lib/curate.mjs', 'plugins/zeroh-roadmap/cli/lib/worktree.mjs', 'plugins/zeroh-roadmap/cli/lib/codex-journal.mjs', 'plugins/zeroh-roadmap/cli/lib/landing.mjs', 'plugins/zeroh-roadmap/cli/commands/codex.mjs', 'plugins/zeroh-roadmap/cli/commands/worktree.mjs'],
