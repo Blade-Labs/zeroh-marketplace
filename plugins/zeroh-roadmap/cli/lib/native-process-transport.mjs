@@ -13,6 +13,8 @@ import { validateRunAddress, inspectReceiptAncestors, ensureReceiptDirectory } f
 import * as defaultReceiptStore from './run-receipt.mjs'
 
 const MAX_OUTPUT = 10 * 1024 * 1024
+const STARTUP_ACK_TIMEOUT_MS = 10_000
+const HEARTBEAT_INTERVAL_MS = 30_000
 const hold = (reason) => ({ status: 'hold', kind: 'unknown-native-outcome', reason })
 const validDigest = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
 const canonical = (value) => Buffer.from(JSON.stringify(value, null, 2) + '\n')
@@ -99,7 +101,7 @@ async function defaultSpawnProcess(input) {
       resolveLaunch(result)
     }
     // Startup handoff only; native execution has no wall-clock cutoff.
-    const timer = setTimeout(() => finish(hold('native supervisor did not acknowledge startup')), 10000)
+    const timer = setTimeout(() => finish(hold('native supervisor did not acknowledge startup')), STARTUP_ACK_TIMEOUT_MS)
     child.once('error', (error) => finish(hold(error.message)))
     child.once('exit', () => finish(hold('native supervisor exited before acknowledging startup')))
     child.on('message', (message) => {
@@ -164,7 +166,7 @@ async function supervise(input) {
   await new Promise((accept, rejectSpawn) => { child.once('spawn', accept); child.once('error', rejectSpawn) })
   stamp()
   process.send?.({ type: 'started' })
-  const heartbeat = setInterval(stamp, 30000)
+  const heartbeat = setInterval(stamp, HEARTBEAT_INTERVAL_MS)
   const outcome = await completion
   clearInterval(heartbeat)
   frame(line + decoder.end())

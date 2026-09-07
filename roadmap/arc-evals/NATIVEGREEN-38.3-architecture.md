@@ -1,7 +1,7 @@
 # NATIVEGREEN 38.3 architecture decision
 
-Date: 2026-09-07  
-Verdict: `PROCEED_WITH_FIX`  
+Date: 2026-09-07
+Verdict: `PROCEED_WITH_FIX`
 Role execution: authorized native Sol fallback; exact runtime unverified. No Fable consultation is claimed.
 
 ## Decision

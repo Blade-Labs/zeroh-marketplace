@@ -13,6 +13,7 @@ const stable = (value) => {
 }
 const hold = (kind, reason, receipt) => ({ status: 'hold', kind, reason, ...(receipt ? { receipt } : {}) })
 const runKey = (request) => JSON.stringify([request.arcId, request.runId])
+const COMPLETION_POLL_INTERVAL_MS = 1_000
 
 function completionEvidence(handle, result, terminal) {
   return {
@@ -70,7 +71,7 @@ export class DurableProcessAgentDriver {
     while (true) {
       const observed = await this.processTransport.observe(operationRef)
       if (observed.status !== 'running') return observed
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await new Promise((resolve) => setTimeout(resolve, COMPLETION_POLL_INTERVAL_MS))
     }
   }
 
