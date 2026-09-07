@@ -3,7 +3,7 @@ import { definePhase } from '../../lib/roadmap/schema'
 /** timing: band 4-6 × surface:false, N=4, median 148.8 min, p80 196.4 min */
 export default definePhase({
   phase:38, name:'Durable run identity and native Claude/Codex adapters',
-  plannedBy:{model:'unverified'}, status:'backlog', category:'feature', kind:'hardening',
+  plannedBy:{model:'unverified'}, status:'in-progress', category:'feature', kind:'hardening',
   source:'NATIVEGREEN harness-adapters plane; ratified architecture §Semantic core and harness adapters; replanned against 036b7c5.',
   priority:'HIGH', arcId:'NATIVEGREEN', dependsOn:[37], conflictsWith:[],
   keyFiles:['plugins/zeroh-roadmap/cli/lib/agent-driver.mjs','plugins/zeroh-roadmap/cli/lib/run-receipt.mjs','plugins/zeroh-roadmap/cli/lib/codex-agent-driver.mjs','plugins/zeroh-roadmap/cli/lib/claude-agent-driver.mjs','plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs','plugins/zeroh-roadmap/test/fixture-consumer/harness.mjs'],
