@@ -69,9 +69,10 @@ import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync, realpathSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, isAbsolute, resolve, basename } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const bases = []
 const kids = []
@@ -410,9 +411,10 @@ test('claimSlot: an EXPIRED session row is reclaimed only when its worktree cann
   execFileSync('git', ['-C', `${r.root}-wt-3`, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '--allow-empty', '-m', 'a week of unlanded phase work'], { stdio: 'ignore' })
   // Backdate all three rows past the TTL.
   const regPath = join(r.root, REGISTRY_REL)
-  const rows = JSON.parse(readFileSync(regPath, 'utf8'))
+  const registry = JSON.parse(readFileSync(regPath, 'utf8'))
+  const rows = Array.isArray(registry) ? registry : registry.slots
   for (const row of rows) row.claimedAt = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString()
-  writeFileSync(regPath, JSON.stringify(rows, null, 2) + '\n')
+  writeFileSync(regPath, JSON.stringify(Array.isArray(registry) ? rows : { ...registry, slots: rows }, null, 2) + '\n')
 
   const fresh = await claimSlot(r.root, { owner: 'newcomer' })
   assert.equal(fresh.slot, 1, 'the missing-worktree slot is the lowest reclaimable one')
@@ -2017,4 +2019,111 @@ test('checkoutOf: EXACT ref equality — a prefix-colliding sibling branch never
   const sibling = checkoutOf(r.root, `${primaryBranch}-primary`)
   assert.ok(sibling && samePath(sibling, r.root), `the primary holds "${primaryBranch}-primary"; got ${sibling}`)
   assert.equal(checkoutOf(r.root, primaryBranch.slice(0, -1)), null, "a prefix of a checked-out branch is nobody's checkout")
+})
+
+test('roadmap worktree ownership exposes create, register, resolve, and exact removal operations', async () => {
+  const module = await load()
+  for (const name of ['createWorktreeIdentity', 'registerWorktreeIdentity', 'resolveWorktreeOwnership', 'removeWorktreeIdentity']) {
+    assert.equal(typeof module[name], 'function', `${name} must be exported`)
+  }
+})
+
+test('real linked worktree is owned only by one exact journal-registry identity join', async () => {
+  const { createWorktreeIdentity, registerWorktreeIdentity, resolveWorktreeOwnership, removeWorktreeIdentity } = await load()
+  const r = makeRepo(); r.commit('seed ownership')
+  const lane = `${r.root}-wt-1`; r.git('worktree', 'add', '-q', '-b', 'wt/1', lane, 'HEAD')
+  const identity = createWorktreeIdentity(r.root, lane, {
+    ownershipId: '123e4567-e89b-42d3-a456-426614174000',
+    laneOwner: { kind: 'roadmap-codex', id: 'run:4051' },
+    expectedBranch: 'refs/heads/wt/1',
+  })
+  assert.deepEqual(registerWorktreeIdentity(r.root, identity), { status: 'registered', identity })
+  assert.deepEqual(registerWorktreeIdentity(r.root, identity), { status: 'existing', identity })
+  const journal = { worktree: lane, worktreeIdentity: identity, lane: 'run', phases: ['4051'], laneOwner: identity.laneOwner }
+  assert.deepEqual(resolveWorktreeOwnership(r.root, journal), { state: 'owned', identity })
+  const registry = JSON.parse(readFileSync(join(r.root, REGISTRY_REL), 'utf8'))
+  assert.equal(registry.version, 2); assert.deepEqual(registry.identities, [identity])
+  await claimSlot(r.root, { owner: 'slot-writer-preserves-identities' })
+  assert.deepEqual(JSON.parse(readFileSync(join(r.root, REGISTRY_REL), 'utf8')).identities, [identity], 'slot updates preserve the ownership registry half verbatim')
+
+  const invalid = [
+    { ...identity, version: 2 },
+    { ...identity, ownershipId: identity.ownershipId.toUpperCase() },
+    { ...identity, ownershipId: '223e4567-e89b-42d3-a456-426614174000' },
+    { ...identity, repository: lane },
+    { ...identity, gitCommonDir: lane },
+    { ...identity, worktree: `${lane}-prefix` },
+    { ...identity, gitAdminDir: r.root },
+    { ...identity, branch: 'refs/heads/wt/10' },
+    { ...identity, laneOwner: { kind: 'roadmap-codex', id: 'run:40510' } },
+    Object.fromEntries(Object.entries(identity).filter(([key]) => key !== 'gitAdminDir')),
+  ]
+  for (const worktreeIdentity of invalid) assert.equal(resolveWorktreeOwnership(r.root, { ...journal, worktreeIdentity }).state, 'unowned')
+  for (const field of ['laneOwner', 'lane', 'phases']) { const partial = { ...journal }; delete partial[field]; assert.equal(resolveWorktreeOwnership(r.root, partial).state, 'unowned', `missing ${field}`) }
+  assert.equal(resolveWorktreeOwnership(r.root, { ...journal, worktreeIdentity: undefined }).state, 'unowned', 'registry record alone is never ownership')
+  assert.equal(resolveWorktreeOwnership(r.root, journal).state, 'owned')
+  const registryBytes = readFileSync(join(r.root, REGISTRY_REL))
+  const otherLane = `${r.root}-wt-2`; r.git('worktree', 'add', '-q', '-b', 'wt/2', otherLane, 'HEAD')
+  const duplicateId = createWorktreeIdentity(r.root, otherLane, {
+    ownershipId: identity.ownershipId,
+    laneOwner: { kind: 'roadmap-codex', id: 'run:4052' },
+    expectedBranch: 'refs/heads/wt/2',
+  })
+  assert.throws(() => registerWorktreeIdentity(r.root, duplicateId), /identity|conflict|registered/i)
+  assert.deepEqual(readFileSync(join(r.root, REGISTRY_REL)), registryBytes, 'a duplicate ownership UUID with different valid bindings is byte-intact conflict')
+  assert.equal(removeWorktreeIdentity(r.root, { ...identity, ownershipId: '323e4567-e89b-42d3-a456-426614174000' }), false)
+  assert.equal(resolveWorktreeOwnership(r.root, journal).state, 'owned')
+  assert.equal(removeWorktreeIdentity(r.root, identity), true)
+  assert.equal(resolveWorktreeOwnership(r.root, journal).state, 'unowned')
+  assert.ok(existsSync(lane), 'identity removal never deletes the worktree or its files')
+})
+
+
+test('ownership registry refuses symlinked homes and files, and never follows the old predictable temp name', async () => {
+  const buildingTarget = realpathSync(mkdtempSync(join(tmpdir(), 'worktree-registry-target-')))
+  bases.push(buildingTarget)
+  const first = makeRepo()
+  rmSync(join(first.root, '.building'), { recursive: true, force: true })
+  symlinkSync(buildingTarget, join(first.root, '.building'))
+  assert.rejects(() => claimSlot(first.root, { owner: 'symlink-building' }), /canonical|symlink|registry/i)
+  assert.deepEqual(readdirSync(buildingTarget), [], 'a symlinked .building target is byte-intact')
+
+  const second = makeRepo(); mkdirSync(join(second.root, '.building'), { recursive: true })
+  const registryTarget = join(second.root, 'outside-registry.json'); writeFileSync(registryTarget, 'outside\n')
+  symlinkSync(registryTarget, join(second.root, REGISTRY_REL))
+  assert.rejects(() => claimSlot(second.root, { owner: 'symlink-registry' }), /regular|symlink|registry/i)
+  assert.equal(readFileSync(registryTarget, 'utf8'), 'outside\n')
+
+  const third = makeRepo(); mkdirSync(join(third.root, '.building'), { recursive: true })
+  const tempTarget = join(third.root, 'outside-temp.txt'); writeFileSync(tempTarget, 'do not overwrite\n')
+  const predictable = join(third.root, `${REGISTRY_REL}.tmp-${process.pid}`); symlinkSync(tempTarget, predictable)
+  assert.equal((await claimSlot(third.root, { owner: 'random-temp' })).slot, 1)
+  assert.equal(readFileSync(tempTarget, 'utf8'), 'do not overwrite\n', 'an attacker-controlled old temp-PID symlink is never opened')
+  assert.ok(existsSync(predictable), 'the unrelated incumbent is not unlinked')
+})
+
+test('ownership registry refuses when the kernel flock helper is unavailable before publishing a registry', async () => {
+  const r = makeRepo(); const emptyPath = realpathSync(mkdtempSync(join(tmpdir(), 'worktree-no-flock-'))); bases.push(emptyPath)
+  const previous = process.env.PATH; process.env.PATH = emptyPath
+  try { await assert.rejects(() => claimSlot(r.root, { owner: 'no-flock' }), /lock unavailable|flock|ENOENT/i) }
+  finally { process.env.PATH = previous }
+  const registry = join(r.root, REGISTRY_REL)
+  assert.equal(existsSync(registry), false, 'missing flock refuses before registry publication')
+})
+
+test('concurrent ownership registrations serialize without losing either identity', async () => {
+  const { createWorktreeIdentity } = await load()
+  const r = makeRepo(); r.commit('concurrent identity seed')
+  const identities = []
+  for (const [slot, uuid] of [[1, '723e4567-e89b-42d3-a456-426614174001'], [2, '723e4567-e89b-42d3-a456-426614174002']]) {
+    const lane = `${r.root}-wt-${slot}`; r.git('worktree', 'add', '-q', '-b', `wt/${slot}`, lane, 'HEAD')
+    identities.push(createWorktreeIdentity(r.root, lane, { ownershipId: uuid, laneOwner: { kind: 'roadmap-codex', id: `run:405${slot}` }, expectedBranch: `refs/heads/wt/${slot}` }))
+  }
+  const modulePath = fileURLToPath(new URL('./worktree.mjs', import.meta.url))
+  const script = `import { registerWorktreeIdentity } from ${JSON.stringify(pathToFileURL(modulePath).href)}; registerWorktreeIdentity(process.argv[1], JSON.parse(process.argv[2]))`
+  const children = identities.map(identity => spawn(process.execPath, ['--input-type=module', '-e', script, r.root, JSON.stringify(identity)], { stdio: ['ignore', 'pipe', 'pipe'] }))
+  const exits = await Promise.all(children.map(child => once(child, 'exit')))
+  assert.deepEqual(exits.map(([code]) => code), [0, 0])
+  const registry = JSON.parse(readFileSync(join(r.root, REGISTRY_REL), 'utf8'))
+  assert.deepEqual(registry.identities.map(row => row.ownershipId).sort(), identities.map(row => row.ownershipId).sort(), 'both concurrent registry RMW updates survive')
 })

@@ -69,6 +69,13 @@ function writeJournal(root, ids, extra = {}) {
   mkdirSync(worktree, { recursive: true })
   execFileSync('git', ['init', '-q'], { cwd: worktree })
   if (!existsSync(join(root, 'roadmap', 'roadmap.config.json'))) writeCodexConfig(root)
+  try { execFileSync('git', ['-C', root, 'rev-parse', '--verify', 'HEAD'], { stdio: 'ignore' }) }
+  catch {
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', 'roadmap'])
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'explicit launch base'])
+  }
+  try { execFileSync('git', ['-C', root, 'show-ref', '--verify', '--quiet', 'refs/heads/develop']) }
+  catch { execFileSync('git', ['-C', root, 'branch', 'develop', 'HEAD']) }
   mkdirSync(join(worktree, 'roadmap'), { recursive: true })
   copyFileSync(join(root, 'roadmap', 'roadmap.config.json'), join(worktree, 'roadmap', 'roadmap.config.json'))
   const phases = join(root, 'roadmap', 'phases')
@@ -76,6 +83,10 @@ function writeJournal(root, ids, extra = {}) {
     mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
     for (const file of readdirSync(phases)) copyFileSync(join(phases, file), join(worktree, 'roadmap', 'phases', file))
   }
+  writeFileSync(join(worktree, '.fixture-head'), 'explicit user worktree\n')
+  execFileSync('git', ['-C', worktree, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.'])
+  execFileSync('git', ['-C', worktree, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'explicit worktree head'])
+  execFileSync('git', ['-C', worktree, 'branch', 'develop', 'HEAD'])
   const j = {
     phases: ids.map(String),
     worktree,
@@ -819,9 +830,15 @@ test('codex run --label names the journal, hand-off report and log for that arm'
   mkdirSync(worktree)
   execFileSync('git', ['init', '-q'], { cwd: worktree })
   writeCodexConfig(root)
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', 'roadmap'])
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'labeled launch base'])
+  execFileSync('git', ['-C', root, 'branch', 'develop', 'HEAD'])
   writeCodexConfig(worktree)
   mkdirSync(join(worktree, 'roadmap', 'phases'), { recursive: true })
   copyFileSync(join(root, 'roadmap', 'phases', 'phase-79.phase.ts'), join(worktree, 'roadmap', 'phases', 'phase-79.phase.ts'))
+  execFileSync('git', ['-C', worktree, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.'])
+  execFileSync('git', ['-C', worktree, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'labeled worktree head'])
+  execFileSync('git', ['-C', worktree, 'branch', 'develop', 'HEAD'])
   const fakeBin = join(root, 'fakebin-label')
   mkdirSync(fakeBin)
   writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nexit 0\n')
@@ -2146,6 +2163,7 @@ test('next-step hint: a dead run round-trips its custom checkout, label and mode
   writePhase(root, 235)
   const worktree = join(root, "worktree with patrik's changes")
   const env = fakeLaunchEnv(root, worktree)
+  execFileSync('git', ['-C', root, 'branch', 'feature/resume-base', 'HEAD'])
   const launched = spawnSync('node', authorizedCodexArgs(
     'run', '235', '--worktree', worktree, '--base', 'feature/resume-base', '--label', 'resume1', '--models', 'codex-full',
   ), { cwd: root, encoding: 'utf8', env })
@@ -4833,4 +4851,171 @@ test('37.5 — stale review reset preserves byte-identical tracked carried input
   assert.ok(existsSync(marker), 'safe identical tracked carry reaches native launch')
   assert.deepEqual(readFileSync(join(fx.worktree, rel)), carried, 'tracked target bytes are preserved without a copy')
   assert.equal(execFileSync('git', ['-C', fx.worktree, 'status', '--porcelain', '--', rel], { encoding: 'utf8' }), '', 'the preserved tracked input remains clean')
+})
+
+test('40.5 — run, plan, and review supervisors cross the native barrier only with one exact journal-registry owner', async () => {
+  const { superviseLane } = await import('./codex.mjs')
+  const { createWorktreeIdentity, registerWorktreeIdentity, resolveWorktreeOwnership } = await import('../lib/worktree.mjs')
+  for (const [lane, id] of [['run', 40511], ['plan', 40512], ['review', 40513]]) {
+    const fx = await completedExactLane('plan', id)
+    const actualHead = execFileSync('git', ['-C', fx.worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    const laneOwner = { kind: 'roadmap-codex', id: `${lane}:${id}` }
+    const branch = execFileSync('git', ['-C', fx.worktree, 'symbolic-ref', 'HEAD'], { encoding: 'utf8' }).trim()
+    const identity = createWorktreeIdentity(fx.root, fx.worktree, {
+      ownershipId: `123e4567-e89b-42d3-a456-42661417${String(4000 + id % 1000).padStart(4, '0')}`,
+      laneOwner,
+      expectedBranch: branch,
+    })
+    registerWorktreeIdentity(fx.root, identity)
+    const launchId = `223e4567-e89b-42d3-a456-42661417${String(4000 + id % 1000).padStart(4, '0')}`
+    const journal = {
+      ...fx.journal,
+      phases: [String(id)], lane, laneOwner, worktreeIdentity: identity,
+      launchId, pgid: process.pid, workingHead: actualHead, requestedHead: actualHead,
+    }
+    delete journal.finishedAt; delete journal.driverExit; delete journal.reportDigest; delete journal.completionFingerprint
+    const journalPath = join(fx.root, '.building', lane === 'run' ? `codex-${id}.json` : `codex-${lane}-${id}.json`)
+    writeFileSync(journalPath, JSON.stringify(journal, null, 2) + '\n')
+    let spawns = 0
+    const status = await superviseLane(fx.root, [String(id)], lane, launchId, {
+      beforeNativeLaunch(value) {
+        assert.ok(Object.isFrozen(value) && Object.isFrozen(value.journal) && Object.isFrozen(value.identity), `${lane}: hook receives a detached frozen observation`)
+        assert.deepEqual(resolveWorktreeOwnership(fx.root, value.journal), { state: 'owned', identity })
+      },
+      spawnNative(_bin, _argv, options) {
+        spawns += 1
+        assert.equal(options.cwd, fx.worktree)
+        return { completion: Promise.resolve({ code: 0, signal: null, error: null }) }
+      },
+    })
+    assert.equal(status, 0, lane)
+    assert.equal(spawns, 1, `${lane}: exactly one native child crosses the barrier`)
+  }
+})
+
+test('40.5 — ownership changed during the launch hook is re-read and refuses with zero native children', async () => {
+  const { superviseLane } = await import('./codex.mjs')
+  const { createWorktreeIdentity, registerWorktreeIdentity, removeWorktreeIdentity } = await import('../lib/worktree.mjs')
+  const id = 40514
+  const fx = await completedExactLane('plan', id)
+  const actualHead = execFileSync('git', ['-C', fx.worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const laneOwner = { kind: 'roadmap-codex', id: `plan:${id}` }
+  const identity = createWorktreeIdentity(fx.root, fx.worktree, {
+    ownershipId: '323e4567-e89b-42d3-a456-426614174514', laneOwner,
+    expectedBranch: execFileSync('git', ['-C', fx.worktree, 'symbolic-ref', 'HEAD'], { encoding: 'utf8' }).trim(),
+  })
+  registerWorktreeIdentity(fx.root, identity)
+  const launchId = '423e4567-e89b-42d3-a456-426614174514'
+  const journal = { ...fx.journal, phases: [String(id)], laneOwner, worktreeIdentity: identity, launchId, pgid: process.pid, workingHead: actualHead, requestedHead: actualHead }
+  delete journal.finishedAt; delete journal.driverExit; delete journal.reportDigest; delete journal.completionFingerprint
+  writeFileSync(fx.journalPath, JSON.stringify(journal, null, 2) + '\n')
+  let spawns = 0
+  const status = await superviseLane(fx.root, [String(id)], 'plan', launchId, {
+    beforeNativeLaunch() { assert.equal(removeWorktreeIdentity(fx.root, identity), true) },
+    spawnNative() { spawns += 1; return { completion: Promise.resolve({ code: 0, signal: null }) } },
+  })
+  assert.equal(status, 1)
+  assert.equal(spawns, 0, 'the supervisor rechecks the durable ownership join after the hook')
+})
+
+test('40.5 — numeric run labels remain labels at the __supervise boundary, never extra phase ids', async () => {
+  const root = tmpRepo()
+  const id = 40515
+  writePhase(root, id)
+  const worktree = join(root, `wt-run-${id}`)
+  const env = fakeLaunchEnv(root, worktree)
+  const fake = join(root, 'fakebin', 'codex')
+  writeFileSync(fake, '#!/bin/sh\nset -eu\ntouch labeled-native-started\nprintf "done\\nCODEX-RUN-COMPLETE\\n" > CODEX-REPORT.7.md\n')
+  chmodSync(fake, 0o755)
+  const launched = spawnSync('node', authorizedCodexArgs('run', String(id), '--label', '7', '--worktree', worktree), { cwd: root, encoding: 'utf8', env })
+  assert.equal(launched.status, 0, launched.stderr)
+  const marker = join(worktree, 'labeled-native-started')
+  for (let attempt = 0; attempt < 80 && !existsSync(marker); attempt += 1) await new Promise(resolve => setTimeout(resolve, 25))
+  assert.ok(existsSync(marker), `the supervisor must find the labeled journal and launch native; stderr: ${launched.stderr}`)
+  const journal = JSON.parse(readFileSync(join(root, '.building', `codex-${id}.7.json`), 'utf8'))
+  assert.deepEqual(journal.phases, [String(id)], 'a numeric label must not be parsed into the phase-id list')
+  assert.equal(journal.label, '7')
+})
+
+test('40.5 — a registered worktree omitted from an otherwise-valid journal refuses, while a truly unregistered user worktree remains launch-compatible', async () => {
+  const { superviseLane } = await import('./codex.mjs')
+  const { createWorktreeIdentity, registerWorktreeIdentity } = await import('../lib/worktree.mjs')
+  for (const registered of [true, false]) {
+    const id = registered ? 40516 : 40517
+    const fx = await completedExactLane('plan', id)
+    const head = execFileSync('git', ['-C', fx.worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    const laneOwner = { kind: 'roadmap-codex', id: `plan:${id}` }
+    if (registered) {
+      registerWorktreeIdentity(fx.root, createWorktreeIdentity(fx.root, fx.worktree, {
+        ownershipId: '523e4567-e89b-42d3-a456-426614174516', laneOwner,
+        expectedBranch: execFileSync('git', ['-C', fx.worktree, 'symbolic-ref', 'HEAD'], { encoding: 'utf8' }).trim(),
+      }))
+    }
+    const launchId = `623e4567-e89b-42d3-a456-42661417451${registered ? 6 : 7}`
+    const journal = { ...fx.journal, phases: [String(id)], laneOwner, launchId, pgid: process.pid, workingHead: head, requestedHead: head }
+    delete journal.worktreeIdentity; delete journal.finishedAt; delete journal.driverExit; delete journal.reportDigest; delete journal.completionFingerprint
+    writeFileSync(fx.journalPath, JSON.stringify(journal, null, 2) + '\n')
+    let spawns = 0
+    const status = await superviseLane(fx.root, [String(id)], 'plan', launchId, {
+      spawnNative() { spawns += 1; return { completion: Promise.resolve({ code: 0, signal: null, error: null }) } },
+    })
+    assert.equal(status, registered ? 1 : 0)
+    assert.equal(spawns, registered ? 0 : 1, registered
+      ? 'omitting the journal half of a registered identity refuses before native spawn'
+      : 'an existing user worktree with no registry identity stays launch-compatible and unowned')
+  }
+})
+
+test('40.5 — fresh run, plan, and review allocations publish the exact identity join before one fake native launch', async () => {
+  const { resolveWorktreeOwnership } = await import('../lib/worktree.mjs')
+  for (const [lane, id] of [['run', 40521], ['plan', 40522], ['review', 40523]]) {
+    const root = tmpRepo()
+    writeCodexConfig(root)
+    if (lane !== 'plan') writePhase(root, id)
+    writeFileSync(join(root, 'seed-ownership.txt'), 'seed\n')
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.'])
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'ownership seed'])
+    execFileSync('git', ['-C', root, 'branch', '-f', 'develop', 'HEAD'])
+    const fakeBin = join(root, 'fakebin-ownership'); mkdirSync(fakeBin)
+    const log = join(root, '.building', 'native-invocations.txt')
+    writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nset -eu\nprintf "%s\\n" "$PWD" >> "$FAKE_INVOCATIONS"\nfor f in CODEX-REPORT.md CODEX-PLAN.md CODEX-REVIEW.md; do printf "done\\nCODEX-RUN-COMPLETE\\n" > "$f"; done\n')
+    chmodSync(join(fakeBin, 'codex'), 0o755)
+    const extra = lane === 'plan' ? ['--brief', writeBrief(root)] : []
+    const launched = spawnSync('node', authorizedCodexArgs(lane, String(id), ...extra, '--base', 'develop'), {
+      cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, FAKE_INVOCATIONS: log },
+    })
+    assert.equal(launched.status, 0, `${lane}: ${launched.stderr}`)
+    const journalPath = join(root, '.building', lane === 'run' ? `codex-${id}.json` : `codex-${lane}-${id}.json`)
+    for (let attempt = 0; attempt < 100 && (!existsSync(log) || readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length < 1); attempt += 1) await new Promise(resolve => setTimeout(resolve, 25))
+    assert.equal(readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length, 1, `${lane}: exactly one native invocation`)
+    const journal = JSON.parse(readFileSync(journalPath, 'utf8'))
+    assert.ok(journal.worktreeIdentity, `${lane}: newly allocated worktree identity is journaled`)
+    assert.deepEqual(resolveWorktreeOwnership(root, journal), { state: 'owned', identity: journal.worktreeIdentity })
+    assert.equal(realpathSync(readFileSync(log, 'utf8').trim()), realpathSync(journal.worktree), `${lane}: native starts in the owned worktree`)
+  }
+})
+
+test('40.5 — a new allocation whose journal publication fails unwinds only its registration and preserves the worktree', async () => {
+  const root = tmpRepo(); const id = 40524
+  writeCodexConfig(root); writePhase(root, id); writeFileSync(join(root, 'seed-unwind.txt'), 'seed\n')
+  writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+  writeFileSync(join(root, 'package-lock.json'), '{"name":"fixture","version":"1.0.0","lockfileVersion":3,"packages":{"":{"name":"fixture","version":"1.0.0"}}}\n')
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.'])
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'unwind seed'])
+  execFileSync('git', ['-C', root, 'branch', '-f', 'develop', 'HEAD'])
+  const journalPath = join(root, '.building', `codex-${id}.json`)
+  const fakeBin = join(root, 'fakebin-unwind'); mkdirSync(fakeBin)
+  writeFileSync(join(fakeBin, 'codex'), '#!/bin/sh\nexit 99\n'); chmodSync(join(fakeBin, 'codex'), 0o755)
+  writeFileSync(join(fakeBin, 'npm'), '#!/bin/sh\nif [ "${1:-}" = --version ]; then echo 10.0.0; exit 0; fi\nsleep 1\nexit 0\n'); chmodSync(join(fakeBin, 'npm'), 0o755)
+  const child = spawn('node', authorizedCodexArgs('run', String(id), '--base', 'develop'), { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` } })
+  const worktree = `${root}-codex-${id}`
+  for (let attempt = 0; attempt < 100 && !existsSync(worktree); attempt += 1) await new Promise(resolve => setTimeout(resolve, 10))
+  assert.ok(existsSync(worktree), 'fixture reaches allocation before injecting the journal collision')
+  mkdirSync(journalPath)
+  const [code] = await once(child, 'exit')
+  assert.notEqual(code, 0)
+  assert.ok(existsSync(worktree), 'journal failure preserves the allocated worktree and any installer/carried files')
+  const registry = JSON.parse(readFileSync(join(root, '.building', 'worktree-slots.json'), 'utf8'))
+  assert.equal(registry.identities.some(identity => identity.worktree === realpathSync(worktree)), false, 'only the newly minted registry identity is unwound')
+  assert.ok(existsSync(journalPath) && statSync(journalPath).isDirectory(), 'the conflicting journal evidence is byte/type intact')
 })

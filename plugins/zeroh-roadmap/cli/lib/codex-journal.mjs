@@ -8,13 +8,14 @@
  * every consumer — the launcher included — imports the names from HERE, so there is one home.
  */
 import { execFileSync } from 'node:child_process'
+import { isDeepStrictEqual } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { roadmapRootRel } from './roadmap-root.mjs'
 import { resolveGovernance } from './governance.mjs'
 import { intersectAuthority } from './drivers.mjs'
-import { groupAlive, listWorktrees } from './worktree.mjs'
+import { groupAlive, listWorktrees, worktreeIdentityDeclineReason } from './worktree.mjs'
 
 /**
  * One entry per mission. Adding a lane is adding an entry here — the launcher, the liveness guard,
@@ -42,15 +43,18 @@ export function journalPath(root, ids, lane = 'run', { label } = {}) {
   return join(root, '.building', `${LANES[lane].prefix}${ids.join('-')}${label ? `.${label}` : ''}.json`)
 }
 
-export function writeJournal(root, journal, { label } = {}) {
-  const path = journalPath(root, journal.phases, journal.lane ?? 'run', { label })
-  mkdirSync(join(root, '.building'), { recursive: true })
-  writeFileSync(path, JSON.stringify(journal, null, 2) + '\n')
-  return path
+export function writeJournal(root, journal, options = {}) {
+  return writeJournalAtomic(root, journal, options)
 }
 
 export function writeJournalAtomic(root, journal, { label } = {}) {
+  const reason = journalDeclineReason(journal)
+  if (reason) throw new Error('journal refused: ' + reason)
   const path = journalPath(root, journal.phases, journal.lane ?? 'run', { label })
+  if (existsSync(path)) {
+    const previous = JSON.parse(readFileSync(path, 'utf8'))
+    if (previous?.worktreeIdentity !== undefined && !isDeepStrictEqual(previous.worktreeIdentity, journal.worktreeIdentity)) throw new Error('journal worktree identity cannot change or disappear')
+  }
   const dir = join(root, '.building')
   mkdirSync(dir, { recursive: true })
   if (realpathSync(dir) !== resolve(dir)) throw new Error('journal directory must be canonical')
@@ -101,9 +105,15 @@ export class JournalUnreadableError extends Error {
  * business, and journals predating a field are deliberately tolerated elsewhere in this lane.
  */
 export function journalDeclineReason(value) {
-  return !value || typeof value !== 'object' || Array.isArray(value)
-    ? `parsed to ${JSON.stringify(value)} — a journal must be an object`
-    : null
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return `parsed to ${JSON.stringify(value)} — a journal must be an object`
+  if (value.worktreeIdentity !== undefined) {
+    const reason = worktreeIdentityDeclineReason(value.worktreeIdentity)
+    if (reason) return reason
+    if (!isDeepStrictEqual(value.laneOwner, value.worktreeIdentity.laneOwner) || value.lane !== value.worktreeIdentity.laneOwner.id.split(':')[0]
+      || !Array.isArray(value.phases) || value.phases.map(String).join('-') !== value.worktreeIdentity.laneOwner.id.split(':')[1]
+      || typeof value.worktree !== 'string' || resolve(value.worktree) !== value.worktreeIdentity.worktree) return 'journal and worktree identity bindings differ'
+  }
+  return null
 }
 
 /**
@@ -263,6 +273,7 @@ export function completionFingerprintOf(journal) {
     phases: journal?.phases,
     lane: journal?.lane ?? 'run',
     worktree: journal?.worktree,
+    ...(journal?.worktreeIdentity !== undefined ? { worktreeIdentity: journal.worktreeIdentity } : {}),
     requestedRef: journal?.requestedRef,
     requestedHead: journal?.requestedHead,
     baseHead: journal?.baseHead,

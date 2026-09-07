@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, symlinkSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { classifyJournal, completionFingerprintOf, writeJournal } from './codex-journal.mjs'
+import { classifyJournal, completionFingerprintOf, findJournal, writeJournal } from './codex-journal.mjs'
 
 const cleanups = []
 process.on('exit', () => cleanups.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
@@ -337,4 +337,28 @@ test('classifyJournal — configured arc marker and canonical labeled run report
     assert.equal(result.state, 'stale-clean', lane)
     assert.equal(result.restartable, true, lane)
   }
+})
+
+
+test('journal persists the complete worktree identity verbatim while legacy journals remain identity-free', () => {
+  const f = fixture()
+  const identity = {
+    version: 1, ownershipId: '123e4567-e89b-42d3-a456-426614174000', repository: realpathSync(f.root),
+    gitCommonDir: realpathSync(join(f.root, '.git')), worktree: realpathSync(f.worktree),
+    gitAdminDir: realpathSync(git(f.worktree, 'rev-parse', '--git-dir')),
+    branch: 'refs/heads/lane/37', laneOwner: { kind: 'roadmap-codex', id: 'run:37' },
+  }
+  f.journal.laneOwner = identity.laneOwner
+  f.journal.worktreeIdentity = identity
+  writeJournal(f.root, f.journal)
+  assert.deepEqual(findJournal(f.root, [37]).journal.worktreeIdentity, identity)
+  const boundBytes = readFileSync(f.path)
+  const dropped = { ...f.journal }; delete dropped.worktreeIdentity
+  assert.throws(() => writeJournal(f.root, dropped), /identity|refused/i)
+  assert.deepEqual(readFileSync(f.path), boundBytes, 'a durable identity cannot be dropped')
+  assert.throws(() => writeJournal(f.root, { ...f.journal, worktreeIdentity: { ...identity, ownershipId: '223e4567-e89b-42d3-a456-426614174000' } }), /identity|refused/i)
+  assert.deepEqual(readFileSync(f.path), boundBytes, 'nor can a durable identity be changed')
+
+  const legacy = fixture()
+  assert.equal(findJournal(legacy.root, [37]).journal.worktreeIdentity, undefined, 'an existing identity-free journal remains readable but unowned')
 })

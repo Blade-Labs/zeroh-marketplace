@@ -61,7 +61,7 @@ import { ConfigError, integrationRefOf, loadConfig } from '../lib/config.mjs'
 import { authorityProfileBounds, driverStamp, intersectAuthority, launchArgv, resolveDriver } from '../lib/drivers.mjs'
 import { resolveGovernance } from '../lib/governance.mjs'
 import { matchKeyFilesField } from '../lib/phasescan.mjs'
-import { disposeWorktree, groupAlive, isSlotDir, listWorktrees } from '../lib/worktree.mjs'
+import { disposeWorktree, groupAlive, isSlotDir, listWorktrees, createWorktreeIdentity, registerWorktreeIdentity, removeWorktreeIdentity, registeredWorktreeIdentity, resolveWorktreeOwnership } from '../lib/worktree.mjs'
 import {
   LANES, prevReportName, journalPath, journalDeclineReason,
   JournalUnreadableError, findJournal, findClosedJournal, writeJournal, writeJournalAtomic,
@@ -401,81 +401,68 @@ function requestDigestOf(prompt, authority, governance, carriedPath = null) {
   return journalBindingDigestOf({ prompt: governedPromptOf(prompt, authority, governance), carriedDigest })
 }
 
-async function launch(root, ids, lane, { worktree, base, prompt, governance, authority, carriedIn = null, modelPolicy, label, reportName = LANES[lane].report }) {
-  const exactLane = lane === 'plan' || lane === 'review'
+async function launch(root, ids, lane, { worktree, base, prompt, governance, authority, carriedIn = null, modelPolicy, label, reportName = LANES[lane].report, allocation = {} }) {
   const git = (cwd, args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
-  const refProbe = exactLane ? git(root, ['rev-parse', '--symbolic-full-name', '--verify', '--end-of-options', base]) : null
-  const requestProbe = exactLane ? git(root, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`]) : null
-  const workingProbe = exactLane ? git(worktree, ['rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}']) : null
-  const requestedRef = refProbe?.status === 0 && refProbe.stdout.trim() ? refProbe.stdout.trim() : base
-  const requestedHead = requestProbe?.status === 0 ? requestProbe.stdout.trim() : ''
-  const workingHead = workingProbe?.status === 0 ? workingProbe.stdout.trim() : ''
-  if (exactLane && (!requestedRef || !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(requestedHead)
-    || !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(workingHead))) {
+  const refProbe = git(root, ['rev-parse', '--symbolic-full-name', '--verify', '--end-of-options', base])
+  const requestProbe = git(root, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`])
+  const workingProbe = git(worktree, ['rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}'])
+  const requestedRef = refProbe.status === 0 && refProbe.stdout.trim() ? refProbe.stdout.trim() : base
+  const requestedHead = requestProbe.status === 0 ? requestProbe.stdout.trim() : ''
+  const workingHead = workingProbe.status === 0 ? workingProbe.stdout.trim() : ''
+  if (!requestedRef || !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(requestedHead) || !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(workingHead)) {
     process.stderr.write(`roadmap codex: cannot resolve exact launch identity for ${base} in ${worktree}; no child launched\n`)
     return 1
   }
   const building = join(root, '.building')
   const stem = `${LANES[lane].prefix}${ids.join('-')}${label ? `.${label}` : ''}`
   const promptPath = join(building, `${stem}-prompt.txt`)
-  const effectiveAuthority = authority
-  const governedPrompt = governedPromptOf(prompt, effectiveAuthority, governance)
-  const carriedDigest = carriedIn && existsSync(join(worktree, carriedIn))
-    ? journalBytesDigestOf(readFileSync(join(worktree, carriedIn))) : null
-  const requestDigest = requestDigestOf(prompt, effectiveAuthority, governance, carriedIn ? join(worktree, carriedIn) : null)
-  writeFileSync(promptPath, governedPrompt)
-  const logPath = join(building, `${stem}.log`)
-  const logFd = openSync(logPath, 'a')
-  const entry = resolveDriver('codex')
-  const launchId = randomUUID()
-  const promptFd = exactLane ? null : openSync(promptPath, 'r')
-  const child = exactLane
-    ? spawn(process.execPath, [ROADMAP_CLI, 'codex', '__supervise', ...ids.map(String), '--lane', lane, '--launch-id', launchId], {
-        cwd: root, detached: true, stdio: ['ignore', logFd, logFd, 'ipc'],
-      })
-    : spawn(entry.bin, effectiveAuthority.native.argv, { detached: true, stdio: [promptFd, logFd, logFd] })
-  if (promptFd !== null) closeSync(promptFd)
-  closeSync(logFd)
-  if (!child.pid) {
-    process.stderr.write('roadmap codex: native supervisor could not start; no journal was written\n')
-    return 1
-  }
-  const supervisorReady = exactLane
-    ? new Promise((ready) => {
-        let settled = false
-        const finish = (value) => { if (!settled) { settled = true; ready(value) } }
-        child.once('message', (message) => finish(message?.ready === launchId))
-        child.once('error', () => finish(false))
-        child.once('exit', () => finish(false))
-        child.once('disconnect', () => finish(false))
-      })
-    : Promise.resolve(true)
+  const carriedDigest = carriedIn && existsSync(join(worktree, carriedIn)) ? journalBytesDigestOf(readFileSync(join(worktree, carriedIn))) : null
+  const requestDigest = requestDigestOf(prompt, authority, governance, carriedIn ? join(worktree, carriedIn) : null)
+  writeFileSync(promptPath, governedPromptOf(prompt, authority, governance))
+  const logPath = join(building, `${stem}.log`), logFd = openSync(logPath, 'a')
+  const entry = resolveDriver('codex'), launchId = randomUUID()
+  let child
+  try {
+    child = spawn(process.execPath, [ROADMAP_CLI, 'codex', '__supervise', ...ids.map(String), '--lane', lane, '--launch-id', launchId, ...(label ? ['--label', label] : [])], {
+      cwd: root, detached: true, stdio: ['ignore', logFd, logFd, 'ipc'],
+    })
+  } finally { closeSync(logFd) }
+  if (!child.pid) { process.stderr.write('roadmap codex: native supervisor could not start; no journal was written\n'); return 1 }
+  const supervisorReady = new Promise(ready => {
+    let settled = false
+    const finish = value => { if (!settled) { settled = true; ready(value) } }
+    child.once('message', message => finish(message?.ready === launchId))
+    child.once('error', () => finish(false)); child.once('exit', () => finish(false)); child.once('disconnect', () => finish(false))
+  })
   const jPath = journalPath(root, ids, lane, { label })
-  ;(exactLane ? writeJournalAtomic : writeJournal)(root, {
-    phases: ids, lane, driver: driverStamp(entry), authority: effectiveAuthority, governance,
-    report: reportName, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath,
-    ...(exactLane ? {
+  try {
+    writeJournalAtomic(root, {
+      phases: ids, lane, driver: driverStamp(entry), authority, governance,
+      report: reportName, worktree, base, pgid: child.pid, log: logPath, prompt: promptPath,
       launchId, requestedRef, requestedHead, baseHead: requestedHead, workingHead,
       laneOwner: { kind: 'roadmap-codex', id: `${lane}:${ids.join('-')}` },
-      ownerRoot: realpathSync(root), authorityDigest: journalBindingDigestOf(effectiveAuthority),
-      governanceDigest: journalBindingDigestOf(governance), requestDigest, carriedDigest,
-    } : {}),
-    ...(label ? { label } : {}), ...(modelPolicy ? { modelPolicy } : {}),
-    ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString(),
-  }, { label })
-  if (exactLane) {
-    if (!await supervisorReady) { child.disconnect(); return 1 }
-    const sent = await new Promise((done) => child.send({ launchId }, (error) => { child.disconnect(); done(!error) }))
-    if (!sent) return 1
-  } else child.unref()
+      ...(allocation.worktreeIdentity ? { worktreeIdentity: allocation.worktreeIdentity } : {}),
+      ownerRoot: realpathSync(root), authorityDigest: journalBindingDigestOf(authority), governanceDigest: journalBindingDigestOf(governance), requestDigest, carriedDigest,
+      ...(label ? { label } : {}), ...(modelPolicy ? { modelPolicy } : {}), ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString(),
+    }, { label })
+    allocation.journalWritten = true
+  } catch (error) {
+    child.kill('SIGTERM'); if (child.connected) child.disconnect()
+    process.stderr.write(`roadmap codex: journal publication refused; no native child launched: ${error.message}\n`)
+    return 1
+  }
+  if (!await supervisorReady) { if (child.connected) child.disconnect(); return 1 }
+  const sent = await new Promise(done => child.send({ launchId }, error => { if (child.connected) child.disconnect(); done(!error) }))
+  if (!sent) return 1
+  child.unref()
   const poll = `roadmap codex status ${ids[0]}${LANES[lane].flag ? ` ${LANES[lane].flag}` : ''}`
   process.stderr.write(`roadmap codex: launched pgid ${child.pid} in ${worktree} — journal ${jPath}, log ${logPath}. Poll: ${poll}\n`)
   return 0
 }
 
-async function superviseExactLane(root, ids, lane, launchId) {
-  if (!['plan', 'review'].includes(lane) || !/^[0-9a-f-]{36}$/.test(launchId ?? '')) return 1
-  const path = journalPath(root, ids, lane)
+export async function superviseLane(root, ids, lane, launchId, { label, beforeNativeLaunch, spawnNative = spawnNativeChild } = {}) {
+  if (!['run', 'plan', 'review'].includes(lane) || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(launchId ?? '') || label !== undefined && (lane !== 'run' || !/^[a-z0-9]+$/.test(label) || label === 'closed')) return 1
+  const path = journalPath(root, ids, lane, { label })
   let journal
   try { journal = JSON.parse(readFileSync(path, 'utf8')) } catch { return 1 }
   const rootReal = realpathSync(root)
@@ -494,13 +481,31 @@ async function superviseExactLane(root, ids, lane, launchId) {
   }
   const initialHead = spawnSync('git', ['-C', worktreeReal, 'rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}'], { encoding: 'utf8' })
   if (initialHead.status !== 0 || initialHead.stdout.trim() !== journal.workingHead
-    || journal.workingHead !== journal.requestedHead) { process.stderr.write('supervisor: prelaunch HEAD refused\n'); return 1 }
+    || lane !== 'run' && journal.workingHead !== journal.requestedHead) { process.stderr.write('supervisor: prelaunch HEAD refused\n'); return 1 }
+  if (journalDeclineReason(journal)) return 1
+  const launchOwnership = value => {
+    if (value.worktreeIdentity) return resolveWorktreeOwnership(root, value)
+    try {
+      // Omission cannot downgrade a registered allocation to legacy compatibility.
+      if (registeredWorktreeIdentity(root, value.worktree, value.laneOwner)) return { state: 'refused' }
+      return { state: 'legacy', identity: null }
+    } catch { return { state: 'refused' } }
+  }
+  const ownership = launchOwnership(journal)
+  if (!['owned', 'legacy'].includes(ownership.state)) { process.stderr.write('supervisor: worktree ownership refused\n'); return 1 }
   const entry = resolveDriver('codex')
   let effective
   try { effective = nativeAuthority(journal.worktree, journal.authority) } catch (error) { process.stderr.write(`supervisor: authority refused ${error.message}\n`); return 1 }
+  const freeze = value => { if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value) }; return value }
+  if (beforeNativeLaunch) await beforeNativeLaunch(freeze(structuredClone({ journal, identity: ownership.identity ?? null })))
+  let reloaded
+  try { reloaded = JSON.parse(readFileSync(path, 'utf8')) } catch { return 1 }
+  if (!isDeepStrictEqual(reloaded, journal) || !isDeepStrictEqual(launchOwnership(reloaded), ownership)) { process.stderr.write('supervisor: launch-boundary identity changed\n'); return 1 }
+  const finalHead = spawnSync('git', ['-C', worktreeReal, 'rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}'], { encoding: 'utf8' })
+  if (finalHead.status !== 0 || finalHead.stdout.trim() !== journal.workingHead) { process.stderr.write('supervisor: launch-boundary HEAD changed\n'); return 1 }
   const logFd = openSync(journal.log, 'a')
   const promptFd = openSync(journal.prompt, 'r')
-  const { completion } = spawnNativeChild(entry.bin, effective.native.argv, {
+  const { completion } = spawnNative(entry.bin, effective.native.argv, {
     cwd: journal.worktree, detached: false, stdio: [promptFd, logFd, logFd],
   })
   closeSync(promptFd)
@@ -569,12 +574,30 @@ function governedPhaseTargets(root, ids, lane) {
  * reads (review), and dependency installation only where the mission needs the consumer's toolchain — the plan
  * act validates its phase file through the consumer's tsx. Returns 0 or an exit to propagate.
  */
-function ensureWorktree(root, { worktree, base, branch }) {
-  if (existsSync(worktree)) return { status: 0, created: false }
+function ensureWorktree(root, { worktree, base, branch, laneOwner }) {
+  if (existsSync(worktree)) {
+    try { return { status: 0, created: false, worktreeIdentity: registeredWorktreeIdentity(root, worktree, laneOwner) } }
+    catch (error) { process.stderr.write(`roadmap codex: ownership refused: ${error.message}\n`); return { status: 1, created: false } }
+  }
   const addArgs = branch ? [worktree, '-b', branch, base] : ['--detach', worktree, base]
   const wt = spawnSync('git', ['worktree', 'add', ...addArgs], { cwd: root, stdio: 'inherit' })
-  return { status: wt.status ?? 1, created: wt.status === 0 }
+  if (wt.status !== 0) return { status: wt.status ?? 1, created: false }
+  try {
+    const identity = createWorktreeIdentity(root, worktree, { laneOwner, expectedBranch: branch ? 'refs/heads/' + branch : null })
+    registerWorktreeIdentity(root, identity)
+    return { status: 0, created: true, registered: true, worktreeIdentity: identity }
+  } catch (error) {
+    process.stderr.write(`roadmap codex: ownership registration refused; preserved unowned worktree ${worktree}: ${error.message}\n`)
+    return { status: 1, created: true }
+  }
 }
+function unwindAllocation(root, allocation) {
+  if (!allocation.registered || allocation.journalWritten) return
+  try {
+    if (!removeWorktreeIdentity(root, allocation.worktreeIdentity)) process.stderr.write('roadmap codex: ownership unwind could not prove exact removal; worktree retained\n')
+  } catch (error) { process.stderr.write(`roadmap codex: ownership unwind refused; worktree retained: ${error.message}\n`) }
+}
+
 
 function installersAvailable(root) {
   for (const dir of [root, join(root, 'web')]) {
@@ -675,7 +698,7 @@ function carryRefreshPreflight(root, worktree, rel, requestedHead, journal) {
   return { ok: true, copy: true }
 }
 
-function runCodex(root, ids, argv, authority) {
+async function runCodex(root, ids, argv, authority) {
   const wi = argv.indexOf('--worktree')
   const bi = argv.indexOf('--base')
   const base = bi >= 0 ? argv[bi + 1] : 'develop'
@@ -718,23 +741,24 @@ function runCodex(root, ids, argv, authority) {
   mkdirSync(building, { recursive: true })
   if (!existsSync(worktree) && !installersAvailable(root)) return 1
 
-  const made = ensureWorktree(root, { worktree, base, branch: `codex/${ids.join('-')}` })
+  const made = ensureWorktree(root, { worktree, base, branch: `codex/${ids.join('-')}`, laneOwner: { kind: 'roadmap-codex', id: `run:${ids.join('-')}` } })
   if (made.status !== 0) return made.status
+  try {
+    const worktreeTargets = governedPhaseTargets(worktree, ids, 'run')
+    if (!worktreeTargets) return 1
+    const governance = governanceGate(worktree, worktreeTargets, 'run')
+    if (!governance) return 1
+    if (made.created) {
+      const installed = installWorktree(worktree)
+      if (installed !== 0) return installed
+    }
 
-  const worktreeTargets = governedPhaseTargets(worktree, ids, 'run')
-  if (!worktreeTargets) return 1
-  const governance = governanceGate(worktree, worktreeTargets, 'run')
-  if (!governance) return 1
-  if (made.created) {
-    const installed = installWorktree(worktree)
-    if (installed !== 0) return installed
-  }
-
-  // buildPrompt can still throw (a renamed/renumbered phase file) — resolve it BEFORE
-  // touching the previous run's hand-off, so a failed relaunch destroys no evidence.
-  const prompt = buildPrompt(root, ids, { modelPolicy, modelsArg: resolverArg, reportName })
-  preserveStaleReport(worktree, reportName)
-  return launch(root, ids, 'run', { worktree, base, prompt, governance, authority, modelPolicy, label, reportName })
+    // buildPrompt can still throw (a renamed/renumbered phase file) — resolve it BEFORE
+    // touching the previous run's hand-off, so a failed relaunch destroys no evidence.
+    const prompt = buildPrompt(root, ids, { modelPolicy, modelsArg: resolverArg, reportName })
+    preserveStaleReport(worktree, reportName)
+    return await launch(root, ids, 'run', { worktree, base, prompt, governance, authority, modelPolicy, label, reportName, allocation: made })
+  } finally { unwindAllocation(root, made) }
 }
 
 function exactLaneDecision(root, ids, lane, worktree, base, governance, authority, prompt, carriedPath = null, carriedRel = null) {
@@ -861,7 +885,7 @@ function preserveArchivedReviewRestart(restart) {
  * The review lane. No branch and no dependency install: the mission never builds and never commits, so
  * the worktree is a detached read-only copy — isolation that costs a checkout, not an install.
  */
-function reviewCodex(root, ids, argv, authority) {
+async function reviewCodex(root, ids, argv, authority) {
   const wi = argv.indexOf('--worktree')
   const bi = argv.indexOf('--base')
   const di = argv.indexOf('--doc')
@@ -898,44 +922,46 @@ function reviewCodex(root, ids, argv, authority) {
     }
   }
 
-  const made = ensureWorktree(root, { worktree, base, branch: null })
+  const made = ensureWorktree(root, { worktree, base, branch: null, laneOwner: { kind: 'roadmap-codex', id: `review:${ids.join('-')}` } })
   if (made.status !== 0) return made.status
-  const worktreeScope = governedPhaseTargets(worktree, ids, 'review')
-  if (!worktreeScope) return 1
-  const governance = governanceGate(worktree, [...worktreeScope, ...(doc ? [doc] : [])], 'review')
-  if (!governance) return 1
-  const decision = archived.restart
-    ? { status: null, reset: false }
-    : exactLaneDecision(root, ids, 'review', worktree, base, governance, authority, prompt, doc ? join(root, doc) : null, doc)
-  if (decision.status !== null) return decision.status
-  if (!decision.reset && !freshExactWorktree(root, worktree, base, made)) {
-    process.stderr.write('roadmap codex: review worktree is not a fresh registered checkout at the requested HEAD; refusing launch\n')
-    return 1
-  }
-  if (!decision.reset && doc) {
-    const requested = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], { encoding: 'utf8' })
-    const carry = requested.status === 0
-      ? carryRefreshPreflight(root, worktree, doc, requested.stdout.trim(), archived.restart?.journal ?? {})
-      : { ok: false, reason: `requested ref ${base} cannot be resolved` }
-    if (!carry.ok) {
-      process.stderr.write(`roadmap codex: review carry-in refused: ${carry.reason}; no child launched\n`)
+  try {
+    const worktreeScope = governedPhaseTargets(worktree, ids, 'review')
+    if (!worktreeScope) return 1
+    const governance = governanceGate(worktree, [...worktreeScope, ...(doc ? [doc] : [])], 'review')
+    if (!governance) return 1
+    const decision = archived.restart
+      ? { status: null, reset: false }
+      : exactLaneDecision(root, ids, 'review', worktree, base, governance, authority, prompt, doc ? join(root, doc) : null, doc)
+    if (decision.status !== null) return decision.status
+    if (!decision.reset && !freshExactWorktree(root, worktree, base, made)) {
+      process.stderr.write('roadmap codex: review worktree is not a fresh registered checkout at the requested HEAD; refusing launch\n')
       return 1
     }
-  }
-  let launchGovernance = governance
-  if (decision.reset) {
-    const refreshedScope = governedPhaseTargets(worktree, ids, 'review')
-    launchGovernance = refreshedScope && governanceGate(worktree, [...refreshedScope, ...(doc ? [doc] : [])], 'review')
-    if (!launchGovernance) return 1
-  }
-  if (decision.reset && decision.carryRefresh?.copy) {
-    mkdirSync(dirname(join(worktree, doc)), { recursive: true })
-    copyFileSync(join(root, doc), join(worktree, doc))
-  }
-  carryIn(root, worktree, doc)
-  preserveStaleReport(worktree, LANES.review.report)
-  if (archived.restart) preserveArchivedReviewRestart(archived.restart)
-  return launch(root, ids, 'review', { worktree, base, prompt, governance: launchGovernance, authority, carriedIn: doc })
+    if (!decision.reset && doc) {
+      const requested = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], { encoding: 'utf8' })
+      const carry = requested.status === 0
+        ? carryRefreshPreflight(root, worktree, doc, requested.stdout.trim(), archived.restart?.journal ?? {})
+        : { ok: false, reason: `requested ref ${base} cannot be resolved` }
+      if (!carry.ok) {
+        process.stderr.write(`roadmap codex: review carry-in refused: ${carry.reason}; no child launched\n`)
+        return 1
+      }
+    }
+    let launchGovernance = governance
+    if (decision.reset) {
+      const refreshedScope = governedPhaseTargets(worktree, ids, 'review')
+      launchGovernance = refreshedScope && governanceGate(worktree, [...refreshedScope, ...(doc ? [doc] : [])], 'review')
+      if (!launchGovernance) return 1
+    }
+    if (decision.reset && decision.carryRefresh?.copy) {
+      mkdirSync(dirname(join(worktree, doc)), { recursive: true })
+      copyFileSync(join(root, doc), join(worktree, doc))
+    }
+    carryIn(root, worktree, doc)
+    preserveStaleReport(worktree, LANES.review.report)
+    if (archived.restart) preserveArchivedReviewRestart(archived.restart)
+    return await launch(root, ids, 'review', { worktree, base, prompt, governance: launchGovernance, authority, carriedIn: doc, allocation: made })
+  } finally { unwindAllocation(root, made) }
 }
 
 /**
@@ -943,7 +969,7 @@ function reviewCodex(root, ids, argv, authority) {
  * validates it through the consumer's tsx), but exactly one file may change and the number is
  * reserved before launch — the planner never picks its own.
  */
-function planCodex(root, ids, argv, authority) {
+async function planCodex(root, ids, argv, authority) {
   const wi = argv.indexOf('--worktree')
   const bi = argv.indexOf('--base')
   const fi = argv.indexOf('--brief')
@@ -986,51 +1012,53 @@ function planCodex(root, ids, argv, authority) {
     }
   }
 
-  const made = ensureWorktree(root, { worktree, base, branch: `codex-plan/${ids.join('-')}` })
+  const made = ensureWorktree(root, { worktree, base, branch: `codex-plan/${ids.join('-')}`, laneOwner: { kind: 'roadmap-codex', id: `plan:${ids.join('-')}` } })
   if (made.status !== 0) return made.status
-  const governance = governanceGate(worktree, targets, 'plan')
-  if (!governance) return 1
-  const decision = exactLaneDecision(root, ids, 'plan', worktree, base, governance, authority, prompt, brief ? join(root, brief) : null, brief)
-  if (decision.status !== null) return decision.status
-  if (!decision.reset && !freshExactWorktree(root, worktree, base, made)) {
-    process.stderr.write('roadmap codex: plan worktree is not a fresh registered checkout at the requested HEAD; refusing launch\n')
-    return 1
-  }
-  if (!decision.reset && brief) {
-    const requested = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], { encoding: 'utf8' })
-    const carry = requested.status === 0
-      ? carryRefreshPreflight(root, worktree, brief, requested.stdout.trim(), {})
-      : { ok: false, reason: `requested ref ${base} cannot be resolved` }
-    if (!carry.ok) {
-      process.stderr.write(`roadmap codex: plan carry-in refused: ${carry.reason}; no child launched\n`)
+  try {
+    const governance = governanceGate(worktree, targets, 'plan')
+    if (!governance) return 1
+    const decision = exactLaneDecision(root, ids, 'plan', worktree, base, governance, authority, prompt, brief ? join(root, brief) : null, brief)
+    if (decision.status !== null) return decision.status
+    if (!decision.reset && !freshExactWorktree(root, worktree, base, made)) {
+      process.stderr.write('roadmap codex: plan worktree is not a fresh registered checkout at the requested HEAD; refusing launch\n')
       return 1
     }
-  }
-  let launchGovernance = governance
-  if (decision.reset) {
-    launchGovernance = governanceGate(worktree, targets, 'plan')
-    if (!launchGovernance) return 1
-  }
-  // Present here but NOT on base means a PREVIOUS run of this number authored it (refuseIfLive
-  // relaunches over a dead one) — a different cause needing the opposite remedy.
-  if (existsSync(join(worktree, phaseFile))) {
-    process.stderr.write(
-      `roadmap codex: ${phaseFile} already exists in ${worktree} but NOT on ${base} — a previous plan run of this number `
-        + 'committed it. Inspect or harvest that commit; this lane never authors over a predecessor\'s output.\n',
-    )
-    return 1
-  }
-  if (made.created) {
-    const installed = installWorktree(worktree)
-    if (installed !== 0) return installed
-  }
-  if (decision.reset && decision.carryRefresh?.copy) {
-    mkdirSync(dirname(join(worktree, brief)), { recursive: true })
-    copyFileSync(join(root, brief), join(worktree, brief))
-  }
-  carryIn(root, worktree, brief)
-  preserveStaleReport(worktree, LANES.plan.report)
-  return launch(root, ids, 'plan', { worktree, base, prompt, governance: launchGovernance, authority, carriedIn: brief })
+    if (!decision.reset && brief) {
+      const requested = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], { encoding: 'utf8' })
+      const carry = requested.status === 0
+        ? carryRefreshPreflight(root, worktree, brief, requested.stdout.trim(), {})
+        : { ok: false, reason: `requested ref ${base} cannot be resolved` }
+      if (!carry.ok) {
+        process.stderr.write(`roadmap codex: plan carry-in refused: ${carry.reason}; no child launched\n`)
+        return 1
+      }
+    }
+    let launchGovernance = governance
+    if (decision.reset) {
+      launchGovernance = governanceGate(worktree, targets, 'plan')
+      if (!launchGovernance) return 1
+    }
+    // Present here but NOT on base means a PREVIOUS run of this number authored it (refuseIfLive
+    // relaunches over a dead one) — a different cause needing the opposite remedy.
+    if (existsSync(join(worktree, phaseFile))) {
+      process.stderr.write(
+        `roadmap codex: ${phaseFile} already exists in ${worktree} but NOT on ${base} — a previous plan run of this number `
+          + 'committed it. Inspect or harvest that commit; this lane never authors over a predecessor\'s output.\n',
+      )
+      return 1
+    }
+    if (made.created) {
+      const installed = installWorktree(worktree)
+      if (installed !== 0) return installed
+    }
+    if (decision.reset && decision.carryRefresh?.copy) {
+      mkdirSync(dirname(join(worktree, brief)), { recursive: true })
+      copyFileSync(join(root, brief), join(worktree, brief))
+    }
+    carryIn(root, worktree, brief)
+    preserveStaleReport(worktree, LANES.plan.report)
+    return await launch(root, ids, 'plan', { worktree, base, prompt, governance: launchGovernance, authority, carriedIn: brief, allocation: made })
+  } finally { unwindAllocation(root, made) }
 }
 
 /**
@@ -1623,12 +1651,16 @@ export default async function run(argv) {
     const xi = argv.indexOf('--launch-id')
     const lane = li >= 0 ? argv[li + 1] : undefined
     const launchId = xi >= 0 ? argv[xi + 1] : undefined
-    const ids = argv.slice(1).filter((value) => /^\d+$/.test(value))
+    const labelIndex = argv.indexOf('--label')
+    const label = labelIndex >= 0 ? argv[labelIndex + 1] : undefined
+    const flagValues = new Set([li + 1, xi + 1, ...(labelIndex >= 0 ? [labelIndex + 1] : [])])
+    const ids = argv.filter((value, index) => index > 0 && !flagValues.has(index) && /^\d+$/.test(value))
     const started = await new Promise((resolveStart) => {
+      process.once('disconnect', () => resolveStart(false))
       process.once('message', (message) => resolveStart(message?.launchId === launchId))
       process.send?.({ ready: launchId })
     })
-    return started ? superviseExactLane(root, ids, lane, launchId) : 1
+    return started ? superviseLane(root, ids, lane, launchId, { label }) : 1
   }
   const arcId = ai >= 0 ? argv[ai + 1] : undefined
   if (ai >= 0 && (!arcId || arcId.startsWith('--') || !existsSync(join(roadmapRoot(root), 'arcs', `${arcId}.arc.ts`)))) {

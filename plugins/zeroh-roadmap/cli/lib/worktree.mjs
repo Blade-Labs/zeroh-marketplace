@@ -10,10 +10,12 @@
  * stolen. Claiming is a REGISTRY act only — git happens in ensureWorktree.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, realpathSync, rmSync, constants, openSync, closeSync, fstatSync, lstatSync, fsyncSync, unlinkSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { LANES, journalDeclineReason } from './codex-journal.mjs'
-import { mainCheckout } from './gitroot.mjs'
+import { mainCheckout, gitCommonDir } from './gitroot.mjs'
+import { randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 
 const git = (cwd, args) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 60_000, encoding: 'utf8' }).trim()
@@ -38,6 +40,21 @@ export class WorktreeError extends Error {
 }
 
 const registryPath = (root) => join(root, '.building', 'worktree-slots.json')
+function registryDirectory(root, { create = false } = {}) {
+  const dir = join(root, '.building')
+  if (create) mkdirSync(dir, { recursive: true })
+  try {
+    if (!lstatSync(dir).isDirectory() || realpathSync(dir) !== resolve(dir)) throw new WorktreeError('registry directory must be canonical and not a symlink')
+  } catch (error) { if (!create && error.code === 'ENOENT') return null; throw error }
+  return dir
+}
+function inspectRegistryFile(root) {
+  try {
+    if (!lstatSync(registryPath(root)).isFile()) throw new WorktreeError('registry must be a regular file, not a symlink')
+    return true
+  } catch (error) { if (error.code === 'ENOENT') return false; throw error }
+}
+
 
 const alive = (pid) => {
   try {
@@ -106,10 +123,25 @@ const reclaimable = (root, row) => {
 /** Tolerant registry read: an array, a {slots:[…]} wrapper, or a slot-keyed map all
  *  parse; anything else fails LOUD naming the accepted shapes — a silently-empty read
  *  would hand two sessions the same slot. */
-function readSlots(root) {
+function readRegistry(root) {
   const p = registryPath(root)
-  if (!existsSync(p)) return []
-  const raw = JSON.parse(readFileSync(p, 'utf8'))
+  if (!registryDirectory(root) || !inspectRegistryFile(root)) return { version: 2, slots: [], identities: [] }
+  let fd, raw
+  try {
+    fd = openSync(p, constants.O_RDONLY | constants.O_NOFOLLOW)
+    if (!fstatSync(fd).isFile()) throw new WorktreeError('registry must be a regular file')
+    raw = JSON.parse(readFileSync(fd, 'utf8'))
+  } finally { if (fd !== undefined) closeSync(fd) }
+  if (raw?.version === 2) {
+    if (!identityKeys(raw, 'version slots identities') || !Array.isArray(raw.slots) || !Array.isArray(raw.identities)) throw new WorktreeError('malformed ownership registry')
+    for (const identity of raw.identities) {
+      const reason = worktreeIdentityDeclineReason(identity)
+      if (reason) throw new WorktreeError('malformed registry identity: ' + reason)
+    }
+    for (const key of ['ownershipId', 'worktree', 'gitAdminDir']) if (new Set(raw.identities.map(row => row[key])).size !== raw.identities.length) throw new WorktreeError('ambiguous registry identity: ' + key)
+    return { version: 2, slots: raw.slots.map(r => ({ ...r, slot: Number(r.slot), pid: Number(r.pid) })), identities: raw.identities }
+  }
+  if (raw && !Array.isArray(raw) && Object.hasOwn(raw, 'version')) throw new WorktreeError('unsupported worktree registry version')
   let rows
   if (Array.isArray(raw)) rows = raw
   else if (raw && Array.isArray(raw.slots)) rows = raw.slots
@@ -119,8 +151,9 @@ function readSlots(root) {
     throw new WorktreeError(
       `worktree registry ${p} is unreadable — expected an array of {slot, pid} rows, a {slots: […]} wrapper, or a slot-keyed map`,
     )
-  return rows.map((r) => ({ ...r, slot: Number(r.slot), pid: Number(r.pid) }))
+  return { version: 2, slots: rows.map((r) => ({ ...r, slot: Number(r.slot), pid: Number(r.pid) })), identities: [] }
 }
+const readSlots = root => readRegistry(root).slots
 
 /** The registry rows as recorded (dead claimers included — pruning is claimSlot's job),
  *  each annotated with live-ness. THE reader for `worktree status`: a second tolerant
@@ -129,47 +162,134 @@ export function listSlots(root) {
   return readSlots(root).map((r) => ({ ...r, dir: `${root}-wt-${r.slot}`, live: rowLive(r) }))
 }
 
-function writeSlots(root, rows) {
-  mkdirSync(join(root, '.building'), { recursive: true })
-  // Write-temp-then-rename: a reader never sees a torn registry.
-  const tmp = `${registryPath(root)}.tmp-${process.pid}`
-  writeFileSync(tmp, JSON.stringify(rows, null, 2) + '\n')
-  renameSync(tmp, registryPath(root))
+function writeRegistry(root, value) {
+  const dir = registryDirectory(root, { create: true })
+  inspectRegistryFile(root)
+  const tmp = `${registryPath(root)}.${randomUUID()}.tmp`
+  let fd
+  try {
+    fd = openSync(tmp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+    writeFileSync(fd, JSON.stringify(value, null, 2) + '\n')
+    fsyncSync(fd); closeSync(fd); fd = undefined
+    registryDirectory(root); inspectRegistryFile(root)
+    renameSync(tmp, registryPath(root))
+    const dirFd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
+    try { fsyncSync(dirFd) } finally { closeSync(dirFd) }
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+    try { unlinkSync(tmp) } catch (error) { if (error.code !== 'ENOENT') throw error }
+  }
 }
 
-/** A directory-based mutex around the claim's read-modify-write: mkdir is atomic, so two
- *  simultaneous claims serialize instead of both reading the same registry and writing
- *  conflicting rows (a lost update hands two sessions one slot). Stale locks (a crashed
- *  claimer) break after LOCK_STALE_MS. */
-const LOCK_STALE_MS = 10_000
+function writeSlots(root, rows) {
+  writeRegistry(root, { ...readRegistry(root), slots: rows })
+}
+
+/** Kernel-held mutex shared by slot and ownership writers. Closing the descriptor or
+ * process death releases it; never delete a lock based on age or PID. */
 function withRegistryLock(root, fn) {
-  mkdirSync(join(root, '.building'), { recursive: true })
+  registryDirectory(root, { create: true })
   const lock = `${registryPath(root)}.lock`
-  const deadline = Date.now() + LOCK_STALE_MS
-  for (;;) {
-    try {
-      mkdirSync(lock)
-      break
-    } catch {
-      let stale = false
-      try {
-        stale = Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS
-      } catch {
-        continue // the holder released between our attempt and the stat — retry at once
-      }
-      if (stale) {
-        rmSync(lock, { recursive: true, force: true })
-        continue
-      }
-      if (Date.now() > deadline) throw new WorktreeError(`worktree registry lock ${lock} held past ${LOCK_STALE_MS}ms — a claimer is stuck or the lock is orphaned`)
-      execFileSync('sleep', ['0.05'])
-    }
-  }
+  let fd
   try {
+    fd = openSync(lock, constants.O_RDWR | constants.O_CREAT | constants.O_NOFOLLOW, 0o600)
+    if (!fstatSync(fd).isFile()) throw new WorktreeError('registry lock must be a regular file')
+    const deadline = Date.now() + 10_000
+    for (;;) {
+      try {
+        // FD3 shares the parent's open-file description, retaining the lock after
+        // this short helper exits until the parent's descriptor closes.
+        execFileSync('flock', ['--exclusive', '--nonblock', '3'], { stdio: ['ignore', 'pipe', 'pipe', fd] })
+        break
+      } catch (error) {
+        if (error.status !== 1) throw new WorktreeError('kernel registry lock unavailable: ' + error.message)
+        if (Date.now() >= deadline) throw new WorktreeError('worktree registry lock busy after 10000ms')
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50)
+      }
+    }
     return fn()
-  } finally {
-    rmSync(lock, { recursive: true, force: true })
-  }
+  } finally { if (fd !== undefined) closeSync(fd) }
+}
+
+const identityKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value)
+  && isDeepStrictEqual(Object.keys(value).sort(), fields.split(' ').sort())
+const absoluteCanonical = value => typeof value === 'string' && value.startsWith('/') && resolve(value) === value && !value.includes('\0')
+
+/** Structural parsing is shared with journals; filesystem agreement is a separate join. */
+export function worktreeIdentityDeclineReason(value) {
+  if (!identityKeys(value, 'version ownershipId repository gitCommonDir worktree gitAdminDir branch laneOwner') || value.version !== 1
+    || typeof value.ownershipId !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.ownershipId)) return 'malformed worktree identity fields or UUID'
+  if (['repository', 'gitCommonDir', 'worktree', 'gitAdminDir'].some(key => !absoluteCanonical(value[key]))) return 'identity paths must be absolute and canonical'
+  if (value.branch !== null && (typeof value.branch !== 'string' || !value.branch.startsWith('refs/heads/') || /[\0\r\n]/.test(value.branch))) return 'identity branch must be an exact branch ref or detached null'
+  if (!identityKeys(value.laneOwner, 'kind id') || value.laneOwner.kind !== 'roadmap-codex'
+    || typeof value.laneOwner.id !== 'string' || !/^(run|plan|review):[0-9]+(?:-[0-9]+)*$/.test(value.laneOwner.id)) return 'identity lane owner is malformed'
+  return null
+}
+
+/** Derive from live Git, without adopting or writing a worktree. */
+export function createWorktreeIdentity(root, worktree, { ownershipId = randomUUID(), laneOwner, expectedBranch } = {}) {
+  const repository = realpathSync(mainCheckout(root)), common = realpathSync(gitCommonDir(root))
+  const path = resolve(worktree), actual = realpathSync(path)
+  if (actual !== path || actual === repository) throw new WorktreeError('ownership requires a canonical linked worktree, not the primary checkout or a symlink')
+  if (realpathSync(gitCommonDir(actual)) !== common || !listWorktrees(root).some(row => resolve(row.dir) === actual)) throw new WorktreeError('worktree is not registered in this repository')
+  const gitAdminDir = realpathSync(git(actual, ['rev-parse', '--absolute-git-dir']))
+  if (gitAdminDir === common) throw new WorktreeError('ownership requires a linked worktree Git admin directory')
+  let branch = null
+  try { branch = git(actual, ['symbolic-ref', '-q', 'HEAD']) } catch (error) { if (error.status !== 1) throw error }
+  if (expectedBranch !== undefined && branch !== expectedBranch) throw new WorktreeError('worktree branch differs from allocation')
+  const identity = { version: 1, ownershipId, repository, gitCommonDir: common, worktree: actual, gitAdminDir, branch, laneOwner }
+  const reason = worktreeIdentityDeclineReason(identity)
+  if (reason) throw new WorktreeError(reason)
+  return identity
+}
+function validateLiveIdentity(root, identity) {
+  const reason = worktreeIdentityDeclineReason(identity)
+  if (reason) throw new WorktreeError(reason)
+  const actual = createWorktreeIdentity(root, identity.worktree, { ownershipId: identity.ownershipId, laneOwner: identity.laneOwner, expectedBranch: identity.branch })
+  if (!isDeepStrictEqual(actual, identity)) throw new WorktreeError('worktree identity differs from live Git')
+}
+export function registerWorktreeIdentity(root, identity) {
+  validateLiveIdentity(root, identity)
+  return withRegistryLock(root, () => {
+    const registry = readRegistry(root)
+    const conflicts = registry.identities.filter(row => row.ownershipId === identity.ownershipId || row.worktree === identity.worktree || row.gitAdminDir === identity.gitAdminDir)
+    if (conflicts.length) {
+      if (conflicts.length === 1 && isDeepStrictEqual(conflicts[0], identity)) return { status: 'existing', identity: structuredClone(identity) }
+      throw new WorktreeError('conflicting worktree ownership identity')
+    }
+    registry.identities.push(structuredClone(identity)); writeRegistry(root, registry)
+    return { status: 'registered', identity: structuredClone(identity) }
+  })
+}
+export function removeWorktreeIdentity(root, identity) {
+  const reason = worktreeIdentityDeclineReason(identity)
+  if (reason) throw new WorktreeError(reason)
+  return withRegistryLock(root, () => {
+    const registry = readRegistry(root), index = registry.identities.findIndex(row => row.ownershipId === identity.ownershipId)
+    if (index < 0) return false
+    if (!isDeepStrictEqual(registry.identities[index], identity)) throw new WorktreeError('ownership removal refused a changed record')
+    registry.identities.splice(index, 1); writeRegistry(root, registry); return true
+  })
+}
+/** A registry lookup is not ownership; callers still need the independent journal join. */
+export function registeredWorktreeIdentity(root, worktree, laneOwner) {
+  const actual = realpathSync(worktree), matches = readRegistry(root).identities.filter(row => row.worktree === actual)
+  if (!matches.length) return null
+  if (matches.length !== 1 || !isDeepStrictEqual(matches[0].laneOwner, laneOwner)) throw new WorktreeError('registered worktree belongs to a different lane')
+  validateLiveIdentity(root, matches[0]); return structuredClone(matches[0])
+}
+export function resolveWorktreeOwnership(root, journal) {
+  try {
+    if (!journal || typeof journal !== 'object') return { state: 'unowned', reason: 'journal is absent or malformed' }
+    const identity = journal.worktreeIdentity, reason = worktreeIdentityDeclineReason(identity)
+    if (reason) return { state: 'unowned', reason }
+    if (typeof journal.worktree !== 'string' || resolve(journal.worktree) !== identity.worktree || !isDeepStrictEqual(journal.laneOwner, identity.laneOwner)) return { state: 'unowned', reason: 'journal and identity bindings differ' }
+    if (journal.lane !== identity.laneOwner.id.split(':')[0] || !Array.isArray(journal.phases) || journal.phases.map(String).join('-') !== identity.laneOwner.id.split(':')[1]) return { state: 'unowned', reason: 'journal lane scope differs from identity' }
+    const registry = readRegistry(root), matches = registry.identities.filter(row => row.ownershipId === identity.ownershipId)
+    if (matches.length !== 1 || !isDeepStrictEqual(matches[0], identity)) return { state: 'unowned', reason: 'registry and journal identities differ or one is absent' }
+    validateLiveIdentity(root, identity)
+    return { state: 'owned', identity: structuredClone(identity) }
+  } catch (error) { return { state: 'unowned', reason: error.message } }
 }
 
 /**
