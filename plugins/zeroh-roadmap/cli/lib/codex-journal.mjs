@@ -9,6 +9,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { isDeepStrictEqual } from 'node:util'
+import { withFileLock } from './file-lock.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
@@ -86,7 +87,22 @@ function reviewGenerationPredecessor(root, path, journal, expected) {
   return bytes
 }
 
-export function writeJournalAtomic(root, journal, { label, closed = false, replaceGeneration } = {}) {
+function withJournalLock(path, fn) {
+  const dir = dirname(path)
+  mkdirSync(dir, { recursive: true })
+  if (realpathSync(dir) !== resolve(dir)) throw new Error('journal directory must be canonical')
+  const livePath = path.replace(/\.closed\.json$/, '.json')
+  return withFileLock(`${livePath}.lock`, fn, { label: 'journal' })
+}
+
+export function writeJournalAtomic(root, journal, options = {}) {
+  const reason = journalDeclineReason(journal)
+  if (reason) throw new Error('journal refused: ' + reason)
+  const path = journalPath(root, journal.phases, journal.lane ?? 'run', { label: options.label })
+  return withJournalLock(path, () => writeJournalUnlocked(root, journal, options))
+}
+
+function writeJournalUnlocked(root, journal, { label, closed = false, replaceGeneration } = {}) {
   const reason = journalDeclineReason(journal)
   if (reason) throw new Error('journal refused: ' + reason)
   if (typeof closed !== 'boolean') throw new Error('journal closed mode must be boolean')
@@ -228,6 +244,10 @@ export function findJournal(root, ids, lane = 'run', { worktree } = {}) {
  * mistake a closed lane for a live one, while findClosedJournal still resolves it.
  */
 export function archiveJournal(journalPath, journal, closedBy) {
+  return withJournalLock(journalPath, () => archiveJournalUnlocked(journalPath, journal, closedBy))
+}
+
+function archiveJournalUnlocked(journalPath, journal, closedBy) {
   const closed = journalPath.replace(/\.json$/, '.closed.json')
   if (closed === journalPath || journalPath.endsWith('.closed.json')) throw new Error('journal close refused: expected live journal path')
   const readExact = path => {
@@ -725,7 +745,12 @@ export function validatePlanArchiveCandidate(root, ids, journal, opts) {
 }
 
 /** The terminal report owner archives exact completed output before making a lane clean. */
-export function archiveCompletedLaneOutput(root, path, journal, { destination } = {}) {
+export function archiveCompletedLaneOutput(root, path, journal, options = {}) {
+  try { return withJournalLock(path, () => archiveCompletedLaneOutputUnlocked(root, path, journal, options)) }
+  catch (error) { return { journal, archived: journal.archivedReport ?? null, removed: false, reason: `archive held: ${error.message}` } }
+}
+
+function archiveCompletedLaneOutputUnlocked(root, path, journal, { destination } = {}) {
   let current = journal
   const hold = reason => ({ journal: current, archived: current.archivedReport ?? null, removed: false, reason })
   try {
@@ -756,7 +781,7 @@ export function archiveCompletedLaneOutput(root, path, journal, { destination } 
     if (!readRegular(archived).equals(bytes)) return hold('archive digest differs')
     const stamped = journal.archivedReport === archived && journal.archivedAt ? journal : { ...journal, archivedReport: archived, archivedAt: new Date().toISOString() }
     if (!isDeepStrictEqual(JSON.parse(readFileSync(path, 'utf8')), journal)) return hold('journal changed before archive stamp')
-    writeJournalAtomic(root, stamped, { label: journal.label, closed })
+    writeJournalUnlocked(root, stamped, { label: journal.label, closed })
     current = stamped
     if (!readRegular(source).equals(bytes) || resolveWorktreeOwnership(root, stamped).state !== 'owned') return { journal: stamped, archived, removed: false, reason: 'report or ownership changed before unlink' }
     // Remove only this exact archived output. Carry-in and unknown files are untouched.

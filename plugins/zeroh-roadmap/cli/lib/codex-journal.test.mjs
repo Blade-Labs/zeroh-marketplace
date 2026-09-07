@@ -476,3 +476,63 @@ test('40 gate repair: explicit review generation CAS preserves the completed pre
   assert.deepEqual(readFileSync(`${prior}.json`), oldBytes); assert.deepEqual(readFileSync(`${prior}.prompt.txt`), oldPrompt); assert.deepEqual(readFileSync(`${prior}.report.md`), report)
   assert.deepEqual(JSON.parse(readFileSync(path)), next); assert.equal(j.writeJournalAtomic(f.root, next), path)
 })
+
+
+for (const operation of ['write', 'close', 'consume']) {
+  test(`journal ${operation} waits for the shared process lock before mutation`, { timeout: 15_000 }, async () => {
+    const { spawn } = await import('node:child_process')
+    const { openSync, closeSync } = await import('node:fs')
+    const ownership = await import('./worktree.mjs')
+    const f = fixture({ completed: true })
+    f.journal.laneOwner = { kind: 'roadmap-codex', id: 'run:37' }
+    const identity = ownership.createWorktreeIdentity(f.root, f.worktree, {
+      ownershipId: '123e4567-e89b-42d3-a456-426614174037', laneOwner: f.journal.laneOwner, expectedBranch: 'refs/heads/lane/37',
+    })
+    ownership.registerWorktreeIdentity(f.root, identity)
+    Object.assign(f.journal, { worktreeIdentity: identity, ownerRoot: f.root, driverExit: { code: 0, signal: null }, finishedAt: '2026-09-07T01:00:00.000Z' })
+    f.journal.completionFingerprint = completionFingerprintOf(f.journal)
+    writeJournal(f.root, f.journal)
+    const before = readFileSync(f.path), reportPath = join(f.worktree, 'CODEX-REPORT.md'), reportBytes = readFileSync(reportPath)
+    const destination = join(f.root, '.building', 'lock-test-report.md')
+    const next = { ...f.journal, startedAt: '2026-09-07T04:00:00.000Z' }
+    const moduleUrl = new URL('./codex-journal.mjs', import.meta.url).href
+    const expression = operation === 'write'
+      ? `j.writeJournalAtomic(${JSON.stringify(f.root)},${JSON.stringify(next)})`
+      : operation === 'close'
+        ? `j.archiveJournal(${JSON.stringify(f.path)},${JSON.stringify(f.journal)},'test close')`
+        : `j.archiveCompletedLaneOutput(${JSON.stringify(f.root)},${JSON.stringify(f.path)},${JSON.stringify(f.journal)},{destination:${JSON.stringify(destination)}})`
+    let fd = openSync(`${f.path}.lock`, 'a+')
+    execFileSync('flock', ['--exclusive', '3'], { stdio: ['ignore', 'pipe', 'pipe', fd] })
+    const child = spawn(process.execPath, ['--input-type=module', '-e', `import * as j from ${JSON.stringify(moduleUrl)}; process.send('ready'); const result=${expression}; process.send({result});`], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+    let stderr = '', result
+    child.stderr.on('data', bytes => { stderr += bytes })
+    const done = new Promise(resolve => { child.once('error', error => resolve({ error })); child.once('exit', (code, signal) => resolve({ code, signal })) })
+    const ready = new Promise(resolve => child.once('message', resolve))
+    child.on('message', message => { if (typeof message === 'object') result = message.result })
+    try {
+      assert.equal(await Promise.race([ready, done]), 'ready', stderr)
+      await new Promise(resolve => setTimeout(resolve, 250))
+      assert.equal(child.exitCode, null, 'the writer cannot finish while the journal lock is held')
+      assert.deepEqual(readFileSync(f.path), before, 'live journal is unchanged under another owner')
+      assert.deepEqual(readFileSync(reportPath), reportBytes, 'report consumption must also wait')
+      assert.equal(existsSync(destination), false)
+      assert.equal(existsSync(f.path.replace(/\.json$/, '.closed.json')), false)
+      closeSync(fd); fd = undefined
+      assert.deepEqual(await done, { code: 0, signal: null }, stderr)
+      if (operation === 'write') assert.deepEqual(JSON.parse(readFileSync(f.path)), next)
+      else if (operation === 'close') {
+        assert.equal(existsSync(f.path), false)
+        assert.equal(JSON.parse(readFileSync(result)).closedBy, 'test close')
+      } else {
+        assert.equal(result.removed, true, result.reason)
+        assert.equal(existsSync(reportPath), false)
+        assert.deepEqual(readFileSync(destination), reportBytes)
+      }
+      assert.equal(existsSync(`${f.path}.lock`), true, 'the shared lock inode stays stable')
+    } finally {
+      if (fd !== undefined) closeSync(fd)
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+      await done
+    }
+  })
+}

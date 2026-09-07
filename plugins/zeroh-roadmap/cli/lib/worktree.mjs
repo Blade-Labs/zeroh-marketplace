@@ -16,6 +16,7 @@ import { LANES, journalDeclineReason, journalBindingDigestOf, journalBytesDigest
 import { mainCheckout, gitCommonDir } from './gitroot.mjs'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { withFileLock } from './file-lock.mjs'
 
 const git = (cwd, args) =>
   execFileSync('git', ['-C', cwd, ...args], { timeout: 60_000, encoding: 'utf8' }).trim()
@@ -186,30 +187,9 @@ function writeSlots(root, rows) {
   writeRegistry(root, { ...readRegistry(root), slots: rows })
 }
 
-/** Kernel-held mutex shared by slot and ownership writers. Closing the descriptor or
- * process death releases it; never delete a lock based on age or PID. */
 function withRegistryLock(root, fn) {
   registryDirectory(root, { create: true })
-  const lock = `${registryPath(root)}.lock`
-  let fd
-  try {
-    fd = openSync(lock, constants.O_RDWR | constants.O_CREAT | constants.O_NOFOLLOW, 0o600)
-    if (!fstatSync(fd).isFile()) throw new WorktreeError('registry lock must be a regular file')
-    const deadline = Date.now() + 10_000
-    for (;;) {
-      try {
-        // FD3 shares the parent's open-file description, retaining the lock after
-        // this short helper exits until the parent's descriptor closes.
-        execFileSync('flock', ['--exclusive', '--nonblock', '3'], { stdio: ['ignore', 'pipe', 'pipe', fd] })
-        break
-      } catch (error) {
-        if (error.status !== 1) throw new WorktreeError('kernel registry lock unavailable: ' + error.message)
-        if (Date.now() >= deadline) throw new WorktreeError('worktree registry lock busy after 10000ms')
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50)
-      }
-    }
-    return fn()
-  } finally { if (fd !== undefined) closeSync(fd) }
+  return withFileLock(`${registryPath(root)}.lock`, fn, { label: 'worktree registry', ErrorType: WorktreeError })
 }
 
 const identityKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value)
