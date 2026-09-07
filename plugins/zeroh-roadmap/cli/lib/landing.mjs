@@ -465,9 +465,9 @@ import { sweepOrphanCapbuildUnits } from './orphan-sweep.mjs'
 import { removeSidecar, releaseClaims } from './sidecar.mjs'
 import { bridgeEval, consumerSchemaPath, BridgeError } from './tsx-bridge.mjs'
 import { gitToplevel } from './gitroot.mjs'
-import { disposeWorktree, isSlotDir } from './worktree.mjs'
-import { archiveJournal, findJournal, RUN_LANE_ARTIFACTS } from './codex-journal.mjs'
-import { loadConfig, ConfigError } from './config.mjs'
+import { runWorktreeCleanup, isSlotDir } from './worktree.mjs'
+import { archiveJournal, archiveCompletedLaneOutput, findJournal, RUN_LANE_ARTIFACTS } from './codex-journal.mjs'
+import { loadConfig, ConfigError, worktreeGcPolicyOf } from './config.mjs'
 
 /**
  * The deferred arc-end full suite (do-arc Step 8, "First, the arc-end full-suite gate"):
@@ -615,7 +615,6 @@ function gitLayer(exec) {
       }
       return exec('git', ['-C', cwd, 'fetch', '.', `${arcBranchName}:${baseRefName}`])
     },
-    worktreeRemove: (cwd, wt) => run(cwd, ['worktree', 'remove', '--force', wt]),
     pushBaseRef: (checkout, baseRefName) => {
       if (baseRefName === 'master' || baseRefName === 'main') {
         return { refused: true, reason: `pushBaseRef refuses ${baseRefName} — a release is a held human act (do-arc Step 8 invariant)` }
@@ -735,7 +734,7 @@ function codexLaneDirs(home, members) {
  * blockers already cleared (landCommand gates it). Returns { outcome, exitCode, record,
  * pushed, pushRefused, summaryPath }. record is the ordered step log the tests replay.
  */
-export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null, dispose = disposeWorktree, archive = archiveJournal, mergeLessons = mergeLaneLessons }) {
+export async function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {}, state, consumerRoot = null, cleanup = runWorktreeCleanup, archiveOutput = archiveCompletedLaneOutput, cleanupDeps = {}, archive = archiveJournal, mergeLessons = mergeLaneLessons }) {
   const git = gitLayer(exec)
   const mp = config.mergePolicy
   const primary = mp.primaryCheckout
@@ -799,13 +798,14 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
   // already landed, and a cleanup fatal here reads as a failed land (attempt 6's crash).
   try {
     if (state.integrationModel === 'isolated' && state.sidecar?.worktree) {
-      git.worktreeRemove(home, state.sidecar.worktree)
-      record.push({ step: 'worktree-remove', worktree: state.sidecar.worktree })
+      record.push({ step: 'worktree-cleanup', worktree: state.sidecar.worktree, outcome: 'held', reason: 'ownership-uncertain' })
+      record.push({ step: 'cleanup', retained: ['.building sidecar', 'RESUME.md', 'claims'], reason: 'unowned sidecar recovery evidence retained' })
+    } else {
+      removeSidecar(home, arcId)
+      rmSync(join(roadmapRoot(home), 'arcs', `${arcId}-RESUME.md`), { force: true })
+      releaseClaims(home, state.members.map((m) => m.num))
+      record.push({ step: 'cleanup', removed: ['.building sidecar', 'RESUME.md', 'claims'] })
     }
-    removeSidecar(home, arcId)
-    rmSync(join(roadmapRoot(home), 'arcs', `${arcId}-RESUME.md`), { force: true })
-    releaseClaims(home, state.members.map((m) => m.num))
-    record.push({ step: 'cleanup', removed: ['.building sidecar', 'RESUME.md', 'claims'] })
     // Every landed member's codex lane, through the SAME rail the phase land uses. This is the
     // only done-moment those worktrees ever get: do-arc's SKILL names arc land the cleanup owner,
     // and while that was prose two fully merged exec lanes squatted slot dirs for weeks.
@@ -827,48 +827,29 @@ export function landArc({ repoRoot, arcId, config, exec = defaultExec, flags = {
       // exploding rm must not strand every remaining member's worktree, and the outer catch's
       // "remove the sidecar/claims by hand" would send the operator at the acts that succeeded.
       try {
-        const r = dispose(home, laneDir.dir, {
-          branch: laneDir.branch,
-          integrationRef: baseRef,
-          allowUntracked: RUN_LANE_ARTIFACTS,
-          pgid: laneDir.pgid,
-        })
-        disposedNow = r.disposed
-        record.push({
-          step: 'codex-lane-dispose',
-          worktree: laneDir.dir,
-          outcome: r.alreadyDisposed ? 'already-disposed' : r.disposed ? 'disposed' : 'refused',
-          ...(r.disposed ? { branchDeleted: r.branchDeleted === true } : { reason: r.reason }),
-          // `detail` on the PASS path carries a merged branch the rail could not delete; dropping
-          // it there makes the field dead and the leak invisible.
-          ...(r.detail ? { detail: r.detail } : {}),
-        })
+        const output = await archiveOutput(home, laneDir.journalPath, laneDir.journal)
+        const journal = output.journal ?? laneDir.journal
+        const closed = output.removed ? archive(laneDir.journalPath, journal, `arc land ${arcId}`) : laneDir.journalPath
+        const policy = { ...worktreeGcPolicyOf(config), integrationRef: baseRef }
+        const identity = journal.worktreeIdentity
+        const result = await cleanup(home, { apply: policy.enabled, ownershipIds: identity ? [identity.ownershipId] : [], policy }, cleanupDeps)
+        const receipt = [...result.resumed.items, ...(result.applied?.items ?? [])].find(row => row.ownershipId === identity?.ownershipId)
+        const item = result.plan.items.find(row => row.worktree === laneDir.dir)
+        disposedNow = receipt?.state === 'removed'
+        record.push({ step: 'codex-lane-dispose', worktree: laneDir.dir, outcome: disposedNow ? (receipt.disposal?.alreadyDisposed ? 'already-disposed' : 'disposed') : 'refused',
+          reason: disposedNow ? null : identity ? receipt?.reason ?? item?.classification ?? 'observation-required' : 'ownership-uncertain', journal: closed, cleanup: result })
         record.push({ step: 'lessons-merge', dir: laneDir.dir, merged: lessons.merged })
       } catch (e) {
         const detail = e?.message?.split('\n')[0] ?? String(e)
         record.push({ step: 'codex-lane-dispose', worktree: laneDir.dir, outcome: 'errored', detail })
         record.push({ step: 'lessons-merge', dir: laneDir.dir, merged: lessons.merged })
-        record.push({ step: 'cleanup', warning: `disposing the codex lane ${laneDir.dir} failed (${detail}) — the land itself is complete; remove that worktree by hand` })
+        record.push({ step: 'cleanup', warning: `disposing the codex lane ${laneDir.dir} failed (${detail}) — the land itself is complete; worktree and recovery records retained` })
         continue
       }
-      // Archive whatever is GONE — `alreadyDisposed` included, since a lane whose directory died
-      // is exactly when its journal must stop reading live. A refused lane still stands and still
-      // needs an operator; a journal claiming it closed is the one thing worse than no cleanup.
-      // Its OWN try: an archive failure is not a disposal outcome, and recording it as one would
-      // put two contradictory answers for the same worktree in the record.
-      if (!disposedNow) continue
-      try {
-        archive(laneDir.journalPath, laneDir.journal, 'arc land')
-      } catch (e) {
-        record.push({
-          step: 'cleanup',
-          warning: `the codex lane ${laneDir.dir} was disposed but its journal could not be ARCHIVED (${e?.message?.split('\n')[0] ?? e}) — `
-            + `\`codex status\` will read it as live until ${laneDir.journalPath} is renamed to .closed.json by hand`,
-        })
-      }
+
     }
   } catch (e) {
-    record.push({ step: 'cleanup', warning: `best-effort cleanup failed (${e?.message?.split('\n')[0] ?? e}) — the land itself is complete; remove the sidecar/claims by hand` })
+    record.push({ step: 'cleanup', warning: `best-effort cleanup failed (${e?.message?.split('\n')[0] ?? e}) — the land itself is complete; sidecar and claims retained for recovery` })
   }
 
   // RunnerSummary — validated through the consumer shape (seam 3), written keyed + pointer.
@@ -1030,7 +1011,7 @@ export async function landCommand(rest) {
       state.suiteMode = 'external'
       let res
       try {
-        res = landArc({ repoRoot: toplevel, arcId, config: cfg, flags, state })
+        res = await landArc({ repoRoot: toplevel, arcId, config: cfg, flags, state })
       } catch (e) {
         if (e instanceof LandingError || e instanceof BridgeError) {
           for (const l of e.messageLines ?? [e.message]) process.stderr.write(l + '\n')
@@ -1137,7 +1118,7 @@ export async function landCommand(rest) {
 
   let res
   try {
-    res = landArc({ repoRoot: toplevel, arcId, config: cfg, flags, state })
+    res = await landArc({ repoRoot: toplevel, arcId, config: cfg, flags, state })
   } catch (e) {
     if (e instanceof LandingError || e instanceof BridgeError) {
       for (const l of e.messageLines ?? [e.message]) process.stderr.write(l + '\n')

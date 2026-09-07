@@ -9,13 +9,14 @@
  *    AFTER scaffolding so `--root docs/roadmap` lands the config beside what was just created
  *    ($schema → relative path to the plugin schema, configVersion 1, the seven core
  *    gateCommands slots with honest placeholders). REFUSES (exit 1) if the file already exists
- *    — never clobber a consumer's config. init writes no optional blocks: absent mergePolicy
+ *    — never clobber a consumer's config. Cleanup scaffolds disabled; absent mergePolicy
  *    = hold-for-user is the safe default by construction.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { DEFAULT_WORKTREE_GC } from '../lib/config.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { roadmapRoot, resetRoadmapRootCache } from '../lib/roadmap-root.mjs'
 
@@ -72,6 +73,7 @@ export default async function run(argv) {
       $schema: relative(dirname(configPath), SCHEMA_ABS),
       configVersion: 1,
       ...PLACEHOLDER_CONFIG,
+      worktreeGc: { ...DEFAULT_WORKTREE_GC },
     }
     writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n')
     process.stderr.write(`roadmap init: wrote ${configPath}\n`)

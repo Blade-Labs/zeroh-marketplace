@@ -674,3 +674,18 @@ test('scaffold helper recovery: migration audit never asks consumers to copy the
   assert.match(audit.stdout, /Steady-state artifacts/)
   assert.doesNotMatch(audit.stdout, /scripts\/collect-phase-metrics\.ts/, 'migration must not reintroduce a removed scaffold dependency')
 })
+
+test('40.7 fresh scaffolds document safe disabled worktree GC policy without enabling destructive apply', () => {
+  const repo = newRepo()
+  const res = roadmap(repo, 'init')
+  assert.equal(res.status, 0, res.stderr)
+  const config = JSON.parse(readFileSync(join(repo, 'roadmap', 'roadmap.config.json'), 'utf8'))
+  assert.deepEqual(config.worktreeGc, {
+    enabled: false,
+    inactiveObservations: 2,
+    inactiveIntervalMs: 60_000,
+    deleteIntegratedBranches: false,
+  })
+  const check = roadmap(repo, 'config', 'check')
+  assert.equal(check.status, 0, check.stderr)
+})

@@ -1089,7 +1089,7 @@ function validateCleanupPolicy(policy) {
 
 /** Planning persists only inactivity observations, never removal authorization. */
 export async function planWorktreeCleanup(root, options = {}, deps = {}) {
-  if (!options || typeof options !== 'object' || Array.isArray(options) || Object.keys(options).some(key => !['invocationId', 'observedAt', 'inactiveObservations', 'inactiveIntervalMs', 'integrationRef', 'configuredProtectionRefs', 'deleteIntegratedBranches'].includes(key))) throw new WorktreeError('unknown cleanup option')
+  if (!options || typeof options !== 'object' || Array.isArray(options) || Object.keys(options).some(key => !['invocationId', 'observedAt', 'inactiveObservations', 'inactiveIntervalMs', 'integrationRef', 'configuredProtectionRefs', 'deleteIntegratedBranches', 'ownershipIds'].includes(key))) throw new WorktreeError('unknown cleanup option')
   root = realpathSync(root)
   const invocationId = options.invocationId ?? randomUUID(), observedAt = options.observedAt ?? new Date(deps.now ? deps.now() : Date.now()).toISOString()
   if (!UUID.test(invocationId) || !instant(observedAt)) throw new WorktreeError('invalid cleanup invocation identity or timestamp')
@@ -1097,7 +1097,9 @@ export async function planWorktreeCleanup(root, options = {}, deps = {}) {
     integrationRef: options.integrationRef ?? 'develop', configuredProtectionRefs: options.configuredProtectionRefs ?? [], deleteIntegratedBranches: options.deleteIntegratedBranches ?? false }
   validateCleanupPolicy(policy)
   const registry = readRegistry(root), repository = realpathSync(mainCheckout(root))
-  const dirs = [...new Set([...listWorktrees(root).map(row => resolve(row.dir)), ...registry.identities.map(row => row.worktree)])].filter(dir => dir !== root && dir !== repository).sort()
+  const selected = options.ownershipIds
+  validateCleanupSelection(selected, registry.identities.map(row => row.ownershipId))
+  const dirs = [...new Set([...listWorktrees(root).map(row => resolve(row.dir)), ...registry.identities.map(row => row.worktree)])].filter(dir => dir !== root && dir !== repository && (selected === undefined || registry.identities.some(row => row.worktree === dir && selected.includes(row.ownershipId)))).sort()
   const items = []
   for (const worktree of dirs) {
     const identity = registry.identities.find(row => row.worktree === worktree) ?? null
@@ -1287,4 +1289,28 @@ export async function resumeWorktreeCleanup(root, { ownershipIds } = {}, deps = 
     items.push(...result.items)
   }
   return freezeCleanup({ version: 1, planDigest: null, items })
+}
+
+function validateCleanupSelection(ids, known) {
+  if (ids === undefined) return
+  if (!Array.isArray(ids) || new Set(ids).size !== ids.length || ids.some(id => typeof id !== 'string' || !UUID.test(id) || !known.includes(id))) throw new WorktreeError('cleanup ownership selection contains unknown, duplicate or malformed IDs')
+}
+
+/** One terminal/operator invocation: recover selected operations, observe once, apply once. */
+export async function runWorktreeCleanup(root, { apply = false, ownershipIds, invocationId = randomUUID(), observedAt, policy } = {}, deps = {}) {
+  root = realpathSync(root)
+  if (!policy || typeof policy.enabled !== 'boolean' || typeof apply !== 'boolean') throw new WorktreeError('cleanup policy and explicit apply mode are required')
+  if (apply && !policy.enabled) throw new WorktreeError('worktreeGc.enabled must be true before cleanup apply')
+  const { enabled, ...configured } = policy
+  const scanPolicy = { inactiveObservations: configured.inactiveObservations, inactiveIntervalMs: configured.inactiveIntervalMs,
+    deleteIntegratedBranches: configured.deleteIntegratedBranches, integrationRef: configured.integrationRef ?? 'develop', configuredProtectionRefs: configured.configuredProtectionRefs ?? [] }
+  validateCleanupPolicy(scanPolicy)
+  const initial = readRegistry(root)
+  validateCleanupSelection(ownershipIds, [...initial.identities.map(row => row.ownershipId), ...Object.keys(initial.cleanup ?? {})])
+  const resumed = apply ? await resumeWorktreeCleanup(root, { ownershipIds }, deps) : { version: 1, planDigest: null, items: [] }
+  const registered = readRegistry(root).identities.map(row => row.ownershipId)
+  const remaining = ownershipIds?.filter(id => registered.includes(id))
+  const plan = await planWorktreeCleanup(root, { ...scanPolicy, ownershipIds: remaining, invocationId, ...(observedAt === undefined ? {} : { observedAt }) }, deps)
+  const applied = apply ? await applyWorktreeCleanup(root, plan, deps) : null
+  return freezeCleanup({ version: 1, invocationId, resumed, plan, applied })
 }

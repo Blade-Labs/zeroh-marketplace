@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, symlinkSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, symlinkSync, unlinkSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { classifyJournal, completionFingerprintOf, findJournal, writeJournal } from './codex-journal.mjs'
@@ -361,4 +361,80 @@ test('journal persists the complete worktree identity verbatim while legacy jour
 
   const legacy = fixture()
   assert.equal(findJournal(legacy.root, [37]).journal.worktreeIdentity, undefined, 'an existing identity-free journal remains readable but unowned')
+})
+
+test('40.7 completed owned output archives byte-exactly before unlink, while mismatched and legacy evidence stays', async () => {
+  const journals = await import('./codex-journal.mjs')
+  assert.equal(typeof journals.archiveCompletedLaneOutput, 'function')
+  const ownership = await import('./worktree.mjs')
+
+  const owned = fixture({ completed: true })
+  owned.journal.laneOwner = { kind: 'roadmap-codex', id: 'run:37' }
+  const identity = ownership.createWorktreeIdentity(owned.root, owned.worktree, {
+    ownershipId: '123e4567-e89b-42d3-a456-426614174037', laneOwner: owned.journal.laneOwner, expectedBranch: 'refs/heads/lane/37',
+  })
+  ownership.registerWorktreeIdentity(owned.root, identity)
+  owned.journal.worktreeIdentity = identity
+  owned.journal.ownerRoot = owned.root
+  owned.journal.driverExit = { code: 0, signal: null }
+  owned.journal.finishedAt = '2026-09-07T01:00:00.000Z'
+  owned.journal.completionFingerprint = completionFingerprintOf(owned.journal)
+  writeJournal(owned.root, owned.journal)
+  const reportPath = join(owned.worktree, 'CODEX-REPORT.md'); const reportBytes = readFileSync(reportPath)
+  const destination = join(owned.root, '.building', 'archived-owned-report.md')
+  const archived = journals.archiveCompletedLaneOutput(owned.root, owned.path, owned.journal, { destination })
+  assert.deepEqual(readFileSync(destination), reportBytes); assert.equal(archived.archived, destination); assert.equal(archived.removed, true); assert.equal(archived.reason, null)
+  assert.equal(existsSync(reportPath), false, 'unlink follows durable archive publication and journal stamp')
+  assert.deepEqual(journals.archiveCompletedLaneOutput(owned.root, owned.path, archived.journal, { destination }), archived, 'repeat is idempotent')
+
+  const mismatch = fixture({ completed: true }); writeFileSync(join(mismatch.worktree, 'CODEX-REPORT.md'), 'changed after digest\n')
+  const mismatchDestination = join(mismatch.root, '.building', 'must-not-publish.md')
+  const held = journals.archiveCompletedLaneOutput(mismatch.root, mismatch.path, mismatch.journal, { destination: mismatchDestination })
+  assert.equal(held.removed, false); assert.match(held.reason, /digest|identity|owned/i); assert.ok(existsSync(join(mismatch.worktree, 'CODEX-REPORT.md'))); assert.equal(existsSync(mismatchDestination), false)
+
+  const legacy = fixture({ completed: true })
+  const unowned = journals.archiveCompletedLaneOutput(legacy.root, legacy.path, legacy.journal, { destination: join(legacy.root, '.building', 'legacy.md') })
+  assert.equal(unowned.removed, false); assert.match(unowned.reason, /unowned|identity/i); assert.ok(existsSync(join(legacy.worktree, 'CODEX-REPORT.md')))
+})
+
+test('40.7 journal close publishes one exact immutable twin before unlink and replays safely', async () => {
+  const { archiveJournal } = await import('./codex-journal.mjs')
+  const f = fixture()
+  const original = readFileSync(f.path)
+  const closed = archiveJournal(f.path, f.journal, 'phase land')
+  assert.equal(existsSync(f.path), false)
+  const value = JSON.parse(readFileSync(closed, 'utf8'))
+  assert.deepEqual({ ...value, closedAt: undefined, closedBy: undefined }, { ...f.journal, closedAt: undefined, closedBy: undefined })
+  assert.equal(value.closedBy, 'phase land')
+  assert.ok(Number.isFinite(Date.parse(value.closedAt)))
+  const closedBytes = readFileSync(closed)
+  assert.equal(archiveJournal(f.path, f.journal, 'phase land'), closed)
+  assert.deepEqual(readFileSync(closed), closedBytes, 'identical post-publish replay is byte-stable')
+
+  writeFileSync(f.path, original)
+  assert.equal(archiveJournal(f.path, f.journal, 'phase land'), closed)
+  assert.equal(existsSync(f.path), false, 'both-copy crash recovery removes only the identical live journal')
+  assert.deepEqual(readFileSync(closed), closedBytes)
+
+  writeFileSync(f.path, original)
+  assert.throws(() => archiveJournal(f.path, { ...f.journal, workingHead: 'a'.repeat(40) }, 'phase land'), /conflict|different|refus|journal/i)
+  assert.deepEqual(readFileSync(f.path), original, 'a conflicting close preserves the exact live journal')
+  assert.deepEqual(readFileSync(closed), closedBytes, 'and never overwrites immutable closed evidence')
+})
+
+test('40.7 journal close preserves a prior launch before closing a new generation', async () => {
+  const { archiveJournal } = await import('./codex-journal.mjs')
+  const f = fixture()
+  f.journal.launchId = 'first-generation'
+  writeFileSync(f.path, JSON.stringify(f.journal))
+  const closed = archiveJournal(f.path, f.journal, 'phase land')
+  const oldBytes = readFileSync(closed)
+  const next = { ...f.journal, launchId: 'next-generation' }
+  writeFileSync(f.path, JSON.stringify(next))
+  assert.equal(archiveJournal(f.path, next, 'phase land'), closed)
+  const prior = f.path.replace(/\.json$/, `.prior.${encodeURIComponent(f.journal.launchId)}.json`)
+  assert.deepEqual(readFileSync(prior), oldBytes)
+  assert.equal(JSON.parse(readFileSync(closed)).launchId, next.launchId)
+  assert.equal(existsSync(f.path), false)
+  assert.equal(archiveJournal(f.path, next, 'phase land'), closed)
 })

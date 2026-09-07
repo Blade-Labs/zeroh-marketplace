@@ -19,7 +19,7 @@ import { MODEL_PRESETS } from './roles.mjs'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MOD = join(HERE, 'config.mjs')
 const SCHEMA_FILE = join(HERE, '..', 'roadmap.config.schema.json') // cli/roadmap.config.schema.json
-const { RoadmapConfigShape, ConfigError, loadConfig } = await import(MOD)
+const { RoadmapConfigShape, ConfigError, loadConfig, DEFAULT_WORKTREE_GC, worktreeGcPolicyOf } = await import(MOD)
 
 // The env override is a test-only escape hatch; never inherit a stray one.
 delete process.env.ROADMAP_CONFIG
@@ -814,4 +814,27 @@ test('modelPolicy model values use the alias vocabulary — typos fail at their 
     assert.ok(err instanceof ConfigError)
     assert.ok(err.messageLines.some((line) => line.startsWith(`${path}:`) && line.includes('sol')), err.message)
   }
+})
+
+test('40.7 worktreeGc defaults remain disabled and bounded when the block is absent', () => {
+  const parsed = RoadmapConfigShape.parse(validConfig())
+  assert.equal(parsed.worktreeGc, undefined, 'raw parsing preserves the authored optional shape')
+  assert.deepEqual(worktreeGcPolicyOf(parsed), {
+    enabled: false,
+    inactiveObservations: 2,
+    inactiveIntervalMs: 60_000,
+    deleteIntegratedBranches: false,
+  })
+  assert.ok(Object.isFrozen(DEFAULT_WORKTREE_GC), 'shared defaults cannot drift through caller mutation')
+})
+
+test('40.7 worktreeGc accepts one strict bounded policy and rejects unsafe thresholds or unknown keys', () => {
+  const accepted = { enabled: true, inactiveObservations: 3, inactiveIntervalMs: 1, deleteIntegratedBranches: true }
+  assert.deepEqual(RoadmapConfigShape.parse(validConfig({ worktreeGc: accepted })).worktreeGc, accepted)
+  for (const worktreeGc of [
+    { ...accepted, inactiveObservations: 1 },
+    { ...accepted, inactiveIntervalMs: 0 },
+    { ...accepted, inactivityMs: 60_000 },
+    { ...accepted, enabled: 'yes' },
+  ]) assert.throws(() => RoadmapConfigShape.parse(validConfig({ worktreeGc })), /worktreeGc|unrecognized|number|boolean/i)
 })

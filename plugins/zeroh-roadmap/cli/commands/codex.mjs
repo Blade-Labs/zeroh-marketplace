@@ -57,14 +57,14 @@ import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { gitToplevel } from '../lib/gitroot.mjs'
-import { ConfigError, integrationRefOf, loadConfig } from '../lib/config.mjs'
+import { ConfigError, integrationRefOf, loadConfig, worktreeGcPolicyOf } from '../lib/config.mjs'
 import { authorityProfileBounds, driverStamp, intersectAuthority, launchArgv, resolveDriver } from '../lib/drivers.mjs'
 import { resolveGovernance } from '../lib/governance.mjs'
 import { matchKeyFilesField } from '../lib/phasescan.mjs'
-import { disposeWorktree, groupAlive, isSlotDir, listWorktrees, createWorktreeIdentity, registerWorktreeIdentity, removeWorktreeIdentity, registeredWorktreeIdentity, resolveWorktreeOwnership } from '../lib/worktree.mjs'
+import { runWorktreeCleanup, groupAlive, isSlotDir, listWorktrees, createWorktreeIdentity, registerWorktreeIdentity, removeWorktreeIdentity, registeredWorktreeIdentity, resolveWorktreeOwnership } from '../lib/worktree.mjs'
 import {
   LANES, prevReportName, journalPath, journalDeclineReason,
-  JournalUnreadableError, findJournal, findClosedJournal, writeJournal, writeJournalAtomic,
+  archiveCompletedLaneOutput, JournalUnreadableError, findJournal, findClosedJournal, writeJournal, writeJournalAtomic,
   classifyJournal, completionFingerprintOf, journalBindingDigestOf, journalBytesDigestOf,
   validateArchivedReviewCompletion, validateLaneCompletion, validatePlanArchiveCandidate,
 } from '../lib/codex-journal.mjs'
@@ -460,7 +460,7 @@ async function launch(root, ids, lane, { worktree, base, prompt, governance, aut
   return 0
 }
 
-export async function superviseLane(root, ids, lane, launchId, { label, beforeNativeLaunch, spawnNative = spawnNativeChild } = {}) {
+export async function superviseLane(root, ids, lane, launchId, { label, beforeNativeLaunch, spawnNative = spawnNativeChild, cleanup = runWorktreeCleanup, archiveOutput = archiveCompletedLaneOutput, cleanupDeps = {} } = {}) {
   if (!['run', 'plan', 'review'].includes(lane) || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(launchId ?? '') || label !== undefined && (lane !== 'run' || !/^[a-z0-9]+$/.test(label) || label === 'closed')) return 1
   const path = journalPath(root, ids, lane, { label })
   let journal
@@ -521,6 +521,7 @@ export async function superviseLane(root, ids, lane, launchId, { label, beforeNa
   }
   if (outcome.code !== 0) {
     writeJournalAtomic(root, finalized)
+    await requestLaneCleanup(root, finalized, { cleanup, cleanupDeps })
     return outcome.code ?? 1
   }
   let report
@@ -1061,95 +1062,44 @@ async function planCodex(root, ids, argv, authority) {
   } finally { unwindAllocation(root, made) }
 }
 
-/**
- * The review lane's done-moment, executed.
- *
- * A review lane is a detached read-only worktree: no branch, no commits, no land — so it has no
- * done-VERB, and the operator ruling forbids inventing one (no standalone close, no timer reaper).
- * Consuming the verdict is therefore the only honest close, which is why `status` gains a side
- * effect here rather than somewhere more polite.
- *
- * Order is the safety: COPY the verdict out FIRST, then dispose. A move would leave an operator
- * sent to resolve a refusal standing in a worktree whose report is gone. Disposal is
- * untracked-tolerant because everything a review lane leaves behind is untracked BY DESIGN — its
- * own CODEX-REVIEW.md, the --doc copy carryIn() wrote — so only a MODIFIED TRACKED file, the one
- * thing a read-only lane should never have produced, refuses. No branch is ever passed: the lane
- * owns none, and disposeWorktree deletes a merged branch it is given.
- *
- * The journal keeps its LIVE name and is stamped in place. Renaming it to .closed.json here would
- * drop it out of findJournal, and the very next `status` would regress to "no journal covers".
- */
-function archiveReviewLane(root, jPath, journal, reportPath) {
-  const archived = jPath.replace(/\.json$/, '-REPORT.md')
-  let stamped = journal
-  // The RELOCATION is one-shot, keyed on archivedAt: the copy is unconditional within that (a
-  // relaunched review of the same ids finds the PREVIOUS verdict sitting at exactly this path,
-  // and skipping the write would leave `status` serving a superseded review forever).
-  if (!journal.archivedAt) {
-    if (existsSync(reportPath)) copyFileSync(reportPath, archived)
-    stamped = { ...journal, archivedAt: new Date().toISOString(), archivedReport: archived }
-    writeFileSync(jPath, JSON.stringify(stamped, null, 2) + '\n')
+/** Terminal callers share selected cleanup; an unowned lane selects nothing and stays. */
+async function requestLaneCleanup(root, journal, { cleanup = runWorktreeCleanup, cleanupDeps = {} } = {}) {
+  try {
+    const config = loadConfig(root), policy = { ...worktreeGcPolicyOf(config), integrationRef: integrationRefOf(config) }
+    return await cleanup(root, { apply: policy.enabled, ownershipIds: journal.worktreeIdentity ? [journal.worktreeIdentity.ownershipId] : [], policy }, cleanupDeps)
+  } catch (error) { return { state: 'held', reason: 'cleanup-unavailable', detail: error.message } }
+}
+function laneCleanupOutcome(result, journal) {
+  if (!journal.worktreeIdentity) return { removed: false, reason: 'ownership-uncertain' }
+  const id = journal.worktreeIdentity.ownershipId
+  const receipt = [...(result.resumed?.items ?? []), ...(result.applied?.items ?? [])].find(row => row.ownershipId === id)
+  const item = result.plan?.items.find(row => row.identity?.ownershipId === id)
+  return { removed: receipt?.state === 'removed', reason: receipt?.reason ?? item?.classification ?? result.reason ?? 'observation-required' }
+}
+async function consumeLaneOutput(root, jPath, journal, reportPath, { cleanup = runWorktreeCleanup, archiveOutput = archiveCompletedLaneOutput, cleanupDeps = {} } = {}) {
+  const output = await archiveOutput(root, jPath, journal)
+  let stamped = output.journal ?? journal, archived = output.archived ?? null
+  // Legacy output may still be copied for the reader, but never unlinked or adopted.
+  if (!journal.worktreeIdentity) {
+    archived = journal.archivedReport ?? jPath.replace(/\.json$/, '-REPORT.md')
+    if (!journal.archivedAt && existsSync(reportPath)) {
+      copyFileSync(reportPath, archived)
+      stamped = { ...journal, archivedAt: new Date().toISOString(), archivedReport: archived }
+      writeJournalAtomic(root, stamped, { label: journal.label })
+    }
   }
-  // The DISPOSAL is not: a refusal is a state that can change. `state === 'complete'` with a LIVE
-  // group is reachable — a driver writes its sentinel before its process group exits, and the
-  // poll loop reads status in between — so a one-shot done-moment would refuse 'live' once and
-  // leave the worktree forever, which is the leak class this rail exists to close and which no
-  // sweep verb is allowed to mop up. Retry on every read until the lane is actually gone.
-  // The third disposal call site, and the one that fires from a READ command — so it needs the
-  // same slot refusal the two landing verbs carry. `codex review <N> --worktree <root>-wt-3`
-  // names a provisioned slot, and untracked-tolerance means even its node_modules would not
-  // refuse: the slot would be force-removed while its registry row still claims a live path.
-  if (isSlotDir(root, journal.worktree)) {
-    process.stderr.write(
-      `roadmap codex: the review verdict is archived at ${archived}, but ${journal.worktree} is a session SLOT, not a review lane — `
-        + 'refusing to remove it; slot retirement is a held human act\n',
-    )
-    return { journal: stamped, archived }
-  }
-  const r = disposeWorktree(root, journal.worktree, { branch: null, untrackedTolerant: true, pgid: journal.pgid ?? null })
-  if (!r.disposed && !r.alreadyDisposed) {
-    process.stderr.write(
-      `roadmap codex: the review verdict is archived at ${archived}, but its worktree was KEPT (${r.reason}) — ${r.detail}\n`,
-    )
-  }
-  return { journal: stamped, archived }
+  const result = await requestLaneCleanup(root, stamped, { cleanup, cleanupDeps })
+  const outcome = laneCleanupOutcome(result, stamped)
+  process.stderr.write(`roadmap codex: ${journal.lane} output ${archived ? `archived at ${archived}` : 'retained'}; worktree ${outcome.removed ? 'removed' : `KEPT (${outcome.reason})`}\n`)
+  return { journal: stamped, archived, cleanup: result }
+}
+async function archiveReviewLane(root, jPath, journal, reportPath, options = {}) {
+  return consumeLaneOutput(root, jPath, journal, reportPath, options)
 }
 
-/**
- * The plan lane's done-moment, executed.
- *
- * The plan lane had no close at all. Its ONE output — roadmap/phases/phase-<N>.phase.ts — is
- * cherry-picked to the primary by the supervising session, and the worktree plus its
- * `codex-plan/<ids>` branch then squat forever (atlas-codex-plan-22 outlived its plan by weeks).
- * The review lane's ratified pattern is the arc-LOCKED design to mirror: consume the hand-off on a
- * status READ, archive it, dispose the lane. Order is the same safety — COPY the plan out FIRST,
- * then remove, so a refusal never leaves an operator standing in a worktree whose plan is gone.
- *
- * What cannot be mirrored is disposeWorktree. Its orphan check is SHA-REACHABILITY, and a harvest
- * is a cherry-pick: the landed commit carries the same bytes under a different sha, so the rail
- * would read every legitimately harvested lane as committed-nowhere-else and refuse it forever.
- * Harvest is CONTENT-carried, and the plan lane's ONE-FILE invariant (the plan envelope's "ONE FILE
- * MAY CHANGE") is what makes a content proof TOTAL — one file, one blob, one question. Guards
- * (a)-(d) below re-provide the liveness and dirt safety the rail would have given, at equal
- * strictness; weakening disposeWorktree with an override flag was considered and rejected, because
- * it would soften that rail for every other caller.
- *
- * THE HARVEST PROOF HAS TWO ARMS (architect amendment A2). Strict byte-equality at the integration
- * tip alone would refuse the NORMAL flow: a Mode A repair routinely edits the harvested phase file
- * again on the integration ref. So the lane counts as harvested when its committed blob either IS
- * the blob at `<integrationRef>:<phaseFile>`, or appears anywhere in that path's committed history
- * there. Both arms read `git rev-parse <ref>:<path>` — committed objects on both sides, never a
- * working-tree file. A never-harvested lane, and a re-plan of the same number, put that blob in
- * neither place.
- *
- * Every refusal KEEPS the lane, names its reason, and names what to do about it. Refusing is never
- * an error: the caller's own act — the status read — already succeeded.
- *
- * The journal keeps its LIVE name and is stamped in place, exactly as archiveReviewLane does:
- * renaming it to .closed.json would drop it out of findJournal and the very next read would regress
- * to "no journal covers".
- */
-function archivePlanLane(root, jPath, journal, reportPath) {
+/** Consume a verified harvested plan before requesting the same conservative cleanup.
+ * Content-equivalent harvest does not substitute for Git ancestry in the disposer. */
+async function archivePlanLane(root, jPath, journal, reportPath, options = {}) {
   const wt = journal.worktree
   const ids = (journal.phases ?? []).map(String)
   const branch = `codex-plan/${ids.join('-')}`
@@ -1169,22 +1119,10 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     return { ok: r.status === 0, out: `${r.stdout ?? ''}${r.stderr ?? ''}` }
   }
 
-  // RE-ENTRY on an ALREADY-CONSUMED lane. The tree is gone and the plan is archived, so the only
-  // thing that can still be stranded is the BRANCH: a `branch -D` that lost to a ref lock on the
-  // closing read is announced once and then never retried and never re-reported, because both
-  // re-entry conditions have gone false. That is a silent leak of exactly the class this phase
-  // exists to end, so the retry lives here rather than in a sweep verb nobody is allowed to add.
+  // Re-entry uses the retained cleanup operation; no separate branch-deletion path.
   if (journal.archivedAt && !existsSync(wt)) {
-    const stranded = q(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])
-    if (!stranded.ok) return { journal, archived: journal.archivedReport ?? null }
-    const retry = q(root, ['branch', '-D', branch])
-    process.stderr.write(
-      retry.ok
-        ? `roadmap codex: ${branch} was stranded by an earlier close (its worktree is already gone) and is now deleted\n`
-        : `roadmap codex: ${branch} is STILL stranded — its worktree was disposed on an earlier read, but the branch will not delete: ${retry.out.trim()}\n`
-          + `  Delete it by hand: git -C ${root} branch -D ${branch}\n`,
-    )
-    return { journal, archived: journal.archivedReport ?? null }
+    const result = await requestLaneCleanup(root, journal, options)
+    return { journal, archived: journal.archivedReport ?? null, cleanup: result }
   }
 
   // (a) LIVENESS. `state === 'complete'` with a live group is reachable — a driver writes its
@@ -1252,7 +1190,7 @@ function archivePlanLane(root, jPath, journal, reportPath) {
                 + `Confirm with git -C ${wt} log --oneline ${base}..HEAD (empty = the lane added nothing of its own). `
               : `${phaseFile} is not committed at this lane's HEAD at all, so there is no plan here to harvest and nothing this close can prove. `)
             + `Either way ${join(wt, LANES.plan.report)} is the only record of what this lane did: read it, and if you then remove the lane, keep that record — `
-            + `cp ${join(wt, LANES.plan.report)} ${jPath.replace(/\.json$/, '-REPORT.md')} && git -C ${root} worktree remove --force ${wt} && git -C ${root} branch -D ${branch}. `
+            + `inspect its report at ${join(wt, LANES.plan.report)} and run roadmap worktree gc --json from ${root}. `
           : '')
         + 'The harvest proof covers that one path, so anything else would ride out of the lane unproven; inspect the branch and land or drop the extra work by hand',
     )
@@ -1320,38 +1258,7 @@ function archivePlanLane(root, jPath, journal, reportPath) {
     )
   }
 
-  // PASS. Copy the plan out BEFORE anything is removed. The relocation is one-shot, keyed on
-  // archivedAt exactly as archiveReviewLane keys it. archivedReport stays NULL when there was
-  // nothing to copy — a tree that died before this read took its hand-off with it, and stamping a
-  // path to a file that exists nowhere is worse than saying there is none.
-  const archived = existsSync(reportPath) ? jPath.replace(/\.json$/, '-REPORT.md') : null
-  let stamped = journal
-  if (!journal.archivedAt) {
-    if (archived) copyFileSync(reportPath, archived)
-    stamped = { ...journal, archivedAt: new Date().toISOString(), archivedReport: archived }
-    writeFileSync(jPath, JSON.stringify(stamped, null, 2) + '\n')
-  }
-  const removed = q(root, ['worktree', 'remove', '--force', wt])
-  if (!removed.ok) {
-    process.stderr.write(
-      `roadmap codex: the plan is ${archived ? `archived at ${archived}` : 'gone with its hand-off (nothing to archive)'}, but its worktree ${wt} could NOT be removed — ${removed.out.trim()}\n`
-        + `  No sweep verb will come back for it: finish by hand from ${root} — git worktree remove --force ${wt} && git branch -D ${branch} && git worktree prune\n`,
-    )
-    return { journal: stamped, archived }
-  }
-  // A branch that will not delete is a leak the caller would otherwise print "consumed" over.
-  const del = q(root, ['branch', '-D', branch])
-  if (!del.ok) {
-    process.stderr.write(`roadmap codex: the plan lane was removed, but its branch ${branch} could NOT be deleted — ${del.out.trim()}\n`)
-  }
-  q(root, ['worktree', 'prune'])
-  process.stderr.write(
-    // `archived` is this read's copy; on a re-entry after a failed removal the earlier read's copy
-    // is the honest answer, and reporting "nothing to archive" over it would be a lie.
-    `roadmap codex: plan lane consumed — ${archived ?? stamped.archivedReport ? `plan archived at ${archived ?? stamped.archivedReport}` : `no ${LANES.plan.report} was left to archive`}`
-      + `; worktree ${wt}${del.ok ? ` and branch ${branch}` : ''} disposed\n`,
-  )
-  return { journal: stamped, archived }
+  return consumeLaneOutput(root, jPath, journal, reportPath, options)
 }
 
 /**
@@ -1480,7 +1387,8 @@ function nextStepHint(lane, state, journal, reportPath, root) {
   return null
 }
 
-function statusCodex(root, ids, lane = 'run') {
+export async function statusCodex(root, ids, lane = 'run', { cleanup = runWorktreeCleanup, archiveOutput = archiveCompletedLaneOutput, cleanupDeps = {} } = {}) {
+  const cleanupOptions = { cleanup, archiveOutput, cleanupDeps }
   let found
   try {
     found = findJournal(root, ids, lane)
@@ -1493,12 +1401,10 @@ function statusCodex(root, ids, lane = 'run') {
     // phase whose lane ran, landed and was cleaned up reads exactly like a phase that never ran.
     const closed = findClosedJournal(root, ids, lane)
     if (closed) {
-      // `report: null`, never the journal's bare NAME: the run lane's report is an allowUntracked
-      // artifact, so the land force-removed it with the worktree and there is no relocated copy
-      // (unlike the review lane, whose verdict IS copied out). Naming a file that exists nowhere
-      // is worse than saying there is none.
+      const cleanupResult = await requestLaneCleanup(root, closed.journal, cleanupOptions)
+      // Closed output is readable only while its archived copy actually exists.
       process.stdout.write(
-        JSON.stringify({ ...closed.journal, state: 'closed', alive: false, sentinel: null, report: null, journal: closed.path }, null, 2) + '\n',
+        JSON.stringify({ ...closed.journal, state: 'closed', alive: false, sentinel: null, report: closed.journal.archivedReport && existsSync(closed.journal.archivedReport) ? closed.journal.archivedReport : null, journal: closed.path, cleanup: cleanupResult }, null, 2) + '\n',
       )
       return 0
     }
@@ -1583,12 +1489,13 @@ function statusCodex(root, ids, lane = 'run') {
         const archive = validatePlanArchiveCandidate(root, missionIds, j)
         if (!archive.valid) refusal = archive
         if (archive.valid) {
-          const consumed = archivePlanLane(root, jPath, j, archive.reportPath)
-          if (consumed.journal.archivedAt && !existsSync(j.worktree)) {
+          const consumed = await archivePlanLane(root, jPath, j, archive.reportPath, cleanupOptions)
+          if (consumed.journal.archivedAt && consumed.archived && existsSync(consumed.archived)) {
             process.stdout.write(JSON.stringify({
               ...consumed.journal, state: 'historical-plan-consumed', alive: false, sentinel: null,
               report: consumed.archived ?? consumed.journal.archivedReport ?? null,
               freshForRequestedHead: false, originalRequestedHead: archive.originalRequestedHead,
+              worktreeRetained: existsSync(j.worktree), cleanup: consumed.cleanup ?? null,
               currentRequestedHead: request.status === 0 ? request.stdout.trim() : null,
             }, null, 2) + '\n')
             return 0
@@ -1613,7 +1520,7 @@ function statusCodex(root, ids, lane = 'run') {
   let journal = j
   let reported = readFrom
   if (lane === 'review' && state === 'complete' && (!j.archivedAt || existsSync(j.worktree))) {
-    const done = archiveReviewLane(root, jPath, j, reportPath)
+    const done = await archiveReviewLane(root, jPath, j, reportPath, cleanupOptions)
     journal = done.journal
     reported = existsSync(reportPath) ? reportPath : done.archived
   }
@@ -1622,13 +1529,14 @@ function statusCodex(root, ids, lane = 'run') {
   // enters on EVERY complete read: an already-consumed lane can still be carrying a branch that
   // failed to delete, and archivePlanLane's own first arm is what retries and re-reports it.
   if (lane === 'plan' && state === 'complete') {
-    const done = archivePlanLane(root, jPath, j, reportPath)
+    const done = await archivePlanLane(root, jPath, j, reportPath, cleanupOptions)
     journal = done.journal
     if (done.archived) reported = existsSync(reportPath) ? reportPath : done.archived
   }
+  const cleanupResult = !alive && (lane === 'run' || state !== 'complete') ? await requestLaneCleanup(root, journal, cleanupOptions) : null
   // The journal spreads FIRST: `j.report` is the bare report NAME, so spreading it last would
   // overwrite both the path status resolved and the `null` that marks a stale report.
-  process.stdout.write(JSON.stringify({ ...journal, state, alive, sentinel, report: reported ?? null, ...(staleReport ? { staleReport } : {}) }, null, 2) + '\n')
+  process.stdout.write(JSON.stringify({ ...journal, state, alive, sentinel, report: reported ?? null, ...(staleReport ? { staleReport } : {}), ...(cleanupResult ? { cleanup: cleanupResult } : {}) }, null, 2) + '\n')
   const hint = nextStepHint(lane, state, journal, reportPath, root)
   if (hint) process.stderr.write(`next: ${hint}\n`)
   return state === 'complete' ? 0 : state === 'running' ? 3 : 2

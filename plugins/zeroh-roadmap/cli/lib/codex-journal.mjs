@@ -10,12 +10,13 @@
 import { execFileSync } from 'node:child_process'
 import { isDeepStrictEqual } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
-import { basename, isAbsolute, join, resolve } from 'node:path'
+import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { publishImmutableFile } from './sidecar.mjs'
 import { roadmapRootRel } from './roadmap-root.mjs'
 import { resolveGovernance } from './governance.mjs'
 import { intersectAuthority } from './drivers.mjs'
-import { groupAlive, listWorktrees, worktreeIdentityDeclineReason } from './worktree.mjs'
+import { groupAlive, listWorktrees, worktreeIdentityDeclineReason, resolveWorktreeOwnership } from './worktree.mjs'
 
 /**
  * One entry per mission. Adding a lane is adding an entry here — the launcher, the liveness guard,
@@ -47,10 +48,12 @@ export function writeJournal(root, journal, options = {}) {
   return writeJournalAtomic(root, journal, options)
 }
 
-export function writeJournalAtomic(root, journal, { label } = {}) {
+export function writeJournalAtomic(root, journal, { label, closed = false } = {}) {
   const reason = journalDeclineReason(journal)
   if (reason) throw new Error('journal refused: ' + reason)
-  const path = journalPath(root, journal.phases, journal.lane ?? 'run', { label })
+  if (typeof closed !== 'boolean') throw new Error('journal closed mode must be boolean')
+  const livePath = journalPath(root, journal.phases, journal.lane ?? 'run', { label })
+  const path = closed ? livePath.replace(/\.json$/, '.closed.json') : livePath
   if (existsSync(path)) {
     const previous = JSON.parse(readFileSync(path, 'utf8'))
     if (previous?.worktreeIdentity !== undefined && !isDeepStrictEqual(previous.worktreeIdentity, journal.worktreeIdentity)) throw new Error('journal worktree identity cannot change or disappear')
@@ -183,8 +186,44 @@ export function findJournal(root, ids, lane = 'run', { worktree } = {}) {
  */
 export function archiveJournal(journalPath, journal, closedBy) {
   const closed = journalPath.replace(/\.json$/, '.closed.json')
-  writeFileSync(closed, JSON.stringify({ ...journal, closedAt: new Date().toISOString(), closedBy }, null, 2) + '\n')
-  rmSync(journalPath, { force: true })
+  if (closed === journalPath || journalPath.endsWith('.closed.json')) throw new Error('journal close refused: expected live journal path')
+  const readExact = path => {
+    if (!lstatSync(path).isFile() || realpathSync(path) !== resolve(path)) throw new Error('journal close refused: noncanonical file')
+    return readFileSync(path)
+  }
+  const liveBytes = existsSync(journalPath) ? readExact(journalPath) : null
+  if (liveBytes && !isDeepStrictEqual(JSON.parse(liveBytes), journal)) throw new Error('journal close refused: live journal differs')
+  if (!liveBytes && !existsSync(closed)) throw new Error('journal close refused: live journal missing')
+  const verifyClosed = () => {
+    const value = JSON.parse(readExact(closed))
+    const { closedAt, closedBy: author, ...original } = value
+    if (!Number.isFinite(Date.parse(closedAt)) || author !== closedBy || !isDeepStrictEqual(original, journal)) throw new Error('journal close refused: conflicting closed journal')
+  }
+  if (liveBytes && existsSync(closed)) {
+    const previousBytes = readExact(closed)
+    const previous = JSON.parse(previousBytes)
+    const validLaunch = value => typeof value === 'string' && value.trim().length > 0
+    if (validLaunch(previous.launchId) && validLaunch(journal.launchId) && previous.launchId !== journal.launchId) {
+      if (!Number.isFinite(Date.parse(previous.closedAt)) || typeof previous.closedBy !== 'string') throw new Error('journal close refused: malformed prior generation')
+      const prior = journalPath.replace(/\.json$/, `.prior.${encodeURIComponent(previous.launchId)}.json`)
+      publishImmutableFile(prior, previousBytes)
+      if (!readExact(prior).equals(previousBytes) || !readExact(closed).equals(previousBytes) || !readExact(journalPath).equals(liveBytes)) throw new Error('journal close refused: prior generation conflict')
+      unlinkSync(closed)
+      const fd = openSync(dirname(closed), 'r')
+      try { fsyncSync(fd) } finally { closeSync(fd) }
+    }
+  }
+  if (existsSync(closed)) verifyClosed()
+  else {
+    publishImmutableFile(closed, JSON.stringify({ ...journal, closedAt: new Date().toISOString(), closedBy }, null, 2) + '\n')
+    verifyClosed()
+  }
+  if (liveBytes) {
+    if (!readExact(journalPath).equals(liveBytes)) throw new Error('journal close refused: live journal changed')
+    unlinkSync(journalPath)
+    const fd = openSync(dirname(journalPath), 'r')
+    try { fsyncSync(fd) } finally { closeSync(fd) }
+  }
   return closed
 }
 
@@ -203,8 +242,8 @@ export function archiveJournal(journalPath, journal, closedBy) {
  * corrupt file. `codex status` asks about liveness, which a closed lane cannot prove either way,
  * so an unreadable one is simply not an answer there. The gate's attribution reconcile asks
  * whether the launcher's record agrees with the phase file's claim, and its contract is explicit
- * that a journal which EXISTS and will not parse is a PROBLEM, never an absence — archiveJournal's
- * write is not atomic, so a crash mid-write produces exactly that file, and answering null would
+ * that a journal which EXISTS and will not parse is a PROBLEM, never an absence — older or externally damaged
+ * journals may contain partial bytes, and answering null would
  * let landing a delegated phase turn a loud guard quiet. `strict` throws JournalUnreadableError.
  */
 export function findClosedJournal(root, ids, lane = 'run', { strict = false, worktree } = {}) {
@@ -441,8 +480,9 @@ export function classifyJournal(root, ids, expected, { isAlive = groupAlive, exe
   if (unique.status !== 0) return refusal('diverged', { path, error: unique.stderr })
   if (Number(unique.stdout.trim()) > 0) return refusal('unique-commit', { path, count: Number(unique.stdout.trim()) })
 
-  const reportPath = resolve(worktreeReal, journal.report ?? '')
-  const reportReal = canonicalExisting(reportPath)
+  const reportLocation = completedReportLocation(rootReal, path, journal, worktreeReal)
+  const reportPath = reportLocation.path
+  const reportReal = reportPath ? canonicalExisting(reportPath) : null
   const completed = typeof journal.reportDigest === 'string' && typeof journal.completionFingerprint === 'string'
   const partialCompletion = journal.reportDigest !== undefined || journal.completionFingerprint !== undefined
   if (partialCompletion && !completed) return refusal('corrupt', { path, error: 'completion binding is incomplete' })
@@ -452,7 +492,7 @@ export function classifyJournal(root, ids, expected, { isAlive = groupAlive, exe
     try { actualReportDigest = reportReal ? digestFile(reportReal) : null } catch (error) {
       return refusal('diverged', { path, error: error.message })
     }
-    if (!reportReal || !reportReal.startsWith(worktreeReal + '/')
+    if (!reportReal || reportReal !== resolve(reportPath) || !reportLocation.archived && !reportReal.startsWith(worktreeReal + '/')
       || actualReportDigest !== journal.reportDigest
       || journal.completionFingerprint !== expectedFingerprint
       || !SHA256.test(journal.reportDigest) || !SHA256.test(journal.completionFingerprint)) {
@@ -482,6 +522,15 @@ export function classifyJournal(root, ids, expected, { isAlive = groupAlive, exe
     requestedHead: expected.requestedHead, workingHead: journal.workingHead,
     evidence: { path, priorRequestedHead: journal.requestedHead },
   }
+}
+
+function completedReportLocation(root, path, journal, worktree) {
+  const source = worktree ? resolve(worktree, journal.report ?? '') : null
+  if (source && existsSync(source)) return { path: source, archived: false }
+  const allowed = [path.replace(/\.json$/, '-REPORT.md'), path.replace(/\.json$/, `-${journal.launchId}-REPORT.md`)]
+  if (Number.isFinite(Date.parse(journal.archivedAt)) && allowed.includes(journal.archivedReport)
+    && dirname(journal.archivedReport) === join(root, '.building')) return { path: journal.archivedReport, archived: true }
+  return { path: source, archived: false }
 }
 
 /** Validate a completed result without granting reset or disposal authority. */
@@ -528,10 +577,12 @@ function validateImmutableCompletionBinding(root, ids, lane, expected, { isAlive
     if (dirty) return dirty
   }
   const promptPath = path.replace(/\.json$/, '-prompt.txt')
-  const reportPath = archived ? path.replace(/\.json$/, '-REPORT.md') : resolve(worktreeReal, reportName)
+  const reportLocation = completedReportLocation(rootReal, path, journal, worktreeReal)
+  const reportPath = reportLocation.path
   try {
     if (journal.prompt !== promptPath || canonicalExisting(promptPath) !== resolve(promptPath)
-      || (archived && journal.archivedReport !== reportPath)
+      || (archived && !reportLocation.archived)
+      || !reportPath
       || canonicalExisting(reportPath) !== resolve(reportPath)) return refusal('unowned', { path, error: 'completion artifact path does not belong to this lane' })
     const carriedDigest = journal.carriedIn
       ? (archived ? journal.carriedDigest : digestFile(resolve(worktreeReal, journal.carriedIn))) : null
@@ -603,4 +654,47 @@ export function validatePlanArchiveCandidate(root, ids, journal, opts) {
     valid: true, purpose: 'plan-archive', originalRequestedHead: checked.requestedHead,
     workingHead: checked.workingHead, reportPath: checked.reportPath, evidence: checked.evidence,
   }
+}
+
+/** The terminal report owner archives exact completed output before making a lane clean. */
+export function archiveCompletedLaneOutput(root, path, journal, { destination } = {}) {
+  let current = journal
+  const hold = reason => ({ journal: current, archived: current.archivedReport ?? null, removed: false, reason })
+  try {
+    root = realpathSync(root)
+    if (resolveWorktreeOwnership(root, journal).state !== 'owned' || journal.ownerRoot !== root) return hold('unowned identity')
+    const livePath = journalPath(root, journal.phases, journal.lane, { label: journal.label })
+    const closed = path === livePath.replace(/\.json$/, '.closed.json')
+    if (path !== livePath && !closed || !lstatSync(path).isFile() || realpathSync(path) !== resolve(path) || !isDeepStrictEqual(JSON.parse(readFileSync(path, 'utf8')), journal)) return hold('journal changed')
+    const expected = journal.lane === 'run' && journal.label ? `CODEX-REPORT.${journal.label}.md` : LANES[journal.lane]?.report
+    if (!expected || journal.report !== expected || journal.label && !/^[a-z0-9]+$/.test(journal.label)
+      || journal.driverExit?.code !== 0 || journal.driverExit.signal != null || !Number.isFinite(Date.parse(journal.finishedAt))
+      || journal.completionFingerprint !== completionFingerprintOf(journal) || !/^sha256:[a-f0-9]{64}$/.test(journal.reportDigest ?? '')) return hold('completed report binding is incomplete')
+    const source = join(journal.worktreeIdentity.worktree, expected)
+    const archived = destination ?? journal.archivedReport ?? path.replace(/\.json$/, `-${journal.launchId}-REPORT.md`)
+    const building = join(root, '.building')
+    if (dirname(resolve(archived)) !== building || realpathSync(building) !== building || archived === path || archived === source) return hold('archive destination is not canonical')
+    const readRegular = file => {
+      if (!lstatSync(file).isFile() || realpathSync(file) !== resolve(file)) throw new Error('artifact is not a canonical regular file')
+      return readFileSync(file)
+    }
+    if (!existsSync(source)) {
+      if (journal.archivedReport !== archived || journalBytesDigestOf(readRegular(archived)) !== journal.reportDigest) return hold('missing source has no exact archive')
+      return { journal, archived, removed: true, reason: null }
+    }
+    const bytes = readRegular(source)
+    if (journalBytesDigestOf(bytes) !== journal.reportDigest) return hold('report digest changed')
+    publishImmutableFile(archived, bytes)
+    if (!readRegular(archived).equals(bytes)) return hold('archive digest differs')
+    const stamped = journal.archivedReport === archived && journal.archivedAt ? journal : { ...journal, archivedReport: archived, archivedAt: new Date().toISOString() }
+    if (!isDeepStrictEqual(JSON.parse(readFileSync(path, 'utf8')), journal)) return hold('journal changed before archive stamp')
+    writeJournalAtomic(root, stamped, { label: journal.label, closed })
+    current = stamped
+    if (!readRegular(source).equals(bytes) || resolveWorktreeOwnership(root, stamped).state !== 'owned') return { journal: stamped, archived, removed: false, reason: 'report or ownership changed before unlink' }
+    // Remove only this exact archived output. Carry-in and unknown files are untouched.
+    unlinkSync(source)
+    const dirFd = openSync(dirname(source), 'r')
+    try { fsyncSync(dirFd) } finally { closeSync(dirFd) }
+    return { journal: stamped, archived, removed: true, reason: null }
+  } catch (error) { return hold(`archive held: ${error.message}`) }
 }

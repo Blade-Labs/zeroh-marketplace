@@ -31,9 +31,9 @@ import { TSX_ABSENT_HINT, bridgeImport } from '../lib/tsx-bridge.mjs'
 import { appendExecutorEvent } from '../lib/beacon.mjs'
 import { matchStatusField } from '../lib/phasescan.mjs'
 import { deriveCurationRange, executeCurate, composeLandedMessage, CurateError } from '../lib/curate.mjs'
-import { landPhase, disposeWorktree, isSlotDir, samePath } from '../lib/worktree.mjs'
-import { archiveJournal, findJournal, JournalUnreadableError, prevReportName, RUN_LANE_ARTIFACTS } from '../lib/codex-journal.mjs'
-import { loadConfig, executionIsolationOf, integrationRefOf } from '../lib/config.mjs'
+import { landPhase, runWorktreeCleanup, isSlotDir, samePath } from '../lib/worktree.mjs'
+import { archiveJournal, archiveCompletedLaneOutput, findJournal, JournalUnreadableError, prevReportName, RUN_LANE_ARTIFACTS } from '../lib/codex-journal.mjs'
+import { loadConfig, executionIsolationOf, integrationRefOf, worktreeGcPolicyOf } from '../lib/config.mjs'
 import { carryLaneEvidence, mergeLaneLessons } from '../lib/landing.mjs'
 import { roadmapRoot } from '../lib/roadmap-root.mjs'
 
@@ -370,7 +370,7 @@ function codexLaneSource(cwd, phaseNum) {
  * after the push, because it removes the very directory the earlier acts run in; and a refusal is
  * reported on stderr with exit 0 intact — the land succeeded, and cleanup reports beside it.
  */
-export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr, mergeLessons = mergeLaneLessons, carryEvidence = carryLaneEvidence }) {
+export async function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = process.stdout, err = process.stderr, mergeLessons = mergeLaneLessons, carryEvidence = carryLaneEvidence, cleanup = runWorktreeCleanup, archiveOutput = archiveCompletedLaneOutput, cleanupDeps = {} }) {
   const lane = codexLaneSource(cwd, phaseNum)
   if (lane?.unreadable) {
     err.write(`phase land: ${lane.unreadable}\n`)
@@ -444,7 +444,7 @@ export function runLand({ cwd, toplevel, phaseNum, loadPhase, config, out = proc
       err.write(`phase land: evidence carry failed (${e?.message?.split('\n')[0] ?? e})\n`)
     }
   }
-  disposeSource(lane, { cwd, laneBranch, baseRef, out, err })
+  await disposeSource(lane, { cwd, laneBranch, baseRef, out, err, config, cleanup, archiveOutput, cleanupDeps })
   return 0
 }
 
@@ -459,57 +459,23 @@ function headBranchOf(cwd) {
 }
 
 /** The post-land disposal act. Never throws and never changes the land's verdict. */
-function disposeSource(lane, { cwd, laneBranch, baseRef, out, err }) {
-  if (!lane) {
-    // Slot lane: the slot itself is kept (reuse-via-reset), but its repo METADATA is shared,
-    // so a sibling slot whose directory died is ours to clear on the way past.
-    try {
-      const root = mainCheckout(cwd)
-      execFileSync('git', ['-C', root, 'worktree', 'prune'], { cwd: root, stdio: 'ignore', timeout: 60_000 })
-    } catch {
-      // a prune that cannot run leaves stale metadata, which is cosmetic — never a land failure
-    }
-    return
-  }
-  let r
+async function disposeSource(lane, { cwd, laneBranch, baseRef, out, err, config, cleanup, archiveOutput, cleanupDeps }) {
+  if (!lane) return // Session slots and unrelated missing registrations are never pruned here.
   try {
-    r = disposeWorktree(lane.root, cwd, {
-      branch: laneBranch,
-      integrationRef: baseRef,
-      allowUntracked: [...new Set([...RUN_LANE_ARTIFACTS, lane.journal?.report, lane.journal?.report ? prevReportName(lane.journal.report) : null].filter(Boolean))],
-      pgid: lane.journal?.pgid ?? null,
-    })
-  } catch (e) {
-    err.write(`phase land: the land is complete, but disposing ${cwd} threw — ${e?.message ?? e}\n`)
-    return
-  }
-  if (!r.disposed) {
-    err.write(`phase land: LANDED, but the lane worktree was KEPT (${r.reason}) — ${r.detail}\n`)
-    return
-  }
-  // Its OWN try, mirroring the arc side: the merge and the push are already done, and an EACCES
-  // on the primary's .building must report beside a completed land, never as a stack trace over
-  // one. The two landing verbs must not disagree about that.
-  let closed
-  try {
-    closed = archiveJournal(lane.journalPath, lane.journal, 'phase land')
-  } catch (e) {
-    err.write(
-      `phase land: the lane was disposed but its journal could NOT be archived (${e?.message?.split('\n')[0] ?? e}) — `
-        + `\`codex status\` will keep reading it as live until ${lane.journalPath} is renamed to .closed.json by hand\n`,
-    )
-    return
-  }
-  out.write(
-    `disposed the codex lane ${cwd}${r.branchDeleted ? ` and its merged ${laneBranch} branch` : ''}; journal archived to ${closed}\n`,
-  )
-  // The rail reports a merged branch it could NOT delete in `detail` on the pass path. Dropping
-  // it would print "disposed the codex lane" over a leak the operator never hears about — which
-  // is the accumulation class in miniature, and would leave the field dead.
-  if (r.detail) err.write(`phase land: ${r.detail}\n`)
+    const archived = await archiveOutput(lane.root, lane.journalPath, lane.journal)
+    const journal = archived.journal ?? lane.journal
+    const closed = archived.removed ? archiveJournal(lane.journalPath, journal, 'phase land') : lane.journalPath
+    const policy = { ...worktreeGcPolicyOf(config), integrationRef: baseRef }
+    const identity = journal.worktreeIdentity
+    const result = await cleanup(lane.root, { apply: policy.enabled, ownershipIds: identity ? [identity.ownershipId] : [], policy }, cleanupDeps)
+    const receipt = [...result.resumed.items, ...(result.applied?.items ?? [])].find(row => row.ownershipId === identity?.ownershipId)
+    const item = result.plan.items.find(row => row.worktree === cwd)
+    if (receipt?.state === 'removed') out.write(`disposed the codex lane ${cwd}${receipt.disposal?.branchDeleted ? ` and its merged ${laneBranch} branch` : ''}; journal archived to ${closed}\n`)
+    else err.write(`phase land: LANDED, but the lane worktree ${cwd} (branch ${laneBranch}) was KEPT (${identity ? receipt?.reason ?? item?.classification ?? 'observation-required' : 'ownership-uncertain'}); journal ${closed}\n`)
+  } catch (error) { err.write(`phase land: LANDED, but cleanup held ${cwd}: ${error.message}\n`) }
 }
 
-function runLandCli(argv) {
+async function runLandCli(argv) {
   const n = argv.find((a) => /^\d+$/.test(a))
   if (!n) {
     process.stderr.write('roadmap phase land: usage: roadmap phase land <N>\n')

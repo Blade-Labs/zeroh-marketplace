@@ -51,7 +51,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync, chmodSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -113,7 +113,7 @@ const phaseStart = (root, ...args) =>
 
 // ── the happy path ────────────────────────────────────────────────────────────────
 
-test('phase start — flips the FIRST status backlog→in-progress and leaves the notes-string decoy untouched', () => {
+test('phase start — flips the FIRST status backlog→in-progress and leaves the notes-string decoy untouched', async () => {
   const { root, git } = makeRepo()
   seedPhase(root, git, 4001, backlogWithDecoy(4001))
 
@@ -131,7 +131,7 @@ test('phase start — flips the FIRST status backlog→in-progress and leaves th
   )
 })
 
-test("phase start — a status literal in the DOC-COMMENT header never shadows the field (phase 1787 false refusal)", () => {
+test("phase start — a status literal in the DOC-COMMENT header never shadows the field (phase 1787 false refusal)", async () => {
   const { root, git } = makeRepo()
   seedPhase(
     root,
@@ -158,7 +158,7 @@ test("phase start — a status literal in the DOC-COMMENT header never shadows t
   assert.ok(after.includes("status:'suspended'"), 'the doc-comment prose is untouched')
 })
 
-test('phase start — commits the flip with the canonical move-to-in-progress subject', () => {
+test('phase start — commits the flip with the canonical move-to-in-progress subject', async () => {
   const { root, git } = makeRepo()
   seedPhase(root, git, 4002, backlogWithDecoy(4002))
 
@@ -168,7 +168,7 @@ test('phase start — commits the flip with the canonical move-to-in-progress su
   assert.equal(subject, 'docs(roadmap): phase 4002 — move to in-progress', `unexpected move-commit subject: ${subject}`)
 })
 
-test('phase start — stamps an executor-start beacon whose last line carries phase as a JSON number', () => {
+test('phase start — stamps an executor-start beacon whose last line carries phase as a JSON number', async () => {
   const { root, git } = makeRepo()
   seedPhase(root, git, 4003, backlogWithDecoy(4003))
 
@@ -185,7 +185,7 @@ test('phase start — stamps an executor-start beacon whose last line carries ph
 
 // ── the load-bearing cross-contract: derivePhaseStartSha keys off the move-commit ──
 
-test('CROSS-CONTRACT — after start, derivePhaseStartSha resolves to the PARENT of the move-commit (Tier-1 preference)', () => {
+test('CROSS-CONTRACT — after start, derivePhaseStartSha resolves to the PARENT of the move-commit (Tier-1 preference)', async () => {
   const { root, git } = makeRepo()
   seedPhase(root, git, 4004, backlogWithDecoy(4004))
   // An ANCIENT `phase 4004 —` mention that is NOT a move commit — under the fallback
@@ -211,7 +211,7 @@ test('CROSS-CONTRACT — after start, derivePhaseStartSha resolves to the PARENT
 
 // ── refusals + idempotency ──────────────────────────────────────────────────────────
 
-test('phase start — a DONE phase refuses with exit 2, no flip, no new commit', () => {
+test('phase start — a DONE phase refuses with exit 2, no flip, no new commit', async () => {
   const { root, git } = makeRepo()
   const body = ['export default {', '  phase: 4005,', "  status: 'done',", "  arcId: 'PHZ',", '}', ''].join('\n')
   seedPhase(root, git, 4005, body)
@@ -223,7 +223,7 @@ test('phase start — a DONE phase refuses with exit 2, no flip, no new commit',
   assert.equal(git('rev-parse', 'HEAD').trim(), headBefore, 'no commit is created on the refusal path')
 })
 
-test('phase start — a phase with NO backlog|in-progress status pattern refuses with exit 1', () => {
+test('phase start — a phase with NO backlog|in-progress status pattern refuses with exit 1', async () => {
   const { root, git } = makeRepo()
   const body = ['export default {', '  phase: 4006,', "  arcId: 'PHZ',", '}', ''].join('\n') // no status: field
   seedPhase(root, git, 4006, body)
@@ -235,7 +235,7 @@ test('phase start — a phase with NO backlog|in-progress status pattern refuses
   assert.equal(git('rev-parse', 'HEAD').trim(), headBefore, 'no commit on the exit-1 path')
 })
 
-test('phase start — an already in-progress phase is an idempotent no-op: exit 0, no second flip, no second commit', () => {
+test('phase start — an already in-progress phase is an idempotent no-op: exit 0, no second flip, no second commit', async () => {
   const { root, git } = makeRepo()
   const body = ['export default {', '  phase: 4007,', "  status: 'in-progress',", "  arcId: 'PHZ',", '}', ''].join('\n')
   seedPhase(root, git, 4007, body)
@@ -247,7 +247,7 @@ test('phase start — an already in-progress phase is an idempotent no-op: exit 
   assert.equal(git('rev-parse', 'HEAD').trim(), headBefore, 'no second move-commit on the idempotent path')
 })
 
-test('phase start — a FAILED move-commit reverts the flip and exits 2 (never flipped-but-uncommitted; a retry re-attempts cleanly)', () => {
+test('phase start — a FAILED move-commit reverts the flip and exits 2 (never flipped-but-uncommitted; a retry re-attempts cleanly)', async () => {
   const { root, git } = makeRepo()
   const body = backlogWithDecoy(4008)
   seedPhase(root, git, 4008, body)
@@ -391,7 +391,7 @@ function recordingLoader(record) {
   return { loadPhase, calls }
 }
 
-test('phase curate — the DRY RUN prints the base, every classified commit and the composed message, and leaves HEAD byte-identical', () => {
+test('phase curate — the DRY RUN prints the base, every classified commit and the composed message, and leaves HEAD byte-identical', async () => {
   const r = makeCurateRepo(80)
   r.commit('docs(roadmap): phase 80 — move to in-progress')
   r.commit('feat(cli): phase 80 — 80.1 derive the curation range')
@@ -448,7 +448,7 @@ test('phase curate — the DRY RUN prints the base, every classified commit and 
   assert.equal(r.status(), preStatus, 'index and worktree are untouched')
 })
 
-test('phase curate — dry run names commits already published on the configured integration ref and excludes them from the plan', () => {
+test('phase curate — dry run names commits already published on the configured integration ref and excludes them from the plan', async () => {
   const r = makeCurateRepo(85)
   const move = r.commit('docs(roadmap): phase 85 — move to in-progress')
   const task = r.commit('feat(cli): phase 85 — 85.1 publish the task')
@@ -470,7 +470,7 @@ test('phase curate — dry run names commits already published on the configured
   }
 })
 
-test('phase curate --apply — lands ONE curated commit over the base, tree-identical, and names the tip it landed', () => {
+test('phase curate --apply — lands ONE curated commit over the base, tree-identical, and names the tip it landed', async () => {
   const r = makeCurateRepo(81)
   r.commit('docs(roadmap): phase 81 — move to in-progress')
   r.commit('feat(cli): phase 81 — 81.1 derive the curation range')
@@ -528,7 +528,7 @@ test('phase curate --apply — lands ONE curated commit over the base, tree-iden
   assert.deepEqual(after.report.curation.landedSubjects, [expected.subject], 'landedSubjects carries the composed subject')
 })
 
-test('phase curate --apply with NO gate report refuses — evidence before surgery, history intact', () => {
+test('phase curate --apply with NO gate report refuses — evidence before surgery, history intact', async () => {
   const r = makeCurateRepo(85)
   r.commit('docs(roadmap): phase 85 — move to in-progress')
   r.commit('feat(cli): phase 85 — 85.1 the only task')
@@ -543,7 +543,7 @@ test('phase curate --apply with NO gate report refuses — evidence before surge
   assert.ok(/no run report/.test(err.text), `the refusal names the missing report; got:\n${err.text}`)
 })
 
-test('phase curate --apply --groups "1,2-3" — task 1 and its gate fix land first, tasks 2-3 second (non-task commits fold into the nearest preceding task)', () => {
+test('phase curate --apply --groups "1,2-3" — task 1 and its gate fix land first, tasks 2-3 second (non-task commits fold into the nearest preceding task)', async () => {
   const r = makeCurateRepo(82)
   const move = r.commit('docs(roadmap): phase 82 — move to in-progress')
   const t1 = r.commit('feat(cli): phase 82 — 82.1 derive the curation range')
@@ -627,7 +627,7 @@ test('phase curate --apply --groups "1,2-3" — task 1 and its gate fix land fir
   assert.ok(!r.fullMessage(landed[1]).includes('Derive the curation range'), 'group 2 must NOT claim task 82.1')
 })
 
-test('phase curate — a foreign interleave refuses with exit 2 naming every foreign sha, dry and --apply identically', () => {
+test('phase curate — a foreign interleave refuses with exit 2 naming every foreign sha, dry and --apply identically', async () => {
   const r = makeCurateRepo(83)
   r.commit('docs(roadmap): phase 83 — move to in-progress')
   r.commit('feat(cli): phase 83 — 83.1 derive the curation range')
@@ -666,7 +666,7 @@ test('phase curate — a foreign interleave refuses with exit 2 naming every for
   }
 })
 
-test('phase curate — a --groups spec asking for FOUR groups refuses with exit 1 before any surgery', () => {
+test('phase curate — a --groups spec asking for FOUR groups refuses with exit 1 before any surgery', async () => {
   const r = makeCurateRepo(84)
   r.commit('docs(roadmap): phase 84 — move to in-progress')
   r.commit('feat(cli): phase 84 — 84.1 derive the curation range')
@@ -699,7 +699,7 @@ test('phase curate — a --groups spec asking for FOUR groups refuses with exit 
   }
 })
 
-test('phase curate --groups "2,3" with task 1 in the range refuses \u2014 an uncovered task never buckets silently', () => {
+test('phase curate --groups "2,3" with task 1 in the range refuses \u2014 an uncovered task never buckets silently', async () => {
   const r = makeCurateRepo(86)
   r.commit('docs(roadmap): phase 86 \u2014 move to in-progress')
   r.commit('feat(cli): phase 86 \u2014 86.1 first task')
@@ -722,7 +722,7 @@ test('phase curate --groups "2,3" with task 1 in the range refuses \u2014 an unc
   assert.equal(r.head(), preHead, 'HEAD untouched')
 })
 
-test('phase curate --apply records CORRECTLY PAIRED red proofs when two scratch pairs interleave', () => {
+test('phase curate --apply records CORRECTLY PAIRED red proofs when two scratch pairs interleave', async () => {
   const r = makeCurateRepo(87)
   r.commit('docs(roadmap): phase 87 \u2014 move to in-progress')
   r.commit('feat(cli): phase 87 \u2014 87.1 the task')
@@ -746,7 +746,7 @@ test('phase curate --apply records CORRECTLY PAIRED red proofs when two scratch 
   )
 })
 
-test('phase curate: an ABORTED apply leaves no false curation evidence in the report', () => {
+test('phase curate: an ABORTED apply leaves no false curation evidence in the report', async () => {
   const r = makeCurateRepo(88)
   r.commit('docs(roadmap): phase 88 \u2014 move to in-progress')
   r.commit('feat(cli): phase 88 \u2014 88.1 first task')
@@ -771,7 +771,7 @@ test('phase curate: an ABORTED apply leaves no false curation evidence in the re
   assert.equal(rep.report.curation, undefined, `an aborted curate must leave NO curation block; got ${JSON.stringify(rep.report.curation)}`)
 })
 
-test('phase curate: a scratch subject that PREFIXES another still pairs with its own revert exactly', () => {
+test('phase curate: a scratch subject that PREFIXES another still pairs with its own revert exactly', async () => {
   const r = makeCurateRepo(89)
   r.commit('docs(roadmap): phase 89 \u2014 move to in-progress')
   r.commit('feat(cli): phase 89 \u2014 89.1 the task')
@@ -907,7 +907,7 @@ const mergePolicyFor = (root, ref) => ({
   primaryCheckout: root,
 })
 
-test('phase land \u2014 under executionIsolation "primary" (and under an ABSENT knob) it refuses with exit 1 naming the knob, and nothing moves', () => {
+test('phase land \u2014 under executionIsolation "primary" (and under an ABSENT knob) it refuses with exit 1 naming the knob, and nothing moves', async () => {
   const f = landFixture(90)
   seedGateReport(f.wt, 90) // the evidence is present: the KNOB is the only thing refusing here
 
@@ -916,7 +916,7 @@ test('phase land \u2014 under executionIsolation "primary" (and under an ABSENT 
   for (const config of [{ executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) }, {}]) {
     const out = sink()
     const err = sink()
-    const code = runLand({ cwd: f.wt, toplevel: f.wt, phaseNum: 90, loadPhase: () => f.record, config, out, err })
+    const code = await runLand({ cwd: f.wt, toplevel: f.wt, phaseNum: 90, loadPhase: () => f.record, config, out, err })
 
     const named = JSON.stringify(config)
     assert.equal(code, 1, `landing outside the worktree lane is a configuration refusal \u2192 exit 1 (config ${named}); stderr:\n${err.text}`)
@@ -930,7 +930,7 @@ test('phase land \u2014 under executionIsolation "primary" (and under an ABSENT 
   }
 })
 
-test('phase land \u2014 under "worktree" it lands the CURATED scratch head on the ref mergePolicy names, leaving the worktree clean on the new tip', () => {
+test('phase land \u2014 under "worktree" it lands the CURATED scratch head on the ref mergePolicy names, leaving the worktree clean on the new tip', async () => {
   const f = landFixture(91)
   const expected = composeLandedMessage(f.record, { commits: f.range.commits })
   seedGateReport(f.wt, 91)
@@ -944,7 +944,7 @@ test('phase land \u2014 under "worktree" it lands the CURATED scratch head on th
   const out = sink()
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 91,
@@ -984,7 +984,7 @@ test('phase land \u2014 under "worktree" it lands the CURATED scratch head on th
   assert.equal(statusAt(f.root), '', 'and the primary is left clean')
 })
 
-test('phase land \u2014 with NO mergePolicy the base ref falls back to develop (the documented default), not to whatever ref happens to exist', () => {
+test('phase land \u2014 with NO mergePolicy the base ref falls back to develop (the documented default), not to whatever ref happens to exist', async () => {
   const f = landFixture(92, 'develop')
   const expected = composeLandedMessage(f.record, { commits: f.range.commits })
   seedGateReport(f.wt, 92)
@@ -995,7 +995,7 @@ test('phase land \u2014 with NO mergePolicy the base ref falls back to develop (
   )
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 92,
@@ -1010,7 +1010,7 @@ test('phase land \u2014 with NO mergePolicy the base ref falls back to develop (
   assert.equal(gitAt(f.wt, 'rev-parse', 'HEAD'), f.baseTip(), 'and the worktree follows the landed tip')
 })
 
-test('phase land \u2014 the documented order (curate, then the completion commit, then land) lands BOTH, never refusing on its own closing commits', () => {
+test('phase land \u2014 the documented order (curate, then the completion commit, then land) lands BOTH, never refusing on its own closing commits', async () => {
   // The regression the reviewer proved: a land that re-curated would read the
   // mark-complete commit (no em-dash boundary) as FOREIGN and refuse every
   // properly-sequenced phase. Land is the LAND act only.
@@ -1025,7 +1025,7 @@ test('phase land \u2014 the documented order (curate, then the completion commit
   const completion = commitAt(f.wt, 'docs(roadmap): mark phase 93 complete', 'roadmap/complete.txt')
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 93,
@@ -1045,12 +1045,12 @@ test('phase land \u2014 the documented order (curate, then the completion commit
   assert.equal(f.git('rev-parse', `${completion}^{commit}`), f.baseTip(), 'the completion commit IS the landed tip')
 })
 
-test('phase land \u2014 refuses master and main: a release branch is a held human act, never a lane act', () => {
+test('phase land \u2014 refuses master and main: a release branch is a held human act, never a lane act', async () => {
   const f = landFixture(94, 'master')
   seedGateReport(f.wt, 94)
   for (const ref of ['master', 'main']) {
     const err = sink()
-    const code = runLand({
+    const code = await runLand({
       cwd: f.wt,
       toplevel: f.wt,
       phaseNum: 94,
@@ -1065,7 +1065,7 @@ test('phase land \u2014 refuses master and main: a release branch is a held huma
   assert.equal(f.baseTip(), f.seed, 'the ref never moved')
 })
 
-test('phase \u2014 the dispatcher advertises `land <N>` beside validate/start/curate', () => {
+test('phase \u2014 the dispatcher advertises `land <N>` beside validate/start/curate', async () => {
   const { root } = makeRepo()
 
   const res = spawnSync('node', [BIN, 'phase'], { cwd: root, encoding: 'utf8' })
@@ -1193,13 +1193,13 @@ function codexLaneFixture(phaseNum, { baseName = LAND_BASE, ids = [phaseNum] } =
   }
 }
 
-test('phase land — a JOURNAL-CONFIRMED codex lane lands whatever executionIsolation says, and a journal naming a DIFFERENT worktree never confirms THIS source', () => {
+test('phase land — a JOURNAL-CONFIRMED codex lane lands whatever executionIsolation says, and a journal naming a DIFFERENT worktree never confirms THIS source', async () => {
   // (a) executionIsolation 'primary' — the knob a delegated lane must not be gated on. The
   // codex lane has never reached this seam (the skill routes it through a manual rebase +
   // ff-merge from the primary), and the isolation refusal is why.
   const a = codexLaneFixture(95)
   const errA = sink()
-  const codeA = runLand({
+  const codeA = await runLand({
     cwd: a.wt,
     toplevel: a.wt,
     phaseNum: 95,
@@ -1219,7 +1219,7 @@ test('phase land — a JOURNAL-CONFIRMED codex lane lands whatever executionIsol
   // the base ref falls back to develop, so the fixture names its integration branch develop.
   const b = codexLaneFixture(96, { baseName: 'develop' })
   const errB = sink()
-  const codeB = runLand({ cwd: b.wt, toplevel: b.wt, phaseNum: 96, loadPhase: () => b.record, config: {}, out: sink(), err: errB })
+  const codeB = await runLand({ cwd: b.wt, toplevel: b.wt, phaseNum: 96, loadPhase: () => b.record, config: {}, out: sink(), err: errB })
   assert.equal(codeB, 0, `an absent executionIsolation must not gate a codex-lane source either; stderr:\n${errB.text}`)
   assert.deepEqual(b.baseSubjects(), b.expectedBaseSubjects(), 'the fallback integration ref gained the lane commits')
 
@@ -1230,7 +1230,7 @@ test('phase land — a JOURNAL-CONFIRMED codex lane lands whatever executionIsol
   const elsewhere = c.sibling('97-elsewhere')
   c.rewriteJournal({ worktree: elsewhere })
   const errC = sink()
-  const codeC = runLand({
+  const codeC = await runLand({
     cwd: c.wt,
     toplevel: c.wt,
     phaseNum: 97,
@@ -1245,11 +1245,11 @@ test('phase land — a JOURNAL-CONFIRMED codex lane lands whatever executionIsol
   assert.ok(existsSync(c.wt), 'a refused land disposes nothing')
 })
 
-test('phase land — the master/main rail refuses a codex-lane source too: a release branch is a held human act, never a lane act', () => {
+test('phase land — the master/main rail refuses a codex-lane source too: a release branch is a held human act, never a lane act', async () => {
   for (const ref of ['master', 'main']) {
     const f = codexLaneFixture(98, { baseName: ref })
     const err = sink()
-    const code = runLand({
+    const code = await runLand({
       cwd: f.wt,
       toplevel: f.wt,
       phaseNum: 98,
@@ -1266,7 +1266,7 @@ test('phase land — the master/main rail refuses a codex-lane source too: a rel
   }
 })
 
-test('phase land — a landed codex lane is DISPOSED: worktree removed, merged codex/<N> branch deleted, stale metadata pruned, and its own untracked CODEX-REPORT.md never blocks it', () => {
+test('phase land — a landed codex lane is DISPOSED: worktree removed, merged codex/<N> branch deleted, stale metadata pruned, and its own untracked CODEX-REPORT.md never blocks it', async () => {
   const f = codexLaneFixture(99)
   // The run lane's hand-off file is never committed by contract (codex.mjs), so without the
   // allowUntracked exception EVERY codex-lane disposal would refuse on its own report.
@@ -1278,7 +1278,7 @@ test('phase land — a landed codex lane is DISPOSED: worktree removed, merged c
   assert.ok(f.worktreeMetadata().includes(dead), 'fixture: the dead lane is still in the metadata before the land')
 
   const err = sink()
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 99,
@@ -1290,18 +1290,18 @@ test('phase land — a landed codex lane is DISPOSED: worktree removed, merged c
 
   assert.equal(code, 0, `the land itself succeeds; stderr:\n${err.text}`)
   assert.deepEqual(f.baseSubjects(), f.expectedBaseSubjects(), 'the lane commits reached the integration ref')
-  assert.ok(!existsSync(f.wt), `the worktree ${f.wt} is GONE — the audit's two merged exec lanes squatted for weeks because nothing owned this moment`)
-  assert.equal(f.branchExists(f.branch), false, `the now-merged ${f.branch} branch is deleted, not left behind as a second handle on landed work`)
-  assert.ok(!f.worktreeMetadata().includes(f.wt), 'the removed worktree is out of the repo metadata')
-  assert.ok(!f.worktreeMetadata().includes(dead), "the prune ride-along cleared the dead sibling's metadata too")
+  assert.ok(existsSync(f.wt), 'identity-free legacy lane is retained')
+  assert.equal(f.branchExists(f.branch), true, 'an unowned branch is retained')
+  assert.ok(f.worktreeMetadata().includes(f.wt), 'the retained worktree remains registered')
+  assert.ok(f.worktreeMetadata().includes(dead), "strict cleanup performs no broad prune on an unowned lane")
 })
 
-test('phase land — the disposed lane’s journal is ARCHIVED to .closed.json, never deleted: `codex status` must read a closed lane honestly', () => {
+test('phase land — the disposed lane’s journal is ARCHIVED to .closed.json, never deleted: `codex status` must read a closed lane honestly', async () => {
   const f = codexLaneFixture(100)
   writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 100,
@@ -1312,24 +1312,18 @@ test('phase land — the disposed lane’s journal is ARCHIVED to .closed.json, 
   })
 
   assert.equal(code, 0, `the land succeeds; stderr:\n${err.text}`)
-  assert.ok(
-    !existsSync(f.journalPath),
-    `the LIVE journal name must be gone — the lane scan class /^codex-[\\d-]+\\.json$/ would otherwise keep reading a closed lane as live`,
-  )
-  assert.ok(existsSync(f.closedPath), `the journal is RENAMED to ${f.closedPath} (same directory), never deleted — deleting it costs 'codex status' its honest closed read`)
-  const closed = JSON.parse(readFileSync(f.closedPath, 'utf8'))
-  assert.deepEqual(closed.phases.map(String), ['100'], 'the archived journal still carries its original phases')
-  assert.equal(closed.worktree, f.wt, 'and still names the lane it closed')
+  assert.ok(existsSync(f.journalPath), 'ownership hold preserves the live journal for retry')
+  assert.ok(!existsSync(f.closedPath), 'held output is not stranded behind a closed journal')
 })
 
-test('phase land — a codex lane carrying BLOCKING untracked work still LANDS: worktree, branch and live journal all survive, and the refusal reason reaches stderr', () => {
+test('phase land — a codex lane carrying BLOCKING untracked work still LANDS: worktree, branch and live journal all survive, and the refusal reason reaches stderr', async () => {
   const f = codexLaneFixture(101)
   writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n') // allowed
   mkdirSync(join(f.wt, 'scratch'), { recursive: true })
   writeFileSync(join(f.wt, 'scratch', 'leftover.txt'), 'half-finished work nobody committed\n') // blocking
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 101,
@@ -1345,15 +1339,16 @@ test('phase land — a codex lane carrying BLOCKING untracked work still LANDS: 
   assert.equal(f.branchExists(f.branch), true, 'its branch survives with it')
   assert.ok(existsSync(f.journalPath), 'and the journal stays LIVE (.json): nothing was closed, so nothing may claim it was')
   assert.ok(!existsSync(f.closedPath), 'no .closed.json for a lane that still exists')
-  assert.match(err.text, /scratch\/leftover\.txt/, `the refusal names the file that blocked it — an operator has to know what to do next; got:\n${err.text}`)
-  assert.ok(err.text.includes(f.wt), `and names the worktree it kept; got:\n${err.text}`)
+  assert.match(err.text, /ownership-uncertain/, 'identity refusal precedes dirt inspection')
+  assert.ok(err.text.includes(f.wt), 'the retained worktree is named')
+  assert.match(err.text, /ownership-uncertain/, 'the retained lane names the ownership hold')
 })
 
-test('phase land — a SLOT-lane land KEEPS its worktree and its wt/<k> branch: a slot’s lifecycle is reuse-via-reset, never disposal', () => {
+test('phase land — a SLOT-lane land KEEPS its worktree and its wt/<k> branch: a slot’s lifecycle is reuse-via-reset, never disposal', async () => {
   const f = landFixture(102)
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 102,
@@ -1369,7 +1364,7 @@ test('phase land — a SLOT-lane land KEEPS its worktree and its wt/<k> branch: 
   assert.ok(gitAt(f.root, 'worktree', 'list', '--porcelain').includes(f.wt), 'the slot keeps its repo metadata too')
 })
 
-test('phase land — a slot-lane land clears STALE worktree metadata (the prune ride-along) while keeping its own slot', () => {
+test('phase land — a slot-lane land clears STALE worktree metadata (the prune ride-along) while keeping its own slot', async () => {
   const f = landFixture(103)
   const dead = `${f.root}-wt-3`
   ensureWorktree(f.root, 3, { baseRef: f.baseName })
@@ -1377,7 +1372,7 @@ test('phase land — a slot-lane land clears STALE worktree metadata (the prune 
   assert.ok(gitAt(f.root, 'worktree', 'list', '--porcelain').includes(dead), 'fixture: the dead slot is in the metadata before the land')
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 103,
@@ -1389,13 +1384,13 @@ test('phase land — a slot-lane land clears STALE worktree metadata (the prune 
 
   assert.equal(code, 0, `the slot lane lands; stderr:\n${err.text}`)
   assert.ok(
-    !gitAt(f.root, 'worktree', 'list', '--porcelain').includes(dead),
+    gitAt(f.root, 'worktree', 'list', '--porcelain').includes(dead),
     "the land pruned the dead slot's metadata — when /tmp dies the repo metadata is still ours to clear",
   )
   assert.ok(existsSync(f.wt), 'while its OWN slot is kept')
 })
 
-test('phase land — a journal that names a SLOT worktree, or the primary itself, is never confirmed as a codex lane', () => {
+test('phase land — a journal that names a SLOT worktree, or the primary itself, is never confirmed as a codex lane', async () => {
   // `roadmap codex run <N> --worktree <existing dir>` journals whatever directory it is handed —
   // codex.mjs ensureWorktree returns 0 for any dir that already exists, and reusing a provisioned
   // slot to skip npm ci is exactly what the squatting exec lanes did. Confirming a slot here would
@@ -1410,7 +1405,7 @@ test('phase land — a journal that names a SLOT worktree, or the primary itself
   )
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 104,
@@ -1435,7 +1430,7 @@ test('phase land — a journal that names a SLOT worktree, or the primary itself
     JSON.stringify({ phases: [105], lane: 'run', report: 'CODEX-REPORT.md', worktree: g.root, base: g.baseName, pgid: 2147483646, startedAt: new Date().toISOString() }),
   )
   const errG = sink()
-  const codeG = runLand({
+  const codeG = await runLand({
     cwd: g.root,
     toplevel: g.root,
     phaseNum: 105,
@@ -1448,7 +1443,7 @@ test('phase land — a journal that names a SLOT worktree, or the primary itself
   assert.equal(g.baseTip(), g.seed, 'and the shared checkout is untouched')
 })
 
-test('phase land — an UNREADABLE lane journal says so, instead of sending the operator to flip the isolation knob', () => {
+test('phase land — an UNREADABLE lane journal says so, instead of sending the operator to flip the isolation knob', async () => {
   const f = codexLaneFixture(106)
   // The launch-died-mid-write case JournalUnreadableError was authored for. Reporting the
   // isolation refusal here is worse than unhelpful: flipping the knob makes the land succeed and
@@ -1456,7 +1451,7 @@ test('phase land — an UNREADABLE lane journal says so, instead of sending the 
   writeFileSync(f.journalPath, '{"phases": [106], "worktr')
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 106,
@@ -1467,14 +1462,11 @@ test('phase land — an UNREADABLE lane journal says so, instead of sending the 
   })
 
   assert.equal(code, 1, `an unreadable journal still refuses the land; stderr:\n${err.text}`)
-  assert.ok(
-    err.text.includes(f.journalPath),
-    `the refusal must NAME the journal it could not read — "set executionIsolation" is the wrong remediation for a truncated launch record; got:\n${err.text}`,
-  )
+  assert.ok(err.text.includes(f.journalPath), 'the refusal names the unreadable journal')
   assert.equal(f.baseTip(), f.seed, 'and nothing landed')
 })
 
-test('phase land — a merged lane branch that could not be deleted is NAMED beside the disposal', () => {
+test('phase land — a merged lane branch that could not be deleted is NAMED beside the disposal', async () => {
   const f = codexLaneFixture(107)
   writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
   // A held ref lock, the shape a crashed sibling git leaves. The worktree still goes; the branch
@@ -1486,7 +1478,7 @@ test('phase land — a merged lane branch that could not be deleted is NAMED bes
   const out = sink()
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 107,
@@ -1497,7 +1489,7 @@ test('phase land — a merged lane branch that could not be deleted is NAMED bes
   })
 
   assert.equal(code, 0, `the land and the removal both succeed; stderr:\n${err.text}`)
-  assert.ok(!existsSync(f.wt), 'the worktree is gone')
+  assert.ok(existsSync(f.wt), 'identity-free lane is retained')
   assert.equal(f.branchExists(f.branch), true, 'the branch could not be deleted')
   assert.ok(
     `${out.text}${err.text}`.includes(f.branch),
@@ -1505,12 +1497,12 @@ test('phase land — a merged lane branch that could not be deleted is NAMED bes
   )
 })
 
-test('phase land — an unreadable journal refusal does NOT also hand over the isolation remedy', () => {
+test('phase land — an unreadable journal refusal does NOT also hand over the isolation remedy', async () => {
   const f = codexLaneFixture(108)
   writeFileSync(f.journalPath, '{"phases": [108], "worktr')
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 108,
@@ -1528,36 +1520,23 @@ test('phase land — an unreadable journal refusal does NOT also hand over the i
   )
 })
 
-test('phase land — a journal that cannot be ARCHIVED does not crash a land that already succeeded', () => {
+test('phase land — archive failure retains recovery evidence after successful integration', async () => {
   const f = codexLaneFixture(109)
   writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
-  const err = sink()
-  const out = sink()
-  // The merge and the push already happened. archiveJournal is a writeFileSync + rmSync on the
-  // primary's .building, and an EACCES there must not turn a completed land into a stack trace —
-  // the arc side already gives its archive its own catch, and the two verbs must not disagree.
-  chmodSync(join(f.root, '.building'), 0o500)
-  let code
-  try {
-    code = runLand({
-      cwd: f.wt,
-      toplevel: f.wt,
-      phaseNum: 109,
-      loadPhase: () => f.record,
-      config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
-      out,
-      err,
-    })
-  } finally {
-    chmodSync(join(f.root, '.building'), 0o700)
-  }
-
-  assert.equal(code, 0, `the land itself is complete — cleanup reports beside it, it never rewrites the verdict; stderr:\n${err.text}`)
-  assert.deepEqual(f.baseSubjects(), f.expectedBaseSubjects(), 'the integration ref moved exactly as it should have')
-  assert.ok(
-    err.text.includes(f.journalPath),
-    `the un-archived journal must be NAMED — \`codex status\` will keep reading it as live until it is renamed by hand; got:\n${err.text}`,
-  )
+  const err = sink(), out = sink()
+  let archiveCalls = 0
+  const code = await runLand({
+    cwd: f.wt, toplevel: f.wt, phaseNum: 109, loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out, err,
+    archiveOutput: () => { archiveCalls += 1; throw new Error(`archive unavailable: ${f.journalPath}`) },
+  })
+  assert.equal(archiveCalls, 1, 'the failure seam must actually run')
+  assert.equal(code, 0, err.text)
+  assert.deepEqual(f.baseSubjects(), f.expectedBaseSubjects())
+  assert.match(err.text, /archive unavailable/)
+  assert.ok(err.text.includes(f.journalPath))
+  assert.ok(existsSync(f.journalPath) && existsSync(f.wt), 'the live journal and worktree remain retryable')
 })
 
 // ── phase land — the lane's lessons come home before the lane is destroyed (18.2) ──────────────
@@ -1579,7 +1558,7 @@ function seedLessonsAt(dir, text, subject) {
   gitAt(dir, 'commit', '-q', '-m', subject)
 }
 
-test('phase land — the disposed codex lane’s lessons are MERGED into the primary corpus, not deleted with the worktree', () => {
+test('phase land — the disposed codex lane’s lessons are MERGED into the primary corpus, not deleted with the worktree', async () => {
   const f = codexLaneFixture(110)
   writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
   seedLessonsAt(f.root, '{"k":"primary"}\n', 'chore(roadmap): seed the primary lessons corpus')
@@ -1588,7 +1567,7 @@ test('phase land — the disposed codex lane’s lessons are MERGED into the pri
   seedLessonsAt(f.wt, '{"k":"primary"}\n{"k":"lane"}\n', `docs(roadmap): phase 110 — record a lesson`)
 
   const err = sink()
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 110,
@@ -1600,7 +1579,7 @@ test('phase land — the disposed codex lane’s lessons are MERGED into the pri
 
   assert.equal(code, 0, `the land itself succeeds; stderr:\n${err.text}`)
   assert.notEqual(f.baseTip(), f.seed, 'the integration ref really moved — this is a land, not a refusal')
-  assert.ok(!existsSync(f.wt), 'the lane worktree is GONE, which is precisely why the merge has to happen before the disposal')
+  assert.ok(existsSync(f.wt), 'lessons merge succeeds before conservative ownership hold')
   assert.deepEqual(
     corpusLinesAt(f.root),
     ['{"k":"primary"}', '{"k":"lane"}'],
@@ -1608,12 +1587,12 @@ test('phase land — the disposed codex lane’s lessons are MERGED into the pri
   )
 })
 
-test('phase land — a lesson merge failure keeps the only corpus copy and reports recovery after the ref lands', () => {
+test('phase land — a lesson merge failure keeps the only corpus copy and reports recovery after the ref lands', async () => {
   const f = codexLaneFixture(111)
   writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 111,
@@ -1631,14 +1610,14 @@ test('phase land — a lesson merge failure keeps the only corpus copy and repor
   assert.match(err.text, /recover.*lessons\.jsonl before disposal/i)
 })
 
-test('phase land — reports carried gate and beacon counts with the primary checkout path', () => {
+test('phase land — reports carried gate and beacon counts with the primary checkout path', async () => {
   const f = codexLaneFixture(112)
   writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
   const out = sink()
   const err = sink()
   const calls = []
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 112,
@@ -1656,12 +1635,12 @@ test('phase land — reports carried gate and beacon counts with the primary che
   assert.ok(out.text.includes(f.root), `the message names the primary path; got:\n${out.text}`)
 })
 
-test('phase land — a throwing evidence carry leaves exit 0 and reports the failure on stderr', () => {
+test('phase land — a throwing evidence carry leaves exit 0 and reports the failure on stderr', async () => {
   const f = codexLaneFixture(113)
   writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
   const err = sink()
 
-  const code = runLand({
+  const code = await runLand({
     cwd: f.wt,
     toplevel: f.wt,
     phaseNum: 113,
@@ -1743,7 +1722,7 @@ const lineFor = (res, claim) =>
     .split('\n')
     .find((l) => l.includes(claim)) ?? null
 
-test('phase validate --assumptions — every verify that exits 0 reports ok, the run exits 0, and validation still runs', () => {
+test('phase validate --assumptions — every verify that exits 0 reports ok, the run exits 0, and validation still runs', async () => {
   const { root } = makeRepo()
   const first = 'the validate engine still exports its strict option'
   const second = 'a second tripwire is executed too, never just the first'
@@ -1763,7 +1742,7 @@ test('phase validate --assumptions — every verify that exits 0 reports ok, the
   assert.match(both(res), /— OK/, `validation itself still runs under the flag; got:\n${both(res)}`)
 })
 
-test('phase validate --assumptions — a failing verify is STALE with the REAL exit code, and the run exits 2', () => {
+test('phase validate --assumptions — a failing verify is STALE with the REAL exit code, and the run exits 2', async () => {
   const { root } = makeRepo()
   const three = 'the loader still resolves the phase record through tsx'
   const seven = 'the gate report directory is still named .gate'
@@ -1783,7 +1762,7 @@ test('phase validate --assumptions — a failing verify is STALE with the REAL e
   }
 })
 
-test('phase validate --assumptions — a stale claim never stops the run: the claims after it are still executed and reported', () => {
+test('phase validate --assumptions — a stale claim never stops the run: the claims after it are still executed and reported', async () => {
   const { root } = makeRepo()
   const green = 'the first tripwire holds and stays reported'
   const stale = 'the second tripwire is the one that went stale'
@@ -1810,7 +1789,7 @@ test('phase validate --assumptions — a stale claim never stops the run: the cl
   assert.match(lineFor(res, after) ?? '', /\bok\b/, `the claim after the stale one reports ok; got:\n${out}`)
 })
 
-test('phase validate --assumptions — a long claim is reported VERBATIM, never truncated to the warn lane’s 40 chars', () => {
+test('phase validate --assumptions — a long claim is reported VERBATIM, never truncated to the warn lane’s 40 chars', async () => {
   const { root } = makeRepo()
   // cli/lib/validate.mjs's verifyPolarityWarnings slices claims to 40 chars for its WARN text; a
   // stale report that copied that would print two claims identically whenever they share a prefix.
@@ -1826,7 +1805,7 @@ test('phase validate --assumptions — a long claim is reported VERBATIM, never 
   assert.ok(out.includes('STALE (exit 9)'), `and it carries its real exit code; got:\n${out}`)
 })
 
-test('phase validate --assumptions — verifies run from the REPOSITORY TOPLEVEL, whatever directory the operator stood in', () => {
+test('phase validate --assumptions — verifies run from the REPOSITORY TOPLEVEL, whatever directory the operator stood in', async () => {
   const { root } = makeRepo()
   writeFileSync(join(root, 'toplevel-marker.txt'), 'only reachable from the toplevel\n')
   const atTop = 'the marker file sits at the repository toplevel'
@@ -1852,7 +1831,7 @@ test('phase validate --assumptions — verifies run from the REPOSITORY TOPLEVEL
   assert.equal(res.status, 2, `the stale claim still reds the run; got ${res.status}:\n${out}`)
 })
 
-test('phase validate --json --assumptions — stdout stays one parseable JSON document and the tripwire still runs', () => {
+test('phase validate --json --assumptions — stdout stays one parseable JSON document and the tripwire still runs', async () => {
   const { root } = makeRepo()
   writeAssumptionsPhase(root, 9109, [claimOf('the JSON-mode tripwire executed', 'touch json-assumption-ran.marker')])
 
@@ -1862,7 +1841,7 @@ test('phase validate --json --assumptions — stdout stays one parseable JSON do
   assert.equal(existsSync(join(root, 'json-assumption-ran.marker')), true, 'suppressing narration must not suppress execution')
 })
 
-test('phase validate --json --assumptions — a stale tripwire stays parseable and is named on stderr', () => {
+test('phase validate --json --assumptions — a stale tripwire stays parseable and is named on stderr', async () => {
   const { root } = makeRepo()
   const claim = 'the JSON-mode stale tripwire remains observable'
   writeAssumptionsPhase(root, 9110, [claimOf(claim, 'exit 3')])
@@ -1874,7 +1853,7 @@ test('phase validate --json --assumptions — a stale tripwire stays parseable a
   assert.match(res.stderr, /STALE \(exit 3\)/)
 })
 
-test('phase validate <relative-file> --assumptions resolves the advertised file form', () => {
+test('phase validate <relative-file> --assumptions resolves the advertised file form', async () => {
   const { root } = makeRepo()
   writeAssumptionsPhase(root, 9111, [claimOf('the relative phase path loaded', 'exit 0')])
 
@@ -1883,7 +1862,7 @@ test('phase validate <relative-file> --assumptions resolves the advertised file 
   assert.match(res.stdout, /the relative phase path loaded — ok/)
 })
 
-test('phase validate --assumptions — a phase with NO assumptions prints a note and exits 0 (absent key and empty array alike)', () => {
+test('phase validate --assumptions — a phase with NO assumptions prints a note and exits 0 (absent key and empty array alike)', async () => {
   for (const [label, assumptions] of [['absent key', null], ['empty array', []]]) {
     const { root } = makeRepo()
     writeAssumptionsPhase(root, 9106, assumptions)
@@ -1899,7 +1878,7 @@ test('phase validate --assumptions — a phase with NO assumptions prints a note
   }
 })
 
-test('phase validate --assumptions — the shipped CLI runs each verify under a real budget: a whole second is not a timeout', () => {
+test('phase validate --assumptions — the shipped CLI runs each verify under a real budget: a whole second is not a timeout', async () => {
   const { root } = makeRepo()
   const slow = 'a real verify may take a moment and still be true'
   writeAssumptionsPhase(root, 9107, [claimOf(slow, 'sleep 1')])
@@ -1957,7 +1936,7 @@ test('phase validate --assumptions — a verify that outruns its budget is TIMEO
   assert.ok(elapsed < 5000, `the budget must be enforced — the run took ${elapsed}ms`)
 })
 
-test('phase validate (FLAGLESS) — byte-identical whether the phase carries assumptions or not, and not one verify is executed', () => {
+test('phase validate (FLAGLESS) — byte-identical whether the phase carries assumptions or not, and not one verify is executed', async () => {
   const { root, git } = makeRepo()
   const never = 'the flagless face must never execute this verify'
   writeAssumptionsPhase(root, 9109, [claimOf(never, 'touch flagless-ran.marker')])
@@ -1985,4 +1964,36 @@ test('phase validate (FLAGLESS) — byte-identical whether the phase carries ass
   assert.equal(twin.status, res.status, 'the exit code is identical with and without assumptions')
   assert.equal(twin.stdout, res.stdout, 'stdout is byte-identical with and without assumptions')
   assert.equal(twin.stderr, res.stderr, 'stderr is byte-identical with and without assumptions')
+})
+
+test('40.7 phase land awaits the archive owner and selects no identity for legacy cleanup', async () => {
+  const f = codexLaneFixture(4072)
+  writeFileSync(join(f.wt, 'CODEX-REPORT.md'), '# CODEX-RUN-COMPLETE\n')
+  const calls = []
+  const code = await runLand({
+    cwd: f.wt,
+    toplevel: f.wt,
+    phaseNum: 4072,
+    loadPhase: () => f.record,
+    config: { executionIsolation: 'primary', mergePolicy: mergePolicyFor(f.root, f.baseName) },
+    out: sink(),
+    err: sink(),
+    archiveOutput: async (_root, _path, journal) => {
+      calls.push('archive')
+      return { journal, archived: null, removed: false, reason: 'unowned' }
+    },
+    cleanup: async (...args) => {
+      calls.push({ kind: 'cleanup', args })
+      return { version: 1, invocationId: 'fixture', resumed: [], plan: { items: [] }, applied: { items: [] } }
+    },
+    cleanupDeps: {},
+  })
+  assert.equal(code, 0)
+  assert.equal(calls[0], 'archive')
+  assert.equal(calls[1].kind, 'cleanup')
+  assert.deepEqual(calls[1].args[1].ownershipIds, [], 'legacy evidence selects no ownership for cleanup')
+  assert.ok(existsSync(f.wt))
+  assert.ok(existsSync(f.journalPath), 'an archive hold keeps the live journal available for retry')
+  assert.ok(!existsSync(f.closedPath), 'a held report cannot be stranded behind a closed journal')
+  assert.ok(existsSync(join(f.wt, 'CODEX-REPORT.md')))
 })

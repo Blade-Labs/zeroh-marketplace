@@ -586,3 +586,81 @@ test('installDeps — the decision is SOURCED from codex.mjs’s detector, not r
     'and it may not spell the npm argv itself: a literal recipe here is a second source of truth the next manager added to the detector will silently not reach',
   )
 })
+
+test('40.7 worktree gc defaults to a JSON-stable dry-run and applies CLI observation overrides once', () => {
+  const r = makeRepo()
+  const configPath = join(r.root, 'roadmap', 'roadmap.config.json')
+  const config = JSON.parse(readFileSync(configPath, 'utf8'))
+  config.worktreeGc = { enabled: false, inactiveObservations: 2, inactiveIntervalMs: 1, deleteIntegratedBranches: false }
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n')
+  const result = runWt(r.root, 'gc', '--inactive-observations', '3', '--inactive-interval-ms', '1', '--json')
+  assert.equal(result.status, 0, result.stderr)
+  const value = JSON.parse(result.stdout)
+  assert.equal(value.version, 1); assert.match(value.invocationId, /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/)
+  assert.equal(value.applied, null); assert.equal(value.plan.invocationId, value.invocationId)
+  assert.deepEqual(value.plan.policy, {
+    inactiveObservations: 3, inactiveIntervalMs: 1, integrationRef: INTEGRATION,
+    configuredProtectionRefs: [], deleteIntegratedBranches: false,
+  })
+  assert.equal(existsSync(join(r.root, '.building', 'worktree-slots.json')), false, 'an empty dry-run writes no receipt or registry')
+})
+
+test('40.7 worktree gc refuses disabled apply and malformed grammar before observation writes', () => {
+  for (const args of [
+    ['gc', '--apply'],
+    ['gc', '--inactive-observations', '1'],
+    ['gc', '--inactive-interval-ms', '0'],
+    ['gc', '--json', '--json'],
+    ['gc', '--unknown'],
+    ['gc', 'residue'],
+  ]) {
+    const r = makeRepo(); const result = runWt(r.root, ...args)
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`)
+    if (args.includes('--apply')) assert.match(result.stderr, /worktreeGc.*enabled|enable.*worktreeGc/i)
+    else assert.match(result.stderr, /usage|duplicate|unknown|at least 2|positive/i)
+    assert.equal(existsSync(join(r.root, '.building', 'worktree-slots.json')), false, `${args.join(' ')} refuses before observations`)
+  }
+})
+
+test('40.7 CLI observation overrides cannot lower configured safety bounds', () => {
+  const r = makeRepo()
+  const configPath = join(r.root, 'roadmap', 'roadmap.config.json')
+  const config = JSON.parse(readFileSync(configPath, 'utf8'))
+  config.worktreeGc = { enabled: true, inactiveObservations: 3, inactiveIntervalMs: 10, deleteIntegratedBranches: false }
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n')
+  for (const args of [['--inactive-observations', '2'], ['--inactive-interval-ms', '9']]) {
+    const result = runWt(r.root, 'gc', ...args, '--json')
+    assert.equal(result.status, 1, result.stderr)
+    assert.match(result.stderr, /cannot lower|configured|safety/i)
+    assert.equal(existsSync(join(r.root, '.building', 'worktree-slots.json')), false)
+  }
+})
+
+test('40.7 injected gc observes one owned lane across invocations, applies once, and completed replay is a no-op', async () => {
+  const { runGc } = await import('./worktree.mjs')
+  const ownership = await import('../lib/worktree.mjs')
+  const r = makeRepo(); const configPath = join(r.root, 'roadmap', 'roadmap.config.json')
+  const config = JSON.parse(readFileSync(configPath, 'utf8'))
+  config.worktreeGc = { enabled: true, inactiveObservations: 2, inactiveIntervalMs: 1, deleteIntegratedBranches: false }
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n'); gitIn(r.root, 'add', 'roadmap/roadmap.config.json'); gitIn(r.root, 'commit', '-qm', 'enable bounded fixture gc'); gitIn(r.root, 'branch', '-f', INTEGRATION, 'HEAD')
+  const worktree = `${r.root}-owned-4071`; bases.push(worktree); gitIn(r.root, 'worktree', 'add', '-q', '-b', 'owned/4071', worktree, INTEGRATION)
+  const laneOwner = { kind: 'roadmap-codex', id: 'run:4071' }
+  const identity = ownership.createWorktreeIdentity(r.root, worktree, { ownershipId: '123e4567-e89b-42d3-a456-426614174071', laneOwner, expectedBranch: 'refs/heads/owned/4071' })
+  ownership.registerWorktreeIdentity(r.root, identity)
+  const head = gitIn(worktree, 'rev-parse', 'HEAD')
+  const journal = { phases: ['4071'], lane: 'run', worktree, laneOwner, worktreeIdentity: identity, ownerRoot: realpathSync(r.root), pgid: 999999999, requestedRef: `refs/heads/${INTEGRATION}`, requestedHead: head, baseHead: head, workingHead: head, startedAt: '2026-09-07T00:00:00.000Z' }
+  writeFileSync(join(r.root, '.building', 'codex-4071.json'), JSON.stringify(journal, null, 2) + '\n')
+  const invoke = async apply => {
+    let stdout = '', stderr = ''
+    const status = await runGc(r.root, [...(apply ? ['--apply'] : []), '--inactive-observations', '2', '--inactive-interval-ms', '1', '--json'], {
+      out: { write(chunk) { stdout += chunk } }, err: { write(chunk) { stderr += chunk } },
+      probeProtection: async () => ({ state: 'unprotected', evidence: [], reason: null }),
+    })
+    assert.equal(status, 0, stderr); return JSON.parse(stdout)
+  }
+  const first = await invoke(false); assert.equal(first.applied, null); assert.equal(first.plan.items.find(item => item.worktree === worktree).classification, 'observation-required')
+  await new Promise(resolve => setTimeout(resolve, 5))
+  const applied = await invoke(true); assert.equal(applied.plan.invocationId, applied.invocationId); assert.equal(applied.applied.items.find(item => item.ownershipId === identity.ownershipId).state, 'removed'); assert.equal(existsSync(worktree), false)
+  const registryBytes = readFileSync(join(r.root, '.building', 'worktree-slots.json'))
+  const replay = await invoke(true); assert.equal(replay.applied.items.length, 0); assert.deepEqual(readFileSync(join(r.root, '.building', 'worktree-slots.json')), registryBytes)
+})

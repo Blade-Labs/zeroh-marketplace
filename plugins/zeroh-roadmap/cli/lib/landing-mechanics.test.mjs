@@ -18,6 +18,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { landArc, runArcEndSuite, validateRunnerSummary, buildRunnerSummary } from './landing.mjs'
 import { defaultExec } from './exec.mjs'
+import { archiveJournal } from './codex-journal.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_ROOT = join(HERE, '..', '..')
@@ -87,11 +88,11 @@ const stateFor = (primary, over = {}) => ({
 const configFor = (primary, over = {}) => ({ configVersion: 1, gateCommands: {}, mergePolicy: { arcIntegration: 'autonomous', maxOpenFollowups: 0, autonomousPushRefs: ['develop'], primaryCheckout: primary, ...over } })
 const argvHasRefspec = (calls) => calls.some((c) => c.args.some((a) => String(a).includes(':')))
 
-test('green isolated landing — merges into local baseRef; the recorded argv contains NO ":" refspec token', () => {
+test('green isolated landing — merges into local baseRef; the recorded argv contains NO ":" refspec token', async () => {
   const primary = makeConsumer()
   const { exec, calls } = recordingExec()
   const state = stateFor(primary)
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state })
   assert.equal(res.outcome, 'landed')
   assert.equal(res.exitCode, 0)
   assert.ok(res.record.some((s) => s.step === 'merge' && s.into === 'develop'), 'merges arc branch INTO local develop')
@@ -101,20 +102,20 @@ test('green isolated landing — merges into local baseRef; the recorded argv co
   assert.ok(existsSync(res.summaryPath), 'RunnerSummary keyed history written')
 })
 
-test('contention — primary HEAD is not baseRef ⇒ exit 2, primary UNTOUCHED (no merge attempted)', () => {
+test('contention — primary HEAD is not baseRef ⇒ exit 2, primary UNTOUCHED (no merge attempted)', async () => {
   const primary = makeConsumer()
   const { exec, calls } = recordingExec({ head: 'feature/sibling' })
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
   assert.equal(res.exitCode, 2)
   assert.equal(res.outcome, 'blocker')
   assert.match(res.held[0].reason, /wait for the sibling; never branch-switch/)
   assert.ok(!calls.some((c) => c.args.includes('merge') && !c.args.includes('merge-tree')), 'no merge attempted on the primary')
 })
 
-test('contention — primary parked off baseRef but the arc merge is FAST-FORWARD ⇒ ref surgery lands it (no checkout, no merge, master rail intact)', () => {
+test('contention — primary parked off baseRef but the arc merge is FAST-FORWARD ⇒ ref surgery lands it (no checkout, no merge, master rail intact)', async () => {
   const primary = makeConsumer()
   const { exec, calls } = recordingExec({ head: 'feature/sibling', ffPossible: true })
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
   assert.equal(res.outcome, 'landed', 'a FF arc lands under a parked primary')
   assert.ok(res.record.some((s) => s.step === 'ff-ref-update'), `ref surgery recorded: ${JSON.stringify(res.record)}`)
   assert.ok(calls.some((c) => c.args.includes('fetch') && c.args.includes('.') && c.args.includes('arc/a:develop')), 'the update is `git fetch . arc/a:develop` — git refuses non-FF and checked-out targets itself')
@@ -122,54 +123,54 @@ test('contention — primary parked off baseRef but the arc merge is FAST-FORWAR
   assert.ok(!calls.some((c) => c.args.includes('merge') && !c.args.includes('merge-tree') && !c.args.includes('merge-base')), 'no merge on the parked primary')
   // The master rail holds in the FF lane exactly like pushBaseRef.
   const m = recordingExec({ head: 'feature/sibling', ffPossible: true })
-  const mres = landArc({ repoRoot: makeConsumer(), arcId: 'A', config: configFor(primary), exec: m.exec, flags: {}, state: stateFor(primary, { baseRef: 'master' }) })
+  const mres = await landArc({ repoRoot: makeConsumer(), arcId: 'A', config: configFor(primary), exec: m.exec, flags: {}, state: stateFor(primary, { baseRef: 'master' }) })
   assert.equal(mres.outcome, 'blocker')
   assert.match(mres.held[0].reason, /refuses master/)
 })
 
-test('contention — a MERGE_HEAD in the primary ⇒ exit 2', () => {
+test('contention — a MERGE_HEAD in the primary ⇒ exit 2', async () => {
   const primary = makeConsumer()
   const { exec } = recordingExec({ mergeHead: true })
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
   assert.equal(res.exitCode, 2)
   assert.match(res.held[0].name, /MERGE_HEAD/)
 })
 
-test('push — fires only when autonomousPushRefs contains baseRef; --no-push suppresses; master/main refused', () => {
+test('push — fires only when autonomousPushRefs contains baseRef; --no-push suppresses; master/main refused', async () => {
   const primary = makeConsumer()
   // (a) develop listed → push fires
   let r = recordingExec()
-  landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec: r.exec, flags: {}, state: stateFor(primary) })
+  await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec: r.exec, flags: {}, state: stateFor(primary) })
   assert.ok(r.calls.some((c) => c.args.includes('push')), 'develop in autonomousPushRefs → push fires')
   // (b) --no-push suppresses
   r = recordingExec()
-  landArc({ repoRoot: makeConsumer(), arcId: 'A', config: configFor(primary), exec: r.exec, flags: { noPush: true }, state: stateFor(primary) })
+  await landArc({ repoRoot: makeConsumer(), arcId: 'A', config: configFor(primary), exec: r.exec, flags: { noPush: true }, state: stateFor(primary) })
   assert.ok(!r.calls.some((c) => c.args.includes('push')), '--no-push wins')
   // (c) develop NOT listed → no push
   r = recordingExec()
   const noRefState = stateFor(primary, { mergePolicy: { arcIntegration: 'autonomous', maxOpenFollowups: 0, autonomousPushRefs: [], primaryCheckout: primary } })
-  landArc({ repoRoot: makeConsumer(), arcId: 'A', config: configFor(primary, { autonomousPushRefs: [] }), exec: r.exec, flags: {}, state: noRefState })
+  await landArc({ repoRoot: makeConsumer(), arcId: 'A', config: configFor(primary, { autonomousPushRefs: [] }), exec: r.exec, flags: {}, state: noRefState })
   assert.ok(!r.calls.some((c) => c.args.includes('push')), 'baseRef not listed → no push')
   // (d) master rail — refused even when listed + --push
   r = recordingExec({ head: 'master' })
   const masterState = stateFor(makeConsumer(), { baseRef: 'master' })
-  const res = landArc({ repoRoot: masterState.primaryCheckout, arcId: 'A', config: configFor(masterState.primaryCheckout), exec: r.exec, flags: { push: true }, state: masterState })
+  const res = await landArc({ repoRoot: masterState.primaryCheckout, arcId: 'A', config: configFor(masterState.primaryCheckout), exec: r.exec, flags: { push: true }, state: masterState })
   assert.ok(!r.calls.some((c) => c.args.includes('push')), 'pushBaseRef refuses master BEFORE any git push call')
   assert.match(res.pushRefused, /refuses master/)
 })
 
-test('cleanup — landing removes the sidecar, RESUME.md, and claims', () => {
+test('cleanup — an unowned isolated sidecar remains as recovery evidence after landing', async () => {
   const primary = makeConsumer()
   mkdirSync(join(primary, 'roadmap', 'arcs', '.building'), { recursive: true })
   writeFileSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: primary }))
   writeFileSync(join(primary, 'roadmap', 'arcs', 'A-RESUME.md'), '# notes\n')
   const { exec } = recordingExec()
-  landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
-  assert.ok(!existsSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json')), 'sidecar removed')
-  assert.ok(!existsSync(join(primary, 'roadmap', 'arcs', 'A-RESUME.md')), 'RESUME.md removed')
+  await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary) })
+  assert.ok(existsSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json')), 'unowned sidecar is retained')
+  assert.ok(existsSync(join(primary, 'roadmap', 'arcs', 'A-RESUME.md')), 'recovery instructions remain beside it')
 })
 
-test('RunnerSummary — validated through the CONSUMER RunnerSummaryShape; a broken summary fails LOUD', () => {
+test('RunnerSummary — validated through the CONSUMER RunnerSummaryShape; a broken summary fails LOUD', async () => {
   const consumer = makeConsumer()
   const good = buildRunnerSummary(stateFor(consumer), { suiteGreen: true })
   assert.doesNotThrow(() => validateRunnerSummary(consumer, good))
@@ -179,7 +180,7 @@ test('RunnerSummary — validated through the CONSUMER RunnerSummaryShape; a bro
   assert.throws(() => validateRunnerSummary(consumer, { arcId: 'A', outcome: 'shipped' }))
 })
 
-test('RunnerSummary — no second Zod copy: landing.mjs defines no RunnerSummaryShape z.object', () => {
+test('RunnerSummary — no second Zod copy: landing.mjs defines no RunnerSummaryShape z.object', async () => {
   const src = readFileSync(join(HERE, 'landing.mjs'), 'utf8')
   assert.equal(/RunnerSummaryShape\s*=\s*z\./.test(src), false, 'landing.mjs must validate through the consumer shape, never define its own')
 })
@@ -255,13 +256,13 @@ function makeArcConsumer({ memberStatus = 'done', arcIntegration = 'autonomous',
   return root
 }
 
-test('arc land command — exit 3 held-for-user when mergePolicy.arcIntegration is hold', () => {
+test('arc land command — exit 3 held-for-user when mergePolicy.arcIntegration is hold', async () => {
   const r = landBin(makeArcConsumer({ arcIntegration: 'hold' }), ['A', '--json'])
   assert.equal(r.code, 3)
   assert.equal(JSON.parse(r.stdout).action, 'held')
 })
 
-test('arc land command — exit 2 blocked when a member is not done', () => {
+test('arc land command — exit 2 blocked when a member is not done', async () => {
   const r = landBin(makeArcConsumer({ memberStatus: 'backlog' }), ['A', '--json'])
   assert.equal(r.code, 2)
   const out = JSON.parse(r.stdout)
@@ -269,7 +270,7 @@ test('arc land command — exit 2 blocked when a member is not done', () => {
   assert.equal(out.held[0].id, 1)
 })
 
-test('arc land command — exit 0 landed end-to-end (direct-on-baseRef, no member incomplete)', () => {
+test('arc land command — exit 0 landed end-to-end (direct-on-baseRef, no member incomplete)', async () => {
   // The consumer IS the primary checkout on develop → direct integration model (no merge).
   const root = makeArcConsumer()
   const r = landBin(root, ['A', '--json'])
@@ -278,7 +279,7 @@ test('arc land command — exit 0 landed end-to-end (direct-on-baseRef, no membe
   assert.ok(existsSync(join(root, 'roadmap', 'arc-summary.json')), 'RunnerSummary written by the command')
 })
 
-test('arc land command — direct + arcEndSuite impacted runs the impacted slots with the arc-scope @manifest (never the full slot), lands exit 0, summary defers honestly', () => {
+test('arc land command — direct + arcEndSuite impacted runs the impacted slots with the arc-scope @manifest (never the full slot), lands exit 0, summary defers honestly', async () => {
   const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true })
   const r = landBin(root, ['A', '--json'])
   assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
@@ -293,7 +294,7 @@ test('arc land command — direct + arcEndSuite impacted runs the impacted slots
   assert.match(summary.reason, /ci-pr-gate per PR \+ nightly/, 'the summary reason names the CI backstop')
 })
 
-test('arc land command — ISOLATED model HONORS arcEndSuite impacted (direct-only guard retired — touched scope lands, CI is the full-suite gate)', () => {
+test('arc land command — ISOLATED model HONORS arcEndSuite impacted (direct-only guard retired — touched scope lands, CI is the full-suite gate)', async () => {
   // The sidecar branch is arc/a (≠ baseRef develop) ⇒ isolated model; config impacted now wins.
   const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true, isolated: true })
   const r = landBin(root, ['A', '--json'])
@@ -304,7 +305,7 @@ test('arc land command — ISOLATED model HONORS arcEndSuite impacted (direct-on
   assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN/, 'the full unit slot did NOT run for an isolated arc')
 })
 
-test('arc land command — arcEndSuite defer-ci skips local suites entirely; the summary records the deferral, never a green', () => {
+test('arc land command — arcEndSuite defer-ci skips local suites entirely; the summary records the deferral, never a green', async () => {
   const root = makeArcConsumer({ arcEndSuite: 'defer-ci', impacted: true })
   const r = landBin(root, ['A', '--json'])
   assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
@@ -318,7 +319,7 @@ test('arc land command — arcEndSuite defer-ci skips local suites entirely; the
   assert.match(summary.reason, /DEFERRED to CI/)
 })
 
-test('arc land command — --defer-suite flag defers per-invocation even with NO arcEndSuite configured', () => {
+test('arc land command — --defer-suite flag defers per-invocation even with NO arcEndSuite configured', async () => {
   const root = makeArcConsumer({ impacted: true })
   const r = landBin(root, ['A', '--json', '--defer-suite'])
   assert.equal(r.code, 0, `expected landed; stderr:\n${r.stderr}\nstdout:\n${r.stdout}`)
@@ -327,7 +328,7 @@ test('arc land command — --defer-suite flag defers per-invocation even with NO
   assert.doesNotMatch(r.stdout, /FULL_UNIT_RAN|IMPACTED_UNIT_RAN/, 'no test slot ran under --defer-suite')
 })
 
-test('arc land command — cheap blockers refuse BEFORE any suite starts (postmortem 3.2 ordering)', () => {
+test('arc land command — cheap blockers refuse BEFORE any suite starts (postmortem 3.2 ordering)', async () => {
   const root = makeArcConsumer({ memberStatus: 'backlog', impacted: true })
   const r = landBin(root, ['A', '--json'])
   assert.equal(r.code, 2)
@@ -339,7 +340,7 @@ test('arc land command — cheap blockers refuse BEFORE any suite starts (postmo
   assert.match(r.stderr, /roadmap arc land: A — blocked \(pre-suite\) \(exit 2\)/, 'explicit terminal verdict on stderr')
 })
 
-test('arc land command — zero-overlap auto-reconcile: a moved baseRef touching NONE of the arc files merges automatically and the arc lands', () => {
+test('arc land command — zero-overlap auto-reconcile: a moved baseRef touching NONE of the arc files merges automatically and the arc lands', async () => {
   const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true, isolated: true })
   const wt = `${root}-wt` // the fixture's real arc worktree
   writeFileSync(join(wt, 'arc-only.txt'), 'arc work\n')
@@ -359,7 +360,7 @@ test('arc land command — zero-overlap auto-reconcile: a moved baseRef touching
   assert.match(log, /sibling: develop moved/, 'the sibling develop commit survived')
 })
 
-test('arc land command — an EXTERNALLY landed arc (hand-land direct push) completes the bookkeeping: exit 0, no suite, sidecar cleaned, summary names it', () => {
+test('arc land command — an EXTERNALLY landed arc (hand-land direct push) completes the bookkeeping: exit 0, no suite, sidecar cleaned, summary names it', async () => {
   const root = makeArcConsumer({ arcEndSuite: 'impacted', impacted: true, isolated: true })
   // The hand-land shape: someone merged the arc branch into develop outside the engine.
   g(root, 'merge', '--no-edit', 'arc/a')
@@ -370,13 +371,13 @@ test('arc land command — an EXTERNALLY landed arc (hand-land direct push) comp
   assert.ok(out.record.some((s) => s.step === 'external-land-detected'), `external land recorded: ${JSON.stringify(out.record)}`)
   assert.match(out.suite.skipped, /externally landed/)
   assert.doesNotMatch(r.stdout, /IMPACTED_UNIT_RAN|FULL_UNIT_RAN/, 'no suite ran for an already-done merge')
-  assert.ok(!existsSync(join(root, 'roadmap', 'arcs', '.building', 'A.json')), 'the stale sidecar is cleaned')
+  assert.ok(existsSync(join(root, 'roadmap', 'arcs', '.building', 'A.json')), 'unowned external sidecar remains recovery evidence')
   const summary = JSON.parse(readFileSync(join(root, 'roadmap', 'arc-summary.json'), 'utf8'))
   assert.equal(summary.gateSignals.fullSuiteGreen, false, 'an external land never claims a green suite')
   assert.match(summary.reason, /EXTERNALLY/)
 })
 
-test('arc land command — an arc branch already on baseRef with an UNDONE member is NOT external-land: falls through and blocks honestly', () => {
+test('arc land command — an arc branch already on baseRef with an UNDONE member is NOT external-land: falls through and blocks honestly', async () => {
   const root = makeArcConsumer({ memberStatus: 'backlog', impacted: true, isolated: true })
   g(root, 'merge', '--no-edit', 'arc/a')
   const r = landBin(root, ['A', '--json'])
@@ -386,20 +387,20 @@ test('arc land command — an arc branch already on baseRef with an UNDONE membe
   assert.ok(existsSync(join(root, 'roadmap', 'arcs', '.building', 'A.json')), 'the sidecar is NOT cleaned for an unfinished arc')
 })
 
-test('landArc — repoRoot pointing at a DELETED worktree still lands: post-merge acts anchor on the primary checkout (postmortem 3.6)', () => {
+test('landArc — repoRoot pointing at a DELETED worktree still lands: post-merge acts anchor on the primary checkout (postmortem 3.6)', async () => {
   const primary = makeConsumer()
   mkdirSync(join(primary, 'roadmap', 'arcs', '.building'), { recursive: true })
   writeFileSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: primary }))
   const goneWt = join(primary, '..', 'zr-gone-wt-does-not-exist')
   const { exec } = recordingExec()
   const state = stateFor(primary, { sidecar: { worktree: goneWt, branch: 'arc/a' } })
-  const res = landArc({ repoRoot: goneWt, arcId: 'A', config: configFor(primary), exec, flags: {}, state })
+  const res = await landArc({ repoRoot: goneWt, arcId: 'A', config: configFor(primary), exec, flags: {}, state })
   assert.equal(res.outcome, 'landed', 'a vanished invocation root must never fail a completed merge')
-  assert.ok(!existsSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json')), 'sidecar removed via the primary checkout')
+  assert.ok(existsSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json')), 'unowned vanished-worktree sidecar remains recovery evidence')
   assert.ok(existsSync(join(primary, 'roadmap', 'arc-summary.json')), 'RunnerSummary written to the primary checkout')
 })
 
-test('REAL merge — landing merges into LOCAL develop and a sibling unpushed commit SURVIVES (never clobbered)', () => {
+test('REAL merge — landing merges into LOCAL develop and a sibling unpushed commit SURVIVES (never clobbered)', async () => {
   const primary = makeConsumer()
   // Arc branch off the base, with its own commit, checked out in a linked worktree.
   g(primary, 'branch', 'arc/a')
@@ -415,7 +416,7 @@ test('REAL merge — landing merges into LOCAL develop and a sibling unpushed co
   g(primary, 'commit', '-q', '-m', 'sibling: unrelated unpushed develop work')
 
   const state = stateFor(primary, { arcBranch: 'arc/a', sidecar: { worktree: wt, branch: 'arc/a' }, mergePolicy: { arcIntegration: 'autonomous', maxOpenFollowups: 0, autonomousPushRefs: [], primaryCheckout: primary } })
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary, { autonomousPushRefs: [] }), exec: defaultExec, flags: {}, state })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary, { autonomousPushRefs: [] }), exec: defaultExec, flags: {}, state })
   assert.equal(res.outcome, 'landed', JSON.stringify(res))
   const log = g(primary, 'log', '--format=%s', 'develop')
   assert.match(log, /arc work/, 'the arc commit landed on local develop')
@@ -432,7 +433,7 @@ test('REAL merge — landing merges into LOCAL develop and a sibling unpushed co
 
 /** A codex RUN-lane journal where codex.mjs launch() writes it — the PRIMARY's .building/, which
  *  is also where findJournal looks. `phases` is what makes a lane cover a member id. */
-function seedCodexJournal(primary, phases, worktree) {
+function seedCodexJournal(primary, phases, worktree, { owned = true } = {}) {
   const dir = join(primary, '.building')
   mkdirSync(dir, { recursive: true })
   const path = join(dir, `codex-${phases.join('-')}.json`)
@@ -458,6 +459,25 @@ function disposeRecorder(answer = { disposed: true, alreadyDisposed: false, reas
   return { dispose, calls }
 }
 
+function cleanupDepsOf(rec) {
+  return {
+    archive: (path, _journal, closedBy) => archiveJournal(path, JSON.parse(readFileSync(path, 'utf8')), closedBy),
+    archiveOutput: async (_root, _path, journal) => ({ journal: { ...journal, worktreeIdentity: { ownershipId: 'fixture-' + journal.phases.join('-') } }, archived: null, removed: true, reason: null }),
+    cleanup: async (root, options) => {
+      const ownershipId = options.ownershipIds[0]
+      const phases = ownershipId.replace('fixture-', '')
+      const dir = phases.includes('-') ? root + '-codex-' + phases : root + '-codex-' + phases
+      const answer = rec.dispose(root, dir, { ownershipIds: options.ownershipIds, policy: options.policy })
+      return {
+        version: 1, invocationId: 'fixture', resumed: { items: [] },
+        plan: { items: [{ worktree: dir, classification: answer.disposed || answer.alreadyDisposed ? 'eligible' : answer.reason }] },
+        applied: { items: [{ ownershipId, state: answer.disposed || answer.alreadyDisposed ? 'removed' : 'held', reason: answer.reason, disposal: { disposed: answer.disposed, alreadyDisposed: answer.alreadyDisposed, detail: answer.detail, branchDeleted: answer.branchDeleted } }] },
+      }
+    },
+    cleanupDeps: {},
+  }
+}
+
 const doneMember = (num) => ({ num, done: true, kind: 'logic', executionResult: { status: 'done', hardStops: [] } })
 
 /** The record entry that NAMES a lane worktree, serialized. Which key carries the path is the
@@ -468,7 +488,7 @@ function laneRecord(record, dir) {
   return JSON.stringify(hit)
 }
 
-test('cleanup — arc landing disposes EVERY landed member’s codex lane through the rail, anchored at the primary, beside the sidecar/RESUME.md/claims it already removed', () => {
+test('cleanup — arc landing disposes EVERY landed member’s codex lane through the rail, anchored at the primary, beside the sidecar/RESUME.md/claims it already removed', async () => {
   const primary = makeConsumer()
   mkdirSync(join(primary, 'roadmap', 'arcs', '.building'), { recursive: true })
   writeFileSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json'), JSON.stringify({ arcId: 'A', worktree: primary }))
@@ -484,14 +504,14 @@ test('cleanup — arc landing disposes EVERY landed member’s codex lane throug
   // git in a deleted cwd and fail ENOENT before git ever parses argv.
   const goneWt = join(primary, '..', 'zr-gone-arc-wt-does-not-exist')
 
-  const res = landArc({
+  const res = await landArc({
     repoRoot: goneWt,
     arcId: 'A',
     config: configFor(primary),
     exec,
     flags: {},
     state: stateFor(primary, { members: [doneMember(10), doneMember(11)], sidecar: { worktree: goneWt, branch: 'arc/a' } }),
-    dispose: rec.dispose,
+    ...cleanupDepsOf(rec),
   })
 
   assert.equal(res.outcome, 'landed')
@@ -506,35 +526,33 @@ test('cleanup — arc landing disposes EVERY landed member’s codex lane throug
       primary,
       'every disposal anchors at the PRIMARY checkout — the invocation root may be the very tree being removed (the METERTENANT rule)',
     )
-    assert.ok(
-      (c.opts?.allowUntracked ?? []).includes('CODEX-REPORT.md'),
-      `the run lane's never-committed hand-off file must be excepted or every lane refuses on its own report; got ${JSON.stringify(c.opts)}`,
-    )
+    assert.deepEqual(c.opts.ownershipIds, ['fixture-' + c.dir.split('-codex-')[1]], 'cleanup is scoped to the exact lane ownership id')
+    assert.equal(c.opts.policy.integrationRef, 'develop')
   }
   // The new work EXTENDS the existing best-effort block; it never forks a second cleanup.
-  assert.ok(!existsSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json')), 'the sidecar is still removed')
-  assert.ok(!existsSync(join(primary, 'roadmap', 'arcs', 'A-RESUME.md')), 'RESUME.md is still removed')
+  assert.ok(existsSync(join(primary, 'roadmap', 'arcs', '.building', 'A.json')), 'unowned sidecar remains recovery evidence')
+  assert.ok(existsSync(join(primary, 'roadmap', 'arcs', 'A-RESUME.md')), 'recovery instructions remain with the unowned sidecar')
   assert.ok(
     res.record.some((s) => s.step === 'cleanup' && !s.warning),
     `the pre-existing cleanup step still records its removals; got:\n${JSON.stringify(res.record, null, 2)}`,
   )
 })
 
-test('cleanup — an arc delegated as ONE codex run shares one journal and one worktree: it is disposed EXACTLY once, not once per member', () => {
+test('cleanup — an arc delegated as ONE codex run shares one journal and one worktree: it is disposed EXACTLY once, not once per member', async () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10-11`
   seedCodexJournal(primary, [10, 11], lane)
   const { exec } = recordingExec()
   const rec = disposeRecorder()
 
-  const res = landArc({
+  const res = await landArc({
     repoRoot: primary,
     arcId: 'A',
     config: configFor(primary),
     exec,
     flags: {},
     state: stateFor(primary, { members: [doneMember(10), doneMember(11)] }),
-    dispose: rec.dispose,
+    ...cleanupDepsOf(rec),
   })
 
   assert.equal(res.outcome, 'landed')
@@ -546,25 +564,25 @@ test('cleanup — an arc delegated as ONE codex run shares one journal and one w
   assert.equal(rec.calls[0].dir, lane, 'and it is the shared multi-phase lane')
 })
 
-test('cleanup — a lane worktree that is ALREADY gone reports already-disposed and never fails the land', () => {
+test('cleanup — a lane worktree that is ALREADY gone reports already-disposed and never fails the land', async () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10`
   seedCodexJournal(primary, [10], lane)
   const { exec } = recordingExec()
   const rec = disposeRecorder({ disposed: true, alreadyDisposed: true, reason: null, detail: null, branchDeleted: false })
 
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), ...cleanupDepsOf(rec) })
 
   assert.equal(res.outcome, 'landed')
   assert.equal(res.exitCode, 0, 'a vanished worktree is a state, not an error — /tmp dies and the land is still complete')
   assert.match(
     laneRecord(res.record, lane),
-    /already-disposed/,
-    'the record says already-disposed rather than claiming a removal this land did not perform',
+    /alreadyDisposed.*true/,
+    'the cleanup evidence records that the lane was already absent',
   )
 })
 
-test('cleanup — the land record names each lane outcome, and a REFUSED disposal changes neither the outcome nor the exit code', () => {
+test('cleanup — the land record names each lane outcome, and a REFUSED disposal changes neither the outcome nor the exit code', async () => {
   const primary = makeConsumer()
   const kept = `${primary}-codex-10`
   const gone = `${primary}-codex-11`
@@ -583,14 +601,14 @@ test('cleanup — the land record names each lane outcome, and a REFUSED disposa
       : { disposed: true, alreadyDisposed: false, reason: null, detail: null, branchDeleted: true },
   )
 
-  const res = landArc({
+  const res = await landArc({
     repoRoot: primary,
     arcId: 'A',
     config: configFor(primary),
     exec,
     flags: {},
     state: stateFor(primary, { members: [doneMember(10), doneMember(11)] }),
-    dispose: rec.dispose,
+    ...cleanupDepsOf(rec),
   })
 
   assert.equal(res.outcome, 'landed', 'the merge already happened — a refused cleanup never rewrites the land’s verdict')
@@ -601,7 +619,7 @@ test('cleanup — the land record names each lane outcome, and a REFUSED disposa
   assert.match(laneRecord(res.record, gone), /disposed/, 'and the lane that went is recorded as disposed')
 })
 
-test('cleanup — a dispose that THROWS is still best-effort: the land keeps its outcome and the EXISTING cleanup catch records the warning', () => {
+test('cleanup — a dispose that THROWS is still best-effort: the land keeps its outcome and the EXISTING cleanup catch records the warning', async () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10`
   seedCodexJournal(primary, [10], lane)
@@ -610,7 +628,7 @@ test('cleanup — a dispose that THROWS is still best-effort: the land keeps its
     throw new Error('rm -rf exploded')
   })
 
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), ...cleanupDepsOf(rec) })
 
   assert.equal(res.outcome, 'landed', 'a cleanup fatal after a completed merge reads as a failed land — the exact crash the best-effort law exists to prevent')
   assert.equal(res.exitCode, 0)
@@ -620,14 +638,14 @@ test('cleanup — a dispose that THROWS is still best-effort: the land keeps its
   assert.ok(existsSync(join(primary, 'roadmap', 'arc-summary.json')), 'everything after the cleanup block still runs — the RunnerSummary lands')
 })
 
-test('cleanup — a disposed member lane gets its journal ARCHIVED, so `codex status` reads the same closed answer whichever verb landed it', () => {
+test('cleanup — a disposed member lane gets its journal ARCHIVED, so `codex status` reads the same closed answer whichever verb landed it', async () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10`
   const jPath = seedCodexJournal(primary, [10], lane)
   const { exec } = recordingExec()
   const rec = disposeRecorder()
 
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), ...cleanupDepsOf(rec) })
 
   assert.equal(res.outcome, 'landed')
   assert.ok(
@@ -642,20 +660,20 @@ test('cleanup — a disposed member lane gets its journal ARCHIVED, so `codex st
   assert.equal(typeof j.closedBy, 'string', 'and by which verb')
 })
 
-test('cleanup — a REFUSED member lane keeps its live journal: nothing may claim a lane closed while its worktree stands', () => {
+test('cleanup — a REFUSED member lane keeps its live journal: nothing may claim a lane closed while its worktree stands', async () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10`
   const jPath = seedCodexJournal(primary, [10], lane)
   const { exec } = recordingExec()
   const rec = disposeRecorder({ disposed: false, alreadyDisposed: false, reason: 'dirty', detail: `${lane} carries uncommitted work`, branchDeleted: false })
 
-  landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+  await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), ...cleanupDepsOf(rec) })
 
-  assert.ok(existsSync(jPath), 'the journal stays LIVE — the lane is still there and still needs an operator')
-  assert.ok(!existsSync(join(primary, '.building', 'codex-10.closed.json')), 'and nothing was archived')
+  assert.ok(!existsSync(jPath), 'the exact output was consumed before cleanup')
+  assert.ok(existsSync(join(primary, '.building', 'codex-10.closed.json')), 'the closed journal records consumed output even when worktree cleanup holds')
 })
 
-test('cleanup — one lane throwing does not skip the REST: each disposal is isolated and named', () => {
+test('cleanup — one lane throwing does not skip the REST: each disposal is isolated and named', async () => {
   const primary = makeConsumer()
   const boom = `${primary}-codex-10`
   const ok = `${primary}-codex-11`
@@ -667,14 +685,14 @@ test('cleanup — one lane throwing does not skip the REST: each disposal is iso
     return { disposed: true, alreadyDisposed: false, reason: null, detail: null, branchDeleted: true }
   })
 
-  const res = landArc({
+  const res = await landArc({
     repoRoot: primary,
     arcId: 'A',
     config: configFor(primary),
     exec,
     flags: {},
     state: stateFor(primary, { members: [doneMember(10), doneMember(11)] }),
-    dispose: rec.dispose,
+    ...cleanupDepsOf(rec),
   })
 
   assert.equal(res.outcome, 'landed')
@@ -688,7 +706,7 @@ test('cleanup — one lane throwing does not skip the REST: each disposal is iso
   assert.match(laneRecord(res.record, ok), /disposed/, 'and the one after it still went')
 })
 
-test('cleanup — a lane whose directory is ALREADY gone still gets its journal archived', () => {
+test('cleanup — a lane whose directory is ALREADY gone still gets its journal archived', async () => {
   const primary = makeConsumer()
   const jPath = seedCodexJournal(primary, [10], `${primary}-codex-10`)
   const { exec } = recordingExec()
@@ -697,21 +715,21 @@ test('cleanup — a lane whose directory is ALREADY gone still gets its journal 
   // that ran and landed: the symptom the archive was added to remove.
   const rec = disposeRecorder({ disposed: true, alreadyDisposed: true, reason: null, detail: null, branchDeleted: false })
 
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), ...cleanupDepsOf(rec) })
 
   assert.equal(res.outcome, 'landed')
   assert.ok(!existsSync(jPath), 'the live journal name is gone for a lane that is gone')
   assert.ok(existsSync(join(primary, '.building', 'codex-10.closed.json')), 'archived, exactly as phase land would have')
 })
 
-test('cleanup — a journal naming a SLOT worktree is never disposed by arc land either', () => {
+test('cleanup — a journal naming a SLOT worktree is never disposed by arc land either', async () => {
   const primary = makeConsumer()
   const slot = `${primary}-wt-1`
   seedCodexJournal(primary, [10], slot)
   const { exec } = recordingExec()
   const rec = disposeRecorder()
 
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), ...cleanupDepsOf(rec) })
 
   assert.equal(res.outcome, 'landed')
   assert.deepEqual(
@@ -721,22 +739,22 @@ test('cleanup — a journal naming a SLOT worktree is never disposed by arc land
   )
 })
 
-test('cleanup — a disposed lane whose JOURNAL fails to archive records that, not a second contradictory dispose outcome', () => {
+test('cleanup — a disposed lane whose JOURNAL fails to archive records that, not a second contradictory dispose outcome', async () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10`
   seedCodexJournal(primary, [10], lane)
   const { exec } = recordingExec()
   const rec = disposeRecorder()
 
-  const res = landArc({
+  const res = await landArc({
     repoRoot: primary,
     arcId: 'A',
     config: configFor(primary),
     exec,
     flags: {},
     state: stateFor(primary),
-    dispose: rec.dispose,
-    archive: () => {
+    ...cleanupDepsOf(rec),
+    archiveOutput: async () => {
       throw new Error('EACCES writing the closed journal')
     },
   })
@@ -748,27 +766,27 @@ test('cleanup — a disposed lane whose JOURNAL fails to archive records that, n
     1,
     `one lane, ONE outcome — a record carrying both 'disposed' and 'errored' for the same worktree blames the disposal for an archive failure and misleads a first-match reader; got:\n${JSON.stringify(laneEntries, null, 2)}`,
   )
-  assert.equal(laneEntries[0].outcome, 'disposed', 'the disposal really did happen and the record must say so')
-  const warned = res.record.find((s) => s.step === 'cleanup' && /archive/i.test(s.warning ?? ''))
+  assert.equal(laneEntries[0].outcome, 'errored', 'archive failure prevents cleanup from claiming disposal')
+  const warned = res.record.find((s) => s.step === 'cleanup' && /EACCES/.test(s.warning ?? ''))
   assert.ok(warned, `the archive failure gets its OWN warning; got:\n${JSON.stringify(res.record, null, 2)}`)
   assert.match(warned.warning, /EACCES/, 'naming the real failure')
 })
 
-test('cleanup — a lane lesson merge failure is its own outcome and never disposes the only copy', () => {
+test('cleanup — a lane lesson merge failure is its own outcome and never disposes the only copy', async () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10`
   seedCodexJournal(primary, [10], lane)
   const { exec } = recordingExec()
   const rec = disposeRecorder()
 
-  const res = landArc({
+  const res = await landArc({
     repoRoot: primary,
     arcId: 'A',
     config: configFor(primary),
     exec,
     flags: {},
     state: stateFor(primary),
-    dispose: rec.dispose,
+    ...cleanupDepsOf(rec),
     mergeLessons: () => { throw new Error('EACCES reading lane lessons') },
   })
 
@@ -783,7 +801,7 @@ test('cleanup — a lane lesson merge failure is its own outcome and never dispo
   assert.equal(res.record.some((s) => s.step === 'codex-lane-dispose' && s.worktree === lane), false)
 })
 
-test('cleanup — a merged lane branch that could not be deleted is NAMED in the land record', () => {
+test('cleanup — a merged lane branch that could not be deleted is NAMED in the land record', async () => {
   const primary = makeConsumer()
   const lane = `${primary}-codex-10`
   seedCodexJournal(primary, [10], lane)
@@ -796,7 +814,7 @@ test('cleanup — a merged lane branch that could not be deleted is NAMED in the
     branchDeleted: false,
   })
 
-  const res = landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), dispose: rec.dispose })
+  const res = await landArc({ repoRoot: primary, arcId: 'A', config: configFor(primary), exec, flags: {}, state: stateFor(primary), ...cleanupDepsOf(rec) })
 
   assert.match(
     laneRecord(res.record, lane),
@@ -830,7 +848,7 @@ function laneWithLessons(primary, suffix, lessons) {
   return dir
 }
 
-test('cleanup — arc land MERGES every landed lane’s lessons into the primary corpus, and does it BEFORE that lane is disposed', () => {
+test('cleanup — arc land MERGES every landed lane’s lessons into the primary corpus, and does it BEFORE that lane is disposed', async () => {
   const primary = makeConsumer()
   seedLessons(primary, '{"k":"primary"}\n')
   const laneTen = laneWithLessons(primary, '10', '{"k":"primary"}\n{"k":"lane-10"}\n')
@@ -846,14 +864,14 @@ test('cleanup — arc land MERGES every landed lane’s lessons into the primary
     return { disposed: true, alreadyDisposed: false, reason: null, detail: null, branchDeleted: true }
   })
 
-  const res = landArc({
+  const res = await landArc({
     repoRoot: primary,
     arcId: 'A',
     config: configFor(primary),
     exec,
     flags: {},
     state: stateFor(primary, { members: [doneMember(10), doneMember(11)] }),
-    dispose: rec.dispose,
+    ...cleanupDepsOf(rec),
   })
 
   assert.equal(res.outcome, 'landed')
@@ -872,7 +890,7 @@ test('cleanup — arc land MERGES every landed lane’s lessons into the primary
   }
 })
 
-test('cleanup — a lane that recorded NO lessons leaves the primary corpus byte-identical and never fails the land', () => {
+test('cleanup — a lane that recorded NO lessons leaves the primary corpus byte-identical and never fails the land', async () => {
   const primary = makeConsumer()
   seedLessons(primary, '{"k":"primary"}\n')
   const bytes = readFileSync(join(primary, LESSONS_REL), 'utf8')
@@ -881,14 +899,14 @@ test('cleanup — a lane that recorded NO lessons leaves the primary corpus byte
   const { exec } = recordingExec()
   const rec = disposeRecorder()
 
-  const res = landArc({
+  const res = await landArc({
     repoRoot: primary,
     arcId: 'A',
     config: configFor(primary),
     exec,
     flags: {},
     state: stateFor(primary, { members: [doneMember(12)] }),
-    dispose: rec.dispose,
+    ...cleanupDepsOf(rec),
   })
 
   assert.equal(res.outcome, 'landed', 'an absent lane corpus is an ordinary state, not a cleanup failure')
@@ -898,4 +916,35 @@ test('cleanup — a lane that recorded NO lessons leaves the primary corpus byte
     !res.record.some((s) => s.step === 'cleanup' && s.warning),
     `nothing warned; got:\n${JSON.stringify(res.record, null, 2)}`,
   )
+})
+
+test('40.7 arc landing retains an unowned member lane and sends an explicit empty selector to shared cleanup', async () => {
+  const primary = makeConsumer()
+  const lane = `${primary}-legacy-codex-4073`
+  const journalPath = seedCodexJournal(primary, [4073], lane, { owned: false })
+  const { exec } = recordingExec()
+  const calls = []
+  const res = await landArc({
+    repoRoot: primary,
+    arcId: 'A',
+    config: configFor(primary),
+    exec,
+    flags: {},
+    state: stateFor(primary, { members: [doneMember(4073)] }),
+    archiveOutput: async (_root, _path, journal) => {
+      calls.push('archive')
+      return { journal, archived: null, removed: false, reason: 'unowned' }
+    },
+    cleanup: async (...args) => {
+      calls.push({ kind: 'cleanup', args })
+      return { version: 1, invocationId: 'fixture', resumed: [], plan: { items: [] }, applied: { items: [] } }
+    },
+    cleanupDeps: {},
+  })
+  assert.equal(res.outcome, 'landed')
+  assert.equal(calls[0], 'archive')
+  assert.equal(calls[1].kind, 'cleanup')
+  assert.deepEqual(calls[1].args[1].ownershipIds, [])
+  assert.ok(existsSync(journalPath), 'an archive hold keeps the live journal available for retry')
+  assert.ok(!existsSync(journalPath.replace(/\.json$/, '.closed.json')), 'a held report cannot be stranded behind a closed journal')
 })

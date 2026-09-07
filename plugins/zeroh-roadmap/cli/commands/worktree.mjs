@@ -15,8 +15,8 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { detectInstaller } from './codex.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
-import { loadConfig, integrationRefOf } from '../lib/config.mjs'
-import { claimSlot, ensureWorktree, resetForPhase, listSlots, ownerIdentity, WorktreeError } from '../lib/worktree.mjs'
+import { loadConfig, integrationRefOf, worktreeGcPolicyOf, ConfigError } from '../lib/config.mjs'
+import { claimSlot, ensureWorktree, resetForPhase, listSlots, ownerIdentity, WorktreeError, runWorktreeCleanup } from '../lib/worktree.mjs'
 
 /** A config that will not load REFUSES here (the ConfigError → exit 1 house posture the bin
  *  dispatcher owns): guessing 'develop' would reset or land the lane onto a branch the
@@ -108,12 +108,55 @@ function runReset(root, argv) {
   return 0
 }
 
+/** Explicit apply is still bounded by the consumer's opt-in policy. */
+export async function runGc(root, argv, { out = process.stdout, err = process.stderr, ...deps } = {}) {
+  const seen = new Set(), overrides = {}
+  let apply = false, json = false
+  for (let index = 0; index < argv.length; index++) {
+    const flag = argv[index]
+    if (seen.has(flag) || !['--apply', '--json', '--inactive-observations', '--inactive-interval-ms'].includes(flag)) {
+      err.write('worktree gc: usage error: unknown or duplicate flag\n'); return 1
+    }
+    seen.add(flag)
+    if (flag === '--apply') { apply = true; continue }
+    if (flag === '--json') { json = true; continue }
+    const raw = argv[++index], value = Number(raw)
+    if (!/^[0-9]+$/.test(raw ?? '') || !Number.isSafeInteger(value) || value < (flag === '--inactive-observations' ? 2 : 1)) {
+      err.write('worktree gc: usage error: observations must be at least two and interval must be positive\n'); return 1
+    }
+    overrides[flag === '--inactive-observations' ? 'inactiveObservations' : 'inactiveIntervalMs'] = value
+  }
+  let config, policy
+  try {
+    config = loadConfig(root)
+    const configured = worktreeGcPolicyOf(config)
+    if (Object.entries(overrides).some(([key, value]) => value < configured[key])) { err.write('worktree gc: usage error: overrides may only strengthen configured inactivity bounds\n'); return 1 }
+    policy = { ...configured, ...overrides, integrationRef: integrationRefOf(config) }
+  }
+  catch (error) { err.write(`worktree gc: configuration refused: ${error.message}\n`); return 1 }
+  if (apply && !policy.enabled) { err.write('worktree gc: worktreeGc.enabled must be true before --apply\n'); return 1 }
+  try {
+    const result = await runWorktreeCleanup(root, { apply, policy }, deps)
+    if (json) out.write(JSON.stringify(result) + '\n')
+    else {
+      out.write(`worktree gc: ${apply ? 'apply' : 'dry-run'}\n`)
+      for (const item of result.plan.items) out.write(`${item.worktree}: ${item.classification}\n`)
+      for (const item of [...result.resumed.items, ...(result.applied?.items ?? [])]) out.write(`${item.ownershipId}: ${item.state}${item.reason ? ` (${item.reason})` : ''}\n`)
+    }
+    return 0
+  } catch (error) {
+    err.write(`worktree gc: scan unavailable: ${error.message}\n`)
+    return error instanceof ConfigError ? 1 : 2
+  }
+}
+
 export default async function run(argv) {
   const sub = argv[0]
   const root = gitToplevel(process.cwd())
+  if (sub === 'gc') return runGc(root, argv.slice(1))
   if (sub === 'up') return runUp(root, argv.slice(1))
   if (sub === 'status') return runStatus(root)
   if (sub === 'reset') return runReset(root, argv.slice(1))
-  process.stderr.write('roadmap worktree: usage: roadmap worktree up | status | reset [--base <ref>] [--slot <k>]\n')
+  process.stderr.write('roadmap worktree: usage: roadmap worktree up | status | reset [--base <ref>] [--slot <k>] | gc [--apply] [--inactive-observations N] [--inactive-interval-ms MS] [--json]\n')
   return 1
 }

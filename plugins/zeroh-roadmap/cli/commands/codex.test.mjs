@@ -1207,7 +1207,7 @@ test('status: `report` is a resolved absolute path, never the journal bare name'
   const fresh = spawnSync('node', [BIN, 'codex', 'status', '112', '--review'], { cwd: fx.root, encoding: 'utf8' })
   assert.equal(fresh.status, 0, fresh.stderr)
   const report = JSON.parse(fresh.stdout).report
-  assert.ok(report.startsWith(fx.root + '/'), `expected an absolute consumer path, got ${report}`)
+  assert.ok(isAbsolute(report), `expected an absolute consumer path, got ${report}`)
   assert.notEqual(report, 'CODEX-REVIEW.md')
   assert.ok(existsSync(report), 'the resolved report path must remain readable')
 })
@@ -1726,21 +1726,13 @@ test('review archive: a COMPLETE lane self-archives on the first status read', (
     `the verdict must be COPIED into the primary's .building/ before the worktree goes — expected ${lane.archived}; fix statusCodex in cli/commands/codex.mjs`,
   )
   assert.equal(readFileSync(lane.archived, 'utf8'), verdict, 'the relocated verdict is byte-identical — a summarized or re-rendered copy is a second source of truth')
-  assert.equal(
-    out.report,
-    lane.archived,
-    `\`report\` must be the RELOCATED path: a reader handed a path inside a removed worktree cannot open it; got ${out.report}`,
-  )
-  assert.ok(!existsSync(lane.worktree), `the review worktree's done-moment has passed — ${lane.worktree} must be disposed`)
-  assert.ok(
-    !lane.git('worktree', 'list', '--porcelain').includes(lane.worktree),
-    'the disposal must go through disposeWorktree (remove + prune), never an rmSync — a hand-deleted directory leaves its repo metadata haunting `git worktree list`',
-  )
-
+  assert.equal(out.report, lane.reportPath, 'an unowned lane keeps its readable source report')
+  assert.ok(existsSync(lane.worktree), 'identity-free legacy review is retained')
+  assert.ok(lane.git('worktree', 'list', '--porcelain').includes(lane.worktree), 'identity-free lane remains registered')
   const j = journalOf(lane)
-  assert.ok(existsSync(lane.jPath), 'the journal keeps its codex-review-<ids>.json NAME — renaming it is how findJournal loses the archived lane and the second read regresses to "no journal covers"')
-  assert.ok(Number.isFinite(Date.parse(j.archivedAt)), `the journal must be STAMPED with an ISO archivedAt — got ${JSON.stringify(j.archivedAt)}`)
-  assert.equal(j.archivedReport, lane.archived, `archivedReport must be the ABSOLUTE relocated path — got ${JSON.stringify(j.archivedReport)}`)
+  assert.ok(existsSync(lane.jPath), 'the live journal remains readable')
+  assert.ok(Number.isFinite(Date.parse(j.archivedAt)), 'journal records the exact archived copy')
+  assert.equal(j.archivedReport, lane.archived)
 
   const branches = lane.git('branch', '--list')
   assert.match(branches, /codex-review\/200/, 'a detached review lane owns no branch — the archival must never hand one to the rail')
@@ -1806,7 +1798,7 @@ test('review archive: a second status on an archived lane still delivers the ver
 
   const first = laneStatus(root, [203], '--review')
   assert.equal(first.out?.state, 'complete', `precondition: the first read archives; stderr: ${first.err}`)
-  assert.ok(!existsSync(lane.worktree), 'precondition: the worktree is gone after the first read')
+  assert.ok(existsSync(lane.worktree), 'precondition: identity-free worktree is retained')
   const stampedAt = journalOf(lane).archivedAt
   const copiedAt = statSync(lane.archived).mtimeMs
 
@@ -1814,7 +1806,7 @@ test('review archive: a second status on an archived lane still delivers the ver
 
   assert.equal(out?.state, 'complete', `an archived lane is READABLE FOREVER — a consumed verdict must never decay to dead-no-report; stderr: ${err}`)
   assert.equal(code, 0, `stderr: ${err}`)
-  assert.equal(out.report, lane.archived, `and still points at the relocated report; got ${out.report}`)
+  assert.equal(out.report, lane.reportPath, `and still points at the readable retained report; got ${out.report}`)
   assert.equal(readFileSync(lane.archived, 'utf8'), verdict, 'which still holds the verdict')
   assert.ok(
     !/ENOENT|no such file|Error/i.test(err),
@@ -1947,7 +1939,8 @@ test('review archive: a SECOND review of the same phase archives ITS verdict, ne
   const root = tmpRepo()
   const lane = reviewLane(root, [207], { body: 'first pass: NEEDS WORK\nCODEX-RUN-COMPLETE\n' })
   assert.equal(laneStatus(root, [207], '--review').out?.state, 'complete', 'precondition: the first review archives')
-  assert.ok(!existsSync(lane.worktree), 'precondition: and its worktree is gone')
+  assert.ok(existsSync(lane.worktree), 'precondition: identity-free lane remains held')
+  lane.git('worktree', 'remove', '--force', lane.worktree) // fixture allocates a distinct next generation at the reusable path
 
   // The relaunch: `codex review 207` again writes a FRESH journal (no archivedAt) and a new
   // detached worktree, exactly as reviewCodex does. The archived name is keyed on the ids, so
@@ -1970,7 +1963,29 @@ test('review archive: a SECOND review of the same phase archives ITS verdict, ne
     second,
     'the archived verdict is THIS run\'s — a copy skipped because the path was already occupied leaves `status` serving a superseded review from a lane it just disposed',
   )
-  assert.ok(!existsSync(lane.worktree), 'and the second lane is disposed like the first')
+  assert.ok(existsSync(lane.worktree), 'the second identity-free generation remains held too')
+})
+
+test('40.7 completed status routes an unowned legacy lane through an empty cleanup selector', async () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [4057])
+  const calls = []
+  const command = await import('./codex.mjs')
+  assert.equal(typeof command.statusCodex, 'function')
+  const code = await command.statusCodex(root, ['4057'], 'review', {
+    archiveOutput: async (_root, _path, journal) => {
+      calls.push('archive')
+      return { journal, archived: null, removed: false, reason: 'unowned' }
+    },
+    cleanup: async (...args) => { calls.push({ kind: 'cleanup', args }); return { version: 1, invocationId: 'fixture', resumed: [], plan: { items: [] }, applied: { items: [] } } },
+    cleanupDeps: {},
+  })
+  assert.equal(code, 0)
+  assert.equal(calls[0], 'archive')
+  assert.equal(calls[1].kind, 'cleanup')
+  assert.deepEqual(calls[1].args[1].ownershipIds, [])
+  assert.ok(existsSync(lane.worktree))
+  assert.ok(existsSync(lane.reportPath))
 })
 
 test('review archive: a disposal refused while the lane was still LIVE is RETRIED on the next status', async () => {
@@ -2006,10 +2021,7 @@ test('review archive: a disposal refused while the lane was still LIVE is RETRIE
 
   assert.equal(out?.state, 'complete', `stderr: ${err}`)
   assert.equal(code, 0, `stderr: ${err}`)
-  assert.ok(
-    !existsSync(lane.worktree),
-    `the group is dead now, so the retry must dispose — a done-moment that fires once leaves exactly the leak this phase exists to kill; stderr: ${err}`,
-  )
+  assert.ok(existsSync(lane.worktree), 'dead legacy lane remains held until ownership is proved')
 })
 
 test('status: a CLOSED lane reports report: null — its worktree, and the report inside it, are gone', () => {
@@ -2415,7 +2427,7 @@ test('next-step hint: the REVIEW lane gets NO hint in any state — its done-mom
   assert.ok(existsSync(blocked.reportPath), 'and the blocked review\'s report stays where it is')
 })
 
-test('next-step hint: STDOUT stays byte-compatible — the same object, the same key set, no `next` anywhere on it', () => {
+test('next-step hint: STDOUT stays one JSON object with cleanup disposition and no next-step prose', () => {
   const root = tmpRepo()
   const j = writeJournal(root, [236], { lane: 'run', report: 'CODEX-REPORT.md', startedAt: new Date(Date.now() - 60_000).toISOString() })
   writeFileSync(join(j.worktree, 'CODEX-REPORT.md'), 'gate green\nCODEX-RUN-COMPLETE\n')
@@ -2429,7 +2441,7 @@ test('next-step hint: STDOUT stays byte-compatible — the same object, the same
   // the gate reconcile) was written against this shape.
   assert.deepEqual(
     Object.keys(out).sort(),
-    ['alive', 'base', 'lane', 'log', 'pgid', 'phases', 'report', 'sentinel', 'startedAt', 'state', 'worktree'],
+    ['alive', 'base', 'cleanup', 'lane', 'log', 'pgid', 'phases', 'report', 'sentinel', 'startedAt', 'state', 'worktree'],
     `the stdout object gained or lost a key — the hint lane is stderr, and this stream is parsed by callers who never asked for a new field; got ${JSON.stringify(Object.keys(out))}`,
   )
   assert.ok(!('next' in out), 'and `next` in particular is never a field: the contract puts the hint on stderr precisely so this object does not move')
@@ -2600,7 +2612,7 @@ function assertPlanLaneKept(lane, why) {
   assert.equal(j.archivedReport, undefined, `${why}: nor an archivedReport — got ${j.archivedReport}`)
 }
 
-test('consume-the-plan: a HARVESTED lane closes on the next status read, and the re-read still serves it', () => {
+test('consume-the-plan: a HARVESTED plan is consumed while its unowned worktree remains, and re-read still serves it', () => {
   const root = tmpRepo()
   const lane = planLane(root, [300])
   const plan = readFileSync(lane.reportPath, 'utf8')
@@ -2624,20 +2636,22 @@ test('consume-the-plan: a HARVESTED lane closes on the next status read, and the
 
   assert.equal(out?.state, 'historical-plan-consumed', err)
   assert.equal(out.freshForRequestedHead, false)
+  assert.equal(out.worktreeRetained, true)
+  assert.ok(out.cleanup, 'consumption exposes the independent cleanup result')
   assert.equal(code, 0, `a consumed plan lane exits 0 — the close is a side effect of a successful read, never a failure; stderr: ${err}`)
   assert.ok(
     existsSync(lane.archived),
     `the plan must be COPIED beside its journal before the worktree goes — expected ${lane.archived} (jPath with .json → -REPORT.md, exactly as archiveReviewLane derives it); fix statusCodex in cli/commands/codex.mjs`,
   )
   assert.equal(readFileSync(lane.archived, 'utf8'), plan, 'byte-identical: a summarized or re-rendered copy is a second source of truth for what was planned')
-  assert.ok(!existsSync(lane.worktree), `the harvested lane's done-moment has passed — ${lane.worktree} must be removed, or it squats like atlas-codex-plan-22 did`)
+  assert.ok(existsSync(lane.worktree), 'consumption retains the identity-free worktree')
   assert.ok(
-    !lane.git('worktree', 'list', '--porcelain').includes(lane.worktree),
-    'the disposal must PRUNE the metadata too — a hand-deleted directory leaves its registration haunting `git worktree list`',
+    lane.git('worktree', 'list', '--porcelain').includes(lane.worktree),
+    'held worktree registration remains',
   )
   assert.ok(
-    !branchResolves(lane),
-    `${lane.branch} must be deleted: its content is on the integration ref under another sha, so the branch is a duplicate that no merge test will ever retire; fix statusCodex in cli/commands/codex.mjs`,
+    branchResolves(lane),
+    'harvest content does not authorize branch deletion',
   )
 
   const j = journalOf(lane)
@@ -2648,8 +2662,7 @@ test('consume-the-plan: a HARVESTED lane closes on the next status read, and the
   assert.ok(Number.isFinite(Date.parse(j.archivedAt)), `the journal must be STAMPED with an ISO archivedAt — got ${JSON.stringify(j.archivedAt)}`)
   assert.equal(j.archivedReport, lane.archived, `archivedReport must be the ABSOLUTE relocated path — got ${JSON.stringify(j.archivedReport)}`)
 
-  // THE SECOND READ. The lane is gone; the journal is not. This is the state a supervising session
-  // actually polls, and the one an archival that renamed or deleted the journal would break.
+  // Re-reading the retained lane must preserve its consumed result and archive stamp.
   const again = laneStatus(root, [300], '--plan')
   assert.equal(again.code, 0, `an archived plan lane is READABLE FOREVER — a consumed verdict must never decay into a failure exit; stderr: ${again.err}`)
   assert.equal(again.out?.state, 'historical-plan-consumed', `nor into dead-no-report; stderr: ${again.err}`)
@@ -2740,7 +2753,7 @@ test('consume-the-plan: a SECOND changed file breaches the one-file invariant �
   assert.ok(existsSync(join(lane.worktree, 'notes.md')), 'and the unproven file is still on disk where its author left it')
 })
 
-test('consume-the-plan: a harvest AMENDED at the integration ref still closes — the proof reads blob HISTORY, not byte-equality', () => {
+test('consume-the-plan: a harvest AMENDED at the integration ref is still consumed — the proof reads blob HISTORY, not byte-equality', () => {
   const root = tmpRepo()
   const lane = planLane(root, [304])
   const plan = readFileSync(lane.reportPath, 'utf8')
@@ -2765,10 +2778,10 @@ test('consume-the-plan: a harvest AMENDED at the integration ref still closes �
   assert.equal(out?.state, 'historical-plan-consumed', `stderr: ${err}`)
   assert.equal(code, 0, `stderr: ${err}`)
   assert.ok(
-    !existsSync(lane.worktree),
-    `an amended harvest is STILL a harvest: the plan is on the integration ref and the lane is spent, so it must close — refusing here strands every lane that got the repair it was supposed to get; stderr: ${err}`,
+    existsSync(lane.worktree),
+    'the amended harvest remains readable while its unowned worktree is retained',
   )
-  assert.ok(!branchResolves(lane), `and ${lane.branch} goes with it — a branch kept "just in case" here is the squat this phase exists to end`)
+  assert.ok(branchResolves(lane), 'harvest content does not authorize branch deletion')
   assert.equal(readFileSync(lane.archived, 'utf8'), plan, 'with the plan archived beside its journal, byte-identical, before any of that happened')
   assert.ok(Number.isFinite(Date.parse(journalOf(lane).archivedAt)), 'and the journal stamped in place under its live name')
 })
@@ -2817,55 +2830,24 @@ test('consume-the-plan: a modified TRACKED file refuses as dirty, while untracke
   assert.ok(branchResolves(clean), `and ${clean.branch} is deleted with it`)
 })
 
-test('consume-the-plan: a branch that failed to delete is RETRIED and re-reported, never silently stranded', () => {
-  // The gate R0 finding. The close's two re-entry conditions (no archivedAt, or the worktree still
-  // standing) both go false the moment the tree is removed — so a `branch -D` that lost to a ref
-  // lock was announced exactly once and then never retried and never mentioned again, leaving the
-  // duplicate branch to squat. That is the leak class this whole phase exists to end, and no sweep
-  // verb is allowed to come back for it.
+test('consume-the-plan: repeated status preserves an unowned branch even after its ref lock clears', () => {
   const root = tmpRepo()
   const lane = planLane(root, [307])
-  const plan = readFileSync(lane.reportPath, 'utf8') // captured BEFORE any read, so the last assertion has a constant to compare against
+  const plan = readFileSync(lane.reportPath, 'utf8')
   harvest(lane)
-  // A held ref lock — the shape a crashed sibling git leaves behind. `branch -D` refuses for a
-  // reason that has nothing to do with the worktree, so the removal still succeeds.
   const lock = join(root, '.git', 'refs', 'heads', `${lane.branch}.lock`)
   mkdirSync(dirname(lock), { recursive: true })
   writeFileSync(lock, '')
-
-  const closed = laneStatus(root, [307], '--plan')
-
-  assert.equal(closed.out?.state, 'historical-plan-consumed', `stderr: ${closed.err}`)
-  assert.ok(!existsSync(lane.worktree), `the worktree still goes — its removal is unaffected by a branch that will not delete; stderr: ${closed.err}`)
-  assert.ok(branchResolves(lane), 'fixture: and the lock really did strand the branch, or the retry below tests nothing')
-  assert.ok(
-    closed.err.includes(lane.branch),
-    `a branch that leaked must be NAMED at the moment it leaks — the caller otherwise prints "consumed" over it; got: ${closed.err}`,
-  )
-
-  // The next read, with nothing changed: the leak must still be REPORTED, not forgotten.
-  const nagged = laneStatus(root, [307], '--plan')
-  assert.ok(
-    nagged.err.includes(lane.branch),
-    `a stranded branch must be re-reported on every read until it is gone — announcing it once and going quiet is how 19 stray worktrees accumulated unnoticed; got: ${nagged.err}`,
-  )
-  assert.ok(branchResolves(lane), 'and it is still there, because the lock is still there')
-  assert.equal(journalOf(lane).archivedAt !== undefined, true, 'the journal stays stamped — re-entry is a retry, never a re-archive')
-
-  // Clear the cause. The very next read must SELF-HEAL, with no verb the operator had to know.
-  rmSync(lock, { force: true })
-  const healed = laneStatus(root, [307], '--plan')
-
-  assert.equal(healed.out?.state, 'historical-plan-consumed', `stderr: ${healed.err}`)
-  assert.ok(
-    !branchResolves(lane),
-    `once the cause is cleared the retry must actually delete it — a report that never acts is the sweep verb the operator ruling refused, wearing a nag's clothes; stderr: ${healed.err}`,
-  )
-  assert.equal(
-    readFileSync(lane.archived, 'utf8'),
-    plan,
-    'and the archived plan survived all three reads byte-identical — the retry is a branch act, and it must never re-copy or re-render the hand-off',
-  )
+  for (const clearLock of [false, false, true]) {
+    if (clearLock) rmSync(lock)
+    const result = laneStatus(root, [307], '--plan')
+    assert.equal(result.out?.state, 'historical-plan-consumed', result.err)
+    assert.equal(result.code, 0)
+    assert.equal(result.out.worktreeRetained, true)
+    assert.match(result.err, /ownership-uncertain/)
+    assert.ok(existsSync(lane.worktree) && branchResolves(lane))
+    assert.equal(readFileSync(lane.archived, 'utf8'), plan)
+  }
 })
 
 test('consume-the-plan: a lane whose DIRECTORY died is never closed on an unseen verdict, and nothing is removed', () => {
@@ -2930,22 +2912,16 @@ test('next-step hint: a plan lane whose DIRECTORY is gone gets the prune hint �
   assert.ok(branchResolves(lane), 'and nothing was removed by the read itself')
 })
 
-test('next-step hint: a CONSUMED plan lane stays silent — the close removed its directory, which is not the same as losing it', () => {
-  // Gate R3, and the sharpest regression of the phase. The missing-worktree arm added at R2 fired
-  // for a lane the close had JUST disposed: `roadmap codex status` printed "plan lane consumed —
-  // plan archived at …; worktree … and branch codex-plan/300 disposed" and then, one line later,
-  // told the operator to prune what was already pruned and to read a branch that had just been
-  // deleted (that `git log` exits 128) "since an unharvested plan lives only there" — of a plan
-  // that was harvested and archived. And it repeated on every read, forever. A missing directory
-  // means two opposite things; `archivedAt` is what tells them apart.
+test('next-step hint: a CONSUMED plan lane has no redundant harvest hint while cleanup retains it', () => {
+  // Harvest is complete; a cleanup hold must not suggest repeating completed planning.
   const root = tmpRepo()
   const lane = planLane(root, [311])
   harvest(lane)
 
   const closing = laneStatus(root, [311], '--plan')
   assert.equal(closing.out?.state, 'historical-plan-consumed', `precondition: the harvested lane closes on this read; stderr: ${closing.err}`)
-  assert.ok(!existsSync(lane.worktree), 'precondition: and its directory is gone — the state the bad arm keyed on')
-  assert.ok(!branchResolves(lane), 'precondition: its branch is gone too, so any hint naming it is unrunnable')
+  assert.ok(existsSync(lane.worktree), 'consumption retains the identity-free worktree')
+  assert.ok(branchResolves(lane), 'harvest content does not authorize branch deletion')
   assert.equal(
     nextHint(closing.err),
     null,
@@ -2985,7 +2961,7 @@ test('consume-the-plan: an EMPTY one-file diff refuses both ways, and neither wa
   assert.match(m.err, /0 file\(s\)/, `and says so with the count that made it fail; got: ${m.err}`)
   assert.ok(m.err.includes(join(lane.worktree, 'CODEX-PLAN.md')), `the hand-off is the only record of what the lane did, so the refusal names it BY PATH; got: ${m.err}`)
   assert.ok(
-    m.err.includes(`cp ${join(lane.worktree, 'CODEX-PLAN.md')}`),
+    m.err.includes('keep that record') && m.err.includes('roadmap worktree gc --json'),
     `and if the operator removes the lane anyway, the remedy keeps that record FIRST — nothing on this path archived it; got: ${m.err}`,
   )
   assert.ok(existsSync(lane.worktree) && branchResolves(lane), 'and the lane itself is untouched by a refusal')
@@ -3122,7 +3098,7 @@ test('consume-the-plan: a harvested lane whose authored file does NOT PARSE refu
   )
 })
 
-test('consume-the-plan: the VALID twin still closes — validation refuses broken entities, not the flow', () => {
+test('consume-the-plan: the VALID twin is consumed — validation refuses broken entities, not the flow', () => {
   // The other direction of the same guard, and the regression pin on the 14.6 close: a validation
   // step wired to the wrong file, the wrong cwd or the wrong exit-code reading refuses EVERY lane,
   // which retires the plan lane's done-moment entirely while looking like a safety improvement.
@@ -3138,8 +3114,8 @@ test('consume-the-plan: the VALID twin still closes — validation refuses broke
   assert.equal(out?.state, 'historical-plan-consumed', `and still serves the verdict; stderr: ${err}`)
   assert.doesNotMatch(err, /does not validate as a phase entity/, `a valid entity must not be refused; got: ${err}`)
   assert.ok(existsSync(lane.archived), `the plan is copied out before the worktree goes — expected ${lane.archived}; stderr: ${err}`)
-  assert.ok(!existsSync(lane.worktree), `and the harvested lane is disposed — ${lane.worktree} must be removed; stderr: ${err}`)
-  assert.ok(!branchResolves(lane), `and ${lane.branch} deleted, exactly as before validation existed; stderr: ${err}`)
+  assert.ok(existsSync(lane.worktree), 'consumption retains the identity-free worktree')
+  assert.ok(branchResolves(lane), 'harvest content does not authorize branch deletion')
   assert.ok(Number.isFinite(Date.parse(journalOf(lane).archivedAt)), 'and the journal stamped: this lane WAS consumed')
 })
 
@@ -4791,7 +4767,7 @@ test('37.5 — a single-member review status poll validates and serves the bound
   assert.equal(out?.state, 'complete', err)
   assert.deepEqual(out.phases, ['3790', '3791'], 'validation binds the full journal mission, not only the queried member')
   assert.equal(readFileSync(out.report, 'utf8'), expected, 'the returned verdict is the report bound to that whole mission')
-  assert.ok(!existsSync(lane.worktree), 'the exactly bound mission is consumed once')
+  assert.ok(existsSync(lane.worktree), 'the exactly bound mission is readable while its unowned worktree is retained')
 })
 
 test('37.5 — stale review reset refuses to overwrite a tracked carried document with different bytes', async () => {
@@ -5018,4 +4994,23 @@ test('40.5 — a new allocation whose journal publication fails unwinds only its
   const registry = JSON.parse(readFileSync(join(root, '.building', 'worktree-slots.json'), 'utf8'))
   assert.equal(registry.identities.some(identity => identity.worktree === realpathSync(worktree)), false, 'only the newly minted registry identity is unwound')
   assert.ok(existsSync(journalPath) && statSync(journalPath).isDirectory(), 'the conflicting journal evidence is byte/type intact')
+})
+
+test('40.7 an inactive failed review retries shared cleanup with no inferred ownership', async () => {
+  const root = tmpRepo()
+  const lane = reviewLane(root, [4058])
+  rmSync(lane.reportPath)
+  const calls = []
+  const command = await import('./codex.mjs')
+  const code = await command.statusCodex(root, ['4058'], 'review', {
+    cleanup: async (...args) => {
+      calls.push(args)
+      return { version: 1, invocationId: 'fixture', resumed: [], plan: { items: [] }, applied: { items: [] } }
+    },
+    cleanupDeps: {},
+  })
+  assert.equal(code, 2)
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0][1].ownershipIds, [])
+  assert.ok(existsSync(lane.worktree), 'failed legacy review is retried but never upgraded into removable ownership')
 })

@@ -165,6 +165,18 @@ const CapacityConfigShape = z.strictObject({
   maxExecutors: z.number().int().positive().optional(),
 })
 
+/** Cleanup is opt-in; defaults are applied at use sites, preserving config round trips. */
+export const DEFAULT_WORKTREE_GC = Object.freeze({ enabled: false, inactiveObservations: 2, inactiveIntervalMs: 60_000, deleteIntegratedBranches: false })
+const WorktreeGcShape = z.strictObject({
+  enabled: z.boolean().optional(),
+  inactiveObservations: z.number().int().min(2).optional(),
+  inactiveIntervalMs: z.number().int().positive().optional(),
+  deleteIntegratedBranches: z.boolean().optional(),
+})
+export function worktreeGcPolicyOf(config) {
+  return { ...DEFAULT_WORKTREE_GC, ...WorktreeGcShape.parse(config.worktreeGc ?? {}) }
+}
+
 /** The full roadmap.config.json shape (ROADCODE-DESIGN.md §1, configVersion 1). */
 export const RoadmapConfigShape = z.strictObject({
   $schema: z.string().optional(),
@@ -196,6 +208,7 @@ export const RoadmapConfigShape = z.strictObject({
   testConventions: z.array(z.string()).optional(),
   exec: ExecShape.optional(),
   capacity: CapacityConfigShape.optional(),
+  worktreeGc: WorktreeGcShape.optional(),
 })
 
 /** True iff `<baseRef>:roadmap/roadmap.config.json` exists (a pre-cutover branch). */
