@@ -2127,3 +2127,303 @@ test('concurrent ownership registrations serialize without losing either identit
   const registry = JSON.parse(readFileSync(join(r.root, REGISTRY_REL), 'utf8'))
   assert.deepEqual(registry.identities.map(row => row.ownershipId).sort(), identities.map(row => row.ownershipId).sort(), 'both concurrent registry RMW updates survive')
 })
+
+test('40.6 cleanup exports protection probing, evidence planning, and receipt application', async () => {
+  const module = await load()
+  for (const name of ['probeWorktreeProtection', 'planWorktreeCleanup', 'applyWorktreeCleanup']) {
+    assert.equal(typeof module[name], 'function', `${name} must be exported`)
+  }
+})
+
+async function cleanupOwnedLane(id = 4061, existing = null) {
+  const module = await load()
+  const r = existing?.r ?? makeRepo()
+  const head = existing ? r.git('rev-parse', 'develop') : r.commit('cleanup integrated seed')
+  if (!existing) r.git('branch', '-f', 'develop', head)
+  const worktree = `${r.root}-cleanup-${id}`; bases.push(worktree); r.git('worktree', 'add', '-q', '-b', `cleanup/${id}`, worktree, head)
+  const laneOwner = { kind: 'roadmap-codex', id: `run:${id}` }
+  const identity = module.createWorktreeIdentity(r.root, worktree, {
+    ownershipId: `823e4567-e89b-42d3-a456-426614${String(id).slice(-6).padStart(6, '0')}`,
+    laneOwner, expectedBranch: `refs/heads/cleanup/${id}`,
+  })
+  module.registerWorktreeIdentity(r.root, identity)
+  const journal = {
+    phases: [String(id)], lane: 'run', worktree, laneOwner, worktreeIdentity: identity,
+    ownerRoot: realpathSync(r.root), pgid: 999999999, requestedRef: 'refs/heads/develop',
+    requestedHead: head, baseHead: head, workingHead: head, startedAt: '2026-09-07T00:00:00.000Z',
+  }
+  const journalPath = join(r.root, '.building', `codex-${id}.json`)
+  writeFileSync(journalPath, JSON.stringify(journal, null, 2) + '\n')
+  return { module, r, head, worktree, identity, journal, journalPath }
+}
+
+const unprotectedProbe = async () => ({ state: 'unprotected', evidence: [], reason: null })
+
+test('40.6 inactivity evidence needs distinct invocations at the exact interval and never slides the first timestamp', async () => {
+  const f = await cleanupOwnedLane(4061)
+  const base = { inactiveObservations: 2, inactiveIntervalMs: 1000, integrationRef: 'develop' }
+  const invoke = (invocationId, observedAt) => f.module.planWorktreeCleanup(f.r.root, { ...base, invocationId, observedAt }, { probeProtection: unprotectedProbe })
+  let plan = await invoke('923e4567-e89b-42d3-a456-426614174001', '2026-09-07T00:00:00.000Z')
+  assert.equal(plan.items.find(item => item.identity.ownershipId === f.identity.ownershipId).classification, 'observation-required')
+  await invoke('923e4567-e89b-42d3-a456-426614174001', '2026-09-07T00:00:05.000Z')
+  plan = await invoke('a23e4567-e89b-42d3-a456-426614174002', '2026-09-07T00:00:00.999Z')
+  assert.equal(plan.items.find(item => item.identity.ownershipId === f.identity.ownershipId).classification, 'observation-interval')
+  plan = await invoke('b23e4567-e89b-42d3-a456-426614174003', '2026-09-07T00:00:01.000Z')
+  const item = plan.items.find(candidate => candidate.identity.ownershipId === f.identity.ownershipId)
+  assert.equal(item.classification, 'eligible')
+  assert.deepEqual(item.observations.map(row => row.observedAt), ['2026-09-07T00:00:00.000Z', '2026-09-07T00:00:01.000Z'])
+  const registry = JSON.parse(readFileSync(join(f.r.root, REGISTRY_REL), 'utf8'))
+  assert.deepEqual(registry.cleanup[f.identity.ownershipId].observations, item.observations, 'the qualification is persisted, not caller memory')
+})
+
+async function cleanupClassification(f, { invocation = 10, probeProtection = unprotectedProbe } = {}) {
+  const plan = await f.module.planWorktreeCleanup(f.r.root, {
+    invocationId: `c23e4567-e89b-42d3-a456-4266141740${String(invocation).padStart(2, '0')}`,
+    observedAt: new Date(Date.parse('2026-09-07T00:00:00.000Z') + invocation * 1000).toISOString(),
+    inactiveObservations: 2, inactiveIntervalMs: 1000, integrationRef: 'develop', configuredProtectionRefs: [],
+  }, { probeProtection })
+  return plan.items.find(item => item.worktree === f.worktree)
+}
+
+function updateCleanupJournal(f, patch) {
+  Object.assign(f.journal, patch)
+  writeFileSync(f.journalPath, JSON.stringify(f.journal, null, 2) + '\n')
+}
+
+test('40.6 classifier holds live, dirty, unique, pushed-unmerged, protected, and unavailable evidence with stable reasons', async t => {
+  const rows = []
+  const live = await cleanupOwnedLane(4062); const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' }); child.unref(); kids.push(child); updateCleanupJournal(live, { pgid: child.pid }); rows.push(['live', await cleanupClassification(live, { invocation: 11 })])
+  const dirty = await cleanupOwnedLane(4063); writeFileSync(join(dirty.worktree, dirty.r.git('ls-files').split('\n')[0]), 'dirty\n'); rows.push(['dirty', await cleanupClassification(dirty, { invocation: 12 })])
+  const unique = await cleanupOwnedLane(4064); const uniqueHead = commitIn(unique.worktree, 'unique lane work', 'unique.txt'); updateCleanupJournal(unique, { workingHead: uniqueHead }); rows.push(['unique', await cleanupClassification(unique, { invocation: 13 })])
+  const unmerged = await cleanupOwnedLane(4065); const pushedHead = commitIn(unmerged.worktree, 'recoverable unmerged work', 'pushed.txt'); unmerged.r.git('branch', `archive/${4065}`, pushedHead); updateCleanupJournal(unmerged, { workingHead: pushedHead }); rows.push(['not-integrated', await cleanupClassification(unmerged, { invocation: 14 })])
+  const protectedLane = await cleanupOwnedLane(4066); rows.push(['protected', await cleanupClassification(protectedLane, { invocation: 15, probeProtection: async () => ({ state: 'protected', evidence: [{ kind: 'provider-pr', id: 'PR-1', head: protectedLane.head }], reason: 'open PR' }) })])
+  const unavailable = await cleanupOwnedLane(4067); rows.push(['protection-unavailable', await cleanupClassification(unavailable, { invocation: 16, probeProtection: async () => { throw new Error('provider offline') } })])
+  assert.deepEqual(rows.map(([expected, item]) => [expected, item.classification]), rows.map(([expected]) => [expected, expected]))
+  for (const [expected, item] of rows) assert.match(item.reason ?? item.classification, new RegExp(expected.replace('-', '.?'), 'i'), `${expected} has a stable actionable reason`)
+})
+
+test('40.6 evidence change resets the persisted inactivity sequence instead of combining unlike observations', async () => {
+  const f = await cleanupOwnedLane(4068)
+  await cleanupClassification(f, { invocation: 20 })
+  const beforeTip = f.r.git('rev-parse', 'develop')
+  const advanced = f.r.commit('integration tip changes observed evidence', 'integration-change.txt')
+  f.r.git('branch', '-f', 'develop', advanced)
+  assert.notEqual(f.r.git('rev-parse', 'develop'), beforeTip, 'fixture changes the configured integration evidence')
+  const item = await cleanupClassification(f, { invocation: 22 })
+  assert.equal(item.classification, 'observation-required')
+  assert.equal(item.observations.length, 1)
+  assert.equal(item.observations[0].invocationId, 'c23e4567-e89b-42d3-a456-426614174022')
+})
+
+async function qualifiedCleanupPlan(f, offset = 30) {
+  await cleanupClassification(f, { invocation: offset })
+  const plan = await f.module.planWorktreeCleanup(f.r.root, {
+    invocationId: `c23e4567-e89b-42d3-a456-4266141740${String(offset + 1).padStart(2, '0')}`,
+    observedAt: new Date(Date.parse('2026-09-07T01:00:00.000Z') + offset * 1000).toISOString(),
+    inactiveObservations: 2, inactiveIntervalMs: 1000, integrationRef: 'develop', configuredProtectionRefs: [],
+  }, { probeProtection: unprotectedProbe })
+  assert.equal(plan.items.find(item => item.worktree === f.worktree).classification, 'eligible')
+  return plan
+}
+
+test('40.6 an exact removing receipt resumes after interruption and completed replay performs no second disposal', async () => {
+  const f = await cleanupOwnedLane(4069); const plan = await qualifiedCleanupPlan(f, 30)
+  let interrupted = false
+  await assert.rejects(() => f.module.applyWorktreeCleanup(f.r.root, plan, {
+    probeProtection: unprotectedProbe,
+    hooks: { afterRemoving() { interrupted = true; throw new Error('crash after removing authorization') } },
+  }), /crash after removing/)
+  assert.equal(interrupted, true); assert.ok(existsSync(f.worktree), 'authorization alone does not remove the tree')
+  const applied = await f.module.applyWorktreeCleanup(f.r.root, plan, { probeProtection: unprotectedProbe })
+  const receipt = applied.items.find(item => item.ownershipId === f.identity.ownershipId)
+  assert.equal(receipt.state, 'removed'); assert.equal(existsSync(f.worktree), false)
+  const registryBytes = readFileSync(join(f.r.root, REGISTRY_REL))
+  const replay = await f.module.applyWorktreeCleanup(f.r.root, plan, { probeProtection: async () => { throw new Error('completed replay must not reprobe') } })
+  assert.deepEqual(replay, applied); assert.deepEqual(readFileSync(join(f.r.root, REGISTRY_REL)), registryBytes)
+})
+
+test('40.6 a boundary dirt race changes only that item to held and leaves its owned worktree intact', async () => {
+  const f = await cleanupOwnedLane(4070); const plan = await qualifiedCleanupPlan(f, 40)
+  const tracked = f.r.git('ls-files').split('\n')[0]
+  const result = await f.module.applyWorktreeCleanup(f.r.root, plan, {
+    probeProtection: unprotectedProbe,
+    hooks: { beforeDisposal() { writeFileSync(join(f.worktree, tracked), 'raced dirt\n') } },
+  })
+  const receipt = result.items.find(item => item.ownershipId === f.identity.ownershipId)
+  assert.equal(receipt.state, 'held'); assert.match(receipt.reason, /dirty|evidence.changed/i)
+  assert.ok(existsSync(f.worktree)); assert.equal(f.module.resolveWorktreeOwnership(f.r.root, f.journal).state, 'owned')
+})
+
+test('40.6 live and archived journal joins are observable, while omitted identity and terminal report residue hold', async () => {
+  const live = await cleanupOwnedLane(4071)
+  assert.equal((await cleanupClassification(live, { invocation: 51 })).classification, 'observation-required')
+
+  const archived = await cleanupOwnedLane(4072)
+  const closedPath = join(archived.r.root, '.building', 'codex-4072.closed.json')
+  writeFileSync(closedPath, readFileSync(archived.journalPath)); rmSync(archived.journalPath)
+  archived.journalPath = closedPath
+  assert.equal((await cleanupClassification(archived, { invocation: 52 })).classification, 'observation-required')
+
+  const omitted = await cleanupOwnedLane(4073)
+  const partial = { ...omitted.journal }; delete partial.worktreeIdentity
+  writeFileSync(omitted.journalPath, JSON.stringify(partial, null, 2) + '\n')
+  assert.equal((await cleanupClassification(omitted, { invocation: 53 })).classification, 'ownership-uncertain')
+  assert.ok(existsSync(omitted.worktree))
+
+  const residue = await cleanupOwnedLane(4074)
+  writeFileSync(join(residue.worktree, 'CODEX-REPORT.md'), 'terminal evidence still owned by caller\n')
+  assert.equal((await cleanupClassification(residue, { invocation: 54 })).classification, 'dirty')
+  assert.ok(existsSync(residue.worktree), 'GC never deletes or exempts terminal artifacts')
+})
+
+test('40.6 configured integration protection is detected before any provider callback', async () => {
+  const f = await cleanupOwnedLane(4075); let providerCalls = 0
+  const plan = await f.module.planWorktreeCleanup(f.r.root, {
+    invocationId: 'd23e4567-e89b-42d3-a456-426614174075', observedAt: '2026-09-07T00:02:00.000Z',
+    inactiveObservations: 2, inactiveIntervalMs: 1000, integrationRef: 'develop', configuredProtectionRefs: ['refs/heads/develop'],
+  }, { probeProtection: async () => { providerCalls += 1; return { state: 'unprotected', evidence: [], reason: null } } })
+  assert.equal(plan.items.find(item => item.worktree === f.worktree).classification, 'protected')
+  assert.equal(providerCalls, 0, 'an exact configured ref is sufficient protection; provider probing cannot weaken it')
+})
+
+test('40.6 configured observation counts above two require every distinct interval-qualified invocation', async () => {
+  const f = await cleanupOwnedLane(4076)
+  const call = (tail, second) => f.module.planWorktreeCleanup(f.r.root, {
+    invocationId: `e23e4567-e89b-42d3-a456-4266141740${tail}`,
+    observedAt: `2026-09-07T00:03:0${second}.000Z`, inactiveObservations: 3,
+    inactiveIntervalMs: 1000, integrationRef: 'develop', configuredProtectionRefs: [],
+  }, { probeProtection: unprotectedProbe })
+  assert.equal((await call('76', 0)).items.find(item => item.worktree === f.worktree).classification, 'observation-required')
+  assert.equal((await call('77', 1)).items.find(item => item.worktree === f.worktree).classification, 'observation-required')
+  const item = (await call('78', 2)).items.find(candidate => candidate.worktree === f.worktree)
+  assert.equal(item.classification, 'eligible'); assert.equal(item.observations.length, 3)
+})
+
+test('40.6 crashes after planned and physical-disposal boundaries resume only the same receipt', async () => {
+  for (const [id, hook] of [[4077, 'afterPlanned'], [4078, 'afterDisposal']]) {
+    const f = await cleanupOwnedLane(id); const plan = await qualifiedCleanupPlan(f, id === 4077 ? 60 : 63)
+    await assert.rejects(() => f.module.applyWorktreeCleanup(f.r.root, plan, {
+      probeProtection: unprotectedProbe, hooks: { [hook]() { throw new Error(`crash ${hook}`) } },
+    }), new RegExp(`crash ${hook}`))
+    assert.equal(existsSync(f.worktree), hook === 'afterPlanned', `${hook}: physical state matches the durable boundary`)
+    const resumed = await f.module.applyWorktreeCleanup(f.r.root, plan, { probeProtection: unprotectedProbe })
+    assert.equal(resumed.items.find(item => item.ownershipId === f.identity.ownershipId).state, 'removed')
+    assert.equal(existsSync(f.worktree), false)
+  }
+})
+
+test('40.6 fresh boundary rechecks hold HEAD, journal, registry, and provider-protection races before disposal', async () => {
+  for (const [id, race] of [[4079, 'head'], [4080, 'journal'], [4081, 'registry'], [4082, 'protection']]) {
+    const f = await cleanupOwnedLane(id); const plan = await qualifiedCleanupPlan(f, id - 4010)
+    let disposalCalls = 0
+    const hooks = { beforeDisposal() {
+      if (race === 'head') commitIn(f.worktree, 'raced head', 'raced-head.txt')
+      if (race === 'journal') writeFileSync(f.journalPath, JSON.stringify({ ...f.journal, startedAt: '2026-09-07T00:00:01.000Z' }, null, 2) + '\n')
+      if (race === 'registry') f.module.removeWorktreeIdentity(f.r.root, f.identity)
+    } }
+    const result = await f.module.applyWorktreeCleanup(f.r.root, plan, {
+      probeProtection: race === 'protection' ? async () => ({ state: 'protected', evidence: [{ kind: 'provider-pr', id: 'PR-race', head: f.head }], reason: 'opened during apply' }) : unprotectedProbe,
+      hooks,
+      dispose() { disposalCalls += 1; throw new Error('dispose must be unreachable after changed evidence') },
+    })
+    const receipt = result.items.find(item => item.ownershipId === f.identity.ownershipId)
+    assert.equal(receipt.state, 'held', race); assert.equal(disposalCalls, 0, race); assert.ok(existsSync(f.worktree), race)
+  }
+})
+
+test('40.6 one raced item is held without suppressing another independently eligible removal', async () => {
+  const first = await cleanupOwnedLane(4083)
+  const second = await cleanupOwnedLane(4084, first)
+  const options = suffix => ({
+    invocationId: `f23e4567-e89b-42d3-a456-4266141740${suffix}`,
+    observedAt: suffix === '83' ? '2026-09-07T04:00:00.000Z' : '2026-09-07T04:00:01.000Z',
+    inactiveObservations: 2, inactiveIntervalMs: 1000, integrationRef: 'develop', configuredProtectionRefs: [],
+  })
+  await first.module.planWorktreeCleanup(first.r.root, options('83'), { probeProtection: unprotectedProbe })
+  const plan = await first.module.planWorktreeCleanup(first.r.root, options('84'), { probeProtection: unprotectedProbe })
+  assert.deepEqual(plan.items.filter(item => [first.worktree, second.worktree].includes(item.worktree)).map(item => item.classification), ['eligible', 'eligible'])
+  const firstTracked = first.r.git('ls-files').split('\n')[0]
+  const result = await first.module.applyWorktreeCleanup(first.r.root, plan, {
+    probeProtection: unprotectedProbe,
+    hooks: { beforeDisposal(item) { if (item.identity.ownershipId === first.identity.ownershipId) writeFileSync(join(first.worktree, firstTracked), 'independent race\n') } },
+  })
+  assert.equal(result.items.find(item => item.ownershipId === first.identity.ownershipId).state, 'held')
+  assert.equal(result.items.find(item => item.ownershipId === second.identity.ownershipId).state, 'removed')
+  assert.ok(existsSync(first.worktree)); assert.equal(existsSync(second.worktree), false)
+})
+
+test('40.6 an initial receipt-CAS evidence race returns an explicit nonreceipt refusal and does not block another item', async () => {
+  const first = await cleanupOwnedLane(4085)
+  const second = await cleanupOwnedLane(4086, first)
+  const options = (uuid, at) => ({ invocationId: uuid, observedAt: at, inactiveObservations: 2, inactiveIntervalMs: 1000, integrationRef: 'develop', configuredProtectionRefs: [] })
+  await first.module.planWorktreeCleanup(first.r.root, options('123e4567-e89b-42d3-a456-426614174085', '2026-09-07T05:00:00.000Z'), { probeProtection: unprotectedProbe })
+  const plan = await first.module.planWorktreeCleanup(first.r.root, options('123e4567-e89b-42d3-a456-426614174086', '2026-09-07T05:00:01.000Z'), { probeProtection: unprotectedProbe })
+  const racedRegistryPath = join(first.r.root, REGISTRY_REL)
+  const racedRegistry = JSON.parse(readFileSync(racedRegistryPath, 'utf8'))
+  racedRegistry.cleanup[first.identity.ownershipId].observations[0].invocationId = '223e4567-e89b-42d3-a456-426614174087'
+  writeFileSync(racedRegistryPath, JSON.stringify(racedRegistry, null, 2) + '\n')
+  const result = await first.module.applyWorktreeCleanup(first.r.root, plan, { probeProtection: unprotectedProbe })
+  const refused = result.items.find(item => item.ownershipId === first.identity.ownershipId)
+  assert.deepEqual({ state: refused.state, reason: refused.reason, receipt: refused.receipt }, { state: 'refused', reason: 'evidence-changed', receipt: null })
+  const removed = result.items.find(item => item.ownershipId === second.identity.ownershipId)
+  assert.equal(removed.state, 'removed'); assert.equal(existsSync(second.worktree), false)
+  const registry = JSON.parse(readFileSync(join(first.r.root, REGISTRY_REL), 'utf8'))
+  assert.equal(registry.cleanup[first.identity.ownershipId].receipt, null, 'a failed initial CAS cannot fabricate a durable held receipt')
+  assert.ok(existsSync(first.worktree))
+})
+
+test('40.6 fresh module resume needs no caller plan after planned, removing, or physical-disposal crashes', async () => {
+  for (const [id, hook] of [[4087, 'afterPlanned'], [4088, 'afterRemoving'], [4089, 'afterDisposal']]) {
+    const f = await cleanupOwnedLane(id); const plan = await qualifiedCleanupPlan(f, id - 4010)
+    await assert.rejects(() => f.module.applyWorktreeCleanup(f.r.root, plan, {
+      probeProtection: unprotectedProbe, hooks: { [hook]() { throw new Error(`fresh crash ${hook}`) } },
+    }), new RegExp(`fresh crash ${hook}`))
+    const row = JSON.parse(readFileSync(join(f.r.root, REGISTRY_REL), 'utf8')).cleanup[f.identity.ownershipId]
+    assert.equal(row.operation.planDigest, plan.planDigest); assert.match(row.operation.operationDigest, /^sha256:[0-9a-f]{64}$/)
+    const fresh = await import(`./worktree.mjs?cleanup-resume=${id}-${Date.now()}`)
+    assert.equal(typeof fresh.resumeWorktreeCleanup, 'function')
+    const resumed = await fresh.resumeWorktreeCleanup(f.r.root, { ownershipIds: [f.identity.ownershipId] }, { probeProtection: unprotectedProbe })
+    assert.equal(resumed.items.find(item => item.ownershipId === f.identity.ownershipId).state, 'removed', hook)
+    assert.equal(existsSync(f.worktree), false, hook)
+  }
+})
+
+test('40.6 corrupt stored operation refuses that ownership id while another valid stored operation resumes', async () => {
+  const valid = await cleanupOwnedLane(4090)
+  const corrupt = await cleanupOwnedLane(4091, valid)
+  const plan = await qualifiedCleanupPlan(valid, 80)
+  await assert.rejects(() => valid.module.applyWorktreeCleanup(valid.r.root, plan, {
+    probeProtection: unprotectedProbe,
+    hooks: { afterPlanned(item) { if (item.identity.ownershipId === valid.identity.ownershipId) throw new Error('leave valid planned') } },
+  }), /leave valid planned/)
+  const registryPath = join(valid.r.root, REGISTRY_REL)
+  const registry = JSON.parse(readFileSync(registryPath, 'utf8'))
+  const source = registry.cleanup[valid.identity.ownershipId]
+  registry.cleanup[corrupt.identity.ownershipId].operation = { ...source.operation, ownerRoot: `${valid.r.root}-copied` }
+  registry.cleanup[corrupt.identity.ownershipId].receipt = { ...source.receipt, ownershipId: corrupt.identity.ownershipId }
+  writeFileSync(registryPath, JSON.stringify(registry, null, 2) + '\n')
+  const fresh = await import(`./worktree.mjs?cleanup-corrupt=${Date.now()}`)
+  const result = await fresh.resumeWorktreeCleanup(valid.r.root, {}, { probeProtection: unprotectedProbe })
+  assert.equal(result.items.find(item => item.ownershipId === valid.identity.ownershipId).state, 'removed')
+  assert.equal(result.items.find(item => item.ownershipId === corrupt.identity.ownershipId).state, 'refused')
+  assert.equal(existsSync(valid.worktree), false); assert.ok(existsSync(corrupt.worktree))
+})
+
+test('40.6 fresh resume refuses a digest-valid stored operation whose item is no longer eligible', async () => {
+  const f = await cleanupOwnedLane(4092); const plan = await qualifiedCleanupPlan(f, 90)
+  await assert.rejects(() => f.module.applyWorktreeCleanup(f.r.root, plan, {
+    probeProtection: unprotectedProbe, hooks: { afterPlanned() { throw new Error('leave planned for noneligible mutation') } },
+  }), /leave planned/)
+  const { journalBindingDigestOf } = await import('./codex-journal.mjs')
+  const registryPath = join(f.r.root, REGISTRY_REL); const registry = JSON.parse(readFileSync(registryPath, 'utf8'))
+  const row = registry.cleanup[f.identity.ownershipId]
+  const { operationDigest: _old, ...operationBody } = row.operation
+  operationBody.item = { ...operationBody.item, classification: 'dirty' }
+  row.operation = { ...operationBody, operationDigest: journalBindingDigestOf(operationBody) }
+  row.receipt.operationDigest = row.operation.operationDigest
+  writeFileSync(registryPath, JSON.stringify(registry, null, 2) + '\n')
+  const fresh = await import(`./worktree.mjs?cleanup-noneligible=${Date.now()}`)
+  const result = await fresh.resumeWorktreeCleanup(f.r.root, { ownershipIds: [f.identity.ownershipId] }, { probeProtection: unprotectedProbe })
+  assert.deepEqual({ state: result.items[0].state, reason: result.items[0].reason, receipt: result.items[0].receipt }, { state: 'refused', reason: 'evidence-changed', receipt: null })
+  assert.ok(existsSync(f.worktree))
+})

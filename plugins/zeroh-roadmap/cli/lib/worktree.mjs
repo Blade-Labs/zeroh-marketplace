@@ -12,7 +12,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, realpathSync, rmSync, constants, openSync, closeSync, fstatSync, lstatSync, fsyncSync, unlinkSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
-import { LANES, journalDeclineReason } from './codex-journal.mjs'
+import { LANES, journalDeclineReason, journalBindingDigestOf, journalBytesDigestOf } from './codex-journal.mjs'
 import { mainCheckout, gitCommonDir } from './gitroot.mjs'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
@@ -133,13 +133,14 @@ function readRegistry(root) {
     raw = JSON.parse(readFileSync(fd, 'utf8'))
   } finally { if (fd !== undefined) closeSync(fd) }
   if (raw?.version === 2) {
-    if (!identityKeys(raw, 'version slots identities') || !Array.isArray(raw.slots) || !Array.isArray(raw.identities)) throw new WorktreeError('malformed ownership registry')
+    if (!(identityKeys(raw, 'version slots identities') || identityKeys(raw, 'version slots identities cleanup')) || !Array.isArray(raw.slots) || !Array.isArray(raw.identities)) throw new WorktreeError('malformed ownership registry')
+    if (raw.cleanup !== undefined && (!raw.cleanup || typeof raw.cleanup !== 'object' || Array.isArray(raw.cleanup))) throw new WorktreeError('malformed cleanup map')
     for (const identity of raw.identities) {
       const reason = worktreeIdentityDeclineReason(identity)
       if (reason) throw new WorktreeError('malformed registry identity: ' + reason)
     }
     for (const key of ['ownershipId', 'worktree', 'gitAdminDir']) if (new Set(raw.identities.map(row => row[key])).size !== raw.identities.length) throw new WorktreeError('ambiguous registry identity: ' + key)
-    return { version: 2, slots: raw.slots.map(r => ({ ...r, slot: Number(r.slot), pid: Number(r.pid) })), identities: raw.identities }
+    return { version: 2, slots: raw.slots.map(r => ({ ...r, slot: Number(r.slot), pid: Number(r.pid) })), identities: raw.identities, ...(raw.cleanup === undefined ? {} : { cleanup: raw.cleanup }) }
   }
   if (raw && !Array.isArray(raw) && Object.hasOwn(raw, 'version')) throw new WorktreeError('unsupported worktree registry version')
   let rows
@@ -257,6 +258,7 @@ export function registerWorktreeIdentity(root, identity) {
       if (conflicts.length === 1 && isDeepStrictEqual(conflicts[0], identity)) return { status: 'existing', identity: structuredClone(identity) }
       throw new WorktreeError('conflicting worktree ownership identity')
     }
+    if (registry.cleanup?.[identity.ownershipId]) throw new WorktreeError('ownership UUID has retained cleanup evidence')
     registry.identities.push(structuredClone(identity)); writeRegistry(root, registry)
     return { status: 'registered', identity: structuredClone(identity) }
   })
@@ -268,7 +270,10 @@ export function removeWorktreeIdentity(root, identity) {
     const registry = readRegistry(root), index = registry.identities.findIndex(row => row.ownershipId === identity.ownershipId)
     if (index < 0) return false
     if (!isDeepStrictEqual(registry.identities[index], identity)) throw new WorktreeError('ownership removal refused a changed record')
-    registry.identities.splice(index, 1); writeRegistry(root, registry); return true
+    registry.identities.splice(index, 1)
+    const cleanup = registry.cleanup?.[identity.ownershipId]
+    if (cleanup && cleanup.observations.length === 0 && cleanup.receipt === null) delete registry.cleanup[identity.ownershipId]
+    writeRegistry(root, registry); return true
   })
 }
 /** A registry lookup is not ownership; callers still need the independent journal join. */
@@ -789,8 +794,40 @@ function deleteIfMerged(quiet, repoRoot, dir, branch, integrationRef) {
 export function disposeWorktree(
   repoRoot,
   dir,
-  { branch = null, integrationRef = 'develop', allowUntracked = [], untrackedTolerant = false, pgid = null } = {},
+  { branch = null, integrationRef = 'develop', allowUntracked = [], untrackedTolerant = false, pgid = null, ownedCleanup = null } = {},
 ) {
+  if (ownedCleanup) {
+    const { item, plan, receipt, deps } = ownedCleanup
+    return withRegistryLock(repoRoot, () => {
+      const held = reason => ({ disposed: false, alreadyDisposed: false, reason, detail: reason, branchDeleted: false })
+      try {
+        validateCleanupPlan(repoRoot, plan, readRegistry(repoRoot).cleanup?.[item.identity.ownershipId]?.operation)
+        if (dir !== item.worktree || !plan.items.some(candidate => isDeepStrictEqual(candidate, item))) return held('ownership-uncertain')
+        const { row } = currentCleanup(repoRoot, item, plan)
+        if (row.receipt?.state !== 'removing' || !isDeepStrictEqual(row.receipt, receipt)) return held('evidence-changed')
+        const missing = !existsSync(dir)
+        const fresh = cleanupLocalEvidence(repoRoot, item.identity, plan.policy, deps, { missing, expectedHead: item.evidence.head })
+        if (fresh.classification !== 'eligible') return held(fresh.classification)
+        const expected = Object.fromEntries(Object.entries(item.evidence).filter(([key]) => !['protection', 'evidenceDigest'].includes(key)))
+        if (!isDeepStrictEqual(fresh.evidence, expected) || fresh.journalPath !== item.journalPath) return held('evidence-changed')
+        if (!missing || listWorktrees(repoRoot).some(row => resolve(row.dir) === dir)) {
+          const removed = cleanupGit(repoRoot, repoRoot, ['worktree', 'remove', dir], deps)
+          if (!removed.ok) return held('dirty')
+        }
+        let branchDeleted = false, detail = null
+        if (plan.policy.deleteIntegratedBranches && item.identity.branch) {
+          const current = cleanupGit(repoRoot, repoRoot, ['rev-parse', '--verify', '--end-of-options', item.identity.branch], deps)
+          if (current.ok) {
+            const removed = cleanupGit(repoRoot, repoRoot, ['update-ref', '-d', item.identity.branch, item.evidence.head], deps)
+            branchDeleted = removed.ok
+            if (!removed.ok) detail = 'integrated branch changed or its deletion was refused'
+          }
+        }
+        // No forced removal and no repository-wide prune in the owned path.
+        return { disposed: true, alreadyDisposed: missing, reason: null, detail, branchDeleted }
+      } catch (error) { return held('evidence-unavailable') }
+    })
+  }
   // UNTRIMMED on purpose: `git status --porcelain` puts the staged/unstaged codes in columns
   // 1-2, so a trim eats the leading space of the FIRST line and a slice(3) parse then names a
   // file that does not exist (`rc/seed.txt` for `src/seed.txt`). Scalars trim at their own site.
@@ -918,4 +955,336 @@ export function disposeWorktree(
   }
   quiet(repoRoot, ['worktree', 'prune'])
   return { disposed: true, alreadyDisposed: false, reason: null, detail, branchDeleted }
+}
+
+// Owned cleanup metadata lives beside the existing slots and identities. It is a
+// bounded current disposition, not an event journal or a second ownership store.
+const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
+const DIGEST = /^sha256:[a-f0-9]{64}$/
+const COMMIT = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/
+const instant = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value
+const digest = journalBindingDigestOf
+const freezeCleanup = value => {
+  if (value && typeof value === 'object') { Object.values(value).forEach(freezeCleanup); Object.freeze(value) }
+  return value
+}
+const CLEANUP_CLASSES = ['eligible', 'ownership-uncertain', 'live', 'dirty', 'unique', 'not-integrated', 'protected', 'protection-unavailable', 'evidence-unavailable', 'observation-required', 'observation-interval']
+function validateCleanupMap(map) {
+  if (!map || typeof map !== 'object' || Array.isArray(map)) throw new WorktreeError('malformed cleanup map')
+  for (const [id, row] of Object.entries(map)) {
+    if (!UUID.test(id) || !identityKeys(row, 'version identityDigest observations operation receipt') || row.version !== 1 || !DIGEST.test(row.identityDigest) || !Array.isArray(row.observations)) throw new WorktreeError('malformed cleanup record')
+    const seen = new Set()
+    for (const observation of row.observations) {
+      if (!identityKeys(observation, 'version invocationId observedAt evidenceDigest identityDigest journalDigest head') || observation.version !== 1 || !UUID.test(observation.invocationId)
+        || !instant(observation.observedAt) || !DIGEST.test(observation.evidenceDigest) || observation.identityDigest !== row.identityDigest || !DIGEST.test(observation.journalDigest) || !COMMIT.test(observation.head) || seen.has(observation.invocationId)) throw new WorktreeError('malformed cleanup observation')
+      seen.add(observation.invocationId)
+    }
+    if (row.receipt !== null) {
+      const r = row.receipt
+      if (!identityKeys(r, 'version planDigest operationDigest ownershipId identityDigest state reason plannedAt removingAt completedAt disposal') || r.version !== 1 || r.ownershipId !== id || r.identityDigest !== row.identityDigest || !DIGEST.test(r.planDigest) || !DIGEST.test(r.operationDigest)
+        || !['planned', 'removing', 'removed', 'held'].includes(r.state) || !instant(r.plannedAt) || r.removingAt !== null && !instant(r.removingAt) || r.completedAt !== null && !instant(r.completedAt)
+        || r.reason !== null && typeof r.reason !== 'string' || r.state === 'planned' && (r.removingAt !== null || r.completedAt !== null || r.disposal !== null)
+        || r.state === 'removing' && (r.removingAt === null || r.completedAt !== null || r.disposal !== null)
+        || ['removed', 'held'].includes(r.state) && r.completedAt === null || r.state === 'removed' && (r.removingAt === null || !r.disposal?.disposed)) throw new WorktreeError('malformed cleanup receipt')
+    }
+  }
+}
+function cleanupGit(root, cwd, args, deps = {}) {
+  if (deps.git) return deps.git(cwd, args)
+  try { return { ok: true, status: 0, out: execFileSync('git', ['-C', cwd, ...args], { cwd: root, timeout: 60_000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) } }
+  catch (error) { return { ok: false, status: error.status ?? null, out: `${error.stdout ?? ''}${error.stderr ?? ''}`.trim() || error.message } }
+}
+function cleanupJournal(root, worktree) {
+  if (!registryDirectory(root)) throw new WorktreeError('journal owner directory is absent')
+  const matches = []
+  for (const name of readdirSync(join(root, '.building'))) {
+    if (!Object.values(LANES).some(lane => lane.journalRe.test(name) || lane.closedRe.test(name))) continue
+    const path = join(root, '.building', name)
+    if (!lstatSync(path).isFile()) throw new WorktreeError('non-regular lane journal')
+    let fd, bytes, journal
+    try { fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW); bytes = readFileSync(fd); journal = JSON.parse(bytes) }
+    catch { throw new WorktreeError('unreadable lane journal') }
+    finally { if (fd !== undefined) closeSync(fd) }
+    if (typeof journal?.worktree !== 'string' || resolve(root, journal.worktree) !== worktree) continue
+    if (journalDeclineReason(journal) || journal.ownerRoot !== root) throw new WorktreeError('journal owner binding differs')
+    matches.push({ path, journal, journalDigest: journalBytesDigestOf(bytes), closed: Object.values(LANES).some(lane => lane.closedRe.test(name)) })
+  }
+  const open = matches.filter(row => !row.closed), selected = open.length ? open : matches
+  if (selected.length !== 1) throw new WorktreeError('absent or ambiguous lane journal')
+  return selected[0]
+}
+function cleanupLiveness(pgid, deps = {}) {
+  if (!Number.isSafeInteger(pgid) || pgid <= 1) return 'unknown'
+  if (deps.isAlive) { const answer = deps.isAlive(pgid); return answer === true ? 'live' : answer === false ? 'inactive' : 'unknown' }
+  try { process.kill(-pgid, 0); return 'live' }
+  catch (error) { return error.code === 'ESRCH' ? 'inactive' : 'unknown' }
+}
+
+/** Configured refs cannot be weakened by a provider; unknown provider state holds. */
+export async function probeWorktreeProtection(request, deps = {}) {
+  const unavailable = reason => ({ state: 'unavailable', evidence: [], reason })
+  for (const ref of request.configuredRefs ?? []) {
+    const target = cleanupGit(request.repository, request.repository, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`], deps)
+    if (!target.ok) return unavailable('configured ref cannot be resolved')
+    const reachable = cleanupGit(request.repository, request.repository, ['merge-base', '--is-ancestor', request.head, target.out.trim()], deps)
+    if (!reachable.ok && reachable.status !== 1) return unavailable('configured ref ancestry is unavailable')
+    if (reachable.ok) return { state: 'protected', evidence: [{ kind: 'configured-ref', id: ref, head: target.out.trim() }], reason: 'configured ref protects lane history' }
+  }
+  if (!deps.probeProtection) return unavailable('provider protection is unavailable')
+  try {
+    const result = await deps.probeProtection(freezeCleanup(structuredClone(request)))
+    if (!identityKeys(result, 'state evidence reason') || !['protected', 'unprotected', 'unavailable'].includes(result.state) || !Array.isArray(result.evidence) || result.reason !== null && typeof result.reason !== 'string'
+      || result.evidence.some(row => !row || !['configured-ref', 'provider-pr'].includes(row.kind) || typeof row.id !== 'string' || row.head !== undefined && !COMMIT.test(row.head))) return unavailable('provider protection response is malformed')
+    return structuredClone(result)
+  } catch { return unavailable('provider protection is unavailable') }
+}
+function cleanupLocalEvidence(root, identity, policy, deps = {}, { missing = false, expectedHead } = {}) {
+  const hold = classification => ({ classification, reason: classification })
+  let joined
+  try {
+    if (!identity || identity.repository !== realpathSync(mainCheckout(root)) || identity.worktree === root || identity.worktree === identity.repository || isSlotDir(identity.repository, identity.worktree) || isSlotDir(root, identity.worktree)) return hold('ownership-uncertain')
+    const registry = readRegistry(root), matches = registry.identities.filter(row => row.ownershipId === identity.ownershipId)
+    if (matches.length !== 1 || !isDeepStrictEqual(matches[0], identity)) return hold('ownership-uncertain')
+    joined = cleanupJournal(root, identity.worktree)
+    if (!isDeepStrictEqual(joined.journal.worktreeIdentity, identity)) return hold('ownership-uncertain')
+    if (!missing && resolveWorktreeOwnership(root, joined.journal).state !== 'owned') return hold('ownership-uncertain')
+  } catch { return hold('ownership-uncertain') }
+  const live = cleanupLiveness(joined.journal.pgid, deps)
+  if (live !== 'inactive') return hold(live === 'live' ? 'live' : 'evidence-unavailable')
+  const run = args => cleanupGit(root, missing ? root : identity.worktree, args, deps)
+  const head = missing ? { ok: COMMIT.test(expectedHead), out: expectedHead } : run(['rev-parse', '--verify', 'HEAD^{commit}'])
+  if (!head.ok || !COMMIT.test(head.out.trim())) return hold('evidence-unavailable')
+  if (!missing) {
+    const status = run(['status', '--porcelain', '-uall'])
+    if (!status.ok) return hold('evidence-unavailable')
+    if (status.out.trim()) return hold('dirty')
+  }
+  const branch = identity.branch
+  const survivors = ['--not', ...(branch ? ['--exclude', branch.slice('refs/heads/'.length)] : []), '--branches', '--remotes', '--tags']
+  const count = run(['rev-list', '--count', head.out.trim(), ...survivors])
+  if (!count.ok || !/^\d+$/.test(count.out.trim())) return hold('evidence-unavailable')
+  if (Number(count.out.trim()) !== 0) return hold('unique')
+  const integration = cleanupGit(root, root, ['rev-parse', '--verify', '--end-of-options', `${policy.integrationRef}^{commit}`], deps)
+  if (!integration.ok) return hold('evidence-unavailable')
+  const ancestry = cleanupGit(root, root, ['merge-base', '--is-ancestor', head.out.trim(), integration.out.trim()], deps)
+  if (!ancestry.ok) return hold(ancestry.status === 1 ? 'not-integrated' : 'evidence-unavailable')
+  return { classification: 'eligible', reason: null, journalPath: joined.path, journalDigest: joined.journalDigest,
+    evidence: { identityDigest: digest(identity), journalDigest: joined.journalDigest, head: head.out.trim(), branch,
+      integrationRef: policy.integrationRef, integrationTip: integration.out.trim(), liveness: 'inactive', clean: true, recoverable: true }, journal: joined.journal }
+}
+async function cleanupEvidence(root, identity, policy, deps, options) {
+  const local = cleanupLocalEvidence(root, identity, policy, deps, options)
+  if (local.classification !== 'eligible') return local
+  const protection = await probeWorktreeProtection({ repository: identity.repository, identity, journal: local.journal,
+    head: local.evidence.head, branch: identity.branch, configuredRefs: policy.configuredProtectionRefs }, deps)
+  if (protection.state !== 'unprotected') return { ...local, classification: protection.state === 'protected' ? 'protected' : 'protection-unavailable', reason: protection.state === 'protected' ? 'protected' : 'protection-unavailable' }
+  const evidence = { ...local.evidence, protection }
+  return { ...local, evidence: { ...evidence, evidenceDigest: digest(evidence) } }
+}
+function validateCleanupPolicy(policy) {
+  if (!identityKeys(policy, 'inactiveObservations inactiveIntervalMs integrationRef configuredProtectionRefs deleteIntegratedBranches') || !Number.isSafeInteger(policy.inactiveObservations) || policy.inactiveObservations < 2
+    || !Number.isSafeInteger(policy.inactiveIntervalMs) || policy.inactiveIntervalMs <= 0 || typeof policy.integrationRef !== 'string' || !policy.integrationRef || policy.integrationRef.startsWith('-')
+    || !Array.isArray(policy.configuredProtectionRefs) || policy.configuredProtectionRefs.some(ref => typeof ref !== 'string' || !ref.startsWith('refs/')) || typeof policy.deleteIntegratedBranches !== 'boolean') throw new WorktreeError('invalid worktree cleanup policy')
+}
+
+/** Planning persists only inactivity observations, never removal authorization. */
+export async function planWorktreeCleanup(root, options = {}, deps = {}) {
+  if (!options || typeof options !== 'object' || Array.isArray(options) || Object.keys(options).some(key => !['invocationId', 'observedAt', 'inactiveObservations', 'inactiveIntervalMs', 'integrationRef', 'configuredProtectionRefs', 'deleteIntegratedBranches'].includes(key))) throw new WorktreeError('unknown cleanup option')
+  root = realpathSync(root)
+  const invocationId = options.invocationId ?? randomUUID(), observedAt = options.observedAt ?? new Date(deps.now ? deps.now() : Date.now()).toISOString()
+  if (!UUID.test(invocationId) || !instant(observedAt)) throw new WorktreeError('invalid cleanup invocation identity or timestamp')
+  const policy = { inactiveObservations: options.inactiveObservations ?? 2, inactiveIntervalMs: options.inactiveIntervalMs,
+    integrationRef: options.integrationRef ?? 'develop', configuredProtectionRefs: options.configuredProtectionRefs ?? [], deleteIntegratedBranches: options.deleteIntegratedBranches ?? false }
+  validateCleanupPolicy(policy)
+  const registry = readRegistry(root), repository = realpathSync(mainCheckout(root))
+  const dirs = [...new Set([...listWorktrees(root).map(row => resolve(row.dir)), ...registry.identities.map(row => row.worktree)])].filter(dir => dir !== root && dir !== repository).sort()
+  const items = []
+  for (const worktree of dirs) {
+    const identity = registry.identities.find(row => row.worktree === worktree) ?? null
+    const found = await cleanupEvidence(root, identity, policy, deps)
+    const item = { worktree, identity, journalPath: found.journalPath ?? null, journalDigest: found.journalDigest ?? null, evidence: found.evidence ?? null,
+      observations: [], classification: found.classification, reason: found.reason }
+    if (identity) try { withRegistryLock(root, () => {
+      const current = readRegistry(root)
+      if (!current.identities.some(row => isDeepStrictEqual(row, identity))) { item.classification = item.reason = 'ownership-uncertain'; return }
+      current.cleanup ??= {}
+      const old = current.cleanup[identity.ownershipId]
+      if (old !== undefined) validateCleanupMap({ [identity.ownershipId]: old })
+      if (old && old.identityDigest !== digest(identity)) throw new WorktreeError('cleanup identity binding changed')
+      if (old?.receipt && ['planned', 'removing', 'removed'].includes(old.receipt.state)) { item.classification = item.reason = 'ownership-uncertain'; return }
+      const row = old ?? { version: 1, identityDigest: digest(identity), observations: [], operation: null, receipt: null }
+      if (found.classification === 'eligible') {
+        const boundary = cleanupLocalEvidence(root, identity, policy, deps)
+        const expected = Object.fromEntries(Object.entries(found.evidence).filter(([key]) => !['protection', 'evidenceDigest'].includes(key)))
+        if (boundary.classification !== 'eligible' || !isDeepStrictEqual(boundary.evidence, expected) || boundary.journalPath !== found.journalPath) {
+          row.observations = []; current.cleanup[identity.ownershipId] = row; writeRegistry(root, current)
+          item.classification = item.reason = boundary.classification === 'eligible' ? 'evidence-unavailable' : boundary.classification
+          return
+        }
+      }
+
+      if (found.classification !== 'eligible') row.observations = []
+      else {
+        const observation = { version: 1, invocationId, observedAt, evidenceDigest: found.evidence.evidenceDigest, identityDigest: digest(identity), journalDigest: found.journalDigest, head: found.evidence.head }
+        if (row.observations.some(prior => prior.evidenceDigest !== observation.evidenceDigest)) row.observations = []
+        const previous = row.observations.at(-1)
+        if (!row.observations.some(prior => prior.invocationId === invocationId) && (!previous || Date.parse(observedAt) - Date.parse(previous.observedAt) >= policy.inactiveIntervalMs)) row.observations = [...row.observations, observation].slice(-policy.inactiveObservations)
+        item.observations = structuredClone(row.observations)
+        if (row.observations.length < policy.inactiveObservations) item.classification = item.reason = previous && Date.parse(observedAt) - Date.parse(previous.observedAt) < policy.inactiveIntervalMs ? 'observation-interval' : 'observation-required'
+      }
+      current.cleanup[identity.ownershipId] = row; writeRegistry(root, current)
+    }) } catch { item.classification = item.reason = 'evidence-unavailable'; item.observations = [] }
+    items.push(item)
+  }
+  const plan = { version: 1, ownerRoot: root, repository, invocationId, observedAt, policy, items }
+  return freezeCleanup({ ...plan, planDigest: digest(plan) })
+}
+
+function validateCleanupPlan(root, plan, operation = null) {
+  if (!identityKeys(plan, 'version ownerRoot repository invocationId observedAt policy items planDigest') || plan.version !== 1 || plan.ownerRoot !== root || plan.repository !== realpathSync(mainCheckout(root))
+    || !UUID.test(plan.invocationId) || !instant(plan.observedAt) || !Array.isArray(plan.items)) throw new WorktreeError('malformed or foreign cleanup plan')
+  const { planDigest, ...body } = plan
+  if (!DIGEST.test(planDigest) || digest(body) !== planDigest) {
+    if (!operation) throw new WorktreeError('cleanup plan digest differs')
+    validateCleanupOperation(root, operation)
+    if (planDigest !== operation.planDigest || plan.items.length !== 1 || !isDeepStrictEqual(plan.items[0], operation.item) || !isDeepStrictEqual(plan.policy, operation.policy)) throw new WorktreeError('recovered operation scope differs')
+  }
+  validateCleanupPolicy(plan.policy)
+  const seen = new Set()
+  for (const item of plan.items) {
+    if (!identityKeys(item, 'worktree identity journalPath journalDigest evidence observations classification reason') || !absoluteCanonical(item.worktree) || seen.has(item.worktree)
+      || !CLEANUP_CLASSES.includes(item.classification) || !Array.isArray(item.observations) || item.identity !== null && worktreeIdentityDeclineReason(item.identity)) throw new WorktreeError('malformed cleanup item')
+    seen.add(item.worktree)
+    if (item.classification !== 'eligible') continue
+    if (!item.identity || item.identity.worktree !== item.worktree || !item.evidence || item.observations.length !== plan.policy.inactiveObservations) throw new WorktreeError('eligible cleanup item lacks evidence')
+    const { evidenceDigest, ...evidence } = item.evidence
+    if (digest(evidence) !== evidenceDigest || evidence.identityDigest !== digest(item.identity) || evidence.journalDigest !== item.journalDigest || !COMMIT.test(evidence.head) || evidence.protection?.state !== 'unprotected') throw new WorktreeError('cleanup evidence binding differs')
+    validateCleanupMap({ [item.identity.ownershipId]: { version: 1, identityDigest: digest(item.identity), observations: item.observations, operation: null, receipt: null } })
+    for (let i = 0; i < item.observations.length; i++) {
+      const row = item.observations[i]
+      if (row.evidenceDigest !== evidenceDigest || row.head !== evidence.head || row.journalDigest !== item.journalDigest
+        || i && Date.parse(row.observedAt) - Date.parse(item.observations[i - 1].observedAt) < plan.policy.inactiveIntervalMs) throw new WorktreeError('inactivity observations do not qualify')
+    }
+  }
+}
+function operationFor(root, item, plan) {
+  const operation = { version: 1, planDigest: plan.planDigest, ownerRoot: root, repository: plan.repository, policy: plan.policy, item }
+  return { ...operation, operationDigest: digest(operation) }
+}
+function validateCleanupOperation(root, operation) {
+  if (!identityKeys(operation, 'version planDigest ownerRoot repository policy item operationDigest') || operation.version !== 1 || operation.ownerRoot !== root || operation.repository !== realpathSync(mainCheckout(root)) || !DIGEST.test(operation.planDigest)) throw new WorktreeError('malformed or foreign cleanup operation')
+  const { operationDigest, ...body } = operation
+  if (operation.item?.classification !== 'eligible') throw new WorktreeError('stored cleanup operation is not eligible')
+  if (!DIGEST.test(operationDigest) || digest(body) !== operationDigest) throw new WorktreeError('cleanup operation digest differs')
+  const last = operation.item?.observations?.at(-1)
+  const scope = { version: 1, ownerRoot: root, repository: operation.repository, invocationId: last?.invocationId, observedAt: last?.observedAt, policy: operation.policy, items: [operation.item] }
+  validateCleanupPlan(root, { ...scope, planDigest: digest(scope) })
+}
+function currentCleanup(root, item, plan) {
+  const registry = readRegistry(root), row = registry.cleanup?.[item.identity.ownershipId]
+  validateCleanupMap({ [item.identity.ownershipId]: row })
+  if (!row || row.identityDigest !== digest(item.identity)) throw new WorktreeError('cleanup record is absent or changed')
+  if (row.operation !== null) {
+    validateCleanupOperation(root, row.operation)
+    if (row.receipt?.operationDigest !== row.operation.operationDigest || row.receipt?.planDigest !== row.operation.planDigest) throw new WorktreeError('cleanup receipt and operation disagree')
+    if (row.receipt?.state !== 'held' && (row.operation.planDigest !== plan.planDigest || !isDeepStrictEqual(row.operation.item, item) || !isDeepStrictEqual(row.operation.policy, plan.policy))) throw new WorktreeError('cleanup operation differs')
+  } else if (row.receipt !== null) throw new WorktreeError('cleanup receipt lacks its operation')
+  if (!isDeepStrictEqual(row.observations, item.observations)) throw new WorktreeError('cleanup observations changed')
+  if (row.receipt && row.receipt.planDigest !== plan.planDigest && row.receipt.state !== 'held') throw new WorktreeError('another cleanup disposition owns this identity')
+  return { registry, row }
+}
+function updateCleanupReceipt(root, item, plan, expected, patch, { removeIdentity = false } = {}) {
+  return withRegistryLock(root, () => {
+    const { registry, row } = currentCleanup(root, item, plan)
+    if (!isDeepStrictEqual(row.receipt, expected)) throw new WorktreeError('cleanup receipt changed concurrently')
+    const receipt = { ...expected, ...patch }
+    if (removeIdentity) {
+      const index = registry.identities.findIndex(identity => identity.ownershipId === item.identity.ownershipId)
+      if (index < 0 || !isDeepStrictEqual(registry.identities[index], item.identity)) throw new WorktreeError('cleanup identity changed before completion')
+      registry.identities.splice(index, 1)
+    }
+    row.receipt = receipt; validateCleanupMap({ [item.identity.ownershipId]: row }); writeRegistry(root, registry)
+    return structuredClone(receipt)
+  })
+}
+
+/** Revalidate each item independently; only the existing disposer can remove it. */
+export async function applyWorktreeCleanup(root, plan, deps = {}) {
+  root = realpathSync(root); validateCleanupPlan(root, plan)
+  return applyCleanupPlan(root, plan, deps)
+}
+async function applyCleanupPlan(root, plan, deps = {}) {
+  const results = [], hooks = deps.hooks ?? {}
+  const stamp = () => new Date(deps.now ? deps.now() : Date.now()).toISOString()
+  for (const item of plan.items) {
+    if (item.classification !== 'eligible') continue
+    let receipt
+    try {
+      receipt = withRegistryLock(root, () => {
+        const { registry, row } = currentCleanup(root, item, plan)
+        if (row.receipt?.planDigest === plan.planDigest) return structuredClone(row.receipt)
+        const local = cleanupLocalEvidence(root, item.identity, plan.policy, deps)
+        const exact = local.classification === 'eligible' && local.journalDigest === item.journalDigest && isDeepStrictEqual(local.evidence, Object.fromEntries(Object.entries(item.evidence).filter(([key]) => !['protection', 'evidenceDigest'].includes(key))))
+        const operation = operationFor(root, item, plan)
+        const value = { version: 1, planDigest: plan.planDigest, operationDigest: operation.operationDigest, ownershipId: item.identity.ownershipId, identityDigest: digest(item.identity),
+          state: exact ? 'planned' : 'held', reason: exact ? null : local.classification === 'eligible' ? 'evidence-changed' : local.classification,
+          plannedAt: stamp(), removingAt: null, completedAt: exact ? null : stamp(), disposal: null }
+        row.operation = operation; row.receipt = value; validateCleanupMap({ [item.identity.ownershipId]: row }); writeRegistry(root, registry); return structuredClone(value)
+      })
+    } catch (error) {
+      results.push({ ownershipId: item.identity.ownershipId, state: 'refused', reason: 'evidence-changed', receipt: null })
+      continue
+    }
+    if (['removed', 'held'].includes(receipt.state)) { results.push(receipt); continue }
+    if (receipt.state === 'planned') await hooks.afterPlanned?.(freezeCleanup(structuredClone(item)))
+    await deps.beforeBoundary?.(freezeCleanup(structuredClone(item)))
+    const missing = !existsSync(item.worktree)
+    let fresh = missing && receipt.state !== 'removing' ? { classification: 'ownership-uncertain' }
+      : await cleanupEvidence(root, item.identity, plan.policy, deps, { missing, expectedHead: item.evidence.head })
+    if (fresh.classification !== 'eligible' || !isDeepStrictEqual(fresh.evidence, item.evidence) || fresh.journalPath !== item.journalPath) {
+      receipt = updateCleanupReceipt(root, item, plan, receipt, { state: 'held', reason: fresh.classification === 'eligible' ? 'evidence-changed' : fresh.classification, completedAt: stamp() })
+      results.push(receipt); continue
+    }
+    if (receipt.state === 'planned') receipt = updateCleanupReceipt(root, item, plan, receipt, { state: 'removing', removingAt: stamp() })
+    await hooks.afterRemoving?.(freezeCleanup(structuredClone(item)))
+    await hooks.beforeDisposal?.(freezeCleanup(structuredClone(item)))
+    // Hooks and an asynchronous provider can yield; recheck protection after them.
+    fresh = await cleanupEvidence(root, item.identity, plan.policy, deps, { missing: !existsSync(item.worktree), expectedHead: item.evidence.head })
+    if (fresh.classification !== 'eligible' || !isDeepStrictEqual(fresh.evidence, item.evidence)) {
+      receipt = updateCleanupReceipt(root, item, plan, receipt, { state: 'held', reason: fresh.classification === 'eligible' ? 'evidence-changed' : fresh.classification, completedAt: stamp() })
+      results.push(receipt); continue
+    }
+    let disposal = (deps.dispose ?? disposeWorktree)(root, item.worktree, { branch: item.identity.branch?.slice('refs/heads/'.length) ?? null,
+      integrationRef: plan.policy.integrationRef, pgid: fresh.journal.pgid, ownedCleanup: { item, plan, receipt, deps } })
+    await hooks.afterDisposal?.(freezeCleanup(structuredClone({ item, disposal })))
+    if (disposal.disposed && existsSync(item.worktree)) disposal = { disposed: false, alreadyDisposed: false, reason: 'evidence-changed', detail: 'worktree is present after disposal', branchDeleted: false }
+    receipt = updateCleanupReceipt(root, item, plan, receipt, { state: disposal.disposed ? 'removed' : 'held', reason: disposal.disposed ? null : disposal.reason, completedAt: stamp(), disposal }, { removeIdentity: disposal.disposed })
+    await hooks.afterReceipt?.(freezeCleanup(structuredClone(receipt)))
+    results.push(receipt)
+  }
+  return freezeCleanup({ version: 1, planDigest: plan.planDigest, items: results })
+}
+
+/** Fresh-process recovery reads only bounded operations already authorized in this registry. */
+export async function resumeWorktreeCleanup(root, { ownershipIds } = {}, deps = {}) {
+  root = realpathSync(root)
+  if (ownershipIds !== undefined && (!Array.isArray(ownershipIds) || ownershipIds.some(id => !UUID.test(id)))) throw new WorktreeError('invalid cleanup recovery selection')
+  const registry = readRegistry(root), items = []
+  for (const [ownershipId, row] of Object.entries(registry.cleanup ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+    if (ownershipIds && !ownershipIds.includes(ownershipId)) continue
+    let operation
+    try {
+      validateCleanupMap({ [ownershipId]: row })
+      if (!row.receipt || !['planned', 'removing'].includes(row.receipt.state)) continue
+      operation = row.operation; validateCleanupOperation(root, operation)
+      if (operation.item.identity.ownershipId !== ownershipId || operation.operationDigest !== row.receipt.operationDigest || operation.planDigest !== row.receipt.planDigest) throw new WorktreeError('recovery operation binding differs')
+    } catch {
+      items.push({ ownershipId, state: 'refused', reason: 'evidence-changed', receipt: null }); continue
+    }
+    const last = operation.item.observations.at(-1)
+    const scope = { version: 1, ownerRoot: root, repository: operation.repository, invocationId: last.invocationId, observedAt: last.observedAt, policy: operation.policy, items: [operation.item], planDigest: operation.planDigest }
+    const result = await applyCleanupPlan(root, scope, deps)
+    items.push(...result.items)
+  }
+  return freezeCleanup({ version: 1, planDigest: null, items })
 }
