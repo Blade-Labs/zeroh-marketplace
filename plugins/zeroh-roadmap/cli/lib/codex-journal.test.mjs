@@ -438,3 +438,41 @@ test('40.7 journal close preserves a prior launch before closing a new generatio
   assert.equal(existsSync(f.path), false)
   assert.equal(archiveJournal(f.path, next, 'phase land'), closed)
 })
+
+test('40 gate repair: explicit review generation CAS preserves the completed predecessor before identity renewal', async () => {
+  const j = await import('./codex-journal.mjs'); const w = await import('./worktree.mjs'); const { publishImmutableFile } = await import('./sidecar.mjs'); const f = fixture(); unlinkSync(f.path)
+  const path = join(f.root, '.building', 'codex-review-37.json'), prompt = path.replace(/\.json$/, '-prompt.txt')
+  const oldPrompt = Buffer.from('old review prompt\n'), report = Buffer.from('old review result\nCODEX-RUN-COMPLETE\n')
+  writeFileSync(prompt, oldPrompt)
+  const owner = { kind: 'roadmap-codex', id: 'review:37' }
+  const oldIdentity = w.createWorktreeIdentity(f.root, f.worktree, { ownershipId: '323e4567-e89b-42d3-a456-426614174037', laneOwner: owner, expectedBranch: 'refs/heads/lane/37' }); w.registerWorktreeIdentity(f.root, oldIdentity)
+  const archivedReport = path.replace(/\.json$/, `-${'old-launch'}-REPORT.md`); writeFileSync(archivedReport, report)
+  const old = { ...f.journal, lane: 'review', laneOwner: owner, worktreeIdentity: oldIdentity, ownerRoot: f.root, launchId: 'old-launch', report: 'CODEX-REVIEW.md', prompt,
+    requestDigest: j.journalBindingDigestOf({ prompt: oldPrompt.toString(), carriedDigest: null }), reportDigest: j.journalBytesDigestOf(report), archivedReport, archivedAt: '2026-09-07T02:00:00.000Z', driverExit: { code: 0, signal: null }, finishedAt: '2026-09-07T02:00:00.000Z' }
+  old.completionFingerprint = j.completionFingerprintOf(old); j.writeJournalAtomic(f.root, old); const oldBytes = readFileSync(path)
+  const prior = path.replace(/\.json$/, `.prior.${encodeURIComponent(old.launchId)}`)
+  assert.equal(publishImmutableFile(`${prior}.json`, oldBytes), true); assert.equal(publishImmutableFile(`${prior}.prompt.txt`, oldPrompt), true); assert.equal(publishImmutableFile(`${prior}.report.md`, report), true)
+  git(f.root, 'worktree', 'remove', '--force', f.worktree); assert.equal(w.removeWorktreeIdentity(f.root, oldIdentity), true); git(f.root, 'branch', '-D', 'lane/37'); git(f.root, 'worktree', 'add', '-q', '-b', 'lane/review-next', f.worktree, old.workingHead)
+  const nextIdentity = w.createWorktreeIdentity(f.root, f.worktree, { ownershipId: '423e4567-e89b-42d3-a456-426614174037', laneOwner: owner, expectedBranch: 'refs/heads/lane/review-next' }); w.registerWorktreeIdentity(f.root, nextIdentity)
+  const newPrompt = Buffer.from('new review prompt\n'); writeFileSync(prompt, newPrompt)
+  const next = { ...old, launchId: 'new-launch', worktreeIdentity: nextIdentity, startedAt: '2026-09-07T03:00:00.000Z', requestDigest: j.journalBindingDigestOf({ prompt: newPrompt.toString(), carriedDigest: null }) }; for (const key of ['reportDigest','archivedReport','archivedAt','driverExit','finishedAt','completionFingerprint']) delete next[key]
+  const priorArtifacts = [[`${prior}.json`, oldBytes], [`${prior}.prompt.txt`, oldPrompt], [`${prior}.report.md`, report]]
+  const intact = () => { assert.deepEqual(readFileSync(path), oldBytes); for (const [artifact, bytes] of priorArtifacts) assert.deepEqual(readFileSync(artifact), bytes) }
+  for (const [artifact, bytes] of priorArtifacts) {
+    unlinkSync(artifact); assert.throws(() => j.writeJournalAtomic(f.root, next, { replaceGeneration: old }), /prior|generation|missing|refus/i); assert.deepEqual(readFileSync(path), oldBytes); assert.equal(publishImmutableFile(artifact, bytes), true)
+    writeFileSync(artifact, 'conflict\n'); assert.throws(() => j.writeJournalAtomic(f.root, next, { replaceGeneration: old }), /prior|generation|digest|differ|refus/i); writeFileSync(artifact, bytes); intact()
+  }
+  writeFileSync(path, JSON.stringify({ ...old, startedAt: '2026-09-07T02:00:01.000Z' }, null, 2) + '\n')
+  assert.throws(() => j.writeJournalAtomic(f.root, next, { replaceGeneration: old }), /current|generation|differ|refus/i); writeFileSync(path, oldBytes); intact()
+  assert.equal(w.removeWorktreeIdentity(f.root, nextIdentity), true)
+  assert.throws(() => j.writeJournalAtomic(f.root, next, { replaceGeneration: old }), /identity|registered|owned|refus/i); intact(); w.registerWorktreeIdentity(f.root, nextIdentity)
+  const badIdentity = { ...nextIdentity, ownershipId: '523e4567-e89b-42d3-a456-426614174037' }
+  assert.throws(() => j.writeJournalAtomic(f.root, { ...next, worktreeIdentity: badIdentity }, { replaceGeneration: old }), /identity|registered|owned|refus/i); intact()
+  assert.throws(() => j.writeJournalAtomic(f.root, { ...next, launchId: old.launchId }, { replaceGeneration: old }), /launch|generation|distinct|refus/i); intact()
+  assert.throws(() => j.writeJournalAtomic(f.root, { ...next, worktreeIdentity: { ...nextIdentity, ownershipId: oldIdentity.ownershipId } }, { replaceGeneration: old }), /identity|ownership|registered|refus/i); intact()
+  assert.throws(() => j.writeJournalAtomic(f.root, { ...next, lane: 'plan', laneOwner: { kind: 'roadmap-codex', id: 'plan:37' }, worktreeIdentity: { ...nextIdentity, laneOwner: { kind: 'roadmap-codex', id: 'plan:37' } } }, { replaceGeneration: old }), /review|lane|scope|identity|refus/i); intact()
+  assert.throws(() => j.writeJournalAtomic(f.root, { ...next, phases: [38], laneOwner: { kind: 'roadmap-codex', id: 'review:38' }, worktreeIdentity: { ...nextIdentity, laneOwner: { kind: 'roadmap-codex', id: 'review:38' } } }, { replaceGeneration: old }), /phase|scope|identity|refus/i); intact()
+  assert.equal(j.writeJournalAtomic(f.root, next, { replaceGeneration: old }), path)
+  assert.deepEqual(readFileSync(`${prior}.json`), oldBytes); assert.deepEqual(readFileSync(`${prior}.prompt.txt`), oldPrompt); assert.deepEqual(readFileSync(`${prior}.report.md`), report)
+  assert.deepEqual(JSON.parse(readFileSync(path)), next); assert.equal(j.writeJournalAtomic(f.root, next), path)
+})

@@ -48,13 +48,55 @@ export function writeJournal(root, journal, options = {}) {
   return writeJournalAtomic(root, journal, options)
 }
 
-export function writeJournalAtomic(root, journal, { label, closed = false } = {}) {
+function readCanonicalJournalArtifact(path) {
+  if (!lstatSync(path).isFile() || realpathSync(path) !== resolve(path)) throw new Error('review generation refused: noncanonical artifact')
+  return readFileSync(path)
+}
+
+function reviewGenerationPredecessor(root, path, journal, expected) {
+  const bytes = readCanonicalJournalArtifact(path)
+  const previous = JSON.parse(bytes)
+  const sameScope = ['ownerRoot', 'lane', 'phases', 'laneOwner', 'worktree', 'authorityDigest']
+    .every(key => isDeepStrictEqual(previous[key], journal[key]))
+  if (!expected || !isDeepStrictEqual(previous, expected) || previous.lane !== 'review' || !sameScope
+    || journal.ownerRoot !== realpathSync(root)
+    || !nonblank(previous.launchId) || !nonblank(journal.launchId) || previous.launchId === journal.launchId
+    || !previous.worktreeIdentity || !journal.worktreeIdentity
+    || previous.worktreeIdentity.ownershipId === journal.worktreeIdentity.ownershipId
+    || !Number.isFinite(Date.parse(previous.archivedAt)) || !Number.isFinite(Date.parse(previous.finishedAt))
+    || previous.driverExit?.code !== 0 || previous.driverExit?.signal != null || previous.driverExit?.error
+    || previous.prompt !== path.replace(/\.json$/, '-prompt.txt')
+    || !archivedReportPaths(path, previous).includes(previous.archivedReport)
+    || dirname(previous.archivedReport) !== dirname(path)
+    || previous.completionFingerprint !== completionFingerprintOf(previous)
+    || resolveWorktreeOwnership(root, previous).state === 'owned'
+    || resolveWorktreeOwnership(root, journal).state !== 'owned') {
+    throw new Error('review generation refused: predecessor, scope or new ownership differs')
+  }
+  const prefix = path.replace(/\.json$/, `.prior.${encodeURIComponent(previous.launchId)}`)
+  const priorJournal = readCanonicalJournalArtifact(`${prefix}.json`)
+  const priorPrompt = readCanonicalJournalArtifact(`${prefix}.prompt.txt`)
+  const priorReport = readCanonicalJournalArtifact(`${prefix}.report.md`)
+  if (!bytes.equals(priorJournal)
+    || previous.requestDigest !== journalBindingDigestOf({ prompt: priorPrompt.toString('utf8'), carriedDigest: previous.carriedDigest ?? null })
+    || previous.reportDigest !== journalBytesDigestOf(priorReport)
+    || !priorReport.equals(readCanonicalJournalArtifact(previous.archivedReport))) {
+    throw new Error('review generation refused: immutable prior artifacts differ')
+  }
+  return bytes
+}
+
+export function writeJournalAtomic(root, journal, { label, closed = false, replaceGeneration } = {}) {
   const reason = journalDeclineReason(journal)
   if (reason) throw new Error('journal refused: ' + reason)
   if (typeof closed !== 'boolean') throw new Error('journal closed mode must be boolean')
+  if (replaceGeneration !== undefined && (journal.lane !== 'review' || replaceGeneration?.lane !== 'review'
+    || !isDeepStrictEqual(journal.phases, replaceGeneration.phases))) throw new Error('review generation refused: lane or phase scope differs')
   const livePath = journalPath(root, journal.phases, journal.lane ?? 'run', { label })
   const path = closed ? livePath.replace(/\.json$/, '.closed.json') : livePath
-  if (existsSync(path)) {
+  if (replaceGeneration !== undefined && (closed || label !== undefined)) throw new Error('review generation refused: only an unlabelled live review can be replaced')
+  const predecessor = replaceGeneration !== undefined ? reviewGenerationPredecessor(root, path, journal, replaceGeneration) : null
+  if (!predecessor && existsSync(path)) {
     const previous = JSON.parse(readFileSync(path, 'utf8'))
     if (previous?.worktreeIdentity !== undefined && !isDeepStrictEqual(previous.worktreeIdentity, journal.worktreeIdentity)) throw new Error('journal worktree identity cannot change or disappear')
   }
@@ -68,6 +110,7 @@ export function writeJournalAtomic(root, journal, { label, closed = false } = {}
     writeFileSync(fd, JSON.stringify(journal, null, 2) + '\n')
     fsyncSync(fd)
     closeSync(fd); fd = undefined
+    if (predecessor && !reviewGenerationPredecessor(root, path, journal, replaceGeneration).equals(predecessor)) throw new Error('review generation refused: live predecessor changed before publication')
     renameSync(temp, path)
     const dirFd = openSync(dir, 'r')
     try { fsyncSync(dirFd) } finally { closeSync(dirFd) }
@@ -524,10 +567,14 @@ export function classifyJournal(root, ids, expected, { isAlive = groupAlive, exe
   }
 }
 
+function archivedReportPaths(path, journal) {
+  return [path.replace(/\.json$/, '-REPORT.md'), path.replace(/\.json$/, `-${journal.launchId}-REPORT.md`)]
+}
+
 function completedReportLocation(root, path, journal, worktree) {
   const source = worktree ? resolve(worktree, journal.report ?? '') : null
   if (source && existsSync(source)) return { path: source, archived: false }
-  const allowed = [path.replace(/\.json$/, '-REPORT.md'), path.replace(/\.json$/, `-${journal.launchId}-REPORT.md`)]
+  const allowed = archivedReportPaths(path, journal)
   if (Number.isFinite(Date.parse(journal.archivedAt)) && allowed.includes(journal.archivedReport)
     && dirname(journal.archivedReport) === join(root, '.building')) return { path: journal.archivedReport, archived: true }
   return { path: source, archived: false }
@@ -633,6 +680,27 @@ export function validateArchivedReviewCompletion(root, ids, expected, opts) {
     valid: true, purpose: 'archived-review', originalRequestedHead: checked.requestedHead,
     workingHead: checked.workingHead, reportPath: checked.reportPath, evidence: checked.evidence,
   }
+}
+
+/** A retained review may preserve its original completion before a newly requested reset. */
+export function validateRetainedReviewCompletion(root, ids, expected, opts) {
+  const purpose = 'retained-review'
+  let found
+  try {
+    found = findJournal(root, ids, 'review')
+    const journal = found?.journal
+    if (!journal || !existsSync(journal.worktree ?? '') || !Number.isFinite(Date.parse(journal.archivedAt))
+      || !archivedReportPaths(found.path, journal).includes(journal.archivedReport)
+      || dirname(journal.archivedReport) !== dirname(found.path)
+      || canonicalExisting(journal.archivedReport) !== resolve(journal.archivedReport)
+      || journalBytesDigestOf(readFileSync(journal.archivedReport)) !== journal.reportDigest) {
+      return { valid: false, purpose, state: 'unowned', evidence: { error: 'retained review needs its exact archived report and standing worktree' } }
+    }
+  } catch (error) { return { valid: false, purpose, state: 'corrupt', evidence: { error: error.message } } }
+  const checked = validateImmutableCompletionBinding(root, ids, 'review', expected, opts, true, false)
+  return checked.state === 'reusable'
+    ? { valid: true, purpose, originalRequestedHead: checked.requestedHead, workingHead: checked.workingHead, reportPath: checked.reportPath, evidence: checked.evidence }
+    : { valid: false, purpose, state: checked.state, evidence: checked.evidence }
 }
 
 /** Historical plan evidence can feed only the existing harvest owner, never a new request. */

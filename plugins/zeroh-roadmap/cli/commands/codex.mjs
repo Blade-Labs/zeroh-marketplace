@@ -52,6 +52,7 @@
 import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { spawnNativeChild } from '../lib/native-child-process.mjs'
+import { publishImmutableFile } from '../lib/sidecar.mjs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
@@ -66,7 +67,7 @@ import {
   LANES, prevReportName, journalPath, journalDeclineReason,
   archiveCompletedLaneOutput, JournalUnreadableError, findJournal, findClosedJournal, writeJournal, writeJournalAtomic,
   classifyJournal, completionFingerprintOf, journalBindingDigestOf, journalBytesDigestOf,
-  validateArchivedReviewCompletion, validateLaneCompletion, validatePlanArchiveCandidate,
+  validateArchivedReviewCompletion, validateRetainedReviewCompletion, validateLaneCompletion, validatePlanArchiveCandidate,
 } from '../lib/codex-journal.mjs'
 import { roadmapRoot, roadmapRootRel } from '../lib/roadmap-root.mjs'
 import { driverTrailer, mergePolicy, policyFromArg, policyToArg } from '../lib/roles.mjs'
@@ -401,7 +402,7 @@ function requestDigestOf(prompt, authority, governance, carriedPath = null) {
   return journalBindingDigestOf({ prompt: governedPromptOf(prompt, authority, governance), carriedDigest })
 }
 
-async function launch(root, ids, lane, { worktree, base, prompt, governance, authority, carriedIn = null, modelPolicy, label, reportName = LANES[lane].report, allocation = {} }) {
+async function launch(root, ids, lane, { worktree, base, prompt, governance, authority, carriedIn = null, modelPolicy, label, reportName = LANES[lane].report, allocation = {}, replaceGeneration }) {
   const git = (cwd, args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
   const refProbe = git(root, ['rev-parse', '--symbolic-full-name', '--verify', '--end-of-options', base])
   const requestProbe = git(root, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`])
@@ -444,7 +445,7 @@ async function launch(root, ids, lane, { worktree, base, prompt, governance, aut
       ...(allocation.worktreeIdentity ? { worktreeIdentity: allocation.worktreeIdentity } : {}),
       ownerRoot: realpathSync(root), authorityDigest: journalBindingDigestOf(authority), governanceDigest: journalBindingDigestOf(governance), requestDigest, carriedDigest,
       ...(label ? { label } : {}), ...(modelPolicy ? { modelPolicy } : {}), ...(carriedIn ? { carriedIn } : {}), startedAt: new Date().toISOString(),
-    }, { label })
+    }, { label, ...(replaceGeneration ? { replaceGeneration } : {}) })
     allocation.journalWritten = true
   } catch (error) {
     child.kill('SIGTERM'); if (child.connected) child.disconnect()
@@ -762,7 +763,7 @@ async function runCodex(root, ids, argv, authority) {
   } finally { unwindAllocation(root, made) }
 }
 
-function exactLaneDecision(root, ids, lane, worktree, base, governance, authority, prompt, carriedPath = null, carriedRel = null) {
+function exactLaneDecision(root, ids, lane, worktree, base, governance, authority, prompt, carriedPath = null, carriedRel = null, beforeReset = null) {
   let found
   try { found = findJournal(root, ids, lane) } catch (error) {
     process.stderr.write(`roadmap codex: ${lane} journal is unreadable; inspect it before relaunch — ${error.message}\n`)
@@ -796,6 +797,10 @@ function exactLaneDecision(root, ids, lane, worktree, base, governance, authorit
   const carryRefresh = carryRefreshPreflight(root, worktree, carriedRel, request.stdout.trim(), found.journal)
   if (!carryRefresh.ok) {
     process.stderr.write(`roadmap codex: ${lane} stale reset refused: ${carryRefresh.reason}; inspect it\n`)
+    return { status: 1 }
+  }
+  try { beforeReset?.() } catch (error) {
+    process.stderr.write(`roadmap codex: ${lane} prior artifacts could not be preserved: ${error.message}; no reset performed\n`)
     return { status: 1 }
   }
   const parked = carryRefresh.park ? `${carryRefresh.park}.codex-preserved-${randomUUID()}` : null
@@ -832,9 +837,11 @@ function archivedReviewRestart(root, ids, worktree, base, prompt, authority, car
     process.stderr.write(`roadmap codex: review journal is unreadable; inspect it before relaunch — ${error.message}\n`)
     return { status: 1 }
   }
-  if (!found?.journal.archivedAt || existsSync(found.journal.worktree)) return { status: null, restart: null }
+  if (!found?.journal.archivedAt) return { status: null, restart: null }
   const journal = found.journal
-  const prior = validateArchivedReviewCompletion(root, ids, {
+  const retained = existsSync(journal.worktree)
+  const validate = retained ? validateRetainedReviewCompletion : validateArchivedReviewCompletion
+  const prior = validate(root, ids, {
     worktree, requestedRef: journal.requestedRef, requestedHead: journal.requestedHead,
     laneOwner: { kind: 'roadmap-codex', id: `review:${ids.join('-')}` },
     authorityDigest: journalBindingDigestOf(authority), governanceDigest: journal.governanceDigest,
@@ -861,7 +868,7 @@ function archivedReviewRestart(root, ids, worktree, base, prompt, authority, car
       return { status: 1 }
     }
   }
-  return { status: null, restart: { ...found, requestedHead } }
+  return { status: null, restart: { ...found, requestedHead }, retained }
 }
 
 function preserveArchivedReviewRestart(restart) {
@@ -874,11 +881,10 @@ function preserveArchivedReviewRestart(restart) {
     [path, `${prefix}.json`],
   ]
   for (const [from, to] of artifacts) {
-    if (!from || !existsSync(from)) continue
+    if (!from || !existsSync(from) || realpathSync(from) !== resolve(from)) throw new Error('prior review artifact is missing or noncanonical')
     const bytes = readFileSync(from)
-    try { writeFileSync(to, bytes, { flag: 'wx' }) } catch (error) {
-      if (error.code !== 'EEXIST' || !readFileSync(to).equals(bytes)) throw error
-    }
+    publishImmutableFile(to, bytes)
+    if (realpathSync(to) !== resolve(to) || !readFileSync(to).equals(bytes)) throw new Error('prior review artifact conflicts')
   }
 }
 
@@ -930,9 +936,10 @@ async function reviewCodex(root, ids, argv, authority) {
     if (!worktreeScope) return 1
     const governance = governanceGate(worktree, [...worktreeScope, ...(doc ? [doc] : [])], 'review')
     if (!governance) return 1
-    const decision = archived.restart
+    const decision = archived.restart && !archived.retained
       ? { status: null, reset: false }
-      : exactLaneDecision(root, ids, 'review', worktree, base, governance, authority, prompt, doc ? join(root, doc) : null, doc)
+      : exactLaneDecision(root, ids, 'review', worktree, base, governance, authority, prompt, doc ? join(root, doc) : null, doc,
+        archived.restart ? () => preserveArchivedReviewRestart(archived.restart) : null)
     if (decision.status !== null) return decision.status
     if (!decision.reset && !freshExactWorktree(root, worktree, base, made)) {
       process.stderr.write('roadmap codex: review worktree is not a fresh registered checkout at the requested HEAD; refusing launch\n')
@@ -954,14 +961,15 @@ async function reviewCodex(root, ids, argv, authority) {
       launchGovernance = refreshedScope && governanceGate(worktree, [...refreshedScope, ...(doc ? [doc] : [])], 'review')
       if (!launchGovernance) return 1
     }
+    if (archived.restart && !archived.retained) preserveArchivedReviewRestart(archived.restart)
     if (decision.reset && decision.carryRefresh?.copy) {
       mkdirSync(dirname(join(worktree, doc)), { recursive: true })
       copyFileSync(join(root, doc), join(worktree, doc))
     }
     carryIn(root, worktree, doc)
     preserveStaleReport(worktree, LANES.review.report)
-    if (archived.restart) preserveArchivedReviewRestart(archived.restart)
-    return await launch(root, ids, 'review', { worktree, base, prompt, governance: launchGovernance, authority, carriedIn: doc, allocation: made })
+    return await launch(root, ids, 'review', { worktree, base, prompt, governance: launchGovernance, authority, carriedIn: doc, allocation: made,
+      replaceGeneration: archived.restart && !archived.retained && archived.restart.journal.worktreeIdentity ? archived.restart.journal : undefined })
   } finally { unwindAllocation(root, made) }
 }
 

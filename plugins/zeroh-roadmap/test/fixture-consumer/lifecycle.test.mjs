@@ -60,7 +60,7 @@ test('L1 — two `roadmap claim` calls return distinct consecutive numbers with 
   assert.ok(existsSync(join(claimsDir, `${na}.claim`)) && existsSync(join(claimsDir, `${nb}.claim`)), 'both claim files exist')
 })
 
-test('session worktree journal lets phase land fast-forward, dispose, and archive the lane', () => {
+test('legacy session worktree lands fast-forward while preserving the unowned lane and its recovery evidence', () => {
   const root = makeFixtureRepo()
   const phase = 9019
   seedPhase(root, { phase, status: 'in-progress', arcId: 'FX', kind: 'logic', tasks: [{ id: `${phase}.1`, done: true }] })
@@ -74,10 +74,15 @@ test('session worktree journal lets phase land fast-forward, dispose, and archiv
     writeFileSync(join(lane, 'CODEX-REPORT.md'), 'CODEX-RUN-COMPLETE\n')
     const land = runCli(lane, ['phase', 'land', String(phase)])
     assert.equal(land.code, 0, land.stderr)
-    assert.equal(existsSync(lane), false)
+    assert.match(git(root, 'log', '--format=%s', 'develop'), new RegExp(`${phase}\\.1 session work`), 'the session commit is integrated locally')
+    assert.equal(readFileSync(join(root, 'session-work.txt'), 'utf8'), 'session lane work\n', 'the integrated tree contains the lane result')
+    assert.equal(existsSync(lane), true, 'an identity-free legacy lane is not upgraded into removable ownership')
+    assert.equal(readFileSync(join(lane, 'CODEX-REPORT.md'), 'utf8'), 'CODEX-RUN-COMPLETE\n', 'the sole source report remains intact')
+    const live = join(root, '.building', `codex-${phase}.json`)
+    assert.ok(existsSync(live), 'the live legacy journal remains available for recovery')
+    assert.match(land.stderr, /KEPT.*ownership-uncertain/i, 'the successful land names the conservative ownership hold')
     const closed = join(root, '.building', `codex-${phase}.closed.json`)
-    assert.ok(existsSync(closed))
-    assert.equal(JSON.parse(readFileSync(closed, 'utf8')).closedBy, 'phase land')
+    assert.equal(existsSync(closed), false, 'a legacy journal is not closed as if its output had an owned archive')
   } finally {
     rmSync(lane, { recursive: true, force: true })
   }

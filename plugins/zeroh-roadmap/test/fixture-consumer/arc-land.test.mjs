@@ -241,13 +241,19 @@ test('B10 — a clean isolated arc lands: exit 0, the arc commit is reachable fr
   // Arc AHEAD of develop so this exercises the real merge path (at-tip = external-land path).
   writeFileSync(join(iso.worktree, 'src', 'arc-b10.ts'), 'export const b10 = 1\n')
   git(iso.worktree, 'add', '-A'); git(iso.worktree, 'commit', '-q', '-m', 'arc: FX b10 work')
+  const sidecar = join(root, 'roadmap', 'arcs', '.building', 'FX.json')
+  const sidecarBefore = readFileSync(sidecar)
   const r = land(root)
   assert.equal(r.code, 0, `clean landing expected; stderr:\n${r.stderr}`)
   assert.equal(r.json.action, 'landed')
   assert.ok(r.json.record.some((s) => s.step === 'merge'), `the true merge path ran: ${JSON.stringify(r.json.record)}`)
   assert.match(git(root, 'log', '--format=%s', 'develop'), /arc: FX b10 work/, 'the arc commit is reachable from the primary local develop')
   assert.ok(existsSync(join(root, 'roadmap', 'arc-summary.json')), 'the RunnerSummary pointer is written (validates against RunnerSummaryShape)')
-  assert.ok(!existsSync(join(root, 'roadmap', 'arcs', '.building', 'FX.json')), 'the sidecar is cleaned')
+  assert.ok(existsSync(sidecar), 'an identity-free sidecar is retained rather than treated as removable ownership evidence')
+  assert.deepEqual(readFileSync(sidecar), sidecarBefore, 'the ownership hold preserves the exact recovery record')
+  assert.ok(existsSync(iso.worktree), 'the unowned arc worktree survives the successful integration')
+  assert.ok(r.json.record.some((step) => step.step === 'worktree-cleanup' && step.outcome === 'held' && step.reason === 'ownership-uncertain'),
+    `landing reports the stable ownership hold: ${JSON.stringify(r.json.record)}`)
 })
 
 test('B11 — disarm frees the lane (a second arm succeeds); --paused preserves the lane', () => {

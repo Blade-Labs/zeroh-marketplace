@@ -6,6 +6,7 @@ import { makeFixtureRepo, runCli, writePhaseFile, commitPaths, git, bases } from
 import { latestReport, correctnessDecision, CORRECTNESS_ROUND_CAP } from '../../cli/lib/gate-report.mjs'
 import { launchCompletedExactLane } from './exact-lane.fixture.mjs'
 import { validateArchivedReviewCompletion } from '../../cli/lib/codex-journal.mjs'
+import { removeWorktreeIdentity } from '../../cli/lib/worktree.mjs'
 
 const seed = (phase) => {
   const root = makeFixtureRepo()
@@ -123,8 +124,8 @@ test('37.6 — ten incomplete criteria converge only after an actual repair HEAD
   assert.equal(correctnessDecision(report.agents).terminal, true)
 })
 
-test('37.6 — three exact reviews preserve every prior launch artifact and identical archived reuse is a no-op', async () => {
-  const phase = 93764
+for (const mode of ['retained', 'removed']) test(`37.6 — three ${mode} exact reviews preserve every prior launch artifact and identical archived reuse is a no-op`, async () => {
+  const phase = mode === 'retained' ? 93764 : 93768
   const root = seed(phase)
   const snapshots = []
   let current
@@ -146,6 +147,11 @@ test('37.6 — three exact reviews preserve every prior launch artifact and iden
     const status = runCli(root, ['codex', 'status', String(phase), '--review'])
     assert.equal(status.code, 0, status.stderr)
     const archivedJournal = JSON.parse(readFileSync(current.journalPath, 'utf8'))
+    if (mode === 'removed') {
+      // Explicit fixture retirement exercises archived reuse; GC safety has its own real-Git matrix.
+      git(root, 'worktree', 'remove', '--force', current.worktree)
+      if (archivedJournal.worktreeIdentity) removeWorktreeIdentity(root, archivedJournal.worktreeIdentity)
+    }
     const prefix = current.journalPath.replace(/\.json$/, `.prior.${archivedJournal.launchId}`)
     snapshots.push({
       journalPath: `${prefix}.json`, promptPath: `${prefix}.prompt.txt`, reportPath: `${prefix}.report.md`,
@@ -161,7 +167,7 @@ test('37.6 — three exact reviews preserve every prior launch artifact and iden
   writeFileSync(`${fakeBin}/codex`, `#!/bin/sh\nprintf started > "${marker}"\n`)
   const identical = runCli(root, ['codex', 'review', String(phase), '--worktree', current.worktree, '--base', 'develop', '--parent-authority', 'workspace-write'], { PATH: `${fakeBin}:${process.env.PATH}` })
   assert.equal(identical.code, 0, identical.stderr)
-  assert.equal(existsSync(current.worktree), false, 'identical archived proof creates no worktree')
+  assert.equal(existsSync(current.worktree), mode === 'retained', 'identical archived reuse preserves worktree presence')
   assert.equal(existsSync(marker), false, 'identical archived proof starts no native process')
   assert.deepEqual(readFileSync(current.journalPath), beforeJournal)
   assert.equal(statSync(current.journalPath).mtimeMs, beforeMtime)
@@ -169,14 +175,15 @@ test('37.6 — three exact reviews preserve every prior launch artifact and iden
 })
 
 test('37.6 — fresh and archived review launches refuse different primary bytes for a tracked target input', async () => {
-  for (const [mode, phase] of [['fresh', 93765], ['archived', 93766]]) {
+  for (const [mode, phase] of [['fresh', 93765], ['archived', 93766], ['retained', 93769]]) {
     const root = seed(phase)
     let worktree = `${root}-exact-review-${phase}`
-    if (mode === 'archived') {
+    if (mode !== 'fresh') {
       const completed = await exactLane(root, 'review', phase)
       const consumed = runCli(root, ['codex', 'status', String(phase), '--review'])
       assert.equal(consumed.code, 0, consumed.stderr)
       worktree = completed.worktree
+      if (mode === 'archived') git(root, 'worktree', 'remove', '--force', worktree)
     }
     const rel = `.building/${mode}-tracked-review.md`
     mkdirSync(`${root}/.building`, { recursive: true })
@@ -194,7 +201,7 @@ test('37.6 — fresh and archived review launches refuse different primary bytes
     const laneExists = existsSync(worktree)
     const before = {
       head: laneExists ? git(worktree, 'rev-parse', 'HEAD') : null,
-      doc: laneExists ? readFileSync(`${worktree}/${rel}`) : null,
+      doc: existsSync(`${worktree}/${rel}`) ? readFileSync(`${worktree}/${rel}`) : null,
       journal: existsSync(journalPath) ? readFileSync(journalPath) : null,
       prompt: existsSync(promptPath) ? readFileSync(promptPath) : null,
       report: existsSync(reportPath) ? readFileSync(reportPath) : null,
@@ -206,7 +213,7 @@ test('37.6 — fresh and archived review launches refuse different primary bytes
     chmodSync(`${fakeBin}/codex`, 0o755)
     const invoked = runCli(root, ['codex', 'review', String(phase), '--doc', `${root}/${rel}`, '--worktree', worktree, '--base', 'develop', '--parent-authority', 'workspace-write'], { PATH: `${fakeBin}:${process.env.PATH}` })
     assert.notEqual(invoked.code, 0, `${mode}: differing tracked bytes must refuse`)
-    assert.match(invoked.stderr, /tracked|differ|overwrite|refus|carried/i, mode)
+    assert.match(invoked.stderr, /tracked|differ|overwrite|refus|carried|unowned/i, mode)
     assert.equal(existsSync(marker), false, `${mode}: no native process starts`)
     assert.deepEqual(existsSync(journalPath) ? readFileSync(journalPath) : null, before.journal, `${mode}: journal preserved`)
     assert.deepEqual(existsSync(promptPath) ? readFileSync(promptPath) : null, before.prompt, `${mode}: prompt preserved`)
@@ -214,7 +221,7 @@ test('37.6 — fresh and archived review launches refuse different primary bytes
     assert.equal(existsSync(worktree), laneExists, `${mode}: worktree presence preserved`)
     if (laneExists) {
       assert.equal(git(worktree, 'rev-parse', 'HEAD'), before.head, `${mode}: HEAD preserved`)
-      assert.deepEqual(readFileSync(`${worktree}/${rel}`), before.doc, `${mode}: target input preserved`)
+      assert.deepEqual(existsSync(`${worktree}/${rel}`) ? readFileSync(`${worktree}/${rel}`) : null, before.doc, `${mode}: target input presence and bytes preserved`)
     }
   }
 })
@@ -263,4 +270,30 @@ test('37.6 — brand-new plan and review refuse tracked input mismatch before cr
     assert.equal(readFileSync(`${root}/${rel}`, 'utf8'), '# Different primary request bytes\n', `${lane}: primary request bytes remain unchanged`)
     assert.equal(git(root, 'show', `HEAD:${rel}`), '# Target-owned input bytes', `${lane}: requested commit bytes remain unchanged`)
   }
+})
+
+
+test('retained archived review with changed archive bytes refuses before reset or prior-artifact mutation', async () => {
+  const phase = 93770
+  const root = seed(phase)
+  const current = await exactLane(root, 'review', phase)
+  const status = runCli(root, ['codex', 'status', String(phase), '--review'])
+  assert.equal(status.code, 0, status.stderr)
+  const journal = JSON.parse(readFileSync(current.journalPath, 'utf8'))
+  writeFileSync(journal.archivedReport, 'corrupt archived bytes\n')
+  writeFileSync(`${root}/src/later.ts`, 'export const later = true\n')
+  commitPaths(root, `fix: phase ${phase} — later review request`, ['src/later.ts'])
+  const before = { journal: readFileSync(current.journalPath), prompt: readFileSync(journal.prompt), head: head(current.worktree) }
+  const marker = `${root}/.building/corrupt-archive-native-start`
+  const fakeBin = `${root}/fakebin-complete-review`
+  writeFileSync(`${fakeBin}/codex`, `#!/bin/sh\nprintf started > "${marker}"\n`)
+  const refused = runCli(root, ['codex', 'review', String(phase), '--worktree', current.worktree, '--base', 'develop', '--parent-authority', 'workspace-write'], { PATH: `${fakeBin}:${process.env.PATH}` })
+  assert.notEqual(refused.code, 0)
+  assert.match(refused.stderr, /archived review|archived report/)
+  assert.equal(existsSync(marker), false)
+  assert.equal(head(current.worktree), before.head)
+  assert.deepEqual(readFileSync(current.journalPath), before.journal)
+  assert.deepEqual(readFileSync(journal.prompt), before.prompt)
+  assert.equal(readdirSync(`${root}/.building`).some(name => name.includes('.prior.')), false)
+  assert.equal(readFileSync(journal.archivedReport, 'utf8'), 'corrupt archived bytes\n')
 })
