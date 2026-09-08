@@ -1,0 +1,90 @@
+{
+  "phase": 41,
+  "date": "2026-09-08",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 44
+  },
+  "taskCount": 7,
+  "keyFiles": [
+    "plugins/zeroh-roadmap/templates/schema.ts",
+    "docs/roadmap/lib/schema.ts",
+    "plugins/zeroh-roadmap/cli/lib/delivery.mjs",
+    "plugins/zeroh-roadmap/cli/lib/branch-strategy.mjs",
+    "plugins/zeroh-roadmap/cli/lib/providers/github.mjs",
+    "plugins/zeroh-roadmap/cli/commands/deliver.mjs",
+    "plugins/zeroh-roadmap/cli/lib/config.mjs",
+    "plugins/zeroh-roadmap/cli/commands/init.mjs",
+    "plugins/zeroh-roadmap/skills/do-arc/SKILL.md",
+    "plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs"
+  ],
+  "gate": {
+    "green": true,
+    "findingsBySeverity": {
+      "CRITICAL": 0,
+      "HIGH": 1,
+      "MEDIUM": 0,
+      "LOW": 0
+    },
+    "roundsLowOnly": 0,
+    "roundsPastCap": 0,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 654617
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "metrics": {
+    "commits": 12,
+    "linesAdded": 2513,
+    "linesRemoved": 108,
+    "filesChanged": 36,
+    "testsAtStart": 2477,
+    "testsAtEnd": 2563,
+    "testsAdded": 86
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "unverified"
+    },
+    "driver": {
+      "model": "unverified (Codex supervising session)",
+      "lane": "codex"
+    },
+    "roles": {
+      "test-engineer": {
+        "model": "unverified (requested gpt-5.6-sol)"
+      },
+      "code-reviewer": {
+        "model": "unverified (requested gpt-5.6-sol)"
+      }
+    }
+  }
+}

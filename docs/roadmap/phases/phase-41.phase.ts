@@ -3,7 +3,7 @@ import { definePhase } from '../lib/schema'
   /** NATIVEGREEN PR-delivery plane. timing: no reference data for band 7-9 × surface:false */
 export default definePhase({
   phase: 41, name: 'Idempotent arc delivery with explicit branch and merge authority',
-  plannedBy: { model: 'unverified' }, status: 'in-progress', category: 'feature', kind: 'logic',
+  plannedBy: { model: 'unverified' }, status: 'done', category: 'feature', kind: 'logic',
   source: 'NATIVEGREEN pr-delivery plane; intent-to-green-pr-design.md §§ArcDelivery, PullRequestProvider, BranchStrategy.',
   priority: 'HIGH', arcId: 'NATIVEGREEN', dependsOn: [40], conflictsWith: [],
   keyFiles: ['plugins/zeroh-roadmap/templates/schema.ts', 'docs/roadmap/lib/schema.ts', 'plugins/zeroh-roadmap/cli/lib/delivery.mjs', 'plugins/zeroh-roadmap/cli/lib/branch-strategy.mjs', 'plugins/zeroh-roadmap/cli/lib/providers/github.mjs', 'plugins/zeroh-roadmap/cli/commands/deliver.mjs', 'plugins/zeroh-roadmap/cli/lib/config.mjs', 'plugins/zeroh-roadmap/cli/commands/init.mjs', 'plugins/zeroh-roadmap/skills/do-arc/SKILL.md', 'plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs'],
@@ -63,6 +63,104 @@ export default definePhase({
       files: ['plugins/zeroh-roadmap/skills/do-arc/SKILL.md', 'plugins/zeroh-roadmap/workflows/arc-plane.workflow.mjs', 'plugins/zeroh-roadmap/cli/lib/delivery.mjs', 'plugins/zeroh-roadmap/cli/lib/delivery.test.mjs', 'plugins/zeroh-roadmap/cli/commands/deliver.test.mjs', 'plugins/zeroh-roadmap/cli/lib/derive.mjs', 'plugins/zeroh-roadmap/cli/lib/derive.test.mjs', 'plugins/zeroh-roadmap/cli/lib/workflow-steps.mjs', 'plugins/zeroh-roadmap/cli/lib/workflow-steps.test.mjs', 'plugins/zeroh-roadmap/cli/commands/arc.mjs', 'plugins/zeroh-roadmap/cli/commands/arc.test.mjs', 'plugins/zeroh-roadmap/test/fixture-consumer/lifecycle.test.mjs', 'plugins/zeroh-roadmap/test/fixture-consumer/arc-next.test.mjs', 'plugins/zeroh-roadmap/cli/commands/deliver.mjs', 'plugins/zeroh-roadmap/bin/roadmap.mjs', 'plugins/zeroh-roadmap/templates/schema.ts', 'docs/roadmap/lib/schema.ts'], testMode: 'tdd', done: true, doneDate: '2026-09-08', transparencyReport: {"whatWasDone": "Wired default PR delivery into canonical lifecycle routing, exact terminal decisions, terminal-preserving resume and a supported Node plane entry with automatic inline completion.", "how": "Independent architect/test engineer specified the contracts; actual finalizer, handoff, CLI-entry, inline-tail and green-resume REDs preceded code. The pure finalizer reuses exact PR/check predicates and immutable authority; new arcs deliver before local integration, historical valid local summaries remain supported only without explicit PR policy or a receipt. Inline handoff freezes one immutable record; resume validates committed phase bytes, ancestry, phase commit boundary and stored checkpoint, then reuses the existing result claim/verify/groom/emit/beacon tail. Seven material review issues were repaired and independently rereviewed clean. Real inline regression proves dirty refusal, committed result consumption, one actual emit and no replay. Initial task gate had165/166 passes with one stale expected-land assertion; diagnosed and corrected. Final gate000016 passed166/166 tests across7 suites in191962ms. Final focused canonical churn check also passed. Full phase gate remains pending.", "compromises": "None", "skipped": "None", "hardcoded": "None", "limitations": "Live GitHub/native delivery remains pending. Normal CLI receipts intentionally cannot queue/merge without a pre-recorded terminal authority source. Reached PR terminals report delivery-evaluation-unavailable until phase42/43 provides a supported PR evidence/report binding; no local summary or completion is fabricated. The inline fixture uses injected result/gate commands plus real filesystem, Git, metadata, backlog and emit; it is not a native model performance claim."},
       interfaces: { consumes: ['awaiting-ci ArcDelivery', 'RequiredChecksEvidenceShape'], produces: ['finalizeDelivery open-green/queue/merge guard'] } },
   ],
+  gate: {
+  "lint": "clean",
+  "typeCheck": "clean",
+  "build": "clean",
+  "unitTests": {
+    "passed": 2563,
+    "total": 2563,
+    "notes": "Full repaired run-000020-2026-09-08T00-53-43-932Z.json passed2563/2563 Node checks across114 files plus schema in654617ms. Independent R2 clean. Metadata-only af1387f separately rechecked measure10/10."
+  },
+  "integrationTests": {
+    "passed": 0,
+    "total": 0,
+    "notes": "Declared absent; real Git/process fixtures run under unit."
+  },
+  "e2eTests": {
+    "passed": 0,
+    "total": 0,
+    "notes": "Native conformance remains phase43; no live provider trial claimed."
+  }
+},
+  metrics: {
+  "commits": 12,
+  "linesAdded": 2513,
+  "linesRemoved": 108,
+  "filesChanged": 36,
+  "testsAtStart": 2477,
+  "testsAtEnd": 2563,
+  "testsAdded": 86
+},
+  compromises: "None",
+  completedDate: "2026-09-08",
+  gateRounds: [
+  {
+    "round": 0,
+    "agent": "quality-pass",
+    "verdict": "findings-fixed",
+    "summary": "Independent one-pass quality sweep of phase41 at e2d22d6 vs656bad7. Parent applied bounded recommendations in d7eb8a6025b117804f5a529fffd49bd1d7896369: one delivery-key/action-key/SHA primitive owner, one CLI clock binding, removal of unused parsed provider storage, and corrected plane help diagnostic. Five production files,29 added/30 removed lines. Four affected suites passed43 checks plus5 focused identity/finalizer checks; configured types declared absent, whitespace clean. Public phase42-facing APIs retained; no style rewrite, hard stops or bugs noted. Full mechanical phase gate follows.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  },
+  {
+    "round": 1,
+    "agent": "code-reviewer",
+    "verdict": "findings-fixed",
+    "summary": "Original independent HIGH at d7eb8a6 repaired by08b0ad8 and independently closed inR2. Human plane labels now pass unchanged; copyable resume uses literal POSIX quoting. Actual regression RED preceded repair, affected51/51 checks passed. Full gate000018 exposed one instruction-budget failure (2561/2562); concise equivalent prose plus metadata correction af1387f restored unchanged11065 ceiling, final measure10/10 passed. Internal Node argv transport remains unchanged.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": [
+      {
+        "file": "plugins/zeroh-roadmap/cli/commands/arc.mjs",
+        "line": 238,
+        "severity": "HIGH",
+        "confidence": 99,
+        "description": "The CLI applies an arc-ID regex that forbids whitespace to planeName, while ArcPlaneShape.name accepts any nonempty string and existing arcs use Lane lifecycle and Integrity & measurement. These valid planes cannot be executed even when quoted; preserve plane labels and shell-quote generated resume arguments."
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "agent": "code-reviewer",
+    "verdict": "clean",
+    "summary": "Independent R2 verifies08b0ad8 since d7eb8a6. Prior HIGH closed at current arc.mjs239/241/244: human plane labels forward exactly, copyable resume quotes literal arguments. Regression covers spaces, apostrophe, ampersand, substitution and semicolon with exact shell argv recovery. Internal workflow stays unchanged execFile argv transport. ReviewFocus absent; no actionable findings. Metadata-only follow-up af1387f changes stale land to deliver; final measure10/10 passes and flow11061<=11065.",
+    "model": "unverified (requested gpt-5.6-sol)",
+    "findings": []
+  }
+],
+  executionResult: {
+  "phase": 41,
+  "status": "done",
+  "driver": {
+    "model": "unverified (Codex supervising session)",
+    "lane": "codex"
+  },
+  "modelPolicy": {
+    "source": "config",
+    "preset": "codex-full"
+  },
+  "roles": [
+    {
+      "role": "test-engineer",
+      "model": "unverified (requested gpt-5.6-sol)",
+      "via": "native"
+    },
+    {
+      "role": "code-reviewer",
+      "model": "unverified (requested gpt-5.6-sol)",
+      "via": "native"
+    }
+  ],
+  "compromises": [],
+  "skipped": [],
+  "hardcoded": [],
+  "surfaced": [
+    "History curation refused foreign backlog reconciliation8f3c112; preserved unchanged.",
+    "PR evaluation binding and live exact-head monitoring are required downstream42/43 work, not completed here."
+  ],
+  "hardStops": [],
+  "gateRounds": 3
+},
   reviewRecord: { date: '2026-09-06', model: 'unverified (requested gpt-5.6-sol)', verdict: 'READY', via: 'executed' },
-  notes: 'Task41.7 handoff: reached PR terminals currently project a typed delivery-evaluation-unavailable hold because the evaluator still binds local RunnerSummary; phase42/43 must add supported PR-terminal report binding before whole-arc completion. This is an honest checkpoint, not completed evaluation. Normal CLI queue/merge remains held without a pre-recorded authority source; no late authority growth was added. Compatibility ruling: a receipt or explicit deliveryPolicy overrides local summaries; existing valid shipped summaries without either retain historical completion; new unpublished arcs default to deliver. Task41.7 architecture: finalizeDelivery is pure and reuses exactChecks plus reducer events; provider mutations remain behind durable action authorization. Canonical derive/classify owns default deliver and awaiting-ci routing before local land, which remains an explicit separate command. Node arc plane entry reuses the existing workflow and inline result consumption tail. Added bounded derive/workflow/CLI/fixture files to task scope; no new generic workflow engine. Task41.6 architecture: provider-owned read-only bootstrap resolves remote identity/base and nonempty required checks before immutable receipt initialization; configured exact checks are the guaranteed path, unavailable or ambiguous discovery holds with a remedy. Fresh invocation authorizes only its one derived delivery ref; queue/merge authority remains absent. Resume preserves requested policy and routes grouped members to order-zero owner. Provider bootstrap extension is included in41.6 files. Task41.4 integration detail: local .deliveries receipts must not make pre-publication normalization refuse its own control-plane state; use the existing per-artifact ignore pattern or explicit clean-worktree classification, without ignoring foreign consumer dirt. Task41.7 also covers merged-terminal finality. Execution architecture41.1: independent codex-full Sol-requested architect ruled PROCEED_WITH_FIX. Target address fields stay immutable; explicit authorized head/base advance invalidates prior CI. Reuse canonical TS schema bridge and the shared persistent kernel flock; pure reducer owns semantic transitions, canonical schema parsing owns nested structural validation. Resume observation for task41.7: inline plane completion returned planeDone without grooming completed entries; supervisor reconciled36–40 through existing groomBacklogSource/emit in8f3c112. The supported consumer entrypoint must make the inline tail reachable and avoid requiring Claude Workflow sandbox execution of a Node module (Atlas/Gandalf report). interview: inherited from NATIVEGREEN. Requested planner model was gpt-5.6-sol; runtime identity was not attested, so plannedBy.model is unverified. [FIXED] Source 036b7c5 observations moved out of rerun assumptions: RoadmapConfigShape has no deliveryPolicy, landing.mjs alone interprets mergePolicy with an absent-policy hold, and no delivery/provider module owns ArcDelivery/PullRequestReceipt; planned work deliberately invalidates those observations, so resume must not reassert them. Current provider capability and credentials are checked only at consequential preflight. Provider credentials stay external and ArcDelivery persists no secrets. Reuse the existing landing, arc-plane, watch/capbuild, and roles-resolver seams. [FIXED] Added arc-ledger task 41.7, the active legacy schema mirror, the real init.mjs scaffold owner, and the do-arc delivery handoff; separated provider deliveryPolicy from local-integration mergePolicy and bound queue/merge to phase-42 exact-head required-check evidence. userFacing false ratified: this is developer workflow automation rather than an application runtime surface, so no product feature flag applies. testScope full ratified: schemas, config, Git/provider mutations, workflow, CLI, and cross-phase CI receipts span the whole plugin. Every task uses tdd because each adds executable parsing, persistence, branching, provider, idempotency, authority, or state-transition logic; injected git/gh adapters add no external package or asset, so licensing is not applicable. reviewScope full ratified because external mutation and authority are governed seams. Suggested config: deliveryPolicy { provider:"github", defaultBase:string, terminal:"open"|"queue"|"merge", branchStrategy:"independent"|"stacked", allowedPushRefs:string[], grouping?:{id:string,order:number}, requiredCapabilities?:string[] }; absent terminal is open/manual. Existing mergePolicy continues to authorize local arc integration only and cannot grant provider queue/merge. Boundary classification was attempted but pnpm dependency preflight stopped on ERR_PNPM_IGNORED_BUILDS before a boundary verdict. Mode A review ran --no-queue; backlog remains untouched. designRef: plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md.',
+  notes: 'COMPLETED: Full repaired run-000020-2026-09-08T00-53-43-932Z.json passed2563/2563 Node checks across114 files plus schema in654617ms. Independent R2 clean. Metadata-only af1387f separately rechecked measure10/10. Curation refused foreign8f3c112; retained. Earlier pending statements below are historical. Task41.7 handoff: reached PR terminals currently project a typed delivery-evaluation-unavailable hold because the evaluator still binds local RunnerSummary; phase42/43 must add supported PR-terminal report binding before whole-arc completion. This is an honest checkpoint, not completed evaluation. Normal CLI queue/merge remains held without a pre-recorded authority source; no late authority growth was added. Compatibility ruling: a receipt or explicit deliveryPolicy overrides local summaries; existing valid shipped summaries without either retain historical completion; new unpublished arcs default to deliver. Task41.7 architecture: finalizeDelivery is pure and reuses exactChecks plus reducer events; provider mutations remain behind durable action authorization. Canonical derive/classify owns default deliver and awaiting-ci routing before local land, which remains an explicit separate command. Node arc plane entry reuses the existing workflow and inline result consumption tail. Added bounded derive/workflow/CLI/fixture files to task scope; no new generic workflow engine. Task41.6 architecture: provider-owned read-only bootstrap resolves remote identity/base and nonempty required checks before immutable receipt initialization; configured exact checks are the guaranteed path, unavailable or ambiguous discovery holds with a remedy. Fresh invocation authorizes only its one derived delivery ref; queue/merge authority remains absent. Resume preserves requested policy and routes grouped members to order-zero owner. Provider bootstrap extension is included in41.6 files. Task41.4 integration detail: local .deliveries receipts must not make pre-publication normalization refuse its own control-plane state; use the existing per-artifact ignore pattern or explicit clean-worktree classification, without ignoring foreign consumer dirt. Task41.7 also covers merged-terminal finality. Execution architecture41.1: independent codex-full Sol-requested architect ruled PROCEED_WITH_FIX. Target address fields stay immutable; explicit authorized head/base advance invalidates prior CI. Reuse canonical TS schema bridge and the shared persistent kernel flock; pure reducer owns semantic transitions, canonical schema parsing owns nested structural validation. Resume observation for task41.7: inline plane completion returned planeDone without grooming completed entries; supervisor reconciled36–40 through existing groomBacklogSource/emit in8f3c112. The supported consumer entrypoint must make the inline tail reachable and avoid requiring Claude Workflow sandbox execution of a Node module (Atlas/Gandalf report). interview: inherited from NATIVEGREEN. Requested planner model was gpt-5.6-sol; runtime identity was not attested, so plannedBy.model is unverified. [FIXED] Source 036b7c5 observations moved out of rerun assumptions: RoadmapConfigShape has no deliveryPolicy, landing.mjs alone interprets mergePolicy with an absent-policy hold, and no delivery/provider module owns ArcDelivery/PullRequestReceipt; planned work deliberately invalidates those observations, so resume must not reassert them. Current provider capability and credentials are checked only at consequential preflight. Provider credentials stay external and ArcDelivery persists no secrets. Reuse the existing landing, arc-plane, watch/capbuild, and roles-resolver seams. [FIXED] Added arc-ledger task 41.7, the active legacy schema mirror, the real init.mjs scaffold owner, and the do-arc delivery handoff; separated provider deliveryPolicy from local-integration mergePolicy and bound queue/merge to phase-42 exact-head required-check evidence. userFacing false ratified: this is developer workflow automation rather than an application runtime surface, so no product feature flag applies. testScope full ratified: schemas, config, Git/provider mutations, workflow, CLI, and cross-phase CI receipts span the whole plugin. Every task uses tdd because each adds executable parsing, persistence, branching, provider, idempotency, authority, or state-transition logic; injected git/gh adapters add no external package or asset, so licensing is not applicable. reviewScope full ratified because external mutation and authority are governed seams. Suggested config: deliveryPolicy { provider:"github", defaultBase:string, terminal:"open"|"queue"|"merge", branchStrategy:"independent"|"stacked", allowedPushRefs:string[], grouping?:{id:string,order:number}, requiredCapabilities?:string[] }; absent terminal is open/manual. Existing mergePolicy continues to authorize local arc integration only and cannot grant provider queue/merge. Boundary classification was attempted but pnpm dependency preflight stopped on ERR_PNPM_IGNORED_BUILDS before a boundary verdict. Mode A review ran --no-queue; backlog remains untouched. designRef: plugins/zeroh-roadmap/docs/architecture/intent-to-green-pr-design.md.',
 })
