@@ -538,3 +538,11 @@ export function groomBacklogSource(source, phaseNumber, { allowAbsent = false } 
   })
   return { source: lines.filter((_, index) => !remove.has(index)).join('\n') }
 }
+
+
+/** Preserve literal identifiers in copyable POSIX resume commands. */
+export function shellArgument(value) {
+  const text = String(value)
+  if (text.includes('\0')) throw new Error('shell argument contains NUL')
+  return /^[A-Za-z0-9_./:-]+$/.test(text) ? text : "'" + text.replaceAll("'", "'\\''") + "'"
+}

@@ -9,7 +9,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -131,4 +131,20 @@ test('arc plane is the supported Node entry and maps real workflow handoffs to e
 })
 test('arc plane rejects missing identifiers, traversal and unsupported or duplicate flags',async()=>{
  for(const argv of [['plane'],['plane','FX'],['plane','FX','P','--recursion'],['plane','FX','P','--inline','--inline'],['plane','../FX','P','--inline']]){let calls=0;const code=await runArc(argv,{workflow:async()=>{calls++;return {done:true}},stdout:()=>{},stderr:()=>{}});assert.equal(code,1);assert.equal(calls,0)}
+})
+
+
+test('arc plane forwards human labels and resume preserves literal shell arguments',async()=>{
+ const scratch=mkdtempSync(join(tmpdir(),'zr-arc-resume-'));bases.push(scratch)
+ const sentinel=join(scratch,'must-not-exist')
+ const arcId='ARC;echo-not-code',planeName=`Integrity & measurement's $(touch ${sentinel})`
+ const calls=[],out=[]
+ const code=await runArc(['plane',arcId,planeName,'--inline','--json'],{workflow:async input=>{calls.push(input);return {handoffInline:{route:'handoff-inline'},phase:41}},stdout:text=>out.push(text),stderr:()=>{}})
+ assert.equal(code,3)
+ assert.deepEqual(calls,[{arcId,planeName,force:'inline'}])
+ const report=JSON.parse(out.join(''))
+ const parsed=execFileSync('bash',['-c',`set -- ${report.resume}; printf '%s\\0' "$@"`],{encoding:'utf8'}).split('\0').filter(Boolean)
+ assert.deepEqual(parsed,['roadmap','arc','plane',arcId,planeName,'--inline','--json'])
+ assert.equal(existsSync(sentinel),false)
+ for(const plane of ['', 'bad\0plane']){let called=false;assert.equal(await runArc(['plane','FX',plane],{workflow:async()=>{called=true;return {done:true}},stderr:()=>{}}),1);assert.equal(called,false)}
 })

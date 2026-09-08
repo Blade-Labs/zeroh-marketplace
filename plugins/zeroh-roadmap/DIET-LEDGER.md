@@ -807,3 +807,7 @@ historical observations and the scoped R0 pilot without claiming a fresh matrix.
 - Mandatory new phase per gap: superseded-with-equivalent(owner-approved small repairs reuse existing ownership, affected gates and fresh independent intent judgment; larger work remains planned). Owner: validate-arc/references/corrections.md.
 - Inline correction detail: moved-to-reference(validate-arc/references/corrections.md), loaded only on GAPS; authority, scope, bounds and unresolved-state rules retained.
 - Automatic new work at exhaustion: superseded-with-equivalent(stop GAPS and obtain an explicit bounded extension; descope remains owner-ratified). Owner: same correction reference.
+
+## NATIVEGREEN phase 41 gate repair
+
+- Repeated do-arc launch, resume and delivery narration: superseded-with-equivalent(concise same-skill instructions retain role resolution, Node-only entry, committed inline result validation/groom/emit, exact-head PR completion, authority and halt reconciliation). No gate or authority rule removed; the existing 11,065-token flow ceiling remains unchanged.
