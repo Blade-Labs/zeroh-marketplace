@@ -170,24 +170,32 @@ export default definePhase({
     },
     {
       "id": "43.4",
-      "title": "Prove one installed Codex intent-to-open-green-PR path",
-      "problem": "The owner needs a usable Codex development path without paying for the broad comparison matrix; real consumer feedback and one ordinary end-to-end run must identify the necessary fixes.",
+      "title": "Repair delegated plan-review friction, then prove the Codex path",
+      "problem": "The single native pilot exhausted1000 seconds in initialization and plan review without application source or tests. The delegated reviewer performs queue work it cannot apply and discovers its missing validation toolchain after launch.",
       "steps": [
         {
-          "file": "plugins/zeroh-roadmap/cli/lib/durable-process-agent-driver.mjs",
-          "description": "Preserve native usage and repair only reproducible Codex-usability defects from consumer feedback or the pilot. Keep existing lifecycle, authority and test owners; carry already shipped 0.40.4/0.40.5 fixes into the candidate."
+          "file": "plugins/zeroh-roadmap/cli/commands/codex.mjs",
+          "description": "Align buildReviewPrompt with delegated report-only Mode A: independent fitness/feasibility/verifier judgment, direct checklist references, no repair or placement probes, existing NOT QUEUED verdict. Follow implementation block1 in arc-prompts/NATIVEGREEN-codex-repair-plan.md. \u2192 verify: rendered prompt preserves independent adverse verdicts and omits delegated queue analysis"
         },
         {
-          "file": "plugins/zeroh-roadmap/cli/lib/beacon.test.mjs",
-          "description": "Regression-check malformed/legacy beacon timestamps and consumer-local schema dependency resolution; run affected configured task checks. Consumer project, host and provider permission issues remain separately classified."
+          "file": "plugins/zeroh-roadmap/skills/review-phase/SKILL.md",
+          "description": "Define the delegated branch and direct reference ownership without duplicating the authoring protocol; preserve standalone repair/queue and Mode B. Follow documentation-rules.md. \u2192 verify: independent review confirms intent, source, feasibility and testability checks remain required"
+        },
+        {
+          "file": "plugins/zeroh-roadmap/cli/commands/codex.mjs",
+          "description": "In reviewCodex validate the exact detached requested checkout before native launch; return a concrete missing-toolchain remedy before launch; the authorized outer session prepares and retries the same worktree. No implicit review install or authority upgrade. Follow block2 for cold/warm/base/carry/dirty/failure handling. \u2192 verify: configured task tests show zero native launches on prerequisite failure and correct requested-base validation"
+        },
+        {
+          "file": "plugins/zeroh-roadmap/cli/commands/codex.test.mjs",
+          "description": "Add offline valid review fixtures and regression cases from block2; retain existing deduplication, authority, carry, archive and cleanup coverage. Preserve previously reviewed usage/beacon/schema fixes. \u2192 verify: node plugins/zeroh-roadmap/bin/roadmap.mjs gate run 43 --task 43.4 --slots unit"
+        },
+        {
+          "file": "docs/roadmap/arc-prompts/NATIVEGREEN-codex-repair-plan.md",
+          "description": "Obtain one independent candidate review and final mechanical/packaging checks before any new native trial; keep the prior failure and original RED gate. \u2192 verify: candidate review has no unresolved blocking finding and final configured gate is green"
         },
         {
           "file": "docs/roadmap/arc-evals/NATIVEGREEN-codex-usability-reassessment.md",
-          "description": "Run one real installed-plugin Codex pilot in an isolated ordinary consumer, with one tiny phase, independent review, runnable output and one non-draft PR whose required checks are green on its current head. Use the ratified 20-minute native-runtime ceiling and shared capbuild admission; observe usage without inventing a hard token cap."
-        },
-        {
-          "file": "docs/roadmap/arc-evals/NATIVEGREEN-codex-usability-reassessment.md",
-          "description": "Resume the same work once and verify no duplicate executor or PR creation. Allow one targeted correction for an identified defect, one independent candidate review and a bounded HIGH-fix re-review. Preserve failures and exact source/run/PR identities; leave merge manual."
+          "description": "Only after a fresh native allowance and verified disposable GitHub target, execute block3: same tiny intent, runtime cap, runnable tests, independent correctness review, one exact-head green open PR and duplicate-free resume. \u2192 verify: actual pilot outcome satisfies all release criteria or remains explicitly failed/incomplete"
         }
       ],
       "acceptanceCriteria": [
@@ -203,9 +211,18 @@ export default definePhase({
         "plugins/zeroh-roadmap/cli/lib/beacon.test.mjs",
         "plugins/zeroh-roadmap/cli/commands/result.mjs",
         "plugins/zeroh-roadmap/cli/commands/result.test.mjs",
-        "docs/roadmap/arc-evals/NATIVEGREEN-codex-usability-reassessment.md"
+        "plugins/zeroh-roadmap/cli/roadmap.config.schema.json",
+        "plugins/zeroh-roadmap/cli/lib/config.test.mjs",
+        "plugins/zeroh-roadmap/package.json",
+        "plugins/zeroh-roadmap/.codex-plugin/plugin.json",
+        "plugins/zeroh-roadmap/.claude-plugin/plugin.json",
+        "docs/roadmap/arc-evals/NATIVEGREEN-codex-usability-reassessment.md",
+        "plugins/zeroh-roadmap/cli/commands/codex.mjs",
+        "plugins/zeroh-roadmap/cli/commands/codex.test.mjs",
+        "plugins/zeroh-roadmap/skills/review-phase/SKILL.md",
+        "docs/roadmap/arc-prompts/NATIVEGREEN-codex-repair-plan.md"
       ],
-      "notes": "Owner ratification 2026-09-08: one real Codex end-to-end run, necessary fixes and review. Reuse the previously ratified single-pilot 20-minute native ceiling; no 24-arm budget is required because the matrix is deferred. One targeted correction, one independent review; a HIGH fix gets one bounded re-review. No automatic merge or release. Stop after this task; 43.5\u201343.8 and phases44\u201345 remain deferred and not done. The abandoned uncommitted matrix-preflight extension is preserved under .building/nativegreen-deferred/43.4-matrix-preflight.patch; the native usage fix remains active.",
+      "notes": "Owner ratification 2026-09-08: one real Codex end-to-end run, necessary fixes and review. Reuse the previously ratified single-pilot 20-minute native ceiling; no 24-arm budget is required because the matrix is deferred. One targeted correction, one independent review; a HIGH fix gets one bounded re-review. No automatic merge or release. Stop after this task; 43.5\u201343.8 and phases44\u201345 remain deferred and not done. The abandoned uncommitted matrix-preflight extension is preserved under .building/nativegreen-deferred/43.4-matrix-preflight.patch; the native usage fix remains active. Owner2026-09-08 requested review and a repair plan after the timeout; this does not authorize a fresh native budget. Active implementation is the two bounded corrections in docs/roadmap/arc-prompts/NATIVEGREEN-codex-repair-plan.md, followed by review and a separately authorized observation. Existing file count includes retained already-reviewed candidate fixes, not new scope; no batchMode assertion is made. Interview: skipped \u2014 existing owner intent and current arc scope are explicit. Planning hypotheses: CONFIRMED the launcher/protocol prerequisite mismatch and redundant delegated placement work exist in the named owners; NOT TESTED whether their correction brings setup/implementation within budget; REFUTED dependency installation alone as an established dominant cause, because the reviewer continued after its repair. Prior candidate fixes remain uncommitted and must be preserved.",
       "testMode": "tdd",
       "done": false,
       "dependsOn": [
