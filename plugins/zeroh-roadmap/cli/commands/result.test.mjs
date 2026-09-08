@@ -12,7 +12,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -422,4 +422,32 @@ test('result check — a LEGACY raw-prose arm stays silent, a HALF-WRITTEN JSON 
   assert.equal(r.code, baseline.code, `an unreadable arm never REDs an honest return; stderr:\n${r.stderr}`)
   assert.ok(r.stderr.includes(brokenArm), `the arm that could not be read must be NAMED; got:\n${r.stderr}`)
   assert.match(r.stderr, /NOT reconcil/i, `and the skipped reconcile stated; got:\n${r.stderr}`)
+})
+
+
+test('contract show resolves zod beside the actual consumer schema when the repository root has no zod', () => {
+  const root = mkdtempSync(join(tmpdir(), 'zr-result-nonroot-zod-'))
+  bases.push(root)
+  const schemaDir = join(root, 'lib', 'roadmap')
+  mkdirSync(schemaDir, { recursive: true })
+  writeFileSync(join(schemaDir, 'schema.ts'), [
+    "import { z } from 'zod'",
+    "export const PhaseExecutionResultShape = z.object({",
+    "  phase: z.number(),",
+    "  status: z.enum(['done', 'escalated', 'failed', 'checkpoint']),",
+    "  gateRounds: z.number(),",
+    "})",
+    '',
+  ].join('\n'))
+  mkdirSync(join(root, 'node_modules'), { recursive: true })
+  mkdirSync(join(schemaDir, 'node_modules'), { recursive: true })
+  symlinkSync(PLUGIN_ZOD, join(schemaDir, 'node_modules', 'zod'), 'dir')
+  execFileSync('git', ['-C', root, 'init', '-q'])
+  assert.equal(existsSync(join(root, 'node_modules', 'zod')), false, 'precondition: repository root cannot resolve zod')
+
+  const r = roadmap(root, ['contract', 'show', '--json-schema'])
+  assert.equal(r.code, 0, r.stderr)
+  const schema = JSON.parse(r.stdout)
+  assert.ok(schema.properties.phase)
+  assert.deepEqual(schema.properties.status.enum, ['done', 'escalated', 'failed', 'checkpoint'])
 })

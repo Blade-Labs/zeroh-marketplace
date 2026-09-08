@@ -69,7 +69,9 @@ export function readBeaconLine(path) {
   if (lines.length === 0) return null
   try {
     const last = JSON.parse(lines[lines.length - 1])
-    const ts = Date.parse(last.ts)
+    const rawTimestamp = Object.hasOwn(last, 'ts') ? last.ts : last.at
+    const ts = typeof rawTimestamp === 'number' ? rawTimestamp : Date.parse(rawTimestamp)
+    if (!Number.isFinite(ts) || ts < 0 || ts > Date.now()) return null
     const event = LEGACY_TERMINAL_ALIASES.get(last.event) ?? last.event
     const identity = Object.fromEntries(['arcId', 'runId', 'executorId', 'nativeSessionId', 'actionFingerprint', 'requestFingerprint', 'runReceiptDigest'].filter((field) => Object.hasOwn(last, field)).map((field) => [field, last[field]]))
     return { ts, ageMin: (Date.now() - ts) / 60000, event, log: last.log ?? null, pid: last.pid ?? null, ...(last.pgid === undefined ? {} : { pgid: last.pgid }), ...identity }

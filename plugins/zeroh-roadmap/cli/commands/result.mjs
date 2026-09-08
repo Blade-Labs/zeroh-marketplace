@@ -119,7 +119,9 @@ Promise.all([import('file://' + schemaPath), import('node:fs')]).then(([m, fs]) 
 // (resolved from cwd = consumerRoot). A pre-v4 zod (no toJSONSchema) → exit 5.
 const CONTRACT_SCRIPT = `
 const schemaPath = process.argv[1]
-Promise.all([import('file://' + schemaPath), import('zod')]).then(([m, zmod]) => {
+Promise.all([import('file://' + schemaPath), import('node:module'), import('node:url')]).then(async ([m, { createRequire }, { pathToFileURL }]) => {
+  const zodPath = createRequire(schemaPath).resolve('zod')
+  const zmod = await import(pathToFileURL(zodPath).href)
   const shape = m.PhaseExecutionResultShape || (m.default && m.default.PhaseExecutionResultShape)
   if (!shape) { process.stderr.write('PhaseExecutionResultShape not exported from ' + schemaPath); process.exit(4) }
   const toJSONSchema = zmod.toJSONSchema || (zmod.z && zmod.z.toJSONSchema)

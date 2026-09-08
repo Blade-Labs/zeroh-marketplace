@@ -196,7 +196,7 @@ const REVIEW_SKILL = fileURLToPath(new URL('../../skills/review-phase/SKILL.md',
  * the same one — a per-lane copy would leave the scorecard's per-model cells comparing
  * briefings instead of models.
  */
-function buildReviewPrompt(root, ids, { doc, focus } = {}) {
+function buildReviewPrompt(root, ids, { doc, focus, requestedHead } = {}) {
   const phaseFiles = ids.map((n) => `${roadmapRootRel(root)}/phases/phase-${n}.phase.ts`)
   for (const f of phaseFiles) {
     if (!existsSync(join(root, f))) throw new Error(`phase file missing: ${f}`)
@@ -216,14 +216,15 @@ function buildReviewPrompt(root, ids, { doc, focus } = {}) {
       : []),
     '',
     'WHAT THIS LANE OVERRIDES — everything else in the protocol runs unchanged:',
-    `- REPORT-ONLY. Step F auto-repair and Step 8's queue mutation are DISABLED here. Never edit a phase file, never touch backlog.ts, never \`git add\`, commit, push, merge, or switch branches; the ONLY file you write is ${LANES.review.report}. Still DO the reasoning of both steps and report their outcome — a repair you would have applied belongs under \`Findings:\` as OPEN, and your placement ruling still goes on the \`Placement:\` line, phrased as a recommendation.`,
+    `- REPORT-ONLY. Use the protocol's delegated report-only Mode A branch for backlog phases: skip Step F and Step 8, including repair/placement reasoning and queue probes. Emit \`Placement: NOT QUEUED — delegated report-only review\`. Required plan repairs belong under \`Findings:\` as OPEN. Never edit a phase file or backlog.ts, never \`git add\`, commit, push, merge, or switch branches; the ONLY file you write is ${LANES.review.report}. Mode B stays a post-execution audit.`,
+    `LAUNCHER VALIDATION — requested HEAD ${requestedHead}: ${ids.map(id => `phase ${id} validation exit 0 (ok)`).join('; ')}. The launcher checked these prerequisites in this checkout before starting you. Reuse this mechanical result; independently judge the plan and report contradictions.`,
     '- THIS LANE REVIEWS INLINE BY DESIGN — not for want of a spawn: independence here is the fresh read, and the verdict must be attributable to the model that formed it. Wherever the protocol spawns an agent per phase or per criterion, run that step yourself, once per target.',
     '- `judged by:` in the verdict block is YOUR OWN model id. Never claim a review that did not run.',
     '- INDEPENDENCE IS THE POINT: a plan and the review already recorded in it may share an author, so treat that recorded review as a HYPOTHESIS to re-test, never as evidence, and "already reviewed" as grounds for more suspicion rather than less. Re-derive every claim from the code at HEAD.',
     '- Cross-repo targets: read the other checkout by full path (it is outside this worktree), and never write there either.',
     ...(focus ? ['', `TRAILING PROMPT — the protocol\'s "extra checks AFTER the protocol"; it never displaces a step: ${focus}`] : []),
     '',
-    'SHARED-HOST RULES (~5 concurrent AI sessions on 16 GB): reading is free, so read widely. The protocol already forbids executing test suites in either mode — honor that. No dev servers, no builds.',
+    'SHARED-HOST RULES: read the target and affected seams; keep discovery bounded to the review question. The protocol already forbids executing test suites in either mode — honor that. No dev servers, no builds.',
     '',
     `WHEN FINISHED (or blocked): write ${LANES.review.report} in the worktree root (do NOT commit it). It contains one \`## Phase N Review\` block per target in EXACTLY the structure the protocol specifies — downstream parsers consume those enums verbatim — plus, where a claim could not be checked, an explicit "Could not verify" list (never let missing evidence default favorable). End the file with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED if you could not review).`,
   ].join('\n')
@@ -888,9 +889,54 @@ function preserveArchivedReviewRestart(restart) {
   }
 }
 
+// Validation is a prerequisite to spending model time, not a second review protocol.
+function validateReviewWorktree(root, worktree, ids, base, requestedHead) {
+  const gitRead = (cwd, args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
+  const atRequestedHead = () => {
+    const requested = gitRead(root, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`])
+    const actual = gitRead(worktree, ['rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}'])
+    return requested.status === 0 && actual.status === 0
+      && requested.stdout.trim() === requestedHead && actual.stdout.trim() === requestedHead
+  }
+  const before = gitRead(worktree, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+  if (before.status !== 0 || !atRequestedHead()) {
+    process.stderr.write('roadmap codex: review validation refused: requested HEAD changed; no child launched\n')
+    return { ok: false }
+  }
+  for (const id of ids) {
+    const result = spawnSync(process.execPath, [ROADMAP_CLI, 'phase', 'validate', String(id), '--json'], {
+      cwd: worktree, encoding: 'utf8', timeout: 30_000, maxBuffer: 64 * 1024,
+    })
+    let validation
+    try { validation = JSON.parse(result.stdout) } catch { /* incomplete output is a refusal */ }
+    if (result.status !== 0 || result.error || validation?.kind !== 'ok') {
+      process.stderr.write(`roadmap codex: review phase ${id} validation failed in ${worktree}; no journal or native child launched\n`)
+      if (validation?.kind === 'toolchain-missing') {
+        const installer = detectInstaller(worktree)
+        if (installer) {
+          const lockfile = installer.bin === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json'
+          process.stderr.write(`Missing review toolchain. In ${JSON.stringify(worktree)}, the committed ${lockfile} selects: ${installer.bin} ${installer.args.join(' ')}. An authorized outer session must prepare this checkout, then retry the same review command. No install was run.\n`)
+        } else {
+          process.stderr.write(`Missing review toolchain in ${JSON.stringify(worktree)}; no committed package-manager recipe is available. Prepare the consumer toolchain explicitly before retrying. No install was run.\n`)
+        }
+      } else {
+        const detail = result.error?.message ?? result.stderr ?? ''
+        process.stderr.write(`${JSON.stringify({ exitCode: result.status, signal: result.signal, error: detail || null, validation: validation ?? 'missing or malformed validator output' }).slice(0, 4096)}\n`)
+      }
+      return { ok: false, preparationRequired: validation?.kind === 'toolchain-missing' }
+    }
+  }
+  const after = gitRead(worktree, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+  if (!atRequestedHead() || after.status !== 0 || after.stdout !== before.stdout) {
+    process.stderr.write('roadmap codex: review checkout changed during validation; refusing launch and preserving changes\n')
+    return { ok: false }
+  }
+  return { ok: true }
+}
+
 /**
- * The review lane. No branch and no dependency install: the mission never builds and never commits, so
- * the worktree is a detached read-only copy — isolation that costs a checkout, not an install.
+ * The review lane validates its detached checkout before launch. Dependencies are prepared
+ * only by an authorized outer session; the reviewer never builds, installs or commits.
  */
 async function reviewCodex(root, ids, argv, authority) {
   const wi = argv.indexOf('--worktree')
@@ -914,7 +960,10 @@ async function reviewCodex(root, ids, argv, authority) {
   // Resolve the prompt against the PRIMARY checkout before any worktree work, so a bad --doc
   // or a renumbered phase file fails loudly and destroys no previous hand-off.
   const focus = fi >= 0 ? argv[fi + 1] : undefined
-  const prompt = buildReviewPrompt(root, ids, { doc, focus })
+  const requested = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], { encoding: 'utf8' })
+  if (requested.status !== 0) { process.stderr.write(`roadmap codex: cannot resolve review base ${base}; no child launched\n`); return 1 }
+  const requestedHead = requested.stdout.trim()
+  const prompt = buildReviewPrompt(root, ids, { doc, focus, requestedHead })
 
   const archived = archivedReviewRestart(root, ids, worktree, base, prompt, authority, doc ? join(root, doc) : null)
   if (archived.status !== null) return archived.status
@@ -931,6 +980,7 @@ async function reviewCodex(root, ids, argv, authority) {
 
   const made = ensureWorktree(root, { worktree, base, branch: null, laneOwner: { kind: 'roadmap-codex', id: `review:${ids.join('-')}` } })
   if (made.status !== 0) return made.status
+  let preservePreparation = false
   try {
     const worktreeScope = governedPhaseTargets(worktree, ids, 'review')
     if (!worktreeScope) return 1
@@ -941,7 +991,7 @@ async function reviewCodex(root, ids, argv, authority) {
       : exactLaneDecision(root, ids, 'review', worktree, base, governance, authority, prompt, doc ? join(root, doc) : null, doc,
         archived.restart ? () => preserveArchivedReviewRestart(archived.restart) : null)
     if (decision.status !== null) return decision.status
-    if (!decision.reset && !freshExactWorktree(root, worktree, base, made)) {
+    if (!decision.reset && !freshExactWorktree(root, worktree, base, { ...made, created: false })) {
       process.stderr.write('roadmap codex: review worktree is not a fresh registered checkout at the requested HEAD; refusing launch\n')
       return 1
     }
@@ -961,16 +1011,25 @@ async function reviewCodex(root, ids, argv, authority) {
       launchGovernance = refreshedScope && governanceGate(worktree, [...refreshedScope, ...(doc ? [doc] : [])], 'review')
       if (!launchGovernance) return 1
     }
+    const validation = validateReviewWorktree(root, worktree, ids, base, requestedHead)
+    if (!validation.ok) { preservePreparation = validation.preparationRequired === true; return 1 }
     if (archived.restart && !archived.retained) preserveArchivedReviewRestart(archived.restart)
     if (decision.reset && decision.carryRefresh?.copy) {
       mkdirSync(dirname(join(worktree, doc)), { recursive: true })
       copyFileSync(join(root, doc), join(worktree, doc))
     }
     carryIn(root, worktree, doc)
+    if (doc) {
+      const carriedValidation = validateReviewWorktree(root, worktree, ids, base, requestedHead)
+      if (!carriedValidation.ok) { preservePreparation = carriedValidation.preparationRequired === true; return 1 }
+    }
     preserveStaleReport(worktree, LANES.review.report)
     return await launch(root, ids, 'review', { worktree, base, prompt, governance: launchGovernance, authority, carriedIn: doc, allocation: made,
       replaceGeneration: archived.restart && !archived.retained && archived.restart.journal.worktreeIdentity ? archived.restart.journal : undefined })
-  } finally { unwindAllocation(root, made) }
+  } finally {
+    // A preparation hold must retain ownership so the same checkout can be retried.
+    if (!preservePreparation) unwindAllocation(root, made)
+  }
 }
 
 /**

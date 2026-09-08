@@ -24,7 +24,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync as rawSpawnSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readdirSync, symlinkSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -584,6 +584,8 @@ test('review: the mission DELIVERS review-phase rather than restating it', () =>
   assert.match(prompt, /REPORT-ONLY/, 'a delegated review must not repair the plan it is judging')
   assert.match(prompt, /judged by:` in the verdict block is YOUR OWN model id/, 'attribution is per-driver, not per-lane')
   assert.match(prompt, /CODEX-REVIEW\.md/, "the review lane hands off its own report, never the run lane's")
+  assert.match(prompt, /skip Step F and Step 8, including repair\/placement reasoning and queue probes/i, 'the report-only branch explicitly skips queue reasoning')
+  assert.doesNotMatch(prompt, /recommend(?:ation)?[^\n]*(?:queue|placement)|(?:queue|placement)[^\n]*recommend/i, 'the prompt must not ask the independent reviewer for queue or placement recommendations')
   assert.doesNotMatch(prompt, /one commit|transparencyReport|roadmap gate run/i, 'implementation grammar must not leak into a review')
 })
 
@@ -5013,4 +5015,176 @@ test('40.7 an inactive failed review retries shared cleanup with no inferred own
   assert.equal(calls.length, 1)
   assert.deepEqual(calls[0][1].ownershipIds, [])
   assert.ok(existsSync(lane.worktree), 'failed legacy review is retried but never upgraded into removable ownership')
+})
+
+
+function validatedReviewFixture(id, { phaseSource, precreate = true } = {}) {
+  const root = tmpRepo()
+  writeCodexConfig(root)
+  mkdirSync(join(root, 'lib', 'roadmap'), { recursive: true })
+  copyFileSync(join(HERE, '..', '..', 'templates', 'schema.ts'), join(root, 'lib', 'roadmap', 'schema.ts'))
+  mkdirSync(join(root, 'roadmap', 'phases'), { recursive: true })
+  phaseSource ??= [
+    "import { definePhase } from '../../lib/roadmap/schema.ts'",
+    'export default definePhase({',
+    `  phase: ${id},`,
+    "  name: 'Review validation fixture',",
+    "  status: 'backlog',",
+    "  category: 'test',",
+    "  kind: 'hardening',",
+    "  userFacing: false,",
+    "  source: 'codex review validation test fixture',",
+    "  priority: 'LOW',",
+    "  dependsOn: [],",
+    "  conflictsWith: [],",
+    "  keyFiles: ['roadmap/phases'],",
+    "  stakeholderDemo: 'The review validation fixture remains inspectable.',",
+    `  tasks: [{ minimal: true, id: '${id}.1', title: 'Validate the requested review checkout', done: false }],`,
+    '})',
+    '',
+  ].join('\n')
+  writeFileSync(join(root, 'roadmap', 'phases', `phase-${id}.phase.ts`), phaseSource)
+  writeFileSync(join(root, '.gitignore'), 'node_modules\n')
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'review-fixture', private: true }) + '\n')
+  writeFileSync(join(root, 'package-lock.json'), JSON.stringify({
+    name: 'review-fixture', lockfileVersion: 3, packages: { '': { name: 'review-fixture' } },
+  }) + '\n')
+  execFileSync('git', ['-C', root, 'add', 'lib', 'roadmap', '.gitignore', 'package.json', 'package-lock.json'])
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'review validation base'])
+  execFileSync('git', ['-C', root, 'branch', '-f', 'develop', 'HEAD'])
+  const requestedHead = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const worktree = join(root, `wt-review-validation-${id}`)
+  const env = precreate ? fakeLaunchEnv(root, worktree) : fakeCodexPath(root)
+  const marker = join(root, '.building', `review-native-${id}.txt`)
+  writeFileSync(join(root, 'fakebin', 'codex'), `#!/bin/sh\nprintf 'invoked\\n' >> ${JSON.stringify(marker)}\nprintf '## Phase ${id} Review\\nVerdict: READY\\nCODEX-RUN-COMPLETE\\n' > CODEX-REVIEW.md\nexit 0\n`)
+  chmodSync(join(root, 'fakebin', 'codex'), 0o755)
+  return { root, worktree, env, marker, requestedHead }
+}
+
+function prepareReviewDependencies(worktree) {
+  const source = realpathSync(join(HERE, '..', '..', 'node_modules'))
+  const destination = join(worktree, 'node_modules')
+  if (!existsSync(destination)) symlinkSync(source, destination, 'dir')
+}
+
+async function waitForReviewCompletion(journalPath) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (existsSync(journalPath)) {
+      try {
+        if (JSON.parse(readFileSync(journalPath, 'utf8')).finishedAt) return
+      } catch {}
+    }
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+}
+
+test('review validation cold-holds with the committed lockfile remedy, then the same externally prepared checkout launches', async () => {
+  const id = 4301
+  const fx = validatedReviewFixture(id)
+  const args = [BIN, 'codex', 'review', String(id), '--worktree', fx.worktree, '--base', fx.requestedHead]
+
+  const cold = spawnSync('node', args, { cwd: fx.root, encoding: 'utf8', env: fx.env })
+  assert.notEqual(cold.status, 0, 'a review cannot launch before its requested checkout can validate the phase')
+  assert.match(cold.stderr, /package-lock\.json.*npm ci|npm ci.*package-lock\.json/i)
+  assert.match(cold.stderr, /toolchain|dependenc|prepare|install/i)
+  assert.equal(existsSync(join(fx.root, '.building', `codex-review-${id}.json`)), false)
+  assert.equal(existsSync(fx.marker), false, 'cold validation never starts the fake native driver')
+
+  prepareReviewDependencies(fx.worktree)
+  const prepared = spawnSync('node', args, { cwd: fx.root, encoding: 'utf8', env: fx.env })
+  assert.equal(prepared.status, 0, prepared.stderr)
+  const journalPath = join(fx.root, '.building', `codex-review-${id}.json`)
+  assert.ok(existsSync(journalPath), 'the same checkout becomes launchable after external preparation')
+  await waitForReviewCompletion(journalPath)
+  const journal = JSON.parse(readFileSync(journalPath, 'utf8'))
+  assert.equal(journal.requestedHead, fx.requestedHead)
+  assert.equal(journal.workingHead, fx.requestedHead)
+  const prompt = readFileSync(journal.prompt, 'utf8')
+  assert.ok(prompt.includes(fx.requestedHead), 'the immutable prompt identifies the exact validated requested HEAD')
+  assert.match(prompt, /phase 4301.*valid|valid.*phase 4301/i)
+})
+
+test('review validation distinguishes an invalid phase from missing dependencies and never launches either', () => {
+  const id = 4302
+  const fx = validatedReviewFixture(id, { phaseSource: 'export default { broken: ; }\n' })
+  prepareReviewDependencies(fx.worktree)
+  const result = spawnSync('node', [BIN, 'codex', 'review', String(id), '--worktree', fx.worktree, '--base', fx.requestedHead], {
+    cwd: fx.root, encoding: 'utf8', env: fx.env,
+  })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /invalid|phase|syntax|validation/i)
+  assert.doesNotMatch(result.stderr, /npm ci|pnpm install/, 'invalid source is not mislabeled as a dependency remedy')
+  assert.equal(existsSync(join(fx.root, '.building', `codex-review-${id}.json`)), false)
+  assert.equal(existsSync(fx.marker), false)
+})
+
+test('review validates requested non-HEAD bytes and refuses dirty or drifting target checkouts before launch', async () => {
+  const id = 4303
+  const fx = validatedReviewFixture(id)
+  prepareReviewDependencies(fx.worktree)
+  writeFileSync(join(fx.root, 'roadmap', 'phases', `phase-${id}.phase.ts`), 'export default { broken: ; }\n')
+  const fromRequestedBase = spawnSync('node', [BIN, 'codex', 'review', String(id), '--worktree', fx.worktree, '--base', fx.requestedHead], {
+    cwd: fx.root, encoding: 'utf8', env: fx.env,
+  })
+  assert.equal(fromRequestedBase.status, 0, fromRequestedBase.stderr)
+  const requestedJournalPath = join(fx.root, '.building', `codex-review-${id}.json`)
+  await waitForReviewCompletion(requestedJournalPath)
+  const journal = JSON.parse(readFileSync(requestedJournalPath, 'utf8'))
+  assert.equal(journal.requestedHead, fx.requestedHead)
+  assert.equal(journal.workingHead, fx.requestedHead)
+
+  const dirtyId = 4304
+  const dirty = validatedReviewFixture(dirtyId)
+  prepareReviewDependencies(dirty.worktree)
+  writeFileSync(join(dirty.worktree, 'roadmap', 'phases', `phase-${dirtyId}.phase.ts`), 'export default { foreign: true }\n')
+  const refused = spawnSync('node', [BIN, 'codex', 'review', String(dirtyId), '--worktree', dirty.worktree, '--base', dirty.requestedHead], {
+    cwd: dirty.root, encoding: 'utf8', env: dirty.env,
+  })
+  assert.notEqual(refused.status, 0)
+  assert.match(refused.stderr, /fresh|dirty|requested HEAD|refus/i)
+  assert.equal(existsSync(join(dirty.root, '.building', `codex-review-${dirtyId}.json`)), false)
+  assert.equal(existsSync(dirty.marker), false)
+})
+
+test('review refuses a checkout mutation produced while phase validation runs and preserves the foreign bytes', () => {
+  const id = 4305
+  const phaseSource = [
+    "import { writeFileSync } from 'node:fs'",
+    "writeFileSync('.validation-drift', 'foreign bytes\\n')",
+    'export default {}',
+    '',
+  ].join('\n')
+  const fx = validatedReviewFixture(id, { phaseSource })
+  prepareReviewDependencies(fx.worktree)
+  const result = spawnSync('node', [BIN, 'codex', 'review', String(id), '--worktree', fx.worktree, '--base', fx.requestedHead], {
+    cwd: fx.root, encoding: 'utf8', env: fx.env,
+  })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /changed during validation|checkout changed|refus/i)
+  assert.equal(readFileSync(join(fx.worktree, '.validation-drift'), 'utf8'), 'foreign bytes\n')
+  assert.equal(existsSync(join(fx.root, '.building', `codex-review-${id}.json`)), false)
+  assert.equal(existsSync(fx.marker), false)
+})
+
+test('a newly allocated cold review checkout retains its ownership for external preparation and exact retry', async () => {
+  const id = 4306
+  const fx = validatedReviewFixture(id, { precreate: false })
+  assert.equal(existsSync(fx.worktree), false)
+
+  const args = [BIN, 'codex', 'review', String(id), '--worktree', fx.worktree, '--base', fx.requestedHead]
+  const cold = spawnSync('node', args, { cwd: fx.root, encoding: 'utf8', env: fx.env })
+  assert.notEqual(cold.status, 0)
+  assert.match(cold.stderr, /package-lock\.json.*npm ci|npm ci.*package-lock\.json/i)
+  assert.ok(existsSync(fx.worktree), 'the exact detached checkout is retained for preparation')
+  assert.equal(existsSync(join(fx.root, '.building', 'codex-review-' + id + '.json')), false)
+  assert.equal(existsSync(fx.marker), false)
+
+  prepareReviewDependencies(fx.worktree)
+  const retried = spawnSync('node', args, { cwd: fx.root, encoding: 'utf8', env: fx.env })
+  assert.equal(retried.status, 0, retried.stderr)
+  const journalPath = join(fx.root, '.building', 'codex-review-' + id + '.json')
+  await waitForReviewCompletion(journalPath)
+  const journal = JSON.parse(readFileSync(journalPath, 'utf8'))
+  assert.equal(journal.requestedHead, fx.requestedHead)
+  assert.equal(journal.workingHead, fx.requestedHead)
 })

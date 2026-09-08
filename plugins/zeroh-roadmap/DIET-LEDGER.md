@@ -811,3 +811,11 @@ historical observations and the scoped R0 pilot without claiming a fresh matrix.
 ## NATIVEGREEN phase 41 gate repair
 
 - Repeated do-arc launch, resume and delivery narration: superseded-with-equivalent(concise same-skill instructions retain role resolution, Node-only entry, committed inline result validation/groom/emit, exact-head PR completion, authority and halt reconciliation). No gate or authority rule removed; the existing 11,065-token flow ceiling remains unchanged.
+
+## NATIVEGREEN delegated plan-review repair
+
+| passage | disposition | evidence |
+|---|---|---|
+| report-only review requiring repair and queue-placement reasoning | superseded-with-equivalent(owner-approved focused delegated review; standalone repair/queue ownership retained) | review-phase delegated Mode A and codex prompt tests; independent intent/feasibility/verifier judgment retained |
+| Step V loading the entire plan-authoring skill | moved-to-reference(existing plan-phase/references/closure-checklist.md, with review-scope applicability) | direct pointer and existing plan-adversary reference; no authoring workflow replay |
+| native reviewer repeating mechanical validation | enforced-by-code(reviewCodex prelaunch validation in the requested checkout) | cold/prepared retry, invalid phase and validation-time mutation regressions; native speed improvement remains unverified |

@@ -220,9 +220,10 @@ export default definePhase({
         "plugins/zeroh-roadmap/cli/commands/codex.mjs",
         "plugins/zeroh-roadmap/cli/commands/codex.test.mjs",
         "plugins/zeroh-roadmap/skills/review-phase/SKILL.md",
+        "plugins/zeroh-roadmap/DIET-LEDGER.md",
         "docs/roadmap/arc-prompts/NATIVEGREEN-codex-repair-plan.md"
       ],
-      "notes": "Owner ratification 2026-09-08: one real Codex end-to-end run, necessary fixes and review. Reuse the previously ratified single-pilot 20-minute native ceiling; no 24-arm budget is required because the matrix is deferred. One targeted correction, one independent review; a HIGH fix gets one bounded re-review. No automatic merge or release. Stop after this task; 43.5\u201343.8 and phases44\u201345 remain deferred and not done. The abandoned uncommitted matrix-preflight extension is preserved under .building/nativegreen-deferred/43.4-matrix-preflight.patch; the native usage fix remains active. Owner2026-09-08 requested review and a repair plan after the timeout; this does not authorize a fresh native budget. Active implementation is the two bounded corrections in docs/roadmap/arc-prompts/NATIVEGREEN-codex-repair-plan.md, followed by review and a separately authorized observation. Existing file count includes retained already-reviewed candidate fixes, not new scope; no batchMode assertion is made. Interview: skipped \u2014 existing owner intent and current arc scope are explicit. Planning hypotheses: CONFIRMED the launcher/protocol prerequisite mismatch and redundant delegated placement work exist in the named owners; NOT TESTED whether their correction brings setup/implementation within budget; REFUTED dependency installation alone as an established dominant cause, because the reviewer continued after its repair. Prior candidate fixes remain uncommitted and must be preserved.",
+      "notes": "Owner ratification 2026-09-08: one real Codex end-to-end run, necessary fixes and review. Reuse the previously ratified single-pilot 20-minute native ceiling; no 24-arm budget is required because the matrix is deferred. One targeted correction, one independent review; a HIGH fix gets one bounded re-review. No automatic merge or release. Stop after this task; 43.5\u201343.8 and phases44\u201345 remain deferred and not done. The abandoned uncommitted matrix-preflight extension is preserved under .building/nativegreen-deferred/43.4-matrix-preflight.patch; the native usage fix remains active. Owner2026-09-08 requested the repair plan and subsequently said do it: implementation and one corrected trial within its proposed20-minute cap are authorized; a verified disposable GitHub target remains required. The prior failed trial stays recorded separately. Active implementation is the two bounded corrections in docs/roadmap/arc-prompts/NATIVEGREEN-codex-repair-plan.md, followed by review and a separately authorized observation. Existing file count includes retained already-reviewed candidate fixes, not new scope; no batchMode assertion is made. Interview: skipped \u2014 existing owner intent and current arc scope are explicit. Planning hypotheses: CONFIRMED the launcher/protocol prerequisite mismatch and redundant delegated placement work exist in the named owners; NOT TESTED whether their correction brings setup/implementation within budget; REFUTED dependency installation alone as an established dominant cause, because the reviewer continued after its repair. Prior candidate fixes remain uncommitted and must be preserved.",
       "testMode": "tdd",
       "done": false,
       "dependsOn": [
@@ -235,6 +236,14 @@ export default definePhase({
         "produces": [
           "single Codex pilot observation"
         ]
+      },
+      "transparencyReport": {
+        "whatWasDone": "Implemented focused delegated plan review and exact-checkout validation before model launch; retained native usage, beacon timestamp and schema-local Zod repairs plus shipped version alignment.",
+        "how": "Reused the existing validator, lockfile recipe selection, authority, worktree and journal owners. Six targeted cases pass; final full gate000025 and schema/packaging checks pass. Independent review found and repaired cold-retry ownership unwind and an overbroad test; HIGH re-review is clean.",
+        "compromises": "None",
+        "skipped": "None",
+        "hardcoded": "None",
+        "limitations": "Corrected native pilot is not run: the disposable GitHub target remains unavailable. No open-green-PR or duplicate-free live resume is proven. Task and arc remain incomplete; actual collaboration model identity is unverified."
       }
     },
     {

@@ -1,6 +1,6 @@
 # Codex usability repair plan
 
-Status: proposed implementation within NATIVEGREEN task43.4; no new arc. Owner requested review and planning on2026-09-08. This authorizes this plan, not a new native run or a release. Tasks43.5–43.8 and phases44–45 stay deferred.
+Status: implementation authorized by the owner’s subsequent “do it”; the two repairs are implemented, targeted checks pass, and final mechanical verification passed. The proposed20-minute native cap is accepted for the corrected pilot; launch still requires a verified disposable GitHub target. No release is authorized or claimed. Tasks43.5–43.8 and phases44–45 stay deferred.
 
 ## Review findings
 
@@ -10,7 +10,7 @@ The isolated pilot stopped after1000.321 seconds with a committed plan but no ap
 2. **P0 — prerequisite discovered after native launch.** `reviewCodex` deliberately omits `installWorktree`, but review requires `phase validate`, whose consumer schema/tsx dependencies are absent in a fresh checkout. The parent repaired this with npm ci while the reviewer ran. This is a reproduced mismatch, not proof that installation caused most of the timeout.
 3. **P1 — parent planning remains expensive.** The pilot already had one phase/one task, so task-count clarification alone cannot explain or fix its nine-minute setup. Avoid a new planning engine. Measure setup separately in the next trial and reject a result that never reaches working code.
 
-The full candidate test run completed2728 checks:2726 passed, one failed, one skipped. The sole failure was the generated Astra enum; its64-test rerun and separate schema checks passed after repair. The original full gate remains RED. Usage/beacon/schema-resolution fixes already reviewed remain in the candidate; they are not evidence that usability is restored.
+The earlier candidate test run completed2728 checks:2726 passed, one failed, one skipped. The sole failure was the generated Astra enum; its64-test rerun and separate schema checks passed after repair. The original full gate remains RED. Usage/beacon/schema-resolution fixes already reviewed remain in the candidate; they are not evidence that usability is restored.
 
 ## Implementation order
 
@@ -42,11 +42,11 @@ Verification: in `codex.test.mjs`, replace review-launch fixtures that use `expo
 
 First run configured task checks, packaging and one independent candidate review. Reuse the existing host admission pool. Run the full terminal gate once on the final candidate; retain the earlier RED report. Stop implementation expansion after these two corrections unless review finds a concrete defect.
 
-A fresh native allowance and an accessible disposable GitHub target must be explicitly in place before the next trial. This planning request does not reset the consumed pilot budget. Verify the target is readable and usable before spending model time; do not repeat the contradictory repository-creation attempts.
+The owner’s subsequent “do it” authorizes one corrected trial within the proposed20-minute cap; the failed earlier run stays recorded separately. An accessible disposable GitHub target must be verified before launch. Verify the target is readable and usable before spending model time; do not repeat the contradictory repository-creation attempts.
 
 Use the same tiny Markdown-summary intent, installed candidate and normal Roadmap commands. Keep one phase/one task, no UI/design ceremony for a CLI, no new orchestration script and no predicted hashes. Prepare the seed and initial dependencies before launch, but do not pre-author the plan or implementation: intent-to-code setup remains measured. Preparation wall time is reported separately, not hidden as a performance gain.
 
-Proposed trial budget, subject to explicit authorization:20 minutes total native wall time shared across parent/children/resume, with all setup/review/native stages timestamped. At10 minutes, if no runnable implementation exists, stop and report failure rather than consume the remainder on paperwork. At the total cap, terminate the process group/cgroup and preserve artifacts. Report overlapping child time separately rather than adding it twice. CI wait and preparation time are separate elapsed observations. Report uncached/cached input and output where known; unknown tail usage stays unknown.
+Accepted corrected-trial budget:20 minutes total native wall time shared across parent/children/resume, with all setup/review/native stages timestamped. At10 minutes, if no runnable implementation exists, stop and report failure rather than consume the remainder on paperwork. At the total cap, terminate the process group/cgroup and preserve artifacts. Report overlapping child time separately rather than adding it twice. CI wait and preparation time are separate elapsed observations. Report uncached/cached input and output where known; unknown tail usage stays unknown.
 
 Acceptance is runnable CLI output with meaningful pure-core and real-stdin tests; one completed independent correctness review; one open non-draft PR with required checks green on its current head; and one same-session resume without duplicate executor/PR. A plan-only result, unknown executor, incomplete review, provider failure or timeout is not a pass. Merge remains manual. If the corrected trial again fails before working code, stop this repair attempt: review the core planning protocol against the evidence before spending another pilot budget. Do not keep adding preparation infrastructure.
 
@@ -58,3 +58,5 @@ Planning evidence: source functions and fixtures read at candidate849cabe plus e
 
 Plan review: one independent prospective review found an underspecified installation-authority path. The plan was repaired to remove implicit installation from reviewCodex. Phase validation and both existing assumptions pass; configured task selection includes codex.test.mjs alongside the retained regression suites. No new test suite or native run was executed during planning. Queue remains phase43 at tier0, task43.4 only; completion and deferred task states are unchanged.
 Independent re-review of the repaired block returned READY, with no residual blocker. This is prospective plan readiness, not product or release approval.
+
+Implementation review found a HIGH cold-retry ownership-unwind defect and a MEDIUM overbroad prompt test. Both were repaired; independent re-review of the HIGH fix returned no findings. Six targeted cases pass, including a newly allocated cold checkout retry and validation-time mutation refusal. Packaging passes. Final full mechanical gate run-000025-2026-09-08T11-43-29-036Z.json: 128/128 test files completed; 2732 passed, 1 skipped, zero failed/cancelled; schema checks passed. Unit-slot wall time1028.463s (17m08s). Packaging passed. This is one local verification run, not a performance comparison.

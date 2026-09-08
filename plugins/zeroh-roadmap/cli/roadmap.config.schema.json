@@ -576,7 +576,8 @@
             "fable",
             "sonnet",
             "opus",
-            "sol"
+            "sol",
+            "astra"
           ]
         },
         "roles": {
@@ -590,7 +591,8 @@
               "fable",
               "sonnet",
               "opus",
-              "sol"
+              "sol",
+              "astra"
             ]
           }
         },
@@ -600,7 +602,8 @@
             "fable",
             "sonnet",
             "opus",
-            "sol"
+            "sol",
+            "astra"
           ]
         }
       },

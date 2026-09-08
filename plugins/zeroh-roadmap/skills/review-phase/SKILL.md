@@ -62,6 +62,26 @@ verdict has judged - that never triggers a swap; never queue on an unrun review
 (`audit-roadmap` flags queue anomalies after the fact). Mode A invoked STANDALONE runs INLINE
 (no spawn); the spawn site is plan-arc Step 3.
 
+### Delegated report-only Mode A
+
+When the launcher identifies this as a **delegated report-only** review, perform Step H,
+Step V and metadata judgment, then emit the existing verdict. Skip Step F and Step 8,
+including their repair/placement reasoning and queue probes. Use the literal
+`Placement: NOT QUEUED — delegated report-only review`. Report required plan repairs as
+OPEN findings; never edit the plan or backlog. The supervising session owns queueing.
+
+Read the phase, its arc criteria and locked decisions, relevant source, the direct
+checklist below and `references/plan-adversary.md`. Do not reload the full plan-authoring
+skill or repeat its authoring workflow. Keep independent intent, coverage, feasibility,
+source/seam, falsifiability, state-coverage and risk judgment. An author summary is
+context, not proof; missing evidence remains a finding. Apply the checklist to the
+reviewed scope: no queue probes for a placement claim this lane does not make.
+
+The launcher supplies the successful mechanical validation summary for this requested
+checkout. Reuse it for shape checks; do not reinstall dependencies or repeat validation.
+If it is absent or contradicts the reviewed checkout, report that gap rather than
+assuming success. These rules do not change standalone Mode A or Mode B.
+
 ### Step H - Holistic feature review (leads the report; finalized after Step V)
 
 A plan can be flawless per-task and still be the wrong, half, or too-much thing. Answer four questions WITH EVIDENCE:
@@ -88,9 +108,10 @@ report-only. An ARC review runs Step H once against the arc entity (`planes`, `s
 
 ### Step V - Per-task adversarial verification
 
-Run **plan-phase Step 5's self-verify list** against each task as an independent adversary
-(catalogue not restated here). Its mechanical members (paths, size lint, markers, emit/parse)
-are `roadmap phase validate <N>`'s job: run it, trust it, never hand-simulate it. Bring JUDGMENT
+Read `../plan-phase/references/closure-checklist.md` directly and apply its judgment
+checks against each task as an independent adversary (catalogue not restated here). Its mechanical members (paths, size lint, markers, emit/parse)
+are `roadmap phase validate <N>`'s job: standalone runs it; the delegated branch uses
+the launcher's checked result. Never hand-simulate it. Bring JUDGMENT
 to the rest via `references/plan-adversary.md` (§A verify-clause falsifiability, §B anchor
 freshness, §C criterion state-coverage, §E decision deferrals, §F prose-mechanism drift) - plus:
 

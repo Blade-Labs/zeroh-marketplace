@@ -267,3 +267,108 @@ test('the same runId in two arcs retains two separately addressed buffered compl
   assert.deepEqual(calls, [['result', 'ARC-LEFT', left.nativeSessionId], ['result', 'ARC-RIGHT', right.nativeSessionId]])
   assert.equal(launch, 2)
 })
+
+
+function detachedCompletionFixture({ usage = { input_tokens: 13, cached_input_tokens: 5, output_tokens: 8 }, terminalType = 'turn.completed', terminalSubtype, terminalError, phaseStatus = 'done' } = {}) {
+  const fx = fixture({ bound: true })
+  const pendingReceipt = {
+    path: '/tmp/detached-pending-receipt.json',
+    digest: hash('detached-pending-receipt'),
+    snapshot: {
+      request: structuredClone(fx.runRequest),
+      requestFingerprint: hash(JSON.stringify(fx.runRequest)),
+      revision: 4,
+      pendingOperation: { kind: 'start', inputDigest: hash('execute phase 38.3'), actionFingerprint: hash('detached-start') },
+      nativeSessionId: fx.nativeSessionId,
+      latestObservation: null,
+      terminalResult: null,
+      outcome: 'active',
+    },
+  }
+  const completion = {
+    version: 1,
+    arcId: fx.runRequest.arcId,
+    runId: fx.runRequest.runId,
+    pendingReceiptDigest: pendingReceipt.digest,
+    actionFingerprint: pendingReceipt.snapshot.pendingOperation.actionFingerprint,
+    nativeSessionId: fx.nativeSessionId,
+    phaseResult: { status: phaseStatus },
+    protocolTerminal: {
+      type: terminalType,
+      ...(terminalSubtype === undefined ? {} : { subtype: terminalSubtype }),
+      ...(terminalError === undefined ? {} : { is_error: terminalError }),
+      ...(usage === null ? {} : { usage: structuredClone(usage) }),
+    },
+    exitCode: terminalType === 'turn.completed' ? 0 : 1,
+    signal: null,
+    stdoutBytes: 120,
+    stderrBytes: terminalType === 'turn.completed' ? 0 : 40,
+    stdoutDigest: hash('detached stdout'),
+    stderrDigest: hash('detached stderr'),
+  }
+  fx.receiptStore.readRunReceipt = () => structuredClone(pendingReceipt)
+  fx.receiptStore.persistRunResult = (cwd, input) => {
+    fx.calls.push(['persistRunResult', cwd, structuredClone(input)])
+    return {
+      status: 'recorded',
+      receipt: {
+        ...structuredClone(pendingReceipt),
+        digest: hash('detached terminal receipt'),
+        snapshot: { ...structuredClone(pendingReceipt.snapshot), revision: 5, pendingOperation: null, latestObservation: input.observation, terminalResult: input.result, outcome: 'complete' },
+      },
+    }
+  }
+  fx.processTransport = {
+    async launch(input) {
+      fx.calls.push(['launch', structuredClone(input)])
+      return { status: 'running', operationRef: { cwd: fx.runRequest.worktree, arcId: fx.runRequest.arcId, runId: fx.runRequest.runId, pendingReceiptDigest: pendingReceipt.digest } }
+    },
+    async observe(ref) {
+      fx.calls.push(['observe', structuredClone(ref)])
+      return { status: 'complete', completion: structuredClone(completion) }
+    },
+  }
+  return { ...fx, pendingReceipt, completion }
+}
+
+const activeState = (arcId = 'NATIVEGREEN') => ({ arcId, stage: 'phase', status: 'active', processedEventIds: [], lastHalt: null, authorityRef: AUTHORITY_REF })
+
+test('detached fresh completion preserves raw usage and all protocol evidence in the durable run result', async () => {
+  const fx = detachedCompletionFixture()
+  const driver = new CodexAgentDriver({ processTransport: fx.processTransport, readLaunchInputs: fx.readLaunchInputs, receiptStore: fx.receiptStore, ownershipStore: fx.ownershipStore, sessionId: PARENT_SESSION_ID })
+  const handle = await driver.start(fx.runRequest)
+  const completed = await driver.awaitEvent(handle, activeState())
+
+  assert.deepEqual(completed.result.usage, fx.completion.protocolTerminal.usage)
+  assert.deepEqual(completed.result.protocolTerminal, fx.completion.protocolTerminal)
+  assert.equal(completed.result.stdoutDigest, fx.completion.stdoutDigest)
+  assert.equal(completed.result.stderrDigest, fx.completion.stderrDigest)
+  assert.equal(Object.hasOwn(completed.result, 'observedModelId'), false)
+  assert.equal(completed.result.model, undefined)
+})
+
+test('receipt recovery preserves the same raw detached completion usage and protocol evidence', async () => {
+  const fx = detachedCompletionFixture()
+  const driver = new CodexAgentDriver({ processTransport: fx.processTransport, readLaunchInputs: fx.readLaunchInputs, receiptStore: fx.receiptStore, ownershipStore: fx.ownershipStore, sessionId: PARENT_SESSION_ID })
+  const recovered = await driver.recover(fx.pendingReceipt, activeState())
+
+  assert.deepEqual(recovered.result.usage, fx.completion.protocolTerminal.usage)
+  assert.deepEqual(recovered.result.protocolTerminal, fx.completion.protocolTerminal)
+  assert.equal(recovered.result.nativeSessionId, fx.nativeSessionId)
+  assert.equal(Object.hasOwn(recovered.result, 'observedModelId'), false)
+  assert.equal(fx.calls.filter(([name]) => name === 'launch').length, 0)
+  assert.equal(fx.calls.filter(([name]) => name === 'persistRunResult').length, 1)
+})
+
+test('absent usage stays null and a failed protocol terminal cannot become a passing phase result or observed model identity', async () => {
+  const fx = detachedCompletionFixture({ usage: null, terminalType: 'turn.failed', terminalError: true, phaseStatus: 'transport-exited' })
+  const driver = new CodexAgentDriver({ processTransport: fx.processTransport, readLaunchInputs: fx.readLaunchInputs, receiptStore: fx.receiptStore, ownershipStore: fx.ownershipStore, sessionId: PARENT_SESSION_ID })
+  const handle = await driver.start(fx.runRequest)
+  const completed = await driver.awaitEvent(handle, activeState())
+
+  assert.equal(completed.result.usage, null)
+  assert.deepEqual(completed.result.protocolTerminal, { type: 'turn.failed', is_error: true })
+  assert.notEqual(completed.result.phaseResult.status, 'done')
+  assert.equal(Object.hasOwn(completed.result, 'observedModelId'), false)
+  assert.equal(completed.result.model, undefined)
+})

@@ -103,7 +103,7 @@ export class DurableProcessAgentDriver {
       const observed = await this.waitForCompletion(launched.operationRef)
       if (observed.status !== 'complete') return observed
       completion = observed.completion
-      parsed = { nativeSessionId: completion.nativeSessionId, terminal: { type: completion.protocolTerminal } }
+      parsed = { nativeSessionId: completion.nativeSessionId, terminal: structuredClone(completion.protocolTerminal) }
       result = null
     } else {
       result = await this.processTransport.execute({ bin: entry.bin, argv, stdin: inputs.prompt, cwd: trustedRequest.worktree })
@@ -156,7 +156,7 @@ export class DurableProcessAgentDriver {
       if (observed.status !== 'complete') return observed
       completion = observed.completion
       if (completion.nativeSessionId !== trustedHandle.nativeSessionId) return hold('identity-conflict', 'native completion session does not match durable resume identity', pendingAction.receipt)
-      parsed = { nativeSessionId: completion.nativeSessionId, terminal: { type: completion.protocolTerminal } }
+      parsed = { nativeSessionId: completion.nativeSessionId, terminal: structuredClone(completion.protocolTerminal) }
       result = null
     } else {
       result = await this.processTransport.execute({ bin: entry.bin, argv, stdin: inputs.prompt, cwd: trustedHandle.request.worktree })
@@ -190,7 +190,7 @@ export class DurableProcessAgentDriver {
     }
     const handle = { request, nativeSessionId: completion.nativeSessionId }
     const pending = receipt.snapshot.pendingOperation
-    this.pending.set(runKey(request), { handle: structuredClone(handle), result: null, terminal: { type: completion.protocolTerminal }, completion: structuredClone(completion), receipt: current,
+    this.pending.set(runKey(request), { handle: structuredClone(handle), result: null, terminal: structuredClone(completion.protocolTerminal), completion: structuredClone(completion), receipt: current,
       actionAcknowledgement: pending.kind === 'action' ? { operation: { kind: 'action', action: pending.action, payload: structuredClone(pending.payload), inputDigest: pending.inputDigest }, nativeSessionId: completion.nativeSessionId } : null })
     return this.awaitEvent(handle, structuredClone(state))
   }
@@ -201,7 +201,7 @@ export class DurableProcessAgentDriver {
     validateRoleRunRequest(trustedHandle?.request, this.driverId)
     const buffered = this.pending.get(runKey(trustedHandle.request))
     if (!buffered || !isDeepStrictEqual(buffered.handle, trustedHandle)) throw new Error('native transport completion is not bound to this run/session')
-    const evidence = buffered.completion ? { driverId: trustedHandle.request.driverId, nativeSessionId: trustedHandle.nativeSessionId, exitCode: buffered.completion.exitCode, signal: buffered.completion.signal, protocolTerminal: buffered.completion.protocolTerminal, stdoutDigest: buffered.completion.stdoutDigest, stderrDigest: buffered.completion.stderrDigest, usage: null } : completionEvidence(trustedHandle, buffered.result, buffered.terminal)
+    const evidence = buffered.completion ? { driverId: trustedHandle.request.driverId, nativeSessionId: trustedHandle.nativeSessionId, exitCode: buffered.completion.exitCode, signal: buffered.completion.signal, protocolTerminal: buffered.completion.protocolTerminal, stdoutDigest: buffered.completion.stdoutDigest, stderrDigest: buffered.completion.stderrDigest, protocolSubtype: buffered.completion.protocolTerminal.subtype ?? null, protocolError: buffered.completion.protocolTerminal.is_error ?? null, usage: buffered.completion.protocolTerminal.usage ?? null } : completionEvidence(trustedHandle, buffered.result, buffered.terminal)
     const eventId = this.driverId + '-exit-' + sha256(JSON.stringify(stable({ runId: trustedHandle.request.runId, ...evidence })))
     buffered.observation = {
       runId: trustedHandle.request.runId, executorId: trustedHandle.request.executorId, roleId: trustedHandle.request.roleId,

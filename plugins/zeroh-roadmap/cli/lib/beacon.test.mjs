@@ -325,3 +325,65 @@ test('20) readBeaconLine projects optional durable run identity without inventin
   const legacy = readBeaconLine(path)
   for (const field of Object.keys(identity)) assert.equal(field in legacy, false, `legacy beacon must not invent ${field}`)
 })
+
+
+test('readBeaconLine accepts legacy at and canonical ISO or epoch ts while preserving owner identity', () => {
+  const cases = [
+    [{ at: isoAgo(2), event: 'task-start', phase: 84 }, 'legacy at'],
+    [{ ts: isoAgo(2), event: 'task-start', phase: 84 }, 'ISO ts'],
+    [{ ts: Date.now() - 120_000, event: 'task-start', phase: 84 }, 'epoch ts'],
+  ]
+  for (const [record, label] of cases) {
+    const worktree = newTmp()
+    const path = phaseBeaconPath(worktree, 84)
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify({
+      ...record,
+      arcId: 'ATLAS',
+      runId: 'run-84',
+      executorId: 'executor-84',
+      nativeSessionId: 'native-84',
+      actionFingerprint: 'a'.repeat(64),
+      requestFingerprint: 'b'.repeat(64),
+      runReceiptDigest: 'c'.repeat(64),
+    }) + '\n')
+    const observed = readBeaconLine(path)
+    assert.ok(observed, label)
+    assert.ok(Number.isFinite(observed.ts), label)
+    assert.ok(Number.isFinite(observed.ageMin) && observed.ageMin >= 0, label)
+    assert.deepEqual({
+      arcId: observed.arcId,
+      runId: observed.runId,
+      executorId: observed.executorId,
+      nativeSessionId: observed.nativeSessionId,
+      actionFingerprint: observed.actionFingerprint,
+      requestFingerprint: observed.requestFingerprint,
+      runReceiptDigest: observed.runReceiptDigest,
+    }, {
+      arcId: 'ATLAS',
+      runId: 'run-84',
+      executorId: 'executor-84',
+      nativeSessionId: 'native-84',
+      actionFingerprint: 'a'.repeat(64),
+      requestFingerprint: 'b'.repeat(64),
+      runReceiptDigest: 'c'.repeat(64),
+    }, label)
+  }
+})
+
+test('readBeaconLine rejects invalid, missing, or future timestamps and never falls back from an invalid ts to at', () => {
+  const records = [
+    { event: 'task-start', phase: 84 },
+    { ts: 'not-a-time', event: 'task-start', phase: 84 },
+    { at: 'not-a-time', event: 'task-start', phase: 84 },
+    { ts: new Date(Date.now() + 60_000).toISOString(), event: 'task-start', phase: 84 },
+    { ts: 'invalid-canonical', at: isoAgo(1), event: 'task-start', phase: 84 },
+  ]
+  for (const record of records) {
+    const worktree = newTmp()
+    const path = phaseBeaconPath(worktree, 84)
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify(record) + '\n')
+    assert.equal(readBeaconLine(path), null, JSON.stringify(record))
+  }
+})
