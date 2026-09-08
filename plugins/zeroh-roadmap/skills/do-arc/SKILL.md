@@ -1,6 +1,6 @@
 ---
 name: "Do Arc"
-description: "Execute a whole arc end to end: launch one per-plane workflow at a time, own the halts it hands back, sweep + validate in-session, and land via the CLI."
+description: "Execute a whole arc end to end: launch one per-plane workflow at a time, own the halts it hands back, sweep + validate in-session, and deliver via the CLI."
 user-invocable: true
 metadata:
   keywords: do arc, execute arc, run arc, arc
