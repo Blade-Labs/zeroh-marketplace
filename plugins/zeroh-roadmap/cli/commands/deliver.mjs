@@ -8,7 +8,7 @@ import {loadConfig,deliveryPolicyOf} from '../lib/config.mjs'
 import {roadmapRoot,consumerSchemaPath} from '../lib/roadmap-root.mjs'
 import {bridgeImport,bridgeParseShape} from '../lib/tsx-bridge.mjs'
 import {resolveBranchStrategy} from '../lib/branch-strategy.mjs'
-import {loadArcDelivery,transitionArcDelivery,publishDelivery,deliveryKeyOf} from '../lib/delivery.mjs'
+import {loadArcDelivery,transitionArcDelivery,publishDelivery,deliveryKeyOf,finalizeDelivery,assertReachedDeliveryTerminal} from '../lib/delivery.mjs'
 import {createGitHubPullRequestProvider} from '../lib/providers/github.mjs'
 const SHA=/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/
 const safeId=id=>typeof id==='string'&&/^[^\s/\\\0]+$/.test(id)&&!['.','..'].includes(id)&&!id.startsWith('-')
@@ -72,6 +72,7 @@ export default async function run(argv,deps={}){
   if(state){
    if(policy.providerId!==state.target.providerId||policy.terminal!==state.requested.terminal||!same(policy.requiredCapabilities,state.requested.requiredCapabilities)||policy.requiredChecks!==null&&!same(policy.requiredChecks,state.requested.requiredChecks)||policy.allowedPushRefs!==null&&!same(policy.allowedPushRefs,state.requested.allowedPushRefs))return finish('refused','Configured delivery policy differs from the immutable receipt; restore the recorded policy.')
   }
+  if(state?.terminal.status==='merged'){assertReachedDeliveryTerminal(state);return finish('merged',null,0)}
   const provider=(deps.createProvider??createGitHubPullRequestProvider)({loadDelivery:load})
   if(typeof provider.bootstrap!=='function')return finish('held','Provider lacks read-only delivery bootstrap; install a supported provider.')
   const predecessor=member.kind==='stacked'?deliveries.find(row=>row.ownerArcId===member.predecessorArcId)?.delivery:null
@@ -108,6 +109,11 @@ export default async function run(argv,deps={}){
   if(result.status!=='published')return finish(result.status==='refused'?'refused':'held',result.reason??'Publication is unobserved; reconcile and resume.')
   const pr=state?.pullRequest,t=state?.target
   if(!pr||pr.state!=='open'||pr.draft||pr.headSha!==t.currentHeadSha||pr.baseSha!==t.currentBaseSha||['providerId','repositoryId','targetKey','baseRef','headRef'].some(key=>pr[key]!==t[key]))return finish('held','Persisted PR does not match the current open non-draft target.')
+  try{assertReachedDeliveryTerminal(state);return finish(state.terminal.status,null,0)}catch{}
+  const final=finalizeDelivery(state,{capabilities:provider.capabilities?.({root,ownerArcId,remote:policy.remote}),at:(deps.clock??(()=>new Date().toISOString()))()})
+  if(final.status==='transition'){state=transition(root,ownerArcId,final.event);return finish(state.terminal.status,null,0)}
+  if(final.status==='held')return finish('held',final.reason)
+  if(final.status==='action-required')return finish('held','Recorded terminal action awaits the CI/provider coordinator; resume that flow without creating another delivery.')
   const terminal={status:'awaiting-ci',headSha:t.currentHeadSha,reason:null}
   if(!same(state.terminal,terminal))state=transition(root,ownerArcId,{type:'set-terminal',deliveryKey:state.deliveryKey,targetKey:t.targetKey,expectedRevision:state.revision,at:(deps.clock??(()=>new Date().toISOString()))(),terminal})
   return finish('awaiting-ci')

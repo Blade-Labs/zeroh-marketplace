@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deliveryKeyOf, reduceDelivery } from './delivery.mjs'
+import { deliveryKeyOf, reduceDelivery, finalizeDelivery } from './delivery.mjs'
 
 const SHA0 = '0'.repeat(40), SHA1 = '1'.repeat(40), SHA2 = '2'.repeat(40)
 const AT0 = '2026-09-07T00:00:00.000Z', AT1 = '2026-09-07T00:01:00.000Z', AT2 = '2026-09-07T00:02:00.000Z'
@@ -177,4 +177,33 @@ test('symlinked delivery ignore guard refuses without touching its target',()=>{
  const root=trackedRepoFixture(),directory=join(root,'docs/roadmap/.deliveries');mkdirSync(directory)
  const outside=join(root,'outside-ignore');writeFileSync(outside,'outside bytes\n');symlinkSync(outside,join(directory,'.gitignore'));const before=readFileSync(outside)
  assert.throws(()=>persistArcDelivery(root,null,initial()),/gitignore|symlink|regular|unsafe/i);assert.deepEqual(readFileSync(outside),before);assert.equal(existsSync(receiptPath(root)),false);assert.equal(lstatSync(join(directory,'.gitignore')).isSymbolicLink(),true)
+})
+
+const terminalCapabilities=kind=>({providerId:'github',supported:['pull-request',kind],unsupported:[]})
+function terminalReady(kind){const state=observeReady();state.requested={...state.requested,terminal:kind,requiredCapabilities:['pull-request',kind],authority:{queue:kind==='queue'?{authorityId:'queue-grant',recordedAt:AT0}:null,merge:kind==='merge'?{authorityId:'merge-grant',recordedAt:AT0}:null}};return state}
+test('finalize open emits one exact-current green transition without changing the input',()=>{
+ const state=observeReady(),before=structuredClone(state),result=finalizeDelivery(state,{capabilities:terminalCapabilities('open'),at:AT2})
+ assert.equal(result.status,'transition');assert.equal(result.event.expectedRevision,state.revision);assert.deepEqual(result.event.terminal,{status:'open-green',headSha:SHA1,checksObservedAt:AT1});assert.deepEqual(state,before)
+ assert.equal(reduceDelivery(state,result.event).terminal.status,'open-green')
+})
+test('finalize stale head/base, draft/closed PR and incomplete check set remain pending',()=>{
+ const ready=observeReady(),cases=[{...ready,target:{...ready.target,currentHeadSha:SHA2},terminal:{...ready.terminal,headSha:SHA2}},{...ready,target:{...ready.target,currentBaseSha:SHA2}},...['draft','closed'].map(kind=>({...ready,pullRequest:{...ready.pullRequest,...(kind==='draft'?{draft:true}:{state:'closed'})}})),{...ready,checks:null},{...ready,requested:{...ready.requested,requiredChecks:['lint']}},{...ready,checks:{...ready.checks,observedChecks:[...ready.checks.observedChecks,{name:'extra',status:'green',attemptId:null,observedAt:AT1}]}},{...ready,checks:{...ready.checks,observedChecks:ready.checks.observedChecks.map(row=>({...row,status:'pending'}))}}]
+ for(const state of cases){const result=finalizeDelivery(state,{capabilities:terminalCapabilities('open'),at:AT2});assert.equal(result.status,'pending');assert.equal(result.action,undefined)}
+})
+test('finalize queue/merge requests exact durable authority then accepts only its successful observation',()=>{
+ for(const kind of ['queue','merge']){
+  const state=terminalReady(kind),options={capabilities:terminalCapabilities(kind),at:AT2},request=finalizeDelivery(state,options)
+  assert.equal(request.status,'action-required');assert.deepEqual(request.action.requested,{baseSha:SHA0,headSha:SHA1,ref:'feat/nativegreen',authorityId:`${kind}-grant`});assert.equal(request.action.actionKey,JSON.stringify([1,state.deliveryKey,kind,SHA0,SHA1]));assert.equal(request.action.status,'requested')
+  const providerActionId=kind==='merge'?SHA2:'MQ_7';state.actions=[{...request.action,status:'succeeded',attempts:[{attempt:1,startedAt:AT1,finishedAt:AT2,observed:{providerActionId,outcome:'succeeded',errorKind:null}}]}]
+  const complete=finalizeDelivery(state,options);assert.equal(complete.status,'transition');assert.equal(complete.event.terminal.status,kind==='queue'?'queued':'merged');assert.equal(complete.event.terminal.providerActionId,providerActionId)
+  const terminal=reduceDelivery(state,complete.event);assert.deepEqual(reduceDelivery(terminal,finalizeDelivery(terminal,{at:AT2}).event),terminal);if(kind==='merge'){assert.equal(terminal.terminal.mergeSha,SHA2);assert.deepEqual(reduceDelivery(terminal,finalizeDelivery(terminal,options).event),terminal);assert.equal(finalizeDelivery({...terminal,target:{...terminal.target,currentHeadSha:SHA2}},options).status,'pending')}
+ }
+})
+test('finalize holds missing capability/ref/authority and conflicting terminal actions',()=>{
+ for(const kind of ['queue','merge']){
+  const base=terminalReady(kind)
+  for(const [state,capabilities] of [[base,terminalCapabilities('other')],[{...base,requested:{...base.requested,allowedPushRefs:[]}},terminalCapabilities(kind)],[{...base,requested:{...base.requested,authority:{queue:null,merge:null}}},terminalCapabilities(kind)]])assert.equal(finalizeDelivery(state,{capabilities,at:AT2}).status,'held')
+  const options={capabilities:terminalCapabilities(kind),at:AT2},action=finalizeDelivery(base,options).action
+  base.actions=[{...action,requested:{...action.requested,authorityId:'other'}}];assert.equal(finalizeDelivery(base,options).status,'held')
+ }
 })

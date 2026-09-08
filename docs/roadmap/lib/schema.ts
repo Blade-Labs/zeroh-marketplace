@@ -1147,8 +1147,7 @@ const BasePhaseFields = {
     )
     .default([]),
   /** The typed Step-4b roll-up the phase-executor produced for this phase, when
-   *  it ran under an arc (do-phase arc-mode persists it; an inline run leaves it
-   *  unset). Makes `do-arc`'s in-context hand-off an OPTIMIZATION rather than the
+   *  it ran under an arc (including inline-supervised execution). Makes `do-arc`'s in-context hand-off an OPTIMIZATION rather than the
    *  system of record: a resumed or context-compacted arc reconstructs each
    *  phase's roll-up via `discoverResults()` instead of losing it. Mirrors the
    *  free-text `compromises` string (which stays for audit/release-sweep) with a

@@ -453,3 +453,15 @@ test('reduceArcTransition — semantically equal known authority ignores object 
   assert.equal(receipt.rejection, null)
   assert.deepEqual(receipt.authorityRef, knownAuthority)
 })
+
+test('PR delivery and awaiting-CI are terminal handoffs before plane membership',()=>{
+ for(const action of ['deliver','awaiting-ci'])assert.equal(classifyNextAction({action},{name:'anything'}),'handoff')
+})
+test('canonical lifecycle routes validated work directly to delivery without local land',()=>{
+ const authorityRef={status:'unknown',reason:'read-only-projection',sourceRef:null}
+ const prior={arcId:'A',stage:'validate',status:'active',processedEventIds:[],lastHalt:null,authorityRef}
+ const delivered=reduceArcTransition(prior,{eventId:'deliver-A',arcId:'A',source:'disk-checkpoint',type:'deliver',evidence:{},authorityRef})
+ assert.equal(delivered.rejection,null);assert.equal(delivered.next.stage,'delivery');assert.equal(delivered.resume,'run-deliver')
+ const pending=reduceArcTransition(delivered.next,{eventId:'ci-A',arcId:'A',source:'disk-checkpoint',type:'awaiting-ci',evidence:{},authorityRef})
+ assert.equal(pending.rejection,null);assert.equal(pending.next.stage,'delivery');assert.equal(pending.resume,'await-ci')
+})

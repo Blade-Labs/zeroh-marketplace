@@ -39,13 +39,48 @@ function replay(state, event) {
     default: return false
   }
 }
+export function assertExactCurrentPullRequest(state,{allowMerged=false}={}) {
+  const p=state.pullRequest,t=state.target
+  if(!p||p.providerId!==t.providerId||p.repositoryId!==t.repositoryId||p.targetKey!==t.targetKey||p.draft||!(allowMerged?['open','merged']:['open']).includes(p.state)||p.baseRef!==t.baseRef||p.headRef!==t.headRef||p.baseSha!==t.currentBaseSha||p.headSha!==t.currentHeadSha)throw Error('green terminal requires exact current pull request head')
+}
 function exactChecks(state, terminal) {
   const c = state.checks, p = state.pullRequest, t = state.target, required = state.requested.requiredChecks
-  const states = terminal.status === 'merged' ? ['open', 'merged'] : ['open']
-  if (!p || p.providerId !== t.providerId || p.repositoryId !== t.repositoryId || p.targetKey !== t.targetKey || p.draft || !states.includes(p.state) || p.baseRef !== t.baseRef || p.headRef !== t.headRef || p.baseSha !== t.currentBaseSha || p.headSha !== t.currentHeadSha || terminal.headSha !== t.currentHeadSha) throw new Error('green terminal requires exact current pull request head')
+  assertExactCurrentPullRequest(state,{allowMerged:terminal.status==='merged'})
+  if(terminal.headSha!==t.currentHeadSha)throw Error('green terminal requires exact current pull request head')
   if (!c || c.providerId !== t.providerId || c.repositoryId !== t.repositoryId || c.providerPullRequestId !== p.providerPullRequestId || c.headSha !== t.currentHeadSha || required.length === 0 || new Set(required).size !== required.length || !same(c.requiredChecks, required) || c.observedChecks.length !== required.length || required.some(n => c.observedChecks.filter(x => x.name === n && x.status === 'green').length !== 1)) throw new Error('green terminal requires exact nonempty all-green check evidence')
   if (terminal.status === 'open-green' && terminal.checksObservedAt !== c.observedAt) throw new Error('green terminal names stale check evidence')
 }
+/** Shared current-head invariant; it certifies observations, never provider authority. */
+export function assertExactCurrentGreen(state) {
+  exactChecks(state,{status:state.terminal.status==='merged'?'merged':'open-green',headSha:state.target.currentHeadSha,checksObservedAt:state.checks?.observedAt})
+}
+
+/** Pure terminal decision. Callers persist events and journal actions through existing seams. */
+export function finalizeDelivery(state,{capabilities,at}={}) {
+  const held=reason=>({status:'held',reason})
+  if(!state||!at||!Number.isFinite(Date.parse(at)))return held('A canonical delivery and observation timestamp are required.')
+  const transition=terminal=>({status:'transition',event:{type:'set-terminal',deliveryKey:state.deliveryKey,targetKey:state.target.targetKey,expectedRevision:state.revision,at,terminal}})
+  if(['open-green','queued','merged'].includes(state.terminal.status)){try{assertReachedDeliveryTerminal(state);return transition(clone(state.terminal))}catch(error){return {status:'pending',reason:error.message}}}
+  try{assertExactCurrentGreen(state)}catch(error){return {status:'pending',reason:error.message}}
+  const kind=state.requested.terminal
+  if(kind==='open')return transition({status:'open-green',headSha:state.target.currentHeadSha,checksObservedAt:state.checks.observedAt})
+  if(!['queue','merge'].includes(kind))return held('Unsupported terminal policy.')
+  const supported=capabilities?.supported
+  if(capabilities?.providerId!==state.target.providerId||!Array.isArray(supported)||!supported.includes(kind)||state.requested.requiredCapabilities.some(name=>!supported.includes(name)))return held('Provider lacks the required terminal capability.')
+  if(!state.requested.allowedPushRefs.includes(state.target.headRef))return held('Terminal action lacks exact allowed-ref authority.')
+  const authority=state.requested.authority[kind]
+  if(!authority)return held('No recorded terminal authority; configuration and local mergePolicy cannot grant it.')
+  const t=state.target,actionKey=JSON.stringify([state.schemaVersion,state.deliveryKey,kind,t.currentBaseSha,t.currentHeadSha])
+  const action={actionKey,kind,targetKey:t.targetKey,requested:{baseSha:t.currentBaseSha,headSha:t.currentHeadSha,ref:t.headRef,authorityId:authority.authorityId},status:'requested',attempts:[]}
+  const prior=state.actions.find(row=>row.actionKey===actionKey)
+  if(prior&&!sameActionIntent(prior,action))return held('Terminal action conflicts with the recorded policy or target.')
+  if(!prior||prior.status!=='succeeded')return {status:'action-required',action:clone(prior??action)}
+  const observed=prior.attempts.at(-1)?.observed,id=observed?.providerActionId
+  if(observed?.outcome!=='succeeded'||observed.errorKind!==null||typeof id!=='string'||!id)return held('Terminal action has no successful provider observation.')
+  if(kind==='merge'&&!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(id))return held('Merged terminal requires the observed merge commit SHA.')
+  return transition({status:kind==='queue'?'queued':'merged',headSha:t.currentHeadSha,providerActionId:id,...(kind==='merge'?{mergeSha:id}:{})})
+}
+
 function actionAuthority(state, action) {
   if (action.targetKey !== state.target.targetKey) throw new Error('action target mismatch')
   if (action.requested.ref !== state.target.headRef) throw new Error('action ref differs from delivery target')
@@ -64,6 +99,12 @@ function validateTerminal(state, terminal) {
   }
   const kind = terminal.status === 'queued' ? 'queue' : 'merge', authority = state.requested.authority[kind]
   if (state.requested.terminal !== kind || !authority || !state.actions.some(a => a.kind === kind && a.status === 'succeeded' && a.requested.authorityId === authority.authorityId && a.requested.headSha === state.target.currentHeadSha && a.requested.baseSha === state.target.currentBaseSha && a.requested.ref === state.target.headRef && a.attempts.at(-1)?.observed?.providerActionId === terminal.providerActionId)) throw new Error(`${kind} terminal lacks matching successful current-head authorized action`)
+}
+
+/** Verify a reached terminal without granting or requesting another provider action. */
+export function assertReachedDeliveryTerminal(state) {
+  if(!['open-green','queued','merged'].includes(state?.terminal?.status))throw Error('Delivery terminal is not reached')
+  validateTerminal(state,state.terminal)
 }
 
 // Provider calls consume durable intent through the same authority/check guards as the reducer.

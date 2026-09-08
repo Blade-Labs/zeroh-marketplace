@@ -33,6 +33,7 @@ import { readLandJournal, classifyLandJournal, landJournalPath } from './landing
 import { classifyBand } from './ladder.mjs'
 import { defaultExec } from './exec.mjs'
 import { roadmapRoot } from './roadmap-root.mjs'
+import { loadArcDelivery, assertReachedDeliveryTerminal, assertExactCurrentPullRequest } from './delivery.mjs'
 import { reduceArcTransition } from './workflow-steps.mjs'
 
 /** A typed derivation failure. kind ∈ 'tsx-absent' | 'load' | 'malformed-artifact'. */
@@ -280,6 +281,8 @@ const lifecyclePriorStage = {
   sweep: 'phase',
   validate: 'sweep',
   land: 'validate',
+  deliver: 'validate',
+  'awaiting-ci': 'delivery',
   'land-unproven': 'land',
   evaluate: 'delivery',
   complete: 'evaluate',
@@ -429,6 +432,12 @@ export function deriveArcPosition({ repoRoot, arcId, config, worktree = repoRoot
   }
 
   // Proven landing resumes post-land work even if pre-land artifacts were cleaned up.
+  const strategies=config?.deliveryPolicy?.branchStrategy??{}
+  const member=strategies[String(arcId)]
+  const deliveryOwner=member?.kind==='grouped'?Object.keys(strategies).find(id=>strategies[id].kind==='grouped'&&strategies[id].groupId===member.groupId&&strategies[id].order===0):String(arcId)
+  if(!deliveryOwner)throw new DeriveError('load',['Delivery group has no order-zero owner.'])
+  const delivery=loadArcDelivery(repoRoot,deliveryOwner)
+  const prRoute=delivery!==null||config?.deliveryPolicy!==undefined
   const summary = readArcSummary(repoRoot, arcId)
   const landingJournal = readLandingJournalState(repoRoot, arcId)
   const landedGates = summary?.summary.outcome === 'shipped'
@@ -437,7 +446,7 @@ export function deriveArcPosition({ repoRoot, arcId, config, worktree = repoRoot
   if (landingJournal.state === 'live') {
     return base({ action: 'land-unproven', gates: landedGates, reason: 'a landing process is still live; reconcile its journal before post-land work' })
   }
-  if (summary?.summary.outcome === 'shipped') {
+  if (!prRoute && summary?.summary.outcome === 'shipped') {
     return currentEvaluationComplete(repoRoot, arcId, summary)
       ? base({ action: 'complete', gates: landedGates })
       : base({ action: 'evaluate', gates: landedGates })
@@ -471,19 +480,18 @@ export function deriveArcPosition({ repoRoot, arcId, config, worktree = repoRoot
     return base({ action: 'gaps', gates, reason: 'verdict GAPS awaiting an explicit correction-ready record' })
   }
 
-  if (sidecar?.branch && sidecar.branch !== arc.baseRef) {
-    const integrated = exec('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', sidecar.branch, arc.baseRef])
-    if (integrated.status !== 1) {
-      return base({
-        action: 'land-unproven',
-        gates,
-        reason: integrated.status === 0
-          ? `arc branch ${sidecar.branch} is already integrated but no shipped summary proves bookkeeping`
-          : `cannot prove whether arc branch ${sidecar.branch} is integrated: ${(integrated.stderr ?? '').trim()}`,
-      })
-    }
+  // New arcs deliver a PR. Legacy shipped summaries above retain their old completion path.
+  if(delivery){
+    const evidence={ownerArcId:deliveryOwner,deliveryKey:delivery.deliveryKey,revision:delivery.revision,terminal:delivery.terminal.status,headSha:delivery.target.currentHeadSha,pullRequest:delivery.pullRequest}
+    try{
+      assertReachedDeliveryTerminal(delivery)
+      return base({action:'blocked',gates,delivery:evidence,reason:'PR delivery reached its terminal, but the evaluator cannot yet bind PR evidence. Resume after the CI/evaluation bridge is available; do not invoke the local-land evaluator.',evaluation:{status:'held',kind:'delivery-evaluation-unavailable'}})
+    }catch{}
+    let exactPr=false
+    try{assertExactCurrentPullRequest(delivery);exactPr=true}catch{}
+    return base({action:exactPr?'awaiting-ci':'deliver',gates,delivery:evidence})
   }
-  return base({ action: 'land', gates })
+  return base({action:'deliver',gates})
 }
 
 /**

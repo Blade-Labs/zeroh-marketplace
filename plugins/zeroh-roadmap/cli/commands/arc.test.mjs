@@ -105,11 +105,11 @@ test('record-validate → arc next round-trip: gates.validated false → write P
   // Stamp PASS.
   r = bin(root, ['arc', 'record-validate', 'A', '--verdict', 'PASS'])
   assert.equal(r.code, 0)
-  // After: validated true → action land.
+  // After: validated true → PR delivery.
   r = bin(root, ['arc', 'next', 'A', '--json'])
   const pos = JSON.parse(r.stdout)
   assert.equal(pos.gates.validated, true)
-  assert.equal(pos.action, 'land')
+  assert.equal(pos.action, 'deliver')
 })
 
 test('record-validate — a bad verdict is a usage error (exit 1)', () => {
@@ -122,4 +122,13 @@ test('arc normalize without an arc id is a normalize-specific usage refusal', ()
   const result = bin(root, ['arc', 'normalize'])
   assert.equal(result.code, 1)
   assert.match(result.stderr, /usage: roadmap arc normalize <arcId> \[--apply\] \[--json\]/)
+})
+
+import runArc from './arc.mjs'
+test('arc plane is the supported Node entry and maps real workflow handoffs to exits',async()=>{
+ const cases=[[{handoffInline:{route:'handoff-inline'},phase:41},'phase-required',3],[{handoff:'awaiting-ci'},'handoff',3],[{handoff:'deliver'},'handoff',0],[{planeDone:true},'plane-done',0],[{done:true},'done',0],[{halt:'failed'},'halted',2]]
+ for(const [result,status,code] of cases){const calls=[],out=[];const actual=await runArc(['plane','FX','P','--inline','--json'],{workflow:async input=>{calls.push(input);return result},stdout:text=>out.push(text),stderr:()=>{}});assert.equal(actual,code,status);assert.deepEqual(calls,[{arcId:'FX',planeName:'P',force:'inline'}]);assert.equal(JSON.parse(out.join('')).status,status);assert.deepEqual(Object.keys(JSON.parse(out.join(''))).sort(),['status','arcId','plane','phase','handoff','resume'].sort())}
+})
+test('arc plane rejects missing identifiers, traversal and unsupported or duplicate flags',async()=>{
+ for(const argv of [['plane'],['plane','FX'],['plane','FX','P','--recursion'],['plane','FX','P','--inline','--inline'],['plane','../FX','P','--inline']]){let calls=0;const code=await runArc(argv,{workflow:async()=>{calls++;return {done:true}},stdout:()=>{},stderr:()=>{}});assert.equal(code,1);assert.equal(calls,0)}
 })

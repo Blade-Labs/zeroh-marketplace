@@ -22,8 +22,8 @@
  */
 import { execFileSync } from 'node:child_process'
 import { randomUUID, createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { existsSync, lstatSync, readFileSync, writeFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   buildHaltPayload,
@@ -42,13 +42,13 @@ import { bridgeImport, bridgeImportMany } from '../cli/lib/tsx-bridge.mjs'
 import { readBeaconLine, appendExecutorEvent, readResultTailCompletion } from '../cli/lib/beacon.mjs'
 import { armExecutor, disarmExecutor, liveArm, armPath, cardModelAlias, DEFAULT_AGENT_CARD, phaseKeyFiles, productRepoOverlaps, readExecutorRunArm } from '../cli/lib/executor-arm.mjs'
 import { productRepos } from '../cli/lib/product-repos.mjs'
-import { pidAlive, claimResultConsumption, listResultClaims } from '../cli/lib/sidecar.mjs'
+import { pidAlive, claimResultConsumption, listResultClaims, buildingDir, publishImmutableFile } from '../cli/lib/sidecar.mjs'
 import { deriveArcLifecycleTransition } from '../cli/lib/derive.mjs'
 import { NativeAgentDriver } from '../cli/lib/native-agent-driver.mjs'
 import { MODEL_DRIVERS } from '../cli/lib/drivers.mjs'
 import { resolveRole } from '../cli/lib/roles.mjs'
 import { resolveGovernance } from '../cli/lib/governance.mjs'
-import { validateRunAddress, ensureReceiptDirectory, readRunReceipt } from '../cli/lib/run-receipt.mjs'
+import { validateRunAddress, ensureReceiptDirectory, inspectReceiptAncestors, readRunReceipt } from '../cli/lib/run-receipt.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'roadmap.mjs')
 const BACKGROUND_RUN_MAX_MIN = 10 // mirror hooks/executor-result-guard.mjs — one 10-min rule
@@ -173,7 +173,7 @@ function backgroundRunAlive(b) {
 /** Read the phase's + arc's acceptanceCriteria + the arc designRefs via the typed bridge
  *  (the same seam validate-roadmap-file proves). Best-effort: a bridge miss yields empty
  *  arrays for live reads. Historical recovery requires both original records. */
-function readPhaseAndArcMeta(repoRoot, arcId, phase, { atCommit, runId } = {}) {
+function readPhaseAndArcMeta(repoRoot, arcId, phase, { atCommit, runId, strict = false } = {}) {
   let pimp, aimp
   if (atCommit === undefined) {
     const root = roadmapRoot(repoRoot)
@@ -225,6 +225,7 @@ function readPhaseAndArcMeta(repoRoot, arcId, phase, { atCommit, runId } = {}) {
       rmSync(temporary, { recursive: true })
     }
   }
+  if(strict&&(!pimp.ok||!aimp.ok||pimp.parsed?.phase!==phase||String(pimp.parsed?.arcId)!==String(arcId)||String(aimp.parsed?.id)!==String(arcId)||!aimp.parsed?.planes?.some(plane=>plane.phases?.includes(phase))))throw Error('inline handoff requires readable original phase and arc membership')
   return {
     acceptanceCriteria: pimp.ok ? pimp.parsed?.acceptanceCriteria ?? [] : [],
     tasks: pimp.ok ? pimp.parsed?.tasks ?? [] : [],
@@ -267,6 +268,7 @@ async function serializeSharedMutation(phase, { repoRoot, cfg, arcId }) {
  */
 export default async function arcPlaneWorkflow(input, deps = {}) {
   const { arcId, planeName, force, pauseAfter, recovery } = input
+  if(!((typeof arcId==='string'&&arcId.trim()&&!/[\\/\s\0]/.test(arcId)&&!['.','..'].includes(arcId))||(Number.isSafeInteger(arcId)&&arcId>0)))return lifecycleHalt('failed',{arcId:'unknown',evidence:{arcId:'requires a safe arc identifier'}})
   const run = deps.run ?? defaultRun
   const nativeMode = deps.agent === undefined
   let nativeDriver = null
@@ -319,7 +321,7 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     if (arm.status !== 'valid' || arm.arm.runId !== request.runId || arm.arm.executorId !== request.executorId || arm.arm.requestFingerprint !== receipt.snapshot.requestFingerprint) throw new Error('native completion no longer owns the executor arm')
     disarmExecutor(worktree, phase)
   }
-  const consumePhaseResult = async ({ phase, rc, meta, resultPrior, checkpointDigest, authorityRef, sessionId, nativeReceipt }) => {
+  const consumePhaseResult = async ({ phase, rc, meta, resultPrior, checkpointDigest, authorityRef, sessionId, nativeReceipt, expectedHead }) => {
     if (rc.exitCode !== 0 || !rc.stdout?.trim()) return workflowHalt('failed', { phase, evidence: { resultCheck: rc.stderr || rc.stdout || 'invalid PhaseExecutionResult' } })
     let result
     try {
@@ -371,11 +373,14 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     }
     // phase-file / gate-report consistency (the anti-narration check, DESIGN §2). A red
     // verify-complete (exit 2 = inconsistent) must halt, not be silently accepted.
+    if(expectedHead&&currentHead(worktree)!==expectedHead)return workflowHalt('failed',{phase,evidence:{inlineCompletion:'HEAD changed before completion verification'}})
     const vc = run(`roadmap gate run ${phase} --verify-complete`, { cwd })
     if (vc.exitCode !== 0) return workflowHalt('failed', { phase, evidence: { verifyComplete: vc.stderr || vc.stdout } })
 
+    if(expectedHead&&currentHead(worktree)!==expectedHead)return workflowHalt('failed',{phase,evidence:{inlineCompletion:'HEAD changed during completion verification'}})
     const mut = await serializeSharedMutation(phase, { repoRoot, cfg, arcId }) // groom backlog + emit — the loop's final step
     if (mut) return workflowHalt(mut.halt ?? 'failed', { phase, evidence: mut.evidence })
+    if(expectedHead&&currentHead(worktree)!==expectedHead)return workflowHalt('failed',{phase,evidence:{inlineCompletion:'HEAD changed during completion tail'}})
     try {
       appendExecutorEvent(worktree, phase, 'phase-complete', {
         resultTailComplete: true,
@@ -536,6 +541,42 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
       }
     }
 
+    // Inline sessions publish their result in the phase file. Consume the same tail before
+    // position derivation can skip to another phase, including on a fresh process.
+    const inlineDir=join(buildingDir(worktree),'inline-handoffs',encodeURIComponent(String(arcId)))
+    if(existsSync(inlineDir)){
+      try{
+        inspectReceiptAncestors(inlineDir)
+        for(const name of readdirSync(inlineDir).filter(name=>name.endsWith('.json')).sort()){
+          const path=join(inlineDir,name)
+          if(lstatSync(path).isSymbolicLink()||!lstatSync(path).isFile())throw Error('inline handoff must be a regular file')
+          const saved=JSON.parse(readFileSync(path,'utf8'))
+          if(saved.planDigest!==sha256(canonicalJson(saved.plan))||saved.version!==1||saved.arcId!==String(arcId)||saved.worktree!==worktree||!Number.isSafeInteger(saved.phase)||name!==`${saved.phase}.json`||!saved.plan||!saved.meta||!/^sha256:[a-f0-9]{64}$/.test(saved.sourceCheckpointDigest)||!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(saved.baseHead))throw Error('inline handoff identity or checkpoint is malformed')
+          const recorded=saved.transitionReceipt
+          if(recorded?.event?.arcId!==String(arcId)||recorded.event.phase!==saved.phase||recorded.next?.stage!=='phase'||canonicalJson(reduceArcTransition(recorded.prior,recorded.event))!==canonicalJson(recorded))throw Error('inline transition identity is inconsistent')
+          const claim=pendingClaims.find(row=>row.phase===saved.phase&&row.checkpointDigest===saved.sourceCheckpointDigest)
+          if(claim&&readResultTailCompletion(worktree,saved.phase,claim))continue
+          const phasePath=join(roadmapRoot(repoRoot),'phases',`phase-${saved.phase}.phase.ts`)
+          const parsed=bridgeImport(phasePath,{consumerRoot:repoRoot}),arcParsed=bridgeImport(join(roadmapRoot(repoRoot),'arcs',`${arcId}.arc.ts`),{consumerRoot:repoRoot})
+          if(!parsed.ok||!arcParsed.ok||String(parsed.parsed.arcId)!==String(arcId)||parsed.parsed.phase!==saved.phase||String(arcParsed.parsed.id)!==String(arcId)||!arcParsed.parsed.planes?.some(plane=>plane.name===saved.planeName&&plane.phases.includes(saved.phase)))throw Error('inline phase/arc identity or membership is unreadable')
+          const p=parsed.parsed
+          if(p.status!=='done')return withTransition({handoffInline:{route:'handoff-inline',band:saved.band},phase:saved.phase,plan:saved.plan},saved.transitionReceipt,lifecycleReceipts)
+          if(!p.executionResult)throw Error('done inline phase lacks its canonical executionResult')
+          if(liveArm(worktree,saved.phase))throw Error('inline completion conflicts with an executor arm; reconcile it first')
+          const completionHead=currentHead(worktree)
+          execFileSync('git',['merge-base','--is-ancestor',saved.baseHead,completionHead],{cwd:worktree,stdio:'pipe'})
+          let committed
+          try{committed=execFileSync('git',['show',`${completionHead}:${relative(worktree,phasePath)}`],{cwd:worktree,encoding:'utf8',maxBuffer:4*1024*1024,stdio:'pipe'})}catch{throw Error('inline phase result must be committed at the captured HEAD')}
+          if(committed!==readFileSync(phasePath,'utf8'))throw Error('inline phase result must be committed at the captured HEAD')
+          const subject=execFileSync('git',['log','-1','--format=%s',completionHead,'--',relative(worktree,phasePath)],{cwd:worktree,encoding:'utf8',stdio:'pipe'})
+          if(!new RegExp(`\\bphase ${saved.phase}\\b`).test(subject))throw Error('inline phase result lacks its phase commit boundary')
+          const rc=checkPhaseResult(saved.phase,p.executionResult)
+          const consumed=await consumePhaseResult({phase:saved.phase,rc,meta:saved.meta,resultPrior:saved.transitionReceipt.next,checkpointDigest:saved.sourceCheckpointDigest,authorityRef:saved.transitionReceipt.authorityRef,sessionId:`inline-${process.pid}`,expectedHead:completionHead})
+          if(consumed)return consumed
+        }
+      }catch(error){return workflowHalt('failed',{evidence:{inlineCompletion:error.message}})}
+    }
+
     const arcNext = run(`roadmap arc next ${arcId} --json`, { cwd })
     if (arcNext.exitCode !== 0 || !arcNext.stdout?.trim()) {
       return commandFailure('failed', 'arcNext', arcNext, { arcId })
@@ -610,6 +651,12 @@ export default async function arcPlaneWorkflow(input, deps = {}) {
     if (bandRoute.route === 'handoff-inline') {
       // trivial/heavy (or --inline forced) → the session runs this phase INLINE under the thin
       // do-phase arc-mode / inline-supervised rules; only `mid` spawns an executor.
+      try{
+        const dir=ensureReceiptDirectory(join(buildingDir(worktree),'inline-handoffs',encodeURIComponent(String(arcId))))
+        const saved={version:1,arcId:String(arcId),planeName,phase,worktree,baseHead:plan.baseHead??currentHead(worktree),sourceCheckpointDigest:next.sourceCheckpoint?.digest??sha256(canonicalJson({arcId,phase,plan})),planDigest:sha256(canonicalJson(plan)),plan,band:bandRoute.band,meta:readPhaseAndArcMeta(repoRoot,arcId,phase,{strict:true}),transitionReceipt}
+        const path=join(dir,`${phase}.json`)
+        if(!publishImmutableFile(path,JSON.stringify(saved,null,2)+'\n'))throw Error('inline handoff already exists; resume its stored checkpoint')
+      }catch(error){return workflowHalt('failed',{phase,evidence:{inlineHandoff:error.message}})}
       return withTransition({ handoffInline: bandRoute, phase, plan }, transitionReceipt, lifecycleReceipts)
     }
 

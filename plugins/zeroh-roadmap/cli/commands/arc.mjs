@@ -231,9 +231,25 @@ export async function arcNormalize(rest, deps = {}) {
   }
 }
 
+async function arcPlane(argv,deps){
+  const stdout=deps.stdout??(text=>process.stdout.write(text)),stderr=deps.stderr??(text=>process.stderr.write(text))
+  const [arcId,planeName,...flags]=argv
+  const safe=value=>typeof value==='string'&&/^[^\s/\\\0]+$/.test(value)&&!['.','..'].includes(value)&&!value.startsWith('-')
+  if(!safe(arcId)||!safe(planeName)||flags.some(flag=>!['--inline','--json'].includes(flag))||new Set(flags).size!==flags.length){stderr('Usage: roadmap arc plane <arcId> <planeName> [--inline] [--json]\n');return 1}
+  const workflow=deps.workflow??(await import('../../workflows/arc-plane.workflow.mjs')).default
+  const input={arcId,planeName,...(flags.includes('--inline')?{force:'inline'}:{})}
+  const result=await workflow(input)
+  const status=result.halt?'halted':result.handoffInline?'phase-required':result.done?'done':result.planeDone?'plane-done':result.handoff?'handoff':'halted'
+  const resume=status==='done'?null:`roadmap arc plane ${arcId} ${planeName}${flags.includes('--inline')?' --inline':''} --json`
+  const output={status,arcId,plane:planeName,phase:result.phase??null,handoff:result.handoff??null,resume}
+  if(flags.includes('--json'))stdout(JSON.stringify(output)+'\n');else stderr(`roadmap arc plane ${arcId} ${planeName}: ${status}${output.handoff?` (${output.handoff})`:''}${resume?`; ${resume}`:''}\n`)
+  return status==='halted'?2:status==='phase-required'||result.handoff==='awaiting-ci'?3:0
+}
+
 export default async function run(argv, deps = {}) {
   const sub = argv[0]
   if (!sub || sub === '--help' || sub === '-h') {
+    process.stdout.write('roadmap arc plane <arcId> <planeName> [--inline] [--json]\n')
     process.stdout.write('roadmap arc normalize <arcId> [--apply] [--json]\n')
     process.stdout.write('roadmap arc next <arcId> [--json] [--ignore-capacity]\n')
     process.stdout.write('roadmap arc record-validate <arcId> (--verdict <PASS|GAPS|no-op> [--note <s>] | --correction-ready)\n')
@@ -241,6 +257,7 @@ export default async function run(argv, deps = {}) {
     return sub ? 0 : 1
   }
   const rest = argv.slice(1)
+  if (sub === 'plane') return arcPlane(rest, deps)
   if (sub === 'normalize') return arcNormalize(rest, deps)
   if (sub === 'next') return arcNext(rest)
   if (sub === 'record-validate') return recordValidate(rest)

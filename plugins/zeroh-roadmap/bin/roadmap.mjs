@@ -35,7 +35,7 @@ const TREE = {
   gate: { phase: 1656, sub: ['plan <phase>', 'run <phase>'], desc: 'the gate decision table + mechanical execution' },
   result: { phase: 1656, sub: ['check'], desc: 'PhaseExecutionResult .parse() via the consumer schema' },
   contract: { phase: 1656, sub: ['show --json-schema'], desc: 'emit the PhaseExecutionResult JSON Schema' },
-  arc: { phase: 1657, sub: ['next <arcId>', 'land <arcId>'], desc: 'position derivation + the ONE landing engine' },
+  arc: { phase: 1657, sub: ['next <arcId>', 'plane <arcId> <planeName> [--inline] [--json]', 'land <arcId>'], desc: 'position derivation + the ONE landing engine' },
   watch: { phase: 1657, sub: ['<arcId>', '--once'], desc: 'executor liveness (absorbs executor-watch/liveness)' },
   beacon: { phase: 1737, sub: ['<event> --phase <N>', '--detail', '--log', '--session'], desc: 'typed executor heartbeat (closed vocabulary)' },
   'executor-arm': { phase: 1737, sub: ['<N> --session <id> [--executor-id <id>] [--agent-card <path>] [--force]'], desc: 'write the executor arm file (never unbound; refuses over another executor)' },

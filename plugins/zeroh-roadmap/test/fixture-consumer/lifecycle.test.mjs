@@ -311,6 +311,7 @@ test('arc workflow lifecycle — backlog startup returns a pre-start HEAD plan w
     throw new Error(`unexpected command after startup: ${command}`)
   }, { force: 'inline' })
   writePhaseFile(drive.root, { phase: 9037, status: 'backlog', arcId: 'FX', tasks: [{ id: '9037.1', done: false }] })
+  writeArcFile(drive.root,{id:'FX',name:'Inline startup',baseRef:'develop',planes:[{name:'P',phases:[9037]}]})
   baseline = git(drive.root, 'rev-parse', 'HEAD')
   const result = await drive.result()
   assert.equal(result.plan.baselineKind, 'pre-start-head')
@@ -833,4 +834,39 @@ test('37.6 — every advertised lifecycle halt has one stable safe resume and du
     assert.deepEqual(duplicate.next, accepted.next, kind)
     assert.equal(duplicate.resume, expected.get(kind), kind)
   }
+})
+
+test('inline handoff auto-consumes its embedded done result and shared tail exactly once before deriving',async()=>{
+ let baseline
+ const first=driveEarlyArcWorkflow(command=>{
+  if(command==='roadmap config check'||command==='roadmap arm FX')return {stdout:'{}',stderr:'',exitCode:0}
+  if(command.includes('arc next'))return {stdout:JSON.stringify({arc:'FX',action:'run-phase',phase:9037,band:'mid',plane:'P',done:[],remaining:[],gates:{}}),stderr:'',exitCode:0}
+  if(command===`roadmap gate plan 9037 --base ${baseline} --json`)return {stdout:JSON.stringify({phase:9037,slots:[],baselineKind:'pre-start-head',baseHead:baseline}),stderr:'',exitCode:0}
+  throw Error(`unexpected first-inline command: ${command}`)
+ },{force:'inline'})
+ const configPath=join(first.root,'roadmap','roadmap.config.json'),cfg=JSON.parse(readFileSync(configPath,'utf8'));cfg.gateCommands.emit='FIXTURE_SLOT_LOG=.fixture-slots.jsonl bash bin/fake-slot.sh emit';writeFileSync(configPath,JSON.stringify(cfg))
+ writePhaseFile(first.root,{phase:9037,status:'backlog',arcId:'FX',tasks:[{id:'9037.1',done:false}]})
+ writeArcFile(first.root,{id:'FX',name:'Inline fixture',baseRef:'develop',planes:[{name:'P',phases:[9037]}]})
+ writeFileSync(join(first.root,'roadmap','backlog.ts'),"export default { entries: [ { phase: 9037, name: 'inline' } ] }\n")
+ baseline=git(first.root,'rev-parse','HEAD')
+ assert.equal((await first.result()).handoffInline.route,'handoff-inline')
+ const embedded={phase:9037,status:'done',compromises:[],skipped:[],gateRounds:1}
+ writePhaseFile(first.root,{phase:9037,status:'done',arcId:'FX',tasks:[{id:'9037.1',done:true}],executionResult:embedded})
+ const calls=[],run=(command,options={})=>{
+  calls.push(command)
+  if(command==='roadmap config check'||command==='roadmap arm FX')return {stdout:'{}',stderr:'',exitCode:0}
+  if(command==='roadmap result check --phase 9037')return {stdout:options.input,stderr:'',exitCode:0}
+  if(command==='roadmap gate run 9037 --verify-complete')return {stdout:'{}',stderr:'',exitCode:0}
+  if(command.includes('arc next'))return {stdout:JSON.stringify({arc:'FX',action:'complete',done:[9037],remaining:[],gates:{}}),stderr:'',exitCode:0}
+  throw Error(`unexpected completion command: ${command}`)
+ }
+ const deps={cwd:first.root,run,agent:async()=>{throw Error('completed inline phase must not spawn')}}
+ const dirty=await arcPlaneWorkflow({arcId:'FX',planeName:'P',force:'inline'},deps);assert.equal(dirty.halt,'failed');assert.match(JSON.stringify(dirty.evidence),/committed/);assert.equal(calls.some(command=>command.includes('result check')),false)
+ commitPaths(first.root,'feat: phase 9037 — 9037.1 complete',['roadmap/phases/phase-9037.phase.ts'])
+ assert.equal((await arcPlaneWorkflow({arcId:'FX',planeName:'P',force:'inline'},deps)).done,true)
+ const checkAt=calls.indexOf('roadmap result check --phase 9037'),verifyAt=calls.indexOf('roadmap gate run 9037 --verify-complete'),nextAt=calls.findIndex(command=>command.includes('arc next'))
+ assert.ok(checkAt>=0&&verifyAt>checkAt&&nextAt>verifyAt,JSON.stringify(calls));assert.doesNotMatch(readFileSync(join(first.root,'roadmap','backlog.ts'),'utf8'),/9037/)
+ const emits=readSlotLog(first.root).filter(row=>row.slot==='emit').length;assert.equal(emits,1)
+ assert.equal((await arcPlaneWorkflow({arcId:'FX',planeName:'P',force:'inline'},deps)).done,true)
+ assert.equal(calls.filter(command=>command==='roadmap result check --phase 9037').length,1);assert.equal(readSlotLog(first.root).filter(row=>row.slot==='emit').length,emits)
 })

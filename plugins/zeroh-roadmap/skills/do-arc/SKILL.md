@@ -28,12 +28,11 @@ Invoke `roadmap <cmd>` (fallback `node ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cm
 
 1. `roadmap arm <id>` — claim the lane (refuses a lane a sibling already holds); `roadmap
    status` shows live lanes.
-2. For each plane in the arc's `planes`, in order: launch `workflows/arc-plane.workflow.mjs`
-   with `{ arcId, planeName, force?, pauseAfter? }` (`force` from `--inline`/`--recursion`,
-   `pauseAfter` from `--pause-after`). The workflow
-   drives every member phase of that plane through the CLI and RETURNS at the plane boundary
-   or the moment anything needs you. **Control returns to you between planes** — checkpoints,
-   pauses, and user rulings live there.
+2. For each plane in the arc's `planes`, in order, run
+   `roadmap arc plane <arcId> <planeName> --json` (add `--inline` when requested).
+   This supported Node entry invokes `workflows/arc-plane.workflow.mjs`; do not give that
+   Node module to a host Workflow sandbox or write a session-side replacement driver.
+   It returns at the plane boundary or when the session must act.
 3. Act on the return, then launch the next plane (or run the terminal handoff).
 
 The workflow re-derives position from disk on every call (`roadmap arc next`), so relaunching
@@ -46,8 +45,10 @@ it always fast-forwards past committed work — it never re-runs a completed pha
   yourself via `do-phase` in arc-mode under the **inline-supervised** rules: you drive
   `software-developer`/`test-engineer` per task while owning every commit, `transparencyReport`,
   and the gate (the one sanctioned per-task fork — an executor never offloads its own tasks).
-  Then relaunch the plane workflow to continue.
-- **`{ handoff: sweep | validate | land | evaluate }`** → the judgment-heavy terminals run in-session
+  Then rerun the same `roadmap arc plane` command. It reads the phase's committed
+  `executionResult` and runs result validation, completion verification, backlog grooming
+  and emit before advancing. Supply no copied result JSON or predicted hashes.
+- **`{ handoff: sweep | validate | deliver | awaiting-ci | evaluate }`** → the judgment-heavy terminals run in-session
   (below).
 - **A typed halt** — use its `reduceArcTransition` receipt and safe resume action:
   - `escalated` / `self-descope` / `permission` / `auth` / `review-exhausted` → resolve the
@@ -80,13 +81,24 @@ it always fast-forwards past committed work — it never re-runs a completed pha
    `validate-arc/references/corrections.md`. After authorized repairs and checks, that owner
    records `roadmap arc record-validate <id> --correction-ready`. Relaunch: the CLI routes through sweep, then fresh validation.
    Sweep recording binds the correction automatically; never type a predicted hash.
-3. **land** → `roadmap arc land <id>` — the ONE landing engine (preconditions, arc-end suite,
-   the blocker check, backlog regroom, RunnerSummary, and the autonomous push per the
-   consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user · 2 = blocker; surface the
-   blocker JSON on any non-zero exit. `baseRef → master` is NEVER part of landing — a release
-   is a held human act. A user instruction to review-before-merge always overrides autonomy.
-4. **evaluate** → run `eval-arc <id>`, which owns collection, independent judgment, and
-   persistence. Re-derive afterward. A pending or unbound report is not completion; an
+3. **deliver** → finish the existing pre-publication history normalization, then run
+   `roadmap deliver <arcId> --json`; add `--resume` when its receipt already exists.
+   This publishes the authorized arc/group head and opens or reconciles its one non-draft
+   PR. Preserve the worktree and journals. Never run local landing or cleanup first.
+   Default completion is an open PR with the configured checks green on its exact head.
+   `awaiting-ci` is a handoff to the CI monitor, not completion. Queue/merge requires its
+   exact policy, capability, allowed ref, current green evidence and already-recorded
+   terminal authority. A config value or local `mergePolicy` cannot grant that authority.
+   Normal CLI-created receipts have no queue/merge grant; report the named hold instead
+   of inventing one. `roadmap arc land` remains only the separately authorized local
+   integration command, and cannot replace an active PR delivery receipt.
+4. **awaiting-ci** → run the configured CI-monitor flow against that same delivery receipt.
+   Preserve current-head/check-set binding and existing correction bounds. Until its
+   monitor is available, retain the named awaiting-CI handoff; do not narrate green.
+5. **evaluate** → run `eval-arc <id>`, which owns collection, independent judgment, and
+   persistence using the reached PR terminal receipt. If the evaluator cannot consume
+   delivery evidence yet, report that missing bridge once and hold; never fabricate a
+   local landing summary or repeatedly invoke an unsupported evaluator. Re-derive afterward. A pending or unbound report is not completion; an
    evaluation failure retries only that missing action. `{ done: true }` ends the arc.
 
 ## Pause & resume

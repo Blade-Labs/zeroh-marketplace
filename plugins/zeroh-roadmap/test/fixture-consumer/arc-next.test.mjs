@@ -119,7 +119,7 @@ test('N5 — the terminal chain: sweep → validate → land, each derived from 
 
   // (c) land — stamp the validate verdict PASS → the derivation advances to land.
   assert.equal(runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS']).code, 0)
-  assert.equal(next(root).json.action, 'land', 'swept + PASS verdict ⇒ land')
+  assert.equal(next(root).json.action, 'deliver', 'swept + PASS verdict ⇒ PR delivery')
 })
 
 // ── N6 — landed arc → complete, idempotent no-op with an identical clean report ──────────

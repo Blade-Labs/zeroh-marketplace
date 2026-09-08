@@ -88,3 +88,12 @@ test('resume rejects explicit base/check policy drift and passes provider factor
  h.policy.defaultBaseRef=null;h.policy.requiredChecks=['other'];assert.equal(await run(['A','--resume'],h.deps),2);assert.deepEqual(h.mutations,before)
  const fresh=harness();fresh.deps.createProvider=settings=>{assert.equal(settings.loadDelivery,fresh.deps.loadArcDelivery);return {bootstrap:()=>({status:'held',remedy:'fixture hold'})}};assert.equal(await run(['A'],fresh.deps),3)
 })
+
+test('unchanged green delivery resume preserves terminal state and revision',async()=>{
+ const h=integrated({A:{kind:'independent'}});assert.equal(await run(['A'],h.deps),0)
+ const state=h.receipts.A,at=AT
+ h.deps.transitionArcDelivery('/repo','A',{type:'observe-checks',deliveryKey:state.deliveryKey,targetKey:state.target.targetKey,expectedRevision:state.revision,at,checks:{providerId:'github',repositoryId:'blade/roadmap',providerPullRequestId:state.pullRequest.providerPullRequestId,headSha:HEAD,requiredChecks:['unit'],observedChecks:[{name:'unit',status:'green',attemptId:'run-1',observedAt:at}],observedAt:at}})
+ const observed=h.receipts.A;h.deps.transitionArcDelivery('/repo','A',{type:'set-terminal',deliveryKey:observed.deliveryKey,targetKey:observed.target.targetKey,expectedRevision:observed.revision,at,terminal:{status:'open-green',headSha:HEAD,checksObservedAt:at}})
+ const before=structuredClone(h.mutations),revision=h.receipts.A.revision
+ assert.equal(await run(['A','--resume','--json'],h.deps),0);assert.equal(h.receipts.A.terminal.status,'open-green');assert.equal(h.receipts.A.revision,revision);assert.deepEqual(h.mutations,before);assert.equal(JSON.parse(h.out.at(-1)).status,'open-green')
+})

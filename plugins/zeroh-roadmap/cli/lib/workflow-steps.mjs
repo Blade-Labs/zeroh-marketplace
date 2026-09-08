@@ -47,7 +47,7 @@ export function buildHaltPayload(kind, detail = {}) {
 // -- Canonical arc lifecycle reducer ----------------------------------------
 const LIFECYCLE_STAGES = new Set(['phase', 'sweep', 'validate', 'land', 'delivery', 'evaluate', 'complete'])
 const LIFECYCLE_EVENTS = new Set([
-  'run-phase', 'resume-phase', 'done', 'sweep', 'validate', 'land', 'land-proven',
+  'run-phase', 'resume-phase', 'done', 'sweep', 'validate', 'land', 'land-proven', 'deliver', 'awaiting-ci',
   'land-unproven', 'evaluate', 'complete', 'resume', 'correction', 'blocked',
   'escalated', 'failed', 'self-descope', 'stalled', 'exited', 'unobserved',
   'permission', 'auth', 'review-exhausted', 'gaps', 'pause-after',
@@ -75,9 +75,9 @@ const ACTIVE_TRANSITIONS = {
     sweep: ['sweep', 'run-sweep'],
   },
   sweep: { validate: ['validate', 'run-validate'] },
-  validate: { land: ['land', 'run-land'] },
+  validate: { land: ['land', 'run-land'], deliver: ['delivery', 'run-deliver'] },
   land: { 'land-proven': ['delivery', 'run-evaluate'] },
-  delivery: { evaluate: ['evaluate', 'run-evaluate'] },
+  delivery: { 'awaiting-ci': ['delivery', 'await-ci'], deliver: ['delivery', 'run-deliver'], evaluate: ['evaluate', 'run-evaluate'] },
   evaluate: { complete: ['complete', 'done'] },
   complete: {},
 }
@@ -305,7 +305,7 @@ export function classifyNextAction(next, plane) {
   const action = next?.action
   if (action === 'complete') return 'complete'
   if (action === 'blocked' || action === 'gaps' || action === 'land-unproven') return 'halt'
-  if (action === 'sweep' || action === 'validate' || action === 'land' || action === 'evaluate') return 'handoff'
+  if (action === 'sweep' || action === 'validate' || action === 'land' || action === 'evaluate' || action === 'deliver' || action === 'awaiting-ci') return 'handoff'
   if (action !== 'run-phase' && action !== 'resume-phase') {
     throw new Error(`classifyNextAction: unhandled arc-next action '${action}'`)
   }

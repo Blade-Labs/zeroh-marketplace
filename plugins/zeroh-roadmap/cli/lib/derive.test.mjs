@@ -225,47 +225,47 @@ test('correction lifecycle — awaiting repair gaps, ready repair sweeps, and ma
   assert.equal(deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) }).action, 'sweep')
 })
 
-test('land — swept + validate verdict PASS + not yet landed', () => {
+test('deliver — swept + validate verdict PASS defaults to PR publication', () => {
   const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }], acceptanceCriteria: [{ id: 'c1', job: 'x' }] }, [done(10)])
   writeValidate(root, 'A', 'PASS')
   writeSidecar(root, 'A', { worktree: root, branch: 'develop' })
   const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
-  assert.equal(pos.action, 'land')
+  assert.equal(pos.action, 'deliver')
   assert.deepEqual(pos.gates, { swept: true, validated: true, suiteGreen: null })
 })
 
-test('land-unproven — integrated distinct arc branch without shipped summary reconciles and never replays land', () => {
+test('deliver — local branch ancestry without a shipped summary cannot replace PR publication', () => {
   const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)])
   execFileSync('git', ['-C', root, 'branch', 'develop'])
   execFileSync('git', ['-C', root, 'branch', 'arc/A'])
   writeSidecar(root, 'A', { worktree: root, branch: 'arc/A' })
   const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
-  assert.equal(pos.action, 'land-unproven')
+  assert.equal(pos.action, 'deliver')
   assert.equal(pos.transitionReceipt.rejection, null)
-  assert.equal(pos.transitionReceipt.next.status, 'halted')
-  assert.equal(pos.transitionReceipt.next.stage, 'land')
-  assert.equal(pos.transitionReceipt.resume, 'reconcile')
+  assert.equal(pos.transitionReceipt.next.status, 'active')
+  assert.equal(pos.transitionReceipt.next.stage, 'delivery')
+  assert.equal(pos.transitionReceipt.resume, 'run-deliver')
 })
 
-test('land — same-branch ancestry is not proof of a prior landing', () => {
+test('deliver — same-branch ancestry does not replace PR publication', () => {
   const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)])
   execFileSync('git', ['-C', root, 'branch', 'develop'])
   writeSidecar(root, 'A', { worktree: root, branch: 'develop' })
   const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
-  assert.equal(pos.action, 'land')
+  assert.equal(pos.action, 'deliver')
   assert.equal(pos.transitionReceipt.rejection, null)
 })
 
-test('land-unproven — a malformed shipped summary cannot prove land', () => {
+test('deliver — a malformed shipped summary cannot prove historical completion', () => {
   const root = makeRepo('A', { planes: [{ name: 'P1', phases: [10] }] }, [done(10)])
   execFileSync('git', ['-C', root, 'branch', 'develop'])
   execFileSync('git', ['-C', root, 'branch', 'arc/A'])
   writeSidecar(root, 'A', { worktree: root, branch: 'arc/A' })
   writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({ arcId: 'A', outcome: 'shipped' }))
   const pos = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
-  assert.equal(pos.action, 'land-unproven')
+  assert.equal(pos.action, 'deliver')
   assert.equal(pos.transitionReceipt.rejection, null)
-  assert.equal(pos.transitionReceipt.resume, 'reconcile')
+  assert.equal(pos.transitionReceipt.resume, 'run-deliver')
 })
 
 test('evaluate — proven shipped summary without an arc evaluation resumes the missing post-land action', () => {
@@ -388,10 +388,37 @@ test('derive lifecycle — terminal disk checkpoints seed their honest stage bef
   )
   writeValidate(root, 'A', 'PASS')
   const position = deriveArcPosition({ repoRoot: root, arcId: 'A', config: CONFIG, exec: makeExec([], []) })
-  assert.equal(position.action, 'land')
+  assert.equal(position.action, 'deliver')
   assert.ok(position.transitionReceipt, 'derive output carries its reducer receipt')
   assert.equal(position.transitionReceipt.prior.stage, 'validate')
-  assert.equal(position.transitionReceipt.event.type, 'land')
-  assert.equal(position.transitionReceipt.next.stage, 'land')
+  assert.equal(position.transitionReceipt.event.type, 'deliver')
+  assert.equal(position.transitionReceipt.next.stage, 'delivery')
   assert.equal(position.transitionReceipt.rejection, null)
+})
+
+test('default unpublished arc derives delivery, and explicit PR policy cannot use local-land completion',()=>{
+ const root=makeRepo('A',{planes:[{name:'P1',phases:[10]}]},[done(10)])
+ let pos=deriveArcPosition({repoRoot:root,arcId:'A',config:CONFIG,exec:makeExec([],[])})
+ assert.equal(pos.action,'deliver');assert.equal(pos.transitionReceipt.next.stage,'delivery')
+ writeArcSummary(root,'A','shipped')
+ pos=deriveArcPosition({repoRoot:root,arcId:'A',config:{...CONFIG,deliveryPolicy:{}},exec:makeExec([],[])})
+ assert.equal(pos.action,'deliver','local summary cannot satisfy explicit PR delivery')
+})
+
+test('persisted PR route awaits exact checks, preserves its checkout, and hands off evaluation without local proof',()=>{
+ const root=makeRepo('A',{planes:[{name:'P1',phases:[10]}]},[done(10)]),at='2026-09-08T00:00:00.000Z',head='1'.repeat(40),base='0'.repeat(40)
+ const target={providerId:'github',repositoryId:'blade/roadmap',targetKey:JSON.stringify(['arc','A']),baseRef:'refs/heads/main',headRef:'refs/heads/roadmap/arc-a',currentBaseSha:base,currentHeadSha:head}
+ const delivery={schemaVersion:1,revision:0,arcId:'A',deliveryKey:JSON.stringify(['github','blade/roadmap',target.targetKey]),target,strategy:{kind:'independent',arcId:'A'},requested:{terminal:'open',allowedPushRefs:[target.headRef],requiredCapabilities:['pull-request'],requiredChecks:['unit'],authority:{queue:null,merge:null}},actions:[],pullRequest:{providerId:'github',repositoryId:'blade/roadmap',targetKey:target.targetKey,providerPullRequestId:'PR_7',number:7,url:null,state:'open',draft:false,baseRef:target.baseRef,headRef:target.headRef,baseSha:base,headSha:head,observedAt:at},checks:null,terminal:{status:'awaiting-ci',headSha:head,reason:null},createdAt:at,updatedAt:at}
+ mkdirSync(join(root,'roadmap','.deliveries'));const path=join(root,'roadmap','.deliveries','A.json');writeFileSync(path,JSON.stringify(delivery));writeArcSummary(root,'A','shipped')
+ let pos=deriveArcPosition({repoRoot:root,arcId:'A',config:CONFIG,exec:makeExec([],[])})
+ assert.equal(pos.action,'awaiting-ci');assert.equal(pos.delivery.ownerArcId,'A');assert.equal(readFileSync(path,'utf8'),JSON.stringify(delivery))
+ const originalPr=structuredClone(delivery.pullRequest)
+ for(const changed of [{draft:true},{state:'closed'},{headSha:base}]){
+  delivery.pullRequest={...originalPr,...changed};writeFileSync(path,JSON.stringify(delivery))
+  assert.equal(deriveArcPosition({repoRoot:root,arcId:'A',config:CONFIG,exec:makeExec([],[])}).action,'deliver')
+ }
+ delivery.pullRequest=originalPr
+ delivery.checks={providerId:'github',repositoryId:'blade/roadmap',providerPullRequestId:'PR_7',headSha:head,requiredChecks:['unit'],observedChecks:[{name:'unit',status:'green',attemptId:'r1',observedAt:at}],observedAt:at};delivery.terminal={status:'open-green',headSha:head,checksObservedAt:at};writeFileSync(path,JSON.stringify(delivery))
+ pos=deriveArcPosition({repoRoot:root,arcId:'A',config:CONFIG,exec:makeExec([],[])})
+ assert.equal(pos.action,'blocked');assert.equal(pos.evaluation.status,'held');assert.equal(pos.delivery.terminal,'open-green');assert.ok(readFileSync(join(root,'roadmap','phases','phase-10.phase.ts'),'utf8'))
 })
