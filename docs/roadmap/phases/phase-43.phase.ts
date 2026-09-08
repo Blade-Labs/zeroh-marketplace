@@ -7,7 +7,7 @@ import { definePhase } from '../lib/schema'
  */
 export default definePhase({
   phase: 43,
-  name: 'Native lifecycle conformance with resumable four-host comparison',
+  name: 'Codex usability pilot; broad native comparison deferred',
   plannedBy: { model: 'unverified' },
   status: 'in-progress',
   category: 'test',
@@ -31,7 +31,7 @@ export default definePhase({
     'plugins/zeroh-roadmap/gauntlet-3.0/results.json',
   ],
   stakeholderDemo:
-    'A reproducible four-lane Gauntlet drives three realistic arcs from intent through an exact-head green PR and proves interruption, repair, branch, history, and cleanup behavior without treating an unjudged or unavailable run as success.',
+    'One installed Codex plugin takes a tiny consumer intent through runnable tested output, bounded review, one exact-head green PR and a safe resume.',
   userFacing: false,
   testScope: 'full',
   reviewScope: 'full',
@@ -169,22 +169,60 @@ export default definePhase({
       interfaces: { consumes: ['ArmJournal', 'GAUNTLET_3_CONTRACT'], produces: ['scoreDeterministicSentinels', 'buildBlindJudgePacket'] },
     },
     {
-      id: "43.4",
-      title: "Attest real native hosts and provider before counting a live arm",
-      problem: "Fake adapters can prove reducer negatives but cannot establish that Claude-native, Codex-native, cross-driver, plugin loading, or provider delivery actually worked.",
-      steps: [
-        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs", description: "Probe the real claude and codex executables, exact versions/models, clean plugin installation hashes, isolated repository remotes, provider account/repository identity, required capabilities, and mutation authority; persist a preflight record with hashes computed from actual bytes by the runner, without signatures, model-predicted hashes, or retyped executable programs and refuse product repositories or any fake/shim executable. → verify: node plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs --verify-receipt plugins/zeroh-roadmap/gauntlet-3.0/preflight.json" },
-        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs", description: "Require the matching fresh preflight receipt for every live arm and record parent PID/executable/version, child driver receipt, plugin manifest hash, provider request IDs, repository identity, and raw transcript checksums; never promote fake-adapter output into the live result namespace. → verify: capbuild node --test --test-name-pattern=attestation plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
-        { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs", description: "Plant shim binaries, stale or copied preflight receipts, wrong plugin hashes, product remotes, fake provider receipts, missing native provenance, and cross-arm receipt reuse; require each arm to be invalid or unavailable, never passed. → verify: capbuild node --test --test-name-pattern=attestation plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
+      "id": "43.4",
+      "title": "Prove one installed Codex intent-to-open-green-PR path",
+      "problem": "The owner needs a usable Codex development path without paying for the broad comparison matrix; real consumer feedback and one ordinary end-to-end run must identify the necessary fixes.",
+      "steps": [
+        {
+          "file": "plugins/zeroh-roadmap/cli/lib/durable-process-agent-driver.mjs",
+          "description": "Preserve native usage and repair only reproducible Codex-usability defects from consumer feedback or the pilot. Keep existing lifecycle, authority and test owners; carry already shipped 0.40.4/0.40.5 fixes into the candidate."
+        },
+        {
+          "file": "plugins/zeroh-roadmap/cli/lib/beacon.test.mjs",
+          "description": "Regression-check malformed/legacy beacon timestamps and consumer-local schema dependency resolution; run affected configured task checks. Consumer project, host and provider permission issues remain separately classified."
+        },
+        {
+          "file": "docs/roadmap/arc-evals/NATIVEGREEN-codex-usability-reassessment.md",
+          "description": "Run one real installed-plugin Codex pilot in an isolated ordinary consumer, with one tiny phase, independent review, runnable output and one non-draft PR whose required checks are green on its current head. Use the ratified 20-minute native-runtime ceiling and shared capbuild admission; observe usage without inventing a hard token cap."
+        },
+        {
+          "file": "docs/roadmap/arc-evals/NATIVEGREEN-codex-usability-reassessment.md",
+          "description": "Resume the same work once and verify no duplicate executor or PR creation. Allow one targeted correction for an identified defect, one independent candidate review and a bounded HIGH-fix re-review. Preserve failures and exact source/run/PR identities; leave merge manual."
+        }
       ],
-      acceptanceCriteria: ["A live-pass arm proves a real native parent process, declared child driver, installed plugin hash, isolated repository, and real provider request chain.", "Fake/shim/stale/copied/missing provenance is mechanically excluded from live scores and documentation claims.", "Unavailable credentials, capabilities, binaries, or authority remain unavailable and cannot be substituted by an in-memory adapter."],
-      files: ["plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs", "plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs", "plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs", "plugins/zeroh-roadmap/gauntlet-3.0/preflight.json"],
-      testMode: "tdd", done: false, dependsOn: ["43.3"],
-      interfaces: { consumes: ["ArmJournal"], produces: ["NativeHostAttestation"] },
+      "acceptanceCriteria": [
+        "One actual Codex session uses the installed candidate in an ordinary consumer and produces a runnable tested result plus one reviewed, open non-draft PR with required checks green on its exact current head.",
+        "Resuming preserves the same work and PR without duplicate executor or publication; the operator does not author a session orchestration program or predict hashes.",
+        "Native runtime is capped at 20 minutes; known token usage and unknown usage are reported separately. Timeout, repeated failure, unknown executor state or a material review gap prevents a release claim.",
+        "Only necessary fixes are included. Read-only feedback from zeroh, viky-agent-2 and atlas is classified and verified without treating their project/auth/host issues as plugin defects. One run supports only the tested Codex path."
+      ],
+      "files": [
+        "plugins/zeroh-roadmap/cli/lib/durable-process-agent-driver.mjs",
+        "plugins/zeroh-roadmap/cli/lib/codex-agent-driver.test.mjs",
+        "plugins/zeroh-roadmap/cli/lib/beacon.mjs",
+        "plugins/zeroh-roadmap/cli/lib/beacon.test.mjs",
+        "plugins/zeroh-roadmap/cli/commands/result.mjs",
+        "plugins/zeroh-roadmap/cli/commands/result.test.mjs",
+        "docs/roadmap/arc-evals/NATIVEGREEN-codex-usability-reassessment.md"
+      ],
+      "notes": "Owner ratification 2026-09-08: one real Codex end-to-end run, necessary fixes and review. Reuse the previously ratified single-pilot 20-minute native ceiling; no 24-arm budget is required because the matrix is deferred. One targeted correction, one independent review; a HIGH fix gets one bounded re-review. No automatic merge or release. Stop after this task; 43.5\u201343.8 and phases44\u201345 remain deferred and not done. The abandoned uncommitted matrix-preflight extension is preserved under .building/nativegreen-deferred/43.4-matrix-preflight.patch; the native usage fix remains active.",
+      "testMode": "tdd",
+      "done": false,
+      "dependsOn": [
+        "43.3"
+      ],
+      "interfaces": {
+        "consumes": [
+          "installed Roadmap Codex CLI and session tools"
+        ],
+        "produces": [
+          "single Codex pilot observation"
+        ]
+      }
     },
     {
       id: '43.5',
-      title: 'Exercise independent, stacked, and grouped delivery through exact-head CI',
+      title: 'DEFERRED — Exercise independent, stacked, and grouped delivery through exact-head CI',
       problem:
         'The central product claim is not proven by phase-only execution; real isolated provider runs must traverse planning, execution, halts, sweep, validation, normalization, PR delivery, CI repair, evaluation, and resume for each branch policy.',
       steps: [
@@ -217,7 +255,7 @@ export default definePhase({
     },
     {
       id: "43.6",
-      title: "Disqualify negative lifecycle, authority, and provider outcomes",
+      title: "DEFERRED — Disqualify negative lifecycle, authority, and provider outcomes",
       problem: "A happy-path live run can hide stale green, unauthorized edits, adapter fallback, or held provider failures unless raw evidence is checked independently.",
       steps: [
         { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/verify-live.mjs", description: "Validate raw live receipts for blocked, stalled, unobserved, exited, review-exhausted, gaps, causal, owned-preexisting, unrelated, flaky, indeterminate, auth, quota, timeout, repeated fingerprint, stale head, forbidden edit, and authority-growth outcomes; reject missing raw evidence and synthetic live receipts. → verify: capbuild node --test --test-name-pattern=live-negative plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
@@ -230,7 +268,7 @@ export default definePhase({
     },
     {
       id: "43.7",
-      title: "Prove semantic parity and paired no-plugin baselines",
+      title: "DEFERRED — Prove semantic parity and paired no-plugin baselines",
       problem: "Four completed arms are not parity evidence unless the same frozen semantic events and outputs are compared, and plugin benefit is not attributable without matched real-parent baselines.",
       steps: [
         { file: "plugins/zeroh-roadmap/scripts/gauntlet-3.0/parity.mjs", description: "Compare canonical transition, authority, delivery, CI, history, cleanup, evaluation, and resume receipts across all four real parent-child conditions after removing declared host provenance only; emit exact mismatch paths and refuse unavailable or unjudged pairs. → verify: capbuild node --test --test-name-pattern=parity plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs" },
@@ -243,7 +281,7 @@ export default definePhase({
     },
     {
       id: '43.8',
-      title: 'Publish a reproducible report with explicit limitations and claim inventory',
+      title: 'DEFERRED — Publish a reproducible report with explicit limitations and claim inventory',
       problem:
         'Phase 45 may document only behavior established here, so the evidence needs a machine-readable claim inventory and a human report that distinguishes verified, unavailable, failed, inferred, and untested behavior.',
       steps: [
@@ -285,5 +323,6 @@ export default definePhase({
   ],
   reviewRecord: { date: '2026-09-06', model: 'unverified (requested gpt-5.6-sol)', verdict: 'READY', via: 'executed' },
   notes:
+    "Owner scope 2026-09-08 supersedes broad execution: only task43.4 is active. Stop after its commit;43.5\u201343.8 and phases44\u201345 remain deferred and unmet. Completed43.1\u201343.3 retain their original evidence. Historical planning notes below describe the deferred matrix, not current release obligations. " +
     '43.2 prerequisite ruling PROCEED_WITH_FIX: installed capbuild-node-tests owns shared fairness but only accepts test-file/TAP jobs; no general admission.submit API exists. A separate reviewed host-tool change at illumination_VS_setup/scripts/capbuild-node-tests will add bounded argv-manifest jobs to that same owner, with literal argv preserved through capbuild. Host prerequisite candidate0ed2b34 was verified in isolated /tmp/nativegreen-capbuild-jobs, then installed atomically and committed4cd9c4f on the owning host branch; the commit trees are identical. Sixteen pool checks, five real lifecycle probes, six environment checks and two real generic-job checks passed. Independent review found a whole-checkout lock starving generic callers; a real two-caller RED proved it, and the fixed generic mode admits the second caller while the first runs. Test-file mode retains its lock. Installed capability advertises jobs-manifest-v1. No host slice ceilings changed. This solves shared admission and cgroup deadlines only. Native token enforcement or durable bounded observation remains a separate required prerequisite, and no live comparison may start without explicit supplied budget/authority. Reuse existing safe receipt IDs and start/awaitEvent/recover; do not pass a fabricated runId through runPhase, which derives its own. 43.1 architecture ruling PROCEED_WITH_FIX: deterministic contract/preflight/fixture authoring remains separate from execution43.2 and fresh native attestation43.4. The eight-condition by three-strategy template has null budget, authority and fixture SHA; authoring validation permits it, launch validation refuses it. Only explicit supplied limits/authority/exact fixture bytes may freeze a launchable contract; no default native allowance or model identity is inferred. Read-only preflight does not attest a native parent/session or count as a live outcome. The supplied frozen seed already owns the complete fixture estate; per-arm building cannot dirty it. writeRunPacket owns only external control selection, and sealed contents stay evaluator-owned outside all builder roots. A readSealedPackets evaluator port supplies actual bytes and paths for a bounded local file walk (10000 files, 64MiB; overflow refuses, never samples); opaque IDs remain permitted references. Candidate and installed hashes both name corresponding manifest bytes, not different objects; explicit credential denial refuses while missing credentials remain unavailable. Requested model IDs may be null in authoring templates but must be explicit before launch and later compared with actual native receipts. Fixture identities and sealed data remain isolated without a new scheduler, receipt journal or hash service. Resume preflight repair: absence of future modules and presence of defects are historical observations at036b7c5, not runtime prerequisites. The original observation remains in Git; legitimate in-progress work must not be stopped because earlier tasks repaired it. Preflights are cheap; behavior suites belong to task/gate verification. Task43.4 explicitly owns fixed production parent-builder RoleRunRequest preparation from real source/authority records, per-arm token enforcement or durably bounded observation, and linked delegated-child receipt attestation. The indexed request launches the requested PARENT; child routing metadata alone proves no cross-driver condition. Both native drivers and provider authority are still mandatory before live tasks43.4–43.7 via43.1/43.4 preflight; unavailable hosts cannot pass, but do not block prior deterministic authoring. Replan 2026-09-06 against source036b7c5; reuse cli/lib/drivers.mjs launchArgv/driverStamp, gate-report.mjs reports, gate-diagnostics.mjs retryDecision, test/fixture-consumer/harness.mjs, and phase38/41 run/delivery records. Greenfield native collectors are product-specific: borrow raw-output parsing only when compatible, never rerun their prototype matrix or scan all session/log trees. Collect only this run ID and bounded secret-free records. All original four conditions plus baselines, three concurrent arcs, twenty lanes and fifty GC cases remain required; deterministic cases do not substitute for live-host criteria. The harness is development conformance tooling, never a new consumer gate or installed proof service; prior READY is historical and fresh review is required. Author model identity is not externally attested. Future modules and verifies are implementation obligations, not existing passes. Scoped task checks use the shipped capbuild pool; the configured terminal suite remains full. ## Hypotheses — CONFIRMED cause: earlier gauntlets compare partial or potentially invalid evidence and no existing runner exercises the complete real native-parent/provider lifecycle (evidence: only scripts/gauntlet-2.0 exists and GAUNTLET-2026-08.md plus GAUNTLET-2.0.md are reports, not a four-condition live runner). Refuted rival: existing fixture-consumer tests provide reusable deterministic substrate but cannot attest real Claude/Codex/plugin/provider execution. Metadata ratification: userFacing false because this produces internal evidence; testScope full and full review are mandatory for the public truth source. Task 43.5 testMode none is ratified because it records live-host evidence through the validators authored in adjacent TDD tasks rather than adding executable logic; every reducer, validator, provider boundary, and report builder remains TDD. interview: skipped — arc member; NATIVEGREEN.arc.ts and its execution prompt record the user rulings. userFacing false: this phase creates internal conformance infrastructure and evidence, not a consumer runtime feature, so no feature flag applies. `testScope: full` and full review are required because the result is the truth source for later public claims. Gauntlet 1.0 provides stronger blind comparative evidence while 2.0 provides paragraph/load discipline; this phase combines both and adds the missing whole lifecycle. The repository boundary wrapper was invoked before editing but dependency preflight stopped on ERR_PNPM_IGNORED_BUILDS before classification; no restricted-path verdict was emitted. --skip-review: plan unverified, not queued. [FIXED review] Replaced the impossible pre-task Gauntlet preflight assumption with the shipped driver-verification commands; task 43.1 still owns creation of the later provider/isolation preflight.',
 })

@@ -5,19 +5,11 @@ export default defineBacklog({
   "tiers": [
     {
       "tier": 0,
-      "label": "NATIVEGREEN — phases36–45",
+      "label": "NATIVEGREEN Codex pilot \u2014 authorized task43.4 only",
       "items": [
         {
           "phase": 43,
-          "name": "Native lifecycle conformance with resumable four-host comparison"
-        },
-        {
-          "phase": 44,
-          "name": "Encode safety invariants and retire production incident archaeology"
-        },
-        {
-          "phase": 45,
-          "name": "Truthful intent-to-green-PR README, guide, orientation, and clean-room onboarding"
+          "name": "One Codex pilot: stop after43.4;43.5\u201343.8 deferred"
         }
       ]
     },
@@ -33,11 +25,19 @@ export default defineBacklog({
     },
     {
       "tier": 2,
-      "label": "DEFERRED — standing owner hold",
+      "label": "DEFERRED \u2014 standing owner hold",
       "items": [
         {
           "phase": 12,
-          "name": "DEFERRED — closed-loop trigger design: scheduled detection that authors draft fix proposals"
+          "name": "DEFERRED \u2014 closed-loop trigger design: scheduled detection that authors draft fix proposals"
+        },
+        {
+          "phase": 44,
+          "name": "DEFERRED \u2014 owner scope: Encode safety invariants and retire production incident archaeology"
+        },
+        {
+          "phase": 45,
+          "name": "DEFERRED \u2014 owner scope: Truthful intent-to-green-PR README, guide, orientation, and clean-room onboarding"
         }
       ]
     }

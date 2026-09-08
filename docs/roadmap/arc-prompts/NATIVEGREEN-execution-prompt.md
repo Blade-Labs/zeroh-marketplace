@@ -128,3 +128,10 @@ The owner subsequently instructed: "do it now". Execute the reviewed NATIVEGREEN
 ## Full resumption — 2026-09-07
 
 Owner: "do the full arc now". Resume the original remaining phases40–45, starting with the unresolved phase40 journal concurrency finding. The pause and three-packet release proposal are historical. Use the current codex-full role resolver; preserve bounded native experiments and existing external-action authority. Full arc execution does not waive correctness gates or authorize an automatic release.
+
+
+## Narrow release authorization — 2026-09-08
+
+Owner: “yes, I want one real Codex end to end run, necessary fixes and review.” This supersedes the earlier full resumption. Only task43.4 is active: installed Codex plugin in one isolated ordinary consumer → runnable tested output → independent review → one non-draft open PR → exact-head required checks → safe resume without duplicate executor/PR. Reuse the ratified 20-minute native ceiling, shared host admission, one targeted correction and one review; a HIGH fix gets one bounded re-review. Token usage is observed, never represented as a hard cap. Merge remains manual.
+
+Read-only feedback from ../zeroh, ../viky-agent-2 and ../atlas informs necessary fixes; these are not extra pilots or gates. Preserve completed work and already shipped fixes. The24-arm/cross-driver/baseline/branch-strategy matrix and phases44–45 are deferred, not done. Stop after43.4; the broad arc remains incomplete. A single observation supports only the tested Codex path.
