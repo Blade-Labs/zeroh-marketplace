@@ -265,6 +265,6 @@ export default async function run(argv, deps = {}) {
     const { landCommand } = await import('../lib/landing.mjs')
     return landCommand(rest)
   }
-  process.stderr.write(`roadmap arc: unknown subcommand '${sub}' (next | normalize | record-validate | land)\n`)
+  process.stderr.write(`roadmap arc: unknown subcommand '${sub}' (next | plane | normalize | record-validate | land)\n`)
   return 1
 }

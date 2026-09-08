@@ -7,6 +7,8 @@ import { bridgeEval, bridgeParseShape } from './tsx-bridge.mjs'
 import { withFileLock } from './file-lock.mjs'
 import { publishImmutableFile } from './sidecar.mjs'
 
+export const isDeliverySha = value => typeof value === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value)
+export const deliveryActionKeyOf = (state, kind, requested) => JSON.stringify([state.schemaVersion, state.deliveryKey, kind, requested.baseSha, requested.headSha])
 export const deliveryKeyOf = target => JSON.stringify([target.providerId, target.repositoryId, target.targetKey])
 const clone = structuredClone
 const baseKeys = ['type', 'deliveryKey', 'targetKey', 'expectedRevision', 'at']
@@ -70,14 +72,14 @@ export function finalizeDelivery(state,{capabilities,at}={}) {
   if(!state.requested.allowedPushRefs.includes(state.target.headRef))return held('Terminal action lacks exact allowed-ref authority.')
   const authority=state.requested.authority[kind]
   if(!authority)return held('No recorded terminal authority; configuration and local mergePolicy cannot grant it.')
-  const t=state.target,actionKey=JSON.stringify([state.schemaVersion,state.deliveryKey,kind,t.currentBaseSha,t.currentHeadSha])
+  const t=state.target,actionKey=deliveryActionKeyOf(state,kind,{baseSha:t.currentBaseSha,headSha:t.currentHeadSha})
   const action={actionKey,kind,targetKey:t.targetKey,requested:{baseSha:t.currentBaseSha,headSha:t.currentHeadSha,ref:t.headRef,authorityId:authority.authorityId},status:'requested',attempts:[]}
   const prior=state.actions.find(row=>row.actionKey===actionKey)
   if(prior&&!sameActionIntent(prior,action))return held('Terminal action conflicts with the recorded policy or target.')
   if(!prior||prior.status!=='succeeded')return {status:'action-required',action:clone(prior??action)}
   const observed=prior.attempts.at(-1)?.observed,id=observed?.providerActionId
   if(observed?.outcome!=='succeeded'||observed.errorKind!==null||typeof id!=='string'||!id)return held('Terminal action has no successful provider observation.')
-  if(kind==='merge'&&!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(id))return held('Merged terminal requires the observed merge commit SHA.')
+  if(kind==='merge'&&!isDeliverySha(id))return held('Merged terminal requires the observed merge commit SHA.')
   return transition({status:kind==='queue'?'queued':'merged',headSha:t.currentHeadSha,providerActionId:id,...(kind==='merge'?{mergeSha:id}:{})})
 }
 
@@ -371,9 +373,6 @@ export function transitionArcDelivery(cwd, arcId, event) {
   return persist(cwd, parsedEvent.parsed.expectedRevision, next, { allowBindings: true })
 }
 
-const publicationActionKey = (state, kind, requested) => JSON.stringify([
-  state.schemaVersion, state.deliveryKey, kind, requested.baseSha, requested.headSha,
-])
 const publicationExpected = state => ({ revision:state.revision,deliveryKey:state.deliveryKey,...state.target,
   ...(state.pullRequest ? {providerPullRequestId:state.pullRequest.providerPullRequestId} : {}),
 })
@@ -394,7 +393,7 @@ export function publishDelivery(request, {
     mark('01-after-load',state)
     if (!state || state.arcId!==arcId) return publicationResult('refused',state,null,'delivery receipt is missing or has another owner')
     const candidateHead=request.publishHeadSha??request.expected?.publishHeadSha??state.target.currentHeadSha
-    if (typeof candidateHead!=='string'||!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(candidateHead)) return publicationResult('refused',state,state.pullRequest,'publication head is malformed')
+    if (!isDeliverySha(candidateHead)) return publicationResult('refused',state,state.pullRequest,'publication head is malformed')
     if(request.expected){
       for(const [field,actual] of Object.entries({revision:state.revision,currentBaseSha:state.target.currentBaseSha,currentHeadSha:state.target.currentHeadSha})) if(request.expected[field]!==actual)return publicationResult('held',state,state.pullRequest,`delivery ${field} changed; reload and resume`)
       if(request.expected.publishHeadSha!==undefined&&request.expected.publishHeadSha!==candidateHead)return publicationResult('held',state,state.pullRequest,'publication head changed; reload and resume')
@@ -410,7 +409,7 @@ export function publishDelivery(request, {
     }
     const refusal=reason=>publicationResult('held',state,state.pullRequest,reason)
     function ensureAction(kind,headSha){
-      const requested={baseSha:state.target.currentBaseSha,headSha,ref:state.target.headRef,authorityId:null},actionKey=publicationActionKey(state,kind,requested)
+      const requested={baseSha:state.target.currentBaseSha,headSha,ref:state.target.headRef,authorityId:null},actionKey=deliveryActionKeyOf(state,kind,requested)
       let action=state.actions.find(row=>row.actionKey===actionKey)
       if(!action){
         action={actionKey,kind,targetKey:state.target.targetKey,requested,status:'requested',attempts:[]}
@@ -453,7 +452,7 @@ export function publishDelivery(request, {
     if(state.target.currentHeadSha!==candidateHead)apply('head-advance','advance-head',{actionKey:push.action.actionKey,fromHeadSha:state.target.currentHeadSha,toHeadSha:candidateHead,observedBaseSha:state.target.currentBaseSha})
     else mark('after-head-already-current',state)
     const createRequested={baseSha:state.target.currentBaseSha,headSha:state.target.currentHeadSha,ref:state.target.headRef,authorityId:null}
-    const createKey=publicationActionKey(state,'create-pr',createRequested)
+    const createKey=deliveryActionKeyOf(state,'create-pr',createRequested)
     let ownCreate=state.actions.find(row=>row.actionKey===createKey),observedPr=null
     // An interrupted create is reconciled through the same idempotent provider operation.
     if(ownCreate&&ownCreate.status!=='succeeded'){

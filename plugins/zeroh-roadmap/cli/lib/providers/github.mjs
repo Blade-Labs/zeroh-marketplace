@@ -3,7 +3,7 @@ import { createPullRequestProvider } from './pull-request.mjs'
 import { loadPublishedCorrectionReceipt } from '../history-normalize.mjs'
 
 const OPERATIONS=['lookup','push','create','update','queue','merge','pull-request']
-const SHA=/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/
+import { isDeliverySha } from '../delivery.mjs'
 const REPO=/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 export const deliveryMarker=key=>`<!-- zeroh-roadmap-delivery:v1:${Buffer.from(key,'utf8').toString('base64url')} -->`
 function failureKind(output) {
@@ -70,7 +70,7 @@ export function createGitHubPullRequestProvider({execFile=defaultExec,git='git',
     return {value:{base:b.value,head:h.value}}
   }
   const canonical=(pr,request,names)=>{
-    if(!pr || pr.base?.repo?.full_name?.toLowerCase()!==request.repositoryId.toLowerCase() || pr.head?.repo?.full_name?.toLowerCase()!==request.repositoryId.toLowerCase() || pr.base.ref!==names.base || pr.head.ref!==names.head || typeof pr.node_id!=='string' || !Number.isInteger(pr.number) || !SHA.test(pr.base.sha) || !SHA.test(pr.head.sha) || typeof pr.draft!=='boolean' || !['open','closed'].includes(pr.state))throw new Error('GitHub PR identity or commit observation differs')
+    if(!pr || pr.base?.repo?.full_name?.toLowerCase()!==request.repositoryId.toLowerCase() || pr.head?.repo?.full_name?.toLowerCase()!==request.repositoryId.toLowerCase() || pr.base.ref!==names.base || pr.head.ref!==names.head || typeof pr.node_id!=='string' || !Number.isInteger(pr.number) || !isDeliverySha(pr.base.sha) || !isDeliverySha(pr.head.sha) || typeof pr.draft!=='boolean' || !['open','closed'].includes(pr.state))throw new Error('GitHub PR identity or commit observation differs')
     return {providerId:'github',repositoryId:request.repositoryId,targetKey:request.targetKey,providerPullRequestId:pr.node_id,number:pr.number,url:pr.html_url??null,state:pr.merged_at?'merged':pr.state,draft:pr.draft,baseRef:request.baseRef,headRef:request.headRef,baseSha:pr.base.sha,headSha:pr.head.sha,observedAt:clock()}
   }
   const lookup=(request,observedRaw=()=>{})=>{
@@ -129,11 +129,11 @@ export function createGitHubPullRequestProvider({execFile=defaultExec,git='git',
   }
   const push=request=>{
     const {action,context,expected}=request
-    if(!SHA.test(action.requested.headSha))return actionHold(request,hold('target-drift','push','Push requires an exact commit.'))
+    if(!isDeliverySha(action.requested.headSha))return actionHold(request,hold('target-drift','push','Push requires an exact commit.'))
     const out=run(git,['ls-remote','--exit-code','--refs',context.remote,expected.headRef],context)
     if(out.status!==0&&out.status!==2)return actionHold(request,hold(failureKind(out),'push','Could not observe the remote head; resume after connectivity is restored.'))
     const rows=(out.stdout??'').trim().split('\n').filter(Boolean),parts=rows[0]?.split(/\s+/),old=parts?.[0]??null
-    if(rows.length>1||(old&&(!SHA.test(old)||parts[1]!==expected.headRef)))return actionHold(request,hold('target-drift','push','Remote head observation is ambiguous.'))
+    if(rows.length>1||(old&&(!isDeliverySha(old)||parts[1]!==expected.headRef)))return actionHold(request,hold('target-drift','push','Remote head observation is ambiguous.'))
     if(old===action.requested.headSha)return result(request,'succeeded',old)
     const args=['push','--porcelain']
     if(old){
@@ -165,14 +165,14 @@ export function createGitHubPullRequestProvider({execFile=defaultExec,git='git',
     const node=prior.value?.data?.node
     if(node?.id!==pr.providerPullRequestId||node.headRefOid!==request.action.requested.headSha)return actionHold(request,hold('target-drift',kind,'PR head changed before terminal mutation.'))
     if(kind==='queue'&&node.mergeQueueEntry?.id){if(node.mergeQueueEntry.headCommit?.oid!==request.action.requested.headSha)return actionHold(request,hold('target-drift',kind,'Queue entry belongs to a different head.'));return result(request,'succeeded',node.mergeQueueEntry.id,pr)}
-    if(kind==='merge'&&node.merged&&SHA.test(node.mergeCommit?.oid)){const out=result(request,'succeeded',node.mergeCommit.oid,{...pr,state:'merged'});return {...out,mergeSha:node.mergeCommit.oid}}
+    if(kind==='merge'&&node.merged&&isDeliverySha(node.mergeCommit?.oid)){const out=result(request,'succeeded',node.mergeCommit.oid,{...pr,state:'merged'});return {...out,mergeSha:node.mergeCommit.oid}}
     if(pr.state!=='open'||node.merged)return actionHold(request,hold('closed',kind,'Delivery PR is no longer open.'))
     const mutation=kind==='queue'?'enqueuePullRequest':'mergePullRequest',fields=kind==='queue'?'mergeQueueEntry{id headCommit{oid}}':'pullRequest{id merged mergeCommit{oid}}'
     const gql=`mutation($id:ID!,$head:GitObjectID!,$key:String!){${mutation}(input:{pullRequestId:$id,expectedHeadOid:$head,clientMutationId:$key}){${fields}}}`
     const response=json(['api','graphql','-f',`query=${gql}`,'-f',`id=${pr.providerPullRequestId}`,'-f',`head=${request.action.requested.headSha}`,'-f',`key=${request.action.actionKey}`],request.context,kind)
     if(response.error)return ['auth','permission','quota','unsupported'].includes(response.error.kind)?actionHold(request,response.error):result(request,'unknown',null,null,response.error.kind)
     const payload=response.value?.data?.[mutation],id=kind==='queue'?payload?.mergeQueueEntry?.id:payload?.pullRequest?.mergeCommit?.oid
-    if(typeof id!=='string'||(kind==='queue'&&payload.mergeQueueEntry.headCommit?.oid!==request.action.requested.headSha)||(kind==='merge'&&(!SHA.test(id)||payload.pullRequest.merged!==true)))return result(request,'unknown',null,null,'malformed-response')
+    if(typeof id!=='string'||(kind==='queue'&&payload.mergeQueueEntry.headCommit?.oid!==request.action.requested.headSha)||(kind==='merge'&&(!isDeliverySha(id)||payload.pullRequest.merged!==true)))return result(request,'unknown',null,null,'malformed-response')
     return {...result(request,'succeeded',id,kind==='merge'?{...pr,state:'merged'}:pr),...(kind==='merge'?{mergeSha:id}:{})}
   }
   // Read-only discovery precedes receipt initialization. Unknown protection is never empty policy.

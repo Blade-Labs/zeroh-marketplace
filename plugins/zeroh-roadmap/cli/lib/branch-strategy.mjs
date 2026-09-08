@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual as same } from 'node:util'
 
-const SHA = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/
+import { deliveryKeyOf, isDeliverySha } from './delivery.mjs'
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const nonempty = value => typeof value === 'string' && value.trim().length > 0
 const exact = (value, keys, label) => {
@@ -31,7 +31,7 @@ function validateInputs(input) {
   exact(input.refs, ['heads'], 'branch refs')
   if (!plain(input.refs.heads)) throw new Error('refs.heads must be a record')
   for (const [ref, sha] of Object.entries(input.refs.heads)) {
-    if (!nonempty(ref) || typeof sha !== 'string' || !SHA.test(sha)) throw new Error(`malformed ref binding for ${ref}`)
+    if (!nonempty(ref) || typeof sha !== 'string' || !isDeliverySha(sha)) throw new Error(`malformed ref binding for ${ref}`)
   }
   if (!Array.isArray(input.deliveries)) throw new Error('deliveries must be an array')
   const strategies = new Map()
@@ -104,11 +104,11 @@ export function resolveBranchStrategy(input) {
     if (!predecessor) return held(memberArcId, 'missing-predecessor', memberArcId, { predecessorArcId: configured.predecessorArcId }, null)
     if (predecessor.strategy.kind === 'grouped') throw new Error('grouped delivery cannot be a stacked predecessor')
     const predecessorId = configured.predecessorArcId
-    if (predecessor.arcId !== predecessorId || predecessor.target.providerId !== input.policy.providerId || predecessor.target.repositoryId !== input.policy.repositoryId || predecessor.target.targetKey !== arcTargetKey(predecessorId) || predecessor.target.headRef !== arcHead(predecessorId) || predecessor.strategy.arcId !== predecessorId || predecessor.strategy.kind !== strategies.get(predecessorId).kind || predecessor.deliveryKey !== JSON.stringify([input.policy.providerId,input.policy.repositoryId,arcTargetKey(predecessorId)])) throw new Error('stacked predecessor receipt has conflicting policy identity')
+    if (predecessor.arcId !== predecessorId || predecessor.target.providerId !== input.policy.providerId || predecessor.target.repositoryId !== input.policy.repositoryId || predecessor.target.targetKey !== arcTargetKey(predecessorId) || predecessor.target.headRef !== arcHead(predecessorId) || predecessor.strategy.arcId !== predecessorId || predecessor.strategy.kind !== strategies.get(predecessorId).kind || predecessor.deliveryKey !== deliveryKeyOf({...input.policy,targetKey:arcTargetKey(predecessorId)})) throw new Error('stacked predecessor receipt has conflicting policy identity')
     const predecessorPolicy = strategies.get(predecessorId)
     const expectedStrategy = predecessorPolicy.kind === 'independent'
       ? { kind: 'independent', arcId: predecessorId }
-      : { kind: 'stacked', arcId: predecessorId, predecessorTargetKey: arcTargetKey(predecessorPolicy.predecessorArcId), predecessorDeliveryKey: JSON.stringify([input.policy.providerId,input.policy.repositoryId,arcTargetKey(predecessorPolicy.predecessorArcId)]) }
+      : { kind: 'stacked', arcId: predecessorId, predecessorTargetKey: arcTargetKey(predecessorPolicy.predecessorArcId), predecessorDeliveryKey: deliveryKeyOf({...input.policy,targetKey:arcTargetKey(predecessorPolicy.predecessorArcId)}) }
     if (!same(predecessor.strategy, expectedStrategy)) throw new Error('stacked predecessor strategy drift')
     baseRef = predecessor.target.headRef
     baseSha = predecessor.target.currentHeadSha
@@ -145,7 +145,7 @@ export function resolveBranchStrategy(input) {
   if (existing) {
     const stableFields = ['targetKey', 'providerId', 'repositoryId', 'baseRef', 'headRef']
     const stableDrift = stableFields.some(field => existing.target[field] !== target[field])
-    const identityDrift = existing.arcId !== ownerArcId || !same(existing.strategy, strategy) || existing.deliveryKey !== JSON.stringify([target.providerId,target.repositoryId,target.targetKey])
+    const identityDrift = existing.arcId !== ownerArcId || !same(existing.strategy, strategy) || existing.deliveryKey !== deliveryKeyOf(target)
     if (stableDrift || identityDrift) return held(memberArcId, 'target-drift', ownerArcId, target, existing.target)
     if (existing.target.currentBaseSha !== target.currentBaseSha) return held(memberArcId, 'base-churn', ownerArcId, target, existing.target)
     if (existing.target.currentHeadSha !== target.currentHeadSha) return held(memberArcId, 'head-churn', ownerArcId, target, existing.target)
