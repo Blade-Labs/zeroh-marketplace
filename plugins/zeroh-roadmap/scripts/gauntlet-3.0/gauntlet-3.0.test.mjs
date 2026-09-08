@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   closeSync, ftruncateSync, mkdtempSync, mkdirSync, openSync, readFileSync,
   realpathSync, rmSync, symlinkSync, writeFileSync,
@@ -15,6 +16,15 @@ import {
   validateGauntletContract,
 } from './scenarios.mjs'
 import { preflightGauntlet } from './preflight.mjs'
+import { dispatchArmIndex, readArmJournal, resumeArm, runArm, runGauntlet3 } from './run.mjs'
+import {
+  bindNativeSession,
+  persistRunRequest,
+  persistRunResult,
+  readRunReceipt,
+  reconcileRunReceipt,
+} from '../../cli/lib/run-receipt.mjs'
+import { claimExecutorRun, readExecutorRunArm } from '../../cli/lib/executor-arm.mjs'
 import {
   FIXTURE_SCAN_LIMITS,
   assertFixtureIsolation,
@@ -45,7 +55,7 @@ const REQUIRED_LIFECYCLE = [
 ]
 
 function clone(value) { return structuredClone(value) }
-function validLaunchable() {
+function validLaunchable(fixtureSha = SHA) {
   const template = clone(GAUNTLET_3_CONTRACT)
   for (const condition of template.conditions) {
     condition.parent.modelId = condition.parent.driverId === 'claude'
@@ -58,7 +68,7 @@ function validLaunchable() {
   return clone(freezeGauntletContract(template, {
     budget: BUDGET,
     externalActionAuthority: AUTHORITY,
-    fixtureSha: SHA,
+    fixtureSha,
   }))
 }
 function assertInvalid(mutator, pattern = /invalid|contract|required|mismatch|missing/i) {
@@ -541,4 +551,601 @@ test('fixture builder refuses an existing target before cloneFixture is called',
     git: async () => { throw new Error('git must not run') },
   }), /exist|target|empty|clone/i)
   assert.equal(cloneCalls, 0)
+})
+
+
+function runnerAuthorityRef(contract) {
+  return Object.freeze({
+    status: 'known',
+    envelopeDigest: 'sha256:gauntlet-3-authority',
+    source: Object.freeze({
+      kind: 'managed-host-receipt',
+      ref: contract.externalActionAuthority.authorityRef,
+    }),
+  })
+}
+const RUN_DIGEST_A = '1'.repeat(64)
+const RUN_DIGEST_B = '2'.repeat(64)
+
+function runnerFixtures(contract, root) {
+  return Object.freeze(contract.scenarios.flatMap(scenario =>
+    contract.conditions.map(condition => Object.freeze({
+      armId: scenario.id + ':' + condition.id,
+      root: join(root, 'worktrees', scenario.id + '--' + condition.id),
+      gitDir: join(root, 'gitdirs', scenario.id + '--' + condition.id),
+      headSha: contract.fixture.baseSha,
+      baseSha: contract.fixture.baseSha,
+      fixtureSha: contract.fixture.baseSha,
+      treeSha: 'b'.repeat(40),
+      statusPorcelain: '',
+      providerNamespace: contract.externalActionAuthority.providerNamespace + '/' + scenario.id + '-' + condition.id,
+      repositoryId: contract.externalActionAuthority.repositoryNamespace + '/' + scenario.id + '-' + condition.id,
+      runPacket: Object.freeze({ path: join(root, 'control', scenario.id + '--' + condition.id + '.json') }),
+      sealedPacketIds: [...contract.fixture.sealedPacketIds],
+    }))))
+}
+
+function runnerHarness(t, overrides = {}) {
+  const fixtureSha = overrides.fixtureSha ?? SHA
+  const adapterOverrides = { ...overrides }
+  delete adapterOverrides.fixtureSha
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'gauntlet-3-runner-')))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const outputDir = join(root, 'output')
+  mkdirSync(outputDir)
+  const contract = validLaunchable(fixtureSha)
+  const authorityRef = runnerAuthorityRef(contract)
+  const fixtures = runnerFixtures(contract, root)
+  for (const fixture of fixtures) {
+    mkdirSync(fixture.root, { recursive: true })
+    mkdirSync(fixture.gitDir, { recursive: true })
+  }
+  const calls = { prepare: [], submit: [], start: [], awaitEvent: [], recover: [], resume: [], readReceipt: [], reconcile: [], delivery: [], usage: [] }
+  const receipts = new Map()
+  const deliveries = new Map()
+  const prepareArm = async ({ arm, fixture, allocation }) => {
+    calls.prepare.push(clone({ arm, fixture, allocation }))
+    mkdirSync(join(root, 'launch-inputs'), { recursive: true })
+    const launchInputsRef = join(root, 'launch-inputs', arm.runId + '.json')
+    writeFileSync(launchInputsRef, JSON.stringify({
+      armId: arm.armId,
+      requestedChild: arm.requestedChild,
+      policy: { driverId: arm.requestedChild.driverId, modelId: arm.requestedChild.modelId },
+    }))
+    const request = {
+      runId: arm.runId,
+      executorId: 'executor-' + arm.runId,
+      arcId: arm.deliveryArcIds[0],
+      phase: 43,
+      roleId: 'gauntlet-parent',
+      driverId: arm.requestedParent.driverId,
+      model: arm.requestedParent.modelId,
+      worktree: fixture.root,
+      baseHead: fixture.baseSha,
+      requestedHead: fixture.baseSha,
+      roleCardDigest: RUN_DIGEST_A,
+      governanceDigest: RUN_DIGEST_B,
+      authority: {
+        parent: { profile: 'workspace-write', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }, provenance: { kind: 'managed-host-input', source: 'supervisor' } },
+        request: { profile: 'inherit', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false }, provenance: null },
+        effective: { profile: 'workspace-write', bounds: { filesystem: 'workspace-write', network: 'denied', gitPush: false, externalWrites: false } },
+        native: { driver: arm.requestedParent.driverId, runtime: { version: null, verified: false }, argv: ['exec'], enforcement: { filesystem: 'sandbox', network: 'sandbox-config', gitPush: 'semantic-only', externalWrites: 'semantic-only' }, limitations: ['test identity unverified'] },
+      },
+      authorityRef,
+    }
+    return {
+      request,
+      initialState: { arcId: request.arcId, stage: 'phase', status: 'active', processedEventIds: [], lastHalt: null, authorityRef },
+      launchInputsRef,
+    }
+  }
+  const ownerReceipt = (request, {
+    nativeSessionId = null,
+    latestObservation = null,
+    terminalResult = null,
+    pendingOperation = nativeSessionId
+      ? { kind: 'start', actionFingerprint: '3'.repeat(64) }
+      : { kind: 'start', actionFingerprint: '4'.repeat(64) },
+    outcome = terminalResult ? 'complete' : nativeSessionId ? 'active' : 'pending',
+  } = {}) => ({
+    path: join(request.worktree, '.building', 'run-receipts', encodeURIComponent(request.arcId), encodeURIComponent(request.runId), '000000.json'),
+    digest: '5'.repeat(64),
+    snapshot: {
+      version: 1,
+      arcId: request.arcId,
+      runId: request.runId,
+      revision: 0,
+      previousDigest: null,
+      request: clone(request),
+      requestFingerprint: '6'.repeat(64),
+      pendingOperation,
+      nativeSessionId,
+      latestObservation,
+      terminalResult,
+      outcome,
+    },
+  })
+  const driver = driverId => ({
+    async start(request) {
+      calls.start.push(clone(request))
+      const handle = { request: clone(request), nativeSessionId: driverId + '-session-' + request.runId }
+      receipts.set(request.runId, ownerReceipt(request, { nativeSessionId: handle.nativeSessionId }))
+      return handle
+    },
+    async awaitEvent(handle, initialState) {
+      calls.awaitEvent.push(clone({ handle, initialState }))
+      const observation = {
+        runId: handle.request.runId,
+        executorId: handle.request.executorId,
+        roleId: handle.request.roleId,
+        driverId: handle.request.driverId,
+        model: handle.request.model,
+        nativeSessionId: handle.nativeSessionId,
+        event: { eventId: 'done-' + handle.request.runId, arcId: handle.request.arcId, source: 'native-agent', type: 'run-phase', phase: 43, authorityRef: handle.request.authorityRef },
+      }
+      const terminalResult = {
+        status: 'transport-exited',
+        driverId,
+        nativeSessionId: handle.nativeSessionId,
+        exitCode: 0,
+        signal: null,
+        protocolTerminal: 'turn.completed',
+        usage: { nativeMs: 100, tokens: 50 },
+        phaseResult: { status: 'done' },
+      }
+      const result = { handle: clone(handle), observation, result: terminalResult }
+      receipts.set(handle.request.runId, ownerReceipt(handle.request, {
+        nativeSessionId: handle.nativeSessionId,
+        latestObservation: result,
+        terminalResult,
+        pendingOperation: null,
+        outcome: 'complete',
+      }))
+      return result
+    },
+    async recover(receipt) { calls.recover.push(clone(receipt)); return { status: 'active', receipt } },
+    async resume(handle) { calls.resume.push(clone(handle)); return handle },
+  })
+  const adapters = {
+    fixtures,
+    prepareArm,
+    preflight: async ({ contract: actual }) => ({ status: 'ready', reasons: [], observed: { contractId: actual.contractId } }),
+    admission: {
+      async submit(allocation, operation) {
+        calls.submit.push(clone(allocation))
+        return operation()
+      },
+    },
+    nativeDrivers: { claude: driver('claude'), codex: driver('codex') },
+    runReceipts: {
+      readRunReceipt(cwd, address) {
+        calls.readReceipt.push(clone({ cwd, address }))
+        return receipts.get(address.runId) ?? null
+
+      },
+      reconcileRunReceipt(cwd, input) {
+        calls.reconcile.push(clone({ cwd, input }))
+        const receipt = receipts.get(input.runId)
+        if (!receipt) return { status: 'missing', receipt: null }
+        if (receipt.snapshot.terminalResult) {
+          return { status: 'complete', result: clone(receipt.snapshot.terminalResult), receipt }
+        }
+        if (receipt.snapshot.nativeSessionId) return { status: 'resume', operation: 'awaitEvent', receipt }
+        if (receipt.snapshot.pendingOperation) return { status: 'hold', reason: 'pending operation has unknown outcome', receipt }
+        return { status: 'active', receipt }
+      },
+    },
+    deliveries: {
+      loadArcDelivery(cwd, arcId) {
+        calls.delivery.push(['load', cwd, arcId])
+        return deliveries.get(arcId) ?? null
+      },
+      async resume(cwd, arcId) {
+        calls.delivery.push(['resume', cwd, arcId])
+        const value = { arcId, revision: 1, actions: [] }
+        deliveries.set(arcId, value)
+        return value
+      },
+    },
+    usage: {
+      read(receipt) {
+        calls.usage.push(clone(receipt))
+        return { nativeMs: 100, tokens: 50 }
+      },
+    },
+    ...adapterOverrides,
+  }
+  return { root, outputDir, contract, fixtures, adapters, calls, receipts, deliveries, ownerReceipt }
+}
+
+test('runner writes a frozen sorted 24-arm index with derived allocations and exact parent requests', async t => {
+  const f = runnerHarness(t)
+  const result = await runGauntlet3({
+    contract: f.contract,
+    outputDir: f.outputDir,
+    adapters: f.adapters,
+    budget: f.contract.budget,
+  })
+  const indexPath = join(f.outputDir, 'arms.json')
+  const bytes = readFileSync(indexPath)
+  const index = JSON.parse(bytes)
+  assert.equal(index.schemaVersion, 1)
+  assert.deepEqual(index.contract, f.contract)
+  assert.equal(index.arms.length, 24)
+  assert.deepEqual(index.arms.map(arm => arm.armId), [...index.arms.map(arm => arm.armId)].sort())
+  assert.deepEqual(index.budget, f.contract.budget)
+  const nativeTotal = index.arms.reduce((sum, arm) => sum + arm.allocation.nativeMs, 0)
+  const tokenTotal = index.arms.reduce((sum, arm) => sum + arm.allocation.tokens, 0)
+  assert.equal(nativeTotal, f.contract.budget.totalNativeMs)
+  assert.equal(tokenTotal, f.contract.budget.totalTokens)
+  for (const arm of index.arms) {
+    const condition = f.contract.conditions.find(c => c.id === arm.conditionId)
+    const scenario = f.contract.scenarios.find(s => s.id === arm.scenarioId)
+    assert.equal(arm.armId, scenario.id + ':' + condition.id)
+    assert.equal(arm.runId, 'g3-' + scenario.id + '--' + condition.id)
+    assert.equal(arm.runId.includes('/'), false)
+    assert.deepEqual(arm.requestedParent, condition.parent)
+    assert.deepEqual(arm.requestedChild, condition.child)
+    assert.equal(arm.request.driverId, condition.parent.driverId)
+    assert.equal(arm.request.model, condition.parent.modelId)
+    assert.equal(arm.request.runId, arm.runId)
+    assert.equal(arm.request.worktree, arm.worktree)
+    assert.equal(arm.request.baseHead, f.contract.fixture.baseSha)
+    assert.ok(scenario.arcIds.includes(arm.request.arcId))
+    assert.equal(arm.initialState.arcId, arm.request.arcId)
+    assert.deepEqual(arm.initialState.authorityRef, arm.request.authorityRef)
+    assert.ok(arm.allocation.nativeMs > 0 && arm.allocation.nativeMs <= f.contract.budget.perArmTimeoutMs)
+    assert.ok(arm.allocation.tokens > 0)
+    const launch = JSON.parse(readFileSync(arm.launchInputsRef, 'utf8'))
+    assert.deepEqual(launch.requestedChild, condition.child)
+  }
+  assert.ok(Object.isFrozen(result.index))
+  assert.ok(Object.isFrozen(result.index.arms))
+  assert.equal(f.calls.prepare.length, 24)
+
+  const replay = await runGauntlet3({
+    contract: f.contract,
+    outputDir: f.outputDir,
+    adapters: f.adapters,
+    budget: f.contract.budget,
+  })
+  assert.deepEqual(readFileSync(indexPath), bytes)
+  assert.deepEqual(replay.index, result.index)
+  assert.equal(f.calls.start.length, 24)
+})
+
+test('native completion remains unjudged and a second resume performs no fresh start or duplicate delivery action', async t => {
+  const f = runnerHarness(t)
+  const run = await runGauntlet3({ contract: f.contract, outputDir: f.outputDir, adapters: f.adapters, budget: f.contract.budget })
+  const armId = run.index.arms[0].armId
+  const first = await runArm(armId, { index: run.index, adapters: f.adapters })
+  assert.equal(first.status, 'unjudged')
+  assert.notEqual(first.status, 'passed')
+  const starts = f.calls.start.length
+  const deliveryResumes = f.calls.delivery.filter(([op]) => op === 'resume').length
+  const second = await resumeArm(armId, { index: run.index, adapters: f.adapters })
+  assert.equal(second.status, 'unjudged')
+  assert.equal(f.calls.start.length, starts)
+  assert.equal(f.calls.delivery.filter(([op]) => op === 'resume').length, deliveryResumes)
+  const journal = await readArmJournal(run.index, f.adapters)
+  assert.equal(journal.find(arm => arm.armId === armId).status, 'unjudged')
+})
+
+test('pending unknown usage forbids a fresh launch and preserves unavailable usage-observed state', async t => {
+  const f = runnerHarness(t, {
+    usage: { read: () => null },
+  })
+  const run = await runGauntlet3({ contract: f.contract, outputDir: f.outputDir, adapters: f.adapters, budget: f.contract.budget })
+  const arm = run.index.arms[0]
+  f.receipts.set(arm.runId, f.ownerReceipt(arm.request, { nativeSessionId: 'existing-session' }))
+  f.calls.start.length = 0
+  const result = await resumeArm(arm.armId, { index: run.index, adapters: f.adapters })
+  assert.equal(result.status, 'unavailable')
+  assert.match(JSON.stringify(result), /usage-unobserved/i)
+  assert.equal(f.calls.start.length, 0)
+})
+
+test('receipt identity mismatch, budget absence, admission limit, auth, and permission stay explicit non-pass', async t => {
+  const f = runnerHarness(t)
+  const built = await runGauntlet3({ contract: f.contract, outputDir: f.outputDir, adapters: f.adapters, budget: f.contract.budget })
+  const arm = built.index.arms[0]
+  f.receipts.set(arm.runId, f.ownerReceipt({ ...clone(arm.request), model: 'wrong-model' }, { nativeSessionId: 'wrong-session' }))
+  const mismatch = await resumeArm(arm.armId, { index: built.index, adapters: f.adapters })
+  assert.equal(mismatch.status, 'failed')
+  assert.match(JSON.stringify(mismatch), /identity|model|mismatch/i)
+
+  const noBudget = clone(f.contract)
+  noBudget.budget = null
+  const starts = f.calls.start.length
+  const unavailable = await runGauntlet3({ contract: noBudget, outputDir: join(f.root, 'no-budget'), adapters: f.adapters, budget: null })
+  assert.equal(unavailable.status, 'unavailable')
+  assert.equal(f.calls.start.length, starts)
+
+  for (const [status, code] of [['unavailable', 'limit'], ['permission-held', 'auth'], ['permission-held', 'permission']]) {
+    const g = runnerHarness(t, {
+      admission: {
+        async submit() { return { status, reason: { code, message: code + ' denied' } } },
+      },
+    })
+    const result = await runGauntlet3({ contract: g.contract, outputDir: g.outputDir, adapters: g.adapters, budget: g.contract.budget })
+    assert.equal(result.status, status)
+    assert.notEqual(result.status, 'passed')
+    assert.match(JSON.stringify(result), new RegExp(code, 'i'))
+  }
+})
+
+test('default adapters refuse as unavailable before any native process can start', async t => {
+  const outputDir = realpathSync(mkdtempSync(join(tmpdir(), 'gauntlet-3-no-adapters-')))
+  t.after(() => rmSync(outputDir, { recursive: true, force: true }))
+  const result = await runGauntlet3({ contract: validLaunchable(), outputDir })
+  assert.equal(result.status, 'unavailable')
+  assert.match(JSON.stringify(result), /adapter|preparation|token|unavailable/i)
+})
+
+
+test('twenty admitted fake lanes use canonical run receipts and executor arms exactly once across replay', async t => {
+  const estate = realpathSync(mkdtempSync(join(tmpdir(), 'gauntlet-3-real-owner-')))
+  t.after(() => rmSync(estate, { recursive: true, force: true }))
+  const seed = join(estate, 'seed')
+  mkdirSync(seed)
+  const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim()
+  git(seed, 'init', '-q')
+  git(seed, 'config', 'user.email', 'gauntlet-owner@example.invalid')
+  git(seed, 'config', 'user.name', 'Gauntlet Owner')
+  writeFileSync(join(seed, 'seed.txt'), 'real owner fixture\n')
+  git(seed, 'add', 'seed.txt')
+  git(seed, 'commit', '-qm', 'seed')
+  const fixtureSha = git(seed, 'rev-parse', 'HEAD')
+  const f = runnerHarness(t, { fixtureSha })
+  const admitted = new Set()
+  const resultWrites = []
+  const roleBytes = Buffer.from('---\nname: gauntlet-parent\n---\n')
+  const governanceBytes = Buffer.from('GAUNTLET 3 TEST GOVERNANCE\n')
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex')
+  const basePrepare = f.adapters.prepareArm
+  f.adapters.prepareArm = async input => {
+    const prepared = await basePrepare(input)
+    prepared.request.roleCardDigest = hash(roleBytes)
+    prepared.request.governanceDigest = hash(governanceBytes)
+    return prepared
+  }
+  for (const fixture of f.fixtures) {
+    rmSync(fixture.root, { recursive: true, force: true })
+    execFileSync('git', ['clone', '-q', '--no-local', seed, fixture.root])
+  }
+
+  let admissions = 0
+  f.adapters.admission = {
+    async submit(allocation, operation) {
+      admissions++
+      if (admissions > 20) return { status: 'unavailable', reason: 'fixture-limit' }
+      admitted.add(allocation.armId)
+      return operation()
+    },
+  }
+  const realDriver = driverId => ({
+    async start(request) {
+      assert.equal(request.driverId, driverId)
+      const persisted = persistRunRequest(request.worktree, request, {
+        operation: { kind: 'start' },
+        roleCardBytes: roleBytes,
+        governanceBytes,
+      })
+      assert.equal(persisted.status, 'recorded')
+      const nativeSessionId = 'native-' + request.runId
+      const claim = claimExecutorRun(request.worktree, request.phase, {
+        sessionId: 'owner-' + request.runId,
+        executorId: request.executorId,
+        runReceipt: persisted.receipt,
+      })
+      assert.equal(claim.status, 'recorded')
+      const bound = bindNativeSession(request.worktree, {
+        arcId: request.arcId,
+        runId: request.runId,
+        expectedRevisionDigest: persisted.receipt.digest,
+        nativeSessionId,
+      })
+      assert.equal(bound.status, 'recorded')
+      return { request, nativeSessionId }
+    },
+    async awaitEvent(handle) {
+      const receipt = readRunReceipt(handle.request.worktree, {
+        arcId: handle.request.arcId,
+        runId: handle.request.runId,
+      })
+      const terminalResult = {
+        status: 'transport-exited',
+        driverId,
+        observedModelId: handle.request.model,
+        nativeSessionId: handle.nativeSessionId,
+        exitCode: 0,
+        signal: null,
+        protocolTerminal: 'turn.completed',
+        usage: { nativeMs: 100, tokens: 50 },
+        phaseResult: { status: 'done' },
+      }
+      const written = persistRunResult(handle.request.worktree, {
+        arcId: handle.request.arcId,
+        runId: handle.request.runId,
+        expectedRevisionDigest: receipt.digest,
+        result: terminalResult,
+      })
+      assert.equal(written.status, 'recorded')
+      resultWrites.push(handle.request.runId)
+      return { handle, result: terminalResult }
+    },
+    async recover() { throw new Error('terminal real receipt must not recover') },
+    async resume() { throw new Error('terminal real receipt must not resume native execution') },
+  })
+  f.adapters.nativeDrivers = { claude: realDriver('claude'), codex: realDriver('codex') }
+  f.adapters.runReceipts = { readRunReceipt, reconcileRunReceipt }
+  f.adapters.usage = { read: receipt => receipt.snapshot.terminalResult?.usage ?? null }
+
+  const first = await runGauntlet3({
+    contract: f.contract,
+    outputDir: f.outputDir,
+    adapters: f.adapters,
+    budget: f.contract.budget,
+  })
+  assert.equal(first.status, 'unavailable')
+  assert.equal(admitted.size, 20)
+  assert.equal(resultWrites.length, 20)
+  const ownerIdentities = new Map()
+  for (const arm of first.index.arms) {
+    const receipt = readRunReceipt(arm.worktree, { arcId: arm.request.arcId, runId: arm.runId })
+    const owner = readExecutorRunArm(arm.worktree, arm.request.phase)
+    if (admitted.has(arm.armId)) {
+      assert.ok(receipt)
+      assert.equal(receipt.snapshot.outcome, 'complete')
+      assert.equal(receipt.snapshot.terminalResult.status, 'transport-exited')
+      assert.equal(receipt.snapshot.request.driverId, arm.requestedParent.driverId)
+      assert.equal(receipt.snapshot.request.model, arm.requestedParent.modelId)
+      assert.equal(owner.status, 'valid')
+      assert.equal(owner.arm.runId, arm.runId)
+      assert.equal(owner.arm.executorId, arm.request.executorId)
+      ownerIdentities.set(arm.armId, {
+        runId: receipt.snapshot.runId,
+        nativeSessionId: receipt.snapshot.nativeSessionId,
+        executorId: owner.arm.executorId,
+        receiptPath: receipt.path,
+      })
+    } else {
+      assert.equal(receipt, null)
+      assert.equal(owner.status, 'missing')
+    }
+  }
+
+  const firstIndexBytes = readFileSync(first.index.indexPath)
+  const second = await runGauntlet3({
+    contract: f.contract,
+    outputDir: f.outputDir,
+    adapters: f.adapters,
+    budget: f.contract.budget,
+  })
+  assert.deepEqual(readFileSync(second.index.indexPath), firstIndexBytes)
+  assert.equal(resultWrites.length, 20)
+  assert.equal(f.calls.delivery.filter(([operation]) => operation === 'resume').length, 0)
+  for (const arm of second.index.arms.filter(arm => admitted.has(arm.armId))) {
+    const receipt = readRunReceipt(arm.worktree, { arcId: arm.request.arcId, runId: arm.runId })
+    const owner = readExecutorRunArm(arm.worktree, arm.request.phase)
+    assert.deepEqual({
+      runId: receipt.snapshot.runId,
+      nativeSessionId: receipt.snapshot.nativeSessionId,
+      executorId: owner.arm.executorId,
+      receiptPath: receipt.path,
+    }, ownerIdentities.get(arm.armId))
+  }
+
+  const planned = second.index.arms.find(arm => !admitted.has(arm.armId))
+  const before = readRunReceipt(planned.worktree, { arcId: planned.request.arcId, runId: planned.runId })
+  assert.equal(before, null)
+  const cli = spawnSync(process.execPath, [
+    new URL('./run.mjs', import.meta.url).pathname,
+    '--run-arm', planned.armId,
+    '--index', second.index.indexPath,
+  ], { encoding: 'utf8', timeout: 10000 })
+  assert.notEqual(cli.status, 0)
+  const stdout = JSON.parse(cli.stdout.trim())
+  assert.equal(stdout.status, 'unavailable')
+  assert.match(stdout.reason, /token-boundary-unavailable/i)
+  assert.equal(readRunReceipt(planned.worktree, { arcId: planned.request.arcId, runId: planned.runId }), null)
+})
+
+
+test('pending provider success reconciles through the existing resume wrapper once and preserves delivery identity', async t => {
+  const f = runnerHarness(t)
+  const first = await runGauntlet3({
+    contract: f.contract,
+    outputDir: f.outputDir,
+    adapters: f.adapters,
+    budget: f.contract.budget,
+  })
+  const arm = first.index.arms[0]
+  const arcId = arm.deliveryArcIds[0]
+  const key = arm.worktree + '\0' + arcId
+  const deliveryKey = 'delivery-key-' + arm.runId
+  const providerPullRequestId = 'PR-' + arm.runId
+  const stores = new Map([[key, {
+    arcId,
+    deliveryKey,
+    revision: 1,
+    target: { repositoryId: arm.repositoryId },
+    pullRequest: { providerPullRequestId },
+    actions: [{ id: 'create-pr', status: 'unknown' }],
+    terminal: { status: 'preparing' },
+  }]])
+  const resumeCalls = []
+  f.adapters.deliveries = {
+    loadArcDelivery(cwd, requestedArcId) {
+      return stores.get(cwd + '\0' + requestedArcId) ?? null
+    },
+    async resume(cwd, requestedArcId) {
+      resumeCalls.push([cwd, requestedArcId])
+      const prior = stores.get(cwd + '\0' + requestedArcId)
+      stores.set(cwd + '\0' + requestedArcId, {
+        ...clone(prior),
+        revision: prior.revision + 1,
+        actions: prior.actions.map(action => ({ ...action, status: 'succeeded' })),
+        terminal: { status: 'preparing' },
+      })
+      return stores.get(cwd + '\0' + requestedArcId)
+    },
+  }
+
+  const resumed = await resumeArm(arm.armId, { index: first.index, adapters: f.adapters })
+  assert.equal(resumed.status, 'unjudged')
+  assert.deepEqual(resumeCalls, [[arm.worktree, arcId]])
+  assert.equal(resumed.deliveryReceiptRefs[0].deliveryKey, deliveryKey)
+  assert.equal(resumed.deliveryReceiptRefs[0].providerPullRequestId, providerPullRequestId)
+
+  const replay = await resumeArm(arm.armId, { index: first.index, adapters: f.adapters })
+  assert.equal(replay.status, 'unjudged')
+  assert.deepEqual(resumeCalls, [[arm.worktree, arcId]])
+  assert.equal(stores.get(key).revision, 2)
+  assert.equal(stores.size, 1)
+})
+
+
+test('installed pool dispatches the immutable index to static unavailable workers without native receipts', {
+  skip: process.env.NATIVEGREEN_HOST_POOL_SMOKE !== '1'
+    ? 'set NATIVEGREEN_HOST_POOL_SMOKE=1 on a host with jobs-manifest-v1'
+    : false,
+}, async t => {
+  const f = runnerHarness(t, {
+    admission: {
+      async submit() { return { status: 'unavailable', reason: 'index-only' } },
+    },
+  })
+  const seed = join(f.root, 'pool-seed')
+  mkdirSync(seed)
+  const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim()
+  git(seed, 'init', '-q')
+  git(seed, 'config', 'user.email', 'gauntlet-pool@example.invalid')
+  git(seed, 'config', 'user.name', 'Gauntlet Pool')
+  writeFileSync(join(seed, 'seed.txt'), 'installed pool static worker fixture\n')
+  git(seed, 'add', 'seed.txt')
+  git(seed, 'commit', '-qm', 'seed')
+  for (const fixture of f.fixtures) {
+    rmSync(fixture.root, { recursive: true, force: true })
+    execFileSync('git', ['clone', '-q', '--no-local', seed, fixture.root])
+  }
+
+  const built = await runGauntlet3({
+    contract: f.contract,
+    outputDir: f.outputDir,
+    adapters: f.adapters,
+    budget: f.contract.budget,
+  })
+  assert.equal(built.status, 'unavailable')
+  for (const arm of built.index.arms) {
+    assert.equal(readRunReceipt(arm.worktree, { arcId: arm.request.arcId, runId: arm.runId }), null)
+  }
+
+  const dispatched = dispatchArmIndex(built.index.indexPath)
+  assert.equal(dispatched.status, 'unavailable')
+  assert.match(dispatched.reason, /production token|preparation|unavailable/i)
+  assert.notEqual(dispatched.exitCode, 0)
+  for (const arm of built.index.arms) {
+    assert.equal(readRunReceipt(arm.worktree, { arcId: arm.request.arcId, runId: arm.runId }), null)
+  }
 })
