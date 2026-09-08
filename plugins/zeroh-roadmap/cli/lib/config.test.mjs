@@ -19,7 +19,7 @@ import { MODEL_PRESETS } from './roles.mjs'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MOD = join(HERE, 'config.mjs')
 const SCHEMA_FILE = join(HERE, '..', 'roadmap.config.schema.json') // cli/roadmap.config.schema.json
-const { RoadmapConfigShape, ConfigError, loadConfig, DEFAULT_WORKTREE_GC, worktreeGcPolicyOf, DeliveryPolicyShape, deliveryPolicyOf } = await import(MOD)
+const { RoadmapConfigShape, ConfigError, loadConfig, DEFAULT_WORKTREE_GC, worktreeGcPolicyOf, DeliveryPolicyShape, deliveryPolicyOf, ciPolicyOf } = await import(MOD)
 
 // The env override is a test-only escape hatch; never inherit a stray one.
 delete process.env.ROADMAP_CONFIG
@@ -880,4 +880,83 @@ test('delivery JSON schema exposes uniqueness, nonempty checks and exact safe br
   assert.ok(patterns.some(pattern=>!pattern.test(ref)),ref)
   assert.equal(DeliveryPolicyShape.safeParse({allowedPushRefs:[ref]}).success,false,ref)
  }
+})
+
+
+test('42.7 ciPolicy resolves finite repository defaults without inventing checks or ownership',()=>{
+ const parsed=RoadmapConfigShape.parse(validConfig())
+ assert.deepEqual(ciPolicyOf(parsed),{
+  providerId:'github',requiredChecks:null,pollIntervalMs:15000,timeoutMs:120000,
+  correctionTimeoutMs:1800000,maxRounds:2,headMode:'source-only',
+  ownership:[],reproductionCommands:{},
+ })
+})
+
+test('42.7 ciPolicy canonicalizes explicit checks, ownership and argv-only reproduction commands',()=>{
+ const command={file:'node',args:['--test',''],timeoutMs:30000}
+ const ciPolicy={provider:'github',requiredChecks:['unit','lint'],pollIntervalMs:2000,timeoutMs:60000,correctionTimeoutMs:120000,maxRounds:2,headMode:'source-only',ownership:[{pathPrefix:'src/api',owner:'ARC'},{pathPrefix:'src',owner:'ARC'}],reproductionCommands:{unit:command}}
+ const resolved=ciPolicyOf(RoadmapConfigShape.parse(validConfig({ciPolicy})))
+ assert.deepEqual(resolved,{
+  providerId:'github',requiredChecks:['lint','unit'],pollIntervalMs:2000,timeoutMs:60000,
+  correctionTimeoutMs:120000,maxRounds:2,headMode:'source-only',
+  ownership:[{pathPrefix:'src',owner:'ARC'},{pathPrefix:'src/api',owner:'ARC'}],
+  reproductionCommands:{unit:command},
+ })
+ assert.notStrictEqual(resolved.ownership,ciPolicy.ownership)
+ assert.equal(Object.isFrozen(resolved),true)
+ assert.equal(Object.isFrozen(resolved.ownership),true)
+ assert.equal(Object.isFrozen(resolved.reproductionCommands.unit.args),true)
+})
+
+test('42.7 ciPolicy rejects unknown, empty, duplicate and unbounded declarations',()=>{
+ const base={provider:'github',requiredChecks:['unit'],pollIntervalMs:1000,timeoutMs:1000,correctionTimeoutMs:60000,maxRounds:1,headMode:'source-only',ownership:[],reproductionCommands:{}}
+ const invalid=[
+  {...base,typo:true},{...base,requiredChecks:[]},{...base,requiredChecks:['unit','unit']},
+  ...['pollIntervalMs','timeoutMs','correctionTimeoutMs','maxRounds'].flatMap(key=>[0,-1,1.5,Number.MAX_SAFE_INTEGER+1].map(value=>({...base,[key]:value}))),
+  {...base,pollIntervalMs:300001},{...base,timeoutMs:1800001},{...base,correctionTimeoutMs:86400001},{...base,maxRounds:3},
+  {...base,ownership:[{pathPrefix:'',owner:'ARC'}]},{...base,ownership:[{pathPrefix:'src',owner:''}]},
+  {...base,reproductionCommands:{unit:{file:'',args:[]}}},{...base,reproductionCommands:{unit:{file:'node\0bad',args:[]}}},{...base,reproductionCommands:{unit:{file:'node',args:['ok\0bad']}}},{...base,reproductionCommands:{unit:{file:'node',args:[],shell:true}}},
+  {...base,arcs:{ARC:{pollIntervalMs:1000,provider:'github'}}},
+ ]
+ for(const ciPolicy of invalid)assert.throws(()=>RoadmapConfigShape.parse(validConfig({ciPolicy})),/ciPolicy|check|unique|number|integer|unrecognized|string|invalid|too (?:small|big)/i,JSON.stringify(ciPolicy))
+})
+
+test('42.7 arc overrides can only narrow repository CI and correction authority',()=>{
+ const unit={file:'node',args:['--test','unit']},lint={file:'npm',args:['run','lint']}
+ const repo={provider:'github',requiredChecks:['unit'],pollIntervalMs:5000,timeoutMs:120000,correctionTimeoutMs:600000,maxRounds:2,headMode:'source-only',ownership:[{pathPrefix:'src',owner:'ARC'},{pathPrefix:'tools',owner:'TOOLS'}],reproductionCommands:{unit,lint}}
+ const narrow={requiredChecks:['integration','unit'],pollIntervalMs:10000,timeoutMs:60000,correctionTimeoutMs:300000,maxRounds:1,ownership:[{pathPrefix:'src/api',owner:'ARC'}],reproductionCommands:{unit},}
+ const config=RoadmapConfigShape.parse(validConfig({ciPolicy:{...repo,arcs:{ARC:narrow}}}))
+ assert.deepEqual(ciPolicyOf(config,'ARC'),{providerId:'github',...narrow,requiredChecks:['integration','unit'],headMode:'source-only'})
+ const {provider:_provider,...normalizedRepo}=repo
+ assert.deepEqual(ciPolicyOf(config,'OTHER'),{providerId:'github',...normalizedRepo,requiredChecks:['unit']})
+ for(const override of [
+  {...narrow,pollIntervalMs:1000},{...narrow,timeoutMs:180000},{...narrow,correctionTimeoutMs:700000},{...narrow,maxRounds:3},
+  {...narrow,requiredChecks:['integration']},{...narrow,ownership:[{pathPrefix:'other',owner:'ARC'}]},
+  {...narrow,ownership:[{pathPrefix:'src/api',owner:'OTHER'}]},{...narrow,reproductionCommands:{unit:{file:'node',args:['changed']}}},
+  {...narrow,reproductionCommands:{new:{file:'node',args:[]}}},
+ ])assert.throws(()=>ciPolicyOf(RoadmapConfigShape.parse(validConfig({ciPolicy:{...repo,arcs:{ARC:override}}})),'ARC'),/arc|narrow|authority|check|poll|timeout|round|ownership|reproduction/i)
+})
+
+test('42.7 delivery checks may supply the unresolved repository set but cannot disagree with ciPolicy',()=>{
+ const deliveryPolicy={requiredChecks:['lint','unit']}
+ assert.deepEqual(ciPolicyOf(RoadmapConfigShape.parse(validConfig({deliveryPolicy}))).requiredChecks,['lint','unit'])
+ assert.deepEqual(ciPolicyOf(RoadmapConfigShape.parse(validConfig({deliveryPolicy,ciPolicy:{requiredChecks:['unit','lint']}}))).requiredChecks,['lint','unit'])
+ assert.throws(()=>ciPolicyOf(RoadmapConfigShape.parse(validConfig({deliveryPolicy,ciPolicy:{requiredChecks:['unit']}}))),/check|agree|differ/i)
+})
+
+
+test('42.7 arc checks narrow the delivery fallback only by adding requirements',()=>{
+ const deliveryPolicy={requiredChecks:['unit']}
+ const allowed=RoadmapConfigShape.parse(validConfig({deliveryPolicy,ciPolicy:{arcs:{ARC:{requiredChecks:['lint','unit']}}}}))
+ assert.deepEqual(ciPolicyOf(allowed,'ARC').requiredChecks,['lint','unit'])
+ const removed=RoadmapConfigShape.parse(validConfig({deliveryPolicy,ciPolicy:{arcs:{ARC:{requiredChecks:['lint']}}}}))
+ assert.throws(()=>ciPolicyOf(removed,'ARC'),/check|remove|narrow/i)
+})
+
+
+test('42.7 loadConfig rejects a structurally valid widening arc override before use',()=>{
+ const repo=newRepo(),ciPolicy={pollIntervalMs:5000,arcs:{ARC:{pollIntervalMs:1000}}}
+ writeConfig(repo,validConfig({ciPolicy}))
+ const error=loadErr(repo)
+ assert.ok(error instanceof ConfigError);assert.equal(error.kind,'invalid');assert.match(error.message,/ciPolicy|arc|poll|narrow/i)
 })

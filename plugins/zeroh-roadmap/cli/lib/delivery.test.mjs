@@ -35,7 +35,7 @@ test('green requires exact current PR head and nonempty all-green configured che
  const base=observeReady(),green=event('set-terminal',{expectedRevision:2,terminal:{status:'open-green',headSha:SHA1,checksObservedAt:AT1}})
  assert.equal(reduceDelivery(base,green).terminal.status,'open-green')
  const invalid=[checks({headSha:SHA0}),checks({requiredChecks:[],observedChecks:[]}),checks({requiredChecks:['lint'],observedChecks:[{name:'lint',status:'green',attemptId:null,observedAt:AT1}]}),checks({observedChecks:[...checks().observedChecks,{name:'extra',status:'green',attemptId:null,observedAt:AT1}]}),checks({observedChecks:checks().observedChecks.map(c=>c.name==='unit'?{...c,status:'red'}:c)})]
- for(const evidence of invalid){let state=reduceDelivery(initial(),event('observe-pr',{pullRequest:pr()}));state=reduceDelivery(state,event('observe-checks',{expectedRevision:1,at:AT2,checks:evidence}));assert.throws(()=>reduceDelivery(state,{...green,expectedRevision:2}),/check|head|green|required/i)}
+ for(const evidence of invalid){assert.throws(()=>{let state=reduceDelivery(initial(),event('observe-pr',{pullRequest:pr()}));state=reduceDelivery(state,event('observe-checks',{expectedRevision:1,at:AT2,checks:evidence}));return reduceDelivery(state,{...green,expectedRevision:2})},/check|head|green|required|configured/i)}
 })
 test('authorized head advance invalidates checks and stale evidence cannot certify green',()=>{
  let state=observeReady()
@@ -206,4 +206,11 @@ test('finalize holds missing capability/ref/authority and conflicting terminal a
   const options={capabilities:terminalCapabilities(kind),at:AT2},action=finalizeDelivery(base,options).action
   base.actions=[{...action,requested:{...action.requested,authorityId:'other'}}];assert.equal(finalizeDelivery(base,options).status,'held')
  }
+})
+
+test('check observations reject stale identity, reversed time and same-time conflicting evidence',()=>{
+ const state=observeReady(),apply=evidence=>reduceDelivery(state,{...event('observe-checks'),expectedRevision:state.revision,checks:evidence})
+ const bad=[checks({headSha:SHA0}),checks({providerPullRequestId:'other'}),checks({requiredChecks:['unit']}),checks({observedChecks:[]}),checks({observedAt:AT0,observedChecks:checks().observedChecks.map(c=>({...c,observedAt:AT0}))}),checks({observedChecks:checks().observedChecks.map(c=>({...c,status:'red'}))}),checks({observedChecks:checks().observedChecks.map(c=>({...c,observedAt:AT0}))})]
+ for(const evidence of bad)assert.throws(()=>apply(evidence),/check|observation|identity|time|configured/i)
+ assert.equal(apply(checks()),state)
 })

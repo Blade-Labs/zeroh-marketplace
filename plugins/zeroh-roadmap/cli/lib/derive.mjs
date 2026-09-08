@@ -1,3 +1,4 @@
+import {assertCurrentDeliverySummary} from './delivery-evaluation.mjs'
 /**
  * derive — THE position-derivation function (arc ROADCODE singleSeam 2). ONE
  * derive-from-disk implementation that `roadmap status` (1657.2 refactor) and
@@ -78,6 +79,11 @@ export function readValidateVerdict(repoRoot, arcId) {
     throw new DeriveError('malformed-artifact', [
       `roadmap: invalid validate artifact ${p} — expected { arcId: "${arcId}", verdict: PASS|GAPS|no-op }`,
     ])
+  }
+  if(raw.correction?.bounds!==undefined){
+    const parsed=bridgeParseShape(repoRoot,consumerSchemaPath(repoRoot),'CorrectionCheckpointShape',raw)
+    if(!parsed.ok)throw new DeriveError('malformed-artifact',[`roadmap: invalid typed correction checkpoint ${p}`])
+    return parsed.parsed
   }
   if (raw.correction !== undefined) {
     const correction = raw.correction
@@ -485,7 +491,9 @@ export function deriveArcPosition({ repoRoot, arcId, config, worktree = repoRoot
     const evidence={ownerArcId:deliveryOwner,deliveryKey:delivery.deliveryKey,revision:delivery.revision,terminal:delivery.terminal.status,headSha:delivery.target.currentHeadSha,pullRequest:delivery.pullRequest}
     try{
       assertReachedDeliveryTerminal(delivery)
-      return base({action:'blocked',gates,delivery:evidence,reason:'PR delivery reached its terminal, but the evaluator cannot yet bind PR evidence. Resume after the CI/evaluation bridge is available; do not invoke the local-land evaluator.',evaluation:{status:'held',kind:'delivery-evaluation-unavailable'}})
+      gates.suiteGreen=true
+      try{if(!summary)throw Error('missing summary');assertCurrentDeliverySummary(repoRoot,summary.summary)}catch{return base({action:'deliver',gates,delivery:evidence,reason:'Run deliver --resume to bind the current PR, sweep and intent evidence for evaluation.'})}
+      return base({action:currentEvaluationComplete(repoRoot,arcId,summary)?'complete':'evaluate',gates,delivery:evidence})
     }catch{}
     let exactPr=false
     try{assertExactCurrentPullRequest(delivery);exactPr=true}catch{}

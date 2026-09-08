@@ -666,7 +666,14 @@ export type CompromiseDisposition = z.output<typeof CompromiseDispositionShape>
  * min(1) so a missing receipt fails .parse() → block; the artifact URLs are optional → honest-absent. The
  * artifact is regenerable + gitignored + written every run, like the Step-1 arc-prompts/ artifact.
  */
+const DeliverySummaryBindingShape = z.object({
+  deliveryKey: z.string().min(1), revision: z.number().int().nonnegative(), providerId: z.string().min(1), repositoryId: z.string().min(1), providerPullRequestId: z.string().min(1),
+  sourceHeadSha: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/), testedHeadSha: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
+  headMode: z.literal('source'), checksObservedAt: z.string().datetime(), terminal: z.enum(['open-green','queued','merged']),
+}).strict().refine(v => v.sourceHeadSha === v.testedHeadSha, 'source CI must bind the tested source head')
+const ArcObservationShape = z.object({headSha:z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),recordedAt:z.string().datetime()}).strict()
 export const RunnerSummaryShape = z.object({
+  delivery: DeliverySummaryBindingShape.optional(),
   // Same number|string union as Arc.id — a numeric-id arc must not fail Step 8b's parse.
   arcId: z.union([z.number().int().positive(), z.string().min(1)]),
   outcome: z.enum(['shipped', 'halted', 'blocked']),
@@ -707,6 +714,7 @@ export type RunnerSummary = z.output<typeof RunnerSummaryShape>
  * across the sweep, the runner summary and the transparency reports, never a parallel set.
  */
 export const SweepReportShape = z.object({
+  observation: ArcObservationShape.optional(),
   // Same number|string union as Arc.id — a numeric-id arc must not fail record-time parse.
   arcId: z.union([z.number().int().positive(), z.string().min(1)]),
   /** ISO date the sweep ran — supplied by the caller; the recorder never mints wall-clock
@@ -1477,6 +1485,7 @@ export type IntentVerdict = z.output<typeof IntentVerdictShape>
  * because it composes it verbatim rather than restating the judge's contract.
  */
 export const ArcVerdictsFileShape = z.object({
+  observation: ArcObservationShape.optional(),
   // Same number|string union as Arc.id.
   arcId: z.union([z.number().int().positive(), z.string().min(1)]),
   date: z.string().min(10),
@@ -2290,11 +2299,13 @@ export const PullRequestReceiptShape = z.object({
   baseRef: DeliveryText, headRef: DeliveryText, baseSha: DeliverySha, headSha: DeliverySha, observedAt: DeliveryTime,
 }).strict()
 const ObservedCheckShape = z.object({ name: DeliveryText, status: z.enum(['pending', 'green', 'red', 'missing']), attemptId: DeliveryText.nullable(), observedAt: DeliveryTime }).strict()
+/** observedAt orders delivery-ledger recordings; raw provider time belongs to ExactHeadCiResult. */
 export const RequiredChecksEvidenceShape = z.object({
   providerId: DeliveryText, repositoryId: DeliveryText, providerPullRequestId: DeliveryText, headSha: DeliverySha,
   requiredChecks: z.array(DeliveryText), observedChecks: z.array(ObservedCheckShape), observedAt: DeliveryTime,
 }).strict().superRefine((v, ctx) => {
   if (new Set(v.requiredChecks).size !== v.requiredChecks.length || v.requiredChecks.some((n, i, a) => i > 0 && a[i - 1] > n)) ctx.addIssue({ code: 'custom', path: ['requiredChecks'], message: 'requiredChecks must be unique and sorted' })
+  if (v.observedChecks.some(c => c.observedAt !== v.observedAt)) ctx.addIssue({ code: 'custom', path: ['observedChecks'], message: 'check rows must share the observation timestamp' })
   const names = v.observedChecks.map(c => c.name)
   if (new Set(names).size !== names.length || names.some((n, i) => i > 0 && names[i - 1] > n)) ctx.addIssue({ code: 'custom', path: ['observedChecks'], message: 'observed check names must be unique and sorted' })
 })
@@ -2304,6 +2315,41 @@ export const DeliveryTerminalShape = z.discriminatedUnion('status', [
   z.object({ status: z.literal('queued'), headSha: DeliverySha, providerActionId: DeliveryText }).strict(),
   z.object({ status: z.literal('merged'), headSha: DeliverySha, providerActionId: DeliveryText, mergeSha: DeliverySha }).strict(),
 ])
+const CorrectionPath = z.string().min(1).refine(p => !/[\\\x00-\x1f]/.test(p) && !p.startsWith('/') && p.split('/').every(s => s !== '' && s !== '.' && s !== '..'), 'canonical repository-relative path required')
+const CorrectionBoundsShape = z.object({
+  maxRounds: z.number().int().min(1).max(2), deadlineAt: DeliveryTime, allowedPathPrefixes: z.array(CorrectionPath).min(1),
+  authority: z.object({ source: z.enum(['session', 'config']), reference: DeliveryText }).strict(),
+}).strict()
+const CorrectionTraceShape = z.object({ phaseId: z.number().int().positive(), criterionIds: z.array(DeliveryText).min(1) }).strict()
+const CorrectionFailureShape = z.object({ checkKey: DeliveryText, attemptId: DeliveryText, signature: DeliverySha.nullable(), kind: z.enum(['causal', 'owned-preexisting', 'unrelated', 'infra', 'flaky', 'indeterminate']), paths: z.array(CorrectionPath) }).strict()
+const CorrectionRouteShape = z.object({
+  kind: z.enum(['small-repair', 'planned-correction']), sourceHeadSha: DeliverySha, predecessorHeadSha: DeliverySha,
+  selected: z.array(CorrectionFailureShape).min(1), residual: z.array(CorrectionFailureShape), scopePaths: z.array(CorrectionPath).min(1),
+  trace: CorrectionTraceShape.nullable(), plannedCorrection: CorrectionTraceShape.extend({ correctionId: DeliveryText }).nullable(),
+  reason: DeliveryText, recordedAt: DeliveryTime,
+}).strict().superRefine((r, ctx) => {
+  if (r.kind === 'small-repair' ? !r.trace || r.plannedCorrection !== null : r.trace !== null || !r.plannedCorrection) ctx.addIssue({code:'custom',message:'route requires its matching phase/criterion trace'})
+  if (r.selected.some(f => !['causal','owned-preexisting'].includes(f.kind) || f.signature === null || f.paths.some(p => !r.scopePaths.includes(p)))) ctx.addIssue({code:'custom',message:'selected failures must be eligible and covered by repair scope'})
+  if (r.residual.some(f => f.paths.some(p => r.scopePaths.includes(p)))) ctx.addIssue({code:'custom',message:'repair scope overlaps a residual failure'})
+})
+export const CorrectionBindingShape = z.object({
+  validationHead: DeliverySha, gateInputKey: DeliverySha, round: z.number().int().min(1).max(2), bounds: CorrectionBoundsShape, route: CorrectionRouteShape,
+}).strict().superRefine((c,ctx) => {
+  if(c.round > c.bounds.maxRounds || c.validationHead !== c.route.sourceHeadSha || Date.parse(c.route.recordedAt) >= Date.parse(c.bounds.deadlineAt) || c.route.scopePaths.some(p => !c.bounds.allowedPathPrefixes.some(prefix => p === prefix || p.startsWith(prefix + '/')))) ctx.addIssue({code:'custom',message:'correction route exceeds checkpoint head, deadline or scope authority'})
+})
+export const CorrectionCheckpointShape = z.object({
+  arcId: DeliveryText, verdict: z.enum(['GAPS','PASS','no-op']), at: DeliveryTime, headSha:DeliverySha.optional(), note: z.string().optional(),
+  correction: z.object({
+    state: z.enum(['awaiting-repair','needs-sweep','validated']), reviewRef:DeliveryText.optional(), validationHead: DeliverySha, repairHead: DeliverySha.optional(), readyAt: DeliveryTime.optional(),
+    gateInputKey: DeliverySha, round: z.number().int().min(0).max(2), bounds: CorrectionBoundsShape, route: CorrectionRouteShape.nullable(),
+  }).strict(),
+}).strict().superRefine((value,ctx) => {
+  const c=value.correction
+  if(c.round > c.bounds.maxRounds)ctx.addIssue({code:'custom',message:'correction round exceeds its fixed budget'})
+  if((value.verdict==='GAPS')===(c.state==='validated'))ctx.addIssue({code:'custom',message:'correction verdict and lifecycle state disagree'})
+  if(c.route){const result=CorrectionBindingShape.safeParse({validationHead:c.validationHead,gateInputKey:c.gateInputKey,round:c.round,bounds:c.bounds,route:c.route});if(!result.success)ctx.addIssue({code:'custom',message:'invalid correction route binding'})}
+  if(c.state==='awaiting-repair'?(c.repairHead!==undefined||c.readyAt!==undefined):(!c.repairHead||!c.readyAt||c.repairHead===c.validationHead))ctx.addIssue({code:'custom',message:'correction lifecycle fields disagree'})
+})
 export const ArcDeliveryShape = z.object({
   schemaVersion: z.literal(1), revision: z.number().int().nonnegative(), arcId: DeliveryText, deliveryKey: DeliveryText,
   target: DeliveryTargetShape, strategy: BranchStrategyShape,
@@ -2312,6 +2358,7 @@ export const ArcDeliveryShape = z.object({
     authority: z.object({ queue: DeliveryAuthority.nullable(), merge: DeliveryAuthority.nullable() }).strict(),
   }).strict(),
   actions: z.array(ExternalActionShape), pullRequest: PullRequestReceiptShape.nullable(), checks: RequiredChecksEvidenceShape.nullable(),
+  correctionBinding: CorrectionBindingShape.optional(),
   terminal: DeliveryTerminalShape, createdAt: DeliveryTime, updatedAt: DeliveryTime,
 }).strict().superRefine((d, ctx) => {
   const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message })
@@ -2341,6 +2388,7 @@ export const ArcDeliveryShape = z.object({
 export type ArcDelivery = z.output<typeof ArcDeliveryShape>
 const DeliveryEventBase = { deliveryKey: DeliveryText, targetKey: DeliveryText, expectedRevision: z.number().int().nonnegative().nullable(), at: DeliveryTime }
 export const DeliveryEventShape = z.discriminatedUnion('type', [
+  z.object({type: z.literal('record-correction-binding'), ...DeliveryEventBase, checkpoint: CorrectionCheckpointShape, binding: CorrectionBindingShape}).strict(),
   z.object({ type: z.literal('initialize'), ...DeliveryEventBase, state: ArcDeliveryShape }).strict(),
   z.object({ type: z.literal('request-action'), ...DeliveryEventBase, action: ExternalActionShape }).strict(),
   z.object({ type: z.literal('record-action-attempt'), ...DeliveryEventBase, actionKey: DeliveryText, attempt: ActionAttemptShape }).strict(),

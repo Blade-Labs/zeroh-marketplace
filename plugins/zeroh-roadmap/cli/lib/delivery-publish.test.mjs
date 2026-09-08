@@ -72,3 +72,45 @@ test('an update applied before its result is persisted resumes without another e
  const s=setup(index);assert.equal(invoke(s).status,'held');assert.equal(s.mutations.update,1)
  assert.equal(invoke(s,{...s.deps,checkpoint:()=>{}}).status,'published');assert.equal(s.mutations.update,1);assert.equal(s.mutations.create,0);assert.ok(s.state.actions.every(a=>a.status==='succeeded'))
 })
+test('a known PR disappearing from lookup never creates a replacement PR',()=>{
+ const s=scenario();assert.equal(invoke(s).status,'published')
+ s.request.publishHeadSha='3'.repeat(40);s.request.provider.lookup=()=>null
+ const before=s.calls.filter(([name])=>name==='create').length,out=invoke(s)
+ assert.equal(out.status,'held');assert.equal(s.calls.filter(([name])=>name==='create').length,before)
+ assert.equal(s.state.pullRequest.providerPullRequestId,'PR_7');assert.equal(s.state.target.currentHeadSha,'3'.repeat(40));assert.equal(s.state.checks,null)
+})
+
+
+const bindCorrectionDeadline=(s,deadlineAt)=>{
+ s.state.correctionBinding={validationHead:OLD,bounds:{deadlineAt}}
+ return s
+}
+test('42.7 an exhausted correction deadline blocks a new push but permits durable push reconciliation',()=>{
+ const deadline='2026-09-07T00:01:00.000Z',expired='2026-09-07T00:01:00.001Z'
+ const blocked=bindCorrectionDeadline(scenario(),deadline)
+ blocked.deps.clock=()=>expired
+ const held=invoke(blocked)
+ assert.equal(held.status,'held');assert.match(held.reason,/deadline|expired/i)
+ assert.deepEqual(blocked.mutations,{push:0,create:0,update:0})
+ assert.equal(blocked.state.actions.length,0)
+
+ const replay=bindCorrectionDeadline(scenario(),deadline)
+ assertComplete(replay,invoke(replay))
+ const revision=replay.state.revision
+ replay.deps.clock=()=>expired
+ const reconciled=invoke(replay)
+ assert.equal(reconciled.status,'published',reconciled.reason)
+ assert.deepEqual(replay.mutations,{push:1,create:1,update:0})
+ assert.equal(replay.state.revision,revision)
+})
+
+test('42.7 a correction deadline crossed during preflight cannot reach provider push',()=>{
+ const deadline='2026-09-07T00:01:00.000Z',expired='2026-09-07T00:01:00.001Z'
+ const s=bindCorrectionDeadline(scenario(),deadline),preflight=s.request.provider.preflight
+ let now=AT
+ s.deps.clock=()=>now
+ s.request.provider.preflight=request=>{const result=preflight(request);now=expired;return result}
+ const out=invoke(s)
+ assert.equal(out.status,'held');assert.match(out.reason,/deadline|expired/i)
+ assert.deepEqual(s.mutations,{push:0,create:0,update:0})
+})

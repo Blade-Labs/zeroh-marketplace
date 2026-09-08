@@ -161,6 +161,15 @@ test('4) typo\'d nested key (gateCommands.typo): `config check` exits 1, stderr 
   assert.match(res.stderr, /gateCommands/, 'the offending slot is named on stderr')
 })
 
+test('42.7 `config check` rejects a structurally valid widening arc CI override', () => {
+  const repo = newRepo()
+  writeConfig(repo, validConfig({ ciPolicy: { timeoutMs: 60000, arcs: { ARC: { timeoutMs: 120000 } } } }))
+  const res = roadmap(repo, 'config', 'check')
+  assert.equal(res.status, 1, res.stderr)
+  assert.match(res.stderr, /ciPolicy|arc|timeout|narrow/i)
+  assert.equal(res.stdout.trim(), '')
+})
+
 test('5) `roadmap --help` exits 0 and lists the command tree on stdout', () => {
   const repo = newRepo()
   const res = roadmap(repo, '--help')

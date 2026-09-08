@@ -1,3 +1,6 @@
+import {loadConfig,ConfigError} from '../lib/config.mjs'
+import {loadArcDelivery} from '../lib/delivery.mjs'
+import {assertCurrentDeliverySummary} from '../lib/delivery-evaluation.mjs'
 /**
  * roadmap eval record-sweep   --arc <ID> [--force] [file|-]  — persist arc-sweep's aggregate
  * roadmap eval record-verdicts --arc <ID> [--force] [file|-]  — persist validate-arc's judge panel
@@ -190,6 +193,17 @@ export default async function run(argv) {
     return 2
   }
 
+  if(Object.hasOwn(JSON.parse(inputJson),'observation')){process.stderr.write('roadmap eval: observation is recorder-owned; omit it from submitted judgments\n');return 2}
+  parsed.observation={headSha:execFileSync('git',['-C',toplevel,'rev-parse','HEAD^{commit}'],{encoding:'utf8'}).trim(),recordedAt:new Date().toISOString()}
+  const observed=bridgeParseShape(toplevel,schemaPath,recorder.shape,parsed)
+  if(!observed.ok||!observed.parsed.observation){process.stderr.write('roadmap eval: consumer schema cannot preserve the judgment observation; sync its schema\n');return 2}
+  let correctionValidation = null
+  try { correctionValidation = readValidateVerdict(toplevel, opts.arc) } catch (error) { process.stderr.write(`roadmap eval ${sub}: cannot read correction authority: ${error.message}\n`); return 2 }
+  if (correctionValidation?.verdict === 'GAPS' && correctionValidation?.correction?.state === 'needs-sweep' && correctionValidation.correction.bounds && Date.parse(parsed.observation.recordedAt) >= Date.parse(correctionValidation.correction.bounds.deadlineAt)) {
+    process.stderr.write(`roadmap eval ${sub}: correction deadline has expired\n`)
+    return 2
+  }
+
   if (sub === 'record-sweep') {
     // Models supply the review; only the recorder binds it to the observed checkout.
     if (Object.hasOwn(JSON.parse(inputJson), 'correction')) {
@@ -197,7 +211,7 @@ export default async function run(argv) {
       return 2
     }
     try {
-      const validation = readValidateVerdict(toplevel, opts.arc)
+      const validation = correctionValidation
       const correction = validation?.correction
       if (validation?.verdict === 'GAPS' && correction?.state === 'needs-sweep') {
         const reviewedHead = execFileSync('git', ['-C', toplevel, 'rev-parse', 'HEAD^{commit}'], { encoding: 'utf8' }).trim()
@@ -230,6 +244,10 @@ export default async function run(argv) {
     return 2
   }
   const overwriting = existsSync(outPath)
+  if (correctionValidation?.verdict === 'GAPS' && correctionValidation?.correction?.state === 'needs-sweep' && correctionValidation.correction.bounds && Date.now() >= Date.parse(correctionValidation.correction.bounds.deadlineAt)) {
+    process.stderr.write(`roadmap eval ${sub}: correction deadline has expired\n`)
+    return 2
+  }
   try {
     mkdirSync(dir, { recursive: true })
     writeFileSync(outPath, JSON.stringify(parsed, null, 2) + '\n')
@@ -1386,6 +1404,19 @@ async function runArcEval(arcId, opts) {
           process.stderr.write(`roadmap eval ${arcId}: current landing summary is not a valid shipped result\n`)
           return 2
         }
+        let cfg
+        try{cfg=loadConfig(toplevel)}catch(error){
+          if(!(error instanceof ConfigError)||error.kind!=='absent')throw error
+          const receipts=join(roadmapRoot(toplevel),'.deliveries')
+          if(raw.delivery||existsSync(receipts)&&readdirSync(receipts).some(name=>name.endsWith('.json')))throw Error('Restore PR delivery configuration before evaluation')
+          cfg={}
+        }
+        const strategies=cfg.deliveryPolicy?.branchStrategy??{},member=strategies[String(arcId)]
+        const owner=member?.kind==='grouped'?Object.keys(strategies).find(id=>strategies[id].kind==='grouped'&&strategies[id].groupId===member.groupId&&strategies[id].order===0):String(arcId)
+        if(!owner)throw Error('PR delivery group has no owner')
+        const prRoute=cfg.deliveryPolicy!==undefined||loadArcDelivery(toplevel,owner)!==null
+        if(prRoute&&!raw.delivery)throw Error('Active PR delivery requires its exact-head delivery summary; local landing evidence cannot replace it')
+        if(raw.delivery)assertCurrentDeliverySummary(toplevel,raw)
         collected.trace.summary = raw
         summaryBytes = bytes
         landSummaryDigest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`

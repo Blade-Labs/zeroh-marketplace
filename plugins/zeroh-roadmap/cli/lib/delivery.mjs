@@ -1,3 +1,7 @@
+import {evidenceCoversHead} from './delivery-evaluation.mjs'
+import {readCorrectionReview} from './gate-report.mjs'
+import { execFileSync } from 'node:child_process'
+import { normalizeArc, loadPublishedCorrectionReceipt } from './history-normalize.mjs'
 import { closeSync, constants, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join, parse, resolve } from 'node:path'
@@ -13,6 +17,7 @@ export const deliveryKeyOf = target => JSON.stringify([target.providerId, target
 const clone = structuredClone
 const baseKeys = ['type', 'deliveryKey', 'targetKey', 'expectedRevision', 'at']
 const eventKeys = {
+  'record-correction-binding': [...baseKeys,'checkpoint','binding'],
   initialize: [...baseKeys, 'state'], 'request-action': [...baseKeys, 'action'],
   'record-action-attempt': [...baseKeys, 'actionKey', 'attempt'], 'observe-pr': [...baseKeys, 'pullRequest'],
   'observe-checks': [...baseKeys, 'checks'], 'set-terminal': [...baseKeys, 'terminal'], hold: [...baseKeys, 'reason'],
@@ -37,6 +42,7 @@ function replay(state, event) {
     case 'set-terminal': return same(state.terminal, event.terminal)
     case 'hold': return state.terminal.status === 'held' && state.terminal.reason === event.reason
     case 'advance-head': return state.target.currentHeadSha === event.toHeadSha && state.target.currentBaseSha === event.observedBaseSha && state.actions.some(a => a.actionKey === event.actionKey && a.kind === 'push' && a.status === 'succeeded' && a.requested.headSha === event.toHeadSha && a.requested.ref === state.target.headRef)
+    case 'record-correction-binding': return same(state.correctionBinding,event.binding)&&same(correctionBindingOf(event.checkpoint),event.binding)&&event.binding.route.sourceHeadSha===state.target.currentHeadSha
     case 'advance-base': return state.target.currentBaseSha === event.toBaseSha
     default: return false
   }
@@ -44,6 +50,16 @@ function replay(state, event) {
 export function assertExactCurrentPullRequest(state,{allowMerged=false}={}) {
   const p=state.pullRequest,t=state.target
   if(!p||p.providerId!==t.providerId||p.repositoryId!==t.repositoryId||p.targetKey!==t.targetKey||p.draft||!(allowMerged?['open','merged']:['open']).includes(p.state)||p.baseRef!==t.baseRef||p.headRef!==t.headRef||p.baseSha!==t.currentBaseSha||p.headSha!==t.currentHeadSha)throw Error('green terminal requires exact current pull request head')
+}
+export function assertCheckObservation(state, evidence) {
+  const target=state.target, required=state.requested.requiredChecks, prior=state.checks
+  if(!evidence||!state.pullRequest||evidence.providerId!==target.providerId||evidence.repositoryId!==target.repositoryId||evidence.providerPullRequestId!==state.pullRequest.providerPullRequestId||evidence.headSha!==target.currentHeadSha||!same(evidence.requiredChecks,required)||!Array.isArray(evidence.observedChecks)||!same(evidence.observedChecks.map(row=>row.name),required))throw Error('check observation identity or configured names differ')
+  const at=Date.parse(evidence.observedAt)
+  if(!Number.isFinite(at)||evidence.observedChecks.some(row=>row.observedAt!==evidence.observedAt))throw Error('check observation requires one valid timestamp')
+  if(prior&&prior.headSha===evidence.headSha&&prior.providerPullRequestId===evidence.providerPullRequestId){
+    const previous=Date.parse(prior.observedAt)
+    if(at<previous||(at===previous&&!same(prior,evidence)))throw Error('check observation time regressed or conflicts at the same timestamp')
+  }
 }
 function exactChecks(state, terminal) {
   const c = state.checks, p = state.pullRequest, t = state.target, required = state.requested.requiredChecks
@@ -191,10 +207,17 @@ export function reduceDelivery(current, event) {
       break
     }
     case 'observe-checks': {
+      assertCheckObservation(current,event.checks)
       next.checks = clone(event.checks)
+      if(next.terminal.status==='held')next.terminal={status:'awaiting-ci',headSha:next.target.currentHeadSha,reason:'New check evidence supersedes the previous observation hold.'}
       if (['open-green', 'queued'].includes(next.terminal.status)) {
         try { validateTerminal(next, next.terminal) } catch { next.terminal = { status: 'awaiting-ci', headSha: next.target.currentHeadSha, reason: 'check observation invalidated prior green' } }
       }
+      break
+    }
+    case 'record-correction-binding': {
+      next.correctionBinding=assertCorrectionBinding(current,event)
+      next.terminal={status:'held',headSha:next.target.currentHeadSha,reason:event.binding.route.residual.length?'Bounded eligible repair; residual failures remain unresolved.':'Bounded correction requires checks, review, sweep and fresh intent validation.'}
       break
     }
     case 'set-terminal': validateTerminal(next, event.terminal); next.terminal = clone(event.terminal); break
@@ -312,9 +335,11 @@ function assertActionEvolution(previous, next) {
 function assertEvolution(current, next, allowBindings) {
   if (!next || next.schemaVersion !== 1) throw new Error('delivery schema version is stale')
   if (current === null) {
-    if (next.revision !== 0 || next.actions.length || next.pullRequest || next.checks || next.terminal.status !== 'preparing' || next.createdAt !== next.updatedAt) throw new Error('first delivery revision must be zero and preparing without observed outcomes')
+    if (next.revision !== 0 || next.actions.length || next.correctionBinding || next.pullRequest || next.checks || next.terminal.status !== 'preparing' || next.createdAt !== next.updatedAt) throw new Error('first delivery revision must be zero and preparing without observed outcomes')
     return
   }
+  if(!same(current.correctionBinding,next.correctionBinding)){if(!allowBindings)throw Error('Correction binding requires an explicit transition');assertCorrectionEvolution(current.correctionBinding,next.correctionBinding)}
+  if(next.checks&&!same(current.checks,next.checks))assertCheckObservation({...next,checks:current.checks},next.checks)
   if (next.revision !== current.revision + 1) throw new Error('delivery revision must advance exactly once')
   if (current.arcId !== next.arcId || current.deliveryKey !== next.deliveryKey) throw new Error('delivery immutable identity drift')
   for (const field of ['targetKey', 'providerId', 'repositoryId', 'baseRef', 'headRef']) {
@@ -367,6 +392,14 @@ export function transitionArcDelivery(cwd, arcId, event) {
   assertSafeArcId(arcId)
   const parsedEvent = bridgeParseShape(cwd, consumerSchemaPath(cwd), 'DeliveryEventShape', event)
   if (!parsedEvent.ok) throw schemaError(parsedEvent.res, 'delivery event schema parse failed')
+  if(event.type==='record-correction-binding'){
+    const path=join(roadmapRoot(cwd),'.gate',`arc-${arcId}`,'validate.json');inspectAncestors(path)
+    return withFileLock(`${path}.lock`,()=>{
+      if(!same(JSON.parse(readFileSync(path,'utf8')),event.checkpoint))throw Error('Correction checkpoint must be persisted before its delivery binding')
+      const current=loadArcDelivery(cwd,arcId),next=reduceDelivery(current,parsedEvent.parsed)
+      return next===current?current:persist(cwd,event.expectedRevision,next,{allowBindings:true})
+    },{label:'validation correction checkpoint'})
+  }
   const current = loadArcDelivery(cwd, arcId), next = reduceDelivery(current, parsedEvent.parsed)
   if (next.arcId !== arcId) throw new Error('delivery transition arc identity differs from requested path')
   if (next === current) return current
@@ -392,6 +425,7 @@ export function publishDelivery(request, {
     let state=load(root,arcId);retained=state
     mark('01-after-load',state)
     if (!state || state.arcId!==arcId) return publicationResult('refused',state,null,'delivery receipt is missing or has another owner')
+    if(request.requirePullRequestId&&state.pullRequest?.providerPullRequestId!==request.requirePullRequestId)return publicationResult('held',state,state.pullRequest,'The required original PR identity is missing or changed')
     const candidateHead=request.publishHeadSha??request.expected?.publishHeadSha??state.target.currentHeadSha
     if (!isDeliverySha(candidateHead)) return publicationResult('refused',state,state.pullRequest,'publication head is malformed')
     if(request.expected){
@@ -408,10 +442,17 @@ export function publishDelivery(request, {
       return state
     }
     const refusal=reason=>publicationResult('held',state,state.pullRequest,reason)
+    function assertCorrectionDeadline(){
+      const binding=state.correctionBinding
+      if(!binding||candidateHead===binding.validationHead)return
+      const now=Date.parse(clock()),deadline=Date.parse(binding.bounds?.deadlineAt)
+      if(!Number.isFinite(now)||!Number.isFinite(deadline)||now>=deadline)throw Error('Shared correction deadline is exhausted; no new publication mutation is allowed')
+    }
     function ensureAction(kind,headSha){
       const requested={baseSha:state.target.currentBaseSha,headSha,ref:state.target.headRef,authorityId:null},actionKey=deliveryActionKeyOf(state,kind,requested)
       let action=state.actions.find(row=>row.actionKey===actionKey)
       if(!action){
+        assertCorrectionDeadline()
         action={actionKey,kind,targetKey:state.target.targetKey,requested,status:'requested',attempts:[]}
         apply(`${kind}-request`,'request-action',{action});action=state.actions.find(row=>row.actionKey===actionKey)
       }
@@ -420,6 +461,7 @@ export function publishDelivery(request, {
     function mutate(method,kind,headSha){
       let action=ensureAction(kind,headSha)
       if(action.status==='succeeded')return {status:'succeeded',action,pullRequest:state.pullRequest}
+      assertCorrectionDeadline()
       const preflightInput={operation:method,context,repositoryId:state.target.repositoryId,target:clone(state.target),pullRequest:state.pullRequest&&clone(state.pullRequest)}
       mark(`before-${method}-preflight`,state)
       let preflight
@@ -430,12 +472,14 @@ export function publishDelivery(request, {
       action=state.actions.find(row=>row.actionKey===action.actionKey)
       let attempt=action.attempts.at(-1)
       if(!attempt||attempt.finishedAt!==null){
+        assertCorrectionDeadline()
         attempt={attempt:action.attempts.length+1,startedAt:clock(),finishedAt:null,observed:null}
         apply(`${method}-attempt-${attempt.attempt}`,'record-action-attempt',{actionKey:action.actionKey,attempt})
         action=state.actions.find(row=>row.actionKey===action.actionKey);attempt=action.attempts.at(-1)
       }
       const providerRequest={action:clone(action),expected:{...publicationExpected(state),...(request.normalizationReceipt?{normalizationReceipt:request.normalizationReceipt}:{})},context}
       mark(`before-${method}-call`,state)
+      assertCorrectionDeadline()
       let outcome
       try{outcome=provider[method](providerRequest)}catch(error){return {status:'held',reason:`provider ${method} outcome is unknown: ${error.message}`}}
       mark(`after-${method}-return`,state)
@@ -456,6 +500,7 @@ export function publishDelivery(request, {
     let ownCreate=state.actions.find(row=>row.actionKey===createKey),observedPr=null
     // An interrupted create is reconciled through the same idempotent provider operation.
     if(ownCreate&&ownCreate.status!=='succeeded'){
+      if(state.pullRequest||request.requirePullRequestId)return refusal('A known PR cannot be replaced by replaying another create action')
       const reconciled=mutate('create','create-pr',state.target.currentHeadSha)
       if(reconciled.status!=='succeeded')return publicationResult(reconciled.status==='refused'?'refused':'held',state,state.pullRequest,reconciled.reason??'pull request creation could not be reconciled')
       observedPr=reconciled.pullRequest;ownCreate=reconciled.action
@@ -475,6 +520,7 @@ export function publishDelivery(request, {
       if(observedPr?.status)return publicationResult(observedPr.status==='refused'?'refused':'held',state,state.pullRequest,observedPr.remedy??'provider lookup did not establish a pull request')
     }
     if(observedPr===null){
+      if(state.pullRequest||request.requirePullRequestId)return refusal('The original PR is missing from lookup; reconcile it without creating a replacement')
       if(ownCreate?.status==='succeeded')return refusal('a succeeded create action has no matching pull request; reconcile provider state')
       const created=mutate('create','create-pr',state.target.currentHeadSha)
       if(created.status!=='succeeded'||!created.pullRequest)return publicationResult(created.status==='refused'?'refused':'held',state,state.pullRequest,created.reason??'pull request creation did not return a canonical receipt')
@@ -501,4 +547,152 @@ export function publishDelivery(request, {
     try { retained=load(root,arcId) } catch { /* Preserve the last observed state when the store is unavailable. */ }
     return publicationResult('held',retained,retained?.pullRequest??null,`Publication interrupted; reload and resume: ${error.message}`)
   }
+}
+
+// The validation checkpoint owns correction bounds. Delivery retains only its latest binding.
+const correctionPath = value => typeof value==='string'&&value.length>0&&!/[\\\x00-\x1f]/.test(value)&&!value.startsWith('/')&&value.split('/').every(p=>p&&p!=='.'&&p!=='..')
+const isTime = value => typeof value==='string'&&Number.isFinite(Date.parse(value))
+function assertCorrectionCheckpoint(checkpoint) {
+  const c=checkpoint?.correction,b=c?.bounds
+  if(checkpoint?.verdict!=='GAPS'||typeof checkpoint.arcId!=='string'||!isTime(checkpoint.at)||!c||!['awaiting-repair','needs-sweep'].includes(c.state)||!isDeliverySha(c.validationHead)||!isDeliverySha(c.gateInputKey)||!Number.isInteger(c.round)||c.round<0||c.round>2||!Number.isInteger(b?.maxRounds)||b.maxRounds<1||b.maxRounds>2||c.round>b.maxRounds||!isTime(b.deadlineAt)||!Array.isArray(b.allowedPathPrefixes)||!b.allowedPathPrefixes.length||!b.allowedPathPrefixes.every(correctionPath)||!['session','config'].includes(b.authority?.source)||typeof b.authority.reference!=='string'||!b.authority.reference||!Object.hasOwn(c,'route'))throw Error('Unknown or malformed typed correction bounds/usage; retain the existing checkpoint')
+  if(c.route!==null&&(!['small-repair','planned-correction'].includes(c.route?.kind)||!isDeliverySha(c.route.sourceHeadSha)||!isDeliverySha(c.route.predecessorHeadSha)||!isTime(c.route.recordedAt)||!Array.isArray(c.route.selected)||!c.route.selected.length||!Array.isArray(c.route.residual)||!Array.isArray(c.route.scopePaths)))throw Error('Malformed correction route')
+  exactKeys(b,['maxRounds','deadlineAt','allowedPathPrefixes','authority'],'correction bounds')
+  exactKeys(b.authority,['source','reference'],'correction authority')
+  if(c.route){
+    const r=c.route
+    if(c.round===0||r.sourceHeadSha!==c.validationHead||Date.parse(r.recordedAt)>=Date.parse(b.deadlineAt)||!r.scopePaths.length||!r.scopePaths.every(file=>correctionPath(file)&&b.allowedPathPrefixes.some(prefix=>file===prefix||file.startsWith(prefix+'/'))))throw Error('Correction route exceeds its head, round, deadline or scope authority bound')
+    if(r.selected.some(f=>!['causal','owned-preexisting'].includes(f.kind)||!isDeliverySha(f.signature)||!Array.isArray(f.paths)||!f.paths.length||f.paths.some(file=>!r.scopePaths.includes(file)))||r.residual.some(f=>f.paths.some(file=>r.scopePaths.includes(file))))throw Error('Correction route contains noneligible or conflicting scope')
+    if(r.kind==='small-repair'?!validTrace(r.trace)||r.plannedCorrection!==null:r.trace!==null||!validTrace(r.plannedCorrection)||!r.plannedCorrection.correctionId)throw Error('Correction route lacks the owning trace')
+  }
+  return c
+}
+export const correctionBindingOf = checkpoint => {
+  const c=assertCorrectionCheckpoint(checkpoint)
+  if(!c.route)throw Error('Correction checkpoint has no persisted route')
+  return clone({validationHead:c.validationHead,gateInputKey:c.gateInputKey,round:c.round,bounds:c.bounds,route:c.route})
+}
+function assertCorrectionEvolution(previous,next) {
+  if(!next)throw Error('Correction binding cannot disappear')
+  if(!previous)return
+  if(!same(previous.bounds,next.bounds)||next.round<previous.round||next.round>previous.round+1)throw Error('Correction bounds or usage cannot reset or grow')
+  if(next.round===previous.round&&!same(previous,next))throw Error('An existing correction round cannot be rewritten')
+}
+const correctionFailure = f => ({checkKey:f.checkKey,attemptId:f.attemptId,signature:f.signature??f.diagnostic?.signature??null,kind:f.kind,paths:clone(f.paths)})
+const validTrace = trace => trace&&Number.isInteger(trace.phaseId)&&trace.phaseId>0&&Array.isArray(trace.criterionIds)&&trace.criterionIds.length>0&&trace.criterionIds.every(id=>typeof id==='string'&&id.length>0)
+export function decideCorrectionRoute({failureDecisions,validationCheckpoint,policy,delivery}) {
+  const held=reason=>({status:'held',reason,routedCheckpoint:clone(validationCheckpoint),deliveryBinding:null,editableFailures:[],residualFailures:clone(failureDecisions?.failures??[]),editPaths:[]})
+  try {
+    const c=assertCorrectionCheckpoint(validationCheckpoint),d=failureDecisions
+    if(!delivery||validationCheckpoint.arcId!==delivery.arcId||!isTime(policy?.at)||!isDeliverySha(policy.predecessorHeadSha)||policy.sourceHeadSha!==delivery.target.currentHeadSha||d?.headSha!==policy.sourceHeadSha||c.validationHead!==policy.sourceHeadSha||d.gateInputKey!==c.gateInputKey)throw Error('Correction head/input/checkpoint binding is stale')
+    if(c.state!=='awaiting-repair')throw Error('Correction is awaiting sweep or validation, not another repair')
+    if(policy.stop||!same(policy.authority,c.bounds.authority))throw Error('Correction authority is absent, changed, or explicitly stopped')
+    if(Date.parse(policy.at)>=Date.parse(c.bounds.deadlineAt))throw Error('Shared correction deadline is exhausted')
+    if(d.status!=='classified'||!Array.isArray(d.failures)||!Array.isArray(d.editPaths)||!d.retryDecision||d.retryDecision.blocked!==false)throw Error('Failure evidence is held or the existing unchanged-input retry limit is exhausted')
+    if(new Set(d.failures.map(f=>f.checkKey)).size!==d.failures.length)throw Error('Conflicting duplicate failures')
+    const editableFailures=d.failures.filter(f=>f.editEligible===true&&['causal','owned-preexisting'].includes(f.kind)),residualFailures=d.failures.filter(f=>!editableFailures.includes(f))
+    if(!editableFailures.length)throw Error('No independently repairable failure')
+    if(editableFailures.some(f=>!isDeliverySha(f.signature??f.diagnostic?.signature)||typeof f.checkKey!=='string'||typeof f.attemptId!=='string'||!Array.isArray(f.paths)||!f.paths.length||!f.paths.every(correctionPath)))throw Error('Eligible failure lacks exact signature, attempt or paths')
+    const scopePaths=[...new Set(d.editPaths)].sort()
+    if(!scopePaths.length||!scopePaths.every(file=>correctionPath(file)&&c.bounds.allowedPathPrefixes.some(prefix=>file===prefix||file.startsWith(prefix+'/')))||!editableFailures.every(f=>f.paths.every(file=>scopePaths.includes(file)))||residualFailures.some(f=>f.paths?.some(file=>scopePaths.includes(file))))throw Error('Repair scope grows beyond authority or overlaps a noneligible failure')
+    const planned=policy.needsPlanning===true
+    if(planned?!(validTrace(policy.plannedCorrection)&&typeof policy.plannedCorrection.correctionId==='string'&&policy.plannedCorrection.correctionId):!validTrace(policy.smallRepair))throw Error('One justified planned correction or existing phase/criterion trace is required')
+    const route={kind:planned?'planned-correction':'small-repair',sourceHeadSha:policy.sourceHeadSha,predecessorHeadSha:policy.predecessorHeadSha,selected:editableFailures.map(correctionFailure),residual:residualFailures.map(correctionFailure),scopePaths,trace:planned?null:clone(policy.smallRepair),plannedCorrection:planned?clone(policy.plannedCorrection):null,reason:residualFailures.length?'Repair only the eligible subset; residual failures remain unresolved.':'Bounded repair of the observed eligible failures.',recordedAt:policy.at}
+    if(delivery.correctionBinding&&(!same(delivery.correctionBinding.bounds,c.bounds)||c.round<delivery.correctionBinding.round))throw Error('Checkpoint bounds or usage differ from the last delivery binding')
+    if(c.route){
+      if(!same({...c.route,recordedAt:null},{...route,recordedAt:null}))throw Error('Checkpoint already routes different evidence; inspect actual work before another round')
+      const binding=correctionBindingOf(validationCheckpoint)
+      if(delivery.correctionBinding)assertCorrectionEvolution(delivery.correctionBinding,binding)
+      return {status:'routed',routedCheckpoint:clone(validationCheckpoint),deliveryBinding:binding,editableFailures:clone(editableFailures),residualFailures:clone(residualFailures),editPaths:scopePaths}
+    }
+    if(c.round>=c.bounds.maxRounds)throw Error('Shared correction round limit is exhausted')
+    const routedCheckpoint=clone(validationCheckpoint)
+    routedCheckpoint.correction={...c,round:c.round+1,route}
+    const binding=correctionBindingOf(routedCheckpoint)
+    if(delivery.correctionBinding)assertCorrectionEvolution(delivery.correctionBinding,binding)
+    return {status:'routed',routedCheckpoint,deliveryBinding:binding,editableFailures:clone(editableFailures),residualFailures:clone(residualFailures),editPaths:scopePaths}
+  }catch(error){return held(error.message)}
+}
+function assertCorrectionBinding(state,event) {
+  const binding=correctionBindingOf(event.checkpoint)
+  if(event.checkpoint.arcId!==state.arcId||binding.route.sourceHeadSha!==state.target.currentHeadSha||binding.validationHead!==state.target.currentHeadSha||!same(binding,event.binding))throw Error('Correction binding differs from the exact checkpoint route/head')
+  assertCorrectionEvolution(state.correctionBinding,binding)
+  return binding
+}
+export function persistCorrectionCheckpoint(cwd,arcId,expected,next,{clock=()=>new Date().toISOString()}={}) {
+  assertSafeArcId(arcId)
+  const directory=join(roadmapRoot(cwd),'.gate',`arc-${arcId}`),receipt=join(directory,'validate.json')
+  inspectAncestors(receipt)
+  const parsed=bridgeParseShape(cwd,consumerSchemaPath(cwd),'CorrectionCheckpointShape',next)
+  if(!parsed.ok)throw schemaError(parsed.res,'correction checkpoint schema parse failed')
+  if(next.arcId!==arcId)throw Error('Correction checkpoint arc mismatch')
+  return withFileLock(`${receipt}.lock`,()=>{
+    const current=JSON.parse(readFileSync(receipt,'utf8'))
+    if(same(current,next))return current
+    if(!same(current,expected))throw Error('Correction checkpoint changed; reload before mutation')
+    const before=assertCorrectionCheckpoint(current),after=assertCorrectionCheckpoint(next)
+    if(!same(before.bounds,after.bounds)||after.round!==before.round+1||before.route!==null||!after.route||before.validationHead!==after.validationHead||before.gateInputKey!==after.gateInputKey)throw Error('Correction checkpoint bounds/usage cannot reset or grow')
+    const now=Date.parse(clock()),deadline=Date.parse(after.bounds.deadlineAt)
+    if(!Number.isFinite(now)||!Number.isFinite(deadline)||now>=deadline)throw Error('Shared correction deadline is exhausted before checkpoint mutation')
+    publish({directory,receipt},next)
+    return next
+  },{label:'validation correction checkpoint'})
+}
+
+/** Publish a reviewed correction through the existing receipt and provider action owner. */
+export function publishCorrection(request, deps={}) {
+  const load=deps.load??loadArcDelivery,git=deps.git??((root,args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',timeout:10000,maxBuffer:8*1024*1024}).trim()),normalize=deps.normalize??normalizeArc
+  let state=null
+  const held=reason=>publicationResult('held',state,state?.pullRequest??null,reason)
+  try {
+    const {root,arcId,repair}=request
+    state=load(root,arcId)
+    if(!state||state.arcId!==arcId||!state.pullRequest||!repair||!same(repair.correctionBinding,state.correctionBinding))return held('Repair is not bound to the existing delivery correction and PR')
+    const binding=state.correctionBinding,source=binding.route.sourceHeadSha,head=repair.headSha,pr=state.pullRequest,t=state.target
+    assertCorrectionCheckpoint({arcId,verdict:'GAPS',at:binding.route.recordedAt,correction:{state:'awaiting-repair',...binding}})
+    if(repair.sourceHeadSha!==source||!isDeliverySha(head)||head===source||![source,head].includes(t.currentHeadSha)||pr.state!=='open'||pr.draft||pr.providerId!==t.providerId||pr.repositoryId!==t.repositoryId||pr.targetKey!==t.targetKey||pr.baseRef!==t.baseRef||pr.headRef!==t.headRef||pr.baseSha!==t.currentBaseSha||![source,head].includes(pr.headSha))return held('Correction source/head or original PR identity is stale')
+    if(request.expected&&Object.entries({revision:state.revision,currentBaseSha:t.currentBaseSha,currentHeadSha:t.currentHeadSha}).some(([key,value])=>request.expected[key]!==value))return held('Correction caller has a stale delivery revision/head')
+    if(['open-green','queued','merged'].includes(state.terminal.status))return held('Successful delivery history cannot be rewritten for cosmetics')
+    if(git(root,['rev-parse','HEAD'])!==head||git(root,['status','--porcelain','--untracked-files=no']))return held('Correction requires its exact committed clean Git HEAD')
+    const changed=git(root,['diff','--name-only','-z',source,head,'--']).split('\0').filter(Boolean)
+    if(!changed.length)return held('Actual correction has no changed paths')
+    { // Review authority is mandatory even when every product path is in scope.
+      let checkpoint
+      try{
+        checkpoint=(deps.loadCheckpoint??((root,id)=>{
+          const raw=JSON.parse(readFileSync(join(roadmapRoot(root),'.gate',`arc-${id}`,'validate.json'),'utf8')),parsed=bridgeParseShape(root,consumerSchemaPath(root),'CorrectionCheckpointShape',raw)
+          if(!parsed.ok)throw Error('Invalid correction checkpoint');return parsed.parsed
+        }))(root,arcId)
+      }catch{return held('Actual correction edits exceed the selected repair scope without a validated evidence tail')}
+      const c=checkpoint?.correction,projection=c&&Object.fromEntries(['validationHead','gateInputKey','round','bounds','route'].map(key=>[key,c[key]])),phase=binding.route.trace?.phaseId??binding.route.plannedCorrection?.phaseId
+      const review=(deps.readReview??readCorrectionReview)(root,phase)
+      if(checkpoint.arcId!==arcId||checkpoint.verdict!=='PASS'||c?.state!=='validated'||!same(projection,binding)||!isDeliverySha(c.repairHead)||repair.repairHeadSha&&repair.repairHeadSha!==c.repairHead||!review||review.arcId!==arcId||review.round!==binding.round||review.sourceHeadSha!==source||review.repairHead!==c.repairHead)return held('Repair evidence does not bind the current validated correction')
+      let judgmentHead=head
+      if(request.normalizationReceipt){
+        const receipt=(deps.loadNormalizationReceipt??loadPublishedCorrectionReceipt)(root,arcId,request.normalizationReceipt.planDigest)
+        if(receipt.newHead!==head||receipt.expectedOld!==source||receipt.publishedRef!==t.headRef||git(root,['rev-parse',`${receipt.oldHead}^{tree}`])!==git(root,['rev-parse',`${head}^{tree}`]))return held('Normalized correction differs from its reviewed tree')
+        judgmentHead=receipt.oldHead
+      }
+      const productPaths=git(root,['diff','--name-only','-z',source,c.repairHead,'--']).split('\0').filter(Boolean)
+      if(!productPaths.length||productPaths.some(path=>!binding.route.scopePaths.includes(path))||!evidenceCoversHead(root,c.repairHead,judgmentHead,{arcId}))return held('Actual correction edits exceed the selected repair scope or canonical evidence tail')
+    }
+    const alreadyPushed=state.actions.some(a=>a.kind==='push'&&a.status==='succeeded'&&a.requested.headSha===head&&a.requested.ref===t.headRef)
+    let normalizationReceipt
+    if(!alreadyPushed){
+      const now=Date.parse((deps.clock??(()=>new Date().toISOString()))())
+      if(!Number.isFinite(now)||now>=Date.parse(binding.bounds.deadlineAt))return held('Shared correction deadline is exhausted; no new correction publication is allowed')
+      if(!state.checks||state.checks.headSha!==source||!state.checks.observedChecks.some(c=>c.status==='red'))return held('Correction publication requires observed red checks on its source head')
+      if(request.normalizationReceipt){
+        const digest=request.normalizationReceipt.planDigest,receipt=(deps.loadNormalizationReceipt??loadPublishedCorrectionReceipt)(root,arcId,digest)
+        if(receipt.kind!=='published-corrections'||receipt.arcId!==arcId||receipt.planDigest!==digest||receipt.publishedRef!==t.headRef||receipt.expectedOld!==source||receipt.newHead!==head)return held('Verified correction normalization receipt does not bind the exact lease/head/ref')
+        normalizationReceipt={planDigest:digest}
+      }else{
+        if(git(root,['merge-base',source,head])!==source)return held('Non-descendant correction requires its verified history normalization receipt')
+        const result=normalize(root,arcId,{apply:false},request.normalizationDeps??{})
+        if(result?.status!=='retained-corrections'||![1,2].includes(result.correctionCount)||result.newHead!==head)return held('Correction history needs the existing red-only normalization before publication')
+      }
+    }
+    const result=(deps.publish??publishDelivery)({...request,publishHeadSha:head,requirePullRequestId:pr.providerPullRequestId,normalizationReceipt,expected:{revision:state.revision,currentBaseSha:t.currentBaseSha,currentHeadSha:t.currentHeadSha,publishHeadSha:head}},deps)
+    if(result.status==='published'&&result.pullRequest?.providerPullRequestId!==pr.providerPullRequestId)return publicationResult('held',result.delivery,result.pullRequest,'Correction publication did not retain the original PR')
+    return result
+  }catch(error){return held(error.message)}
 }

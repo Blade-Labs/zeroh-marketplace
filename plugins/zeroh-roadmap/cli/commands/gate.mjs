@@ -37,6 +37,7 @@ import {
 import { resolveSlot, resolveScopedOrFallback, resolveAffectedOrFallback, createScopeManifest, runSlot, resolveHygieneSlots, resolveConditionalSlots, historyCommentFindings, HISTORY_COMMENT_SUFFIXES, probeScopedSlot } from '../lib/slots.mjs'
 import {
   writeReport,
+  recordCorrectionReview,
   latestReport,
   recentReports,
   appendAgentRound,
@@ -587,6 +588,7 @@ function parseArgs(argv) {
     else if (a === '--slots') opts.slots = argv[++i]
     else if (a === '--retry-reason') opts.retryReason = argv[++i] ?? ''
     else if (a === '--task') opts.task = argv[++i] ?? ''
+    else if (a === '--record-correction-review') opts.recordCorrectionReview = argv[++i] ?? ''
     else if (a === '--record-round') opts.recordRound = argv[++i]
     else if (a === '--cap-override') opts.capOverride = argv[++i] ?? ''
     else if (a === '--verify-complete') opts.verifyComplete = true
@@ -620,7 +622,7 @@ export default async function run(argv) {
   const sub = argv[0]
   if (sub === '--help' || sub === '-h' || !sub) {
     process.stdout.write('roadmap gate plan <phase> [--task <id>] [--base <sha>] [--mode inline|arc] [--sequence-member] [--json]\n')
-    process.stdout.write('roadmap gate run  <phase> [--task <id> --slots unit] [--base <sha>] [--slots a,b] [--record-round <json>] [--cap-override <reason>] [--verify-complete] [--json]\n')
+    process.stdout.write('roadmap gate run  <phase> [--task <id> --slots unit] [--base <sha>] [--slots a,b] [--record-round <json>] [--record-correction-review <json-or-file>] [--cap-override <reason>] [--verify-complete] [--json]\n')
     process.stdout.write('roadmap gate round-brief <phase> [--json]\n')
     process.stdout.write('roadmap gate diagnose <phase> [--json] — inspect failures without running commands\n')
     process.stdout.write('roadmap gate run <phase> [--retry-reason "<diagnosis and repair>"] — resume after repeated failure\n')
@@ -829,6 +831,11 @@ export async function runGate(phaseNum, opts) {
     return 1
   }
 
+  if(opts.recordCorrectionReview!=null){
+    if(opts.recordRound!=null||opts.verifyComplete||opts.slots||opts.task){process.stderr.write('gate correction review cannot combine execution or phase-completion options\n');return 1}
+    try{if(!opts.recordCorrectionReview.trim())throw Error('A correction review JSON document or file is required');const value=opts.recordCorrectionReview.trim(),input=JSON.parse(value.startsWith('{')?value:readFileSync(value,'utf8'));const review=recordCorrectionReview(toplevel,phaseNum,input);process.stdout.write(JSON.stringify(review)+'\n');return 0}catch(error){process.stderr.write('gate correction review: '+error.message+'\n');return 2}
+  }
+
   if (opts.diagnose) {
     try {
       const reports = recentReports(toplevel, phaseNum)
@@ -1023,6 +1030,7 @@ export async function runGate(phaseNum, opts) {
       return 2
     }
   }
+  const inputHeadSha=execFileSync('git',['-C',toplevel,'rev-parse','HEAD'],{encoding:'utf8'}).trim()
   const inputKey = gateInputKey(toplevel, { exclude: [relative(toplevel, dirname(gateDir(toplevel, phaseNum))), relative(toplevel, phaseEvalRecordPath(toplevel, phaseNum))] })
   const commands = plan.slots.filter(row => slotMatches(row.slot) && row.command)
   if (!wanted || wanted.has('history-comments')) commands.push({ slot: 'history-comments', command: `(plugin-native scan of ${plan.baseSha}..HEAD added comment lines)` })
@@ -1118,7 +1126,7 @@ export async function runGate(phaseNum, opts) {
 
   const report = {
     phase: phaseNum,
-    attempt: { inputKey, ...(opts.retryReason ? { retryReason: opts.retryReason.trim() } : {}) },
+    attempt: { inputKey, headSha:inputHeadSha, ...(opts.task?{taskId:opts.task}:{}), ...(opts.retryReason ? { retryReason: opts.retryReason.trim() } : {}) },
     startedAt: new Date().toISOString(),
     baseSha: plan.baseSha,
     mode: plan.mode,

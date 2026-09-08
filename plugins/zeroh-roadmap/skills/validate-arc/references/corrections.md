@@ -29,6 +29,14 @@ Preserve and update the same budget accounting on later stamps; an interruption 
 its deadline. Inspect actual work before continuing, never replay blindly. Unknown prior
 budget/round usage requires clarification, not a fresh allowance.
 
+Remote CI repairs use the same checkpoint and shared limit. A typed correction checkpoint
+records the original authority, allowed path prefixes, round and fixed deadline. The classifier
+selects only causal or owned-preexisting failures; unrelated or uncertain members remain
+unresolved. Persist the selected route in `validate.json` before binding it to the delivery
+receipt. Resuming that exact route consumes no additional round. The binding is a reference
+to the selected repair, not another budget or action journal. Unknown legacy usage requires
+reconciliation; neither a fresh receipt nor switching routes grants a fresh allowance.
+
 ## Small repair pass
 
 1. Repair the related gaps on the existing arc branch. Add or update meaningful regression

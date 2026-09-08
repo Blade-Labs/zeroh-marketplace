@@ -51,12 +51,23 @@ function latestGatePath(root, phase) {
   const dir = join(root, 'roadmap', '.gate', String(phase))
   return join(dir, readdirSync(dir).filter((name) => name.endsWith('.json')).sort().at(-1))
 }
-export function appendReviewedCorrection(fixture, round, phase = fixture.phases.at(-1)) { const path = join(fixture.root, 'src', `published-correction-${round}.txt`)
+export function appendReviewedCorrection(fixture, round, phase, publishedHead) { const path = join(fixture.root, 'src', `published-correction-${round}.txt`)
   writeFileSync(path, `correction ${round}\n`); git(fixture.root, 'add', path)
   git(fixture.root, 'commit', '-q', '-m', `fix(history): phase ${phase} gate R${round} — published correction`)
   const head = git(fixture.root, 'rev-parse', 'HEAD'); const gatePath = latestGatePath(fixture.root, phase)
   const report = JSON.parse(readFileSync(gatePath, 'utf8'))
   report.agents = [{ round: 1, agent: 'code-reviewer', verdict: 'clean', summary: `correction ${round} reviewed`, sha: head, recordedAt: '2026-09-07T07:00:00.000Z' }]
+  // Synthetic canonical normalization evidence; the physical CI fixture exercises the actual review recorder.
+  // These phase-attributed commits form one correction batch, not three correction rounds.
+  const inputKey = 'c'.repeat(64)
+  report.slots = [{ slot: 'unit-affected', command: 'fixture affected-check projection', exitCode: 0, durationMs: 1, logPath: null }]
+  report.attempt = { inputKey, headSha: head }
+  report.correctionReview = {
+    arcId: fixture.arcId, phase, taskId: null, round: 1, sourceHeadSha: publishedHead, repairHead: head, inputKey,
+    changedPaths: git(fixture.root, 'diff', '--name-only', '-z', publishedHead, head, '--').split('\0').filter(Boolean).sort(),
+    reviewer: { arcId: fixture.arcId, agent: 'code-reviewer', model: 'fixture-independent', verdict: 'clean', summary: 'Synthetic reviewed correction projection.', findings: [] },
+    recordedAt: '2026-09-07T07:01:00.000Z',
+  }
   writeFileSync(gatePath, JSON.stringify(report, null, 2) + '\n')
   return head
 }

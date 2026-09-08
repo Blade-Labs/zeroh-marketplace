@@ -359,6 +359,206 @@
       },
       "additionalProperties": false
     },
+    "ciPolicy": {
+      "type": "object",
+      "properties": {
+        "requiredChecks": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$"
+          },
+          "uniqueItems": true
+        },
+        "pollIntervalMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 300000
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 1800000
+        },
+        "correctionTimeoutMs": {
+          "type": "integer",
+          "minimum": 60000,
+          "maximum": 86400000
+        },
+        "maxRounds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "ownership": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pathPrefix": {
+                "type": "string",
+                "minLength": 1
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^\\S(?:.*\\S)?$"
+              }
+            },
+            "required": [
+              "pathPrefix",
+              "owner"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "reproductionCommands": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^\\S(?:.*\\S)?$"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "timeoutMs": {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 1800000
+              }
+            },
+            "required": [
+              "file",
+              "args"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "provider": {
+          "type": "string",
+          "const": "github"
+        },
+        "headMode": {
+          "type": "string",
+          "const": "source-only"
+        },
+        "arcs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "requiredChecks": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^\\S(?:.*\\S)?$"
+                },
+                "uniqueItems": true
+              },
+              "pollIntervalMs": {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 300000
+              },
+              "timeoutMs": {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 1800000
+              },
+              "correctionTimeoutMs": {
+                "type": "integer",
+                "minimum": 60000,
+                "maximum": 86400000
+              },
+              "maxRounds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2
+              },
+              "ownership": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "pathPrefix": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "owner": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^\\S(?:.*\\S)?$"
+                    }
+                  },
+                  "required": [
+                    "pathPrefix",
+                    "owner"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "reproductionCommands": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^\\S(?:.*\\S)?$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^\\S(?:.*\\S)?$"
+                    },
+                    "args": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "timeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 1800000
+                    }
+                  },
+                  "required": [
+                    "file",
+                    "args"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "modelPolicy": {
       "type": "object",
       "properties": {

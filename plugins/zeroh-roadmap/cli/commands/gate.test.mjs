@@ -2708,3 +2708,11 @@ test('gate refuses a third unchanged failure, diagnoses without execution, and r
   assert.match(latestReportOf(repo.root, 1392).attempt.retryReason, /Installed/)
   assert.notEqual(runGateCmd(repo.root, ['1392', '--verify-complete']).code, 0, 'a successful partial retry cannot certify completion')
 })
+test('missing correction-review argument never starts another gate execution',()=>{
+ const repo=makeRepo(RUN_CFG())
+ repo.writePhase(1303,phaseObj({phase:1303}))
+ repo.commit('feat: phase 1303 — code',{'lib/e.ts':'export const e=1\n'})
+ const out=runGateCmd(repo.root,['1303','--record-correction-review'])
+ assert.equal(out.code,2,out.stdout+out.stderr)
+ assert.equal(existsSync(join(repo.root,'roadmap','.gate','1303')),false)
+})

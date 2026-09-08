@@ -126,6 +126,23 @@ function gateBinding(root, phase, substantive) {
   if (reviewed !== substantive.sha && !isCuratedTreeReplacement(root, reviewed, substantive.sha)) fail('gate-stale', 'phase ' + phase.phase + ' has substantive changes after its terminal review')
   return { path: relative(root, latest.path), digest: hash(bytes), baseSha: report.baseSha, reviewedHead: reviewed }
 }
+function correctionGateBinding(root, arcId, phase, substantive, sourceHead) {
+  const latest = latestReport(root, phase.phase)
+  if (!latest) fail('gate-unproven', 'missing correction review evidence for phase ' + phase.phase)
+  const bytes = readFileSync(latest.path), report = GateRunReportShape.parse(JSON.parse(bytes.toString('utf8'))), review = report.correctionReview
+  if (!report.green || !report.slots.length || report.slots.some(row => row.exitCode !== 0 && !row.declaredAbsent)
+    || !report.slots.some(row => row.exitCode === 0 && /unit|integration|e2e/.test(row.slot))) fail('gate-unproven', 'phase ' + phase.phase + ' lacks current green affected checks')
+  if (!review || review.arcId !== arcId || review.phase !== phase.phase || review.sourceHeadSha !== sourceHead
+    || review.repairHead !== substantive.sha || report.attempt?.headSha !== review.repairHead || report.attempt?.inputKey !== review.inputKey
+    || review.reviewer.arcId !== arcId || review.reviewer.verdict !== 'clean' || review.reviewer.findings.length
+    || /self[\s_-]?review|phase-executor|software-developer/i.test(review.reviewer.agent)) fail('gate-unproven', 'phase ' + phase.phase + ' lacks an exact clean correction review binding')
+  exactCommit(root, review.sourceHeadSha); exactCommit(root, review.repairHead)
+  const changedPaths = git(root, ['diff', '--name-only', '-z', review.sourceHeadSha, review.repairHead, '--']).split('\0').filter(Boolean).sort()
+  if (!isDeepStrictEqual(changedPaths, review.changedPaths)) fail('gate-stale', 'phase ' + phase.phase + ' correction review paths differ from Git')
+  return { path: relative(root, latest.path), digest: hash(bytes), baseSha: report.baseSha, reviewedHead: review.repairHead,
+    correctionReview: { sourceHeadSha: review.sourceHeadSha, repairHead: review.repairHead, round: review.round, inputKey: review.inputKey, changedPaths: review.changedPaths } }
+}
+
 
 /** Plan only: Git objects, refs, runtime files and the consumer tree stay untouched. */
 export function planHistoryNormalization(cwd, input, deps = {}) {
@@ -470,16 +487,20 @@ export function normalizeArc(cwd, arcId, options = {}, deps = {}) {
   }
 }
 
-function publishedObservation(root, observed, head, originalHead = head) {
+function observedPublishedHead(root, ref, deps) {
+  const value = typeof deps?.observePublishedRef === 'function' ? deps.observePublishedRef(ref) : git(root, ['rev-parse', '--verify', ref])
+  return exactCommit(root, value)
+}
+function publishedObservation(root, observed, head, originalHead = head, deps = {}) {
   if (!observed || observed.then || observed.head !== head || observed.publication !== 'published'
     || !keys(observed.pullRequest, 'head ref') || !oid(observed.pullRequest.head) || typeof observed.pullRequest.ref !== 'string'
     || !observed.pullRequest.ref.startsWith('refs/') || !Array.isArray(observed.publicationRefs) || !observed.publicationRefs.includes(observed.pullRequest.ref)) fail('delivery-unproven', 'published correction needs an exact local and PR head observation')
   const { ref, head: publishedHead } = observed.pullRequest
   git(root, ['check-ref-format', ref]); exactCommit(root, publishedHead)
-  if (git(root, ['rev-parse', '--verify', ref]) !== publishedHead) fail('lease', 'provider ref differs from the observed PR head')
+  if (observedPublishedHead(root, ref, deps) !== publishedHead) fail('lease', 'provider ref differs from the observed PR head')
   if (observed.green === true || observed.checks?.state === 'green') fail('green', 'green history is never rewritten for cosmetics')
   if (observed.green !== false || !keys(observed.checks, 'head state') || observed.checks.head !== publishedHead || observed.checks.state !== 'red'
-    || !keys(observed.correction, 'classification pushRequired') || !['causal', 'owned-preexisting'].includes(observed.correction.classification) || observed.correction.pushRequired !== true) fail('correction-unproven', 'published compaction requires owned red CI and an already-necessary repair push')
+    || !keys(observed.correction, 'classification pushRequired') || !['causal', 'owned-preexisting', 'mixed'].includes(observed.correction.classification) || observed.correction.pushRequired !== true) fail('correction-unproven', 'published compaction requires owned red CI and an already-necessary repair push')
   if (originalHead === publishedHead) fail('correction-unproven', 'published compaction requires a pending local repair')
   try { git(root, ['merge-base', '--is-ancestor', publishedHead, originalHead]) } catch { fail('lease', 'local repair does not descend from the observed red PR head') }
   return { localHead: originalHead, ref, publishedHead, checksHead: publishedHead, classification: observed.correction.classification }
@@ -529,9 +550,9 @@ function validateCorrectionPlan(root, plan) {
     || !isDeepStrictEqual(plan.group, { sourceBoundary: { sha: plan.expectedHead, tree: plan.expectedTree }, message: correctionMessage(plan.arcId, plan.corrections) })) fail('plan', 'published correction range, count or message differs')
   if (!isDeepStrictEqual(plan.phaseGates.map(row => row.phase), [...substantive.keys()].sort((a, b) => a - b))) fail('plan', 'published correction phase gate set differs')
   for (const row of plan.phaseGates) {
-    if (!keys(row, 'phase path digest baseSha reviewedHead') || !repoPath(row.path) || !digestValue(row.digest)) fail('plan', 'published correction gate binding is malformed')
+    if (!keys(row, 'phase path digest baseSha reviewedHead correctionReview') || !repoPath(row.path) || !digestValue(row.digest) || !keys(row.correctionReview, 'sourceHeadSha repairHead round inputKey changedPaths')) fail('plan', 'published correction gate binding is malformed')
     exactCommit(root, row.baseSha); exactCommit(root, row.reviewedHead)
-    if (row.reviewedHead !== substantive.get(row.phase) && !isCuratedTreeReplacement(root, row.reviewedHead, substantive.get(row.phase))) fail('gate-stale', 'published correction review is stale')
+    if (row.reviewedHead !== substantive.get(row.phase) || row.correctionReview.sourceHeadSha !== plan.delivery.publishedHead || row.correctionReview.repairHead !== row.reviewedHead || ![1, 2].includes(row.correctionReview.round) || !digestValue(row.correctionReview.inputKey) || !Array.isArray(row.correctionReview.changedPaths) || !isDeepStrictEqual(row.correctionReview.changedPaths, git(root, ['diff', '--name-only', '-z', row.correctionReview.sourceHeadSha, row.correctionReview.repairHead, '--']).split('\0').filter(Boolean).sort())) fail('gate-stale', 'published correction review is stale')
   }
 }
 function verifyCorrectionReceipt(root, plan, receipt) {
@@ -540,9 +561,9 @@ function verifyCorrectionReceipt(root, plan, receipt) {
   if (!isDeepStrictEqual(expected, receipt) || git(root, ['rev-parse', receipt.newHead + '^{tree}']) !== plan.expectedTree) fail('receipt', 'published correction receipt differs from deterministic Git contents')
   ensureCurationRescue(root, plan.expectedHead, { create: false })
 }
-function planCorrectionTail(root, arcId, previous, observed) {
+function planCorrectionTail(root, arcId, previous, observed, deps = {}) {
   const head = git(root, ['rev-parse', 'HEAD']); stableHead(root, head)
-  const delivery = publishedObservation(root, observed, head)
+  const delivery = publishedObservation(root, observed, head, head, deps)
   recordFiles(root, head)
   const loaded = records(root, arcId), ids = loaded.arc.planes.flatMap(plane => plane.phases)
   const phases = loaded.phases.filter(phase => ids.includes(phase.phase))
@@ -569,8 +590,9 @@ function planCorrectionTail(root, arcId, previous, observed) {
     return row
   })
   if (!useful) fail('correction-unproven', 'published history contains no useful corrections')
-  const phaseGates = [...lastWork].sort(([a], [b]) => a - b).map(([phase, row]) => ({ phase, ...gateBinding(root, phases.find(item => item.phase === phase), row) }))
+  const phaseGates = [...lastWork].sort(([a], [b]) => a - b).map(([phase, row]) => ({ phase, ...correctionGateBinding(root, arcId, phases.find(item => item.phase === phase), row, delivery.publishedHead) }))
   if (useful < 3) return { status: 'retained-corrections', correctionCount: useful, newHead: head }
+  if (delivery.classification === 'mixed') fail('correction-unproven', 'Mixed correction ownership must retain reviewed commits; no compaction')
   const plan = { version: 1, kind: 'published-corrections', arcId, priorReceiptDigest: hash(encoded(previous.receipt)), base,
     expectedHead: head, expectedTree: priorTree, corrections, phaseGates,
     group: { sourceBoundary: { sha: head, tree: priorTree }, message: correctionMessage(arcId, corrections) }, delivery }
@@ -584,17 +606,17 @@ function finishCorrectionPush(root, plan, receipt, deps) {
   if (typeof deps.inspectDelivery !== 'function') fail('delivery-unproven', 'correction publication requires a current provider observation')
   const observed = deps.inspectDelivery({ root, arcId: plan.arcId, base: plan.base, head })
   if (observed?.head !== head || observed?.publication !== 'published' || observed?.pullRequest?.ref !== plan.delivery.ref) fail('delivery-unproven', 'correction replay observation differs from its exact head/ref')
-  const actual = git(root, ['rev-parse', '--verify', plan.delivery.ref])
+  const actual = observedPublishedHead(root, plan.delivery.ref, deps)
   if (observed.pullRequest.head !== actual) fail('lease', 'provider observation differs from actual publication ref')
   if (actual === receipt.newHead) return { status: 'already-applied', planDigest: plan.planDigest, newHead: receipt.newHead, rescueRef: receipt.rescueRef, alreadyPublished: true }
   if (actual !== plan.delivery.publishedHead) fail('lease', 'correction publication lease changed')
-  publishedObservation(root, observed, head, plan.expectedHead)
+  publishedObservation(root, observed, head, plan.expectedHead, deps)
   return replaceCorrectionHead(root, plan, receipt, deps)
 }
 function replaceCorrectionHead(root, plan, receipt, deps) {
   if (typeof deps.replacePublishedHead !== 'function') fail('delivery-unproven', 'published correction replacement capability is unavailable')
   const out = deps.replacePublishedHead({ ref: plan.delivery.ref, expectedOld: plan.delivery.publishedHead, newHead: receipt.newHead, arcId: plan.arcId, planDigest: plan.planDigest })
-  if (!keys(out, 'ref head') || out.ref !== plan.delivery.ref || out.head !== receipt.newHead || git(root, ['rev-parse', '--verify', out.ref]) !== receipt.newHead) fail('lease', 'provider did not attest the exact leased replacement')
+  if (!keys(out, 'ref head') || out.ref !== plan.delivery.ref || out.head !== receipt.newHead || observedPublishedHead(root, out.ref, deps) !== receipt.newHead) fail('lease', 'provider did not attest the exact leased replacement')
   return { status: 'published-rewrite-applied', planDigest: plan.planDigest, newHead: receipt.newHead, rescueRef: receipt.rescueRef }
 }
 function applyCorrectionPlan(root, plan, previous, options, deps) {
@@ -609,7 +631,7 @@ function applyCorrectionPlan(root, plan, previous, options, deps) {
   if (head !== plan.expectedHead && head !== preview.newHead) fail('head-changed', 'published correction is not at an exact recovery prefix')
   stableHead(root, head)
   if (head === plan.expectedHead) {
-    const fresh = planCorrectionTail(root, plan.arcId, previous, deps.inspectDelivery({ root, arcId: plan.arcId, base: plan.base, head }))
+    const fresh = planCorrectionTail(root, plan.arcId, previous, deps.inspectDelivery({ root, arcId: plan.arcId, base: plan.base, head }), deps)
     if (!isDeepStrictEqual(fresh, plan)) fail('plan-stale', 'published correction inputs changed before apply')
   } else {
     ensureCurationRescue(root, plan.expectedHead, { create: false })
@@ -624,7 +646,7 @@ function applyCorrectionPlan(root, plan, previous, options, deps) {
   if (head === plan.expectedHead) {
     deps.beforeCas?.(prepared)
     stableHead(root, head)
-    const fresh = planCorrectionTail(root, plan.arcId, previous, deps.inspectDelivery({ root, arcId: plan.arcId, base: plan.base, head }))
+    const fresh = planCorrectionTail(root, plan.arcId, previous, deps.inspectDelivery({ root, arcId: plan.arcId, base: plan.base, head }), deps)
     if (!isDeepStrictEqual(fresh, plan)) fail('plan-stale', 'published correction changed before CAS')
     commitPreparedCuration(root, prepared)
     deps.afterCas?.(prepared)
@@ -636,7 +658,7 @@ function applyCorrectionPlan(root, plan, previous, options, deps) {
   return finishCorrectionPush(root, plan, receipt, deps)
 }
 function normalizePublishedCorrections(root, arcId, previous, observed, options, deps) {
-  const plan = planCorrectionTail(root, arcId, previous, observed)
+  const plan = planCorrectionTail(root, arcId, previous, observed, deps)
   if (plan.status === 'retained-corrections') return plan
   return applyCorrectionPlan(root, plan, previous, options, deps)
 }

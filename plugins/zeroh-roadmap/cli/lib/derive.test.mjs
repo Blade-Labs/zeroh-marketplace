@@ -57,13 +57,14 @@ function writeValidate(root, arcId, verdict) {
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'validate.json'), JSON.stringify({ arcId, verdict, at: '2026-07-16T00:00:00Z' }))
 }
-function writeArcSummary(root, arcId, outcome) {
+function writeArcSummary(root, arcId, outcome, extra = {}) {
   writeFileSync(join(root, 'roadmap', 'arc-summary.json'), JSON.stringify({
     arcId,
     outcome,
     compromiseDisposition: [],
     gateSignals: { arcSweepClean: true, validateArcPassed: true, fullSuiteGreen: true },
     receiptRef: 'none',
+    ...extra,
   }))
 }
 
@@ -419,6 +420,7 @@ test('persisted PR route awaits exact checks, preserves its checkout, and hands 
  }
  delivery.pullRequest=originalPr
  delivery.checks={providerId:'github',repositoryId:'blade/roadmap',providerPullRequestId:'PR_7',headSha:head,requiredChecks:['unit'],observedChecks:[{name:'unit',status:'green',attemptId:'r1',observedAt:at}],observedAt:at};delivery.terminal={status:'open-green',headSha:head,checksObservedAt:at};writeFileSync(path,JSON.stringify(delivery))
+ writeArcSummary(root,'A','shipped',{delivery:{deliveryKey:delivery.deliveryKey,revision:delivery.revision,providerId:'github',repositoryId:'blade/roadmap',providerPullRequestId:'PR_7',sourceHeadSha:head,testedHeadSha:head,headMode:'source',checksObservedAt:at,terminal:'open-green'}})
  pos=deriveArcPosition({repoRoot:root,arcId:'A',config:CONFIG,exec:makeExec([],[])})
- assert.equal(pos.action,'blocked');assert.equal(pos.evaluation.status,'held');assert.equal(pos.delivery.terminal,'open-green');assert.ok(readFileSync(join(root,'roadmap','phases','phase-10.phase.ts'),'utf8'))
+ assert.equal(pos.action,'deliver');assert.match(pos.reason,/bind the current PR.*evaluation/i);assert.equal(pos.delivery.terminal,'open-green');assert.ok(readFileSync(join(root,'roadmap','phases','phase-10.phase.ts'),'utf8'))
 })

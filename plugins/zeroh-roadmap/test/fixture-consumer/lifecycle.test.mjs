@@ -10,6 +10,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { initializeCiCorrection } from '../../cli/commands/arc.mjs'
+import { decideCorrectionRoute, persistCorrectionCheckpoint } from '../../cli/lib/delivery.mjs'
+import { gateInputKey } from '../../cli/lib/gate-diagnostics.mjs'
+import { writeReport, recordCorrectionReview } from '../../cli/lib/gate-report.mjs'
 import { makeFixtureRepo, runCli, writePhaseFile, writeArcFile, commitPaths, readSlotLog, git } from './harness.mjs'
 import { SCOPED_FALLBACK_NOTE } from '../../cli/lib/slots.mjs'
 import arcPlaneWorkflow from '../../workflows/arc-plane.workflow.mjs'
@@ -408,41 +413,50 @@ test('arc workflow lifecycle — proven land hands off only the missing evaluati
 
 test('arc correction lifecycle — correction-ready binds actual heads, preserves GAPS evidence, and retries byte-identically', () => {
   const root = makeFixtureRepo()
-  writePhaseFile(root, { phase: 9042, status: 'done', arcId: 'FX', tasks: [{ id: '9042.1', done: true }] })
-  writeArcFile(root, {
-    id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [9042] }],
-    acceptanceCriteria: [{ id: 'c1', job: 'repair the observed gap' }],
-  })
+  writePhaseFile(root, { phase: 9042, name: 'Bounded correction fixture', status: 'backlog', category: 'test', kind: 'logic', arcId: 'FX', source: 'physical fixture', priority: 'LOW', dependsOn: [], conflictsWith: [], keyFiles: ['repair-evidence.txt'], stakeholderDemo: 'The observed correction passes.', tasks: [{ minimal: true, id: '9042.1', title: 'Repair observed gap', done: false }] })
+  writeArcFile(root, { id: 'FX', baseRef: 'develop', planes: [{ name: 'P', phases: [9042] }], acceptanceCriteria: [{ id: 'c1', job: 'repair the observed gap' }] })
   commitPaths(root, 'feat: seed correction fixture', ['roadmap/phases/phase-9042.phase.ts', 'roadmap/arcs/FX.arc.ts'])
   const validationHead = git(root, 'rev-parse', 'HEAD')
   let cli = runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'GAPS', '--note', 'one bounded repair remains'])
   assert.equal(cli.code, 0, cli.stderr)
   const artifactPath = join(root, 'roadmap', '.gate', 'arc-FX', 'validate.json')
-  const awaiting = JSON.parse(readFileSync(artifactPath, 'utf8'))
-  assert.equal(awaiting.verdict, 'GAPS')
-  assert.equal(awaiting.note, 'one bounded repair remains')
-  assert.deepEqual(awaiting.correction, { state: 'awaiting-repair', validationHead })
-
-  const awaitingBytes = readFileSync(artifactPath, 'utf8')
+  const legacyBytes = readFileSync(artifactPath, 'utf8')
+  const bounds = { maxRounds: 2, deadlineAt: new Date(Date.now() + 1200000).toISOString(), allowedPathPrefixes: ['repair-evidence.txt'], authority: { source: 'session', reference: 'fixture-approved-repair' } }
+  assert.throws(() => initializeCiCorrection(root, 'FX', { headSha: validationHead, inputKey: gateInputKey(root), bounds }), /Legacy correction usage is unknown/)
+  assert.equal(readFileSync(artifactPath, 'utf8'), legacyBytes, 'unknown legacy usage cannot acquire a new budget')
   cli = runCli(root, ['arc', 'record-validate', 'FX', '--correction-ready'])
   assert.notEqual(cli.code, 0, 'unchanged HEAD is not repair evidence')
-  assert.equal(readFileSync(artifactPath, 'utf8'), awaitingBytes)
+  assert.equal(readFileSync(artifactPath, 'utf8'), legacyBytes)
 
-  const bounds = { round: 1, budget: { used: 1, limit: 2 } }
-  const topLevelBounds = { correctionRounds: { used: 1, limit: 2 } }
-  writeFileSync(artifactPath, JSON.stringify({
-    ...awaiting,
-    bounds: topLevelBounds,
-    correction: { ...awaiting.correction, bounds },
-  }, null, 2) + '\n')
-
+  // Seed an explicitly accepted source before the production CI initializer creates its bounded checkpoint.
+  cli = runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'PASS'])
+  assert.equal(cli.code, 0, cli.stderr)
+  const initialized = initializeCiCorrection(root, 'FX', { headSha: validationHead, inputKey: gateInputKey(root), bounds })
+  const routed = decideCorrectionRoute({
+    validationCheckpoint: initialized,
+    delivery: { arcId: 'FX', target: { currentHeadSha: validationHead } },
+    policy: { at: new Date().toISOString(), sourceHeadSha: validationHead, predecessorHeadSha: git(root, 'rev-parse', 'HEAD^'), authority: bounds.authority, stop: false, needsPlanning: false, smallRepair: { phaseId: 9042, criterionIds: ['c1'] }, plannedCorrection: null },
+    failureDecisions: { status: 'classified', headSha: validationHead, gateInputKey: initialized.correction.gateInputKey, failures: [{ checkKey: 'unit', attemptId: 'fixture-1', kind: 'causal', editEligible: true, paths: ['repair-evidence.txt'], signature: 'b'.repeat(64) }], editPaths: ['repair-evidence.txt'], retryDecision: { blocked: false, failures: [] } },
+  })
+  assert.equal(routed.status, 'routed', routed.reason)
+  persistCorrectionCheckpoint(root, 'FX', initialized, routed.routedCheckpoint)
+  const awaiting = JSON.parse(readFileSync(artifactPath, 'utf8'))
+  assert.equal(awaiting.correction.round, 1)
+  assert.deepEqual(awaiting.correction.bounds, bounds)
   writeFileSync(join(root, 'repair-evidence.txt'), 'bounded correction evidence\n')
   commitPaths(root, 'fix: repair validated gap', ['repair-evidence.txt'])
   const repairHead = git(root, 'rev-parse', 'HEAD')
   cli = runCli(root, ['arc', 'record-validate', 'FX', '--correction-ready'])
+  assert.notEqual(cli.code, 0, 'an unreviewed repair cannot advance')
+  assert.deepEqual(JSON.parse(readFileSync(artifactPath, 'utf8')), awaiting)
+  const assertion = "require('assert/strict').equal(require('fs').readFileSync('repair-evidence.txt','utf8'),'bounded correction evidence\\n')"
+  execFileSync(process.execPath, ['-e', assertion], { cwd: root })
+  const inputKey = gateInputKey(root, { exclude: ['roadmap/.gate', 'roadmap/arc-evals/phase-9042.peval.json'] })
+  writeReport(root, { phase: 9042, startedAt: new Date().toISOString(), baseSha: validationHead, mode: 'arc', kind: 'logic', testScope: { derived: 'relevant', declared: null, effective: 'relevant' }, reviewScope: { derived: 'none', declared: null, effective: 'none' }, slots: [{ slot: 'unit-affected', command: 'node -e ' + JSON.stringify(assertion), exitCode: 0 }], agents: [], green: true, notes: [], slotFilter: 'unit', attempt: { inputKey, headSha: repairHead } })
+  recordCorrectionReview(root, 9042, { arcId: 'FX', agent: 'code-reviewer', model: 'fixture-independent', verdict: 'clean', summary: 'The physical affected assertion passes.', findings: [] })
+  cli = runCli(root, ['arc', 'record-validate', 'FX', '--correction-ready'])
   assert.equal(cli.code, 0, cli.stderr)
-  const readyBytes = readFileSync(artifactPath, 'utf8')
-  const ready = JSON.parse(readyBytes)
+  const readyBytes = readFileSync(artifactPath, 'utf8'), ready = JSON.parse(readyBytes)
   assert.equal(ready.verdict, awaiting.verdict)
   assert.equal(ready.at, awaiting.at)
   assert.equal(ready.note, awaiting.note)
@@ -450,19 +464,18 @@ test('arc correction lifecycle — correction-ready binds actual heads, preserve
   assert.equal(ready.correction.validationHead, validationHead)
   assert.equal(ready.correction.repairHead, repairHead)
   assert.deepEqual(ready.correction.bounds, bounds)
-  assert.deepEqual(ready.bounds, topLevelBounds)
+  assert.equal(ready.correction.round, 1)
   assert.match(ready.correction.readyAt, /^\d{4}-\d{2}-\d{2}T/)
-
   cli = runCli(root, ['arc', 'record-validate', 'FX', '--correction-ready'])
   assert.equal(cli.code, 0, cli.stderr)
   assert.equal(readFileSync(artifactPath, 'utf8'), readyBytes, 'same-head retry is a byte no-op')
-
   cli = runCli(root, ['arc', 'record-validate', 'FX', '--verdict', 'GAPS'])
   assert.equal(cli.code, 0, cli.stderr)
   const nextRound = JSON.parse(readFileSync(artifactPath, 'utf8'))
   assert.equal(nextRound.note, awaiting.note)
-  assert.deepEqual(nextRound.bounds, topLevelBounds)
   assert.deepEqual(nextRound.correction.bounds, bounds)
+  assert.equal(nextRound.correction.round, 1, 'recording another gap does not reset or spend a route round')
+  assert.equal(nextRound.correction.route, null)
   assert.equal(nextRound.correction.state, 'awaiting-repair')
   assert.equal(nextRound.correction.validationHead, repairHead)
   assert.equal(nextRound.correction.repairHead, undefined)

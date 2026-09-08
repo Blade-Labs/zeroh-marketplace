@@ -120,6 +120,65 @@ export function deliveryPolicyOf(config = {}) {
   }
 }
 
+const ciPathPrefix = z.string().min(1).refine(value =>
+  !/[\\\x00-\x1f]/.test(value) && !value.startsWith('/')
+  && value.split('/').every(part => part !== '' && part !== '.' && part !== '..'),
+  'ciPolicy ownership pathPrefix must be canonical and repository-relative')
+const ciText = z.string().min(1).regex(/^\S(?:.*\S)?$/).refine(value => !/[\x00-\x1f]/.test(value), 'ciPolicy text must be nonblank and contain no control characters')
+const ciArg = z.string().refine(value => !value.includes('\0'), 'ciPolicy argv must not contain NUL')
+const CiReproductionCommandShape = z.strictObject({
+  file: ciText,
+  args: z.array(ciArg),
+  timeoutMs: z.number().int().min(1000).max(1800000).optional(),
+})
+const CiOwnershipShape = z.strictObject({pathPrefix:ciPathPrefix,owner:ciText})
+const CiArcPolicyShape = z.strictObject({
+  requiredChecks: uniqueDeliveryList(deliveryString, 1).optional(),
+  pollIntervalMs: z.number().int().min(1000).max(300000).optional(),
+  timeoutMs: z.number().int().min(1000).max(1800000).optional(),
+  correctionTimeoutMs: z.number().int().min(60000).max(86400000).optional(),
+  maxRounds: z.number().int().min(1).max(2).optional(),
+  ownership: z.array(CiOwnershipShape).optional(),
+  reproductionCommands: z.record(deliveryString,CiReproductionCommandShape).optional(),
+})
+export const CiPolicyShape = CiArcPolicyShape.extend({
+  provider: z.literal('github').optional(),
+  headMode: z.literal('source-only').optional(),
+  arcs: z.record(deliveryString,CiArcPolicyShape).optional(),
+}).strict()
+const CI_DEFAULTS = Object.freeze({providerId:'github',requiredChecks:null,pollIntervalMs:15000,timeoutMs:120000,correctionTimeoutMs:1800000,maxRounds:2,headMode:'source-only'})
+const sortedUnique = values => values === undefined ? undefined : [...values].sort()
+const normalizedOwnership = values => (values??[]).map(value=>({...value})).sort((a,b)=>a.pathPrefix.localeCompare(b.pathPrefix)||a.owner.localeCompare(b.owner))
+const normalizedCommands = values => Object.fromEntries(Object.entries(values??{}).sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>[key,{...value,args:[...value.args]}]))
+const sameJson = (a,b) => JSON.stringify(a)===JSON.stringify(b)
+const deepFreeze = value => {
+  if(value&&typeof value==='object'&&!Object.isFrozen(value)){for(const child of Object.values(value))deepFreeze(child);Object.freeze(value)}
+  return value
+}
+
+/** Resolve finite CI/correction policy. Arc overrides may reduce, never enlarge, repository authority. */
+export function ciPolicyOf(config = {}, arcId) {
+  const root=CiPolicyShape.parse(config.ciPolicy??{}),override=arcId===undefined?undefined:root.arcs?.[String(arcId)]
+  const deliveryChecks=sortedUnique(config.deliveryPolicy?.requiredChecks),configuredChecks=sortedUnique(root.requiredChecks)
+  if(configuredChecks&&deliveryChecks&&!sameJson(configuredChecks,deliveryChecks))throw Error('ciPolicy and deliveryPolicy required checks differ')
+  const repository={providerId:root.provider??CI_DEFAULTS.providerId,requiredChecks:configuredChecks??deliveryChecks??null,pollIntervalMs:root.pollIntervalMs??CI_DEFAULTS.pollIntervalMs,timeoutMs:root.timeoutMs??CI_DEFAULTS.timeoutMs,correctionTimeoutMs:root.correctionTimeoutMs??CI_DEFAULTS.correctionTimeoutMs,maxRounds:root.maxRounds??CI_DEFAULTS.maxRounds,headMode:root.headMode??CI_DEFAULTS.headMode,ownership:normalizedOwnership(root.ownership),reproductionCommands:normalizedCommands(root.reproductionCommands)}
+  if(override){
+    const checks=sortedUnique(override.requiredChecks),ownership=normalizedOwnership(override.ownership),commands=normalizedCommands(override.reproductionCommands)
+    if(override.pollIntervalMs!==undefined&&override.pollIntervalMs<repository.pollIntervalMs)throw Error('ciPolicy arc poll interval must narrow repository polling')
+    if(override.timeoutMs!==undefined&&override.timeoutMs>repository.timeoutMs)throw Error('ciPolicy arc timeout must narrow repository authority')
+    if(override.correctionTimeoutMs!==undefined&&override.correctionTimeoutMs>repository.correctionTimeoutMs)throw Error('ciPolicy arc correction timeout must narrow repository authority')
+    if(override.maxRounds!==undefined&&override.maxRounds>repository.maxRounds)throw Error('ciPolicy arc round bound must narrow repository authority')
+    if(checks&&repository.requiredChecks&&repository.requiredChecks.some(check=>!checks.includes(check)))throw Error('ciPolicy arc required checks cannot remove repository checks')
+    if(override.ownership&&ownership.some(rule=>!repository.ownership.some(parent=>parent.owner===rule.owner&&(rule.pathPrefix===parent.pathPrefix||rule.pathPrefix.startsWith(parent.pathPrefix+'/')))))throw Error('ciPolicy arc ownership must narrow repository authority')
+    if(override.reproductionCommands&&Object.entries(commands).some(([key,value])=>!Object.hasOwn(repository.reproductionCommands,key)||!sameJson(value,repository.reproductionCommands[key])))throw Error('ciPolicy arc reproduction commands must select repository commands unchanged')
+    Object.assign(repository,override)
+    if(checks!==undefined)repository.requiredChecks=checks
+    if(override.ownership!==undefined)repository.ownership=ownership
+    if(override.reproductionCommands!==undefined)repository.reproductionCommands=commands
+  }
+  return deepFreeze(repository)
+}
+
 const ModelPolicyShape = z.strictObject({
   preset: z.enum(Object.keys(MODEL_PRESETS)).optional(),
   default: z.enum(Object.keys(MODEL_ALIASES)).optional(),
@@ -237,6 +296,7 @@ export const RoadmapConfigShape = z.strictObject({
   testCadence: TestCadenceShape.optional(),
   mergePolicy: MergePolicyShape.optional(),
   deliveryPolicy: DeliveryPolicyShape.optional(),
+  ciPolicy: CiPolicyShape.optional(),
   modelPolicy: ModelPolicyShape.optional(),
   gateSpecialists: z.array(GateSpecialistShape).optional(),
   validationTiers: ValidationTiersShape.optional(),
@@ -343,6 +403,12 @@ export function loadConfig(cwd, opts = {}) {
       lines.push(`${dotted}: ${issue.message}`)
     }
     throw new ConfigError('invalid', lines)
+  }
+  try {
+    ciPolicyOf(result.data)
+    for (const arcId of Object.keys(result.data.ciPolicy?.arcs ?? {})) ciPolicyOf(result.data, arcId)
+  } catch (error) {
+    throw new ConfigError('invalid', [configPath, `ciPolicy: ${error?.message ?? error}`])
   }
   return result.data
 }

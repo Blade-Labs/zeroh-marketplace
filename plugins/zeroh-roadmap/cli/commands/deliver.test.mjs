@@ -10,7 +10,12 @@ function harness({arcId='A',strategy={A:{kind:'independent'}},existing={},bootst
  const chosen=planned??{status:'ready',ownerArcId:arcId,memberArcId:arcId,memberOrder:null,target:target(arcId),strategy:{kind:'independent',arcId},existing:receipts[arcId]??null}
  const policy={providerId:'github',remote:'origin',defaultBaseRef:null,terminal:'open',allowedPushRefs:null,requiredCapabilities:['create','lookup','pull-request','push','update'],requiredChecks:null,strategy}
  const provider={bootstrap(input){calls.push(['bootstrap',input]);return bootstrap??{status:'ready',providerId:'github',repositoryId:'blade/roadmap',baseRef:'refs/heads/main',baseSha:BASE,requiredChecks:['unit'],refs:{heads:{'refs/heads/main':BASE,...(chosen.target?{[chosen.target.headRef]:HEAD}:{})}}}}}
- const deps={cwd:'/repo',loadConfig:()=>({}),deliveryPolicyOf:()=>policy,loadArc:(_root,id)=>({id,name:`Arc ${id}`,baseRef:'local-only'}),listDeliveries:()=>Object.entries(receipts).map(([ownerArcId,delivery])=>({ownerArcId,delivery})),loadArcDelivery:(_root,id)=>receipts[id]??null,
+ const resumePublishedDelivery=({state,ownerArcId})=>{
+  calls.push(['resume',{ownerArcId}])
+  if(state.terminal.status==='preparing')state=receipts[ownerArcId]=reduceDelivery(state,{type:'set-terminal',deliveryKey:state.deliveryKey,targetKey:state.target.targetKey,expectedRevision:state.revision,at:AT,terminal:{status:'awaiting-ci',headSha:state.target.currentHeadSha,reason:null}})
+  return {status:state.terminal.status,state,reason:null}
+ }
+ const deps={resumePublishedDelivery,cwd:'/repo',loadConfig:()=>({}),deliveryPolicyOf:()=>policy,loadArc:(_root,id)=>({id,name:`Arc ${id}`,baseRef:'local-only'}),listDeliveries:()=>Object.entries(receipts).map(([ownerArcId,delivery])=>({ownerArcId,delivery})),loadArcDelivery:(_root,id)=>receipts[id]??null,
  resolveBranchStrategy(input){calls.push(['resolve',input]);return chosen},createProvider:()=>provider,gitHead:()=>HEAD,clock:()=>AT,
  transitionArcDelivery(_root,id,event){calls.push(['transition',event]);receipts[id]=reduceDelivery(receipts[id]??null,event);return receipts[id]},
  publishDelivery(request){calls.push(['publish',request]);const state=receipts[request.arcId],t=state.target,pullRequest={providerId:t.providerId,repositoryId:t.repositoryId,targetKey:t.targetKey,providerPullRequestId:'PR_7',number:7,url:null,state:'open',draft:false,baseRef:t.baseRef,headRef:t.headRef,baseSha:t.currentBaseSha,headSha:t.currentHeadSha,observedAt:AT};state.pullRequest=pullRequest;return {status:'published',delivery:state,pullRequest,reason:null}},stdout:value=>out.push(value),stderr:value=>err.push(value)}
@@ -35,7 +40,7 @@ test('group nonowner resumes sole order-zero owner without publishing its own HE
  owner.target={...owner.target,targetKey:JSON.stringify(['group','release']),headRef:'refs/heads/roadmap/group-release'};owner.deliveryKey=JSON.stringify(['github','blade/roadmap',owner.target.targetKey]);owner.requested={...owner.requested,allowedPushRefs:[owner.target.headRef]};owner.pullRequest={...owner.pullRequest,targetKey:owner.target.targetKey,headRef:owner.target.headRef}
  const planned={status:'ready',ownerArcId:'A',memberArcId:'B',memberOrder:1,target:owner.target,strategy:owner.strategy,existing:owner}
  const h=harness({arcId:'B',strategy,existing:{A:owner},planned});h.deps.gitHead=()=>{throw Error('nonowner HEAD must not be read')}
- assert.equal(await run(['B','--resume','--json'],h.deps),0,h.err.join(''));assert.equal(h.calls.find(([n])=>n==='publish')[1].arcId,'A');assert.equal(h.receipts.B,undefined)
+ assert.equal(await run(['B','--resume','--json'],h.deps),0,h.err.join(''));assert.equal(h.calls.find(([n])=>n==='resume')[1].ownerArcId,'A');assert.equal(h.receipts.B,undefined)
 })
 test('bootstrap and planner holds make zero publication or initialization calls',async()=>{
  for(const blocked of [{bootstrap:{status:'held',kind:'auth',remedy:'authenticate GitHub',resumable:true,observedAt:AT}},{planned:{status:'held',ownerArcId:'A',memberArcId:'A',reason:'base-churn',expected:{},observed:{}}}]){
@@ -96,4 +101,35 @@ test('unchanged green delivery resume preserves terminal state and revision',asy
  const observed=h.receipts.A;h.deps.transitionArcDelivery('/repo','A',{type:'set-terminal',deliveryKey:observed.deliveryKey,targetKey:observed.target.targetKey,expectedRevision:observed.revision,at,terminal:{status:'open-green',headSha:HEAD,checksObservedAt:at}})
  const before=structuredClone(h.mutations),revision=h.receipts.A.revision
  assert.equal(await run(['A','--resume','--json'],h.deps),0);assert.equal(h.receipts.A.terminal.status,'open-green');assert.equal(h.receipts.A.revision,revision);assert.deepEqual(h.mutations,before);assert.equal(JSON.parse(h.out.at(-1)).status,'open-green')
+})
+test('base churn reconciles the same observed PR and invalidates old check evidence before CI resume',async()=>{
+ const fresh=harness();await run(['A','--json'],fresh.deps)
+ const nextBase='2'.repeat(40),h=harness({existing:fresh.receipts,bootstrap:{status:'ready',providerId:'github',repositoryId:'blade/roadmap',baseRef:'refs/heads/main',baseSha:nextBase,requiredChecks:['unit'],refs:{heads:{'refs/heads/main':nextBase,[fresh.receipts.A.target.headRef]:HEAD}}}})
+ const provider=h.deps.createProvider();provider.lookup=()=>({...h.receipts.A.pullRequest,baseSha:nextBase,observedAt:AT})
+ h.deps.resumePublishedDelivery=({state})=>{assert.equal(state.target.currentBaseSha,nextBase);assert.equal(state.pullRequest.baseSha,nextBase);assert.equal(state.checks,null);return {state,status:'awaiting-ci'}}
+ assert.equal(await run(['A','--resume','--json'],h.deps),0,h.out.join(''))
+ assert.equal(h.calls.filter(([name,event])=>name==='transition'&&event.type==='advance-base').length,1)
+ assert.equal(h.calls.some(([name])=>name==='publish'),false)
+})
+
+
+test('--correction-phase is a resume-only positive phase selector forwarded to the coordinator',async()=>{
+ const seeded=harness();await run(['A','--json'],seeded.deps)
+ const resumed=harness({existing:seeded.receipts});let selected
+ resumed.deps.resumePublishedDelivery=request=>{selected=request.correctionPhase;return {status:'awaiting-ci',state:request.state}}
+ assert.equal(await run(['A','--resume','--correction-phase','42','--json'],resumed.deps),0,resumed.err.join(''))
+ assert.equal(selected,42)
+ for(const argv of [['A','--correction-phase','42'],['A','--resume','--correction-phase','0'],['A','--resume','--correction-phase','bad'],['A','--resume','--correction-phase'],['A','--resume','--correction-phase','42','--correction-phase','43']]){
+  const h=harness({existing:seeded.receipts});assert.equal(await run(argv,h.deps),1,JSON.stringify(argv));assert.equal(h.calls.length,0)
+ }
+})
+
+
+test('42.7 per-arc configured checks cannot replace an immutable receipt before bootstrap',async()=>{
+ const seeded=harness();assert.equal(await run(['A','--json'],seeded.deps),0)
+ const before=structuredClone(seeded.receipts.A),h=harness({existing:seeded.receipts})
+ h.deps.loadConfig=()=>({ciPolicy:{requiredChecks:['unit'],arcs:{A:{requiredChecks:['integration','unit']}}}})
+ assert.equal(await run(['A','--resume','--json'],h.deps),2,h.err.join(''))
+ assert.deepEqual(h.receipts.A,before)
+ assert.equal(h.calls.some(([name])=>['bootstrap','resolve','publish','resume','transition'].includes(name)),false)
 })

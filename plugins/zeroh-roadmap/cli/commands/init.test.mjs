@@ -30,7 +30,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { deliveryPolicyOf } from '../lib/config.mjs'
+import { deliveryPolicyOf, ciPolicyOf } from '../lib/config.mjs'
 import { provisionTsx, installConsumerSchema } from '../../test/fixture-consumer/harness.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url)) // cli/commands/
@@ -148,6 +148,9 @@ test('1) `init --config` writes a self-consistent config that `config check` the
   assert.equal(deliveryPolicyOf(emitted).terminal,'open')
   assert.equal(deliveryPolicyOf(emitted).requiredChecks,null)
   assert.equal(deliveryPolicyOf(emitted).allowedPushRefs,null)
+  assert.deepEqual(emitted.ciPolicy,{provider:'github',pollIntervalMs:15000,timeoutMs:120000,correctionTimeoutMs:1800000,maxRounds:2,headMode:'source-only',ownership:[],reproductionCommands:{}})
+  assert.equal(Object.hasOwn(emitted.ciPolicy,'requiredChecks'),false)
+  assert.deepEqual(ciPolicyOf(emitted),{providerId:'github',requiredChecks:null,pollIntervalMs:15000,timeoutMs:120000,correctionTimeoutMs:1800000,maxRounds:2,headMode:'source-only',ownership:[],reproductionCommands:{}})
 
   // Self-consistency: the scaffolded config must parse through the loader the
   // check command drives — a placeholder that fails its own validator is a bug.

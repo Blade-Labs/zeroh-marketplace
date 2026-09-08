@@ -34,6 +34,16 @@ const PLACEHOLDER_CONFIG = {
     e2e: 'npm run test:e2e',
     emit: 'npm run emit:phases',
   },
+  ciPolicy: {
+    provider: 'github',
+    pollIntervalMs: 15000,
+    timeoutMs: 120000,
+    correctionTimeoutMs: 1800000,
+    maxRounds: 2,
+    headMode: 'source-only',
+    ownership: [],
+    reproductionCommands: {},
+  },
 }
 
 export default async function run(argv) {

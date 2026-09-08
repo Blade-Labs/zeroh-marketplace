@@ -1,3 +1,4 @@
+import {loadConfig} from './config.mjs'
 /**
  * gate-report — the GateRunReport shape + writer/reader + the ONE phase-file↔report
  * consistency checker (ROADCODE-DESIGN §2, pre-made decision 4). The report is a NEW
@@ -15,7 +16,12 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join } from 'node:path'
+import { join,relative,dirname } from 'node:path'
+import {gateInputKey} from './gate-diagnostics.mjs'
+import {bridgeImport,bridgeParseShape} from './tsx-bridge.mjs'
+import {consumerSchemaPath} from './roadmap-root.mjs'
+import {withFileLock} from './file-lock.mjs'
+import {isDeepStrictEqual as same} from 'node:util'
 import { z } from 'zod'
 import { roadmapRoot } from './roadmap-root.mjs'
 
@@ -112,8 +118,12 @@ const CurationShape = z.object({
   redProofs: z.array(z.object({ scratch: z.string(), revert: z.string(), subject: z.string() })),
 })
 
+const CorrectionReviewInputShape=z.object({arcId:z.string().min(1),agent:z.string().min(1),model:z.string().min(1),verdict:z.literal('clean'),summary:z.string().min(1),findings:z.array(GateFindingRecordShape).length(0)}).strict()
+const CorrectionReviewShape=z.object({arcId:z.string().min(1),phase:z.number().int().positive(),taskId:z.string().nullable(),round:z.number().int().min(1).max(2),sourceHeadSha:z.string(),repairHead:z.string(),inputKey:z.string(),changedPaths:z.array(z.string()).min(1),reviewer:CorrectionReviewInputShape,recordedAt:z.string().datetime()}).strict()
+
 /** The persisted GateRunReport (plugin-side Zod). */
 export const GateRunReportShape = z.object({
+  correctionReview: CorrectionReviewShape.optional(),
   phase: z.number().int().positive(),
   startedAt: z.string(),
   baseSha: z.string(),
@@ -133,7 +143,7 @@ export const GateRunReportShape = z.object({
    * flip) and by the --verify-complete eval refresh (a subset is not a sample).
    */
   slotFilter: z.string().min(1).optional(),
-  attempt: z.object({ inputKey: z.string().nullable(), retryReason: z.string().optional() }).optional(),
+  attempt: z.object({ inputKey: z.string().nullable(), headSha:z.string().optional(), taskId:z.string().optional(), retryReason: z.string().optional() }).optional(),
 })
 
 /** The record element gate run --record-round parses (without recordedAt — added on append). */
@@ -335,4 +345,52 @@ export function checkPhaseConsistency(parsedPhase, report) {
     if (!decision.terminal) problems.push(...decision.problems)
   }
   return { ok: problems.length === 0, problems }
+}
+
+export function readCorrectionReview(root,phase){
+ const report=latestReport(root,phase)?.report,review=report?.correctionReview
+ if(!review||!report.green||report.slots.some(row=>row.exitCode!==0&&!row.declaredAbsent)||!report.slots.some(row=>row.exitCode===0&&/unit|integration|e2e/.test(row.slot))||report.attempt?.headSha!==review.repairHead||report.attempt?.inputKey!==review.inputKey)return null
+ return review
+}
+export function recordCorrectionReview(root,phase,input,{clock=()=>new Date().toISOString(),loadCheckpoint=(root,id)=>{const raw=JSON.parse(readFileSync(join(roadmapRoot(root),'.gate',`arc-${id}`,'validate.json'),'utf8')),parsed=bridgeParseShape(root,consumerSchemaPath(root),'CorrectionCheckpointShape',raw);if(!parsed.ok)throw Error('Malformed correction checkpoint');return parsed.parsed},loadPhase=(root,number)=>{
+ const path=join(roadmapRoot(root),'phases',`phase-${number}.phase.ts`),imported=bridgeImport(path,{consumerRoot:root})
+ if(!imported.ok)throw Error('Cannot read correction owning phase')
+ const parsed=bridgeParseShape(root,consumerSchemaPath(root),'PhaseShape',imported.parsed)
+ if(!parsed.ok)throw Error('Correction owning phase is invalid')
+ return parsed.parsed
+}}={}){
+ const reviewer=CorrectionReviewInputShape.parse(input)
+ if(/[\\/\0]/.test(reviewer.arcId)||['.','..'].includes(reviewer.arcId)||/self[\s_-]?review|phase-executor|software-developer/i.test(reviewer.agent))throw Error('Correction review requires an independent reviewer and safe arc identity')
+ const dir=gateDir(root,phase)
+ return withFileLock(join(dir,'.correction-review.lock'),()=>{
+  const latest=latestReport(root,phase),checkpoint=loadCheckpoint(root,reviewer.arcId),c=checkpoint?.correction,owner=loadPhase(root,phase),at=clock()
+  const report=latest?.report
+  if(!report?.green||!report.slots.length||report.slots.some(row=>row.exitCode!==0&&!row.declaredAbsent)||!report.slots.some(row=>row.exitCode===0&&/unit|integration|e2e/.test(row.slot)))throw Error('Correction requires current green affected checks')
+  if(!Number.isFinite(Date.parse(at))||!Number.isFinite(Date.parse(c?.bounds?.deadlineAt))||checkpoint.arcId!==reviewer.arcId||checkpoint.verdict!=='GAPS'||c?.state!=='awaiting-repair'||!c.route||!Number.isInteger(c.round)||c.round<1||c.round>c.bounds?.maxRounds||!Number.isInteger(c.bounds?.maxRounds)||c.bounds.maxRounds<1||c.bounds.maxRounds>2||c.route.sourceHeadSha!==c.validationHead)throw Error('Correction checkpoint is missing, stale or exhausted')
+  const trace=c.route.kind==='small-repair'?c.route.trace:c.route.plannedCorrection
+  if(trace?.phaseId!==phase||owner.phase!==phase||!correctionPhaseBelongs(root,owner.arcId,reviewer.arcId))throw Error('Correction phase ownership differs')
+  const git=args=>execFileSync('git',['-C',root,...args],{encoding:'utf8',timeout:10000,maxBuffer:8*1024*1024}).trim()
+  const head=git(['rev-parse','HEAD']),key=gateInputKey(root,{exclude:[relative(root,dirname(gateDir(root,phase))),relative(root,join(roadmapRoot(root),'arc-evals',`phase-${phase}.peval.json`))]})
+  if(head===c.validationHead||report.attempt?.headSha!==head||!key||report.attempt?.inputKey!==key||git(['status','--porcelain','--untracked-files=no']))throw Error('Correction gate HEAD or effective input is stale/uncommitted')
+  git(['merge-base','--is-ancestor',c.validationHead,head])
+  const taskId=report.attempt?.taskId??null,task=taskId?owner.tasks.find(t=>t.id===taskId):null
+  if(taskId&&!task)throw Error('Correction gate task is missing')
+  const covered=task?task.files:[...(owner.keyFiles??[]),...owner.tasks.flatMap(t=>t.files??[])]
+  const changedPaths=git(['diff','--name-only','-z',c.validationHead,head,'--']).split('\0').filter(Boolean).sort()
+  if(!changedPaths.length||changedPaths.some(path=>!c.route.scopePaths.includes(path)||!covered.some(prefix=>path===prefix||path.startsWith(prefix.replace(/\/$/,'')+'/'))))throw Error('Actual repair paths exceed the routed scope or affected task coverage')
+  const review=CorrectionReviewShape.parse({arcId:reviewer.arcId,phase,taskId,round:c.round,sourceHeadSha:c.validationHead,repairHead:head,inputKey:key,changedPaths,reviewer,recordedAt:at})
+  if(report.correctionReview&&same({...report.correctionReview,recordedAt:null},{...review,recordedAt:null}))return report.correctionReview
+  const writeAt=clock()
+  if(!Number.isFinite(Date.parse(writeAt))||Date.parse(writeAt)>=Date.parse(c.bounds.deadlineAt))throw Error('Correction checkpoint is missing, stale or exhausted')
+  const updated=GateRunReportShape.parse({...report,correctionReview:review})
+  if(latestReport(root,phase)?.path!==latest.path)throw Error('Latest gate changed while recording correction review')
+  writeFileSync(latest.path,JSON.stringify(updated,null,2)+'\n')
+  return review
+ },{label:'affected correction review'})
+}
+
+function correctionPhaseBelongs(root,phaseArcId,deliveryArcId){
+ if(phaseArcId===deliveryArcId)return true
+ const strategy=loadConfig(root).deliveryPolicy?.branchStrategy??{},owner=strategy[deliveryArcId],member=strategy[phaseArcId]
+ return owner?.kind==='grouped'&&owner.order===0&&member?.kind==='grouped'&&member.groupId===owner.groupId
 }

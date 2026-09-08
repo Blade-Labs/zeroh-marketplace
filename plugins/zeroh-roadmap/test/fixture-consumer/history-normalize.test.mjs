@@ -61,7 +61,7 @@ test('curation primitives refuse a prepared CAS race, an immutable rescue collis
 test('three reviewed mixed-phase corrections become one neutral leased tail and push replay is idempotent', () => {
   const fixture = arcFixture(); normalizeArc(fixture.root, fixture.arcId, { apply: true }, deps())
   const publishedHead = git(fixture.root, 'rev-parse', 'HEAD'); let observed
-  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count)), publishedHead)
+  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count), publishedHead), publishedHead)
   let pushes = 0
   const live = () => ({ ...observed, head: git(fixture.root, 'rev-parse', 'HEAD') })
   const applied = normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: live, replacePublishedHead(call) { pushes++; git(fixture.root, 'update-ref', call.ref, call.newHead, call.expectedOld); return { ref: call.ref, head: call.newHead } } })
@@ -78,7 +78,7 @@ test('three reviewed mixed-phase corrections become one neutral leased tail and 
 test('green published corrections never rewrite or invoke the lease seam', () => {
   const fixture = arcFixture(); normalizeArc(fixture.root, fixture.arcId, { apply: true }, deps())
   const publishedHead = git(fixture.root, 'rev-parse', 'HEAD'); let observed
-  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count)), publishedHead)
+  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count), publishedHead), publishedHead)
   observed = { ...observed, green: true, checks: { head: publishedHead, state: 'green' } }; let pushes = 0
   const before = git(fixture.root, 'rev-parse', 'HEAD')
   assert.throws(() => normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => ({ ...observed, head }), replacePublishedHead(call) { pushes++; git(fixture.root, 'update-ref', call.ref, call.newHead, call.expectedOld); return { ref: call.ref, head: call.newHead } } }), (error) => error.kind === 'green')
@@ -88,7 +88,7 @@ test('green published corrections never rewrite or invoke the lease seam', () =>
 test('non-red published checks cannot authorize the third-correction lease even with valid ownership evidence', () => {
   const fixture = arcFixture(); normalizeArc(fixture.root, fixture.arcId, { apply: true }, deps())
   const publishedHead = git(fixture.root, 'rev-parse', 'HEAD'); let observed
-  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count)), publishedHead)
+  for (const count of [1, 2, 3]) observed = publishedDelivery(fixture.root, appendReviewedCorrection(fixture, count, fixture.phases.at(-4 + count), publishedHead), publishedHead)
   observed = { ...observed, checks: { head: publishedHead, state: 'pending' } }; let pushes = 0
   const before = git(fixture.root, 'rev-parse', 'HEAD')
   assert.throws(() => normalizeArc(fixture.root, fixture.arcId, { apply: true }, { inspectDelivery: ({ head }) => ({ ...observed, head }), replacePublishedHead(call) { pushes++; git(fixture.root, 'update-ref', call.ref, call.newHead, call.expectedOld); return { ref: call.ref, head: call.newHead } } }), (error) => error.kind === 'correction-unproven')

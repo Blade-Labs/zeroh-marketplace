@@ -10,7 +10,10 @@
  * runCaptured is the ASYNC sibling for a CONSUMER-authored shell command — same honesty
  * rail, plus a budget, because a consumer's own runner may hang.
  */
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { readSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 // execFileSync's 1 MiB default silently truncates and THEN throws ENOBUFS, which a caller
 // reads as "the command failed" — indistinguishable from "the command found nothing". A git
@@ -77,3 +80,33 @@ export function runCaptured(command, { cwd, timeoutMs = 120_000 } = {}) {
     child.on('close', (code) => finish(timedOut ? { timedOut: true } : { exitCode: code ?? 128 }))
   })
 }
+
+// Configured argv travels as bounded data through resource wrappers, never as shell text.
+function argvStdinMain() {
+  try {
+    const chunks = [], buffer = Buffer.alloc(8192)
+    let length = 0, count
+    while ((count = readSync(0, buffer, 0, buffer.length, null)) > 0) {
+      length += count
+      if (length > 1024 * 1024) throw Error('argv input exceeds 1 MiB')
+      chunks.push(Buffer.from(buffer.subarray(0, count)))
+    }
+    const argv = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+    if (!Array.isArray(argv) || !argv.length || !argv.every(value => typeof value === 'string' && !value.includes('\0')) || !argv[0].trim()) throw Error('expected a nonempty NUL-free argv array')
+    const result = spawnSync(argv[0], argv.slice(1), { cwd: process.cwd(), shell: false, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 8 * 1024 * 1024 })
+    if (result.stdout?.length) writeFileSync(1, result.stdout)
+    if (result.stderr?.length) writeFileSync(2, result.stderr)
+    if (result.error) {
+      writeFileSync(2, 'roadmap argv launcher: ' + result.error.message + '\n')
+      process.exitCode = result.error.code === 'ENOENT' ? 127 : result.error.code === 'EACCES' ? 126 : 125
+    } else if (result.signal) {
+      writeFileSync(2, 'roadmap argv launcher: child signal: ' + result.signal + '\n')
+      process.kill(process.pid, result.signal)
+    } else if (Number.isInteger(result.status)) process.exitCode = result.status
+    else throw Error('child completion is unavailable')
+  } catch (error) {
+    writeFileSync(2, 'roadmap argv launcher: ' + error.message + '\n')
+    process.exitCode = 125
+  }
+}
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url) && process.argv[2] === '--argv-stdin') argvStdinMain()

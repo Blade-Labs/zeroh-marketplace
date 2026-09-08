@@ -1,3 +1,4 @@
+import {isDeepStrictEqual as same} from 'node:util'
 /**
  * roadmap arc <sub> — the arc-level transitions (arc ROADCODE §2).
  *   next <arcId> [--json] [--ignore-capacity]  the ONE position derivation (seam 2) + admission gate
@@ -9,9 +10,16 @@
  * around it) · 3 held-for-user (land). STRICT context — a tsx-absent typed read is a
  * loud exit 1, never a guess.
  */
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync,renameSync,unlinkSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join } from 'node:path'
+import { join,relative } from 'node:path'
+import {randomUUID} from 'node:crypto'
+import {withFileLock} from '../lib/file-lock.mjs'
+import {gateInputKey} from '../lib/gate-diagnostics.mjs'
+import {readCorrectionReview,latestReport} from '../lib/gate-report.mjs'
+import {bridgeImport,bridgeParseShape} from '../lib/tsx-bridge.mjs'
+import {consumerSchemaPath} from '../lib/roadmap-root.mjs'
+import {assertDeliveryJudgments,readDeliveryArtifact,evidenceCoversHead} from '../lib/delivery-evaluation.mjs'
 import { gitToplevel } from '../lib/gitroot.mjs'
 import { loadConfig, ConfigError } from '../lib/config.mjs'
 import { deriveArcPosition, readValidateVerdict, DeriveError } from '../lib/derive.mjs'
@@ -148,6 +156,9 @@ async function recordValidate(rest) {
     process.stderr.write(`roadmap arc record-validate: cannot resolve the current commit: ${e.message}\n`)
     return 1
   }
+  let priorRecord
+  try{priorRecord=readValidateVerdict(toplevel,arcId)}catch(error){process.stderr.write('roadmap arc record-validate: '+error.message+'\n');return 2}
+  const mutationAt = new Date().toISOString()
   let artifact
   if (correctionReady) {
     let existing
@@ -169,6 +180,7 @@ async function recordValidate(rest) {
       process.stdout.write(JSON.stringify(existing, null, 2) + '\n')
       return 0
     }
+    if(correction.bounds && Date.parse(mutationAt) >= Date.parse(correction.bounds.deadlineAt)){process.stderr.write('roadmap arc record-validate: correction deadline has expired\n');return 2}
     if (correction.state !== 'awaiting-repair') {
       process.stderr.write('roadmap arc record-validate: correction is not awaiting repair\n')
       return 1
@@ -183,13 +195,20 @@ async function recordValidate(rest) {
       process.stderr.write('roadmap arc record-validate: repair commit does not descend from its validation checkpoint\n')
       return 1
     }
+    let reviewRef
+    if(correction.bounds){
+      const phase=correction.route?.trace?.phaseId??correction.route?.plannedCorrection?.phaseId,review=readCorrectionReview(toplevel,phase)
+      if(!review||review.arcId!==arcId||review.round!==correction.round||review.sourceHeadSha!==correction.validationHead||review.repairHead!==head){process.stderr.write('roadmap arc record-validate: record the current green affected gate and independent correction review before --correction-ready\n');return 2}
+      reviewRef=relative(toplevel,latestReport(toplevel,phase).path)
+    }
     artifact = {
       ...existing,
       correction: {
         ...correction,
         state: 'needs-sweep',
         repairHead: head,
-        readyAt: new Date().toISOString(),
+        ...(reviewRef?{reviewRef}:{}),
+        readyAt: mutationAt,
       },
     }
   } else {
@@ -197,19 +216,42 @@ async function recordValidate(rest) {
     if (verdict === 'GAPS' && existsSync(path)) {
       try { prior = JSON.parse(readFileSync(path, 'utf8')) } catch { /* a new explicit verdict replaces corrupt evidence */ }
     }
+    if(priorRecord?.correction?.bounds)prior=priorRecord
     const continuing = prior?.verdict === 'GAPS' && String(prior.arcId) === String(arcId)
     const { state, validationHead, repairHead, readyAt, ...bounds } = continuing ? (prior.correction ?? {}) : {}
     artifact = {
       ...(continuing ? prior : {}),
       arcId,
       verdict,
-      at: new Date().toISOString(),
+      headSha:head,
+      at: mutationAt,
       ...(note ? { note } : {}),
       ...(verdict === 'GAPS' ? { correction: { ...bounds, state: 'awaiting-repair', validationHead: head } } : {}),
     }
   }
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(path, JSON.stringify(artifact, null, 2) + '\n')
+  if(!correctionReady&&priorRecord?.correction?.bounds){
+    const c=priorRecord.correction
+    if(Date.parse(mutationAt)>=Date.parse(c.bounds.deadlineAt)){
+      if(verdict==='GAPS'&&c.state==='awaiting-repair'&&c.validationHead===head&&!note)artifact=priorRecord
+      else if(verdict==='PASS'&&c.state==='validated'&&priorRecord.verdict==='PASS'&&priorRecord.headSha===head&&!note){process.stdout.write(JSON.stringify(priorRecord,null,2)+'\n');return 0}
+      else{process.stderr.write('roadmap arc record-validate: correction deadline has expired\n');return 2}
+    }
+    if(verdict==='GAPS'){
+      if(c.state==='awaiting-repair'&&c.validationHead===head)artifact={...priorRecord,...(note?{note}:{})}
+      else artifact={...artifact,correction:{state:'awaiting-repair',validationHead:head,gateInputKey:gateInputKey(toplevel),round:c.round,bounds:c.bounds,route:null}}
+    }else{
+      if(c.state!=='needs-sweep'&&c.state!=='validated'){process.stderr.write('roadmap arc record-validate: correction must pass review and sweep before PASS\n');return 2}
+      try{
+        const imported=bridgeImport(join(roadmapRoot(toplevel),'arcs',`${arcId}.arc.ts`),{consumerRoot:toplevel});if(!imported.ok)throw Error('cannot read arc')
+        const parsed=bridgeParseShape(toplevel,consumerSchemaPath(toplevel),'ArcShape',imported.parsed);if(!parsed.ok)throw Error('invalid arc')
+        const sweep=readDeliveryArtifact(toplevel,arcId,'sweep','SweepReportShape'),panel=readDeliveryArtifact(toplevel,arcId,'verdicts','ArcVerdictsFileShape')
+        if(sweep?.correction?.repairHead!==c.repairHead||sweep.correction.validationHead!==c.validationHead||Date.parse(sweep.observation?.recordedAt)<Date.parse(c.readyAt)||Date.parse(panel?.observation?.recordedAt)<Date.parse(sweep.observation?.recordedAt))throw Error('correction sweep or independent panel is stale')
+        assertDeliveryJudgments({arc:parsed.parsed,sweep,panel,validation:artifact,head,isCurrentHead:(observed,current)=>evidenceCoversHead(toplevel,observed,current,{arcId})})
+        artifact.correction={...c,state:'validated'}
+      }catch(error){process.stderr.write('roadmap arc record-validate: '+error.message+'\n');return 2}
+    }
+  }
+  writeValidationCheckpoint(toplevel,arcId,priorRecord,artifact)
   process.stdout.write(JSON.stringify(artifact, null, 2) + '\n')
   return 0
 }
@@ -268,4 +310,29 @@ export default async function run(argv, deps = {}) {
   }
   process.stderr.write(`roadmap arc: unknown subcommand '${sub}' (next | plane | normalize | record-validate | land)\n`)
   return 1
+}
+
+export function writeValidationCheckpoint(root,arcId,expected,next,{clock=()=>new Date().toISOString()}={}){
+ if(typeof arcId!=='string'||!arcId||/[\\/\0]/.test(arcId)||['.','..'].includes(arcId))throw Error('Unsafe validation arc identity')
+ const dir=join(roadmapRoot(root),'.gate',`arc-${arcId}`),path=join(dir,'validate.json')
+ mkdirSync(dir,{recursive:true})
+ return withFileLock(`${path}.lock`,()=>{
+  const actual=existsSync(path)?JSON.parse(readFileSync(path,'utf8')):null
+  if(!same(actual,expected))throw Error('Validation checkpoint changed; reload before recording')
+  if(same(actual,next))return actual
+  if(next.correction?.bounds){const writeAt=clock();if(!Number.isFinite(Date.parse(writeAt))||Date.parse(writeAt)>=Date.parse(next.correction.bounds.deadlineAt))throw Error('Correction checkpoint deadline has expired')}
+  if(actual?.correction?.bounds&&(!next.correction?.bounds||!same(actual.correction.bounds,next.correction.bounds)||next.correction.round!==actual.correction.round))throw Error('Correction bounds and consumed rounds cannot reset or grow through validation recording')
+  if(next.correction?.bounds){const checked=bridgeParseShape(root,consumerSchemaPath(root),'CorrectionCheckpointShape',next);if(!checked.ok)throw Error('Malformed typed correction checkpoint')}
+  const temp=`${path}.${randomUUID()}.tmp`
+  try{writeFileSync(temp,JSON.stringify(next,null,2)+'\n',{flag:'wx'});renameSync(temp,path)}finally{try{unlinkSync(temp)}catch(error){if(error.code!=='ENOENT')throw error}}
+  return next
+ },{label:'validation checkpoint'})
+}
+export function initializeCiCorrection(root,arcId,{headSha,inputKey,bounds}){
+ const prior=readValidateVerdict(root,arcId)
+ if(prior?.correction?.bounds)return prior
+ if(prior?.correction||prior?.verdict==='GAPS')throw Error('Legacy correction usage is unknown; reconcile it before creating a budget')
+ if(!prior||!['PASS','no-op'].includes(prior.verdict)||!evidenceCoversHead(root,prior.headSha,headSha,{arcId}))throw Error('A current accepted arc is required before CI correction')
+ const next={arcId,verdict:'GAPS',at:new Date().toISOString(),headSha,note:'Bounded repair of exact-head CI failures within existing authority.',correction:{state:'awaiting-repair',validationHead:headSha,gateInputKey:inputKey,round:0,bounds,route:null}}
+ return writeValidationCheckpoint(root,arcId,prior,next)
 }
