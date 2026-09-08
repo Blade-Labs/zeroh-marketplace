@@ -6,10 +6,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import 'tsx/cjs'
-import { register } from 'tsx/esm/api'
-register()
-const { defineArc, definePhase, defineBacklog } = await import('../templates/schema.ts')
-const { crossValidate, discoverPhases } = await import('../templates/registry.ts')
+import { createRequire } from 'node:module'
+// Use the registered CJS loader consistently on both supported Node versions.
+const require = createRequire(import.meta.url)
+const { defineArc, definePhase, defineBacklog } = require('../templates/schema.ts')
+const { crossValidate, discoverPhases } = require('../templates/registry.ts')
 const arc = () => ({ id: 'A', name: 'Usable app', intent: 'Finish the user journey', scope: ['Local app'], acceptanceCriteria: [{ id: 'journey', description: 'User can complete the journey' }], phases: [1] })
 const phase = () => ({ phase: 1, name: 'Journey', arcId: 'A', criteria: ['journey'], tasks: [{ id: 'implement', description: 'Implement and check the user journey' }] })
 const review = { reviewer: 'independent reviewer', summary: 'Drove the documented user journey and checked the diff' }
