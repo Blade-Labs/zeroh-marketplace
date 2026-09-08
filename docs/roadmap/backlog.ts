@@ -8,10 +8,6 @@ export default defineBacklog({
       "label": "NATIVEGREEN — phases36–45",
       "items": [
         {
-          "phase": 41,
-          "name": "Idempotent arc delivery with explicit branch and merge authority"
-        },
-        {
           "phase": 42,
           "name": "Exact-head full-CI monitoring with bounded owned-failure correction"
         },
