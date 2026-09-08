@@ -819,3 +819,14 @@ historical observations and the scoped R0 pilot without claiming a fresh matrix.
 | report-only review requiring repair and queue-placement reasoning | superseded-with-equivalent(owner-approved focused delegated review; standalone repair/queue ownership retained) | review-phase delegated Mode A and codex prompt tests; independent intent/feasibility/verifier judgment retained |
 | Step V loading the entire plan-authoring skill | moved-to-reference(existing plan-phase/references/closure-checklist.md, with review-scope applicability) | direct pointer and existing plan-adversary reference; no authoring workflow replay |
 | native reviewer repeating mechanical validation | enforced-by-code(reviewCodex prelaunch validation in the requested checkout) | cold/prepared retry, invalid phase and validation-time mutation regressions; native speed improvement remains unverified |
+
+
+## NATIVEGREEN small-project planning repair
+
+| passage | disposition | evidence |
+|---|---|---|
+| unconstrained reading and repeated unchanged-source checks | superseded-with-equivalent(scope-specific discovery and refresh after affected inputs change; independent reviewer still reads source) | plan-phase short path and Codex reference |
+| every future symbol must exist before implementation | superseded-with-equivalent(existing anchors resolve; declared additions name creating task and contract) | closure checklist, arc review packet, plan-adversary |
+| product checks must run both directions during planning | superseded-with-equivalent(current assumptions/cheap polarity probes now; real behavioral red/green during execution; pending is never pass) | verify-rehearsal shared by planner and reviewer |
+| one-phase work cannot use an arc | superseded-with-equivalent(one existing arc retained when authorized delivery needs its identity; same review/intent/delivery gates) | plan-arc single-phase delivery branch |
+| agents reconstruct setup shapes from schemas/tests | moved-to-reference(plan-phase/references/small-project.md and templates/small-project.json) | real-consumer example validation in init.test.mjs; no new engine/schema |

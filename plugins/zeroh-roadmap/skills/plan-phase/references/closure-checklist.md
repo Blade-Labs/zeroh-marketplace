@@ -1,13 +1,14 @@
 # Step 5 self-verify list: judgment checks against the CURRENT tree
 
-Run after `roadmap phase validate <N>` passes. Every check re-reads the code NOW, never Step-2
-memory: planning-time memory is exactly where hallucinated paths and stale problem statements live.
+Run after `roadmap phase validate <N>` passes. Use inspected source at the current ref;
+refresh affected evidence if inputs changed. Independent reviewers inspect source themselves.
 Severity in parentheses is the verdict the check earns at review-phase Mode A if it fails.
 **Run in listed order**: the BLOCKER members lead, so a time-boxed pass still catches the worst
 defects; report any unrun member as unrun, never silently skip.
 
 1. **Source confirms** (BLOCKER): open each function a task modifies; does the `problem` actually
-   exist there, in the current tree?
+   exist there, in the current tree? For additions, confirm the capability is absent and the task
+   declares the new path and contract; do not require its future symbol to exist.
 
 2. **Decision completeness** (BLOCKER): grep the phase prose (problems, steps, notes) for
    decision-deferral language: `decide`, `choose`, `either`, `or we could`, `as appropriate`,
@@ -23,7 +24,8 @@ defects; report any unrun member as unrun, never silently skip.
    queued item already covering the work: STOP, do not queue, hand the ruling to the user; a
    third duplicate in the queue is strictly worse than no phase.
 
-5. **Anchor freshness** (NEEDS WORK): every `steps[].file` path and named symbol greps clean,
+5. **Anchor freshness** (NEEDS WORK): every existing path and symbol greps clean; planned
+   additions name their creating task and contract. Existing matches are checked
    case-exact, against the current tree; `line?` values are re-checked or dropped. Symbols are
    copy-pasted, never retyped. (FLUENTFRONT: a case-variant retype made a tripwire pass on the
    wrong claim.)
@@ -47,17 +49,14 @@ defects; report any unrun member as unrun, never silently skip.
    empty vs populated, cold vs warm), at least one acceptance criterion exercises the non-initial
    state. (BRAINVIEW: cold-layout-only geometry criteria; the fix was inert at real prod density.)
 
-10. **Verifies rehearsed** (NEEDS WORK): attest, per clause, which direction each verify actually
-    ran during Step 3 per `references/verify-rehearsal.md` (assumptions exited 0 now;
-    step-verifies red now for the reason the diff removes; negative greps dry-run against the
-    scratch copy; time-boxed inheritance attested as "inherited from <representative clause>").
-    A clause you cannot attest gets executed here, before commit.
+10. **Verification status** (NEEDS WORK): apply `references/verify-rehearsal.md`. Distinguish
+    observed current checks, retained behavior and future tests pending execution. Judge whether
+    each changed behavior has a feasible discriminating test; do not demand product red/green
+    during planning or treat missing future files as a behavioral test result.
 
-11. **Probes encoded, vocabulary total** (NEEDS WORK): every probe the plan names that was
-    runnable at plan time HAS run, with its observed result written into the plan (a runnable
-    probe left as execution-time homework is a foreseeable dead-end); every enumerated verdict
-    vocabulary in a task can express every outcome its probe can yield, including the honest
-    escape member (`observed: <result>`).
+11. **Probes encoded, vocabulary total** (NEEDS WORK): cheap load-bearing current-state probes
+    have observed results. Future suites/builds remain explicitly pending. Every verdict vocabulary
+    can express the outcomes its probe yields, including unknown or blocked evidence.
 
 12. **Hypotheses refuted** (NEEDS WORK; `category:'fix'` / `kind:'hardening'` only): the
     `## Hypotheses` block exists per `references/phase-file-contract.md`: ≥2 ranked causes,

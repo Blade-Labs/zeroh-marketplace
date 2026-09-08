@@ -30,7 +30,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { deliveryPolicyOf, ciPolicyOf } from '../lib/config.mjs'
+import { deliveryPolicyOf, ciPolicyOf, RoadmapConfigShape } from '../lib/config.mjs'
 import { provisionTsx, installConsumerSchema } from '../../test/fixture-consumer/harness.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url)) // cli/commands/
@@ -698,3 +698,39 @@ test('40.7 fresh scaffolds document safe disabled worktree GC policy without ena
   const check = roadmap(repo, 'config', 'check')
   assert.equal(check.status, 0, check.stderr)
 })
+
+
+for (const layout of ['roadmap', 'docs/roadmap']) {
+  test(`small-project example validates in a real ${layout} consumer without product files`, () => {
+    const repo = newRepo()
+    writeFileSync(join(repo, 'package.json'), JSON.stringify({type: 'module', scripts: {test: 'node --test'}}))
+    const setup = roadmap(repo, 'init', '--root', layout)
+    assert.equal(setup.status, 0, setup.stderr)
+    provisionTsx(repo)
+    const example = JSON.parse(readFileSync(join(HERE, '../../templates/small-project.json'), 'utf8'))
+    assert.equal(RoadmapConfigShape.safeParse(example.config).success, true)
+    assert.equal(example.config.deliveryPolicy.terminal, 'open')
+    assert.equal(example.phase.arcId, example.arc.id)
+    assert.deepEqual(example.arc.phases, [example.phase.phase])
+    assert.ok(example.config.deliveryPolicy.branchStrategy[example.arc.id])
+    const root = join(repo, layout)
+    writeFileSync(join(root, 'roadmap.config.json'), JSON.stringify(example.config))
+    writeFileSync(join(root, 'phases', 'phase-1.phase.ts'), definePhaseSrc('../lib/schema', example.phase))
+    mkdirSync(join(root, 'arcs'), { recursive: true })
+    writeFileSync(join(root, 'arcs', 'START.arc.ts'),
+      `import { defineArc } from '../lib/schema'\nexport default defineArc(${JSON.stringify(example.arc)})\n`)
+    const config = roadmap(repo, 'config', 'check')
+    assert.equal(config.status, 0, config.stderr)
+    const phase = roadmap(repo, 'phase', 'validate', '1')
+    assert.equal(phase.status, 0, phase.stderr)
+    // Load through the real consumer loader, not a duplicate schema or mocked validator.
+    const arc = spawnSync('node', ['--import', 'tsx', '--input-type=module', '-e',
+      `import arc from './${layout}/arcs/START.arc.ts'; console.log(JSON.stringify(arc))`],
+      { cwd: repo, encoding: 'utf8' })
+    assert.equal(arc.status, 0, arc.stderr)
+    const loaded = JSON.parse(arc.stdout)
+    assert.deepEqual(loaded.planes.flatMap(p => p.phases), [example.phase.phase])
+    assert.equal(existsSync(join(repo, 'src')), false, 'example does not create product code')
+    assert.equal(existsSync(join(repo, '.building')), false, 'example validation does not launch a native lane')
+  })
+}

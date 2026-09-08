@@ -21,7 +21,21 @@ handed off with `/do-arc <id>`.
 User says: `plan arc`, `/plan-arc`, `create arc`, `new arc`.
 **Not this skill:** one standalone phase -> `plan-phase`; building / sweeping / validating
 an existing arc -> `do-arc` / `arc-sweep` / `validate-arc`. An arc is a named block of phases
-shipped as one unit; work one phase can carry routes to `plan-phase` - never inflate it.
+shipped as one unit. Work one phase can carry routes to `plan-phase`, except when the
+requested PR delivery needs the existing arc identity.
+
+## Single-phase delivery
+
+For plan-phase's small, fully specified scope with authorized PR delivery, retain one ordinary
+arc and one phase. Use `../plan-phase/references/small-project.md`; no new mode, receipt or
+scheduler is required. Reuse the supplied decisions, record the existing interview/design ruling,
+and keep the user's outcome in the arc criteria. Unresolved design decisions still use Step 1b.
+Use a compact promise-to-task mapping in the arc and a short execution prompt that points to it;
+do not restate the brief in each artifact. Plan the member through plan-phase's short path with
+`--skip-review` because Step 3 owns its independent review. The supervisor owns Lane A's cheap
+mechanical checks; one independent reviewer owns Lane B's judgment. Queue only after READY.
+Existing do-arc execution, sweep, independent intent validation, delivery and resume still apply.
+Read detailed sections below only for an unresolved contract; do not replay completed checks.
 
 ## Arguments
 
@@ -146,8 +160,9 @@ Loop `plan-phase` over the reserved numbers in dependency / plane order:
   it implements; a phase that would deviate must **reopen Step 1b**, never diverge.
 - **`source` cites, never narrates:** <=2 lines - arc + plane + the designRef pointer;
   rationale stays in the execution prompt.
-- **Anchor by symbol, never by line:** cite `steps[].file` paths plus exported symbols an
-  exact `grep -F` finds at HEAD - a `file.ts:123` anchor is stale by execution time.
+- **Anchor by symbol, never by line:** existing paths/symbols resolve at the inspected ref.
+  Planned additions name their creating task and public contract, not an existing HEAD symbol.
+  A `file.ts:123` anchor is stale by execution time.
 - **Escalate, never guess:** a choice outside the three buckets stops the loop.
 
 ## Step 2c: Promise ledger - every arc promise names its fulfilling task
@@ -166,9 +181,10 @@ empty-set failure, arc-integrity.md §3).
 Review all member phases in parallel - one agent per phase, each given the reviewer
 packet from arc-integrity.md §4, each returning one READY / NEEDS WORK / BLOCKER verdict:
 - **Lane A - spec compliance (mechanical; full checklist §4):** ledger-row coverage;
-  every `steps[].file` + cited symbol hits case-sensitive `grep -F` at HEAD; every verify
-  EXECUTED in both directions - green as written, red under its falsification probe. No
-  achievable red = NEEDS WORK: UCAUDIT queued 8 of 20 phases carrying one.
+  existing files/symbols resolve at the inspected ref; planned additions name their creating task
+  and contract. Apply plan-phase/references/verify-rehearsal.md: current assumptions and cheap
+  polarity probes now, product red/green in execution. A missing planned test is not passing
+  evidence, nor a requirement to implement it during planning. Reuse current validator results.
 - **Lane B - plan quality (judgment):** `review-phase` Mode A with **`--no-queue`**,
   model per `modelPolicy.judgeModel` in `roadmap.config.json`. **Band-scoped:** Lane B
   defaults ON and is SKIPPED only when a phase is kind:mockup, docs-only (every keyFiles

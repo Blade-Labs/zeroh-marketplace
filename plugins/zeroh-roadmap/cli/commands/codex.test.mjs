@@ -640,6 +640,54 @@ test('review: a missing --doc fails loudly and destroys no previous review', () 
   assert.equal(readFileSync(prior, 'utf8'), 'previous findings\nCODEX-RUN-COMPLETE\n', 'a failed launch must leave the previous hand-off intact')
 })
 
+for (const [label, docArgs] of [
+  ['trailing --doc', ['--doc']],
+  ['--doc followed by another option', ['--doc', '--focus', 'keep the original intent']],
+]) {
+  test(`review: ${label} rejects a missing value before creating launch artifacts`, () => {
+    const root = tmpRepo()
+    writePhase(root, 630)
+    const existingWorktree = join(root, 'wt-review-630')
+    const env = fakeLaunchEnv(root, existingWorktree)
+    const priorReport = join(existingWorktree, 'CODEX-REVIEW.md')
+    const priorBytes = 'foreign previous review\nCODEX-RUN-COMPLETE\n'
+    writeFileSync(priorReport, priorBytes)
+    const worktreesBefore = execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: root, encoding: 'utf8' })
+    const artifactsBefore = readdirSync(join(root, '.building')).sort()
+    const missingWorktree = join(root, 'must-not-be-created')
+
+    for (const worktree of [existingWorktree, missingWorktree]) {
+      // Keep --doc literally last in the trailing case: the normal positive-fixture
+      // wrapper appends authority and would otherwise hide that parser edge case.
+      const result = rawSpawnSync('node', [BIN, 'codex', 'review', '630', ...EXPLICIT_PARENT, '--worktree', worktree, ...docArgs], {
+        cwd: root, encoding: 'utf8', env,
+      })
+      assert.notEqual(result.status, 0, 'an incomplete option must never launch a reviewer')
+      assert.match(result.stderr, /--doc[^\n]*(?:requires|missing|expected|needs)[^\n]*(?:value|path)|(?:missing|expected)[^\n]*(?:value|path)[^\n]*--doc/i)
+      assert.deepEqual(readdirSync(join(root, '.building')).sort(), artifactsBefore, 'no prompt, journal or launch metadata may be created')
+      assert.equal(readFileSync(priorReport, 'utf8'), priorBytes, 'foreign review bytes must survive argument rejection')
+      assert.equal(existsSync(missingWorktree), false, 'argument rejection must precede worktree creation')
+      assert.equal(execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: root, encoding: 'utf8' }), worktreesBefore)
+    }
+  })
+}
+
+test('review: a valid --doc does not supply implicit parent authority', () => {
+  const root = tmpRepo()
+  writePhase(root, 631)
+  const worktree = join(root, 'wt-review-631')
+  const env = fakeLaunchEnv(root, worktree)
+  writeFileSync(join(root, '.building', 'PLAN.md'), '# approved intent\n')
+  const before = readdirSync(join(root, '.building')).sort()
+  const result = rawSpawnSync('node', [BIN, 'codex', 'review', '631', '--worktree', worktree, '--doc', '.building/PLAN.md'], {
+    cwd: root, encoding: 'utf8', env: { ...env, ROADMAP_PARENT_AUTHORITY: 'workspace-write' },
+  })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /parent.authority|--parent-authority/i)
+  assert.deepEqual(readdirSync(join(root, '.building')).sort(), before)
+  assert.equal(existsSync(join(worktree, '.building', 'PLAN.md')), false, 'context is not carried before explicit authority')
+})
+
 test('review: an untracked --doc is copied into the worktree it names', () => {
   const root = tmpRepo()
   writePhase(root, 64)
@@ -1132,7 +1180,7 @@ test('plan: a number whose phase file already exists is refused, not planned ove
 
 /**
  * Strings plan-phase/SKILL.md OWNS — protocol BODY, never this lane's disposition:
- *  - `KNOW THE DIFF BEFORE WRITING THE TASK` / `ESCALATE TO ARCHITECT` / `PROCEED_WITH_TASK` —
+ *  - `KNOW THE CHANGE BEFORE WRITING THE TASK` / `ESCALATE TO ARCHITECT` / `PROCEED_WITH_TASK` —
  *    the two prime rules and the architect verdict token: WHEN a plan is precise enough and when
  *    to escalate is identical for every planner, so a second copy is a second protocol.
  *  - `roadmap claim` — the number-reservation mechanics. This lane reserves BEFORE launching, so
@@ -1147,7 +1195,7 @@ test('plan: a number whose phase file already exists is refused, not planned ove
  * CODEX-PLAN.md hand-off.
  */
 const PLAN_PHASE_OWNED = [
-  'KNOW THE DIFF BEFORE WRITING THE TASK',
+  'KNOW THE CHANGE BEFORE WRITING THE TASK',
   'ESCALATE TO ARCHITECT',
   'PROCEED_WITH_TASK',
   'roadmap claim',

@@ -1,6 +1,6 @@
 # Codex usability repair plan
 
-Status: corrected candidate87ec2d4 is mechanically green and independently reviewed, but the corrected native trial FAILED the10-minute runnable-code checkpoint. All pilot processes stopped. No further native run or release; task43.4 remains incomplete and broader work stays deferred.
+Status: four audited planning repairs implemented; task checks326/326 and packaging pass, independent review findings repaired. Live usability remains unproven after two failed pilots. No third native run or release;43.4 remains incomplete.
 
 ## Review findings
 
@@ -82,3 +82,35 @@ The cold-checkout preflight path worked: the parent prepared dependencies before
 Decision: stop this repair attempt as agreed; no third native trial or broad arc expansion. Review the existing planning protocol for a minimal small-project path before authorizing further implementation. Preserve independent correctness/intent review, but move the next investigation to work required before runnable code. Current repairs remain mechanically valid; they did not establish usable intent-to-PR completion.
 
 Evidence: NATIVEGREEN-corrected-pilot-20260908.json retains checkpoint, pool timing and last-observed usage (including separately labeled guardian overhead). Raw native logs and local consumer/worktree remain under /tmp/nativegreen-corrected-pilot-20260908. The owner will delete zeroh-roadmap-pilot, atlas-connector-proof-84 and roadmap-codex-pilot-20260908; this session deletes none. The completed pilot no longer needs its remote repository.
+
+
+## Follow-up planning repair — owner authorized after read-only audit
+
+The subsequent do-it authorizes four bounded repairs within43.4: a short existing-skill path for
+small fully specified work; coherent existing/new-file and planning/execution verification rules;
+a maintained schema-checked small-project configuration/phase/arc example; and fail-fast review
+argument handling with explicit parent authority in usage. No third native pilot or release is
+authorized. The two failed observations and the prior full mechanical gate remain historical.
+
+Independent test-engineer reproduced both malformed --doc cases before production changes.
+The repaired CLI rejects missing values before Git discovery, artifacts or model launch and
+retains explicit parent authority. Existing valid document carry remains covered. New fixture
+checks exercise the example through config and phase validation plus real consumer arc loading
+in both supported layouts. Product files and native receipts are not created by those checks.
+
+The short path retains independent plan review before queueing, execution correctness review,
+real tests, arc sweep and independent intent validation. No schema, scheduler or delivery engine
+changes. Same-ref source evidence may be reused by the author; the independent reviewer still
+reads relevant source independently. Only cheap current-state and polarity probes run during
+planning; future product tests remain pending until meaningful execution red/green.
+
+
+Follow-up implementation verification: task gate000028 (2026-09-08T13:23:57Z) GREEN,
+326/326 checks across6 files. Prior task gate000027 is retained RED: one assertion still named
+the old planning heading; it was re-anchored without weakening its anti-duplication check.
+The initial example test fixture lacked its declared ESM package type; corrected fixture setup
+now passes in both layouts. Types000026 declared-none; packaging and phase validation pass.
+Independent review returned one MEDIUM stale new-symbol rule and two LOW stale-description/
+number-reservation findings; all repaired and verified by source inspection. No HIGH findings.
+Actual reviewer model identity is unverified. The follow-up does not rerun the full terminal
+gate or establish live usability. No new native run, release or global cache change occurred.

@@ -1,0 +1,135 @@
+{
+  "config": {
+    "configVersion": 1,
+    "gateCommands": {
+      "lint": "none",
+      "types": "none",
+      "unit": "npm test",
+      "integration": "none",
+      "build": "none",
+      "e2e": "none",
+      "emit": "npm run emit:phases"
+    },
+    "modelPolicy": {
+      "preset": "codex-full"
+    },
+    "ciPolicy": {
+      "provider": "github",
+      "requiredChecks": [
+        "test"
+      ]
+    },
+    "deliveryPolicy": {
+      "provider": "github",
+      "remote": "origin",
+      "defaultBase": "main",
+      "terminal": "open",
+      "allowedPushRefs": [
+        "refs/heads/feature/prototype"
+      ],
+      "requiredCapabilities": [
+        "pull-request"
+      ],
+      "requiredChecks": [
+        "test"
+      ],
+      "branchStrategy": {
+        "START": {
+          "kind": "independent"
+        }
+      }
+    }
+  },
+  "arc": {
+    "id": "START",
+    "name": "First CLI prototype",
+    "baseRef": "main",
+    "phases": [
+      1
+    ],
+    "singleSeams": [
+      "A pure summarizer owns counting; the CLI owns stdin and exit codes."
+    ],
+    "honestyRails": [
+      "No runtime dependencies; do not claim unrun tests."
+    ],
+    "acceptanceCriteria": [
+      {
+        "id": "summary",
+        "job": "Summarize task input from stdin",
+        "surfaces": [
+          "CLI"
+        ],
+        "signal": "Empty and mixed completed/open tasks produce exact JSON counts; repeated calls agree.",
+        "tier": "wired",
+        "bar": "Expected counts, help exit0 and unknown-option exit2 pass real stdin tests."
+      }
+    ]
+  },
+  "phase": {
+    "phase": 1,
+    "name": "Build the tested CLI prototype",
+    "plannedBy": {
+      "model": "unknown"
+    },
+    "status": "backlog",
+    "category": "feature",
+    "kind": "logic",
+    "arcId": "START",
+    "source": "START; owner-approved CLI brief.",
+    "priority": "HIGH",
+    "dependsOn": [],
+    "conflictsWith": [],
+    "keyFiles": [
+      "src/summary.mjs",
+      "src/cli.mjs",
+      "test/cli.test.mjs",
+      "README.md"
+    ],
+    "stakeholderDemo": "Pipe task input into a CLI and read exact counts.",
+    "userFacing": true,
+    "flag": {
+      "bootWired": true,
+      "justification": "The standalone CLI is the product entry point; there is no runtime switch."
+    },
+    "tasks": [
+      {
+        "id": "1.1",
+        "title": "Implement the input-to-summary behavior",
+        "problem": "No task-summary implementation exists yet.",
+        "steps": [
+          {
+            "file": "src/summary.mjs",
+            "description": "Add the pure task summarizer with integer total/done/open counts \u2192 verify: npm test"
+          },
+          {
+            "file": "src/cli.mjs",
+            "description": "Read stdin, emit one JSON line, handle help and invalid options \u2192 verify: npm test"
+          },
+          {
+            "file": "test/cli.test.mjs",
+            "description": "Test empty and mixed input, repeat calls, help and invalid options using real stdin \u2192 verify: npm test"
+          },
+          {
+            "file": "README.md",
+            "description": "Document usage, architecture and testing \u2192 verify: README names the command and expected JSON output"
+          }
+        ],
+        "acceptanceCriteria": [
+          "Real stdin tests assert exact counts for empty and mixed input.",
+          "Help exits0; invalid options exit2 with stderr.",
+          "README describes invocation and the pure-core/CLI boundary."
+        ],
+        "files": [
+          "src/summary.mjs",
+          "src/cli.mjs",
+          "test/cli.test.mjs",
+          "README.md"
+        ],
+        "testMode": "tdd",
+        "done": false
+      }
+    ],
+    "notes": "Example only: replace with owner decisions and actual author identity. Future tests are execution pending. One task covers one small vertical behavior; independent review remains required."
+  }
+}

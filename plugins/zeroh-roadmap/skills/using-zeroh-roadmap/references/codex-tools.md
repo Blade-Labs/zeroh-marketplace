@@ -40,7 +40,7 @@ broke — do not infer it from an installed-plugin listing, which reports instal
 
 | The skills say | On Codex |
 |---|---|
-| read a file / search the repo | your file-read and shell tools; reading is free, read widely |
+| read a file / search the repo | your file-read and shell tools; read relevant inputs once and refresh changed evidence |
 | spawn a role / dispatch an agent | `spawn_agent` (needs `multi_agent`, below) — or the child-CLI route when the role's model is not yours |
 | message a running agent, ask for a fix round | `followup_task` — it delivers, triggers a turn, and reloads an evicted child |
 | wait for a spawned role | `wait_agent`, in bounded stretches of 5-10 min; it is an event subscription, so short polls buy nothing |
@@ -83,6 +83,15 @@ it — you do not choose either:
 Record every firing into the phase's `executionResult.roles`, and record a substitution when a
 tier was skipped. A role binding that is not recorded did not happen as far as the scorecard is
 concerned.
+
+## Native review invocation
+
+Use the invoking session's actual authority, never a profile inferred from repository config:
+`roadmap codex review <N> --parent-authority <read-only|workspace-write|isolated-unsafe>`.
+Omit `--doc` unless supplying a readable repository-relative path (`--doc <path>`); it is
+not a switch. A cold checkout returns an install recipe before model launch. Within existing
+install authority, prepare that exact checkout and retry the same command. Otherwise retain the
+hold. The command never installs or grants broader authority implicitly.
 
 ## Environment
 

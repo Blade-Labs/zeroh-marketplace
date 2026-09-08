@@ -116,13 +116,12 @@ ARC (read-only): <root>/arcs/<id>.arc.ts. Your ledger rows: <rows naming phase N
 
 LANE A - spec compliance (mechanical; any miss = NEEDS WORK, fabricated evidence = BLOCKER):
  A1 Ledger coverage: each of your ledger rows is implemented by a named task in THIS phase.
- A2 Anchors: every steps[].file exists at HEAD; every cited symbol is found via
-    grep -F '<exact symbol>' <file>   (case-sensitive - a case-variant miss IS a stale anchor).
- A3 Verify falsification: for EACH assumptions[].verify and each "→ verify:" clause,
-    (1) RUN it as written - expect green; (2) RUN a falsification probe (negate the claim:
-    grep for the absence, point it at a file where the claim is false) - expect red.
-    Record both commands + exit codes in your review notes. No achievable red = the verify
-    cannot fail = NEEDS WORK (rewrite it); an exit-0-always pipeline = BLOCKER.
+ A2 Anchors: existing files/symbols resolve at the inspected ref. Planned additions name their
+    creating task and contract; absence is expected until implementation.
+ A3 Verification: apply plan-phase/references/verify-rehearsal.md. Run cheap current assumptions
+    and polarity probes; judge future behavior tests without executing suites or inventing results.
+    Record observed evidence and pending execution separately. A non-discriminating check still
+    needs repair; an exit-0-always pipeline cannot prove the changed behavior.
  LANE B - plan quality: run review-phase Mode A with --no-queue, model per
     modelPolicy.judgeModel in roadmap.config.json. ELIGIBILITY (plan-arc Step 3 band):
     skipped only for kind:mockup / docs-only / all-tasks-batchMode phases with no

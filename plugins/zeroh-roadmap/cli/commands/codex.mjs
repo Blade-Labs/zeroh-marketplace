@@ -1615,6 +1615,14 @@ function arcPhases(root, arcId) {
 
 export default async function run(argv) {
   const sub = argv[0]
+  if (sub === 'review') {
+    for (const [index, arg] of argv.entries()) {
+      if (arg === '--doc' && (!argv[index + 1]?.trim() || argv[index + 1].startsWith('--'))) {
+        process.stderr.write('roadmap codex: --doc needs a path; omit --doc when no context document is supplied. No launch artifacts were created.\n')
+        return 1
+      }
+    }
+  }
   const ai = argv.indexOf('--arc')
   const root = gitToplevel(process.cwd())
   if (sub === '__supervise') {
@@ -1687,7 +1695,7 @@ export default async function run(argv) {
   if (sub === 'status' && ids.length > 0) return statusCodex(root, ids, lane)
   process.stderr.write(
     'roadmap codex: usage: roadmap codex run <N> [<N2>…] | run --arc <ID> [--worktree <path>] [--base <ref>]\n' +
-      '                     roadmap codex review <N> [<N2>…] [--doc <path>] [--focus <text>] [--worktree <path>] [--base <ref>]\n' +
+      '                     roadmap codex review <N> [<N2>…] --parent-authority <read-only|workspace-write|isolated-unsafe> [--doc <path>] [--focus <text>] [--worktree <path>] [--base <ref>]\n' +
       '                     roadmap codex plan <N> --brief <path> [--worktree <path>] [--base <ref>]\n' +
       '                     roadmap codex status <N> [<N2>…] [--review|--plan] | status --arc <ID>\n',
   )

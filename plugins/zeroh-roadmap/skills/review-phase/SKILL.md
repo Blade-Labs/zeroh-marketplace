@@ -116,7 +116,8 @@ to the rest via `references/plan-adversary.md` (§A verify-clause falsifiability
 freshness, §C criterion state-coverage, §E decision deferrals, §F prose-mechanism drift) - plus:
 
 - **Source confirms** - open the function each task claims to modify; does `problem` exist there
-  NOW? Absent everywhere = BLOCKER.
+  NOW? For a planned addition, confirm the missing capability and its creating task/contract;
+  absence of that future file or symbol is expected, not a BLOCKER.
 - **Blast radius** (the commonest real failure) - per Evidence rules: grep each changed
   pattern/symbol repo-wide keyed to the code token, plus alternate phrasings for prose carriers
   (comments, labels, docs drift in different words); every uncovered occurrence = NEEDS WORK.
