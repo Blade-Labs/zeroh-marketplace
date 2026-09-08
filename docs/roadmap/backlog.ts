@@ -8,10 +8,6 @@ export default defineBacklog({
       "label": "NATIVEGREEN — phases36–45",
       "items": [
         {
-          "phase": 42,
-          "name": "Exact-head full-CI monitoring with bounded owned-failure correction"
-        },
-        {
           "phase": 43,
           "name": "Native lifecycle conformance with resumable four-host comparison"
         },
