@@ -1,0 +1,165 @@
+{
+  "candidate": "87ec2d4",
+  "verdict": "FAILED_NO_RUNNABLE_IMPLEMENTATION_AT_10_MINUTES",
+  "repository": "Blade-Labs/roadmap-codex-pilot-20260908",
+  "checkpoint": {
+    "checkpointAt": 1788871455.0038207,
+    "nativeElapsedSeconds": 600.0038211345673,
+    "results": [
+      {
+        "root": "/tmp/nativegreen-corrected-pilot-20260908/consumer",
+        "cliExists": false,
+        "runnable": false
+      },
+      {
+        "root": "/tmp/nativegreen-corrected-pilot-20260908/consumer-codex-review-1",
+        "cliExists": false,
+        "runnable": false
+      }
+    ],
+    "stopped": true
+  },
+  "admission": {
+    "files": 1,
+    "expectedFiles": 1,
+    "seconds": 600.206620329991,
+    "results": [
+      {
+        "jobId": "nativegreen-corrected-pilot",
+        "exit": 125,
+        "seconds": 600.0005389852449,
+        "totals": {},
+        "peakMemoryBytes": 296460288,
+        "log": "/tmp/capbuild-tests-yp7bca7t/000.log"
+      }
+    ]
+  },
+  "usage": [
+    {
+      "log": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/.building/nativegreen-corrected-codex-home/sessions/2026/09/08/rollout-2026-09-08T12-43-30-01a0810b-83a2-7fc0-9edf-d2d9745d8aed.jsonl",
+      "id": "01a0810b-83a2-7fc0-9edf-d2d9745d8aed",
+      "cwd": "/tmp/nativegreen-corrected-pilot-20260908/consumer-codex-review-1",
+      "lastObservedUsage": {
+        "timestamp": "2026-09-08T12:43:54.819Z",
+        "info": {
+          "total_token_usage": {
+            "input_tokens": 8289,
+            "cached_input_tokens": 4864,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 122,
+            "reasoning_output_tokens": 62,
+            "total_tokens": 8411
+          },
+          "last_token_usage": {
+            "input_tokens": 8289,
+            "cached_input_tokens": 4864,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 122,
+            "reasoning_output_tokens": 62,
+            "total_tokens": 8411
+          },
+          "model_context_window": 258400
+        }
+      },
+      "source": {
+        "subagent": {
+          "other": "guardian"
+        }
+      }
+    },
+    {
+      "log": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/.building/nativegreen-corrected-codex-home/sessions/2026/09/08/rollout-2026-09-08T12-43-30-01a0810b-8301-7601-b55c-5cf98a311869.jsonl",
+      "id": "01a0810b-8301-7601-b55c-5cf98a311869",
+      "cwd": "/tmp/nativegreen-corrected-pilot-20260908/consumer-codex-review-1",
+      "lastObservedUsage": {
+        "timestamp": "2026-09-08T12:43:54.898Z",
+        "info": {
+          "total_token_usage": {
+            "input_tokens": 34115,
+            "cached_input_tokens": 27904,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 369,
+            "reasoning_output_tokens": 14,
+            "total_tokens": 34484
+          },
+          "last_token_usage": {
+            "input_tokens": 17171,
+            "cached_input_tokens": 16768,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 181,
+            "reasoning_output_tokens": 14,
+            "total_tokens": 17352
+          },
+          "model_context_window": 258400
+        }
+      },
+      "source": "exec"
+    },
+    {
+      "log": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/.building/nativegreen-corrected-codex-home/sessions/2026/09/08/rollout-2026-09-08T12-34-16-01a08103-0df3-7231-ad60-58a665d50e0a.jsonl",
+      "id": "01a08103-0df3-7231-ad60-58a665d50e0a",
+      "cwd": "/tmp/nativegreen-corrected-pilot-20260908/consumer",
+      "lastObservedUsage": {
+        "timestamp": "2026-09-08T12:44:05.600Z",
+        "info": {
+          "total_token_usage": {
+            "input_tokens": 2031234,
+            "cached_input_tokens": 1939968,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 11583,
+            "reasoning_output_tokens": 1404,
+            "total_tokens": 2042817
+          },
+          "last_token_usage": {
+            "input_tokens": 97435,
+            "cached_input_tokens": 95744,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 108,
+            "reasoning_output_tokens": 8,
+            "total_tokens": 97543
+          },
+          "model_context_window": 258400
+        }
+      },
+      "source": "exec"
+    },
+    {
+      "log": "/home/patrik/zeroh-marketplace/.building/nativegreen-replan/.building/nativegreen-corrected-codex-home/sessions/2026/09/08/rollout-2026-09-08T12-34-16-01a08103-0e32-7ff2-a8a6-2cd0d9778dcd.jsonl",
+      "id": "01a08103-0e32-7ff2-a8a6-2cd0d9778dcd",
+      "cwd": "/tmp/nativegreen-corrected-pilot-20260908/consumer",
+      "lastObservedUsage": {
+        "timestamp": "2026-09-08T12:44:05.491Z",
+        "info": {
+          "total_token_usage": {
+            "input_tokens": 762563,
+            "cached_input_tokens": 648704,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2014,
+            "reasoning_output_tokens": 655,
+            "total_tokens": 764577
+          },
+          "last_token_usage": {
+            "input_tokens": 46639,
+            "cached_input_tokens": 44800,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 60,
+            "reasoning_output_tokens": 10,
+            "total_tokens": 46699
+          },
+          "model_context_window": 258400
+        }
+      },
+      "source": {
+        "subagent": {
+          "other": "guardian"
+        }
+      }
+    }
+  ],
+  "usageCaveat": "Last observed interrupted usage; unknown tails and no billed-cost claim. Cached input is included in input. Guardian sessions are separate from parent and reviewer.",
+  "prCount": 0,
+  "sameSessionResume": "not attempted after mandatory stop",
+  "reviewerFinalState": "dead-no-report",
+  "allPilotProcessesStopped": true,
+  "cleanupOwner": "User will delete zeroh-roadmap-pilot, atlas-connector-proof-84, roadmap-codex-pilot-20260908; assistant deletes none."
+}

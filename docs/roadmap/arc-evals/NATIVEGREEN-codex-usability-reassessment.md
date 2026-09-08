@@ -45,3 +45,16 @@ Delegated report-only review now skips authoring/queue work while preserving ind
 Independent implementation review found one HIGH ownership-unwind defect and one MEDIUM test assertion defect. Both were repaired; bounded independent HIGH re-review returned no findings. Candidate native usage/beacon/schema-resolution repairs and shipped version alignment are retained. Actual collaboration reviewer model identity is unverified.
 
 The owner’s do-it instruction accepts one corrected trial with the proposed20-minute cap. The GitHub target still returns404; no corrected native session has launched. Task43.4 remains in progress, with no PR/resume/release success claimed. Deferred work remains deferred.
+
+
+## Corrected native trial — failed at the accepted stop rule
+
+On2026-09-08 the owner added sandbox token access. REST access was verified, the fresh seed and CI workflow were pushed, and the corrected candidate87ec2d4 ran through the actual isolated Codex installation. No previous phase plan or product implementation was copied. Parent01a08103-0df3-7231-ad60-58a665d50e0a requestedgpt-5.6-sol with codex-full; the plugin-managed reviewer was01a0810b-8301-7601-b55c-5cf98a311869. Guardian sessions are separately identified in the accounting record.
+
+The10-minute checkpoint found no src/cli.mjs in either consumer or reviewer checkout. The supervisor stopped the complete capbuild cgroup; the pool recorded600.000539s native wall time and exit125. Final reviewer status is dead-no-report/alivefalse; no pilot processes remain, no PR exists, no same-session resume was attempted and no release is authorized. Task43.4 remains incomplete. This is a failed usability observation, not a failure of the already-green2732-test mechanical gate.
+
+The cold-checkout preflight path worked: the parent prepared dependencies before the reviewer launched at12:43:29.894Z, approximately9m15s after the12:34:15 start. There was too little reviewer runtime to judge the focused-review speed hypothesis. Initialization, reference/schema reading and planning consumed most of the budget. Concrete retries included a host bwrap patch failure, shell quoting in a verification command, missing --parent-authority, and --doc consuming the following option as a path. Do not attribute all elapsed time to any one retry or infer a population benchmark.
+
+Decision: stop this repair attempt as agreed; no third native trial or broad arc expansion. Review the existing planning protocol for a minimal small-project path before authorizing further implementation. Preserve independent correctness/intent review, but move the next investigation to work required before runnable code. Current repairs remain mechanically valid; they did not establish usable intent-to-PR completion.
+
+Evidence: NATIVEGREEN-corrected-pilot-20260908.json retains checkpoint, pool timing and last-observed usage (including separately labeled guardian overhead). Raw native logs and local consumer/worktree remain under /tmp/nativegreen-corrected-pilot-20260908. The owner will delete zeroh-roadmap-pilot, atlas-connector-proof-84 and roadmap-codex-pilot-20260908; this session deletes none. The completed pilot no longer needs its remote repository.

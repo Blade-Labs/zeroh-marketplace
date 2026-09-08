@@ -1,6 +1,6 @@
 # Codex usability repair plan
 
-Status: implementation authorized by the owner’s subsequent “do it”; the two repairs are implemented, targeted checks pass, and final mechanical verification passed. The proposed20-minute native cap is accepted for the corrected pilot; launch still requires a verified disposable GitHub target. No release is authorized or claimed. Tasks43.5–43.8 and phases44–45 stay deferred.
+Status: corrected candidate87ec2d4 is mechanically green and independently reviewed, but the corrected native trial FAILED the10-minute runnable-code checkpoint. All pilot processes stopped. No further native run or release; task43.4 remains incomplete and broader work stays deferred.
 
 ## Review findings
 
@@ -60,3 +60,25 @@ Plan review: one independent prospective review found an underspecified installa
 Independent re-review of the repaired block returned READY, with no residual blocker. This is prospective plan readiness, not product or release approval.
 
 Implementation review found a HIGH cold-retry ownership-unwind defect and a MEDIUM overbroad prompt test. Both were repaired; independent re-review of the HIGH fix returned no findings. Six targeted cases pass, including a newly allocated cold checkout retry and validation-time mutation refusal. Packaging passes. Final full mechanical gate run-000025-2026-09-08T11-43-29-036Z.json: 128/128 test files completed; 2732 passed, 1 skipped, zero failed/cancelled; schema checks passed. Unit-slot wall time1028.463s (17m08s). Packaging passed. This is one local verification run, not a performance comparison.
+
+
+## Corrected-pilot access preflight — 2026-09-08
+
+The corrected native trial has not started; its accepted20-minute budget remains unspent. Candidate87ec2d4 was installed through the actual Codex marketplace/plugin CLI into `.building/nativegreen-corrected-codex-home`; installed command, delegated-review skill and generated model-schema bytes match the reviewed source. Global plugin cache was not changed.
+
+One explicit private sandbox creation returned repository ID1361333681 and `Blade-Labs/roadmap-codex-pilot-20260908`. Subsequent authenticated REST reads by name and ID returned404; GraphQL returned NOT_FOUND; HTTPS Git with the gh credential helper returned403. The same gh identity, kolesarp1, can read Blade-Labs/zeroh-marketplace. SSH `git ls-remote` for the new sandbox succeeded with exit0 and no refs, confirming an accessible empty repository. No seed push, PR or native model launch occurred.
+
+This isolates the blocker to API/HTTPS credential access for the new repository; selected-repository token scope is a likely explanation, not a verified token setting. The owner must grant the existing fine-grained credential access to this specific sandbox (and the repository permissions needed for contents/workflows, pull requests and CI/status reads), or supply an already-authorized API identity. No token value should be posted in chat. Recheck REST access before preparing publication or launching the timed trial. Do not create further repositories or repeat the completed full gate.
+
+
+## Corrected native trial — failed at the accepted stop rule
+
+On2026-09-08 the owner added sandbox token access. REST access was verified, the fresh seed and CI workflow were pushed, and the corrected candidate87ec2d4 ran through the actual isolated Codex installation. No previous phase plan or product implementation was copied. Parent01a08103-0df3-7231-ad60-58a665d50e0a requestedgpt-5.6-sol with codex-full; the plugin-managed reviewer was01a0810b-8301-7601-b55c-5cf98a311869. Guardian sessions are separately identified in the accounting record.
+
+The10-minute checkpoint found no src/cli.mjs in either consumer or reviewer checkout. The supervisor stopped the complete capbuild cgroup; the pool recorded600.000539s native wall time and exit125. Final reviewer status is dead-no-report/alivefalse; no pilot processes remain, no PR exists, no same-session resume was attempted and no release is authorized. Task43.4 remains incomplete. This is a failed usability observation, not a failure of the already-green2732-test mechanical gate.
+
+The cold-checkout preflight path worked: the parent prepared dependencies before the reviewer launched at12:43:29.894Z, approximately9m15s after the12:34:15 start. There was too little reviewer runtime to judge the focused-review speed hypothesis. Initialization, reference/schema reading and planning consumed most of the budget. Concrete retries included a host bwrap patch failure, shell quoting in a verification command, missing --parent-authority, and --doc consuming the following option as a path. Do not attribute all elapsed time to any one retry or infer a population benchmark.
+
+Decision: stop this repair attempt as agreed; no third native trial or broad arc expansion. Review the existing planning protocol for a minimal small-project path before authorizing further implementation. Preserve independent correctness/intent review, but move the next investigation to work required before runnable code. Current repairs remain mechanically valid; they did not establish usable intent-to-PR completion.
+
+Evidence: NATIVEGREEN-corrected-pilot-20260908.json retains checkpoint, pool timing and last-observed usage (including separately labeled guardian overhead). Raw native logs and local consumer/worktree remain under /tmp/nativegreen-corrected-pilot-20260908. The owner will delete zeroh-roadmap-pilot, atlas-connector-proof-84 and roadmap-codex-pilot-20260908; this session deletes none. The completed pilot no longer needs its remote repository.
