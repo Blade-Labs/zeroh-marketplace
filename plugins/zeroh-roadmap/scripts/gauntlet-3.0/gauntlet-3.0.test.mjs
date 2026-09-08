@@ -18,6 +18,14 @@ import {
 import { preflightGauntlet } from './preflight.mjs'
 import { dispatchArmIndex, readArmJournal, resumeArm, runArm, runGauntlet3 } from './run.mjs'
 import {
+  EXPECTED_DISPOSITIONS,
+  SENTINEL_NAMES,
+  buildBlindJudgePacket,
+  mergeBlindVerdict,
+  pairGauntletOutcomes,
+  scoreDeterministicSentinels,
+} from './score.mjs'
+import {
   bindNativeSession,
   persistRunRequest,
   persistRunResult,
@@ -25,6 +33,10 @@ import {
   reconcileRunReceipt,
 } from '../../cli/lib/run-receipt.mjs'
 import { claimExecutorRun, readExecutorRunArm } from '../../cli/lib/executor-arm.mjs'
+import { buildHaltPayload } from '../../cli/lib/workflow-steps.mjs'
+import { finalizeCiObservation } from '../../cli/lib/providers/ci.mjs'
+import { buildDeliverySummary } from '../../cli/lib/delivery-evaluation.mjs'
+import { decideCorrectionRoute, deliveryKeyOf } from '../../cli/lib/delivery.mjs'
 import {
   FIXTURE_SCAN_LIMITS,
   assertFixtureIsolation,
@@ -41,7 +53,7 @@ const BUDGET = Object.freeze({
 })
 const AUTHORITY = Object.freeze({
   authorityRef: 'authority://nativegreen/gauntlet-3',
-  repositoryNamespace: 'gauntlet-3-test/repository',
+  repositoryNamespace: 'gauntlet-3-test',
   providerNamespace: 'gauntlet-3-test/provider',
   allowedOperations: ['create-repository', 'push', 'pull-request', 'read-ci'],
   expiresAt: '2026-09-12T12:00:00.000Z',
@@ -1147,5 +1159,731 @@ test('installed pool dispatches the immutable index to static unavailable worker
   assert.notEqual(dispatched.exitCode, 0)
   for (const arm of built.index.arms) {
     assert.equal(readRunReceipt(arm.worktree, { arcId: arm.request.arcId, runId: arm.runId }), null)
+  }
+})
+
+
+function blindArmScore(contract, conditionId = contract.conditions[0].id, scenarioId = contract.scenarios[0].id) {
+  return {
+    armId: scenarioId + ':' + conditionId,
+    status: 'valid',
+    absoluteScore: 1,
+    sentinels: SENTINEL_NAMES.map(name => ({
+      name,
+      status: 'pass',
+      ownerRefs: ['owner://' + name],
+      evidence: ['canonical ' + name + ' evidence'],
+      reason: null,
+    })),
+  }
+}
+
+function judgeOwnerEvidence(expectedJudge, packet) {
+  const stdin = Buffer.from(JSON.stringify(packet, null, 2) + '\n')
+  const request = {
+    runId: expectedJudge.runId,
+    arcId: 'blind-judge',
+    driverId: expectedJudge.driverId,
+    model: expectedJudge.modelId,
+  }
+  const pendingReceipt = {
+    path: '/evaluator/receipts/' + expectedJudge.runId + '-pending.json',
+    digest: '7'.repeat(64),
+    snapshot: {
+      revision: 0,
+      request,
+      pendingOperation: {
+        kind: 'start',
+        actionFingerprint: '8'.repeat(64),
+        inputDigest: createHash('sha256').update(stdin).digest('hex'),
+      },
+      nativeSessionId: 'judge-session',
+      terminalResult: null,
+      outcome: 'active',
+    },
+  }
+  const terminalReceipt = {
+    path: '/evaluator/receipts/' + expectedJudge.runId + '-terminal.json',
+    digest: '9'.repeat(64),
+    snapshot: {
+      revision: 1,
+      request: clone(request),
+      pendingOperation: null,
+      nativeSessionId: 'judge-session',
+      terminalResult: {
+        status: 'transport-exited',
+        driverId: expectedJudge.driverId,
+        observedModelId: expectedJudge.modelId,
+        nativeSessionId: 'judge-session',
+        exitCode: 0,
+        signal: null,
+        protocolTerminal: 'turn.completed',
+      },
+      outcome: 'complete',
+    },
+  }
+  return { judgeEvidence: { stdin, pendingReceipt, terminalReceipt } }
+}
+
+function judgedVerdict(packet, status = 'judged') {
+  return {
+    packetId: packet.packetId,
+    status,
+    criteria: packet.criteria.map((criterion, index) => ({
+      criterionId: criterion.id,
+      status: status === 'abstained' ? 'abstain' : index === 0 ? 'gap' : 'met',
+      confidence: index === 0 ? 'high' : 'medium',
+      violations: index === 0 && status === 'judged' ? ['missing causal evidence'] : [],
+      evidence: ['artifact-' + index],
+    })),
+  }
+}
+
+test('blind packet is stable, deeply frozen, anonymized, and contains deterministic names without absolute score', async () => {
+  const contract = validLaunchable()
+  const scenario = contract.scenarios[0]
+  const armScore = blindArmScore(contract)
+  const calls = []
+  const readAnonymizedDeliverables = async input => {
+    calls.push(clone(input))
+    return [
+      { artifactId: 'artifact-1', mediaType: 'text/plain', content: 'candidate output A' },
+      { artifactId: 'artifact-2', mediaType: 'application/json', content: '{"result":"complete"}' },
+    ]
+  }
+  const packet = await buildBlindJudgePacket({
+    contract,
+    scenarioId: scenario.id,
+    armScore,
+  }, { readAnonymizedDeliverables })
+  const replay = await buildBlindJudgePacket({
+    contract,
+    scenarioId: scenario.id,
+    armScore,
+  }, { readAnonymizedDeliverables })
+  assert.deepEqual(packet, replay)
+  assert.equal(packet.version, 1)
+  assert.match(packet.packetId, /^[A-Za-z0-9_-]+$/)
+  assert.deepEqual(packet.criteria, scenario.criteria.map(id => ({
+    id,
+    expectedDisposition: EXPECTED_DISPOSITIONS[id],
+  })))
+  assert.deepEqual(Object.keys(EXPECTED_DISPOSITIONS).sort(), [...new Set(contract.requiredCriteria)].sort())
+  assert.ok(packet.criteria.every(criterion =>
+    typeof criterion.expectedDisposition === 'string' && criterion.expectedDisposition.trim()))
+  assert.deepEqual(packet.deterministic, {
+    status: 'valid',
+    sentinelNames: armScore.sentinels.map(sentinel => sentinel.name),
+  })
+  assert.equal(Object.isFrozen(packet), true)
+  assert.equal(Object.isFrozen(packet.criteria), true)
+  assert.equal(Object.isFrozen(packet.criteria[0]), true)
+  assert.equal(Object.isFrozen(packet.deliverables), true)
+  assert.deepEqual(calls, [
+    { armId: armScore.armId, scenarioId: scenario.id },
+    { armId: armScore.armId, scenarioId: scenario.id },
+  ])
+  const serialized = JSON.stringify(packet)
+  for (const forbidden of [
+    'absoluteScore', 'pluginEnabled', 'matchedConditionId', 'requestedParent',
+    'requestedChild', 'driverId', 'modelId', 'reasoning', 'transcript', 'priorVerdict',
+  ]) assert.equal(serialized.includes(forbidden), false, forbidden)
+})
+
+test('blind packet rejects invalid deterministic evidence and malformed or identity-leaking deliverables', async () => {
+  const contract = validLaunchable()
+  const scenarioId = contract.scenarios[0].id
+  const base = { contract, scenarioId, armScore: blindArmScore(contract) }
+  await assert.rejects(() => buildBlindJudgePacket({
+    ...base,
+    armScore: { ...base.armScore, status: 'invalid', absoluteScore: null },
+  }, { readAnonymizedDeliverables: async () => [] }), /invalid|deterministic|score/i)
+
+  for (const deliverables of [
+    [{ artifactId: 'a', mediaType: 'text/plain', content: 'x', driverId: 'codex' }],
+    [{ artifactId: 'a', mediaType: 'text/plain', content: 'x', priorVerdict: 'pass' }],
+    [{ artifactId: 'plugin-artifact', mediaType: 'text/plain', content: 'x' }],
+    [{ artifactId: 'codex-output', mediaType: 'text/plain', content: 'x' }],
+    [{ artifactId: 'a', mediaType: 'text/plain', content: 'x' }, { artifactId: 'a', mediaType: 'text/plain', content: 'y' }],
+    [{ artifactId: '', mediaType: 'text/plain', content: 'x' }],
+  ]) {
+    await assert.rejects(() => buildBlindJudgePacket(base, {
+      readAnonymizedDeliverables: async () => deliverables,
+    }), /deliverable|anonym|identity|duplicate|artifact/i)
+  }
+})
+
+test('blind verdict requires exact packet-bound canonical judge identity and persists judged detail', async () => {
+  const contract = validLaunchable()
+  const packet = await buildBlindJudgePacket({
+    contract,
+    scenarioId: contract.scenarios[0].id,
+    armScore: blindArmScore(contract),
+  }, {
+    readAnonymizedDeliverables: async () => [
+      { artifactId: 'artifact-1', mediaType: 'text/plain', content: 'anonymous result' },
+    ],
+  })
+  const expectedJudge = { driverId: 'codex', modelId: 'gpt-5.6-sol', runId: 'judge-g3-1' }
+  const verdict = judgedVerdict(packet)
+  const merged = mergeBlindVerdict({
+    packet,
+    expectedJudge,
+    ...judgeOwnerEvidence(expectedJudge, packet),
+    verdict,
+  })
+  assert.equal(merged.status, 'judged', JSON.stringify(merged))
+  assert.deepEqual(merged.judge, expectedJudge)
+  assert.deepEqual(merged.criteria, verdict.criteria)
+  assert.equal(merged.confidence, 'medium')
+  assert.deepEqual(merged.violations, ['missing causal evidence'])
+
+  const absent = mergeBlindVerdict({
+    packet,
+    expectedJudge,
+    judgeEvidence: null,
+    verdict: null,
+  })
+  assert.equal(absent.status, 'unjudged')
+  for (const mutate of [
+    evidence => { evidence.judgeEvidence.stdin = Buffer.from('changed stdin') },
+    evidence => { evidence.judgeEvidence.pendingReceipt.snapshot.request.runId = 'other-run' },
+    evidence => { evidence.judgeEvidence.pendingReceipt.snapshot.request.driverId = 'claude' },
+    evidence => { evidence.judgeEvidence.terminalReceipt.snapshot.terminalResult.observedModelId = 'wrong-model' },
+    evidence => { evidence.judgeEvidence.terminalReceipt.snapshot.nativeSessionId = 'foreign-session' },
+    evidence => { evidence.judgeEvidence.terminalReceipt.snapshot.revision = 0 },
+  ]) {
+    const evidence = judgeOwnerEvidence(expectedJudge, packet)
+    mutate(evidence)
+    const result = mergeBlindVerdict({ packet, expectedJudge, ...evidence, verdict })
+    assert.equal(result.status, 'invalid')
+  }
+})
+
+test('abstention is explicit and incomplete criteria or fabricated verdict fields cannot become judged', async () => {
+  const contract = validLaunchable()
+  const packet = await buildBlindJudgePacket({
+    contract,
+    scenarioId: contract.scenarios[0].id,
+    armScore: blindArmScore(contract),
+  }, { readAnonymizedDeliverables: async () => [{ artifactId: 'a', mediaType: 'text/plain', content: 'x' }] })
+  const expectedJudge = { driverId: 'claude', modelId: 'claude-opus-4-1', runId: 'judge-g3-2' }
+  const evidence = judgeOwnerEvidence(expectedJudge, packet)
+  const abstained = mergeBlindVerdict({
+    packet,
+    expectedJudge,
+    ...evidence,
+    verdict: judgedVerdict(packet, 'abstained'),
+  })
+  assert.equal(abstained.status, 'abstained')
+
+  for (const mutate of [
+    verdict => { verdict.packetId = 'wrong' },
+    verdict => { verdict.criteria.pop() },
+    verdict => { verdict.criteria[0].criterionId = 'unknown' },
+    verdict => { verdict.criteria[0].status = 'pass' },
+    verdict => { verdict.criteria[0].confidence = 'certain' },
+    verdict => { verdict.absoluteScore = 1 },
+  ]) {
+    const verdict = judgedVerdict(packet)
+    mutate(verdict)
+    const result = mergeBlindVerdict({ packet, expectedJudge, ...evidence, verdict })
+    assert.notEqual(result.status, 'judged')
+  }
+})
+
+function pairedRow(contract, condition, scenario, packet, judgment, score = blindArmScore(contract, condition.id, scenario.id)) {
+  return {
+    armId: scenario.id + ':' + condition.id,
+    scenarioId: scenario.id,
+    conditionId: condition.id,
+    fixtureSha: contract.fixture.baseSha,
+    score,
+    judgment,
+    packet,
+  }
+}
+
+test('paired outcomes compare only frozen reciprocal plugin/baseline mates in the same scenario and judge model', async () => {
+  const contract = validLaunchable()
+  const scenario = contract.scenarios[0]
+  const pluginCondition = contract.conditions.find(condition => condition.pluginEnabled)
+  const baselineCondition = contract.conditions.find(condition => condition.id === pluginCondition.matchedConditionId)
+  const pluginScore = blindArmScore(contract, pluginCondition.id, scenario.id)
+  const baselineScore = blindArmScore(contract, baselineCondition.id, scenario.id)
+  const pluginPacket = await buildBlindJudgePacket({ contract, scenarioId: scenario.id, armScore: pluginScore }, {
+    readAnonymizedDeliverables: async () => [{ artifactId: 'a-001', mediaType: 'text/plain', content: 'A' }],
+  })
+  const baselinePacket = await buildBlindJudgePacket({ contract, scenarioId: scenario.id, armScore: baselineScore }, {
+    readAnonymizedDeliverables: async () => [{ artifactId: 'a-002', mediaType: 'text/plain', content: 'B' }],
+  })
+  const judge = { driverId: 'codex', modelId: 'gpt-5.6-sol', runId: 'pair-judge' }
+  const pluginJudgment = {
+    status: 'judged', judge: clone(judge), confidence: 'high', violations: [],
+    criteria: pluginPacket.criteria.map(c => ({ criterionId: c.id, status: 'met', confidence: 'high', violations: [], evidence: ['A'] })),
+  }
+  const baselineJudgment = {
+    status: 'judged', judge: clone(judge), confidence: 'high', violations: ['gap'],
+    criteria: baselinePacket.criteria.map((c, index) => ({ criterionId: c.id, status: index ? 'met' : 'gap', confidence: index === 1 ? 'medium' : 'high', violations: index ? [] : ['gap'], evidence: ['B'] })),
+  }
+  const plugin = pairedRow(contract, pluginCondition, scenario, pluginPacket, pluginJudgment, pluginScore)
+  const baseline = pairedRow(contract, baselineCondition, scenario, baselinePacket, baselineJudgment, baselineScore)
+  const compared = pairGauntletOutcomes({ contract, plugin, baseline })
+  assert.equal(compared.comparison, 'plugin-better')
+  assert.equal(compared.confidence, 'medium')
+
+  const invalidPairs = [
+    ['cross-scenario', rows => { rows.baseline.scenarioId = contract.scenarios[1].id }],
+    ['non-mate', rows => { rows.baseline.conditionId = contract.conditions.find(c => c.id !== baselineCondition.id).id }],
+    ['fixture drift', rows => { rows.baseline.fixtureSha = 'f'.repeat(40) }],
+    ['different judge model', rows => { rows.baseline.judgment.judge.modelId = 'other-judge' }],
+    ['unjudged', rows => { rows.baseline.judgment.status = 'unjudged' }],
+    ['invalid deterministic score', rows => { rows.baseline.score.status = 'invalid'; rows.baseline.score.absoluteScore = null }],
+    ['partial frozen criteria', rows => { rows.plugin.packet.criteria.pop() }],
+  ]
+  const incomplete = []
+  for (const [label, mutate] of invalidPairs) {
+    const rows = clone({ plugin, baseline })
+    mutate(rows)
+    const result = pairGauntletOutcomes({ contract, ...rows })
+    incomplete.push([label, result.comparison, result.confidence])
+  }
+  assert.deepEqual(incomplete, invalidPairs.map(([label]) => [label, 'incomplete', null]))
+})
+
+
+function deterministicIndex(contract, armId = contract.scenarios[0].id + ':' + contract.conditions[0].id) {
+  const [scenarioId, conditionId] = armId.split(':')
+  const scenario = contract.scenarios.find(value => value.id === scenarioId)
+  const condition = contract.conditions.find(value => value.id === conditionId)
+  return {
+    contract,
+    arms: [{
+      armId,
+      scenarioId,
+      conditionId,
+      runId: 'g3-' + scenarioId + '--' + conditionId,
+      request: {
+        arcId: scenario.arcIds[0],
+        runId: 'g3-' + scenarioId + '--' + conditionId,
+        executorId: 'executor-' + conditionId,
+        phase: 43,
+        roleId: 'gauntlet-parent',
+        driverId: condition.parent.driverId,
+        model: condition.parent.modelId,
+        worktree: '/tmp/gauntlet-3-score/' + scenarioId + '--' + conditionId,
+        baseHead: contract.fixture.baseSha,
+        requestedHead: contract.fixture.baseSha,
+        authorityRef: runnerAuthorityRef(contract),
+      },
+      worktree: '/tmp/gauntlet-3-score/' + scenarioId + '--' + conditionId,
+      deliveryArcIds: [...scenario.arcIds],
+      repositoryId: contract.externalActionAuthority.repositoryNamespace + '/' + scenarioId + '-' + conditionId,
+    }],
+  }
+}
+
+function missingDeterministicPorts() {
+  return {
+    readRunReceipt: () => null,
+    loadArcDelivery: () => null,
+    readLifecycleCases: () => null,
+    readResumeObservations: () => null,
+    readNormalizationObservation: () => null,
+    readCleanupObservation: () => null,
+    readEvaluationObservation: () => null,
+    git: () => { throw new Error('missing git evidence') },
+  }
+}
+
+test('deterministic scoring is fail-closed for every named sentinel when canonical evidence is missing', async () => {
+  const contract = validLaunchable()
+  const index = deterministicIndex(contract)
+  const armId = index.arms[0].armId
+  const result = await scoreDeterministicSentinels({ contract, index, armId }, missingDeterministicPorts())
+  assert.equal(result.armId, armId)
+  assert.equal(result.status, 'invalid')
+  assert.equal(result.absoluteScore, null)
+  assert.deepEqual(result.sentinels.map(sentinel => sentinel.name), [...SENTINEL_NAMES])
+  assert.equal(result.sentinels.length, 11)
+  assert.ok(result.sentinels.every(sentinel =>
+    ['missing', 'unreadable'].includes(sentinel.status) &&
+    Array.isArray(sentinel.ownerRefs) &&
+    Array.isArray(sentinel.evidence) &&
+    typeof sentinel.reason === 'string' &&
+    sentinel.reason.length > 0))
+})
+
+test('deterministic scoring preserves unreadable owner failures and rejects caller score fabrication', async () => {
+  const contract = validLaunchable()
+  const index = deterministicIndex(contract)
+  const armId = index.arms[0].armId
+  const ports = missingDeterministicPorts()
+  ports.readLifecycleCases = () => { throw new Error('malformed retained lifecycle JSON') }
+  ports.readResumeObservations = () => { throw new Error('stale canonical receipt') }
+  ports.readNormalizationObservation = () => { throw new Error('normalization digest mismatch') }
+  ports.readCleanupObservation = () => { throw new Error('unsafe cleanup observation') }
+  ports.readEvaluationObservation = () => { throw new Error('evaluation summary unreadable') }
+  const result = await scoreDeterministicSentinels({ contract, index, armId }, ports)
+  assert.equal(result.status, 'invalid')
+  assert.equal(result.absoluteScore, null)
+  assert.ok(result.sentinels.some(sentinel =>
+    sentinel.status === 'unreadable' && /malformed|stale|digest|unsafe|evaluation|unreadable/i.test(sentinel.reason)))
+
+  assert.throws(() => scoreDeterministicSentinels({
+    contract,
+    index,
+    armId,
+    absoluteScore: 1,
+  }, missingDeterministicPorts()), /absoluteScore|fabricat|caller|unknown/i)
+})
+
+
+function deterministicPositiveFixture(contract) {
+  const index = deterministicIndex(contract)
+  const arm = index.arms[0]
+  const scenario = contract.scenarios.find(value => value.id === arm.scenarioId)
+  const head = contract.fixture.baseSha
+  const base = '0'.repeat(40)
+  const at = '2026-09-11T10:00:00.000Z'
+  const deliveries = new Map()
+  for (const arcId of scenario.arcIds) {
+    const target = {
+      targetKey: 'target-' + arcId,
+      providerId: 'github',
+      repositoryId: arm.repositoryId,
+      baseRef: 'main',
+      headRef: 'feat/' + arcId,
+      currentBaseSha: base,
+      currentHeadSha: head,
+    }
+    deliveries.set(arcId, {
+      schemaVersion: 1,
+      revision: 4,
+      arcId,
+      deliveryKey: deliveryKeyOf(target),
+      target,
+      strategy: { kind: 'independent', arcId },
+      requested: {
+        terminal: 'open',
+        allowedPushRefs: ['feat/' + arcId],
+        requiredCapabilities: ['pull-request'],
+        requiredChecks: ['unit'],
+        authority: { queue: null, merge: null },
+      },
+      actions: [],
+      pullRequest: {
+        providerId: 'github',
+        repositoryId: arm.repositoryId,
+        targetKey: target.targetKey,
+        providerPullRequestId: 'PR-' + arcId,
+        number: 1,
+        url: 'https://github.test/' + arcId,
+        state: 'open',
+        draft: false,
+        baseRef: 'main',
+        headRef: 'feat/' + arcId,
+        baseSha: base,
+        headSha: head,
+        observedAt: at,
+      },
+      checks: {
+        providerId: 'github',
+        repositoryId: arm.repositoryId,
+        providerPullRequestId: 'PR-' + arcId,
+        headSha: head,
+        requiredChecks: ['unit'],
+        observedChecks: [{ name: 'unit', status: 'green', attemptId: '1', observedAt: at }],
+        observedAt: at,
+      },
+      terminal: { status: 'open-green', headSha: head, checksObservedAt: at },
+      createdAt: at,
+      updatedAt: at,
+    })
+  }
+  const routeFor = (arcId, planned = false) => {
+    const input = 'a'.repeat(64), signature = 'b'.repeat(64)
+    const failure = { checkKey: 'check-run:7:unit', attemptId: '1', kind: 'causal', editEligible: true, paths: ['src/fix.mjs'], signature, diagnostic: { category: 'product', summary: 'unit failed', nextStep: 'repair', signature } }
+    const validationCheckpoint = { arcId, verdict: 'GAPS', at, note: 'CI repair', correction: { state: 'awaiting-repair', validationHead: head, gateInputKey: input, round: 0, bounds: { maxRounds: 2, deadlineAt: '2026-09-12T00:00:00.000Z', allowedPathPrefixes: ['src'], authority: { source: 'session', reference: contract.externalActionAuthority.authorityRef } }, route: null } }
+    const policy = { at, sourceHeadSha: head, predecessorHeadSha: base, authority: validationCheckpoint.correction.bounds.authority, stop: false, needsPlanning: planned, smallRepair: planned ? null : { phaseId: 42, criterionIds: ['repair'] }, plannedCorrection: planned ? { correctionId: 'CORR-' + arcId, phaseId: 44, criterionIds: ['planned'] } : null }
+    return decideCorrectionRoute({
+      failureDecisions: { status: 'classified', headSha: head, gateInputKey: input, failures: [failure], editPaths: ['src/fix.mjs'], retryDecision: { blocked: false, failures: [] } },
+      validationCheckpoint,
+      policy,
+      delivery: (() => {
+        const delivery = clone(deliveries.get(arcId))
+        delete delivery.correctionBinding
+        return delivery
+      })(),
+    })
+  }
+  for (const arcId of scenario.arcIds) deliveries.get(arcId).correctionBinding = routeFor(arcId).deliveryBinding
+  const requestForArc = arcId => ({ ...clone(arm.request), arcId })
+  const receiptForArc = (arcId, revision = 2) => ({
+    path: '/owners/' + arcId + '/receipt-' + revision + '.json',
+    digest: createHash('sha256').update(arcId + ':' + revision).digest('hex'),
+    snapshot: {
+      arcId,
+      runId: arm.runId,
+      request: requestForArc(arcId),
+      nativeSessionId: 'native-' + arm.runId + '-' + arcId,
+      pendingOperation: null,
+      latestObservation: null,
+      terminalResult: {
+        status: 'transport-exited',
+        driverId: arm.request.driverId,
+        observedModelId: arm.request.model,
+        nativeSessionId: 'native-' + arm.runId + '-' + arcId,
+        exitCode: 0,
+        signal: null,
+        protocolTerminal: 'turn.completed',
+        phaseResult: { status: 'done' },
+      },
+      outcome: 'complete',
+      revision,
+    },
+  })
+
+  const casesFor = arcId => scenario.criteria.map(criterion => {
+    let output
+    if (['blocked', 'stalled', 'unobserved', 'exited', 'review-exhausted', 'auth'].includes(criterion)) {
+      output = buildHaltPayload(criterion, { phase: 43, evidence: { arcId, observed: true } })
+    } else if (['quota', 'timeout'].includes(criterion)) {
+      output = finalizeCiObservation({
+        providerId: 'github',
+        repositoryId: arm.repositoryId,
+        providerPullRequestId: 'PR-' + arcId,
+        sourceHeadSha: head,
+        baseSha: base,
+        requiredChecks: ['unit'],
+        headMode: 'source',
+        mergeQueue: null,
+      }, { hold: { kind: criterion, remedy: 'resume after ' + criterion }, observedAt: at })
+    } else if (['causal', 'owned-preexisting', 'unrelated', 'infrastructure', 'flaky', 'indeterminate'].includes(criterion)) {
+      const kind = criterion === 'infrastructure' ? 'infra' : criterion
+      const eligible = ['causal', 'owned-preexisting'].includes(criterion)
+      const scope = eligible ? 'editable'
+        : criterion === 'unrelated' ? 'unrelated'
+          : ['infrastructure', 'flaky'].includes(criterion) ? 'retryable' : 'held'
+      output = {
+        status: criterion === 'indeterminate' ? 'held' : 'classified',
+        scope,
+        headSha: head,
+        gateInputKey: 'a'.repeat(64),
+        failures: [{ kind, editEligible: eligible, paths: eligible ? ['src/fix.mjs'] : [] }],
+        editPaths: eligible ? ['src/fix.mjs'] : [],
+        retryDecision: { blocked: !eligible, failures: [] },
+        reasons: [],
+      }
+    } else if (criterion === 'validation-small-repair' || criterion === 'validation-planned-correction') {
+      const kind = criterion === 'validation-small-repair' ? 'small-repair' : 'planned-correction'
+      output = routeFor(arcId, kind === 'planned-correction')
+    } else if (criterion === 'repeated-input') {
+      output = { blocked: true, failures: [{ failure: { signature: 'repeat-' + arcId }, inputKey: 'same-input' }] }
+    } else {
+      output = { arcId }
+    }
+    return { criterion, invocationId: 'invocation-' + arcId + '-' + criterion, output }
+  })
+  const lifecycle = {
+    schemaVersion: 1,
+    armId: arm.armId,
+    scenarioId: scenario.id,
+    arcs: scenario.arcIds.map(arcId => ({ arcId, cases: casesFor(arcId) })),
+  }
+  const resumes = {
+    schemaVersion: 1,
+    armId: arm.armId,
+    scenarioId: scenario.id,
+    arcs: scenario.arcIds.map(arcId => {
+      const firstReceipt = receiptForArc(arcId, 1)
+      const secondReceipt = receiptForArc(arcId, 2)
+      const delivery = deliveries.get(arcId)
+      return {
+        arcId,
+        first: { invocationId: 'first-' + arcId, runAddress: { arcId, runId: arm.runId }, runReceipt: firstReceipt, delivery: clone(delivery) },
+        second: { invocationId: 'second-' + arcId, runAddress: { arcId, runId: arm.runId }, runReceipt: secondReceipt, delivery: clone(delivery) },
+      }
+    }),
+  }
+  const normalizations = {
+    arcs: scenario.arcIds.map(arcId => {
+      const planBody = {
+        version: 1,
+        arcId,
+        base,
+        expectedHead: head,
+        expectedTree: 'a'.repeat(40),
+        phases: [1, 2, 3, 4, 5, 6],
+        groups: [1, 2, 3, 4, 5, 6].map(phase => ({
+          phase,
+          sourceBoundary: { sha: String(phase).repeat(40), tree: 'a'.repeat(40) },
+        })),
+        delivery: { publication: 'unpublished', green: false, pullRequest: null },
+      }
+      const planDigest = createHash('sha256').update(JSON.stringify(planBody) + '\n').digest('hex')
+      const plan = { ...planBody, planDigest }
+      return {
+        arcId,
+        plan,
+        receipt: {
+          version: 1,
+          arcId,
+          base,
+          planDigest,
+          oldHead: head,
+          newHead: 'f'.repeat(40),
+          tree: plan.expectedTree,
+          rescueRef: 'refs/curate-rescue/' + head.slice(0, 12),
+          outcomes: plan.groups.map(group => ({
+            phase: group.phase,
+            sourceCommit: group.sourceBoundary.sha,
+            sourceTree: group.sourceBoundary.tree,
+            normalizedCommit: String.fromCharCode(96 + group.phase).repeat(40),
+          })),
+        },
+      }
+    }),
+  }
+  const cleanup = {
+    cases: Array.from({ length: 50 }, (_, index) => {
+      const worktree = '/tmp/gc/' + index
+      if (index !== 0) return {
+        identity: null,
+        worktree,
+        result: { plan: { items: [{ worktree, identity: null, classification: 'ownership-uncertain', reason: 'ownership-uncertain', observations: [], evidence: null }] }, applied: { items: [] } },
+        after: { exists: true, headSha: null, recoverableHeadSha: null, branchRefSha: null },
+      }
+      const identity = { ownershipId: 'ownership-0' }
+      return {
+        identity,
+        worktree,
+        result: {
+          plan: { items: [{ worktree, identity, classification: 'eligible', evidence: { head, clean: true, recoverable: true, liveness: 'inactive', protection: { state: 'unprotected', evidence: [], reason: null } }, observations: [{ invocationId: 'gc-1', observedAt: at }, { invocationId: 'gc-2', observedAt: '2026-09-11T10:01:00.000Z' }] }] },
+          applied: { items: [{ ownershipId: identity.ownershipId, state: 'removed', reason: 'eligible', disposal: { disposed: true } }] },
+        },
+        after: { exists: false, headSha: head, recoverableHeadSha: head, branchRefSha: head },
+      }
+    }),
+  }
+  const summaries = new Map([...deliveries].map(([arcId, delivery]) => [arcId, buildDeliverySummary({
+    delivery,
+    arc: { id: arcId, acceptanceCriteria: [] },
+    sweep: { arcId, overall: 'green', blockers: [], debtDispositions: [], observation: { headSha: head, recordedAt: at } },
+    validation: { arcId, verdict: 'PASS', at, headSha: head },
+    panel: null,
+  })]))
+  for (const arc of lifecycle.arcs) {
+    const byCriterion = new Map(arc.cases.map(row => [row.criterion, row]))
+    const normalization = normalizations.arcs.find(row => row.arcId === arc.arcId)
+    byCriterion.get('history-normalization').output = { plan: clone(normalization.plan), receipt: clone(normalization.receipt) }
+    byCriterion.get('worktree-gc').output = clone(cleanup)
+    byCriterion.get('exact-head-green').output = clone(deliveries.get(arc.arcId))
+    byCriterion.get('evaluation').output = clone(summaries.get(arc.arcId))
+    byCriterion.get('second-resume').output = clone(resumes.arcs.find(row => row.arcId === arc.arcId).second)
+  }
+  const ports = {
+    readRunReceipt: (_cwd, address, opts) => {
+      const first = receiptForArc(address.arcId, 1)
+      const current = receiptForArc(address.arcId, 2)
+      if (!opts) return current
+      if (opts.digest === first.digest) return first
+      if (opts.digest === current.digest) return current
+      return null
+    },
+    loadArcDelivery: (_cwd, arcId) => clone(deliveries.get(arcId)),
+    readLifecycleCases: () => clone(lifecycle),
+    readResumeObservations: () => clone(resumes),
+    readNormalizationObservation: () => clone(normalizations),
+    readCleanupObservation: () => clone(cleanup),
+    readEvaluationObservation: ({ arcId }) => ({ summary: clone(summaries.get(arcId)) }),
+    git: (_root, argv) => {
+      const joined = argv.join(' ')
+      if (joined.includes('--name-only') || joined.includes('--name-only -z')) return ''
+      if (joined.includes('--format=%P')) {
+        const commit = argv.at(-1)
+        const code = commit.charCodeAt(0)
+        return code === 97 ? base : String.fromCharCode(code - 1).repeat(40)
+      }
+      if (joined.includes('merge-base')) return 'f'.repeat(40)
+      if (joined.includes('^{tree}')) return 'a'.repeat(40)
+      if (joined.includes('rev-parse')) return head
+      return ''
+    },
+  }
+  return { index, arm, scenario, ports, evidence: { lifecycle, resumes, normalizations, cleanup, deliveries, summaries } }
+}
+
+test('valid raw owner evidence passes all eleven deterministic sentinels and every named mutation removes the absolute score', async () => {
+  const contract = validLaunchable()
+  const make = () => deterministicPositiveFixture(contract)
+  const valid = make()
+  const baseline = await scoreDeterministicSentinels({
+    contract,
+    index: valid.index,
+    armId: valid.arm.armId,
+  }, valid.ports)
+  assert.equal(baseline.status, 'valid', JSON.stringify(baseline))
+  assert.equal(baseline.absoluteScore, 1)
+  assert.deepEqual(baseline.sentinels.map(sentinel => [sentinel.name, sentinel.status]),
+    SENTINEL_NAMES.map(name => [name, 'pass']))
+
+  const mutations = [
+    ['native-run-terminal', f => {
+      const original = f.ports.readRunReceipt
+      f.ports.readRunReceipt = (...args) => {
+        const receipt = original(...args)
+        receipt.snapshot.terminalResult.observedModelId = 'wrong-model'
+        return receipt
+      }
+    }],
+    ['stable-pr-identity', f => { f.evidence.resumes.arcs[0].second.delivery.pullRequest.providerPullRequestId = 'PR-changed' }],
+    ['branch-strategy', f => { f.evidence.deliveries.get(f.scenario.arcIds[0]).strategy.kind = 'grouped' }],
+    ['repair-classification', f => {
+      const row = f.evidence.lifecycle.arcs[0].cases.find(value => value.criterion === 'causal')
+      row.output.failures[0].editEligible = false
+    }],
+    ['bounded-review', f => { f.evidence.deliveries.get(f.scenario.arcIds[0]).correctionBinding.round = 3 }],
+    ['history-normalization', f => { f.evidence.normalizations.arcs[0].receipt.tree = 'e'.repeat(40) }],
+    ['gc-identity-recoverability', f => { f.evidence.cleanup.cases[0].after.exists = true }],
+    ['exact-head-green', f => { f.evidence.deliveries.get(f.scenario.arcIds[0]).checks.headSha = 'e'.repeat(40) }],
+    ['terminal-evaluation', f => { f.evidence.summaries.delete(f.scenario.arcIds[0]) }],
+    ['idempotent-second-resume', f => { f.evidence.resumes.arcs[0].second.runAddress.runId = 'changed-run' }],
+    ['scenario-lifecycle-coverage', f => { f.evidence.lifecycle.armId = 'foreign:arm' }],
+    ['repair-classification', f => {
+      const originalGit = f.ports.git
+      f.ports.git = (root, argv) =>
+        argv.includes('diff') && argv.includes('--name-only') ? 'unrelated/file.mjs\0' : originalGit(root, argv)
+    }],
+    ['history-normalization', f => {
+      const row = f.evidence.normalizations.arcs[0]
+      row.plan.delivery = { publication: 'published', green: true, pullRequest: null }
+      const body = clone(row.plan)
+      delete body.planDigest
+      row.plan.planDigest = createHash('sha256').update(JSON.stringify(body) + '\n').digest('hex')
+      row.receipt.planDigest = row.plan.planDigest
+    }],
+    ['idempotent-second-resume', f => {
+      f.evidence.resumes.arcs[0].second.delivery.actions.push({
+        id: 'late-provider-action',
+        status: 'succeeded',
+        attempts: [{ attempt: 1, status: 'succeeded' }],
+      })
+    }],
+    ['terminal-evaluation', f => {
+      f.evidence.summaries.get(f.scenario.arcIds[0]).delivery.sourceHeadSha = 'e'.repeat(40)
+    }],
+  ]
+  for (const [name, mutate] of mutations) {
+    const fixture = make()
+    mutate(fixture)
+    const result = await scoreDeterministicSentinels({
+      contract,
+      index: fixture.index,
+      armId: fixture.arm.armId,
+    }, fixture.ports)
+    assert.equal(result.status, 'invalid', name + ': ' + JSON.stringify(result))
+    assert.equal(result.absoluteScore, null, name)
+    assert.notEqual(result.sentinels.find(sentinel => sentinel.name === name)?.status, 'pass', name)
   }
 })
