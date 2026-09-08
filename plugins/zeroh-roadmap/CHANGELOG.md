@@ -1,3 +1,7 @@
+## 0.40.7 — 2026-09-08
+
+- Carries the two 2026-09-07 consumer-found fixes onto 0.40.6: the `rejectedAlternatives-append-only` phantom-element bug (trailing `// R<n>` comment) and the `astra` alias (`gpt-6-astra` → codex driver) for a per-role codex lead. No other change.
+
 ## 0.40.5 — 2026-09-07
 
 - `astra` joins the alias vocabulary (`MODEL_IDS.ASTRA` = `gpt-6-astra`, routed to the codex driver) so a consumer can lead a role on the codex family's higher-judgment model while the lane's default pin stays `gpt-5.6-sol` — owner ruling 2026-09-07 20:04 UTC ("use codex fully: astra architect and sol developer"). No chain or preset changes; `roles.test.mjs` fixture extended.
