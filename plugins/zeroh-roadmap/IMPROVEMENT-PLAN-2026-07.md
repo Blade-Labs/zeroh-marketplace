@@ -1,3 +1,5 @@
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+
 # zeroh-roadmap improvement plan — 2026-07-01 audit
 
 Three parallel audits (lifecycle skills · review agents/gates · mechanical substrate), each

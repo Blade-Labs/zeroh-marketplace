@@ -1,3 +1,5 @@
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+
 # Skill Upgrade Gauntlet — 2026-08-13/14 (shipped as v0.30.0)
 
 All 14 skills went through blind competitive trials: frozen outcome contracts, benchmark

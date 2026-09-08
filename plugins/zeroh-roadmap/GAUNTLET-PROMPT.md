@@ -1,3 +1,5 @@
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+
 # Skill Upgrade Gauntlet
 
 Audit every Claude Code skill currently installed and autonomously upgrade the ones I select through a Skill Upgrade Gauntlet.

@@ -1,7 +1,8 @@
 # Save a program once
 
-Use the installed plugin's `scripts/prepared-program.mjs` when an approved
-operation needs a large executable program. Simple commands stay direct.
+Native edits, file copies and simple commands are the default. Optionally use
+the installed plugin's `scripts/prepared-program.mjs` for an exceptional approved
+bulk executable program. The helper is not a required initialization step.
 
 1. Write the program once in an isolated working directory outside the consumer.
    Choose `bash`, `python` or `node` (ES module; use cwd-relative paths).

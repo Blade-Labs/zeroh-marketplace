@@ -1,3 +1,5 @@
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+
 # zeroh-roadmap — Deletion-Disposition Ledger (ROADCODE prose diet)
 
 ## 2026-09 missing-home routing — phase 34.1

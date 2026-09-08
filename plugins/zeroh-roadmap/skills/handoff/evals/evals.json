@@ -1,40 +1,40 @@
 [
   {
-    "skills": ["handoff"],
-    "query": "The implementation and review decisions are already captured in phase 5. Prepare the handoff for a fresh session that should execute that phase. This is the pure-phase case represented by PROMPT-710-711.",
+    "skills": [
+      "handoff"
+    ],
+    "query": "Phase 5 already holds the plan and decisions. Prepare a fresh-session handoff.",
     "files": [
       "roadmap/phases/phase-5.phase.ts"
     ],
     "expected_behavior": [
-      "Routes design reasoning and learned code facts into the phase notes.",
-      "Routes executable tripwires into the phase assumptions instead of the handoff file.",
-      "Leaves .building/HANDOFF.md absent or nearly empty because the phase owns the durable context.",
-      "Emits the one-line invocation `do phase 5`."
+      "Updates concise typed progress and relevant check results without copying the transcript.",
+      "Preserves original intent and remaining work.",
+      "Gives a short resume instruction naming the actual checkout and phase."
     ]
   },
   {
-    "skills": ["handoff"],
-    "query": "Prepare a handoff while an arc is mid-flight. Its committed decisions belong in the arc and phase files, but the next session also needs a release scope fence, two uncommitted commit SHAs, and a live artifact URL. This is the hybrid case represented by RESUME-702-703.",
-    "files": [
-      "roadmap/arcs/POLYSEAT.arc.ts",
-      "roadmap/phases/phase-4.phase.ts"
+    "skills": [
+      "handoff"
     ],
-    "expected_behavior": [
-      "Routes ratified rulings into the arc's locked decisions and phase-specific facts into the phase notes.",
-      "Writes only the unroutable release fence, mid-flight SHAs, and live artifact URL to .building/HANDOFF.md, with a why-not-routable reason for each item.",
-      "Records writtenAt and HEAD freshness anchors and the supersedes-previous marker in the handoff header.",
-      "Emits `Read .building/HANDOFF.md (the fence), then do phase 4`."
-    ]
-  },
-  {
-    "skills": ["handoff"],
-    "query": "No phase exists yet. Preserve the freeform discovery state, open questions and next action so another fresh session can continue. This is the pre-phase case represented by NEXT-SESSION-PROMPT.md.",
+    "query": "An arc is interrupted with a running check and a held foreign work claim. Prepare a handoff.",
     "files": [],
     "expected_behavior": [
-      "Routes any durable cross-project facts to the operator vault when one is bound and durable lessons to `roadmap eval lesson`.",
-      "Writes the remaining mission, scope fence, state, open questions and next action to .building/HANDOFF.md because no phase or arc can own them yet.",
-      "Labels every residue item with why it could not be routed to a typed artifact.",
-      "Emits `Read .building/HANDOFF.md and continue from Next.`"
+      "Distinguishes observed exit from unknown running work.",
+      "Does not silently take over or release foreign ownership.",
+      "Links canonical records and states the next concrete action without inventing completion."
+    ]
+  },
+  {
+    "skills": [
+      "handoff"
+    ],
+    "query": "No phase exists yet. Preserve useful discovery for another session.",
+    "files": [],
+    "expected_behavior": [
+      "Uses a short handoff only for useful context without an existing typed home.",
+      "Preserves scope, consequential open questions and next action.",
+      "Does not create an evaluation ledger or a full planning arc merely to hand off."
     ]
   }
 ]

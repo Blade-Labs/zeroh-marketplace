@@ -1,3 +1,5 @@
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+
 # zeroh-roadmap — Design Notes (relocation archive)
 
 **Contract.** This file is the relocation home for every dated incident narration and

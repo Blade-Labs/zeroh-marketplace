@@ -1,52 +1,23 @@
-## Generator
-```sh
-npx create-next-app@^16 my-app --typescript --tailwind --eslint --app --src-dir --import-alias '@/*' --use-npm --yes
-```
+# Web
 
-Sources: https://nextjs.org/docs/app/api-reference/cli/create-next-app,
-https://ui.shadcn.com/docs/installation/next, and
-https://tailwindcss.com/docs/installation/framework-guides/nextjs. The generator,
-shadcn/ui, Tailwind v4, and selected Magic UI registry are MIT, tier
-`Allowed anywhere`.
+Decide browser-only versus server-backed, first user journey and data boundary.
 
-## Post-steps
-Apply `references/design-system.md`: retain CSS-first Tailwind v4 output, run
-shadcn init, and set the concrete registry mapping
-`@magicui: https://magicui.design/r/{name}.json` in `components.json` under
-`registries`. Cite beautifului.dev as an approved source when selected.
+## Prerequisites and creation
 
-## File tree
-```text
-my-app/
-  package.json
-  components.json
-  src/app/page.tsx
-  src/app/globals.css
-```
+Node/package manager appropriate to the approved framework; backend prerequisites only if needed.
 
-## Conventions delta
-Extend `Flag-first delivery` for user-visible routes and components.
+Vite, Next.js and SvelteKit are examples. Follow the selected generator documentation; do not silently choose Next.js.
 
-## testConventions
-Use `npm test` for units and `npx playwright test` for Playwright flows.
+## Minimal shape and rationale
 
-## designHomes
-Set `designHomes.architecture.home` to `docs/architecture.md` and
-`designHomes.ux.canon` to `docs/ux-canon.md`.
+src/ with app entry, a domain function and data adapter only where needed; tests/ or colocated tests; README with run/test commands.
 
-## Verify
-```sh
-test -f my-app/package.json && test -f my-app/src/app/page.tsx && test -f my-app/src/app/globals.css && (cd my-app && node scripts/check-readme-catalog.mjs --project-root .)
-```
+Keep browser presentation separate from domain behavior and external I/O. Start with one useful route.
 
-## CI and release adapter
+## Run and test
 
-Select `web` in `.github/greenfield-delivery.json` and follow
-[the shared CI/release strategy](../ci-release-strategy.md) for its exact inventory,
-executor, raw report, coverage merge and build contract. Bind runner/build argv
-into the shard manifest before execution; require exact-once leaf/file selection.
-Generate `scripts/ci-shard-plan.mjs`, `.github/workflows/ci.yml` and
-`.github/workflows/release.yml` only from the approved preservation plan.
-Missing tooling/reporters are unavailable with the adapter install remedy.
-Affected PR checks backstop into authoritative full shards on main/manual runs;
-release promotes the same verified artifact bytes without rebuilding.
+Run the actual development command and exercise that route. Test its meaningful domain behavior and a user interaction where relevant; build when required by the selected framework.
+
+Record concrete commands after inspecting generated output. This recipe is guidance, not an observed platform acceptance result. Missing tooling or an unrun target remains unverified. Canonical architecture and test homes can be README sections.
+
+Sources to check when selecting tooling: https://vite.dev/guide/ · https://nextjs.org/docs/app/api-reference/cli/create-next-app · https://svelte.dev/docs/kit

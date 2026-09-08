@@ -1,3 +1,5 @@
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+
 # Protocol diet execution trial — September 2026
 
 This protocol was fixed before any trial run. It exercises the trimmed protocol on the two reviewed READY backlog phases selected by the supervising session: phase 27 (curation range safety) and phase 7 (measured Graft spike). Each phase runs once with `claude-opus-5` and once with `gpt-5.6-sol`, with both arms starting from the same `feat/roadmap-arcs` base SHA recorded below.

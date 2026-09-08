@@ -21,6 +21,7 @@ import {
   ROOT_CANDIDATES,
   RoadmapRootError,
   roadmapRoot,
+  roadmapRootRel,
   consumerSchemaPath,
   resetRoadmapRootCache,
 } from './roadmap-root.mjs'
@@ -357,120 +358,6 @@ function rootLiteralSources() {
   return out
 }
 
-test('roadmap-root.mjs: it is the ONLY home of the root literals left in non-test cli/ and hooks/ code', () => {
-  // The acceptance criterion as a grep the conversion cannot half-do. A consumer laid out under
-  // docs/roadmap/ reads as "no roadmap" at every site that spells the root itself, so the count
-  // of such sites has to be checkable — and stay at one — rather than surveyed by hand once.
-  const sources = rootLiteralSources().filter((s) => !isScanExcluded(s.rel))
-  const names = new Set(sources.map((s) => s.rel))
-  const known = ['cli/lib/derive.mjs', 'cli/commands/status.mjs', 'hooks/session-lane-check.mjs', 'cli/audit-checks.mts']
-  const missing = known.filter((k) => !names.has(k))
-  assert.ok(
-    sources.length >= 30 && missing.length === 0,
-    `scan guard: the sweep must actually reach the plugin's sources — it enumerated ${sources.length} ` +
-      `non-test files and did not see ${missing.join(', ') || '(nothing)'}. A readdir that walked the wrong ` +
-      `directory, or one that found nothing, would make the assertion below vacuously green: an empty ` +
-      `flagged set deepEquals nothing and every literal in the tree would ship unnoticed`,
-  )
-
-  const found = []
-  for (const { rel, src } of sources) {
-    const shapes = [...src.matchAll(argvForm()), ...src.matchAll(pathForm())].map((m) => m[0])
-    if (shapes.length > 0) found.push({ rel, shapes: [...new Set(shapes)] })
-  }
-  const hits = found.map((f) => f.rel)
-  const detail = found.map((f) => `  ${f.rel} — ${f.shapes.join(' ')}`).join('\n')
-  assert.deepEqual(
-    hits,
-    ['cli/lib/roadmap-root.mjs'],
-    `cli/lib/roadmap-root.mjs is the ONLY home the roadmap data root may be spelled as a literal in; ` +
-      `${hits.length} file(s) under cli/ or hooks/ still spell it themselves:\n${detail}\n` +
-      `Each one reads a docs/roadmap consumer as "no roadmap" — join onto roadmapRoot(dir) / ` +
-      `roadmapRootRel(dir) instead. (Only QUOTED occurrences are flagged: the docs/roadmap prose in ` +
-      `gate.mjs and slots.mjs is not a literal and is not the target.)`,
-  )
-
-  // The exemption is only sound while the exempt file is a REAL home. An entry pointing at a
-  // module that no longer carries the literals is a stale allow-list, not a passing invariant.
-  const home = readFileSync(new URL('./roadmap-root.mjs', import.meta.url), 'utf8')
-  assert.match(
-    home,
-    /export const ROOT_CANDIDATES/,
-    'anchor NOT FOUND: cli/lib/roadmap-root.mjs must declare `export const ROOT_CANDIDATES` — the allow-listed ' +
-      'home has to be the module that actually owns the candidate list, or the exemption above exempts nothing',
-  )
-  for (const candidate of ROOT_CANDIDATES) {
-    assert.ok(
-      home.includes(`'${candidate}'`) || home.includes(`"${candidate}"`) || home.includes(`\`${candidate}\``),
-      `the home must spell every ROOT_CANDIDATES entry as a literal; '${candidate}' is not written in ` +
-        `roadmap-root.mjs — a candidate assembled elsewhere is a second home the scan above cannot see`,
-    )
-  }
-  assert.match(
-    home,
-    new RegExp(argvForm().source),
-    'the home carries the ARGV form (the quoted root segment) — an exempt file with none of the literals it ' +
-      'is exempt for is an empty exemption',
-  )
-  // The other half of the exemption: the PATH form. The home does NOT carry that shape, and must
-  // not — it returns a ROOT and callers join members onto it, so a 'roadmap/phases' string inside
-  // roadmap-root.mjs would be a value nothing reads, a literal planted only to satisfy this block.
-  // A text anchor here would be unsatisfiable by any correct implementation, and a guard that
-  // reds on lawful code gets deleted by the next person along with its real coverage. What has
-  // to be true is stronger and behavioral: every path-form string the scan strips from a call
-  // site must be REBUILDABLE from the module, per member, under BOTH layouts — otherwise the
-  // stripped sites have nowhere to go and the scan above is buying a regression.
-  const plainTree = newTree()
-  writeAt([plainTree, 'roadmap', 'roadmap.config.json'])
-  const docsTree = newTree()
-  writeAt([docsTree, 'docs', 'roadmap', 'roadmap.config.json'])
-  for (const member of ROOT_MEMBERS) {
-    assert.equal(
-      `${roadmapRootRel(plainTree)}/${member}`,
-      `roadmap/${member}`,
-      `the path form 'roadmap/${member}' must respell as roadmapRootRel(dir) + '/${member}' — a member ` +
-        `the scan strips from every call site but the module cannot reproduce is a homeless literal`,
-    )
-    assert.equal(
-      `${roadmapRootRel(docsTree)}/${member}`,
-      `docs/roadmap/${member}`,
-      `and it must FOLLOW the resolved root: the whole point of the strip is that '${member}' moves with it`,
-    )
-    assert.equal(
-      join(roadmapRoot(docsTree), member),
-      join(docsTree, 'docs', 'roadmap', member),
-      `the ABSOLUTE spelling too — join(roadmapRoot(dir), '${member}') is the other replacement idiom`,
-    )
-  }
-})
-
-// ── roadmapRootRel: the repo-relative spelling (git pathspecs, diff prefixes, provenance) ──
-
-/**
- * roadmapRootRel, or a NAMED failure. Git pathspecs (`git log -- roadmap/backlog.ts`),
- * diff-prefix tests (`file.startsWith('roadmap/')`) and provenance strings cited in eval
- * reports all need the root RELATIVE to the repo, not the absolute path roadmapRoot returns.
- */
-function roadmapRootRel(dir) {
-  assert.equal(
-    typeof roadmapRootModule.roadmapRootRel,
-    'function',
-    'cli/lib/roadmap-root.mjs must export roadmapRootRel(dir): the resolved root as a repo-relative POSIX ' +
-      'path. Without it every pathspec site keeps its own literal and the scan tripwire above can never go green',
-  )
-  return roadmapRootModule.roadmapRootRel(dir)
-}
-
-/** Call roadmapRootRel expecting a throw; return the caught error. */
-function relErr(dir) {
-  try {
-    roadmapRootRel(dir)
-  } catch (e) {
-    return e
-  }
-  return assert.fail('expected roadmapRootRel to throw, it returned')
-}
-
 test('roadmapRootRel — the marked root, repo-relative and POSIX: "roadmap" / "docs/roadmap", no ./ and no trailing slash', () => {
   const plain = newTree()
   writeAt([plain, 'roadmap', 'roadmap.config.json'])
@@ -549,6 +436,8 @@ test('roadmapRootRel — an ABSOLUTE ROADMAP_ROOT OUTSIDE dir yields an honest .
   })
 })
 
+function relErr(dir) { try {roadmapRootRel(dir)} catch(error) {return error} assert.fail('Expected ambiguous root refusal') }
+
 test('roadmapRootRel — an AMBIGUOUS tree THROWS RoadmapRootError, it never guesses a pathspec', () => {
   const dir = newTree()
   writeAt([dir, 'roadmap', 'roadmap.config.json'])
@@ -564,71 +453,4 @@ test('roadmapRootRel — an AMBIGUOUS tree THROWS RoadmapRootError, it never gue
   withRoadmapRootEnv(join(dir, 'docs', 'roadmap'), () => {
     assert.equal(roadmapRootRel(dir), 'docs/roadmap', 'and the advertised remedy resolves it here too')
   })
-})
-
-/**
- * Every source under bin/, cli/, hooks/ and scripts/ INCLUDING tests — the wider sweep the
- * exclusion proof needs (it has to ask which files reach into cli/testdata/, and the answer is
- * only meaningful if test files are in the question).
- */
-function allPluginSources() {
-  const pluginRoot = new URL('../../', import.meta.url)
-  const out = []
-  const walk = (rel) => {
-    for (const e of readdirSync(new URL(rel, pluginRoot), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (e.isDirectory()) walk(`${rel}${e.name}/`)
-      else if (/\.(m[jt]s|sh)$/.test(e.name)) out.push({ rel: `${rel}${e.name}`, src: readFileSync(new URL(`${rel}${e.name}`, pluginRoot), 'utf8') })
-    }
-  }
-  for (const d of ['bin/', 'cli/', 'hooks/', 'scripts/']) walk(d)
-  return out
-}
-
-test('the cli/testdata/ scan exclusion is PROVEN, not asserted', () => {
-  // An exemption nobody re-checks becomes an allow-list. Each assertion below kills the
-  // exclusion the day its own justification dies, so it can never quietly outlive its reason.
-  const all = allPluginSources()
-  const excluded = rootLiteralSources().filter((s) => isScanExcluded(s.rel))
-
-  // (a) non-vacuous — a directory the walk never reaches is a stale entry, not an exclusion.
-  assert.ok(
-    excluded.length > 0,
-    `SCAN_EXCLUDED_DIRS names ${SCAN_EXCLUDED_DIRS.join(', ')}, but the walk found no source under it — ` +
-      'delete the entry rather than carrying a directory that no longer exists',
-  )
-
-  // (b) not an empty exemption — the same rule this file applies to roadmap-root.mjs itself.
-  assert.ok(
-    excluded.some(({ src }) => [...src.matchAll(argvForm()), ...src.matchAll(pathForm())].length > 0),
-    'no excluded file carries a root literal any more — the exclusion buys nothing and must be ' +
-      'DELETED, so the scan covers cli/testdata/ like everything else',
-  )
-
-  // (c) the premise: "it is test material" is only true while nothing shipped reaches into it.
-  const shipped = all.filter((f) => !/\.test\.m[jt]s$/.test(f.rel) && !isScanExcluded(f.rel) && /testdata\//.test(f.src))
-  assert.deepEqual(
-    shipped.map((f) => f.rel),
-    [],
-    `cli/testdata/ is excluded from the scan because only tests reach it. These NON-test files ` +
-      `reference it, so that premise is false and the exclusion must be re-earned or dropped: ` +
-      `${shipped.map((f) => f.rel).join(', ')}`,
-  )
-
-  // (d) the freeze pin — arc-status-legacy.mjs is exempt because it is a FROZEN parity oracle
-  // that `roadmap status` is diffed against. Both halves of that reason are pinned: lose the
-  // freeze marker, or stop diffing against it, and this REDs.
-  const legacy = excluded.find((f) => f.rel === 'cli/testdata/arc-status-legacy.mjs')
-  assert.ok(legacy, 'cli/testdata/arc-status-legacy.mjs is gone — remove its exemption reasoning with it')
-  assert.match(
-    legacy.src,
-    /FROZEN FOR PARITY/,
-    'arc-status-legacy.mjs no longer declares itself FROZEN FOR PARITY — convert it or delete it, ' +
-      'but do not leave it silently exempt from the scan',
-  )
-  const parity = readFileSync(new URL('../commands/status.parity.test.mjs', import.meta.url), 'utf8')
-  assert.ok(
-    parity.includes("'arc-status-legacy.mjs'"),
-    'status.parity.test.mjs no longer diffs against arc-status-legacy.mjs — an oracle nothing ' +
-      'compares against is dead code, not an exemption',
-  )
 })

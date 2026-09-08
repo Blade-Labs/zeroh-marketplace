@@ -1,52 +1,16 @@
-# zeroh-greenfield
+# ZeroH Greenfield
 
-Start from an idea and reach a runnable first prototype with a good foundation.
-Greenfield interviews only unresolved product/platform choices, selects an
-appropriate template, and proposes architecture, stack rationale, test strategy,
-project structure and local run instructions. CI/release infrastructure is optional.
+A short product interview and project recipes that help an AI coding session build a runnable first prototype with a useful foundation. Works independently of Roadmap on native coding hosts.
 
-For an existing project, inspect the actual architecture and tests, then offer
-missing or stale practices as individual improvements. Accept all, a subset, or
-none; existing working homes and code are preserved. Changes require approval.
-Large executable programs are prepared once and checked before execution with
-`scripts/prepared-program.mjs`; hashes are computed
-from actual bytes, not predicted by the model.
+- `greenfield-init`: reuse known intent, resolve consequential questions, build an approved small prototype and run its meaningful check.
+- `brownfield-audit`: offer selective missing/stale practices; accepting none is valid.
+- `stack-decision`: resolve a real choice without imposing an example stack.
+- `using-zeroh-greenfield`: choose the relevant guidance.
 
-Install the paired `zeroh-roadmap` 0.40.0 or a later compatible release before setup.
-The preflight requires `roadmap config capabilities --json`; older installed Roadmap
-snapshots must be updated before Greenfield can write to a consumer.
+[Recipes](skills/greenfield-init/references/archetypes/README.md) cover web, Android, Expo, Flutter, desktop, combined surfaces, justified Nx workspaces and library/CLI projects. They are adaptable guidance, not prebuilt or platform-validated applications. A small project can keep its PRD, architecture and test strategy in one README. Templates are optional fragments, never a checklist of required files.
 
-## Skills
+Use native edits and the selected framework's ordinary commands. The sole optional production helper, [prepared-program](skills/greenfield-init/references/prepared-program.md), protects exceptional bulk programs from retyping and stale targets. It is not a sandbox or workflow engine. No runtime scripts are copied into consumers by default.
 
-- `using-zeroh-greenfield` chooses the correct workflow.
-- `greenfield-init` interviews, proposes, waits for approval, and initializes.
-- `brownfield-audit` identifies and fills approved gaps without replacing homes.
-- `stack-decision` records sourced stack alternatives and the chosen option.
+Roadmap can consult these skills and link the resulting canonical homes. Greenfield does not require Roadmap configuration, gate slots, proof objects or delivery adapters. Existing consumer workflows and configuration remain consumer-owned; updating this plugin does not migrate or delete them.
 
-## Claude Code
-
-```text
-/plugin marketplace add Blade-Labs/zeroh-marketplace
-/plugin install zeroh-greenfield@zeroh-marketplace
-```
-
-Restart Claude Code or begin a fresh session after installation so the skills are loaded.
-
-## Codex
-
-```text
-codex plugin marketplace add Blade-Labs/zeroh-marketplace
-```
-
-Install or enable `zeroh-greenfield` from the Codex plugin marketplace, then start a fresh Codex session.
-
-## How it relates
-
-| Plugin | Ownership |
-| --- | --- |
-| zeroh-greenfield | Missing project homes |
-| zeroh-roadmap | Consume pointers and run phases |
-| zeroh-design | Blade tokens and themes |
-
-The architecture and ownership decisions live in
-[`roadmap/arc-prompts/GREENFIELD-execution-prompt.md`](../../roadmap/arc-prompts/GREENFIELD-execution-prompt.md).
+Run deterministic helper regressions with `node --test plugins/zeroh-greenfield/test/*.test.mjs` from the marketplace root. Historical dry-run records describe earlier versions and do not establish acceptance of this revision.

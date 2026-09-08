@@ -1,3 +1,5 @@
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+
 # Protocol diet plan — September 2026
 
 This map is the binding input to phase 26.3. A paragraph is a Markdown block separated by a blank line; frontmatter is one block. Every source block below has exactly one disposition. Incident-bearing passages are relocated, never deleted. Measurements use source bytes and the repository token estimator before edits.

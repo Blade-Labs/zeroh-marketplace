@@ -1,25 +1,19 @@
 # <project-name>
 
-<project-summary>
+<first useful behavior and intended user>
 
-## Structure
+## Product scope
 
-| Path | Purpose |
-| --- | --- |
-| <path> | <purpose> |
+<platforms needed now, success check, non-goals and assumptions>
 
-## Commands
+## Run and test
 
-| Command | Purpose |
-| --- | --- |
-| <command> | <purpose> |
+<prerequisites, actual local command and meaningful test command>
 
-## Catalog
+## Foundation
 
-<!-- repo-catalog:start -->
-| Project | Path | Purpose |
-| --- | --- | --- |
-| <project> | <path> | <purpose> |
-<!-- repo-catalog:end -->
+<small architecture rationale and key source paths; link existing homes>
 
-Check catalog currency with `<catalog-check-command>`.
+## Known limits
+
+<unverified platforms and deferred decisions>

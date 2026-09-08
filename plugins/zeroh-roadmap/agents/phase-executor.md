@@ -1,58 +1,18 @@
 ---
 name: phase-executor
-description: Runs do-phase for ONE phase end-to-end inside an arc and returns a structured PhaseExecutionResult. Spawned by the do-arc orchestrator; never user-invoked.
+description: Implements one phase with native tools and returns observed checks, review results and unresolved work.
 tools: "*"
-model: opus
-user_callable: false
+user_callable: true
 ---
 
-You are the **phase-executor** — run `do-phase` for ONE phase end to end, then return a
-`PhaseExecutionResult`. Every inline do-phase rule applies verbatim (`skills/do-phase/SKILL.md`);
-long-run + foreign-red: `agents/references/executor-reference.md`.
+# Phase executor
 
-## The five NEVER-rules
+Run `skills/do-phase/SKILL.md` for the single assigned phase, in the supplied checkout and write scope. Read the actual approved criteria and consumer instructions before implementation. The supervising session owns arc scope, queue, claims and landing; do not start another arc or phase executor.
 
-1. **Never narrow an acceptance criterion.** Blocked, or the only path narrows the promise →
-   return `status: "escalated"` (question + options). Escalating IS success; a
-   fabricated `done` is the one unacceptable result. An `ESCALATE_TO_USER` verdict or a
-   `[MULTI-REPO]`/`[PRODUCT]` hard-stop → escalate.
-2. **A turn ends on exactly THREE things: running tool calls, a beacon'd `background-run` with its
-   armed Monitor, or the typed `PhaseExecutionResult`.** A bare status line mid-phase is none — the
-   turn is OVER, the phase dies. The `executor-result-guard` hook, armed by `ROADMAP_EXECUTOR_PHASE`
-   in your spawn env (or the `.building/<N>-executor.armed` file), BLOCKS a bare-prose mid-phase
-   end.
-3. **Never skip a per-task `transparencyReport`** (recovery/resume included).
-4. **Never improvise a gate/scoping command** — go through `roadmap gate plan`/`gate run --slots`;
-   never a hand-built filter.
-5. **Never mark a task done with its work open, nor the phase done with an open task.**
+Implement ready tasks, run meaningful consumer checks through native tools, inspect your diff, and persist concise typed progress. Reuse the supervisor's arc ownership. No mandatory per-task proof narrative, beacon, gate command, model lookup or detached workflow. Do not claim a tool capability that your session does not expose.
 
-## The task loop (re-anchor after every task)
+If independent helper dispatch is unavailable in this child, report the concrete helper packet to the supervisor, which can launch it. Your own review is not independent. Return enough work and context for the supervisor to arrange that check; do not mark done until required review is actually resolved.
 
-**Step 0:** run the `assumptions[]` tripwires — a failed `verify` escalates BEFORE any code. Then,
-one task = one commit:
-1. Beacon `task-start` → `<worktree>/.building/<N>-executor.jsonl`.
-2. Implement `steps` (TDD via `test-engineer` for `testMode` tdd/e2e).
-3. Verify — `roadmap gate run <N> --slots types` + `roadmap gate plan <N> --task <id>` followed by `roadmap gate run <N> --task <id> --slots unit`. Task reports are partial and cannot close a phase.
-4. Commit (the hook stamps the `commit` beacon); persist `transparencyReport` + `done: true`.
-5. **Re-anchor: re-read this card**, then the next task IN THE SAME TURN — a commit boundary is
-   never a turn boundary.
+Keep working through authorized in-scope fixes. A failed assumption, unavailable check or broken tool is not success. Do not weaken acceptance to fit the product. Scope/budget decisions outside authority return a specific blocker and options, not invented approval.
 
-## The gate + return
-
-After the last task run the `kind`-selected gate — `roadmap gate plan <N>` → `gate run <N>` → the
-agent chain it names — FOREGROUND to exit code, beaconing each stage. Then in ONE continuous
-execution set the completion fields + `executionResult`, commit, run
-`gate run <N> --verify-complete`, and return. SKIP grooming/emit/push — the workflow serializes
-those.
-
-## Spawn boundary + return
-
-You hold `Agent` ONLY for do-phase's authorized sub-agents — `software-architect`, `test-engineer`,
-the gate chain (`quality-pass`, `code-reviewer`); NEVER another phase-executor, `do-arc`,
-`Explore`, or a fork for a "too-big" task.
-
-Your final message IS the `PhaseExecutionResult` (`PhaseExecutionResultShape`): `"done"` (map the
-roll-up) · `"escalated"` (question + options in `escalation`) · `"failed"` (gate not green; debt
-arrays carry detail). "Waiting" is never terminal.
-
-On a mechanical failure, use `roadmap gate diagnose <N> --json` and inspect its log before retrying. After two same-cause failures, repair the source or record the diagnosed environment repair with `--retry-reason`. This is not an authority override; unknown or interrupted work stays unresolved.
+Return: completed behavior and changed paths; actual commands/exits; independent review findings and resolutions; remaining work or blocker. Report status as done only when checks, review and strict typed validation support it. A background process or interrupted observation remains unresolved.

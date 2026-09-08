@@ -1,51 +1,23 @@
-## Generator
-```sh
-flutter create my_app
-```
+# Flutter
 
-Source: https://docs.flutter.dev/reference/create-new-app. Flutter is
-BSD-3-Clause, tier `Allowed anywhere`.
+Confirm required platforms, native integration and whether a shared Dart UI suits the product.
 
-## Post-steps
-Add `shadcn_flutter: ^0.0.54` from
-https://pub.dev/packages/shadcn_flutter and apply the token-name mapping from
-`references/design-system.md`. Flutter: BSD-3-Clause; shadcn_flutter 0.0.54:
-BSD-3-Clause. Both are `Allowed anywhere`.
+## Prerequisites and creation
 
-## File tree
-```text
-my_app/
-  pubspec.yaml
-  lib/main.dart
-  test/widget_test.dart
-  analysis_options.yaml
-```
+Flutter SDK and target-specific tooling; inspect flutter doctor output.
 
-## Conventions delta
-Keep presentation widgets separate from application services and retain the
-generated analyzer configuration.
+Use flutter create for the selected targets following current docs; preserve approved target choices.
 
-## testConventions
-Use `flutter test` for widgets and `flutter test integration_test` for device
-flows when the project adds them.
+## Minimal shape and rationale
 
-## designHomes
-Set `designHomes.architecture.home` to `docs/architecture.md` and
-`designHomes.ux.canon` to `docs/ux-canon.md`.
+lib/ with entry screen and small domain seam, test/, generated target folders and README commands.
 
-## Verify
-```sh
-test -f pubspec.yaml && test -f lib/main.dart && test -f test/widget_test.dart && node scripts/check-readme-catalog.mjs --project-root .
-```
+Keep domain behavior independent of platform plugins where useful.
 
-## CI and release adapter
+## Run and test
 
-Select `flutter` in `.github/greenfield-delivery.json` and follow
-[the shared CI/release strategy](../ci-release-strategy.md) for its exact inventory,
-executor, raw report, coverage merge and build contract. Bind runner/build argv
-into the shard manifest before execution; require exact-once leaf/file selection.
-Generate `scripts/ci-shard-plan.mjs`, `.github/workflows/ci.yml` and
-`.github/workflows/release.yml` only from the approved preservation plan.
-Missing tooling/reporters are unavailable with the adapter install remedy.
-Affected PR checks backstop into authoritative full shards on main/manual runs;
-release promotes the same verified artifact bytes without rebuilding.
+Run flutter test with a behavior assertion, then launch the actual app on each required available target. A successful unit test does not prove device integration.
+
+Record concrete commands after inspecting generated output. This recipe is guidance, not an observed platform acceptance result. Missing tooling or an unrun target remains unverified. Canonical architecture and test homes can be README sections.
+
+Sources to check when selecting tooling: https://docs.flutter.dev/get-started · https://docs.flutter.dev/testing

@@ -1,35 +1,3 @@
-# Product requirements
+# Product intent
 
-## Product
-
-<product>
-
-## Audience
-
-<audience>
-
-## Platforms
-
-<platforms>
-
-## Constraints
-
-<constraints>
-
-## Non-goals
-
-<non-goals>
-
-## Success signals
-
-<success-signals>
-
-## Brand
-
-<brand>
-
-## Decisions
-
-| Date | Ruling | Reason |
-| --- | --- | --- |
-| <date> | <ruling> | <reason> |
+<user, first journey, observable success, platforms now, constraints, non-goals, assumptions and approved choices>
