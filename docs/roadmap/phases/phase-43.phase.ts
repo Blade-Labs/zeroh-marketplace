@@ -9,7 +9,7 @@ export default definePhase({
   phase: 43,
   name: 'Native lifecycle conformance with resumable four-host comparison',
   plannedBy: { model: 'unverified' },
-  status: 'backlog',
+  status: 'in-progress',
   category: 'test',
   kind: 'hardening',
   source:
