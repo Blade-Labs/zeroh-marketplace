@@ -789,3 +789,12 @@ receipt-backed audit blocks moved out of default discovery. Synthetic tampering,
 authority, command/exit and delivery mutation regressions remain in npm test.
 The owner authorized purpose-based release review; phase 34.7 explicitly retains
 historical observations and the scoped R0 pilot without claiming a fresh matrix.
+
+
+## Small Codex planning repair
+
+- Repeated unchanged-source reads: superseded-with-equivalent(bounded discovery and refresh after changes; independent review still reads source).
+- Existing-anchor requirement for future files: superseded-with-equivalent(existing anchors resolve; additions name creating task and contract).
+- Product red/green during planning: superseded-with-equivalent(cheap current checks now, real behavior tests during execution; pending never means pass).
+- Delegated repair/placement reasoning: superseded-with-equivalent(report OPEN findings; supervisor owns repairs and queueing).
+- Reviewer reload of authoring skill: moved-to-reference(existing closure-checklist.md); independent intent, feasibility and verification remain required.

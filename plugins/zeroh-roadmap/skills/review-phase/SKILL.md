@@ -60,7 +60,18 @@ frontmatter alias (fail-safe). Judge independence is fresh read-only context +
 evidence-or-downgrade, not a different model. A reviewer that RAN and returned an adverse
 verdict has judged - that never triggers a swap; never queue on an unrun review
 (`audit-roadmap` flags queue anomalies after the fact). Mode A invoked STANDALONE runs INLINE
-(no spawn); the spawn site is plan-arc Step 3.
+(no spawn); authoring dispatches independent reviewers from plan-phase Step 7 or plan-arc Step 3.
+
+### Delegated report-only review
+
+When the launcher identifies this as delegated report-only, perform Step H, Step V and its metadata
+ratifications, then emit the existing verdict. Skip Step F and Step 8, including repair/placement
+reasoning and queue probes. Report proposed repairs as OPEN findings; use
+`Placement: NOT QUEUED - delegated report-only review`. The supervisor owns repair and queueing.
+Read relevant source independently and the direct closure checklist; do not replay plan authoring.
+Mechanical validation still runs as Step V requires. If its toolchain is missing, report the
+specific hold; never assume validation passed or install dependencies in a report-only review.
+Standalone review and Mode B retain their existing behavior.
 
 ### Step H - Holistic feature review (leads the report; finalized after Step V)
 
@@ -88,14 +99,15 @@ report-only. An ARC review runs Step H once against the arc entity (`planes`, `s
 
 ### Step V - Per-task adversarial verification
 
-Run **plan-phase Step 5's self-verify list** against each task as an independent adversary
+Read `../plan-phase/references/closure-checklist.md` directly and apply its checks against each task as an independent adversary
 (catalogue not restated here). Its mechanical members (paths, size lint, markers, emit/parse)
 are `roadmap phase validate <N>`'s job: run it, trust it, never hand-simulate it. Bring JUDGMENT
 to the rest via `references/plan-adversary.md` (§A verify-clause falsifiability, §B anchor
 freshness, §C criterion state-coverage, §E decision deferrals, §F prose-mechanism drift) - plus:
 
 - **Source confirms** - open the function each task claims to modify; does `problem` exist there
-  NOW? Absent everywhere = BLOCKER.
+  NOW? For additions, verify the creating task and planned contract; the future symbol's
+  absence is expected, not a BLOCKER.
 - **Blast radius** (the commonest real failure) - per Evidence rules: grep each changed
   pattern/symbol repo-wide keyed to the code token, plus alternate phrasings for prose carriers
   (comments, labels, docs drift in different words); every uncovered occurrence = NEEDS WORK.

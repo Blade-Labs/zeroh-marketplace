@@ -186,14 +186,14 @@ function buildReviewPrompt(root, ids, { doc, focus } = {}) {
       : []),
     '',
     'WHAT THIS LANE OVERRIDES — everything else in the protocol runs unchanged:',
-    `- REPORT-ONLY. Step F auto-repair and Step 8's queue mutation are DISABLED here. Never edit a phase file, never touch backlog.ts, never \`git add\`, commit, push, merge, or switch branches; the ONLY file you write is ${LANES.review.report}. Still DO the reasoning of both steps and report their outcome — a repair you would have applied belongs under \`Findings:\` as OPEN, and your placement ruling still goes on the \`Placement:\` line, phrased as a recommendation.`,
+    `- REPORT-ONLY. Use the delegated report-only branch of the review protocol. Step F and Step 8, including repair/placement reasoning and queue probes, are DISABLED. Never edit a phase file or backlog.ts, commit, push, merge, or switch branches; write only ${LANES.review.report}. Proposed repairs remain OPEN findings; emit Placement: NOT QUEUED - delegated report-only review.`,
     '- THIS LANE REVIEWS INLINE BY DESIGN — not for want of a spawn: independence here is the fresh read, and the verdict must be attributable to the model that formed it. Wherever the protocol spawns an agent per phase or per criterion, run that step yourself, once per target.',
     '- `judged by:` in the verdict block is YOUR OWN model id. Never claim a review that did not run.',
     '- INDEPENDENCE IS THE POINT: a plan and the review already recorded in it may share an author, so treat that recorded review as a HYPOTHESIS to re-test, never as evidence, and "already reviewed" as grounds for more suspicion rather than less. Re-derive every claim from the code at HEAD.',
     '- Cross-repo targets: read the other checkout by full path (it is outside this worktree), and never write there either.',
     ...(focus ? ['', `TRAILING PROMPT — the protocol\'s "extra checks AFTER the protocol"; it never displaces a step: ${focus}`] : []),
     '',
-    'SHARED-HOST RULES (~5 concurrent AI sessions on 16 GB): reading is free, so read widely. The protocol already forbids executing test suites in either mode — honor that. No dev servers, no builds.',
+    'SHARED-HOST RULES: read the target and affected seams; keep discovery bounded to the review question. The protocol already forbids executing test suites in either mode — honor that. No dev servers, no builds.',
     '',
     `WHEN FINISHED (or blocked): write ${LANES.review.report} in the worktree root (do NOT commit it). It contains one \`## Phase N Review\` block per target in EXACTLY the structure the protocol specifies — downstream parsers consume those enums verbatim — plus, where a claim could not be checked, an explicit "Could not verify" list (never let missing evidence default favorable). End the file with the single line CODEX-RUN-COMPLETE (or CODEX-RUN-BLOCKED if you could not review).`,
   ].join('\n')
@@ -1038,6 +1038,14 @@ function arcPhases(root, arcId) {
 
 export default async function run(argv) {
   const sub = argv[0]
+  if (sub === 'review') {
+    for (const [index, arg] of argv.entries()) {
+      if (arg === '--doc' && (!argv[index + 1]?.trim() || argv[index + 1].startsWith('--'))) {
+        process.stderr.write('roadmap codex: --doc needs a path; omit --doc when no context document is supplied. No launch artifacts were created.\n')
+        return 1
+      }
+    }
+  }
   const ai = argv.indexOf('--arc')
   const root = gitToplevel(process.cwd())
   const arcId = ai >= 0 ? argv[ai + 1] : undefined

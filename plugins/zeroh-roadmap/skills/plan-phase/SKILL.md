@@ -1,6 +1,6 @@
 ---
 name: "Plan Phase"
-description: "Create a new roadmap phase. Use when user says: create phase, plan phase, add to roadmap, new phase, add feature, create task. Reads the code first, pre-makes every decision, rehearses verifies in both directions, then writes and commits a .phase.ts file. Not this skill: planning a multi-phase arc (plan-arc, which loops plan-phase per member) or queueing/auditing an existing phase (review-phase owns the queue)."
+description: "Create a new roadmap phase. Use when user says: create phase, plan phase, add to roadmap, new phase, add feature, create task. Scopes the intended change and public contracts, checks current evidence, then writes a reviewable .phase.ts plan. Small fully specified work uses a short path. Not this skill: planning a multi-phase arc (plan-arc, which loops plan-phase per member) or queueing/auditing an existing phase (review-phase owns the queue)."
 user-invocable: true
 metadata:
   keywords: plan, phase, create, new, roadmap, backlog, feature, add, task, implement
@@ -20,9 +20,33 @@ say "plan unverified, not queued".
 per member); queueing, auditing, or re-reviewing an existing phase is `review-phase` (queueing is
 its Mode A Step 8 act, never this skill's).
 
-## PRIME RULE 1: KNOW THE DIFF BEFORE WRITING THE TASK
+## Small, fully specified work
 
-Every task is planned to the point where you know the exact diff before any code. If you cannot
+When the brief fixes the outcome and stack, one phase can carry the work, and no unresolved
+architecture, authority or high-risk migration decision remains, use this short path. Record
+that scope in notes. One task is valid; do not expand it to meet a task-count target.
+
+1. Reuse supplied decisions. Ask only genuinely user-owned scope/preferences; an unresolved
+   load-bearing technical choice exits this short path and follows Prime Rule 2. Read
+   relevant source/configuration and applicable repository instructions once. Reuse that evidence
+   while the inspected inputs are unchanged; refresh affected evidence after a change.
+2. Run the bounded duplicate probe. Reuse a supplied reserved number; otherwise claim once.
+   Author the existing phase shape using
+   `references/phase-file-contract.md`: outcome, affected/new files, steps, acceptance, test strategy,
+   and load-bearing assumptions. Fix public contracts; leave routine internal implementation choices
+   to the executor. New files are planned additions, not missing existing anchors.
+3. Apply `references/verify-rehearsal.md` and the closure checklist to applicable claims;
+   report other members as not applicable, and required but unrun members as unrun.
+   Do not implement the product in scratch merely to make future checks pass. Validate once,
+   revalidating after a relevant edit; commit and run the same independent review in Step 7.
+
+This changes planning effort, not required schema fields, review independence, gate floors or
+intent acceptance. Use the existing phase/arc routing; this short path adds no delivery mechanism.
+Continue into the detailed steps only for an unresolved requirement, not to replay these acts.
+
+## PRIME RULE 1: KNOW THE CHANGE BEFORE WRITING THE TASK
+
+Every task names its outcome, affected files and public contracts before code. If you cannot
 name the specific files, functions, and nature of the change, you have not planned enough: go read
 the code. "Rework masking" is a non-plan; "add the missing fail-closed category arm to
 `maskPrompt` in `src/masking.ts`" is a plan. Work that cannot reach this precision becomes an
@@ -30,7 +54,7 @@ explicit *investigation task*, never a vague one.
 
 ## PRIME RULE 2: ESCALATE TO ARCHITECT BEFORE GIVING UP
 
-Tokens are not the constraint; hallucinations and shortcuts are. Whenever you would otherwise
+Respect the owner’s time and token budget. For a load-bearing technical ambiguity, whenever you would otherwise
 (a) write a vague low-confidence task, (b) drop a `[NEEDS CLARIFICATION]` marker, (c) split into
 "investigate-first" sub-phases, or (d) STOP and ask the user a planning question, **first** invoke
 `zeroh-roadmap:software-architect` (foreground, synchronous, single hop) per its **Decision
@@ -73,7 +97,7 @@ grammar review-phase also commits under), and re-run `roadmap phase validate <N>
 
 ## Step 1: Reserve the number
 
-`roadmap claim` atomically reserves the next monotonic number across active+archive (wx-noclobber
+Reuse the reserved number supplied by plan-arc. Otherwise `roadmap claim` atomically reserves the next monotonic number across active+archive (wx-noclobber
 lock — cli/commands/claim.mjs owns the mechanics). Never hand-compute max+1. The committed phase file supersedes the claim; there is no
 manual release step.
 
@@ -97,7 +121,7 @@ anti-patterns: `references/phase-file-contract.md`. The authoring decisions, in 
 cut/changelog/infra/deploy). Torn between `logic` and `hardening`: choose `hardening` (an extra
 integration rerun costs far less than an unverified persistence fix). `kind` is independent of `category`.
 
-**Phase granularity: target 5-8 tasks** (gate cost is per-phase: gate chain, executor spawn,
+**Phase granularity for larger work: target 5-8 tasks** (gate cost is per-phase: gate chain, executor spawn,
 serialization tail, so don't shard). Split below ~4 only for a nameable reason (risk isolation, a hard
 dependency boundary, a distinct `kind`) — "felt like a separate topic" is not one. Past ~10
 tasks you are in do-arc's HEAVY band. One task = one focused change; "and also..." is two tasks.
@@ -120,17 +144,17 @@ whose FALSITY WOULD CHANGE THE PLAN (the RAGUNIFY 1343.6 miss) becomes
 re-testing the tree instead of the load-bearing claims); **zero is legitimate for a pure-prose phase — say so
 in the notes**. Not every `keyFiles` anchor is an assumption.
 
-**Run every plan-time-runnable probe NOW and encode the observed result.** A command runnable
-today (a grep, an exit-code probe, a gate slot) never becomes execution-time homework: run it,
-write what it yielded into the plan. When a task enumerates per-item verdicts
+**Run cheap current-state probes and encode the observed result.** Run load-bearing
+assumption and source checks now. Product test suites, builds and future-behavior checks belong
+to execution; name their expected outcomes without claiming they ran. Reuse unchanged evidence. When a task enumerates per-item verdicts
 (per-slot sweeps, per-connector states), the vocabulary MUST be able to express every outcome its
 probe can yield; include the honest escape member (`observed: <result>`) — a closed
 enum dead-ends the executor.
 
-**Rehearse verifies BOTH DIRECTIONS before writing them** (the single most repeated authoring
+**Check verify meaning before writing it; run product red/green during execution** (the single most repeated authoring
 defect: SEODESKFIX shipped four backward verifies across three phases; UCAUDIT, 8 of 20 member
-phases carried one that could not fail). The protocol, the direction table, the four backward
-shapes, the scratch-copy discipline, and the time-boxed mandatory core:
+phases carried one that could not fail). Current assumptions, future/retained behavior,
+cheap polarity checks and observables:
 `references/verify-rehearsal.md`. Enforcement: `roadmap phase validate` carries a WARN-level
 polarity+grammar lint (new-to-git phase files only); review-phase Mode A is the gate.
 
@@ -181,10 +205,10 @@ failures are never waived. What validate does NOT check: task size. `files ≤10
 unless that TASK sets `batchMode: true` is this skill's own plan-time refusal (the size lint's owners per the
 `PhaseTaskShape` docblock; review-phase re-checks, `roadmap audit` check 11 reds escapes at HIGH).
 
-## Step 5: Self-verify (judgment checklist, re-reading the code NOW)
+## Step 5: Self-verify (judgment checklist against current evidence)
 
 The judgment members live in `references/closure-checklist.md`; run them against the CURRENT tree,
-not Step-2 memory, in the checklist's listed order (BLOCKER-yield members lead) so a time-boxed
+using the inspected inputs (refresh changed inputs), in the checklist's listed order (BLOCKER-yield members lead) so a time-boxed
 pass still catches the worst defects; report any unrun member as unrun, never silently skip.
 Three members exist because real arcs shipped without them (FLUENTFRONT, BRAINVIEW, EVALCORE;
 provenance in the checklist). Fix everything found, re-run `roadmap phase validate <N>`.
@@ -197,7 +221,11 @@ being queued; otherwise clear them all first.
 
 ## Step 7: Auto-invoke `/review-phase N` (MANDATORY unless `--skip-review`; honor-system)
 
-Immediately run `/review-phase N` against the committed phase (Mode A, since status `backlog`).
+Review the committed phase using review-phase Mode A (status `backlog`), dispatched as follows.
+After authoring, dispatch a fresh review-phase reviewer using the host's role resolver; the author
+cannot substitute an inline self-review. On Codex use `roadmap codex review N`, then
+`roadmap codex status N --review` for the result. The supervisor applies reported repairs and
+owns Step 8 queueing only after READY. A standalone user-requested review still follows review-phase.
 **This pass is EXECUTED, never "reviewed inline"** (standing user ruling: every authored phase
 gets an explicit review pass); make its evidence git-visible: fix each finding and commit the
 repairs SEPARATELY as `docs(roadmap): phase N — address review findings`, so anyone can

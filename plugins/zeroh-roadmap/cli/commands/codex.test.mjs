@@ -527,6 +527,9 @@ test('review: the mission DELIVERS review-phase rather than restating it', () =>
   }
 
   assert.match(prompt, /REPORT-ONLY/, 'a delegated review must not repair the plan it is judging')
+  assert.match(prompt, /Placement: NOT QUEUED - delegated report-only review/)
+  assert.doesNotMatch(prompt, /Still DO the reasoning|phrased as a recommendation|reading is free/)
+  assert.match(prompt, /repair\/placement reasoning and queue probes, are DISABLED/)
   assert.match(prompt, /judged by:` in the verdict block is YOUR OWN model id/, 'attribution is per-driver, not per-lane')
   assert.match(prompt, /CODEX-REVIEW\.md/, "the review lane hands off its own report, never the run lane's")
   assert.doesNotMatch(prompt, /one commit|transparencyReport|roadmap gate run/i, 'implementation grammar must not leak into a review')
@@ -1075,7 +1078,7 @@ test('plan: a number whose phase file already exists is refused, not planned ove
 
 /**
  * Strings plan-phase/SKILL.md OWNS — protocol BODY, never this lane's disposition:
- *  - `KNOW THE DIFF BEFORE WRITING THE TASK` / `ESCALATE TO ARCHITECT` / `PROCEED_WITH_TASK` —
+ *  - `KNOW THE CHANGE BEFORE WRITING THE TASK` / `ESCALATE TO ARCHITECT` / `PROCEED_WITH_TASK` —
  *    the two prime rules and the architect verdict token: WHEN a plan is precise enough and when
  *    to escalate is identical for every planner, so a second copy is a second protocol.
  *  - `roadmap claim` — the number-reservation mechanics. This lane reserves BEFORE launching, so
@@ -1090,7 +1093,7 @@ test('plan: a number whose phase file already exists is refused, not planned ove
  * CODEX-PLAN.md hand-off.
  */
 const PLAN_PHASE_OWNED = [
-  'KNOW THE DIFF BEFORE WRITING THE TASK',
+  'KNOW THE CHANGE BEFORE WRITING THE TASK',
   'ESCALATE TO ARCHITECT',
   'PROCEED_WITH_TASK',
   'roadmap claim',
@@ -3948,3 +3951,34 @@ test('24.3 — a PINNED or unspellable --models refuses the launch: nothing jour
   assert.doesNotMatch(unknown.stderr, /^\s+at .*:\d+:\d+\)?$/m, `a policy refusal must not expose a stack frame; got stderr:\n${unknown.stderr}`)
   assert.ok(!existsSync(join(root, '.building', 'codex-244.json')), 'an unparseable policy journals nothing either')
 })
+
+for (const [label, docArgs] of [
+  ['trailing --doc', ['--doc']],
+  ['--doc followed by another option', ['--doc', '--focus', 'keep the original intent']],
+]) {
+  test(`review: ${label} rejects a missing value before creating launch artifacts`, () => {
+    const root = tmpRepo()
+    writePhase(root, 630)
+    const existingWorktree = join(root, 'wt-review-630')
+    const env = fakeLaunchEnv(root, existingWorktree)
+    const priorReport = join(existingWorktree, 'CODEX-REVIEW.md')
+    const priorBytes = 'foreign previous review\nCODEX-RUN-COMPLETE\n'
+    writeFileSync(priorReport, priorBytes)
+    const worktreesBefore = execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: root, encoding: 'utf8' })
+    const artifactsBefore = readdirSync(join(root, '.building')).sort()
+    const missingWorktree = join(root, 'must-not-be-created')
+
+    for (const worktree of [existingWorktree, missingWorktree]) {
+      // Keep --doc literally last to exercise the missing-value parser edge case.
+      const result = spawnSync('node', [BIN, 'codex', 'review', '630', '--worktree', worktree, ...docArgs], {
+        cwd: root, encoding: 'utf8', env,
+      })
+      assert.notEqual(result.status, 0, 'an incomplete option must never launch a reviewer')
+      assert.match(result.stderr, /--doc[^\n]*(?:requires|missing|expected|needs)[^\n]*(?:value|path)|(?:missing|expected)[^\n]*(?:value|path)[^\n]*--doc/i)
+      assert.deepEqual(readdirSync(join(root, '.building')).sort(), artifactsBefore, 'no prompt, journal or launch metadata may be created')
+      assert.equal(readFileSync(priorReport, 'utf8'), priorBytes, 'foreign review bytes must survive argument rejection')
+      assert.equal(existsSync(missingWorktree), false, 'argument rejection must precede worktree creation')
+      assert.equal(execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: root, encoding: 'utf8' }), worktreesBefore)
+    }
+  })
+}

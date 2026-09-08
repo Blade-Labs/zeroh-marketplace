@@ -9,8 +9,10 @@ plus round-1 blind gauntlet feedback 2026-08-13 (§F); per-section arc names bel
 For EVERY `verify:` clause (step strings carry `→ verify: <command>`), name the **false world**:
 the concrete broken state in which this exact command exits non-zero or visibly changes output.
 If you cannot name one, the clause is decoration - NEEDS WORK; auto-repair by rewriting to a
-falsifiable command. Then run the clause both directions mentally: it must FAIL before the step
-lands and PASS after; a clause that passes in both worlds (or fails in both) is broken.
+falsifiable command or concrete observable. For changed behavior, the intended broken behavior
+must fail and its correction pass. Future tests remain pending execution; existing regression
+checks may already pass but cannot alone prove the new behavior. Use the planning/execution
+split in plan-phase/references/verify-rehearsal.md.
 (UCAUDIT: 8 of 20 member phases shipped an unfalsifiable verify.)
 
 Grade these shapes on sight, no benefit of the doubt:
@@ -34,8 +36,9 @@ Grade these shapes on sight, no benefit of the doubt:
 
 ## §B - Stale or misspelled anchors
 
-Open every `steps[].file` (and optional `line`) and confirm the named function/symbol is there
-NOW, not at planning time. Search the symbol case-INsensitively first (`grep -rin`, bounded
+For modifications, open the existing `steps[].file` (and optional `line`) and confirm the
+named function/symbol is there now. For additions, check the task declares the new file and
+contract; do not require its future symbol to exist. Search the symbol case-INsensitively first (`grep -rin`, bounded
 dirs), then exactly: a case-variant symbol name produced a tripwire false-negative (FLUENTFRONT).
 Wrong-but-relocatable anchor = auto-repair `[FIXED]`. Symbol absent from the repo entirely = the
 `problem` may not exist → escalate to the Step V source-confirms BLOCKER lane.

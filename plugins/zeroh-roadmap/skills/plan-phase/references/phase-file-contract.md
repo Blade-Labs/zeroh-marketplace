@@ -26,7 +26,8 @@ definePhase({
 - `steps[].description` MUST end `" → verify: <one command or observable>"` (rehearsed per
   `references/verify-rehearsal.md`).
 - `steps[].line` is optional and approximate; the symbol name is the real anchor, copy-pasted from
-  the file (a FLUENTFRONT tripwire went false-negative on a case-variant retype).
+  existing file. A new symbol names the contract its creating task will implement; it cannot
+  be copied from code that does not exist yet.
 - `batchMode` is TASK-level (it sits inside the task object; `templates/schema.ts` `PhaseTaskShape`).
   Set `batchMode: true` ONLY for genuinely mechanical multi-commit work where the unit of intent
   is one task but the unit of commit is many (a rename across >10 files, N parallel shapes from a
@@ -58,10 +59,10 @@ The posture is the consumer CLAUDE.md rule "Flag-first delivery": cite that rule
 never restate it (a restated paraphrase is exactly how a default-polarity drift once shipped).
 The two schema shapes:
 
-- `flag: { id: 'FLAG_ID' }`: a FlagId registered in `src/flags/registry.ts`.
-- `flag: { bootWired: true, justification }`: joins `src/release/feature-manifest.ts`; the
-  justification (min 20 chars, schema-enforced) is where boot-wiring without a runtime switch is
-  ratified.
+- `flag: { id: 'FLAG_ID' }`: use the consumer's actual flag registry, when it has one.
+- `flag: { bootWired: true, justification }`: explain why the behavior is the entry point without
+  a runtime switch (minimum 20 characters). Follow a consumer feature manifest when it exists;
+  a standalone CLI does not need an invented registry or feature-manifest file.
 
 `roadmap phase validate` reds `userFacing: true` with no `flag` (rule `userFacing-without-flag`).
 A non-user-facing phase declares `userFacing: false` in the file plus one notes line saying why no

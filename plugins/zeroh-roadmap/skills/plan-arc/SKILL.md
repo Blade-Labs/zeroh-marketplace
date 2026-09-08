@@ -146,8 +146,8 @@ Loop `plan-phase` over the reserved numbers in dependency / plane order:
   it implements; a phase that would deviate must **reopen Step 1b**, never diverge.
 - **`source` cites, never narrates:** <=2 lines - arc + plane + the designRef pointer;
   rationale stays in the execution prompt.
-- **Anchor by symbol, never by line:** cite `steps[].file` paths plus exported symbols an
-  exact `grep -F` finds at HEAD - a `file.ts:123` anchor is stale by execution time.
+- **Anchor by symbol, never by line:** existing paths/symbols resolve at HEAD of the review checkout.
+  Planned additions name their creating task and public contract, not an existing HEAD symbol.
 - **Escalate, never guess:** a choice outside the three buckets stops the loop.
 
 ## Step 2c: Promise ledger - every arc promise names its fulfilling task
@@ -166,9 +166,10 @@ empty-set failure, arc-integrity.md §3).
 Review all member phases in parallel - one agent per phase, each given the reviewer
 packet from arc-integrity.md §4, each returning one READY / NEEDS WORK / BLOCKER verdict:
 - **Lane A - spec compliance (mechanical; full checklist §4):** ledger-row coverage;
-  every `steps[].file` + cited symbol hits case-sensitive `grep -F` at HEAD; every verify
-  EXECUTED in both directions - green as written, red under its falsification probe. No
-  achievable red = NEEDS WORK: UCAUDIT queued 8 of 20 phases carrying one.
+  existing files/symbols resolve at HEAD of the review checkout; planned additions name their creating task
+  and contract. Apply plan-phase/references/verify-rehearsal.md: current assumptions and cheap
+  polarity probes now, product red/green in execution. Reuse current validator results within the same checkout/head only; the independent reviewer
+  validates its own checkout once.
 - **Lane B - plan quality (judgment):** `review-phase` Mode A with **`--no-queue`**,
   model per `modelPolicy.judgeModel` in `roadmap.config.json`. **Band-scoped:** Lane B
   defaults ON and is SKIPPED only when a phase is kind:mockup, docs-only (every keyFiles

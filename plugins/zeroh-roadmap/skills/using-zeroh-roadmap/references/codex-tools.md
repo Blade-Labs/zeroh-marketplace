@@ -39,7 +39,7 @@ broke — do not infer it from an installed-plugin listing, which reports instal
 
 | The skills say | On Codex |
 |---|---|
-| read a file / search the repo | your file-read and shell tools; reading is free, read widely |
+| read a file / search the repo | your file-read and shell tools; read relevant inputs once and refresh changed evidence |
 | spawn a role / dispatch an agent | `spawn_agent` (needs `multi_agent`, below) — or the child-CLI route when the role's model is not yours |
 | message a running agent, ask for a fix round | `followup_task` — it delivers, triggers a turn, and reloads an evicted child |
 | wait for a spawned role | `wait_agent`, in bounded stretches of 5-10 min; it is an event subscription, so short polls buy nothing |
