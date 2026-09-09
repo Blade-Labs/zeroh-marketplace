@@ -23,3 +23,5 @@ For a standalone user outcome, independently drive its acceptance as `validate-a
 Return what changed, observed checks and exits, independent review result, and any unresolved work or blocker. An unavailable check, permission refusal, timeout or interrupted process remains unresolved. Do not return success just because implementation commits exist. Release a standalone claim with the same owner on completion or an explicit checked handoff.
 
 Completion records must satisfy the typed done shape: independent review, completed tasks, and successful required checks or `checks: []` with a justified `checksNotApplicable` reason. Run the consumer’s combined typecheck and `roadmap phase validate --all` command before final closure. Do not invent check results or weaken requirements to satisfy the schema. Runtime refinements remain necessary; a clean `tsc` alone does not verify relationships or original intent.
+
+For migrated records, also read `extensions.roadmapMigration.original` and its preserved source for task steps, acceptance details and owner rulings. Those requirements remain relevant; legacy execution-engine settings are historical metadata.

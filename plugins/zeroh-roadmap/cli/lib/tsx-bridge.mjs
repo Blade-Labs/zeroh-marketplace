@@ -45,7 +45,7 @@ export function bridgeImport(path, options = {}) {
 }
 // Read literal committed intent without executing source or importing mutable helpers.
 // Unsupported computed intent is explicitly unavailable; do not guess its old value.
-export function bridgeSource(source, sourcePath, consumerRoot=dirname(sourcePath)) {
+export function bridgeSource(source, sourcePath, consumerRoot=dirname(sourcePath), wrapper = 'defineArc') {
   try {
     let ts
     try { ts=createRequire(import.meta.url)('typescript') } catch {
@@ -56,7 +56,7 @@ export function bridgeSource(source, sourcePath, consumerRoot=dirname(sourcePath
     const exports = file.statements.filter(ts.isExportAssignment)
     if (exports.length !== 1) throw new Error('Expected one default intent export')
     let expression = exports[0].expression
-    if (ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) && expression.expression.text === 'defineArc' && expression.arguments.length === 1) expression=expression.arguments[0]
+    if (ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) && expression.expression.text === wrapper && expression.arguments.length === 1) expression=expression.arguments[0]
     function literal(node) {
       if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) return literal(node.expression)
       if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text

@@ -29,3 +29,5 @@ Before editing an existing arc, acquire its exclusive work claim. Phase-number a
 New project: if Greenfield is available, consult its PRD interview and selected project recipe before implementation. Reuse supplied answers and approval. Existing project: inspect its architecture, test and run-command homes; optionally offer missing practices. Declining those suggestions does not block Roadmap initialization. If Greenfield is unavailable, use the project's guidance and state any unresolved foundation choice; installing another plugin is not a prerequisite.
 
 Read only relevant references: `documentation-rules.md` for docs; `test-worthiness.md` for checks; `component-structure.md` for UI organization; `external-assets-licensing.md` for external assets. These are guidance subordinate to the consumer's own standards, not extra review stages.
+
+For a legacy migration, read `../../docs/native-core-migration.md#arc-scoped-migration-command` and start with `roadmap migrate --arc <path>`. Preview before applying; retain original requirements and historical records. Migration success is not execution approval.

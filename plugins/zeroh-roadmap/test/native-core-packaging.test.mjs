@@ -1,4 +1,5 @@
 import test from 'node:test'
+import ts from 'typescript'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, relative, join, dirname } from 'node:path'
@@ -10,6 +11,7 @@ const expected=[
   "bin/validate-roadmap-file.mjs",
   "cli/commands/claim.mjs",
   "cli/commands/init.mjs",
+  "cli/commands/migrate.mjs",
   "cli/commands/phase.mjs",
   "cli/commands/status.mjs",
   "cli/lib/bridge-error.mjs",
@@ -30,12 +32,16 @@ const expected=[
   "templates/schema.ts"
 ]
 const excluded=path=>path.startsWith('docs/reviews/') || path.split('/').some(part=>['test','tests','fixtures','dry-runs','testdata'].includes(part)) || /\.test\.[^.]+$/.test(path)
-test('the shipped native core contains exactly the reviewed 22 production sources',()=>{
+test('the shipped native core contains exactly the reviewed 23 production sources',()=>{
  const production=files(root).map(path=>relative(root,path)).filter(path=>/\.(?:mjs|js|ts|mts|sh|py)$/.test(path)&&!excluded(path)).sort()
  assert.deepEqual(production,expected)
  for(const name of production.filter(name=>name.endsWith('.mjs'))) {
   const path=join(root,name),text=readFileSync(path,'utf8')
-  for(const match of text.matchAll(/(?:from\s+|import\s*)['"](\.[^'"]+)['"]/g)) assert.ok(existsSync(resolve(dirname(path),match[1])),name+' imports missing '+match[1])
+  const ast=ts.createSourceFile(path,text,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS)
+  for(const node of ast.statements) {
+   const specifier=(ts.isImportDeclaration(node)||ts.isExportDeclaration(node)) && node.moduleSpecifier
+   if(specifier && ts.isStringLiteral(specifier) && specifier.text.startsWith('.')) assert.ok(existsSync(resolve(dirname(path),specifier.text)),name+' imports missing '+specifier.text)
+  }
  }
 })
 test('Greenfield ships one optional helper and no coupled delivery templates',()=>{

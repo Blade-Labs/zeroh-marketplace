@@ -26,6 +26,7 @@ function unique(values: (string | number)[], label: string, ctx: z.RefinementCtx
 }
 
 const progress = {
+  extensions: z.record(z.string(), z.unknown()).optional(),
   checks: z.array(check).default([]),
   findings: z.array(finding).default([]),
   independentReview: review.optional(),
